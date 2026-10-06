@@ -10,7 +10,7 @@ use velnor_actions_contract::config::{
     CheckEvidence, CheckPlatform, HostContainerProfile, QualifiedTool,
 };
 use velnor_actions_contract::{
-    ExecuteTaskIds, ExecuteTaskRef, FinalReport, FinalStatus, MatrixEntry, Plan,
+    ExecuteTaskIds, ExecuteTaskRef, FinalReport, FinalStatus, MatrixEntry, Plan, PlannedPlatform,
     canonical_json_bytes,
 };
 
@@ -39,7 +39,8 @@ fn plan_with_tools(qualified_tools: &[QualifiedTool]) -> Plan {
         serde_json::json!({"check_id":"demo","system_tools":[],"qualified_tools":qualified_tools,"tool_specs":tool_specs,"qualification_digest":qualification_digest,"evidence":{"path":"proof.json","expected_scenarios":["one"]},
             "runner":{"label":"ubuntu-24.04","platform":"linux_x64","executor":"hosted"}}),
         ExecuteTaskIds { tasks: BTreeMap::from([("check".into(), ExecuteTaskRef::Single(TASK.into()))]) },
-        &obligation.input_digest, "local", "check-demo").expect("entry");
+        &obligation.input_digest, "local", "check-demo",
+        PlannedPlatform::new("ubuntu-24.04", "x86_64-unknown-linux-gnu").expect("planned platform")).expect("entry");
     entry.declared_outputs = vec!["proof.json".into()];
     plan.matrix.include = vec![entry];
     plan.obligations = vec![obligation];

@@ -12,8 +12,10 @@ pub mod named_check_lanes;
 pub mod needs;
 pub mod permissions;
 pub mod plan;
+pub mod platform;
 pub mod qualification;
 pub mod report;
+mod report_validate;
 pub mod step;
 pub mod step_identity;
 mod step_protocol;
@@ -51,6 +53,10 @@ pub use plan::{
     DYNAMIC_MATRIX_OUTPUT_MODE, ObligationDecision, PLAN_MATRIX_OUTPUT_MODE_ENV, Plan,
     PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, WorkflowEvent,
     validate_matrix_run,
+};
+pub use platform::{
+    PlannedPlatform, PlannedRunnerEnvironment, PlatformBinding, PlatformRunnerEnvironment,
+    PlatformUnavailableReason,
 };
 pub use qualification::{
     FinalCounts, FinalReport, FinalStatus, JobConclusion, RequiredJobResult,

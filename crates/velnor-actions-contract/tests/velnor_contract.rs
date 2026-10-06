@@ -11,6 +11,8 @@ mod impl_contract;
 mod impl_contract_conclusions;
 #[path = "impl_contract_ids.rs"]
 mod impl_contract_ids;
+#[path = "impl_contract_ids_b.rs"]
+mod impl_contract_ids_b;
 #[path = "impl_contract_job_ids.rs"]
 mod impl_contract_job_ids;
 #[path = "impl_contract_manifest_targets.rs"]
@@ -23,6 +25,8 @@ mod impl_contract_release_ir;
 mod impl_contract_release_modes;
 #[path = "impl_contract_reports.rs"]
 mod impl_contract_reports;
+#[path = "impl_contract_reports_b.rs"]
+mod impl_contract_reports_b;
 #[path = "impl_contract_step_roles.rs"]
 mod impl_contract_step_roles;
 #[path = "impl_contract_step_seed.rs"]
@@ -31,6 +35,8 @@ mod impl_contract_step_seed;
 mod impl_contract_targets;
 #[path = "impl_contract_tofu_config.rs"]
 mod impl_contract_tofu_config;
+#[path = "impl_observed_platform.rs"]
+mod impl_observed_platform;
 #[path = "impl_remed_cache.rs"]
 mod impl_remed_cache;
 #[path = "impl_remed_cache_b.rs"]

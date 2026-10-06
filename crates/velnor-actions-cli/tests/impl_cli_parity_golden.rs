@@ -208,6 +208,10 @@ fn task_report(bytes: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         .get("matrix_key")
         .and_then(serde_json::Value::as_str)
         .ok_or("entry lacks matrix_key")?;
+    let planned_platform_id = entry
+        .pointer("/planned_platform/platform_id")
+        .and_then(serde_json::Value::as_str)
+        .ok_or("entry lacks planned_platform.platform_id")?;
     // Binary-only report bytes: struct field order with JSON-escaped
     // fragments (serde_json sorts map keys, so `json!` cannot reproduce
     // the wire order). Spellings mirror the report contract; the golden
@@ -215,13 +219,14 @@ fn task_report(bytes: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
     let report_id = report_id_for(matrix_key, task_digest)?;
     let quoted = |raw: &str| -> Result<String, Box<dyn Error>> { Ok(serde_json::to_string(raw)?) };
     let out = format!(
-        "{{\"schema\":1,\"task_report_id\":{},\"run_key\":{},\"event\":\"local\",\"trust\":\"pr\",\"matrix_id\":{},\"matrix_key\":{},\"task_id\":{},\"task_digest\":{},\"status\":\"executed\",\"cache\":{{\"layer\":\"sources\",\"key\":\"parity-fixed-key\",\"result\":\"miss\",\"miss_reason\":\"no_entry\"}},\"exit_code\":0,\"duration_ms\":7,\"outputs\":[]}}",
+        "{{\"schema\":3,\"task_report_id\":{},\"run_key\":{},\"event\":\"local\",\"trust\":\"pr\",\"matrix_id\":{},\"matrix_key\":{},\"task_id\":{},\"task_digest\":{},\"status\":\"executed\",\"cache\":{{\"layer\":\"sources\",\"key\":\"parity-fixed-key\",\"result\":\"miss\",\"miss_reason\":\"no_entry\"}},\"platform_binding\":{{\"state\":\"unavailable\",\"planned_platform_id\":{},\"runner_environment\":\"unknown\",\"reason\":\"observation_not_recorded\"}},\"exit_code\":0,\"duration_ms\":7,\"outputs\":[]}}",
         quoted(&report_id)?,
         quoted(RUN_KEY)?,
         quoted(matrix_id)?,
         quoted(matrix_key)?,
         quoted(task_id)?,
         quoted(task_digest)?,
+        quoted(planned_platform_id)?,
     );
     Ok(out.into_bytes())
 }

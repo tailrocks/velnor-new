@@ -49,7 +49,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
 pub(crate) fn sample_plan(run_key: &str) -> Result<Plan, ContractError> {
     let entry = sample_entry(run_key)?;
     Ok(Plan {
-        schema: 1,
+        schema: Plan::SCHEMA,
         run_key: run_key.to_owned(),
         plan_id: plan_id_for_run(run_key)?,
         base: None,

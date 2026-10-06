@@ -1,4 +1,4 @@
-//! Schema-1 affected plan and generic matrix entries.
+//! Schema-2 affected plan and generic matrix entries.
 use super::baseline::{BaselineProof, PlanBaseline};
 use super::lanes::NamedCheckLaneVariant;
 use super::matrix_entry::MatrixEntry;
@@ -21,11 +21,11 @@ pub const PLAN_MATRIX_OUTPUT_MODE_ENV: &str = "VELNOR_PLAN_MATRIX_OUTPUT_MODE";
 /// Exact value of [`PLAN_MATRIX_OUTPUT_MODE_ENV`] for dynamic matrices.
 pub const DYNAMIC_MATRIX_OUTPUT_MODE: &str = "dynamic_matrix";
 use std::collections::{BTreeMap, BTreeSet};
-/// Schema-1 affected plan.
+/// Schema-2 affected plan.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Plan {
-    /// Plan schema version; must be 1.
+    /// Plan schema version; must be 2.
     pub schema: u32,
     /// Run key.
     pub run_key: String,
@@ -170,7 +170,7 @@ impl PlanRunner {
 }
 impl Plan {
     /// Plan schema version.
-    pub const SCHEMA: u32 = 1;
+    pub const SCHEMA: u32 = 2;
     /// Validate schema, plan ID, sorting, digests, and matrix entries.
     /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
@@ -178,7 +178,7 @@ impl Plan {
             return Err(ContractError::UnsupportedSchema {
                 field: "schema",
                 found: self.schema.to_string(),
-                expected: "1",
+                expected: "2",
             });
         }
         validate_run_key(&self.run_key)?;

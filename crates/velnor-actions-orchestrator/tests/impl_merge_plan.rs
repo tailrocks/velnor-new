@@ -247,11 +247,15 @@ fn task_file_gaps_fail_closed() -> TestResult {
     let digest = velnor_actions_contract::digest_b3(b"foreign-task");
     let report_id =
         velnor_actions_contract::task_report_id_for_task("local", &matrix_key, &digest)?;
-    let foreign = serde_json::json!({"schema": 1, "task_report_id": report_id, "run_key": "local",
+    let foreign = serde_json::json!({"schema": velnor_actions_contract::TaskReport::SCHEMA,
+        "task_report_id": report_id, "run_key": "local",
         "event": "pull_request", "trust": "pr", "matrix_id": matrix_id, "matrix_key": matrix_key,
         "task_id": "stack/rust/foreign/build/default", "task_digest": digest, "status": "executed",
-        "cache": {"layer": "task", "key": "", "result": "not_attempted"}, "exit_code": 0,
-        "duration_ms": 0, "outputs": []});
+        "cache": {"layer": "task", "key": "", "result": "not_attempted"},
+        "platform_binding": {"state": "unavailable",
+            "planned_platform_id": velnor_actions_contract::digest_b3(b"planned-platform"),
+            "runner_environment": "unknown", "reason": "observation_not_recorded"},
+        "exit_code": 0, "duration_ms": 0, "outputs": []});
     let parsed: velnor_actions_contract::TaskReport = serde_json::from_value(foreign.clone())?;
     parsed.validate()?;
     unexpected["task_reports"]

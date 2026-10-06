@@ -9,6 +9,12 @@ use serde::Serialize;
 use crate::canonical::{StackExtension, canonical_json_bytes, digest_b3, validate_digest};
 use crate::errors::ContractError;
 
+#[path = "cachekey_platform.rs"]
+mod platform;
+pub use platform::{
+    MAX_OBSERVED_PLATFORM_FACT_BYTES, PlatformInputs, observed_platform_id, platform_id,
+};
+
 /// Cache-key schema id, always `v1`.
 pub const CACHE_SCHEMA_ID: &str = "v1";
 /// Prefix shared by the MBX action namespace and task cache identity.
@@ -102,24 +108,6 @@ pub struct LaneInputs {
     pub writer_lane: String,
 }
 
-/// Platform identity inputs, including runner image metadata.
-#[derive(Debug, Clone, Serialize)]
-pub struct PlatformInputs {
-    /// Operating system name.
-    pub os: String,
-    /// CPU architecture.
-    pub arch: String,
-    /// Exact literal `runs-on` label.
-    pub runs_on: String,
-    /// Runner `ImageOS` value; `unknown` when unobserved (P03-4: the
-    /// generator never splits label text into this field).
-    pub image_os: String,
-    /// Runner `ImageVersion` value; `unknown` when unobserved (P03-4).
-    pub image_version: String,
-    /// Execution target (`host` or triple).
-    pub target: String,
-}
-
 /// Toolchain identity inputs: exact pins plus selected driver/runner.
 #[derive(Debug, Clone, Serialize)]
 pub struct ToolchainInputs {
@@ -163,22 +151,6 @@ pub fn lane_id(inputs: &LaneInputs) -> Result<String, ContractError> {
         ("task_kind", inputs.task_kind.as_str()),
         ("configuration", inputs.configuration.as_str()),
         ("writer_lane", inputs.writer_lane.as_str()),
-    ] {
-        validate_semantic_text(field, value)?;
-    }
-    Ok(digest_b3(&canonical_json_bytes(inputs)?))
-}
-
-/// Compute `platform_id` over OS/arch/label/image/target.
-/// # Errors
-pub fn platform_id(inputs: &PlatformInputs) -> Result<String, ContractError> {
-    for (field, value) in [
-        ("os", inputs.os.as_str()),
-        ("arch", inputs.arch.as_str()),
-        ("runs_on", inputs.runs_on.as_str()),
-        ("image_os", inputs.image_os.as_str()),
-        ("image_version", inputs.image_version.as_str()),
-        ("target", inputs.target.as_str()),
     ] {
         validate_semantic_text(field, value)?;
     }

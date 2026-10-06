@@ -27,7 +27,7 @@ fn plan_with(obligations: Vec<PlanObligation>) -> Plan {
         .map(|obligation| obligation.task_id.clone())
         .collect();
     Plan {
-        schema: 1,
+        schema: Plan::SCHEMA,
         run_key: "local".to_owned(),
         plan_id: "plan-local".to_owned(),
         base: None,

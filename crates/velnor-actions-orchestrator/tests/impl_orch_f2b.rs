@@ -3,8 +3,8 @@
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::{
-    FinalStatus, NotSelectedReason, ObligationDecision, TaskStatus, Trust, WorkflowEvent,
-    digest_b3, matrix_id_for_task_group, matrix_key_for_id,
+    FinalStatus, NotSelectedReason, ObligationDecision, PlannedPlatform, TaskStatus, Trust,
+    WorkflowEvent, digest_b3, matrix_id_for_task_group, matrix_key_for_id,
 };
 use velnor_actions_orchestrator::decisions::{
     CacheHit, MetadataFailure, NotSelectedInputs, ObligationInputs, baseline_expired,
@@ -110,11 +110,13 @@ fn not_selected_reason_validates_iff_present() -> TestResult {
     let matrix_id = matrix_id_for_task_group("rust", task_id)?;
     let matrix_key = matrix_key_for_id(&matrix_id)?;
     let digest = digest_b3(b"task");
+    let planned_platform = PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")?;
     let inputs = NotSelectedInputs {
         run_key: "local",
         event: WorkflowEvent::PullRequest,
         trust: Trust::Pr,
         matrix_id: &matrix_id,
+        planned_platform: &planned_platform,
         matrix_key: &matrix_key,
         task_id,
         task_digest: &digest,
