@@ -23,16 +23,18 @@ prints concise text instead of YAML, and writes no repository files.
 ## Local build from a clean checkout
 
 No ambient Cargo, Rust, or MBX is required: `mise.toml` pins every tool
-(Rust 1.98.1, MBX 1.21.1, Nextest 0.9.146) and `mise install` resolves them.
+(Rust 1.98.1, MBX 1.22.0, Nextest 0.9.146) and `mise install` resolves them.
 Historical clean-checkout proof, 2026-10-01 at `34550e8` in a fresh clone with `cargo`/`mbx` absent
-from `PATH`:
+from `PATH`. The MBX 1.22.0 acquisition path was separately verified 2026-10-04 on macOS
+ARM64 (`mise install mr-boxington@1.22.0`, then `mise exec mr-boxington@1.22.0 -- mbx --version`
+returned `mbx 1.22.0`). Proof transcript:
 
 ```sh
 git clone https://github.com/tailrocks/velnor-new.git
-cd velnor-new && git checkout docs/velnor-actions-spec
+cd velnor-new && git checkout 34550e8
 mise install
 mise exec -- cargo --version   # cargo 1.98.1
-mise exec -- mbx --version      # mbx 1.21.1
+mise exec -- mbx --version      # mbx 1.21.0
 mise exec -- cargo build --locked -p velnor-actions-cli
 ./target/debug/velnor-actions --help
 ./target/debug/velnor-actions plan

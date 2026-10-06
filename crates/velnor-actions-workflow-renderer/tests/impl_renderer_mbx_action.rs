@@ -47,7 +47,7 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
         panic!("version check must be a shell step");
     };
     assert!(run[2].contains("mbx --version"));
-    assert!(run[2].contains("mbx 1.21.1"));
+    assert!(run[2].contains(&format!("mbx {TEST_MBX_VERSION}")));
     assert!(run[2].contains("unterminated"));
     assert!(run[2].contains(&format!(
         "mise --no-config --no-env --no-hooks exec rust@{TEST_RUST_TOOLCHAIN} -- mbx --version"

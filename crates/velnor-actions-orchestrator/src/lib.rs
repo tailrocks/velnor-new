@@ -43,7 +43,6 @@ mod inventory;
 mod inventory_reuse;
 mod lock_audit;
 mod matrix_step;
-mod mbx_preflight;
 mod merge;
 mod merge_request;
 mod noop_report;

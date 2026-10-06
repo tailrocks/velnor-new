@@ -24,6 +24,12 @@ fn supported_targets_and_naming() {
         asset_filename("0.1.0", "x86_64-unknown-linux-gnu"),
         "velnor-actions-0.1.0-x86_64-unknown-linux-gnu"
     );
+    for target in SUPPORTED_TARGETS {
+        assert_eq!(
+            asset_filename("0.1.0", target),
+            format!("velnor-actions-0.1.0-{target}")
+        );
+    }
     assert_eq!(
         ReleaseTarget::for_runner_label("ubuntu-26.04"),
         Some(ReleaseTarget::LinuxX86_64)

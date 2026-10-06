@@ -74,7 +74,7 @@ fn candidate_build_specs_come_only_from_catalog() -> Result<(), String> {
         "native action owns MBX; candidate Mise selectors exclude it: {argv:?}"
     );
     assert!(
-        !argv.iter().any(|arg| arg == "mr-boxington@1.21.1"),
+        !argv.iter().any(|arg| arg == "mr-boxington@1.22.0"),
         "no pinned fallback may leak in: {argv:?}"
     );
     Ok(())

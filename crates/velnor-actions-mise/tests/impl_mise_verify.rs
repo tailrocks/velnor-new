@@ -109,13 +109,13 @@ fn verify_mbx_route_selects_action_identity_and_rust_probe() -> Result<(), Strin
     .map_err(|err| err.to_string())?;
     assert_eq!(
         step.identity_specs(),
-        &["rust@1.98.1".to_owned(), "mr-boxington@1.21.1".to_owned()]
+        &["rust@1.98.1".to_owned(), "mr-boxington@1.22.0".to_owned()]
     );
     assert_eq!(step.probe_specs(), &["rust@1.98.1".to_owned()]);
     let probes = step.probes(&catalog);
     assert_eq!(probes.len(), 1, "route probe covers cargo_test: {probes:?}");
     assert!(
-        !probes[0].iter().any(|arg| arg == "mr-boxington@1.21.1"),
+        !probes[0].iter().any(|arg| arg == "mr-boxington@1.22.0"),
         "Mise must not install or select action-owned MBX: {probes:?}"
     );
     assert!(probes[0].iter().any(|arg| arg == "rust@1.98.1"));
@@ -180,7 +180,7 @@ fn verify_nextest_adds_runner_probe_per_driver() -> Result<(), String> {
         ])
     );
     assert!(
-        !probes[1].iter().any(|arg| arg == "mr-boxington@1.21.1"),
+        !probes[1].iter().any(|arg| arg == "mr-boxington@1.22.0"),
         "Nextest route must use action-owned MBX, not Mise: {probes:?}"
     );
     Ok(())

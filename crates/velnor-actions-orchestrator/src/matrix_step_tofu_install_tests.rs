@@ -1,8 +1,7 @@
 //! Tofu-install classification tests: suites that spawn `tofu`.
 //!
 //! Declared via `#[path]` from `matrix_step.rs` under `cfg(test)`.
-//! Mirrors the `GENERATE_VALIDATOR_SUITES` pin shape: classification,
-//! render-level install proof, and a workspace-wide audit axis.
+//! Covers typed tool ownership and rendered install behavior.
 
 use super::*;
 use crate::clippy_groups::ClippyMemoryPlan;
@@ -79,9 +78,8 @@ fn prepare_run(job: &Job) -> Vec<String> {
 
 #[test]
 fn tofu_install_follows_executed_suite_per_policy() {
-    // `TOFU_EXEC_SUITES` holds exactly one member: only the mise
-    // suite spawns real tofu (`tofu_exec` + `run_bounded`), so only
-    // the mise job installs opentofu beyond tofu obligations.
+    // Only the mise suite spawns real tofu (`tofu_exec` plus
+    // `run_bounded`), so only its job adds opentofu beyond obligations.
     for package in [
         "velnor-actions-orchestrator",
         "velnor-actions-cli",
@@ -94,12 +92,15 @@ fn tofu_install_follows_executed_suite_per_policy() {
         "demo",
     ] {
         assert!(
-            !crate_needs_tofu_install(WorkflowPolicy::ConsumerV1, package),
+            !crate_needs_tofu_install(WorkflowPolicy::ConsumerV1, suite_for_package(package)),
             "consumer suites cannot reach our tofu_exec ctor: {package} installs no opentofu"
         );
     }
     assert!(
-        crate_needs_tofu_install(WorkflowPolicy::VelnorRepositoryV1, "velnor-actions-mise"),
+        crate_needs_tofu_install(
+            WorkflowPolicy::VelnorRepositoryV1,
+            suite_for_package("velnor-actions-mise")
+        ),
         "mise spawns real tofu and must install opentofu"
     );
     for package in [
@@ -113,7 +114,10 @@ fn tofu_install_follows_executed_suite_per_policy() {
         "demo",
     ] {
         assert!(
-            !crate_needs_tofu_install(WorkflowPolicy::VelnorRepositoryV1, package),
+            !crate_needs_tofu_install(
+                WorkflowPolicy::VelnorRepositoryV1,
+                suite_for_package(package)
+            ),
             "{package} never spawns tofu and must not install opentofu"
         );
     }

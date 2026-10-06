@@ -48,16 +48,37 @@ fn policy_vectors_pin_specs_and_payloads() {
         "discovery without a nested runner must not inject its manifest"
     );
     let machete = machete_argv().expect("machete argv");
-    let want = argv_of(&[
+    let tool_spec = &machete[5];
+    assert!(
+        tool_spec.starts_with(
+            "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/"
+        ),
+        "cold install must fetch the exact v0.9.2 asset: {tool_spec}"
+    );
+    assert!(
+        tool_spec.contains(
+            ",checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2"
+        ),
+        "cold install must verify the known digest and pin version: {tool_spec}"
+    );
+    assert!(
+        !tool_spec.contains("api.github.com/repos/bnjbvr/cargo-machete/releases")
+            && !tool_spec.contains("releases/latest"),
+        "cold install must not query the releases listing API: {tool_spec}"
+    );
+
+    let mut want = argv_of(&[
         "mise",
         "--no-config",
         "--no-env",
         "--no-hooks",
         "exec",
-        "ubi:bnjbvr/cargo-machete@0.9.2",
+        "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2",
         "--",
         "cargo",
         "machete",
+    ]);
+    let expected_scan_crates = [
         "crates/velnor-actions-contract",
         "crates/velnor-actions-rust",
         "crates/velnor-actions-tofu",
@@ -66,7 +87,8 @@ fn policy_vectors_pin_specs_and_payloads() {
         "crates/velnor-actions-workflow-renderer",
         "crates/velnor-actions-orchestrator",
         "crates/velnor-actions-cli",
-    ]);
+    ];
+    want.extend(expected_scan_crates.map(ToString::to_string));
     assert_eq!(machete, want);
     assert!(validator_argv("evil-tool", "1.2.3", "cargo", &["deny"]).is_err());
     assert!(validator_argv("cargo-deny", "latest", "cargo", &["deny"]).is_err());

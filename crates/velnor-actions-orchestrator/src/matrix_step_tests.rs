@@ -187,7 +187,7 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
         TF_INPUT_ENV, TF_INPUT_OFF,
     };
     let mut tofu = obligation();
-    tofu.task_id = "stack/tofu/root/validate/default".to_owned();
+    tofu.task_id = "stack/tofu/dir-/validate/default".to_owned();
     tofu.kind = "validate".to_owned();
     tofu.step_name = "Validate".to_owned();
     let step = obligation_step(&tofu, &ToolCatalog::pinned(), &[], None).expect("step");
@@ -216,7 +216,14 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
     );
     assert_eq!(
         env.get(TF_DATA_DIR_ENV).map(String::as_str),
-        Some("${{ runner.temp }}/velnor/tofu-data/root-af1349b9f5f9"),
+        Some(
+            velnor_actions_tofu::tofu_data_dir_under(
+                velnor_actions_mise::runtime_paths::TOFU_DATA_BASE_EXPR,
+                "",
+            )
+            .expect("data dir")
+            .as_str(),
+        ),
         "tofu steps isolate the per-root data dir"
     );
     assert!(
@@ -267,13 +274,16 @@ fn validator_installs_follow_executed_suite_per_policy() {
         "demo",
     ] {
         assert!(
-            crate_needs_generate_validators(WorkflowPolicy::ConsumerV1, package),
+            crate_needs_generate_validators(WorkflowPolicy::ConsumerV1, suite_for_package(package)),
             "consumer suites are opaque: {package} keeps the trio"
         );
     }
     for package in ["velnor-actions-orchestrator", "velnor-actions-cli"] {
         assert!(
-            crate_needs_generate_validators(WorkflowPolicy::VelnorRepositoryV1, package),
+            crate_needs_generate_validators(
+                WorkflowPolicy::VelnorRepositoryV1,
+                suite_for_package(package)
+            ),
             "{package} spawns validators and must install them"
         );
     }
@@ -287,7 +297,10 @@ fn validator_installs_follow_executed_suite_per_policy() {
         "demo",
     ] {
         assert!(
-            !crate_needs_generate_validators(WorkflowPolicy::VelnorRepositoryV1, package),
+            !crate_needs_generate_validators(
+                WorkflowPolicy::VelnorRepositoryV1,
+                suite_for_package(package)
+            ),
             "{package} never spawns validators and must trim the trio"
         );
     }

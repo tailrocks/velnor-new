@@ -15,7 +15,7 @@ use std::ffi::OsString;
 
 use velnor_actions_contract::{
     CachePolicy, ContractError, IdentityInputs, ProposedTask, ResourceClass, ResourceDemand,
-    component_id_for_unit, project_root_for_unit_path,
+    component_id_for_unit,
 };
 
 use crate::argv::tofu_payload_argv;
@@ -42,24 +42,63 @@ pub struct TofuTaskGroup {
     pub no_targets: bool,
 }
 
-/// Manifest key for a normalized tofu root: `""` maps to `root`.
+/// Bijective ASCII key for the exact normalized root UTF-8 bytes.
 #[must_use]
 pub fn key_for_root(root: &str) -> String {
-    if root.is_empty() {
-        "root".to_owned()
-    } else {
-        root.to_owned()
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut key = String::from("dir-");
+    for byte in root.bytes() {
+        key.push(char::from(HEX[usize::from(byte >> 4)]));
+        key.push(char::from(HEX[usize::from(byte & 15)]));
     }
+    key
 }
 
-/// Normalized tofu root for a manifest key: `root` maps to `""`.
-#[must_use]
-pub fn root_for_key(key: &str) -> String {
-    if key == "root" {
-        String::new()
-    } else {
-        key.to_owned()
+/// Decode a canonical exact-root key; malformed or legacy keys fail closed.
+/// # Errors
+/// Returns an identity error for noncanonical keys or paths.
+pub fn root_for_key(key: &str) -> Result<String, ContractError> {
+    let bad = || ContractError::identity("tofu_root_key", "noncanonical_root_key");
+    let hex = key.strip_prefix("dir-").ok_or_else(bad)?;
+    if hex.len() % 2 != 0 || !velnor_actions_contract::ids::is_lower_hex(hex) {
+        return Err(bad());
     }
+    let bytes = hex
+        .as_bytes()
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|pair| {
+            let digit = |byte: u8| {
+                if byte <= b'9' {
+                    byte - b'0'
+                } else {
+                    byte - b'a' + 10
+                }
+            };
+            (digit(pair[0]) << 4) | digit(pair[1])
+        })
+        .collect::<Vec<_>>();
+    let root = String::from_utf8(bytes).map_err(|_| bad())?;
+    validate_normalized_root(&root)?;
+    Ok(root)
+}
+
+/// Validate an exact normalized repository-relative root.
+/// # Errors
+/// Rejects normalization aliases, traversal, absolute paths, and controls.
+pub fn validate_normalized_root(root: &str) -> Result<(), ContractError> {
+    if !root.is_empty() {
+        velnor_actions_contract::config::Utf8RepoRelDir::parse(root)
+            .map_err(|_| ContractError::identity("tofu_root", "invalid_normalized_root"))?;
+        if root == "." {
+            return Err(ContractError::identity(
+                "tofu_root",
+                "invalid_normalized_root",
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Display root for a normalized tofu root: `""` renders as `.`.
@@ -87,6 +126,7 @@ pub fn task_id_for_root(
     kind: TofuTaskKind,
     configuration: &str,
 ) -> Result<String, ContractError> {
+    validate_normalized_root(root)?;
     velnor_actions_contract::task_id_for_stack(
         crate::STACK_ID,
         &key_for_root(root),
@@ -109,9 +149,10 @@ pub fn task_id_for_root(
 /// task-ID grammar, or when the fixed payload rejects a
 /// leading-dash root.
 pub fn propose_task(group: &TofuTaskGroup) -> Result<ProposedTask, ContractError> {
+    validate_normalized_root(&group.root)?;
     let key = key_for_root(&group.root);
     let unit_path = display_for_root(&group.root);
-    let project_root = project_root_for_unit_path(&unit_path);
+    let project_root = unit_path.clone();
     let task_id = task_id_for_root(&group.root, group.kind, &group.configuration)?;
     let environment: BTreeMap<String, String> = tofu_payload_env(group.kind)
         .into_iter()

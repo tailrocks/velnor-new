@@ -150,7 +150,21 @@ impl ReleaseManifest {
         self.targets.iter().find(|record| record.target == target)
     }
 
-    /// Validate schema, version, repository, and every target record.
+    /// Validate the separate published asset URL against this manifest.
+    ///
+    /// # Errors
+    pub fn validate_published_asset_url(&self, url: &str, file: &str) -> Result<(), ContractError> {
+        crate::targets::check_release_manifest_artifact(
+            url,
+            &self.version,
+            &self.commit,
+            file,
+            "manifest_asset",
+        )
+    }
+
+    /// Validate schema, version, repository, and exactly one record per
+    /// supported target.
     ///
     /// The repository is pinned to the canonical identity and every
     /// artifact URL is bound to this exact version and target (X1); a
@@ -184,6 +198,7 @@ impl ReleaseManifest {
             crate::targets::check_release_artifact(
                 &record.artifact,
                 &self.version,
+                &self.commit,
                 &record.target,
                 file,
                 "targets.artifact",

@@ -170,9 +170,12 @@ impl CacheAdmission {
                 continue;
             }
             if metadata.file_type().is_symlink() {
-                resolved = current.canonicalize().map_err(|error| {
-                    IndexError::SymlinkLoop(format!("{}: {error}", current.display()))
-                })?;
+                let Some(canonical) = current.canonicalize().ok() else {
+                    // Dangling or looping links resolve nowhere, so they cannot
+                    // alias into the private cache. Missing listed paths stay allowed.
+                    return Ok(false);
+                };
+                resolved = canonical;
             } else {
                 resolved.push(component.as_os_str());
             }
@@ -211,9 +214,10 @@ impl CachedDirectory {
             return Ok(false);
         }
         if identity.is_symlink {
-            let canonical = path
-                .canonicalize()
-                .map_err(|error| IndexError::SymlinkLoop(format!("{}: {error}", path.display())))?;
+            let Ok(canonical) = path.canonicalize() else {
+                // Link broke since caching; entry is stale, not a loop signal.
+                return Ok(false);
+            };
             return Ok(canonical == self.resolved);
         }
         Ok(resolved_parent.join(component) == self.resolved)

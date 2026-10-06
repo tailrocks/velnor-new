@@ -106,7 +106,7 @@ pub(super) fn assert_target_builds(
         "{linux_action}"
     );
     assert!(
-        linux_action.contains("rust@1.98.1 mr-boxington@1.21.1"),
+        linux_action.contains("rust@1.98.1 mr-boxington@1.22.0"),
         "{linux_action}"
     );
     let macos = super::super::job_body(body, "build-macos")?;
@@ -227,7 +227,7 @@ fn assert_manifest_attestation_job(
 fn assert_manifest_builder_contract(manifest: &str) {
     assert!(
         manifest.contains(
-            "create-release-manifest.sh '0.1.1' 'tailrocks/velnor-new' '1.98.1' '1.21.1'"
+            "create-release-manifest.sh '0.1.1' 'tailrocks/velnor-new' '1.98.1' '1.22.0'"
         ),
         "{manifest}"
     );

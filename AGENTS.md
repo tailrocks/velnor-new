@@ -37,6 +37,9 @@
 - Stop only at a proven tool/model/project limit. When uncertain, inspect, test, and measure first.
 - Before fixing a bug, find why the architecture permitted it and whether relatives hide nearby. Prefer structural fixes that remove the enabling condition; a symptom patch must name the deferred root cause.
 - Delegate first: use subagents for parallel research, implementation, review, and verification. Resolve ambiguity autonomously from evidence and docs.
+- Implementation, execution, research, debugging, test-writing, and integration agents use `gpt-6-luna` with `max`. Review, audit, verification, and acceptance agents use `gpt-6.1-sol` with `medium`. No other models or model fallback are allowed.
+- Every spawn explicitly sets `model` and `reasoning_effort` and passes `fork_turns: "none"`. Each agent verifies its own actual JSONL model and effort match its assignment; the assigned coordinator verifies the spawned turn is bound to that exact spawn/handle before accepting output. Never resume actors launched under another model.
+- Root and assigned coordinators own all spawns; implementation and research agents request bounded child work from them instead of spawning descendants.
 
 ## Commits and review integrity
 

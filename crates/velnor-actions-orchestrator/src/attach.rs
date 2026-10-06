@@ -7,12 +7,16 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_actionlint::PinnedActionRef;
+use velnor_actions_actionlint::actions::{MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION};
 use velnor_actions_contract::{
     GeneratorLock, ReleaseTarget, Step, StepRole, WorkflowIr, is_crate_job_id,
 };
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID};
-use velnor_actions_workflow_renderer::steps::STAGED_BINARY_PREFIX;
+use velnor_actions_workflow_renderer::steps::{
+    CompileDriver, STAGED_BINARY_PREFIX, mbx_steps_for_driver,
+};
 use velnor_actions_workflow_renderer::{
     PreseedStageSource, preseed_build_step, preseed_download_step, preseed_manifest_step,
     preseed_manifest_verify_step, preseed_stage_step, preseed_upload_step, preseed_verify_step,
@@ -198,13 +202,36 @@ fn insert_plan_mbx_restore(
         .iter()
         .position(|step| step.role == Some(StepRole::CargoSourcesRestore))
         .map_or_else(|| after_rust_setup(steps), |index| index + 1);
-    for (offset, step) in crate::mbx_preflight::steps_for_catalog(catalog)?
+    for (offset, step) in plan_mbx_steps(catalog)?
         .into_iter()
         .enumerate()
     {
         steps.insert(restore_at + offset, step);
     }
     Ok(())
+}
+
+/// Build the strict preflight, native action, and version check from catalog pins.
+/// # Errors
+fn plan_mbx_steps(catalog: &ToolCatalog) -> Result<[Step; 3], OrchestratorError> {
+    let uses = PinnedActionRef::new(
+        "jdx/mr-boxington-action",
+        None,
+        MR_BOXINGTON_ACTION_SHA,
+        MR_BOXINGTON_ACTION_VERSION,
+    )?
+    .uses_value();
+    let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
+    let steps = mbx_steps_for_driver(
+        &uses,
+        CompileDriver::Mbx,
+        catalog.version(PinnedTool::MrBoxington),
+        catalog.version(PinnedTool::Rust),
+        env,
+    )?;
+    steps.ok_or_else(|| OrchestratorError::Contract {
+        problem: "mbx_driver_did_not_emit_preflight".to_owned(),
+    })
 }
 
 /// Replace Swatinem's Cargo-only plan cache with the shared registry snapshot.
@@ -276,8 +303,8 @@ fn is_mbx_action(step: &Step) -> bool {
 /// Insert index for the plan-job pre-seed build block.
 ///
 /// The build compiles code, so it runs after the source-probing steps
-/// that guarantee sources present (which is after every restore);
-/// without them it anchors after the last restore, and the fallback
+/// that guarantee sources present; without them it anchors after the
+/// last cache prelude, and the fallback
 /// covers lockless plans and hand-built fixtures without cache steps.
 fn preseed_anchor(steps: &[Step]) -> usize {
     let last_required = steps
@@ -301,6 +328,9 @@ fn is_plan_restore(step: &Step) -> bool {
     )
 }
 
+#[cfg(test)]
+#[path = "attach_preseed_tests.rs"]
+mod attach_preseed_tests;
 #[cfg(test)]
 #[path = "attach_tests.rs"]
 mod attach_tests;

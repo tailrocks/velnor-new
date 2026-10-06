@@ -61,7 +61,7 @@ pub struct Discovery {
     pub clippy_memory: ClippyMemoryPlan,
     /// Non-fatal generation recommendations.
     pub recommendations: Vec<String>,
-    /// Release-manifest text from the committed repo file.
+    /// Release-manifest text for consumer policy from the committed file.
     ///
     /// Absent files remain `None` in every build mode so consumer
     /// generation fails closed with `consumer_requires_release_install`.
