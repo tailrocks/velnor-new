@@ -13,6 +13,7 @@ by the `fixtures/**` ignore, so these inputs never trip the real job.
 | `crates-only/stray.rs` | `crates-only` | `.rs` file at simulated `src/stray.rs`, outside `crates/` |
 | `rust-max-lines/oversized.rs` | `rust-max-lines` | 401 physical lines (limit 400) |
 | `lib-main-max-lines/lib.rs` | `lib-main-max-lines` | 151 physical lines (limit 150) |
+| `no-source-suffix/stray.source` | `velnor-no-source-suffix` | `.source` snapshot duplicate at simulated docs path |
 
 Header comments (`repo-path:`, `expected-lines:`) are read by the tests to
 guard against silent fixture drift: editing a fixture without updating its

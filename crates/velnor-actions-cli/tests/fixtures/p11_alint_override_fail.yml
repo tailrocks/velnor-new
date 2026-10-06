@@ -103,9 +103,23 @@ rules:
     kind: file_absent
     paths:
       include: ["**/*.rs"]
-      exclude: ["crates/**"]
+      exclude:
+        - "crates/*/src/**"
+        - "crates/*/tests/**"
+        - "crates/*/benches/**"
+        - "crates/*/examples/**"
+        - "crates/*/fixtures/**"
+        - "crates/*/testdata/**"
+        - "crates/*/build.rs"
+        - "crates/*/build_support/**"
+        - "crates/test_support/**"
+        - "crates/velnor-runner/crates/*/src/**"
+        - "crates/velnor-runner/crates/*/tests/**"
+        - "crates/velnor-runner/crates/*/benches/**"
+        - "crates/velnor-runner/crates/*/examples/**"
+        - "crates/velnor-runner/crates/*/build.rs"
     level: error
-    message: "First-party Rust sources MUST live under crates/"
+    message: "Rust sources MUST live in canonical crate dirs (ARCH-1.10 strict placement)"
 
   # The bundled nested-lock rules are excepted above. These replacements
   # still forbid stray locks, and name the two locks the bundles cannot see:
