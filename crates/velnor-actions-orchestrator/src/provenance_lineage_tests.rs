@@ -143,3 +143,47 @@ fn manifest_bytes_remain_bounded() {
         Err("baseline_lineage_limit".to_owned())
     );
 }
+
+#[test]
+fn plan_and_merge_accept_the_same_large_lineage() {
+    use super::super::{ProvenanceExpectations, baseline_artifact_name, validate_provenance};
+
+    let first = "a".repeat(40);
+    let mut origin = manifest_for(&first);
+    origin.repository_id = digest_b3(b"github.com/o/r");
+    origin.tasks[0].external_data = Some(crate::external_data::ExternalDataFreshness {
+        source: "x".repeat(20_000),
+        identity: digest_b3(b"external snapshot"),
+        age_secs: 0,
+    });
+    let mut carried = origin;
+    for run_id in 8..39 {
+        carried = carry(carried, run_id);
+        carried.source_commit = format!("{run_id:040x}");
+        carried.artifact_name =
+            baseline_artifact_name(&carried.source_commit, &carried.compatibility_id)
+                .expect("artifact name");
+        carried.artifact_id =
+            crate::cover_compat::baseline_artifact_numeric_id(&carried.artifact_name);
+    }
+    let size = canonical_json_bytes(&carried).expect("canonical").len();
+    assert!(
+        size > MAX_LINEAGE_BYTES / 2 && size < MAX_LINEAGE_BYTES,
+        "{size}"
+    );
+
+    let expected = ProvenanceExpectations {
+        base: carried.source_commit.clone(),
+        branch: "testmain".to_owned(),
+        workflow_path: ".github/workflows/ci.yml".to_owned(),
+        generator_version: carried.generator_version.clone(),
+        generator_sha256: carried.generator_sha256.clone(),
+        repository_id: Some(carried.repository_id.clone()),
+        repository_slug: Some("o/r".to_owned()),
+        repository_conflict: false,
+    };
+    let digest = digest_b3(&canonical_json_bytes(&carried).expect("canonical manifest"));
+    assert!(validate_provenance(&carried, &digest, &expected).is_ok());
+    let plan = plan_for(&carried, Some(&carried.source_commit));
+    assert!(!verdict(&plan, Some(&carried)).0.planning_failed);
+}
