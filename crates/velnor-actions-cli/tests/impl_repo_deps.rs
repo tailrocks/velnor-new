@@ -137,7 +137,13 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
                                 || (key == "ureq" && feature == "rustls-no-provider")))
                         || (dir == "crates/velnor-actions-cli"
                             && key == "syn"
-                            && matches!(feature, "full" | "visit"));
+                            && matches!(feature, "full" | "visit"))
+                        // F2A offline-scanner tests parse Rust with syn and
+                        // read line numbers from spans (dev-deps only).
+                        || (dir == "crates/velnor-actions-orchestrator"
+                            && ((key == "syn"
+                                && matches!(feature, "full" | "parsing" | "printing" | "visit"))
+                                || (key == "proc-macro2" && feature == "span-locations")));
                     assert!(narrow, "{dir}/{key} feature {feature}");
                 }
             }
