@@ -138,7 +138,7 @@ artifacts = [
   { url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.146/cargo-nextest-0.9.146-x86_64-unknown-linux-gnu.tar.gz", sha256 = "682c21b777c333e96fd532e114d3a5a894e0729ab88d94c0a9f20f8419695428" },
 ]
 dependency_artifacts = []
-install_tree_sha256 = "d60a85ca26b833208b5917cfba5bd1b90fc34fe168764731e4319f5567b39f7a"
+install_tree_sha256 = "a00d122ef5a0077254a317b33346cabcbd14e05531e7d29cdae06a07f64940ae"
 [[qualified_tools.platforms.executables]]
 name = "cargo-nextest"
 path = "cargo-nextest"
@@ -159,7 +159,7 @@ artifacts = [
   { url = "https://static.rust-lang.org/dist/2026-09-03/rustc-1.98.1-x86_64-unknown-linux-gnu.tar.xz", sha256 = "e974f036b28565f37c0f3bd92ddefa809bee16c04f9dcf07b9ed96e05aaaf7c4" },
 ]
 dependency_artifacts = []
-install_tree_sha256 = "566c2e71257ddd283b65ea36f4dfd003fead1de98d28af1a707ffa037ba07668"
+install_tree_sha256 = "53f388a3b565f1717c2e6f55c8748c905f9141c20dc8757cca152c1ff5bb744a"
 [[qualified_tools.platforms.executables]]
 name = "cargo"
 path = "bin/cargo"
