@@ -110,7 +110,6 @@ uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
 uses: asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb # v0.16.1
-uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 ```
 
 Release records: [mise-action v4.3.0](https://github.com/jdx/mise-action/releases/tag/v4.3.0),
@@ -118,14 +117,12 @@ Release records: [mise-action v4.3.0](https://github.com/jdx/mise-action/release
 [download-artifact v8.0.1](https://github.com/actions/download-artifact/releases/tag/v8.0.1),
 [mr-boxington-action v1.6.0](https://github.com/jdx/mr-boxington-action/releases/tag/v1.6.0),
 [cache v6.1.0](https://github.com/actions/cache/releases/tag/v6.1.0),
-[upload-artifact v7.0.1](https://github.com/actions/upload-artifact/releases/tag/v7.0.1),
-and [rust-cache v2.9.2](https://github.com/Swatinem/rust-cache/releases/tag/v2.9.2).
+[upload-artifact v7.0.1](https://github.com/actions/upload-artifact/releases/tag/v7.0.1).
 
 Checkout, Mise setup, cache restore/save, and artifact transfer are emitted
 where required by the workflow graph. The Mr. Boxington action is emitted only
-when Rust scanning detects project use of MBX. `Swatinem/rust-cache` is
-emitted only for Cargo-only repositories (registry-only, shared key, never
-with MBX). All references come from the registry. The full-SHA
+when Rust scanning detects project use of MBX. Cargo sources use the shared
+exact-path `actions/cache` layer in every Rust mode. All references come from the registry. The full-SHA
 `asamarts/alint` pin is emitted only by the separate Velnor
 repository-policy job.
 `taiki-e/install-action`, `actions/setup-*`, branch refs, unapproved tag refs,

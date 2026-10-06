@@ -27,6 +27,13 @@ fn null_and_omitted_statistics_match_and_message_zero_is_real() -> Result<(), &'
     assert_eq!(left.message_id, 0);
     assert!(may_ack(&left, true));
     assert!(!may_ack(&left, false));
+    assert_eq!(
+        parse_poll(
+            200,
+            r#"{"messageType":"RunnerScaleSetJobMessages","body":"[]"}"#
+        ),
+        Err(WireError::Malformed)
+    );
     Ok(())
 }
 
@@ -39,16 +46,60 @@ fn empty_poll_is_not_an_ack_and_unknown_kind_is_visible() -> Result<(), &'static
     };
     assert!(matches!(batch.jobs[0].kind, InnerKind::Unsupported(_)));
     assert_eq!(batch.jobs[1].request_id, Some(3));
+    assert_eq!(
+        batch.raw_body,
+        r#"[{"messageType":"JobExploded","runnerRequestId":9},{"messageType":"JobAvailable","runnerRequestId":3}]"#
+    );
+    assert_eq!(
+        velnor_runner_github::parse_inner_messages(&batch.raw_body),
+        Ok(batch.jobs.clone())
+    );
     assert!(!may_ack(&batch, true));
     assert!(!may_ack(
         &velnor_runner_github::ParsedBatch {
             message_id: -1,
+            raw_body: String::new(),
             statistics: None,
             jobs: Vec::new()
         },
         true
     ));
     Ok(())
+}
+
+#[test]
+fn started_and_completed_fields_match_their_pinned_message_types() -> Result<(), &'static str> {
+    let raw = r#"{"messageId":8,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobStarted\",\"runnerRequestId\":17,\"runnerId\":31,\"runnerName\":\"runner-31\"},{\"messageType\":\"JobCompleted\",\"runnerRequestId\":18,\"runnerId\":32,\"runnerName\":\"runner-32\",\"result\":\"Succeeded\"},{\"messageType\":\"JobAvailable\",\"runnerRequestId\":19,\"runnerId\":99,\"runnerName\":\"ignored\",\"result\":\"ignored\"}]"}"#;
+    let Poll::Batch(batch) = parse_poll(200, raw).map_err(|_| "batch")? else {
+        return Err("batch");
+    };
+    let started = batch.jobs.first().ok_or("started")?;
+    assert_eq!(started.kind, InnerKind::Started);
+    assert_eq!(started.request_id, Some(17));
+    assert_eq!(started.runner_id, Some(31));
+    assert_eq!(started.runner_name.as_deref(), Some("runner-31"));
+    assert_eq!(started.result, None);
+    let completed = batch.jobs.get(1).ok_or("completed")?;
+    assert_eq!(completed.kind, InnerKind::Completed);
+    assert_eq!(completed.request_id, Some(18));
+    assert_eq!(completed.runner_id, Some(32));
+    assert_eq!(completed.runner_name.as_deref(), Some("runner-32"));
+    assert_eq!(completed.result.as_deref(), Some("Succeeded"));
+    let available = batch.jobs.get(2).ok_or("available")?;
+    assert_eq!(available.request_id, Some(19));
+    assert_eq!(available.runner_id, None);
+    assert_eq!(available.runner_name, None);
+    assert_eq!(available.result, None);
+    Ok(())
+}
+
+#[test]
+fn malformed_runner_fields_quarantine_the_poll_batch() {
+    let raw = r#"{"messageId":8,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobCompleted\",\"runnerRequestId\":18,\"runnerId\":\"32\",\"runnerName\":\"runner-32\",\"result\":\"Succeeded\"}]"}"#;
+    let Poll::Quarantined(quarantined) = parse_poll(200, raw).expect("quarantined") else {
+        panic!("expected quarantine, got {:?}", parse_poll(200, raw));
+    };
+    assert_eq!(quarantined.message_id, 8);
 }
 
 #[test]
@@ -84,6 +135,80 @@ fn completed_message_decodes_runner_identity_and_keeps_job_fields() -> Result<()
     assert_eq!(job.runner_name.as_deref(), Some("runner-31"));
     assert_eq!(job.result.as_deref(), Some("succeeded"));
     Ok(())
+}
+
+#[test]
+fn poll_body_enforces_protocol_byte_and_message_limits() -> Result<(), &'static str> {
+    let accepted = poll_with_message_count(velnor_runner_github::MAX_POLL_MESSAGES);
+    let Poll::Batch(batch) = parse_poll(200, &accepted).map_err(|_| "accepted limit")? else {
+        return Err("accepted batch");
+    };
+    assert_eq!(batch.jobs.len(), velnor_runner_github::MAX_POLL_MESSAGES);
+
+    let rejected = poll_with_message_count(velnor_runner_github::MAX_POLL_MESSAGES + 1);
+    assert!(matches!(
+        parse_poll(200, &rejected),
+        Ok(Poll::Quarantined(_))
+    ));
+    let at_byte_limit = format!(
+        "[{}]",
+        " ".repeat(velnor_runner_github::MAX_POLL_BODY_BYTES - 2)
+    );
+    assert_eq!(
+        velnor_runner_github::parse_inner_messages(&at_byte_limit),
+        Ok(Vec::new())
+    );
+    assert_eq!(
+        velnor_runner_github::parse_inner_messages(&format!(
+            "[{}]",
+            " ".repeat(velnor_runner_github::MAX_POLL_BODY_BYTES - 1)
+        )),
+        Err(WireError::Malformed)
+    );
+    Ok(())
+}
+
+#[test]
+fn outer_message_id_is_authoritative_over_inner_fields() -> Result<(), &'static str> {
+    let raw = r#"{"messageId":17,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobAvailable\",\"runnerRequestId\":9,\"messageId\":999}]"}"#;
+    let Poll::Batch(batch) = parse_poll(200, raw).map_err(|_| "poll")? else {
+        return Err("batch");
+    };
+    assert_eq!(batch.message_id, 17);
+    assert_eq!(batch.jobs[0].request_id, Some(9));
+    assert!(batch.jobs[0].fields.contains(&"messageId".to_owned()));
+    Ok(())
+}
+
+#[test]
+fn malformed_bounded_inner_body_keeps_outer_id_and_exact_body() {
+    let raw = r#"{"messageId":18,"messageType":"RunnerScaleSetJobMessages","body":"[{bad json]"}"#;
+    assert_eq!(
+        parse_poll(200, raw),
+        Ok(Poll::Quarantined(velnor_runner_github::QuarantinedBatch {
+            message_id: 18,
+            raw_body: "[{bad json]".to_owned(),
+        }))
+    );
+
+    let missing_id = r#"{"messageType":"RunnerScaleSetJobMessages","body":"[{bad json]"}"#;
+    assert_eq!(parse_poll(200, missing_id), Err(WireError::Malformed));
+    let negative_id = r#"{"messageId":-1,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobCompleted\",\"runnerRequestId\":9,\"runnerId\":17,\"runnerName\":\"runner-9\"}]"}"#;
+    assert_eq!(parse_poll(200, negative_id), Err(WireError::Malformed));
+    let oversized = format!(
+        r#"{{"messageId":19,"messageType":"RunnerScaleSetJobMessages","body":"{}"}}"#,
+        "x".repeat(velnor_runner_github::MAX_POLL_BODY_BYTES + 1)
+    );
+    assert_eq!(parse_poll(200, &oversized), Err(WireError::Malformed));
+}
+
+fn poll_with_message_count(count: usize) -> String {
+    let item = r#"{"messageType":"JobAvailable"}"#;
+    let body = std::iter::repeat_n(item, count)
+        .collect::<Vec<_>>()
+        .join(",");
+    let escaped = body.replace('"', "\\\"");
+    format!(r#"{{"messageId":1,"messageType":"RunnerScaleSetJobMessages","body":"[{escaped}]"}}"#)
 }
 
 #[test]

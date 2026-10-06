@@ -1,0 +1,134 @@
+{
+  "schema": 1,
+  "kind": "phasec-registered-source-fixes",
+  "base_checkpoint": {
+    "commit": "98324fb7411ccfff83a95a74cb5254cb4b4e5731",
+    "manifest": "docs/reviews/phasec-registered-source-v30.json",
+    "manifest_sha256": "c968bda9f6f24db43b86f8d2ce5e2dc99bcac041b4f5edbb9b78e9d59ed1fe1c"
+  },
+  "checkpoint": {
+    "commit": "05308a2371ae89db5b1751882545732cf69ce225",
+    "tree": "89cb2c383236b8861fd5681709c15e368d8bf7ee",
+    "clean_worktree": true,
+    "private_detached_author_worktree": "/private/tmp/velnor-phasec-registered-assembly-v30",
+    "remote_operations": false
+  },
+  "commits": [
+    {
+      "commit": "eb995af4bb3e935d3244ab88736b85d95ab83437",
+      "subject": "fix(renderer): accept documented workflow run refs",
+      "stat": {"files": 7, "insertions": 37, "deletions": 12},
+      "signed_off": true,
+      "co_authored_by": "Codex <codex@openai.com>",
+      "changes": [
+        "Expose actual parallel API fixture helpers to their parent test module.",
+        "Accept the exact qualification workflow REST path ending in @main or @refs/heads/main in both stock and cancellation restore validators.",
+        "Use @main in API fixtures and exercise both exact accepted path spellings in a registered stock-run test."
+      ],
+      "paths": [
+        "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_observer_restore_log.rs",
+        "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_test_support.rs",
+        "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_transport_fixture_preamble.sh",
+        "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api_script_helpers.rs",
+        "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api_stock_fixture.rs",
+        "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api_stock_miss_tests.rs",
+        "crates/velnor-actions-workflow-renderer/src/schema2_mbx_stock_restore.sh"
+      ]
+    },
+    {
+      "commit": "12eeae8060abb80df2436acccc7e1082ff70d1fe",
+      "subject": "fix(renderer): bind MBX snapshots to attached evidence",
+      "stat": {"files": 10, "insertions": 269, "deletions": 64},
+      "signed_off": true,
+      "co_authored_by": "Codex <codex@openai.com>",
+      "changes": [
+        "Default qualification-writer resource snapshot binding to false; only the typed resource evidence attachment changes the actual export step binding to true.",
+        "Reject missing, duplicate, non-shell, or overridden measurement bindings at workflow construction and validate the shell value before export.",
+        "Keep required sampler failures fatal for measured jobs; skip sampler calls for the unmeasured cancellation writer so successful export can reach the existing Save predicate.",
+        "Add registered renderer assertions for measured/unmeasured bindings and an executed typed cancellation graph/export fixture with no sampler file.",
+        "Split MBX backend/environment checks into a child module to keep the parent source file within the 400-line limit."
+      ],
+      "paths": [
+        "crates/velnor-actions-workflow-renderer/src/mbx_bundle.rs",
+        "crates/velnor-actions-workflow-renderer/src/mbx_bundle_backend.rs",
+        "crates/velnor-actions-workflow-renderer/src/mbx_bundle_qualification.rs",
+        "crates/velnor-actions-workflow-renderer/src/mbx_bundle_qualification_snapshot_tests.rs",
+        "crates/velnor-actions-workflow-renderer/src/mbx_bundle_qualification_tests.rs",
+        "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_export_composition_tests.rs",
+        "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_tests.rs",
+        "crates/velnor-actions-workflow-renderer/src/schema2_mbx_resource_probe.rs",
+        "crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_cancel_probe.rs",
+        "crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_resource_corruption.rs"
+      ]
+    },
+    {
+      "commit": "05308a2371ae89db5b1751882545732cf69ce225",
+      "subject": "test(renderer): assert cancellation save readiness gate",
+      "stat": {"files": 1, "insertions": 4, "deletions": 0},
+      "signed_off": true,
+      "co_authored_by": "Codex <codex@openai.com>",
+      "changes": [
+        "Assert the typed cancellation Save step consumes the ready=true output produced by the successful export fixture."
+      ],
+      "paths": [
+        "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_export_composition_tests.rs"
+      ]
+    }
+  ],
+  "registered_cases_added": [
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api_stock_miss_tests.rs",
+      "test": "documented_and_explicit_default_branch_workflow_paths_are_accepted",
+      "cases": 2,
+      "coverage": ["qualification.yml@main", "qualification.yml@refs/heads/main"]
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_export_composition_tests.rs",
+      "test": "during_save_writer_reaches_save_without_an_unattached_sampler",
+      "cases": 1,
+      "coverage": [
+        "typed during-save cancellation victim",
+        "actual export script",
+        "resource evidence binding false",
+        "sampler absent",
+        "export and GC succeed",
+        "ready=true before the existing Save step",
+        "existing Save readiness condition consumes steps.mbx-export.outputs.ready"
+      ]
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_cancel_probe.rs",
+      "test": "during_save_writer_has_no_sampler_binding_and_keeps_the_export_save_path",
+      "cases": 1
+    }
+  ],
+  "source_hashes_sha256": [
+    {"path": "crates/velnor-actions-workflow-renderer/src/mbx_bundle.rs", "sha256": "1b861461bb6d019a824099ecb4ecaf3cbec5d4677b98af40c00515d169eed5b8"},
+    {"path": "crates/velnor-actions-workflow-renderer/src/mbx_bundle_backend.rs", "sha256": "0726c9e10f9d06727973904dbf095bd9e6963554b0f589bbe59a082ea8e0e07c"},
+    {"path": "crates/velnor-actions-workflow-renderer/src/mbx_bundle_qualification.rs", "sha256": "2887ceb25f22968a4c0dcfaf4359119cf8cff0f96d27fe04a5e18bb461d8903d"},
+    {"path": "crates/velnor-actions-workflow-renderer/src/mbx_bundle_qualification_snapshot_tests.rs", "sha256": "a809e84d8653368f2cf08a0241a74f94ab8e620d68c48757e4a5f85c1dc8da88"},
+    {"path": "crates/velnor-actions-workflow-renderer/src/mbx_bundle_qualification_tests.rs", "sha256": "8f3ba9f50faaad1ed41d5949a58c66281b6cb77cd68255d2805844482c3c7b08"},
+    {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_export_composition_tests.rs", "sha256": "b7f1838c46e18a5ba449fff1bc7a379656caee4ad174f362e0f73e6ea673d50a"},
+    {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_observer_restore_log.rs", "sha256": "64225c55add8e9111c91a8d0203fd30bc0fb21b79cd9dd00e2c11f58f3096a6a"},
+    {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_test_support.rs", "sha256": "7b00ae54c766aeaff75b9078b16570676fcdf205bd7f15667ba7cc46f4d339ea"},
+    {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_tests.rs", "sha256": "7ce80a00ec2187601f077bd147606bb933f7d8c8d25216b5ab7ea811685d5a0c"},
+    {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_transport_fixture_preamble.sh", "sha256": "38da0b8006dfceb0c9b1dd847d2fd4d436d5a71b53196bace399e195b9dd2ec8"},
+    {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api_script_helpers.rs", "sha256": "6cada2236a19a6a3dbfd0cd5b8b895cec9c6366482ad4e7d4db25f73c1332010"},
+    {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api_stock_fixture.rs", "sha256": "bc3ae71859947c968514a363acebe832ef2e0281162e53c897a9fefaf0a814fd"},
+    {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api_stock_miss_tests.rs", "sha256": "8d438e0a0d8f651eadbd411cb5d69642b8dcd18ad0301cfc8dadd44cdb7b5f9e"},
+    {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_resource_probe.rs", "sha256": "2472700ff95c185380d35b1ab42e895db8160ae36a22da8ac9a6d2ad0723f2cf"},
+    {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_stock_restore.sh", "sha256": "5aaf99011522b0386489a61512e6e83426735eb431ee37a0b10d9a7b266e98dd"},
+    {"path": "crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_cancel_probe.rs", "sha256": "dda5548a275ec1982bcf7a56db8903a6a539cf653fee8a69d072c0d15c842cb1"},
+    {"path": "crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_resource_corruption.rs", "sha256": "1c04f67f2326f04a8cba184836e3365f7baaffabc4ab705b95b7a6cb87a85ffc"}
+  ],
+  "verification": [
+    {"command": "rtk cargo fmt --all", "result": "passed"},
+    {"command": "rtk git diff --check", "result": "passed"},
+    {"command": "Rust compilation, registered tests, and Clippy", "result": "not run; await immutable coordinator gate tree"}
+  ],
+  "preserved": [
+    "The e074 ENOSPC export-failure test and readiness/save predicate assertion remain intact.",
+    "Required sampler failures still fail measured qualification writers before Save.",
+    "The generated workflow and network state were not changed; no push or shared-index write was made."
+  ]
+}

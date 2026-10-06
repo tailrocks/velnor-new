@@ -16,8 +16,8 @@ pub mod tools;
 pub mod zizmor;
 
 pub use actions::{
-    ALINT_ACTION, ALINT_ACTION_SHA, ALINT_ACTION_VERSION, ALLOWED_ACTIONS, CHECKOUT_ACTION,
-    PinnedActionRef, RUST_CACHE_ACTION, RUST_CACHE_ACTION_SHA, RUST_CACHE_ACTION_VERSION,
+    ALINT_ACTION, ALINT_ACTION_SHA, ALINT_ACTION_VERSION, ALLOWED_ACTIONS, AWS_CREDENTIALS_ACTION,
+    AWS_CREDENTIALS_ACTION_SHA, AWS_CREDENTIALS_ACTION_VERSION, CHECKOUT_ACTION, PinnedActionRef,
 };
 pub use capabilities::{
     ACTIONLINT_VERSION, ActionlintCapabilities, NativeParallelismConcerns, StepSyntax,
@@ -33,7 +33,7 @@ pub use metadata::{
 };
 pub use overrides::{
     ActionInputSchema, ActionPinOverride, ApprovedPin, ApprovedPinCatalog, checkout_inputs_schema,
-    rust_cache_inputs_schema, validate_action_inputs,
+    validate_action_inputs,
 };
 pub use tools::{
     ActionlintToolchain, SHELLCHECK_VERSION, ShellcheckToolchain, WorkflowLintTools,

@@ -6,6 +6,7 @@ policy = "velnor-repository-v1"
 default_branch = "main"
 generator_validation = "bootstrap"
 max_parallel_jobs = 2
+pull_request_cache_policy = "same-repository-scoped"
 
 [resources]
 compiler_process_budget = 2
@@ -39,7 +40,7 @@ release_pr = true
 tag_name = "{{ package }}-v{{ version }}"
 
 [discovery]
-exclude = ["fixtures/**"]
+exclude = ["fixtures/**", "crates/**/tests/fixtures/**"]
 
 [actions.overrides]
 
@@ -59,3 +60,113 @@ kind = "github-scale-set"
 name = "ubuntu-26.04-scale-set"
 labels = ["velnor", "ubuntu-26.04-scale-set"]
 platform = "linux/amd64"
+
+[[checks]]
+id = "maintenance-helpers"
+task = "test-maintenance-helpers"
+inputs = [
+  ".config/nextest.toml",
+  ".mise-version",
+  ".velnor/version-policy.toml",
+  "Cargo.lock",
+  "Cargo.toml",
+  "crates/velnor-actions-freshness/Cargo.toml",
+  "crates/velnor-actions-freshness/src/context.rs",
+  "crates/velnor-actions-freshness/src/dependencies.rs",
+  "crates/velnor-actions-freshness/src/dependencies/lock.rs",
+  "crates/velnor-actions-freshness/src/dependencies/lock/graph.rs",
+  "crates/velnor-actions-freshness/src/dependencies/lock/identity.rs",
+  "crates/velnor-actions-freshness/src/dependencies/workspace.rs",
+  "crates/velnor-actions-freshness/src/evidence.rs",
+  "crates/velnor-actions-freshness/src/evidence/advisories.rs",
+  "crates/velnor-actions-freshness/src/evidence/exceptions.rs",
+  "crates/velnor-actions-freshness/src/evidence/freshness.rs",
+  "crates/velnor-actions-freshness/src/inventory.rs",
+  "crates/velnor-actions-freshness/src/inventory/mirror.rs",
+  "crates/velnor-actions-freshness/src/inventory/pins.rs",
+  "crates/velnor-actions-freshness/src/lib.rs",
+  "crates/velnor-actions-freshness/src/members.rs",
+  "crates/velnor-actions-freshness/src/patterns.rs",
+  "crates/velnor-actions-freshness/src/probe.rs",
+  "crates/velnor-actions-freshness/src/probe/tests.rs",
+  "crates/velnor-actions-freshness/src/probe/tests/http.rs",
+  "crates/velnor-actions-freshness/src/probe/transport.rs",
+  "crates/velnor-actions-freshness/src/process.rs",
+  "crates/velnor-actions-freshness/src/process/capture.rs",
+  "crates/velnor-actions-freshness/src/process/tests.rs",
+  "crates/velnor-actions-freshness/src/tests.rs",
+  "crates/velnor-actions-freshness/src/time.rs",
+  "crates/velnor-actions-freshness/src/trailer_policy.rs",
+  "crates/velnor-actions-freshness/src/trailer_policy/tests.rs",
+  "crates/velnor-actions-freshness/src/validation.rs",
+  "crates/velnor-actions-freshness/tests/freshness_contract.rs",
+  "crates/velnor-archive-guard/Cargo.toml",
+  "crates/velnor-archive-guard/build.rs",
+  "crates/velnor-archive-guard/build_support/archive_guard_inputs.rs",
+  "crates/velnor-archive-guard/src/bin/velnor_archive_guard.rs",
+  "crates/velnor-archive-guard/src/lib.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/additional_tests.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/mod.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/pax.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/profile.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/stream.rs",
+  "crates/velnor-archive-guard/src/owned_archive_guard/tests.rs",
+  "crates/velnor-archive-guard/tests/archive_guard_cli.rs",
+  "scripts/archive-guard-build-namespace.sh",
+  "scripts/archive-guard-inputs.txt",
+  "scripts/build-owned-archive-guard.sh",
+  "scripts/check-owned-archive-guard-sources.sh",
+  "scripts/owned_archive_preflight.py",
+  "mise.toml",
+]
+tools = ["cargo-nextest", "rust"]
+timeout_minutes = 60
+[checks.runner]
+label = "ubuntu-26.04"
+platform = "linux_x64"
+executor = "hosted"
+
+[[qualified_tools]]
+id = "cargo-nextest"
+backend = { kind = "aqua", package = "nextest-rs/nextest/cargo-nextest" }
+version = "0.9.146"
+options = { kind = "default" }
+depends_on = ["rust"]
+[[qualified_tools.platforms]]
+platform = "linux_x64"
+artifacts = [
+  { url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.146/cargo-nextest-0.9.146-x86_64-unknown-linux-gnu.tar.gz", sha256 = "682c21b777c333e96fd532e114d3a5a894e0729ab88d94c0a9f20f8419695428" },
+]
+dependency_artifacts = []
+install_tree_sha256 = "a00d122ef5a0077254a317b33346cabcbd14e05531e7d29cdae06a07f64940ae"
+[[qualified_tools.platforms.executables]]
+name = "cargo-nextest"
+path = "cargo-nextest"
+sha256 = "aac21fea56e7ae3f45b5b7c606e02d62d4ec5b3578658fefe4a98a5f29c4bf1a"
+probe = { kind = "cargo_nextest_version", expected = "cargo-nextest 0.9.146 (8af696ddc 2026-09-21)" }
+
+[[qualified_tools]]
+id = "rust"
+backend = { kind = "core", tool = "rust" }
+version = "1.98.1"
+options = { kind = "rust", components = [], targets = [] }
+depends_on = []
+[[qualified_tools.platforms]]
+platform = "linux_x64"
+artifacts = [
+  { url = "https://static.rust-lang.org/dist/2026-09-03/cargo-1.98.1-x86_64-unknown-linux-gnu.tar.xz", sha256 = "ea1de9f9e23107d97ee2b41a72c552f34064a593da503789218387aee59f3ba4" },
+  { url = "https://static.rust-lang.org/dist/2026-09-03/rust-std-1.98.1-x86_64-unknown-linux-gnu.tar.xz", sha256 = "fa3ff450172a16c026944030230c5069947af93c728d9179971d44e5e0cfb561" },
+  { url = "https://static.rust-lang.org/dist/2026-09-03/rustc-1.98.1-x86_64-unknown-linux-gnu.tar.xz", sha256 = "e974f036b28565f37c0f3bd92ddefa809bee16c04f9dcf07b9ed96e05aaaf7c4" },
+]
+dependency_artifacts = []
+install_tree_sha256 = "53f388a3b565f1717c2e6f55c8748c905f9141c20dc8757cca152c1ff5bb744a"
+[[qualified_tools.platforms.executables]]
+name = "cargo"
+path = "bin/cargo"
+sha256 = "da77c8b33849312255ccde3179198ada4c8deb370488d050286146b1d1b27e14"
+probe = { kind = "version", expected = "cargo 1.98.1 (797e8a9bc 2026-08-05)" }
+[[qualified_tools.platforms.executables]]
+name = "rustc"
+path = "bin/rustc"
+sha256 = "859254978c0a0402c32f949f6de0d99aee73be8d15f45aac00ae1448aac51e74"
+probe = { kind = "rustc_verbose", expected = "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8" }

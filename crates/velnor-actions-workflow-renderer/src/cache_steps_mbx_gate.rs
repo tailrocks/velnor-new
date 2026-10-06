@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use super::mbx_command::{has_external_mbx_selector, uses_mbx_command};
-use super::mbx_preflight::mbx_version_check_step;
+use super::mbx_preflight::{canonical_mbx_preflight_step, mbx_version_check_step};
 use super::{CompileDriver, MBX_ACTION_NAME};
 use crate::RenderError;
 use velnor_actions_contract::{Job, Step, StepRole};
@@ -31,6 +31,18 @@ pub fn check_mbx_gating(
             )));
         };
         check_job_mbx(id, job, *driver)?;
+    }
+    for (id, job) in jobs {
+        if job
+            .steps
+            .iter()
+            .any(|step| step.role == Some(StepRole::MbxPreflight))
+            && drivers.get(id) != Some(&CompileDriver::Mbx)
+        {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "mbx_preflight_without_selection:{id}"
+            )));
+        }
     }
     Ok(())
 }
@@ -143,6 +155,12 @@ fn check_mbx_version_order(
             "mbx_toolchain_missing:{id}"
         )));
     };
+    let expected_preflight = canonical_mbx_preflight_step(version, rust_toolchain, env)?;
+    if job.steps.get(preflight_at) != Some(&expected_preflight) {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_preflight_mismatch:{id}"
+        )));
+    }
     let expected = mbx_version_check_step(version, rust_toolchain, env.clone())?;
     if job.steps.get(check_at) != Some(&expected) {
         return Err(RenderError::InvalidWorkflow(format!(

@@ -20,6 +20,10 @@ automation that is not wired.
   the `runner` default-label row), `upstream-probe`
   (only with `--check-upstream`), `exception-expiry`,
   `standing-exception`, `advisories`.
+- The shell entrypoint forwards repository checks through the existing CLI's
+  private `repo-policy-v1` gate to the separate `velnor-actions-freshness`
+  library. The library is repository-maintenance support outside V1 planning;
+  this adds no public command or binary.
 - Usages: `scripts/check-freshness.sh` (offline gate),
   `scripts/check-freshness.sh --with-advisories` (plus the live
   `cargo deny` scan, 180 s bound),
@@ -105,9 +109,11 @@ advance only through reviewed update sets, and the real-root
 `upstream-freshness` rows stay honestly red once `checked_at` ages past
 `check_interval_hours`.
 `--check-upstream` is the bounded probe that the freshness job runs: one GET per
-row (10 s timeout, 512 KiB cap, small fixed row count), parsing only
-GitHub-releases tags, `crates.io` `max_version`, and the rust channel
-manifest's `[pkg.rust]` version. It writes nothing. Every probe row
+row (10 s timeout, independent 512 KiB encoded and decompressed caps, small
+fixed row count). It accepts identity or gzip encoding; unsupported encodings,
+malformed gzip, and either cap overflow fail closed. It parses only
+GitHub-releases tags, `crates.io` `max_version`, and the rust channel manifest's
+`[pkg.rust]` version. It writes nothing. Every probe row
 records its source URL and check timestamp; stale pins and lookup
 failures fail as rows — signal for the next update set, not a build
 gate. A `lookup_failed` row is fail-closed signal, never current:
@@ -121,7 +127,8 @@ hosted workflow log. Keep a normal CI runtime observation separate from a
 formal `Qualification` workflow result: a newer CI observation refreshes
 image identity only and does not claim the qualification matrix ran again.
 The [2026-10-04 evidence snapshot](freshness-evidence-2026-10-04.md)
-records this distinction.
+records this distinction. The [2026-10-05 evidence snapshot](freshness-evidence-2026-10-05.md)
+records two bounded release-metadata captures and a separate hosted-runner image observation.
 
 ## Exceptions (≤14 days)
 

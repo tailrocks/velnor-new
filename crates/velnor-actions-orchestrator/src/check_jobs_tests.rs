@@ -2,7 +2,7 @@
 
 use super::*;
 use velnor_actions_contract::config::{CheckPlatform, CheckRunner, MiseCheck, QualifiedTool};
-use velnor_actions_contract::{JobConclusion, RequiredJobResult, StepKind};
+use velnor_actions_contract::{JobConclusion, RequiredJobResult, StepKind, VelnorConfig};
 use velnor_actions_mise::PinnedTool;
 
 fn check(id: &str, runner: CheckRunner) -> MiseCheck {
@@ -32,16 +32,22 @@ fn fixture(checks: &[MiseCheck]) -> (tempfile::TempDir, Discovery) {
     fixture_with_tools(checks, &[gh_qualification()])
 }
 
+fn named_workflow(
+    root: &std::path::Path,
+    config: &VelnorConfig,
+    discovery: &Discovery,
+) -> crate::workflow::WorkflowPlan {
+    crate::workflow::build_workflow(root, config, "main", "ubuntu-26.04", discovery, &[])
+        .expect("named checks workflow")
+}
+
 fn fixture_with_tools(
     checks: &[MiseCheck],
     tools: &[QualifiedTool],
 ) -> (tempfile::TempDir, Discovery) {
     let root = tempfile::tempdir().expect("temporary repository");
-    std::fs::write(
-        root.path().join("mise.toml"),
-        "[tasks.\"check:all\"]\nrun = 'true'\n",
-    )
-    .expect("native task source");
+    let source = "[tasks.\"check:all\"]\nrun = 'true'\n";
+    std::fs::write(root.path().join("mise.toml"), source).expect("native task source");
     let checks = velnor_actions_mise::discover_checks(root.path(), checks, tools)
         .expect("discover explicit checks");
     let discovery = Discovery {
@@ -57,6 +63,7 @@ fn fixture_with_tools(
         },
         recommendations: Vec::new(),
         consumer_manifest_json: None,
+        consumer_manifest_stand_in: false,
         skipped_non_utf8: false,
         tofu_note: None,
         tofu_units: Vec::new(),
@@ -122,9 +129,7 @@ fn no_cargo_checks_gate_required_without_becoming_rust_jobs() {
     )
     .expect("config");
     let config = crate::config::load_config(root.path()).expect("defaulted config");
-    let workflow =
-        crate::workflow::build_workflow(&config, "main", "ubuntu-26.04", &discovery, &[])
-            .expect("named checks workflow");
+    let workflow = named_workflow(root.path(), &config, &discovery);
     assert_eq!(workflow.ir.jobs["check-ffi"].display_name, "Check / ffi");
     assert!(
         workflow.ir.jobs["required"]
@@ -164,6 +169,15 @@ fn mixed_platform_checks_keep_exact_tools_and_unconditional_reports() {
     assert_eq!(jobs[1].1.runs_on, "macos-15");
     for (id, job) in &jobs {
         assert_eq!(job.needs, ["plan"]);
+        let checkout = job.steps.first().expect("checkout");
+        let StepKind::Action { with, .. } = &checkout.kind else {
+            panic!("checkout action");
+        };
+        assert_eq!(
+            with.get("fetch-depth").map(String::as_str),
+            Some("0"),
+            "named check verifies the plan head against the merge commit parent"
+        );
         let execution = job
             .steps
             .iter()
@@ -364,18 +378,23 @@ fn ignored_rust_candidate_keeps_plan_inventory_toolchain() {
     )
     .expect("config");
     let config = crate::config::load_config(root.path()).expect("defaulted config");
-    let workflow =
-        crate::workflow::build_workflow(&config, "main", "ubuntu-26.04", &discovery, &[])
-            .expect("ignored Rust workflow");
+    let workflow = named_workflow(root.path(), &config, &discovery);
     let plan = &workflow.ir.jobs["plan"];
+    let pinned_tools = plan
+        .steps
+        .iter()
+        .find(|step| step.name == "Prepare pinned tools")
+        .expect("plan inventory prepares its exact Rust compiler");
+    assert!(matches!(
+        &pinned_tools.kind,
+        StepKind::Shell { run, .. }
+            if run.contains(&ToolCatalog::pinned().tool_spec(PinnedTool::Rust))
+    ));
     assert!(
-        plan.steps
+        !plan
+            .steps
             .iter()
-            .any(|step| step.name == "Prepare Rust components")
+            .any(|step| step.name == "Prepare Rust components"),
+        "an ignored candidate has no selected plan-owned Format step"
     );
-    assert!(plan.steps.iter().any(|step| match &step.kind {
-        StepKind::Shell { run, .. } =>
-            run.contains(&ToolCatalog::pinned().tool_spec(PinnedTool::Rust)),
-        _ => false,
-    }));
 }

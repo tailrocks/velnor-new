@@ -24,6 +24,35 @@ fn unknown_flags_exit_two() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn retired_foundation_qualification_flag_is_unknown() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("args-foundation-retired")?;
+    let preview = tmp.join("preview");
+    let output = spawn(
+        &[
+            "generate",
+            "--foundation-qualification-only",
+            "--output-dir",
+            preview.to_str().unwrap_or("/"),
+        ],
+        &[],
+        &tmp,
+    )?;
+    assert_eq!(code(&output), 2, "retired flag must be a usage error");
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert!(
+        stderr.contains("--foundation-qualification-only")
+            && stderr.to_ascii_lowercase().contains("argument"),
+        "the retired flag must be rejected by argument parsing: {stderr}"
+    );
+    assert!(
+        !preview.exists(),
+        "unknown flag must not create preview output"
+    );
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
 fn extra_positionals_exit_two() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("args-pos")?;
     for args in [vec!["init", "extra"], vec!["plan", "extra"]] {
@@ -112,6 +141,60 @@ fn generate_output_dir_flag_parses() -> Result<(), Box<dyn Error>> {
         &tmp,
     )?;
     assert_eq!(code(&output), 1);
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
+fn owned_candidates_mode_requires_explicit_preview_destination() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("args-owned-only")?;
+    let output = spawn(&["generate", "--owned-tool-candidates-only"], &[], &tmp)?;
+    assert_eq!(code(&output), 2);
+    git_init(&tmp)?;
+    let preview = tmp.join("preview");
+    let output = spawn(
+        &[
+            "generate",
+            "--owned-tool-candidates-only",
+            "--output-dir",
+            preview.to_str().unwrap_or("/"),
+        ],
+        &[],
+        &tmp,
+    )?;
+    assert_eq!(code(&output), 1, "parses, then fails on missing config");
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
+fn reviewed_push_requires_source_preview_category() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("args-owned-push")?;
+    let preview = tmp.join("preview");
+    let output = spawn(
+        &[
+            "generate",
+            "--owned-tool-candidates-push",
+            "--output-dir",
+            preview.to_str().unwrap_or("/"),
+        ],
+        &[],
+        &tmp,
+    )?;
+    assert_eq!(code(&output), 2);
+    git_init(&tmp)?;
+    let output = spawn(
+        &[
+            "generate",
+            "--owned-tool-candidates-only",
+            "--owned-tool-candidates-push",
+            "--output-dir",
+            preview.to_str().unwrap_or("/"),
+        ],
+        &[],
+        &tmp,
+    )?;
+    assert_eq!(code(&output), 1, "parses, then fails on missing config");
     cleanup(&tmp);
     Ok(())
 }

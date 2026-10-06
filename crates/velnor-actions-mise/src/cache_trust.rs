@@ -1,23 +1,21 @@
 //! P08 trust, save, and quota policy: PR scoping, deltas, service data.
 //!
-//! The pinned MBX v1.6.0 action supports opt-in same-repo PR saving, but
-//! Velnor keeps that option off: PRs restore the default-branch cache
-//! read-only; any PR-branch save never promotes to trusted.
-//! Fork PRs stay read-only. PR outputs never become trusted/release
-//! evidence. Saves happen only for producer-successful useful deltas in
-//! the allowed trust scope after writers finish. Cache-service errors
-//! never fail verification nor permit skipped work. Quota/headroom come
-//! from service data (`gh cache list --json`, `.../cache/usage`), never
-//! a hardcoded limit: callers pass the limit in.
+//! Trusted-layer saves are protected-push-only, independent of action
+//! PR-save capability. Pull requests restore read-only; fork PRs stay
+//! read-only. PR outputs never become trusted/release evidence. Saves
+//! happen only for producer-successful useful deltas in the allowed
+//! trust scope after writers finish. Cache-service errors never fail
+//! verification nor permit skipped work. Quota/headroom come from
+//! service data (`gh cache list --json`, `.../cache/usage`), never a
+//! hardcoded limit: callers pass the limit in.
 
 use crate::error::MiseError;
 
-/// Velnor does not opt in to the action's same-repository PR cache writes.
-pub const MBX_PR_SAVE_OPTED_IN: bool = false;
-
-/// True when a same-repo PR may save (action must support PR scoping).
+/// Whether action-level PR saving is supported for this run.
 ///
-/// Forks never save; non-PR events are governed by `save_allowed`.
+/// This capability check does not authorize trusted-layer writes;
+/// [`authorize_trusted_save`] remains protected-push-only. Forks and
+/// non-PR events cannot use this PR capability.
 #[must_use]
 pub fn pr_save_allowed(action_supports_pr_save: bool, is_fork: bool, event: &str) -> bool {
     if is_fork {
@@ -70,28 +68,16 @@ pub fn save_after_success(gate: SaveGate) -> bool {
 /// [`save_after_success`] must still require all four gate conditions,
 /// [`crate::restore::save_decision`] must permit only the
 /// trusted/push/passed combination, [`crate::cache::save_allowed`] must
-/// agree, and the generator must not enable PR saves. The
-/// returned condition is the `if:` gate the emitted save step carries;
-/// policy drift fails generation instead of emitting a stale gate.
+/// agree, and every PR/other event must remain denied regardless of
+/// action-level PR-save capability. The returned condition is the `if:`
+/// gate the emitted save step carries; policy drift fails generation
+/// instead of emitting a stale gate.
 ///
 /// # Errors
 ///
 /// Returns [`MiseError::Contract`] when the policy no longer matches
 /// the emitted push-only gate.
 pub fn authorize_trusted_save() -> Result<&'static str, MiseError> {
-    authorize_trusted_save_for(MBX_PR_SAVE_OPTED_IN)
-}
-
-/// Authorize one trusted-layer save step under an explicit PR-save policy.
-///
-/// The generator policy arrives as a parameter so tests cover drift
-/// rejection without flipping the production constant.
-///
-/// # Errors
-///
-/// Returns [`MiseError::Contract`] when the policy no longer matches
-/// the emitted push-only gate.
-pub fn authorize_trusted_save_for(pr_save_supported: bool) -> Result<&'static str, MiseError> {
     use crate::restore::{SaveInputs, save_decision};
     let open = SaveGate {
         producer_passed: true,
@@ -101,9 +87,6 @@ pub fn authorize_trusted_save_for(pr_save_supported: bool) -> Result<&'static st
     };
     if !save_after_success(open) {
         return Err(contract("save_gate_weakened"));
-    }
-    if pr_save_supported {
-        return Err(contract("save_policy_drift:pr_save_supported"));
     }
     let allowed = SaveInputs {
         layer_trust: "trusted",
@@ -140,8 +123,8 @@ pub fn authorize_trusted_save_for(pr_save_supported: bool) -> Result<&'static st
         return Err(contract("save_policy_drift:allowlist"));
     }
     let gate = velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
-    if !gate.contains("success()") {
-        return Err(contract("save_gate_missing_success"));
+    if gate != "success() && github.event_name == 'push'" {
+        return Err(contract("save_gate_not_push_only"));
     }
     Ok(gate)
 }

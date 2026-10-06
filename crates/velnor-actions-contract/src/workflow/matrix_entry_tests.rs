@@ -7,6 +7,10 @@ use std::collections::BTreeMap;
 const TASK: &str = "stack/mise/demo/check/default";
 
 fn entry(variant: NamedCheckLaneVariant, job_id: &str) -> MatrixEntry {
+    let runs_on = match variant {
+        NamedCheckLaneVariant::Hosted => "ubuntu-26.04",
+        NamedCheckLaneVariant::ScaleSet => "scale-set:velnor+ubuntu-26.04-scale-set",
+    };
     MatrixEntry::derive_for_lane(
         "mise",
         TASK,
@@ -20,6 +24,7 @@ fn entry(variant: NamedCheckLaneVariant, job_id: &str) -> MatrixEntry {
         "local",
         job_id,
         Some(variant),
+        PlannedPlatform::new(runs_on, "x86_64-unknown-linux-gnu").expect("planned platform"),
     )
     .expect("derived paired lane")
 }
@@ -52,6 +57,7 @@ fn lane_identity_rejects_wrong_stack_or_emitted_job_suffix() {
         "local",
         "check-demo__local",
         Some(NamedCheckLaneVariant::Hosted),
+        PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("planned platform"),
     )
     .expect_err("hosted variant cannot claim the local job");
     assert!(

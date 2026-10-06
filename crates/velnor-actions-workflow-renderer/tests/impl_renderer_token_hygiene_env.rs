@@ -1,4 +1,4 @@
-//! Token hygiene: action env scanning plus typed fetch authority.
+//! Token hygiene: action env scanning plus fetch-exemption shape.
 //!
 //! Split from `impl_renderer_token_hygiene` to hold the 400-line gate.
 
@@ -7,7 +7,8 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::{Job, StepRole, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
     RenderError, action_step_with_env, ambient_shell_step, checkout_step, plan_step,
-    render_workflow_ir, steps::MBX_CACHE_MODE_ENV,
+    render_workflow_ir, steps::MBX_CACHE_MODE_ENV, steps::RESOLVE_QUALIFICATION_OPERATION,
+    steps::internal_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -66,20 +67,50 @@ fn benign_mbx_cache_mode_env_passes() -> Result<(), RenderError> {
 }
 
 #[test]
-fn ambient_fetch_auth_uses_typed_role_not_display_name() -> Result<(), RenderError> {
-    // A typed fetch retains its generator-owned ambient-auth exemption
-    // after its presentation name changes.
-    let mut allowed_step = ambient_shell_step(
-        "Renamed source preparation",
+fn qualification_resolver_is_scoped_to_dispatch_in_plan_job() -> Result<(), RenderError> {
+    let mut resolver = internal_step(
+        "Resolve qualification predecessor",
+        RESOLVE_QUALIFICATION_OPERATION,
+    )?;
+    resolver.condition = Some("github.event_name == 'workflow_dispatch'".to_owned());
+    render_workflow_ir(
+        &fixture_ir(vec![action_plan_job(vec![resolver])?]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )?;
+
+    let unguarded = internal_step(
+        "Resolve qualification predecessor",
+        RESOLVE_QUALIFICATION_OPERATION,
+    )?;
+    let error = render_workflow_ir(
+        &fixture_ir(vec![action_plan_job(vec![unguarded])?]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )
+    .expect_err("resolver must require workflow_dispatch condition");
+    assert!(
+        matches!(error, RenderError::InvalidWorkflow(ref problem) if problem.contains("qualification_resolver_scope")),
+        "{error}"
+    );
+    Ok(())
+}
+
+#[test]
+fn fetch_ambient_auth_follows_typed_role_not_label() -> Result<(), RenderError> {
+    let mut role_owned = ambient_shell_step(
+        "Renamed source fetch",
         vec!["true".to_owned()],
         BTreeMap::new(),
     )?;
-    allowed_step.role = Some(StepRole::CargoSourcesFetch);
+    role_owned.role = Some(StepRole::CargoSourcesFetch);
     let allowed = job(
         "plan",
         "Plan",
         Vec::new(),
-        vec![checkout_step(&checkout_pin())?, allowed_step, plan_step()],
+        vec![checkout_step(&checkout_pin())?, role_owned, plan_step()],
     );
     render_workflow_ir(
         &fixture_ir(vec![allowed]),
@@ -88,31 +119,20 @@ fn ambient_fetch_auth_uses_typed_role_not_display_name() -> Result<(), RenderErr
         &fixture_ctx(),
     )?;
 
-    // Old and forged labels carry no authority by themselves.
-    for name in [
-        "Fetch Cargo sources (nested/Cargo.toml)",
-        "Fetch Cargo sources (a/b/Cargo.toml)",
-        "Fetch Cargo sources (x",
-        "Fetch Cargo sources (nested/Cargo.toml",
-        "Fetch Cargo sources (nested/Cargo.toml))",
-        "Fetch Cargo sources (nested/Cargo.toml) extra",
-        "Fetch Cargo sources (Cargo.lock)",
-        "Fetch Cargo sources ()",
-        "Fetch Cargo sources (../escape/Cargo.toml)",
-        "Fetch Cargo sources ($HOME/Cargo.toml)",
-        "Fetch Cargo sources (a\"b/Cargo.toml)",
-    ] {
-        let forged = job(
-            "plan",
-            "Plan",
-            Vec::new(),
-            vec![
-                checkout_step(&checkout_pin())?,
-                ambient_shell_step(name, vec!["true".to_owned()], BTreeMap::new())?,
-                plan_step(),
-            ],
-        );
-        render_fails_with(vec![forged], "missing_scrub");
-    }
+    let label_only = job(
+        "plan",
+        "Plan",
+        Vec::new(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            ambient_shell_step(
+                "Fetch Cargo sources (nested/Cargo.toml)",
+                vec!["true".to_owned()],
+                BTreeMap::new(),
+            )?,
+            plan_step(),
+        ],
+    );
+    render_fails_with(vec![label_only], "missing_scrub");
     Ok(())
 }

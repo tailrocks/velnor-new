@@ -113,6 +113,7 @@ fn cache_miss_cannot_fail_merge() -> TestResult {
         event: velnor_actions_contract::WorkflowEvent::PullRequest,
         trust: velnor_actions_contract::Trust::Pr,
         matrix_id: &entry.id,
+        planned_platform: &entry.planned_platform,
         matrix_key: &entry.matrix_key,
         task_id: &entry.task_id,
         task_digest: &obligation.task_digest,

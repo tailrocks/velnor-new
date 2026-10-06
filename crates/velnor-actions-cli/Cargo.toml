@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 velnor-actions-orchestrator = { version = "=0.1.1", path = "../velnor-actions-orchestrator" }
+velnor-actions-freshness = { version = "=0.1.1", path = "../velnor-actions-freshness" }
 clap = { version = "=4.6.7", features = ["derive"] }
 
 [lints]
@@ -25,3 +26,9 @@ path = "tests/velnor_cli.rs"
 proc-macro2 = "=1.0.107"
 serde_json = { workspace = true }
 syn = { version = "=3.0.6", features = ["full", "visit"] }
+unicode-general-category = "=1.1.0"
+
+[[example]]
+name = "validate_commit_trailers"
+path = "examples/validate_commit_trailers.rs"
+test = true

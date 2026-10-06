@@ -6,7 +6,7 @@ use std::process::Command;
 
 #[test]
 fn publisher_observes_one_release_id_before_and_after_publication() {
-    let script = manifest::publish_script(&test_pins());
+    let script = manifest::publish_script(&test_pins()).expect("pinned publisher script");
     let create_tag = script
         .find("created_ref=")
         .expect("publisher creates the exact source tag");
@@ -28,6 +28,10 @@ fn publisher_observes_one_release_id_before_and_after_publication() {
     let second_ci = script
         .rfind("actions/workflows/ci.yml/runs?")
         .expect("publisher rechecks Required immediately before publication");
+    let final_tag_check = script[second_ci..]
+        .find("assert_release_tag_source")
+        .map(|offset| second_ci + offset)
+        .expect("publisher rechecks the source tag immediately before publication");
     let publish = script
         .find("--method PATCH -F draft=false")
         .expect("publisher publishes by stable release ID");
@@ -41,7 +45,8 @@ fn publisher_observes_one_release_id_before_and_after_publication() {
     assert!(resolve_id < upload);
     assert!(upload < draft_read);
     assert!(draft_read < second_ci);
-    assert!(second_ci < publish);
+    assert!(second_ci < final_tag_check);
+    assert!(final_tag_check < publish);
     assert!(publish < immutable_read);
     assert!(immutable_read < receipt);
     assert!(script.contains("repos/$GITHUB_REPOSITORY/releases/$release_id"));

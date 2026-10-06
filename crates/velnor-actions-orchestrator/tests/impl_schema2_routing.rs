@@ -14,10 +14,8 @@ mod monitoring_fixture;
 mod named_check_lanes_tests;
 #[path = "schema2_feature_snapshots.rs"]
 mod schema2_feature_snapshots;
-#[path = "schema2_generator_release_snapshots.rs"]
-mod schema2_generator_release_snapshots;
-#[path = "schema2_release_snapshots.rs"]
-mod schema2_release_snapshots;
+#[path = "schema2_product_release_snapshots.rs"]
+mod schema2_product_release_snapshots;
 #[path = "impl_schema2_routing_shell.rs"]
 mod shell_tests;
 
@@ -126,38 +124,24 @@ fn schema2_workflows_match_expected_bytes() -> TestResult {
         qualification,
         &marked(schema2_feature_snapshots::QUALIFICATION)
     );
-    let image = required_file(&tree, ".github/workflows/image-release.yml")?;
-    let macos = required_file(&tree, ".github/workflows/macos-binary-release.yml")?;
-    assert_eq!(image, &marked(schema2_release_snapshots::IMAGE_RELEASE));
-    assert_eq!(macos, &marked(schema2_release_snapshots::MACOS_RELEASE));
-    assert_image_producer(image)?;
-    assert_macos_producer(macos)?;
+    required_file(&tree, ".github/workflows/product-release.yml")?;
+    schema2_product_release_snapshots::assert_rendered(&tree)?;
+    let images = required_file(&tree, ".github/workflows/product-release-images.yml")?;
+    let binary = required_file(&tree, ".github/workflows/product-release-binary.yml")?;
+    assert_image_producer(images)?;
+    assert_macos_producer(binary)?;
     assert_eq!(
         required_file(&tree, ".github/workflows/monitoring.yml")?,
         &marked(MONITORING)
     );
-    schema2_generator_release_snapshots::assert_rendered(&tree)?;
     Ok(())
 }
 
 #[test]
 fn committed_release_files_match_schema2_bytes() -> TestResult {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    for (name, expected) in [
-        (
-            "image-release.yml",
-            schema2_release_snapshots::IMAGE_RELEASE,
-        ),
-        (
-            "macos-binary-release.yml",
-            schema2_release_snapshots::MACOS_RELEASE,
-        ),
-    ] {
-        let path = root.join(".github/workflows").join(name);
-        let body = std::fs::read_to_string(&path)?;
-        assert_eq!(body, marked(expected), "{}", path.display());
-    }
-    schema2_generator_release_snapshots::assert_committed(&root)?;
+    let tree = render_staged_tree(&prepare(&root)?)?;
+    schema2_product_release_snapshots::assert_committed(&root, &tree)?;
     Ok(())
 }
 
@@ -176,7 +160,7 @@ fn assert_both_ci(ci: &str) -> TestResult {
     assert!(local.contains(SCALE_RUNS), "{local}");
     assert!(!local.contains(SCALE_REVERSED), "{local}");
     assert!(!local.contains("runs-on: ubuntu-26.04\n"), "{local}");
-    shell_tests::assert_scale_set_shell_and_same_steps(hosted, local);
+    shell_tests::assert_scale_set_shell_and_same_steps(hosted, local)?;
     let plan = job_body(ci, "plan")?;
     assert!(plan.contains(HOSTED_RUNS), "{plan}");
     assert!(!plan.contains("ubuntu-26.04-scale-set"), "{plan}");
@@ -316,11 +300,13 @@ fn assert_image_producer(body: &str) -> TestResult {
         body.contains("actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8")
     );
     assert!(body.contains("gh release create"));
-    assert!(body.contains("runner-${GITHUB_SHA}"));
+    assert!(body.contains("readonly tag_prefix='runner'"));
+    assert!(body.contains("${tag_prefix}-${release_source_sha}"));
     assert!(body.contains(HOSTED_RUNS));
     assert_release_permissions(body, "attest-images", "publish-images")?;
     assert!(!body.contains("echo release"));
-    assert!(!body.contains("inputs:"));
+    assert!(body.contains("workflow_call:"));
+    assert!(!body.contains("workflow_dispatch:"));
     assert!(!body.contains("packages:"));
     assert!(!body.contains("CARGO_REGISTRY_TOKEN"));
     assert!(!body.contains("secrets:"));
@@ -331,10 +317,8 @@ fn assert_image_producer(body: &str) -> TestResult {
 fn assert_macos_producer(body: &str) -> TestResult {
     let build = job_body(body, "build-binary")?;
     assert!(build.contains("runs-on: macos-15"), "{build}");
-    assert!(!build.contains("ubuntu"), "{build}");
     assert!(build.contains("jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5"));
     assert!(build.contains("rust@1.98.1"), "{build}");
-    assert!(!body.contains("ubuntu"));
     assert!(body.contains(
         "cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-runner-cli"
     ));
@@ -345,19 +329,20 @@ fn assert_macos_producer(body: &str) -> TestResult {
         body.contains("actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8")
     );
     assert!(body.contains("gh release create"));
-    assert!(body.contains("binary-${GITHUB_SHA}"));
+    assert!(body.contains("readonly tag_prefix='binary'"));
+    assert!(body.contains("${tag_prefix}-${release_source_sha}"));
     assert_release_permissions(body, "attest-binary", "publish-binary")?;
     assert!(!body.contains("echo release"));
-    assert!(!body.contains("inputs:"));
+    assert!(body.contains("workflow_call:"));
+    assert!(!body.contains("workflow_dispatch:"));
     assert!(!body.contains("packages:"));
     assert!(!body.contains("CARGO_REGISTRY_TOKEN"));
     Ok(())
 }
 
 fn assert_release_permissions(body: &str, attest: &str, publish: &str) -> TestResult {
-    assert_eq!(body.matches("id-token: write").count(), 1, "{body}");
-    assert_eq!(body.matches("contents: write").count(), 1, "{body}");
-    assert!(body.contains("workflow_dispatch: {}"), "{body}");
+    assert!(body.contains("workflow_call:"), "{body}");
+    assert!(!body.contains("workflow_dispatch:"), "{body}");
     let attest_body = job_body(body, attest)?;
     let publish_body = job_body(body, publish)?;
     assert!(attest_body.contains("id-token: write"), "{attest_body}");
@@ -370,7 +355,7 @@ fn assert_release_permissions(body: &str, attest: &str, publish: &str) -> TestRe
     );
     assert!(publish_body.contains("actions/checkout@"), "{publish_body}");
     assert!(
-        publish_body.contains(r#"-R \"${GITHUB_REPOSITORY}\""#),
+        publish_body.contains("release_repository='tailrocks/velnor-new'"),
         "{publish_body}"
     );
     assert!(!attest_body.contains("GH_TOKEN"), "{attest_body}");

@@ -1,0 +1,1 @@
+{'stdout': ['2026-10-04T21:38:15.173781956Z 2026-10-04 21:38:15.173 UTC [46] LOG:  database system is ready to accept connections'], 'stderr': ['2026-10-04T21:38:15.763901106Z 2026-10-04 21:38:15.763 UTC [1] LOG:  database system is ready to accept connections']}

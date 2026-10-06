@@ -1,14 +1,21 @@
 # T04 Rust-only golden evidence (Phase A behavior bracket)
 
-## Current release integration checkpoint (2026-10-05)
+## PR41 + PR46 integration checkpoint (2026-10-05)
 
-After syncing main `2d9bca8` and scoping consumer-manifest discovery to
-`ConsumerV1`, the pinned debug CLI regenerated the shipping `.github` tree
-and all five fixture trees. The golden check reports all five match, and the
-dogfood verdict is `identical`; the producer repository no longer reads or
-synthesizes a consumer release manifest. No authentic same-run three-target
-candidate manifest is present, so `check-release`, hosted qualification,
-immutable publication, and infrastructure protection remain unverified.
+After syncing main `2d9bca8` (including the PR71 generator correction and the
+PR73 seed-authority correction) and applying the source policy fix, the pinned
+debug CLI regenerated the checked-in `.github` tree and recaptured all five
+fixture trees. A separate
+`scripts/capture-opentofu-goldens.sh check` reports **all five match**, and
+`dogfood.verdict` is `identical`. Under
+`VelnorRepositoryV1`, discovery neither reads nor synthesizes the consumer
+manifest; the generated source tree contains no debug-only manifest data. The
+regression in `impl_consumer_manifest_file.rs` proves this path still emits no
+consumer `Acquire Velnor` step. No authentic same-run three-target candidate
+manifest is present; `check-release`, hosted qualification, immutable
+publication, and infrastructure protection remain unverified. The seed
+authority correction is present in this source tree, but hosted cache and seed
+qualification remain unverified.
 
 Pre-refactor capture at `a12efd7` (behavior-identical to `origin/main`
 106bfd7; docs-only delta). Every T06 ownership move must re-run the
@@ -46,11 +53,19 @@ normalization.
 
 | Case | plan exit | Goldens in `cases/<case>/` |
 |---|---|---|
-| nested | 0 | plan.txt, generate tree (ci.yml + actionlint.yaml), tree.sha256 |
+| nested | 0 | plan.txt, complete generated `.github` tree, tree.sha256 |
 | mbx-nextest | 0 | same |
 | empty-suite | 0 | same |
 | minimal-cargo | 0 | same |
-| dogfood (this repo) | 0 | plan.txt, generate tree, `dogfood.verdict=identical`, tree.sha256 |
+| dogfood (this repo) | 0 | plan.txt, complete generated tree, `dogfood.verdict=identical`, tree.sha256 |
+
+These case trees were regenerated from the current source after the V2 tools-cache
+migration using the actual `velnor-actions` CLI. Hosted cache previews include the
+generated identity-and-seed prelude, tools-cache restore composite, and identity
+helper where the workload uses V2; the V1 `mise-v1-*` key and built-in Mise cache
+route are absent. The dogfood tree is byte-equal to the checked-in `.github` tree.
+This is generated-source evidence only; it does not claim a hosted cache hit or
+persistent-cache round trip.
 
 The four consumer fixtures receive the checked-in
 `fixtures/consumer-release-manifest.json` in their scratch repositories.
@@ -60,12 +75,12 @@ qualification, or release evidence. The dogfood producer repo stays on its
 VelnorRepositoryV1 path and receives no consumer manifest. The actual CLI
 parity suite also removes the fixture and verifies that `plan` fails closed.
 
-The checked-in producer workflow was regenerated from the reviewed source with
+Historical pre-V2 producer capture: the checked-in workflow was regenerated from the reviewed source with
 the locked release candidate (`mbx build --release --locked --package
 velnor-actions-cli --bin velnor-actions`). Its complete `.github` output was
 reproduced by a second `generate --output-dir` run; the only difference from
-the preceding shipping tree was `.github/workflows/ci.yml`. The resulting CI
-workflow SHA-256 is `613eeba58b49f4b6f28da06c97fadeb6567d7f2b521dece53149631643e839b9`.
+the preceding shipping tree was `.github/workflows/ci.yml`. That historical CI
+workflow SHA-256 was `613eeba58b49f4b6f28da06c97fadeb6567d7f2b521dece53149631643e839b9`.
 The local golden collector still builds `target/debug/velnor-actions`; its
 `identical` dogfood verdict confirms that this source preview matches the
 checked-in tree, but the debug binary is not the producer artifact. The

@@ -1,14 +1,16 @@
 use std::collections::BTreeMap;
 
+use crate::verification_jobs::build_task_jobs::{BuildTaskArtifact, BuildTaskTool};
 use velnor_actions_contract::{
-    Job, JobTimeout, PermissionLevel, VerificationRunner, VerificationTask, VerificationTaskKind,
+    Job, JobTimeout, PermissionLevel, VerificationRunner, VerificationTask,
 };
 
 use super::{
     HOSTED_TASK_NAME_SUFFIX, SCALE_TASK_NAME_SUFFIX, VerificationTaskPolicy,
-    build_verification_task_job, extend_required_needs, validate_verification_jobs,
+    build_verification_task_job, validate_verification_jobs,
 };
 use crate::MiseSetup;
+use crate::verification_jobs::workflow_task_jobs::extend_required_needs;
 
 const CHECKOUT: &str = "actions/checkout@0123456789abcdef0123456789abcdef01234567";
 
@@ -16,7 +18,6 @@ fn policy(id: &str, runner: VerificationRunner) -> VerificationTaskPolicy {
     VerificationTaskPolicy {
         task: VerificationTask {
             id: id.to_owned(),
-            kind: VerificationTaskKind::Verification,
             mise_task: format!("lint-{id}"),
             runner,
             timeout_minutes: 10,
@@ -28,6 +29,10 @@ fn policy(id: &str, runner: VerificationRunner) -> VerificationTaskPolicy {
             version: "2026.9.18".to_owned(),
             sha256: "a".repeat(64),
         },
+        selected_tools: Vec::new(),
+        mise_config_sha256: None,
+        mise_lock_sha256: None,
+        rust_toolchain_sha256: None,
     }
 }
 
@@ -44,7 +49,7 @@ fn task_job_is_unconditional_cache_off_and_credential_scrubbed() {
     assert_eq!(permissions.actions, PermissionLevel::None);
     assert_eq!(permissions.pull_requests, PermissionLevel::None);
     assert_eq!(permissions.id_token, PermissionLevel::None);
-    assert_eq!(job.steps.len(), 4);
+    assert_eq!(job.steps.len(), 3);
     if let velnor_actions_contract::StepKind::Action { uses, with, env } = &job.steps[0].kind {
         assert_eq!(uses.as_str(), CHECKOUT);
         assert_eq!(
@@ -67,8 +72,11 @@ fn task_job_is_unconditional_cache_off_and_credential_scrubbed() {
     }
     for step in &job.steps[2..] {
         if let velnor_actions_contract::StepKind::Shell { run, env } = &step.kind {
-            let unset = crate::toolchain_env::with_env_unset_argv(&[]);
-            assert!(run.starts_with(&unset));
+            assert_eq!(run.len(), 3);
+            assert_eq!(run[0], "bash");
+            assert_eq!(run[1], "-c");
+            let prelude = format!("{} ", crate::toolchain_env::credential_unset_prelude());
+            assert!(run[2].starts_with(&prelude), "{}", run[2]);
             for variable in crate::toolchain_env::STEP_CREDENTIAL_DENYLIST {
                 assert!(
                     env.get(variable).is_some_and(String::is_empty),
@@ -79,20 +87,80 @@ fn task_job_is_unconditional_cache_off_and_credential_scrubbed() {
             panic!("Mise task commands must be shell steps");
         }
     }
-    if let velnor_actions_contract::StepKind::Shell { run, .. } = &job.steps[2].kind {
-        assert!(run.ends_with(&[
-            "mise".to_owned(),
-            "install".to_owned(),
-            "--locked".to_owned(),
-        ]));
-    }
-    if let velnor_actions_contract::StepKind::Shell { run, .. } = &job.steps[3].kind {
-        assert!(run.ends_with(&[
-            "mise".to_owned(),
-            "run".to_owned(),
-            "lint-construct-assets".to_owned(),
-        ]));
-    }
+    let velnor_actions_contract::StepKind::Shell { run, .. } = &job.steps[2].kind else {
+        panic!("verification task must be a shell step");
+    };
+    let script = run.last().expect("Bash script argument");
+    assert!(script.contains("mise --no-env --no-hooks run --skip-tools lint-construct-assets"));
+    assert!(script.contains("MISE_AUTO_INSTALL=false"));
+    assert!(script.contains("MISE_TASK_RUN_AUTO_INSTALL=false"));
+    assert!(!script.contains("mise --no-env --locked --no-hooks install"));
+}
+
+#[test]
+fn selected_prebuilt_tools_are_isolated_and_task_tools_are_skipped_at_runtime() {
+    let mut task = policy("locked-lint", VerificationRunner::MacosArm64);
+    task.mise_config_sha256 = Some("a".repeat(64));
+    task.mise_lock_sha256 = Some("b".repeat(64));
+    task.selected_tools = vec![BuildTaskTool {
+        key: "aqua:vendor/tool".to_owned(),
+        version: "1.2.3".to_owned(),
+        backend: "aqua:vendor/tool".to_owned(),
+        os: vec!["macos".to_owned()],
+        config_options: BTreeMap::new(),
+        lock_options: BTreeMap::new(),
+        artifact: Some(BuildTaskArtifact {
+            checksum: format!("sha256:{}", "c".repeat(64)),
+            url: "https://github.com/vendor/tool/releases/download/v1.2.3/tool-aarch64.tar.gz"
+                .to_owned(),
+            url_api: None,
+            signer: None,
+            provenance: None,
+        }),
+    }];
+    let job = build_verification_task_job(&task, CHECKOUT).expect("locked verification job");
+    assert_eq!(job.steps.len(), 4);
+    let velnor_actions_contract::StepKind::Shell { run: install, .. } = &job.steps[2].kind else {
+        panic!("selected tools use an isolated install step");
+    };
+    let install_script = install.last().expect("Bash script argument");
+    assert!(install_script.contains("mise --no-env --locked --no-hooks install --jobs 2"));
+    assert!(
+        install_script.contains(
+            "https://github.com/vendor/tool/releases/download/v1.2.3/tool-aarch64.tar.gz"
+        )
+    );
+    assert!(!install_script.contains("codebook-lsp"));
+    let velnor_actions_contract::StepKind::Shell { run, .. } = &job.steps[3].kind else {
+        panic!("task run is a shell step");
+    };
+    let run_script = run.last().expect("Bash script argument");
+    assert!(
+        run_script.contains("mise --no-env --locked --no-hooks run --skip-tools lint-locked-lint")
+    );
+    assert!(run_script.contains("mise --no-env --no-hooks config ls --json"));
+    assert!(!run_script.contains("mise install"));
+}
+
+#[test]
+fn verification_rejects_cargo_sources_and_unbound_artifacts() {
+    let mut policy = policy("unsafe-lint", VerificationRunner::LinuxX64);
+    policy.mise_config_sha256 = Some("a".repeat(64));
+    policy.mise_lock_sha256 = Some("b".repeat(64));
+    policy.selected_tools = vec![BuildTaskTool {
+        key: "cargo:example-tool".to_owned(),
+        version: "1.2.3".to_owned(),
+        backend: "cargo:example-tool".to_owned(),
+        os: Vec::new(),
+        config_options: BTreeMap::new(),
+        lock_options: BTreeMap::new(),
+        artifact: None,
+    }];
+    assert!(build_verification_task_job(&policy, CHECKOUT).is_err());
+
+    policy.selected_tools[0].key = "aqua:vendor/tool".to_owned();
+    policy.selected_tools[0].backend = "aqua:vendor/tool".to_owned();
+    assert!(build_verification_task_job(&policy, CHECKOUT).is_err());
 }
 
 #[test]
@@ -209,4 +277,22 @@ fn task_job_contract_rejects_conditions_dependencies_and_extra_steps() {
     let error = validate_verification_jobs(&jobs, &[task], CHECKOUT)
         .expect_err("conditional task cannot pass");
     assert!(error.to_string().contains("verification_job_contract"));
+}
+
+#[test]
+fn emitted_verification_scripts_are_single_line_without_command_substitution() {
+    for runner in [VerificationRunner::LinuxX64, VerificationRunner::MacosArm64] {
+        let task = policy("native-format", runner);
+        let job = build_verification_task_job(&task, CHECKOUT).expect("task job");
+        for step in &job.steps {
+            let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
+                continue;
+            };
+            for arg in run {
+                assert!(!arg.contains('\n'), "single-line script: {arg}");
+                assert!(!arg.contains("$("), "no substitution: {arg}");
+                assert!(!arg.contains('`'), "no backticks: {arg}");
+            }
+        }
+    }
 }

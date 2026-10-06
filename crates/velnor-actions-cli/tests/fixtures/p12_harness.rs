@@ -106,6 +106,29 @@ pub(crate) fn run_script(dir: &Path, extra: &[&str]) -> Result<Run, Box<dyn Erro
     })
 }
 
+#[test]
+fn relative_root_is_resolved_before_the_script_changes_directory() -> Result<(), Box<dyn Error>> {
+    let fixture = passing("p12-relative-root")?;
+    let caller_dir = fixture.dir.parent().ok_or("fixture parent missing")?;
+    let relative_root = fixture.dir.file_name().ok_or("fixture name missing")?;
+    let script = crate::impl_repo_policy::repo_root().join("scripts/check-freshness.sh");
+    let output = Command::new("bash")
+        .arg(script)
+        .arg("--root")
+        .arg(relative_root)
+        .env("CDPATH", caller_dir)
+        .current_dir(caller_dir)
+        .output()?;
+    let run = Run {
+        code: output.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+    };
+    assert_clean(&run);
+    cleanup(&fixture);
+    Ok(())
+}
+
 /// Stdout lines carrying a machine-readable `row:` payload.
 pub(crate) fn rows(run: &Run) -> Vec<&str> {
     run.stdout
@@ -271,6 +294,11 @@ const TOOL_PROBE_ROWS: &[(&str, &str, &str)] = &[
         "{\"crate\": {\"max_version\": \"0.9.146\"}}",
     ),
     (
+        "https://crates.io/api/v1/crates/release-plz",
+        "release-plz.json",
+        "{\"crate\": {\"max_version\": \"0.3.169\"}}",
+    ),
+    (
         "https://api.github.com/repos/opentofu/opentofu/releases/latest",
         "opentofu.json",
         "{\"tag_name\": \"v1.13.1\"}",
@@ -278,11 +306,6 @@ const TOOL_PROBE_ROWS: &[(&str, &str, &str)] = &[
 ];
 
 const ACTION_PROBE_ROWS: &[(&str, &str, &str)] = &[
-    (
-        "https://api.github.com/repos/Swatinem/rust-cache/tags",
-        "rust-cache.json",
-        "[{\"name\": \"v2.9.2\"}]",
-    ),
     (
         "https://api.github.com/repos/jdx/mise-action/releases/latest",
         "mise-action.json",
@@ -317,6 +340,11 @@ const ACTION_PROBE_ROWS: &[(&str, &str, &str)] = &[
         "https://api.github.com/repos/asamarts/alint/releases/latest",
         "alint.json",
         "{\"tag_name\": \"v0.16.1\"}",
+    ),
+    (
+        "https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest",
+        "aws-credentials.json",
+        "{\"tag_name\": \"v6.3.0\"}",
     ),
 ];
 

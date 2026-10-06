@@ -143,13 +143,13 @@ The generated matrix MUST be derived from this exact plan; matrix jobs MUST NOT 
 
 Affected selection needs evidence for omitted obligations. Velnor MUST use an immutable `baseline.json` uploaded as a run-scoped artifact only after the protected default-branch `push` passes the required final gate. Pull requests, forks, merge groups, other branch pushes, failed runs, and cancelled runs MUST NOT publish trusted baseline evidence.
 
-The manifest MUST bind repository identity, exact source commit, protected workflow path/ref/event, run ID/attempt, successful final result, generator version/digest/schema, compatibility identity, and a task entry for each covered obligation. Each task proof MUST bind task ID, task digest, input digest, Cargo graph identity, toolchain/components, MBX format, platform/target, profile/features, and the direct successful execution run. When a later baseline carries a prior proof forward, retain the original proof run ID and record the carrying run separately.
+The manifest MUST bind repository identity, exact source commit, protected workflow path/ref/event, run ID/attempt, successful final result, generator version/digest/schema, compatibility identity, and a task entry for each covered obligation. Each task proof MUST bind task ID, task digest, input digest, Cargo graph identity, toolchain/components, MBX format, platform/target, profile/features, and the direct successful execution run. When a later baseline carries a prior proof forward, retain the original proof run ID and record the carrying run separately. Schema 2 requires `parent` on every manifest and `carried_from` on every task entry; direct publications set both to `null`. A carried manifest includes the complete immediate parent manifest, and each carried task binds that parent by its source commit, run ID, artifact ID/name, and canonical manifest digest. Validation walks the full chain, requires the same repository, ref, workflow, generator version/digest, and compatibility identity at every node, rejects non-prior or repeated run IDs, and checks expiry. The full canonical JSON is limited to 1 MiB and 32 manifests; invalid or oversized lineage fails closed to execute-all.
 
 The artifact contains one UTF-8 `baseline.json` and no other payload. Its minimum shape is:
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
   "repository_id": "b3-...",
   "source_commit": "<40 lowercase hex>",
   "ref": "refs/heads/main",
@@ -161,13 +161,18 @@ The artifact contains one UTF-8 `baseline.json` and no other payload. Its minimu
   "generator_version": "<semver>",
   "generator_sha256": "<64 lowercase hex>",
   "compatibility_id": "b3-...",
+  "artifact_id": 12345,
+  "artifact_name": "velnor-baseline-<source-commit>-<compatibility-id>",
   "tasks": [{
     "task_id": "stack/rust/crates/parser/test-run/default",
     "task_digest": "b3-...",
     "input_digest": "b3-...",
+    "closure_digest": "b3-...",
     "proof_run_id": 12345,
+    "carried_from": null,
     "observed_run_id": 12345
-  }]
+  }],
+  "parent": null
 }
 ```
 

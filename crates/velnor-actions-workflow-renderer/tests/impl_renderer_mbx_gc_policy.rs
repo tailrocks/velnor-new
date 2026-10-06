@@ -95,7 +95,11 @@ fn mbx_job_policy_applies_to_hosted_and_scale_set_lanes() -> Result<(), RenderEr
         None,
         &fixture_ctx(),
     )?;
-    assert_eq!(text.matches("MBX_GC_AUTO: \"1\"").count(), 2, "{text}");
+    assert_eq!(
+        text.matches("MBX_GC_AUTO: \"1\"").count(),
+        2,
+        "both native MBX consumers use the same GC policy: {text}"
+    );
     assert_eq!(
         text.matches("MBX_SHARE_OUT_DIR: \"0\"").count(),
         2,

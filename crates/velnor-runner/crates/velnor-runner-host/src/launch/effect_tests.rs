@@ -1,4 +1,4 @@
-//! Acquisition and mint errors retain capacity when a remote effect is uncertain.
+//! Acquisition and post-acquire errors retain capacity when effects are uncertain.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -40,6 +40,12 @@ async fn unusable_successes_hold_acquired_jobs_without_retry_or_ack() -> Result<
             "jit-conflict-after-acquire",
             Mode::JitConflict,
             EnsureError::Conflict,
+            &["acquire", "jit"][..],
+        ),
+        (
+            "jit-forbidden-after-acquire",
+            Mode::JitForbidden,
+            EnsureError::Forbidden,
             &["acquire", "jit"][..],
         ),
     ] {

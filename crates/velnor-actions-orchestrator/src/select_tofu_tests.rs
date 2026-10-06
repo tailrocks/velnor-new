@@ -32,6 +32,7 @@ fn discovery_with(statuses: Vec<DetectionStatus>, units: Vec<TofuSelectionUnit>)
         },
         recommendations: Vec::new(),
         consumer_manifest_json: None,
+        consumer_manifest_stand_in: false,
         skipped_non_utf8: false,
         tofu_note: None,
         tofu_units: units,
@@ -61,7 +62,7 @@ fn chdir_findings_name_each_subdir_root_once() {
         }
     }
     let mut warnings = Vec::new();
-    push_chdir_findings(&discovery, &mut warnings);
+    push_chdir_findings(&discovery, &mut warnings).expect("valid proposal roots");
     assert_eq!(
         warnings,
         vec![
@@ -80,8 +81,24 @@ fn chdir_findings_name_each_subdir_root_once() {
         .proposals
         .push(velnor_actions_tofu::propose_task(&group).expect("proposes"));
     let mut silent = Vec::new();
-    push_chdir_findings(&root_only, &mut silent);
-    assert!(silent.is_empty());
+    push_chdir_findings(&root_only, &mut silent).expect("valid root proposal");
+    assert_eq!(silent, Vec::<String>::new());
+}
+
+#[test]
+fn chdir_findings_reject_a_forged_root_identity() {
+    use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
+    let mut discovery = discovery_with(Vec::new(), Vec::new());
+    let group = TofuTaskGroup {
+        root: "stacks/a".to_owned(),
+        kind: TofuTaskKind::Validate,
+        configuration: "default".to_owned(),
+        no_targets: false,
+    };
+    let mut task = velnor_actions_tofu::propose_task(&group).expect("proposes");
+    task.identity.project_root = "stacks/b".to_owned();
+    discovery.proposals.push(task);
+    assert!(push_chdir_findings(&discovery, &mut Vec::new()).is_err());
 }
 
 #[test]
@@ -96,7 +113,7 @@ fn selected_roots_derive_from_selected_statuses_only() {
     };
     let roots = tofu_selected_roots(&[selected("stacks/b"), selected(""), ignored]);
     assert_eq!(roots, vec![String::new(), "stacks/b".to_owned()]);
-    assert!(tofu_selected_roots(&[]).is_empty());
+    assert_eq!(tofu_selected_roots(&[]), Vec::<String>::new());
 }
 
 #[test]
@@ -121,11 +138,11 @@ fn derive_tofu_proposes_triples_with_fmt_scope_targets() {
     assert!(fmt.iter().all(|task| !task.no_targets));
     let validate = tasks
         .iter()
-        .find(|task| task.task_id == "stack/tofu/stacks/b/validate/default")
+        .find(|task| task.task_id == "stack/tofu/dir-737461636b732f62/validate/default")
         .expect("second validate");
     assert_eq!(
         validate.depends_on,
-        vec!["stack/tofu/stacks/b/init/default".to_owned()]
+        vec!["stack/tofu/dir-737461636b732f62/init/default".to_owned()]
     );
 }
 
@@ -136,12 +153,13 @@ fn derive_tofu_merges_nested_fmt_scopes() {
     let tasks = derive_tofu(&statuses, &files).expect("derives");
     assert_eq!(tasks.len(), 6);
     let fmt_no_targets = |unit: &str| {
+        let key = velnor_actions_tofu::key_for_root(unit);
         tasks
             .iter()
-            .find(|task| task.task_kind == "fmt" && task.identity.unit_id == unit)
+            .find(|task| task.task_kind == "fmt" && task.identity.unit_id == key)
             .map(|task| task.no_targets)
     };
-    assert_eq!(fmt_no_targets("root"), Some(false), "outer fmt runs");
+    assert_eq!(fmt_no_targets(""), Some(false), "outer fmt runs");
     assert_eq!(
         fmt_no_targets("stacks/a"),
         Some(true),
@@ -173,8 +191,8 @@ fn derive_tofu_inits_once_per_root() {
     assert_eq!(
         inits,
         [
-            "stack/tofu/stacks/a/init/default",
-            "stack/tofu/stacks/b/init/default",
+            "stack/tofu/dir-737461636b732f61/init/default",
+            "stack/tofu/dir-737461636b732f62/init/default",
         ],
         "duplicate statuses still derive one init per root"
     );
@@ -228,6 +246,6 @@ fn no_tofu_roots_passes_through_without_git() {
     )
     .expect("passthrough");
     assert_eq!(rust, changed);
-    assert!(tofu.is_empty());
-    assert!(warnings.is_empty());
+    assert_eq!(tofu, std::collections::BTreeSet::<String>::new());
+    assert_eq!(warnings, Vec::<String>::new());
 }

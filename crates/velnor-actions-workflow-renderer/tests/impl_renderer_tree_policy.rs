@@ -1,19 +1,21 @@
 //! Workflow/tree invariant cases (triggers, concurrency, candidate, gates).
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, JobTimeout, Permissions, Step, StepKind, Trigger,
-    ValidatorKind, WorkflowIr, WorkflowPolicy,
+    Concurrency, Job, JobTimeout, Permissions, Step, Trigger, ValidatorKind, WorkflowIr,
+    WorkflowPolicy,
 };
 use velnor_actions_workflow_renderer::{
-    CANDIDATE_JOB_ID, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, CandidateSpec, RenderContext,
-    RenderError, ValidatorCommand, checkout_step, merge_step, plan_step, render_workflow_ir,
-    shell_step, with_marker,
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, RenderError, ValidatorCommand,
+    checkout_step, plan_step, render_workflow_ir, with_marker,
 };
 
-const VERSION: &str = "0.1.0";
-const LABEL: &str = "ubuntu-26.04";
+#[path = "impl_renderer_tree_policy_candidates.rs"]
+mod candidates;
 
-fn checkout_pin() -> String {
+const VERSION: &str = "0.1.0";
+pub(crate) const LABEL: &str = "ubuntu-26.04";
+
+pub(crate) fn checkout_pin() -> String {
     format!("actions/checkout@{:040x}", 0)
 }
 
@@ -27,7 +29,8 @@ pub(crate) fn fixture_ctx() -> RenderContext {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
-        verification_tasks: Vec::new(),
+        workflow_tasks: Vec::new(),
+        pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         plan_consumer_env: std::collections::BTreeMap::new(),
     }
 }
@@ -58,6 +61,7 @@ pub(crate) fn validator_commands() -> Vec<ValidatorCommand> {
         validator: *validator,
         name: (*name).to_owned(),
         argv: vec!["deny".to_owned()],
+        prepare_argv: Vec::new(),
     })
     .collect()
 }
@@ -117,6 +121,14 @@ fn triggers_must_be_exact() -> Result<(), RenderError> {
     let mut ir = fixture_ir()?;
     ir.triggers.push_branches.push("other".to_owned());
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
+    for branch in ["main'||true||'", "main\non: [push]"] {
+        let mut ir = fixture_ir()?;
+        ir.triggers.push_branches[0] = branch.to_owned();
+        assert!(
+            render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err(),
+            "unsafe push branch must not reach YAML generation: {branch:?}"
+        );
+    }
     let mut ir = fixture_ir()?;
     ir.triggers.merge_group = false;
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
@@ -148,253 +160,6 @@ fn concurrency_and_label_must_be_exact() -> Result<(), RenderError> {
     Ok(())
 }
 
-#[test]
-fn candidate_never_plans_and_lock_matches_catalog_per_target() -> Result<(), RenderError> {
-    let ctx = fixture_ctx();
-    let policy = WorkflowPolicy::VelnorRepositoryV1;
-    let mut lonely = fixture_ir()?;
-    lonely.jobs.insert(
-        CANDIDATE_JOB_ID.to_owned(),
-        simple_job("Lonely", Vec::new(), vec![checkout_step(&checkout_pin())?]),
-    );
-    assert!(render_workflow_ir(&lonely, policy, None, &ctx).is_err());
-    let mut planner = fixture_ir()?;
-    planner.jobs.insert(
-        CANDIDATE_JOB_ID.to_owned(),
-        simple_job(
-            "Planning candidate",
-            vec!["plan".to_owned()],
-            vec![checkout_step(&checkout_pin())?, plan_step()],
-        ),
-    );
-    assert!(render_workflow_ir(&planner, policy, None, &ctx).is_err());
-    let mut thief = fixture_ir()?;
-    thief.jobs.insert(
-        "velnor-task".to_owned(),
-        simple_job(
-            "Task",
-            vec![CANDIDATE_JOB_ID.to_owned()],
-            vec![checkout_step(&checkout_pin())?],
-        ),
-    );
-    thief.jobs.insert(
-        CANDIDATE_JOB_ID.to_owned(),
-        simple_job(
-            "Candidate",
-            vec!["plan".to_owned()],
-            vec![checkout_step(&checkout_pin())?],
-        ),
-    );
-    assert!(render_workflow_ir(&thief, policy, None, &ctx).is_err());
-    Ok(())
-}
-
-#[test]
-fn candidate_job_renders_with_plan_dependency() -> Result<(), RenderError> {
-    let mut ctx = fixture_ctx();
-    ctx.validator_commands = validator_commands();
-    ctx.candidate = Some(CandidateSpec {
-        build: argv_of(&[
-            "mise",
-            "exec",
-            "rust@1.98.1",
-            "mr-boxington@1.19.0",
-            "--",
-            "build",
-        ]),
-        qualify: argv_of(&["sh", "-c", "plan-and-check"]),
-    });
-    let support =
-        WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Candidate);
-    let text = render_workflow_ir(
-        &fixture_ir()?,
-        WorkflowPolicy::VelnorRepositoryV1,
-        Some(&support),
-        &ctx,
-    )?;
-    assert!(text.contains("candidate:"));
-    assert!(text.contains("plan"));
-    assert!(text.contains("release:"));
-    assert!(text.contains("ref_protected"));
-    assert!(text.contains("actions/download-artifact@"));
-    // S1: the build compiles PR source and qualification executes the
-    // PR-built binary, so both steps unset runner credentials first.
-    assert!(
-        text.contains("env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN"),
-        "build must unset:\n{text}"
-    );
-    assert!(
-        text.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"),
-        "qualify must unset:\n{text}"
-    );
-    assert!(
-        text.contains("GITHUB_TOKEN: \"\""),
-        "candidate steps must scrub:\n{text}"
-    );
-    Ok(())
-}
-
-#[test]
-fn candidate_qualify_rejects_non_shell_vectors() {
-    let mut ctx = fixture_ctx();
-    ctx.validator_commands = validator_commands();
-    ctx.candidate = Some(CandidateSpec {
-        build: argv_of(&[
-            "mise",
-            "exec",
-            "rust@1.98.1",
-            "mr-boxington@1.19.0",
-            "--",
-            "build",
-        ]),
-        qualify: argv_of(&["mise", "run", "qualify"]),
-    });
-    let support =
-        WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Candidate);
-    let ir = fixture_ir().expect("ir");
-    let err = render_workflow_ir(
-        &ir,
-        WorkflowPolicy::VelnorRepositoryV1,
-        Some(&support),
-        &ctx,
-    )
-    .expect_err("non-shell qualify must fail");
-    assert!(
-        format!("{err:?}").contains("qualify_without_unset"),
-        "wrong rejection: {err:?}"
-    );
-}
-
-#[test]
-fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
-    let ctx = fixture_ctx();
-    let mut ir = fixture_ir()?;
-    ir.jobs.insert(
-        "required".to_owned(),
-        Job {
-            display_name: "Wrong Name".to_owned(),
-            runs_on: LABEL.to_owned(),
-            check_runner: None,
-            timeout_minutes: JobTimeout::CRATE,
-            needs: vec!["plan".to_owned()],
-            condition: Some("always()".to_owned()),
-            permissions: None,
-            environment: None,
-            steps: vec![checkout_step(&checkout_pin())?, merge_step()],
-        },
-    );
-    assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
-    let mut ir = fixture_ir()?;
-    ir.jobs.insert(
-        "required".to_owned(),
-        Job {
-            display_name: "Required".to_owned(),
-            runs_on: LABEL.to_owned(),
-            check_runner: None,
-            timeout_minutes: JobTimeout::REQUIRED,
-            needs: vec!["plan".to_owned()],
-            condition: None,
-            permissions: None,
-            environment: None,
-            steps: vec![checkout_step(&checkout_pin())?, merge_step()],
-        },
-    );
-    assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
-    let mut ir = fixture_ir()?;
-    ir.jobs.insert(
-        "required".to_owned(),
-        Job {
-            display_name: "Required".to_owned(),
-            runs_on: LABEL.to_owned(),
-            check_runner: None,
-            timeout_minutes: JobTimeout::REQUIRED,
-            needs: vec!["plan".to_owned()],
-            condition: Some("always()".to_owned()),
-            permissions: Some(Permissions {
-                contents: velnor_actions_contract::workflow::permissions::PermissionLevel::Read,
-                actions: velnor_actions_contract::workflow::permissions::PermissionLevel::Read,
-                pull_requests:
-                    velnor_actions_contract::workflow::permissions::PermissionLevel::None,
-                id_token: velnor_actions_contract::workflow::permissions::PermissionLevel::None,
-            }),
-            environment: None,
-            steps: vec![checkout_step(&checkout_pin())?, merge_step()],
-        },
-    );
-    let text = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;
-    assert!(text.contains("name: Required"));
-    assert!(text.contains("if: always()"));
-    Ok(())
-}
-
 pub(crate) fn task_job(step: Step) -> Job {
     simple_job("Task", vec!["plan".to_owned()], vec![step])
-}
-
-#[test]
-fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
-    let ctx = fixture_ctx();
-    let mut ir = fixture_ir()?;
-    ir.jobs.insert(
-        "velnor-task".to_owned(),
-        task_job(Step {
-            name: "Install".to_owned(),
-            id: None,
-            role: None,
-            condition: None,
-            kind: StepKind::Shell {
-                run: vec!["cargo".to_owned(), "install".to_owned(), "x".to_owned()],
-                env: BTreeMap::new(),
-            },
-        }),
-    );
-    assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
-    let mut ir = fixture_ir()?;
-    ir.jobs.insert(
-        "velnor-task".to_owned(),
-        task_job(Step {
-            name: "Fetch".to_owned(),
-            id: None,
-            role: None,
-            condition: None,
-            kind: StepKind::Action {
-                uses: "actions/checkout@main".to_owned(),
-                with: BTreeMap::new(),
-                env: BTreeMap::new(),
-            },
-        }),
-    );
-    assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
-    let mut ir = fixture_ir()?;
-    ir.jobs.insert(
-        "velnor-task".to_owned(),
-        task_job(Step {
-            name: "Run Alint".to_owned(),
-            id: None,
-            role: None,
-            condition: None,
-            kind: StepKind::Action {
-                uses: "asamarts/alint@v0.16.1".to_owned(),
-                with: BTreeMap::new(),
-                env: BTreeMap::new(),
-            },
-        }),
-    );
-    let err = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)
-        .expect_err("alint tag ref must be rejected");
-    assert!(
-        format!("{err:?}").contains("unpinned_ref"),
-        "wrong rejection: {err:?}"
-    );
-    let mut ir = fixture_ir()?;
-    ir.jobs.insert(
-        "velnor-task".to_owned(),
-        task_job(shell_step(
-            "Focused",
-            vec!["true".to_owned()],
-            BTreeMap::new(),
-        )?),
-    );
-    assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_ok());
-    Ok(())
 }

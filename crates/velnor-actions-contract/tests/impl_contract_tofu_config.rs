@@ -152,15 +152,13 @@ fn unit_prefix_folds_dot_only() {
 }
 
 #[test]
-fn reserved_root_spelling_rejected() {
+fn literal_root_spelling_is_an_ordinary_directory() {
     for raw in [&["root"][..], &[".", "root"][..]] {
-        let err = tofu(raw).validate("config.toml").expect_err("root fails");
-        assert!(
-            err.to_string().contains("reserved_root_key"),
-            "{raw:?}: {err}"
-        );
+        tofu(raw)
+            .validate("config.toml")
+            .expect("distinct roots validate");
     }
-    assert!(Utf8RepoRelDir::parse("root").is_err());
+    assert!(Utf8RepoRelDir::parse("root").is_ok());
     assert!(Utf8RepoRelDir::parse("roots").is_ok());
     assert!(Utf8RepoRelDir::parse("a/root").is_ok());
 }

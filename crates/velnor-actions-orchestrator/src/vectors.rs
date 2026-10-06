@@ -9,6 +9,7 @@ use velnor_actions_mise::{
 };
 use velnor_actions_rust::tool_needs;
 use velnor_actions_workflow_renderer::render::CandidateSpec;
+use velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv;
 
 use crate::{OrchestratorError, qualify::QualifyRequest};
 
@@ -21,30 +22,43 @@ pub(crate) const CARGO_DENY_VERSION: &str = "0.20.2";
 
 /// Resolve an emitted validator install spec to its pinned name and version.
 ///
-/// Only `cargo-deny` installs (machete and zizmor run through isolated
-/// `exec`, never `install`); the version must equal the pinned const or
-/// the emitted shape drifted and the audit fails closed.
+/// Supported validator installation pins. The version must equal the pinned
+/// const or the emitted shape drifted and the audit fails closed.
 #[must_use]
-pub(crate) fn validator_install_pin(spec: &str) -> Option<(&'static str, &'static str)> {
+pub(crate) fn validator_install_pin(
+    spec: &str,
+) -> Option<(&'static str, &'static str, &'static str)> {
     let (key, version) = spec.split_once('@')?;
-    if key == "cargo-deny" && version == CARGO_DENY_VERSION {
-        Some(("cargo-deny", CARGO_DENY_VERSION))
-    } else {
-        None
+    match key {
+        "cargo-deny" if version == CARGO_DENY_VERSION => {
+            Some(("cargo-deny", CARGO_DENY_VERSION, "cargo-deny"))
+        }
+        CARGO_MACHETE_TOOL_SPEC if version == CARGO_MACHETE_VERSION => Some((
+            "cargo-machete",
+            CARGO_MACHETE_VERSION,
+            CARGO_MACHETE_TOOL_SPEC,
+        )),
+        "zizmor" if version == velnor_actions_mise::catalog::ZIZMOR_VERSION => Some((
+            "zizmor",
+            velnor_actions_mise::catalog::ZIZMOR_VERSION,
+            "zizmor",
+        )),
+        _ => None,
     }
 }
 
-/// Qualified cargo-machete release.
-/// Source: `https://crates.io/api/v1/crates/cargo-machete`; checked 2026-09-29.
-/// The mise registry has no `cargo-machete` shorthand and the aqua registry
-/// has no package, so the spec is backend-qualified `ubi:` (same precedent
-/// as Nextest's aqua path): `mise ls-remote ubi:bnjbvr/cargo-machete` lists
-/// 0.9.2 and the isolated `mise exec ubi:bnjbvr/cargo-machete@0.9.2 --
-/// cargo machete --version` probe reported 0.9.2.
+/// Exact Linux `x86_64` musl release for cargo-machete.
+/// GitHub's release API digest, its published `.sha256` companion, and the
+/// downloaded asset hash agree. Ubi's cold install enumerated the broad API.
 const CARGO_MACHETE_VERSION: &str = "0.9.2";
+const CARGO_MACHETE_TOOL_SPEC: &str = concat!(
+    "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/",
+    "download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,",
+    "checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]",
+);
 
 /// Mise tool specs the validator vectors may select, without versions.
-const VALIDATOR_TOOL_SPECS: [&str; 2] = ["cargo-deny", "ubi:bnjbvr/cargo-machete"];
+const VALIDATOR_TOOL_SPECS: [&str; 2] = ["cargo-deny", CARGO_MACHETE_TOOL_SPEC];
 
 /// Product crates scanned by the machete vector, in contract order.
 ///
@@ -196,6 +210,8 @@ pub(crate) fn deny_argv(workspace_roots: &[String]) -> Result<Vec<String>, Orche
         })?;
     let install_argv =
         strings_of(install.argv()).map_err(|problem| OrchestratorError::Contract { problem })?;
+    let inner_command = join_quoted_argv(&inner)?;
+    let install_command = join_quoted_argv(&install_argv)?;
     let payload = roots
         .iter()
         .map(|workspace| {
@@ -206,14 +222,14 @@ pub(crate) fn deny_argv(workspace_roots: &[String]) -> Result<Vec<String>, Orche
             };
             format!(
                 "{} {} --config \"$GITHUB_WORKSPACE/{config}\" check",
-                join_quoted_argv(&inner),
+                inner_command,
                 crate::source_prep::isolated_manifest_flag(workspace)
             )
         })
         .collect::<Vec<_>>()
         .join(" && ");
     Ok(crate::source_prep::privilege_drop_argv(
-        &join_quoted_argv(&install_argv),
+        &install_command,
         &payload,
     ))
 }
@@ -223,11 +239,12 @@ pub(crate) fn deny_argv(workspace_roots: &[String]) -> Result<Vec<String>, Orche
 /// Every current element is a plain token (identity join); quoting
 /// through the one authority keeps future drift exact instead of
 /// silently mis-spliced.
-fn join_quoted_argv(argv: &[String]) -> String {
+fn join_quoted_argv(argv: &[String]) -> Result<String, OrchestratorError> {
     argv.iter()
         .map(|element| velnor_actions_workflow_renderer::quote_run_arg(element))
-        .collect::<Vec<_>>()
-        .join(" ")
+        .collect::<Result<Vec<_>, _>>()
+        .map(|words| words.join(" "))
+        .map_err(OrchestratorError::from)
 }
 
 /// Policy zizmor scan target: generated workflows only.
@@ -244,8 +261,13 @@ const ZIZMOR_POLICY_INPUT: &str = ".github/workflows";
 const ZIZMOR_POLICY_CONFIG: &str = ".zizmor.yml";
 
 /// Fixed validator-job vector: offline zizmor audit through pinned Mise.
+///
+/// The argv carries the credential-unset prefix: an empty-string
+/// `GH_TOKEN` (workflow-level scrub overlay) makes zizmor abort
+/// with `GitHub token cannot be empty`, while a truly-absent
+/// variable falls back to clean unauthenticated operation.
 pub(crate) fn zizmor_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
-    exec_argv(
+    let argv = exec_argv(
         vec![PinnedTool::Zizmor],
         "zizmor",
         &[
@@ -255,19 +277,31 @@ pub(crate) fn zizmor_argv(catalog: &ToolCatalog) -> Result<Vec<String>, Orchestr
             ZIZMOR_POLICY_INPUT,
         ],
         catalog,
-    )
+    )?;
+    Ok(with_env_unset_argv(&argv))
 }
 
-/// Fixed validator-job vector: `cargo machete` over product crates via Mise.
+/// Fixed validator-job vector: verified `cargo machete` release via Mise.
 pub(crate) fn machete_argv() -> Result<Vec<String>, OrchestratorError> {
     let mut args = vec!["machete"];
     args.extend(MACHETE_SCAN_CRATES);
     validator_argv(
-        "ubi:bnjbvr/cargo-machete",
+        CARGO_MACHETE_TOOL_SPEC,
         CARGO_MACHETE_VERSION,
         "cargo",
         &args,
     )
+}
+
+/// Explicit pinned backend install for cold-cache cargo-machete execution.
+pub(crate) fn machete_install_argv() -> Result<Vec<String>, OrchestratorError> {
+    let install = IsolatedCommand::mise_install(&[format!(
+        "{CARGO_MACHETE_TOOL_SPEC}@{CARGO_MACHETE_VERSION}"
+    )])
+    .map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })?;
+    strings_of(install.argv()).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
 /// One validator vector: an allowlisted tool spec plus a fixed cargo payload.

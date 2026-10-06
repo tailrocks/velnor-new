@@ -6,12 +6,13 @@ use tempfile::TempDir;
 use velnor_actions_mise::{
     IsolatedCommand, MiseInstall, PinnedTool, PreparePinnedTools, ToolCatalog, ToolHomes,
 };
-use velnor_actions_orchestrator::prepare;
+use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use crate::impl_common::{TestResult, fixture_manifest_json, git, without_ambient_identity};
 
 /// Velnor-policy workspace: a validator-spawning suite plus a plain crate.
-fn velnor_workspace() -> Result<TempDir, Box<dyn std::error::Error>> {
+pub(super) fn velnor_workspace() -> Result<TempDir, Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
     let root = dir.path();
     git(&["init", "-b", "testmain"], root)?;
@@ -114,18 +115,59 @@ fn prepare_runs(yaml: &str) -> BTreeMap<String, String> {
     runs
 }
 
+/// Extract a rendered job through the next peer job.
+fn job_section<'a>(yaml: &'a str, id: &str) -> Option<&'a str> {
+    let prefix = format!("  {id}:\n");
+    let start = yaml.find(&prefix)? + prefix.len();
+    let tail = &yaml[start..];
+    let mut end = 0;
+    for line in tail.split_inclusive('\n') {
+        if line.starts_with("  ") && !line.starts_with("   ") {
+            break;
+        }
+        end += line.len();
+    }
+    Some(&tail[..end])
+}
+
+/// Validators invoke their exact analyzer pin through isolated Mise exec.
+fn assert_pinned_exec(section: &str, tool: &str) -> Result<(), String> {
+    if section.contains("mise --no-config --no-env --no-hooks exec") && section.contains(tool) {
+        Ok(())
+    } else {
+        Err(format!(
+            "validator does not execute pinned {tool}: {section}"
+        ))
+    }
+}
+
+/// Cache miss remains executable: explicit install sits after setup and before exec.
+fn assert_cold_install_order(section: &str, command: &str) -> Result<(), String> {
+    let position = |name: &str| {
+        section
+            .find(name)
+            .ok_or_else(|| format!("job misses {name}: {section}"))
+    };
+    let restore = position("- name: Restore Mise tools")?;
+    let setup = position("- name: Setup Mise")?;
+    let install = position("- name: Prepare pinned tools")?;
+    let run = position(command)?;
+    if !(restore < setup && setup < install && install < run) {
+        return Err(format!("cold install order is wrong: {section}"));
+    }
+    Ok(())
+}
+
 #[test]
 fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
     without_ambient_identity("velnor_jobs_carry_trio_only_where_executed", || {
         let repo = velnor_workspace()?;
         let prep = prepare(repo.path())?;
-        let yaml = velnor_actions_workflow_renderer::render_workflow_ir(
-            &prep.workflow.ir,
-            prep.config.workflow.policy,
-            prep.workflow.support.as_ref(),
-            &prep.workflow.context,
-        )
-        .map_err(|err| format!("render: {err}"))?;
+        let tree = render_staged_tree(&prep)?;
+        let yaml = tree
+            .get(WORKFLOW_PATH)
+            .ok_or("rendered workflow missing")?
+            .to_owned();
         let runs = prepare_runs(&yaml);
         let trio = ["actionlint@", "shellcheck@", "zizmor@"];
         let plan = runs.get("plan").ok_or("plan must prepare tools")?;
@@ -148,10 +190,33 @@ fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
         for spec in trio {
             assert!(!required.contains(spec), "required must not carry {spec}");
         }
-        for id in ["alint", "cargo-deny", "cargo-machete", "zizmor"] {
+        let lint = runs.get("actionlint").ok_or("lint must prepare tools")?;
+        assert!(lint.contains("actionlint@1.7.12"), "{lint}");
+        assert!(lint.contains("shellcheck@0.11.0"), "{lint}");
+        let machete = runs.get("cargo-machete").ok_or("machete must prepare")?;
+        assert!(
+            machete.contains("http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2"),
+            "{machete}"
+        );
+        let zizmor = runs.get("zizmor").ok_or("zizmor must prepare")?;
+        assert!(zizmor.contains("zizmor@1.30.1"), "{zizmor}");
+        for (id, tool, command) in [
+            ("actionlint", "actionlint@1.7.12", "Run actionlint"),
+            (
+                "cargo-machete",
+                "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2",
+                "Run cargo-machete",
+            ),
+            ("zizmor", "zizmor@1.30.1", "Run zizmor"),
+        ] {
+            let section = job_section(&yaml, id).ok_or("validator job missing")?;
+            assert_pinned_exec(section, tool)?;
+            assert_cold_install_order(section, command)?;
+        }
+        for id in ["alint", "cargo-deny"] {
             assert!(
                 !runs.contains_key(id),
-                "dedicated {id} has no Prepare step to trim"
+                "{id} keeps its own install boundary"
             );
         }
         Ok(())

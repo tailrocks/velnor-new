@@ -26,19 +26,28 @@ pub use super::generate::{
     render_staged_tree, render_staged_tree_with,
 };
 pub use super::init::{InitReport, init_config};
+#[doc(hidden)]
+pub use super::internal::phase_timing::{PlanPhaseTimings, plan_internal_with_phase_timings};
+pub use super::internal::validate_plan_response;
 pub use super::internal::{
     MERGE_OP, PLAN_OP, PlanOutputs, REQUEST_FILE_ENV, WRITE_REQUEST_OP, merge_passed,
-    plan_internal, plan_outputs, publish_final_report, publish_plan_files, response_path_for,
-    write_request, write_request_parts,
+    plan_internal, plan_outputs, plan_outputs_from_staged_admission, plan_outputs_with_admission,
+    publish_final_report, publish_plan_files, response_path_for, write_request,
+    write_request_parts,
 };
 pub use super::merge::merge_internal;
 pub use super::merge_request::assemble_merge_request;
+pub use super::owned_tool_preview::{SourceQualificationTrigger, preview_owned_tool_candidates};
 pub use super::pins::{acquire_script_argv, consumer_acquire_step_with_manifest};
 pub use super::plan::{plan_text, plan_text_checked};
 pub use super::plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMode};
 pub use super::prepare::{GenerationPreparation, prepare};
 pub use super::preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
 pub use super::provenance::{EvidenceProvenance, ProfileProvenance};
+pub use super::qualification_resolver::{
+    QUALIFICATION_ADMISSION_FILENAME, QUALIFICATION_RESOLVER_OP, read_qualification_admission,
+    resolve_qualification_admission,
+};
 pub use super::qualify::qualify_argv_staged;
 pub use super::retrieve_reports::{FETCH_OP, retrieve_reports};
 pub use super::root::resolve_root;
@@ -54,4 +63,8 @@ pub use super::validators::{
 };
 pub use super::workflow::{CHECKOUT_USES, DEFAULT_RUNNER_LABEL, WorkflowPlan};
 pub use velnor_actions_contract::ExecutionMode;
+pub use velnor_actions_contract::workflow::{
+    QUALIFICATION_CACHE_ENABLED_OUTPUT, QUALIFICATION_CACHE_WRITE_OUTPUT,
+    QUALIFICATION_CAMPAIGN_OUTPUT, QUALIFICATION_PHASE_OUTPUT,
+};
 pub use velnor_actions_contract::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};

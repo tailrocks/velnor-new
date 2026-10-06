@@ -59,7 +59,7 @@ fn poll_batch(body: &str) -> Result<ParsedBatch, &'static str> {
     }
     match polled {
         Poll::Batch(batch) => Ok(batch),
-        Poll::Empty => Err("empty"),
+        Poll::Empty | Poll::Quarantined(_) => Err("empty or quarantined"),
     }
 }
 
@@ -75,6 +75,22 @@ fn empty_poll_is_not_acknowledged() -> Result<(), &'static str> {
     assert_eq!(script.seen[0].method, Method::Get);
     assert_eq!(header(&script.seen[0], CAPACITY_HEADER), Some("9"));
     Ok(())
+}
+
+#[test]
+fn missing_outer_id_fails_poll_without_an_ack_request() {
+    let malformed = r#"{"messageType":"RunnerScaleSetJobMessages","body":"[{bad json]"}"#;
+    let mut script = Script::once(200, malformed);
+    let result = poll(&mut script, QUEUE, 0, 1, TOKEN, &RefreshGate::new(), || {
+        Ok(())
+    });
+    assert!(matches!(
+        result,
+        Err(SessionError::Wire(WireError::Malformed))
+    ));
+    assert_eq!(script.seen.len(), 1);
+    assert_eq!(script.seen[0].method, Method::Get);
+    assert!(!script.seen[0].path.contains("/0"));
 }
 
 #[test]

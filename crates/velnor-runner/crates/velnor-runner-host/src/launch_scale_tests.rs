@@ -3,7 +3,7 @@
 use std::sync::{Arc, Mutex};
 
 use crate::launch::drive_offer;
-use crate::launch_harness::{CANARY, Mode, Script, absent, assigned_wait, ctx, open};
+use crate::launch_harness::{CANARY, JitProbe, Mode, Script, absent, assigned_wait, ctx, open};
 use crate::launch_test_support::valid_worker_volume;
 use crate::{EnsureError, HostError, IntentState, Outcome, Started};
 
@@ -144,6 +144,27 @@ async fn scale_jit_failure_is_not_acked() -> Result<(), String> {
     assert_eq!(script.calls, ["jit"]);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows[0].state, IntentState::Uncertain);
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn jit_conflict_marks_the_fresh_row_failed_without_ack() -> Result<(), String> {
+    let (scratch, journal) = open("jit-conflict").await?;
+    let mut blocked = JitProbe::conflict();
+    let error = drive_offer(
+        &mut blocked,
+        &ctx(),
+        &assigned_wait(7, 1),
+        &journal,
+        |_name, _jit, _bind| async { Err(HostError::Docker) },
+    )
+    .await;
+    assert_eq!(error, Err(EnsureError::Conflict));
+    assert_eq!(blocked.calls(), ["jit"]);
+    let failed = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(failed.len(), 1);
+    assert_eq!(failed[0].state, IntentState::Failed);
+    assert_eq!(blocked.names.first().map(String::as_str), Some("m7"));
     absent(&scratch.file())
 }
 

@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::StepKind;
 use velnor_actions_contract::workflow::ir::Job;
 use velnor_actions_contract::workflow::permissions::PermissionLevel;
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{
     GenerationPreparation, finalized_jobs, prepare, render_staged_tree,
 };
@@ -94,10 +95,29 @@ fn has_checkout(job: &Job) -> bool {
     })
 }
 
+fn plan_installs_gh(prep: &GenerationPreparation) -> bool {
+    let Some(step) = prep.workflow.ir.jobs.get("plan").and_then(|job| {
+        job.steps
+            .iter()
+            .find(|step| step.name == "Prepare pinned tools")
+    }) else {
+        return false;
+    };
+    let StepKind::Shell { run, .. } = &step.kind else {
+        return false;
+    };
+    let gh = ToolCatalog::pinned().tool_spec(PinnedTool::Gh);
+    run.contains(&gh)
+}
+
 #[test]
 fn consumer_workflow_scopes_actions_read_to_required() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let prep = prepare(repo.path())?;
+    assert!(
+        !plan_installs_gh(&prep),
+        "consumer plan does not resolve receipts"
+    );
     let jobs = finalized_jobs(&prep)?;
     assert_ir_permissions(&prep, &jobs, false)?;
     let tree = render_staged_tree(&prep)?;
@@ -124,6 +144,7 @@ fn repository_workflow_scopes_actions_read_to_plan_and_required() -> TestResult 
                 repo.path(),
             )?;
             let prep = prepare(repo.path())?;
+            assert!(plan_installs_gh(&prep), "Velnor plan resolves receipts");
             let jobs = finalized_jobs(&prep)?;
             assert_ir_permissions(&prep, &jobs, true)?;
             let tree = render_staged_tree(&prep)?;
@@ -246,6 +267,10 @@ fn assert_rendered_permissions(yaml: &str, plan_auth: bool) -> TestResult {
         token_binding_steps(&lines, "GH_TOKEN", "${{ github.token }}"),
         if plan_auth {
             vec![
+                (
+                    "plan".to_owned(),
+                    "Resolve qualification predecessor".to_owned(),
+                ),
                 ("plan".to_owned(), "Plan".to_owned()),
                 expected_required.clone(),
             ]

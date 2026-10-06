@@ -39,13 +39,10 @@ pub(crate) fn owned_preparation(
                 env!("CARGO_PKG_VERSION"),
             )?;
         } else {
-            let fetch_roots =
-                crate::source_prep::lockful_roots(&prep.root, &prep.discovery.workspaces);
             attach_preseed(
                 &mut owned.workflow,
                 &prep.runner_label,
                 env!("CARGO_PKG_VERSION"),
-                &fetch_roots,
             )?;
         }
     }

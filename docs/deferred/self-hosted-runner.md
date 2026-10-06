@@ -76,7 +76,7 @@ V3 replaces the control host with Debian and Docker Engine. It MUST use the same
 
 ### V1 and runner contract
 
-Before any self-hosted runner implementation begins, the V1 generator MUST add a versioned compatibility output named `runner-rust-ci-v1`. It is a gated V1-to-runner integration change and is not part of the current proposed V1 output. Its exact path and schema are:
+**Superseded:** the `runner-rust-ci-v1` output below, including `"architecture": "ARM64"` and `platform = "linux-arm64"`. Those MUST rules are historical. Active execution is `linux/amd64` with hosted `ubuntu-26.04` or scale-set `[velnor, ubuntu-26.04-scale-set]`. The old path was:
 
 ```text
 <runner-state>/runner-rust-ci-v1.json
@@ -278,7 +278,7 @@ V2 uses the repository-level JIT endpoint:
 POST /repos/{owner}/{repo}/actions/runners/generate-jitconfig
 ```
 
-The request MUST set an owned runner name, resolved runner group, `runner-rust-ci-v1` labels, and a work folder. The host MUST persist the provisioning identity before making the request.
+**Superseded:** classic `generate-jitconfig` and `runner-rust-ci-v1` labels. The active call is Scale Set `generatejitconfig` with labels `ubuntu-26.04-scale-set` and `velnor` only. Persist intent before that call. The endpoint and steps in this section are historical.
 
 The official lifecycle is:
 
@@ -334,7 +334,7 @@ official Scale Set mode. Do not implement it. The table below is historical.
 | Actions | No arbitrary `uses:` execution |
 | Containers | Velnor's sandbox only; no services or nested actions |
 
-The runtime MUST reject custom `if`, `continue-on-error`, reusable actions, unsupported expressions, services, and unknown execution semantics before repository code runs. GitHub remains responsible for workflow triggers, DAG scheduling, and job assignment.
+**Superseded:** rejecting services, nested Docker, and marketplace actions. The active spec requires private DinD and official execution of the generated workflow. This rejection is historical with the table above. GitHub remains responsible for workflow triggers, DAG scheduling, and job assignment.
 
 Checkout MUST fetch and validate the assigned SHA. It MUST NOT substitute a branch tip. Private checkout credentials MUST be job-scoped and MUST NOT be the controller's administration token.
 

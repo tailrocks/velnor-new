@@ -83,8 +83,9 @@ fn provider_hit_still_runs_init_and_validate() -> TestResult {
     use velnor_actions_contract::digest_b3;
     use velnor_actions_mise::restore_evidence::{RestoreObservation, verify_provider_restore};
     let bytes = b"provider bytes".to_vec();
+    let locator = velnor_actions_tofu::tofu_root_locator("stacks/a")?;
     let hit = RestoreObservation {
-        entry_path: "tofu-cache/root-0123456789ab/provider".to_owned(),
+        entry_path: format!("tofu-cache/{locator}/provider"),
         entry_bytes: bytes.clone(),
         expected_digest: digest_b3(&bytes),
         expected_compat: digest_b3(b"compat"),
@@ -133,10 +134,9 @@ fn tofu_reuse_claims_fail_closed_at_merge() -> TestResult {
 }
 
 /// Every finalized tofu job saves exactly its own restored key under
-/// the push-only gate; the plan job saves nothing.
+/// the push-only gate plus the raw-dispatch denial; the plan job saves nothing.
 #[test]
 fn finalized_tofu_jobs_save_exactly_their_restored_key() -> TestResult {
-    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
     let dir = make_pure_tofu_repo(&two_root_config(), &two_root_files())?;
     let jobs = finalized_jobs(&prepare(dir.path())?)?;
     let plan = jobs.get("plan").ok_or("plan job")?;
@@ -169,7 +169,10 @@ fn finalized_tofu_jobs_save_exactly_their_restored_key() -> TestResult {
             .collect();
         assert_eq!(saves.len(), 1, "{id} saves once");
         let save = saves[0];
-        assert_eq!(save.condition.as_deref(), Some(CACHE_SAVE_CONDITION));
+        assert_eq!(
+            save.condition.as_deref(),
+            Some("success() && github.event_name == 'push'")
+        );
         let StepKind::Action { with: inputs, .. } = &save.kind else {
             return Err(format!("{id} save must be an action step").into());
         };

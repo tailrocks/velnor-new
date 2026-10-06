@@ -27,6 +27,7 @@ fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectation
         artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
         artifact_name: name,
         tasks: Vec::new(),
+        parent: None,
         expires_at_unix: None,
     };
     let expected = ProvenanceExpectations {
@@ -50,6 +51,7 @@ fn task_entry(digest: &str, proof_run_id: u64) -> BaselineTaskEntry {
         input_digest: digest.to_owned(),
         closure_digest: digest.to_owned(),
         proof_run_id,
+        carried_from: None,
         observed_run_id: 7,
         external_data: None,
         proof: None,
@@ -115,6 +117,8 @@ fn forwarded_proof_runs_fail_closed() {
     // One forwarded entry poisons the whole manifest, even beside a
     // same-run entry.
     let (mut manifest, expected) = manifest_and_expected(&base);
+    let mut forwarded = forwarded;
+    forwarded.task_id = "stack/rust/root/fmt/default".to_owned();
     manifest.tasks = vec![same, forwarded];
     assert_eq!(
         validate_provenance(&manifest, &digest_b3(b"m"), &expected).expect_err("mixed"),

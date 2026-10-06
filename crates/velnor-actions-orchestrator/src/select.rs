@@ -22,14 +22,23 @@ use crate::validators::{validate_diff_rev, validate_select_diff_args};
 
 #[path = "select_checkout.rs"]
 mod checkout;
+#[path = "select_paths.rs"]
+mod paths;
 pub(crate) use checkout::{verify_checkout, verify_checkout_until};
 
+use paths::{head_sha, is_advisory_toolfile, tree_diff_names, untracked_files};
+
 /// Full obligation universe: every task with applicable targets.
-/// No-target omissions and Tofu working-directory caveats are recorded.
+///
+/// Tasks without applicable targets are never obligations: scheduling
+/// them would emit impossible work (for example `cargo test --doc` for a
+/// package with no doctest-able target). Each omission is recorded as a
+/// `valid_no_test_targets:<task-id>` warning, never silent. Tofu
+/// subdir roots additionally record one `path.cwd:<root>` caveat each.
 pub(crate) fn select_universe<'a>(
     discovery: &'a Discovery,
     warnings: &mut Vec<String>,
-) -> Vec<&'a ProposedTask> {
+) -> Result<Vec<&'a ProposedTask>, crate::OrchestratorError> {
     let mut kept = Vec::new();
     for task in &discovery.proposals {
         if task.no_targets {
@@ -38,8 +47,8 @@ pub(crate) fn select_universe<'a>(
             kept.push(task);
         }
     }
-    crate::select_tofu::push_chdir_findings(discovery, warnings);
-    kept
+    crate::select_tofu::push_chdir_findings(discovery, warnings)?;
+    Ok(kept)
 }
 
 /// Changed package IDs, or `None` when the comparison is unknown.
@@ -56,6 +65,15 @@ pub(crate) fn classify_changed(
     discovery: &Discovery,
     warnings: &mut Vec<String>,
 ) -> Option<BTreeSet<String>> {
+    if event == WorkflowEvent::Qualification {
+        return Some(
+            discovery
+                .proposals
+                .iter()
+                .map(|task| task.identity.unit_id.clone())
+                .collect(),
+        );
+    }
     if discovery.skipped_non_utf8 {
         warnings.push(format!(
             "comparison_unavailable:{NON_UTF8_PATH}:all_changed"
@@ -176,6 +194,9 @@ fn affected_from_changed(
 }
 
 /// True when one task counts as changed under the affected packages.
+///
+/// Tasks with an empty unit ID follow their manifest siblings: a
+/// workspace-level task is affected when any same-manifest package is.
 pub(crate) fn group_changed(
     task: &ProposedTask,
     changed: &BTreeSet<String>,
@@ -283,68 +304,6 @@ fn local_change_set(root: &Path, warnings: &mut Vec<String>) -> Option<(BTreeSet
         .filter(|path| !is_advisory_toolfile(path))
         .collect();
     Some((changed, toolfiles))
-}
-
-/// Staged (`--cached`) or unstaged names, NUL-delimited like `changed_files`.
-fn tree_diff_names(root: &Path, cached: bool) -> Result<BTreeSet<String>, String> {
-    let mut args = vec![OsString::from("--name-only")];
-    if cached {
-        args.push(OsString::from("--cached"));
-    }
-    args.push(OsString::from("--no-renames"));
-    args.push(OsString::from("--"));
-    validate_select_diff_args(&args).map_err(|err| err.to_string())?;
-    args.insert(0, OsString::from("-z"));
-    let output = GitRequest::diff(args)
-        .run_in(root)
-        .map_err(|err| err.to_string())?;
-    output
-        .require_success("git")
-        .map_err(|err| err.to_string())?;
-    split_nul_paths(&output.stdout)
-}
-
-/// Resolve `HEAD` to a SHA for local comparison.
-fn head_sha(root: &Path) -> Result<String, String> {
-    let output = GitRequest::rev_parse(vec![OsString::from("HEAD")])
-        .run_in(root)
-        .map_err(|error| error.to_string())?;
-    if !output.success {
-        return Err("missing_head".to_owned());
-    }
-    let sha = output
-        .stdout_text("git")
-        .map_err(|err| err.to_string())?
-        .trim()
-        .to_owned();
-    validate_diff_rev(&sha, "bad_head")?;
-    Ok(sha)
-}
-
-/// Untracked non-ignored paths via the allowlisted `ls-files` verb.
-///
-/// Ignored paths never surface (`--exclude-standard`); any other untracked
-/// file broadens via the caller because the committed diff cannot see it.
-fn untracked_files(root: &Path) -> Result<BTreeSet<String>, String> {
-    let args = ["--others", "--exclude-standard", "-z"]
-        .iter()
-        .map(OsString::from)
-        .collect();
-    let output = GitRequest::ls_files(args)
-        .run_in(root)
-        .map_err(|err| err.to_string())?;
-    output
-        .require_success("git")
-        .map_err(|err| err.to_string())?;
-    split_nul_paths(&output.stdout)
-}
-
-/// True for advisory tool files: findings-only, never select or broaden.
-///
-/// Generated execution uses Velnor's exact pins, so these repository inputs
-/// feed inspection findings only; a task consuming one must declare it.
-fn is_advisory_toolfile(path: &str) -> bool {
-    path == ".mise.toml" || velnor_actions_rust::is_known_toolfile(path)
 }
 
 #[cfg(test)]

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "packages": [
+    "velnor-actions-actionlint",
+    "velnor-actions-cli",
+    "velnor-actions-contract",
+    "velnor-actions-mise",
+    "velnor-actions-orchestrator",
+    "velnor-actions-rust",
+    "velnor-actions-tofu",
+    "velnor-actions-workflow-renderer",
+    "velnor-archive-guard"
+  ]
+}

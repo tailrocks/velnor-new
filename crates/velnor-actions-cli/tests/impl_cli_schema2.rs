@@ -9,6 +9,7 @@ const SOURCE: &str = r#"schema = 1
 name = "Kept"
 default_branch = "main"
 runner_label = "ubuntu-24.04"
+pull_request_cache_policy = "same-repository-scoped"
 [resources]
 compiler_process_budget = 4
 test_process_budget = 5
@@ -40,6 +41,10 @@ fn config_migrate_preview_does_not_write() -> Result<(), Box<dyn Error>> {
     assert!(stdout.contains("schema = 2"), "{stdout}");
     assert!(
         stdout.contains("runner_label = \"ubuntu-24.04\""),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("pull_request_cache_policy = \"same-repository-scoped\""),
         "{stdout}"
     );
     assert!(stdout.contains("default_profile = \"hosted\""), "{stdout}");

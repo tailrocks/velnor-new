@@ -8,14 +8,16 @@ use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use crate::{RenderError, commands, marker};
 
+pub(crate) use crate::cache_steps::tools_cache_step;
 pub use crate::cache_steps::{
     CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompileDriver, MBX_ACTION_NAME, MBX_CACHE_MODE_ENV,
     MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, MBX_VERSION_CHECK_NAME, NEVER_ARCHIVE_MARKERS,
-    TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH, TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES,
-    TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step, check_cache_step_order, check_mbx_gating,
-    is_never_archive_path, mbx_steps_for_driver, tools_cache_key, tools_restore_step,
-    tools_save_step,
+    TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH, TOOLS_CACHE_PATHS, TOOLS_RESTORE_ACTION_USES,
+    TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step,
+    check_cache_step_order, check_mbx_gating, is_never_archive_path, mbx_steps_for_driver,
 };
+pub(crate) use crate::steps_shell::composite_shell_step;
+pub use crate::steps_shell::{ambient_shell_step, shell_step};
 
 pub use crate::action_ref::validate_uses;
 pub use crate::steps_artifact::{
@@ -44,6 +46,8 @@ pub const PUBLISH_OPERATION: &str = "publish-baseline-v1";
 pub const FETCH_OPERATION: &str = "fetch-reports-v1";
 /// Write-request operation name.
 pub const WRITE_REQUEST_OPERATION: &str = "write-request-v1";
+/// Resolve exact predecessor receipts for a typed qualification plan.
+pub const RESOLVE_QUALIFICATION_OPERATION: &str = "resolve-qualification-v1";
 /// Required prefix of the digest-verified staged binary path.
 pub const STAGED_BINARY_PREFIX: &str = "$RUNNER_TEMP/velnor/bin/velnor-actions-";
 /// Required prefix of internal request directories (expression form: shell
@@ -98,10 +102,6 @@ pub const CRATE_REPORT_UPLOAD_NAME: &str = "Upload crate reports";
 pub const DENY_STEP_NAME: &str = "Run cargo-deny";
 /// Contract-fixed display name of the policy cargo-machete step.
 pub const MACHETE_STEP_NAME: &str = "Run cargo-machete";
-
-pub use crate::commands::{
-    has_bare_env_expansion, quote_env_path_for_run, quote_run_line_env_paths,
-};
 
 /// Reject text containing a private-subcommand or parallel token.
 /// # Errors
@@ -177,90 +177,6 @@ pub fn action_step_with_env(
             with,
             env,
         },
-    })
-}
-
-/// Validated fixed-argv shell step, scrubbed and unset by construction.
-///
-/// The default posture for every `run:` step: env leaves carrying the
-/// empty-string scrub overlay, and credentials leave truly removed by
-/// the mechanism matching the argv shape — an `unset` prelude inside
-/// `sh -c`/`bash -c` scripts, an `env -u` prefix on direct-exec
-/// vectors — so a step that forgets credential handling fails safe
-/// instead of leaking. The split is load-bearing: shellcheck cannot
-/// see through `env … sh -c` (SC2016 on the script's `$`), while the
-/// in-script prelude keeps the recognized `sh -c '…'` shape. Callers
-/// pass the unscrubbed base env (validated before the overlay lands);
-/// the overlay overwrites any caller-supplied denied key rather than
-/// trusting it: any denied key in the base fails loud, so the
-/// constructor alone owns the scrub overlay. Steps that genuinely
-/// need ambient auth (tool acquisition, `gh` publishing, forge-bound
-/// release phases) use [`ambient_shell_step`] instead, keeping the
-/// exception greppable.
-/// # Errors
-pub fn shell_step(
-    name: &str,
-    argv: Vec<String>,
-    env: BTreeMap<String, String>,
-) -> Result<Step, RenderError> {
-    if name.trim().is_empty() {
-        return Err(RenderError::BadCommand("empty_name".to_owned()));
-    }
-    crate::expressions::check_name_content(name)?;
-    commands::validate_command_argv(&argv)?;
-    commands::validate_env(&env)?;
-    crate::toolchain_env::reject_denied_step_keys(&env)?;
-    scan_for_private_subcommands(name)?;
-    let run = if commands::is_inline_shell(&argv) {
-        let mut scripted = argv;
-        let preluded = crate::toolchain_env::with_credential_unset_script(&scripted[2]);
-        scripted[2] = preluded;
-        scripted
-    } else {
-        let mut run = crate::toolchain_env::with_env_unset_argv(&[]);
-        run.extend(argv);
-        run
-    };
-    let mut env_map = env;
-    env_map.extend(crate::toolchain_env::credential_scrub());
-    Ok(Step {
-        name: name.to_owned(),
-        id: None,
-        role: None,
-        condition: None,
-        kind: StepKind::Shell { run, env: env_map },
-    })
-}
-
-/// Validated fixed-argv shell step with ambient credentials intact.
-///
-/// The explicit exception to [`shell_step`]: no `env -u` prefix, no
-/// scrub overlay. Allowed only when the step executes no repository
-/// code and needs network auth to function: pinned-tool acquisition
-/// (`mise install`, where authenticated quota beats flaky anonymous
-/// limits), offline pinned analyzers over the checkout (deny, machete,
-/// zizmor, actionlint — scrubbing broke their tool bootstrap, CI run
-/// 36815180228), and `gh` release publishing. Anything compiling or
-/// running repository code must use [`shell_step`].
-/// # Errors
-pub fn ambient_shell_step(
-    name: &str,
-    argv: Vec<String>,
-    env: BTreeMap<String, String>,
-) -> Result<Step, RenderError> {
-    if name.trim().is_empty() {
-        return Err(RenderError::BadCommand("empty_name".to_owned()));
-    }
-    crate::expressions::check_name_content(name)?;
-    commands::validate_command_argv(&argv)?;
-    commands::validate_env(&env)?;
-    scan_for_private_subcommands(name)?;
-    Ok(Step {
-        name: name.to_owned(),
-        id: None,
-        role: None,
-        condition: None,
-        kind: StepKind::Shell { run: argv, env },
     })
 }
 

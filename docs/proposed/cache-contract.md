@@ -19,8 +19,9 @@ stack_extension (typed, versioned adapter data)
 
 The contract crate owns this envelope and canonical serialization. Each detector supplies a typed
 `stack_extension`; Mise supplies tool, environment, and generated-task identity. Only the orchestrator
-combines them and decides reuse eligibility. The renderer never computes cache identity. An unknown extension
-schema disables reuse and baseline coverage.
+combines task identity and decides reuse eligibility. The V2 tools layer separately derives its static
+archive digest from typed tool obligations; the renderer adds only the qualified runtime identity. An unknown
+extension schema disables reuse and baseline coverage.
 
 For `stack_id = "rust"`, `stack_extension` is a `RustTaskIdentityExtension` containing the Cargo package ID,
 normalized manifest path, workspace/local-package graph digest, target kinds and names, features and required
@@ -103,9 +104,9 @@ Each path has one owner:
 
 | Data | Owner | Rule |
 |---|---|---|
-| Mise tools and Rust components | Compiled-in generator catalog, executed by Mise | Embed and invoke exact versions; disable project config, env files, and hooks |
-| Cargo registry and Git sources | Velnor source layer | Exclude credentials; separate from MBX |
-| Compiler objects and scheduler state | `jdx/mr-boxington-action` when MBX is selected | Production remains pinned to action v1.6 and MBX `1.21.1`; the newer MBX `1.22.0` is candidate-only pending the #29 source, lifecycle, disk, and input qualification. The action owns object format, cache transport, and post step. The current experiment uses the provider's Rust-identity key with a generation bound to action pin, runner environment, GitHub job ID, and MBX version; its current source has not established an exact immutable runner-image identity or useful-delta admission. Do not treat the experiment as satisfying those cache requirements. The stable logical store path is `$RUNNER_TEMP/velnor/mbx`. Velnor does not install MBX through Mise or implement the object format |
+| Mise tools and Rust components | V2 tools layer | Archive exact tool, Rustup, and Cargo-bin paths under typed static and runtime-qualified identity; disable Mise's built-in cache |
+| Cargo registry and Git sources | Velnor source layer | Archive only `registry/index`, `registry/cache`, and `git/db`; exclude binaries and credentials |
+| Compiler objects and scheduler state | `jdx/mr-boxington-action` when MBX is selected | Production remains pinned to action v1.6.0 and MBX `1.21.1`; the newer MBX `1.22.0` is candidate-only pending exact source, lifecycle, disk, and input qualification. The action owns object format, cache transport, and post step. The stable logical store path is `$RUNNER_TEMP/velnor/mbx`. Velnor does not install MBX through Mise or implement the object format |
 | Mutable target directory | Matrix job | Reuse sequentially; never share concurrently |
 | Successful task result | Mise task cache | Use only for qualified deterministic tasks and complete outputs |
 
@@ -124,8 +125,8 @@ The generated workflow MUST use these paths. `CARGO_TARGET_DIR` is never an arch
 
 ```text
 VELNOR_CACHE_ROOT     = $RUNNER_TEMP/velnor/cache
-CARGO_HOME            = $VELNOR_CACHE_ROOT/cargo
-CARGO_SOURCE_PATHS    = $CARGO_HOME/registry $CARGO_HOME/git
+CARGO_HOME            = $RUNNER_TEMP/velnor/cargo
+CARGO_SOURCE_PATHS    = $CARGO_HOME/registry/index $CARGO_HOME/registry/cache $CARGO_HOME/git/db
 CARGO_TARGET_DIR      = $RUNNER_TEMP/velnor/target/<lane_id>
 MBX_CACHE_DIR         = $RUNNER_TEMP/velnor/mbx (preflight exports through GITHUB_ENV; the action main and post receive it explicitly)
 MISE_TASK_CACHE_DIR   = $VELNOR_CACHE_ROOT/mise-task
@@ -134,7 +135,7 @@ REPORT_DIR            = $RUNNER_TEMP/velnor/<run-key>/<matrix-key>
 ```
 
 `CARGO_HOME` is set to this isolated path for every generated task. The source archive MUST include only
-`registry/` and `git/`, never credentials or other files under Cargo home. Mise stores task artifacts under
+the listed index, registry-cache, and Git-database paths, never credentials, binaries, or other files under Cargo home. Mise stores task artifacts under
 `$MISE_TASK_CACHE_DIR/task-artifacts/v2`; CI sets that environment variable before Mise starts and archives
 only that directory.
 

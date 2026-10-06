@@ -1,5 +1,11 @@
 //! Shared spawn and tempdir helpers for CLI integration tests.
 
+#[path = "../../test_support/git_fixture.rs"]
+pub(crate) mod git_fixture;
+
+#[path = "impl_cli_git_isolation.rs"]
+mod isolation_tests;
+
 use std::error::Error;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -26,7 +32,12 @@ pub(crate) fn fresh_tempdir(prefix: &str) -> Result<PathBuf, Box<dyn Error>> {
 
 /// Best-effort tempdir removal; cleanup must never fail a test.
 pub(crate) fn cleanup(dir: &Path) {
-    drop(std::fs::remove_dir_all(dir));
+    if let Err(error) = std::fs::remove_dir_all(dir) {
+        eprintln!(
+            "failed to clean CLI test fixture {}: {error}",
+            dir.display()
+        );
+    }
 }
 
 /// Spawn the `velnor-actions` binary with args, env, and cwd applied.
@@ -62,11 +73,7 @@ pub(crate) fn spawn_isolated(
 
 /// Initialize a Git working tree in `dir`.
 pub(crate) fn git_init(dir: &Path) -> Result<(), Box<dyn Error>> {
-    let output = Command::new("git")
-        .arg("init")
-        .arg("-q")
-        .arg(dir)
-        .output()?;
+    let output = git_fixture::command(dir)?.arg("init").arg("-q").output()?;
     if output.status.success() {
         Ok(())
     } else {
@@ -97,7 +104,10 @@ pub(crate) fn commit_all(dir: &Path) -> Result<String, Box<dyn Error>> {
             "fixture",
         ],
     ] {
-        let output = Command::new("git").args(&args).current_dir(dir).output()?;
+        let output = git_fixture::command(dir)?
+            .args(&args)
+            .current_dir(dir)
+            .output()?;
         if !output.status.success() {
             return Err(format!("git {args:?} failed: {}", output.status).into());
         }
@@ -107,7 +117,7 @@ pub(crate) fn commit_all(dir: &Path) -> Result<String, Box<dyn Error>> {
 
 /// Current HEAD sha of a fixture repo.
 pub(crate) fn head_sha(dir: &Path) -> Result<String, Box<dyn Error>> {
-    let output = Command::new("git")
+    let output = git_fixture::command(dir)?
         .args(["rev-parse", "HEAD"])
         .current_dir(dir)
         .output()?;
@@ -162,6 +172,7 @@ pub(crate) fn add_crate_pair(repo: &Path) -> Result<(), Box<dyn Error>> {
         let output = Command::new("cargo")
             .arg("init")
             .arg("--quiet")
+            .args(["--vcs", "none"])
             .arg("--lib")
             .arg("--name")
             .arg(name)

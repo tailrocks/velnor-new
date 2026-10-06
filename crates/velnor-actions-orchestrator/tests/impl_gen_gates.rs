@@ -1,5 +1,7 @@
 //! Generate gate cases: fixed-point, determinism, matrix budget.
 
+use crate::impl_common::git_fixture;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
@@ -72,7 +74,16 @@ fn cross_checkout_determinism() -> TestResult {
     );
     let left_bytes = preview_bytes(left.path())?;
     let right_bytes = preview_bytes(right.path())?;
-    assert_eq!(left_bytes.keys().len(), 5, "five generated files");
+    assert_eq!(
+        left_bytes.keys().len(),
+        9,
+        "nine generated files: {:?}",
+        left_bytes.keys().collect::<Vec<_>>()
+    );
+    assert!(left_bytes.contains_key(".github/actions/u26/action.yml"));
+    assert!(left_bytes.contains_key(".github/actions/velnor-tools-cache-restore/action.yml"));
+    assert!(left_bytes.contains_key(".github/actions/velnor-tools-prelude-u26/action.yml"));
+    assert!(left_bytes.contains_key(".github/scripts/velnor-tools-cache-identity.sh"));
     assert_eq!(
         left_bytes, right_bytes,
         "identical inputs at different absolute paths stage identical bytes"
@@ -130,7 +141,7 @@ fn matrix_budget_enforced_never_truncated() -> TestResult {
     let root = repo.path();
     git(&["add", "."], root)?;
     git(&["commit", "-m", "wide"], root)?;
-    let output = std::process::Command::new("git")
+    let output = git_fixture::command(root)?
         .args(["rev-parse", "HEAD"])
         .current_dir(root)
         .output()?;

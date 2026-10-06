@@ -1,8 +1,9 @@
 # Velnor Actions bootstrap and release contract
 
-**Status:** Proposed. The source-bound generator-release workflow is
-implemented in the renderer; no bootstrap seed, successful hosted
-qualification, or published release has been verified.
+**Status:** Proposed. The renderer emits a source-bound, dispatch-only
+`product-release.yml` coordinator and reusable image, binary, and generator
+release modules; no bootstrap seed, successful hosted qualification, or
+published release has been verified.
 
 This contract defines how generated consumer workflows acquire Velnor, how
 Velnor pins its tools, and how a candidate becomes a release. Consumer
@@ -71,12 +72,16 @@ tree.
 
 Code enforces the manifest shape (`commit` required, 40 lowercase
 hex) and records the pinned commit in generated steps. The
-generator-release workflow also builds and qualifies exact target
+product-release workflow family also builds and qualifies exact target
 artifacts, assembles a same-run manifest, verifies source-bound
-attestations, and publishes only through its protected dispatch job.
+attestations, and publishes generator assets only through its protected
+`generator-release` environment.
 Consumer generation still does not verify release signatures or
-attestations; the external release and seed procedure below remains
-in force.
+attestations. The generator release workflow implements same-run candidate
+qualification, manifest-byte comparison, and source/workflow-bound asset and
+manifest attestation verification; a successful hosted three-target run has
+not yet supplied runtime proof. The external release and seed procedure below
+remains in force.
 
 The release manager MUST follow this exact process for every
 official release:
@@ -92,11 +97,13 @@ official release:
    manifest; verify each asset's SHA-256 matches the manifest before
    publishing.
 4. Produce Sigstore/SLSA provenance for every asset (build
-   attestation bound to the source commit and the release workflow)
-   and attach it to the release. Until generator-side attestation
-   verification lands, reviewers MUST manually verify each
-   attestation against the manifest `commit` before approving a
-   manifest update.
+   attestation bound to the source commit and the reusable generator
+   workflow) and attach it to the release. The generator publication
+   workflow verifies each downloaded bundle against the exact source
+   commit, workflow authority, repository, and asset bytes before it
+   publishes. Until a successful hosted three-target run proves this
+   path, reviewers MUST NOT treat source tests as published-attestation
+   evidence.
 5. Open the manifest-update change with the published manifest bytes;
    a second reviewer MUST confirm the committed file is
    byte-identical to the published release and that `commit` equals
@@ -107,14 +114,13 @@ dropped). Same-version seed rollback: URL binding proves an artifact
 URL names this version's official asset, but a committed seed
 replaced at the same version (or a re-published tag upstream) is
 caught only by reviewer comparison against the published release
-(process step 5 until automated). Unsigned seeds: no signature or
-attestation is verified by code yet (process step 4 until
-generator-side Sigstore/SLSA verification lands). The remaining
-follow-ups are: Sigstore/SLSA attestation verification for release
-assets, a published-vs-committed comparison job proving the
-committed manifest is byte-identical to the published release, and
-CODEOWNERS ownership of `.velnor/release-manifest.json` so every
-seed change gets security review.
+(process step 5 until automated). Source-level attestation verification
+is implemented, but hosted proof remains unverified until the protected
+three-target workflow completes. The remaining follow-ups are a
+successful immutable release, a published-vs-committed comparison job
+proving the committed manifest is byte-identical to the published
+release, and CODEOWNERS ownership of `.velnor/release-manifest.json`
+so every seed change gets security review.
 
 Compromise rotation (X5 runbook note): a compromised seed poisons
 every cache entry its runs wrote, and entries persist after the seed
@@ -151,11 +157,6 @@ sha256 = "<64-lowercase-hex>"
 
 [[generator.binaries]]
 target = "aarch64-apple-darwin"
-artifact = "<immutable-release-asset-url>"
-sha256 = "<64-lowercase-hex>"
-
-[[generator.binaries]]
-target = "x86_64-apple-darwin"
 artifact = "<immutable-release-asset-url>"
 sha256 = "<64-lowercase-hex>"
 

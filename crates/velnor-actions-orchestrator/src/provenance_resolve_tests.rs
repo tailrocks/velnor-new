@@ -33,6 +33,7 @@ fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectation
         artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
         artifact_name: name,
         tasks: Vec::new(),
+        parent: None,
         expires_at_unix: None,
     };
     let expected = ProvenanceExpectations {

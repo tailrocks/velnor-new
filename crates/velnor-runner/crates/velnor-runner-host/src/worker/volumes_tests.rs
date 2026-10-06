@@ -12,6 +12,11 @@ use crate::launch::admission;
 use crate::worker::{create_named_volumes, remove_worker_volumes, worker_id_for_name};
 use crate::{HostError, IntentState, Outcome, dind_create};
 
+#[path = "volumes_effect_tests.rs"]
+mod effect_tests;
+#[path = "volumes_post_delete_tests.rs"]
+mod post_delete;
+
 const TIMEOUT: Duration = Duration::from_secs(2);
 const WORKER: &str = "wtransport";
 
@@ -48,6 +53,27 @@ async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
             .count(),
         3
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn unlabeled_matching_volume_is_not_removed() -> Result<(), String> {
+    let unlabeled = serde_json::json!({
+        "Name": "wtransport",
+        "Driver": "local",
+        "Mountpoint": "/var/lib/docker/volumes/wtransport/_data",
+        "Labels": {},
+        "Options": {},
+        "Scope": "local"
+    })
+    .to_string();
+    let stub = DockerStub::open(vec![http(200, &unlabeled)])?;
+    let result = remove_worker_volumes(&stub.docker, WORKER).await;
+    let requests = stub.finish().await?;
+
+    assert_eq!(result, Ok(false));
+    assert_eq!(requests.len(), 1);
+    assert!(requests[0].starts_with("GET "));
     Ok(())
 }
 
@@ -130,51 +156,6 @@ async fn container_identity_requires_id_and_exact_labels() -> Result<(), String>
         Ok(None)
     );
     assert_eq!(stub.finish().await?.len(), 5);
-    Ok(())
-}
-
-#[tokio::test]
-async fn uncertain_volume_holds_without_remote_settlement() -> Result<(), String> {
-    let scratch = crate::launch_harness::Scratch::new("volume-post-delete")
-        .map_err(|error| error.to_string())?;
-    let journal = crate::Journal::open(&scratch.file())
-        .await
-        .map_err(|error| error.to_string())?;
-    let (row, fresh) = journal
-        .begin_launch("offer-transport")
-        .await
-        .map_err(|error| error.to_string())?;
-    assert!(fresh);
-    journal
-        .bind_worker_volume(row, WORKER)
-        .await
-        .map_err(|error| error.to_string())?;
-    journal
-        .finish(row, Outcome::Uncertain)
-        .await
-        .map_err(|error| error.to_string())?;
-
-    let stub = DockerStub::open(Vec::new())?;
-    let decision = admission(
-        &stub.docker,
-        &journal,
-        1,
-        1,
-        0,
-        &crate::launch_harness::assigned_wait(1, 1),
-    )
-    .await;
-    let requests = stub.finish().await?;
-
-    assert_eq!(decision, Ok(crate::launch::Admit::Hold));
-    assert!(requests.is_empty());
-    let rows = journal.rows().await.map_err(|error| error.to_string())?;
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].state, IntentState::Uncertain);
-    assert_eq!(rows[0].docker_id, None);
-    assert_eq!(rows[0].dind_id, None);
-    assert_eq!(rows[0].worker_volume.as_deref(), Some(WORKER));
-    assert!(!rows[0].cleanup_proven);
     Ok(())
 }
 

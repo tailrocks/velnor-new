@@ -29,6 +29,7 @@ fn shared_lanes_keep_ci_under_github_file_cap() {
         calls: BTreeMap::new(),
         checkouts: BTreeMap::new(),
         env_steps: BTreeMap::new(),
+        runtime_preludes: BTreeMap::new(),
         prefixes: BTreeMap::new(),
         preludes: BTreeMap::new(),
         postludes: BTreeMap::new(),

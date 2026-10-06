@@ -128,6 +128,17 @@ fn tofu_provider_pair_and_consumer_sequence_is_valid() {
 }
 
 #[test]
+fn tofu_provider_save_must_follow_restore_without_consumers() {
+    let steps = [tofu_save(), tofu_restore()];
+    assert!(
+        validate_step_sequence(&steps, "tofu-job")
+            .expect_err("provider save before restore is rejected without consumers")
+            .to_string()
+            .contains("tofu_provider_save_before_restore")
+    );
+}
+
+#[test]
 fn tofu_provider_sequence_rejects_missing_conditional_or_malformed_composite() {
     let mut missing = tofu_sequence();
     missing.remove(0);
@@ -261,17 +272,6 @@ fn tofu_provider_save_must_match_restore_gate_and_order() {
             .expect_err("save must follow every provider consumer")
             .to_string()
             .contains("tofu_provider_save_before_use")
-    );
-}
-
-#[test]
-fn tofu_provider_save_must_follow_restore_without_consumers() {
-    let error = validate_step_sequence(&[tofu_save(), tofu_restore()], "tofu-job")
-        .expect_err("save outputs cannot be consumed before their restore step runs");
-    assert!(
-        error
-            .to_string()
-            .contains("tofu_provider_save_before_restore")
     );
 }
 

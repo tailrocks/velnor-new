@@ -78,37 +78,21 @@ pub const EXPECTED_REPOSITORY: &str = "tailrocks/velnor-new";
 const ASSET_HOST: &str = "github.com";
 
 /// Fixed release-asset path prefix under the host.
-const ASSET_PREFIX: &str = "/tailrocks/velnor-new/releases/download/";
+const ASSET_PREFIX: &str = "tailrocks/velnor-new/releases/download/";
 
-/// Validate one release-asset URL against its manifest version and target.
+/// Validate a release-asset URL and return its final path segment.
 ///
-/// Bootstrap/release contract §2: the URL MUST be
-/// `https://github.com/tailrocks/velnor-new/releases/download/<tag>/
-/// <asset>` where `<asset>` is exactly [`asset_filename`] for this
-/// version and target and `<tag>` is either a single non-`latest`
-/// segment or a seed tag bound to this version
-/// ([`is_seed_tag_for_version`]). Shape-only `https://` checks would
-/// let a merged manifest redirect the Acquire step at attacker
-/// infrastructure. Userinfo, query, fragment, `$`, backtick, and
-/// whitespace all fail closed.
-///
-/// Residual (X1/X4): same-version seed rollback stays review-gated. The
-/// binding proves the URL names this version's official asset, but an
-/// attacker who replaces the committed seed bytes at the same version
-/// (or re-publishes the tag upstream) is caught only by reviewer
-/// comparison against the published release. Follow-ups (scoped, not
-/// dropped): Sigstore/SLSA attestation verification, a
-/// published-vs-committed comparison job, and CODEOWNERS on the
-/// committed manifest (bootstrap-and-release-contract §2).
 /// # Errors
-pub fn check_release_artifact(
-    url: &str,
+fn checked_release_asset_name<'a>(
+    url: &'a str,
     version: &str,
-    target: &str,
+    commit: &str,
     file: &str,
     key: &str,
-) -> Result<(), crate::errors::ContractError> {
+) -> Result<&'a str, crate::errors::ContractError> {
     let bad = || crate::errors::ContractError::config(file, key, "unexpected_artifact_url");
+    crate::manifest_checks::check_semver(version, file, "version")?;
+    crate::manifest_checks::check_commit(commit, file, "commit")?;
     if url.bytes().any(|b| {
         b.is_ascii_whitespace() || b.is_ascii_control() || matches!(b, b'$' | b'`' | b'?' | b'#')
     }) {
@@ -123,24 +107,89 @@ pub fn check_release_artifact(
     if host != ASSET_HOST {
         return Err(bad());
     }
-    let path = format!("/{path}");
     let Some(trailer) = path.strip_prefix(ASSET_PREFIX) else {
         return Err(bad());
     };
-    // Split from the right: the asset is always the last segment, and
-    // seed tags legitimately contain slashes (see below).
+    // Split from the right: seed tags legitimately contain slashes.
     let Some((tag, asset)) = trailer.rsplit_once('/') else {
         return Err(bad());
     };
-    if asset.is_empty() {
+    if asset.is_empty() || !is_release_tag_for_source(tag, version, commit) {
         return Err(bad());
     }
-    let single = !tag.is_empty() && !tag.contains('/') && tag != "latest";
-    if !single && !is_seed_tag_for_version(tag, version) {
-        return Err(bad());
-    }
+    Ok(asset)
+}
+
+/// Accept only release tags whose spelling is bound to the manifest.
+fn is_release_tag_for_source(tag: &str, version: &str, commit: &str) -> bool {
+    tag.strip_prefix('v')
+        .is_some_and(|tag_version| tag_version == version)
+        || tag.strip_prefix("generator-").is_some_and(|tag_commit| {
+            crate::ids::is_lower_hex_len(tag_commit, 40) && tag_commit == commit
+        })
+        || is_seed_tag_for_version(tag, version)
+}
+
+/// Validate one release-asset URL against its manifest version and target.
+///
+/// Bootstrap/release contract §2: the URL MUST be
+/// `https://github.com/tailrocks/velnor-new/releases/download/<tag>/
+/// <asset>` where `<asset>` is exactly [`asset_filename`] for this
+/// version and target. `<tag>` MUST be `v<version>`,
+/// `generator-<manifest commit>`, or a seed tag bound to this version
+/// ([`is_seed_tag_for_version`]). Exact grammar rejects path traversal,
+/// backslash, percent-encoding, and other URL-normalization ambiguity.
+/// Userinfo, query, fragment, `$`, backtick, and whitespace also fail
+/// closed.
+///
+/// Residual (X1/X4): same-version seed rollback stays review-gated. The
+/// binding proves the URL names this version's official asset, but an
+/// attacker who replaces the committed seed bytes at the same version
+/// (or re-publishes the tag upstream) is caught only by reviewer
+/// comparison against the published release. Follow-ups (scoped, not
+/// dropped): Sigstore/SLSA attestation verification, a
+/// published-vs-committed comparison job, and CODEOWNERS on the
+/// committed manifest (bootstrap-and-release-contract §2).
+/// # Errors
+pub fn check_release_artifact(
+    url: &str,
+    version: &str,
+    commit: &str,
+    target: &str,
+    file: &str,
+    key: &str,
+) -> Result<(), crate::errors::ContractError> {
+    let asset = checked_release_asset_name(url, version, commit, file, key)?;
     if asset != asset_filename(version, target) {
-        return Err(bad());
+        return Err(crate::errors::ContractError::config(
+            file,
+            key,
+            "unexpected_artifact_url",
+        ));
+    }
+    Ok(())
+}
+
+/// Validate the separately published release-manifest asset URL.
+///
+/// The JSON manifest records target assets but not its own URL. Callers
+/// handling the release asset URL use this check to enforce the canonical
+/// filename alongside the same host and release-path rules as binaries.
+/// # Errors
+pub fn check_release_manifest_artifact(
+    url: &str,
+    version: &str,
+    commit: &str,
+    file: &str,
+    key: &str,
+) -> Result<(), crate::errors::ContractError> {
+    let asset = checked_release_asset_name(url, version, commit, file, key)?;
+    if asset != RELEASE_MANIFEST_FILENAME {
+        return Err(crate::errors::ContractError::config(
+            file,
+            key,
+            "unexpected_artifact_url",
+        ));
     }
     Ok(())
 }
@@ -172,3 +221,6 @@ pub fn is_seed_tag_for_version(tag: &str, version: &str) -> bool {
             && suffix[1..].bytes().all(|b| b.is_ascii_digit())
     })
 }
+
+/// Version marker for the contract schema shell.
+pub const CONTRACT_VERSION: u32 = 0;

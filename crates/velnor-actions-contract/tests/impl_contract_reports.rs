@@ -2,14 +2,13 @@
 use crate::impl_contract_ids::{MANIFEST, TASK, sample_entry};
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    BaselineProof, CacheLayer, CacheOutcome, CacheResult, Concurrency, ContractError, FinalCounts,
-    FinalReport, FinalStatus, Job, JobConclusion, JobTimeout, MatrixReport, MatrixStatus,
-    NotSelectedReason, ObligationDecision, Permissions, Plan, PlanBaseline, PlanGenerator,
-    PlanMatrix, PlanObligation, PlanPackage, PlanRunner, RequiredJobResult, RunnerSelection, Step,
-    StepKind, TaskReport, TaskStatus, Trigger, Trust, WorkflowEvent, WorkflowIr,
-    artifact_id_for_matrix, artifact_id_for_plan, canonical_json_bytes, digest_b3,
-    final_report_id_for_run, plan_id_for_run, run_key_for_ci, task_report_id_for_task,
-    validate_final_report_id,
+    BaselineProof, CacheLayer, CacheOutcome, CacheResult, Concurrency, ContractError, Job,
+    JobTimeout, MatrixEntry, MatrixReport, MatrixStatus, NotSelectedReason, ObligationDecision,
+    Permissions, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage,
+    PlanRunner, PlannedPlatform, PlatformBinding, PlatformRunnerEnvironment,
+    PlatformUnavailableReason, RunnerSelection, Step, StepKind, TaskReport, TaskStatus, Trigger,
+    Trust, WorkflowEvent, WorkflowIr, artifact_id_for_plan, canonical_json_bytes, digest_b3,
+    plan_id_for_run, run_key_for_ci, task_report_id_for_task,
 };
 
 #[test]
@@ -17,12 +16,13 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
     let run_key = run_key_for_ci(3, 1);
     let entry = sample_entry(&run_key)?;
     let plan = Plan {
-        schema: 1,
+        schema: Plan::SCHEMA,
         run_key: run_key.clone(),
         plan_id: plan_id_for_run(&run_key)?,
         base: None,
         head: "ab".repeat(20),
         event: WorkflowEvent::PullRequest,
+        qualification: None,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,
@@ -79,15 +79,15 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
     Ok(())
 }
 
-#[test]
-fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
-    let run_key = run_key_for_ci(11, 1);
-    let entry = sample_entry(&run_key)?;
-    let task_digest = digest_b3(b"task-bytes");
-    let report = TaskReport {
-        schema: 1,
-        task_report_id: task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?,
-        run_key: run_key.clone(),
+fn executed_report(
+    run_key: &str,
+    entry: &MatrixEntry,
+    task_digest: String,
+) -> Result<TaskReport, ContractError> {
+    Ok(TaskReport {
+        schema: TaskReport::SCHEMA,
+        task_report_id: task_report_id_for_task(run_key, &entry.matrix_key, &task_digest)?,
+        run_key: run_key.to_owned(),
         event: WorkflowEvent::PullRequest,
         trust: Trust::Pr,
         matrix_id: entry.id.clone(),
@@ -102,6 +102,11 @@ fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
             result: CacheResult::Miss,
             miss_reason: Some("no_entry".to_owned()),
         },
+        platform_binding: PlatformBinding::Unavailable {
+            planned_platform_id: digest_b3(b"planned-platform"),
+            runner_environment: PlatformRunnerEnvironment::Unknown,
+            reason: PlatformUnavailableReason::ObservationNotRecorded,
+        },
         exit_code: 0,
         duration_ms: Some(12),
         outputs: vec![],
@@ -110,8 +115,17 @@ fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
         partition: None,
         reason: None,
         timing: None,
-    };
+    })
+}
+
+#[test]
+fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
+    let run_key = run_key_for_ci(11, 1);
+    let entry = sample_entry(&run_key)?;
+    let task_digest = digest_b3(b"task-bytes");
+    let report = executed_report(&run_key, &entry, task_digest)?;
     report.validate()?;
+    rejects_task_report_v2(&report);
     let skipped = TaskReport {
         status: TaskStatus::NotSelected,
         not_selected_reason: Some(NotSelectedReason::UpstreamFailed),
@@ -151,46 +165,17 @@ fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
     Ok(())
 }
 
-#[test]
-fn final_reports_validate() -> Result<(), ContractError> {
-    let run_key = run_key_for_ci(5, 3);
-    let entry = sample_entry(&run_key)?;
-    let report_id = final_report_id_for_run(&run_key)?;
-    validate_final_report_id(&report_id)?;
-    let final_report = FinalReport {
-        schema: 1,
-        report_id,
-        run_key: run_key.clone(),
-        plan_id: plan_id_for_run(&run_key)?,
-        expected_report_ids: vec![entry.report_id.clone()],
-        downloaded_artifact_ids: vec![
-            artifact_id_for_matrix(&run_key, &entry.matrix_key)?,
-            artifact_id_for_plan(&run_key)?,
-        ],
-        required_job_results: vec![RequiredJobResult {
-            job_id: "plan".to_owned(),
-            conclusion: JobConclusion::Success,
-        }],
-        status: FinalStatus::Passed,
-        counts: FinalCounts {
-            selected: 1,
-            reused: 0,
-            executed: 1,
-            empty_partition: 0,
-            covered: 0,
-            failed: 0,
-            cancelled: 0,
-            blocked: 0,
-            not_run: 0,
-        },
-        miss_reasons: vec![],
-    };
-    final_report.validate()?;
-    assert_eq!(
-        final_report.artifact_id()?,
-        format!("velnor-final-{run_key}")
-    );
-    Ok(())
+fn rejects_task_report_v2(report: &TaskReport) {
+    let mut legacy_report = report.clone();
+    legacy_report.schema = 2;
+    assert!(matches!(
+        legacy_report.validate(),
+        Err(ContractError::UnsupportedSchema {
+            field: "schema",
+            found,
+            expected: "3"
+        }) if found == "2"
+    ));
 }
 
 #[test]
@@ -267,35 +252,10 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
         &digest_b3(b"entry-inputs"),
         &run_key,
         "plan",
+        PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")?,
     )?;
     let task_digest = digest_b3(b"task-bytes");
-    let report = TaskReport {
-        schema: 1,
-        task_report_id: task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?,
-        run_key: run_key.clone(),
-        event: WorkflowEvent::PullRequest,
-        trust: Trust::Pr,
-        matrix_id: entry.id.clone(),
-        matrix_key: entry.matrix_key.clone(),
-        task_id: TASK.to_owned(),
-        task_digest,
-        status: TaskStatus::Executed,
-        not_selected_reason: None,
-        cache: CacheOutcome {
-            layer: CacheLayer::Task,
-            key: "velnor-v1-task-pr-x".to_owned(),
-            result: CacheResult::Miss,
-            miss_reason: Some("no_entry".to_owned()),
-        },
-        exit_code: 0,
-        duration_ms: Some(12),
-        outputs: vec![],
-        lane: None,
-        queue: None,
-        partition: None,
-        reason: None,
-        timing: None,
-    };
+    let report = executed_report(&run_key, &entry, task_digest)?;
     report.validate()?;
     let matrix = MatrixReport {
         schema: 1,
@@ -334,7 +294,7 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
 #[test]
 fn absent_duration_deserializes_to_none_and_skips() -> Result<(), ContractError> {
     let value = serde_json::json!({
-        "schema": 1,
+        "schema": TaskReport::SCHEMA,
         "task_report_id": "task-local-m-0000000000000000-0000000000000000000000000000000000000000000000000000000000000000",
         "run_key": "local",
         "event": "pull_request",
@@ -345,6 +305,12 @@ fn absent_duration_deserializes_to_none_and_skips() -> Result<(), ContractError>
         "task_digest": "b3-0000000000000000000000000000000000000000000000000000000000000000",
         "status": "executed",
         "cache": {"layer": "task", "key": "", "result": "not_attempted"},
+        "platform_binding": {
+            "state": "unavailable",
+            "planned_platform_id": "b3-0000000000000000000000000000000000000000000000000000000000000000",
+            "runner_environment": "unknown",
+            "reason": "observation_not_recorded"
+        },
         "exit_code": 0,
         "outputs": [],
     });
@@ -356,31 +322,5 @@ fn absent_duration_deserializes_to_none_and_skips() -> Result<(), ContractError>
         !String::from_utf8_lossy(&bytes).contains("duration_ms"),
         "absent timing serializes absent"
     );
-    Ok(())
-}
-
-#[test]
-fn final_without_plan_is_planning_failed() -> Result<(), ContractError> {
-    let run_key = run_key_for_ci(9, 3);
-    let jobs = vec![
-        RequiredJobResult {
-            job_id: "plan".to_owned(),
-            conclusion: JobConclusion::Failure,
-        },
-        RequiredJobResult {
-            job_id: "alint".to_owned(),
-            conclusion: JobConclusion::Success,
-        },
-    ];
-    let report = FinalReport::without_plan(&run_key, jobs)?;
-    report.validate()?;
-    assert_eq!(report.status, FinalStatus::PlanningFailed);
-    assert_eq!(report.report_id, format!("final-{run_key}"));
-    assert_eq!(report.plan_id, format!("plan-{run_key}"));
-    assert!(report.expected_report_ids.is_empty());
-    assert!(report.downloaded_artifact_ids.is_empty());
-    assert_eq!(report.required_job_results[0].job_id, "alint");
-    assert_eq!(report.counts.selected, 0);
-    assert!(FinalReport::without_plan("bogus", Vec::new()).is_err());
     Ok(())
 }

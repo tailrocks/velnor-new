@@ -4,10 +4,10 @@ use velnor_runner_github::{
     Exchange, Poll, QueueSession, SessionRequest, Transport, TransportFail, create_session,
 };
 
-use super::{Ready, start_turn};
+use super::{Ready, StartTurn, start_turn};
 use crate::journal::Outcome;
 use crate::launch::inspect_tests::{DockerStub, http};
-use crate::launch_harness::{Mode, Script, absent, assigned_wait, ctx, open, started_progress};
+use crate::launch_harness::{Mode, Script, absent, assigned_wait, open};
 use crate::worker::Started;
 use crate::{EnsureError, IntentState};
 
@@ -26,12 +26,20 @@ impl Transport for InitialSession {
     }
 }
 
-fn zero_assignment_session() -> Result<QueueSession, String> {
+pub(super) fn zero_assignment_session() -> Result<QueueSession, String> {
     create_session(&mut InitialSession, 1, "owner", "admin-token")
         .map_err(|error| error.to_string())
 }
 
-fn ready<'a>(session: &'a QueueSession, polled: &'a Poll) -> Ready<'a> {
+pub(super) fn rest() -> crate::launch::Rest<'static> {
+    crate::launch::Rest {
+        owner: "",
+        repo: "",
+        pat: "",
+    }
+}
+
+pub(super) fn ready<'a>(session: &'a QueueSession, polled: &'a Poll) -> Ready<'a> {
     Ready {
         set_id: 1,
         session,
@@ -63,11 +71,14 @@ async fn zero_initial_census_and_positive_poll_keep_jit_conflict_unacked() -> Re
     let result = start_turn(
         &mut script,
         &mut workers,
-        ready(&session, &polled),
-        &journal,
-        &docker.docker,
-        2,
-        false,
+        StartTurn {
+            ready: ready(&session, &polled),
+            journal: &journal,
+            docker: &docker.docker,
+            capacity: 2,
+            rest: rest(),
+            stop: false,
+        },
     )
     .await;
     drop(docker);
@@ -86,95 +97,61 @@ async fn zero_initial_census_and_positive_poll_keep_jit_conflict_unacked() -> Re
 }
 
 #[tokio::test]
-async fn idless_uncertain_reservation_blocks_turn_without_jit_or_ack() -> Result<(), String> {
-    let (scratch, journal) = open("turn-idless-uncertain").await?;
+async fn missing_status_keeps_the_slot_and_blocks_assignment() -> Result<(), String> {
+    let (scratch, journal) = open("turn-missing-runner-status").await?;
     let (row, _) = journal
-        .begin_launch("m95")
+        .begin_launch("m96")
+        .await
+        .map_err(|error| error.to_string())?;
+    journal
+        .bind(row, Some("runner-container"), None)
         .await
         .map_err(|error| error.to_string())?;
     journal
         .finish(row, Outcome::Uncertain)
         .await
         .map_err(|error| error.to_string())?;
+    let before = journal.rows().await.map_err(|error| error.to_string())?;
     let session = zero_assignment_session()?;
-    let polled = assigned_wait(95, 1);
-    let docker = DockerStub::open(Vec::new())?;
-    let decision = crate::launch::admission(&docker.docker, &journal, 1, 1, 0, &polled)
-        .await
-        .map_err(|error| error.to_string())?;
-    let mut script = Script {
-        calls: Vec::new(),
-        mode: Mode::JitConflict,
-    };
-    let mut workers: Vec<Started> = Vec::new();
-    let result = start_turn(
-        &mut script,
-        &mut workers,
-        ready(&session, &polled),
-        &journal,
-        &docker.docker,
-        1,
-        false,
-    )
-    .await;
-    docker.finish().await?;
-
-    assert_eq!(decision, crate::launch::Admit::Hold);
-    assert_eq!(result, Ok(false));
-    assert!(script.calls.is_empty());
-    assert!(workers.is_empty());
-    assert_eq!(crate::launch::slot::occupied(&journal).await, Ok(1));
-    let rows = journal.rows().await.map_err(|error| error.to_string())?;
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].id, row);
-    assert_eq!(rows[0].subject, "m95");
-    assert_eq!(rows[0].state, IntentState::Uncertain);
-    assert!(rows[0].docker_id.is_none());
-    assert!(rows[0].dind_id.is_none());
-    assert!(rows[0].worker_volume.is_none());
-    absent(&scratch.file())
-}
-
-#[tokio::test]
-async fn full_uncertain_slot_still_acks_progress_notice() -> Result<(), String> {
-    let (scratch, journal) = open("turn-progress-uncertain").await?;
-    let (row, _) = journal
-        .begin_launch("m95")
-        .await
-        .map_err(|error| error.to_string())?;
-    journal
-        .finish(row, Outcome::Uncertain)
-        .await
-        .map_err(|error| error.to_string())?;
-    let polled = started_progress(95, 5);
-    let decision = crate::launch::admission(
-        &crate::launch_test_support::Engine::new(),
-        &journal,
-        1,
-        1,
-        0,
-        &polled,
-    )
-    .await
-    .map_err(|error| error.to_string())?;
-    let Poll::Batch(batch) = &polled else {
-        return Err("progress fixture must contain a batch".to_owned());
-    };
+    let polled = assigned_wait(96, 1);
+    let docker = DockerStub::open(vec![http(200, r#"{"State":{"Running":false}}"#)])?;
     let mut script = Script {
         calls: Vec::new(),
         mode: Mode::Ok,
     };
-    super::super::steps::acknowledge(&mut script, &ctx(), batch)
-        .map_err(|error| error.to_string())?;
+    let mut workers: Vec<Started> = Vec::new();
 
-    assert_eq!(decision, crate::launch::Admit::Ack { stop: false });
-    assert_eq!(script.calls, ["ack"]);
+    let result = start_turn(
+        &mut script,
+        &mut workers,
+        StartTurn {
+            ready: ready(&session, &polled),
+            journal: &journal,
+            docker: &docker.docker,
+            capacity: 2,
+            rest: rest(),
+            stop: false,
+        },
+    )
+    .await;
+    let requests = docker.finish().await?;
+
+    assert_eq!(
+        result,
+        Err(EnsureError::Unexpected {
+            status: 0,
+            step: "docker",
+        })
+    );
+    assert_eq!(requests.len(), 1);
+    assert!(requests[0].contains("/containers/runner-container/json"));
+    assert!(script.calls.is_empty());
+    assert!(workers.is_empty());
     assert_eq!(crate::launch::slot::occupied(&journal).await, Ok(1));
-    let rows = journal.rows().await.map_err(|error| error.to_string())?;
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].id, row);
-    assert_eq!(rows[0].subject, "m95");
-    assert_eq!(rows[0].state, IntentState::Uncertain);
+    let after = journal.rows().await.map_err(|error| error.to_string())?;
+    assert_eq!(after, before);
+    assert_eq!(after[0].state, IntentState::Uncertain);
+    assert_eq!(after[0].docker_id.as_deref(), Some("runner-container"));
     absent(&scratch.file())
 }
 
@@ -186,6 +163,69 @@ async fn dind_only_live_row_keeps_the_current_assignment_unacked() -> Result<(),
 #[tokio::test]
 async fn volume_only_live_row_keeps_the_current_assignment_unacked() -> Result<(), String> {
     bound_resource_keeps_assignment("turn-volume-only", BoundResource::Volume).await
+}
+
+#[tokio::test]
+async fn uncertain_volume_keeps_cleanup_unproven_and_redelivery_unacked() -> Result<(), String> {
+    let (scratch, journal) = open("turn-unlabeled-volume").await?;
+    let (row, _) = journal
+        .begin_launch("m95")
+        .await
+        .map_err(|error| error.to_string())?;
+    let worker = "w00000000000000000000000000000000";
+    journal
+        .bind_worker_volume(row, worker)
+        .await
+        .map_err(|error| error.to_string())?;
+    journal
+        .finish(row, Outcome::Uncertain)
+        .await
+        .map_err(|error| error.to_string())?;
+
+    let session = zero_assignment_session()?;
+    let polled = assigned_wait(95, 1);
+    let docker = DockerStub::open(Vec::new())?;
+    let decision = crate::launch::admission(&docker.docker, &journal, 1, 1, 0, &polled).await;
+    let requests = docker.finish().await?;
+
+    assert_eq!(decision, Ok(crate::launch::Admit::Hold));
+    assert!(requests.is_empty());
+    let rows = journal.rows().await.map_err(|error| error.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].state, IntentState::Uncertain);
+    assert_eq!(rows[0].worker_volume.as_deref(), Some(worker));
+    assert!(!rows[0].cleanup_proven);
+
+    let docker = DockerStub::open(Vec::new())?;
+    let mut script = Script {
+        calls: Vec::new(),
+        mode: Mode::JitConflict,
+    };
+    let mut workers: Vec<Started> = Vec::new();
+    let redelivered = start_turn(
+        &mut script,
+        &mut workers,
+        StartTurn {
+            ready: ready(&session, &polled),
+            journal: &journal,
+            docker: &docker.docker,
+            capacity: 1,
+            rest: rest(),
+            stop: false,
+        },
+    )
+    .await;
+    docker.finish().await?;
+
+    assert_eq!(redelivered, Ok(false));
+    assert!(script.calls.is_empty());
+    assert!(workers.is_empty());
+    let rows = journal.rows().await.map_err(|error| error.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].state, IntentState::Uncertain);
+    assert_eq!(rows[0].worker_volume.as_deref(), Some(worker));
+    assert!(!rows[0].cleanup_proven);
+    absent(&scratch.file())
 }
 
 #[tokio::test]
@@ -238,7 +278,11 @@ async fn bound_running_worker_acks_without_a_second_jit_request() -> Result<(), 
         .map_err(|error| error.to_string())?;
     let session = zero_assignment_session()?;
     let polled = assigned_wait(93, 1);
-    let docker = DockerStub::open(vec![http(200, r#"{"State":{"Running":true}}"#)])?;
+    let docker = DockerStub::open(vec![
+        http(200, r#"{"State":{"Status":"running","Running":true}}"#),
+        // Best-effort engine identity probe; empty ID keeps the old `None` behavior.
+        http(200, r#"{"ID":""}"#),
+    ])?;
     let mut script = Script {
         calls: Vec::new(),
         mode: Mode::JitConflict,
@@ -247,11 +291,14 @@ async fn bound_running_worker_acks_without_a_second_jit_request() -> Result<(), 
     let result = start_turn(
         &mut script,
         &mut workers,
-        ready(&session, &polled),
-        &journal,
-        &docker.docker,
-        2,
-        false,
+        StartTurn {
+            ready: ready(&session, &polled),
+            journal: &journal,
+            docker: &docker.docker,
+            capacity: 2,
+            rest: rest(),
+            stop: false,
+        },
     )
     .await;
     docker.finish().await?;
@@ -311,11 +358,14 @@ async fn bound_resource_keeps_assignment(
     let result = start_turn(
         &mut script,
         &mut workers,
-        ready(&session, &polled),
-        &journal,
-        &docker.docker,
-        2,
-        false,
+        StartTurn {
+            ready: ready(&session, &polled),
+            journal: &journal,
+            docker: &docker.docker,
+            capacity: 2,
+            rest: rest(),
+            stop: false,
+        },
     )
     .await;
     drop(docker);

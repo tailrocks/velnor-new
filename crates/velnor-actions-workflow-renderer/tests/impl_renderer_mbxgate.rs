@@ -1,8 +1,9 @@
 //! MBX action gating: emitted only for MBX-selected drivers.
 use std::collections::BTreeMap;
-use velnor_actions_contract::StepRole;
+use velnor_actions_contract::{Step, StepKind, StepRole};
 use velnor_actions_workflow_renderer::{
-    CompileDriver, RenderError, check_mbx_gating, checkout_step, mbx_steps_for_driver, shell_step,
+    CompileDriver, MBX_PREFLIGHT_NAME, RenderError, check_mbx_gating, checkout_step,
+    mbx_steps_for_driver, shell_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -143,6 +144,111 @@ fn mbx_gating_requires_typed_action_and_preflight_roles() -> Result<(), RenderEr
         check_mbx_gating(&jobs, &mbx)
             .is_err_and(|err| format!("{err:?}").contains("mbx_action_role_missing")),
         "an MBX action needs its typed owner role"
+    );
+    Ok(())
+}
+
+fn assert_preflight_mismatch(steps: [Step; 3]) -> Result<(), RenderError> {
+    let mut complete = vec![checkout_step(&checkout_pin())?];
+    complete.extend(steps);
+    complete.push(report_wrapped_mbx_task()?);
+    let jobs = BTreeMap::from([job("velnor-mbx", "MBX leg", Vec::new(), complete)]);
+    let driver = BTreeMap::from([("velnor-mbx".to_owned(), CompileDriver::Mbx)]);
+    assert!(
+        check_mbx_gating(&jobs, &driver)
+            .is_err_and(|error| format!("{error:?}").contains("mbx_preflight_mismatch"))
+    );
+    Ok(())
+}
+
+#[test]
+fn mbx_preflight_must_equal_the_factory_step_for_the_selected_action() -> Result<(), RenderError> {
+    let canonical = mbx_tool_steps(&mbx_pin(), "1.19.0", "1.98.1")?;
+    let mut complete = vec![checkout_step(&checkout_pin())?];
+    complete.extend(canonical.clone());
+    complete.push(report_wrapped_mbx_task()?);
+    let jobs = BTreeMap::from([job("velnor-mbx", "MBX leg", Vec::new(), complete)]);
+    let driver = BTreeMap::from([("velnor-mbx".to_owned(), CompileDriver::Mbx)]);
+    check_mbx_gating(&jobs, &driver)?;
+
+    let mut no_op = canonical.clone();
+    no_op[0] = shell_step(
+        MBX_PREFLIGHT_NAME,
+        vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
+        BTreeMap::new(),
+    )?;
+    no_op[0].role = Some(StepRole::MbxPreflight);
+    assert_preflight_mismatch(no_op)?;
+
+    let mut changed_body = canonical.clone();
+    if let StepKind::Shell { run, .. } = &mut changed_body[0].kind {
+        run[2].push_str(" # changed");
+    }
+    assert_preflight_mismatch(changed_body)?;
+
+    let mut changed_env = canonical.clone();
+    if let StepKind::Shell { env, .. } = &mut changed_env[0].kind {
+        env.insert("UNTRUSTED_OVERRIDE".to_owned(), "1".to_owned());
+    }
+    assert_preflight_mismatch(changed_env)?;
+
+    let mut renamed = canonical.clone();
+    renamed[0].name.push_str(" (altered)");
+    assert_preflight_mismatch(renamed)?;
+
+    let mut conditional = canonical;
+    conditional[0].condition = Some("always()".to_owned());
+    assert_preflight_mismatch(conditional)
+}
+
+#[test]
+fn mbx_preflight_role_and_cardinality_are_gated() -> Result<(), RenderError> {
+    let [preflight, action, version_check] = mbx_tool_steps(&mbx_pin(), "1.19.0", "1.98.1")?;
+    let mut untyped = vec![checkout_step(&checkout_pin())?];
+    let mut no_role = preflight.clone();
+    no_role.role = None;
+    untyped.extend([no_role, action.clone(), version_check.clone()]);
+    let jobs = BTreeMap::from([job("velnor-mbx", "MBX leg", Vec::new(), untyped)]);
+    let driver = BTreeMap::from([("velnor-mbx".to_owned(), CompileDriver::Mbx)]);
+    assert!(
+        check_mbx_gating(&jobs, &driver)
+            .is_err_and(|error| format!("{error:?}").contains("mbx_preflight_missing"))
+    );
+
+    let mut duplicated = vec![checkout_step(&checkout_pin())?];
+    duplicated.extend([
+        preflight.clone(),
+        preflight,
+        action,
+        version_check,
+        report_wrapped_mbx_task()?,
+    ]);
+    let jobs = BTreeMap::from([job("velnor-mbx", "MBX leg", Vec::new(), duplicated)]);
+    assert!(
+        check_mbx_gating(&jobs, &driver)
+            .is_err_and(|error| format!("{error:?}").contains("mbx_preflight_duplicated"))
+    );
+    Ok(())
+}
+
+#[test]
+fn mbx_preflight_role_is_rejected_without_a_selected_driver() -> Result<(), RenderError> {
+    let [mut preflight, _, _] = mbx_tool_steps(&mbx_pin(), "1.19.0", "1.98.1")?;
+    preflight.role = Some(StepRole::MbxPreflight);
+    let jobs = BTreeMap::from([job(
+        "orphan",
+        "Orphan preflight",
+        Vec::new(),
+        vec![preflight],
+    )]);
+    assert!(
+        check_mbx_gating(&jobs, &BTreeMap::new())
+            .is_err_and(|error| format!("{error:?}").contains("mbx_preflight_without_selection"))
+    );
+    let cargo = BTreeMap::from([("orphan".to_owned(), CompileDriver::Cargo)]);
+    assert!(
+        check_mbx_gating(&jobs, &cargo)
+            .is_err_and(|error| format!("{error:?}").contains("mbx_preflight_without_selection"))
     );
     Ok(())
 }

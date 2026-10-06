@@ -16,7 +16,8 @@ fn context(checkout_uses: &str) -> RenderContext {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
-        verification_tasks: Vec::new(),
+        workflow_tasks: Vec::new(),
+        pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         plan_consumer_env: BTreeMap::new(),
     }
 }
@@ -96,7 +97,7 @@ fn shared_composite_rejects_unpinned_remote_action_refs() {
 #[test]
 fn shared_composite_keeps_pinned_remote_refs() {
     let checkout = format!("actions/checkout@{:040x}", 0);
-    let pinned = crate::cache_steps::TOOLS_RESTORE_USES;
+    let pinned = crate::cache_steps::TOOLS_RESTORE_ACTION_USES;
     let jobs = paired_action(&checkout, pinned);
     let shared = share_lanes(&jobs, &context(&checkout)).expect("pinned action is accepted");
     let composite = shared

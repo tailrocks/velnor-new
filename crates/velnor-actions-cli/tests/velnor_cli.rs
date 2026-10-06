@@ -9,6 +9,10 @@ mod impl_cli_args;
 mod impl_cli_gate;
 #[path = "impl_cli_gate_preseed.rs"]
 mod impl_cli_gate_preseed;
+#[path = "impl_cli_gate_qualification.rs"]
+mod impl_cli_gate_qualification;
+#[path = "impl_cli_gate_repo_policy.rs"]
+mod impl_cli_gate_repo_policy;
 #[path = "impl_cli_init.rs"]
 mod impl_cli_init;
 #[path = "impl_cli_parity.rs"]
@@ -37,6 +41,8 @@ mod impl_cli_verify_local;
 mod impl_repo_deps;
 #[path = "impl_repo_freshness.rs"]
 mod impl_repo_freshness;
+#[path = "impl_repo_freshness_support.rs"]
+mod impl_repo_freshness_support;
 #[path = "impl_repo_goldens.rs"]
 mod impl_repo_goldens;
 #[path = "impl_repo_policy.rs"]
@@ -45,6 +51,8 @@ mod impl_repo_policy;
 mod impl_repo_quality;
 #[path = "impl_repo_shape.rs"]
 mod impl_repo_shape;
+#[path = "impl_repo_size.rs"]
+mod impl_repo_size;
 #[path = "impl_repo_strictness.rs"]
 mod impl_repo_strictness;
 #[path = "impl_repo_suppressions.rs"]

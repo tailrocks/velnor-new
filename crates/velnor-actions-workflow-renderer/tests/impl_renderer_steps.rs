@@ -42,6 +42,8 @@ fn uses_validation_rejects_moving_refs_and_forbidden_actions() {
     assert!(validate_uses("just-a-name").is_err());
     assert!(validate_uses(&pin("actions/setup-node")).is_err());
     assert!(validate_uses(&pin("taiki-e/install-action")).is_err());
+    assert!(validate_uses("./.github/actions/velnor-tools-cache-restore").is_ok());
+    assert!(validate_uses("./.github/actions/unregistered-tools-restore").is_err());
     assert!(checkout_step(&pin("actions/download-artifact")).is_err());
 }
 

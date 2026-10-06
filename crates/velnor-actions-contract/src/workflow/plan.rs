@@ -1,7 +1,8 @@
-//! Schema-1 affected plan and generic matrix entries.
+//! Schema-2 affected plan and generic matrix entries.
 use super::baseline::{BaselineProof, PlanBaseline};
 use super::lanes::NamedCheckLaneVariant;
-use super::matrix_entry::MatrixEntry;
+pub use super::matrix_entry::MatrixEntry;
+use super::qualification_dispatch::QualificationDispatch;
 use super::trust::Trust;
 use crate::canonical::validate_digest;
 use crate::config::{RUNNER_LABEL_CATALOG, RunnerSelection};
@@ -21,11 +22,11 @@ pub const PLAN_MATRIX_OUTPUT_MODE_ENV: &str = "VELNOR_PLAN_MATRIX_OUTPUT_MODE";
 /// Exact value of [`PLAN_MATRIX_OUTPUT_MODE_ENV`] for dynamic matrices.
 pub const DYNAMIC_MATRIX_OUTPUT_MODE: &str = "dynamic_matrix";
 use std::collections::{BTreeMap, BTreeSet};
-/// Schema-1 affected plan.
+/// Schema-2 affected plan.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Plan {
-    /// Plan schema version; must be 1.
+    /// Plan schema version; must be 2.
     pub schema: u32,
     /// Run key.
     pub run_key: String,
@@ -37,6 +38,9 @@ pub struct Plan {
     pub head: String,
     /// Triggering event.
     pub event: WorkflowEvent,
+    /// Authenticated dispatch context, required only for qualification runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub qualification: Option<QualificationDispatch>,
     /// Selected runner.
     pub runner: PlanRunner,
     /// Trust scope.
@@ -74,6 +78,8 @@ pub enum WorkflowEvent {
     Local,
     /// Fork pull-request run (untrusted, read-only caches).
     Fork,
+    /// Protected default-branch hosted qualification dispatch.
+    Qualification,
 }
 /// Selected runner record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -170,7 +176,7 @@ impl PlanRunner {
 }
 impl Plan {
     /// Plan schema version.
-    pub const SCHEMA: u32 = 1;
+    pub const SCHEMA: u32 = 2;
     /// Validate schema, plan ID, sorting, digests, and matrix entries.
     /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
@@ -178,13 +184,14 @@ impl Plan {
             return Err(ContractError::UnsupportedSchema {
                 field: "schema",
                 found: self.schema.to_string(),
-                expected: "1",
+                expected: "2",
             });
         }
         validate_run_key(&self.run_key)?;
         if plan_id_for_run(&self.run_key)? != self.plan_id {
             return Err(ContractError::identity("plan_id", "plan_mismatch"));
         }
+        super::qualification_dispatch::validate_plan_qualification(self)?;
         self.runner.validate()?;
         check_sorted_unique(&self.task_ids, "task_ids")?;
         check_sorted_by(&self.packages, "packages", |pkg| pkg.package_id.as_str())?;

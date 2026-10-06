@@ -50,6 +50,18 @@ pub struct PackageRecord {
     pub features: Vec<String>,
     /// Whether a `custom-build` target exists.
     pub has_build_script: bool,
+    /// Explicit Velnor V1 task owner, defaulting to ordinary project tasks.
+    pub v1_task_owner: VelnorV1TaskOwner,
+}
+
+/// Velnor repository classification for a Cargo package's V1 task derivation.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum VelnorV1TaskOwner {
+    /// Derive ordinary per-crate V1 tasks.
+    #[default]
+    Project,
+    /// Keep the package out of the canonical repository's product task graph.
+    RepositoryMaintenance,
 }
 
 /// One parsed `cargo metadata` document.
@@ -107,6 +119,13 @@ pub enum MetadataError {
         /// Kind value found.
         kind: String,
     },
+    /// Unknown Velnor V1 package task owner.
+    UnknownVelnorV1TaskOwner {
+        /// Candidate manifest being parsed.
+        manifest: String,
+        /// Owner value found.
+        owner: String,
+    },
 }
 
 impl MetadataError {
@@ -140,6 +159,9 @@ impl fmt::Display for MetadataError {
             }
             Self::UnknownDepKind { manifest, kind } => {
                 write!(f, "unknown_dep_kind:{manifest}: {kind}")
+            }
+            Self::UnknownVelnorV1TaskOwner { manifest, owner } => {
+                write!(f, "unknown_v1_task_owner:{manifest}: {owner}")
             }
         }
     }
@@ -176,7 +198,12 @@ pub fn parse_metadata_json(
     let members: BTreeSet<&str> = raw.workspace_members.iter().map(String::as_str).collect();
     let mut packages = Vec::with_capacity(raw.packages.len());
     for package in &raw.packages {
-        packages.push(convert_package(package, repo_root, &members));
+        packages.push(convert_package(
+            package,
+            repo_root,
+            &members,
+            manifest_hint,
+        )?);
     }
     packages.sort_by(|left, right| left.manifest.cmp(&right.manifest));
     let dirs = manifest_dirs(&raw.packages);
@@ -212,7 +239,12 @@ pub fn parse_metadata_json(
 }
 
 /// Convert one raw package to retained inventory.
-fn convert_package(raw: &RawPackage, repo_root: &Path, members: &BTreeSet<&str>) -> PackageRecord {
+fn convert_package(
+    raw: &RawPackage,
+    repo_root: &Path,
+    members: &BTreeSet<&str>,
+    manifest_hint: &str,
+) -> Result<PackageRecord, MetadataError> {
     let (manifest, external) = relativize_file(repo_root, &raw.manifest_path);
     let mut targets = Vec::new();
     for target in &raw.targets {
@@ -232,7 +264,8 @@ fn convert_package(raw: &RawPackage, repo_root: &Path, members: &BTreeSet<&str>)
     targets.dedup();
     let mut features: Vec<String> = raw.features.keys().cloned().collect();
     features.sort();
-    PackageRecord {
+    let v1_task_owner = package_v1_task_owner(raw.metadata.as_ref(), manifest_hint)?;
+    Ok(PackageRecord {
         id: raw.id.clone(),
         name: raw.name.clone(),
         version: raw.version.clone(),
@@ -242,6 +275,39 @@ fn convert_package(raw: &RawPackage, repo_root: &Path, members: &BTreeSet<&str>)
         has_build_script: targets.iter().any(|target| target.kind == "custom-build"),
         targets,
         features,
+        v1_task_owner,
+    })
+}
+
+fn package_v1_task_owner(
+    metadata: Option<&serde_json::Value>,
+    manifest: &str,
+) -> Result<VelnorV1TaskOwner, MetadataError> {
+    let velnor = metadata
+        .and_then(serde_json::Value::as_object)
+        .and_then(|metadata| metadata.get("velnor"));
+    let Some(velnor) = velnor else {
+        return Ok(VelnorV1TaskOwner::Project);
+    };
+    let Some(velnor) = velnor.as_object() else {
+        return Err(MetadataError::UnknownVelnorV1TaskOwner {
+            manifest: manifest.to_owned(),
+            owner: velnor.to_string(),
+        });
+    };
+    let Some(owner) = velnor.get("v1-task-owner") else {
+        return Ok(VelnorV1TaskOwner::Project);
+    };
+    match owner.as_str() {
+        Some("repository-maintenance") => Ok(VelnorV1TaskOwner::RepositoryMaintenance),
+        Some(owner) => Err(MetadataError::UnknownVelnorV1TaskOwner {
+            manifest: manifest.to_owned(),
+            owner: owner.to_owned(),
+        }),
+        _ => Err(MetadataError::UnknownVelnorV1TaskOwner {
+            manifest: manifest.to_owned(),
+            owner: owner.to_string(),
+        }),
     }
 }
 

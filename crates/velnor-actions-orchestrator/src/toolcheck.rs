@@ -8,14 +8,15 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use crate::native_tool_input::{
+    NativeToolInput, NativeToolSource, flatten_json, native_mise_source, toml_to_json,
+};
 use velnor_actions_contract::digest_b3;
 use velnor_actions_rust::{TOOLING_INPUT_INVALID, inspect_toolchain_file};
 
 /// Tool-input paths checked on every plan and generate.
 pub const TOOL_INPUT_PATHS: [&str; 3] = ["rust-toolchain.toml", "mise.toml", "mise.lock"];
 
-/// Maximum flattened values kept per tool file.
-const MAX_VALUES: usize = 64;
 /// Maximum problem detail kept from a parse failure.
 const MAX_PROBLEM: usize = 120;
 
@@ -52,6 +53,8 @@ pub struct ToolInputCheck {
     pub digest: Option<String>,
     /// Adapter finding codes, sorted unique (TOOL-1.2).
     pub codes: Vec<String>,
+    /// Sanitized native-build projection of this source, never raw config.
+    pub(crate) native: Option<NativeToolInput>,
 }
 
 /// Check every tool-input path under `root`.
@@ -60,23 +63,19 @@ pub fn check_tool_inputs(root: &Path) -> Vec<ToolInputCheck> {
     TOOL_INPUT_PATHS
         .iter()
         .map(|path| {
-            // P09-7: `NotFound` is missing; any other IO failure is
-            // unreadable. `.ok()` would collapse the two, hiding an
-            // inaccessible file behind a "not found" diagnosis.
-            let read = match std::fs::read(root.join(path)) {
-                Ok(bytes) => Ok(Some(bytes)),
-                Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
-                Err(_) => Err(()),
+            let text = match crate::safe_read::read_repo_file(
+                root,
+                path,
+                crate::safe_read::MAX_REPO_FILE_BYTES,
+            ) {
+                Ok(crate::safe_read::RepoRead::Absent) => None,
+                Ok(crate::safe_read::RepoRead::Text(text)) => Some(text),
+                Err(_) => return inaccessible(path),
             };
-            match read {
-                Err(()) => inaccessible(path),
-                Ok(bytes) => {
-                    if *path == TOOL_INPUT_PATHS[0] {
-                        check_toolchain(path, bytes.as_deref())
-                    } else {
-                        check_mise_file(path, bytes.as_deref(), *path == TOOL_INPUT_PATHS[2])
-                    }
-                }
+            if *path == TOOL_INPUT_PATHS[0] {
+                check_toolchain(path, text.as_deref())
+            } else {
+                check_mise_file(path, text.as_deref(), *path == TOOL_INPUT_PATHS[2])
             }
         })
         .collect()
@@ -95,16 +94,13 @@ fn inaccessible(path: &str) -> ToolInputCheck {
         values: BTreeMap::new(),
         digest: None,
         codes: vec![TOOLING_INPUT_INVALID.to_owned()],
+        native: None,
     }
 }
 
 /// Check the Rust-owned toolchain file through the Rust adapter.
-fn check_toolchain(path: &str, bytes: Option<&[u8]>) -> ToolInputCheck {
-    let digest = bytes.map(digest_b3);
-    let content = bytes.and_then(|raw| std::str::from_utf8(raw).ok());
-    if bytes.is_some() && content.is_none() {
-        return unreadable(path, digest);
-    }
+fn check_toolchain(path: &str, content: Option<&str>) -> ToolInputCheck {
+    let digest = content.map(|text| digest_b3(text.as_bytes()));
     let Ok(inspection) = inspect_toolchain_file(path, content) else {
         return unreadable(path, digest);
     };
@@ -124,6 +120,10 @@ fn check_toolchain(path: &str, bytes: Option<&[u8]>) -> ToolInputCheck {
         values: spec_values(inspection.spec.as_ref()),
         digest,
         codes: finding_codes(&inspection.findings),
+        native: content.map(|text| NativeToolInput {
+            sha256: crate::cover_identity::generator::sha256_hex(text.as_bytes()),
+            source: NativeToolSource::RustToolchain,
+        }),
     }
 }
 
@@ -179,6 +179,7 @@ fn unreadable(path: &str, digest: Option<String>) -> ToolInputCheck {
         values: BTreeMap::new(),
         digest,
         codes: vec![TOOLING_INPUT_INVALID.to_owned()],
+        native: None,
     }
 }
 
@@ -186,9 +187,9 @@ fn unreadable(path: &str, digest: Option<String>) -> ToolInputCheck {
 ///
 /// Lockfiles also accept JSON shape; their values stay scalar leaves
 /// only because lock internals belong to the Mise adapter.
-fn check_mise_file(path: &str, bytes: Option<&[u8]>, json_fallback: bool) -> ToolInputCheck {
-    let digest = bytes.map(digest_b3);
-    let Some(raw) = bytes else {
+fn check_mise_file(path: &str, text: Option<&str>, json_fallback: bool) -> ToolInputCheck {
+    let digest = text.map(|value| digest_b3(value.as_bytes()));
+    let Some(text) = text else {
         return ToolInputCheck {
             path: path.to_owned(),
             present: false,
@@ -196,20 +197,22 @@ fn check_mise_file(path: &str, bytes: Option<&[u8]>, json_fallback: bool) -> Too
             values: BTreeMap::new(),
             digest,
             codes: Vec::new(),
+            native: None,
         };
     };
-    let Ok(text) = std::str::from_utf8(raw) else {
-        return unreadable(path, digest);
-    };
     match toml::from_str::<toml::Value>(text) {
-        Ok(value) => ToolInputCheck {
-            path: path.to_owned(),
-            present: true,
-            parse: ToolParse::Valid,
-            values: flatten_json(&toml_to_json(&value)),
-            digest,
-            codes: Vec::new(),
-        },
+        Ok(value) => {
+            let native = native_mise_source(path, text.as_bytes(), &value);
+            ToolInputCheck {
+                path: path.to_owned(),
+                present: true,
+                parse: ToolParse::Valid,
+                values: flatten_json(&toml_to_json(&value)),
+                digest,
+                codes: Vec::new(),
+                native,
+            }
+        }
         Err(toml_err) => {
             if json_fallback && let Ok(json) = serde_json::from_str::<serde_json::Value>(text) {
                 return ToolInputCheck {
@@ -219,6 +222,7 @@ fn check_mise_file(path: &str, bytes: Option<&[u8]>, json_fallback: bool) -> Too
                     values: flatten_json(&json),
                     digest,
                     codes: Vec::new(),
+                    native: None,
                 };
             }
             ToolInputCheck {
@@ -230,63 +234,8 @@ fn check_mise_file(path: &str, bytes: Option<&[u8]>, json_fallback: bool) -> Too
                 values: BTreeMap::new(),
                 digest,
                 codes: vec![TOOLING_INPUT_INVALID.to_owned()],
+                native: None,
             }
-        }
-    }
-}
-
-/// Convert TOML to JSON so one flattener serves both shapes.
-fn toml_to_json(value: &toml::Value) -> serde_json::Value {
-    serde_json::to_value(value).unwrap_or(serde_json::Value::Null)
-}
-
-/// Flatten scalar leaves into dotted keys, capped and sorted.
-fn flatten_json(value: &serde_json::Value) -> BTreeMap<String, String> {
-    let mut out = BTreeMap::new();
-    flatten_into(String::new(), value, &mut out);
-    out
-}
-
-/// Recurse one value, recording scalar leaves only.
-fn flatten_into(prefix: String, value: &serde_json::Value, out: &mut BTreeMap<String, String>) {
-    if out.len() >= MAX_VALUES {
-        return;
-    }
-    match value {
-        serde_json::Value::Object(map) => {
-            for (key, child) in map {
-                let scoped = if prefix.is_empty() {
-                    key.clone()
-                } else {
-                    format!("{prefix}.{key}")
-                };
-                flatten_into(scoped, child, out);
-            }
-        }
-        serde_json::Value::Array(items) => {
-            let scalars: Vec<String> = items.iter().filter_map(json_scalar).collect();
-            if !prefix.is_empty() && !scalars.is_empty() {
-                out.insert(prefix, scalars.join(","));
-            }
-        }
-        _ => {
-            if !prefix.is_empty()
-                && let Some(scalar) = json_scalar(value)
-            {
-                out.insert(prefix, scalar);
-            }
-        }
-    }
-}
-
-/// Scalar text of one JSON value, if it is a scalar.
-fn json_scalar(value: &serde_json::Value) -> Option<String> {
-    match value {
-        serde_json::Value::String(text) => Some(text.clone()),
-        serde_json::Value::Number(num) => Some(num.to_string()),
-        serde_json::Value::Bool(flag) => Some(flag.to_string()),
-        serde_json::Value::Null | serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
-            None
         }
     }
 }
@@ -393,5 +342,48 @@ mod tests {
             !lines.iter().any(|line| line.contains("mise.lock")),
             "missing stays silent: {lines:?}"
         );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn symlinked_tool_input_is_rejected_without_following() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let outside = tempfile::tempdir().expect("outside tempdir");
+        std::fs::write(
+            outside.path().join("mise.toml"),
+            "[tools]\nrust = \"1.85.0\"\n",
+        )
+        .expect("write outside tool config");
+        std::os::unix::fs::symlink(
+            outside.path().join("mise.toml"),
+            dir.path().join("mise.toml"),
+        )
+        .expect("symlink tool config");
+
+        let checks = check_tool_inputs(dir.path());
+        let mise = checks
+            .iter()
+            .find(|check| check.path == "mise.toml")
+            .expect("mise");
+        assert_eq!(mise.parse, ToolParse::Unreadable);
+        assert!(mise.native.is_none());
+        assert!(mise.digest.is_none());
+    }
+
+    #[test]
+    fn oversized_tool_input_is_rejected_before_parsing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let max = usize::try_from(crate::safe_read::MAX_REPO_FILE_BYTES).expect("limit fits");
+        let bytes = vec![b'x'; max + 1];
+        std::fs::write(dir.path().join("mise.lock"), bytes).expect("write oversized lock");
+
+        let checks = check_tool_inputs(dir.path());
+        let lock = checks
+            .iter()
+            .find(|check| check.path == "mise.lock")
+            .expect("lock");
+        assert_eq!(lock.parse, ToolParse::Unreadable);
+        assert!(lock.native.is_none());
+        assert!(lock.digest.is_none());
     }
 }

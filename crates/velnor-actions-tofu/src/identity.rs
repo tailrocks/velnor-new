@@ -19,7 +19,7 @@ use crate::task_identity::{DigestSlot, ExtensionInputs, TofuTaskIdentityExtensio
 /// Digests and root facts the orchestrator supplies per extension.
 #[derive(Debug, Clone)]
 pub struct TofuGroupExtensionInputs<'a> {
-    /// Tofu root key.
+    /// Exact `OpenTofu` root key: `dir-` plus lowercase UTF-8 hex.
     pub unit_id: &'a str,
     /// Workspace identity digest.
     pub workspace_id: &'a str,
@@ -51,6 +51,17 @@ pub fn extension_for_proposal(
     task: &ProposedTask,
     inputs: &TofuGroupExtensionInputs<'_>,
 ) -> Result<TofuTaskIdentityExtension, ContractError> {
+    let root = crate::normalized_root_for_proposal(task)?;
+    if inputs.root != root
+        || inputs.unit_id != task.identity.unit_id
+        || inputs.manifest != task.identity.unit_path
+        || inputs.profile != task.configuration
+    {
+        return Err(ContractError::identity(
+            "tofu_root",
+            "extension_root_mismatch",
+        ));
+    }
     let unit_id = component_id_for_unit(inputs.unit_id, inputs.manifest);
     let identity = &task.identity;
     check_driver(&identity.compile_driver)?;
@@ -84,6 +95,7 @@ pub fn entry_metadata_for_task(
     task: &ProposedTask,
     evidence_ids: &[String],
 ) -> Result<serde_json::Value, ContractError> {
+    crate::normalized_root_for_proposal(task)?;
     check_driver(&task.identity.compile_driver)?;
     check_runner(&task.identity.test_runner)?;
     Ok(serde_json::json!({

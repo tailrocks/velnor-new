@@ -1,0 +1,226 @@
+status	path	disposition
+M	.alint.yml	ALINT-v0.17.0-PIN-UPDATE; VERIFY-UPSTREAM-SEPARATELY
+M	.github/workflows/ci.yml	ALINT-v0.17.0-PIN-UPDATE; VERIFY-UPSTREAM-SEPARATELY
+M	.velnor/config.toml	CONFIG-OR-LOCK-EVIDENCE; NOT-SOURCE-BEHAVIOR
+M	.velnor/freshness-inventory.json	ALINT-v0.17.0-PIN-UPDATE; VERIFY-UPSTREAM-SEPARATELY
+M	.velnor/version-policy.toml	ALINT-v0.17.0-PIN-UPDATE; VERIFY-UPSTREAM-SEPARATELY
+M	Cargo.lock	ARCHIVE-PIPELINE-PENDING-INDEPENDENT-REVIEW
+M	crates/velnor-actions-actionlint/src/actions.rs	ALINT-v0.17.0-PIN-UPDATE; VERIFY-UPSTREAM-SEPARATELY
+M	crates/velnor-actions-actionlint/tests/impl_actionlint_config.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/fixtures/p11_alint_duped_extends_fail.yml	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/fixtures/p11_alint_override_fail.yml	TEST-OR-FIXTURE-ONLY
+A	crates/velnor-actions-cli/tests/fixtures/p12_action_wiring.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/fixtures/p12_actions.txt	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/fixtures/p12_harness.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/fixtures/p12_inventory.json	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/fixtures/p12_live.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/fixtures/p12_manifest.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/fixtures/p12_policy.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/fixtures/p12_policy.toml	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/fixtures/p12_policy_b.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/fixtures/p12_render.txt	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/fixtures/p12_upstream.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/impl_cli_gate.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/impl_cli_init.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/impl_cli_protocol.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/impl_cli_smoke.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/impl_cli_verify_local.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/impl_repo_deps.rs	TEST-OR-FIXTURE-ONLY
+A	crates/velnor-actions-cli/tests/impl_repo_deps_layout.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/impl_repo_freshness.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/impl_repo_git_policy.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/impl_repo_policy.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/impl_repo_quality.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-cli/tests/impl_repo_shape.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-contract/tests/impl_adapter_wire_contract.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-contract/tests/impl_alint_negative.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-contract/tests/impl_contract.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-contract/tests/impl_contract_ids.rs	TEST-OR-FIXTURE-ONLY
+A	crates/velnor-actions-contract/tests/impl_contract_ids_matrix.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-contract/tests/impl_contract_release.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-contract/tests/impl_contract_release_modes.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-contract/tests/impl_contract_reports.rs	TEST-OR-FIXTURE-ONLY
+A	crates/velnor-actions-contract/tests/impl_contract_reports/final_workflow.rs	TEST-OR-FIXTURE-ONLY
+A	crates/velnor-actions-contract/tests/impl_contract_reports/matrix_identity_timing.rs	TEST-OR-FIXTURE-ONLY
+A	crates/velnor-actions-contract/tests/impl_contract_reports/plan_matrix_task.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-mise/src/gh.rs	ARCHIVE-PIPELINE-PENDING-INDEPENDENT-REVIEW
+A	crates/velnor-actions-mise/tests/fixtures/mbx-synchronous/registry-fixture/Cargo.lock.fixture	PRIVATE-MBX-QUALIFICATION-FIXTURE; NOT-CARRIED
+A	crates/velnor-actions-mise/tests/fixtures/mbx-synchronous/registry-fixture/Cargo.toml	PRIVATE-MBX-QUALIFICATION-FIXTURE; NOT-CARRIED
+A	crates/velnor-actions-mise/tests/fixtures/mbx-synchronous/registry-fixture/src/lib.rs	PRIVATE-MBX-QUALIFICATION-FIXTURE; NOT-CARRIED
+M	crates/velnor-actions-mise/tests/impl_adapter_wire_mise.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-mise/tests/impl_mise_baseline.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-mise/tests/impl_mise_env_policy.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-mise/tests/impl_mise_p06.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-mise/tests/impl_mise_p08.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-mise/tests/impl_mise_surface.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/Cargo.toml	ARCHIVE-PIPELINE-PENDING-INDEPENDENT-REVIEW
+A	crates/velnor-actions-orchestrator/src/baseline_archive.rs	ARCHIVE-PIPELINE-PENDING-INDEPENDENT-REVIEW
+A	crates/velnor-actions-orchestrator/src/baseline_archive_deflate.rs	ARCHIVE-PIPELINE-PENDING-INDEPENDENT-REVIEW
+A	crates/velnor-actions-orchestrator/src/baseline_archive_tests.rs	ARCHIVE-PIPELINE-PENDING-INDEPENDENT-REVIEW
+A	crates/velnor-actions-orchestrator/src/baseline_archive_zip.rs	ARCHIVE-PIPELINE-PENDING-INDEPENDENT-REVIEW
+A	crates/velnor-actions-orchestrator/src/baseline_artifact_listing.rs	ARCHIVE-PIPELINE-PENDING-INDEPENDENT-REVIEW
+A	crates/velnor-actions-orchestrator/src/baseline_artifact_listing_tests.rs	ARCHIVE-PIPELINE-PENDING-INDEPENDENT-REVIEW
+M	crates/velnor-actions-orchestrator/src/clippy_groups.rs	TEST-ASSERTION-ONLY; NO-RUNTIME-DELTA
+M	crates/velnor-actions-orchestrator/src/closure_tests.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/src/config_stacks.rs	TEST-ASSERTION-ONLY; NO-RUNTIME-DELTA
+M	crates/velnor-actions-orchestrator/src/cover_baseline.rs	ARCHIVE-PIPELINE-PENDING-INDEPENDENT-REVIEW
+M	crates/velnor-actions-orchestrator/src/cover_baseline_tests.rs	ARCHIVE-PIPELINE-PENDING-INDEPENDENT-REVIEW
+M	crates/velnor-actions-orchestrator/src/covered_tasks_tests.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/src/foundation_qualification_tests.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/src/generate_preserve_tests.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/src/internal_plan_tests.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/src/lib.rs	ARCHIVE-PIPELINE-PENDING-INDEPENDENT-REVIEW
+M	crates/velnor-actions-orchestrator/src/lock_audit_tests.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/src/needs_channel.rs	TEST-ASSERTION-ONLY; NO-RUNTIME-DELTA
+M	crates/velnor-actions-orchestrator/src/retrieve_baseline_race_tests.rs	ARCHIVE-PIPELINE-PENDING-INDEPENDENT-REVIEW
+M	crates/velnor-actions-orchestrator/src/retrieve_baseline_tests.rs	ARCHIVE-PIPELINE-PENDING-INDEPENDENT-REVIEW
+M	crates/velnor-actions-orchestrator/src/retrieve_planned_baseline.rs	ATTEMPT-PATH-CARRY-CANDIDATE; ARCHIVE-PENDING-REVIEW
+M	crates/velnor-actions-orchestrator/src/retrieve_planned_baseline_tests.rs	ATTEMPT-PATH-REGRESSION; ARCHIVE-PENDING-REVIEW
+M	crates/velnor-actions-orchestrator/src/retrieve_reports_enumeration_tests.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/src/retrieve_reports_tests.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/src/run_select.rs	REJECT-SUMMARY-SUCCESS-FILTER
+M	crates/velnor-actions-orchestrator/src/select_tofu_tests.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/src/shard_baseline.rs	ARCHIVE-PIPELINE-PENDING-INDEPENDENT-REVIEW
+M	crates/velnor-actions-orchestrator/src/shard_baseline_retry_tests.rs	REJECT-FILTER-REGRESSION; ARCHIVE-REVIEW-TEST
+M	crates/velnor-actions-orchestrator/src/shard_baseline_tests.rs	ARCHIVE-PIPELINE-PENDING-INDEPENDENT-REVIEW
+M	crates/velnor-actions-orchestrator/src/shard_tests.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/src/task_report_tests.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/src/wire_w1_tests.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/impl_config_internal.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/impl_gapc.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/impl_gates_cover.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/impl_matrix.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/impl_merge_plan.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/impl_orch_f2a.rs	TEST-OR-FIXTURE-ONLY
+A	crates/velnor-actions-orchestrator/tests/impl_orch_f2a_offline.rs	TEST-OR-FIXTURE-ONLY
+A	crates/velnor-actions-orchestrator/tests/impl_orch_f2a_offline_adversarial_tests.rs	TEST-OR-FIXTURE-ONLY
+A	crates/velnor-actions-orchestrator/tests/impl_orch_f2a_offline_execution.rs	TEST-OR-FIXTURE-ONLY
+A	crates/velnor-actions-orchestrator/tests/impl_orch_f2a_offline_execution_fetch.rs	TEST-OR-FIXTURE-ONLY
+A	crates/velnor-actions-orchestrator/tests/impl_orch_f2a_offline_source_context_tests.rs	TEST-OR-FIXTURE-ONLY
+A	crates/velnor-actions-orchestrator/tests/impl_orch_f2a_offline_source_forms.rs	TEST-OR-FIXTURE-ONLY
+A	crates/velnor-actions-orchestrator/tests/impl_orch_f2a_offline_source_visitor.rs	TEST-OR-FIXTURE-ONLY
+A	crates/velnor-actions-orchestrator/tests/impl_orch_f2a_offline_sources.rs	TEST-OR-FIXTURE-ONLY
+A	crates/velnor-actions-orchestrator/tests/impl_orch_f2a_offline_sources_attrs.rs	TEST-OR-FIXTURE-ONLY
+A	crates/velnor-actions-orchestrator/tests/impl_orch_f2a_offline_tests.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/impl_orch_f2b.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/impl_orch_f2c.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/impl_orch_f2d.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/impl_orch_install_sets.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/impl_orch_intake.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/impl_orch_lock_audit.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/impl_p03_identity.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/impl_p06_detection.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/impl_p06_detection_malformed.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/impl_perf_p13.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/impl_validators_repo.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/impl_wire_w2.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-rust/src/identity_closure.rs	TEST-ASSERTION-ONLY; NO-RUNTIME-DELTA
+M	crates/velnor-actions-rust/src/propose.rs	TEST-ASSERTION-ONLY; NO-RUNTIME-DELTA
+M	crates/velnor-actions-rust/tests/impl_adapter_wire_rust.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-rust/tests/impl_rust_detect.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-rust/tests/impl_rust_evidence.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-rust/tests/impl_rust_f2b.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-rust/tests/impl_rust_gapc.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-rust/tests/impl_rust_gates.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-rust/tests/impl_rust_metadata.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-rust/tests/impl_rust_nested.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-rust/tests/impl_rust_p03_identity.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-rust/tests/impl_rust_p06.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-rust/tests/impl_rust_release_graph.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-rust/tests/impl_rust_release_select.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-rust/tests/impl_rust_tasks.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-rust/tests/impl_rust_test_targets.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-rust/tests/impl_rust_toolfiles.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-tofu/tests/impl_tofu_argv.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-tofu/tests/impl_tofu_closure.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-tofu/tests/impl_tofu_closure_b.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-tofu/tests/impl_tofu_content.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-tofu/tests/impl_tofu_detect.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-tofu/tests/impl_tofu_effective.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-tofu/tests/impl_tofu_evidence.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-tofu/tests/impl_tofu_fmt.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-tofu/tests/impl_tofu_infer.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-tofu/tests/impl_tofu_lockfile.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-tofu/tests/impl_tofu_modules.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-tofu/tests/impl_tofu_parser.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-tofu/tests/impl_tofu_propose.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-tofu/tests/impl_tofu_qualify.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-tofu/tests/impl_tofu_units.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-workflow-renderer/src/lane_share.rs	TEST-ASSERTION-ONLY; NO-RUNTIME-DELTA
+M	crates/velnor-actions-workflow-renderer/src/render.rs	ALINT-v0.17.0-PIN-UPDATE; VERIFY-UPSTREAM-SEPARATELY
+M	crates/velnor-actions-workflow-renderer/tests/impl_renderer_lint.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-workflow-renderer/tests/impl_renderer_msrv.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-workflow-renderer/tests/impl_renderer_overlap.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-workflow-renderer/tests/impl_renderer_p08_elect.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-workflow-renderer/tests/impl_renderer_steps.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-workflow-renderer/tests/impl_renderer_tree_policy.rs	TEST-OR-FIXTURE-ONLY
+M	crates/velnor-actions-workflow-renderer/tests/impl_renderer_tree_rejections.rs	TEST-OR-FIXTURE-ONLY
+M	deny.toml	ARCHIVE-PIPELINE-PENDING-INDEPENDENT-REVIEW
+A	docs/implemented/freshness-evidence-2026-10-04.md	PASSIVE-DOC-OR-EVIDENCE
+M	docs/implemented/gate-0-repository-contract.md	PASSIVE-DOC-OR-EVIDENCE
+M	docs/implemented/gate-5-trusted-baseline.md	PASSIVE-DOC-OR-EVIDENCE
+M	docs/implemented/requirements-evidence.md	PASSIVE-DOC-OR-EVIDENCE
+M	docs/implemented/update-procedure.md	PASSIVE-DOC-OR-EVIDENCE
+M	docs/proposed/implementation-plan.md	PASSIVE-DOC-OR-EVIDENCE
+M	docs/proposed/opentofu-goldens/MANIFEST.sha256	PASSIVE-GOLDEN-ONLY
+M	docs/proposed/opentofu-goldens/cases/dogfood/generate.stderr.txt	PASSIVE-GOLDEN-ONLY
+M	docs/proposed/opentofu-goldens/cases/dogfood/plan.txt	PASSIVE-GOLDEN-ONLY
+M	docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/workflows/ci.yml	PASSIVE-GOLDEN-ONLY
+A	docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/workflows/foundation-qualification.yml	PASSIVE-GOLDEN-ONLY
+M	docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/workflows/qualification.yml	PASSIVE-GOLDEN-ONLY
+M	docs/proposed/opentofu-goldens/cases/dogfood/tree.sha256	PASSIVE-GOLDEN-ONLY
+M	docs/proposed/opentofu-goldens/cases/empty-suite/generate.stderr.txt	PASSIVE-GOLDEN-ONLY
+M	docs/proposed/opentofu-goldens/cases/mbx-nextest/generate.stderr.txt	PASSIVE-GOLDEN-ONLY
+M	docs/proposed/opentofu-goldens/cases/mbx-nextest/plan.txt	PASSIVE-GOLDEN-ONLY
+M	docs/proposed/opentofu-goldens/cases/mbx-nextest/preview/.github/workflows/ci.yml	PASSIVE-GOLDEN-ONLY
+M	docs/proposed/opentofu-goldens/cases/mbx-nextest/tree.sha256	PASSIVE-GOLDEN-ONLY
+M	docs/proposed/opentofu-goldens/cases/minimal-cargo/generate.stderr.txt	PASSIVE-GOLDEN-ONLY
+M	docs/proposed/opentofu-goldens/cases/nested/generate.stderr.txt	PASSIVE-GOLDEN-ONLY
+M	docs/proposed/parallelism-and-selection-contract.md	PASSIVE-DOC-OR-EVIDENCE
+M	docs/proposed/rust-quality-contract.md	PASSIVE-DOC-OR-EVIDENCE
+M	docs/proposed/version-policy.md	PASSIVE-DOC-OR-EVIDENCE
+M	docs/proposed/workflow-contract.md	PASSIVE-DOC-OR-EVIDENCE
+M	docs/references.md	PASSIVE-DOC-OR-EVIDENCE
+A	docs/reviews/alint-v0.17.0-qualification.md	PASSIVE-ALINT-PIN-EVIDENCE; NOT-INDEPENDENTLY-QUALIFIED
+M	docs/reviews/ci-performance-completion-ledger.md	PASSIVE-DOC-OR-EVIDENCE
+M	docs/reviews/ci-performance-freshness-audit.md	PASSIVE-DOC-OR-EVIDENCE
+A	docs/reviews/ci-performance-source-progress-history-20261004.md	PASSIVE-DOC-OR-EVIDENCE
+A	docs/reviews/freshness-refresh-20261004.md	PASSIVE-DOC-OR-EVIDENCE
+A	docs/reviews/verification-trigger-contract-erratum-20261004.md	PASSIVE-DOC-OR-EVIDENCE
+M	scripts/capture-opentofu-goldens.sh	GOLDEN-CAPTURE-SUPPORT-ONLY
+M	scripts/freshness_context.py	FRESHNESS-PARSER-BEHAVIOR-ONLY; FreshnessContext.rust_const tokenizes bounded top-level Rust pin literals; carry behavior only, not this standalone module
+A	scripts/owned_mbx_observation.py	PRIVATE-MBX-QUALIFICATION-ONLY; observe/smoke_matches bind admitted MBX bytes; imported by qualify-owned-tool.py; no V1/product caller
+A	scripts/owned_tool_git_fixture.py	PRIVATE-OWNED-SOURCE-TEST-FIXTURE; fixture_ignored_blob serves test_owned_tool_build.py only; no production caller
+A	scripts/qualification/mbx-synchronous/README.md	PRIVATE-OWNED-SOURCE-MBX-QUALIFICATION; NOT-CARRIED
+M	scripts/qualification/mbx-synchronous/bind_inputs.py	PRIVATE-MBX-FIXTURE-BINDER; verify/main binds manifest, fixture and Cargo registry bytes for run.py; harness/tests only, no V1 caller
+A	scripts/qualification/mbx-synchronous/join.py	PRIVATE-MBX-EVIDENCE-JOIN; join/main validates local input, config and command receipts without authority; harness/tests only
+A	scripts/qualification/mbx-synchronous/join_same_root.py	PRIVATE-MBX-SAME-ROOT-RECEIPTS; join/lifecycle binds fresh same-root states to retained-byte witnesses; harness/tests only
+A	scripts/qualification/mbx-synchronous/join_support.py	PRIVATE-MBX-JOIN-HELPERS; artifact/JSON byte checks support sibling join modules; no standalone product or V1 caller
+A	scripts/qualification/mbx-synchronous/join_v2.py	PRIVATE-MBX-TRANSPORT-JOIN; join/main validates V2 native transport against retained local evidence; harness/tests only
+M	scripts/qualification/mbx-synchronous/manifest.json	PRIVATE-OWNED-SOURCE-MBX-QUALIFICATION; NOT-CARRIED
+D	scripts/qualification/mbx-synchronous/registry-fixture/Cargo.lock	PRIVATE-OWNED-SOURCE-MBX-QUALIFICATION; NOT-CARRIED
+D	scripts/qualification/mbx-synchronous/registry-fixture/Cargo.toml	PRIVATE-OWNED-SOURCE-MBX-QUALIFICATION; NOT-CARRIED
+D	scripts/qualification/mbx-synchronous/registry-fixture/src/lib.rs	PRIVATE-OWNED-SOURCE-MBX-QUALIFICATION; NOT-CARRIED
+A	scripts/qualification/mbx-synchronous/resolve_t08.py	PRIVATE-T08-BOOTSTRAP; bootstrap_with_guards creates the reviewed offline Cargo lock for this private fixture; no V1 caller
+M	scripts/qualification/mbx-synchronous/run.py	PRIVATE-MBX-LOCAL-HARNESS; run_all/main execute three isolated local observations and retain reports; manual qualification only, no product caller
+A	scripts/qualification/mbx-synchronous/run_negative_t08_v2.py	PRIVATE-T08-NEGATIVE-DRIVER; run_all checks exact itoa 17-to-18 source transition; private qualification only
+A	scripts/qualification/mbx-synchronous/source-owner-contract.json	PRIVATE-OWNED-SOURCE-MBX-QUALIFICATION; NOT-CARRIED
+A	scripts/qualification/mbx-synchronous/test_bind_inputs.py	PRIVATE-BINDER-REGRESSION-ONLY; InputClosureTests cover manifest/source/archive mutations and symlink escapes; validator tests only
+A	scripts/qualification/mbx-synchronous/test_cache_transport_v2.py	PRIVATE-MBX-API-REGRESSION-ONLY; TransportTests check V2 schema and refusal paths, not workspace usefulness; no product caller
+A	scripts/qualification/mbx-synchronous/test_join.py	PRIVATE-EVIDENCE-JOIN-REGRESSION-ONLY; JoinTests/RunnerJoinTests reject identity, artifact and forged-authority mismatches
+A	scripts/qualification/mbx-synchronous/test_join_same_root.py	PRIVATE-SAME-ROOT-REGRESSION-ONLY; SameRootTests cover fresh states, mutation, reuse and lifecycle witnesses
+A	scripts/qualification/mbx-synchronous/test_join_v2.py	PRIVATE-V2-ROUTING-REGRESSION-ONLY; JoinV2Tests route local drivers through strict V2 and unchanged typed joins
+A	scripts/qualification/mbx-synchronous/test_mutable_working_data.py	PRIVATE-REGISTRY-SEED-REGRESSION-ONLY; ReadonlyRegistrySeedTests assert exact read-only registry bytes survive checked copy routes
+A	scripts/qualification/mbx-synchronous/test_mutable_workspace.py	PRIVATE-FIXTURE-COPY-REGRESSION-ONLY; MutableWorkspaceTests cover readonly source normalization and copy failure
+M	scripts/qualification/mbx-synchronous/test_negative_pipeline_v2.py	PRIVATE-MBX-PROTOCOL-SIMULATION-ONLY; PipelineTests use fake executors for two-state success/failure ordering; no native tools launch
+A	scripts/qualification/mbx-synchronous/test_resolve_t08.py	PRIVATE-T08-BOOTSTRAP-REGRESSION-ONLY; BootstrapTests validate synthetic TOML and mocked failures; no corpus lock creation
+A	scripts/qualification/mbx-synchronous/test_run.py	PRIVATE-MBX-HARNESS-REGRESSION-ONLY; HarnessTests mock subprocess and check environment, transport and receipts; no Cargo/compiler workload
+A	scripts/qualification/mbx-synchronous/test_run_negative_t08_v2.py	PRIVATE-T08-PROTOCOL-REGRESSION-ONLY; T08Tests simulate the exact 17-to-18 transition; subprocesses mocked, no native execution
+M	scripts/qualify-owned-tool.py	PRIVATE-OWNED-TOOL-QUALIFIER; qualify/main admits and measures a prebuilt candidate; no build/publish and no V1 or workflow caller
+A	scripts/test_freshness_context.py	FRESHNESS-PARSER-REGRESSION-ONLY; RustPinExtractionTests cover comments, strings, macros, cfg, duplicates and source cap; register with carried behavior
+A	scripts/test_owned_mbx_observation.py	PRIVATE-MBX-OBSERVER-REGRESSION-ONLY; ObservationTests mock smoke and refusal boundaries; no native binary execution
+M	scripts/test_owned_tool_build.py	PRIVATE-OWNED-TOOL-BUILD-REGRESSION-ONLY; SourceTests/BuildTests check source admission and mocked recipe; fixture helper only
+A	scripts/test_qualify_mbx_observation.py	PRIVATE-MBX-QUALIFICATION-REGRESSION-ONLY; MbxDispatchTests bind real image metadata with mocked smoke; no tool/compiler execution
+M	scripts/test_qualify_owned_tool.py	PRIVATE-OWNED-TOOL-QUALIFIER-REGRESSION-ONLY; QualifierAdmissionTests bind synthetic builder receipts/source/artifacts; no builds
+M	velnor-actions-ci-performance-goal.md	PASSIVE-DOC-OR-EVIDENCE

@@ -4,9 +4,10 @@ use crate::impl_contract_ids::{GROUP, TASK, sample_entry};
 use crate::impl_remed_contract::sample_plan;
 use velnor_actions_contract::{
     ContractError, EdgeKind, ExecuteTaskRef, FinalCounts, FinalReport, FinalStatus, JobConclusion,
-    RequiredJobResult, TaskEdge, TaskReport, TaskStatus, TaskTiming, WorkflowEvent,
-    artifact_id_for_matrix, artifact_id_for_plan, digest_b3, final_report_id_for_run,
-    plan_id_for_run, run_key_for_ci, task_report_id_for_task, validate_plan_edges,
+    PlatformBinding, PlatformRunnerEnvironment, PlatformUnavailableReason, RequiredJobResult,
+    TaskEdge, TaskReport, TaskStatus, TaskTiming, WorkflowEvent, artifact_id_for_matrix,
+    artifact_id_for_plan, digest_b3, final_report_id_for_run, plan_id_for_run, run_key_for_ci,
+    task_report_id_for_task, validate_plan_edges,
 };
 
 #[test]
@@ -154,7 +155,7 @@ fn task_report_schedule_fields_validate() -> Result<(), ContractError> {
     assert_eq!(timing.accounted_total(), 244);
     assert_eq!(timing.slots().len(), 10);
     let mut report = TaskReport {
-        schema: 1,
+        schema: TaskReport::SCHEMA,
         task_report_id: task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?,
         run_key,
         event: WorkflowEvent::Local,
@@ -170,6 +171,11 @@ fn task_report_schedule_fields_validate() -> Result<(), ContractError> {
             key: "k".to_owned(),
             result: velnor_actions_contract::CacheResult::Hit,
             miss_reason: None,
+        },
+        platform_binding: PlatformBinding::Unavailable {
+            planned_platform_id: digest_b3(b"planned-platform"),
+            runner_environment: PlatformRunnerEnvironment::Unknown,
+            reason: PlatformUnavailableReason::ObservationNotRecorded,
         },
         exit_code: 0,
         duration_ms: Some(244),

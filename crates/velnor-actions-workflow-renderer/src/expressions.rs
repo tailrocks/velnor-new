@@ -48,14 +48,13 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 
 /// Exact `${{ }}` inners permitted in shell-step env values.
 ///
-/// Runner paths, the release tag, plan-matrix coordinates, the two
-/// fixed secret bindings (bootstrap registry plus the release forge
-/// token, whose placements the release gates still police separately),
-/// and the protected-default-branch cache-mode selector (the generator
-/// pins it on the native MBX action so other events stay read-only).
+/// Runner paths, the release tag, plan-matrix coordinates, fixed
+/// workflow secret handles, AWS action outputs, and the MBX
+/// cache-mode selector. Hosted writes require a protected push to the
+/// default branch; Scale Set routes do not invoke action restore.
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: &[&str] = &[
+const ENV_EXPRESSIONS: [&str; 11] = [
     "runner.temp",
     "github.ref_name",
     "github.event_name",
@@ -64,6 +63,9 @@ const ENV_EXPRESSIONS: &[&str] = &[
     "secrets.GITHUB_TOKEN",
     "github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha",
     "inputs.cache_key",
+    "steps.aws-credentials.outputs.aws-access-key-id",
+    "steps.aws-credentials.outputs.aws-secret-access-key",
+    "steps.aws-credentials.outputs.aws-session-token",
 ];
 
 /// Exact `${{ }}` inners permitted in action `with:` values.
@@ -72,14 +74,15 @@ const ENV_EXPRESSIONS: &[&str] = &[
 /// push-gated cache-save flag, and the publish step's derived
 /// artifact name. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: &[&str] = &[
+const WITH_EXPRESSIONS: [&str; 10] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
-    "runner.environment",
-    "github.job",
     "github.event_name == 'push'",
     "steps.publish-baseline.outputs.artifact_name",
+    "steps.v2.outputs.identity",
+    "runner.environment",
+    "github.job",
     "steps.tofu-providers.outputs.cache-key",
     "steps.tofu-providers.outputs.cache-path",
 ];
@@ -114,15 +117,42 @@ fn is_hash_files(inner: &str) -> bool {
 /// Reject unlisted `${{ }}` spans in one shell-step env value.
 /// # Errors
 pub(crate) fn check_env_value(key: &str, value: &str) -> Result<(), RenderError> {
+    check_env_value_with_scope(key, value, false)
+}
+
+/// Validate env expressions scoped to a generated composite action body.
+pub(crate) fn check_composite_env_value(key: &str, value: &str) -> Result<(), RenderError> {
+    check_env_value_with_scope(key, value, true)
+}
+
+fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result<(), RenderError> {
     let Some(spans) = expression_spans(value) else {
         return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
     };
     for inner in spans {
-        if !ENV_EXPRESSIONS.contains(&inner) && !is_matrix_field(inner) {
+        let composite_input = composite
+            && inner.strip_prefix("inputs.")
+                == Some(crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT);
+        if !ENV_EXPRESSIONS.contains(&inner)
+            && !is_matrix_field(inner)
+            && !composite_input
+            && !is_github_token_secret(inner)
+        {
             return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
         }
     }
     Ok(())
+}
+
+/// Declared provider token inputs use an uppercase Actions secret handle.
+fn is_github_token_secret(inner: &str) -> bool {
+    inner.strip_prefix("secrets.").is_some_and(|name| {
+        name.starts_with("GH_TOKEN_")
+            && name.len() <= 100
+            && name
+                .bytes()
+                .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_')
+    })
 }
 
 /// Reject bad action `with:` keys: empty, `${{`, or control characters.

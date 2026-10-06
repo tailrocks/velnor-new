@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_workflow_renderer::lane_target::lane_cargo_target_env;
 use velnor_actions_workflow_renderer::steps::{
-    TOOLS_CACHE_PATH, TOOLS_RESTORE_USES, TOOLS_SAVE_USES, cache_action_step,
+    TOOLS_CACHE_PATH, TOOLS_RESTORE_ACTION_USES, TOOLS_SAVE_USES, cache_action_step,
 };
 use velnor_actions_workflow_renderer::toolchain_env::{
     TOOLCHAIN_HOME_KEYS, check_toolchain_homes, with_toolchain_homes,
@@ -84,7 +84,7 @@ fn lane_env_isolates_target_dir() {
 fn cache_steps_restore_before_save() -> Result<(), RenderError> {
     let restore = cache_action_step(
         true,
-        TOOLS_RESTORE_USES,
+        TOOLS_RESTORE_ACTION_USES,
         "tools",
         "k",
         &["rk".to_owned()],

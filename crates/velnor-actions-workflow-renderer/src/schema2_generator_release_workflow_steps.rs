@@ -10,6 +10,7 @@ use super::super::features::CHECKOUT_USES;
 
 const ATTEST_USES: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
+const GH_COMMAND_TIMEOUT_SECONDS: u16 = 60;
 
 pub(super) fn command_step(name: &str, argv: &[String]) -> Result<Yaml, RenderError> {
     Ok(bash_step(name, &join_argv_for_run(argv)?))
@@ -35,8 +36,14 @@ pub(super) fn mise_step(setup: &MiseSetup) -> Result<Yaml, RenderError> {
 }
 
 pub(super) fn gh_function(argv: &[String]) -> Result<String, RenderError> {
+    gh_function_with_timeout(argv, GH_COMMAND_TIMEOUT_SECONDS)
+}
+
+fn gh_function_with_timeout(argv: &[String], timeout_seconds: u16) -> Result<String, RenderError> {
     let executable = join_argv_for_run(argv)?;
-    Ok(format!("gh() {{ {executable} \"$@\"; }}\nexport -f gh"))
+    Ok(format!(
+        "gh() {{ timeout --signal=TERM --kill-after=5s {timeout_seconds}s {executable} \"$@\"; }}\nexport -f gh"
+    ))
 }
 
 pub(super) fn install_gh_step(install_argv: &[String]) -> Result<Yaml, RenderError> {

@@ -48,8 +48,8 @@ fn publish_job_needs_required_and_gates_push() {
     );
     assert!(
         with.get("path")
-            .is_some_and(|path| path.ends_with("/baseline.json")),
-        "upload stages the single manifest: {with:?}"
+            .is_some_and(|path| path.ends_with("/published-baseline/baseline.json")),
+        "upload stages output separately from its parent: {with:?}"
     );
     assert_eq!(
         with.get("if-no-files-found").map(String::as_str),
@@ -63,7 +63,7 @@ fn publish_job_needs_required_and_gates_push() {
 
 #[test]
 fn publish_job_rejects_malformed_branches() {
-    for bad in ["", "  ", "feat/x y", "a\nb"] {
+    for bad in ["", "  ", "feat/x y", "a\nb", "main'||true||'"] {
         assert!(
             baseline_publish_job("ubuntu-26.04", bad, None).is_err(),
             "malformed branches never reach the gate: {bad:?}"

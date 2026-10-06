@@ -3,10 +3,11 @@
 //! The next immutable release is `v0.1.1`. Attest jobs never receive
 //! `contents: write`. Only publish does.
 
-use super::{GeneratorReleasePins, Schema2WorkflowRequest};
+use super::{ProductReleasePins, Schema2WorkflowRequest};
 use crate::RenderError;
 use crate::runs_on::runs_on_yaml;
 use crate::yaml::Yaml;
+use velnor_actions_contract::ReleaseTarget;
 
 /// GitHub-hosted macOS label. The arm64 binary is not built on Ubuntu.
 const MACOS_RUNS_ON: &str = "macos-15";
@@ -35,6 +36,96 @@ pub(super) struct GeneratorRelease {
     pub actions: Vec<(String, Yaml)>,
 }
 
+/// Typed role for one node in the generator release graph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum JobRole {
+    SourceGate,
+    Build(ReleaseTarget),
+    CandidateManifest,
+    Qualify(ReleaseTarget),
+    Attest(ReleaseTarget),
+    AttestManifest,
+    Publish,
+}
+
+/// Resolve a job ID through the explicit asset/target inventory.
+pub(super) fn job_role(id: &str) -> Option<JobRole> {
+    match id {
+        "verify-release-source" => return Some(JobRole::SourceGate),
+        "candidate-manifest" => return Some(JobRole::CandidateManifest),
+        "attest-manifest" => return Some(JobRole::AttestManifest),
+        "publish-generator" => return Some(JobRole::Publish),
+        _ => {}
+    }
+    assets::ASSETS.iter().find_map(|asset| {
+        if id == asset.build_job {
+            Some(JobRole::Build(asset.target))
+        } else if id == asset.qualify_job {
+            Some(JobRole::Qualify(asset.target))
+        } else if id == asset.attest_job {
+            Some(JobRole::Attest(asset.target))
+        } else {
+            None
+        }
+    })
+}
+
+/// Canonical paths published by the same-run release-manifest producer.
+pub(super) fn publication_asset_paths() -> Vec<String> {
+    manifest::release_asset_path_list()
+}
+
+/// Version bound into the canonical release manifest and immutable tag.
+pub(super) const fn release_version() -> &'static str {
+    assets::VERSION
+}
+
+/// Validate the candidate manifest against downloaded bytes and provenance.
+pub(super) fn verify_published_manifest_script(pins: &ProductReleasePins) -> String {
+    manifest::verify_published_manifest_script(pins)
+}
+
+/// Verify all downloaded attestation bundles against the exact workflow authority.
+pub(super) fn verify_attestation_bundles_script() -> String {
+    manifest::attestation_bundle_script()
+}
+
+/// Resolve the product-wide pinned Mise setup and GitHub CLI through adapters.
+pub(super) fn product_setup_steps(
+    pins: &ProductReleasePins,
+    target: ReleaseTarget,
+) -> Result<Vec<Yaml>, RenderError> {
+    Ok(vec![
+        mise_setup_step(pins, target)?,
+        workflow_steps::install_gh_step(&pins.install_gh_argv)?,
+    ])
+}
+
+/// Render one verified target's pinned Mise setup action.
+pub(super) fn mise_setup_step(
+    pins: &ProductReleasePins,
+    target: ReleaseTarget,
+) -> Result<Yaml, RenderError> {
+    workflow_steps::mise_step(pins.setup_for(target))
+}
+
+/// Render the pinned GitHub CLI invocation as a shell function.
+pub(super) fn gh_function(pins: &ProductReleasePins) -> Result<String, RenderError> {
+    workflow_steps::gh_function(&pins.gh_argv)
+}
+
+pub(super) fn release_gate_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, RenderError> {
+    Ok(vec![
+        workflow_steps::command_step(
+            "Install pinned release gate tools",
+            &pins.install_gate_tools_argv,
+        )?,
+        workflow_steps::command_step("Run actionlint", &pins.actionlint_argv)?,
+        workflow_steps::command_step("Run zizmor", &pins.zizmor_argv)?,
+        workflow_steps::bash_step("Check release freshness", "bash scripts/check-freshness.sh"),
+    ])
+}
+
 /// Qualify each native build in isolation, attest every product, then publish once.
 ///
 /// # Errors
@@ -44,9 +135,9 @@ pub(super) fn generator_release(
     request: &Schema2WorkflowRequest,
 ) -> Result<GeneratorRelease, RenderError> {
     let pins = request
-        .generator_release
+        .product_release
         .as_ref()
-        .ok_or_else(|| RenderError::InvalidWorkflow("generator_release_pins_missing".to_owned()))?;
+        .ok_or_else(|| RenderError::InvalidWorkflow("product_release_pins_missing".to_owned()))?;
     let hosted = runs_on_yaml(&request.hosted_label)?;
     let macos = runs_on_yaml(MACOS_RUNS_ON)?;
     let macos_intel = runs_on_yaml(MACOS_INTEL_RUNS_ON)?;
@@ -77,7 +168,7 @@ pub(super) fn generator_release(
 
 fn linux_jobs(
     hosted: Yaml,
-    pins: &GeneratorReleasePins,
+    pins: &ProductReleasePins,
     source_step: &Yaml,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
@@ -124,7 +215,7 @@ fn linux_jobs(
 
 fn macos_arm64_jobs(
     macos: Yaml,
-    pins: &GeneratorReleasePins,
+    pins: &ProductReleasePins,
     source_step: &Yaml,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
@@ -171,7 +262,7 @@ fn macos_arm64_jobs(
 
 fn macos_x86_64_jobs(
     macos: Yaml,
-    pins: &GeneratorReleasePins,
+    pins: &ProductReleasePins,
     source_step: &Yaml,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {

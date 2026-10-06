@@ -1,4 +1,6 @@
-//! Typed verification task routing through schema-2 execution modes.
+//! Typed workflow-task routing through schema-2 execution modes.
+
+use std::fs;
 
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 
@@ -11,6 +13,7 @@ const SCALE_RUNS: &str = "runs-on: [velnor, ubuntu-26.04-scale-set, verification
 fn verification_tasks_follow_eligible_lanes_and_stay_required() -> TestResult {
     for mode in ["hosted", "scale-set", "both"] {
         let repo = make_repo(&config(mode))?;
+        write_verification_task_config(repo.path())?;
         let tree = render_staged_tree(&prepare(repo.path())?)?;
         let workflow = required_file(&tree, ".github/workflows/ci.yml")?;
         let required = job_body(workflow, "required")?;
@@ -79,6 +82,7 @@ fn macos_task_cannot_select_the_linux_scale_set_profile() -> TestResult {
         config("hosted")
     );
     let repo = make_repo(&config)?;
+    write_verification_task_config(repo.path())?;
     let prep = prepare(repo.path())?;
     let error = render_staged_tree(&prep).expect_err("macOS cannot target Linux Scale Set");
     assert!(
@@ -90,7 +94,21 @@ fn macos_task_cannot_select_the_linux_scale_set_profile() -> TestResult {
     Ok(())
 }
 
-fn config(mode: &str) -> String {
+fn write_verification_task_config(root: &std::path::Path) -> TestResult {
+    fs::write(
+        root.join("mise.toml"),
+        r#"
+[tasks.lint-linux]
+run = "echo lint-linux"
+
+[tasks.desktop-format-check]
+run = "echo desktop-format-check"
+"#,
+    )?;
+    Ok(())
+}
+
+pub(crate) fn config(mode: &str) -> String {
     format!(
         "schema = 2\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n\
 [[workflow.tasks]]\nid = \"linux-lint\"\nkind = \"verification\"\nmise_task = \"lint-linux\"\nrunner = \"linux-x64\"\ntimeout_minutes = 10\n\

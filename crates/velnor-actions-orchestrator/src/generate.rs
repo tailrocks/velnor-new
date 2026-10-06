@@ -22,10 +22,18 @@ use crate::validate::validate_staged;
 #[path = "generate_guards.rs"]
 pub(crate) mod guards;
 
+/// Preserve repository-owned entries while replacing generated output.
+#[path = "generate_preserve.rs"]
+mod preserve;
+
+/// Stage and publish fresh preview output transactionally.
+#[path = "generate_preview.rs"]
+mod preview;
+
 /// Re-exported snapshot: the `generate::ToolSnapshot` path is stable API.
 pub use guards::ToolSnapshot;
 
-use guards::{GenerateOwnership, prepare_preview_dir, same_filesystem};
+use guards::{GenerateOwnership, same_filesystem};
 
 /// Options for [`generate`].
 #[derive(Debug, Clone, Default)]
@@ -87,10 +95,7 @@ pub fn generate_dispatched(
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     let warnings = match &opts.output_dir {
         None => replace_in_place(prep, &tree)?,
-        Some(dir) => {
-            write_preview(prep, dir, &tree)?;
-            Vec::new()
-        }
+        Some(dir) => preview::write_preview(prep, dir, &tree)?,
     };
     Ok(GenerateReport {
         files_written: tree.paths(),
@@ -174,6 +179,8 @@ fn render_all(
     let actionlint = rehead_actionlint_marker(&actionlint.yaml, version)?;
     let mut extra = crate::release_emit::release_files(prep, &mise)?;
     extra.extend(crate::freshness_emit::freshness_files(prep)?);
+    extra.extend(crate::owned_tool_publication::files(prep)?);
+    extra.extend(crate::tofu_apply_emit::tofu_apply_files(prep)?);
     extra.extend(crate::routing::extra_files(&prep.config, version)?);
     extra.extend(rendered.shared);
     let tree = render_tree_with_extra(&workflow, &actionlint, &extra, version)?;
@@ -234,8 +241,7 @@ fn replace_in_place(
     }
     let staging = tempfile::tempdir_in(root)
         .map_err(|err| OrchestratorError::io(root.display().to_string(), err.to_string()))?;
-    let staged = staging.path().join(".github");
-    write_tree(&staged, tree)?;
+    let staged = preserve::stage_in_place(&target, staging.path(), tree)?;
     if !same_filesystem(staging.path(), root)? {
         return Err(OrchestratorError::Contract {
             problem: "cross_filesystem_staging".to_owned(),
@@ -311,19 +317,6 @@ fn backup_path(root: &Path, target: &Path) -> PathBuf {
         candidate = root.join(format!("{base}.{counter}"));
     }
     candidate
-}
-
-/// Write `PATH/.github` for a fresh outside-repo preview root.
-fn write_preview(
-    prep: &GenerationPreparation,
-    dest: &Path,
-    tree: &RenderedTree,
-) -> Result<(), OrchestratorError> {
-    let canonical = prepare_preview_dir(&prep.root, dest)?;
-    for rel in check_tree_paths(tree)? {
-        guard::check_no_symlink(&canonical, &rel, is_symlink)?;
-    }
-    write_tree(&canonical.join(".github"), tree)
 }
 
 /// Staged tree writing: regular files and symbolic links.

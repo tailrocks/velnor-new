@@ -5,8 +5,8 @@
 
 use crate::ActionlintError;
 use crate::actions::{
-    ALINT_ACTION, ALLOWED_ACTIONS, CHECKOUT_ACTION, PinnedActionRef, RUST_CACHE_ACTION,
-    is_full_sha, is_version_tag, split_key,
+    ALINT_ACTION, ALLOWED_ACTIONS, CHECKOUT_ACTION, PinnedActionRef, is_full_sha, is_version_tag,
+    split_key,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -162,30 +162,6 @@ pub fn checkout_inputs_schema() -> ActionInputSchema {
         action: CHECKOUT_ACTION.to_owned(),
         required: vec!["persist-credentials".to_owned()],
         optional: vec!["ref".to_owned(), "fetch-depth".to_owned()],
-    }
-}
-
-/// Canonical input schema for the Cargo-only `rust-cache` step (P08-7).
-///
-/// Required (always explicit, never defaulted): `shared-key` (one shared
-/// registry identity, no job-id suffix), `save-if` (`true` only for the
-/// trusted writer, `false` for readers), `cache-targets` (always `false`
-/// in V1: registry only, targets stay per-lane ephemeral),
-/// `cache-on-failure` (always `false`: producer-successful saves only).
-/// Optional: `prefix-key`, `add-job-id-key` (always `false` when set).
-/// Every other upstream input (`workspaces`, `cache-all-crates`, ...) is
-/// rejected: V1 never sets per-job target caches over MBX-owned paths.
-#[must_use]
-pub fn rust_cache_inputs_schema() -> ActionInputSchema {
-    ActionInputSchema {
-        action: RUST_CACHE_ACTION.to_owned(),
-        required: vec![
-            "shared-key".to_owned(),
-            "save-if".to_owned(),
-            "cache-targets".to_owned(),
-            "cache-on-failure".to_owned(),
-        ],
-        optional: vec!["prefix-key".to_owned(), "add-job-id-key".to_owned()],
     }
 }
 

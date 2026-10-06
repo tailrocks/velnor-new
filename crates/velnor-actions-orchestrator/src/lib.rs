@@ -1,13 +1,12 @@
-//! Generation coordination: root, config, discovery, IR, and writes.
-//!
-//! Composes the contract, Rust, Mise, actionlint, and workflow-renderer
-//! adapters. This crate launches no child invocations, builds no fixed
-//! vectors itself, and assembles no workflow text: execution belongs to
-//! Mise, vectors to `vectors` via Mise requests, text to the renderer.
+//! Generation coordination: discovery, planning, workflow IR, and writes.
+//! Execution belongs to Mise, vector requests to vectors, and YAML to the renderer.
 
 mod api;
 mod attach;
+mod baseline_artifact_listing;
 mod baseline_publish;
+mod build_task_tools;
+mod build_tasks;
 mod check_evidence;
 mod check_runtime;
 mod clippy_groups;
@@ -41,22 +40,31 @@ mod internal_plan;
 mod internal_request;
 mod inventory;
 mod inventory_reuse;
+pub mod local_release_manifest;
 mod lock_audit;
 mod matrix_step;
 mod mbx_preflight;
 mod merge;
 mod merge_request;
+mod native_image_tasks;
+mod native_mise_tasks;
+mod native_tool_input;
+mod native_tool_lock;
 mod noop_report;
 mod obligation_order;
 mod origin;
+mod owned_tool_preview;
+mod owned_tool_publication;
 mod pins;
 mod plan;
 mod plan_output_limits;
 mod plan_stacks;
 mod prepare;
 mod preseed_manifest;
+mod product_release_pins;
 mod provenance;
 mod publish_job;
+mod qualification_resolver;
 mod qualify;
 mod recommendations;
 mod release_checkouts;
@@ -78,8 +86,9 @@ mod select_edges;
 mod select_tofu;
 mod source_cache;
 mod source_prep;
-mod task_report;
+pub(crate) mod task_report;
 mod task_report_aggregate;
+mod tofu_apply_emit;
 mod tofu_cache;
 mod toolcheck;
 mod toolfindings;
@@ -93,6 +102,7 @@ mod verification_tasks;
 mod workflow;
 mod workflow_jobs;
 mod workflow_jobs_cache;
+mod workflow_task_jobs;
 
 pub use api::*;
 

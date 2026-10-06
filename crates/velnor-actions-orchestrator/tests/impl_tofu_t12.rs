@@ -36,7 +36,7 @@ fn write_roots(root: &Path) -> TestResult {
 
 /// Reasons for every obligation whose task ID contains `member`.
 fn reasons(plan: &Plan, member: &str) -> Vec<String> {
-    reasons_for(plan, member)
+    reasons_for(plan, &velnor_actions_tofu::key_for_root(member))
         .into_iter()
         .map(str::to_owned)
         .collect()
@@ -71,7 +71,7 @@ fn module_target_change_selects_calling_root_only() -> TestResult {
     let head = commit(root, "head")?;
     let (plan, warnings) = plan_pr(root, Some(&base), &head)?;
     assert_narrow(&plan, "stacks/a", "stacks/b");
-    for reason in reasons(&plan, "stack/rust") {
+    for reason in reasons_for(&plan, "stack/rust") {
         assert_ne!(reason, "affected_by_change", "rust stays unselected");
     }
     assert!(
@@ -145,7 +145,10 @@ fn rust_change_leaves_tofu_unaffected() -> TestResult {
     fs::write(root.join("src/lib.rs"), "pub fn f() {}\npub fn g() {}\n")?;
     let head = commit(root, "head")?;
     let (plan, warnings) = plan_pr(root, Some(&base), &head)?;
-    let rust = reasons(&plan, "stack/rust");
+    let rust = reasons_for(&plan, "stack/rust")
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
     assert!(
         rust.iter().all(|reason| reason == "affected_by_change"),
         "rust selects: {rust:?}"

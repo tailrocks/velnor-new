@@ -28,6 +28,7 @@ pub const fn trust_for_event(event: WorkflowEvent) -> Trust {
         WorkflowEvent::PullRequest
         | WorkflowEvent::Fork
         | WorkflowEvent::Local
-        | WorkflowEvent::MergeGroup => Trust::Pr,
+        | WorkflowEvent::MergeGroup
+        | WorkflowEvent::Qualification => Trust::Pr,
     }
 }

@@ -62,10 +62,10 @@ fn crate_job_fetches_lockful_sources_before_obligations() -> TestResult {
         .ok_or_else(|| std::io::Error::other("missing crate job"))?;
     let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
     let at = |name: &str| names.iter().position(|seen| *seen == name);
-    // Cargo-only fixture: reader is `rust-cache` (no MBX, no shared save).
+    // Cargo-only fixture uses the same shared sources restore as MBX.
     let (Some(prepare_at), Some(cache_at), Some(fetch_at), Some(run_at)) = (
         at("Prepare pinned tools"),
-        at("Restore Cargo registry"),
+        at("Restore Cargo sources"),
         at("Fetch Cargo sources"),
         at("Clippy"),
     ) else {
@@ -196,8 +196,12 @@ fn mbx_objects_precede_fetch_on_mbx_crates() -> TestResult {
         "restore<objects<fetch<obligations: {names:?}"
     );
     assert!(
-        names.iter().all(|name| *name != "Restore Cargo registry"),
-        "MBX crates never stack rust-cache: {names:?}"
+        names
+            .iter()
+            .filter(|name| **name == "Restore Cargo sources")
+            .count()
+            == 1,
+        "MBX crate has one exact sources restore: {names:?}"
     );
     Ok(())
 }

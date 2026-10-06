@@ -1,6 +1,6 @@
 //! Workflow-IR to YAML document builders.
 //!
-//! Fixed key order: name, on, permissions, concurrency, jobs.
+//! Fixed key order: name, on, permissions, env, concurrency, jobs.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -14,7 +14,7 @@ use crate::{
 };
 use velnor_actions_contract::{
     Job, Permissions, RunsOn, StepKind, StepRole, Trigger, WorkflowIr,
-    workflow::{ir::DispatchInput, permissions::PermissionLevel},
+    workflow::{DispatchInput, DispatchInputType, permissions::PermissionLevel},
 };
 
 #[cfg(test)]
@@ -35,6 +35,7 @@ pub(crate) fn workflow_to_yaml(
     let jobs = &shared.jobs;
     if shared.calls.keys().ne(shared.checkouts.keys())
         || shared.calls.keys().ne(shared.env_steps.keys())
+        || shared.calls.keys().ne(shared.runtime_preludes.keys())
         || shared.calls.keys().ne(shared.prefixes.keys())
         || shared.calls.keys().ne(shared.preludes.keys())
         || shared.calls.keys().ne(shared.postludes.keys())
@@ -46,6 +47,7 @@ pub(crate) fn workflow_to_yaml(
     }
     let needs_env = needs_channel_envs(jobs)?;
     let lane_steps = lane_steps(shared);
+    let workflow_env = crate::document_env::workflow_env(!ctx.workflow_tasks.is_empty());
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
         let call = shared.calls.get(id).map(String::as_str);
@@ -60,9 +62,10 @@ pub(crate) fn workflow_to_yaml(
                 &needs_env,
                 call,
                 &lane_steps,
-                MbxJobPolicy {
+                JobRenderPolicy {
                     native_mbx: mbx_jobs.contains(id),
                     actions_read,
+                    workflow_env: &workflow_env,
                 },
             )?,
         ));
@@ -74,6 +77,7 @@ pub(crate) fn workflow_to_yaml(
             "permissions".to_owned(),
             permissions_to_yaml(&ir.permissions),
         ),
+        ("env".to_owned(), string_map_yaml(&workflow_env)),
         (
             "concurrency".to_owned(),
             Yaml::Map(vec![
@@ -99,6 +103,7 @@ fn lane_steps(shared: &LaneShare) -> crate::document_lanes::SharedLaneSteps<'_> 
     crate::document_lanes::SharedLaneSteps {
         checkouts: &shared.checkouts,
         env_steps: &shared.env_steps,
+        runtime_preludes: &shared.runtime_preludes,
         prefixes: &shared.prefixes,
         preludes: &shared.preludes,
         postludes: &shared.postludes,
@@ -217,10 +222,16 @@ fn dispatch_input_to_yaml(input: &DispatchInput) -> Yaml {
     let mut fields = vec![
         (
             "type".to_owned(),
-            Yaml::str(DispatchInput::INPUT_TYPE.to_owned()),
+            Yaml::str(input.input_type.as_str().to_owned()),
         ),
         ("required".to_owned(), Yaml::Bool(input.required)),
     ];
+    if input.input_type == DispatchInputType::Choice {
+        fields.push((
+            "options".to_owned(),
+            Yaml::Seq(input.choices.iter().cloned().map(Yaml::str).collect()),
+        ));
+    }
     if let Some(default) = &input.default {
         fields.push(("default".to_owned(), Yaml::str(default.clone())));
     }
@@ -228,9 +239,10 @@ fn dispatch_input_to_yaml(input: &DispatchInput) -> Yaml {
 }
 
 #[derive(Clone, Copy)]
-struct MbxJobPolicy {
+struct JobRenderPolicy<'a> {
     native_mbx: bool,
     actions_read: bool,
+    workflow_env: &'a BTreeMap<String, String>,
 }
 
 /// Render one job: name, runs-on, timeout, environment, permissions, needs, if, steps.
@@ -241,7 +253,7 @@ fn job_to_yaml(
     needs_envs: &[(String, String)],
     shared: Option<&str>,
     lanes: &crate::document_lanes::SharedLaneSteps<'_>,
-    mbx_policy: MbxJobPolicy,
+    policy: JobRenderPolicy<'_>,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
     let runner = RunsOn::parse(&job.runs_on).map_err(RenderError::Contract)?;
@@ -258,20 +270,14 @@ fn job_to_yaml(
         StepKind::Shell { env, .. } | StepKind::Action { env, .. } => !env.is_empty(),
         StepKind::Internal { .. } => false,
     });
-    let mut job_env = if step_has_env {
-        if ctx
-            .verification_tasks
-            .iter()
-            .any(|task| task.owns_job_id(id))
-        {
-            // Verification jobs intentionally execute repository-declared
-            // Mise tasks, so they need Mise config while retaining the same
-            // credential scrub as every other repository-code step.
-            crate::toolchain_env::credential_scrub()
-        } else {
-            crate::toolchain_env::job_level_env()
-        }
+    let mut job_env = if step_has_env && ctx.workflow_tasks.iter().any(|task| task.owns_job_id(id))
+    {
+        // Verification jobs intentionally execute repository-declared
+        // Mise tasks, so they need Mise config while retaining the same
+        // credential scrub as every other repository-code step.
+        crate::toolchain_env::credential_scrub()
     } else {
+        // Hoisted: ordinary jobs inherit the workflow-level env.
         BTreeMap::new()
     };
     if step_has_env {
@@ -298,7 +304,7 @@ fn job_to_yaml(
             }
         }
     }
-    if mbx_policy.native_mbx {
+    if policy.native_mbx {
         job_env.insert(
             crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
             crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned(),
@@ -309,7 +315,9 @@ fn job_to_yaml(
         );
     }
     let mut entries = job_header_fields(job, runs_on);
-    append_job_options(&mut entries, job, scale_set, &job_env)?;
+    append_job_options(&mut entries, job, scale_set, &job_env, policy.workflow_env)?;
+    let mut effective_env = policy.workflow_env.clone();
+    effective_env.extend(job_env.clone());
     let rendered_steps = crate::document_lanes::render_job_steps(
         id,
         job,
@@ -318,8 +326,9 @@ fn job_to_yaml(
         shared,
         lanes,
         &crate::document_lanes::JobStepContext {
-            job_env: &job_env,
-            actions_read: mbx_policy.actions_read,
+            job_env: &effective_env,
+            runs_on: Some(&job.runs_on),
+            actions_read: policy.actions_read,
         },
     )?;
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
@@ -342,14 +351,16 @@ fn append_job_options(
     job: &Job,
     scale_set: bool,
     job_env: &BTreeMap<String, String>,
+    workflow_env: &BTreeMap<String, String>,
 ) -> Result<(), RenderError> {
     if scale_set {
         entries.push(crate::runs_on::run_shell_defaults_field(
             crate::runs_on::SCALE_SET_RUN_SHELL,
         ));
     }
+    let job_env = crate::document_env::exclude_inherited(job_env, workflow_env);
     if !job_env.is_empty() {
-        entries.push(("env".to_owned(), string_map_yaml(job_env)));
+        entries.push(("env".to_owned(), string_map_yaml(&job_env)));
     }
     if let Some(environment) = &job.environment {
         entries.push(("environment".to_owned(), Yaml::str(environment.clone())));

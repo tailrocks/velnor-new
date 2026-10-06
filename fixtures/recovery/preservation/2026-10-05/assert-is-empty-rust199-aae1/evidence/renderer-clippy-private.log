@@ -1,0 +1,57 @@
+    Checking velnor-actions-contract v0.1.1 (/root/.cache/velnor-task-targets/20261005/assert-is-empty-rust199-aae1-candidate/crates/velnor-actions-contract)
+    Checking velnor-actions-workflow-renderer v0.1.1 (/root/.cache/velnor-task-targets/20261005/assert-is-empty-rust199-aae1-candidate/crates/velnor-actions-workflow-renderer)
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-actions-workflow-renderer/src/lane_share_tests.rs:255:5
+    |
+255 |     assert!(shared.files.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+    = note: `-D clippy::assert-is-empty` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::assert_is_empty)]`
+help: use `assert_eq!` to show the value on failure
+    |
+255 -     assert!(shared.files.is_empty());
+255 +     assert_eq!(shared.files, [] as [tree::RenderedFile; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-actions-workflow-renderer/src/lane_share_tests.rs:288:5
+    |
+288 |     assert!(local.steps.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+288 -     assert!(local.steps.is_empty());
+288 +     assert_eq!(local.steps, [] as [velnor_actions_contract::Step; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-actions-workflow-renderer/src/schema2_release_eligibility_edge_tests.rs:72:9
+   |
+72 |         assert!(result.calls.is_empty());
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+72 -         assert!(result.calls.is_empty());
+72 +         assert_eq!(result.calls, "");
+   |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-actions-workflow-renderer/src/verification_jobs_tests.rs:39:5
+   |
+39 |     assert!(job.needs.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+39 -     assert!(job.needs.is_empty());
+39 +     assert_eq!(job.needs, [] as [std::string::String; 0]);
+   |
+
+error: could not compile `velnor-actions-workflow-renderer` (lib test) due to 4 previous errors

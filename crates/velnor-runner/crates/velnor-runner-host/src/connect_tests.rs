@@ -15,6 +15,11 @@ fn host_toml(repo: &str, context: &str, endpoint: &str, credential: &str) -> Str
             "credential_ref = \"{credential}\"\n",
             "[host]\n",
             "max_jobs = 1\n",
+            "[host.resources]\n",
+            "runner_cpu_millicores = 1000\n",
+            "runner_memory_bytes = 2147483648\n",
+            "dind_cpu_millicores = 3000\n",
+            "dind_memory_bytes = 6442450944\n",
             "[docker]\n",
             "context = \"{context}\"\n",
             "platform = \"linux/amd64\"\n",
@@ -135,6 +140,49 @@ fn credential_is_a_keychain_ref() -> Result<(), HostError> {
 }
 
 #[test]
+fn resource_limits_are_required_and_aggregate_values_are_checked() {
+    let valid = host_toml(
+        "ChainArgos/java-monorepo",
+        "orbstack",
+        "unix:///var/run/docker.sock",
+        "keychain:com.tailrocks.velnor.host/chainargos",
+    );
+    let resources = concat!(
+        "[host.resources]\n",
+        "runner_cpu_millicores = 1000\n",
+        "runner_memory_bytes = 2147483648\n",
+        "dind_cpu_millicores = 3000\n",
+        "dind_memory_bytes = 6442450944\n",
+    );
+    assert!(HostConfig::parse(&valid.replace(resources, "")).is_err());
+    assert!(
+        HostConfig::parse(
+            &valid.replace("runner_cpu_millicores = 1000", "runner_cpu_millicores = 0")
+        )
+        .is_err()
+    );
+    assert!(
+        HostConfig::parse(&valid.replace(
+            "runner_memory_bytes = 2147483648",
+            "runner_memory_bytes = 1"
+        ))
+        .is_err()
+    );
+
+    let aggregate_overflow = valid
+        .replace("max_jobs = 1", "max_jobs = 2")
+        .replace(
+            "runner_memory_bytes = 2147483648",
+            "runner_memory_bytes = 4000000000000000000",
+        )
+        .replace(
+            "dind_memory_bytes = 6442450944",
+            "dind_memory_bytes = 4000000000000000000",
+        );
+    assert!(HostConfig::parse(&aggregate_overflow).is_err());
+}
+
+#[test]
 fn disconnect_deletes_only_recorded_ownership() {
     assert_eq!(
         disconnect_effects(SetOwnership::Adopted, true),
@@ -165,7 +213,15 @@ fn structs_used_by_connect_plan_stay_secret_free() {
             scale_set_name: "ubuntu-26.04-scale-set".to_owned(),
             credential_ref: "keychain:item".to_owned(),
         },
-        host: HostLimits { max_jobs: 1 },
+        host: HostLimits {
+            max_jobs: 1,
+            resources: crate::worker::ResourceBudgetConfig {
+                runner_cpu_millicores: 1_000,
+                runner_memory_bytes: 2_147_483_648,
+                dind_cpu_millicores: 3_000,
+                dind_memory_bytes: 6_442_450_944,
+            },
+        },
         docker: DockerConfig {
             context: "orbstack".to_owned(),
             platform: "linux/amd64".to_owned(),

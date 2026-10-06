@@ -11,19 +11,19 @@ use velnor_actions_mise::PinnedTool;
 use crate::OrchestratorError;
 use crate::internal::internal;
 
-/// Provider-cache key prefix (per-root: target + tofu + root slug).
+/// Provider-cache key prefix (per-root: target + tofu + root locator).
 pub(crate) const TOFU_PROVIDERS_KEY_PREFIX: &str =
     velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDERS_KEY_PREFIX;
 /// Owned plugin-cache base (expression form; mirrors the renderer's).
 pub(crate) const TOFU_PROVIDER_CACHE_BASE_EXPR: &str =
     velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_CACHE_BASE_EXPR;
-/// Per-root provider-cache key: target + tofu + root slug + lock hash.
+/// Per-root provider-cache key: target + tofu + opaque root locator + lock hash.
 ///
 /// Static segments invalidate exactly when pins or the root change;
 /// the trailing `hashFiles` over the root lockfile churns the key
 /// when provider pins change. No spaces: the cache action rejects
-/// them. The root slug mirrors the isolated data-dir scheme
-/// (H3-hashed, never interpolated). Depth budget: roots carry no
+/// them. The locator mirrors the isolated data-dir scheme and never
+/// interpolates repository paths. Depth budget: roots carry no
 /// separate depth cap; the 512-byte key cap bounds them instead — a
 /// root nested deep enough to overflow the key fails `key_too_long`.
 /// # Errors
@@ -53,19 +53,14 @@ pub(crate) fn tofu_providers_cache_key(
     } else {
         format!("{root}/.terraform.lock.hcl")
     };
-    let slug = provider_root_slug(root);
+    let locator = velnor_actions_tofu::tofu_root_locator(root)?;
     let key = format!(
-        "{TOFU_PROVIDERS_KEY_PREFIX}-{target}-{tofu_version}-{slug}-${{{{hashFiles('{lock}')}}}}"
+        "{TOFU_PROVIDERS_KEY_PREFIX}-{target}-{tofu_version}-{locator}-${{{{hashFiles('{lock}')}}}}"
     );
     if key.len() > MAX_CACHE_KEY_BYTES {
         return Err(bad_key("key_too_long".to_owned()));
     }
     Ok(key)
-}
-
-/// H3-hashed root slug through the tofu adapter's shared derivation.
-fn provider_root_slug(root: &str) -> String {
-    velnor_actions_tofu::tofu_root_slug(root)
 }
 
 /// Job-private plugin-cache path for one root (never the data dir).
@@ -114,7 +109,7 @@ pub(crate) fn tofu_providers_restore_step(
 /// The restore action may extract a prefix match before exposing its
 /// outputs. On a miss or mismatched key, clear only the validated
 /// job-private plugin-cache leaf so init can run cold. The generated
-/// key binds target, `OpenTofu` pin, root slug, and lockfile hash; GitHub's
+/// key binds target, `OpenTofu` pin, root locator, and lockfile hash; GitHub's
 /// cache branch scope remains the trust boundary. `TF_DATA_DIR` is not
 /// part of this path.
 /// # Errors
@@ -122,21 +117,88 @@ pub(crate) fn tofu_providers_restore_step(
 /// Returns render errors for a rejected key or provider-cache path.
 /// Normalized tofu root backing one job's obligations.
 ///
-/// Groups key by unit, so every member shares the root; the first
-/// member's key segment names it.
+/// Tofu obligations in one job must share one exact root; a present
+/// Validate obligation gates on Init when that obligation is present.
 /// # Errors
 ///
-/// Returns an internal error for empty obligations or an unparsable
-/// key segment (both unreachable past validation).
+/// Rejects empty, duplicate, malformed, inconsistent, or mixed-root
+/// Tofu obligations.
 pub(crate) fn tofu_root_for_obligations(
     obligations: &[CrateObligation],
 ) -> Result<String, OrchestratorError> {
-    let first = obligations
-        .first()
+    use std::collections::BTreeSet;
+    use velnor_actions_tofu::TofuTaskKind;
+
+    let mut tofu = obligations.iter().filter(|obligation| {
+        crate::extension_schemas::task_stack_segment(&obligation.task_id)
+            == Some(velnor_actions_tofu::STACK_ID)
+    });
+    let first = tofu
+        .next()
         .ok_or_else(|| internal("tofu_empty_obligations"))?;
-    let key = crate::extension_schemas::task_key_segment(&first.task_id)
-        .ok_or_else(|| internal("tofu_unparsable_key"))?;
-    Ok(velnor_actions_tofu::root_for_key(&key))
+    let (root, configuration, first_kind) = tofu_obligation_identity(first)?;
+    let mut kinds = BTreeSet::from([first_kind.as_str()]);
+    let mut identified = vec![(first, first_kind)];
+
+    for obligation in tofu {
+        let (other_root, other_configuration, kind) = tofu_obligation_identity(obligation)?;
+        if other_root != root || other_configuration != configuration {
+            return Err(internal("tofu_mixed_roots"));
+        }
+        if !kinds.insert(kind.as_str()) {
+            return Err(internal("tofu_duplicate_obligation"));
+        }
+        identified.push((obligation, kind));
+    }
+    let has_init = kinds.contains(TofuTaskKind::InitForValidate.as_str());
+    for (obligation, kind) in identified {
+        validate_tofu_obligation_gate(obligation, kind, &root, &configuration, has_init)?;
+    }
+    Ok(root)
+}
+
+/// Parse and cross-check one Tofu obligation's exact root task identity.
+fn tofu_obligation_identity(
+    obligation: &CrateObligation,
+) -> Result<(String, String, velnor_actions_tofu::TofuTaskKind), OrchestratorError> {
+    use velnor_actions_tofu::TofuTaskKind;
+
+    let parts: Vec<_> = obligation.task_id.split('/').collect();
+    if parts.len() != 5 || parts[0] != "stack" || parts[1] != velnor_actions_tofu::STACK_ID {
+        return Err(internal("tofu_unparsable_task_id"));
+    }
+    let root = velnor_actions_tofu::root_for_key(parts[2])?;
+    let kind = TofuTaskKind::parse(parts[3])?;
+    if obligation.kind != kind.as_str()
+        || velnor_actions_tofu::task_id_for_root(&root, kind, parts[4])? != obligation.task_id
+    {
+        return Err(internal("tofu_obligation_identity_mismatch"));
+    }
+    Ok((root, parts[4].to_owned(), kind))
+}
+
+/// Check the fixed Tofu dependency contract carried by one obligation.
+fn validate_tofu_obligation_gate(
+    obligation: &CrateObligation,
+    kind: velnor_actions_tofu::TofuTaskKind,
+    root: &str,
+    configuration: &str,
+    has_init: bool,
+) -> Result<(), OrchestratorError> {
+    use velnor_actions_tofu::TofuTaskKind;
+
+    let expected = match kind {
+        TofuTaskKind::Validate if has_init => vec![velnor_actions_tofu::task_id_for_root(
+            root,
+            TofuTaskKind::InitForValidate,
+            configuration,
+        )?],
+        TofuTaskKind::Validate | TofuTaskKind::Fmt | TofuTaskKind::InitForValidate => Vec::new(),
+    };
+    if obligation.gated_by != expected {
+        return Err(internal("tofu_obligation_gate_mismatch"));
+    }
+    Ok(())
 }
 
 /// Build the compact restore/admission step for one root.
@@ -180,7 +242,7 @@ mod tests {
             "one base across crates"
         );
         assert!(
-            path.starts_with(&format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/stacks-vpc-")),
+            path.starts_with(&format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/b3-")),
             "{path}"
         );
         let step = tofu_providers_restore_step(&key, &path).expect("restore builds");
@@ -224,7 +286,7 @@ mod tests {
         let key = tofu_providers_cache_key("x86_64-unknown-linux-gnu", "1.13.1", "")
             .expect("provider key builds");
         assert!(
-            key.starts_with("velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-root-"),
+            key.starts_with("velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-b3-"),
             "{key}"
         );
         assert!(

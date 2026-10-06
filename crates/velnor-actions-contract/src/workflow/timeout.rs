@@ -30,9 +30,11 @@ impl JobTimeout {
     /// timeout above the default it exists to undercut is absurd.
     pub const MAX_MINUTES: u16 = 360;
 
-    /// Planner job: measured 88 s (tools 15 s + Build helper 59 s),
-    /// so 10 minutes is ~7x headroom for cold-install variance.
-    pub const PLAN: Self = Self(10);
+    /// Planner job. The small measured path is 88 s. Java run
+    /// 37346647634 spent 569 s in Checkout and the 10 minute bound
+    /// cancelled the job during Fetch Cargo sources, so Plan never ran.
+    /// Twenty minutes covers that checkout and the remaining plan steps.
+    pub const PLAN: Self = Self(20);
     /// Crate job: measured max ~13 minutes (orchestrator: 686 s tests
     /// plus setup), so 30 minutes is ~2.4x over the slowest suite.
     pub const CRATE: Self = Self(30);

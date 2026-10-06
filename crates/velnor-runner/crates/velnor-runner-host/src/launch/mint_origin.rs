@@ -1,6 +1,7 @@
 //! Provenance for JIT requests that can fail after a remote job was acquired.
 
 use crate::journal::Outcome;
+use velnor_runner_github::Certainty;
 
 /// Whether a JIT request follows an already successful acquire operation.
 pub(super) enum MintOrigin {
@@ -11,12 +12,15 @@ pub(super) enum MintOrigin {
 }
 
 impl MintOrigin {
-    /// A JIT conflict cannot settle an earlier successful `AcquireJobs` effect.
+    /// Decide whether the JIT error settles this launch reservation.
     #[must_use]
-    pub(super) const fn conflict_outcome(self) -> Outcome {
+    pub(super) const fn error_outcome(self, certainty: Certainty) -> Outcome {
         match self {
             Self::AcquiredJob => Outcome::Uncertain,
-            Self::AssignedPopulation => Outcome::DefiniteFailure,
+            Self::AssignedPopulation => match certainty {
+                Certainty::Definite => Outcome::DefiniteFailure,
+                Certainty::Uncertain => Outcome::Uncertain,
+            },
         }
     }
 }

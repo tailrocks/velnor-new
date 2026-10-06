@@ -1,3 +1,5 @@
 .firecrawl/
 /target/
 .DS_Store
+__pycache__/
+.cache/

@@ -22,6 +22,29 @@ jobs:
         with:
           fetch-depth: "1"
           persist-credentials: "false"
+      - name: Setup Mise
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+        with:
+          cache: "false"
+          cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          version: 2026.9.18
+      - name: Install Rust toolchain
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks install rust@1.98.1
       - name: Check upstream freshness
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -35,4 +58,4 @@ jobs:
           MISE_GITHUB_TOKEN: ""
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
-        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR bash scripts/check-freshness.sh --check-upstream
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec rust@1.98.1 -- bash scripts/check-freshness.sh --check-upstream

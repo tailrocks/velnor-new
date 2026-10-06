@@ -69,9 +69,9 @@ sha = "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb"
 reviewed = "2026-09-28"
 
 [[actions]]
-name = "Swatinem/rust-cache"
-version = "v2.9.2"
-sha = "6323deb102c322ba6fcbdcafc7e3dddab59af2b6"
+name = "aws-actions/configure-aws-credentials"
+version = "v6.3.0"
+sha = "e1253824e5c10ff9df46874f81ed3ec929e19cfd"
 reviewed = "2026-09-28"
 
 [validation-tools]

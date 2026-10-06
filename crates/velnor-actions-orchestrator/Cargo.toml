@@ -25,6 +25,11 @@ tempfile = { version = "=3.27.0" }
 thiserror = { workspace = true }
 toml = { version = "=0.9.12" }
 
+# This dependency selects zip's pure-Rust deflate backend through feature
+# unification; archive parsing calls it transitively through `zip`.
+[package.metadata.cargo-machete]
+ignored = ["flate2"]
+
 [lints]
 workspace = true
 
@@ -37,6 +42,8 @@ name = "validation_failure"
 path = "tests/validation_failure.rs"
 
 [dev-dependencies]
+proc-macro2 = { version = "=1.0.107", features = ["span-locations"] }
 serde_json = { workspace = true }
+syn = { version = "=3.0.6", default-features = false, features = ["full", "parsing", "printing", "visit"] }
 tempfile = { version = "=3.27.0" }
 velnor-actions-contract = { version = "=0.1.1", path = "../velnor-actions-contract" }

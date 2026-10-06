@@ -20,6 +20,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use velnor_actions_contract::{
     CacheLayer, CacheOutcome, CacheResult, ContractError, NotSelectedReason, ObligationDecision,
+    PlannedPlatform, PlatformBinding, PlatformRunnerEnvironment, PlatformUnavailableReason,
     RunnerImageEvidence, Stack, TaskReport, TaskStatus, Trust, WorkflowEvent, join_runner_temp,
     task_report_id_for_task, validate_run_key,
 };
@@ -182,6 +183,8 @@ pub struct NotSelectedInputs<'a> {
     pub trust: Trust,
     /// Owning matrix ID.
     pub matrix_id: &'a str,
+    /// Immutable runner placement from the matrix plan.
+    pub planned_platform: &'a PlannedPlatform,
     /// Matrix key.
     pub matrix_key: &'a str,
     /// Skipped task ID.
@@ -218,6 +221,11 @@ pub fn not_selected_report(inputs: &NotSelectedInputs<'_>) -> Result<TaskReport,
             result: CacheResult::NotAttempted,
             miss_reason: None,
         },
+        platform_binding: PlatformBinding::unavailable(
+            &inputs.planned_platform.platform_id,
+            PlatformRunnerEnvironment::Unknown,
+            PlatformUnavailableReason::ObservationNotRecorded,
+        )?,
         exit_code: 0,
         duration_ms: None,
         outputs: Vec::new(),

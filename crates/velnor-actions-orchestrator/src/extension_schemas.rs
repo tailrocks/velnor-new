@@ -55,12 +55,10 @@ pub fn task_kind_segment(task_id: &str) -> Option<&str> {
     Some(parts[parts.len() - 2])
 }
 
-/// Manifest-key segment of a `stack/<sid>/...` task ID, if well-formed.
+/// Unit-key segment of a `stack/<sid>/...` task ID, if well-formed.
 ///
-/// Keys nest (`stack/tofu/stacks/vpc/fmt/default` keys `stacks/vpc`),
-/// so the key is every segment between the stack ID and the trailing
-/// kind/configuration pair (a shard suffix strips first), mirroring
-/// the grammar's own parse. Internal obligations carry no key.
+/// Tofu root keys are encoded into one segment; Rust manifest keys may
+/// span segments. Internal obligations carry no key.
 #[must_use]
 pub fn task_key_segment(task_id: &str) -> Option<String> {
     let rest = task_id.strip_prefix("stack/")?;
@@ -121,16 +119,16 @@ mod tests {
     #[test]
     fn key_segment_returns_nested_manifest_keys() {
         assert_eq!(
-            task_key_segment("stack/tofu/root/validate/default"),
-            Some("root".to_owned())
+            task_key_segment("stack/tofu/dir-/validate/default"),
+            Some("dir-".to_owned())
         );
         assert_eq!(
-            task_key_segment("stack/tofu/stacks/vpc/fmt/default"),
-            Some("stacks/vpc".to_owned())
+            task_key_segment("stack/tofu/dir-737461636b732f767063/fmt/default"),
+            Some("dir-737461636b732f767063".to_owned())
         );
         assert_eq!(
-            task_key_segment("stack/tofu/stacks/a/init/default/shard-1-of-2"),
-            Some("stacks/a".to_owned())
+            task_key_segment("stack/tofu/dir-737461636b732f61/init/default/shard-1-of-2"),
+            Some("dir-737461636b732f61".to_owned())
         );
         assert_eq!(
             task_key_segment("stack/rust/a/b/clippy/default"),
@@ -166,9 +164,9 @@ mod tests {
             extension_schema_for_stack("tofu"),
             Some(TOFU_EXTENSION_SCHEMA)
         );
-        assert!(coverage_schema_known("stack/tofu/root/validate/default"));
+        assert!(coverage_schema_known("stack/tofu/dir-/validate/default"));
         assert!(coverage_schema_known(
-            "stack/tofu/stacks/a/init/default/shard-1-of-2"
+            "stack/tofu/dir-737461636b732f61/init/default/shard-1-of-2"
         ));
         assert!(reuse_eligible_for_schema(TOFU_EXTENSION_SCHEMA));
     }

@@ -33,6 +33,7 @@ fn package() -> PackageRecord {
         targets: vec![target("lib"), target("bin")],
         features: vec!["default".to_owned()],
         has_build_script: true,
+        v1_task_owner: velnor_actions_rust::VelnorV1TaskOwner::Project,
     }
 }
 

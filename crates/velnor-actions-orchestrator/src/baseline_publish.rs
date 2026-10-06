@@ -9,9 +9,8 @@
 //! Every gate fails closed with a `publish_refused:*` reason: wrong
 //! event, unprotected ref, unanchored repository, head or plan-event
 //! mismatch, unverifiable generator, malformed source commit, or an
-//! unproven reuse disposition. Covered obligations are skipped, never
-//! carried forward: this run executed no proof for them, and a carried
-//! proof without originating attestation fails validation downstream.
+//! unproven reuse disposition. Covered obligations carry only when the
+//! downloaded parent exactly binds the planner's revalidated identities.
 //! Before staging, the op self-checks the manifest through the same
 //! [`validate_provenance`](crate::cover_baseline::provenance_check::validate_provenance)
 //! consumers run, so publish and consume agree by construction.
@@ -34,6 +33,8 @@ use crate::request_event::{request_refs, workflow_event_for};
 pub const PUBLISH_OP: &str = "publish-baseline-v1";
 /// Staged baseline filename inside the run directory.
 pub(crate) const BASELINE_FILENAME: &str = "baseline.json";
+/// Separate output directory so publication never overwrites its parent.
+pub(crate) const PUBLISHED_BASELINE_DIR: &str = "published-baseline";
 
 /// `publish-baseline-v1` request: push refs plus protected-branch evidence.
 ///
@@ -51,6 +52,9 @@ struct PublishRequest {
     op: Option<String>,
     /// Triggering event; must be `push`.
     event: WorkflowEvent,
+    /// Push event's `before` commit, null only for a branch creation.
+    #[serde(default)]
+    base: Option<String>,
     /// Pushed head commit.
     head: String,
     /// Runner-owned repository slug (`owner/repo`) for provenance.
@@ -96,11 +100,12 @@ pub(crate) fn write_publish_request(
     let payload: serde_json::Value =
         serde_json::from_str(payload_json).map_err(|_| internal("malformed_event_payload"))?;
     let event = workflow_event_for(event_name, &payload)?;
-    let (_, head) = request_refs(event, &payload, github_sha)?;
+    let (base, head) = request_refs(event, &payload, github_sha)?;
     let request = serde_json::json!({
         "schema": SCHEMA,
         "op": PUBLISH_OP,
         "event": event,
+        "base": base,
         "head": head,
         "repository": repository.filter(|slug| !slug.is_empty()),
         "git_ref": nonempty(payload.get("ref").and_then(serde_json::Value::as_str)),
@@ -168,13 +173,16 @@ pub(crate) fn baseline_publish_to(
     publish_gate(&request)?;
     let plan = crate::task_report::load_plan(run_key, runner_temp)?;
     bind_plan(&request, &plan)?;
-    let manifest = publish_manifest(&request, &plan, run_id, run_attempt)?;
+    let parent = baseline_publish_lineage::load_parent_for_publish(&request, &plan, runner_temp)?;
+    let manifest = publish_manifest(&request, &plan, run_id, run_attempt, parent.as_ref())?;
     self_check(&request, &manifest)?;
     let bytes = canonical_json_bytes(&manifest).map_err(internal_contract)?;
-    let path = runner_temp
+    let output_dir = runner_temp
         .join("velnor")
         .join(run_key)
-        .join(BASELINE_FILENAME);
+        .join(PUBLISHED_BASELINE_DIR);
+    crate::exclusive_write::create_dir_no_symlink(runner_temp, &output_dir)?;
+    let path = output_dir.join(BASELINE_FILENAME);
     crate::exclusive_write::write_exclusive(&path, &bytes, "baseline")?;
     Ok(PublishOutputs {
         artifact_name: manifest.artifact_name,
@@ -220,7 +228,7 @@ fn publish_gate(request: &PublishRequest) -> Result<(), OrchestratorError> {
     let protected = request
         .default_branch
         .as_deref()
-        .filter(|branch| !branch.is_empty() && !branch.chars().any(char::is_whitespace))
+        .filter(|branch| velnor_actions_contract::is_valid_branch_name(branch))
         .map(|branch| format!("refs/heads/{branch}"));
     if protected.is_none() || request.git_ref.as_ref() != protected.as_ref() {
         return Err(internal("publish_refused:unprotected_ref"));
@@ -244,6 +252,9 @@ fn bind_plan(
     request: &PublishRequest,
     plan: &velnor_actions_contract::Plan,
 ) -> Result<(), OrchestratorError> {
+    if plan.base != request.base {
+        return Err(internal("publish_refused:base_mismatch"));
+    }
     if plan.head != request.head {
         return Err(internal("publish_refused:head_mismatch"));
     }
@@ -256,13 +267,14 @@ fn bind_plan(
 /// Build the trusted manifest over the plan's executed obligations.
 ///
 /// Compatibility derives from the plan alone so later lookups name
-/// this exact artifact; covered obligations are skipped (never
-/// carried), and any reuse disposition refuses outright.
+/// this exact artifact; covered obligations carry only from a validated
+/// parent, and any reuse disposition refuses outright.
 fn publish_manifest(
     request: &PublishRequest,
     plan: &velnor_actions_contract::Plan,
     run_id: u64,
     run_attempt: u64,
+    parent: Option<&BaselineManifest>,
 ) -> Result<BaselineManifest, OrchestratorError> {
     if is_unverifiable_generator_sha(&plan.generator.sha256) {
         return Err(internal("publish_refused:generator_unverifiable"));
@@ -277,12 +289,18 @@ fn publish_manifest(
                     input_digest: obligation.input_digest.clone(),
                     closure_digest: obligation.closure_digest.clone(),
                     proof_run_id: run_id,
+                    carried_from: None,
                     observed_run_id: run_id,
                     external_data: None,
                     proof: None,
                 });
             }
-            velnor_actions_contract::ObligationDecision::CoveredByTrustedBaseline => {}
+            velnor_actions_contract::ObligationDecision::CoveredByTrustedBaseline => {
+                let parent = parent.ok_or_else(|| internal("publish_refused:parent_missing"))?;
+                tasks.push(baseline_publish_lineage::carried_entry(
+                    obligation, parent, run_id,
+                )?);
+            }
             velnor_actions_contract::ObligationDecision::ReusedFromTaskCache => {
                 return Err(internal("publish_refused:unproven_reuse"));
             }
@@ -319,6 +337,7 @@ fn publish_manifest(
         artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
         artifact_name: name,
         tasks,
+        parent: parent.map(|manifest| Box::new(manifest.clone())),
         expires_at_unix: None,
     })
 }
@@ -360,3 +379,11 @@ fn self_check(
 #[cfg(test)]
 #[path = "baseline_publish_tests.rs"]
 mod baseline_publish_tests;
+
+#[path = "baseline_publish_lineage.rs"]
+mod baseline_publish_lineage;
+pub(crate) use baseline_publish_lineage::carry_candidate_fits;
+
+#[cfg(test)]
+#[path = "baseline_publish_branch_tests.rs"]
+mod baseline_publish_branch_tests;

@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::{FRESHNESS_WORKFLOW_PATH, ScheduleTrigger, Step, StepRole};
 
 use crate::{
-    RenderError, guard, marker,
+    MiseSetup, RenderError, guard, marker, mise_setup_step,
     render::RenderedFile,
     steps::{self, action_step, shell_step},
     yaml::{Yaml, render_yaml},
@@ -49,6 +49,10 @@ pub struct FreshnessSpec {
     pub runs_on: String,
     /// Pinned `actions/checkout` ref.
     pub checkout_uses: String,
+    /// Compiled, digest-verified Mise setup action.
+    pub mise_setup: MiseSetup,
+    /// Exact Rust toolchain installed and used by the freshness script.
+    pub rust_version: String,
     /// Exact generator version for the marker.
     pub generator_version: String,
 }
@@ -64,6 +68,10 @@ impl FreshnessSpec {
         marker::validate_version(&self.generator_version)?;
         guard::validate_runs_on(&self.runs_on)?;
         steps::validate_uses(&self.checkout_uses)?;
+        self.mise_setup.validate()?;
+        if !valid_rust_version(&self.rust_version) {
+            return Err(RenderError::BadCommand("bad_rust_version".to_owned()));
+        }
         if !self.checkout_uses.starts_with("actions/checkout@") {
             return Err(RenderError::BadActionRef(format!(
                 "not_checkout:{}",
@@ -72,6 +80,24 @@ impl FreshnessSpec {
         }
         Ok(())
     }
+}
+
+/// Accept one exact numeric Rust toolchain version, with no shell syntax.
+fn valid_rust_version(value: &str) -> bool {
+    let mut components = value.split('.');
+    let Some(major) = components.next() else {
+        return false;
+    };
+    let Some(minor) = components.next() else {
+        return false;
+    };
+    let Some(patch) = components.next() else {
+        return false;
+    };
+    components.next().is_none()
+        && [major, minor, patch]
+            .iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
 }
 
 /// Render the freshness workflow document from a validated spec.
@@ -90,17 +116,36 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
         ]),
     )?;
     checkout.role = Some(StepRole::Checkout);
+    let setup_mise = mise_setup_step(&spec.mise_setup)?;
+    let install_rust = shell_step(
+        "Install Rust toolchain",
+        vec![
+            "mise".to_owned(),
+            "--no-config".to_owned(),
+            "--no-env".to_owned(),
+            "--no-hooks".to_owned(),
+            "install".to_owned(),
+            format!("rust@{}", spec.rust_version),
+        ],
+        BTreeMap::new(),
+    )?;
     let probe = shell_step(
         "Check upstream freshness",
         vec![
+            "mise".to_owned(),
+            "--no-config".to_owned(),
+            "--no-env".to_owned(),
+            "--no-hooks".to_owned(),
+            "exec".to_owned(),
+            format!("rust@{}", spec.rust_version),
+            "--".to_owned(),
             "bash".to_owned(),
             FRESHNESS_SCRIPT.to_owned(),
             FRESHNESS_PROBE_FLAG.to_owned(),
         ],
         BTreeMap::new(),
     )?;
-    let document = freshness_document(spec, &checkout, &probe)?;
-    let document = crate::yaml::quote_run_values_in_yaml(document);
+    let document = freshness_document(spec, &checkout, &setup_mise, &install_rust, &probe)?;
     let text = marker::with_marker(&spec.generator_version, &render_yaml(&document))?;
     crate::workflow_size::check_workflow_size(FRESHNESS_WORKFLOW_PATH, &text)?;
     steps::scan_for_private_subcommands(&text)?;
@@ -114,10 +159,17 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
 fn freshness_document(
     spec: &FreshnessSpec,
     checkout: &Step,
+    setup_mise: &Step,
+    install_rust: &Step,
     probe: &Step,
 ) -> Result<Yaml, RenderError> {
     velnor_actions_contract::workflow::step_identity::validate_step_sequence(
-        &[checkout.clone(), probe.clone()],
+        &[
+            checkout.clone(),
+            setup_mise.clone(),
+            install_rust.clone(),
+            probe.clone(),
+        ],
         FRESHNESS_JOB_ID,
     )
     .map_err(RenderError::Contract)?;
@@ -139,6 +191,8 @@ fn freshness_document(
             "steps".to_owned(),
             Yaml::Seq(vec![
                 crate::steps_plain::plain_step_to_yaml(checkout)?,
+                crate::steps_plain::plain_step_to_yaml(setup_mise)?,
+                crate::steps_plain::plain_step_to_yaml(install_rust)?,
                 crate::steps_plain::plain_step_to_yaml(probe)?,
             ]),
         ),
@@ -173,125 +227,5 @@ fn read_only_permissions() -> Yaml {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use velnor_actions_contract::FRESHNESS_CRON_WEEKLY;
-
-    const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
-
-    fn spec() -> FreshnessSpec {
-        FreshnessSpec {
-            schedule: ScheduleTrigger {
-                cron: vec![FRESHNESS_CRON_WEEKLY.to_owned()],
-            },
-            runs_on: "ubuntu-26.04".to_owned(),
-            checkout_uses: CHECKOUT.to_owned(),
-            generator_version: "0.1.0".to_owned(),
-        }
-    }
-
-    #[test]
-    fn renders_schedule_only_read_only_probe() {
-        let file = render_freshness_workflow(&spec()).expect("render");
-        assert_eq!(file.path, ".github/workflows/freshness.yml");
-        let yaml = &file.bytes;
-        assert!(
-            yaml.starts_with("# Generated by Velnor Actions 0.1.0"),
-            "marker:\n{yaml}"
-        );
-        assert!(yaml.contains("cron: 0 6 * * 1"), "weekly trigger:\n{yaml}");
-        assert!(
-            yaml.contains("workflow_dispatch:"),
-            "manual re-run:\n{yaml}"
-        );
-        assert!(
-            !yaml.contains("pull_request") && !yaml.contains("push:"),
-            "schedule-only:\n{yaml}"
-        );
-        assert!(
-            yaml.matches("contents: read").count() >= 2,
-            "top-level plus job perms:\n{yaml}"
-        );
-        assert!(!yaml.contains("write"), "read-only:\n{yaml}");
-        assert!(!yaml.contains("secrets."), "no secrets:\n{yaml}");
-        assert!(
-            yaml.contains("uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"),
-            "exact pin:\n{yaml}"
-        );
-        assert!(
-            yaml.contains("persist-credentials: \"false\""),
-            "no credentials:\n{yaml}"
-        );
-        assert!(
-            yaml.contains("scripts/check-freshness.sh --check-upstream"),
-            "bounded probe:\n{yaml}"
-        );
-        assert!(
-            yaml.contains("timeout-minutes: 10"),
-            "explicit timeout:\n{yaml}"
-        );
-        assert!(
-            yaml.contains("group: freshness") && yaml.contains("cancel-in-progress: false"),
-            "serialize scheduled runs:\n{yaml}"
-        );
-    }
-
-    #[test]
-    fn rejects_bad_spec_scalars() {
-        let bad_cron = FreshnessSpec {
-            schedule: ScheduleTrigger {
-                cron: vec!["not-a-cron".to_owned()],
-            },
-            ..spec()
-        };
-        assert!(render_freshness_workflow(&bad_cron).is_err(), "bad cron");
-        let empty_cron = FreshnessSpec {
-            schedule: ScheduleTrigger { cron: Vec::new() },
-            ..spec()
-        };
-        assert!(
-            render_freshness_workflow(&empty_cron).is_err(),
-            "empty cron"
-        );
-        for runs_on in ["ubuntu-latest", "ubuntu-26.04 ${{ x }}", ""] {
-            let bad = FreshnessSpec {
-                runs_on: runs_on.to_owned(),
-                ..spec()
-            };
-            assert!(
-                render_freshness_workflow(&bad).is_err(),
-                "bad label {runs_on}"
-            );
-        }
-        for uses in [
-            "actions/checkout@v7.0.1",
-            "actions/checkout@short",
-            "other/x@3d3c42e5aac5ba805825da76410c181273ba90b1",
-        ] {
-            let bad = FreshnessSpec {
-                checkout_uses: uses.to_owned(),
-                ..spec()
-            };
-            assert!(
-                render_freshness_workflow(&bad).is_err(),
-                "bad checkout {uses}"
-            );
-        }
-    }
-
-    #[test]
-    fn rejects_internal_steps_fail_closed() {
-        let internal = Step {
-            name: "Plan".to_owned(),
-            id: None,
-            role: None,
-            condition: None,
-            kind: velnor_actions_contract::StepKind::Internal {
-                operation: "plan-v1".to_owned(),
-                env: std::collections::BTreeMap::new(),
-            },
-        };
-        let err = crate::steps_plain::plain_step_to_yaml(&internal).expect_err("rejected");
-        assert!(err.to_string().contains("internal_op_rejected"), "{err}");
-    }
-}
+#[path = "freshness_tests.rs"]
+mod tests;

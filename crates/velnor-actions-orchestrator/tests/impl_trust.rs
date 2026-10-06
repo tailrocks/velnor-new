@@ -91,7 +91,9 @@ fn manifest_for(plan: &Plan, base: &str) -> serde_json::Value {
             serde_json::json!({
                 "task_id": ob.task_id, "task_digest": ob.task_digest,
                 "input_digest": ob.input_digest, "closure_digest": ob.closure_digest,
+                "carried_from": null,
                 "proof_run_id": 7, "observed_run_id": 7,
+                "carried_from": serde_json::Value::Null,
             })
         })
         .collect();
@@ -102,7 +104,7 @@ fn manifest_for(plan: &Plan, base: &str) -> serde_json::Value {
         "run_id": 7, "run_attempt": 1, "final_status": "passed",
         "generator_version": plan.generator.version, "generator_sha256": plan.generator.sha256,
         "compatibility_id": compat, "artifact_id": baseline_artifact_numeric_id(&name),
-        "artifact_name": name, "tasks": tasks,
+        "artifact_name": name, "tasks": tasks, "parent": serde_json::Value::Null,
     })
 }
 

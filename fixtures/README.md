@@ -31,6 +31,12 @@ Refactor-behavior corpus consumed by
 target/SHA). Regenerate only at a known-good commit with
 `VELNOR_UPDATE_GOLDENS=1`.
 
+Consumer-generation harnesses explicitly install
+`consumer-release-manifest.json` into temporary repositories. It is a
+deterministic schema fixture with placeholder digest/commit values, not a
+release record or qualification evidence. Missing manifests are tested as
+an error by the actual CLI.
+
 | Case | Intent |
 |---|---|
 | minimal-cargo/ | single crate, cargo-only baseline |

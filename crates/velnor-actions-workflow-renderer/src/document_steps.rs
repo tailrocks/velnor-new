@@ -2,9 +2,6 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::step_identity::{
-    StepRole, TOFU_PROVIDER_ADMISSION_USES, TOOL_SEED_USES,
-};
 use velnor_actions_contract::{Step, StepKind};
 
 use crate::{
@@ -20,17 +17,11 @@ use crate::{
 /// An absent plan artifact (failed plan) must still reach the merge
 /// verdict instead of failing the job at the download step.
 fn is_verdict_download(step: &Step) -> bool {
-    matches!(
-        &step.kind,
-        StepKind::Action { uses, .. } if uses == steps::DOWNLOAD_ARTIFACT_USES
-    ) && step.role == Some(StepRole::DownloadPlan)
-}
-
-/// Emit a step's explicitly declared output id.
-fn push_step_id(entries: &mut Vec<(String, Yaml)>, step: &Step) {
-    if let Some(id) = step.id {
-        entries.push(("id".to_owned(), Yaml::str(id.as_str().to_owned())));
-    }
+    step.role == Some(velnor_actions_contract::StepRole::DownloadPlan)
+        && matches!(
+            &step.kind,
+            StepKind::Action { uses, .. } if uses == steps::DOWNLOAD_ARTIFACT_USES
+        )
 }
 
 /// Env for one internal step: op plus request file, authorized reads carry auth.
@@ -72,6 +63,9 @@ fn internal_env(
         env.push(("GH_REPO".to_owned(), Yaml::str("${{ github.repository }}")));
         env.push(("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")));
     }
+    if op == steps::RESOLVE_QUALIFICATION_OPERATION {
+        env.push(("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")));
+    }
     env.push((INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())));
     for (key, value) in needs_envs {
         env.push((key.clone(), Yaml::str(value.clone())));
@@ -108,8 +102,29 @@ fn action_step_to_yaml(
     with: &BTreeMap<String, String>,
     env: &BTreeMap<String, String>,
     job_env: &BTreeMap<String, String>,
+    runs_on: Option<&str>,
 ) -> Result<Yaml, RenderError> {
-    steps::validate_uses(uses)?;
+    let runtime_identity = step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity)
+        || ["ubuntu-22.04", "ubuntu-24.04", "ubuntu-26.04"]
+            .iter()
+            .any(|lane| {
+                crate::cache_p08::runtime_identity_action_uses(lane) == Some(uses)
+                    || crate::cache_p08::runtime_prelude_action_uses(lane) == Some(uses)
+            });
+    if runtime_identity {
+        let Some(lane) = runs_on else {
+            return Err(RenderError::InvalidWorkflow(
+                "tools_cache_identity_missing_runner".to_owned(),
+            ));
+        };
+        crate::cache_p08::validate_runtime_identity_action(step, uses, lane, with, env)?;
+    } else if uses == crate::tool_seed::TOOL_SEED_USES {
+        crate::tool_seed::validate_action_call(step, uses, with, env)?;
+    } else if uses == crate::cache_steps::TOOLS_RESTORE_USES {
+        crate::cache_steps::validate_tools_restore_call(step)?;
+    } else {
+        steps::validate_uses(uses)?;
+    }
     for (key, value) in with {
         crate::expressions::check_with_key(key)?;
         crate::expressions::check_with_value(key, value)?;
@@ -118,7 +133,7 @@ fn action_step_to_yaml(
     }
     commands::validate_env(env)?;
     let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-    push_step_id(&mut entries, step);
+    crate::step_ids::push_step_id(&mut entries, step);
     if let Some(condition) = &step.condition {
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
@@ -131,29 +146,24 @@ fn action_step_to_yaml(
     if job_id == FINAL_JOB_ID && is_verdict_download(step) {
         entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
     }
-    if uses.starts_with(TOOL_SEED_USES) {
-        if uses != TOOL_SEED_USES {
-            return Err(RenderError::InvalidWorkflow(
-                "tool_seed_bad_action_ref".to_owned(),
-            ));
-        }
-        crate::tool_seed::validate_seed_action(step, None)?;
-    }
-    let uses_yaml = if matches!(uses, TOOL_SEED_USES | TOFU_PROVIDER_ADMISSION_USES)
+    let uses_value = if runtime_identity
+        || uses == crate::tool_seed::TOOL_SEED_USES
+        || uses == crate::cache_steps::TOOLS_RESTORE_USES
+        || uses == crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
         || crate::action_ref::is_generated_provider_prelude(uses)
     {
         Yaml::annotated(uses, "zizmor: ignore[self-repository]")
     } else {
         Yaml::str(uses.to_owned())
     };
-    entries.push(("uses".to_owned(), uses_yaml));
+    entries.push(("uses".to_owned(), uses_value));
     if !with.is_empty() {
         entries.push(("with".to_owned(), string_map_yaml(with)));
     }
     let filtered_env: BTreeMap<String, String> = env
         .iter()
-        .filter(|(k, v)| job_env.get(*k).map(String::as_str) != Some(v.as_str()))
-        .map(|(k, v)| (k.clone(), v.clone()))
+        .filter(|(key, value)| job_env.get(*key).map(String::as_str) != Some(value.as_str()))
+        .map(|(key, value)| (key.clone(), value.clone()))
         .collect();
     if !filtered_env.is_empty() {
         entries.push(("env".to_owned(), string_map_yaml(&filtered_env)));
@@ -178,26 +188,37 @@ pub(crate) fn step_to_yaml(
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
     composite: bool,
-    job_env: &BTreeMap<String, String>,
-    actions_read: bool,
+    step_context: &crate::document_lanes::JobStepContext<'_>,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&step.name)?;
     match &step.kind {
-        StepKind::Action { uses, with, env } => {
-            action_step_to_yaml(job_id, step, uses, with, env, job_env)
-        }
+        StepKind::Action { uses, with, env } => action_step_to_yaml(
+            job_id,
+            step,
+            uses,
+            with,
+            env,
+            step_context.job_env,
+            step_context.runs_on,
+        ),
         StepKind::Shell { run, env } => {
             commands::validate_command_argv(run)?;
-            commands::validate_env(env)?;
+            if composite {
+                commands::validate_composite_env(env)?;
+            } else {
+                commands::validate_env(env)?;
+            }
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-            push_step_id(&mut entries, step);
+            crate::step_ids::push_step_id(&mut entries, step);
             if let Some(condition) = &step.condition {
                 steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
             }
             let filtered_env: BTreeMap<String, String> = env
                 .iter()
-                .filter(|(k, v)| job_env.get(*k).map(String::as_str) != Some(v.as_str()))
+                .filter(|(k, v)| {
+                    step_context.job_env.get(*k).map(String::as_str) != Some(v.as_str())
+                })
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
             if !filtered_env.is_empty() {
@@ -210,41 +231,67 @@ pub(crate) fn step_to_yaml(
             ));
             Ok(Yaml::Map(entries))
         }
-        StepKind::Internal {
-            operation,
-            env: step_env,
-        } => {
-            let (op, target) = steps::split_internal_operation(operation)?;
-            if op == steps::FETCH_OPERATION && !actions_read {
-                return Err(RenderError::InvalidWorkflow(
-                    "report_fetch_requires_actions_read".to_owned(),
-                ));
-            }
-            let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-            push_step_id(&mut entries, step);
-            if let Some(condition) = &step.condition {
-                steps::scan_for_private_subcommands(condition)?;
-                entries.push(("if".to_owned(), Yaml::str(condition.clone())));
-            }
-            // No `continue-on-error` on the fetch step (F5): the helper
-            // retries each leg bounded and still exits success on
-            // per-leg failure, so the merge judges honestly; only hard
-            // environment failures fail the job, unmasked.
-            let channel = if job_id == FINAL_JOB_ID && target == steps::MERGE_OPERATION {
-                needs_envs
-            } else {
-                &[]
-            };
-            entries.push((
-                "env".to_owned(),
-                internal_env(op, target, ctx, channel, job_env, step_env, actions_read)?,
-            ));
-            push_composite_shell(&mut entries, composite);
-            entries.push((
-                "run".to_owned(),
-                Yaml::str(commands::quote_run_arg(&ctx.staged_binary)),
-            ));
-            Ok(Yaml::Map(entries))
+        StepKind::Internal { .. } => {
+            internal_step_to_yaml(job_id, step, ctx, needs_envs, composite, step_context)
         }
     }
+}
+
+/// Render one internal planner step. The operation travels in env, never argv.
+fn internal_step_to_yaml(
+    job_id: &str,
+    step: &Step,
+    ctx: &RenderContext,
+    needs_envs: &[(String, String)],
+    composite: bool,
+    step_context: &crate::document_lanes::JobStepContext<'_>,
+) -> Result<Yaml, RenderError> {
+    let StepKind::Internal {
+        operation,
+        env: step_env,
+    } = &step.kind
+    else {
+        return Err(RenderError::InvalidWorkflow(
+            "internal_step_required".to_owned(),
+        ));
+    };
+    let (op, target) = steps::split_internal_operation(operation)?;
+    if op == steps::FETCH_OPERATION && !step_context.actions_read {
+        return Err(RenderError::InvalidWorkflow(
+            "report_fetch_requires_actions_read".to_owned(),
+        ));
+    }
+    let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+    if let Some(condition) = &step.condition {
+        steps::scan_for_private_subcommands(condition)?;
+        entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+    }
+    // No `continue-on-error` on the fetch step (F5): the helper
+    // retries each leg bounded and still exits success on
+    // per-leg failure, so the merge judges honestly; only hard
+    // environment failures fail the job, unmasked.
+    let channel = if job_id == FINAL_JOB_ID && target == steps::MERGE_OPERATION {
+        needs_envs
+    } else {
+        &[]
+    };
+    crate::step_ids::push_step_id(&mut entries, step);
+    entries.push((
+        "env".to_owned(),
+        internal_env(
+            op,
+            target,
+            ctx,
+            channel,
+            step_context.job_env,
+            step_env,
+            step_context.actions_read,
+        )?,
+    ));
+    push_composite_shell(&mut entries, composite);
+    entries.push((
+        "run".to_owned(),
+        Yaml::str(commands::quote_run_arg(&ctx.staged_binary)?),
+    ));
+    Ok(Yaml::Map(entries))
 }

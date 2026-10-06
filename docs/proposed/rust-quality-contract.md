@@ -33,6 +33,7 @@ CODEOWNERS                  # repo root; Velnor never emits, reads, or validates
 .velnor/config.toml
 .velnor/version-policy.toml
 crates/
+  velnor-archive-guard/       # repository-only archive security utility
   velnor-actions-contract/
   velnor-actions-rust/
   velnor-actions-mise/
@@ -40,6 +41,7 @@ crates/
   velnor-actions-workflow-renderer/
   velnor-actions-orchestrator/
   velnor-actions-cli/
+  velnor-actions-freshness/   # repository-only freshness maintenance
   velnor-actions-tofu/
 # Optional, repository-owned, read-only Velnor inputs:
 rust-toolchain.toml
@@ -47,28 +49,23 @@ mise.toml
 mise.lock
 ```
 
-All first-party Rust packages MUST be under `crates/`. The root manifest MUST
-be a virtual workspace with exactly the eight product package names listed in
-the table below. Cargo metadata is authoritative for package membership and
-dependency relationships. V1 does not add a custom linter to reject package
-renames or validate the architecture dependency matrix; those decisions are reviewed only through the §5
-mechanism allowlist (committed policy tests, generic Alint, Clippy, human-reviewed snapshots). Rust/Cargo-specific symbols, Cargo
-metadata, and `rust-toolchain.toml` inspection are restricted to
-`velnor-actions-rust`; Mise syntax, environment, `mise.toml`/`mise.lock`
-inspection, and task metadata are restricted to `velnor-actions-mise`; actionlint
-metadata/configuration belongs to `velnor-actions-actionlint`. Alint enforces
-only its configured generic file/path, required-file, and line-count rules.
-The CLI package MUST
-declare binary `velnor-actions`, the only target name without the
-package-purpose suffix. Non-Rust directories MAY remain in their own
-conventional locations.
+All first-party Rust packages MUST be under `crates/`; root MUST be virtual with
+exactly the eight product package names below plus repository-only member `velnor-actions-freshness`
+and utility `velnor-archive-guard`. Cargo metadata defines membership; V1 adds
+no custom architecture linter; §5, Alint, Clippy, tests, and review govern boundaries.
+Within V1 product behavior, Rust/Cargo metadata and `rust-toolchain.toml` belong to `velnor-actions-rust`; Mise syntax, environment, and task metadata belong to `velnor-actions-mise`; actionlint metadata belongs to `velnor-actions-actionlint`.
+Freshness may inspect Velnor-owned Cargo/Mise sources for private maintenance;
+results MUST NOT feed V1 planning. Scripts provision archive guard. Neither
+helper enters V1 Rust task derivation or the product crate matrix. The
+canonical Velnor repository uses the existing named-Mise-check contract to
+run both helper packages' Rust test suites as one required
+`maintenance-helpers` repository-quality check; ordinary ConsumerV1
+configurations do not declare this repository-owned check. Alint enforces only configured
+generic file/path, required-file, and line-count rules.
+The CLI package MUST declare binary `velnor-actions`, the only target name without the package-purpose suffix. Non-Rust directories MAY remain in their own conventional locations.
 
-The eight V1 crates have fixed boundaries. Every V1 Cargo package MUST use the
-`velnor-actions-<purpose>` namespace. Generic names such as `velnor-model`,
-`velnor-core`, `velnor-rust`, `velnor-common`, and `velnor-utils` are forbidden. The
-`velnor-actions` binary is owned by package `velnor-actions-cli`. Future
-stacks use dedicated names such as `velnor-actions-node`; they remain
-independent of other stack crates.
+The eight V1 product crates have fixed boundaries; the two repository-only members are separately labeled in the table. Every V1 Cargo package MUST use the `velnor-actions-<purpose>` namespace. Generic names such as `velnor-model`, `velnor-core`, `velnor-rust`, `velnor-common`, and `velnor-utils` are forbidden.
+The `velnor-actions` binary is owned by package `velnor-actions-cli`. Future stacks use dedicated names such as `velnor-actions-node`; they remain independent of other stack crates.
 
 | Crate | MUST own | MUST NOT own |
 | --- | --- | --- |
@@ -80,6 +77,24 @@ independent of other stack crates.
 | `velnor-actions-orchestrator` | Composition, obligation selection, cache evidence, scheduling, generation coordination, typed process-request coordination | Parsing Cargo/Mise files, direct YAML templates, CLI parsing, OS process details, process creation |
 | `velnor-actions-cli` | Clap parser, typed dispatch, concise deterministic human plan renderer, generation output, and exit-code formatting; emits binary `velnor-actions` | Orchestration algorithms or Rust, Mise, and renderer domain rules |
 | `velnor-actions-tofu` | All OpenToFu/HCL discovery, root/module interpretation, task payloads, affected selection, identity extensions | Rust/Cargo, Mise execution, workflow YAML, process details, non-tofu stacks |
+| `velnor-actions-freshness` (repository-only support) | Read-only repository freshness/pin/lock/advisory checks and bounded bootstrap metadata operations behind the existing CLI private gate | V1 planning, task graph or selection, runner behavior, product evidence claims, public commands, or workflow generation |
+| `velnor-archive-guard` (repository-only security utility) | Bounded validation of owned candidate and Cargo package archive bytes through its explicit modes | V1 stack behavior, task derivation, workflow generation, or product dependencies |
+
+Both repository-only members are outside the eight-product V1 task graph. The
+CLI private gate consumes freshness at runtime, repository scripts provision
+archive guard, and the orchestrator does not link either helper as a library.
+The canonical repository's `maintenance-helpers` named Mise check runs their
+package test suites independently of Rust task derivation and the product
+matrix; this repository's VelnorRepositoryV1 configuration makes it required.
+
+Each repository-only package declares its task owner with Cargo package metadata:
+
+```toml
+[package.metadata.velnor]
+v1-task-owner = "repository-maintenance"
+```
+
+The Rust metadata adapter maps that value to a typed owner and rejects unknown owner values. Under `VelnorRepositoryV1`, the orchestrator omits only root-workspace packages with this owner from V1 task derivation and feature union; `prepare` verifies the canonical origin first. Under `ConsumerV1`, the same metadata does not exclude a same-named project. Package names and paths alone never grant this exclusion.
 
 Hard invariants 10–12 (spec §3.3) are normative throughout. 10 — One owner per
 domain rule per the table above; extend an existing owner before making a new
@@ -117,7 +132,7 @@ snapshot is Rust 1.98.1 with MSRV 1.98. Never use a placeholder MSRV.
 
 ```toml
 [workspace]
-members = ["crates/velnor-actions-contract", "crates/velnor-actions-rust", "crates/velnor-actions-mise", "crates/velnor-actions-actionlint", "crates/velnor-actions-workflow-renderer", "crates/velnor-actions-orchestrator", "crates/velnor-actions-cli", "crates/velnor-actions-tofu"]
+members = ["crates/velnor-actions-contract", "crates/velnor-archive-guard", "crates/velnor-actions-rust", "crates/velnor-actions-mise", "crates/velnor-actions-actionlint", "crates/velnor-actions-workflow-renderer", "crates/velnor-actions-orchestrator", "crates/velnor-actions-cli", "crates/velnor-actions-freshness", "crates/velnor-actions-tofu"]
 resolver = "3"
 
 [workspace.package]
@@ -340,56 +355,6 @@ supports them.
 
 ## 9. Required verification
 
-If structure blocks a clean change, land the smallest
-behavior-preserving refactor first (verified with golden parity and
-committed), preserving error outcomes, ordering, defaults, serialization,
-IDs, hashes, and process behavior; the behavior change gets its own commit
-and tests. A red baseline is reproduced and classified first, never waived.
-
-Mise MUST expose these focused task templates; each invocation MUST target one
-package/configuration and preserve the real exit status. `dependencies` is
-repository-wide because it inspects manifests without compiling every crate.
-Velnor's repository policy runs Alint in its own job; ordinary consumer CI
-does not require it. The generated Velnor CI MUST use one matrix
-entry per selected crate as specified in the workflow contract; it MUST NOT
-replace those entries with workspace-wide Clippy or test runs.
-
-The following are logical task definitions, not shell command templates.
-`velnor-actions-mise` emits and executes them through pinned Mise. Exact
-executable and argument vectors for generated Rust tasks are defined by the
-[task execution contract](task-execution-contract.md); each task uses the
-workspace's detected Cargo or MBX compile driver and Cargo-test or Nextest test
-runner. Generated workflow YAML does not invoke Rust commands outside Mise.
-
-```text
-fmt-check          Formatting validation once for the selected source tree
-dependencies       Dependency policy and unused direct dependency checks
-actionlint         Generated workflow syntax validation
-zizmor             Generated workflow security validation
-clippy <pkg>       Configured Clippy validation for one package
-test-build <pkg>   Build once for one package when selected runner needs an archive
-test <pkg>         Run Cargo test or the prepared Nextest configuration
-doctest <pkg>      Run documentation tests for one package
-doc <pkg>          Build package documentation with warnings denied
-msrv <pkg>         Check one package on the exact declared minimum Rust version
-```
-
-Every command above runs through Mise. Rust compiler invocations pass through
-MBX only for workspaces whose detected profile selects it. A full-workspace compile/test MAY run as an
-explicit release or diagnostic audit, but MUST NOT be the default PR task.
-
-The default feature/target matrix MUST be explicit. Do not use `--all-features`
-as a substitute for a supported matrix. `cargo-hack` MAY enumerate feature
-combinations in an isolated checkout. Each product crate MUST be checked on
-MSRV in the toolchain-update qualification workflow using the Mise-managed
-tool version equal to workspace `rust-version`; it MUST use `--locked`. Action workflows MUST also pass `actionlint`
-and `zizmor`, use full commit-SHA pins, least-privilege permissions, and avoid
-privileged execution of untrusted pull-request code.
-
-Risk-triggered verification MUST add `cargo-mutants` for important behavior,
-`cargo-fuzz` for untrusted parsers, Miri for unsafe/low-level code, Loom for
-custom synchronization, and `cargo-semver-checks` for published APIs. Coverage
-does not replace behavioral or mutation evidence. Retries are disabled by
-default; a retry requires a reviewed reason.
-
-Agent instructions, performance measurements, acceptance budgets, and readiness evidence are specified in the [agent and performance contract](agent-and-performance-contract.md).
+The binding task templates, test scope, workflow checks, and risk-triggered
+verification requirements are specified in the [Rust verification
+contract](rust-verification-contract.md).

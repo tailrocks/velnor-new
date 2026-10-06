@@ -1,19 +1,21 @@
 use super::*;
 
 #[test]
-fn cargo_only_preseed_replaces_registry_cache_and_uses_native_helper_owner() {
+fn cargo_only_preseed_uses_exact_sources_and_native_helper_owners() {
     use velnor_actions_contract::StepRole;
     use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
     let roots = [String::new()];
-    let mut plan = preseed_fixture(false, &roots);
-    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0", &roots).expect("attach");
+    let mut plan = preseed_fixture(&roots);
+    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").expect("attach");
     let steps = &plan.ir.jobs["plan"].steps;
     let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
     assert!(
-        !steps
-            .iter()
-            .any(|step| step.role == Some(StepRole::CargoRegistryRestore)),
-        "the overlapping registry cache is replaced: {names:?}"
+        steps.iter().all(|step| !matches!(
+            &step.kind,
+            velnor_actions_contract::StepKind::Action { uses, .. }
+                if uses.starts_with("Swatinem/rust-cache@")
+        )),
+        "retired action has no producer: {names:?}"
     );
     let role_at = |role| {
         steps
@@ -43,7 +45,15 @@ fn cargo_only_preseed_replaces_registry_cache_and_uses_native_helper_owner() {
             .filter(|step| step.role == Some(StepRole::MbxCache))
             .count(),
         1,
-        "the preseed helper installs MBX once"
+        "the native action is the only MBX owner"
+    );
+    assert!(
+        steps.iter().all(|step| !matches!(
+            &step.kind,
+            velnor_actions_contract::StepKind::Shell { run, .. }
+                if run.iter().any(|argument| argument == "mr-boxington@1.21.1")
+        )),
+        "the pre-seed lane must not install action-owned MBX through Mise"
     );
     assert_owned_homes(steps, StepRole::PreseedBuild, PRESEED_BUILD_NAME);
     assert_owned_homes(steps, StepRole::PreseedVerifyBuild, PRESEED_VERIFY_NAME);

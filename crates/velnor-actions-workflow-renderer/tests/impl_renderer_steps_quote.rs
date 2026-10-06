@@ -1,15 +1,12 @@
 //! Run-string quoting and join cases (split from step templates).
 use std::collections::BTreeMap;
+use std::process::Command;
 use velnor_actions_contract::{
     Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr, WorkflowPolicy,
 };
-use velnor_actions_workflow_renderer::steps::{
-    has_bare_env_expansion, quote_env_path_for_run, quote_run_line_env_paths,
-};
 use velnor_actions_workflow_renderer::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, RenderError, STAGED_BINARY_PREFIX,
-    checkout_step, join_argv_for_run, plan_step, quote_run_arg, quote_scalar, render_workflow_ir,
-    shell_step,
+    checkout_step, join_argv_for_run, plan_step, quote_run_arg, render_workflow_ir, shell_step,
 };
 
 fn pin(name: &str) -> String {
@@ -50,43 +47,40 @@ fn shell_step_joins_fixed_argv_with_quoting() -> Result<(), RenderError> {
 }
 
 #[test]
-fn run_quoting_preserves_runner_expansion() {
+fn run_quoting_preserves_runner_expansion() -> Result<(), RenderError> {
     assert_eq!(
-        quote_run_arg("$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0"),
-        "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0"
+        quote_run_arg("$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0")?,
+        "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.0'"
     );
     assert_eq!(
-        quote_run_arg("$RUNNER_TEMP/my dir/tool"),
-        "$RUNNER_TEMP'/my dir/tool'"
+        quote_run_arg("$RUNNER_TEMP/my dir/tool")?,
+        "\"$RUNNER_TEMP\"'/my dir/tool'"
     );
     assert_eq!(
-        quote_run_arg("${{ github.run_id }}"),
+        quote_run_arg("${{ github.run_id }}")?,
         "${{ github.run_id }}"
     );
-    assert_eq!(quote_run_arg("$HOME"), "$HOME");
-    assert_eq!(quote_run_arg("plain"), "plain");
-    assert_eq!(quote_run_arg("with space"), "'with space'");
-    assert_eq!(quote_run_arg("it's"), "'it''\\'''s'");
+    assert!(quote_run_arg("${{ github.run_id }").is_err());
+    assert_eq!(quote_run_arg("$HOME")?, "\"$HOME\"");
+    assert_eq!(quote_run_arg("plain")?, "plain");
+    assert_eq!(quote_run_arg("with space")?, "'with space'");
+    assert_eq!(quote_run_arg("it's")?, "'it''\\'''s'");
+    Ok(())
 }
 
 #[test]
-fn inline_shell_scripts_quote_whole_for_inner_expansion() {
-    let line = join_argv_for_run(&argv(&["sh", "-c", "read sha rest < f && echo \"$sha\""]));
-    assert_eq!(
-        line.ok().as_deref(),
-        Some("sh -c 'read sha rest < f && echo \"$sha\"'")
-    );
-    let quotes = join_argv_for_run(&argv(&["sh", "-c", "cut -d' ' -f1"]));
-    assert_eq!(
-        quotes.ok().as_deref(),
-        Some("sh -c 'cut -d'\\'' '\\'' -f1'")
-    );
-    let direct = join_argv_for_run(&argv(&["mise", "exec", "--", "cargo", "test"]));
-    assert_eq!(direct.ok().as_deref(), Some("mise exec -- cargo test"));
+fn inline_shell_scripts_quote_whole_for_inner_expansion() -> Result<(), RenderError> {
+    let line = join_argv_for_run(&argv(&["sh", "-c", "read sha rest < f && echo \"$sha\""]))?;
+    assert_eq!(line, "sh -c 'read sha rest < f && echo \"$sha\"'");
+    let quotes = join_argv_for_run(&argv(&["sh", "-c", "cut -d' ' -f1"]))?;
+    assert_eq!(quotes, "sh -c 'cut -d'\\'' '\\'' -f1'");
+    let direct = join_argv_for_run(&argv(&["mise", "exec", "--", "cargo", "test"]))?;
+    assert_eq!(direct, "mise exec -- cargo test");
+    Ok(())
 }
 
 #[test]
-fn unset_wrapped_shell_still_quotes_script_whole() {
+fn unset_wrapped_shell_still_quotes_script_whole() -> Result<(), Box<dyn std::error::Error>> {
     use velnor_actions_workflow_renderer::toolchain_env::{
         CREDENTIAL_UNSET_VARS, with_env_unset_argv,
     };
@@ -102,83 +96,87 @@ fn unset_wrapped_shell_still_quotes_script_whole() {
         prefix.join(" ")
     );
     assert_eq!(line, want);
-    // A foreign `-u` pair stops the prefix: no script position, so
-    // the payload quotes as an ordinary arg (`$x` unquoted) instead of
-    // a script (`$x` inside single quotes).
+    assert_eq!(shell_argv(&line, None, "/tmp/Home Space")?, wrapped);
+    // An arbitrary `env -u` wrapper still needs to preserve the script
+    // argument for the inner shell.
     let foreign = join_argv_for_run(&argv(&["env", "-u", "FOO", "sh", "-c", "echo $x"]));
-    assert_eq!(foreign.ok().as_deref(), Some("env -u FOO sh -c 'echo '$x"));
+    let foreign = foreign?;
+    assert_eq!(foreign, "env -u FOO sh -c 'echo $x'");
+    assert_eq!(
+        shell_argv(&foreign, None, "/tmp/Home Space")?,
+        argv(&["env", "-u", "FOO", "sh", "-c", "echo $x"])
+    );
+    Ok(())
 }
 
 #[test]
-fn env_paths_quote_for_run_without_word_splitting() {
-    let staged = format!("{STAGED_BINARY_PREFIX}0.1.0");
-    let quoted = quote_env_path_for_run(&staged);
-    assert_eq!(quoted, "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"");
-    assert_eq!(quote_env_path_for_run(&quoted), quoted);
-    assert_eq!(quote_env_path_for_run(&staged), quoted);
-    assert_eq!(quote_env_path_for_run("cargo"), "cargo");
-    assert_eq!(
-        quote_env_path_for_run("${{ github.run_id }}"),
-        "${{ github.run_id }}"
-    );
-    assert_eq!(
-        quote_env_path_for_run("${RUNNER_TEMP}/tool"),
-        "\"${RUNNER_TEMP}/tool\""
-    );
-}
-
-#[test]
-fn requote_leaves_quoted_words_untouched() {
-    let bare = "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0";
-    assert_eq!(
-        quote_run_line_env_paths(bare),
-        "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\""
-    );
-    let mixed = "sh -c 'read sha rest < f && printf \"%s\" \"$sha\"' $RUNNER_TEMP/x";
-    assert_eq!(
-        quote_run_line_env_paths(mixed),
-        "sh -c 'read sha rest < f && printf \"%s\" \"$sha\"' \"$RUNNER_TEMP/x\""
-    );
-    let script = "sh -c 'mkdir '$RUNNER_TEMP'/x && read sha rest'";
-    assert_eq!(quote_run_line_env_paths(script), script);
-}
-
-#[test]
-fn emitted_run_lines_carry_no_bare_env_expansion() {
-    let staged = format!("{STAGED_BINARY_PREFIX}0.1.0");
-    let run_value = quote_env_path_for_run(&staged);
-    assert!(!has_bare_env_expansion(&run_value));
-    assert!(has_bare_env_expansion(&staged));
-    assert!(has_bare_env_expansion("run: $RUNNER_TEMP/x"));
-    assert!(has_bare_env_expansion("run: ${RUNNER_TEMP}/x"));
-    assert!(!has_bare_env_expansion("run: \"$RUNNER_TEMP/x\""));
-    assert!(!has_bare_env_expansion("run: ${{ github.run_id }}"));
-    assert!(!has_bare_env_expansion("run: 'literal $HOME stays put'"));
-    let yaml_scalar = quote_scalar(&run_value);
-    assert_eq!(
-        yaml_scalar,
-        "\"\\\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\\\"\""
-    );
-    assert_eq!(unescape_yaml_double(&yaml_scalar), Some(run_value));
-}
-
-/// Minimal `"`-scalar decoder proving the YAML round-trip.
-fn unescape_yaml_double(scalar: &str) -> Option<String> {
-    let inner = scalar.strip_prefix('"')?.strip_suffix('"')?;
-    let mut out = String::new();
-    let mut chars = inner.chars();
-    while let Some(ch) = chars.next() {
-        if ch == '\\' {
-            match chars.next()? {
-                '"' => out.push('"'),
-                '\\' => out.push('\\'),
-                _ => return None,
-            }
-        } else {
-            out.push(ch);
-        }
+fn typed_argv_quotes_expansions_before_rendering() -> Result<(), Box<dyn std::error::Error>> {
+    let cases = [
+        ("$RUNNER_TEMP/my dir/path", "/tmp/Runner Space/my dir/path"),
+        (
+            r"escaped\ $RUNNER_TEMP/path",
+            r"escaped\ /tmp/Runner Space/path",
+        ),
+        (
+            "quoted\"$RUNNER_TEMP/path",
+            "quoted\"/tmp/Runner Space/path",
+        ),
+        (
+            r"backslash\\$RUNNER_TEMP/path",
+            r"backslash\\/tmp/Runner Space/path",
+        ),
+    ];
+    for (argument, expected) in cases {
+        let joined = join_argv_for_run(&argv(&["tool", argument]))?;
+        assert_eq!(
+            shell_argv(&joined, Some("/tmp/Runner Space"), "/tmp/Home Space")?,
+            vec!["tool", expected],
+            "argument={argument:?}, joined={joined:?}"
+        );
     }
-    Some(out)
+    Ok(())
+}
+
+#[test]
+fn inline_shell_script_bytes_remain_unchanged_for_the_inner_shell()
+-> Result<(), Box<dyn std::error::Error>> {
+    let script = "mkdir -p \"$RUNNER_TEMP/velnor/bin\" && printf '%s  %s\\n' \"$VELNOR_ASSET_SHA256\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\" | shasum -a 256 -c -";
+    let line = join_argv_for_run(&argv(&["sh", "-c", script]))?;
+    assert_eq!(line, format!("sh -c '{}'", script.replace('\'', "'\\''")));
+    assert_eq!(
+        shell_argv(&line, None, "/tmp/Home Space")?,
+        argv(&["sh", "-c", script])
+    );
+    Ok(())
+}
+
+pub(crate) fn shell_argv(
+    run_line: &str,
+    runner_temp: Option<&str>,
+    home: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let script = format!("set -- {run_line}; printf '%s\\0' \"$@\"");
+    let mut command = Command::new("/bin/sh");
+    command.arg("-c").arg(script).env_clear().env("HOME", home);
+    if let Some(value) = runner_temp {
+        command.env("RUNNER_TEMP", value);
+    }
+    let output = command.output()?;
+    assert!(output.status.success(), "shell failed: {run_line:?}");
+    split_nul_argv(&output.stdout)
+}
+
+fn split_nul_argv(stdout: &[u8]) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    if stdout.is_empty() {
+        return Ok(Vec::new());
+    }
+    let body = stdout
+        .strip_suffix(&[0])
+        .ok_or_else(|| std::io::Error::other("missing argv terminator"))?;
+    Ok(std::str::from_utf8(body)?
+        .split('\0')
+        .map(ToOwned::to_owned)
+        .collect())
 }
 
 const EMIT_VERSION: &str = "0.1.0";
@@ -194,7 +192,8 @@ fn emit_ctx() -> RenderContext {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
-        verification_tasks: Vec::new(),
+        workflow_tasks: Vec::new(),
+        pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         plan_consumer_env: std::collections::BTreeMap::new(),
     }
 }
@@ -257,24 +256,17 @@ fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
     assert_eq!(first, second);
     // Payload assertion, not `run:`-anchored: the constructor's
     // `env -u` prefix now heads the run string.
-    assert!(
-        first.contains("\\\"$RUNNER_TEMP/velnor/bin/x\\\" --flag\""),
-        "quoted shell run missing:\n{first}"
-    );
-    assert!(
-        first.contains("run: \"\\\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\\\"\""),
-        "quoted internal run missing:\n{first}"
-    );
-    for line in first.lines() {
-        if line.trim_start().starts_with("run:") {
-            assert!(!has_bare_env_expansion(line), "bare expansion in {line:?}");
-        }
-    }
-    let quoted = "\"$RUNNER_TEMP/velnor/bin/x\" --flag";
     assert_eq!(
-        quote_run_line_env_paths("$RUNNER_TEMP/velnor/bin/x --flag"),
-        quoted
+        join_argv_for_run(&argv(&["$RUNNER_TEMP/velnor/bin/x", "--flag"]))?,
+        "\"$RUNNER_TEMP\"'/velnor/bin/x' --flag"
     );
-    assert_eq!(quote_run_line_env_paths(quoted), quoted);
+    assert!(
+        first.contains("\\\"$RUNNER_TEMP\\\"'/velnor/bin/x' --flag"),
+        "typed path is not protected in the rendered run value:\n{first}"
+    );
+    assert!(
+        first.contains("\\\"$RUNNER_TEMP\\\"'/velnor/bin/velnor-actions-0.1.0'"),
+        "internal path is not protected in the rendered run value:\n{first}"
+    );
     Ok(())
 }

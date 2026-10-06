@@ -4,6 +4,8 @@
 //! scale suites reuse it through that parent (the P13
 //! `perf_fixtures_p13` precedent: one owner, `crate::` sharing).
 
+use crate::impl_common::git_fixture;
+
 use std::fs;
 use std::path::Path;
 use std::time::Instant;
@@ -187,7 +189,7 @@ pub(crate) fn plan_at_event(
 /// direct-`cargo metadata` proxy; plan itself adds the untracked pass).
 pub(crate) fn index_baseline_ms(root: &Path) -> Result<u128, Box<dyn std::error::Error>> {
     let start = Instant::now();
-    let output = std::process::Command::new("git")
+    let output = git_fixture::command(root)?
         .args(["ls-files"])
         .current_dir(root)
         .output()?;

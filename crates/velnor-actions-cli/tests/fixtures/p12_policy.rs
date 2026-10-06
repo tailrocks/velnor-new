@@ -12,8 +12,12 @@ const MUTANTS: &str = ".cargo/mutants.toml";
 
 /// Temporary-hold object with full attribution for `key`.
 fn hold(key: &str, granted: &str, expires: &str) -> String {
+    hold_version(key, "9.9.9", granted, expires)
+}
+
+fn hold_version(key: &str, version: &str, granted: &str, expires: &str) -> String {
     format!(
-        "{{\"key\":\"{key}\",\"held_version\":\"9.9.9\",\"owner\":\"team\",\
+        "{{\"key\":\"{key}\",\"held_version\":\"{version}\",\"owner\":\"team\",\
          \"issue\":\"#1\",\"reason\":\"blocked\",\"granted\":\"{granted}\",\
          \"expires\":\"{expires}\"}}"
     )
@@ -68,6 +72,31 @@ fn policy_mirror_drift_fails() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn policy_runner_supported_rejects_non_string_and_duplicate_labels() -> Result<(), Box<dyn Error>> {
+    let anchor = "supported = [\"ubuntu-26.04\", \"ubuntu-24.04\", \"ubuntu-22.04\"]";
+    for (suffix, replacement, expected) in [
+        (
+            "non-string",
+            "supported = [\"ubuntu-26.04\", \"ubuntu-24.04\", \"ubuntu-22.04\", 123]",
+            "entry 3 must be a string",
+        ),
+        (
+            "duplicate",
+            "supported = [\"ubuntu-26.04\", \"ubuntu-24.04\", \"ubuntu-22.04\", \"ubuntu-26.04\"]",
+            "duplicate label: ubuntu-26.04",
+        ),
+    ] {
+        let fixture = harness::passing(&format!("p12-runner-policy-{suffix}"))?;
+        harness::mutate(&fixture.dir, POLICY, anchor, replacement)?;
+        let run = harness::run_script(&fixture.dir, &[])?;
+        harness::assert_fail(&run, "policy-mirror");
+        harness::assert_fail(&run, expected);
+        harness::cleanup(&fixture);
+    }
+    Ok(())
+}
+
+#[test]
 fn mutant_pin_drift_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-mutant-pin")?;
     harness::mutate(
@@ -94,6 +123,27 @@ fn dangling_mutant_glob_fails() -> Result<(), Box<dyn Error>> {
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_fail(&run, "matches no production file");
     harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
+fn mutant_globs_reject_non_string_entries() -> Result<(), Box<dyn Error>> {
+    for (suffix, replacement) in [
+        ("number-only", "123"),
+        ("mixed", "\"crates/aaa/Cargo.toml\",\n    123"),
+    ] {
+        let fixture = harness::passing(&format!("p12-mutant-glob-{suffix}"))?;
+        harness::mutate(
+            &fixture.dir,
+            MUTANTS,
+            "\"crates/aaa/Cargo.toml\"",
+            replacement,
+        )?;
+        let run = harness::run_script(&fixture.dir, &[])?;
+        harness::assert_fail(&run, ".cargo/mutants.toml examine_globs");
+        harness::assert_fail(&run, "must be a string");
+        harness::cleanup(&fixture);
+    }
     Ok(())
 }
 
@@ -162,6 +212,14 @@ fn held_status_needs_a_covering_hold() -> Result<(), Box<dyn Error>> {
         INVENTORY,
         "\"temporary_holds\":[]",
         &format!("\"temporary_holds\":[{}]", hold("gh", &granted, &expires)),
+    )?;
+    let run = harness::run_script(&fixture.dir, &[])?;
+    harness::assert_fail(&run, "temporary hold covers held_version");
+    harness::mutate(
+        &fixture.dir,
+        INVENTORY,
+        "\"held_version\":\"9.9.9\"",
+        "\"held_version\":\"2.101.0\"",
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_clean(&run);
@@ -294,18 +352,24 @@ fn unknown_hold_subject_fails() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn action_const_wiring_is_mapped() -> Result<(), Box<dyn Error>> {
-    let script = crate::impl_repo_policy::read("scripts/check-freshness.sh")?;
+    let inventory =
+        crate::impl_repo_policy::read("crates/velnor-actions-freshness/src/inventory.rs")?;
+    let pins =
+        crate::impl_repo_policy::read("crates/velnor-actions-freshness/src/inventory/pins.rs")?;
     assert!(
-        script.contains(ACTIONS_RS),
-        "action const path must be read"
+        inventory.contains(ACTIONS_RS) && pins.contains("EXPECTED_ACTIONS"),
+        "Rust freshness owner must map action consts"
     );
     for key in [
         "actions/cache/restore",
         "actions/cache/save",
         "asamarts/alint",
-        "Swatinem/rust-cache",
     ] {
-        assert!(script.contains(key), "expected action set misses {key}");
+        assert!(inventory.contains(key), "expected action set misses {key}");
     }
+    assert!(
+        !inventory.contains("Swatinem/rust-cache"),
+        "retired action remains mapped"
+    );
     Ok(())
 }

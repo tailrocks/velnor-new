@@ -5,9 +5,10 @@ use velnor_actions_contract::config::ActionsConfig;
 use velnor_actions_contract::{
     AGENTS_MD_PATH, CLAUDE_MD_PATH, ContractError, DECLARED_GITHUB_FORMATS, DiscoveryConfig,
     ObligationDecision, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage,
-    PlanRunner, ResourcesConfig, RunnerSelection, RustStackConfig, StacksConfig,
-    TestShardingConfig, Trust, VelnorConfig, WorkflowConfig, WorkflowEvent, WorkflowPolicy,
-    digest_b3, find_github_format, is_declared_github_format, plan_id_for_run, run_key_for_ci,
+    PlanRunner, PullRequestCachePolicy, ResourcesConfig, RunnerSelection, RustStackConfig,
+    StacksConfig, TestShardingConfig, Trust, VelnorConfig, WorkflowConfig, WorkflowEvent,
+    WorkflowPolicy, digest_b3, find_github_format, is_declared_github_format, plan_id_for_run,
+    run_key_for_ci,
 };
 
 /// Valid config shared by remediation cases.
@@ -22,8 +23,10 @@ pub(crate) fn valid_config() -> VelnorConfig {
             default_branch: None,
             generator_validation: velnor_actions_contract::GeneratorValidation::Bootstrap,
             max_parallel_jobs: 2,
+            pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
             tasks: Vec::new(),
+            tofu_apply: None,
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -48,12 +51,13 @@ pub(crate) fn valid_config() -> VelnorConfig {
 pub(crate) fn sample_plan(run_key: &str) -> Result<Plan, ContractError> {
     let entry = sample_entry(run_key)?;
     Ok(Plan {
-        schema: 1,
+        schema: Plan::SCHEMA,
         run_key: run_key.to_owned(),
         plan_id: plan_id_for_run(run_key)?,
         base: None,
         head: "ab".repeat(20),
         event: WorkflowEvent::PullRequest,
+        qualification: None,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,

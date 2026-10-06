@@ -64,7 +64,11 @@ pub(crate) fn attach_lock_acquire(
     for (id, job) in &mut ir.jobs {
         if let Some(runner) = &job.check_runner {
             let step = lock_acquire_for_runner(lock, runner, &staged)?;
-            if !job.steps.iter().any(|step| step.name == "Acquire Velnor") {
+            if !job
+                .steps
+                .iter()
+                .any(|step| step.role == Some(StepRole::AcquireVelnor))
+            {
                 job.steps.insert(1.min(job.steps.len()), step);
             }
         } else if is_crate_job_id(id) {
@@ -97,7 +101,6 @@ pub(crate) fn attach_preseed(
     workflow: &mut WorkflowPlan,
     label: &str,
     version: &str,
-    fetch_roots: &[String],
 ) -> Result<(), OrchestratorError> {
     let catalog = ToolCatalog::pinned();
     let target = ReleaseTarget::for_runner_label(label)
@@ -130,7 +133,7 @@ pub(crate) fn attach_preseed(
             problem: "plan_job_missing".to_owned(),
         });
     };
-    insert_plan_mbx_restore(&catalog, label, fetch_roots, &mut plan.steps)?;
+    insert_plan_mbx_restore(&catalog, &mut plan.steps)?;
     let at = preseed_anchor(&plan.steps);
     plan.steps.splice(at..at, plan_steps);
     let Some(final_gate) = workflow.ir.jobs.get_mut(FINAL_JOB_ID) else {
@@ -184,8 +187,6 @@ fn after_prepare(steps: &[Step]) -> usize {
 /// Lockless plans have no source cache and install MBX after Rust setup.
 fn insert_plan_mbx_restore(
     catalog: &ToolCatalog,
-    label: &str,
-    fetch_roots: &[String],
     steps: &mut Vec<Step>,
 ) -> Result<(), OrchestratorError> {
     if steps.iter().any(is_mbx_action) {
@@ -193,7 +194,6 @@ fn insert_plan_mbx_restore(
             problem: "preseed_mbx_action_duplicated".to_owned(),
         });
     }
-    replace_plan_registry_cache(catalog, label, fetch_roots, steps)?;
     let restore_at = steps
         .iter()
         .position(|step| step.role == Some(StepRole::CargoSourcesRestore))
@@ -204,55 +204,6 @@ fn insert_plan_mbx_restore(
     {
         steps.insert(restore_at + offset, step);
     }
-    Ok(())
-}
-
-/// Replace Swatinem's Cargo-only plan cache with the shared registry snapshot.
-///
-/// MBX object storage and the source subset remain separate owners. The
-/// registry-only fallback cannot coexist with the MBX action in one job,
-/// so lockful pre-seed plans use the same source cache as MBX workflows.
-fn replace_plan_registry_cache(
-    catalog: &ToolCatalog,
-    label: &str,
-    fetch_roots: &[String],
-    steps: &mut Vec<Step>,
-) -> Result<(), OrchestratorError> {
-    let registry: Vec<usize> = steps
-        .iter()
-        .enumerate()
-        .filter(|(_, step)| step.role == Some(StepRole::CargoRegistryRestore))
-        .map(|(index, _)| index)
-        .collect();
-    if registry.is_empty() {
-        return Ok(());
-    }
-    if registry.len() != 1 || fetch_roots.is_empty() {
-        return Err(OrchestratorError::Contract {
-            problem: "preseed_registry_cache_without_locked_sources".to_owned(),
-        });
-    }
-    let target = ReleaseTarget::for_runner_label(label)
-        .map(ReleaseTarget::triple)
-        .ok_or_else(|| OrchestratorError::Contract {
-            problem: format!("unsupported_target_for_runner:{label}"),
-        })?;
-    let key = crate::source_cache::sources_cache_key(
-        target,
-        catalog.version(PinnedTool::Rust),
-        fetch_roots,
-    )?;
-    let prefix = crate::source_cache::sources_restore_prefix(&key);
-    steps[registry[0]] = crate::source_cache::sources_restore_step(&key, &[prefix])?;
-    let save = crate::source_cache::sources_save_step(&key)?;
-    let after_source_collection = steps
-        .iter()
-        .rposition(|step| step.role == Some(StepRole::CargoSourcesFetch))
-        .map(|index| index + 1)
-        .ok_or_else(|| OrchestratorError::Contract {
-            problem: "preseed_registry_cache_missing_source_step".to_owned(),
-        })?;
-    steps.insert(after_source_collection, save);
     Ok(())
 }
 
@@ -284,21 +235,19 @@ fn preseed_anchor(steps: &[Step]) -> usize {
         .iter()
         .enumerate()
         .filter(|(_, step)| {
-            step.role == Some(StepRole::CargoSourcesFetch)
-                || is_plan_restore(step)
-                || step.role == Some(StepRole::MbxVersionCheck)
+            matches!(
+                step.role,
+                Some(
+                    StepRole::CargoSourcesFetch
+                        | StepRole::CargoSourcesRestore
+                        | StepRole::MbxCache
+                        | StepRole::MbxVersionCheck
+                )
+            )
         })
         .map(|(index, _)| index)
         .max();
     last_required.map_or_else(|| after_prepare(steps), |index| index + 1)
-}
-
-/// True for plan-job restore steps (shared, registry, MBX objects).
-fn is_plan_restore(step: &Step) -> bool {
-    matches!(
-        step.role,
-        Some(StepRole::CargoSourcesRestore | StepRole::CargoRegistryRestore | StepRole::MbxCache)
-    )
 }
 
 #[cfg(test)]

@@ -24,7 +24,11 @@ async fn non_not_found_inspect_error_blocks_admission_and_reconcile() -> Result<
         http(500, r#"{"message":"private runner-id detail"}"#),
     ])?;
 
-    let busy = within(slot::busy(&journal, &stub.docker, 2), "capacity probe").await?;
+    let busy = within(
+        slot::busy_except(&journal, &stub.docker, 2, None),
+        "capacity probe",
+    )
+    .await?;
     let reconcile = within(
         gate::reconcile_gate(&journal, &stub.docker),
         "reconcile probe",
@@ -144,8 +148,8 @@ async fn docker_api_observations_preserve_only_known_running_states() -> Result<
     let before = journal.rows().await.map_err(|error| error.to_string())?;
     let stub = DockerStub::open(vec![
         http(404, r#"{"message":"missing"}"#),
-        http(200, r#"{"State":{"Running":true}}"#),
-        http(200, r#"{"State":{"Running":false}}"#),
+        http(200, r#"{"State":{"Status":"running","Running":true}}"#),
+        http(200, r#"{"State":{"Status":"exited","Running":false}}"#),
         http(200, "{}"),
         http(200, r#"{"State":{}}"#),
         http(200, "{}"),

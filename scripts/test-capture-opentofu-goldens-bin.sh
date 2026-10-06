@@ -29,10 +29,18 @@ STUB_BIN="$WORK/stub bin"
 MARKER="$WORK/cargo-invoked"
 ORIGINAL_PATH="$PATH"
 mkdir -p "$STUB_BIN" "$WORK/tmp workspace"
+# Only `cargo build` is the collector's implicit debug build. `plan` runs
+# `cargo metadata` through the real toolchain; poisoning that call makes
+# the spaced-path check fail before it can prove the collector skipped build.
 cat >"$STUB_BIN/cargo" <<'STUB'
 #!/bin/sh
-printf invoked >"$VELNOR_TEST_CARGO_MARKER"
-exit 79
+if [ "${1-}" = "build" ]; then
+  printf invoked >"$VELNOR_TEST_CARGO_MARKER"
+  exit 79
+fi
+PATH="$VELNOR_TEST_REAL_CARGO_PATH"
+export PATH
+exec cargo "$@"
 STUB
 chmod u+x "$STUB_BIN/cargo"
 
@@ -128,6 +136,7 @@ expect_release_rejected() {
   local status=0 log="$WORK/$label.log"
   GITHUB_SHA="$source" GITHUB_REPOSITORY=tailrocks/velnor-new \
     PATH="$STUB_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
+    VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
     "$SCRIPT" check-release "$CLI_BIN" "$manifest" "$digest" >"$log" 2>&1 || status=$?
   if [ "$status" -ne 2 ] || ! grep -Fq "$expected" "$log"; then
     cat "$log" >&2
@@ -152,6 +161,7 @@ expect_release_rejected_without_message() {
   local status=0 log="$WORK/$label.log"
   GITHUB_SHA="$source" GITHUB_REPOSITORY=tailrocks/velnor-new \
     PATH="$STUB_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
+    VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
     "$SCRIPT" check-release "$CLI_BIN" "$manifest" "$digest" >"$log" 2>&1 || status=$?
   if [ "$status" -eq 0 ]; then
     cat "$log" >&2
@@ -175,6 +185,7 @@ expect_rejected() {
   local label="$1" expected="$2" status=0
   shift 2
   PATH="$STUB_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
+    VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
     "$SCRIPT" "$@" >"$WORK/$label.log" 2>&1 || status=$?
   if [ "$status" -ne 2 ] || ! grep -Fq "$expected" "$WORK/$label.log"; then
     cat "$WORK/$label.log" >&2
@@ -254,6 +265,7 @@ expect_execution_failure() {
     cd "$WORK" || exit 2
     TMPDIR="$WORK/tmp workspace" PATH="$STUB_BIN:$ORIGINAL_PATH" \
       VELNOR_TEST_CARGO_MARKER="$MARKER" \
+      VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
       VELNOR_TEST_FAILING_BIN_MARKER="$WORK/failing binary invoked" \
       "$SCRIPT" capture "$FAILING_BIN"
   ) >"$log" 2>&1; then
@@ -331,6 +343,7 @@ if (
   cd "$WORK" || exit 2
   TMPDIR="$WORK/tmp workspace" PATH="$STUB_BIN:$ORIGINAL_PATH" \
     VELNOR_TEST_CARGO_MARKER="$MARKER" \
+    VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
     "$SCRIPT" check "space path/velnor-actions"
 ) >"$WORK/spaced-path.log" 2>&1; then
   cat "$WORK/spaced-path.log"

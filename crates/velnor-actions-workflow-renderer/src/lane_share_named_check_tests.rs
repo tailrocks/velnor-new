@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::lanes::{
     HOSTED_SUFFIX, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, SCALE_SUFFIX,
 };
-use velnor_actions_contract::{Job, JobTimeout, Step, StepKind, StepRole};
+use velnor_actions_contract::{Job, JobTimeout, Step, StepKind};
 
 use super::share_lanes;
 use super::tests::{ctx, echo_step, render_jobs, workflow_ir};
@@ -37,7 +37,7 @@ fn named_check_identity_and_report_upload_stay_on_their_exact_lane() {
         let checkout = Step {
             name: "Checkout".to_owned(),
             id: None,
-            role: Some(StepRole::Checkout),
+            role: Some(velnor_actions_contract::StepRole::Checkout),
             condition: None,
             kind: StepKind::Action {
                 uses: ctx().checkout_uses,
@@ -62,7 +62,7 @@ fn named_check_identity_and_report_upload_stay_on_their_exact_lane() {
         steps.push(Step {
             name: "Upload reports".to_owned(),
             id: None,
-            role: Some(StepRole::MatrixReportUpload),
+            role: Some(velnor_actions_contract::StepRole::MatrixReportUpload),
             condition: Some("always()".to_owned()),
             kind: StepKind::Action {
                 uses: crate::steps::UPLOAD_ARTIFACT_USES.to_owned(),

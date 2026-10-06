@@ -1,0 +1,105 @@
+{
+  "schema": 1,
+  "kind": "executed_generator_policy_prerequisite",
+  "status": "IMPLEMENTED_INDEPENDENTLY_VERIFIED",
+  "execution_utc": "2026-10-02T23:24:13.689336+00:00",
+  "source_sha": "c57c700459bbe1549fe7eedcb7d8689585c38986",
+  "repository": "tailrocks/velnor-new",
+  "live_policies": {
+    "default_branch": "main",
+    "protected": true,
+    "main_ruleset_id": 24396608,
+    "tag_ruleset_id": 24397132,
+    "required_checks": [
+      "Required"
+    ],
+    "strict_checks": true,
+    "approval_count": 0,
+    "standing_bypasses": 0,
+    "immutable_releases": {
+      "enabled": true,
+      "enforced_by_owner": false
+    }
+  },
+  "private_receipts": {
+    "directory": "/Users/donbeave/.codex-chainargos2/evidence/ci-performance/protection-execution-20261003",
+    "status": "execution-status.json",
+    "status_sha256": "1a606d2116246229756be3287fe2d5ef3ac814465d774c4a05b106abfbef1fd1",
+    "immutable_put_sha256": "dbe640dea217b2b6c10b525ea17aa32ca6c714d8435f0a84600dd5e9335b16ed",
+    "immutable_get_sha256": "24a561674c5055cc46a9dfbf3a00d63555032c51bc1d441a9ddcc5aa3e02c3e8",
+    "branch_create_sha256": "d2c3ae04601d0c381a772831cffeb4d7dea4bb7356f8b831fbb0a9f1fb7527b2",
+    "tags_create_sha256": "048b917236df310fb9acee23f95e5e83435d945633cb966b44a7dea8f7585710",
+    "default_branch_run": "default-branch-run-37079136334.json",
+    "default_branch_run_sha256": "78e3e5fde126d606d938b8ea439c20c7c9d52c6ef58bb746a4749cafbd7a2dff"
+  },
+  "authoritative_iac": {
+    "repository": "tailrocks/github-terraform",
+    "base_source_sha": "288dc40dec53500dfeb8bed148613b99cfea92c2",
+    "changes": {
+      "variables.tf": "velnor-new.required_checks=[] -> [Required]",
+      "imports.tf": [
+        "module.repository_policy.github_repository_ruleset.protect_main[velnor-new]: velnor-new:24396608",
+        "module.repository_policy.github_repository_ruleset.protect_tags[velnor-new]: velnor-new:24397132"
+      ]
+    },
+    "source_integration": "MERGED_DEFAULT_BRANCH_VERIFIED",
+    "state_imported": true,
+    "local_state_serial": 13,
+    "state_sha256": "2971091599c5a86b8a3018096500a461f72cfa86dd69c238b3308d931ee8a041",
+    "state_backup": "private external directory; no state bytes committed",
+    "no_broad_apply": true,
+    "format_verification": "tofu fmt -check variables.tf imports.tf passed",
+    "source_commit": "667eae4d8ecedde5153eb486fefe07a9d00cc3ad",
+    "pull_request": "https://github.com/tailrocks/github-terraform/pull/39",
+    "pull_request_state": "MERGED",
+    "reviewed_source_commit": "fd6f03c5793717265a894be0f4f0f7aa2c54c789",
+    "merged_at": "2026-10-02T23:46:20Z",
+    "pr_ci": "https://github.com/tailrocks/github-terraform/actions/runs/37078918815",
+    "default_branch_ci": "https://github.com/tailrocks/github-terraform/actions/runs/37079136334",
+    "default_branch_ci_status": "SUCCESS",
+    "default_branch_ci_head_sha": "667eae4d8ecedde5153eb486fefe07a9d00cc3ad",
+    "default_branch_ci_verified_jobs": {
+      "OpenToFu \u2014 .": 111075619736,
+      "Required": 111075687974
+    }
+  },
+  "state_preservation_proof": {
+    "method": "official locked GitHub6.13.0 import into isolated private state, then supported official tofu state mv into full baseline copy; independent whole-state review before hash/serial-guarded atomic adoption",
+    "preserved": [
+      "all prior resource instances/provider/private data",
+      "all5 root outputs",
+      "lineage",
+      "all check_results entries/statuses; array order only changed"
+    ],
+    "allowed_changes": [
+      "two exact reviewed ruleset instances added",
+      "serial11->12->13",
+      "OpenTofu version metadata and collection serialization order"
+    ],
+    "no_custom_state_json_mutation": true,
+    "proof_files": [
+      "isolated-import/adoption-verification.json",
+      "tag-adoption-verification.json"
+    ]
+  },
+  "qualification_limits": [
+    "Settings implementation is not qualified runtime publication or T01-T26 success.",
+    "Current defaultsource c57c700 Required failed; exact new reviewed source must pass actual Required before qualification.",
+    "Future releases immutability does not retrofit v0.1.0 or establish source provenance.",
+    "Current protection cannot retrospectively qualify caches/baselines/assets created without protection.",
+    "Authoritative IaC source merged through PR39; resulting default-branch CI passed. Broad apply remains blocked by stale migrated check inventory."
+  ],
+  "deferred_root_cause": "Existing full IaC import graph initializes unrelated1password provider and output assumes main/tags paired instances. Narrow supported official import context avoids graph; source architecture fix remains separate.",
+  "primary_sources": [
+    "https://docs.github.com/en/rest/repos/rules#create-a-repository-ruleset",
+    "https://docs.github.com/en/rest/repos/repos#enable-immutable-releases",
+    "https://github.com/integrations/terraform-provider-github/blob/v6.13.0/docs/resources/repository_ruleset.md#import",
+    "https://opentofu.org/docs/cli/commands/state/mv/"
+  ],
+  "execution_utc_origin": "client receipt-summary creation time; server mutation/verification times recorded separately",
+  "server_response_utc": {
+    "immutable_put": "2026-10-02T23:24:11Z",
+    "immutable_get": "2026-10-02T23:24:12Z"
+  },
+  "independent_review": "protection_execution_review approved exact finalhead fd6f03c after all reviews/comments/replies/threads and passed Required; normal exact-head squash merged667eae4d; postmerge default source/API/state/all feedback and actual default-branch CI/document independently PASS"
+}

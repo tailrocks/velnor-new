@@ -1,10 +1,10 @@
 //! Release IR cases: permissions, dispatch inputs, schedule, environment.
 use std::collections::BTreeMap;
-use velnor_actions_contract::workflow::ir::{
-    Concurrency, DispatchInput, Job, Trigger, WorkflowDispatch, WorkflowIr,
-};
 use velnor_actions_contract::workflow::permissions::{PermissionLevel, Permissions};
-use velnor_actions_contract::workflow::step::{Step, StepKind};
+use velnor_actions_contract::workflow::{
+    Concurrency, DispatchInput, DispatchInputType, Job, Step, StepKind, Trigger, WorkflowDispatch,
+    WorkflowIr,
+};
 use velnor_actions_contract::{ContractError, JobTimeout, ScheduleTrigger};
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -13,6 +13,8 @@ fn input(name: &str, required: bool, default: Option<&str>) -> DispatchInput {
     DispatchInput {
         name: name.to_owned(),
         required,
+        input_type: DispatchInputType::String,
+        choices: Vec::new(),
         default: default.map(str::to_owned),
     }
 }
@@ -96,6 +98,20 @@ fn ir_default_permissions_grant_contents_only() {
 }
 
 #[test]
+fn ir_rejects_unsafe_push_branch_names() {
+    for branch in ["main\non: [push]", "main'||true||'", "main.lock", "-main"] {
+        let mut workflow = ci_workflow();
+        workflow.triggers.push_branches = vec![branch.to_owned()];
+        assert!(
+            identity_problem(&workflow).is_some_and(|problem| {
+                problem.starts_with("trigger.push_branches malformed_branch:")
+            }),
+            "unsafe branch name must fail IR validation: {branch:?}"
+        );
+    }
+}
+
+#[test]
 fn ir_rejects_permission_violations() {
     let mut id_token = ci_workflow();
     id_token.permissions.id_token = PermissionLevel::Write;
@@ -139,7 +155,8 @@ fn ir_rejects_permission_violations() {
 
 #[test]
 fn ir_validates_dispatch_input_charset_and_order() {
-    assert_eq!(DispatchInput::INPUT_TYPE, "string");
+    assert_eq!(DispatchInputType::String.as_str(), "string");
+    assert_eq!(DispatchInputType::Choice.as_str(), "choice");
     let mut workflow = ci_workflow();
     workflow.triggers.pull_request_types.clear();
     workflow.triggers.workflow_dispatch = Some(WorkflowDispatch {
@@ -178,6 +195,36 @@ fn ir_validates_dispatch_input_charset_and_order() {
             .expect("must reject")
             .ends_with("bad_default:source-sha")
     );
+}
+
+#[test]
+fn ir_validates_choice_dispatch_inputs() {
+    let mut workflow = ci_workflow();
+    workflow.triggers.pull_request_types.clear();
+    workflow.triggers.workflow_dispatch = Some(WorkflowDispatch {
+        inputs: vec![DispatchInput {
+            name: "phase".to_owned(),
+            required: true,
+            input_type: DispatchInputType::Choice,
+            choices: vec!["cold".to_owned(), "warm".to_owned()],
+            default: Some("cold".to_owned()),
+        }],
+    });
+    assert_eq!(workflow.validate(), Ok(()));
+
+    for choices in [
+        vec![],
+        vec!["warm".to_owned(), "cold".to_owned()],
+        vec!["cold".to_owned(), "cold".to_owned()],
+        vec!["cold".to_owned(), "Bad".to_owned()],
+    ] {
+        let mut bad = workflow.clone();
+        dispatch_inputs(&mut bad).expect("dispatch")[0].choices = choices;
+        assert!(identity_problem(&bad).is_some(), "{bad:?}");
+    }
+    let mut bad_default = workflow;
+    dispatch_inputs(&mut bad_default).expect("dispatch")[0].default = Some("control".to_owned());
+    assert!(identity_problem(&bad_default).is_some());
 }
 
 #[test]

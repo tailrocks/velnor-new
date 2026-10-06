@@ -328,6 +328,12 @@ capture_dogfood "$stage/dogfood"
 note "captured dogfood (plan exit $(cat "$stage/dogfood/plan.exit"), tree $(cat "$stage/dogfood/dogfood.verdict" 2>/dev/null))"
 
 if [ "$MODE" = "capture" ]; then
+  if [ ! -d "$stage/dogfood/preview/.github" ]; then
+    die "dogfood preview has no .github directory"
+  fi
+  if [ "$(cat "$stage/dogfood/dogfood.verdict" 2>/dev/null)" != "identical" ]; then
+    die "dogfood generated workflows are not identical to repository workflows"
+  fi
   rm -rf "$GOLDEN_DIR/cases"
   mkdir -p "$GOLDEN_DIR"
   copy_tree "$stage" "$GOLDEN_DIR/cases"

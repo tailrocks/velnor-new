@@ -43,6 +43,20 @@ MUST use explicit stack names such as `velnor-actions-node`; each adapter
 contains only its named stack. Alint is the sole repository-structure linter
 and runs as a separate GitHub Actions job.
 
+The workspace also contains `velnor-actions-freshness` and
+`velnor-archive-guard` as repository-only maintenance members. Both are
+outside the eight-product V1 graph and do not enter V1 Rust task derivation.
+The orchestrator does not link either helper as a library. Only the CLI's
+private maintenance gate consumes
+freshness at runtime; repository scripts provision the archive guard. Under
+`VelnorRepositoryV1`, the existing named-Mise-check contract emits one
+independent `maintenance-helpers` Required check for both packages' Rust test
+suites. That repository-quality check stays outside the product crate matrix;
+ordinary ConsumerV1 configurations do not declare this repository-owned
+check. Both manifests declare
+the typed `repository-maintenance` task owner; package names and paths alone
+never grant the task-derivation exclusion.
+
 | Crate | Owns | Must not own |
 |---|---|---|
 | `velnor-actions-contract` | Stack-neutral generator contracts: stack/component IDs, task graph, workflow IR, cache identities, generated-file records, reports, recommendations | Rust/Cargo, Mise, process, filesystem, YAML implementation, CLI, or generic application models |
@@ -72,12 +86,15 @@ remains reserved for a separate future product.
 Adapters exchange typed requests and stack-neutral results through the contract
 crate. The Rust adapter requests Cargo metadata; the orchestrator asks Mise to
 execute it with exact pins, then passes the JSON back to Rust for validation.
-The Rust adapter never launches processes or constructs Mise commands. Mise
-owns the fixed subprocess wrapper for Git, Cargo/MBX, Nextest, GitHub CLI, and
-policy tools. The orchestrator supplies requests and schedules calls; it never
-builds shell commands. Rust alone inspects `rust-toolchain.toml`; Mise alone
-inspects `mise.toml` and `mise.lock`. The renderer receives validated command
-references and generic workflow IR; it never emits Mise syntax.
+The Rust adapter never launches processes or constructs Mise commands. Within
+V1 planning, Mise owns the fixed subprocess wrapper for Git, Cargo/MBX, Nextest,
+GitHub CLI, and policy tools; Rust alone inspects `rust-toolchain.toml`, while
+Mise inspects `mise.toml` and `mise.lock`. Repository-only freshness operations
+may inspect Velnor-owned Cargo/Mise sources and launch bounded maintenance
+probes behind the private gate; their results MUST NOT enter V1 planning. The
+orchestrator supplies product requests and schedules calls; it never builds
+shell commands. The renderer receives validated command references and generic
+workflow IR; it never emits Mise syntax.
 
 All Velnor product Rust package roots MUST live under `crates/`. The root
 manifest MUST be a virtual workspace with explicit members.
@@ -107,6 +124,7 @@ crates/velnor-actions-actionlint/
 crates/velnor-actions-workflow-renderer/
 crates/velnor-actions-orchestrator/
 crates/velnor-actions-cli/
+crates/velnor-actions-freshness/  # repository-only support, outside V1 product graph
 fixtures/rust-workspaces/
 .github/actionlint.yaml
 .github/workflows/ci.yml
@@ -196,7 +214,7 @@ budgets, and shard settings bound execution.
 
 `stacks.ignore` is a sorted, duplicate-free list of exact eligible registered stack IDs (`rust` and `tofu`). Explicit Mise checks are mandatory; `ignore = ["mise"]` is rejected regardless of the check inventory. For example, `ignore = ["rust"]` disables Rust task planning and generation. Detection still runs, and matching detections appear with status `ignored`. Unknown IDs fail configuration validation. CLI flags cannot change this list. Stack-specific options belong under `[stacks.<id>]`; Rust supports `configurations`, `compile_driver`, `test_runner`, and `release`. Tofu validation roots belong under `[stacks.tofu]`. The driver/runner keys are sticky profile declarations; conflicts with durable evidence fail closed (see [task execution](task-execution-contract.md)). If the Rust configuration field is absent, use one documented default Rust configuration. `discovery.exclude` contains repository-relative POSIX path globs applied before detectors; it is not a stack selector. Invalid, absolute, parent-traversal, or malformed patterns fail validation. The registry contains `mise`, `rust`, and `tofu` in ascending ID order. Mise checks are explicit top-level `[[checks]]` declarations, independent of detected Rust projects and Tofu roots; each declaration selects a repository-owned task and binds its input files, runner platform, tool pins, and optional named scenario evidence. The config rejects shell fragments, raw YAML, arbitrary `uses:` actions, installation commands, and plugin URLs. The removed Rust custom-task option is rejected. Task bodies execute through a qualified projection of repository-owned Mise configuration, under the hosted or ephemeral admission policy. See the [implemented named-check contract](../implemented/named-mise-checks.md) for execution isolation and Required evidence rules.
 
-Generic non-Rust validation also supports sorted `[[workflow.tasks]]` declarations. V1 accepts only `kind = "verification"`, argv-safe Mise task names, a bounded timeout, and `linux-x64` or `macos-arm64` runners. Each task is an unconditional standalone job on every pull request, push, and merge-group run; its base job key is `task-{id}` and every emitted task job joins the `Required` fan-in. Under schema 2, Linux x64 tasks follow the selected execution mode: `hosted` emits the hosted base job, `scale-set` emits the Scale Set base job, and `both` emits hosted and Scale Set copies. macOS ARM64 tasks stay on `macos-15` in every mode because the current Scale Set is Linux/amd64; their hosted result is required but does not qualify as paired-lane execution. The job token grants `contents: read` with every other declared permission set to `none`; checkout does not persist credentials. The job uses the pinned Mise binary and its runner-specific digest, disables Mise caches and environment activation, then clears credential variables before locked installs or task code reads repository configuration. It writes no artifacts or caches and exports no downstream task outputs. Task authors own the locked tool closure and change-coverage tests. Keeping verification scripts free of Rust compilation is an authoring and review invariant; V1 does not inspect or enforce task bodies. Protected release and signing remain a separate capability.
+All explicit workflow work belongs to the one sorted `[[workflow.tasks]]` list. The strict tagged variants are `verification`, `build`, and `native-image`; they share one ID namespace and generated `task-{id}` job namespace, and every emitted task job joins the `Required` fan-in. Verification tasks alone are compile-free: they accept argv-safe Mise task names, a bounded timeout, and `linux-x64` or `macos-arm64` runners. Under schema 2, Linux x64 verification tasks follow the selected execution mode: `hosted` emits the hosted base job, `scale-set` emits the Scale Set base job, and `both` emits hosted and Scale Set copies. macOS ARM64 verification tasks stay hosted on `macos-15` in every mode because the current Scale Set is Linux/amd64. Build tasks are separately typed, may compile only through the declared bounded native tool route, and stay hosted on macOS 26 ARM64 in every schema-2 mode. Native-image tasks execute on the matching hosted native platform and also stay hosted-only. The job token grants `contents: read` with every other declared permission set to `none`; checkout does not persist credentials. Verification jobs use the pinned Mise binary and its runner-specific digest, disable Mise caches and environment activation, then clear credential variables before locked installs or task code reads repository configuration. Verification tasks write no artifacts or caches and export no downstream task outputs. Task authors own the locked tool closure and change-coverage tests. Keeping verification scripts free of Rust compilation is an authoring and review invariant; V1 does not inspect or enforce task bodies. Protected release and signing remain a separate capability.
 
 `discovery.exclude` contains repository-relative POSIX path globs applied before detectors; it is not a stack selector. Invalid, absolute, parent-traversal, or malformed patterns fail validation. V1 registers the `mise`, `rust`, and `tofu` stacks. V1 MUST reject custom shell fragments, raw YAML, and arbitrary `uses:` actions in configuration.
 

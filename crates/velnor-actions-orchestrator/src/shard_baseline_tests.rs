@@ -122,3 +122,22 @@ fn gh_stdout_cap_misses_before_parsing() {
         Err("baseline_unavailable".to_owned())
     );
 }
+
+#[test]
+fn exact_artifact_zip_uses_service_id_endpoint() {
+    let lookup = BaselineLookup::new(
+        &"1".repeat(40),
+        ".github/workflows/ci.yml",
+        "testmain",
+        "o/r",
+    )
+    .expect("lookup");
+    assert_eq!(
+        lookup.artifact_zip_args(99),
+        Ok(vec![
+            "api".into(),
+            "repos/o/r/actions/artifacts/99/zip".into()
+        ])
+    );
+    assert!(lookup.artifact_zip_args(0).is_err());
+}

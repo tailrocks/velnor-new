@@ -3,9 +3,9 @@ use crate::impl_contract_ids::{GROUP, sample_entry};
 use crate::impl_remed_contract::{sample_plan, valid_config};
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    ContractError, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, PlanRunner, RunnerSelection,
-    check_matrix_agreement, digest_b3, matrix_json_bytes, plan_json_bytes, require_release_version,
-    run_key_for_ci,
+    ContractError, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, PlanRunner, PlannedPlatform,
+    RunnerSelection, check_matrix_agreement, digest_b3, matrix_json_bytes, plan_json_bytes,
+    require_release_version, run_key_for_ci,
 };
 
 #[test]
@@ -41,7 +41,7 @@ fn wf_contract_surface_has_no_utility_fields() {
     };
     assert_eq!(
         section("workflow").join(","),
-        "generator_validation,max_parallel_jobs,name,policy"
+        "generator_validation,max_parallel_jobs,name,policy,pull_request_cache_policy"
     );
     assert_eq!(section("stacks").join(","), "ignore");
     let text = serde_json::to_string(&value).expect("text");
@@ -149,6 +149,7 @@ fn wf_matrix_entry_requires_registered_stack() -> Result<(), ContractError> {
         &digest_b3(b"entry-inputs"),
         &run_key,
         "plan",
+        PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")?,
     )?;
     let err = bogus.validate(&run_key).expect_err("bogus stack");
     assert_eq!(

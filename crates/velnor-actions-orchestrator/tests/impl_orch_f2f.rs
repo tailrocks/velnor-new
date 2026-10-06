@@ -12,10 +12,10 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// Allowed intra-workspace edges per member package.
+/// Allowed intra-workspace edges per product or support package.
 fn expected_internal(dir: &str) -> Vec<&str> {
     match dir {
-        "crates/velnor-actions-contract" => vec![],
+        "crates/velnor-actions-contract" | "crates/velnor-actions-freshness" => vec![],
         "crates/velnor-actions-orchestrator" => vec![
             "velnor-actions-actionlint",
             "velnor-actions-contract",
@@ -24,12 +24,14 @@ fn expected_internal(dir: &str) -> Vec<&str> {
             "velnor-actions-tofu",
             "velnor-actions-workflow-renderer",
         ],
-        "crates/velnor-actions-cli" => vec!["velnor-actions-orchestrator"],
+        "crates/velnor-actions-cli" => {
+            vec!["velnor-actions-orchestrator", "velnor-actions-freshness"]
+        }
         _ => vec!["velnor-actions-contract"],
     }
 }
 
-/// Member directories in dependency-table order.
+/// Product members plus the separately owned repository-maintenance library.
 fn members() -> Vec<&'static str> {
     vec![
         "crates/velnor-actions-actionlint",
@@ -39,6 +41,7 @@ fn members() -> Vec<&'static str> {
         "crates/velnor-actions-orchestrator",
         "crates/velnor-actions-rust",
         "crates/velnor-actions-tofu",
+        "crates/velnor-actions-freshness",
         "crates/velnor-actions-workflow-renderer",
     ]
 }
@@ -46,7 +49,13 @@ fn members() -> Vec<&'static str> {
 #[test]
 fn crate_boundaries_match_architecture_dependency_direction() -> TestResult {
     let output = std::process::Command::new("cargo")
-        .args(["metadata", "--format-version", "1", "--manifest-path"])
+        .args([
+            "metadata",
+            "--locked",
+            "--format-version",
+            "1",
+            "--manifest-path",
+        ])
         .arg(repo_root().join("Cargo.toml"))
         .current_dir(repo_root())
         .output()?;
@@ -194,6 +203,27 @@ fn flagged(source: &str) -> Vec<&'static str> {
     hits
 }
 
+fn rust_sources_recursive(
+    root: &std::path::Path,
+) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+    let mut pending = vec![root.to_path_buf()];
+    let mut sources = Vec::new();
+    while let Some(directory) = pending.pop() {
+        for entry in std::fs::read_dir(directory)? {
+            let entry = entry?;
+            let kind = entry.file_type()?;
+            let path = entry.path();
+            if kind.is_dir() {
+                pending.push(path);
+            } else if kind.is_file() && path.extension().is_some_and(|ext| ext == "rs") {
+                sources.push(path);
+            }
+        }
+    }
+    sources.sort();
+    Ok(sources)
+}
+
 #[test]
 fn forbidden_token_table_is_exact() {
     assert_eq!(
@@ -254,11 +284,7 @@ fn strip_line_comment(line: &str) -> &str {
 fn orchestrator_src_passes_forbidden_table() -> TestResult {
     let src = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut checked = 0;
-    for entry in std::fs::read_dir(&src)? {
-        let path = entry?.path();
-        if path.extension().is_some_and(|ext| ext != "rs") {
-            continue;
-        }
+    for path in rust_sources_recursive(&src)? {
         let text = std::fs::read_to_string(&path)?;
         let code: String = text
             .lines()

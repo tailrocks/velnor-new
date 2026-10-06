@@ -16,8 +16,9 @@ use crate::impl_perf_p13::perf_fixtures_p13::{
     add_path_dep, workspace_repo, workspace_repo_linked,
 };
 use crate::impl_perf_p13::perf_harness_p13::{
-    BenchSample, RssSampler, bench_line, commit_two, metadata_baseline_ms, obligation_digest,
-    obligation_task_ids, plan_at, timed, timed_rss, toolchain_metadata,
+    BenchSample, RssSampler, bench_line, bench_line_with_phase_timings, commit_two,
+    metadata_baseline_ms, obligation_digest, obligation_task_ids, plan_at,
+    plan_at_with_phase_timings, timed, timed_rss, toolchain_metadata,
 };
 
 /// Fixture width for every benchmark case (44 obligations, under budget).
@@ -53,20 +54,38 @@ fn bench_empty_caches_cold_plan() -> TestResult {
     let root = repo.path();
     let (outcome, plan_ms, rss_kb) = timed_rss(|| {
         let touched = commit_two(root, "src/lib.rs");
-        touched.and_then(|(base, head)| plan_at(root, &base, &head))
+        touched.and_then(|(base, head)| plan_at_with_phase_timings(root, &base, &head))
     });
-    let (plan, _) = outcome?;
+    let (plan, _, phases) = outcome?;
     assert!(!plan.obligations.is_empty(), "obligations exist");
+    assert!(
+        phases.metadata_commands > 0,
+        "metadata phase records actual runs"
+    );
+    assert_eq!(
+        phases.generator_sha_calls, 1,
+        "one generator identity digest"
+    );
+    assert!(
+        phases.prepare_us >= phases.metadata_run_us + phases.metadata_parse_us,
+        "metadata phases are nested within prepare"
+    );
+    assert!(
+        phases.plan_internal_us >= phases.prepare_us + phases.generator_sha_us,
+        "prepare and generator hashing are nested within plan"
+    );
     let metadata_ms = metadata_baseline_ms(root, "Cargo.toml")?;
-    report(
-        "cold",
+    let sample = BenchSample {
+        case: "cold",
+        crates: BENCH_CRATES,
         setup_ms,
         plan_ms,
         metadata_ms,
         rss_kb,
-        &plan,
-        "first-plan",
-    );
+        plan: &plan,
+        note: "first-plan",
+    };
+    bench_line_with_phase_timings(&sample, phases);
     Ok(())
 }
 

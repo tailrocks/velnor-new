@@ -1,6 +1,8 @@
 //! Whole-surface invariants: mise-only invocation, no config passthrough,
 //! catalog pins without project selectors, and `mise.lock` absence
 //! (RQ-2.12, RQ-3.4, RQ-9.3, TOOL-2.6).
+use crate::impl_mise_git_config::git_fixture;
+
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use velnor_actions_mise::catalog::NEXTEST_VERSION;
@@ -83,11 +85,6 @@ fn all_mise_vectors() -> Result<Vec<Vec<OsString>>, String> {
     )
     .map_err(|err| err.to_string())?;
     vectors.push(lookup.list_argv(&catalog).map_err(|err| err.to_string())?);
-    vectors.push(
-        lookup
-            .download_argv(&catalog, 7, &PathBuf::from("/tmp/velnor-base"))
-            .map_err(|err| err.to_string())?,
-    );
     let gated = qualified_task_run_argv(
         "test",
         false,
@@ -204,7 +201,8 @@ fn mise_lock_neither_present_nor_tracked() -> Result<(), String> {
         !root.join("mise.lock").exists(),
         "Velnor must not create mise.lock"
     );
-    let tracked = std::process::Command::new("git")
+    let tracked = git_fixture::command(&root)
+        .map_err(|err| err.to_string())?
         .args(["ls-files", "mise.lock"])
         .current_dir(&root)
         .output();

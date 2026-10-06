@@ -6,6 +6,8 @@ mod cancellable;
 mod check;
 #[path = "command_env.rs"]
 mod env;
+#[path = "command_git.rs"]
+mod git;
 #[path = "command_output.rs"]
 mod output;
 #[path = "qualified_acquisition.rs"]
@@ -104,16 +106,6 @@ impl IsolatedCommand {
         Self::mise_with_subcommand("install", tool_specs, None, false)
     }
 
-    pub(crate) fn direct(program: &str, args: Vec<OsString>) -> Self {
-        Self {
-            program: OsString::from(program),
-            args,
-            cwd: None,
-            extra_env: Vec::new(),
-            policy: EnvPolicy::Discovery,
-        }
-    }
-
     /// Build a repo-task child: cleared env plus declared inputs.
     /// # Errors
     /// Returns [`MiseError::InvalidStepInput`] on a reserved declared key.
@@ -152,7 +144,11 @@ impl IsolatedCommand {
     pub fn with_env(mut self, extra: &[(OsString, OsString)]) -> Result<Self, MiseError> {
         for pair in extra {
             let key = pair.0.to_string_lossy();
-            if is_reserved_env_key(&key) {
+            if is_reserved_env_key(&key)
+                || (self.policy == EnvPolicy::Discovery
+                    && self.program == "git"
+                    && key == "GIT_OPTIONAL_LOCKS")
+            {
                 return Err(MiseError::InvalidStepInput {
                     field: key.into_owned(),
                     value: "reserved_env_key".to_owned(),

@@ -62,11 +62,10 @@ fn render_consumer_yaml(manifest: &str) -> Result<String, Box<dyn std::error::Er
 fn expected_acquire_block() -> String {
     let version = env!("CARGO_PKG_VERSION");
     format!(
-        "- name: Acquire Velnor\n        run: \"sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \\\"$RUNNER_TEMP/velnor/bin\\\" && s=\\\"/opt/velnor/seed/generator/velnor-actions-{version}\\\" d=\\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" && if [ -f \\\"$s\\\" ] && echo \\\"$VELNOR_ASSET_SHA256  $s\\\" | sha256sum -c -; then cp \\\"$s\\\" \\\"$d\\\"; else curl -fsSL --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$d\\\" && echo \\\"$VELNOR_ASSET_SHA256  $d\\\" | sha256sum -c -; fi && chmod +x \\\"$d\\\"'\"",
+        "- name: Acquire Velnor\n        run: \"sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\"&&mkdir -p \\\"${{d%/*}}\\\"&&s=\\\"/opt/velnor/seed/generator/${{d##*/}}\\\"&&p=\\\"$VELNOR_ASSET_SHA256  \\\"&&if [ -f \\\"$s\\\" ]&&echo \\\"$p$s\\\"|sha256sum -c -;then cp \\\"$s\\\" \\\"$d\\\";else curl -fsSL --retry 5 --retry-all-errors --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$d\\\"&&echo \\\"$p$d\\\"|sha256sum -c -;fi&&chmod +x \\\"$d\\\"'\"",
     )
 }
 
-/// Extract the full `- name: Acquire Velnor` step block from `yaml`.
 fn acquire_block(yaml: &str) -> Result<&str, Box<dyn std::error::Error>> {
     let acquire = yaml
         .find("- name: Acquire Velnor")
@@ -137,13 +136,23 @@ fn absent_manifest_fails_closed_without_provenance() {
 }
 
 #[test]
-fn absent_manifest_fails_prepare_in_all_build_modes() -> TestResult {
+#[cfg(debug_assertions)]
+fn debug_absent_file_keeps_standin() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     fs::remove_file(repo.path().join(".velnor/release-manifest.json"))?;
-    let err = prepare(repo.path()).expect_err("missing consumer provenance fails closed");
-    let text = err.to_string();
-    assert!(text.contains("consumer_requires_release_install"), "{text}");
-    assert!(text.contains("official"), "{text}");
+    let prep = prepare(repo.path())?;
+    let yaml = velnor_actions_workflow_renderer::render_workflow_ir(
+        &prep.workflow.ir,
+        prep.config.workflow.policy,
+        prep.workflow.support.as_ref(),
+        &prep.workflow.context,
+    )
+    .map_err(|err| format!("render: {err}"))?;
+    let version = env!("CARGO_PKG_VERSION");
+    let expect = format!(
+        "https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-x86_64-unknown-linux-gnu"
+    );
+    assert!(yaml.contains(&expect), "debug stand-in preserved:\n{yaml}");
     Ok(())
 }
 

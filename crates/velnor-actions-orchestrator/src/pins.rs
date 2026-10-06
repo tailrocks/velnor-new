@@ -10,8 +10,8 @@ use velnor_actions_actionlint::overrides::{
     ActionPinOverride as ApprovedOverride, ApprovedPinCatalog,
 };
 use velnor_actions_contract::{
-    GeneratorLock, RELEASE_MANIFEST_FILENAME, ReleaseManifest, ReleaseTarget, Step, VelnorConfig,
-    VerificationRunner, check_release_artifact,
+    BuildTaskRunner, GeneratorLock, RELEASE_MANIFEST_FILENAME, ReleaseManifest, ReleaseTarget,
+    Step, VelnorConfig, VerificationRunner, check_release_artifact,
 };
 use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_workflow_renderer::{
@@ -71,6 +71,21 @@ pub(crate) fn resolve_verification_mise_setup(
     let sha256 = match runner {
         VerificationRunner::LinuxX64 => MISE_BINARY_SHA256_LINUX_X64,
         VerificationRunner::MacosArm64 => MISE_BINARY_SHA256_MACOS_ARM64,
+    };
+    Ok(MiseSetup {
+        uses: mise_action_uses(config)?,
+        version: MISE_VERSION.to_owned(),
+        sha256: sha256.to_owned(),
+    })
+}
+
+/// Resolve cache-off Mise setup for the native macOS build runner.
+pub(crate) fn resolve_build_task_mise_setup(
+    config: &VelnorConfig,
+    runner: BuildTaskRunner,
+) -> Result<MiseSetup, OrchestratorError> {
+    let sha256 = match runner {
+        BuildTaskRunner::Macos26Arm64 => MISE_BINARY_SHA256_MACOS_ARM64,
     };
     Ok(MiseSetup {
         uses: mise_action_uses(config)?,
@@ -182,6 +197,7 @@ fn consumer_acquire_for_target(
     check_release_artifact(
         &record.artifact,
         &manifest.version,
+        &manifest.commit,
         target.triple(),
         RELEASE_MANIFEST_FILENAME,
         "targets.artifact",
@@ -262,7 +278,14 @@ const GENERATOR_SEED_ROOT: &str = "/opt/velnor/seed";
 /// Fixed acquisition argv. A matching seed file is copied. Otherwise curl.
 ///
 /// Curl stays HTTPS-only (`--proto '=https'`) over TLS 1.2+. Paths are
-/// double-quoted, and a seed with the wrong digest is never copied.
+/// double-quoted, and a seed with the wrong digest is never copied. Curl
+/// retries all failures up to five times, including a TLS EOF; certificate
+/// verification stays enabled.
+/// Both checks inline that target's native digest utility. A shared hash
+/// prefix keeps each repeated step inside the 500_000-byte workflow cap.
+/// The staged path stays a literal `$RUNNER_TEMP/velnor/bin/velnor-actions-`
+/// prefix. `&&` still skips `chmod` when mkdir, copy, download, or the
+/// digest check fails.
 ///
 /// # Errors
 ///
@@ -287,16 +310,14 @@ pub fn acquire_script_argv(
             problem: format!("bad_staged_path:{staged}"),
         });
     }
-    let dir = staged.rsplit_once('/').map_or(staged, |(head, _)| head);
     let name = staged.rsplit_once('/').map_or(staged, |(_, tail)| tail);
     if !file_token(name) {
         return Err(OrchestratorError::Contract {
             problem: format!("bad_staged_name:{name}"),
         });
     }
-    let seed = format!("{seed_root}/generator/{name}");
     let script = format!(
-        "mkdir -p \"{dir}\" && s=\"{seed}\" d=\"{staged}\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | {digest}; then cp \"$s\" \"$d\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | {digest}; fi && chmod +x \"$d\""
+        "d=\"{staged}\"&&mkdir -p \"${{d%/*}}\"&&s=\"{seed_root}/generator/${{d##*/}}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|{digest};then cp \"$s\" \"$d\";else curl -fsSL --retry 5 --retry-all-errors --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|{digest};fi&&chmod +x \"$d\""
     );
     Ok(vec!["sh".to_owned(), "-c".to_owned(), script])
 }
@@ -351,3 +372,10 @@ fn test_manifest_json() -> String {
 #[cfg(test)]
 #[path = "pins_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "pins_tests_b.rs"]
+mod tests_b;
+
+#[cfg(test)]
+#[path = "pins_manifest_tests.rs"]
+mod pins_manifest_tests;

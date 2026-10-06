@@ -77,33 +77,6 @@ pub fn render_yaml(value: &Yaml) -> String {
     out
 }
 
-/// Quote bare env paths in every `run:` scalar.
-pub(crate) fn quote_run_values_in_yaml(node: Yaml) -> Yaml {
-    match node {
-        Yaml::Map(entries) => Yaml::Map(
-            entries
-                .into_iter()
-                .map(|(key, value)| {
-                    if key == "run" {
-                        if let Yaml::Str(line) = value {
-                            (
-                                key,
-                                Yaml::Str(crate::commands::quote_run_line_env_paths(&line)),
-                            )
-                        } else {
-                            (key, value)
-                        }
-                    } else {
-                        (key, quote_run_values_in_yaml(value))
-                    }
-                })
-                .collect(),
-        ),
-        Yaml::Seq(items) => Yaml::Seq(items.into_iter().map(quote_run_values_in_yaml).collect()),
-        other => other,
-    }
-}
-
 /// Quote a scalar only when plain style would be unsafe or ambiguous.
 #[must_use]
 pub fn quote_scalar(value: &str) -> String {

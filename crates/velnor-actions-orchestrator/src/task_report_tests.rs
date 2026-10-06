@@ -10,8 +10,9 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_contract::{
     ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, ObligationDecision,
-    Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, RunnerSelection,
-    TaskReport, TaskStatus, Trust, WorkflowEvent, matrix_json_bytes, plan_id_for_run,
+    Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, PlannedPlatform,
+    RunnerSelection, TaskReport, TaskStatus, Trust, WorkflowEvent, matrix_json_bytes,
+    plan_id_for_run,
 };
 
 use super::*;
@@ -89,6 +90,7 @@ pub(super) fn entry_for(
         &digest(seed + 10),
         "local",
         job_id,
+        PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("planned platform"),
     )
     .expect("entry derives");
     (entry, task_digest)
@@ -112,12 +114,13 @@ pub(super) fn fixture_plan() -> Plan {
     let (clippy_entry, clippy_digest) = entry_for("rust", CLIPPY, "clippy", 1, "crate_clippy");
     let (test_entry, test_digest) = entry_for("rust", TEST, "test", 2, "crate_test");
     let plan = Plan {
-        schema: 1,
+        schema: Plan::SCHEMA,
         run_key: "local".to_owned(),
         plan_id: plan_id_for_run("local").expect("plan id"),
         base: None,
         head: "HEAD".to_owned(),
         event: WorkflowEvent::PullRequest,
+        qualification: None,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,
@@ -255,7 +258,7 @@ fn failed_report_marks_entry_failed() {
 }
 
 /// Tofu task ID for the timing-carrying execution case.
-const TOFU_VALIDATE: &str = "stack/tofu/stacks/a/validate/default";
+const TOFU_VALIDATE: &str = "stack/tofu/dir-737461636b732f61/validate/default";
 
 #[test]
 fn tofu_executed_report_carries_measured_timing() {

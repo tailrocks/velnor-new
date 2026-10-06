@@ -66,7 +66,7 @@ fn every_job_emits_its_per_kind_timeout() -> Result<(), RenderError> {
     assert_eq!(
         timeouts,
         BTreeMap::from([
-            ("plan".to_owned(), "10".to_owned()),
+            ("plan".to_owned(), "20".to_owned()),
             ("actionlint".to_owned(), "10".to_owned()),
             ("required".to_owned(), "10".to_owned()),
         ]),

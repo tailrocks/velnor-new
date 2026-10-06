@@ -38,7 +38,7 @@ RUN apt-get update \
 
 # containerd's overlay snapshotter returns EINVAL when this amd64 dockerd
 # runs under emulation. vfs does not mount overlay. linux/amd64 stays the baseline.
-RUN mkdir -p /etc/docker \
+RUN mkdir -p /etc/docker /usr/local/libexec/velnor /usr/share/doc/velnor-dind \
     && printf '%s\n' \
         '{' \
         '  "storage-driver": "vfs",' \
@@ -48,4 +48,12 @@ RUN mkdir -p /etc/docker \
         '  "iptables": true' \
         '}' > /etc/docker/daemon.json
 
-ENTRYPOINT ["dockerd", "--host=unix:///var/run/docker.sock"]
+# This bounded wrapper adapts the cgroup-v2 block from Moby hack/dind at
+# 8d9e3502aba39127e4d12196dae16d306f76993d. The pinned upstream source SHA-256
+# is 673bb7adc8b463b56e9e929672ea74b40951f655a023d0b9801f46c9da4bc509.
+# Its Apache-2.0 license is retained in the image.
+COPY cgroup-v2-delegation.sh /usr/local/libexec/velnor/cgroup-v2-delegation.sh
+COPY entrypoint.sh /usr/local/bin/velnor-dind-entrypoint
+COPY LICENSE-moby /usr/share/doc/velnor-dind/LICENSE-moby
+RUN chmod 0755 /usr/local/bin/velnor-dind-entrypoint
+ENTRYPOINT ["/usr/local/bin/velnor-dind-entrypoint"]

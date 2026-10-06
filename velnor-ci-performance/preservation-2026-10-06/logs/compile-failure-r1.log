@@ -1,0 +1,122 @@
+   Compiling serde_core v1.0.229
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling cfg-if v1.0.5
+   Compiling libc v0.2.189
+   Compiling serde v1.0.229
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.14
+   Compiling itoa v1.0.18
+   Compiling zmij v1.0.23
+   Compiling cc v1.5.1
+   Compiling memchr v2.8.3
+   Compiling thiserror v2.0.21
+   Compiling serde_json v1.0.151
+   Compiling blake3 v1.8.7
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayvec v0.7.8
+   Compiling winnow v1.0.4
+   Compiling typenum v1.20.1
+   Compiling hybrid-array v0.4.15
+   Compiling rustix v1.1.5
+   Compiling crc32fast v1.5.2
+   Compiling hashbrown v0.17.1
+   Compiling equivalent v1.0.2
+   Compiling ryu v1.0.23
+   Compiling crypto-common v0.2.2
+   Compiling block-buffer v0.12.1
+   Compiling fnv v1.0.7
+   Compiling pratt v0.4.0
+   Compiling adler2 v2.0.1
+   Compiling getrandom v0.4.3
+   Compiling const-oid v0.10.2
+   Compiling simd-adler32 v0.3.10
+   Compiling bitflags v2.13.2
+   Compiling indexmap v2.14.2
+   Compiling serde_spanned v1.1.1
+   Compiling syn v3.0.6
+   Compiling miniz_oxide v0.9.1
+   Compiling digest v0.11.3
+   Compiling toml_datetime v0.7.5+spec-1.1.0
+   Compiling toml_parser v1.1.3+spec-1.1.0
+   Compiling velnor-actions-tofu v0.1.1 (/private/tmp/velnor-orchestrator-phase-timing/crates/velnor-actions-tofu)
+   Compiling toml_writer v1.1.2+spec-1.1.0
+   Compiling winnow v0.7.15
+   Compiling fastrand v2.5.0
+   Compiling once_cell v1.21.4
+   Compiling flate2 v1.1.10
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling typed-path v0.12.3
+   Compiling errno v0.3.14
+   Compiling cpufeatures v0.3.1
+   Compiling filetime v0.2.29
+   Compiling toml v0.9.12+spec-1.1.0
+   Compiling sha2 v0.11.0
+   Compiling zip v8.6.0
+   Compiling tar v0.4.46
+   Compiling lzma-rust2 v0.21.0
+   Compiling velnor-actions-contract v0.1.1 (/private/tmp/velnor-orchestrator-phase-timing/crates/velnor-actions-contract)
+   Compiling vecmap-rs v0.2.5
+   Compiling hcl-primitives v0.1.12
+   Compiling hcl-edit v0.9.7
+   Compiling tempfile v3.27.0
+   Compiling hcl-rs v0.19.8
+   Compiling velnor-actions-actionlint v0.1.1 (/private/tmp/velnor-orchestrator-phase-timing/crates/velnor-actions-actionlint)
+   Compiling velnor-actions-rust v0.1.1 (/private/tmp/velnor-orchestrator-phase-timing/crates/velnor-actions-rust)
+   Compiling velnor-actions-mise v0.1.1 (/private/tmp/velnor-orchestrator-phase-timing/crates/velnor-actions-mise)
+   Compiling velnor-actions-workflow-renderer v0.1.1 (/private/tmp/velnor-orchestrator-phase-timing/crates/velnor-actions-workflow-renderer)
+   Compiling velnor-actions-orchestrator v0.1.1 (/private/tmp/velnor-orchestrator-phase-timing/crates/velnor-actions-orchestrator)
+warning: unused import: `WorkflowEvent`
+  --> crates/velnor-actions-orchestrator/src/internal.rs:15:36
+   |
+15 |     ProposedTask, RunnerSelection, WorkflowEvent, canonical_json_bytes, named_check_lanes,
+   |                                    ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error: implementation of `FnMut` is not general enough
+  --> crates/velnor-actions-orchestrator/src/inventory.rs:88:40
+   |
+88 |     let (rust_outcomes, inventories) = run_with(root, &rust_manifests, true, &mut load)?;
+   |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ implementation of `FnMut` is not general enough
+   |
+   = note: closure with signature `fn(&'2 str) -> Result<WorkspaceRecord, FetchFailure>` must implement `FnMut<(&'1 str,)>`, for any lifetime `'1`...
+   = note: ...but it actually implements `FnMut<(&'2 str,)>`, for some specific lifetime `'2`
+
+error: implementation of `FnOnce` is not general enough
+  --> crates/velnor-actions-orchestrator/src/inventory.rs:88:40
+   |
+88 |     let (rust_outcomes, inventories) = run_with(root, &rust_manifests, true, &mut load)?;
+   |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ implementation of `FnOnce` is not general enough
+   |
+   = note: closure with signature `fn(&'2 str) -> Result<WorkspaceRecord, FetchFailure>` must implement `FnOnce<(&'1 str,)>`, for any lifetime `'1`...
+   = note: ...but it actually implements `FnOnce<(&'2 str,)>`, for some specific lifetime `'2`
+
+warning: `velnor-actions-orchestrator` (lib) generated 1 warning
+error: could not compile `velnor-actions-orchestrator` (lib) due to 2 previous errors; 1 warning emitted
+warning: build failed, waiting for other jobs to finish...
+error: implementation of `FnMut` is not general enough
+  --> crates/velnor-actions-orchestrator/src/inventory.rs:88:40
+   |
+88 |     let (rust_outcomes, inventories) = run_with(root, &rust_manifests, true, &mut load)?;
+   |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ implementation of `FnMut` is not general enough
+   |
+   = note: closure with signature `fn(&'2 str) -> Result<velnor_actions_rust::WorkspaceRecord, inventory::FetchFailure>` must implement `FnMut<(&'1 str,)>`, for any lifetime `'1`...
+   = note: ...but it actually implements `FnMut<(&'2 str,)>`, for some specific lifetime `'2`
+
+error: implementation of `FnOnce` is not general enough
+  --> crates/velnor-actions-orchestrator/src/inventory.rs:88:40
+   |
+88 |     let (rust_outcomes, inventories) = run_with(root, &rust_manifests, true, &mut load)?;
+   |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ implementation of `FnOnce` is not general enough
+   |
+   = note: closure with signature `fn(&'2 str) -> Result<velnor_actions_rust::WorkspaceRecord, inventory::FetchFailure>` must implement `FnOnce<(&'1 str,)>`, for any lifetime `'1`...
+   = note: ...but it actually implements `FnOnce<(&'2 str,)>`, for some specific lifetime `'2`
+
+warning: `velnor-actions-orchestrator` (lib test) generated 1 warning (1 duplicate)
+error: could not compile `velnor-actions-orchestrator` (lib test) due to 2 previous errors; 1 warning emitted
+error: command `/Users/donbeave/.rustup/toolchains/1.98.1-aarch64-apple-darwin/bin/cargo '--color=auto' test --manifest-path crates/velnor-actions-orchestrator/Cargo.toml --no-run --message-format json-render-diagnostics --package velnor-actions-orchestrator --locked --offline` exited with code 101
+mbx[cache]: 89 hits, 8 misses; 0 B downloaded, 0 B uploaded, 94.3 MiB stored locally
+mbx[savings]: 1h 58m not spent compiling, over 462 builds. what you did instead is between you and the terminal.

@@ -4,6 +4,7 @@ mod args;
 mod compare;
 mod daemon_run;
 mod dispatch;
+mod readiness_probe;
 mod service;
 
 pub use args::Cli;

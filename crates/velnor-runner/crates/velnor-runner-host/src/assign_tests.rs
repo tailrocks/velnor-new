@@ -7,6 +7,7 @@ use crate::{Offer, offer};
 fn batch(jobs: Vec<InnerJob>) -> Poll {
     Poll::Batch(ParsedBatch {
         message_id: 4,
+        raw_body: String::new(),
         statistics: None,
         jobs,
     })

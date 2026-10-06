@@ -1,0 +1,9 @@
+archive_actual_sha256=378ada19d4bc70c43732004e8159be771b23b9a5afdf059e5f8a2b3fa2c70a69
+sums_archive_check=PASS
+github_release_api_archive_digest=PASS
+github_release_api_sums_digest=PASS
+git_tag_peeled_commit=c512d0956f274dfbe02de09ccb7b534f16caf13e	refs/tags/v1.13.1
+233700b795b6d2372f1c56ed57a4abaec9d36475	refs/tags/v1.13.1^{}
+archive_member_set=PASS
+executable_sha256=a325c8c2f6834575e440b03c2ba67f94256072754ac7787fea718be6f01fef6a  /opt/velnor-task-fixtures/20261005/opentofu-1.13.1-official-provenance-20261005T1902Z/install/tofu
+executable_file=/opt/velnor-task-fixtures/20261005/opentofu-1.13.1-official-provenance-20261005T1902Z/install/tofu: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, Go BuildID=uGjVJNvmkWxwNno67yOp/GeHzYfscMjLwgEkY7Dol/uIFVkpO5zYunDUVI5zFN/-QGD6CilgUPbbZjukaRH, BuildID[sha1]=0f23f6822eb746970140b90d11ccf04b805ecbf1, stripped

@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use velnor_actions_actionlint::ACTIONLINT_VERSION;
 use velnor_actions_contract::{
     CRATE_JOB_ID_PREFIX, FRESHNESS_WORKFLOW_PATH, Job, ProposedTask, RequiredCheckMigration,
-    RunnerSelection, WorkflowPolicy, is_crate_job_id,
+    RunnerSelection, TOFU_APPLY_WORKFLOW_PATH, WorkflowPolicy, is_crate_job_id,
 };
 use velnor_actions_rust::KIND_DISPLAY_WORDS;
 use velnor_actions_workflow_renderer::action_pins;
@@ -71,6 +71,8 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation, jobs: &BTree
     push(out, &format!("  {WORKFLOW_PATH}"));
     release_file_lines(out, prep);
     freshness_file_lines(out, prep);
+    owned_tool_file_lines(out, prep);
+    tofu_apply_file_lines(out, prep);
     push(
         out,
         &format!(
@@ -149,6 +151,26 @@ fn release_file_lines(out: &mut String, prep: &GenerationPreparation) {
 fn freshness_file_lines(out: &mut String, prep: &GenerationPreparation) {
     if crate::freshness_emit::freshness_enabled(prep) {
         push(out, &format!("  {FRESHNESS_WORKFLOW_PATH}"));
+    }
+}
+
+/// Protected apply workflow path, exactly when the closed config enables it.
+fn tofu_apply_file_lines(out: &mut String, prep: &GenerationPreparation) {
+    if crate::tofu_apply_emit::tofu_apply_enabled(prep) {
+        push(out, &format!("  {TOFU_APPLY_WORKFLOW_PATH}"));
+    }
+}
+
+/// Owned-tool candidate workflow, exactly when `generate` emits it.
+///
+/// The checked entrypoint already rendered the staged tree (owned-tool
+/// files included) before this infallible section runs, so an error
+/// here means nothing is emitted.
+fn owned_tool_file_lines(out: &mut String, prep: &GenerationPreparation) {
+    if let Ok(files) = crate::owned_tool_publication::files(prep) {
+        for file in files {
+            push(out, &format!("  {}", file.path));
+        }
     }
 }
 

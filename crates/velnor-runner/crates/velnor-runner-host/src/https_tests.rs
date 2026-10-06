@@ -15,6 +15,19 @@ fn https_base_rejects_plain_http() {
 }
 
 #[test]
+fn background_cleanup_client_has_a_short_deadline() {
+    assert_eq!(
+        HttpsTransport::new("https://api.github.com").map(|transport| transport.timeout_seconds()),
+        Ok(60)
+    );
+    assert_eq!(
+        HttpsTransport::new("https://api.github.com")
+            .map(|transport| transport.cleanup_client().timeout_seconds()),
+        Ok(5)
+    );
+}
+
+#[test]
 fn join_keeps_the_encoded_query() {
     let url = join_url(
         "https://api.github.com",

@@ -1,0 +1,11 @@
+captured nested (plan exit 0)
+captured mbx-nextest (plan exit 0)
+captured empty-suite (plan exit 0)
+captured minimal-cargo (plan exit 0)
+captured dogfood (plan exit 0, tree identical)
+match: nested
+match: mbx-nextest
+match: empty-suite
+match: minimal-cargo
+match: dogfood
+ALL GOLDENS MATCH

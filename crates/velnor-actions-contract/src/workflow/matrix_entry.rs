@@ -3,6 +3,7 @@
 use super::cache_ids::EntryCacheIds;
 use super::execute::{ExecuteTaskIds, ExecuteTaskRef};
 use super::lanes::NamedCheckLaneVariant;
+use super::platform::PlannedPlatform;
 use crate::canonical::{normalize_posix_path, validate_digest};
 use crate::config::VelnorConfig;
 use crate::errors::ContractError;
@@ -43,6 +44,8 @@ pub struct MatrixEntry {
     pub job_id: String,
     /// Derived job artifact name carrying this entry's reports.
     pub artifact_id: String,
+    /// Immutable runner, target, and planned platform identity.
+    pub planned_platform: PlannedPlatform,
     /// Cache identity digests recorded in the plan (cache §1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_ids: Option<EntryCacheIds>,
@@ -59,7 +62,7 @@ impl MatrixEntry {
     /// # Errors
     #[expect(
         clippy::too_many_arguments,
-        reason = "entry identity needs all nine inputs at once"
+        reason = "entry identity needs all ten inputs at once"
     )]
     pub fn derive(
         stack_id: &str,
@@ -71,6 +74,7 @@ impl MatrixEntry {
         input_digest: &str,
         run_key: &str,
         job_id: &str,
+        planned_platform: PlannedPlatform,
     ) -> Result<Self, ContractError> {
         Self::derive_for_lane(
             stack_id,
@@ -83,6 +87,7 @@ impl MatrixEntry {
             run_key,
             job_id,
             None,
+            planned_platform,
         )
     }
 
@@ -92,7 +97,7 @@ impl MatrixEntry {
     /// # Errors
     #[expect(
         clippy::too_many_arguments,
-        reason = "entry identity needs all ten inputs at once"
+        reason = "entry identity needs all eleven inputs at once"
     )]
     pub fn derive_for_lane(
         stack_id: &str,
@@ -105,6 +110,7 @@ impl MatrixEntry {
         run_key: &str,
         job_id: &str,
         lane_variant: Option<NamedCheckLaneVariant>,
+        planned_platform: PlannedPlatform,
     ) -> Result<Self, ContractError> {
         let identity_group = lane_task_group_id(task_group_id, lane_variant)?;
         let id = matrix_id_for_task_group(stack_id, &identity_group)?;
@@ -115,6 +121,7 @@ impl MatrixEntry {
         validate_digest(task_digest)?;
         execute_task_ids.validate()?;
         validate_lane_binding(stack_id, job_id, lane_variant)?;
+        planned_platform.validate()?;
         Ok(Self {
             report_id: report_id_for_matrix(run_key, &matrix_key)?,
             artifact_id: artifact_id_for_crate_job(run_key, job_id)?,
@@ -124,6 +131,7 @@ impl MatrixEntry {
             stack_id: stack_id.to_owned(),
             task_id: task_group_id.to_owned(),
             lane_variant,
+            planned_platform,
             run: run.to_owned(),
             task_digest: task_digest.to_owned(),
             adapter_metadata,
@@ -165,7 +173,14 @@ impl MatrixEntry {
         }
         if let Some(cache_ids) = &self.cache_ids {
             cache_ids.validate()?;
+            if cache_ids.platform_id() != self.planned_platform.platform_id {
+                return Err(ContractError::identity(
+                    "cache_ids.platform_id",
+                    "planned_platform_mismatch",
+                ));
+            }
         }
+        self.planned_platform.validate()?;
         validate_lane_binding(&self.stack_id, &self.job_id, self.lane_variant)?;
         let identity_group = lane_task_group_id(&self.task_id, self.lane_variant)?;
         let expect_id = matrix_id_for_task_group(&self.stack_id, &identity_group)?;

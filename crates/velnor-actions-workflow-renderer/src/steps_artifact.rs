@@ -131,7 +131,9 @@ pub fn baseline_publish_upload_step() -> Result<Step, RenderError> {
             ),
             (
                 "path".to_owned(),
-                format!("${{{{ runner.temp }}}}/velnor/{RUN_KEY_EXPR}/baseline.json"),
+                format!(
+                    "${{{{ runner.temp }}}}/velnor/{RUN_KEY_EXPR}/published-baseline/baseline.json"
+                ),
             ),
             ("if-no-files-found".to_owned(), "error".to_owned()),
             (

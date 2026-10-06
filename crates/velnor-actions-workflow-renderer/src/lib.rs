@@ -14,8 +14,12 @@ mod candidate;
 pub mod closure;
 mod closure_paths;
 mod commands;
+mod commands_env;
+mod commands_scan;
 mod composite;
+mod dispatch_cache_boundary;
 mod document;
+mod document_env;
 mod document_lanes;
 mod document_steps;
 mod error;
@@ -32,6 +36,7 @@ mod matrix_output_mode;
 mod mbx_gc_policy;
 pub mod msrv;
 pub mod overlap;
+pub mod owned_tool_publication;
 pub mod plan_format;
 pub mod preseed;
 mod preseed_closure;
@@ -43,14 +48,22 @@ pub mod release_permissions;
 pub mod release_spec;
 pub mod release_tree;
 pub mod render;
+mod render_cache_files;
 mod runs_on;
 pub mod schema2;
 pub mod setup;
+mod step_ids;
 pub mod steps;
 mod steps_artifact;
 mod steps_internal;
 mod steps_plain;
+mod steps_shell;
 mod support;
+pub mod tofu_apply;
+mod tofu_apply_command;
+mod tofu_apply_document;
+mod tofu_apply_policy;
+mod tofu_apply_steps;
 pub mod tofu_cache;
 mod tool_seed;
 mod tool_seed_admission;
@@ -58,7 +71,7 @@ mod tool_seed_admission;
 mod tool_seed_test_support;
 pub mod toolchain_env;
 pub mod tree;
-mod verification_jobs;
+pub mod verification_jobs;
 mod workflow_policy;
 mod workflow_size;
 pub mod yaml;
@@ -77,8 +90,7 @@ pub use closure::{
     download_plan_step, freshness_step, provision_acquire_step, publish_plan_step,
 };
 pub use commands::{
-    check_no_bare_cargo, has_bare_env_expansion, join_argv_for_run, quote_env_path_for_run,
-    quote_run_arg, quote_run_line_env_paths, validate_command_argv, validate_env,
+    check_no_bare_cargo, join_argv_for_run, quote_run_arg, validate_command_argv, validate_env,
 };
 pub use guard::{SafeTreePath, check_no_symlink, join_within_root, validate_tree_path};
 pub use marker::{
@@ -104,7 +116,7 @@ pub use render::{
     action_pins, finalize_jobs, render_workflow_ir, render_workflow_ir_strict,
 };
 pub use schema2::{
-    GeneratorReleasePins, MbxQualificationPins, Schema2WorkflowRequest, render_schema2_workflows,
+    MbxQualificationPins, ProductReleasePins, Schema2WorkflowRequest, render_schema2_workflows,
 };
 pub use setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
 pub use steps::{
@@ -118,6 +130,11 @@ pub use steps::{
     check_mbx_gating, checkout_step, crate_job_report_upload_step, internal_step,
     lane_cargo_target_env, matrix_report_upload_step, mbx_steps_for_driver, merge_step, plan_step,
     publish_step, scan_for_private_subcommands, shell_step, validate_uses, write_request_step,
+};
+pub use tofu_apply::{
+    AWS_CREDENTIALS_STEP_ID, AWS_CREDENTIALS_USES, AWS_CREDENTIALS_VERSION,
+    TOFU_APPLY_CONCURRENCY_GROUP, TOFU_APPLY_JOB_ID, TOFU_APPLY_TIMEOUT_MINUTES,
+    TOFU_APPLY_WORKFLOW_NAME, TofuApplySpec, render_tofu_apply_workflow,
 };
 pub use tree::{render_tree, render_tree_with_extra};
 pub use verification_jobs::{

@@ -187,7 +187,7 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
         TF_INPUT_ENV, TF_INPUT_OFF,
     };
     let mut tofu = obligation();
-    tofu.task_id = "stack/tofu/root/validate/default".to_owned();
+    tofu.task_id = "stack/tofu/dir-/validate/default".to_owned();
     tofu.kind = "validate".to_owned();
     tofu.step_name = "Validate".to_owned();
     let step = obligation_step(&tofu, &ToolCatalog::pinned(), &[], None).expect("step");
@@ -216,7 +216,14 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
     );
     assert_eq!(
         env.get(TF_DATA_DIR_ENV).map(String::as_str),
-        Some("${{ runner.temp }}/velnor/tofu-data/root-af1349b9f5f9"),
+        Some(
+            velnor_actions_tofu::tofu_data_dir_under(
+                velnor_actions_mise::runtime_paths::TOFU_DATA_BASE_EXPR,
+                "",
+            )
+            .expect("data dir")
+            .as_str(),
+        ),
         "tofu steps isolate the per-root data dir"
     );
     assert!(
@@ -265,15 +272,19 @@ fn validator_installs_follow_executed_suite_per_policy() {
         "velnor-actions-contract",
         "velnor-actions-mise",
         "demo",
+        "velnor-actions-freshness",
     ] {
         assert!(
-            crate_needs_generate_validators(WorkflowPolicy::ConsumerV1, package),
+            crate_needs_generate_validators(WorkflowPolicy::ConsumerV1, suite_for_package(package)),
             "consumer suites are opaque: {package} keeps the trio"
         );
     }
     for package in ["velnor-actions-orchestrator", "velnor-actions-cli"] {
         assert!(
-            crate_needs_generate_validators(WorkflowPolicy::VelnorRepositoryV1, package),
+            crate_needs_generate_validators(
+                WorkflowPolicy::VelnorRepositoryV1,
+                suite_for_package(package)
+            ),
             "{package} spawns validators and must install them"
         );
     }
@@ -284,10 +295,14 @@ fn validator_installs_follow_executed_suite_per_policy() {
         "velnor-actions-tofu",
         "velnor-actions-workflow-renderer",
         "velnor-actions-actionlint",
+        "velnor-actions-freshness",
         "demo",
     ] {
         assert!(
-            !crate_needs_generate_validators(WorkflowPolicy::VelnorRepositoryV1, package),
+            !crate_needs_generate_validators(
+                WorkflowPolicy::VelnorRepositoryV1,
+                suite_for_package(package)
+            ),
             "{package} never spawns validators and must trim the trio"
         );
     }
@@ -296,7 +311,7 @@ fn validator_installs_follow_executed_suite_per_policy() {
 /// Every workspace member is classified: validator-spawning or trimmed.
 ///
 /// A new crate fails here by name until its suite is audited for
-/// trio execution (see `GENERATE_VALIDATOR_SUITES`) and classified.
+/// trio execution (see `SUITE_TOOL_OWNERS`) and classified.
 #[test]
 fn every_workspace_member_is_classified() {
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -304,29 +319,29 @@ fn every_workspace_member_is_classified() {
         .parent()
         .and_then(std::path::Path::parent)
         .expect("crate lives two levels under the workspace root");
-    let mut members = Vec::new();
-    let crates = std::fs::read_dir(root.join("crates")).expect("crates dir lists");
-    for entry in crates {
-        let manifest = entry.expect("dir entry reads").path().join("Cargo.toml");
-        let text = std::fs::read_to_string(&manifest).expect("member manifest reads");
-        let mut in_package = false;
-        for line in text.lines() {
-            if line.trim() == "[package]" {
-                in_package = true;
-            } else if line.starts_with('[') {
-                in_package = false;
-            } else if in_package && line.trim_start().starts_with("name = ") {
-                let name = line
-                    .trim_start()
-                    .trim_start_matches("name = ")
-                    .trim()
-                    .trim_matches('"');
-                members.push(name.to_owned());
-                break;
-            }
-        }
-    }
-    assert!(!members.is_empty(), "workspace scan must find members");
+    let manifest: toml::Value = toml::from_str(
+        &std::fs::read_to_string(root.join("Cargo.toml")).expect("workspace manifest reads"),
+    )
+    .expect("workspace manifest parses");
+    let members = manifest["workspace"]["members"]
+        .as_array()
+        .expect("workspace members are explicit paths");
+    assert!(!members.is_empty(), "workspace must declare members");
+    let members: Vec<String> = members
+        .iter()
+        .map(|member| {
+            let path = member.as_str().expect("workspace member is a path");
+            let manifest: toml::Value = toml::from_str(
+                &std::fs::read_to_string(root.join(path).join("Cargo.toml"))
+                    .expect("member manifest reads"),
+            )
+            .expect("member manifest parses");
+            manifest["package"]["name"]
+                .as_str()
+                .expect("workspace member declares its package name")
+                .to_owned()
+        })
+        .collect();
     for member in &members {
         let known = [
             "velnor-actions-orchestrator",
@@ -337,6 +352,7 @@ fn every_workspace_member_is_classified() {
             "velnor-actions-tofu",
             "velnor-actions-workflow-renderer",
             "velnor-actions-actionlint",
+            "velnor-actions-freshness",
             "velnor-archive-guard",
         ]
         .contains(&member.as_str());

@@ -2,10 +2,15 @@
 
 use super::*;
 use crate::workflow::execute::ExecuteTaskIds;
+use crate::workflow::platform::PlannedPlatform;
 
 const TASK: &str = "stack/mise/demo/check/default";
 
 fn lane(variant: NamedCheckLaneVariant, job_id: &str) -> MatrixEntry {
+    let runs_on = match variant {
+        NamedCheckLaneVariant::Hosted => "ubuntu-26.04",
+        NamedCheckLaneVariant::ScaleSet => "scale-set:velnor+ubuntu-26.04-scale-set",
+    };
     MatrixEntry::derive_for_lane(
         "mise",
         TASK,
@@ -17,6 +22,7 @@ fn lane(variant: NamedCheckLaneVariant, job_id: &str) -> MatrixEntry {
         "local",
         job_id,
         Some(variant),
+        PlannedPlatform::new(runs_on, "x86_64-unknown-linux-gnu").expect("planned platform"),
     )
     .expect("lane entry")
 }
@@ -46,6 +52,7 @@ fn paired_and_single_entries_cannot_share_one_logical_task() {
         &format!("b3-{}", "b".repeat(64)),
         "local",
         "check-demo",
+        PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("planned platform"),
     )
     .expect("single entry");
     single.task_id = TASK.to_owned();

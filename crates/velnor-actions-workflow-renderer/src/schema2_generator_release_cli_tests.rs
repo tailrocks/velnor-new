@@ -62,10 +62,22 @@ pub(super) fn assert_pinned_publish_calls(
         case,
         Failure::UnauthorizedTag | Failure::ForbiddenTag | Failure::TransientTag
     );
+    let has_required_failure = case == Failure::DuplicateRequired;
     if has_local_input_failure {
         assert_eq!(external_calls, 0, "{calls}");
     } else if has_preflight_failure {
         assert_eq!(external_calls, 1, "{calls}");
+    } else if has_required_failure {
+        // Merged order: tag + release preflights, main-tip check, CI runs, then the
+        // Required-jobs read that detects the duplicate and aborts before mutations.
+        assert_eq!(external_calls, 5, "{calls}");
+        assert!(
+            calls
+                .lines()
+                .last()
+                .is_some_and(|call| call.contains("attempts/1/jobs"))
+        );
+        assert!(!calls.contains("release create"), "{calls}");
     } else {
         assert!(
             calls
@@ -94,7 +106,8 @@ pub(super) fn assert_pinned_publish_calls(
             | Failure::WrongDraftDigest
             | Failure::WrongDraftUrl
             | Failure::WrongDraftSize
-            | Failure::WrongDraftInventory => 1,
+            | Failure::WrongDraftInventory
+            | Failure::TagMovedBeforePublish => 1,
             _ => 3,
         };
         assert_eq!(release_reads, expected_reads, "{calls}");

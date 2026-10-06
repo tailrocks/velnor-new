@@ -4,7 +4,7 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use clap::CommandFactory;
+use clap::{CommandFactory, Parser};
 
 use super::{ConnectRequest, connect_with};
 
@@ -25,6 +25,16 @@ fn connect_help_reads_stdin_and_has_no_token_flag() -> Result<(), String> {
     let text = String::from_utf8(buffer).map_err(|err| err.to_string())?;
     if !text.contains("stdin") || !text.contains("not a flag") {
         return Err("help omits stdin".to_owned());
+    }
+    for flag in [
+        "--runner-cpu-millicores",
+        "--runner-memory-bytes",
+        "--dind-cpu-millicores",
+        "--dind-memory-bytes",
+    ] {
+        if !text.contains(flag) {
+            return Err(format!("missing required resource flag {flag}"));
+        }
     }
     if text.contains("--token") {
         return Err("token flag".to_owned());
@@ -79,6 +89,16 @@ fn connect_writes_host_toml_without_the_token() -> Result<(), String> {
     if text.contains("canary-token") {
         return Err("toml contains token".to_owned());
     }
+    for field in [
+        "runner_cpu_millicores = 1000",
+        "runner_memory_bytes = 2147483648",
+        "dind_cpu_millicores = 3000",
+        "dind_memory_bytes = 6442450944",
+    ] {
+        if !text.contains(field) {
+            return Err(format!("missing {field}"));
+        }
+    }
     let stored = security_framework::passwords::generic_password(
         security_framework::passwords::PasswordOptions::new_generic_password(
             TEST_SERVICE,
@@ -101,6 +121,10 @@ fn request(state: &Path) -> ConnectRequest<'_> {
         max_jobs: Some(1),
         docker_context: Some("orbstack"),
         endpoint: Some("unix:///var/run/docker.sock"),
+        runner_cpu_millicores: 1_000,
+        runner_memory_bytes: 2_147_483_648,
+        dind_cpu_millicores: 3_000,
+        dind_memory_bytes: 6_442_450_944,
     }
 }
 
@@ -147,4 +171,44 @@ impl Drop for KeychainItem {
             Ok(()) | Err(_) => {}
         }
     }
+}
+
+#[test]
+fn connect_requires_all_four_resource_limits() {
+    let complete = [
+        "velnor-host",
+        "connect",
+        "--repo",
+        "example/repo",
+        "--scale-set",
+        "ubuntu-26.04-scale-set",
+        "--platform",
+        "linux/amd64",
+        "--runner-cpu-millicores",
+        "1000",
+        "--runner-memory-bytes",
+        "2147483648",
+        "--dind-cpu-millicores",
+        "3000",
+        "--dind-memory-bytes",
+        "6442450944",
+    ];
+    assert!(crate::Cli::try_parse_from(complete).is_ok());
+    let missing_memory = [
+        "velnor-host",
+        "connect",
+        "--repo",
+        "example/repo",
+        "--scale-set",
+        "ubuntu-26.04-scale-set",
+        "--platform",
+        "linux/amd64",
+        "--runner-cpu-millicores",
+        "1000",
+        "--runner-memory-bytes",
+        "2147483648",
+        "--dind-cpu-millicores",
+        "3000",
+    ];
+    assert!(crate::Cli::try_parse_from(missing_memory).is_err());
 }

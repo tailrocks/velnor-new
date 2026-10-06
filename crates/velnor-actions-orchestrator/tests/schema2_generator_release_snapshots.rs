@@ -115,7 +115,7 @@ fn assert_source_gate(body: &str) -> Result<(), Box<dyn std::error::Error>> {
     let source_gate = super::job_body(body, "verify-release-source")?;
     assert!(
         source_gate.contains(
-            r#"gh() { mise --no-config --no-env --no-hooks exec gh@2.102.0 -- gh \"$@\"; }\nexport -f gh"#
+            r#"gh() { timeout --signal=TERM --kill-after=5s 60s mise --no-config --no-env --no-hooks exec gh@2.102.0 -- gh \"$@\"; }\nexport -f gh"#
         ),
         "{source_gate}"
     );

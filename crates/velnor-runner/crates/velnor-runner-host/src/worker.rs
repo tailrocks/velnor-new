@@ -2,27 +2,47 @@
 //!
 //! JIT is not a field. `start_pair` writes it on stdin and does not store it.
 
-use std::collections::HashMap;
-
 use bollard::Docker;
-use bollard::models::{ContainerCreateBody, HostConfig, Mount as DockerMount, MountType};
+use bollard::models::ContainerCreateBody;
 use bollard::query_parameters::{
     AttachContainerOptionsBuilder, CreateContainerOptions, StartContainerOptions,
 };
 use tokio::io::AsyncWriteExt;
 
 use crate::docker_client::docker_deadline;
-use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_plan};
+use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_mounts, runner_plan};
 use crate::error::HostError;
 use crate::stage::PairStop;
 
+pub(crate) mod resources;
 mod volumes;
-pub(crate) use volumes::{create_named_volumes, remove_worker_volumes};
+#[cfg(test)]
+pub(crate) use volumes::remove_verified_worker_volume;
+pub(crate) use volumes::{
+    VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole, WorkerVolumeVerification,
+    create_named_volumes, remove_worker_volumes, verify_worker_volume,
+};
+mod mounts;
+mod projection;
+mod resource_budget;
 #[cfg(all(test, unix))]
 mod volumes_tests;
+#[cfg(test)]
+pub(crate) use projection::{dind_create_for_identity, runner_create_for_identity};
+#[cfg(test)]
+pub(crate) use projection::{identity_labels_match, launch_identity_labels_match};
+#[cfg(test)]
+pub(crate) use resource_budget::bounded_host_limits;
+#[cfg(test)]
+pub(crate) use resource_budget::test_resource_budget;
+pub(crate) use resource_budget::{ResourceBudget, ResourceBudgetConfig};
+#[cfg(test)]
+mod projection_tests;
 
 const PLATFORM: &str = "linux/amd64";
 const DIND_IMAGE: &str = "velnor-dind:29.8.2";
+#[cfg(test)]
+const DIND_ENTRYPOINT: [&str; 1] = ["/usr/local/bin/velnor-dind-entrypoint"];
 const IDENTITY_HEX: &[u8; 16] = b"0123456789abcdef";
 
 /// Generate a collision-resistant worker volume base for one journal row.
@@ -61,16 +81,37 @@ pub struct CreateProjection {
     pub env: Vec<String>,
     /// Command. Empty when the image entrypoint stands.
     pub cmd: Vec<String>,
+    /// Expected image entrypoint. It is checked during reconciliation, not sent to Docker.
+    pub entrypoint: Vec<String>,
+    /// Expected image user. An empty image value means the image default.
+    pub user: Option<String>,
+    /// Expected image working directory. An empty image value means the image default.
+    pub working_dir: Option<String>,
     /// `key=value` labels. No JIT.
     pub labels: Vec<String>,
     /// Mounts. Volume sources use `volume:<name>`.
     pub mounts: Vec<Mount>,
+    /// Private host binds. The action archive bind is read-only.
+    pub bind_mounts: Vec<BindMount>,
     /// Host privilege. False for the runner. True only for private `DinD`.
     pub privileged: bool,
     /// `OpenStdin`. True only for the runner channel.
     pub open_stdin: bool,
     /// `container:<id>` joins that container's network namespace. Runner only.
     pub network_mode: Option<String>,
+    /// Validated CPU/memory budget. `None` keeps legacy unbounded behavior.
+    pub(crate) resource_budget: Option<ResourceBudget>,
+}
+
+/// One controller-owned host bind in a runner create projection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BindMount {
+    /// Controller-owned source path.
+    pub source: String,
+    /// Container path.
+    pub target: String,
+    /// Whether the container may write to the source.
+    pub read_only: bool,
 }
 
 /// Ids this call created. No JIT and no name.
@@ -110,11 +151,16 @@ pub fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, HostError
         platform: plan.platform.clone(),
         env: plan.env.clone(),
         cmd: plan.cmd.clone(),
+        entrypoint: Vec::new(),
+        user: None,
+        working_dir: None,
         labels: plan.labels.clone(),
-        mounts: plan.mounts.clone(),
+        mounts: runner_mounts(&plan.mounts)?,
+        bind_mounts: Vec::new(),
         privileged: false,
         open_stdin: true,
         network_mode: None,
+        resource_budget: None,
     })
 }
 
@@ -125,7 +171,7 @@ pub fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, HostError
 ///
 /// # Errors
 ///
-/// Returns [`HostError::ForbiddenMount`] when `dind_id` is not a hex container id.
+/// Returns [`HostError::ForbiddenMount`] when `dind_id` is not 64 hex digits.
 pub(crate) fn join_dind_net(
     mut spec: CreateProjection,
     dind_id: &str,
@@ -138,15 +184,15 @@ pub(crate) fn join_dind_net(
 }
 
 fn dind_container_id(id: &str) -> bool {
-    (12..=64).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_hexdigit())
+    id.len() == 64 && id.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 /// Private `DinD` create. Privilege is not a flag on the runner plan.
 ///
 /// Mounts are the runner plan's socket volume at `/run`, the work volume at
 /// the Actions runner's `/home/runner/_work`, and a DinD-only volume at `/var/lib/docker`. The data
-/// volume is not on the runner. vfs on the container layer slows later
-/// Testcontainers starts.
+/// volume is not on the runner. The action archive volume is not mounted
+/// here. vfs on the container layer slows later Testcontainers starts.
 ///
 /// # Errors
 ///
@@ -170,11 +216,16 @@ pub fn dind_create(private_volume: &str) -> Result<CreateProjection, HostError> 
         platform: runner.platform,
         env: Vec::new(),
         cmd: Vec::new(),
+        entrypoint: Vec::new(),
+        user: None,
+        working_dir: None,
         labels,
         mounts,
+        bind_mounts: Vec::new(),
         privileged: true,
         open_stdin: false,
         network_mode: None,
+        resource_budget: None,
     })
 }
 
@@ -192,11 +243,11 @@ pub fn bollard_create(spec: &CreateProjection) -> Result<BollardCreate, HostErro
         image: Some(spec.image.clone()),
         env: none_if_empty(&spec.env),
         cmd: none_if_empty(&spec.cmd),
-        labels: label_map(&spec.labels)?,
+        labels: mounts::label_map(&spec.labels)?,
         open_stdin: Some(spec.open_stdin),
         attach_stdin: Some(spec.open_stdin),
         stdin_once: Some(spec.open_stdin),
-        host_config: Some(host_config(spec)?),
+        host_config: Some(mounts::host_config(spec)?),
         ..Default::default()
     };
     Ok(BollardCreate {
@@ -247,62 +298,6 @@ fn none_if_empty(items: &[String]) -> Option<Vec<String>> {
     } else {
         Some(items.to_vec())
     }
-}
-
-fn host_config(spec: &CreateProjection) -> Result<HostConfig, HostError> {
-    Ok(HostConfig {
-        privileged: Some(spec.privileged),
-        mounts: docker_mounts(&spec.mounts)?,
-        network_mode: spec.network_mode.clone(),
-        ..Default::default()
-    })
-}
-
-fn docker_mounts(mounts: &[Mount]) -> Result<Option<Vec<DockerMount>>, HostError> {
-    if mounts.is_empty() {
-        return Ok(None);
-    }
-    let mut out = Vec::with_capacity(mounts.len());
-    for mount in mounts {
-        out.push(docker_mount(mount)?);
-    }
-    Ok(Some(out))
-}
-
-fn docker_mount(mount: &Mount) -> Result<DockerMount, HostError> {
-    let (typ, source) = mount_source(&mount.source)?;
-    Ok(DockerMount {
-        target: Some(mount.target.clone()),
-        source: Some(source),
-        typ: Some(typ),
-        ..Default::default()
-    })
-}
-
-fn mount_source(source: &str) -> Result<(MountType, String), HostError> {
-    Ok((MountType::VOLUME, volume_name(source)?.to_owned()))
-}
-
-fn label_map(labels: &[String]) -> Result<Option<HashMap<String, String>>, HostError> {
-    if labels.is_empty() {
-        return Ok(None);
-    }
-    let mut map = HashMap::with_capacity(labels.len());
-    for label in labels {
-        let (key, value) = label.split_once('=').ok_or(HostError::ForbiddenMount)?;
-        if key.is_empty() {
-            return Err(HostError::ForbiddenMount);
-        }
-        map.insert(key.to_owned(), value.to_owned());
-    }
-    Ok(Some(map))
-}
-
-fn volume_name(source: &str) -> Result<&str, HostError> {
-    source
-        .strip_prefix("volume:")
-        .filter(|name| !name.is_empty())
-        .ok_or(HostError::ForbiddenMount)
 }
 
 pub(crate) async fn worker_id_for_name(

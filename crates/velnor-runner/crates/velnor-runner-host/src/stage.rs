@@ -10,8 +10,9 @@ use crate::docker_client::docker_deadline;
 use crate::docker_spec::{DeleteDecision, delete_decision, runner_plan};
 use crate::error::HostError;
 use crate::worker::{
-    CreateProjection, create_named_volumes, create_only, deliver_jit, dind_create, join_dind_net,
-    remove_worker_volumes, runner_create, start_id,
+    CreateProjection, WorkerVolumeRole, WorkerVolumeVerification, create_named_volumes,
+    create_only, deliver_jit, dind_create, join_dind_net, remove_worker_volumes, runner_create,
+    start_id, verify_worker_volume,
 };
 
 /// Where `start_pair_until` returns. Later steps are not started.
@@ -53,6 +54,11 @@ pub(crate) trait PairEngine {
         volume: &str,
         role: &str,
     ) -> Result<Option<String>, HostError>;
+    async fn verify_volume(
+        &self,
+        worker: &str,
+        role: WorkerVolumeRole,
+    ) -> Result<WorkerVolumeVerification, HostError>;
     async fn remove_worker_volumes(&self, volume: &str) -> Result<bool, HostError>;
     async fn running(&self, id: &str) -> Result<bool, HostError>;
 }
@@ -93,7 +99,8 @@ impl PairEngine for Docker {
             volume,
             &dind_create(volume)?.mounts,
         )))
-        .await?
+        .await??;
+        crate::work_owner::own_work_volume(self, &format!("{volume}-work")).await
     }
 
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError> {
@@ -139,6 +146,14 @@ impl PairEngine for Docker {
         role: &str,
     ) -> Result<Option<String>, HostError> {
         crate::worker::worker_id_for_name(self, name, volume, role).await
+    }
+
+    async fn verify_volume(
+        &self,
+        worker: &str,
+        role: WorkerVolumeRole,
+    ) -> Result<WorkerVolumeVerification, HostError> {
+        verify_worker_volume(self, worker, role).await
     }
 
     async fn remove_worker_volumes(&self, volume: &str) -> Result<bool, HostError> {

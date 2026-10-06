@@ -33,6 +33,31 @@ file_size_bytes() {
   printf '%s\n' "$size"
 }
 
+json_has_unique_keys() {
+  local path="$1"
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "FATAL: python3 is required to reject duplicate JSON keys" >&2
+    return 1
+  fi
+  python3 - "$path" <<'PY'
+import json
+import sys
+
+def pairs(seq):
+    seen = set()
+    out = {}
+    for key, value in seq:
+        if key in seen:
+            raise SystemExit(1)
+        seen.add(key)
+        out[key] = value
+    return out
+
+with open(sys.argv[1], "rb") as handle:
+    json.load(handle, object_pairs_hook=pairs)
+PY
+}
+
 host_target() {
   case "$(uname -s):$(uname -m)" in
     Linux:x86_64|Linux:amd64) echo "x86_64-unknown-linux-gnu" ;;
@@ -67,6 +92,10 @@ validate_candidate_manifest() {
   fi
   if ! jq -e . "$CANDIDATE_MANIFEST" >/dev/null 2>&1; then
     echo "FATAL: candidate manifest is malformed JSON" >&2
+    exit 2
+  fi
+  if ! json_has_unique_keys "$CANDIDATE_MANIFEST"; then
+    echo "FATAL: candidate manifest contains duplicate JSON keys" >&2
     exit 2
   fi
   if [ "${GITHUB_REPOSITORY-unset}" != "tailrocks/velnor-new" ]; then

@@ -1,4 +1,4 @@
-//! Negative cases for the four enabled Alint rules (`.alint.yml`).
+//! Negative cases for the five enabled Alint rules (`.alint.yml`).
 //!
 //! Each test embeds one fixture from `fixtures/alint-negative/` and asserts
 //! the mirrored rule predicate rejects it. The predicates mirror the rule
@@ -24,6 +24,8 @@ const STRAY_RS: &str = include_str!("../../../fixtures/alint-negative/crates-onl
 const OVERSIZED_RS: &str =
     include_str!("../../../fixtures/alint-negative/rust-max-lines/oversized.rs");
 const BIG_LIB_RS: &str = include_str!("../../../fixtures/alint-negative/lib-main-max-lines/lib.rs");
+const STRAY_SOURCE: &str =
+    include_str!("../../../fixtures/alint-negative/no-source-suffix/stray.source");
 
 /// Required entries absent from `present` (mirrors `file_exists`).
 fn missing_required(present: &[&str]) -> Vec<&'static str> {
@@ -36,12 +38,46 @@ fn missing_required(present: &[&str]) -> Vec<&'static str> {
     missing
 }
 
-/// True when `repo_path` matches `**/*.rs` outside `crates/**`.
+/// True when `repo_path` matches `**/*.rs` outside the canonical crate dirs.
 fn violates_crates_only(repo_path: &str) -> bool {
+    if std::path::Path::new(repo_path)
+        .extension()
+        .is_none_or(|ext| ext != "rs")
+    {
+        return false;
+    }
+    !matches!(
+        repo_path.split('/').collect::<Vec<_>>().as_slice(),
+        ["crates", "test_support", ..]
+            | [
+                "crates",
+                _,
+                "src"
+                    | "tests"
+                    | "benches"
+                    | "examples"
+                    | "fixtures"
+                    | "testdata"
+                    | "build_support"
+                    | "build.rs",
+                ..
+            ]
+            | [
+                "crates",
+                "velnor-runner",
+                "crates",
+                _,
+                "src" | "tests" | "benches" | "examples" | "build.rs",
+                ..
+            ]
+    )
+}
+
+/// True when `repo_path` matches `**/*.source`.
+fn violates_no_source_suffix(repo_path: &str) -> bool {
     std::path::Path::new(repo_path)
         .extension()
-        .is_some_and(|ext| ext == "rs")
-        && !repo_path.starts_with("crates/")
+        .is_some_and(|ext| ext == "source")
 }
 
 /// Physical line count, matching `file_max_lines` accounting.
@@ -88,6 +124,30 @@ fn crates_only_fixture_path_is_rejected() {
     ));
     assert!(!violates_crates_only("docs/notes.md"));
     assert!(violates_crates_only("crates-notes.rs"));
+    assert!(!violates_crates_only("crates/velnor-actions-cli/build.rs"));
+    assert!(!violates_crates_only(
+        "crates/velnor-archive-guard/build_support/inputs.rs"
+    ));
+    assert!(!violates_crates_only("crates/test_support/git_fixture.rs"));
+    assert!(!violates_crates_only(
+        "crates/velnor-runner/crates/velnor-runner-host/src/lib.rs"
+    ));
+    assert!(violates_crates_only("crates/velnor-actions-cli/stray.rs"));
+    assert!(violates_crates_only("crates/velnor-runner/stray.rs"));
+    assert!(violates_crates_only("docs/wip/snapshot/launch_harness.rs"));
+}
+
+#[test]
+fn no_source_suffix_fixture_path_is_rejected() {
+    let repo_path = header_value(STRAY_SOURCE, "repo-path").expect("fixture header");
+    assert!(
+        violates_no_source_suffix(repo_path),
+        "fixture path must be rejected: {repo_path}"
+    );
+    assert!(!violates_no_source_suffix(
+        "crates/velnor-runner/crates/velnor-runner-host/src/launch_harness.rs"
+    ));
+    assert!(violates_no_source_suffix("fixtures/evil.source"));
 }
 
 #[test]

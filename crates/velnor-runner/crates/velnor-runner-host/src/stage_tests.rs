@@ -5,7 +5,10 @@ use std::sync::Mutex;
 
 use super::HostError;
 use super::stage::{Forget, PairEngine, PairStop, decide, drive};
-use super::worker::CreateProjection;
+use super::worker::{CreateProjection, WorkerVolumeRole, WorkerVolumeVerification};
+
+// join_dind_net accepts only a 64-hex container id.
+const FIRST_CONTAINER_ID: &str = "0000000000000000000000000000000000000000000000000000000000000001";
 
 struct Fake {
     events: Mutex<Vec<&'static str>>,
@@ -73,7 +76,7 @@ impl PairEngine for Fake {
         self.hit("create")?;
         push(&self.events, "create")?;
         let mut ids = self.ids.lock().map_err(|_| HostError::Docker)?;
-        let id = format!("{:012x}", ids.len() + 1);
+        let id = format!("{:064x}", ids.len() + 1);
         ids.push(id.clone());
         drop(ids);
         self.names
@@ -122,6 +125,14 @@ impl PairEngine for Fake {
         Ok(names.get(name).cloned())
     }
 
+    async fn verify_volume(
+        &self,
+        _worker: &str,
+        _role: WorkerVolumeRole,
+    ) -> Result<WorkerVolumeVerification, HostError> {
+        Ok(WorkerVolumeVerification::Absent)
+    }
+
     async fn remove_worker_volumes(&self, _volume: &str) -> Result<bool, HostError> {
         Ok(true)
     }
@@ -140,7 +151,7 @@ fn push(events: &Mutex<Vec<&'static str>>, event: &'static str) -> Result<(), Ho
 async fn dind_created_does_not_start() -> Result<(), HostError> {
     let engine = Fake::new();
     let partial = drive(&engine, "worker_a", b"jit", PairStop::DindCreated, &Forget).await?;
-    assert_eq!(partial.dind_id.as_deref(), Some("000000000001"));
+    assert_eq!(partial.dind_id.as_deref(), Some(FIRST_CONTAINER_ID));
     assert_eq!(partial.runner_id, None);
     assert_eq!(engine.events(), ["volumes", "create"]);
     Ok(())
@@ -201,7 +212,7 @@ async fn volumes_stop_creates_no_container() -> Result<(), HostError> {
 async fn dind_started_does_not_create_the_runner() -> Result<(), HostError> {
     let engine = Fake::new();
     let partial = drive(&engine, "worker_a", b"jit", PairStop::DindStarted, &Forget).await?;
-    assert_eq!(partial.dind_id.as_deref(), Some("000000000001"));
+    assert_eq!(partial.dind_id.as_deref(), Some(FIRST_CONTAINER_ID));
     assert_eq!(partial.runner_id, None);
     assert_eq!(engine.events(), ["volumes", "create", "start"]);
     Ok(())
@@ -255,7 +266,7 @@ async fn second_create_failure_removes_only_the_owned_dind() -> Result<(), HostE
         return Err(HostError::Docker);
     };
     assert_eq!(error, HostError::Docker);
-    assert_eq!(engine.removed(), ["000000000001".to_owned()]);
+    assert_eq!(engine.removed(), [FIRST_CONTAINER_ID.to_owned()]);
     assert_eq!(engine.events(), ["volumes", "create", "start", "remove"]);
     let names = engine.names.lock().map_err(|_| HostError::Docker)?;
     assert_eq!(

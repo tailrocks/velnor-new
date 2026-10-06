@@ -8,10 +8,11 @@
 //! untracked path must be created to be listed) and reports a loud
 //! `paths: ... status=SKIP` diagnostic instead of asserting.
 
+#[cfg(unix)]
+use crate::impl_common::git_fixture;
+
 use std::fs;
 use std::path::Path;
-#[cfg(unix)]
-use std::process::Command as StdCommand;
 
 use velnor_actions_contract::Plan;
 use velnor_actions_orchestrator::{plan_internal, resolve_root};
@@ -307,7 +308,7 @@ fn commit_with_raw_name(
     use std::os::unix::ffi::OsStringExt;
 
     fn git_output(args: &[OsString], cwd: &Path) -> Result<String, Box<dyn std::error::Error>> {
-        let output = StdCommand::new("git")
+        let output = git_fixture::command(cwd)?
             .args(args)
             .current_dir(cwd)
             .output()?;
@@ -319,7 +320,7 @@ fn commit_with_raw_name(
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
     }
 
-    let hash_child = StdCommand::new("git")
+    let hash_child = git_fixture::command(root)?
         .args(["hash-object", "-w", "-t", "blob", "--stdin"])
         .current_dir(root)
         .stdin(std::process::Stdio::null())

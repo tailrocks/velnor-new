@@ -16,7 +16,7 @@
 //! well-formed requests never reach this fallback.
 
 use serde::Deserialize;
-use velnor_actions_contract::{RequiredJobResult, WorkflowEvent};
+use velnor_actions_contract::{QualificationDispatch, RequiredJobResult, WorkflowEvent};
 
 use super::MergeRequest;
 use crate::cover::shard::{ResourceLimits, ShardProof};
@@ -32,6 +32,9 @@ struct LenientRequest {
     /// Merge-time triggering event captured at assembly.
     #[serde(default)]
     actual_event: Option<WorkflowEvent>,
+    /// Qualification provenance recaptured from the actual merge runner.
+    #[serde(default)]
+    actual_qualification: Option<QualificationDispatch>,
     /// Head-bound candidate attestation; required in candidate mode.
     #[serde(default)]
     candidate_attestation: Option<serde_json::Value>,
@@ -104,6 +107,7 @@ pub(crate) fn lenient_request(envelope: &serde_json::Value) -> Option<MergeReque
         schema: raw.schema,
         run_key: raw.run_key,
         actual_event: raw.actual_event,
+        actual_qualification: raw.actual_qualification,
         candidate_attestation,
         plan,
         matrix,

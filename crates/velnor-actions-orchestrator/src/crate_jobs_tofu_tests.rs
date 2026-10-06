@@ -3,6 +3,7 @@
 //! Declared via `#[path]` from `crate_jobs.rs` under `cfg(test)`.
 
 use super::*;
+use crate::matrix_step::step_name_for;
 use velnor_actions_rust::TaskKind;
 
 /// Tofu proposal via the T12 adapter constructor.
@@ -20,11 +21,7 @@ fn tofu_group(root: &str, kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTa
 
 /// Provider restore present, rust restores absent, for pure-tofu names.
 fn assert_provider_restore_only(names: &[&str]) {
-    for rust in [
-        "Restore Cargo sources",
-        "Restore Cargo registry",
-        "Restore MBX objects",
-    ] {
+    for rust in ["Restore Cargo sources", "Restore MBX objects"] {
         assert!(!names.contains(&rust), "no rust-pinned {rust}: {names:?}");
     }
     assert!(

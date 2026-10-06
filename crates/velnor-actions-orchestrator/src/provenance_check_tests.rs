@@ -36,6 +36,7 @@ fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectation
         artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
         artifact_name: name,
         tasks: Vec::new(),
+        parent: None,
         expires_at_unix: None,
     };
     let expected = ProvenanceExpectations {
@@ -251,6 +252,7 @@ fn task_entry(digest: &str) -> crate::merge::required_evidence::BaselineTaskEntr
         input_digest: digest.to_owned(),
         closure_digest: digest.to_owned(),
         proof_run_id: 7,
+        carried_from: None,
         observed_run_id: 7,
         external_data: None,
         proof: None,

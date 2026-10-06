@@ -14,12 +14,13 @@
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::{
-    ContractError, FileIndex, RustConfiguration, Stack, VelnorConfig, task_id_for_stack,
+    ContractError, FileIndex, RustConfiguration, Stack, VelnorConfig, WorkflowPolicy,
+    task_id_for_stack,
 };
 use velnor_actions_mise::{ArchivePlan, NextestArchive, NextestDriver, SortedInventory};
 use velnor_actions_rust::{
-    CompileDriver, DeriveInputs, RustExecutionProfile, TaskGroup, TaskKind, derive_task_groups,
-    derive_workspace_fmt_if_explicit, expand_shards_for_group,
+    CompileDriver, DeriveInputs, RustExecutionProfile, TaskGroup, TaskKind, VelnorV1TaskOwner,
+    derive_task_groups, derive_workspace_fmt_if_explicit, expand_shards_for_group,
 };
 
 use crate::OrchestratorError;
@@ -58,11 +59,16 @@ impl FeatureFallback {
 pub(crate) fn declared_union(
     workspaces: &[PlannedWorkspace],
     index: &FileIndex,
+    policy: WorkflowPolicy,
 ) -> BTreeSet<String> {
     let mut union = BTreeSet::new();
     for workspace in workspaces {
         for package in &workspace.record.packages {
-            if package.in_workspace && !package.external && index.contains(&package.manifest) {
+            if package.in_workspace
+                && !package.external
+                && index.contains(&package.manifest)
+                && !repository_maintenance_member(policy, &workspace.record.workspace_root, package)
+            {
                 union.extend(package.features.iter().cloned());
             }
         }
@@ -93,7 +99,15 @@ pub(crate) fn derive_for_config(
     let mut groups = Vec::new();
     let mut fallbacks = Vec::new();
     for package in &record.packages {
-        if !package.in_workspace || package.external || !index.contains(&package.manifest) {
+        if !package.in_workspace
+            || package.external
+            || !index.contains(&package.manifest)
+            || repository_maintenance_member(
+                config.workflow.policy,
+                &record.workspace_root,
+                package,
+            )
+        {
             continue;
         }
         let (features, fallback) =
@@ -136,6 +150,20 @@ pub(crate) fn derive_for_config(
         groups.push(fmt);
     }
     Ok((groups, fallbacks))
+}
+
+/// A repository-maintenance owner applies only to the canonical repository's
+/// root workspace. Consumer policy always treats the same package as a project.
+fn repository_maintenance_member(
+    policy: WorkflowPolicy,
+    workspace_root: &str,
+    package: &velnor_actions_rust::PackageRecord,
+) -> bool {
+    policy == WorkflowPolicy::VelnorRepositoryV1
+        && workspace_root.is_empty()
+        && package.in_workspace
+        && !package.external
+        && package.v1_task_owner == VelnorV1TaskOwner::RepositoryMaintenance
 }
 
 /// Intersect one configuration request with one crate's declared features.
@@ -196,6 +224,10 @@ fn resolve_features(
     };
     Ok((applied, Some(fallback)))
 }
+
+#[cfg(test)]
+#[path = "derive_groups_task_owner_tests.rs"]
+mod task_owner_tests;
 
 /// Expand test groups into per-shard groups when sharding exceeds one.
 pub(crate) fn expand_shards(

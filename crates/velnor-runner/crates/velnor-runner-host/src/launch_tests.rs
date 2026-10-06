@@ -4,17 +4,23 @@ use std::sync::{Arc, Mutex};
 
 use velnor_runner_github::{InnerJob, InnerKind, ParsedBatch, Poll, Statistics};
 
-use crate::launch::{Idle, drive_offer, idle};
+use crate::journal::Outcome;
+use crate::launch::{Idle, drive_offer, fail_unstarted, idle};
 use crate::launch_harness::{
     CANARY, Mode, Script, absent, assigned_wait, available, ctx, open, started_progress,
+    started_wait,
 };
 use crate::launch_test_support::valid_worker_volume;
 use crate::{EnsureError, HostError, IntentState, Started};
+
+#[path = "launch_drive_tests.rs"]
+mod drive;
 
 #[test]
 fn statistics_advance_and_offers_stay() {
     let stats = Poll::Batch(ParsedBatch {
         message_id: 2,
+        raw_body: String::new(),
         statistics: None,
         jobs: Vec::new(),
     });
@@ -24,6 +30,8 @@ fn statistics_advance_and_offers_stay() {
     assert_eq!(idle(&available(&[3, 4])), Idle::Blocked);
     assert_eq!(idle(&assigned_wait(7, 1)), Idle::Scale);
     assert_eq!(idle(&assigned_wait(7, 0)), Idle::Ack);
+    assert_eq!(idle(&started_wait(7, 1)), Idle::Scale);
+    assert_eq!(idle(&assigned_started(7, 4)), Idle::Ack);
     assert_eq!(idle(&assigned_wait(8, -1)), Idle::Blocked);
     assert_eq!(idle(&started_progress(11, 5)), Idle::Scale);
 
@@ -80,6 +88,7 @@ fn statistics_advance_and_offers_stay() {
     );
     let synthetic = ParsedBatch {
         message_id: -1,
+        raw_body: String::new(),
         statistics: None,
         jobs: Vec::new(),
     };
@@ -93,6 +102,7 @@ fn no_stats(jobs: Vec<InnerJob>) -> Poll {
 fn batch(statistics: Option<Statistics>, jobs: Vec<InnerJob>) -> Poll {
     Poll::Batch(ParsedBatch {
         message_id: 77,
+        raw_body: String::new(),
         statistics,
         jobs,
     })
@@ -109,6 +119,104 @@ fn job(kind: InnerKind) -> InnerJob {
         result: None,
         fields: Vec::new(),
     }
+}
+
+fn assigned_started(message_id: i64, assigned: i64) -> Poll {
+    let mut assigned_job = job(InnerKind::Assigned);
+    assigned_job.request_id = Some(4);
+    let mut started_job = job(InnerKind::Started);
+    started_job.request_id = Some(4);
+    Poll::Batch(ParsedBatch {
+        message_id,
+        raw_body: String::new(),
+        statistics: Some(Statistics {
+            total_available_jobs: 0,
+            total_acquired_jobs: 0,
+            total_assigned_jobs: assigned,
+            total_running_jobs: 0,
+            total_registered_runners: 0,
+            total_busy_runners: 0,
+            total_idle_runners: 0,
+        }),
+        jobs: vec![assigned_job, started_job],
+    })
+}
+
+#[tokio::test]
+async fn started_replay_releases_the_unstarted_row() -> Result<(), String> {
+    let (scratch, journal) = open("started-replay").await?;
+    let id = journal
+        .begin("launch", "m100000776")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
+    let poll = assigned_started(100_000_776, 4);
+    let failed = fail_unstarted(&journal, &poll)
+        .await
+        .map_err(|err| err.to_string())?;
+    if !failed {
+        return Err("unstarted replay row was not failed".to_owned());
+    }
+    let state = journal.read(id).await.map_err(|err| err.to_string())?;
+    if state != IntentState::Failed {
+        return Err(format!("state {state:?}"));
+    }
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn name_taken_failure_releases_the_unstarted_scale_row() -> Result<(), String> {
+    let (scratch, journal) = open("name-taken").await?;
+    let id = journal
+        .begin("launch", "m100000769")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
+    let failed = fail_unstarted(&journal, &assigned_wait(100_000_769, 5))
+        .await
+        .map_err(|err| err.to_string())?;
+    if !failed {
+        return Err("unstarted row was not failed".to_owned());
+    }
+    let state = journal.read(id).await.map_err(|err| err.to_string())?;
+    if state != IntentState::Failed {
+        return Err(format!("state {state:?}"));
+    }
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn name_taken_keeps_a_row_that_has_a_container() -> Result<(), String> {
+    let (scratch, journal) = open("name-taken-live").await?;
+    let id = journal
+        .begin("launch", "m100000769")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .bind_worker(id, Some("runner-container"), None)
+        .await
+        .map_err(|err| err.to_string())?;
+    let failed = fail_unstarted(&journal, &assigned_wait(100_000_769, 5))
+        .await
+        .map_err(|err| err.to_string())?;
+    if failed {
+        return Err("container row was treated as a name collision".to_owned());
+    }
+    let state = journal.read(id).await.map_err(|err| err.to_string())?;
+    if state != IntentState::Uncertain {
+        return Err(format!("state {state:?}"));
+    }
+    absent(&scratch.file())
 }
 
 #[tokio::test]
@@ -156,6 +264,13 @@ async fn launch_acks_only_after_start_and_hides_jit() -> Result<(), String> {
     assert_eq!(rows[0].state, IntentState::Done);
     assert_eq!(rows[0].docker_id.as_deref(), Some("runner-1"));
     assert_eq!(rows[0].dind_id.as_deref(), Some("dind-1"));
+    assert_eq!(
+        journal
+            .record_runner_completed(1, 3, 901, "v3")
+            .await
+            .map_err(|error| error.to_string())?,
+        Some(rows[0].id)
+    );
     absent(&scratch.file())
 }
 
@@ -194,7 +309,7 @@ async fn uncertain_acquire_does_not_ack() -> Result<(), String> {
     )
     .await;
     assert_eq!(replayed, Err(EnsureError::Uncertain));
-    assert!(replay.calls.is_empty());
+    assert_eq!(replay.calls, Vec::<&str>::new());
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].id, id);
@@ -250,126 +365,4 @@ async fn empty_acquire_is_not_acked() -> Result<(), String> {
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows[0].state, IntentState::Failed);
     Ok(())
-}
-
-#[tokio::test]
-async fn two_offers_are_not_acquired() -> Result<(), String> {
-    let (_scratch, journal) = open("two").await?;
-    let mut script = Script {
-        calls: Vec::new(),
-        mode: Mode::Ok,
-    };
-    let error = drive_offer(
-        &mut script,
-        &ctx(),
-        &available(&[3, 4]),
-        &journal,
-        |_volume, _jit, _bind| async { Err(HostError::Docker) },
-    )
-    .await;
-    assert_eq!(
-        error,
-        Err(EnsureError::Unexpected {
-            status: 0,
-            step: "capacity",
-        })
-    );
-    assert_eq!(script.calls, Vec::<&str>::new());
-    let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert_eq!(rows, Vec::new());
-    Ok(())
-}
-
-#[tokio::test]
-async fn bound_runner_acks_without_a_second_start() -> Result<(), String> {
-    let (scratch, journal) = open("replay").await?;
-    let mut first = Script {
-        calls: Vec::new(),
-        mode: Mode::Ok,
-    };
-    let started = drive_offer(
-        &mut first,
-        &ctx(),
-        &available(&[3]),
-        &journal,
-        |_volume, _jit, _bind| async {
-            Ok(Started {
-                dind_id: "dind-1".to_owned(),
-                runner_id: "runner-1".to_owned(),
-            })
-        },
-    )
-    .await
-    .map_err(|err| err.to_string())?;
-    assert_eq!(
-        started.map(|item| item.runner_id).as_deref(),
-        Some("runner-1")
-    );
-    let mut second = Script {
-        calls: Vec::new(),
-        mode: Mode::Ok,
-    };
-    let again = drive_offer(
-        &mut second,
-        &ctx(),
-        &available(&[3]),
-        &journal,
-        |_volume, _jit, _bind| async { Err(HostError::Docker) },
-    )
-    .await
-    .map_err(|err| err.to_string())?;
-    assert_eq!(again, None);
-    assert_eq!(second.calls, ["ack"]);
-    absent(&scratch.file())
-}
-
-#[tokio::test]
-async fn start_failure_after_acquire_is_not_acked() -> Result<(), String> {
-    let (scratch, journal) = open("start").await?;
-    let mut script = Script {
-        calls: Vec::new(),
-        mode: Mode::Ok,
-    };
-    let error = drive_offer(
-        &mut script,
-        &ctx(),
-        &available(&[3]),
-        &journal,
-        |_volume, _jit, _bind| async { Err(HostError::Docker) },
-    )
-    .await;
-    assert_eq!(error, Err(EnsureError::Uncertain));
-    assert_eq!(script.calls, ["acquire", "jit"]);
-    let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert_eq!(rows[0].state, IntentState::Uncertain);
-    assert_eq!(rows[0].docker_id, None);
-    absent(&scratch.file())
-}
-
-#[tokio::test]
-async fn ack_failure_keeps_the_runner_bound() -> Result<(), String> {
-    let (scratch, journal) = open("ack").await?;
-    let mut script = Script {
-        calls: Vec::new(),
-        mode: Mode::AckFail,
-    };
-    let error = drive_offer(
-        &mut script,
-        &ctx(),
-        &available(&[3]),
-        &journal,
-        |_volume, _jit, _bind| async {
-            Ok(Started {
-                dind_id: "dind-1".to_owned(),
-                runner_id: "runner-1".to_owned(),
-            })
-        },
-    )
-    .await;
-    assert_eq!(error, Err(EnsureError::Uncertain));
-    assert_eq!(script.calls, ["acquire", "jit", "ack"]);
-    let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert_eq!(rows[0].state, IntentState::Uncertain);
-    assert_eq!(rows[0].docker_id.as_deref(), Some("runner-1"));
-    absent(&scratch.file())
 }

@@ -2,9 +2,10 @@
 //! (normal repo, linked worktree, include, worktree config, reject
 //! mismatch/missing) through the typed prepare boundary.
 
+use crate::impl_common::git_fixture;
+
 use std::fs;
 use std::path::Path;
-use std::process::Command as StdCommand;
 
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{OrchestratorError, prepare};
@@ -44,7 +45,7 @@ fn make_velnor_repo() -> Result<TempDir, Box<dyn std::error::Error>> {
 
 /// Run git with owned arguments (for dynamic paths).
 fn git_owned(args: &[String], cwd: &Path) -> TestResult {
-    let status = StdCommand::new("git")
+    let status = git_fixture::command(cwd)?
         .args(args)
         .current_dir(cwd)
         .status()?;

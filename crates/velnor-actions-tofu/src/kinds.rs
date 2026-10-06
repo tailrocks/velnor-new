@@ -15,7 +15,7 @@ pub enum TofuTaskKind {
     /// Validation-only init (backend-less, readonly lockfile).
     ///
     /// Contract-exact `InitForValidate`; the wire spelling stays
-    /// `init` (spec §6.1 `stack/tofu/root/init/default` normative).
+    /// `init` (spec §6.1 `stack/tofu/dir-/init/default` normative).
     InitForValidate,
     /// Real validate in the initialized root.
     Validate,

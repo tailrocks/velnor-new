@@ -6,7 +6,7 @@ use crate::yaml::Yaml;
 use super::super::features::{base, finish};
 use super::assets::ProductAsset;
 use super::workflow_steps::{self, with_permissions};
-use super::{GeneratorReleasePins, assets, jobs, manifest};
+use super::{ProductReleasePins, assets, jobs, manifest};
 
 pub(super) struct QualificationJob<'a> {
     pub id: &'a str,
@@ -21,7 +21,7 @@ pub(super) struct QualificationJob<'a> {
 /// Qualify a build artifact in a job that has no write or attestation permissions.
 pub(super) fn job(
     job: QualificationJob<'_>,
-    pins: &GeneratorReleasePins,
+    pins: &ProductReleasePins,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<(String, Yaml), RenderError> {
     let mut action_steps = vec![workflow_steps::mise_step(

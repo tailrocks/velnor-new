@@ -1,11 +1,19 @@
 # Release gates: source and external evidence
 
 This record separates checked-in release mechanics from hosted evidence and
-infrastructure. PR46 adds the source-bound `generator-release.yml` workflow,
-including candidate qualification, a same-run manifest, and protected
+infrastructure. The renderer emits a source-bound, dispatch-only
+`.github/workflows/product-release.yml` coordinator with reusable image,
+binary, and generator modules. The generator module includes candidate
+qualification, a same-run manifest, source-bound attestations, and protected
 publication. Source and local tests do not prove a hosted qualification run,
 an immutable release, or GitHub environment protection. No release was
 published while preparing this change.
+
+This release integration checkpoint does not constitute whole-tree source
+acceptance. The merged catalog keeps production MBX at 1.21.1 and retains the
+hold on the unqualified 1.22.0 promotion. The merged PR73 seed-authority
+correction is present in this source tree, but no hosted cache or seed
+qualification is established by the release-source checks below.
 
 ## Seed and first release (BOOT)
 
@@ -13,19 +21,24 @@ published while preparing this change.
   pinned Mise + MBX (no Velnor binary), 2 distinct admin approvals, and an
   independent reproducible rebuild (second party, pinned catalog, sha256
   match) recorded in the seed PR (Gap E review). Pre-seed is trust-on-review.
-- BOOT-2.1 (release assets): SOURCE-IMPLEMENTED, NOT RELEASED. The protected
-  workflow builds three target binaries, qualifies the exact uploaded bytes,
-  and produces the canonical versioned manifest from their measured digests.
-  Unblock = a successful exact-source hosted run verifies all three native
-  targets and publishes the immutable assets and manifest; a separate review
-  then verifies the published bytes and updates consumer provenance.
+- BOOT-2.1 (release assets): SOURCE-IMPLEMENTED, HOSTED QUALIFICATION AND
+  PUBLICATION UNVERIFIED, NOT RELEASED. The source-bound workflow builds three
+  target binaries, admits each candidate TAR through the checkout-owned native
+  guard before parsing, and binds qualification, attestations, and the
+  canonical versioned manifest to the same measured artifact bytes. No
+  successful exact-source hosted run has qualified all three native targets;
+  `check-release`, immutable publication, and the resulting external asset
+  provenance remain unverified. Unblock = complete that hosted qualification
+  and publication, then separately review the published bytes and update
+  consumer provenance.
 - BOOT-4.7 (protected release job): SOURCE-IMPLEMENTED, INFRASTRUCTURE
-  UNVERIFIED. The renderer emits a dispatch-only publisher with a protected
-  `generator-release` environment, serialized publication, source/CI rechecks,
-  immutable-tag preflight, and digest/attestation verification. Unblock =
-  verify the repository's actual environment rules and branch protections,
-  complete a qualified hosted run, and land the bootstrap-lock update in a
-  SEPARATE reviewed change while ordinary CI keeps using the previous seed.
+  UNVERIFIED. The renderer emits a dispatch-only coordinator and a generator
+  publisher with a protected `generator-release` environment, serialized
+  publication, source/CI rechecks, immutable-tag preflight, and
+  digest/attestation verification. Unblock = verify the repository's actual
+  environment rules and branch protections, complete a qualified hosted run,
+  and land the bootstrap-lock update in a SEPARATE reviewed change while
+  ordinary CI keeps using the previous seed.
 - BOOT-3.4 (mise-bootstrap equality): half done (`.mise-version` ==
   `MISE_VERSION` const). Unblock = seed creates `.velnor/generator.lock`
   with the same exact Mise release + SHA-256; the equality check then

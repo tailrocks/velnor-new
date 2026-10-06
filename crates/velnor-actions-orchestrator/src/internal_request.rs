@@ -4,20 +4,20 @@ use std::collections::BTreeMap;
 use std::env;
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    NAMED_CHECK_LANES_ENV, NamedCheckLane, WorkflowEvent, canonical_json_bytes, run_key_for_ci,
-    validate_run_key,
+    FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, NAMED_CHECK_LANES_ENV, NamedCheckLane,
+    PLAN_JSON_FILENAME, QualificationDispatch, WorkflowEvent, canonical_json_bytes,
+    matrix_json_bytes, plan_json_bytes, run_key_for_ci, validate_run_key,
 };
 
 use crate::OrchestratorError;
-use crate::internal::{MERGE_OP, PLAN_OP, SCHEMA, internal, internal_contract};
-use crate::request_event::{request_refs, workflow_event_for};
-
-#[path = "internal_request_outputs.rs"]
-mod outputs;
-pub use outputs::{
-    PlanOutputs, merge_passed, plan_outputs, publish_final_report, publish_plan_files,
+use crate::decisions::plan_artifact_dir;
+use crate::internal::{
+    MERGE_OP, PLAN_OP, PlanResponse, SCHEMA, check_schema, internal, internal_contract,
+};
+use crate::request_event::{
+    QualificationRunnerContext, qualification_dispatch_for_parts, request_refs, workflow_event_for,
 };
 
 /// Plan-time request: `{schema, op, event, base, head, root}` (schema 1).
@@ -42,11 +42,17 @@ struct EventRequest {
     /// Omitted when unset (local runs fall back to the git origin).
     #[serde(skip_serializing_if = "Option::is_none")]
     repository: Option<String>,
-    /// Exact emitted named-check job and report identities, when schema 2
-    /// expands checks across execution lanes.
+    /// Source-bound context for protected hosted qualification dispatches.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    qualification: Option<QualificationDispatch>,
+    /// Exact named-check job identities for lane expansion.
     #[serde(skip_serializing_if = "Option::is_none")]
     named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
 }
+
+#[path = "internal_request_plan.rs"]
+mod plan;
+pub(crate) use plan::{PlanRequest, checked_plan_request};
 
 /// Materialize the canonical request file from the GitHub environment.
 ///
@@ -161,6 +167,20 @@ fn write_request_parts_with_lanes(
     let payload: serde_json::Value =
         serde_json::from_str(payload_json).map_err(|_| internal("malformed_event_payload"))?;
     let event = workflow_event_for(event_name, &payload)?;
+    let qualification = qualification_dispatch_for_parts(
+        event_name,
+        &payload,
+        QualificationRunnerContext {
+            repository,
+            git_ref: env::var("GITHUB_REF").ok().as_deref(),
+            ref_protected: env::var("GITHUB_REF_PROTECTED").ok().as_deref(),
+            workflow_ref: env::var("GITHUB_WORKFLOW_REF").ok().as_deref(),
+            workflow_sha: env::var("GITHUB_WORKFLOW_SHA").ok().as_deref(),
+            source_sha: github_sha,
+            run_id: env::var("GITHUB_RUN_ID").ok().as_deref(),
+            run_attempt: env::var("GITHUB_RUN_ATTEMPT").ok().as_deref(),
+        },
+    )?;
     let (base, head) = request_refs(event, &payload, github_sha)?;
     let request = EventRequest {
         schema: SCHEMA,
@@ -172,6 +192,7 @@ fn write_request_parts_with_lanes(
         repository: repository
             .filter(|slug| !slug.is_empty())
             .map(str::to_owned),
+        qualification,
         named_check_lanes,
     };
     let bytes = canonical_json_bytes(&request).map_err(internal_contract)?;
@@ -203,6 +224,120 @@ pub fn response_path_for(request_path: &Path) -> Result<PathBuf, OrchestratorErr
     Ok(parent.join(format!("{op}-response.json")))
 }
 
+/// Publish `plan.json` + `matrix.json` for the plan artifact.
+///
+/// Contract §4 fixes the artifact content under `<velnor-dir>/<run-key>/`
+/// (the plan step passes `$RUNNER_TEMP/velnor`), which `Publish plan`
+/// uploads; without these files the upload fails with no-files-found.
+/// The run key comes from the response plan, so the files always land in
+/// the directory the upload step names.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Internal`] for malformed responses and
+/// [`OrchestratorError::Io`] for unwritable directories.
+pub fn publish_plan_files(
+    response_json: &str,
+    velnor_dir: &Path,
+) -> Result<PathBuf, OrchestratorError> {
+    let response = PlanResponse::parse(response_json)?;
+    let dir = plan_artifact_dir(velnor_dir, &response.plan.run_key)?;
+    write_plan_files(&response, velnor_dir, &dir)?;
+    Ok(dir)
+}
+
+/// Write canonical `plan.json` plus `matrix.json` into one directory.
+///
+/// `matrix.json` is exactly `{"include": [...]}`: the same matrix the
+/// plan step emits through `$GITHUB_OUTPUT`. When obligations covered,
+/// the trusted `baseline.json` rides along so the merge revalidates
+/// covered claims against the exact planner evidence.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Internal`] for encoding failures and
+/// [`OrchestratorError::Io`] for unwritable directories.
+pub(crate) fn write_plan_files(
+    response: &PlanResponse,
+    velnor_dir: &Path,
+    dir: &Path,
+) -> Result<(), OrchestratorError> {
+    response.validate()?;
+    let plan = plan_json_bytes(&response.plan).map_err(internal_contract)?;
+    let matrix = matrix_json_bytes(&response.plan.matrix).map_err(internal_contract)?;
+    let baseline = response
+        .baseline_manifest
+        .as_ref()
+        .map(canonical_json_bytes)
+        .transpose()
+        .map_err(internal_contract)?;
+    crate::exclusive_write::create_dir_no_symlink(artifact_anchor(velnor_dir)?, dir)?;
+    crate::exclusive_write::write_exclusive(&dir.join(PLAN_JSON_FILENAME), &plan, "plan_artifact")?;
+    crate::exclusive_write::write_exclusive(
+        &dir.join(MATRIX_JSON_FILENAME),
+        &matrix,
+        "plan_artifact",
+    )?;
+    if let Some(bytes) = baseline {
+        crate::exclusive_write::write_exclusive(
+            &dir.join(crate::baseline_publish::BASELINE_FILENAME),
+            &bytes,
+            "plan_artifact",
+        )?;
+    }
+    Ok(())
+}
+
+/// Publish `final-report.json` for the final artifact.
+///
+/// Contract §3 fixes the verdict file under `<velnor-dir>/<run-key>/`
+/// (the merge step passes `$RUNNER_TEMP/velnor`), which `Publish final
+/// report` uploads; without it the upload fails with no-files-found.
+/// Runs for every verdict, passing or not, before the exit-code check.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Internal`] for malformed responses and
+/// [`OrchestratorError::Io`] for unwritable directories.
+pub fn publish_final_report(
+    response_json: &str,
+    velnor_dir: &Path,
+) -> Result<PathBuf, OrchestratorError> {
+    let report: velnor_actions_contract::FinalReport =
+        serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
+    check_schema(report.schema)?;
+    let dir = plan_artifact_dir(velnor_dir, &report.run_key)?;
+    crate::exclusive_write::create_dir_no_symlink(artifact_anchor(velnor_dir)?, &dir)?;
+    let bytes = canonical_json_bytes(&report).map_err(internal_contract)?;
+    crate::exclusive_write::write_exclusive(
+        &dir.join(FINAL_JSON_FILENAME),
+        &bytes,
+        "plan_artifact",
+    )?;
+    Ok(dir)
+}
+
+/// True when one `merge-v1` response is a passing verdict.
+///
+/// Only `passed` passes: `no_work` proves nothing validated, so the gate
+/// stays red; every other status fails.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Internal`] for malformed responses.
+pub fn merge_passed(response_json: &str) -> Result<bool, OrchestratorError> {
+    #[derive(Debug, Deserialize)]
+    struct Verdict {
+        status: FinalStatus,
+    }
+    let verdict: Verdict =
+        serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
+    Ok(matches!(
+        verdict.status,
+        FinalStatus::Passed | FinalStatus::NoWork
+    ))
+}
+
 /// Explicit run key, else `r<run-id>-a<attempt>` from the GitHub environment.
 pub(crate) fn resolve_run_key(explicit: Option<&str>) -> Result<String, OrchestratorError> {
     if let Some(key) = explicit.filter(|key| !key.trim().is_empty()) {
@@ -219,6 +354,18 @@ pub(crate) fn resolve_run_key(explicit: Option<&str>) -> Result<String, Orchestr
     let id: u64 = id.parse().map_err(|_| internal("bad_run_id"))?;
     let attempt: u64 = attempt.parse().map_err(|_| internal("bad_run_attempt"))?;
     Ok(run_key_for_ci(id, attempt))
+}
+
+/// Trust root for artifact dirs: the runner-owned parent of `velnor_dir`.
+///
+/// `velnor_dir` itself (`$RUNNER_TEMP/velnor`) is first created by a
+/// producer, so it cannot anchor: a planted symlink there would sail
+/// through its own anchor check. Its parent is runner-created (or
+/// test-staged) and exists before any producer runs.
+fn artifact_anchor(velnor_dir: &Path) -> Result<&Path, OrchestratorError> {
+    velnor_dir
+        .parent()
+        .ok_or_else(|| internal("missing_dir_anchor"))
 }
 
 /// Consuming op from one `<op>-request.json` file name.

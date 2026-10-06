@@ -145,12 +145,17 @@ fn plan_writes_response_and_github_outputs() -> Result<(), Box<dyn Error>> {
     assert!(response.contains("\"run_key\":\"r7-a2\""), "{response}");
     let body = std::fs::read_to_string(&outputs)?;
     let lines: Vec<&str> = body.lines().collect();
-    assert_eq!(lines.len(), 5, "{body}");
+    assert_eq!(lines.len(), 10, "{body}");
     assert_eq!(lines[0], "seed=1");
     let matrix = lines[1].strip_prefix("matrix=").ok_or("matrix line")?;
     assert_eq!(lines[2], "plan_id=plan-r7-a2");
     assert_eq!(lines[3], "run_key=r7-a2");
     assert_eq!(lines[4], "covered_tasks=");
+    assert_eq!(lines[5], "qualification_campaign=");
+    assert_eq!(lines[6], "qualification_phase=");
+    assert_eq!(lines[7], "qualification_cache_enabled=false");
+    assert_eq!(lines[8], "qualification_cache_write=false");
+    assert_eq!(lines[9], "qualification_cache_directives=");
     assert!(matrix.starts_with("{\"include\":"), "{matrix}");
     let response: serde_json::Value = serde_json::from_str(&response)?;
     assert_eq!(
@@ -244,11 +249,16 @@ fn plan_publishes_plan_artifact_files() -> Result<(), Box<dyn Error>> {
     assert!(plan_json.contains("\"run_key\":\"r7-a2\""), "{plan_json}");
     let body = std::fs::read_to_string(&outputs)?;
     let lines: Vec<&str> = body.lines().collect();
-    assert_eq!(lines.len(), 4, "{body}");
+    assert_eq!(lines.len(), 9, "{body}");
     let matrix = lines[0].strip_prefix("matrix=").ok_or("matrix line")?;
     assert_eq!(lines[1], "plan_id=plan-r7-a2");
     assert_eq!(lines[2], "run_key=r7-a2");
     assert_eq!(lines[3], "covered_tasks=");
+    assert_eq!(lines[4], "qualification_campaign=");
+    assert_eq!(lines[5], "qualification_phase=");
+    assert_eq!(lines[6], "qualification_cache_enabled=false");
+    assert_eq!(lines[7], "qualification_cache_write=false");
+    assert_eq!(lines[8], "qualification_cache_directives=");
     assert_eq!(matrix_json, matrix, "matrix.json agrees with GITHUB_OUTPUT");
     let plan: serde_json::Value = serde_json::from_str(&plan_json)?;
     assert_eq!(
