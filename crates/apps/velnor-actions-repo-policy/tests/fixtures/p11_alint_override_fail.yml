@@ -1,5 +1,6 @@
-# NEGATIVE FIXTURE: copy of .alint.yml with the GHA bundle listed twice
-# (must be rejected by the deduped-extends pin; still parses as YAML).
+# NEGATIVE FIXTURE: copy of .alint.yml plus a well-formed same-id override
+# of bundled `gha-pin-actions-to-sha` (must be rejected: overrides are
+# banned; still parses as YAML).
 # Repository policy, enforced by asamarts/alint as its own CI job.
 # Local rules cover generic file/path requirements and agent-instruction
 # file integrity only. No dependency-architecture, Rust-syntax, or
@@ -17,7 +18,7 @@
 # `$.package.edition` would reject all seven manifests. Adoption §4
 # requires the inheritance-aware form instead, enforced and tested by the
 # Rust policy suite (`cargo metadata` effective edition plus TOML
-# inheritance predicates in `crates/apps/velnor-actions-cli/tests/fixtures/`).
+# inheritance predicates in `crates/apps/velnor-actions-repo-policy/tests/fixtures/`).
 #
 # Schema: alint config model (`version` + `rules`, each rule with
 # id/kind/level). The top-level `command` rule is trusted and checks only
@@ -42,7 +43,6 @@ ignore:
 
 extends:
   - alint://bundled/oss-baseline@v1
-  - alint://bundled/ci/github-actions@v1
   - alint://bundled/ci/github-actions@v1
   - alint://bundled/rust@v1
   - url: alint://bundled/hygiene/lockfiles@v1
@@ -164,3 +164,15 @@ rules:
     max_lines: 150
     level: error
     message: "src/lib.rs and src/main.rs MUST stay under 150 physical lines (§5)"
+
+  # BANNED FIXTURE: well-formed same-id override of a bundled rule.
+  - id: gha-pin-actions-to-sha
+    kind: yaml_path_matches
+    paths:
+      - .github/workflows/*.yml
+      - .github/workflows/*.yaml
+    path: $.jobs.*.steps[*].uses
+    matches: ^(\./.*|docker://[^@]+@sha256:[a-f0-9]{64}|[a-zA-Z0-9._/-]+@[a-f0-9]{40})$
+    if_present: true
+    level: info
+    message: "Third-party action is not pinned to a commit SHA"

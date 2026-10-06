@@ -15,7 +15,7 @@ fn repo_root() -> PathBuf {
 /// Allowed intra-workspace edges per member package.
 fn expected_internal(dir: &str) -> Vec<&str> {
     match dir {
-        "crates/core/velnor-actions-contract" => vec![],
+        "crates/core/velnor-actions-contract" | "crates/apps/velnor-actions-repo-policy" => vec![],
         "crates/services/velnor-actions-orchestrator" => vec![
             "velnor-actions-actionlint",
             "velnor-actions-contract",
@@ -42,6 +42,7 @@ fn members() -> Vec<&'static str> {
     vec![
         "crates/adapters/velnor-actions-actionlint",
         "crates/apps/velnor-actions-cli",
+        "crates/apps/velnor-actions-repo-policy",
         "crates/core/velnor-actions-contract",
         "crates/adapters/velnor-actions-mise",
         "crates/services/velnor-actions-orchestrator",

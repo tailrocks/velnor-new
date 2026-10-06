@@ -3,6 +3,7 @@
   "groups": {
     "velnor-actions-actionlint": "library",
     "velnor-actions-cli": "tool",
+    "velnor-actions-repo-policy": "library",
     "velnor-actions-contract": "library",
     "velnor-actions-mise": "library",
     "velnor-actions-orchestrator": "library",

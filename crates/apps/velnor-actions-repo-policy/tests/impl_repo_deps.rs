@@ -15,7 +15,7 @@ use crate::impl_repo_policy::{
 /// Intra-workspace edges allowed per member package (matched on leaf name).
 fn expected_internal(dir: &str) -> Vec<&str> {
     match dir.rsplit('/').next().unwrap_or("") {
-        "velnor-actions-contract" => vec![],
+        "velnor-actions-contract" | "velnor-actions-repo-policy" => vec![],
         "velnor-actions-orchestrator" => vec![
             "velnor-actions-actionlint",
             "velnor-actions-contract",
@@ -35,7 +35,7 @@ fn expected_internal(dir: &str) -> Vec<&str> {
 
 #[test]
 fn dependency_edges_match_ownership_table() -> Result<(), Box<dyn Error>> {
-    for (dir, _) in MEMBERS {
+    for dir in MEMBERS {
         let doc = p11_toml::parse(&manifest(dir)?)?;
         let mut found: Vec<String> = p11_toml::section(&doc, "dependencies")
             .map(|deps| {
@@ -90,7 +90,7 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // Reviewed Rust AST (`full`, `visit`) for the test-source closure guard.
         "syn",
     ];
-    for (dir, _) in MEMBERS {
+    for dir in MEMBERS {
         let body = manifest(dir)?;
         assert!(!body.contains("tokio"), "{dir} must not use tokio");
         for line in dep_lines(&body) {
@@ -122,7 +122,7 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
 #[test]
 fn dep_versions_exact_and_consistent() -> Result<(), Box<dyn Error>> {
     let mut seen: BTreeMap<String, String> = BTreeMap::new();
-    for (dir, _) in MEMBERS {
+    for dir in MEMBERS {
         for line in dep_lines(&manifest(dir)?) {
             if !line.contains("version") {
                 continue;
@@ -141,7 +141,7 @@ fn dep_versions_exact_and_consistent() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn no_custom_linter_modules() -> Result<(), Box<dyn Error>> {
-    for (dir, _) in MEMBERS {
+    for dir in MEMBERS {
         for path in tree_files(&format!("{dir}/src"), "rs")? {
             let name = path
                 .file_name()
@@ -162,7 +162,7 @@ fn no_custom_linter_modules() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn one_test_entry_per_crate() -> Result<(), Box<dyn Error>> {
-    for (dir, _) in MEMBERS {
+    for dir in MEMBERS {
         let body = manifest(dir)?;
         assert!(body.contains("autotests = false"), "{dir}");
         assert!(body.contains("name = \"velnor_"), "{dir}");
@@ -178,7 +178,7 @@ fn one_test_entry_per_crate() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn every_crate_has_registered_tests() -> Result<(), Box<dyn Error>> {
-    for (dir, _) in MEMBERS {
+    for dir in MEMBERS {
         assert!(test_markers(dir)? >= 1, "{dir} has no tests");
         for line in manifest(dir)?.lines() {
             if line.trim().starts_with("path = ") {
@@ -220,7 +220,7 @@ pub(crate) fn physical_lines(body: &str) -> usize {
 #[test]
 fn size_limits_hold() -> Result<(), Box<dyn Error>> {
     let mut over = Vec::new();
-    for (dir, _) in MEMBERS {
+    for dir in MEMBERS {
         for area in ["src", "tests"] {
             for path in tree_files(&format!("{dir}/{area}"), "rs")? {
                 let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
@@ -336,7 +336,7 @@ fn parse_tests_live_outside_src() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn test_entries_match_layout_and_stay_far_below_cases() -> Result<(), Box<dyn Error>> {
-    for (dir, _) in MEMBERS {
+    for dir in MEMBERS {
         let body = manifest(dir)?;
         let entries = body.matches("[[test]]").count();
         let want = if dir.ends_with("orchestrator") { 2 } else { 1 };
@@ -375,7 +375,7 @@ fn fixtures_stay_independent_and_cover_failures() -> Result<(), Box<dyn Error>> 
     ];
     let mut tempdir_files = 0;
     let mut failure_cases = 0;
-    for (dir, _) in MEMBERS {
+    for dir in MEMBERS {
         for path in tree_files(&format!("{dir}/tests"), "rs")? {
             let body = std::fs::read_to_string(&path)?;
             if body.contains("TempDir") {

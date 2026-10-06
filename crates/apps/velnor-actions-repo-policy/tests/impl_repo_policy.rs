@@ -29,37 +29,25 @@ mod p12_policy_b;
 #[path = "fixtures/p12_upstream.rs"]
 mod p12_upstream;
 
-/// Expected members as (directory, package name).
-pub(crate) const MEMBERS: [(&str, &str); 10] = [
-    (
-        "crates/adapters/velnor-actions-actionlint",
-        "velnor-actions-actionlint",
-    ),
-    ("crates/apps/velnor-actions-cli", "velnor-actions-cli"),
-    (
-        "crates/core/velnor-actions-contract",
-        "velnor-actions-contract",
-    ),
-    ("crates/adapters/velnor-actions-mise", "velnor-actions-mise"),
-    (
-        "crates/services/velnor-actions-orchestrator",
-        "velnor-actions-orchestrator",
-    ),
-    ("crates/adapters/velnor-actions-rust", "velnor-actions-rust"),
-    (
-        "crates/adapters/velnor-actions-rust-core",
-        "velnor-actions-rust-core",
-    ),
-    ("crates/adapters/velnor-actions-tofu", "velnor-actions-tofu"),
-    (
-        "crates/adapters/velnor-actions-tofu-core",
-        "velnor-actions-tofu-core",
-    ),
-    (
-        "crates/services/velnor-actions-workflow-renderer",
-        "velnor-actions-workflow-renderer",
-    ),
+/// Expected member directories (package name is the leaf).
+pub(crate) const MEMBERS: [&str; 11] = [
+    "crates/adapters/velnor-actions-actionlint",
+    "crates/apps/velnor-actions-cli",
+    "crates/apps/velnor-actions-repo-policy",
+    "crates/core/velnor-actions-contract",
+    "crates/adapters/velnor-actions-mise",
+    "crates/services/velnor-actions-orchestrator",
+    "crates/adapters/velnor-actions-rust",
+    "crates/adapters/velnor-actions-rust-core",
+    "crates/adapters/velnor-actions-tofu",
+    "crates/adapters/velnor-actions-tofu-core",
+    "crates/services/velnor-actions-workflow-renderer",
 ];
+
+/// Package name for a member dir (the leaf segment).
+pub(crate) fn package(dir: &str) -> &str {
+    dir.rsplit('/').next().unwrap_or("")
+}
 
 pub(crate) const WORKSPACE_ROOTS: [&str; 2] = ["", "crates/velnor-runner"];
 
@@ -171,12 +159,17 @@ pub(crate) fn dep_referenced(dir: &str, dep: &str) -> Result<bool, Box<dyn Error
 }
 
 #[test]
-fn workspace_lists_eight_product_crates_and_archive_guard() -> Result<(), Box<dyn Error>> {
+fn workspace_lists_members_runner_and_archive_guard() -> Result<(), Box<dyn Error>> {
     let root = read("Cargo.toml")?;
     let start = root.find("members = [").ok_or("members block")?;
     let block = root[start..].split(']').next().ok_or("members end")?;
-    assert_eq!(block.matches("crates/").count(), 9, "{block}");
-    for (dir, _) in MEMBERS {
+    let runner = p11_metadata::RUNNER_MEMBERS.len();
+    assert_eq!(
+        block.matches("crates/").count(),
+        MEMBERS.len() + runner + 1,
+        "{block}"
+    );
+    for dir in MEMBERS {
         assert!(block.contains(&format!("\"{dir}\"")), "{dir} not listed");
     }
     assert!(
@@ -191,7 +184,7 @@ fn root_manifest_is_virtual_with_explicit_members() -> Result<(), Box<dyn Error>
     let root = read("Cargo.toml")?;
     assert!(root.contains("[workspace]"));
     assert!(!root.contains("[package]"), "root must stay virtual");
-    for (dir, _) in MEMBERS {
+    for dir in MEMBERS {
         assert!(root.contains(dir), "{dir} not explicit");
     }
     assert!(!root.contains("crates/*"), "members must not glob");
@@ -200,7 +193,8 @@ fn root_manifest_is_virtual_with_explicit_members() -> Result<(), Box<dyn Error>
 
 #[test]
 fn package_names_use_purpose_suffix() -> Result<(), Box<dyn Error>> {
-    for (dir, package) in MEMBERS {
+    for dir in MEMBERS {
+        let package = package(dir);
         let body = manifest(dir)?;
         assert!(body.contains(&format!("name = \"{package}\"")), "{dir}");
         let purpose = package.strip_prefix("velnor-actions-").ok_or(package)?;
@@ -212,7 +206,7 @@ fn package_names_use_purpose_suffix() -> Result<(), Box<dyn Error>> {
 #[test]
 fn generic_names_forbidden() -> Result<(), Box<dyn Error>> {
     let stems = ["model", "core", "common", "utils", "util"];
-    for (dir, _) in MEMBERS {
+    for dir in MEMBERS {
         let body = manifest(dir)?;
         for prefix in ["velnor-", "velnor-actions-"] {
             for stem in stems {
@@ -228,7 +222,7 @@ fn generic_names_forbidden() -> Result<(), Box<dyn Error>> {
 #[test]
 fn velnor_name_never_published() -> Result<(), Box<dyn Error>> {
     let mut bins = 0;
-    for (dir, _) in MEMBERS {
+    for dir in MEMBERS {
         let body = manifest(dir)?;
         assert!(!body.contains("name = \"velnor\""), "{dir}");
         assert!(!body.contains("[alias"), "{dir}");
@@ -297,6 +291,7 @@ fn toolchain_file_tracks_mise() -> Result<(), Box<dyn Error>> {
 fn members_inherit_workspace_settings() -> Result<(), Box<dyn Error>> {
     for (dir, _) in MEMBERS
         .into_iter()
+        .map(|member| (member, member))
         .chain(p11_metadata::RUNNER_MEMBERS)
         .chain([("crates/tools/velnor-archive-guard", "velnor-archive-guard")])
     {

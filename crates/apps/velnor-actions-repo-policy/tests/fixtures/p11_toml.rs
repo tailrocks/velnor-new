@@ -245,7 +245,7 @@ fn workspace_edition_is_2024() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn members_inherit_edition_without_literal() -> Result<(), Box<dyn Error>> {
-    for (dir, _) in super::MEMBERS {
+    for dir in super::MEMBERS {
         let member = parse(&super::manifest(dir)?)?;
         assert!(
             member_edition_inherited(&member),
@@ -257,7 +257,7 @@ fn members_inherit_edition_without_literal() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn members_inherit_lints_purely() -> Result<(), Box<dyn Error>> {
-    for (dir, _) in super::MEMBERS {
+    for dir in super::MEMBERS {
         let member = parse(&super::manifest(dir)?)?;
         assert!(
             member_lints_inherited(&member),
@@ -269,7 +269,7 @@ fn members_inherit_lints_purely() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn members_use_supported_deps_only() -> Result<(), Box<dyn Error>> {
-    for (dir, _) in super::MEMBERS {
+    for dir in super::MEMBERS {
         let member = parse(&super::manifest(dir)?)?;
         assert!(member_deps_supported(&member), "{dir} uses unsupported dep");
     }

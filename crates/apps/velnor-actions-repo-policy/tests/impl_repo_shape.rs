@@ -31,7 +31,7 @@ fn collect_entries(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), Box<dyn Err
 
 #[test]
 fn arch110_product_roots_live_under_crates() -> Result<(), Box<dyn Error>> {
-    for (dir, _) in MEMBERS {
+    for dir in MEMBERS {
         assert!(dir.starts_with("crates/"), "{dir} escapes crates/");
     }
     let root = read("Cargo.toml")?;
@@ -147,7 +147,7 @@ fn rq11_repo_shape_files_present() {
     for file in files {
         assert!(repo_root().join(file).is_file(), "{file} missing");
     }
-    for (dir, _) in MEMBERS {
+    for dir in MEMBERS {
         assert!(repo_root().join(dir).is_dir(), "{dir} missing");
     }
     assert!(

@@ -13,10 +13,10 @@ mod impl_rust_f2a;
 mod impl_rust_f2b;
 #[path = "impl_rust_gates.rs"]
 mod impl_rust_gates;
-#[path = "impl_rust_nested.rs"]
-mod impl_rust_nested;
 #[path = "impl_rust_negative.rs"]
 mod impl_rust_negative;
+#[path = "impl_rust_nested.rs"]
+mod impl_rust_nested;
 #[path = "impl_rust_p03_identity.rs"]
 mod impl_rust_p03_identity;
 #[path = "impl_rust_profile_emit.rs"]

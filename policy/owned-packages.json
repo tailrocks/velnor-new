@@ -3,6 +3,7 @@
   "packages": [
     "velnor-actions-actionlint",
     "velnor-actions-cli",
+    "velnor-actions-repo-policy",
     "velnor-actions-contract",
     "velnor-actions-mise",
     "velnor-actions-orchestrator",

@@ -33,21 +33,7 @@ mod impl_cli_tmp;
 mod impl_cli_tofu_capacity;
 #[path = "impl_cli_verify_local.rs"]
 mod impl_cli_verify_local;
-#[path = "impl_repo_deps.rs"]
-mod impl_repo_deps;
 #[path = "impl_repo_freshness.rs"]
 mod impl_repo_freshness;
-#[path = "impl_repo_goldens.rs"]
-mod impl_repo_goldens;
-#[path = "impl_repo_policy.rs"]
-mod impl_repo_policy;
-#[path = "impl_repo_quality.rs"]
-mod impl_repo_quality;
-#[path = "impl_repo_shape.rs"]
-mod impl_repo_shape;
-#[path = "impl_repo_strictness.rs"]
-mod impl_repo_strictness;
-#[path = "impl_repo_suppressions.rs"]
-mod impl_repo_suppressions;
 #[path = "impl_repo_test_registration.rs"]
 mod impl_repo_test_registration;

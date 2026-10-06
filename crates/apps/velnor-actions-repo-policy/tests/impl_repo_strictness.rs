@@ -12,7 +12,7 @@ use crate::impl_repo_policy::{MEMBERS, alint_miniyaml, manifest, p11_alint, read
 
 #[test]
 fn no_restriction_or_nursery_groups() -> Result<(), Box<dyn Error>> {
-    for (dir, _) in MEMBERS {
+    for dir in MEMBERS {
         let body = manifest(dir)?;
         assert!(!body.contains("restriction"), "{dir}");
         assert!(!body.contains("nursery"), "{dir}");
@@ -33,7 +33,7 @@ fn no_nightly_toolchain() -> Result<(), Box<dyn Error>> {
     ] {
         assert!(!read(file)?.to_lowercase().contains("nightly"), "{file}");
     }
-    for (dir, _) in MEMBERS {
+    for dir in MEMBERS {
         assert!(!manifest(dir)?.to_lowercase().contains("nightly"), "{dir}");
     }
     Ok(())
@@ -41,7 +41,7 @@ fn no_nightly_toolchain() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn no_git_dependencies() -> Result<(), Box<dyn Error>> {
-    for (dir, _) in MEMBERS {
+    for dir in MEMBERS {
         let body = manifest(dir)?;
         assert!(!body.contains("git="), "{dir}");
         assert!(!body.contains("git ="), "{dir}");
@@ -93,7 +93,7 @@ fn unsafe_forbidden_and_absent() -> Result<(), Box<dyn Error>> {
         "unsafe extern",
         "#[unsafe",
     ];
-    for (dir, _) in MEMBERS {
+    for dir in MEMBERS {
         for path in tree_files(&format!("{dir}/src"), "rs")? {
             let body = std::fs::read_to_string(&path)?;
             for spelling in spellings {

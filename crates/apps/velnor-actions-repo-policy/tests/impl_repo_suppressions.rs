@@ -83,7 +83,7 @@ fn level_of(raw: &str) -> String {
 
 #[test]
 fn no_allow_suppressions_in_product_code() -> Result<(), Box<dyn Error>> {
-    for (dir, _) in crate::impl_repo_policy::MEMBERS {
+    for dir in crate::impl_repo_policy::MEMBERS {
         for path in tree_files(&format!("{dir}/src"), "rs")? {
             let body = std::fs::read_to_string(&path)?;
             for spelling in ["#[allow", "#![allow"] {
@@ -100,7 +100,7 @@ fn no_allow_suppressions_in_product_code() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn every_lint_expect_carries_reason() -> Result<(), Box<dyn Error>> {
-    for (dir, _) in crate::impl_repo_policy::MEMBERS {
+    for dir in crate::impl_repo_policy::MEMBERS {
         for path in tree_files(&format!("{dir}/src"), "rs")? {
             let body = std::fs::read_to_string(&path)?;
             for (index, _) in body.match_indices("#[expect") {
@@ -197,7 +197,7 @@ fn extra_denies_match_tested_set() -> Result<(), Box<dyn Error>> {
     for (table, key, fixture) in DENY_FIXTURES {
         want.insert((table, key.to_owned()));
         let body = read(&format!(
-            "crates/apps/velnor-actions-cli/tests/fixtures/{fixture}"
+            "crates/apps/velnor-actions-repo-policy/tests/fixtures/{fixture}"
         ))?;
         assert!(!body.trim().is_empty(), "{fixture} is empty");
     }

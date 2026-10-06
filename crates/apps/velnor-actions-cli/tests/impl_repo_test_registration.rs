@@ -18,9 +18,12 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use crate::impl_repo_policy::repo_root;
-
 type Outcome<T> = Result<T, Box<dyn Error>>;
+
+/// Repo root: two levels above this crate's manifest directory.
+pub(super) fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
+}
 
 struct PackagePlan {
     id: String,

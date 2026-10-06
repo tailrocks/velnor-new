@@ -291,7 +291,10 @@ fn metadata_members_match_products_and_archive_guard() -> Result<(), Box<dyn Err
         .filter_map(|pkg| pkg.get("name").and_then(Json::as_str))
         .collect();
     names.sort_unstable();
-    let mut want: Vec<&str> = super::MEMBERS.iter().map(|member| member.1).collect();
+    let mut want: Vec<&str> = super::MEMBERS
+        .iter()
+        .map(|dir| super::package(dir))
+        .collect();
     want.push("velnor-archive-guard");
     want.sort_unstable();
     assert_eq!(names, want, "product and archive guard member set drift");

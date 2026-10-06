@@ -7,8 +7,9 @@ use std::process::{Command, Output};
 
 use serde_json::Value;
 
-use super::{Outcome, PackagePlan, TestTarget, WorkspacePlan};
-use crate::impl_repo_policy::{WORKSPACE_ROOTS, repo_root};
+use super::{Outcome, PackagePlan, TestTarget, WorkspacePlan, repo_root};
+
+const WORKSPACE_ROOTS: [&str; 2] = ["", "crates/velnor-runner"];
 
 pub(super) fn cargo_target_dir_for_manifest(manifest: &Path) -> Outcome<PathBuf> {
     if let Some(configured) = std::env::var_os("CARGO_TARGET_DIR") {

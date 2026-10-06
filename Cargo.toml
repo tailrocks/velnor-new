@@ -7,6 +7,7 @@ members = [
     "crates/adapters/velnor-actions-tofu",
     "crates/adapters/velnor-actions-tofu-core",
     "crates/apps/velnor-actions-cli",
+    "crates/apps/velnor-actions-repo-policy",
     "crates/core/velnor-actions-contract",
     "crates/services/velnor-actions-orchestrator",
     "crates/services/velnor-actions-workflow-renderer",

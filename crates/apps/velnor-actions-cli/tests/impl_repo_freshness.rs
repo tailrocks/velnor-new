@@ -5,11 +5,30 @@
 //! only; human residuals live in docs/implemented/release-gates.md.
 
 use std::error::Error;
-
-use crate::impl_repo_policy::{quoted_value, read};
+use std::path::PathBuf;
 
 #[path = "fixtures/p12_property.rs"]
 mod p12_property;
+
+/// Repo root: two levels above this crate's manifest directory.
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
+}
+
+/// Read a repo-relative file to a string.
+fn read(relative: &str) -> Result<String, Box<dyn Error>> {
+    Ok(std::fs::read_to_string(repo_root().join(relative))?)
+}
+
+/// First double-quoted value on the first line containing `key`.
+fn quoted_value(text: &str, key: &str) -> Result<String, Box<dyn Error>> {
+    text.lines()
+        .filter(|line| line.contains(key))
+        .filter_map(|line| line.split('"').nth(1))
+        .map(str::to_owned)
+        .next()
+        .ok_or_else(|| format!("{key} not found").into())
+}
 
 #[test]
 fn boot34_mise_version_matches_catalog() -> Result<(), Box<dyn Error>> {

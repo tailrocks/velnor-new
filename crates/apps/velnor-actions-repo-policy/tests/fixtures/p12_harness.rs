@@ -9,7 +9,31 @@
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Monotonic counter keeping tempdir names unique within one test binary.
+static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Create a fresh unique directory under the system temp dir.
+fn fresh_tempdir(prefix: &str) -> Result<PathBuf, Box<dyn Error>> {
+    let id = COUNTER.fetch_add(1, Ordering::SeqCst);
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!(
+        "velnor-policy-{prefix}-{}-{id}-{nanos}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
+/// Best-effort tempdir removal; cleanup must never fail a test.
+fn remove_dir(dir: &Path) {
+    drop(std::fs::remove_dir_all(dir));
+}
 
 /// One script run: exit code plus captured streams.
 pub(crate) struct Run {
@@ -145,7 +169,7 @@ pub(crate) fn assert_fail(run: &Run, needle: &str) {
 
 /// A complete supported inventory tree; the gate must pass on it.
 pub(crate) fn passing(prefix: &str) -> Result<Fixture, Box<dyn Error>> {
-    let dir = crate::impl_cli_tmp::fresh_tempdir(prefix)?;
+    let dir = fresh_tempdir(prefix)?;
     for (rel, body) in [
         (
             "crates/adapters/velnor-actions-mise/src/catalog.rs",
@@ -226,7 +250,7 @@ pub(crate) fn add_nested_workspace(fixture: &Fixture) -> Result<(), Box<dyn Erro
 
 /// Remove a fixture tree; cleanup must never fail a test.
 pub(crate) fn cleanup(fixture: &Fixture) {
-    crate::impl_cli_tmp::cleanup(&fixture.dir);
+    remove_dir(&fixture.dir);
 }
 
 const TOOL_PROBE_ROWS: &[(&str, &str, &str)] = &[
