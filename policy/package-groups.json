@@ -6,6 +6,10 @@
     "velnor-actions-repo-policy": "library",
     "velnor-actions-contract": "library",
     "velnor-actions-mise": "library",
+    "velnor-actions-mise-cache": "library",
+    "velnor-actions-mise-catalog": "library",
+    "velnor-actions-mise-core": "library",
+    "velnor-actions-mise-nextest": "library",
     "velnor-actions-orchestrator": "library",
     "velnor-actions-rust": "library",
     "velnor-actions-rust-core": "library",
@@ -17,6 +21,7 @@
     "velnor-runner-core": "library",
     "velnor-runner-github": "library",
     "velnor-runner-host": "library",
-    "velnor-runner-launch": "library"
+    "velnor-runner-launch": "library",
+    "velnor-actions-mise-probes": "library"
   }
 }

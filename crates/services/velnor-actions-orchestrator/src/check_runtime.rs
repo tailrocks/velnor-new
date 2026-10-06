@@ -224,7 +224,7 @@ fn run_check(
     let before =
         preparation::container::probe(&item.check.runner, owned.container.as_ref(), deadline)?;
     let command = owned
-        .command(deadline)
+        .command(deadline, velnor_actions_mise::MISE_VERSION)
         .map_err(|e| internal(&e.to_string()))?
         .with_env(&pairs)
         .map_err(|e| internal(&e.to_string()))?;

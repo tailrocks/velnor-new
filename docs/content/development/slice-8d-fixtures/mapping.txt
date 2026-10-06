@@ -1,1 +1,0 @@
-mapping: test list byte-identical (fixture data moves only; no test identities changed)

@@ -172,7 +172,7 @@ pub(crate) fn passing(prefix: &str) -> Result<Fixture, Box<dyn Error>> {
     let dir = fresh_tempdir(prefix)?;
     for (rel, body) in [
         (
-            "crates/adapters/velnor-actions-mise/src/catalog.rs",
+            "crates/adapters/velnor-actions-mise-catalog/src/catalog.rs",
             include_str!("p12_catalog.txt"),
         ),
         (

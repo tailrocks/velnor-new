@@ -6,7 +6,8 @@ use velnor_actions_contract::config::{
     QualifiedToolBackend, QualifiedToolExecutable, QualifiedToolOptions, QualifiedToolPlatform,
     QualifiedToolProbe,
 };
-use velnor_actions_mise::checks::{CheckCapabilityProof, QualifiedCheck, discover_checks};
+use velnor_actions_mise::checks::{CheckCapabilityProof, QualifiedCheck};
+use velnor_actions_mise::{MISE_VERSION, discover_checks};
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
@@ -113,7 +114,7 @@ fn fixed_binary_rejects_ambient_path_replacement() -> TestResult {
         std::env::var_os("VELNOR_FIXED_BINARY_HOME"),
     ) {
         let handle = qualified(Path::new(&repo), Path::new(&home))?;
-        let command = handle.command(test_deadline()?)?;
+        let command = handle.command(test_deadline()?, MISE_VERSION)?;
         assert_eq!(command.program(), handle.mise_program().as_os_str());
         assert!(!command.argv().iter().any(|arg| arg == "--tool"));
         let env = command.full_env();
@@ -192,7 +193,7 @@ fn owned_binary_wrong_version_fails_before_task_execution() -> TestResult {
         "touch \"$HOME/TASK_EXECUTED\"",
     )?;
     let handle = qualified(&repo, &home)?;
-    assert!(handle.command(test_deadline()?).is_err());
+    assert!(handle.command(test_deadline()?, MISE_VERSION).is_err());
     assert!(!home.join("TASK_EXECUTED").exists());
     Ok(())
 }

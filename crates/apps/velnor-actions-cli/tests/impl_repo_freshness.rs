@@ -33,7 +33,7 @@ fn quoted_value(text: &str, key: &str) -> Result<String, Box<dyn Error>> {
 #[test]
 fn boot34_mise_version_matches_catalog() -> Result<(), Box<dyn Error>> {
     let pinned = read(".mise-version")?;
-    let catalog = read("crates/adapters/velnor-actions-mise/src/catalog.rs")?;
+    let catalog = read("crates/adapters/velnor-actions-mise-catalog/src/catalog.rs")?;
     assert_eq!(
         pinned.trim(),
         quoted_value(&catalog, "MISE_VERSION")?.as_str()

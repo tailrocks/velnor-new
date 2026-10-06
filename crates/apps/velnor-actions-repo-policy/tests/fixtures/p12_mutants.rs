@@ -55,7 +55,7 @@ fn mutant_scope_covers_risk_wiring() -> Result<(), Box<dyn Error>> {
         "crates/core/velnor-actions-contract/src/strict_json.rs",
         "crates/core/velnor-actions-contract/src/ids/**/*.rs",
         "crates/adapters/velnor-actions-rust/src/identity.rs",
-        "crates/adapters/velnor-actions-mise/src/toolfiles.rs",
+        "crates/adapters/velnor-actions-mise-catalog/src/toolfiles.rs",
         "crates/services/velnor-actions-orchestrator/src/select.rs",
         "crates/services/velnor-actions-orchestrator/src/select_affected.rs",
         "crates/services/velnor-actions-orchestrator/src/cover_identity.rs",

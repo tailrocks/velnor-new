@@ -12,77 +12,7 @@ fn src_dir() -> PathBuf {
 }
 
 fn expected_modules() -> Vec<&'static str> {
-    vec![
-        "build.rs",
-        "cache.rs",
-        "cache_sources.rs",
-        "cache_transport.rs",
-        "cache_trust.rs",
-        "catalog.rs",
-        "catalog/lock.rs",
-        "catalog/lock_verify.rs",
-        "catalog/mbx.rs",
-        "catalog/release_plz.rs",
-        "catalog/versions.rs",
-        "check_deadline.rs",
-        "check_deadline/tests.rs",
-        "check_tool_probes.rs",
-        "checks.rs",
-        "checks/capabilities.rs",
-        "checks/capabilities/observation.rs",
-        "checks/capabilities/observation/app.rs",
-        "checks/capabilities/observation/tests.rs",
-        "checks/capabilities/probe.rs",
-        "checks/capabilities/probe/tests.rs",
-        "checks/capabilities/tests.rs",
-        "checks/discovery.rs",
-        "checks/discovery/projection.rs",
-        "checks/discovery/qualified.rs",
-        "checks/discovery/qualified/tests.rs",
-        "checks/discovery/qualified/tests/identity_tests.rs",
-        "checks/discovery/qualified/tests/names_tests.rs",
-        "checks/discovery/qualified/tests/resolve_tests.rs",
-        "checks/discovery/task_validation.rs",
-        "checks/execution.rs",
-        "checks/file_read.rs",
-        "checks/file_read/tests.rs",
-        "checks/metadata.rs",
-        "checks/system_tools.rs",
-        "checks/system_tools/tests.rs",
-        "command.rs",
-        "command/cancellable.rs",
-        "command/check.rs",
-        "command/env.rs",
-        "command/output.rs",
-        "command/qualified_acquisition.rs",
-        "command/tofu.rs",
-        "custom_run.rs",
-        "error.rs",
-        "gate6.rs",
-        "gh.rs",
-        "git.rs",
-        "git/tests.rs",
-        "lib.rs",
-        "nextest/mod.rs",
-        "nextest_config/mod.rs",
-        "nextest_plan/mod.rs",
-        "nextest_shapes/mod.rs",
-        "preflight.rs",
-        "requests.rs",
-        "restore.rs",
-        "restore_evidence.rs",
-        "reuse.rs",
-        "runtime_paths.rs",
-        "steps.rs",
-        "template.rs",
-        "toml_parser.rs",
-        "toml_scan.rs",
-        "toml_strings.rs",
-        "toolfiles.rs",
-        "toolfiles/lockfile.rs",
-        "verify.rs",
-        "wrappers.rs",
-    ]
+    vec!["git.rs", "git/tests.rs", "lib.rs"]
 }
 
 /// Strip a trailing `//` comment, ignoring `//` inside string literals.
@@ -131,7 +61,7 @@ fn mise_sources_stay_read_only_and_unmanaged() -> Result<(), String> {
                 pending.push(path);
                 continue;
             }
-            if !path.extension().is_some_and(|ext| ext == "rs") {
+            if path.extension().is_none_or(|ext| ext != "rs") {
                 continue;
             }
             let relative = path

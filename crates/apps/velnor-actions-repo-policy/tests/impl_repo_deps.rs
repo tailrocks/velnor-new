@@ -7,31 +7,14 @@ use std::error::Error;
 mod archive_deps;
 use archive_deps::reviewed_archive_dependency;
 
+#[path = "fixtures/p11_edges.rs"]
+mod p11_edges;
+use p11_edges::expected_internal;
+
 use crate::impl_repo_policy::{
     MEMBERS, dep_key, dep_lines, dep_referenced, manifest, p11_toml, read, repo_root, test_markers,
     tree_files,
 };
-
-/// Intra-workspace edges allowed per member package (matched on leaf name).
-fn expected_internal(dir: &str) -> Vec<&str> {
-    match dir.rsplit('/').next().unwrap_or("") {
-        "velnor-actions-contract" | "velnor-actions-repo-policy" => vec![],
-        "velnor-actions-orchestrator" => vec![
-            "velnor-actions-actionlint",
-            "velnor-actions-contract",
-            "velnor-actions-mise",
-            "velnor-actions-rust",
-            "velnor-actions-rust-core",
-            "velnor-actions-tofu",
-            "velnor-actions-tofu-core",
-            "velnor-actions-workflow-renderer",
-        ],
-        "velnor-actions-tofu" => vec!["velnor-actions-contract", "velnor-actions-tofu-core"],
-        "velnor-actions-rust" => vec!["velnor-actions-contract", "velnor-actions-rust-core"],
-        "velnor-actions-cli" => vec!["velnor-actions-orchestrator"],
-        _ => vec!["velnor-actions-contract"],
-    }
-}
 
 #[test]
 fn dependency_edges_match_ownership_table() -> Result<(), Box<dyn Error>> {
@@ -261,7 +244,7 @@ fn lockfile_committed_and_locked_used() -> Result<(), Box<dyn Error>> {
         .output()?;
     assert!(tracked.status.success(), "Cargo.lock not committed");
     for file in [
-        "crates/adapters/velnor-actions-mise/src/requests.rs",
+        "crates/adapters/velnor-actions-mise-catalog/src/requests.rs",
         "crates/services/velnor-actions-orchestrator/src/vectors.rs",
         ".github/workflows/ci.yml",
     ] {

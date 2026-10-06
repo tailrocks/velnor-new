@@ -2,6 +2,11 @@
 members = [
     "crates/adapters/velnor-actions-actionlint",
     "crates/adapters/velnor-actions-mise",
+    "crates/adapters/velnor-actions-mise-cache",
+    "crates/adapters/velnor-actions-mise-catalog",
+    "crates/adapters/velnor-actions-mise-core",
+    "crates/adapters/velnor-actions-mise-nextest",
+    "crates/adapters/velnor-actions-mise-probes",
     "crates/adapters/velnor-actions-rust",
     "crates/adapters/velnor-actions-rust-core",
     "crates/adapters/velnor-actions-tofu",

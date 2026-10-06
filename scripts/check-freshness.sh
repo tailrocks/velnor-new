@@ -250,7 +250,7 @@ if policy is not None:
                  "weakens policy: must be <= 14")
 
 # --- Local pins: code constants == reviewed inventory pins (VER-0.1).
-CATALOG = "crates/adapters/velnor-actions-mise/src/catalog.rs"
+CATALOG = "crates/adapters/velnor-actions-mise-catalog/src/catalog.rs"
 ACTIONS = "crates/adapters/velnor-actions-actionlint/src/actions.rs"
 TOOLS = "crates/adapters/velnor-actions-actionlint/src/tools.rs"
 CAPABILITIES = "crates/adapters/velnor-actions-actionlint/src/capabilities.rs"

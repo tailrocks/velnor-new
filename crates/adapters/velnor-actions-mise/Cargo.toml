@@ -10,14 +10,16 @@ autotests = false
 workspace = true
 
 [dependencies]
-velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
-serde = { workspace = true }
-serde_json = { workspace = true }
-rustix = { workspace = true, features = ["process"] }
+velnor-actions-mise-cache = { version = "=0.1.1", path = "../velnor-actions-mise-cache" }
+velnor-actions-mise-catalog = { version = "=0.1.1", path = "../velnor-actions-mise-catalog" }
+velnor-actions-mise-core = { version = "=0.1.1", path = "../velnor-actions-mise-core" }
+velnor-actions-mise-nextest = { version = "=0.1.1", path = "../velnor-actions-mise-nextest" }
+velnor-actions-mise-probes = { version = "=0.1.1", path = "../velnor-actions-mise-probes" }
 
 [[test]]
 name = "velnor_mise"
 path = "tests/main.rs"
 
 [dev-dependencies]
+velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
 velnor-actions-tofu-core = { version = "=0.1.1", path = "../velnor-actions-tofu-core" }

@@ -6,7 +6,7 @@ use super::p12_harness as harness;
 
 const INVENTORY: &str = ".velnor/freshness-inventory.json";
 const POLICY: &str = ".velnor/version-policy.toml";
-const CATALOG: &str = "crates/adapters/velnor-actions-mise/src/catalog.rs";
+const CATALOG: &str = "crates/adapters/velnor-actions-mise-catalog/src/catalog.rs";
 const ACTIONS_RS: &str = "crates/adapters/velnor-actions-actionlint/src/actions.rs";
 const MUTANTS: &str = ".cargo/mutants.toml";
 

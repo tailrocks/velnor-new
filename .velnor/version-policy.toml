@@ -1,7 +1,7 @@
 # Velnor-repository-only version-policy file (version-policy §0–§2).
 # Header declares the policy schema, stable channel, release registry,
 # freshness cadence, and maximum exception age. The [tools] mirror MUST
-# equal the compiled catalog in velnor-actions-mise/src/catalog.rs (checked
+# equal the compiled catalog in velnor-actions-mise-catalog/src/catalog.rs (checked
 # by `verify_version_policy` during dogfood generate); the [[actions]]
 # mirror MUST equal the action pins in .velnor/freshness-inventory.json
 # (qualified 2026-10-03; checked by scripts/check-freshness.sh).

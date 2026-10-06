@@ -32,6 +32,23 @@ fn expected_internal(dir: &str) -> Vec<&str> {
         "crates/adapters/velnor-actions-rust" => {
             vec!["velnor-actions-contract", "velnor-actions-rust-core"]
         }
+        "crates/adapters/velnor-actions-mise" => vec![
+            "velnor-actions-mise-cache",
+            "velnor-actions-mise-catalog",
+            "velnor-actions-mise-core",
+            "velnor-actions-mise-nextest",
+            "velnor-actions-mise-probes",
+        ],
+        "crates/adapters/velnor-actions-mise-catalog"
+        | "crates/adapters/velnor-actions-mise-cache"
+        | "crates/adapters/velnor-actions-mise-probes" => {
+            vec!["velnor-actions-contract", "velnor-actions-mise-core"]
+        }
+        "crates/adapters/velnor-actions-mise-nextest" => vec![
+            "velnor-actions-contract",
+            "velnor-actions-mise-catalog",
+            "velnor-actions-mise-core",
+        ],
         "crates/apps/velnor-actions-cli" => vec!["velnor-actions-orchestrator"],
         _ => vec!["velnor-actions-contract"],
     }
@@ -45,6 +62,11 @@ fn members() -> Vec<&'static str> {
         "crates/apps/velnor-actions-repo-policy",
         "crates/core/velnor-actions-contract",
         "crates/adapters/velnor-actions-mise",
+        "crates/adapters/velnor-actions-mise-cache",
+        "crates/adapters/velnor-actions-mise-catalog",
+        "crates/adapters/velnor-actions-mise-core",
+        "crates/adapters/velnor-actions-mise-nextest",
+        "crates/adapters/velnor-actions-mise-probes",
         "crates/services/velnor-actions-orchestrator",
         "crates/adapters/velnor-actions-rust",
         "crates/adapters/velnor-actions-rust-core",

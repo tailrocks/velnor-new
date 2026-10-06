@@ -8,8 +8,10 @@ use std::ffi::OsString;
 use std::path::Path;
 
 use crate::CheckDeadline;
-use crate::command::{IsolatedCommand, OUTPUT_CAPTURE_LIMIT_BYTES, ProcessOutput};
-use crate::error::MiseError;
+use velnor_actions_mise_core::command::{
+    IsolatedCommand, OUTPUT_CAPTURE_LIMIT_BYTES, ProcessOutput,
+};
+use velnor_actions_mise_core::error::MiseError;
 
 /// Program name for direct Git invocations.
 const GIT_PROGRAM: &str = "git";

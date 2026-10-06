@@ -30,12 +30,17 @@ mod p12_policy_b;
 mod p12_upstream;
 
 /// Expected member directories (package name is the leaf).
-pub(crate) const MEMBERS: [&str; 11] = [
+pub(crate) const MEMBERS: [&str; 16] = [
     "crates/adapters/velnor-actions-actionlint",
     "crates/apps/velnor-actions-cli",
     "crates/apps/velnor-actions-repo-policy",
     "crates/core/velnor-actions-contract",
     "crates/adapters/velnor-actions-mise",
+    "crates/adapters/velnor-actions-mise-cache",
+    "crates/adapters/velnor-actions-mise-catalog",
+    "crates/adapters/velnor-actions-mise-core",
+    "crates/adapters/velnor-actions-mise-nextest",
+    "crates/adapters/velnor-actions-mise-probes",
     "crates/services/velnor-actions-orchestrator",
     "crates/adapters/velnor-actions-rust",
     "crates/adapters/velnor-actions-rust-core",
@@ -260,7 +265,7 @@ pub(crate) fn minor(version: &str) -> String {
 
 #[test]
 fn rust_version_tracks_toolchain() -> Result<(), Box<dyn Error>> {
-    let catalog_src = read("crates/adapters/velnor-actions-mise/src/catalog.rs")?;
+    let catalog_src = read("crates/adapters/velnor-actions-mise-catalog/src/catalog.rs")?;
     let catalog = quoted_value(&catalog_src, "RUST_VERSION")?;
     let mise = quoted_value(&read("mise.toml")?, "rust = ")?;
     for workspace_root in WORKSPACE_ROOTS {

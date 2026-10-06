@@ -1,0 +1,18 @@
+[package]
+name = "velnor-actions-mise-catalog"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[lints]
+workspace = true
+
+[dependencies]
+velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
+velnor-actions-mise-core = { version = "=0.1.1", path = "../velnor-actions-mise-core" }
+
+[[test]]
+name = "velnor_mise_catalog"
+path = "tests/main.rs"

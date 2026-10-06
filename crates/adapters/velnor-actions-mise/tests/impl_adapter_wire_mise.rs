@@ -278,7 +278,8 @@ fn inspect_mise_file_never_fails_never_writes() {
     assert_eq!(spec.tools.get("rust").map(String::as_str), Some("1.98.1"));
     assert!(inspect_mise_file("rust-toolchain.toml", Some("")).is_err());
     let src = std::fs::read_to_string(
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/toolfiles.rs"),
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../velnor-actions-mise-catalog/src/toolfiles.rs"),
     )
     .expect("read");
     for token in [
@@ -303,7 +304,8 @@ fn lock_tool_versions_exposes_map() {
 
 #[test]
 fn rust_files_named_only_in_toolfiles() {
-    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../velnor-actions-mise-catalog/src");
     let table = std::fs::read_to_string(dir.join("toolfiles.rs")).expect("read");
     for name in [
         "mise.toml",

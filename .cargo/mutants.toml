@@ -27,8 +27,8 @@ examine_globs = [
     "crates/core/velnor-actions-contract/src/tooling.rs",
     "crates/core/velnor-actions-contract/src/workflow/plan.rs",
     "crates/adapters/velnor-actions-rust/src/metadata.rs",
-    "crates/adapters/velnor-actions-mise/src/catalog/lock.rs",
-    "crates/adapters/velnor-actions-mise/src/toolfiles.rs",
+    "crates/adapters/velnor-actions-mise-catalog/src/catalog/lock.rs",
+    "crates/adapters/velnor-actions-mise-catalog/src/toolfiles.rs",
     # Identities: validated ids, cache keys/ids, rust identity, cover id.
     "crates/core/velnor-actions-contract/src/ids/**/*.rs",
     "crates/core/velnor-actions-contract/src/cachekey.rs",
