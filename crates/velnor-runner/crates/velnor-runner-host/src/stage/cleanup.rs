@@ -1,10 +1,11 @@
 //! Bounded cleanup after an official runner has reached a terminal state.
 
 use super::pair::PairEngine;
-use super::reconcile_worker;
+use super::{reconcile_worker, reconcile_worker_with_budget};
 use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::HostError;
 use crate::launch_identity::LaunchIdentity;
+use crate::worker::ResourceBudget;
 
 /// Remove one worker pair after its runner has stopped.
 ///
@@ -25,7 +26,31 @@ pub(super) async fn cleanup_unstarted_dind<E: PairEngine>(
     identity: &LaunchIdentity,
     dind_id: &str,
 ) -> Result<(), HostError> {
-    let observed = reconcile_worker(engine, identity, None, Some(dind_id), None).await?;
+    cleanup_unstarted_dind_inner(engine, identity, dind_id, None).await
+}
+
+pub(super) async fn cleanup_unstarted_dind_with_budget<E: PairEngine>(
+    engine: &E,
+    identity: &LaunchIdentity,
+    dind_id: &str,
+    resource_budget: ResourceBudget,
+) -> Result<(), HostError> {
+    cleanup_unstarted_dind_inner(engine, identity, dind_id, Some(resource_budget)).await
+}
+
+async fn cleanup_unstarted_dind_inner<E: PairEngine>(
+    engine: &E,
+    identity: &LaunchIdentity,
+    dind_id: &str,
+    resource_budget: Option<ResourceBudget>,
+) -> Result<(), HostError> {
+    let observed = match resource_budget {
+        Some(budget) => {
+            reconcile_worker_with_budget(engine, identity, None, Some(dind_id), None, budget)
+                .await?
+        }
+        None => reconcile_worker(engine, identity, None, Some(dind_id), None).await?,
+    };
     if observed.runner_id().is_some() {
         return Err(HostError::Ownership);
     }

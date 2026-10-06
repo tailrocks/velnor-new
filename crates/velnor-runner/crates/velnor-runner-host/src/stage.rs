@@ -23,7 +23,7 @@ pub(crate) use cleanup::cleanup_worker;
 pub(crate) use pair::{
     ContainerRecord, DindProbe, cleanup_prepared_dind, prepare_dind, start_runner,
 };
-pub(crate) use reconcile::reconcile_worker;
+pub(crate) use reconcile::{reconcile_worker, reconcile_worker_with_budget};
 
 /// Where `start_pair_until` returns. Later steps are not started.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

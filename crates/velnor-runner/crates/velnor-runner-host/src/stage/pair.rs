@@ -12,7 +12,7 @@ use crate::error::{HostError, PreparationCause};
 use crate::launch_identity::LaunchIdentity;
 use crate::worker::resources::refuse_existing;
 use crate::worker::{
-    CreateProjection, PreparedDind, Started, confirmed_not_found, create_only,
+    CreateProjection, PreparedDind, ResourceBudget, Started, confirmed_not_found, create_only,
     create_owned_volumes, deliver_jit, dind_create_for_identity, join_dind_net, list_launch,
     probe_dind, remove_owned_volumes, runner_create_for_identity, start_id, verify_container,
     verify_engine,
@@ -60,6 +60,22 @@ pub(crate) trait PairEngine {
         archive_lease: Option<&ActionArchiveLease>,
         require_running: bool,
     ) -> Result<ContainerRecord, HostError>;
+    /// Verify one container and check its Docker limits against `resource_budget`.
+    ///
+    /// Engines without budget plumbing fall back to [`Self::verify_container`].
+    async fn verify_container_with_budget(
+        &self,
+        identity: &LaunchIdentity,
+        role: &str,
+        id: &str,
+        dind_id: Option<&str>,
+        archive_lease: Option<&ActionArchiveLease>,
+        _resource_budget: ResourceBudget,
+        require_running: bool,
+    ) -> Result<ContainerRecord, HostError> {
+        self.verify_container(identity, role, id, dind_id, archive_lease, require_running)
+            .await
+    }
     async fn write_jit(&self, id: &str, jit: &[u8]) -> Result<(), HostError>;
     async fn remove(&self, id: &str) -> Result<(), HostError>;
     async fn inspect_container(
@@ -111,6 +127,30 @@ impl PairEngine for Docker {
             id,
             dind_id,
             archive_lease,
+            None,
+            require_running,
+        )
+        .await
+    }
+
+    async fn verify_container_with_budget(
+        &self,
+        identity: &LaunchIdentity,
+        role: &str,
+        id: &str,
+        dind_id: Option<&str>,
+        archive_lease: Option<&ActionArchiveLease>,
+        resource_budget: ResourceBudget,
+        require_running: bool,
+    ) -> Result<ContainerRecord, HostError> {
+        verify_container(
+            self,
+            identity,
+            role,
+            id,
+            dind_id,
+            archive_lease,
+            Some(resource_budget),
             require_running,
         )
         .await

@@ -10,8 +10,8 @@ use tokio::time::timeout;
 
 use super::super::mounts::{label_map, mount_source};
 use super::super::{
-    CreateProjection, DIND_ENTRYPOINT, DIND_IMAGE, dind_create_for_identity, identity_labels_match,
-    join_dind_net, launch_identity_labels_match, runner_create_for_identity,
+    CreateProjection, DIND_ENTRYPOINT, DIND_IMAGE, ResourceBudget, dind_create_for_identity,
+    identity_labels_match, join_dind_net, launch_identity_labels_match, runner_create_for_identity,
 };
 use super::confirmed_not_found;
 use crate::action_archive_seed::ActionArchiveLease;
@@ -21,6 +21,9 @@ use crate::stage::ContainerRecord;
 
 mod environment;
 use environment::environment_matches;
+#[path = "containers_limits.rs"]
+mod limits;
+use limits::resource_limits_match;
 
 const DOCKER_CALL_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -147,6 +150,7 @@ pub(super) async fn verify_container(
     id: &str,
     dind_id: Option<&str>,
     archive_lease: Option<&ActionArchiveLease>,
+    resource_budget: Option<ResourceBudget>,
     require_running: bool,
 ) -> Result<ContainerRecord, HostError> {
     if !container_id(id) {
@@ -154,16 +158,19 @@ pub(super) async fn verify_container(
     }
     let expected = match role {
         "dind" if dind_id.is_none() && archive_lease.is_none() => {
-            dind_create_for_identity(identity)?
+            let mut expected = dind_create_for_identity(identity)?;
+            expected.resource_budget = resource_budget;
+            expected
         }
         "runner" => {
             if archive_lease.is_some_and(|lease| lease.launch_id() != identity.launch_id()) {
                 return Err(HostError::Ownership);
             }
-            let runner = runner_create_for_identity(
+            let mut runner = runner_create_for_identity(
                 identity,
                 archive_lease.map(ActionArchiveLease::cache_path),
             )?;
+            runner.resource_budget = resource_budget;
             join_dind_net(runner, dind_id.ok_or(HostError::Ownership)?)?
         }
         _ => return Err(HostError::Ownership),
@@ -255,6 +262,7 @@ fn dind_projection(runner: &CreateProjection) -> Result<CreateProjection, HostEr
         name,
         image: DIND_IMAGE.to_owned(),
         platform: runner.platform.clone(),
+
         env: Vec::new(),
         cmd: Vec::new(),
         entrypoint: DIND_ENTRYPOINT
@@ -269,6 +277,7 @@ fn dind_projection(runner: &CreateProjection) -> Result<CreateProjection, HostEr
         privileged: true,
         open_stdin: false,
         network_mode: None,
+        resource_budget: runner.resource_budget,
     })
 }
 
@@ -306,6 +315,7 @@ fn topology_matches(
         || !environment_matches(spec, config)?
         || host.privileged != Some(spec.privileged)
         || host.cgroupns_mode != Some(HostConfigCgroupnsModeEnum::PRIVATE)
+        || !resource_limits_match(spec, host)
         || !network_matches(spec.network_mode.as_deref(), host.network_mode.as_deref())
     {
         return Ok(false);

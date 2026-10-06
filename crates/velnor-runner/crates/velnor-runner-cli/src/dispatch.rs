@@ -46,6 +46,8 @@ fn dispatch(cli: &Cli) -> ExitCode {
             max_jobs,
             docker_context,
             endpoint,
+            // Resource budgets land with HostConfig resources support.
+            ..
         } => connect(&ConnectRequest {
             state: &state,
             repo,
