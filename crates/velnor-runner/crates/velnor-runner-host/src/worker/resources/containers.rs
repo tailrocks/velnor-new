@@ -79,6 +79,7 @@ async fn reject_existing_role(
         ("dind", [], []) => Ok(()),
         ("dind", [dind_row], []) => verify_existing(docker, spec, dind_row).await,
         ("runner", [dind_row], []) => verify_dind(docker, spec, dind_row).await,
+        ("dind", [], [_]) => Err(HostError::Ownership),
         ("runner", [], [runner_row]) => verify_existing(docker, spec, runner_row).await,
         _ => Err(HostError::Ownership),
     }
