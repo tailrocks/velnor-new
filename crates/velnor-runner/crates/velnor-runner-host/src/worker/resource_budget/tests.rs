@@ -1,0 +1,112 @@
+//! Resource budget unit checks. No Docker engine is required.
+
+use super::{PairResourceBudget, ResourceBudgetConfig};
+use crate::error::HostError;
+
+fn config() -> ResourceBudgetConfig {
+    ResourceBudgetConfig {
+        runner_cpu_millicores: 1_000,
+        runner_memory_bytes: 2_147_483_648,
+        dind_cpu_millicores: 3_000,
+        dind_memory_bytes: 6_442_450_944,
+    }
+}
+
+#[test]
+fn conversion_keeps_each_container_and_pair_budget_explicit() -> Result<(), HostError> {
+    let budget = config().validate()?;
+    assert_eq!(budget.runner().nano_cpus, 1_000_000_000);
+    assert_eq!(budget.runner().memory_bytes, 2_147_483_648);
+    assert_eq!(budget.dind().nano_cpus, 3_000_000_000);
+    assert_eq!(budget.dind().memory_bytes, 6_442_450_944);
+    assert_eq!(
+        budget.pair(),
+        PairResourceBudget {
+            cpu_millicores: 4_000,
+            memory_bytes: 8_589_934_592,
+        }
+    );
+    Ok(())
+}
+
+#[test]
+fn zero_or_overflowing_container_budgets_fail_closed() {
+    let mut bad = config();
+    bad.runner_cpu_millicores = 0;
+    assert_eq!(bad.validate().err(), Some(HostError::Config));
+
+    let mut bad = config();
+    bad.dind_memory_bytes = 0;
+    assert_eq!(bad.validate().err(), Some(HostError::Config));
+
+    let mut bad = config();
+    bad.runner_cpu_millicores = u64::MAX;
+    assert_eq!(bad.validate().err(), Some(HostError::Config));
+
+    let mut bad = config();
+    bad.dind_memory_bytes = u64::MAX;
+    assert_eq!(bad.validate().err(), Some(HostError::Config));
+}
+
+#[test]
+fn aggregate_worker_budget_checks_multiplication_and_docker_ranges() -> Result<(), HostError> {
+    let budget = config().validate()?;
+    assert_eq!(budget.pair().docker_limits(0), Err(HostError::Config));
+    assert_eq!(
+        budget.pair().docker_limits(u32::MAX),
+        Err(HostError::Config)
+    );
+    assert_eq!(
+        PairResourceBudget {
+            cpu_millicores: u64::MAX,
+            memory_bytes: 1,
+        }
+        .docker_limits(2),
+        Err(HostError::Config)
+    );
+    assert_eq!(
+        PairResourceBudget {
+            cpu_millicores: 1,
+            memory_bytes: u64::MAX,
+        }
+        .docker_limits(2),
+        Err(HostError::Config)
+    );
+    Ok(())
+}
+
+#[test]
+fn docker_minimum_memory_and_guest_cpu_limits_are_checked() -> Result<(), HostError> {
+    let mut bad = config();
+    bad.runner_memory_bytes = 6_291_455;
+    assert_eq!(bad.validate().err(), Some(HostError::Config));
+
+    let budget = config().validate()?;
+    assert_eq!(budget.validate_guest_cpu(Some(4)), Ok(()));
+    assert_eq!(budget.validate_guest_cpu(Some(3)), Err(HostError::Config));
+    assert_eq!(budget.validate_guest_cpu(Some(0)), Err(HostError::Config));
+    assert_eq!(budget.validate_guest_cpu(None), Err(HostError::Config));
+    assert_eq!(
+        budget.validate_guest_cpu(Some(i64::MAX)),
+        Err(HostError::Config)
+    );
+    Ok(())
+}
+
+// The budgeted-projection test stays with the unported budgeted-projection work.
+
+#[test]
+fn resource_configuration_rejects_missing_malformed_and_overflowing_values() {
+    assert!(toml::from_str::<ResourceBudgetConfig>(
+        "runner_cpu_millicores = 1000\nrunner_memory_bytes = 2147483648\ndind_cpu_millicores = 3000"
+    )
+    .is_err());
+    assert!(toml::from_str::<ResourceBudgetConfig>(
+        "runner_cpu_millicores = 'many'\nrunner_memory_bytes = 2147483648\ndind_cpu_millicores = 3000\ndind_memory_bytes = 6442450944"
+    )
+    .is_err());
+    let oversized = toml::from_str::<ResourceBudgetConfig>(
+        "runner_cpu_millicores = 1000\nrunner_memory_bytes = 9223372036854775807\ndind_cpu_millicores = 3000\ndind_memory_bytes = 6442450944",
+    );
+    assert!(oversized.is_ok_and(|value| value.validate().is_err()));
+}
