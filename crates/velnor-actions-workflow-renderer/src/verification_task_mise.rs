@@ -40,7 +40,7 @@ pub(crate) fn steps(
     }
     rendered.push(shell_step(
         RUN_VERIFICATION_TASK_NAME,
-        bash_script(&run_script(policy)?),
+        bash_script(&run_script(policy)),
         env,
     )?);
     Ok(rendered)
@@ -192,7 +192,7 @@ fn install_script(policy: &VerificationTaskPolicy) -> Result<String, RenderError
     Ok(statements.join("; "))
 }
 
-fn run_script(policy: &VerificationTaskPolicy) -> Result<String, RenderError> {
+fn run_script(policy: &VerificationTaskPolicy) -> String {
     let root = task_root(policy);
     let mut statements = base_environment(&root);
     statements.extend([
@@ -246,7 +246,7 @@ fn run_script(policy: &VerificationTaskPolicy) -> Result<String, RenderError> {
         "mise --no-env {locked}--no-hooks run --skip-tools {}",
         policy.task.mise_task
     ));
-    Ok(statements.join("; "))
+    statements.join("; ")
 }
 
 /// Pinned-MBX identity checks without command substitution.

@@ -9,6 +9,9 @@ use crate::OrchestratorError;
 use crate::native_tool_input::NativeMiseConfig;
 use crate::native_tool_lock::{NativeLockedTool, NativeMiseLock};
 
+/// (`version`, `options`, `extra_args`) selected for a tool.
+type ToolVersionSelection = (String, BTreeMap<String, String>, Vec<String>);
+
 const BOLTFFI_KEY: &str = "github:boltffi/boltffi";
 const BOLTFFI_MATCHING_REGEX: &str = r"^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$";
 
@@ -62,7 +65,7 @@ fn selected_version_and_options(
     config: &NativeMiseConfig,
     rust_version: &str,
     rust_lock_options: &BTreeMap<String, String>,
-) -> Result<(String, BTreeMap<String, String>, Vec<String>), OrchestratorError> {
+) -> Result<ToolVersionSelection, OrchestratorError> {
     if key == "rust" {
         return Ok((
             rust_version.to_owned(),

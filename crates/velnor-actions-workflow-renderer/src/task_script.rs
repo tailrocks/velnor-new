@@ -23,7 +23,7 @@ pub(crate) fn printf_write(path: &str, content: &str, scope: &str) -> Result<Str
     let content = content.strip_suffix('\n').unwrap_or(content);
     let mut command = vec!["printf '%s\\n'".to_owned()];
     for line in content.split('\n') {
-        if line.bytes().any(|byte| byte < 0x20 || byte > 0x7e) {
+        if line.bytes().any(|byte| !(0x20..=0x7e).contains(&byte)) {
             return Err(RenderError::InvalidWorkflow(format!(
                 "{scope}_mise_file_bytes"
             )));

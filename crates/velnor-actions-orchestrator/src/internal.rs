@@ -141,7 +141,9 @@ fn plan_internal_inner(
             })
             .ok()
     });
-    let used_manifest = if request.event != WorkflowEvent::Qualification {
+    let used_manifest = if request.event == WorkflowEvent::Qualification {
+        None
+    } else {
         apply_baseline(
             &mut plan,
             request.event,
@@ -156,8 +158,6 @@ fn plan_internal_inner(
             &prep.discovery,
             changed.as_ref(),
         )?
-    } else {
-        None
     };
     plan.validate().map_err(internal_contract)?;
     check_matrix_budget(&plan.matrix)?;

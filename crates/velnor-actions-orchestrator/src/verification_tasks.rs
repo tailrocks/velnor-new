@@ -14,6 +14,11 @@ use crate::pins::resolve_verification_mise_setup;
 use crate::toolcheck::{ToolInputCheck, ToolParse};
 use crate::{OrchestratorError, discover::Discovery};
 
+/// (version, options) resolved for the rust toolchain.
+type RustToolValues = (String, BTreeMap<String, String>);
+/// (`version`, `options`, `extra_args`) selected for a tool.
+type ToolVersionSelection = (String, BTreeMap<String, String>, Vec<String>);
+
 /// Resolve each workflow task onto its fixed platform and Mise binary pin.
 pub(crate) fn policies(
     config: &VelnorConfig,
@@ -134,7 +139,7 @@ fn rust_tool_values(
     checks: &[ToolInputCheck],
     rust: Option<&NativeToolInput>,
     requested: &BTreeMap<String, String>,
-) -> Result<Option<(String, BTreeMap<String, String>)>, OrchestratorError> {
+) -> Result<Option<RustToolValues>, OrchestratorError> {
     if !requested.contains_key("rust") {
         return Ok(None);
     }
@@ -156,14 +161,24 @@ fn rust_tool_values(
     Ok(Some((version.to_owned(), options)))
 }
 
+/// True when (`key`, `backend`) names a pinned tool backend: rust core,
+/// mr-boxington, boltffi, aqua, or a matching `github:` tool.
+fn is_pinned_tool_backend(key: &str, backend: &str) -> bool {
+    key == "rust" && backend == "core:rust"
+        || key == "mr-boxington" && backend == "packslip:github.com/jdx/mr-boxington"
+        || key == "github:boltffi/boltffi" && backend == key
+        || backend.starts_with("aqua:") && backend.len() > "aqua:".len()
+        || key.starts_with("github:") && key == backend
+}
+
 fn requested_tool_version(
     key: &str,
     requested_version: String,
     mise_config: &NativeMiseConfig,
     mise_os: &str,
-    rust_values: Option<&(String, BTreeMap<String, String>)>,
+    rust_values: Option<&RustToolValues>,
     locked: &NativeLockedTool,
-) -> Result<(String, BTreeMap<String, String>, Vec<String>), OrchestratorError> {
+) -> Result<ToolVersionSelection, OrchestratorError> {
     if key == "rust" {
         let (version, options) =
             rust_values.ok_or_else(|| failure("verification_rust_toolchain"))?;
@@ -286,13 +301,7 @@ fn resolve_tool(
         .backend
         .clone()
         .ok_or_else(|| failure("verification_tool_backend"))?;
-    if backend.starts_with("cargo:")
-        || !(key == "rust" && backend == "core:rust")
-            && !(key == "mr-boxington" && backend == "packslip:github.com/jdx/mr-boxington")
-            && !(key == "github:boltffi/boltffi" && backend == key)
-            && !(backend.starts_with("aqua:") && backend.len() > "aqua:".len())
-            && !(key.starts_with("github:") && key == backend)
-    {
+    if backend.starts_with("cargo:") || !is_pinned_tool_backend(key, &backend) {
         return Err(failure("verification_tool_backend_unsupported"));
     }
     let artifact = if key == "rust" {

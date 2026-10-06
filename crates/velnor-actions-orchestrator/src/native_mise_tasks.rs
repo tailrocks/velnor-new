@@ -148,11 +148,13 @@ fn string_list(
         .iter()
         .map(toml::Value::as_str)
         .collect::<Option<Vec<_>>>()
-        .map(|items| items.into_iter().map(ToOwned::to_owned).collect())
-        .unwrap_or_else(|| {
-            unsupported.push(format!("{name}.shape"));
-            Vec::new()
-        })
+        .map_or_else(
+            || {
+                unsupported.push(format!("{name}.shape"));
+                Vec::new()
+            },
+            |items| items.into_iter().map(ToOwned::to_owned).collect(),
+        )
 }
 
 fn string_map(

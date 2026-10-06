@@ -77,7 +77,7 @@ pub(crate) fn validate_workflow_task_jobs(
                     jobs,
                     std::slice::from_ref(task),
                     checkout_uses,
-                )?)
+                )?);
             }
             WorkflowTaskPolicy::Build(task) => job_ids.extend(
                 crate::verification_jobs::build_task_jobs::validate_build_task_jobs(

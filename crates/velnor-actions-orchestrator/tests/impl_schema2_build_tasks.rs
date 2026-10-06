@@ -166,7 +166,7 @@ fn parse_printf_args(args: &str) -> Result<Vec<String>, Box<dyn std::error::Erro
     loop {
         match chars.next() {
             None => return Ok(out),
-            Some(' ') => continue,
+            Some(' ') => {}
             Some('\'') => {
                 let mut line = String::new();
                 for char in chars.by_ref() {

@@ -205,6 +205,12 @@ fn config_chain_check(expected: &[&str]) -> String {
     )
 }
 
+fn source_hash_check(path: &str, sha256: &str) -> String {
+    format!(
+        "test -f \"$workspace_root/{path}\"; test ! -L \"$workspace_root/{path}\"; /usr/bin/shasum -a 256 \"$workspace_root/{path}\" > \"$task_root/sha256.txt\"; read actual rest < \"$task_root/sha256.txt\"; test \"$actual\" = '{sha256}'"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use std::process::Command;
@@ -286,10 +292,4 @@ mod tests {
             "every isolated tool and Mise setting has its exact value"
         );
     }
-}
-
-fn source_hash_check(path: &str, sha256: &str) -> String {
-    format!(
-        "test -f \"$workspace_root/{path}\"; test ! -L \"$workspace_root/{path}\"; /usr/bin/shasum -a 256 \"$workspace_root/{path}\" > \"$task_root/sha256.txt\"; read actual rest < \"$task_root/sha256.txt\"; test \"$actual\" = '{sha256}'"
-    )
 }

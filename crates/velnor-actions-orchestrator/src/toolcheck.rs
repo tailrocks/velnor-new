@@ -373,7 +373,8 @@ mod tests {
     #[test]
     fn oversized_tool_input_is_rejected_before_parsing() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let bytes = vec![b'x'; crate::safe_read::MAX_REPO_FILE_BYTES as usize + 1];
+        let max = usize::try_from(crate::safe_read::MAX_REPO_FILE_BYTES).expect("limit fits");
+        let bytes = vec![b'x'; max + 1];
         std::fs::write(dir.path().join("mise.lock"), bytes).expect("write oversized lock");
 
         let checks = check_tool_inputs(dir.path());

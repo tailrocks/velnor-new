@@ -226,7 +226,7 @@ fn validate_tool_backend(
         ("mr-boxington", "packslip:github.com/jdx/mr-boxington", Some(artifact))
             if tool.config_options.is_empty() && tool.lock_options.is_empty() =>
         {
-            validate_artifact(&tool.key, artifact)?
+            validate_artifact(&tool.key, artifact)?;
         }
         (BOLTFFI_KEY, BOLTFFI_KEY, Some(artifact)) => validate_artifact(&tool.key, artifact)?,
         (_, backend, Some(artifact))
@@ -236,7 +236,7 @@ fn validate_tool_backend(
                 && tool.config_options.is_empty()
                 && tool.lock_options.is_empty() =>
         {
-            validate_artifact(&tool.key, artifact)?
+            validate_artifact(&tool.key, artifact)?;
         }
         (key, backend, Some(artifact))
             if key.starts_with("github:")
@@ -244,7 +244,7 @@ fn validate_tool_backend(
                 && tool.config_options.is_empty()
                 && tool.lock_options.is_empty() =>
         {
-            validate_artifact(&tool.key, artifact)?
+            validate_artifact(&tool.key, artifact)?;
         }
         _ => {
             return Err(RenderError::InvalidWorkflow(format!(

@@ -8,10 +8,9 @@ use std::error::Error;
 
 #[path = "impl_repo_archive_deps.rs"]
 mod archive_deps;
-#[path = "../../test_support/git_fixture.rs"]
-mod git_fixture;
 #[path = "impl_repo_size_limits.rs"]
 mod size_limits;
+use crate::impl_cli_tmp::git_fixture;
 use archive_deps::reviewed_archive_dependency;
 
 use crate::impl_repo_policy::{

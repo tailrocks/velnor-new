@@ -98,7 +98,10 @@ fn is_safe_native_image_script_path(path: &str) -> bool {
     let Some(relative) = path.strip_prefix(PREFIX) else {
         return false;
     };
-    if !relative.ends_with(".sh") {
+    let is_shell = std::path::Path::new(relative)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("sh"));
+    if !is_shell {
         return false;
     }
     relative.split('/').all(|component| {

@@ -46,7 +46,7 @@ fn source_approval_rejects_dispatch_injection_and_partial_transport() {
         |value: &mut ApprovedOwnedSource| {
             value.archive_url = value
                 .archive_url
-                .replace("tailrocks/velnor-new", "other/source")
+                .replace("tailrocks/velnor-new", "other/source");
         },
         |value: &mut ApprovedOwnedSource| {
             value

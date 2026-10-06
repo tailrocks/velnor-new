@@ -357,8 +357,9 @@ fn declared_jobs_are_exact_sorted_and_unique() {
     let jobs = BTreeMap::from([(id.clone(), job.clone())]);
     assert_eq!(
         validate_build_task_jobs(&jobs, std::slice::from_ref(&policy), CHECKOUT)
-            .expect("declared native job"),
-        [id.clone()]
+            .expect("declared native job")
+            .as_slice(),
+        std::slice::from_ref(&id)
     );
 
     let mut changed = jobs;

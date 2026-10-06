@@ -122,7 +122,7 @@ fn native_image_steps(
         steps::checkout_step(checkout_uses)?,
         shell_step(
             VERIFY_NATIVE_IMAGE_SOURCE_NAME,
-            bash_script(&source_guard_script(policy)?),
+            bash_script(&source_guard_script(policy)),
             BTreeMap::new(),
         )?,
         shell_step(
@@ -138,7 +138,7 @@ fn native_image_steps(
     ])
 }
 
-fn source_guard_script(policy: &NativeImageTaskPolicy) -> Result<String, RenderError> {
+fn source_guard_script(policy: &NativeImageTaskPolicy) -> String {
     let mut lines = vec![
         "set -euo pipefail".to_owned(),
         "cd -P -- \"$GITHUB_WORKSPACE\"".to_owned(),
@@ -161,7 +161,7 @@ fn source_guard_script(policy: &NativeImageTaskPolicy) -> Result<String, RenderE
             policy.source_sha256, policy.task.script
         ),
     ]);
-    Ok(lines.join("; "))
+    lines.join("; ")
 }
 
 fn image_script_argv(policy: &NativeImageTaskPolicy) -> Vec<String> {
