@@ -35,6 +35,7 @@ mod runner_dir;
 pub(crate) use drive::{Drive, Lane, Rest};
 pub(crate) use inspect::classify_inspect;
 mod mint_origin;
+mod pressure;
 mod session;
 mod slot;
 mod steady;
@@ -45,6 +46,7 @@ mod trace;
 mod turn;
 
 pub(crate) use capacity::{install_job_capacity, job_capacity};
+pub(crate) use pressure::advertise as advertise_capacity;
 
 #[cfg(test)]
 pub(crate) use capacity::{
