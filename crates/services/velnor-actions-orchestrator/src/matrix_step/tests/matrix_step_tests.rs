@@ -183,7 +183,7 @@ fn doc_obligation_step_carries_typed_rustdocflags() {
 #[test]
 fn tofu_obligation_steps_carry_the_automation_pair() {
     use velnor_actions_mise::{MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV, RUSTUP_TOOLCHAIN_ENV};
-    use velnor_actions_tofu::{
+    use velnor_actions_tofu_core::{
         TF_CLI_CONFIG_FILE_ENV, TF_DATA_DIR_ENV, TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON,
         TF_INPUT_ENV, TF_INPUT_OFF,
     };

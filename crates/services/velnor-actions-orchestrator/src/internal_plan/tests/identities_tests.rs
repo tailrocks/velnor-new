@@ -246,14 +246,14 @@ fn tofu_toolchain_flips_on_provider_surface() {
 }
 
 /// Tofu proposal via the T12 adapter constructor.
-fn tofu_proposal(kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTask {
-    let group = velnor_actions_tofu::TofuTaskGroup {
+fn tofu_proposal(kind: velnor_actions_tofu_core::TofuTaskKind) -> ProposedTask {
+    let group = velnor_actions_tofu_core::TofuTaskGroup {
         root: String::new(),
         kind,
         configuration: "default".to_owned(),
         no_targets: false,
     };
-    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    let task = velnor_actions_tofu_core::propose_task(&group).expect("fixture proposes");
     task.validate().expect("fixture valid");
     task
 }
@@ -289,7 +289,7 @@ fn empty_discovery() -> crate::discover::Discovery {
 
 #[test]
 fn tofu_bundles_skip_rust_checkout_probes() {
-    use velnor_actions_tofu::TofuTaskKind;
+    use velnor_actions_tofu_core::TofuTaskKind;
     let task = tofu_proposal(TofuTaskKind::Validate);
     let discovery = empty_discovery();
     let snapshot = super::super::snapshot::ExecutionSnapshot::build(&discovery);

@@ -316,7 +316,7 @@ fn build_plan(
     // fill, so a source build can never emit a release-pinned identity.
     let generator = default_generator();
     let snapshot = ExecutionSnapshot::build(discovery);
-    let mut reads = velnor_actions_tofu::FileCache::new();
+    let mut reads = velnor_actions_tofu_core::FileCache::new();
     for task in universe {
         let wire = GroupWire {
             event: request.event,

@@ -143,7 +143,7 @@ fn checkout_resolution_binds_content_and_absence() {
         &graph,
         &toolchain,
         &platform,
-        &mut velnor_actions_tofu::FileCache::new(),
+        &mut velnor_actions_tofu_core::FileCache::new(),
     )
     .expect("closure");
     assert!(
@@ -175,7 +175,7 @@ fn checkout_resolution_binds_content_and_absence() {
         &graph,
         &toolchain,
         &platform,
-        &mut velnor_actions_tofu::FileCache::new(),
+        &mut velnor_actions_tofu_core::FileCache::new(),
     )
     .expect("closure");
     assert_eq!(digest_of(&closure), digest_of(&again));
@@ -186,7 +186,7 @@ fn checkout_resolution_binds_content_and_absence() {
         &graph,
         &toolchain,
         &platform,
-        &mut velnor_actions_tofu::FileCache::new(),
+        &mut velnor_actions_tofu_core::FileCache::new(),
     )
     .expect("closure");
     assert!(missing.verify_complete().is_err());
@@ -197,7 +197,7 @@ fn checkout_resolution_binds_content_and_absence() {
         &graph,
         &toolchain,
         &platform,
-        &mut velnor_actions_tofu::FileCache::new(),
+        &mut velnor_actions_tofu_core::FileCache::new(),
     )
     .expect("closure");
     assert!(dirty.verify_complete().is_err());
@@ -222,7 +222,7 @@ fn source_edits_flip_and_classes_exclude_explicitly() {
             &graph,
             &toolchain,
             &platform,
-            &mut velnor_actions_tofu::FileCache::new(),
+            &mut velnor_actions_tofu_core::FileCache::new(),
         )
         .expect("closure")
     };
@@ -332,7 +332,7 @@ fn tofu_dispatch_resolves_closure() {
         "g",
         "t",
         "p",
-        &mut velnor_actions_tofu::FileCache::new(),
+        &mut velnor_actions_tofu_core::FileCache::new(),
     )
     .expect("tofu converts");
     assert!(closure.unknown_inputs().is_empty());
@@ -352,7 +352,7 @@ fn tofu_dispatch_rejects_unknown_kind() {
         "g",
         "t",
         "p",
-        &mut velnor_actions_tofu::FileCache::new(),
+        &mut velnor_actions_tofu_core::FileCache::new(),
     )
     .expect_err("unknown kind");
     assert!(err.to_string().contains("unknown_kind"), "{err}");
@@ -370,7 +370,7 @@ fn closure_dispatch_rejects_unregistered_stack() {
         "g",
         "t",
         "p",
-        &mut velnor_actions_tofu::FileCache::new(),
+        &mut velnor_actions_tofu_core::FileCache::new(),
     )
     .expect_err("bogus");
     assert!(err.to_string().contains("unregistered_stack"), "{err}");

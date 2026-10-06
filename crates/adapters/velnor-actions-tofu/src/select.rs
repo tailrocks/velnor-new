@@ -14,7 +14,9 @@ use std::fmt;
 
 use velnor_actions_contract::reverse_closure;
 
-use crate::modules::{ModuleEdges, ModuleError, SourceClass, check_acyclic, module_edge_pairs};
+use velnor_actions_tofu_core::modules::{
+    ModuleEdges, ModuleError, SourceClass, check_acyclic, module_edge_pairs,
+};
 
 /// Outcome of calling-root selection.
 #[derive(Debug, Clone, PartialEq, Eq)]

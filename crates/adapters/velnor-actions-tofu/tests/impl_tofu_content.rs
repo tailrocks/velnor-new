@@ -1,6 +1,6 @@
 //! E4 content-signal cases.
-use velnor_actions_tofu::content::signals_for;
-use velnor_actions_tofu::effective::Dialect;
+use velnor_actions_tofu_core::content::signals_for;
+use velnor_actions_tofu_core::effective::Dialect;
 
 #[test]
 fn native_version_and_legacy_signal_together() {

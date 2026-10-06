@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn tofu_tasks_derive_the_tofu_envelope() {
-    use velnor_actions_tofu::TofuTaskKind;
+    use velnor_actions_tofu_core::TofuTaskKind;
     let dir = TempDir::create("tofu-ext").expect("tempdir");
     std::fs::write(dir.path.join(".terraform.lock.hcl"), "lock").expect("lockfile");
     let task = tofu_proposal(TofuTaskKind::Validate);
@@ -19,7 +19,7 @@ fn tofu_tasks_derive_the_tofu_envelope() {
         &task,
         &dir.path,
         &bundle,
-        &mut velnor_actions_tofu::FileCache::new(),
+        &mut velnor_actions_tofu_core::FileCache::new(),
     )
     .expect("derives");
     assert_eq!(envelope.schema, TOFU_EXTENSION_SCHEMA);
@@ -32,7 +32,7 @@ fn tofu_tasks_derive_the_tofu_envelope() {
 
 #[test]
 fn tofu_drift_fails_the_bridge_closed() {
-    use velnor_actions_tofu::TofuTaskKind;
+    use velnor_actions_tofu_core::TofuTaskKind;
     let dir = TempDir::create("tofu-drift").expect("tempdir");
     let mut task = tofu_proposal(TofuTaskKind::InitForValidate);
     task.identity.compile_driver = "cargo".to_owned();
@@ -49,7 +49,7 @@ fn tofu_drift_fails_the_bridge_closed() {
         &task,
         &dir.path,
         &bundle,
-        &mut velnor_actions_tofu::FileCache::new(),
+        &mut velnor_actions_tofu_core::FileCache::new(),
     )
     .expect_err("drift fails");
     assert!(err.to_string().contains("unknown_driver:cargo"), "{err}");
@@ -98,7 +98,7 @@ fn rust_tasks_keep_the_rust_envelope() {
         &task,
         &dir.path,
         &bundle,
-        &mut velnor_actions_tofu::FileCache::new(),
+        &mut velnor_actions_tofu_core::FileCache::new(),
     )
     .expect("derives");
     assert_eq!(envelope.schema, RUST_EXTENSION_SCHEMA);

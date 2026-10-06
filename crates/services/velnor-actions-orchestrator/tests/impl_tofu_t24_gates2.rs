@@ -6,8 +6,10 @@
 use velnor_actions_contract::{JobTimeout, digest_b3};
 use velnor_actions_mise::command::{OUTPUT_CAPTURE_LIMIT_BYTES, RUN_TIMEOUT_SECS};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
-use velnor_actions_tofu::kinds::TofuTaskKind;
-use velnor_actions_tofu::task_identity::{DigestSlot, ExtensionInputs, TofuTaskIdentityExtension};
+use velnor_actions_tofu_core::kinds::TofuTaskKind;
+use velnor_actions_tofu_core::task_identity::{
+    DigestSlot, ExtensionInputs, TofuTaskIdentityExtension,
+};
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, WORKFLOW_PATH};
 
 use crate::impl_common::TestResult;

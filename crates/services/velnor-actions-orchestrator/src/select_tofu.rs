@@ -12,9 +12,9 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use velnor_actions_contract::{DetectionStatus, ProposedTask};
-use velnor_actions_tofu::{
+use velnor_actions_tofu::select_roots;
+use velnor_actions_tofu_core::{
     Family, ModuleEdges, chdir_finding_for_root, family_of, key_for_root, root_for_key,
-    select_roots,
 };
 
 use crate::OrchestratorError;
@@ -44,7 +44,7 @@ pub(crate) fn tofu_selected_roots(statuses: &[DetectionStatus]) -> Vec<String> {
         .iter()
         .filter_map(|status| match status {
             DetectionStatus::Selected(project)
-                if project.stack_id == velnor_actions_tofu::STACK_ID =>
+                if project.stack_id == velnor_actions_tofu_core::STACK_ID =>
             {
                 Some(project.project_root.clone())
             }
@@ -65,7 +65,7 @@ pub(crate) fn tofu_selected_roots(statuses: &[DetectionStatus]) -> Vec<String> {
 pub(crate) fn push_chdir_findings(discovery: &Discovery, warnings: &mut Vec<String>) {
     let mut findings: BTreeSet<String> = BTreeSet::new();
     for task in &discovery.proposals {
-        if task.stack_id != velnor_actions_tofu::STACK_ID {
+        if task.stack_id != velnor_actions_tofu_core::STACK_ID {
             continue;
         }
         let root = root_for_key(&task.identity.unit_key);
@@ -196,8 +196,9 @@ fn base_module_graph(
     let specs: Vec<&str> = wanted.iter().map(String::as_str).collect();
     let texts = base_manifests(root, base, &specs)?;
     let pairs: Vec<(String, String)> = wanted.into_iter().zip(texts).collect();
-    let refs = velnor_actions_tofu::module_refs_for_texts(&pairs).map_err(|err| err.to_string())?;
-    velnor_actions_tofu::resolve_refs(&refs).map_err(|err| err.to_string())
+    let refs =
+        velnor_actions_tofu_core::module_refs_for_texts(&pairs).map_err(|err| err.to_string())?;
+    velnor_actions_tofu_core::resolve_refs(&refs).map_err(|err| err.to_string())
 }
 
 /// Union attribution nodes: roots plus both graphs' edge ends.
@@ -266,9 +267,9 @@ pub(crate) fn derive_tofu(
     statuses: &[DetectionStatus],
     files: &[String],
 ) -> Result<Vec<ProposedTask>, OrchestratorError> {
-    use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
+    use velnor_actions_tofu_core::{TofuTaskGroup, TofuTaskKind};
     let selected = tofu_selected_roots(statuses);
-    let covered = velnor_actions_tofu::covered_fmt_roots(&selected);
+    let covered = velnor_actions_tofu_core::covered_fmt_roots(&selected);
     let mut proposals = Vec::new();
     for root in &selected {
         for kind in [
@@ -277,7 +278,7 @@ pub(crate) fn derive_tofu(
             TofuTaskKind::Validate,
         ] {
             let no_fmt = kind == TofuTaskKind::Fmt
-                && (velnor_actions_tofu::fmt_scope_for_root(files, root).is_empty()
+                && (velnor_actions_tofu_core::fmt_scope_for_root(files, root).is_empty()
                     || covered.contains(root));
             let group = TofuTaskGroup {
                 root: root.clone(),
@@ -285,7 +286,7 @@ pub(crate) fn derive_tofu(
                 configuration: "default".to_owned(),
                 no_targets: no_fmt,
             };
-            let task = velnor_actions_tofu::propose_task(&group)?;
+            let task = velnor_actions_tofu_core::propose_task(&group)?;
             task.validate()?;
             proposals.push(task);
         }

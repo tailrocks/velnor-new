@@ -1,5 +1,5 @@
 //! `required_version` floor-evaluation cases.
-use velnor_actions_tofu::version::{
+use velnor_actions_tofu_core::version::{
     admits_opentofu, admits_version, is_terraform_only, toolchain_triple,
 };
 
@@ -101,7 +101,7 @@ fn tightest_upper_wins() {
 
 #[test]
 fn floor_constant_is_first_opentofu_release() {
-    assert_eq!(velnor_actions_tofu::version::OPENTOFU_FLOOR, (1, 6, 0));
+    assert_eq!(velnor_actions_tofu_core::version::OPENTOFU_FLOOR, (1, 6, 0));
     assert!(!is_terraform_only(">= 1.6.0"));
 }
 

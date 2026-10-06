@@ -12,7 +12,7 @@ use velnor_actions_mise::cache_sources as mise_sources;
 use velnor_actions_orchestrator::{
     GenerateOptions, finalized_jobs, generate, plan_internal, prepare,
 };
-use velnor_actions_tofu::TofuLockSnapshot;
+use velnor_actions_tofu_core::TofuLockSnapshot;
 use velnor_actions_workflow_renderer::steps as renderer_steps;
 
 use super::impl_common::{TestResult, git, git_line, install_fixture_release_manifest, make_repo};

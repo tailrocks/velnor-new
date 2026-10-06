@@ -1,7 +1,7 @@
 //! Snapshot-scoped read-cache cases: memoization, failure fidelity,
 //! and the oversize read-through bound.
-use velnor_actions_tofu::FileCache;
-use velnor_actions_tofu::parser::MAX_FILE_BYTES;
+use velnor_actions_tofu_core::FileCache;
+use velnor_actions_tofu_core::parser::MAX_FILE_BYTES;
 
 use crate::support::{Outcome, TempDir};
 

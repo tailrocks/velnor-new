@@ -7,14 +7,14 @@ use super::*;
 use velnor_actions_rust::TaskKind;
 
 /// Tofu proposal via the T12 adapter constructor.
-fn tofu_group(root: &str, kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTask {
-    let group = velnor_actions_tofu::TofuTaskGroup {
+fn tofu_group(root: &str, kind: velnor_actions_tofu_core::TofuTaskKind) -> ProposedTask {
+    let group = velnor_actions_tofu_core::TofuTaskGroup {
         root: root.to_owned(),
         kind,
         configuration: "default".to_owned(),
         no_targets: false,
     };
-    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    let task = velnor_actions_tofu_core::propose_task(&group).expect("fixture proposes");
     task.validate().expect("fixture valid");
     task
 }
@@ -36,7 +36,7 @@ fn assert_provider_restore_only(names: &[&str]) {
 
 #[test]
 fn tofu_obligations_order_fmt_init_validate() {
-    use velnor_actions_tofu::TofuTaskKind;
+    use velnor_actions_tofu_core::TofuTaskKind;
     let fmt = tofu_group("", TofuTaskKind::Fmt);
     let init = tofu_group("", TofuTaskKind::InitForValidate);
     let validate = tofu_group("", TofuTaskKind::Validate);
@@ -60,7 +60,7 @@ fn tofu_obligations_order_fmt_init_validate() {
 
 #[test]
 fn tofu_tasks_bind_no_rust_tools_but_select_opentofu() {
-    use velnor_actions_tofu::TofuTaskKind;
+    use velnor_actions_tofu_core::TofuTaskKind;
     let tofu = tofu_group("stacks/a", TofuTaskKind::Validate);
     let needs = needs(&tofu);
     assert!(!needs.mbx && !needs.nextest);
@@ -76,7 +76,7 @@ fn tofu_tasks_bind_no_rust_tools_but_select_opentofu() {
 fn pure_tofu_group_renders_without_rust_setup() {
     use velnor_actions_contract::StepKind;
     use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, PREPARE_RUST_COMPONENTS_STEP};
-    use velnor_actions_tofu::TofuTaskKind;
+    use velnor_actions_tofu_core::TofuTaskKind;
 
     use crate::source_prep::FETCH_SOURCES_STEP;
     let tasks = vec![
@@ -143,7 +143,7 @@ fn pure_tofu_group_renders_without_rust_setup() {
         );
     }
     assert!(
-        env.get(velnor_actions_tofu::TF_DATA_DIR_ENV)
+        env.get(velnor_actions_tofu_core::TF_DATA_DIR_ENV)
             .is_some_and(|dir| dir.contains("tofu-data")),
         "tofu obligation keeps its isolated data dir: {env:?}"
     );
@@ -152,7 +152,7 @@ fn pure_tofu_group_renders_without_rust_setup() {
 #[test]
 fn mixed_group_keeps_the_rust_union() {
     use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, PREPARE_RUST_COMPONENTS_STEP};
-    use velnor_actions_tofu::TofuTaskKind;
+    use velnor_actions_tofu_core::TofuTaskKind;
     let mut rust = super::group("demo", TaskKind::Clippy, &[]);
     let tofu = tofu_group("stacks/a", TofuTaskKind::Validate);
     rust.identity.unit_id.clone_from(&tofu.identity.unit_id);
@@ -196,7 +196,7 @@ fn mixed_group_keeps_the_rust_union() {
 
 /// One fmt/init/validate triple per root, all runnable.
 fn tofu_triples(roots: &[&str]) -> Vec<ProposedTask> {
-    use velnor_actions_tofu::TofuTaskKind;
+    use velnor_actions_tofu_core::TofuTaskKind;
     let mut tasks = Vec::new();
     for root in roots {
         for kind in [
@@ -348,7 +348,7 @@ fn first_tofu_obligation_declares_the_cap() {
 #[test]
 fn all_tofu_groups_take_tofu_ids_mixed_keep_rust() {
     use velnor_actions_contract::TOFU_JOB_ID_PREFIX;
-    use velnor_actions_tofu::TofuTaskKind;
+    use velnor_actions_tofu_core::TofuTaskKind;
     let mut rust = super::group("demo", TaskKind::Clippy, &[]);
     let tofu = tofu_group("stacks/a", TofuTaskKind::Validate);
     rust.identity.unit_id.clone_from(&tofu.identity.unit_id);

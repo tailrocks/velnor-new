@@ -2,11 +2,11 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use velnor_actions_tofu::effective::effective_set;
-use velnor_actions_tofu::modules::{
+use velnor_actions_tofu_core::effective::effective_set;
+use velnor_actions_tofu_core::modules::{
     ModuleEdge, ModuleError, ModuleRef, ModuleSource, qualify_module_edges, resolve_refs,
 };
-use velnor_actions_tofu::units::analyze_files;
+use velnor_actions_tofu_core::units::analyze_files;
 
 use crate::support::{Outcome, TempDir, fixture_dir, read_pairs};
 

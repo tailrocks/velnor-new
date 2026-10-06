@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn chdir_findings_name_each_subdir_root_once() {
-    use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
+    use velnor_actions_tofu_core::{TofuTaskGroup, TofuTaskKind};
     let kinds = [
         TofuTaskKind::Fmt,
         TofuTaskKind::InitForValidate,
@@ -19,7 +19,7 @@ fn chdir_findings_name_each_subdir_root_once() {
             };
             discovery
                 .proposals
-                .push(velnor_actions_tofu::propose_task(&group).expect("proposes"));
+                .push(velnor_actions_tofu_core::propose_task(&group).expect("proposes"));
         }
     }
     let mut warnings = Vec::new();
@@ -40,7 +40,7 @@ fn chdir_findings_name_each_subdir_root_once() {
     };
     root_only
         .proposals
-        .push(velnor_actions_tofu::propose_task(&group).expect("proposes"));
+        .push(velnor_actions_tofu_core::propose_task(&group).expect("proposes"));
     let mut silent = Vec::new();
     push_chdir_findings(&root_only, &mut silent);
     assert!(silent.is_empty());
@@ -50,7 +50,7 @@ fn chdir_findings_name_each_subdir_root_once() {
 fn selected_roots_derive_from_selected_statuses_only() {
     let ignored = DetectionStatus::Ignored {
         project: DetectedProject {
-            stack_id: velnor_actions_tofu::STACK_ID.to_owned(),
+            stack_id: velnor_actions_tofu_core::STACK_ID.to_owned(),
             project_root: "stacks/z".to_owned(),
             manifest: "stacks/z".to_owned(),
         },

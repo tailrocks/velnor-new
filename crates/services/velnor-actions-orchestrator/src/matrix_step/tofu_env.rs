@@ -30,7 +30,7 @@ pub(super) fn tofu_data_dir_for_extra(
     let Some(root) = tofu_root_for_extra(extra) else {
         return Ok(None);
     };
-    velnor_actions_tofu::tofu_data_dir_under(
+    velnor_actions_tofu_core::tofu_data_dir_under(
         velnor_actions_mise::runtime_paths::TOFU_DATA_BASE_EXPR,
         &root,
     )
@@ -56,7 +56,7 @@ pub(super) fn tofu_plugin_cache_dir_for_extra(
     let Some(root) = tofu_root_for_extra(extra) else {
         return Ok(None);
     };
-    velnor_actions_tofu::tofu_cache_dir_under(
+    velnor_actions_tofu_core::tofu_cache_dir_under(
         crate::tofu_cache::TOFU_PROVIDER_CACHE_BASE_EXPR,
         &root,
     )
@@ -78,5 +78,5 @@ fn tofu_root_for_extra(extra: &BTreeMap<String, String>) -> Option<String> {
         return None;
     }
     let key = crate::extension_schemas::task_key_segment(task_id)?;
-    Some(velnor_actions_tofu::root_for_key(&key))
+    Some(velnor_actions_tofu_core::root_for_key(&key))
 }

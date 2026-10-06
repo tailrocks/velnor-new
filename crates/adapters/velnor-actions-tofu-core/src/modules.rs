@@ -23,7 +23,7 @@ pub use grammar::{
 pub use identity::identities_digest;
 pub use resolve::{ModuleEdge, ModuleEdges, ModuleFinding, resolve_local_target, resolve_refs};
 
-pub(crate) use canonical::canonicalize_side;
+pub use canonical::canonicalize_side;
 pub(crate) use grammar::{source_from_json, source_from_native};
 
 /// Project module edges to neutral pairs (rust `local_edge_pairs` precedent).

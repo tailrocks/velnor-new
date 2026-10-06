@@ -301,16 +301,22 @@ fn gate3_single_index_single_traversal_bounded_walks() -> TestResult {
         selections[0].starts_with("select_tofu.rs"),
         "{selections:?}"
     );
+    let tofu_core = crate_src("../../adapters/velnor-actions-tofu-core");
     assert!(
-        token_hits(&tofu, "build_file_index")?.is_empty(),
+        token_hits(&tofu, "build_file_index")?.is_empty()
+            && token_hits(&tofu_core, "build_file_index")?.is_empty(),
         "adapter uses the shared index"
     );
-    let walks = token_hits(&tofu, "read_dir")?;
-    assert_eq!(walks.len(), 1, "only bounded unit walk: {walks:?}");
-    assert!(walks[0].starts_with("closure.rs"), "{walks:?}");
-    let closure = std::fs::read_to_string(tofu.join("closure.rs"))?;
     assert!(
-        closure.contains("MAX_FILES_PER_UNIT"),
+        token_hits(&tofu, "read_dir")?.is_empty(),
+        "selection layer performs no walks"
+    );
+    let walks = token_hits(&tofu_core, "read_dir")?;
+    assert_eq!(walks.len(), 1, "only bounded unit walk: {walks:?}");
+    assert!(walks[0].starts_with("file_cache.rs"), "{walks:?}");
+    let cache = std::fs::read_to_string(tofu_core.join("file_cache.rs"))?;
+    assert!(
+        cache.contains("MAX_FILES_PER_UNIT"),
         "unit walk stays capped"
     );
     Ok(())

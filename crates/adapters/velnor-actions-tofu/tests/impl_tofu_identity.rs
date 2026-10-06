@@ -5,9 +5,11 @@ use velnor_actions_contract::{
 use velnor_actions_tofu::identity::{
     TofuGroupExtensionInputs, entry_metadata_for_task, extension_for_proposal, lock_slot_at_root,
 };
-use velnor_actions_tofu::kinds::TofuTaskKind;
-use velnor_actions_tofu::propose::{TofuTaskGroup, propose_task};
-use velnor_actions_tofu::task_identity::{DigestSlot, ExtensionInputs, TofuTaskIdentityExtension};
+use velnor_actions_tofu_core::kinds::TofuTaskKind;
+use velnor_actions_tofu_core::propose::{TofuTaskGroup, propose_task};
+use velnor_actions_tofu_core::task_identity::{
+    DigestSlot, ExtensionInputs, TofuTaskIdentityExtension,
+};
 
 use crate::support::TempDir;
 
@@ -313,11 +315,11 @@ fn entry_metadata_pins_tofu_shape() {
 #[test]
 fn lock_probe_binds_content_or_absence() -> Result<(), Box<dyn std::error::Error>> {
     let dir = TempDir::create("tofu-lock")?;
-    let mut reads = velnor_actions_tofu::FileCache::new();
+    let mut reads = velnor_actions_tofu_core::FileCache::new();
     let absent = lock_slot_at_root(dir.path(), ".", &mut reads);
     assert!(matches!(absent, DigestSlot::AbsentProven(_)));
     dir.write(".terraform.lock.hcl", "lock content")?;
-    let mut reads = velnor_actions_tofu::FileCache::new();
+    let mut reads = velnor_actions_tofu_core::FileCache::new();
     let known = lock_slot_at_root(dir.path(), ".", &mut reads);
     assert_eq!(known, DigestSlot::Known(digest_b3(b"lock content")));
     dir.write("stacks/a/main.tf", "terraform {}")?;

@@ -1,6 +1,6 @@
 //! Advisory root inference with child-module exclusion.
 use std::collections::BTreeMap;
-use velnor_actions_tofu::evidence::classify_with_contents;
+use velnor_actions_tofu_core::evidence::classify_with_contents;
 
 /// Index file list from names.
 fn files(names: &[&str]) -> Vec<String> {

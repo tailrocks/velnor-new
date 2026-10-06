@@ -1,11 +1,11 @@
 //! Lock, version, and init-stderr diagnostic cases.
-use velnor_actions_tofu::diagnostics::{
+use velnor_actions_tofu_core::diagnostics::{
     LOCKFILE_MISSING, LOCKFILE_STALE, PROVIDER_DEPENDENCY_CHANGES,
     REQUIRED_VERSION_EXCLUDES_TOOLCHAIN, RequiredVersionClaim, lockfile_findings_for_root,
     remediation_for_init_stderr, required_versions_for_root, version_compat_findings,
 };
-use velnor_actions_tofu::file_cache::FileCache;
-use velnor_actions_tofu::lockfile::LOCKFILE_UNPINNED_HASHES;
+use velnor_actions_tofu_core::file_cache::FileCache;
+use velnor_actions_tofu_core::lockfile::LOCKFILE_UNPINNED_HASHES;
 
 use crate::support::{Outcome, TempDir, fixture_dir};
 
@@ -261,7 +261,8 @@ fn required_versions_collect_with_paths() -> Outcome {
 #[test]
 fn diagnostics_module_never_writes() {
     let src = std::fs::read_to_string(
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/diagnostics.rs"),
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../velnor-actions-tofu-core/src/diagnostics.rs"),
     )
     .expect("read");
     for token in [

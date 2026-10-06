@@ -1,7 +1,7 @@
 //! Detector registration cases (T08: registered, candidate-free).
 use crate::support::{Outcome, TempDir};
 use velnor_actions_contract::{Stack, VelnorConfig, build_index};
-use velnor_actions_tofu::{STACK_ID, discover_stack_candidates};
+use velnor_actions_tofu_core::{STACK_ID, discover_stack_candidates};
 
 #[test]
 fn registration_matches_contract_registry() {
@@ -86,7 +86,7 @@ fn detector_empty_under_exclusions() -> Outcome {
 #[test]
 fn units_convert_to_detector_records() {
     use velnor_actions_contract::StackCandidate;
-    use velnor_actions_tofu::{detected_projects_for_units, manifest_for_unit_root};
+    use velnor_actions_tofu_core::{detected_projects_for_units, manifest_for_unit_root};
     let candidates = vec![
         StackCandidate {
             stack_id: STACK_ID.to_owned(),
@@ -111,7 +111,7 @@ fn units_convert_to_detector_records() {
 #[test]
 fn conversion_preserves_candidate_order() {
     use velnor_actions_contract::StackCandidate;
-    use velnor_actions_tofu::detected_projects_for_units;
+    use velnor_actions_tofu_core::detected_projects_for_units;
     let candidates = vec![
         StackCandidate {
             stack_id: STACK_ID.to_owned(),
@@ -129,6 +129,6 @@ fn conversion_preserves_candidate_order() {
 
 #[test]
 fn conversion_of_empty_is_empty() {
-    use velnor_actions_tofu::detected_projects_for_units;
+    use velnor_actions_tofu_core::detected_projects_for_units;
     assert!(detected_projects_for_units(&[]).is_empty());
 }

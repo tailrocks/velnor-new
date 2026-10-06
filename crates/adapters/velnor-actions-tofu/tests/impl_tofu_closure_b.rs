@@ -2,7 +2,7 @@
 //! modules, and varfiles.
 use velnor_actions_contract::Provenance;
 use velnor_actions_tofu::closure::resolve_closure_at_root;
-use velnor_actions_tofu::file_cache::FileCache;
+use velnor_actions_tofu_core::file_cache::FileCache;
 
 use crate::impl_tofu_closure::{proposal, seed, seed_modules};
 use crate::support::{Outcome, TempDir};

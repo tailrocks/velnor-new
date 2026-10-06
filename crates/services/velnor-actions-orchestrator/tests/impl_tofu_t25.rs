@@ -1,7 +1,7 @@
 //! T25 waste-removal pins: hoisted read-cache construction sites and
 //! exactly-once plan-artifact downloads per job.
 //!
-//! The shared [`FileCache`](velnor_actions_tofu::FileCache) must be
+//! The shared [`FileCache`](velnor_actions_tofu_core::FileCache) must be
 //! constructed once per top-level phase (never per call inside the
 //! tofu adapter), and every generated job must download the plan
 //! artifact at most once (runner isolation keeps the per-job

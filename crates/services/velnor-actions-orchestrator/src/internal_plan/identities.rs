@@ -315,7 +315,7 @@ pub(crate) fn toolchain_inputs_for(
         Stack::Rust => {}
         Stack::Tofu => {
             let specs = catalog.tool_specs(&[PinnedTool::Opentofu]);
-            return velnor_actions_tofu::toolchain_inputs_for_task(task, specs);
+            return velnor_actions_tofu_core::toolchain_inputs_for_task(task, specs);
         }
     }
     let needs = tool_needs(&task.identity.compile_driver, &task.identity.test_runner);
@@ -380,7 +380,7 @@ pub(crate) fn cache_format_id_for(driver: CompileDriver) -> String {
 /// fallback below never triggers.
 pub(crate) fn cache_format_id_for_tofu() -> String {
     if let Ok(id) = cache_format_id(&FormatInputs {
-        adapter: velnor_actions_tofu::STACK_ID.to_owned(),
+        adapter: velnor_actions_tofu_core::STACK_ID.to_owned(),
         format: CACHE_FORMAT_LABEL.to_owned(),
         generation: "1".to_owned(),
     }) {
@@ -388,7 +388,7 @@ pub(crate) fn cache_format_id_for_tofu() -> String {
     }
     canonical_digest(&serde_json::json!({
         "schema": "velnor-cache-format-fallback-v1",
-        "adapter": velnor_actions_tofu::STACK_ID,
+        "adapter": velnor_actions_tofu_core::STACK_ID,
     }))
     .unwrap_or_else(|_| digest_b3(b"cache_format_error"))
 }

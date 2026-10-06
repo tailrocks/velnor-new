@@ -1,12 +1,14 @@
 //! Tofu payload argv + env shape cases (T13).
 use velnor_actions_contract::ContractError;
-use velnor_actions_tofu::argv::{CHDIR_FINDING_TAG, chdir_finding_for_root, tofu_payload_argv};
-use velnor_actions_tofu::env::{
+use velnor_actions_tofu_core::argv::{
+    CHDIR_FINDING_TAG, chdir_finding_for_root, tofu_payload_argv,
+};
+use velnor_actions_tofu_core::env::{
     TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF, tofu_payload_env,
 };
-use velnor_actions_tofu::fmt_scope::fmt_scope_for_root;
-use velnor_actions_tofu::kinds::TofuTaskKind;
-use velnor_actions_tofu::propose::{TofuTaskGroup, payload_env_for_kind, propose_task};
+use velnor_actions_tofu_core::fmt_scope::fmt_scope_for_root;
+use velnor_actions_tofu_core::kinds::TofuTaskKind;
+use velnor_actions_tofu_core::propose::{TofuTaskGroup, payload_env_for_kind, propose_task};
 
 use crate::support::{Outcome, TempDir};
 

@@ -1,8 +1,8 @@
 //! Tofu proposal + task-kind cases (T12).
 use velnor_actions_contract::ResourceClass;
-use velnor_actions_tofu::argv::tofu_payload_argv;
-use velnor_actions_tofu::kinds::TofuTaskKind;
-use velnor_actions_tofu::propose::{
+use velnor_actions_tofu_core::argv::tofu_payload_argv;
+use velnor_actions_tofu_core::kinds::TofuTaskKind;
+use velnor_actions_tofu_core::propose::{
     KIND_DISPLAY_WORDS, TOFU_DRIVER, TOFU_RUNNER, TofuTaskGroup, display_for_root, is_init_kind,
     is_validate_kind, key_for_root, payload_env_for_kind, propose_task, resource_class_for_kind,
     root_for_key, step_base_name, task_id_for_root, task_kind_rank,

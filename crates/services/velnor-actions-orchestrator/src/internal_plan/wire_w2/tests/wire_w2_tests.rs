@@ -55,14 +55,14 @@ fn reuse_outcomes_execute_with_precise_reasons() {
 }
 
 /// Tofu proposal via the T12 adapter constructor.
-fn tofu_group(kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTask {
-    let group = velnor_actions_tofu::TofuTaskGroup {
+fn tofu_group(kind: velnor_actions_tofu_core::TofuTaskKind) -> ProposedTask {
+    let group = velnor_actions_tofu_core::TofuTaskGroup {
         root: String::new(),
         kind,
         configuration: "default".to_owned(),
         no_targets: false,
     };
-    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    let task = velnor_actions_tofu_core::propose_task(&group).expect("fixture proposes");
     task.validate().expect("fixture valid");
     task
 }
@@ -72,7 +72,7 @@ fn tofu_group(kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTask {
 /// and init must-run carries the Network signal on top.
 #[test]
 fn tofu_init_and_validate_never_plan_reuse() {
-    use velnor_actions_tofu::TofuTaskKind;
+    use velnor_actions_tofu_core::TofuTaskKind;
     let digest = digest_b3(b"toolchain");
     let outcome = |task: &ProposedTask, availability| {
         plan_reuse_outcome(

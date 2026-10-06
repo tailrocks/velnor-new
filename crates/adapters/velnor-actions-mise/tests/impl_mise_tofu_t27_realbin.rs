@@ -20,7 +20,7 @@ use velnor_actions_mise::command::{
     CancelHandle, IsolatedCommand, ProcessOutput, is_cancel_or_timeout,
 };
 use velnor_actions_mise::{MiseError, OPENTOFU_VERSION, PinnedTool, ToolCatalog};
-use velnor_actions_tofu::{TofuTaskKind, tofu_payload_argv};
+use velnor_actions_tofu_core::{TofuTaskKind, tofu_payload_argv};
 
 /// Opt-in env var for the network-dependent live test.
 const LIVE_ENV: &str = "VELNOR_LIVE_TOFU";

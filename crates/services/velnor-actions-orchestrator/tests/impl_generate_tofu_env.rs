@@ -7,31 +7,31 @@ use std::ffi::OsString;
 fn tofu_key_consts_agree_across_crates() {
     assert_eq!(
         velnor_actions_mise::TF_IN_AUTOMATION_ENV,
-        velnor_actions_tofu::TF_IN_AUTOMATION_ENV
+        velnor_actions_tofu_core::TF_IN_AUTOMATION_ENV
     );
     assert_eq!(
         velnor_actions_mise::TF_IN_AUTOMATION_ON,
-        velnor_actions_tofu::TF_IN_AUTOMATION_ON
+        velnor_actions_tofu_core::TF_IN_AUTOMATION_ON
     );
     assert_eq!(
         velnor_actions_mise::TF_INPUT_ENV,
-        velnor_actions_tofu::TF_INPUT_ENV
+        velnor_actions_tofu_core::TF_INPUT_ENV
     );
     assert_eq!(
         velnor_actions_mise::TF_INPUT_OFF,
-        velnor_actions_tofu::TF_INPUT_OFF
+        velnor_actions_tofu_core::TF_INPUT_OFF
     );
     assert_eq!(
         velnor_actions_mise::TF_DATA_DIR_ENV,
-        velnor_actions_tofu::TF_DATA_DIR_ENV
+        velnor_actions_tofu_core::TF_DATA_DIR_ENV
     );
     assert_eq!(
         velnor_actions_mise::TF_CLI_CONFIG_FILE_ENV,
-        velnor_actions_tofu::TF_CLI_CONFIG_FILE_ENV
+        velnor_actions_tofu_core::TF_CLI_CONFIG_FILE_ENV
     );
     assert_eq!(
         velnor_actions_mise::TF_PLUGIN_CACHE_DIR_ENV,
-        velnor_actions_tofu::TF_PLUGIN_CACHE_DIR_ENV
+        velnor_actions_tofu_core::TF_PLUGIN_CACHE_DIR_ENV
     );
     assert_eq!(
         velnor_actions_mise::runtime_paths::TOFU_DATA_BASE_EXPR,
@@ -80,7 +80,7 @@ fn tf_predicate_parity_with_documented_divergence() {
 
 #[test]
 fn isolation_pairs_agree_between_author_and_constructor() -> Result<(), String> {
-    let authored = velnor_actions_tofu::tofu_isolation_env(
+    let authored = velnor_actions_tofu_core::tofu_isolation_env(
         "/velnor/tofu-data",
         "/velnor/tofu-cli.hcl",
         "/velnor/tofu-cache",

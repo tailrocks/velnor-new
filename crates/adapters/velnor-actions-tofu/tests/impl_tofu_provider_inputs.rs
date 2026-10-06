@@ -1,7 +1,7 @@
 //! Tofu provider-input toolchain entries: the per-root provider
 //! surface declaration bound into the toolchain identity.
 use velnor_actions_contract::ContractError;
-use velnor_actions_tofu::provider_toolchain_entries;
+use velnor_actions_tofu_core::provider_toolchain_entries;
 
 fn entry_for(unit: &str, kind: &str, tofu: &str) -> Result<String, ContractError> {
     let entries = provider_toolchain_entries(unit, kind, tofu)?;
@@ -46,7 +46,7 @@ fn provider_entries_flip_on_root_kind_slot_and_tofu_pin() -> Result<(), Contract
 
 #[test]
 fn toolchain_inputs_carry_exact_pin_plus_surface() -> Result<(), ContractError> {
-    use velnor_actions_tofu::{
+    use velnor_actions_tofu_core::{
         TofuTaskGroup, TofuTaskKind, propose_task, toolchain_inputs_for_task,
     };
     let group = TofuTaskGroup {

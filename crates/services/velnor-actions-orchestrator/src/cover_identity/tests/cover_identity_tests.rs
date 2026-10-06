@@ -10,7 +10,7 @@ use velnor_actions_mise::ToolCatalog;
 #[test]
 fn tofu_tasks_bind_no_mbx_pin_across_catalogs() {
     use velnor_actions_mise::PinnedTool;
-    use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
+    use velnor_actions_tofu_core::{TofuTaskGroup, TofuTaskKind};
     let pinned = ToolCatalog::pinned();
     let bumped = ToolCatalog::new(
         pinned.version(PinnedTool::Rust),
@@ -29,7 +29,7 @@ fn tofu_tasks_bind_no_mbx_pin_across_catalogs() {
         configuration: "default".to_owned(),
         no_targets: false,
     };
-    let tofu = velnor_actions_tofu::propose_task(&group).expect("proposes");
+    let tofu = velnor_actions_tofu_core::propose_task(&group).expect("proposes");
     assert_eq!(
         live_mbx_digest(&tofu, &pinned),
         live_mbx_digest(&tofu, &bumped),
@@ -255,14 +255,14 @@ fn advisory_needs_fresh_external_data() {
 }
 
 /// Tofu proposal via the T12 adapter constructor.
-fn tofu_proposal(kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTask {
-    let group = velnor_actions_tofu::TofuTaskGroup {
+fn tofu_proposal(kind: velnor_actions_tofu_core::TofuTaskKind) -> ProposedTask {
+    let group = velnor_actions_tofu_core::TofuTaskGroup {
         root: String::new(),
         kind,
         configuration: "default".to_owned(),
         no_targets: false,
     };
-    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    let task = velnor_actions_tofu_core::propose_task(&group).expect("fixture proposes");
     task.validate().expect("fixture valid");
     task
 }
@@ -280,14 +280,14 @@ fn cover_bundle_for(
 /// Valid tofu spellings verify at cover time (G5 close).
 #[test]
 fn tofu_cover_extension_verifies_valid_spellings() {
-    use velnor_actions_tofu::TofuTaskKind;
+    use velnor_actions_tofu_core::TofuTaskKind;
     let tmp = tempfile::tempdir().expect("tempdir");
     std::fs::write(tmp.path().join(".terraform.lock.hcl"), "lock").expect("lockfile");
     let task = tofu_proposal(TofuTaskKind::Validate);
     let discovery = discovery_with(&[]);
     let snapshot = ExecutionSnapshot::build(&discovery);
     let bundle = cover_bundle_for(&snapshot, &discovery, &task, tmp.path());
-    let mut reads = velnor_actions_tofu::FileCache::new();
+    let mut reads = velnor_actions_tofu_core::FileCache::new();
     verify_cover_extension(&task, tmp.path(), &bundle, &mut reads)
         .expect("tofu verifies at cover time");
 }
@@ -295,14 +295,14 @@ fn tofu_cover_extension_verifies_valid_spellings() {
 /// Drifted tofu spellings refuse coverage, never parse loosely.
 #[test]
 fn tofu_cover_extension_refuses_drift() {
-    use velnor_actions_tofu::TofuTaskKind;
+    use velnor_actions_tofu_core::TofuTaskKind;
     let tmp = tempfile::tempdir().expect("tempdir");
     let mut task = tofu_proposal(TofuTaskKind::InitForValidate);
     task.identity.compile_driver = "cargo".to_owned();
     let discovery = discovery_with(&[]);
     let snapshot = ExecutionSnapshot::build(&discovery);
     let bundle = cover_bundle_for(&snapshot, &discovery, &task, tmp.path());
-    let mut reads = velnor_actions_tofu::FileCache::new();
+    let mut reads = velnor_actions_tofu_core::FileCache::new();
     let err =
         verify_cover_extension(&task, tmp.path(), &bundle, &mut reads).expect_err("drift refuses");
     assert!(err.contains("unparsable_spelling"), "{err}");
@@ -311,14 +311,14 @@ fn tofu_cover_extension_refuses_drift() {
 /// Undeclared tofu inputs refuse coverage like undeclared rust reads.
 #[test]
 fn tofu_cover_extension_refuses_undeclared_inputs() {
-    use velnor_actions_tofu::TofuTaskKind;
+    use velnor_actions_tofu_core::TofuTaskKind;
     let tmp = tempfile::tempdir().expect("tempdir");
     let mut task = tofu_proposal(TofuTaskKind::Validate);
     task.identity.undeclared_reads = true;
     let discovery = discovery_with(&[]);
     let snapshot = ExecutionSnapshot::build(&discovery);
     let bundle = cover_bundle_for(&snapshot, &discovery, &task, tmp.path());
-    let mut reads = velnor_actions_tofu::FileCache::new();
+    let mut reads = velnor_actions_tofu_core::FileCache::new();
     let err = verify_cover_extension(&task, tmp.path(), &bundle, &mut reads)
         .expect_err("undeclared refuses");
     assert_eq!(err, "undeclared_inputs");

@@ -1,6 +1,6 @@
 //! Unit-analysis cases: precedence, structure, duplicates, scopes.
-use velnor_actions_tofu::modules::ModuleSource;
-use velnor_actions_tofu::units::{
+use velnor_actions_tofu_core::modules::ModuleSource;
+use velnor_actions_tofu_core::units::{
     UnitError, analyze_files, files_for_prefix, module_refs_for_texts,
 };
 

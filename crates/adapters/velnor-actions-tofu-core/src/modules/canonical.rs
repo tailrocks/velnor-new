@@ -52,7 +52,11 @@ pub fn canonicalize_edges(
 }
 
 /// Realpath one edge side; in-repo sides return repo-relative POSIX.
-pub(crate) fn canonicalize_side(canonical_root: &Path, side: &str) -> Result<String, ModuleError> {
+///
+/// # Errors
+///
+/// Returns [`ModuleError`] when the side escapes the repo or cannot resolve.
+pub fn canonicalize_side(canonical_root: &Path, side: &str) -> Result<String, ModuleError> {
     let resolved = canonical_root.join(side).canonicalize().map_err(|err| {
         if err.kind() == std::io::ErrorKind::NotFound {
             ModuleError::MissingTarget {

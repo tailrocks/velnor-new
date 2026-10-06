@@ -1,6 +1,6 @@
 //! Tofu isolation data cases: isolation pairs, per-root data dirs, M4 CLI config.
 use std::ffi::OsString;
-use velnor_actions_tofu::{
+use velnor_actions_tofu_core::{
     TF_CLI_CONFIG_FILE_ENV, TF_DATA_DIR_ENV, TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON,
     TF_INPUT_ENV, TF_INPUT_OFF, TF_PLUGIN_CACHE_DIR_ENV, tofu_cache_dir_under, tofu_cli_config,
     tofu_data_dir_under, tofu_isolation_env, tofu_root_slug,

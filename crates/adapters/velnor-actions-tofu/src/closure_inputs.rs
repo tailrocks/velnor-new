@@ -12,11 +12,11 @@ use std::path::Path;
 use velnor_actions_contract::{Provenance, digest_b3};
 
 use crate::closure::files_digest;
-use crate::effective::effective_set;
-use crate::family::{Family, family_of, is_auto_var};
-use crate::file_cache::FileCache;
-use crate::kinds::TofuTaskKind;
-use crate::modules::{
+use velnor_actions_tofu_core::effective::effective_set;
+use velnor_actions_tofu_core::family::{Family, family_of, is_auto_var};
+use velnor_actions_tofu_core::file_cache::FileCache;
+use velnor_actions_tofu_core::kinds::TofuTaskKind;
+use velnor_actions_tofu_core::modules::{
     ModuleEdge, ModuleError, ModuleFinding, ModuleRef, ModuleSource, SourceClass,
     canonicalize_side, check_acyclic, identities_digest, resolve_local_target, resolve_refs,
 };

@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::effective::{Dialect, config_shape};
-use crate::parser::{FileModel, MAX_FILE_BYTES, parse_json, parse_native};
+use crate::parser::{FileModel, MAX_FILE_BYTES, MAX_FILES_PER_UNIT, parse_json, parse_native};
 
 /// Cached raw-read failure: the kind plus the exact message.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,12 +129,14 @@ impl FileCache {
     /// Hits replay the first walk's list or failure string; misses
     /// delegate to [`collect_unit_files`].
     ///
-    /// [`collect_unit_files`]: crate::closure::collect_unit_files
-    pub(crate) fn unit_files(&mut self, root: &Path, unit: &str) -> Result<Vec<String>, String> {
+    /// # Errors
+    ///
+    /// Returns the walk failure string when the unit cannot be listed.
+    pub fn unit_files(&mut self, root: &Path, unit: &str) -> Result<Vec<String>, String> {
         if let Some(hit) = self.walks.get(&(root.to_path_buf(), unit.to_owned())) {
             return hit.clone();
         }
-        let outcome = crate::closure::collect_unit_files(root, unit);
+        let outcome = collect_unit_files(root, unit);
         self.walks
             .insert((root.to_path_buf(), unit.to_owned()), outcome.clone());
         outcome
@@ -143,13 +145,12 @@ impl FileCache {
     /// Parsed config model of one repo-relative path, parsed once.
     ///
     /// Reads through the raw compartment, so bytes are shared with
-    /// every other pass. `Ok(None)` skips files no dialect owns;
-    /// `Err` carries the live `unreadable:`/`malformed:` reason.
-    pub(crate) fn model_for(
-        &mut self,
-        root: &Path,
-        path: &str,
-    ) -> Result<Option<FileModel>, String> {
+    /// every other pass. `Ok(None)` skips files no dialect owns.
+    ///
+    /// # Errors
+    ///
+    /// Returns the live `unreadable:`/`malformed:` reason.
+    pub fn model_for(&mut self, root: &Path, path: &str) -> Result<Option<FileModel>, String> {
         let joined = root.join(path);
         if let Some(hit) = self.models.get(&joined) {
             return hit.clone();
@@ -191,4 +192,66 @@ impl FileCache {
     pub fn store_pinned(&mut self, path: PathBuf, outcome: PinnedOutcome) {
         self.pinned.insert(path, outcome);
     }
+}
+
+/// Repo-relative files under `unit`, skipping hidden directories.
+///
+/// Symlinks, non-UTF-8 names, unreadable entries, and over-cap
+/// selections fail the walk (the caller reports unknown).
+fn collect_unit_files(root: &Path, unit: &str) -> Result<Vec<String>, String> {
+    let mut base: PathBuf = root.to_path_buf();
+    if !unit.is_empty() {
+        base.push(unit);
+    }
+    let mut files = Vec::new();
+    let mut stack = vec![base];
+    while let Some(current) = stack.pop() {
+        let entries = std::fs::read_dir(&current)
+            .map_err(|err| format!("unreadable_dir:{}:{err}", current.display()))?;
+        for entry in entries {
+            let entry =
+                entry.map_err(|err| format!("unreadable_entry:{}:{err}", current.display()))?;
+            if entry
+                .file_type()
+                .map_err(|err| format!("unreadable_entry:{err}"))?
+                .is_symlink()
+            {
+                return Err(format!("symlink_present:{}", entry.path().display()));
+            }
+            let name = entry
+                .file_name()
+                .into_string()
+                .map_err(|_| "non_utf8_name".to_owned())?;
+            if name.starts_with('.') {
+                continue;
+            }
+            let path = entry.path();
+            if path.is_dir() {
+                if stack.len() >= MAX_FILES_PER_UNIT {
+                    return Err("too_many_dirs".to_owned());
+                }
+                stack.push(path);
+                continue;
+            }
+            if !path.is_file() {
+                continue;
+            }
+            let stripped = path.strip_prefix(root).map_err(|_| "escape".to_owned())?;
+            let mut parts = Vec::new();
+            for component in stripped.components() {
+                parts.push(
+                    component
+                        .as_os_str()
+                        .to_str()
+                        .ok_or_else(|| "non_utf8_name".to_owned())?,
+                );
+            }
+            files.push(parts.join("/"));
+            if files.len() > MAX_FILES_PER_UNIT {
+                return Err(format!("too_many_files:{}", files.len()));
+            }
+        }
+    }
+    files.sort();
+    Ok(files)
 }

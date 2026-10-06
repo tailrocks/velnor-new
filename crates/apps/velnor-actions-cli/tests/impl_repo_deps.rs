@@ -12,19 +12,21 @@ use crate::impl_repo_policy::{
     tree_files,
 };
 
-/// Intra-workspace edges allowed per member package.
+/// Intra-workspace edges allowed per member package (matched on leaf name).
 fn expected_internal(dir: &str) -> Vec<&str> {
-    match dir {
-        "crates/core/velnor-actions-contract" => vec![],
-        "crates/services/velnor-actions-orchestrator" => vec![
+    match dir.rsplit('/').next().unwrap_or("") {
+        "velnor-actions-contract" => vec![],
+        "velnor-actions-orchestrator" => vec![
             "velnor-actions-actionlint",
             "velnor-actions-contract",
             "velnor-actions-mise",
             "velnor-actions-rust",
             "velnor-actions-tofu",
+            "velnor-actions-tofu-core",
             "velnor-actions-workflow-renderer",
         ],
-        "crates/apps/velnor-actions-cli" => vec!["velnor-actions-orchestrator"],
+        "velnor-actions-tofu" => vec!["velnor-actions-contract", "velnor-actions-tofu-core"],
+        "velnor-actions-cli" => vec!["velnor-actions-orchestrator"],
         _ => vec!["velnor-actions-contract"],
     }
 }
@@ -95,10 +97,8 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
                 continue;
             }
             let archive_decoder = reviewed_archive_dependency(dir, key, line);
-            assert!(
-                allowed.contains(&key) || archive_decoder,
-                "{dir} uses {key}"
-            );
+            let ok = allowed.contains(&key) || archive_decoder;
+            assert!(ok, "{dir} uses {key}");
             if let Some(index) = line.find("features").filter(|_| !archive_decoder) {
                 let quoted: Vec<&str> = line[index..].split('"').collect();
                 for feature in quoted.into_iter().skip(1).step_by(2) {

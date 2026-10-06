@@ -20,7 +20,7 @@ pub(crate) fn collect_recommendations(
     index: &FileIndex,
     workspaces: &[PlannedWorkspace],
     tool_checks: &[ToolInputCheck],
-    reads: &mut velnor_actions_tofu::FileCache,
+    reads: &mut velnor_actions_tofu_core::FileCache,
 ) -> Vec<String> {
     let mut out = BTreeSet::new();
     for workspace in workspaces {

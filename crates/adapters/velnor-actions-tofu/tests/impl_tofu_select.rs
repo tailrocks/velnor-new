@@ -1,8 +1,8 @@
 //! Calling-root selection over the base/head module-graph union.
 use std::collections::BTreeSet;
 
-use velnor_actions_tofu::modules::{ModuleEdge, ModuleEdges, ModuleFinding, SourceClass};
 use velnor_actions_tofu::select::{RootSelection, SelectAllReason, select_roots};
+use velnor_actions_tofu_core::modules::{ModuleEdge, ModuleEdges, ModuleFinding, SourceClass};
 
 /// One local edge.
 fn edge(from: &str, to: &str) -> ModuleEdge {
@@ -274,7 +274,7 @@ fn base_only_finding_still_widens() {
 
 #[test]
 fn remote_finding_never_widens() {
-    use velnor_actions_tofu::modules::RemoteKind;
+    use velnor_actions_tofu_core::modules::RemoteKind;
     let head = findings(&[(
         "a/main.tf",
         "m",

@@ -8,21 +8,21 @@ use velnor_actions_contract::StepKind;
 use velnor_actions_rust::TaskKind;
 
 /// Tofu proposal via the T12 adapter constructor.
-fn tofu_group(root: &str, kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTask {
-    let group = velnor_actions_tofu::TofuTaskGroup {
+fn tofu_group(root: &str, kind: velnor_actions_tofu_core::TofuTaskKind) -> ProposedTask {
+    let group = velnor_actions_tofu_core::TofuTaskGroup {
         root: root.to_owned(),
         kind,
         configuration: "default".to_owned(),
         no_targets: false,
     };
-    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    let task = velnor_actions_tofu_core::propose_task(&group).expect("fixture proposes");
     task.validate().expect("fixture valid");
     task
 }
 
 /// One fmt/init/validate triple per root, all runnable.
 fn tofu_triples(roots: &[&str]) -> Vec<ProposedTask> {
-    use velnor_actions_tofu::TofuTaskKind;
+    use velnor_actions_tofu_core::TofuTaskKind;
     let mut tasks = Vec::new();
     for root in roots {
         for kind in [
@@ -151,7 +151,7 @@ fn rust_jobs_carry_no_provider_restore() {
 
 #[test]
 fn mixed_job_restores_both_sources_and_providers() {
-    use velnor_actions_tofu::TofuTaskKind;
+    use velnor_actions_tofu_core::TofuTaskKind;
     let mut rust = super::group("demo", TaskKind::Clippy, &[]);
     let tofu = tofu_group("stacks/a", TofuTaskKind::Validate);
     rust.identity.unit_id.clone_from(&tofu.identity.unit_id);

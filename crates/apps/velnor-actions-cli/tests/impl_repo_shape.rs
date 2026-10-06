@@ -105,7 +105,7 @@ fn arch112_alint_scopes_product_paths() -> Result<(), Box<dyn Error>> {
 fn arch15_all_stacks_explicit() -> Result<(), Box<dyn Error>> {
     for (dir, id) in [
         ("crates/adapters/velnor-actions-rust", "rust"),
-        ("crates/adapters/velnor-actions-tofu", "tofu"),
+        ("crates/adapters/velnor-actions-tofu-core", "tofu"),
     ] {
         let detect = read(&format!("{dir}/src/detect.rs"))?;
         assert!(

@@ -10,11 +10,13 @@ use std::path::Path;
 
 use velnor_actions_contract::{ContractError, ProposedTask, component_id_for_unit};
 
-use crate::file_cache::FileCache;
-use crate::kinds::TofuTaskKind;
-use crate::lockfile::lock_digest_at_root;
-use crate::propose::{TOFU_DRIVER, TOFU_RUNNER};
-use crate::task_identity::{DigestSlot, ExtensionInputs, TofuTaskIdentityExtension};
+use velnor_actions_tofu_core::file_cache::FileCache;
+use velnor_actions_tofu_core::kinds::TofuTaskKind;
+use velnor_actions_tofu_core::lockfile::lock_digest_at_root;
+use velnor_actions_tofu_core::propose::{TOFU_DRIVER, TOFU_RUNNER};
+use velnor_actions_tofu_core::task_identity::{
+    DigestSlot, ExtensionInputs, TofuTaskIdentityExtension,
+};
 
 /// Digests and root facts the orchestrator supplies per extension.
 #[derive(Debug, Clone)]

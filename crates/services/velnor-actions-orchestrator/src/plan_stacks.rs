@@ -40,7 +40,7 @@ pub(crate) fn stacks_section(out: &mut String, prep: &GenerationPreparation) {
         .iter()
         .filter_map(|status| match status {
             DetectionStatus::Selected(project)
-                if project.stack_id == velnor_actions_tofu::STACK_ID =>
+                if project.stack_id == velnor_actions_tofu_core::STACK_ID =>
             {
                 Some(if project.project_root.is_empty() {
                     ".".to_owned()
@@ -81,12 +81,12 @@ pub(crate) fn stacks_section(out: &mut String, prep: &GenerationPreparation) {
 }
 
 /// Tofu plan note: ignore marker or table-less evidence advisory.
-fn tofu_lines(out: &mut String, note: &velnor_actions_tofu::TofuNote) {
+fn tofu_lines(out: &mut String, note: &velnor_actions_tofu_core::TofuNote) {
     match note {
-        velnor_actions_tofu::TofuNote::Ignored => {
+        velnor_actions_tofu_core::TofuNote::Ignored => {
             push(out, "  Tofu: ignored (config stacks.ignore)");
         }
-        velnor_actions_tofu::TofuNote::Advisory(advisory) => {
+        velnor_actions_tofu_core::TofuNote::Advisory(advisory) => {
             let strength = if advisory.strong { "strong" } else { "weak" };
             push(
                 out,

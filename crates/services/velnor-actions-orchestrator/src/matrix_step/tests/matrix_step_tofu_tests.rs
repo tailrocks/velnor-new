@@ -113,10 +113,10 @@ fn tofu_obligation_step_carries_isolated_cache_dir() {
         panic!("obligation must be a shell step");
     };
     let data = env
-        .get(velnor_actions_tofu::TF_DATA_DIR_ENV)
+        .get(velnor_actions_tofu_core::TF_DATA_DIR_ENV)
         .expect("data dir");
     let cache = env
-        .get(velnor_actions_tofu::TF_PLUGIN_CACHE_DIR_ENV)
+        .get(velnor_actions_tofu_core::TF_PLUGIN_CACHE_DIR_ENV)
         .expect("cache dir");
     assert!(
         data.starts_with("${{ runner.temp }}/velnor/tofu-data/root-"),

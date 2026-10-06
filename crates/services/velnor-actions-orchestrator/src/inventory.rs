@@ -37,7 +37,7 @@ pub(crate) fn run_inventories(
     root: &Path,
     candidates: &[StackCandidate],
     files: &[String],
-    reads: &mut velnor_actions_tofu::FileCache,
+    reads: &mut velnor_actions_tofu_core::FileCache,
 ) -> Result<(Inventories, Vec<TofuSelectionUnit>), OrchestratorError> {
     let catalog = ToolCatalog::pinned();
     let mut manifests = Vec::with_capacity(candidates.len());
@@ -107,7 +107,7 @@ pub(crate) fn run_inventories(
 fn manifest_for_candidate(candidate: &StackCandidate) -> Result<String, OrchestratorError> {
     match Stack::require_known(&candidate.stack_id) {
         Ok(Stack::Rust) => Ok(manifest_for_rust(&candidate.unit_root)),
-        Ok(Stack::Tofu) => Ok(velnor_actions_tofu::manifest_for_unit_root(
+        Ok(Stack::Tofu) => Ok(velnor_actions_tofu_core::manifest_for_unit_root(
             &candidate.unit_root,
         )),
         Ok(Stack::Mise) => Err(explicit_check_candidate_error()),
@@ -140,29 +140,30 @@ fn analyze_tofu_unit(
     root: &Path,
     files: &[String],
     unit: &str,
-    reads: &mut velnor_actions_tofu::FileCache,
+    reads: &mut velnor_actions_tofu_core::FileCache,
 ) -> (CandidateOutcome, Option<TofuSelectionUnit>) {
     let failed = |outcome: CandidateOutcome| (outcome, None);
-    let selected = match velnor_actions_tofu::files_for_prefix(files, unit) {
+    let selected = match velnor_actions_tofu_core::files_for_prefix(files, unit) {
         Ok(selected) => selected,
         Err(err) => return failed(malformed_outcome(unit, err.to_string())),
     };
-    let effective = velnor_actions_tofu::effective_set(&selected);
+    let effective = velnor_actions_tofu_core::effective_set(&selected);
     let mut pairs = Vec::with_capacity(effective.len());
     for path in &effective {
-        match read_repo_file_cached(root, path, velnor_actions_tofu::MAX_FILE_BYTES, reads) {
-            velnor_actions_tofu::PinnedOutcome::Text(text) => pairs.push((path.clone(), text)),
-            velnor_actions_tofu::PinnedOutcome::Absent => {
+        match read_repo_file_cached(root, path, velnor_actions_tofu_core::MAX_FILE_BYTES, reads) {
+            velnor_actions_tofu_core::PinnedOutcome::Text(text) => pairs.push((path.clone(), text)),
+            velnor_actions_tofu_core::PinnedOutcome::Absent => {
                 return failed(malformed_outcome(path, "absent_after_index".to_owned()));
             }
-            velnor_actions_tofu::PinnedOutcome::Unreadable(problem) => {
+            velnor_actions_tofu_core::PinnedOutcome::Unreadable(problem) => {
                 return failed(malformed_outcome(path, problem));
             }
         }
     }
-    match velnor_actions_tofu::analyze_files(&pairs) {
+    match velnor_actions_tofu_core::analyze_files(&pairs) {
         Ok(unit_record) => {
-            match velnor_actions_tofu::qualify_module_edges(root, files, &unit_record.modules) {
+            match velnor_actions_tofu_core::qualify_module_edges(root, files, &unit_record.modules)
+            {
                 Ok(edges) => {
                     let record = TofuSelectionUnit {
                         root: unit.to_owned(),
@@ -188,8 +189,9 @@ fn config_files(selected: &[String]) -> Vec<String> {
         .filter(|path| {
             let name = path.rsplit('/').next().unwrap_or(path);
             matches!(
-                velnor_actions_tofu::family_of(name),
-                velnor_actions_tofu::Family::Config | velnor_actions_tofu::Family::Override
+                velnor_actions_tofu_core::family_of(name),
+                velnor_actions_tofu_core::Family::Config
+                    | velnor_actions_tofu_core::Family::Override
             )
         })
         .cloned()
@@ -199,22 +201,25 @@ fn config_files(selected: &[String]) -> Vec<String> {
 }
 
 /// Evidence path naming a tofu unit failure.
-fn unit_error_path(err: &velnor_actions_tofu::UnitError, unit: &str) -> String {
+fn unit_error_path(err: &velnor_actions_tofu_core::UnitError, unit: &str) -> String {
     match err {
-        velnor_actions_tofu::UnitError::TooManyFiles { .. } => unit.to_owned(),
-        velnor_actions_tofu::UnitError::Parse { path, .. }
-        | velnor_actions_tofu::UnitError::UnknownBlock { path, .. }
-        | velnor_actions_tofu::UnitError::Shape { path, .. } => path.clone(),
-        velnor_actions_tofu::UnitError::Duplicate { second, .. } => second.clone(),
+        velnor_actions_tofu_core::UnitError::TooManyFiles { .. } => unit.to_owned(),
+        velnor_actions_tofu_core::UnitError::Parse { path, .. }
+        | velnor_actions_tofu_core::UnitError::UnknownBlock { path, .. }
+        | velnor_actions_tofu_core::UnitError::Shape { path, .. } => path.clone(),
+        velnor_actions_tofu_core::UnitError::Duplicate { second, .. } => second.clone(),
     }
 }
 
 /// Malformed outcome for one module-boundary failure.
-fn module_error_outcome(err: &velnor_actions_tofu::ModuleError, unit: &str) -> CandidateOutcome {
+fn module_error_outcome(
+    err: &velnor_actions_tofu_core::ModuleError,
+    unit: &str,
+) -> CandidateOutcome {
     let path = match err {
-        velnor_actions_tofu::ModuleError::Escape { target }
-        | velnor_actions_tofu::ModuleError::MissingTarget { target }
-        | velnor_actions_tofu::ModuleError::Unreadable { target }
+        velnor_actions_tofu_core::ModuleError::Escape { target }
+        | velnor_actions_tofu_core::ModuleError::MissingTarget { target }
+        | velnor_actions_tofu_core::ModuleError::Unreadable { target }
             if !target.is_empty() =>
         {
             target.clone()

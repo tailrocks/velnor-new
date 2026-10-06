@@ -6,7 +6,7 @@
 //! are bounded, skip hidden directories, and treat any symlink as
 //! unknown (fail-closed until H5 containment lands in T11).
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use velnor_actions_contract::{
     ClosureBuilder, ContractError, ProposedTask, Provenance, TaskInputClosure,
@@ -14,12 +14,11 @@ use velnor_actions_contract::{
 };
 
 use crate::closure_inputs::{modules_provenance, varfiles_provenance};
-use crate::effective::effective_set;
-use crate::family::{Family, LOCKFILE_NAME, family_of};
-use crate::file_cache::FileCache;
-use crate::fmt_scope::is_fmt_file;
-use crate::kinds::TofuTaskKind;
-use crate::parser::MAX_FILES_PER_UNIT;
+use velnor_actions_tofu_core::effective::effective_set;
+use velnor_actions_tofu_core::family::{Family, LOCKFILE_NAME, family_of};
+use velnor_actions_tofu_core::file_cache::FileCache;
+use velnor_actions_tofu_core::fmt_scope::is_fmt_file;
+use velnor_actions_tofu_core::kinds::TofuTaskKind;
 
 /// Resolve one proposed task's closure against the checkout at `root`.
 ///
@@ -190,66 +189,4 @@ pub(crate) fn files_digest(files: &[(String, String)]) -> String {
         .collect();
     canonical_json_bytes(&pairs)
         .map_or_else(|_| digest_b3(b"files_error"), |bytes| digest_b3(&bytes))
-}
-
-/// Repo-relative files under `unit`, skipping hidden directories.
-///
-/// Symlinks, non-UTF-8 names, unreadable entries, and over-cap
-/// selections fail the walk (the caller reports unknown).
-pub(crate) fn collect_unit_files(root: &Path, unit: &str) -> Result<Vec<String>, String> {
-    let mut base: PathBuf = root.to_path_buf();
-    if !unit.is_empty() {
-        base.push(unit);
-    }
-    let mut files = Vec::new();
-    let mut stack = vec![base];
-    while let Some(current) = stack.pop() {
-        let entries = std::fs::read_dir(&current)
-            .map_err(|err| format!("unreadable_dir:{}:{err}", current.display()))?;
-        for entry in entries {
-            let entry =
-                entry.map_err(|err| format!("unreadable_entry:{}:{err}", current.display()))?;
-            if entry
-                .file_type()
-                .map_err(|err| format!("unreadable_entry:{err}"))?
-                .is_symlink()
-            {
-                return Err(format!("symlink_present:{}", entry.path().display()));
-            }
-            let name = entry
-                .file_name()
-                .into_string()
-                .map_err(|_| "non_utf8_name".to_owned())?;
-            if name.starts_with('.') {
-                continue;
-            }
-            let path = entry.path();
-            if path.is_dir() {
-                if stack.len() >= MAX_FILES_PER_UNIT {
-                    return Err("too_many_dirs".to_owned());
-                }
-                stack.push(path);
-                continue;
-            }
-            if !path.is_file() {
-                continue;
-            }
-            let stripped = path.strip_prefix(root).map_err(|_| "escape".to_owned())?;
-            let mut parts = Vec::new();
-            for component in stripped.components() {
-                parts.push(
-                    component
-                        .as_os_str()
-                        .to_str()
-                        .ok_or_else(|| "non_utf8_name".to_owned())?,
-                );
-            }
-            files.push(parts.join("/"));
-            if files.len() > MAX_FILES_PER_UNIT {
-                return Err(format!("too_many_files:{}", files.len()));
-            }
-        }
-    }
-    files.sort();
-    Ok(files)
 }

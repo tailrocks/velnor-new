@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use velnor_actions_contract::{ContractError, FileIndex, StackCandidate, VelnorConfig};
-use velnor_actions_tofu::{
+use velnor_actions_tofu_core::{
     EvidenceLevel, TofuNote, classify_with_contents, effective_set, plan_note, qualify_roots,
 };
 
@@ -40,13 +40,13 @@ pub(crate) fn qualify_tofu_step(
     config: &VelnorConfig,
     index: &FileIndex,
     tool_checks: &[ToolInputCheck],
-    reads: &mut velnor_actions_tofu::FileCache,
+    reads: &mut velnor_actions_tofu_core::FileCache,
 ) -> Result<TofuStep, OrchestratorError> {
     let ignored = config
         .stacks
         .ignore
         .iter()
-        .any(|id| id == velnor_actions_tofu::STACK_ID);
+        .any(|id| id == velnor_actions_tofu_core::STACK_ID);
     if let Some(tofu) = &config.stacks.tofu {
         return qualify_configured(root, tofu, index, ignored, reads);
     }
@@ -81,14 +81,16 @@ fn qualify_configured(
     tofu: &velnor_actions_contract::TofuStackConfig,
     index: &FileIndex,
     ignored: bool,
-    reads: &mut velnor_actions_tofu::FileCache,
+    reads: &mut velnor_actions_tofu_core::FileCache,
 ) -> Result<TofuStep, OrchestratorError> {
     let candidates = qualify_roots(CONFIG_REL, root, tofu, index).map_err(map_roots_error)?;
     if !ignored {
         for configured in &tofu.roots {
-            let unit = velnor_actions_tofu::display_for_root(configured.unit_prefix());
-            velnor_actions_tofu::require_committed_provider_lock(CONFIG_REL, root, &unit, reads)
-                .map_err(map_roots_error)?;
+            let unit = velnor_actions_tofu_core::display_for_root(configured.unit_prefix());
+            velnor_actions_tofu_core::require_committed_provider_lock(
+                CONFIG_REL, root, &unit, reads,
+            )
+            .map_err(map_roots_error)?;
         }
     }
     Ok(TofuStep {
@@ -122,15 +124,15 @@ fn map_roots_error(err: ContractError) -> OrchestratorError {
 fn config_contents(
     root: &Path,
     index: &FileIndex,
-    reads: &mut velnor_actions_tofu::FileCache,
+    reads: &mut velnor_actions_tofu_core::FileCache,
 ) -> BTreeMap<String, String> {
     let mut contents = BTreeMap::new();
     for path in effective_set(index.files())
         .iter()
-        .take(velnor_actions_tofu::MAX_FILES_PER_UNIT)
+        .take(velnor_actions_tofu_core::MAX_FILES_PER_UNIT)
     {
-        if let velnor_actions_tofu::PinnedOutcome::Text(text) =
-            read_repo_file_cached(root, path, velnor_actions_tofu::MAX_FILE_BYTES, reads)
+        if let velnor_actions_tofu_core::PinnedOutcome::Text(text) =
+            read_repo_file_cached(root, path, velnor_actions_tofu_core::MAX_FILE_BYTES, reads)
         {
             contents.insert(path.clone(), text);
         }
@@ -148,13 +150,13 @@ pub(crate) fn tofu_diagnostic_lines(
     root: &Path,
     config: &VelnorConfig,
     tool_checks: &[ToolInputCheck],
-    reads: &mut velnor_actions_tofu::FileCache,
+    reads: &mut velnor_actions_tofu_core::FileCache,
 ) -> Vec<String> {
     let ignored = config
         .stacks
         .ignore
         .iter()
-        .any(|id| id == velnor_actions_tofu::STACK_ID);
+        .any(|id| id == velnor_actions_tofu_core::STACK_ID);
     let Some(tofu) = &config.stacks.tofu else {
         return Vec::new();
     };
@@ -165,12 +167,13 @@ pub(crate) fn tofu_diagnostic_lines(
     let pin = values.remove("tools.opentofu");
     let mut lines = Vec::new();
     for configured in &tofu.roots {
-        let unit = velnor_actions_tofu::display_for_root(configured.unit_prefix());
+        let unit = velnor_actions_tofu_core::display_for_root(configured.unit_prefix());
         let mut findings =
-            velnor_actions_tofu::lockfile_findings_for_root(root, &unit, &mut *reads);
+            velnor_actions_tofu_core::lockfile_findings_for_root(root, &unit, &mut *reads);
         if let Some(pinned) = &pin {
-            let claims = velnor_actions_tofu::required_versions_for_root(root, &unit, &mut *reads);
-            findings.extend(velnor_actions_tofu::version_compat_findings(
+            let claims =
+                velnor_actions_tofu_core::required_versions_for_root(root, &unit, &mut *reads);
+            findings.extend(velnor_actions_tofu_core::version_compat_findings(
                 &claims, pinned,
             ));
         }

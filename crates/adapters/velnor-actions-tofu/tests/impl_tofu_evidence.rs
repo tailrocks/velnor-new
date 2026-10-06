@@ -1,6 +1,6 @@
 //! Dialect evidence classification cases.
 use std::collections::BTreeMap;
-use velnor_actions_tofu::evidence::{
+use velnor_actions_tofu_core::evidence::{
     EvidenceLevel, TofuNote, classify, classify_with_contents, mise_tool_selected, plan_note,
 };
 
@@ -186,7 +186,7 @@ fn contents(entries: &[(&str, &str)]) -> BTreeMap<String, String> {
 
 #[test]
 fn version_plus_legacy_is_strong() {
-    use velnor_actions_tofu::evidence::classify_with_contents;
+    use velnor_actions_tofu_core::evidence::classify_with_contents;
     let evidence = classify_with_contents(
         &files(&["main.tf"]),
         &contents(&[(
@@ -216,7 +216,7 @@ fn version_plus_legacy_is_strong() {
 
 #[test]
 fn version_alone_stays_weak() {
-    use velnor_actions_tofu::evidence::classify_with_contents;
+    use velnor_actions_tofu_core::evidence::classify_with_contents;
     let evidence = classify_with_contents(
         &files(&["main.tf"]),
         &contents(&[(
@@ -238,7 +238,7 @@ fn version_alone_stays_weak() {
 
 #[test]
 fn legacy_alone_stays_weak() {
-    use velnor_actions_tofu::evidence::classify_with_contents;
+    use velnor_actions_tofu_core::evidence::classify_with_contents;
     let evidence = classify_with_contents(
         &files(&["main.tf"]),
         &contents(&[("main.tf", "locals {\n  cmd = \"terraform plan\"\n}\n")]),
@@ -249,7 +249,7 @@ fn legacy_alone_stays_weak() {
 
 #[test]
 fn terraform_only_pin_is_a_marker() {
-    use velnor_actions_tofu::evidence::classify_with_contents;
+    use velnor_actions_tofu_core::evidence::classify_with_contents;
     let evidence = classify_with_contents(
         &files(&["main.tofu"]),
         &contents(&[(
@@ -271,7 +271,7 @@ fn terraform_only_pin_is_a_marker() {
 
 #[test]
 fn terraform_only_pin_alone_stays_silent() {
-    use velnor_actions_tofu::evidence::classify_with_contents;
+    use velnor_actions_tofu_core::evidence::classify_with_contents;
     let evidence = classify_with_contents(
         &files(&["main.tf"]),
         &contents(&[(
@@ -285,7 +285,7 @@ fn terraform_only_pin_alone_stays_silent() {
 
 #[test]
 fn malformed_content_contributes_no_signals() {
-    use velnor_actions_tofu::evidence::classify_with_contents;
+    use velnor_actions_tofu_core::evidence::classify_with_contents;
     let evidence = classify_with_contents(
         &files(&["main.tf"]),
         &contents(&[("main.tf", "variable \"x\" {")]),
@@ -304,7 +304,7 @@ fn malformed_content_contributes_no_signals() {
 
 #[test]
 fn non_config_content_ignored() {
-    use velnor_actions_tofu::evidence::classify_with_contents;
+    use velnor_actions_tofu_core::evidence::classify_with_contents;
     let evidence = classify_with_contents(
         &files(&["main.tf"]),
         &contents(&[(
@@ -318,7 +318,7 @@ fn non_config_content_ignored() {
 
 #[test]
 fn json_content_signals_fire() {
-    use velnor_actions_tofu::evidence::classify_with_contents;
+    use velnor_actions_tofu_core::evidence::classify_with_contents;
     let evidence = classify_with_contents(
         &files(&["main.tf"]),
         &contents(&[(

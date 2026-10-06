@@ -65,7 +65,7 @@ pub(crate) fn tofu_providers_cache_key(
 
 /// H3-hashed root slug through the tofu adapter's shared derivation.
 fn provider_root_slug(root: &str) -> String {
-    velnor_actions_tofu::tofu_root_slug(root)
+    velnor_actions_tofu_core::tofu_root_slug(root)
 }
 
 /// Job-private plugin-cache path for one root (never the data dir).
@@ -74,11 +74,11 @@ fn provider_root_slug(root: &str) -> String {
 /// Returns contract errors for an empty base (unreachable: the base
 /// is a literal) or a root the adapter rejects.
 pub(crate) fn tofu_provider_cache_path(root: &str) -> Result<String, OrchestratorError> {
-    velnor_actions_tofu::tofu_cache_dir_under(TOFU_PROVIDER_CACHE_BASE_EXPR, root).map_err(|err| {
-        OrchestratorError::Contract {
+    velnor_actions_tofu_core::tofu_cache_dir_under(TOFU_PROVIDER_CACHE_BASE_EXPR, root).map_err(
+        |err| OrchestratorError::Contract {
             problem: err.to_string(),
-        }
-    })
+        },
+    )
 }
 
 /// Per-root provider restore/admission composite (L2 exact-key).
@@ -136,7 +136,7 @@ pub(crate) fn tofu_root_for_obligations(
         .ok_or_else(|| internal("tofu_empty_obligations"))?;
     let key = crate::extension_schemas::task_key_segment(&first.task_id)
         .ok_or_else(|| internal("tofu_unparsable_key"))?;
-    Ok(velnor_actions_tofu::root_for_key(&key))
+    Ok(velnor_actions_tofu_core::root_for_key(&key))
 }
 
 /// Build the compact restore/admission step for one root.

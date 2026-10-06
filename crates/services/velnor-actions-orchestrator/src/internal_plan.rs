@@ -30,9 +30,9 @@ pub(crate) fn tofu_extension_for(
     task: &ProposedTask,
     root: &std::path::Path,
     bundle: &ExtensionBundle,
-    reads: &mut velnor_actions_tofu::FileCache,
-) -> Result<velnor_actions_tofu::TofuTaskIdentityExtension, ContractError> {
-    let normalized = velnor_actions_tofu::root_for_key(&task.identity.unit_key);
+    reads: &mut velnor_actions_tofu_core::FileCache,
+) -> Result<velnor_actions_tofu_core::TofuTaskIdentityExtension, ContractError> {
+    let normalized = velnor_actions_tofu_core::root_for_key(&task.identity.unit_key);
     let inputs = velnor_actions_tofu::TofuGroupExtensionInputs {
         unit_id: &task.identity.unit_id,
         workspace_id: bundle.workspace_id(),
@@ -357,8 +357,8 @@ fn tofu_packages(discovery: &Discovery, selected: &BTreeSet<&str>) -> Vec<PlanPa
     roots
         .iter()
         .map(|root| {
-            let key = velnor_actions_tofu::key_for_root(root);
-            let display = velnor_actions_tofu::display_for_root(root);
+            let key = velnor_actions_tofu_core::key_for_root(root);
+            let display = velnor_actions_tofu_core::display_for_root(root);
             package_row(&key, &display, &display, discovery, selected)
         })
         .collect()

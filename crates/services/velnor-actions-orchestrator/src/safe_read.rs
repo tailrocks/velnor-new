@@ -19,7 +19,7 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 
-use velnor_actions_tofu::{FileCache, PinnedOutcome};
+use velnor_actions_tofu_core::{FileCache, PinnedOutcome};
 
 use crate::OrchestratorError;
 

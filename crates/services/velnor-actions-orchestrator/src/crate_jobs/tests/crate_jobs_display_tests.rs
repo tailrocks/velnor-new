@@ -9,14 +9,14 @@ use super::*;
 use velnor_actions_rust::TaskKind;
 
 /// Tofu proposal via the adapter constructor.
-fn tofu_group(root: &str, kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTask {
-    let group = velnor_actions_tofu::TofuTaskGroup {
+fn tofu_group(root: &str, kind: velnor_actions_tofu_core::TofuTaskKind) -> ProposedTask {
+    let group = velnor_actions_tofu_core::TofuTaskGroup {
         root: root.to_owned(),
         kind,
         configuration: "default".to_owned(),
         no_targets: false,
     };
-    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    let task = velnor_actions_tofu_core::propose_task(&group).expect("fixture proposes");
     task.validate().expect("fixture valid");
     task
 }
@@ -24,7 +24,7 @@ fn tofu_group(root: &str, kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTa
 #[test]
 fn id_and_display_prefixes_agree_per_partition() {
     use velnor_actions_contract::{TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX};
-    use velnor_actions_tofu::TofuTaskKind;
+    use velnor_actions_tofu_core::TofuTaskKind;
     let mut rust = group("demo", TaskKind::Clippy, &[]);
     let mixed_tofu = tofu_group("stacks/b", TofuTaskKind::Validate);
     rust.identity

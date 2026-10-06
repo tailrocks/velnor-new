@@ -5,10 +5,10 @@ use std::ffi::OsString;
 use velnor_actions_contract::{
     CachePolicy, IdentityInputs, ProposedTask, Provenance, ResourceClass, ResourceDemand,
 };
-use velnor_actions_tofu::argv::tofu_payload_argv;
 use velnor_actions_tofu::closure::resolve_closure_at_root;
-use velnor_actions_tofu::file_cache::FileCache;
-use velnor_actions_tofu::kinds::TofuTaskKind;
+use velnor_actions_tofu_core::argv::tofu_payload_argv;
+use velnor_actions_tofu_core::file_cache::FileCache;
+use velnor_actions_tofu_core::kinds::TofuTaskKind;
 
 use crate::support::{Outcome, TempDir};
 

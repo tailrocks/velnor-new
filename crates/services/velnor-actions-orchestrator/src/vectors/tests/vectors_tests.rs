@@ -186,14 +186,14 @@ fn section4_build_vector_is_byte_exact() {
 
 #[test]
 fn tofu_task_argv_routes_through_pinned_opentofu() {
-    use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
+    use velnor_actions_tofu_core::{TofuTaskGroup, TofuTaskKind};
     let group = TofuTaskGroup {
         root: String::new(),
         kind: TofuTaskKind::Validate,
         configuration: "default".to_owned(),
         no_targets: false,
     };
-    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    let task = velnor_actions_tofu_core::propose_task(&group).expect("fixture proposes");
     task.validate().expect("fixture valid");
     let catalog = ToolCatalog::pinned();
     let argv = task_argv(&task, &catalog).expect("task argv");
@@ -214,14 +214,14 @@ fn tofu_task_argv_routes_through_pinned_opentofu() {
 
 #[test]
 fn tofu_subdir_payload_runs_under_chdir_first() {
-    use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
+    use velnor_actions_tofu_core::{TofuTaskGroup, TofuTaskKind};
     let group = TofuTaskGroup {
         root: "stacks/a".to_owned(),
         kind: TofuTaskKind::Fmt,
         configuration: "default".to_owned(),
         no_targets: false,
     };
-    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    let task = velnor_actions_tofu_core::propose_task(&group).expect("fixture proposes");
     let catalog = ToolCatalog::pinned();
     let argv = task_argv(&task, &catalog).expect("task argv");
     let at = argv.iter().position(|arg| arg == "--").expect("separator");

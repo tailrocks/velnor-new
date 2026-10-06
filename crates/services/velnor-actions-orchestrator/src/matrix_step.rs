@@ -44,7 +44,7 @@ pub(crate) const OBLIGATION_MATRIX_KEY_ENV: &str = "VELNOR_MATRIX_KEY";
 /// rust table (unknown segments keep existing behavior).
 pub(crate) fn step_name_for(kind: &str, task_id: &str) -> String {
     let base = match obligation_stack(task_id) {
-        Some(Stack::Tofu) => velnor_actions_tofu::step_base_name(kind, FORMAT_STEP_NAME),
+        Some(Stack::Tofu) => velnor_actions_tofu_core::step_base_name(kind, FORMAT_STEP_NAME),
         _ => step_base_name(kind, FORMAT_STEP_NAME),
     };
     match shard_suffix(task_id) {
@@ -70,7 +70,7 @@ fn obligation_stack(task_id: &str) -> Option<Stack> {
 /// automation pair); everything else keeps the rust mapping.
 fn payload_env_for_obligation(task_id: &str, kind: &str) -> Vec<(OsString, OsString)> {
     match obligation_stack(task_id) {
-        Some(Stack::Tofu) => velnor_actions_tofu::payload_env_for_kind(kind),
+        Some(Stack::Tofu) => velnor_actions_tofu_core::payload_env_for_kind(kind),
         _ => payload_env_for_kind(kind),
     }
 }
@@ -119,11 +119,14 @@ pub(crate) fn task_step_env(
             .map(|(key, value)| (key.clone(), value.clone())),
     );
     if let Some(data_dir) = tofu_env::tofu_data_dir_for_extra(extra)? {
-        base.insert(velnor_actions_tofu::TF_DATA_DIR_ENV.to_owned(), data_dir);
+        base.insert(
+            velnor_actions_tofu_core::TF_DATA_DIR_ENV.to_owned(),
+            data_dir,
+        );
     }
     if let Some(cache_dir) = tofu_env::tofu_plugin_cache_dir_for_extra(extra)? {
         base.insert(
-            velnor_actions_tofu::TF_PLUGIN_CACHE_DIR_ENV.to_owned(),
+            velnor_actions_tofu_core::TF_PLUGIN_CACHE_DIR_ENV.to_owned(),
             cache_dir,
         );
     }

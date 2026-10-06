@@ -1,5 +1,5 @@
 //! Effective-set and precedence cases (S1 minimal).
-use velnor_actions_tofu::effective::{
+use velnor_actions_tofu_core::effective::{
     Dialect, config_shape, dir_files, dir_has_effective_config, effective_set,
 };
 

@@ -1,5 +1,5 @@
 [package]
-name = "velnor-actions-mise"
+name = "velnor-actions-tofu-core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,13 +11,10 @@ workspace = true
 
 [dependencies]
 velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
+hcl = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-rustix = { workspace = true, features = ["process"] }
 
 [[test]]
-name = "velnor_mise"
+name = "velnor_tofu_core"
 path = "tests/main.rs"
-
-[dev-dependencies]
-velnor-actions-tofu-core = { version = "=0.1.1", path = "../velnor-actions-tofu-core" }

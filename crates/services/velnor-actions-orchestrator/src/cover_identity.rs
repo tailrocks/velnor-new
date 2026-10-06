@@ -53,7 +53,7 @@ fn cover_closure_digest(
         Some(root),
         nextest_config_for(discovery, task).as_deref(),
     );
-    let mut reads = velnor_actions_tofu::FileCache::new();
+    let mut reads = velnor_actions_tofu_core::FileCache::new();
     verify_cover_extension(task, root, &bundle, &mut reads)?;
     let Ok(toolchain) = toolchain_id(task, catalog) else {
         return Err("toolchain_unresolvable".to_owned());
@@ -85,7 +85,7 @@ fn verify_cover_extension(
     task: &ProposedTask,
     root: &Path,
     bundle: &crate::internal_plan::identities::ExtensionBundle,
-    reads: &mut velnor_actions_tofu::FileCache,
+    reads: &mut velnor_actions_tofu_core::FileCache,
 ) -> Result<(), String> {
     let stack =
         Stack::require_known(&task.stack_id).map_err(|e| format!("extension_unverified:{e}"))?;

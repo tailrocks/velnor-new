@@ -14,7 +14,7 @@ pub(super) const DETECTORS: [DetectorEntry; 2] = [
     (
         Stack::Tofu.id(),
         DETECTION_SCHEMA,
-        velnor_actions_tofu::discover_stack_candidates,
+        velnor_actions_tofu_core::discover_stack_candidates,
     ),
 ];
 
@@ -52,7 +52,7 @@ pub(super) fn detected_projects(
         }
     }
     let rust_projects = velnor_actions_rust::detected_projects_for_units(&rust);
-    let tofu_projects = velnor_actions_tofu::detected_projects_for_units(&tofu);
+    let tofu_projects = velnor_actions_tofu_core::detected_projects_for_units(&tofu);
     let mut projects = Vec::with_capacity(rust_projects.len() + tofu_projects.len());
     for stack in order {
         match stack {

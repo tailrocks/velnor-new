@@ -1,0 +1,13 @@
+before=3370 after=3381 removed=0
+No renames or removals. Added 11 tofu-core smoke tests:
+  + velnor-actions-tofu-core::velnor_tofu_core families_classify_load_set
+  + velnor-actions-tofu-core::velnor_tofu_core fmt_scope_recognizes_config_files
+  + velnor-actions-tofu-core::velnor_tofu_core json_parser_accepts_empty_object
+  + velnor-actions-tofu-core::velnor_tofu_core native_parser_accepts_empty_unit
+  + velnor-actions-tofu-core::velnor_tofu_core payload_argv_starts_with_subcommand
+  + velnor-actions-tofu-core::velnor_tofu_core root_keys_round_trip
+  + velnor-actions-tofu-core::velnor_tofu_core stack_identity_is_stable
+  + velnor-actions-tofu-core::velnor_tofu_core task_ids_carry_stack_and_kind
+  + velnor-actions-tofu-core::velnor_tofu_core task_kinds_cover_lifecycle
+  + velnor-actions-tofu-core::velnor_tofu_core unknown_kind_fails_closed
+  + velnor-actions-tofu-core::velnor_tofu_core versions_admit_opentofu_floor

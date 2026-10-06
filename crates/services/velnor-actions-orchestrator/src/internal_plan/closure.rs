@@ -25,7 +25,7 @@ pub(crate) fn resolve_closure_at_root(
     graph_digest: &str,
     toolchain_id: &str,
     platform_id: &str,
-    reads: &mut velnor_actions_tofu::FileCache,
+    reads: &mut velnor_actions_tofu_core::FileCache,
 ) -> Result<TaskInputClosure, ContractError> {
     match Stack::require_known(&task.stack_id)? {
         Stack::Rust => velnor_actions_rust::resolve_closure_at_root(

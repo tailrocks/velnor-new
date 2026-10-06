@@ -69,7 +69,7 @@ pub struct Discovery {
     ///
     /// `None` when the tofu table is absent and no evidence exists, or
     /// when configured roots convert to selected projects.
-    pub tofu_note: Option<velnor_actions_tofu::TofuNote>,
+    pub tofu_note: Option<velnor_actions_tofu_core::TofuNote>,
     /// Tofu selection records: head files plus edges per root.
     pub tofu_units: Vec<crate::select_tofu::TofuSelectionUnit>,
 }
@@ -91,7 +91,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         candidates.extend(detect(&index));
     }
     let tool_checks = check_tool_inputs(root);
-    let mut reads = velnor_actions_tofu::FileCache::new();
+    let mut reads = velnor_actions_tofu_core::FileCache::new();
     let tofu_step = qualify_tofu_step(root, config, &index, &tool_checks, &mut reads)?;
     candidates.extend(tofu_step.candidates);
     let projects = detected_projects(&candidates)?;

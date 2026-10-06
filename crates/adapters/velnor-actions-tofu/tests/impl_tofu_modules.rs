@@ -1,12 +1,12 @@
 //! S6 module grammar, lexical resolution, cycles, identity digests.
 use std::collections::BTreeSet;
 
-use velnor_actions_tofu::modules::{
+use velnor_actions_tofu_core::modules::{
     ModuleEdge, ModuleError, ModuleFinding, ModuleRef, ModuleSource, RemoteKind, SourceClass,
     check_acyclic, classify_literal, identities_digest, module_edge_pairs, resolve_local_target,
     resolve_refs,
 };
-use velnor_actions_tofu::parser::{ParseError, parse_json, parse_native};
+use velnor_actions_tofu_core::parser::{ParseError, parse_json, parse_native};
 
 /// One literal module reference from `file`.
 fn literal(file: &str, name: &str, source: &str) -> ModuleRef {

@@ -1,5 +1,5 @@
 //! Bounded structural parser cases (S8).
-use velnor_actions_tofu::parser::{
+use velnor_actions_tofu_core::parser::{
     MAX_DEPTH, ParseError, has_legacy_ref_text, parse_json, parse_native, strip_template_spans,
 };
 

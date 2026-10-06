@@ -11,7 +11,7 @@ use velnor_actions_contract::{DetectedProject, DetectionStatus};
 /// Selected tofu status for `root`.
 fn selected(root: &str) -> DetectionStatus {
     DetectionStatus::Selected(DetectedProject {
-        stack_id: velnor_actions_tofu::STACK_ID.to_owned(),
+        stack_id: velnor_actions_tofu_core::STACK_ID.to_owned(),
         project_root: root.to_owned(),
         manifest: root.to_owned(),
     })

@@ -3,7 +3,7 @@
 use std::fs;
 
 use velnor_actions_orchestrator::{GenerateOptions, generate, plan_text_checked, prepare};
-use velnor_actions_tofu::TofuLockSnapshot;
+use velnor_actions_tofu_core::TofuLockSnapshot;
 
 use crate::impl_common::{TestResult, config_with_branch, make_repo};
 

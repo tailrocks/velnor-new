@@ -1,5 +1,5 @@
 //! File-family classification cases.
-use velnor_actions_tofu::family::{Family, family_of, is_auto_var, is_override_stem};
+use velnor_actions_tofu_core::family::{Family, family_of, is_auto_var, is_override_stem};
 
 #[test]
 fn config_spellings_classify_config() {

@@ -1,7 +1,7 @@
 //! Configured-roots qualification cases.
 use crate::support::{Outcome, TempDir};
 use velnor_actions_contract::{TofuStackConfig, Utf8RepoRelDir, build_index};
-use velnor_actions_tofu::{STACK_ID, qualify_roots};
+use velnor_actions_tofu_core::{STACK_ID, qualify_roots};
 
 /// Tofu config from raw root spellings.
 fn tofu(raw: &[&str]) -> TofuStackConfig {

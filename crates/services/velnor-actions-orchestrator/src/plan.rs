@@ -221,7 +221,7 @@ fn present_kinds(tasks: &[ProposedTask]) -> Vec<&'static str> {
     let mut kinds = Vec::new();
     let words = KIND_DISPLAY_WORDS
         .into_iter()
-        .chain(velnor_actions_tofu::KIND_DISPLAY_WORDS);
+        .chain(velnor_actions_tofu_core::KIND_DISPLAY_WORDS);
     for (kind, word) in words {
         if tasks
             .iter()

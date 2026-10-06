@@ -115,7 +115,7 @@ fn extension_for_task(
     task: &ProposedTask,
     root: &Path,
     bundle: &ExtensionBundle,
-    reads: &mut velnor_actions_tofu::FileCache,
+    reads: &mut velnor_actions_tofu_core::FileCache,
 ) -> Result<(StackExtension, bool), OrchestratorError> {
     let stack = Stack::require_known(&task.stack_id).map_err(internal_contract)?;
     if stack == Stack::Mise {
@@ -140,7 +140,7 @@ fn planned_identity(
     argv: &[String],
     toolchain: &str,
     platform_id: &str,
-    reads: &mut velnor_actions_tofu::FileCache,
+    reads: &mut velnor_actions_tofu_core::FileCache,
 ) -> Result<PlannedIdentity, OrchestratorError> {
     let task = inputs.task;
     let manifest = task.identity.unit_path.clone();
@@ -189,7 +189,7 @@ fn planned_identity(
 /// classification.
 pub(crate) fn plan_group(
     inputs: &GroupInputs<'_>,
-    reads: &mut velnor_actions_tofu::FileCache,
+    reads: &mut velnor_actions_tofu_core::FileCache,
 ) -> Result<(PlanObligation, Vec<MatrixEntry>), OrchestratorError> {
     let task = inputs.task;
     if Stack::from_id(&task.stack_id) == Some(Stack::Mise) {

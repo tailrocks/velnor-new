@@ -1,5 +1,5 @@
 //! Formatting-scope (S2) inclusion, exclusion, and per-root sets.
-use velnor_actions_tofu::fmt_scope::{
+use velnor_actions_tofu_core::fmt_scope::{
     covered_fmt_roots, fmt_scope_for_root, fmt_set, is_excluded_name, is_fmt_file, under_hidden_dir,
 };
 
@@ -158,9 +158,9 @@ fn deep_chains_cover_every_descendant() {
 /// Family-derived fmt oracle: native configs/overrides, tests, and
 /// non-JSON vars format; JSON spellings, the lock, and others never.
 fn family_expects_fmt(name: &str) -> bool {
-    use velnor_actions_tofu::effective::{Dialect, config_shape};
-    use velnor_actions_tofu::family::{Family, family_of};
-    use velnor_actions_tofu::fmt_scope::is_excluded_name;
+    use velnor_actions_tofu_core::effective::{Dialect, config_shape};
+    use velnor_actions_tofu_core::family::{Family, family_of};
+    use velnor_actions_tofu_core::fmt_scope::is_excluded_name;
     if is_excluded_name(name) {
         return false;
     }

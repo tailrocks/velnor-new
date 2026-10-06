@@ -7,9 +7,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{TofuStackConfig, Utf8RepoRelDir, build_index};
-use velnor_actions_tofu::modules::{ModuleEdges, SourceClass};
 use velnor_actions_tofu::select::{RootSelection, SelectAllReason, select_roots};
-use velnor_actions_tofu::{
+use velnor_actions_tofu_core::modules::{ModuleEdges, SourceClass};
+use velnor_actions_tofu_core::{
     analyze_files, classify, fmt_scope_for_root, module_refs_for_texts, qualify_roots, resolve_refs,
 };
 
@@ -130,7 +130,7 @@ fn formatting_only_change_still_selects_caller() {
     // select_roots sees changed PATHS only; a whitespace-only edit to
     // a module file still selects the calling root (conservative).
     let mut head = empty();
-    head.edges.push(velnor_actions_tofu::ModuleEdge {
+    head.edges.push(velnor_actions_tofu_core::ModuleEdge {
         from: "a".to_owned(),
         to: "m".to_owned(),
         source: "./../m".to_owned(),
@@ -228,7 +228,7 @@ fn missing_base_comparison_selects_from_head() {
     // alone drives narrow selection (no fallback invented).
     let missing_base = empty();
     let mut head = empty();
-    head.edges.push(velnor_actions_tofu::ModuleEdge {
+    head.edges.push(velnor_actions_tofu_core::ModuleEdge {
         from: "a".to_owned(),
         to: "m".to_owned(),
         source: "./../m".to_owned(),
@@ -273,7 +273,7 @@ fn missing_base_with_empty_head_selects_nothing_for_roots() {
 
 #[test]
 fn tool_change_flips_evidence_level() {
-    use velnor_actions_tofu::EvidenceLevel;
+    use velnor_actions_tofu_core::EvidenceLevel;
     let files = roots(&["main.tf"]);
     let mut opentofu = BTreeMap::new();
     opentofu.insert("tools.opentofu".to_owned(), "1.13.1".to_owned());
