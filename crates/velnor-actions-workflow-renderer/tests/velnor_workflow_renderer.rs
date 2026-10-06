@@ -49,6 +49,8 @@ mod impl_renderer_overlap;
 mod impl_renderer_p08;
 #[path = "impl_renderer_p08_elect.rs"]
 mod impl_renderer_p08_elect;
+#[path = "impl_renderer_p08_elect_names.rs"]
+mod impl_renderer_p08_elect_names;
 #[path = "impl_renderer_p08_tofu_elect.rs"]
 mod impl_renderer_p08_tofu_elect;
 #[path = "impl_renderer_planclose.rs"]
