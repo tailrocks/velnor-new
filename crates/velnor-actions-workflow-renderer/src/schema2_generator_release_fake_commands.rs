@@ -10,14 +10,16 @@ if [ "$1" = attestation ] && [ "$2" = verify ]; then exit 0; fi
 if [ "$1" = api ]; then
   shift
   if [ "$1" = --paginate ] && [ "$2" = --slurp ]; then
-    case "$3" in
+    query="$3"
+    if [ "$query" = -X ]; then query="$5"; fi
+    case "$query" in
       *actions/workflows/ci.yml/runs*)
         printf '[{"workflow_runs":[{"id":91,"run_number":9,"run_attempt":1,"path":".github/workflows/ci.yml","head_sha":"%s","head_branch":"main","head_repository":{"full_name":"tailrocks/velnor-new"},"event":"push","status":"completed","conclusion":"success"}]}]\n' "$GITHUB_SHA" ;;
       *actions/runs/91/attempts/1/jobs*)
         if [ "${GH_CASE:-}" = DuplicateRequired ]; then
-          printf '[{"jobs":[{"name":"Required","head_sha":"%s","head_branch":"main","status":"completed","conclusion":"success"},{"name":"Required","head_sha":"%s","head_branch":"main","status":"completed","conclusion":"cancelled"}]}]\n' "$GITHUB_SHA" "$GITHUB_SHA"
+          printf '[{"jobs":[{"name":"Required","run_id":91,"run_attempt":1,"head_sha":"%s","head_branch":"main","status":"completed","conclusion":"success"},{"name":"Required","run_id":91,"run_attempt":1,"head_sha":"%s","head_branch":"main","status":"completed","conclusion":"cancelled"}]}]\n' "$GITHUB_SHA" "$GITHUB_SHA"
         else
-          printf '[{"jobs":[{"name":"Required","head_sha":"%s","head_branch":"main","status":"completed","conclusion":"success"}]}]\n' "$GITHUB_SHA"
+          printf '[{"jobs":[{"name":"Required","run_id":91,"run_attempt":1,"head_sha":"%s","head_branch":"main","status":"completed","conclusion":"success"}]}]\n' "$GITHUB_SHA"
         fi ;;
       *) exit 43 ;;
     esac
@@ -33,7 +35,7 @@ if [ "$1" = api ]; then
   fi
   case "$1" in
     repos/tailrocks/velnor-new/commits/main)
-      if [ "$2" = --jq ] && [ "$3" = .sha ]; then printf '%s\n' "$GITHUB_SHA"; else printf '{"sha":"%s"}\n' "$GITHUB_SHA"; fi ;;
+      if [ "${2:-}" = --jq ] && [ "${3:-}" = .sha ]; then printf '%s\n' "$GITHUB_SHA"; else printf '{"sha":"%s"}\n' "$GITHUB_SHA"; fi ;;
     repos/tailrocks/velnor-new/git/refs)
       test "$2 $3" = '--method POST'
       printf '%s\n' "$GITHUB_SHA" > "$GH_TAG_SOURCE"

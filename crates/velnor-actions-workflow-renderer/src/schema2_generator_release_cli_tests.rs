@@ -68,7 +68,9 @@ pub(super) fn assert_pinned_publish_calls(
     } else if has_preflight_failure {
         assert_eq!(external_calls, 1, "{calls}");
     } else if has_required_failure {
-        assert_eq!(external_calls, 4, "{calls}");
+        // Merged order: tag + release preflights, main-tip check, CI runs, then the
+        // Required-jobs read that detects the duplicate and aborts before mutations.
+        assert_eq!(external_calls, 5, "{calls}");
         assert!(
             calls
                 .lines()

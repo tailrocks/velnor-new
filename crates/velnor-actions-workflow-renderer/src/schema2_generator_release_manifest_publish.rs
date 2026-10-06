@@ -1,14 +1,15 @@
 //! Draft and publish one verified release through a stable release ID.
 
-use super::assets::{self, ASSETS, REPOSITORY, VERSION};
-use super::{ATTESTATION_DIR, DIR, FILE, GeneratorReleasePins, publication_verify_script};
+use super::assets::{ASSETS, REPOSITORY, VERSION};
+use super::{ATTESTATION_DIR, DIR, FILE, ProductReleasePins, publication_verify_script};
+use crate::RenderError;
 
 const ACCEPTED_DIRECTORY: &str = "release-accepted";
 pub(super) const ACCEPTED_MANIFEST: &str = "release-accepted/release-manifest.json";
 pub(super) const ACCEPTANCE_RECEIPT: &str = "release-accepted/release-acceptance.json";
 
 /// Publish the exact qualified inventory, then emit receipt inputs after immutability.
-pub(super) fn publish_script(pins: &GeneratorReleasePins) -> String {
+pub(super) fn publish_script(pins: &ProductReleasePins) -> Result<String, RenderError> {
     let paths = release_asset_path_list();
     let upload = paths
         .iter()
@@ -17,11 +18,11 @@ pub(super) fn publish_script(pins: &GeneratorReleasePins) -> String {
         .join(" \\\n");
     let verify = publication_verify_script(pins);
     let preflight = tag_preflight_script();
-    let ci_check = assets::ci_check_script();
+    let ci_check = super::super::super::release_eligibility::publisher_script(pins)?;
     let names = asset_names_bash(&paths);
     let draft_check = verify_release_script("true", "draft-release.json");
     let published_check = published_release_verify_script();
-    [
+    Ok([
         "set -eu".to_owned(),
         format!("tag='v{VERSION}'"),
         "release_tmp=\"$(mktemp -d)\"\ntrap 'rm -rf \"$release_tmp\"' EXIT".to_owned(),
@@ -44,7 +45,7 @@ pub(super) fn publish_script(pins: &GeneratorReleasePins) -> String {
         published_check,
         acceptance_receipt_script(),
     ]
-    .join("\n")
+    .join("\n"))
 }
 
 /// Require confirmed 404 responses for both immutable tag and release lookups.
@@ -147,7 +148,7 @@ pub(super) fn acceptance_artifact_paths() -> [&'static str; 2] {
     [ACCEPTED_MANIFEST, ACCEPTANCE_RECEIPT]
 }
 
-fn release_asset_path_list() -> Vec<String> {
+pub(super) fn release_asset_path_list() -> Vec<String> {
     let mut paths = ASSETS
         .iter()
         .flat_map(|asset| {

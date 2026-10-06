@@ -1,4 +1,5 @@
 use super::manifest;
+use crate::schema2::product_release_test_pins::test_pins;
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -7,9 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const REPOSITORY: &str = "tailrocks/velnor-new";
 const SOURCE_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
-#[path = "schema2_generator_release_test_pins.rs"]
-mod pins;
-use pins::{PINNED_MISE_ARGUMENTS, test_pins};
+const PINNED_MISE_ARGUMENTS: &str = "--no-config --no-env --no-hooks exec gh@2.102.0 --";
 
 struct Scratch(PathBuf);
 
@@ -90,7 +89,7 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
     fs::write(scratch.0.join("published-release.json"), published_json)?;
     install_mock_gh(&scratch.0)?;
     let script = scratch.0.join("publish.sh");
-    fs::write(&script, manifest::publish_script(&test_pins()))?;
+    fs::write(&script, manifest::publish_script(&test_pins())?)?;
     let gh_function = super::workflow_steps::gh_function(&test_pins().gh_argv)?;
     let output = run_publish_command(&scratch.0, case, &script, &gh_function)?;
     assert_publish_result(&scratch.0, case, &output)?;
@@ -153,7 +152,12 @@ fn run_publish_command(
         .env("GITHUB_RUN_ID", "987654321")
         .env("GITHUB_RUN_ATTEMPT", "2")
         .env("GITHUB_REF", "refs/heads/main")
+        .env(
+            "GITHUB_WORKFLOW_REF",
+            "tailrocks/velnor-new/.github/workflows/product-release.yml@refs/heads/main",
+        )
         .env("GITHUB_EVENT_NAME", "workflow_dispatch")
+        .env("GITHUB_OUTPUT", root.join("eligibility-output"))
         .env("GH_PREFLIGHT", preflight_mode(case))
         .env("GH_CASE", format!("{case:?}"))
         .env("GH_DRAFT_JSON", root.join("draft-release.json"))
@@ -169,6 +173,7 @@ fn run_publish_command(
         .env("GH_MOVED_SHA", "1111111111111111111111111111111111111111")
         .env("MOCK_GH", root.join("mock-bin/gh"));
     cli_tests::isolate_gh_environment(&mut command, root)?;
+    command.env("GH_TOKEN", "fixture-token");
     Ok(command.output()?)
 }
 
@@ -237,7 +242,6 @@ fn assert_publish_result(
     Ok(())
 }
 
-
 fn install_mock_gh(root: &Path) -> Result<(), Box<dyn Error>> {
     fake_commands::install_mock_gh(root)
 }
@@ -266,7 +270,6 @@ fn expected_asset_args() -> String {
 fn assert_no_release_created(root: &Path) {
     assert!(!root.join("created-tag").exists());
 }
-
 
 #[path = "schema2_generator_release_cli_tests.rs"]
 mod cli_tests;

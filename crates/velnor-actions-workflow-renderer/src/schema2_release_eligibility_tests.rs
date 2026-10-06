@@ -6,6 +6,7 @@ use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::{ELIGIBILITY_SCRIPT, JOB_ID, REQUIRED_JOB_JQ, job, script};
+use crate::schema2::product_release_test_pins::test_pins;
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 const AUTHORITY: &str = SHA;
@@ -91,15 +92,21 @@ set -eu
 exec gh "$@"
 "#;
 
+const TIMEOUT_STUB: &str = r#"#!/bin/sh
+set -eu
+test "$1" = --signal=TERM
+shift
+test "$1" = --kill-after=5s
+shift
+test "$1" = 60s
+shift
+exec "$@"
+"#;
+
 const GIT_STUB: &str = r#"#!/bin/sh
 set -eu
-for arg do
-  if [ "$arg" = "HEAD" ]; then
-    printf '%s\n' "$VELNOR_TEST_GIT_SHA"
-    exit 0
-  fi
-done
-exit 64
+if [ "$1" = rev-parse ] && [ "$2" = HEAD ]; then printf '%s\n' "$GITHUB_SHA"; exit 0; fi
+exec /usr/bin/git "$@"
 "#;
 
 const GH_STUB: &str = r#"#!/bin/sh
@@ -165,8 +172,9 @@ fn create_fixture(scenario: &Scenario) -> Result<Fixture, Box<dyn Error>> {
     fs::write(&calls, "")?;
     fs::write(&output, "")?;
     write_executable(&bin.join("mise"), MISE_STUB)?;
-    write_executable(&bin.join("git"), GIT_STUB)?;
     write_executable(&bin.join("gh"), GH_STUB)?;
+    write_executable(&bin.join("timeout"), TIMEOUT_STUB)?;
+    write_executable(&bin.join("git"), GIT_STUB)?;
     Ok(Fixture {
         directory,
         bin,
@@ -218,15 +226,9 @@ fn job_pages(jobs: &[String]) -> String {
 fn execute(scenario: Scenario) -> Result<Execution, Box<dyn Error>> {
     let fixture = create_fixture(&scenario)?;
     let path = std::env::var("PATH")?;
-    let workflow_path = scenario
-        .workflow_ref
-        .strip_prefix(&scenario.repository)
-        .and_then(|path| path.strip_prefix('/'))
-        .and_then(|path| path.split_once('@'))
-        .map_or(scenario.workflow_ref.as_str(), |(path, _)| path);
     let output = Command::new("bash")
         .args(["-euo", "pipefail", "-c"])
-        .arg(script(workflow_path))
+        .arg(script(&test_pins())?)
         .env("PATH", format!("{}:{path}", fixture.bin.display()))
         .env("VELNOR_TEST_FIXTURES", &fixture.directory)
         .env("VELNOR_TEST_CALLS", &fixture.calls)
@@ -236,8 +238,6 @@ fn execute(scenario: Scenario) -> Result<Execution, Box<dyn Error>> {
         .env("GITHUB_REF", scenario.ref_name)
         .env("GITHUB_EVENT_NAME", scenario.event)
         .env("GITHUB_WORKFLOW_REF", scenario.workflow_ref)
-        .env("VELNOR_RELEASE_SOURCE_SHA", scenario.source_sha.clone())
-        .env("VELNOR_TEST_GIT_SHA", scenario.source_sha.clone())
         .env("GITHUB_SHA", scenario.source_sha)
         .env("GITHUB_WORKFLOW_SHA", scenario.authority_sha)
         .env("GITHUB_OUTPUT", &fixture.output)
@@ -304,8 +304,8 @@ fn rejects_newer_failed_run_instead_of_reusing_old_success() -> Result<(), Box<d
 }
 
 #[test]
-fn script_uses_the_expected_paginated_selectors_and_bounded_wait() {
-    let rendered = script(super::super::IMAGE_RELEASE_WORKFLOW);
+fn script_uses_the_expected_paginated_selectors_and_bounded_wait() -> Result<(), Box<dyn Error>> {
+    let rendered = script(&test_pins())?;
     assert!(!rendered.contains("@LATEST_RUN_JQ@"));
     assert!(!rendered.contains("@REQUIRED_JOB_JQ@"));
     assert!(rendered.contains("/actions/runs/$run_id/attempts/$run_attempt/jobs?per_page=100"));
@@ -316,14 +316,13 @@ fn script_uses_the_expected_paginated_selectors_and_bounded_wait() {
     assert!(REQUIRED_JOB_JQ.contains(".run_attempt == $run_attempt"));
     assert!(rendered.contains("head_repository.full_name == $repository"));
     assert!(ELIGIBILITY_SCRIPT.contains("GITHUB_WORKFLOW_REF"));
+    Ok(())
 }
 
 #[test]
 fn job_renders_a_read_only_source_gate() {
-    let (name, value) = job(
-        crate::yaml::Yaml::str("ubuntu-latest"),
-        super::super::IMAGE_RELEASE_WORKFLOW,
-    );
+    let (name, value) =
+        job(crate::yaml::Yaml::str("ubuntu-latest"), &test_pins()).expect("pinned eligibility job");
     assert_eq!(name, JOB_ID);
     let rendered = crate::yaml::render_yaml(&crate::yaml::Yaml::Map(vec![(name, value)]));
     assert!(rendered.contains("actions: read"));

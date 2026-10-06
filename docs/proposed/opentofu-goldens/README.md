@@ -1,14 +1,21 @@
 # T04 Rust-only golden evidence (Phase A behavior bracket)
 
-## Current release integration checkpoint (2026-10-05)
+## PR41 + PR46 integration checkpoint (2026-10-05)
 
-After syncing main `2d9bca8` and scoping consumer-manifest discovery to
-`ConsumerV1`, the pinned debug CLI regenerated the shipping `.github` tree
-and all five fixture trees. The golden check reports all five match, and the
-dogfood verdict is `identical`; the producer repository no longer reads or
-synthesizes a consumer release manifest. No authentic same-run three-target
-candidate manifest is present, so `check-release`, hosted qualification,
-immutable publication, and infrastructure protection remain unverified.
+After syncing main `2d9bca8` (including the PR71 generator correction and the
+PR73 seed-authority correction) and applying the source policy fix, the pinned
+debug CLI regenerated the checked-in `.github` tree and recaptured all five
+fixture trees. A separate
+`scripts/capture-opentofu-goldens.sh check` reports **all five match**, and
+`dogfood.verdict` is `identical`. Under
+`VelnorRepositoryV1`, discovery neither reads nor synthesizes the consumer
+manifest; the generated source tree contains no debug-only manifest data. The
+regression in `impl_consumer_manifest_file.rs` proves this path still emits no
+consumer `Acquire Velnor` step. No authentic same-run three-target candidate
+manifest is present; `check-release`, hosted qualification, immutable
+publication, and infrastructure protection remain unverified. The seed
+authority correction is present in this source tree, but hosted cache and seed
+qualification remain unverified.
 
 Pre-refactor capture at `a12efd7` (behavior-identical to `origin/main`
 106bfd7; docs-only delta). Every T06 ownership move must re-run the

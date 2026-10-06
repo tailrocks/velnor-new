@@ -163,11 +163,12 @@ not a deviation.
 
 ## MISSING summary (4 honest residues)
 
-1. `.velnor/generator.lock` + seed v0 + release publication + branch
-   protection (BOOT NEEDS-HUMAN; mechanical halves tested, human halves
-   unproved). 2. Release-gate workflow wiring + human update/security runs
-   (VER NEEDS-HUMAN; `scripts/check-freshness.sh` exists, no release gate
-   calls it). 3. Risk-triggered tool runs — mutants/fuzz/Miri/Loom/semver
+1. Candidate archive admission plus `.velnor/generator.lock`, seed v0, hosted
+   release publication, and branch protection (archive guard integration is
+   pending; workflow wiring exists, while hosted qualification, environment
+   rules, and branch protections remain unproved).
+   2. Human update/security runs (VER NEEDS-HUMAN; procedures exist but no
+   current run is recorded). 3. Risk-triggered tool runs — mutants/fuzz/Miri/Loom/semver
    (manual procedure in `verification-triggers.md` only; no recorded runs).
 4. Two-minute warm SMALL-FIXTURE path on a named runner (no small-fixture
    CI run exists; full-dogfood green run is 21 m 19 s for 47 jobs).
