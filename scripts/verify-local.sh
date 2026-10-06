@@ -163,7 +163,7 @@ if [ -f "$RUNNER_MANIFEST" ]; then
     stage runner-test "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace
   fi
   stage runner-doctest "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace --doc
-  stage runner-deny mise exec "cargo-deny@0.20.2" -- cargo deny --locked --manifest-path "$RUNNER_MANIFEST" --config "crates/velnor-runner/deny.toml" check
+  stage runner-deny mise exec "cargo-deny@0.20.2" -- cargo-deny --locked --manifest-path "$RUNNER_MANIFEST" --config "crates/velnor-runner/deny.toml" check
 fi
 
 # --- repo policy -----------------------------------------------------------
@@ -182,33 +182,19 @@ else
     if [ -z "$BIN" ] && [ -n "${CARGO_TARGET_DIR:-}" ]; then
       BIN="$(find "$CARGO_TARGET_DIR/debug" "$CARGO_TARGET_DIR/release" -maxdepth 1 -name velnor-actions -type f 2>/dev/null | head -n 1)"
     fi
-    # Schema 1 does not emit these. They are schema-2 generator bytes.
-    STRIP="$(mktemp -d 2>/dev/null || true)"
-    if [ -z "$STRIP" ]; then
-      fail "generated-tree (mktemp failed)"
+    # Schema 2 emits the full product workflow set; compare it directly.
+    if [ -n "$BIN" ] && "$BIN" generate --output-dir "$GEN_DIR/tree" \
+      >"/tmp/verify-local-generated-run.log" 2>&1 &&
+      diff -r --brief .github "$GEN_DIR/tree/.github" \
+        >"/tmp/verify-local-generated-diff.log" 2>&1; then
+      pass "generated-tree"
     else
-      cp -R .github "$STRIP/github"
-      rm -f \
-        "$STRIP/github/workflows/qualification.yml" \
-        "$STRIP/github/workflows/image-release.yml" \
-        "$STRIP/github/workflows/macos-binary-release.yml" \
-        "$STRIP/github/workflows/generator-release.yml"
-      if [ -n "$BIN" ] && "$BIN" generate --output-dir "$GEN_DIR/tree" \
-        >"/tmp/verify-local-generated-run.log" 2>&1 &&
-        diff -r --brief "$STRIP/github" "$GEN_DIR/tree/.github" \
-          >"/tmp/verify-local-generated-diff.log" 2>&1; then
-        pass "generated-tree"
-      else
-        fail "generated-tree (see /tmp/verify-local-generated-*.log)"
-      fi
+      fail "generated-tree (see /tmp/verify-local-generated-*.log)"
     fi
   else
     fail "generated-tree (build failed: /tmp/verify-local-generated-build.log)"
   fi
   rm -rf "$GEN_DIR"
-  if [ -n "${STRIP:-}" ]; then
-    rm -rf "$STRIP"
-  fi
 fi
 
 # --- per-crate clippy, tests, doctests, docs ---------------------------------

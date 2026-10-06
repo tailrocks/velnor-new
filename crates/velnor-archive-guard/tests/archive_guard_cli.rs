@@ -157,6 +157,7 @@ fn producer_tar() -> Result<Vec<u8>, Box<dyn Error>> {
     let archive = root.join("generator-assets.tar");
     let output = Command::new("tar")
         .args([
+            "--format=ustar",
             "-cf",
             "generator-assets.tar",
             "binary",
