@@ -45,8 +45,8 @@ pub use config::{
     ExecutionRole, GeneratorValidation, ProfileKind, ResourcesConfig, RootProblem, RoutingWorkflow,
     RunnerSelection, RunsOn, RustConfiguration, RustStackConfig, SCALE_SET_NAME, ScaleSetSelector,
     ShardTimingEvidence, StacksConfig, TestShardingConfig, TofuStackConfig, Utf8RepoRelDir,
-    VELNOR_LABEL, VelnorConfig, VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,
-    is_valid_custom_task_name, is_valid_feature_name, is_valid_rust_target,
+    VELNOR_LABEL, VelnorConfig, VelnorSupportWorkflow, VerifyConfig, WorkflowConfig,
+    WorkflowPolicy, is_valid_custom_task_name, is_valid_feature_name, is_valid_rust_target,
     validate_shard_changes_need_evidence,
 };
 pub use discover::{
@@ -63,8 +63,8 @@ pub use extensions::{
 };
 pub use finding::Finding;
 pub use formats::{
-    AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET, DECLARED_GITHUB_FORMATS, find_github_format,
-    is_declared_github_format,
+    AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET, DECLARED_GITHUB_FORMATS,
+    PULL_REQUEST_TEMPLATE_PATH, find_github_format, is_declared_github_format,
 };
 pub use freshness::{
     FRESHNESS_CLASSES, FreshnessRequirement, RunnerImageEvidence, UNOBSERVED_IMAGE_VALUE,

@@ -64,6 +64,27 @@ pub(crate) fn isolated_manifest_flag(root: &str) -> String {
 /// fixed `sh` template in this module (fetch probe-and-fetch is the
 /// first): shell sequencing for cargo isolation lives here, so the
 /// orchestrator's `sh` confinement set stays closed.
+/// Fixed native-validator probe script: each host CLI validates the
+/// repo root when installed and is skipped otherwise.
+///
+/// `grok plugin validate` takes the same root path by analogy; its
+/// exact arguments are undocumented, so a wrong guess fails only on
+/// runners with `grok` installed (never default CI).
+const NATIVE_VALIDATORS_SCRIPT: &str = r#"fail=0; if command -v claude >/dev/null 2>&1; then claude plugin validate --strict . || fail=1; fi; if command -v muse >/dev/null 2>&1; then muse plugins validate . || fail=1; for d in skills/*/; do [ -d "$d" ] || continue; muse skills validate "$d" || fail=1; done; fi; if command -v grok >/dev/null 2>&1; then grok plugin validate . || fail=1; fi; exit $fail"#;
+
+/// Fixed `sh -c` wrapper over the native-validator probe script.
+///
+/// Third fixed `sh` template in this module: fixed CLI names plus the
+/// fixed `skills/*/` glob, no repository input, so the orchestrator's
+/// `sh` confinement set stays closed.
+pub(crate) fn native_validators_argv() -> Vec<String> {
+    vec![
+        "sh".to_owned(),
+        "-c".to_owned(),
+        NATIVE_VALIDATORS_SCRIPT.to_owned(),
+    ]
+}
+
 pub(crate) fn privilege_drop_argv(install: &str, payload: &str) -> Vec<String> {
     let prelude = velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude();
     let script = format!(

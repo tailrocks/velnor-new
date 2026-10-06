@@ -9,7 +9,6 @@ use velnor_actions_contract::{ExecutionMode, expand_workflow};
 use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
 use velnor_actions_workflow_renderer::render::RenderedTree;
 use velnor_actions_workflow_renderer::steps::rehead_actionlint_marker;
-use velnor_actions_workflow_renderer::tree::render_tree_with_extra;
 
 use crate::OrchestratorError;
 use crate::finalized::owned_preparation;
@@ -181,8 +180,7 @@ fn render_all(
     extra.extend(crate::routing::extra_files(&prep.config, version)?);
     extra.extend(rendered.shared);
     let actionlint = self_repo_gap::note(&actionlint, &workflow, &extra)?;
-    let tree = render_tree_with_extra(&workflow, &actionlint, &extra, version)?;
-    Ok(tree)
+    write::assemble_tree(&workflow, &actionlint, &extra, &prep.root, version)
 }
 
 /// Validate every rendered path lexically plus symlink-prefix probing.

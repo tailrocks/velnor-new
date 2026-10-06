@@ -38,6 +38,25 @@ pub struct WorkflowConfig {
     /// Pinned older runner-label override; omit for latest.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runner_label: Option<String>,
+    /// Consumer-selected verification jobs; empty disables them all.
+    #[serde(default, skip_serializing_if = "VerifyConfig::is_empty")]
+    pub verify: VerifyConfig,
+}
+
+/// `[workflow.verify]`: config-selected verification jobs.
+///
+/// Each entry names a [`ValidatorKind::consumer_verify`] job ID; the
+/// generator emits one support job per entry on any policy and the
+/// required gate covers them. Unknown or duplicated names fail
+/// validation closed. Enabled jobs may require repository-owned
+/// policy files (`.alint.yml`, `.zizmor.yml`); a missing file fails
+/// that job, never silently.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VerifyConfig {
+    /// Verification job IDs to emit, in canonical emission order.
+    #[serde(default)]
+    pub jobs: Vec<String>,
 }
 
 /// Workflow policy selector.
@@ -129,6 +148,38 @@ impl WorkflowConfig {
                 format!("unsupported_label:{label}"),
             ));
         }
+        self.verify.validate(file)?;
+        Ok(())
+    }
+}
+
+impl VerifyConfig {
+    /// True when no verification job is selected.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.jobs.is_empty()
+    }
+
+    /// Validate the verify allowlist: known IDs, no duplicates.
+    /// # Errors
+    pub fn validate(&self, file: &str) -> Result<(), ContractError> {
+        let mut seen = std::collections::BTreeSet::new();
+        for job in &self.jobs {
+            if ValidatorKind::from_verify_name(job).is_none() {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.verify.jobs",
+                    format!("unknown_verify_job:{job}"),
+                ));
+            }
+            if !seen.insert(job) {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.verify.jobs",
+                    format!("duplicate_verify_job:{job}"),
+                ));
+            }
+        }
         Ok(())
     }
 }
@@ -146,6 +197,7 @@ mod tests {
             generator_validation: GeneratorValidation::Bootstrap,
             max_parallel_jobs: 2,
             runner_label: None,
+            verify: super::VerifyConfig::default(),
         }
     }
 
@@ -158,5 +210,47 @@ mod tests {
                 .expect_err("bad name fails");
             assert!(err.to_string().contains("bad_name"), "{err}");
         }
+    }
+
+    #[test]
+    fn verify_jobs_accept_known_ids_in_any_order() {
+        let mut config = named("CI");
+        config.verify.jobs = vec![
+            "native-validators".to_owned(),
+            "alint".to_owned(),
+            "strict-json".to_owned(),
+        ];
+        assert!(config.validate("config.toml").is_ok());
+    }
+
+    #[test]
+    fn verify_jobs_reject_unknown_and_duplicates() {
+        let mut config = named("CI");
+        config.verify.jobs = vec!["bogus".to_owned()];
+        let err = config
+            .validate("config.toml")
+            .expect_err("unknown job fails");
+        assert!(
+            err.to_string().contains("unknown_verify_job:bogus"),
+            "{err}"
+        );
+        for forbidden in ["cargo-deny", "cargo-machete", "actionlint", "plan"] {
+            config.verify.jobs = vec![forbidden.to_owned()];
+            let err = config
+                .validate("config.toml")
+                .expect_err("non-verify ID fails");
+            assert!(
+                err.to_string().contains("unknown_verify_job"),
+                "{forbidden}: {err}"
+            );
+        }
+        config.verify.jobs = vec!["alint".to_owned(), "alint".to_owned()];
+        let err = config
+            .validate("config.toml")
+            .expect_err("duplicate job fails");
+        assert!(
+            err.to_string().contains("duplicate_verify_job:alint"),
+            "{err}"
+        );
     }
 }

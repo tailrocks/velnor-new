@@ -117,12 +117,8 @@ pub(crate) fn build_workflow(
     let version = env!("CARGO_PKG_VERSION").to_owned();
     let policy = config.workflow.policy;
     let use_mbx = plan_uses_mbx(discovery);
-    let support = match policy {
-        WorkflowPolicy::ConsumerV1 => None,
-        WorkflowPolicy::VelnorRepositoryV1 => {
-            Some(policy.support_workflow(config.workflow.generator_validation))
-        }
-    };
+    let verify = crate::verify::verify_kinds(&config.workflow.verify.jobs)?;
+    let support = crate::verify::build_support(config, &verify);
     let mut jobs = BTreeMap::new();
     let acquire = match policy {
         WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(label, &version, discovery)?),
@@ -180,7 +176,7 @@ pub(crate) fn build_workflow(
         },
         jobs,
     };
-    let context = render_context(config, label, &version, &catalog, use_rust)?;
+    let context = render_context(config, label, &version, &catalog, use_rust, &verify)?;
     let actionlint = actionlint_input(config, &version, label);
     Ok(WorkflowPlan {
         ir,
@@ -331,10 +327,11 @@ fn render_context(
     version: &str,
     catalog: &ToolCatalog,
     plan_needs_rust: bool,
+    verify: &[ValidatorKind],
 ) -> Result<RenderContext, OrchestratorError> {
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let velnor = config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1;
-    let validator_commands = if velnor {
+    let mut validator_commands = if velnor {
         vec![
             ValidatorCommand {
                 validator: ValidatorKind::CargoDeny,
@@ -355,6 +352,7 @@ fn render_context(
     } else {
         Vec::new()
     };
+    crate::verify::push_verify_commands(&mut validator_commands, verify, catalog)?;
     let candidate =
         if velnor && config.workflow.generator_validation == GeneratorValidation::Candidate {
             Some(candidate_spec(catalog)?)

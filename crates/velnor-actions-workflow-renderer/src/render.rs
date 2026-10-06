@@ -305,9 +305,9 @@ fn merged_jobs(
     check_single_label(ir, &ctx.runs_on)?;
     let mut jobs = ir.jobs.clone();
     match policy {
-        WorkflowPolicy::ConsumerV1 => support::reject_consumer_support(&jobs, support)?,
+        WorkflowPolicy::ConsumerV1 => support::merge_consumer_verify(&mut jobs, support, ctx)?,
         WorkflowPolicy::VelnorRepositoryV1 => {
-            support::merge_support_jobs(&mut jobs, support, ctx)?;
+            support::merge_support_jobs(&mut jobs, support, ctx, "velnor-repository-v1")?;
         }
     }
     msrv::check_no_msrv(&jobs)?;

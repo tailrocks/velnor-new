@@ -19,6 +19,14 @@ pub const AGENTS_MD_PATH: &str = ".github/AGENTS.md";
 pub const CLAUDE_MD_PATH: &str = ".github/CLAUDE.md";
 /// Relative symlink target for sibling CLAUDE.md.
 pub const CLAUDE_MD_TARGET: &str = "AGENTS.md";
+/// Repository-owned PR template path: preserved byte-for-byte, never generated.
+///
+/// The only `.github` file `generate` carries over instead of replacing
+/// (generated-file-contract §3): generation never writes this path, so an
+/// existing template survives and a missing one stays missing. Preserved
+/// bytes skip the generated marker and token gates (GitHub renders the
+/// template; it never executes), but path, size, and UTF-8 gates apply.
+pub const PULL_REQUEST_TEMPLATE_PATH: &str = ".github/PULL_REQUEST_TEMPLATE.md";
 
 /// Every declared `.github` output format (gen §0).
 pub const DECLARED_GITHUB_FORMATS: [GithubFormat; 4] = [

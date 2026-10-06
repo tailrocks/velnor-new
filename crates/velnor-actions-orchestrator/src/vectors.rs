@@ -45,7 +45,13 @@ pub(crate) fn validator_install_pin(spec: &str) -> Option<(&'static str, &'stati
 const CARGO_MACHETE_VERSION: &str = "0.9.2";
 
 /// Mise tool specs the validator vectors may select, without versions.
-const VALIDATOR_TOOL_SPECS: [&str; 2] = ["cargo-deny", "ubi:bnjbvr/cargo-machete"];
+const VALIDATOR_TOOL_SPECS: [&str; 5] = [
+    "cargo-deny",
+    "ubi:bnjbvr/cargo-machete",
+    "npm:markdownlint-cli2",
+    "node",
+    "ubi:lycheeverse/lychee",
+];
 
 /// Product crates scanned by the machete vector, in contract order.
 ///
@@ -227,13 +233,13 @@ pub(crate) fn machete_argv() -> Result<Vec<String>, OrchestratorError> {
     )
 }
 
-/// One validator vector: an allowlisted tool spec plus a fixed cargo payload.
+/// One validator vector: an allowlisted tool spec plus a fixed payload.
 ///
 /// Built through the Mise adapter's isolated `exec` constructor, so the
 /// emitted shape (global flags, spec, `--` separator, payload) matches the
 /// typed `PinnedToolExec` vectors byte for byte. The spec name must be
 /// allowlisted and the version an exact pin; anything else fails closed.
-fn validator_argv(
+pub(crate) fn validator_argv(
     spec: &str,
     version: &str,
     program: &str,

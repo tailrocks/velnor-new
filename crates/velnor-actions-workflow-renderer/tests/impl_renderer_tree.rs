@@ -134,16 +134,23 @@ fn consumer_tree_has_exactly_two_sorted_paths() -> Result<(), RenderError> {
 }
 
 #[test]
-fn consumer_tree_has_no_codeowners_and_rejects_support_jobs() -> Result<(), RenderError> {
+fn consumer_tree_has_no_codeowners_merges_verify_and_rejects_candidate() -> Result<(), RenderError>
+{
     let ir = fixture_ir()?;
     let ctx = fixture_ctx();
-    let with_support = VelnorSupportWorkflow {
+    // Config-selected verification jobs merge on the consumer policy.
+    let with_verify = VelnorSupportWorkflow {
         validators: vec![ValidatorKind::Alint],
         candidate_validation: false,
     };
-    assert!(
-        render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, Some(&with_support), &ctx).is_err()
-    );
+    let text = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, Some(&with_verify), &ctx)?;
+    assert!(text.contains("alint:"));
+    // Velnor-only validators still fail closed on the consumer policy.
+    let with_denied = VelnorSupportWorkflow {
+        validators: vec![ValidatorKind::CargoDeny],
+        candidate_validation: false,
+    };
+    assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, Some(&with_denied), &ctx).is_err());
     let with_candidate = VelnorSupportWorkflow {
         validators: Vec::new(),
         candidate_validation: true,
