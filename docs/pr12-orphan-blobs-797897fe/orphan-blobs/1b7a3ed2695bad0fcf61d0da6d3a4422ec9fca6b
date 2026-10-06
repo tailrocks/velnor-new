@@ -1,0 +1,311 @@
+/goal
+
+# Finish the useful PR #12 work and retire the unnecessary owned-source system
+
+## Mode and outcome
+
+IMPLEMENTATION MODE. This is not another research-only review. Implement, test,
+independently review, commit, push, integrate, release, migrate affected consumers,
+and clean up obsolete code and refs within the scope below.
+
+This goal supersedes the research-only operating mode in the earlier review pack.
+It does not supersede repository protections, model restrictions, or evidence gates.
+
+Deliver the smallest production-ready result that preserves real requirements:
+
+1. Real Rust regression coverage for Velnor's mise configuration-isolation contract,
+   followed by adoption of a verified fixed official mise distribution.
+2. One working stock-MBX cache lifecycle, fixing the concrete PR #26 round-trip and
+   disk-pressure problems where they still exist, without private tool forks.
+3. Removal of unnecessary owned-source builders, publishers, qualification code,
+   Foundation-only wiring, custom protocols, and their exclusive tests/dependencies.
+4. Deterministic generator output, verified consumer adoption, and recoverable
+   retirement of the six owned-source snapshot branches.
+5. Preservation of useful independent PR #12 fixes, existing functionality, and
+   other agents' work. Salvage requirements and correct code, not the whole apparatus.
+
+Do not stop at a plan, a rewritten specification, local tests, or opened PRs. Finish
+all independently executable work. An external blocker makes its affected item
+PARTIAL; it does not justify abandoning unrelated work or inventing a success.
+
+## Authority and boundaries
+
+Use normal development branches, small commits, pushes, focused PRs, approved
+release machinery, CI/qualification runs, and policy-compliant merges to complete
+this scope. Retire only the specified obsolete snapshot refs after the archival,
+consumer-migration, exact-head verification, and deletion gates pass.
+
+Do not force-push, rewrite shared history, discard uncommitted work, weaken branch
+protections, overwrite immutable releases, remove repositories, or delete unrelated
+branches, clones, worktrees, credentials, or release assets. Do not merge foreign
+upstream-root histories into Velnor main merely to preserve them.
+
+CI migration is not permission to apply Terraform/OpenTofu, change infrastructure,
+deploy business workloads to production, or run privileged untrusted code. Use
+qualification fixtures and the existing authorized CI/release paths. Missing
+permissions are a blocker to record, not authorization to bypass controls.
+
+## Mandatory execution policy
+
+Use subagents aggressively for evidence collection, implementation, testing,
+security review, consumer migration, and independent verification. The coordinator
+orchestrates, integrates, resolves conflicts, and checks gates; it must not claim
+parallelism or reviews that were not actually performed.
+
+For Velnor work, the coordinator and every subagent must use exactly:
+  model: gpt-5.6-luna
+  reasoning effort: max
+
+Repository-specific exception: all work on jackin-project/jackin must use a separate
+coordinator/team with exactly gpt-6.1-sol and reasoning effort medium, including its
+analysis, implementation, reviews, and tests. The Velnor coordinator only routes
+that handoff and records its result. Do not apply this exception to other repos.
+
+Verify effective model and effort using trustworthy runtime metadata. A prompt or
+model self-description is not verification. No fallback, substitution, reduced
+effort, or unverified agent is permitted. Fail closed for an unavailable lane; do
+not silently perform its work with another model.
+
+Work autonomously. Do not ask the user to resolve ordinary technical ambiguity.
+Assign a research/review subagent, inspect evidence, choose the smallest correct
+reversible solution, record the decision, and continue. Do not invent credentials,
+authority, maintainer approval, or evidence to unblock yourself.
+
+Use distinct implementation and review/verification agents. Require independent
+security and deletion-blast-radius review for executable downloads, cache trust,
+process/environment boundaries, archive extraction, publication, and ref retirement.
+
+Commit small coherent verified changes frequently and push regularly. Prefer one
+integration branch per repository; reuse relevant existing PRs rather than opening
+competing work. Merge main rather than rebasing shared history. Serialize Git-index,
+commit, integration, and final-generation operations. Parallel agents need disjoint
+file ownership or isolated disposable worktrees; they must not share mutable
+compiler output/cache directories unsafely. Bound CPU, disk, Git, and network load.
+
+Read current AGENTS.md and repository-specific instructions before acting. Address
+all relevant review comments and unresolved threads before merging; record evidence
+for accepted fixes and explanations for rejected suggestions.
+
+## Inputs and historical anchors
+
+Primary repository: https://github.com/tailrocks/velnor-new
+PR under review: https://github.com/tailrocks/velnor-new/pull/12
+Related stock-cache repair: https://github.com/tailrocks/velnor-new/pull/26
+Accepted mise change to revalidate: https://github.com/jdx/mise/pull/13926
+
+Read these earlier research artifacts when available:
+  owned-source-review.md
+  owned-source-spec.md
+  owned-source-inventories.md
+  owned-source-inventory.json
+
+Their absence is not a reason to stop: the scope and execution requirements below
+are self-contained. Their findings are historical evidence, not current truth or
+authority to delete. The review lacked fresh-clone ancestry proofs, complete
+all-ref/consumer searches, packaged-action execution, and hosted qualification.
+
+Historical reviewed identities; refresh and validate every one before relying on it:
+  velnor-new/main       5a946c33cf005777feab2bc91fa4aa8e01dd58f4
+  PR #12 head           d94fe9cefa6a0b97f00d235191c2d3142d1af6ff
+  PR #12 branch         perf/cache-selection-qualification
+  PR #26 head           1ecd84d1f6320e9a0209968c2057952b9363c8a4
+  tar-absolute          5b309009599ce11173830045e237fef6900d6b42
+  accepted mise merge   dfe74a90b41603625ee6aabecb42f14a1f5eb0f6
+
+True upstreams to verify:
+  jdx/mise
+  jdx/mr-boxington
+  jdx/mr-boxington-action
+  obi1kenobi/cargo-semver-checks
+  actions/cache
+
+Do not reset to these anchors, treat them as current heads, or duplicate work that
+has since landed. Fetch main, refs/pull/12/head, PR #26, all Velnor branches/tags,
+and relevant open PR heads. Record timestamps and full SHAs. Recheck moving refs
+before integration, rollout, and deletion. Reconcile only the changed evidence
+when a head moves; do not restart an endless whole-project research loop.
+
+## Phase A — close actionable evidence gaps and choose the integration path
+
+Run parallel evidence lanes while safe additive Phase 0 tests are developed. No
+deletion passes until its caller/dependency coverage is complete; no snapshot
+retirement passes until the full scoped consumer audit is complete.
+
+Inventory PR #12 by feature and file, not just by commit. Separate useful generic
+correctness changes from owned-source scaffolding. Check main, other branches,
+open PRs, and existing releases for equivalent implementations before editing.
+If PR #12 is still the appropriate integration branch, narrow it in place without
+rewriting history. Otherwise use one focused branch from current main, selectively
+carry over useful changes, and close the superseded PR only after every item has a
+recorded disposition. Preserve and coordinate PR #26 and independent runner fixes.
+
+In fresh upstream scratch clones, before importing foreign snapshot objects, prove
+upstream objects and peeled tags with git cat-file and git rev-parse. Then inspect
+parents, original fork points, later upstream merges, and full custom diffs. Record
+authored changes separately from vendored tests and generated bundles. Validate the
+15 historical custom commits in Appendix A and account for newly discovered ones.
+
+Load current scope.json and compare it with the reviewed 46-consumer inventory.
+Audit their union plus newly discovered consumers. Resolve renamed/transferred
+repositories through actual metadata; an old name, missing access, failed request,
+or empty indexed search is not a zero-consumer result.
+
+Search every fetched Velnor ref, including generated outputs and tests. For each
+consumer inspect current default-branch workflows/configuration, reusable/composite
+actions, invoked scripts, and relevant open-PR/branch heads; follow all positive
+indirect references. Search full snapshot SHAs, owned-source branch/ref names,
+script names/import stems, Foundation, MISE_OWNED_CARGO_WRAPPER,
+owned-cache-transport, comparison-state, expected-binary-sha256, velnor-plan,
+velnor-compare, and SDK/quarantine identifiers. Use bounded git grep/rg, not repeated
+unbounded filesystem scans. Search actual files, not only GitHub's code index.
+
+Classify each reference as passive documentation, mock, real-code test definition,
+staged executable workflow, or observed runtime invocation. For observed execution
+record run ID, attempt, repository/head/merge SHA, job, command, and relevant logs.
+A live scheduled/manual invocation is still a consumer even without retained logs;
+do not delete a credible declared runtime contract merely because logs expired.
+
+Verify consumer-v1 versus VelnorRepositoryV1 using the actual generator and effective
+configuration. Do not infer omitted policy values from another repository/version.
+
+For every custom feature choose one evidence-backed disposition:
+  KEEP-IN-VELNOR: necessary behavior owned by an existing Velnor crate/module.
+  ADOPT-UPSTREAM: necessary behavior supplied by verified official upstream code.
+  MINIMAL-UPSTREAM-PR: indispensable missing behavior with no adequate Velnor seam.
+  DELETE: unnecessary feature whose callers are removed/replaced or absent.
+  TEMPORARY-HOLD: a concrete unresolved dependency, named owner, next probe, and
+                  expiry event; not an indefinite staging destination.
+
+A feature's own tests do not by themselves create a product requirement. Conversely,
+a real test must not be mislabeled a mock. Investigate any missed consumer first;
+suspend only the affected deletion while resolving its requirement.
+
+Try concrete config/process/renderer/composite/stock-API alternatives before changing
+upstream. Name the exact seam and prove behavior. Do not claim ordinary cache saving
+reproduces semantic usefulness/lineage, or that metadata wrapping reproduces private
+semver lint behavior. Do not preserve unused sophistication merely to avoid deletion.
+
+## Phase 0 — port retained regression coverage to Rust before removing Python
+
+Extract only necessary stock-mise no-config/miserc tests from:
+  scripts/owned_mise_qualification.py
+
+Proposed target, adjusted to the current real harness:
+  crates/velnor-actions-mise/tests/impl_miserc_isolation.rs
+
+Reuse the existing velnor-actions-mise process/environment boundary, integration
+harness, fixture conventions, and pinned toolchain. Do not port the receipt engine,
+owned wrapper/shim/banner, fake MBX, source capsules, or candidate orchestrator.
+
+Execute real official mise binaries and prove:
+  - flag-only and environment-only no-config selection;
+  - --version and exec operations;
+  - repository-root and nested working directories;
+  - malformed project, global, and system miserc discovery layers;
+  - a control without no-config that actually reaches the malformed configuration;
+  - an affected official release exhibiting the regression;
+  - a selected fixed official binary passing the retained contract;
+  - Velnor's production --no-config --no-env --no-hooks boundary remains enforced.
+
+Keep flag-only and environment-only tests genuinely distinct: the latter must not
+pass merely because the helper silently adds the flag. Use test-only supported
+entrypoints where needed, without weakening the production process API. Isolate all
+fixtures; never modify the developer's actual home/system configuration. Use existing
+safe overrides or disposable containers for system-level discovery tests.
+
+Record release/source identity and actual executable digest. Known-broken controls
+must be asserted expected failures, not a permanently red normal suite. Missing
+binaries, skipped platforms, fake executable output, and tests not selected by CI
+are not qualification passes. Cover every applicable supported platform or explicitly
+leave that qualification incomplete.
+
+Audit test_git_optional_locks.py and all other proposed test deletions for retained
+generic requirements. Port any necessary regression into its existing owning Rust
+crate in this same Phase 0. Add only the smallest reusable helper needed; do not
+create a new qualification framework. Keep this slice independently reviewable.
+
+## Phase B — adopt fixed official mise, not the owned fork
+
+Re-query official releases. Prove the selected source contains the accepted
+jdx/mise#13926 fix or a verified equivalent, then run Phase 0 against its distributed
+binary. The historical review found a merged fix but an inspected release without
+it; neither a PR merge nor a version string is deployment evidence.
+
+Update the real version catalog, bootstrap/action selection, checksums, freshness
+authorities, and generated fixtures together. Inspect current equivalents of:
+  crates/velnor-actions-mise/src/catalog.rs
+  crates/velnor-actions-mise/src/command.rs
+
+Do not submit the same upstream fix again. Do not retain the broader owned mise
+wrapper/shim/banner simply because one small part was useful.
+
+If no fixed official binary exists, continue independent work. Consider a minimal
+Velnor-side workaround at IsolatedCommand::mise_exec, mise_install, with_cwd, and
+repo_task only after proving it against the same tests. Neutral CWD alone is not
+proof: validate project/global/system discovery, nested Cargo, environment policy,
+and tool identity. Do not start a private distribution pipeline as a workaround.
+
+Distinguish source cleanup, a qualified temporary workaround, and official release
+adoption. Pending official adoption remains explicitly PARTIAL with a pinned
+upstream dependency and the exact release event that resolves it.
+
+## Phase C — finish the stock-MBX cache lifecycle using existing work
+
+Refresh PR #26 and inspect its current implementation, tests, reviews, and CI. Reuse
+or correct that work; do not open a competing implementation or reintroduce a bug
+already fixed after the research head.
+
+Historical seam to inspect:
+  crates/velnor-actions-workflow-renderer/src/mbx_bundle.rs
+
+The research identified a potential mismatch between stock-action restore/import
+inside the MBX store and Velnor's separate save of an external bundle. Verify current
+packaged behavior before concluding that defect remains.
+
+Choose ONE coherent supported contract:
+  A. Preserve the stock action's complete compatible restore/import/export/save path.
+  B. Have Velnor render both stock actions/cache/restore and actions/cache/save around
+     explicit official MBX import/export of the same external bundle path.
+
+Specify path sets, resolved cache version, key/prefix schema, compression, archive
+format, platform/toolchain compatibility, import/export ordering, and write trust
+as one contract. Matching keys alone are insufficient. Avoid duplicate implicit
+post-action saves when Velnor owns the save step.
+
+Use verified immutable official tool/action pins. Keep logical cache paths stable
+between writer and reader; use keys rather than random cache paths for qualification
+nonces. Also preserve genuine job isolation: never share a live mutable store solely
+to force path equality. Verify actual cross-job path/version behavior on the supported
+runner families instead of assuming matching YAML expressions prove compatibility.
+
+Preserve the approved production write policy. PR/fork jobs must not populate trusted
+production caches. Manual qualification, when needed, must use an explicitly isolated
+qualification namespace and a trusted fixture; it must not loosen production gates.
+
+Handle misses with safe uncached builds. Reject corrupt/incompatible cache input and
+recover without consuming unsafe data. Do not save failed/empty exports. Test prefix
+restores, cancellation, parallel jobs, old-cache isolation, and disk/inode exhaustion.
+
+Avoid recursive deletion. Any necessary store removal requires canonical containment,
+exclusive job ownership, stopped consumers, and symlink/race review. A name containing
+'mbx' is not deletion authorization. Never remove a shared or unrelated directory.
+
+Qualification must include actual generated YAML and two fresh hosted jobs using the
+real cache service: writer saves; independent reader restores, imports, and shows
+object/compiler reuse. A cache-hit output, mocked cache, same-process round trip,
+or old-head green badge is insufficient. Use the repository's existing qualification
+mechanism rather than inventing another publication/receipt service.
+
+Measure the affected ChainArgos workload separately from a tiny probe. Record cold
+and warm setup/build/import/export/upload durations and peak bytes/inodes. Eliminate
+avoidable overhead introduced by this change; flag scoped pipelines over the user's
+120-second target without hiding work or skipping checks. Do not expand this task
+into unrelated CI architecture rewrites.
+
+Do not activate either owned action snapshot with MBX ac6ceed10df0c6cb0af1bc6d1a69d0de4d392f81
+in comparison mode. The historical source contracts were report v1 versus v2. If no
+necessary comparison consumer survives, delete the feature rather than repair an
+unused protocol. If one survives, choose one explicitly versioned semantic contract,
+inspect/rebuild the actual committed dist bundle, and test real producer-to-packaged-
+action execution. Do not blindly accept both versions or rename fields as a fix.
+
