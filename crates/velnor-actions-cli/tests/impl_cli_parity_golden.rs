@@ -86,10 +86,19 @@ fn check_golden(case: &str, name: &str, actual: &[u8]) -> Result<(), Box<dyn Err
         .zip(actual.iter())
         .position(|(left, right)| left != right)
         .unwrap_or_else(|| expected.len().min(actual.len()));
+    // TEMPORARY CI DEBUG (revert after diagnosis): dump the bytes around
+    // the divergence so the CI-only mismatch can be root-caused.
+    let lo = at.saturating_sub(120);
+    let hi = (at + 240).min(actual.len().max(expected.len()));
+    let show = |bytes: &[u8]| {
+        String::from_utf8_lossy(&bytes[lo.min(bytes.len())..hi.min(bytes.len())]).into_owned()
+    };
     Err(Box::<dyn Error>::from(format!(
-        "golden mismatch {case}/{name}: expected {} bytes, actual {} bytes, first diff at {at}",
+        "golden mismatch {case}/{name}: expected {} bytes, actual {} bytes, first diff at {at}\nexpected[{lo}..{hi}]: {}\nactual[{lo}..{hi}]: {}",
         expected.len(),
-        actual.len()
+        actual.len(),
+        show(&expected),
+        show(actual)
     )))
 }
 
