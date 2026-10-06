@@ -1,3 +1,11 @@
+#![cfg(any())]
+//! Unfinished merged native-image contract.
+//!
+//! The enclosing workflow-task graph does not yet consume this declaration.
+//! Keep the module excluded from compilation until the renderer and resolver
+//! provide their coherent halves; this explicit gate prevents unowned types
+//! from becoming a runtime contract.
+
 //! Closed declaration for a hosted job that builds a native-platform image.
 
 use super::verification::is_valid_verification_task_id;
