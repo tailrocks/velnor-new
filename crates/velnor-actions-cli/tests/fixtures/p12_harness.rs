@@ -318,6 +318,11 @@ const ACTION_PROBE_ROWS: &[(&str, &str, &str)] = &[
         "alint.json",
         "{\"tag_name\": \"v0.16.1\"}",
     ),
+    (
+        "https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest",
+        "aws-credentials.json",
+        "{\"tag_name\": \"v6.3.0\"}",
+    ),
 ];
 
 /// (inventory source URL, canned file, canned body) for every probe row.
