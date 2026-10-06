@@ -74,6 +74,18 @@ impl ActionArchiveManifest {
             archives,
         })
     }
+
+    /// Stable consumer repository ID bound into the lease generation.
+    #[must_use]
+    pub(crate) fn consumer_repository_id(&self) -> u64 {
+        self.consumer_repository_id
+    }
+
+    /// Exact normalized action allowlist bound into the lease generation.
+    #[must_use]
+    pub(crate) fn archives(&self) -> &[ActionArchiveIdentity] {
+        &self.archives
+    }
 }
 
 impl ActionArchiveStore {
