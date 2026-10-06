@@ -109,15 +109,14 @@ async fn observe_worker(
     budget: &mut EffectBudget<'_>,
     task: &ContainerCleanup<'_>,
 ) -> Result<Option<String>, Failure> {
-    if let Some(recorded) = task.recorded_id {
-        if let Some(found) =
+    if let Some(recorded) = task.recorded_id
+        && let Some(found) =
             request_worker_id(context, intent_id, claim, budget, recorded, task).await?
-        {
-            if found != recorded {
-                return Err(Failure::not_proven("container id identity"));
-            }
-            return Ok(Some(found));
+    {
+        if found != recorded {
+            return Err(Failure::not_proven("container id identity"));
         }
+        return Ok(Some(found));
     }
     let found = request_worker_id(context, intent_id, claim, budget, task.name, task).await?;
     if let Some(recorded) = task.recorded_id {

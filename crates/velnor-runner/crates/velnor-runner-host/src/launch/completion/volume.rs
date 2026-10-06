@@ -27,7 +27,7 @@ pub(super) async fn cleanup(
     ] {
         let verification = verify(context, launch.intent.id, claim, budget, worker, role).await?;
         match verification {
-            WorkerVolumeVerification::Absent => continue,
+            WorkerVolumeVerification::Absent => {}
             WorkerVolumeVerification::OwnershipMismatch => {
                 return Err(Failure::not_proven("volume ownership"));
             }

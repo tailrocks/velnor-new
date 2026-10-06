@@ -78,7 +78,7 @@ fn empty_poll_is_not_acknowledged() -> Result<(), &'static str> {
 }
 
 #[test]
-fn missing_outer_id_fails_poll_without_an_ack_request() -> Result<(), &'static str> {
+fn missing_outer_id_fails_poll_without_an_ack_request() {
     let malformed = r#"{"messageType":"RunnerScaleSetJobMessages","body":"[{bad json]"}"#;
     let mut script = Script::once(200, malformed);
     let result = poll(&mut script, QUEUE, 0, 1, TOKEN, &RefreshGate::new(), || {
@@ -91,7 +91,6 @@ fn missing_outer_id_fails_poll_without_an_ack_request() -> Result<(), &'static s
     assert_eq!(script.seen.len(), 1);
     assert_eq!(script.seen[0].method, Method::Get);
     assert!(!script.seen[0].path.contains("/0"));
-    Ok(())
 }
 
 #[test]

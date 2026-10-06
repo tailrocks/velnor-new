@@ -1,7 +1,7 @@
 //! Definite JIT rejection can release only an unacquired population reservation.
 
 use super::start_tests::{ready, rest, zero_assignment_session};
-use super::start_turn;
+use super::{StartTurn, start_turn};
 use crate::EnsureError;
 use crate::IntentState;
 use crate::launch::inspect_tests::{DockerStub, http};
@@ -22,12 +22,14 @@ async fn definite_assigned_jit_rejection_releases_then_redelivery_retries() -> R
     let result = start_turn(
         &mut rejected,
         &mut workers,
-        ready(&session, &polled),
-        &journal,
-        &docker.docker,
-        1,
-        rest(),
-        false,
+        StartTurn {
+            ready: ready(&session, &polled),
+            journal: &journal,
+            docker: &docker.docker,
+            capacity: 1,
+            rest: rest(),
+            stop: false,
+        },
     )
     .await;
 
@@ -50,12 +52,14 @@ async fn definite_assigned_jit_rejection_releases_then_redelivery_retries() -> R
     let result = start_turn(
         &mut recovered,
         &mut workers,
-        ready(&session, &polled),
-        &journal,
-        &docker.docker,
-        1,
-        rest(),
-        false,
+        StartTurn {
+            ready: ready(&session, &polled),
+            journal: &journal,
+            docker: &docker.docker,
+            capacity: 1,
+            rest: rest(),
+            stop: false,
+        },
     )
     .await;
     // The dead row still owns its identity (unique index), so the redelivered

@@ -18,7 +18,7 @@ fn cancelled_shutdown_keeps_join_ownership_with_blocking_pool_saturated() -> Res
         .max_blocking_threads(1)
         .build()
         .map_err(|_| HostError::Journal)?;
-    let saturated = SaturatedWorker::start()?;
+    let saturated = SaturatedWorker::start();
     let SaturatedWorker {
         worker,
         stopping,
@@ -56,7 +56,7 @@ struct SaturatedWorker {
 }
 
 impl SaturatedWorker {
-    fn start() -> Result<Self, HostError> {
+    fn start() -> Self {
         let stopping = Arc::new(AtomicBool::new(false));
         let thread_stopping = Arc::clone(&stopping);
         let result_sent = Arc::new(AtomicBool::new(false));
@@ -80,7 +80,7 @@ impl SaturatedWorker {
                 eprintln!("completion test worker lost phase=done");
             }
         });
-        Ok(Self {
+        Self {
             worker: CompletionWorker {
                 wake,
                 stopping: Arc::clone(&stopping),
@@ -93,13 +93,13 @@ impl SaturatedWorker {
             release_worker,
             worker_done,
             reaped,
-        })
+        }
     }
 }
 
 fn wait_for_stop_signal(receiver: &mpsc::Receiver<()>, stopping: &AtomicBool) -> bool {
-    let received = receiver.recv_timeout(Duration::from_secs(2)).is_ok();
-    if !received || !stopping.load(Ordering::Acquire) {
+    let signaled = receiver.recv_timeout(Duration::from_secs(2)).is_ok();
+    if !signaled || !stopping.load(Ordering::Acquire) {
         eprintln!("completion test worker timed out phase=stop");
         return false;
     }

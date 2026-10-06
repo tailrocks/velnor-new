@@ -11,18 +11,18 @@ async fn resolved_acquire_without_jit_resumes_one_jit_without_acquire() -> Resul
     let (id, fresh) = journal
         .begin_assigned_launch("m1r41", 1, 41, "v41")
         .await
-        .map_err(error_text)?;
+        .map_err(|error| error_text(&error))?;
     assert!(fresh);
     assert!(
         journal
             .claim_assigned_acquire(id)
             .await
-            .map_err(error_text)?
+            .map_err(|error| error_text(&error))?
     );
     journal
         .record_assigned_acquire(id, true)
         .await
-        .map_err(error_text)?;
+        .map_err(|error| error_text(&error))?;
     let batch = assigned_batch(2)?;
     let mut lane = script();
 
@@ -53,12 +53,12 @@ async fn unresolved_acquire_does_not_replay_acquire_or_request_jit() -> Result<(
     let (id, _) = journal
         .begin_assigned_launch("m3r43", 1, 43, "v43")
         .await
-        .map_err(error_text)?;
+        .map_err(|error| error_text(&error))?;
     assert!(
         journal
             .claim_assigned_acquire(id)
             .await
-            .map_err(error_text)?
+            .map_err(|error| error_text(&error))?
     );
     let batch = assigned_batch(4)?;
     let mut lane = script();
@@ -89,18 +89,23 @@ async fn uncertain_jit_does_not_repeat_jit_or_acquire() -> Result<(), String> {
     let (id, _) = journal
         .begin_assigned_launch("m5r45", 1, 45, "v45")
         .await
-        .map_err(error_text)?;
+        .map_err(|error| error_text(&error))?;
     assert!(
         journal
             .claim_assigned_acquire(id)
             .await
-            .map_err(error_text)?
+            .map_err(|error| error_text(&error))?
     );
     journal
         .record_assigned_acquire(id, true)
         .await
-        .map_err(error_text)?;
-    assert!(journal.claim_launch_jit(id).await.map_err(error_text)?);
+        .map_err(|error| error_text(&error))?;
+    assert!(
+        journal
+            .claim_launch_jit(id)
+            .await
+            .map_err(|error| error_text(&error))?
+    );
     let batch = assigned_batch(6)?;
     let mut lane = script();
 
@@ -125,8 +130,10 @@ async fn uncertain_jit_does_not_repeat_jit_or_acquire() -> Result<(), String> {
 }
 
 async fn open_journal(label: &str) -> Result<(Scratch, Journal), String> {
-    let scratch = Scratch::new(label).map_err(error_text)?;
-    let journal = Journal::open(&scratch.file()).await.map_err(error_text)?;
+    let scratch = Scratch::new(label).map_err(|error| error_text(&error))?;
+    let journal = Journal::open(&scratch.file())
+        .await
+        .map_err(|error| error_text(&error))?;
     Ok((scratch, journal))
 }
 
@@ -137,6 +144,6 @@ fn assigned_batch(message_id: i64) -> Result<velnor_runner_github::ParsedBatch, 
     Ok(batch)
 }
 
-fn error_text(error: impl ToString) -> String {
+fn error_text(error: &impl ToString) -> String {
     error.to_string()
 }

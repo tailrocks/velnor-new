@@ -48,9 +48,9 @@ pub(crate) fn idle(polled: &Poll) -> Idle {
         Poll::Batch(batch) => match offer(polled) {
             Offer::Acquire { ids, .. } if ids.len() == 1 => Idle::Launch,
             Offer::Wait if may_ack(batch, true) => {
-                if absent_census_progress(batch) {
-                    Idle::Ack
-                } else if batch.statistics.is_some() && crate::assign::started_replay(batch) {
+                if absent_census_progress(batch)
+                    || batch.statistics.is_some() && crate::assign::started_replay(batch)
+                {
                     Idle::Ack
                 } else {
                     match assigned_population(batch) {
@@ -322,7 +322,19 @@ where
         if !fresh && stale_cleared(lane, ctx, journal, id, name, &mut extra).await? {
             continue;
         }
-        let minted = mint_attempt(lane, ctx, journal, id, name, batch, fresh, &start).await;
+        let minted = mint_attempt(
+            lane,
+            ctx,
+            journal,
+            MintAttempt {
+                id,
+                name,
+                batch,
+                fresh,
+            },
+            &start,
+        )
+        .await;
         match minted {
             Err(EnsureError::NameCleared) if extra > 0 => {
                 extra -= 1;
@@ -355,15 +367,20 @@ where
     }
 }
 
+/// Row and batch inputs for one mint attempt.
+struct MintAttempt<'a> {
+    id: i64,
+    name: &'a str,
+    batch: Option<&'a velnor_runner_github::ParsedBatch>,
+    fresh: bool,
+}
+
 /// Mint once on row `id`, claiming the JIT or binding the identity first.
 async fn mint_attempt<T, S, F>(
     lane: &mut T,
     ctx: &Drive,
     journal: &Journal,
-    id: i64,
-    name: &str,
-    batch: Option<&velnor_runner_github::ParsedBatch>,
-    fresh: bool,
+    attempt: MintAttempt<'_>,
     start: &S,
 ) -> Result<Option<Started>, EnsureError>
 where
@@ -371,6 +388,12 @@ where
     S: Fn(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
+    let MintAttempt {
+        id,
+        name,
+        batch,
+        fresh,
+    } = attempt;
     if !fresh {
         if !journal.claim_launch_jit(id).await.map_err(map_journal)? {
             return hold(journal, id, EnsureError::Uncertain).await;

@@ -78,7 +78,6 @@ async fn retry_accepts_runner_absent_by_recorded_id_and_name_after_dind_failure(
         .await?
         .ok_or(HostError::Journal)?;
     let retry_result = run_cleanup(&context, &launch, retry_claim).await;
-    drop(context);
     assert_eq!(retry_result, Ok(()));
 
     let requests = stub.finish().await?;
@@ -113,7 +112,6 @@ async fn retry_rejects_a_different_container_at_the_durable_name() -> Result<(),
         admin: &admin,
     };
     let result = run_cleanup(&context, &launch, claim).await;
-    drop(context);
     assert_eq!(result, Err(Failure::not_proven("container name identity")));
     let requests = stub.finish().await?;
     assert_eq!(requests.len(), 2);

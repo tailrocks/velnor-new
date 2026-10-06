@@ -140,7 +140,7 @@ fn credential_is_a_keychain_ref() -> Result<(), HostError> {
 }
 
 #[test]
-fn resource_limits_are_required_and_aggregate_values_are_checked() -> Result<(), HostError> {
+fn resource_limits_are_required_and_aggregate_values_are_checked() {
     let valid = host_toml(
         "ChainArgos/java-monorepo",
         "orbstack",
@@ -180,7 +180,6 @@ fn resource_limits_are_required_and_aggregate_values_are_checked() -> Result<(),
             "dind_memory_bytes = 4000000000000000000",
         );
     assert!(HostConfig::parse(&aggregate_overflow).is_err());
-    Ok(())
 }
 
 #[test]

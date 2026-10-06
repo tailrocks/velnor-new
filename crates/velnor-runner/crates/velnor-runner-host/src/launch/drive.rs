@@ -45,6 +45,7 @@ impl fmt::Debug for Drive {
             .field("queue_path", &self.queue_path)
             .field("queue_token", &"[redacted]")
             .field("admin_token", &"[redacted]")
+            .field("docker_engine_id", &self.docker_engine_id)
             .field("owner", &self.owner)
             .field("repo", &self.repo)
             .field("pat", &"[redacted]")

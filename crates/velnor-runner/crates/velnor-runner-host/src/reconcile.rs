@@ -75,6 +75,10 @@ impl LaunchPhase {
 
 /// One durable intent loaded for reconcile.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "DB row mirror: each bool is an independent journal column"
+)]
 pub struct IntentRow {
     /// Row id.
     pub id: i64,
@@ -110,9 +114,9 @@ pub struct IntentRow {
     pub assignment_key: Option<String>,
     /// Immutable action archive generation pinned for this launch.
     pub seed_generation_id: Option<String>,
-    /// An AcquireJobs call may have started for this assignment.
+    /// An `AcquireJobs` call may have started for this assignment.
     pub acquire_attempted: bool,
-    /// The AcquireJobs response was received and recorded.
+    /// The `AcquireJobs` response was received and recorded.
     pub acquire_resolved: bool,
     /// The response confirmed this request was acquired.
     pub acquired: bool,

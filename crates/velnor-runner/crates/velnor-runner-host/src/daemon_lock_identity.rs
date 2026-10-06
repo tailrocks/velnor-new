@@ -3,10 +3,14 @@
 use sha2::{Digest, Sha256};
 
 pub(crate) fn engine_key(engine_id: &str) -> String {
-    Sha256::digest(engine_id.as_bytes())
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let digest = Sha256::digest(engine_id.as_bytes());
+    let mut hex = String::with_capacity(digest.len() * 2);
+    for byte in &digest {
+        hex.push(HEX[usize::from(byte >> 4)] as char);
+        hex.push(HEX[usize::from(byte & 0x0f)] as char);
+    }
+    hex
 }
 
 pub(crate) fn engine_id_valid(value: &str) -> bool {

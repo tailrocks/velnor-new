@@ -1,4 +1,4 @@
-//! Validated CPU and memory budgets for one runner plus its private DinD.
+//! Validated CPU and memory budgets for one runner plus its private `DinD`.
 
 use serde::Deserialize;
 
@@ -10,7 +10,7 @@ const NANOS_PER_MILLICORE: u64 = NANO_CPUS_PER_CPU / MILLICORES_PER_CPU;
 const DOCKER_MIN_MEMORY_BYTES: u64 = 6_291_456;
 const DOCKER_MIN_MEMORY_BYTES_I64: i64 = 6_291_456;
 
-/// TOML values for the runner and the private DinD container.
+/// TOML values for the runner and the private `DinD` container.
 ///
 /// CPU values are millicores and memory values are bytes. Each side is
 /// required; there are deliberately no unlimited or zero-value defaults.
@@ -21,9 +21,9 @@ pub(crate) struct ResourceBudgetConfig {
     pub(crate) runner_cpu_millicores: u64,
     /// Runner container memory limit in bytes.
     pub(crate) runner_memory_bytes: u64,
-    /// Private DinD container CPU allocation in millicores.
+    /// Private `DinD` container CPU allocation in millicores.
     pub(crate) dind_cpu_millicores: u64,
-    /// Private DinD container memory limit in bytes.
+    /// Private `DinD` container memory limit in bytes.
     pub(crate) dind_memory_bytes: u64,
 }
 
@@ -36,7 +36,7 @@ pub(crate) struct DockerResourceLimits {
     pub(crate) memory_bytes: i64,
 }
 
-/// Check that an inspected Docker HostConfig carries finite supported limits.
+/// Check that an inspected Docker `HostConfig` carries finite supported limits.
 #[must_use]
 pub(crate) fn bounded_host_limits(
     nano_cpus: Option<i64>,
@@ -53,9 +53,9 @@ pub(crate) fn bounded_host_limits(
 /// Limits for one complete job pair, after checked addition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PairResourceBudget {
-    /// Runner and private DinD total, in millicores.
+    /// Runner and private `DinD` total, in millicores.
     pub(crate) cpu_millicores: u64,
-    /// Runner and private DinD total, in bytes.
+    /// Runner and private `DinD` total, in bytes.
     pub(crate) memory_bytes: u64,
 }
 
@@ -98,13 +98,13 @@ impl ResourceBudget {
         self.runner
     }
 
-    /// Private DinD container limits.
+    /// Private `DinD` container limits.
     #[must_use]
     pub(crate) const fn dind(self) -> DockerResourceLimits {
         self.dind
     }
 
-    /// Aggregate runner plus private DinD limits for one job.
+    /// Aggregate runner plus private `DinD` limits for one job.
     #[must_use]
     pub(crate) const fn pair(self) -> PairResourceBudget {
         self.pair

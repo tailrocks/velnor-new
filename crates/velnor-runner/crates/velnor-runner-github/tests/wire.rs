@@ -181,7 +181,7 @@ fn outer_message_id_is_authoritative_over_inner_fields() -> Result<(), &'static 
 }
 
 #[test]
-fn malformed_bounded_inner_body_keeps_outer_id_and_exact_body() -> Result<(), &'static str> {
+fn malformed_bounded_inner_body_keeps_outer_id_and_exact_body() {
     let raw = r#"{"messageId":18,"messageType":"RunnerScaleSetJobMessages","body":"[{bad json]"}"#;
     assert_eq!(
         parse_poll(200, raw),
@@ -200,7 +200,6 @@ fn malformed_bounded_inner_body_keeps_outer_id_and_exact_body() -> Result<(), &'
         "x".repeat(velnor_runner_github::MAX_POLL_BODY_BYTES + 1)
     );
     assert_eq!(parse_poll(200, &oversized), Err(WireError::Malformed));
-    Ok(())
 }
 
 fn poll_with_message_count(count: usize) -> String {

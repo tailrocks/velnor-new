@@ -154,9 +154,10 @@ impl EngineLineageGuard {
                 }
                 current
             }
-            None => match read_anchor(&self.inner.anchor_path)? {
-                Some(anchor) => anchor,
-                None => {
+            None => {
+                if let Some(anchor) = read_anchor(&self.inner.anchor_path)? {
+                    anchor
+                } else {
                     if partial_write {
                         return Err(HostError::Journal);
                     }
@@ -164,7 +165,7 @@ impl EngineLineageGuard {
                     *state = Some(desired);
                     return Ok(());
                 }
-            },
+            }
         };
         check_lineage(&existing, &desired)?;
         let recovered = recover_revision(existing, desired)?;

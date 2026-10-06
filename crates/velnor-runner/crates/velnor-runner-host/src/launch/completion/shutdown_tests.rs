@@ -33,12 +33,12 @@ fn failed_reaper_start_retains_join_until_start_retry() -> Result<(), HostError>
             eprintln!("completion test worker lost phase=done");
         }
     });
-    let (reaped_tx, reaped) = mpsc::channel();
+    let (join_tx, join_rx) = mpsc::channel();
     reaper.enqueue(ReapTask {
         thread,
         finished: None,
         joined: None,
-        reaped: Some(reaped_tx),
+        reaped: Some(join_tx),
     });
 
     assert!(matches!(
@@ -52,7 +52,7 @@ fn failed_reaper_start_retains_join_until_start_retry() -> Result<(), HostError>
         .recv_timeout(Duration::from_secs(1))
         .map_err(|_| HostError::Journal)?;
     reaper.ensure_started()?;
-    reaped
+    join_rx
         .recv_timeout(Duration::from_secs(1))
         .map_err(|_| HostError::Journal)?;
     assert_eq!(reaper.pending_count(), 0);
@@ -62,7 +62,7 @@ fn failed_reaper_start_retains_join_until_start_retry() -> Result<(), HostError>
 #[tokio::test]
 async fn stop_after_claim_schedules_durable_retry_without_starting_http() -> Result<(), HostError> {
     let scratch = Scratch::new("stop-before-effect")?;
-    let mut harness = Harness::new(&scratch.file()).await?;
+    let mut harness = Harness::new(scratch.file()).await?;
     let id = completed_launch(&harness.journal, TEST_REQUEST_ID).await?;
     let mut due = harness
         .journal
@@ -70,12 +70,11 @@ async fn stop_after_claim_schedules_durable_retry_without_starting_http() -> Res
         .await?;
     let mut launch = due.pop().ok_or(HostError::Journal)?;
     launch.intent.worker_volume = Some("wcompletion".to_owned());
-    let second = Journal::open(&scratch.file()).await?;
+    let second = Journal::open(scratch.file()).await?;
     let stopping = AtomicBool::new(true);
     let mut context = harness.context();
 
     assert_eq!(reconcile_one(&mut context, launch, &stopping).await, None);
-    drop(context);
 
     assert!(
         second
@@ -141,8 +140,8 @@ struct InFlightWorker {
 impl InFlightWorker {
     async fn start() -> Result<Self, HostError> {
         let scratch = Scratch::new("drop-in-flight")?;
-        let journal = Journal::open(&scratch.file()).await?;
-        let worker_journal = Journal::open(&scratch.file()).await?;
+        let journal = Journal::open(scratch.file()).await?;
+        let worker_journal = Journal::open(scratch.file()).await?;
         let id = completed_launch(&journal, TEST_REQUEST_ID).await?;
         let claim = worker_journal
             .claim_completion_cleanup(id, CLAIM_LEASE_SECONDS)
@@ -273,7 +272,7 @@ async fn run_in_flight_effects(task: InFlightEffects<'_>) -> Result<bool, HostEr
         claim,
         "bounded HTTP request",
         || async move {
-            started.send(()).map_err(|_| HostError::Journal)?;
+            started.send(()).map_err(|()| HostError::Journal)?;
             tokio::time::sleep(IN_FLIGHT_EFFECT).await;
             Ok(())
         },

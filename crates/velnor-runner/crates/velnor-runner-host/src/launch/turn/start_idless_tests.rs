@@ -3,7 +3,7 @@
 use velnor_runner_github::Poll;
 
 use super::start_tests::{ready, rest, zero_assignment_session};
-use super::start_turn;
+use super::{StartTurn, start_turn};
 use crate::IntentState;
 use crate::journal::Outcome;
 use crate::launch::inspect_tests::DockerStub;
@@ -35,12 +35,14 @@ async fn idless_uncertain_reservation_blocks_turn_without_jit_or_ack() -> Result
     let result = start_turn(
         &mut script,
         &mut workers,
-        ready(&session, &polled),
-        &journal,
-        &docker.docker,
-        1,
-        rest(),
-        false,
+        StartTurn {
+            ready: ready(&session, &polled),
+            journal: &journal,
+            docker: &docker.docker,
+            capacity: 1,
+            rest: rest(),
+            stop: false,
+        },
     )
     .await;
     docker.finish().await?;

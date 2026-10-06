@@ -48,8 +48,7 @@ fn bind_mounts(spec: &CreateProjection) -> Result<Vec<DockerMount>, HostError> {
         .iter()
         .filter(|entry| entry.starts_with("ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE="))
         .count();
-    if spec.bind_mounts.len() > 1 || archive_envs != if spec.bind_mounts.is_empty() { 0 } else { 1 }
-    {
+    if spec.bind_mounts.len() > 1 || archive_envs != usize::from(!spec.bind_mounts.is_empty()) {
         return Err(HostError::ForbiddenMount);
     }
     for mount in &spec.bind_mounts {

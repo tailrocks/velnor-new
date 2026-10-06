@@ -113,18 +113,17 @@ pub(super) async fn record_completed(
             .await
             .map_err(map_completion_journal)?;
         return Ok(());
-    } else {
-        let entry = crate::journal::CompletionInboxEntry {
-            scale_set_id: set_id,
-            message_id: batch.message_id,
-            raw_body: batch.raw_body.clone(),
-            attempts: 0,
-        };
-        journal
-            .resolve_completion_inbox(&entry)
-            .await
-            .map_err(map_completion_journal)?;
     }
+    let entry = crate::journal::CompletionInboxEntry {
+        scale_set_id: set_id,
+        message_id: batch.message_id,
+        raw_body: batch.raw_body.clone(),
+        attempts: 0,
+    };
+    journal
+        .resolve_completion_inbox(&entry)
+        .await
+        .map_err(map_completion_journal)?;
     Ok(())
 }
 

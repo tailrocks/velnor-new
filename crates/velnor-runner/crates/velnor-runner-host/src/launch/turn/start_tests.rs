@@ -4,7 +4,7 @@ use velnor_runner_github::{
     Exchange, Poll, QueueSession, SessionRequest, Transport, TransportFail, create_session,
 };
 
-use super::{Ready, start_turn};
+use super::{Ready, StartTurn, start_turn};
 use crate::journal::Outcome;
 use crate::launch::inspect_tests::{DockerStub, http};
 use crate::launch_harness::{Mode, Script, absent, assigned_wait, open};
@@ -71,12 +71,14 @@ async fn zero_initial_census_and_positive_poll_keep_jit_conflict_unacked() -> Re
     let result = start_turn(
         &mut script,
         &mut workers,
-        ready(&session, &polled),
-        &journal,
-        &docker.docker,
-        2,
-        rest(),
-        false,
+        StartTurn {
+            ready: ready(&session, &polled),
+            journal: &journal,
+            docker: &docker.docker,
+            capacity: 2,
+            rest: rest(),
+            stop: false,
+        },
     )
     .await;
     drop(docker);
@@ -122,12 +124,14 @@ async fn missing_status_keeps_the_slot_and_blocks_assignment() -> Result<(), Str
     let result = start_turn(
         &mut script,
         &mut workers,
-        ready(&session, &polled),
-        &journal,
-        &docker.docker,
-        2,
-        rest(),
-        false,
+        StartTurn {
+            ready: ready(&session, &polled),
+            journal: &journal,
+            docker: &docker.docker,
+            capacity: 2,
+            rest: rest(),
+            stop: false,
+        },
     )
     .await;
     let requests = docker.finish().await?;
@@ -201,12 +205,14 @@ async fn uncertain_volume_keeps_cleanup_unproven_and_redelivery_unacked() -> Res
     let redelivered = start_turn(
         &mut script,
         &mut workers,
-        ready(&session, &polled),
-        &journal,
-        &docker.docker,
-        1,
-        rest(),
-        false,
+        StartTurn {
+            ready: ready(&session, &polled),
+            journal: &journal,
+            docker: &docker.docker,
+            capacity: 1,
+            rest: rest(),
+            stop: false,
+        },
     )
     .await;
     docker.finish().await?;
@@ -285,12 +291,14 @@ async fn bound_running_worker_acks_without_a_second_jit_request() -> Result<(), 
     let result = start_turn(
         &mut script,
         &mut workers,
-        ready(&session, &polled),
-        &journal,
-        &docker.docker,
-        2,
-        rest(),
-        false,
+        StartTurn {
+            ready: ready(&session, &polled),
+            journal: &journal,
+            docker: &docker.docker,
+            capacity: 2,
+            rest: rest(),
+            stop: false,
+        },
     )
     .await;
     docker.finish().await?;
@@ -350,12 +358,14 @@ async fn bound_resource_keeps_assignment(
     let result = start_turn(
         &mut script,
         &mut workers,
-        ready(&session, &polled),
-        &journal,
-        &docker.docker,
-        2,
-        rest(),
-        false,
+        StartTurn {
+            ready: ready(&session, &polled),
+            journal: &journal,
+            docker: &docker.docker,
+            capacity: 2,
+            rest: rest(),
+            stop: false,
+        },
     )
     .await;
     drop(docker);

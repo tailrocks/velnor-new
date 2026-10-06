@@ -152,10 +152,10 @@ const fn error_reason(error: HostError) -> &'static str {
 }
 
 pub(super) fn run(
-    runtime: tokio::runtime::Runtime,
+    runtime: &tokio::runtime::Runtime,
     resources: Resources,
-    stopping: Arc<AtomicBool>,
-    receiver: Receiver<()>,
+    stopping: &Arc<AtomicBool>,
+    receiver: &Receiver<()>,
 ) -> Result<(), HostError> {
     let Resources {
         journal,
@@ -174,7 +174,7 @@ pub(super) fn run(
         if stopping.load(Ordering::Acquire) {
             return first_failure.map_or(Ok(()), Err);
         }
-        match runtime.block_on(reconcile_due_burst(&mut context, &stopping)) {
+        match runtime.block_on(reconcile_due_burst(&mut context, stopping)) {
             Ok((_, failure)) => remember_failure(&mut first_failure, failure),
             Err(failure) => {
                 failure.report();
@@ -194,10 +194,10 @@ pub(super) fn run(
 }
 
 fn remember_failure(first: &mut Option<HostError>, failure: Option<Failure>) {
-    if first.is_none() {
-        if let Some(failure) = failure {
-            *first = Some(failure.error);
-        }
+    if first.is_none()
+        && let Some(failure) = failure
+    {
+        *first = Some(failure.error);
     }
 }
 
@@ -227,10 +227,10 @@ async fn reconcile_due_burst(
             if stopping.load(Ordering::Acquire) {
                 return Ok((processed, first_failure));
             }
-            if let Some(failure) = reconcile_one(context, launch, stopping).await {
-                if first_failure.is_none() {
-                    first_failure = Some(failure);
-                }
+            if let Some(failure) = reconcile_one(context, launch, stopping).await
+                && first_failure.is_none()
+            {
+                first_failure = Some(failure);
             }
             processed += 1;
         }

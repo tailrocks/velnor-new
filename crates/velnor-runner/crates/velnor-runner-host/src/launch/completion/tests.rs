@@ -30,8 +30,8 @@ const ORIGINAL_LEASE_CROSSING: Duration = Duration::from_millis(2_100);
 #[tokio::test]
 async fn slow_request_keeps_its_lease_after_the_original_claim_expires() -> Result<(), HostError> {
     let scratch = Scratch::new("effect-fence")?;
-    let first = Journal::open(&scratch.file()).await?;
-    let second = Journal::open(&scratch.file()).await?;
+    let first = Journal::open(scratch.file()).await?;
+    let second = Journal::open(scratch.file()).await?;
     let id = completed_launch(&first, TEST_REQUEST_ID).await?;
     let claim = first
         .claim_completion_cleanup(id, 2)
@@ -51,7 +51,7 @@ async fn slow_request_keeps_its_lease_after_the_original_claim_expires() -> Resu
             claim,
             "slow Docker request",
             || async move {
-                started_tx.send(()).map_err(|_| HostError::Journal)?;
+                started_tx.send(()).map_err(|()| HostError::Journal)?;
                 tokio::time::sleep(SLOW_REQUEST_DURATION).await;
                 Err(HostError::Docker)
             },
@@ -105,8 +105,7 @@ fn effect_window_and_budget_cover_the_complete_cleanup_chain() {
     );
     assert!(
         u64::try_from(EFFECT_WINDOW_SECONDS)
-            .ok()
-            .is_some_and(|window| window >= docker_seconds + EFFECT_MARGIN_SECONDS)
+            .is_ok_and(|window| window >= docker_seconds + EFFECT_MARGIN_SECONDS)
     );
     assert_eq!(MAX_CLEANUP_EFFECTS, 24);
     assert_eq!(MAX_EXTERNAL_CHAIN_SECONDS, 390);
@@ -139,7 +138,7 @@ fn effect_window_and_budget_cover_the_complete_cleanup_chain() {
 async fn burst_processes_later_rows_before_waiting_for_the_scan_interval() -> Result<(), HostError>
 {
     let scratch = Scratch::new("bounded-burst")?;
-    let mut harness = Harness::new(&scratch.file()).await?;
+    let mut harness = Harness::new(scratch.file()).await?;
     let mut expected_remaining = 0;
     let burst_limit = usize::try_from(SCAN_LIMIT).map_err(|_| HostError::Journal)? * MAX_SCAN_WAVES;
     for request_id in 1..=i64::try_from(burst_limit + 1).map_err(|_| HostError::Journal)? {
@@ -150,7 +149,6 @@ async fn burst_processes_later_rows_before_waiting_for_the_scan_interval() -> Re
     let (processed, failure) = reconcile_due_burst(&mut context, &stopping)
         .await
         .map_err(|failure| failure.error)?;
-    drop(context);
     assert_eq!(processed, burst_limit);
     assert_eq!(failure, Some(Failure::not_proven("completion identity")));
     let due = harness
@@ -165,7 +163,7 @@ async fn burst_processes_later_rows_before_waiting_for_the_scan_interval() -> Re
 #[tokio::test]
 async fn shutdown_request_leaves_due_rows_unclaimed() -> Result<(), HostError> {
     let scratch = Scratch::new("burst-stop")?;
-    let mut harness = Harness::new(&scratch.file()).await?;
+    let mut harness = Harness::new(scratch.file()).await?;
     let first_id = completed_launch(&harness.journal, 1).await?;
     let second_id = completed_launch(&harness.journal, 2).await?;
     let mut context = harness.context();
@@ -173,7 +171,6 @@ async fn shutdown_request_leaves_due_rows_unclaimed() -> Result<(), HostError> {
     let (processed, failure) = reconcile_due_burst(&mut context, &stopping)
         .await
         .map_err(|failure| failure.error)?;
-    drop(context);
 
     assert_eq!(processed, 0);
     assert_eq!(failure, None);
@@ -190,7 +187,7 @@ async fn shutdown_request_leaves_due_rows_unclaimed() -> Result<(), HostError> {
 #[tokio::test]
 async fn request_failure_signal_survives_a_successful_retry_schedule() -> Result<(), HostError> {
     let scratch = Scratch::new("request-failure")?;
-    let journal = Journal::open(&scratch.file()).await?;
+    let journal = Journal::open(scratch.file()).await?;
     let id = completed_launch(&journal, TEST_REQUEST_ID).await?;
     let claim = journal
         .claim_completion_cleanup(id, CLAIM_LEASE_SECONDS)

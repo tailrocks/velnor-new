@@ -38,7 +38,7 @@ pub struct HostLimits {
     /// Total permits. Defaults to 1.
     #[serde(default = "default_max_jobs")]
     pub max_jobs: u32,
-    /// Required per-job runner and private DinD CPU and memory budgets.
+    /// Required per-job runner and private `DinD` CPU and memory budgets.
     pub(crate) resources: ResourceBudgetConfig,
 }
 

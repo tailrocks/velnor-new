@@ -39,10 +39,10 @@ pub enum Command {
         /// Runner memory limit in bytes.
         #[arg(long)]
         runner_memory_bytes: u64,
-        /// Private DinD CPU allocation in millicores.
+        /// Private `DinD` CPU allocation in millicores.
         #[arg(long)]
         dind_cpu_millicores: u64,
-        /// Private DinD memory limit in bytes.
+        /// Private `DinD` memory limit in bytes.
         #[arg(long)]
         dind_memory_bytes: u64,
         /// Docker context name.

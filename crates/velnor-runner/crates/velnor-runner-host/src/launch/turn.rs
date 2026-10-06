@@ -49,7 +49,7 @@ pub(super) async fn poll_and_drive(
     let completion = CompletionWorker::start(
         journal.clone(),
         docker.clone(),
-        link.base().to_owned(),
+        link.base(),
         admin_token.to_owned(),
     )
     .map_err(|_| completion_error())?;
@@ -383,19 +383,32 @@ impl Turn<'_> {
 /// A conflict remains an error here; production handling for cleared and
 /// colliding names lives in [`Turn::start`]. Only a bound worker covers it.
 #[cfg(test)]
+struct StartTurn<'a> {
+    ready: Ready<'a>,
+    journal: &'a Journal,
+    docker: &'a bollard::Docker,
+    capacity: u32,
+    rest: Rest<'a>,
+    stop: bool,
+}
+
+#[cfg(test)]
 async fn start_turn<T>(
     lane: &mut T,
     workers: &mut Vec<Started>,
-    ready: Ready<'_>,
-    journal: &Journal,
-    docker: &bollard::Docker,
-    capacity: u32,
-    rest: Rest<'_>,
-    stop: bool,
+    turn: StartTurn<'_>,
 ) -> Result<bool, EnsureError>
 where
     T: velnor_runner_github::Transport + super::Lane,
 {
+    let StartTurn {
+        ready,
+        journal,
+        docker,
+        capacity,
+        rest,
+        stop,
+    } = turn;
     let Some(worker) = drive_ready(lane, ready, journal, docker, capacity, rest).await? else {
         return Ok(false);
     };
