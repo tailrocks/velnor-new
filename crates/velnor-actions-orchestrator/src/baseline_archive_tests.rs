@@ -143,6 +143,9 @@ fn service_size_digest_and_single_manifest_are_bound() {
     let mut wrong_id = metadata(0, &archive);
     wrong_id.id = 0;
     assert!(extract_baseline(&wrong_id, &archive).is_err());
+
+    let oversized = vec![0; MAX_BASELINE_ARCHIVE_BYTES + 1];
+    assert!(extract_baseline(&metadata(99, &oversized), &oversized).is_err());
 }
 
 #[test]
@@ -372,4 +375,27 @@ fn only_one_exact_regular_manifest_entry_is_accepted() {
     writer.write_all(b"x").expect("write extra");
     let archive = writer.finish().expect("finish archive").into_inner();
     assert!(extract_baseline(&metadata(99, &archive), &archive).is_err());
+
+    let mut symlink = test_archive("baseline.json", payload);
+    let central = central_offset(&symlink);
+    set_u16(&mut symlink, central + 4, (3 << 8) | 0x14);
+    set_u32(&mut symlink, central + 38, 0o120_777 << 16);
+    assert!(extract_baseline(&metadata(99, &symlink), &symlink).is_err());
+}
+
+#[test]
+fn staged_manifest_is_exclusive_and_keeps_admitted_bytes() {
+    let root = tempfile::tempdir().expect("staging root");
+    let payload = br#"{"schema":2}"#;
+    let archive = test_archive("baseline.json", payload);
+    let metadata = metadata(99, &archive);
+    let artifact_name = format!("velnor-baseline-{}-b3-{}", "a".repeat(40), "b".repeat(64));
+    let path = stage_baseline_archive(root.path(), &artifact_name, &metadata, &archive)
+        .expect("stage admitted archive");
+    assert_eq!(std::fs::read(&path).expect("read staged bytes"), payload);
+    assert!(stage_baseline_archive(root.path(), &artifact_name, &metadata, &archive).is_err());
+    assert_eq!(
+        std::fs::read(&path).expect("preserved staged bytes"),
+        payload
+    );
 }
