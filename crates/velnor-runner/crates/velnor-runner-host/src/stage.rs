@@ -104,7 +104,8 @@ impl PairEngine for Docker {
             volume,
             &dind_create(volume)?.mounts,
         )))
-        .await?
+        .await??;
+        crate::work_owner::own_work_volume(self, &format!("{volume}-work")).await
     }
 
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError> {

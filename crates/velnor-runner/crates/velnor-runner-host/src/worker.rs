@@ -150,8 +150,8 @@ fn dind_container_id(id: &str) -> bool {
 ///
 /// Mounts are the runner plan's socket volume at `/run`, the work volume at
 /// the Actions runner's `/home/runner/_work`, and a DinD-only volume at `/var/lib/docker`. The data
-/// volume is not on the runner. vfs on the container layer slows later
-/// Testcontainers starts.
+/// volume is not on the runner. The action archive volume is not mounted
+/// here. vfs on the container layer slows later Testcontainers starts.
 ///
 /// # Errors
 ///
@@ -280,13 +280,15 @@ fn docker_mount(mount: &Mount) -> Result<DockerMount, HostError> {
         target: Some(mount.target.clone()),
         source: Some(source),
         typ: Some(typ),
-        read_only: seed_read_only(&mount.source),
+        read_only: shared_read_only(&mount.source),
         ..Default::default()
     })
 }
 
-fn seed_read_only(source: &str) -> Option<bool> {
-    (source == crate::docker_spec::SEED_VOLUME).then_some(true)
+fn shared_read_only(source: &str) -> Option<bool> {
+    (source == crate::docker_spec::SEED_VOLUME
+        || source == crate::docker_spec::ACTION_ARCHIVE_VOLUME)
+        .then_some(true)
 }
 
 fn mount_source(source: &str) -> Result<(MountType, String), HostError> {
