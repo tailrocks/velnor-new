@@ -49,8 +49,33 @@ fn repo_sample_text() -> Result<String, Box<dyn std::error::Error>> {
     Ok(fs::read_to_string(path)?)
 }
 
+/// Live task source paired with the repository configuration sample.
+fn repo_mise_text() -> Result<String, Box<dyn std::error::Error>> {
+    let path = format!("{}/../../mise.toml", env!("CARGO_MANIFEST_DIR"));
+    Ok(fs::read_to_string(path)?)
+}
+
+/// Restrict the live check to its task source inside the minimal plan fixture.
+fn fixture_config_sample(sample: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let table: toml::Table = toml::from_str(sample)?;
+    let mut table = table;
+    let checks = table
+        .get_mut("checks")
+        .and_then(toml::Value::as_array_mut)
+        .ok_or("live sample has no checks array")?;
+    let check = checks
+        .first_mut()
+        .and_then(toml::Value::as_table_mut)
+        .ok_or("live sample has no named check")?;
+    check.insert(
+        "inputs".into(),
+        toml::Value::Array(vec![toml::Value::String("mise.toml".into())]),
+    );
+    Ok(toml::to_string(&table)?)
+}
+
 /// Git fixture carrying the live sample plus the Velnor identity.
-fn make_sample_repo(sample: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
+fn make_sample_repo(sample: &str, mise: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
     let root = dir.path();
     git(&["init", "-b", "testmain"], root)?;
@@ -68,6 +93,7 @@ fn make_sample_repo(sample: &str) -> Result<TempDir, Box<dyn std::error::Error>>
     )?;
     fs::create_dir_all(root.join(".velnor"))?;
     fs::write(root.join(".velnor/config.toml"), sample)?;
+    fs::write(root.join("mise.toml"), mise)?;
     fs::write(
         root.join(".velnor/release-manifest.json"),
         fixture_manifest_json(),
@@ -98,8 +124,9 @@ fn make_sample_repo(sample: &str) -> Result<TempDir, Box<dyn std::error::Error>>
 #[test]
 fn repo_config_sample_parses_through_prepare() -> TestResult {
     without_ambient_identity("repo_config_sample_parses_through_prepare", || {
-        let sample = repo_sample_text()?;
-        let repo = make_sample_repo(&sample)?;
+        let sample = fixture_config_sample(&repo_sample_text()?)?;
+        let mise = repo_mise_text()?;
+        let repo = make_sample_repo(&sample, &mise)?;
         let prep = prepare(repo.path())?;
         assert_eq!(prep.config.schema, 2);
         let execution = prep
@@ -135,6 +162,8 @@ fn repo_config_sample_covers_schema_keys() -> TestResult {
                 "discovery",
                 "actions",
                 "execution",
+                "checks",
+                "qualified_tools",
             ]
             .contains(&key.as_str()),
             "sample key outside schema: {key}"

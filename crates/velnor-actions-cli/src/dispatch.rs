@@ -16,11 +16,10 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use velnor_actions_orchestrator::{
-    DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, GenerateOptions, MERGE_OP,
-    OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP,
-    PlanOutputMode, REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, execute_check,
-    generate_dispatched, init_config, merge_internal, merge_passed, parse_dispatch_mode,
-    plan_internal, plan_outputs, plan_text_checked, prepare, publish_final_report,
+    DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, MERGE_OP, OrchestratorError,
+    PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PlanOutputMode,
+    REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, execute_check, init_config, merge_internal,
+    merge_passed, plan_internal, plan_outputs, plan_text_checked, prepare, publish_final_report,
     publish_plan_files, resolve_root, response_path_for, retrieve_reports, write_preseed_manifest,
     write_request, write_task_report,
 };
@@ -46,6 +45,7 @@ const GITHUB_EVENT_PATH_ENV: &str = "GITHUB_EVENT_PATH";
 enum InternalOp {
     /// Materialize the request file from the GitHub environment.
     WriteRequest,
+    /// Execute one named hosted platform check.
     ExecuteCheck,
     /// Plan operation.
     Plan,
@@ -59,6 +59,8 @@ enum InternalOp {
     PreseedManifest,
     /// Baseline-publish operation.
     Publish,
+    /// Repository-maintenance operation behind its separate private gate.
+    RepoPolicy,
 }
 
 /// Validated private request: operation plus exact request-file path.
@@ -83,7 +85,7 @@ pub(crate) fn run_public() -> ExitCode {
         Command::Plan => run_plan(),
         Command::Generate {
             output_dir, mode, ..
-        } => run_generate(output_dir, mode),
+        } => crate::dispatch_generate::run_generate(output_dir, mode),
         Command::Config { command } => crate::dispatch_config::run_config(&command),
     }
 }
@@ -113,6 +115,7 @@ fn gate_request() -> Option<InternalRequest> {
         Ok(tag) if tag == REPORT_OP => InternalOp::Report,
         Ok(tag) if tag == PRESEED_MANIFEST_OP => InternalOp::PreseedManifest,
         Ok(tag) if tag == PUBLISH_OP => InternalOp::Publish,
+        Ok("repo-policy-v1") => InternalOp::RepoPolicy,
         _ => return None,
     };
     if op == InternalOp::Fetch || op == InternalOp::Report || op == InternalOp::ExecuteCheck {
@@ -123,6 +126,10 @@ fn gate_request() -> Option<InternalRequest> {
     }
     if op == InternalOp::PreseedManifest {
         return runner_velnor_dir().map(|path| InternalRequest { op, path });
+    }
+    if op == InternalOp::RepoPolicy {
+        let root = crate::dispatch_repo_policy::gate_root()?;
+        return Some(InternalRequest { op, path: root });
     }
     let path = env::var_os(REQUEST_FILE_ENV)
         .filter(|value| !value.is_empty())
@@ -147,6 +154,7 @@ fn gate_request() -> Option<InternalRequest> {
         InternalOp::Fetch
         | InternalOp::Report
         | InternalOp::PreseedManifest
+        | InternalOp::RepoPolicy
         | InternalOp::ExecuteCheck => {}
     }
     Some(InternalRequest { op, path })
@@ -189,6 +197,7 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             Err(error) => fail_internal(&error.to_string()),
         },
         InternalOp::Publish => run_publish_internal(&request.path),
+        InternalOp::RepoPolicy => crate::dispatch_repo_policy::run(&request.path),
     }
 }
 
@@ -323,55 +332,6 @@ fn run_plan() -> ExitCode {
         println!();
     }
     ExitCode::SUCCESS
-}
-
-/// Dispatch `generate`: files written and recommendations go to stderr.
-fn run_generate(output_dir: Option<PathBuf>, mode: Option<String>) -> ExitCode {
-    let Some(cwd) = working_dir() else {
-        return ExitCode::from(1);
-    };
-    let options = GenerateOptions { output_dir };
-    let root = match resolve_root(&cwd) {
-        Ok(root) => root,
-        Err(error) => return fail_public(&error),
-    };
-    let preparation = match prepare(&root) {
-        Ok(preparation) => preparation,
-        Err(error) => return fail_public(&error),
-    };
-    let dispatch = match mode {
-        Some(text) => match parse_dispatch_mode(&text) {
-            Ok(mode) => Some(mode),
-            Err(error) => return fail_public(&error),
-        },
-        None => None,
-    };
-    match generate_dispatched(&preparation, &options, dispatch) {
-        Ok(report) => {
-            if let Some(dir) = &options.output_dir {
-                eprintln!("Preview: {}", absolute_preview(&cwd, dir).display());
-                eprintln!("Repository: {}", root.display());
-            }
-            for path in &report.files_written {
-                eprintln!("{path}");
-            }
-            for recommendation in &report.recommendations {
-                eprintln!("{recommendation}");
-            }
-            ExitCode::SUCCESS
-        }
-        Err(error) => fail_public(&error),
-    }
-}
-
-/// Absolute preview path for the stderr report; canonical when possible.
-fn absolute_preview(cwd: &Path, dir: &Path) -> PathBuf {
-    let joined = if dir.is_absolute() {
-        dir.to_path_buf()
-    } else {
-        cwd.join(dir)
-    };
-    joined.canonicalize().unwrap_or(joined)
 }
 
 /// Read the working directory, reporting failures as exit 1.
