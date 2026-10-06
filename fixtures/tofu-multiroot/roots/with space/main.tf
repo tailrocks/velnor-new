@@ -1,0 +1,3 @@
+variable "s" {
+  default = "space"
+}
