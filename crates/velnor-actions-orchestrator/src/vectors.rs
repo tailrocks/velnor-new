@@ -9,6 +9,7 @@ use velnor_actions_mise::{
 };
 use velnor_actions_rust::tool_needs;
 use velnor_actions_workflow_renderer::render::CandidateSpec;
+use velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv;
 
 use crate::{OrchestratorError, qualify::QualifyRequest};
 
@@ -260,8 +261,13 @@ const ZIZMOR_POLICY_INPUT: &str = ".github/workflows";
 const ZIZMOR_POLICY_CONFIG: &str = ".zizmor.yml";
 
 /// Fixed validator-job vector: offline zizmor audit through pinned Mise.
+///
+/// The argv carries the credential-unset prefix: an empty-string
+/// `GH_TOKEN` (workflow-level scrub overlay) makes zizmor abort
+/// with `GitHub token cannot be empty`, while a truly-absent
+/// variable falls back to clean unauthenticated operation.
 pub(crate) fn zizmor_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
-    exec_argv(
+    let argv = exec_argv(
         vec![PinnedTool::Zizmor],
         "zizmor",
         &[
@@ -271,7 +277,8 @@ pub(crate) fn zizmor_argv(catalog: &ToolCatalog) -> Result<Vec<String>, Orchestr
             ZIZMOR_POLICY_INPUT,
         ],
         catalog,
-    )
+    )?;
+    Ok(with_env_unset_argv(&argv))
 }
 
 /// Fixed validator-job vector: verified `cargo machete` release via Mise.

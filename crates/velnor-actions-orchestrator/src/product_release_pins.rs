@@ -5,6 +5,7 @@ use std::ffi::{OsStr, OsString};
 use velnor_actions_contract::{ReleaseTarget, VelnorConfig};
 use velnor_actions_mise::{MiseInstall, PinnedTool, PinnedToolExec, ToolCatalog};
 use velnor_actions_workflow_renderer::ProductReleasePins;
+use velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv;
 
 use crate::OrchestratorError;
 use crate::pins::resolve_mise_setup_for_release_target;
@@ -75,7 +76,9 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, Orche
             &["-color"],
             &catalog,
         )?,
-        zizmor_argv: exec_argv(
+        // Scrubbed like the validator vector: an empty-string GH_TOKEN
+        // makes zizmor abort, while an absent one is clean offline.
+        zizmor_argv: with_env_unset_argv(&exec_argv(
             &[PinnedTool::Zizmor],
             "zizmor",
             &[
@@ -85,7 +88,7 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, Orche
                 ".github/workflows",
             ],
             &catalog,
-        )?,
+        )?),
         gh_argv: exec_argv(&[PinnedTool::Gh], "gh", &[], &catalog)?,
         rust_version: catalog.version(PinnedTool::Rust).to_owned(),
         mr_boxington_version: catalog.version(PinnedTool::MrBoxington).to_owned(),
