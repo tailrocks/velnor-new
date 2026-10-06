@@ -29,7 +29,7 @@ pub use registration::{
     organization_registration_token_path, product_create_labels, registration_token, remove_runner,
     repository_registration_token_path,
 };
-pub use runner::RunnerReference;
+pub use runner::{JitResult, RunnerReference};
 pub use secret::EncodedJit;
 pub use session::{
     Ack, AckScope, Exchange, Method, QueueSession, SessionError, SessionRequest, Transport, ack,

@@ -102,5 +102,5 @@ where
     T: Transport + ?Sized,
 {
     let body = jit_request(name)?;
-    jit(lane, ctx.set_id, &ctx.admin_token, &body)
+    jit(lane, ctx.set_id, &ctx.admin_token, &body).map(|result| result.encoded_jit_config)
 }

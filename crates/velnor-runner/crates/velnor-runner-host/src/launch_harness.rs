@@ -82,7 +82,9 @@ impl Transport for Script {
                     body: br#"{"encodedJITConfig":""}"#.to_vec(),
                 });
             }
-            let body = format!(r#"{{"encodedJITConfig":"{CANARY}"}}"#);
+            let body = format!(
+                r#"{{"encodedJITConfig":"{CANARY}","runner":{{"id":31,"name":"runner-31","runnerScaleSetId":7}}}}"#
+            );
             return Ok(Exchange {
                 status: 200,
                 body: body.into_bytes(),

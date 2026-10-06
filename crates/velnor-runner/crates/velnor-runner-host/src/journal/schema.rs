@@ -6,15 +6,15 @@ use crate::error::HostError;
 
 const JOURNAL_VERSION: i64 = 1;
 const CURRENT_COLUMNS: [ColumnShape; 9] = [
-    ColumnShape::new("id", "INTEGER", false),
-    ColumnShape::new("kind", "TEXT", true),
-    ColumnShape::new("subject", "TEXT", true),
-    ColumnShape::new("state", "TEXT", true),
-    ColumnShape::new("docker_id", "TEXT", false),
-    ColumnShape::new("github_runner_id", "TEXT", false),
-    ColumnShape::new("cleanup_proven", "INTEGER", true),
-    ColumnShape::new("dind_id", "TEXT", false),
-    ColumnShape::new("worker_volume", "TEXT", false),
+    ColumnShape::new("id", "INTEGER", false, None),
+    ColumnShape::new("kind", "TEXT", true, None),
+    ColumnShape::new("subject", "TEXT", true, None),
+    ColumnShape::new("state", "TEXT", true, None),
+    ColumnShape::new("docker_id", "TEXT", false, None),
+    ColumnShape::new("github_runner_id", "TEXT", false, None),
+    ColumnShape::new("cleanup_proven", "INTEGER", true, Some("0")),
+    ColumnShape::new("dind_id", "TEXT", false, None),
+    ColumnShape::new("worker_volume", "TEXT", false, None),
 ];
 
 #[derive(Clone, Copy)]
@@ -22,14 +22,21 @@ struct ColumnShape {
     name: &'static str,
     declared_type: &'static str,
     not_null: bool,
+    default_value: Option<&'static str>,
 }
 
 impl ColumnShape {
-    const fn new(name: &'static str, declared_type: &'static str, not_null: bool) -> Self {
+    const fn new(
+        name: &'static str,
+        declared_type: &'static str,
+        not_null: bool,
+        default_value: Option<&'static str>,
+    ) -> Self {
         Self {
             name,
             declared_type,
             not_null,
+            default_value,
         }
     }
 }
@@ -37,6 +44,7 @@ impl ColumnShape {
 struct ColumnInfo {
     declared_type: String,
     not_null: bool,
+    default_value: Option<String>,
     primary_key_position: i64,
 }
 
@@ -122,6 +130,7 @@ async fn validate_current_schema(conn: &turso::Connection) -> Result<(), HostErr
             .trim()
             .eq_ignore_ascii_case(expected.declared_type)
             || actual.not_null != expected.not_null
+            || actual.default_value.as_deref() != expected.default_value
         {
             return Err(HostError::Journal);
         }
@@ -199,6 +208,9 @@ async fn read_columns(conn: &turso::Connection) -> Result<HashMap<String, Column
             ColumnInfo {
                 declared_type: row.get::<String>(2).map_err(|_| HostError::Journal)?,
                 not_null: row.get::<i64>(3).map_err(|_| HostError::Journal)? != 0,
+                default_value: row
+                    .get::<Option<String>>(4)
+                    .map_err(|_| HostError::Journal)?,
                 primary_key_position: row.get::<i64>(5).map_err(|_| HostError::Journal)?,
             },
         );

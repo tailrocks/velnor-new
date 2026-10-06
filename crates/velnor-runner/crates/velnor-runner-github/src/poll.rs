@@ -47,16 +47,16 @@ pub struct InnerJob {
     pub kind: InnerKind,
     /// `runnerRequestId` when present.
     pub request_id: Option<i64>,
+    /// `runnerId` on `JobStarted` and `JobCompleted` only.
+    pub runner_id: Option<i64>,
+    /// `runnerName` on `JobStarted` and `JobCompleted` only.
+    pub runner_name: Option<String>,
+    /// `result` on `JobCompleted` only.
+    pub result: Option<String>,
     /// Numeric `jobId` only. Other shapes are dropped.
     pub job_id: Option<String>,
     /// `requestLabels` names. Empty when the field is absent.
     pub labels: Vec<String>,
-    /// `runnerId` on `JobStarted` and `JobCompleted` when present.
-    pub runner_id: Option<i64>,
-    /// `runnerName` on `JobStarted` and `JobCompleted` when present.
-    pub runner_name: Option<String>,
-    /// `result` on `JobCompleted` when present.
-    pub result: Option<String>,
     /// Object keys. Names only, so a live trace can show the shape.
     pub fields: Vec<String>,
 }
@@ -144,15 +144,6 @@ fn parse_inner(value: &Value) -> Result<InnerJob, WireError> {
     let request_id = value.get("runnerRequestId").and_then(Value::as_i64);
     let job_id = numeric_job_id(value.get("jobId").and_then(Value::as_str));
     let labels = label_names(value.get("requestLabels"));
-    let runner_id = value.get("runnerId").and_then(Value::as_i64);
-    let runner_name = value
-        .get("runnerName")
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned);
-    let result = value
-        .get("result")
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned);
     let fields = object_fields(value);
     let kind = match kind_text {
         "JobAvailable" => InnerKind::Available,
@@ -161,16 +152,63 @@ fn parse_inner(value: &Value) -> Result<InnerJob, WireError> {
         "JobCompleted" => InnerKind::Completed,
         other => InnerKind::Unsupported(other.to_owned()),
     };
+    let runner_fields = message_runner_fields(value, &kind)?;
     Ok(InnerJob {
         kind,
         request_id,
+        runner_id: runner_fields.runner_id,
+        runner_name: runner_fields.runner_name,
+        result: runner_fields.result,
         job_id,
         labels,
-        runner_id,
-        runner_name,
-        result,
         fields,
     })
+}
+
+fn message_runner_fields(
+    value: &Value,
+    kind: &InnerKind,
+) -> Result<MessageRunnerFields, WireError> {
+    match kind {
+        InnerKind::Started => Ok(MessageRunnerFields {
+            runner_id: optional_i64(value, "runnerId")?,
+            runner_name: optional_string(value, "runnerName")?,
+            result: None,
+        }),
+        InnerKind::Completed => Ok(MessageRunnerFields {
+            runner_id: optional_i64(value, "runnerId")?,
+            runner_name: optional_string(value, "runnerName")?,
+            result: optional_string(value, "result")?,
+        }),
+        InnerKind::Available | InnerKind::Assigned | InnerKind::Unsupported(_) => {
+            Ok(MessageRunnerFields::default())
+        }
+    }
+}
+
+#[derive(Default)]
+struct MessageRunnerFields {
+    runner_id: Option<i64>,
+    runner_name: Option<String>,
+    result: Option<String>,
+}
+
+fn optional_i64(value: &Value, field: &str) -> Result<Option<i64>, WireError> {
+    match value.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(number) => number.as_i64().map(Some).ok_or(WireError::Malformed),
+    }
+}
+
+fn optional_string(value: &Value, field: &str) -> Result<Option<String>, WireError> {
+    match value.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(text) => text
+            .as_str()
+            .map(str::to_owned)
+            .map(Some)
+            .ok_or(WireError::Malformed),
+    }
 }
 
 fn numeric_job_id(value: Option<&str>) -> Option<String> {
