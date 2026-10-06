@@ -1,19 +1,19 @@
-//! Resolve the generator-release workflow's platform and command pins.
+//! Resolve the composed product-release workflow's platform and command pins.
 
 use std::ffi::{OsStr, OsString};
 
 use velnor_actions_contract::{ReleaseTarget, VelnorConfig};
 use velnor_actions_mise::{MiseInstall, PinnedTool, PinnedToolExec, ToolCatalog};
-use velnor_actions_workflow_renderer::GeneratorReleasePins;
+use velnor_actions_workflow_renderer::ProductReleasePins;
 
 use crate::OrchestratorError;
 use crate::pins::resolve_mise_setup_for_release_target;
 use crate::utf8::strings_of;
 
 /// Build every release command through the Mise adapter's typed requests.
-pub(crate) fn resolve(config: &VelnorConfig) -> Result<GeneratorReleasePins, OrchestratorError> {
+pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, OrchestratorError> {
     let catalog = ToolCatalog::pinned();
-    Ok(GeneratorReleasePins {
+    Ok(ProductReleasePins {
         linux_x86_64_setup: resolve_mise_setup_for_release_target(
             config,
             ReleaseTarget::LinuxX86_64,
@@ -39,6 +39,7 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<GeneratorReleasePins, Orc
             &[PinnedTool::Rust, PinnedTool::MrBoxington],
             &catalog,
         )?,
+        install_runner_build_tools_argv: install_argv(&[PinnedTool::Rust], &catalog)?,
         install_gh_argv: install_argv(&[PinnedTool::Gh], &catalog)?,
         build_argv: exec_argv(
             &[PinnedTool::Rust, PinnedTool::MrBoxington],
@@ -51,6 +52,20 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<GeneratorReleasePins, Orc
                 "velnor-actions-cli",
                 "--bin",
                 "velnor-actions",
+            ],
+            &catalog,
+        )?,
+        runner_build_argv: exec_argv(
+            &[PinnedTool::Rust],
+            "cargo",
+            &[
+                "build",
+                "--locked",
+                "--manifest-path",
+                "crates/velnor-runner/Cargo.toml",
+                "--release",
+                "-p",
+                "velnor-runner-cli",
             ],
             &catalog,
         )?,

@@ -6,7 +6,7 @@ use std::process::Command;
 
 #[test]
 fn publisher_observes_one_release_id_before_and_after_publication() {
-    let script = manifest::publish_script(&test_pins());
+    let script = manifest::publish_script(&test_pins()).expect("pinned publisher script");
     let create_tag = script
         .find("created_ref=")
         .expect("publisher creates the exact source tag");

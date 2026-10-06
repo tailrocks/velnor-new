@@ -6,22 +6,171 @@
 //! built. Dispatch has no inputs, so a caller cannot supply a shell fragment
 //! or a checksum.
 
+use crate::RenderError;
+use crate::commands::join_argv_for_run;
+use crate::runs_on::runs_on_yaml;
 use crate::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
 use crate::yaml::Yaml;
 
-use super::features::{CHECKOUT_USES, base, finish, publish_step, run_step};
-use super::release_eligibility;
+use super::features::{CHECKOUT_USES, base, finish, identified_publish_step, run_step};
+use super::{Schema2WorkflowRequest, generator_release, product_release_family};
+use velnor_actions_contract::ReleaseTarget;
 
-/// Same `jdx/mise-action` commit CI pins. Not a floating tag.
-const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
-/// Catalog version. The Linux cache checksum is not reused on macOS.
-const MISE_VERSION: &str = "2026.9.18";
+/// GitHub-hosted macOS label. The binary is native; it is not built on Ubuntu.
+const MACOS_RUNS_ON: &str = "macos-15";
 /// `actions/attest-build-provenance` tag `v4.2.2` (commit, not a floating tag).
 const ATTEST_USES: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
 const ASSET_DIR: &str = "assets";
+const CHECKSUMS: &str = "SHA256SUMS";
+const RUNNER_TAR: &str = "velnor-runner-linux-amd64.tar";
+const DIND_TAR: &str = "velnor-dind-linux-amd64.tar";
+const HOST_BIN: &str = "velnor-host";
 
-pub(super) fn build_job(
+const IMAGE_BUILD: &str = "\
+set -eu
+docker build --platform linux/amd64 -t velnor-runner:linux-amd64 images/runner/ubuntu-26.04
+docker build --platform linux/amd64 -t velnor-dind:linux-amd64 images/dind";
+
+const IMAGE_VERIFY: &str = "\
+set -eu
+runner=\"$(docker image inspect --format '{{.Architecture}}' velnor-runner:linux-amd64)\"
+dind=\"$(docker image inspect --format '{{.Architecture}}' velnor-dind:linux-amd64)\"
+test \"$runner\" = amd64
+test \"$dind\" = amd64";
+
+const IMAGE_SAVE: &str = "\
+set -eu
+docker save --output velnor-runner-linux-amd64.tar velnor-runner:linux-amd64
+docker save --output velnor-dind-linux-amd64.tar velnor-dind:linux-amd64
+test -s velnor-runner-linux-amd64.tar
+test -s velnor-dind-linux-amd64.tar";
+
+const IMAGE_SUM: &str = "\
+set -eu
+sha256sum velnor-runner-linux-amd64.tar velnor-dind-linux-amd64.tar > SHA256SUMS";
+
+const BINARY_VERIFY: &str = "\
+set -eu
+desc=\"$(file -b velnor-host)\"
+case \"$desc\" in
+  *Mach-O*arm64*) ;;
+  *) echo \"not an arm64 Mach-O: $desc\" >&2; exit 1 ;;
+esac";
+
+const BINARY_SUM: &str = "\
+set -eu
+shasum -a 256 velnor-host > SHA256SUMS";
+
+/// Image release: build both linux/amd64 images, attest, then upload assets.
+///
+/// # Errors
+///
+/// An illegal hosted label fails.
+pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
+    let hosted = runs_on_yaml(&request.hosted_label)?;
+    let files = [RUNNER_TAR, DIND_TAR, CHECKSUMS];
+    Ok(document(
+        "Image release",
+        vec![
+            build_job(
+                "build-images",
+                "Build runner images",
+                hosted.clone(),
+                60,
+                vec![
+                    run_step("Build images", IMAGE_BUILD),
+                    run_step("Verify image architecture", IMAGE_VERIFY),
+                    run_step("Save image tars", IMAGE_SAVE),
+                    run_step("Checksum built bytes", IMAGE_SUM),
+                ],
+                "Upload image assets",
+                &files,
+            ),
+            attest_job(
+                "attest-images",
+                "Attest runner images",
+                hosted.clone(),
+                "build-images",
+                "image-assets",
+                &files,
+            ),
+            publish_job(
+                hosted,
+                &Publish {
+                    id: "publish-images",
+                    name: "Publish runner images",
+                    needs: "attest-images",
+                    artifact: "image-assets",
+                    prefix: "runner",
+                    notes: "Runner image assets built from ${GITHUB_SHA}.",
+                    files: &files,
+                },
+            ),
+        ],
+    ))
+}
+
+/// macOS binary release. Every job uses `macos-15`, never the Ubuntu label.
+///
+/// # Errors
+///
+/// An illegal macOS label fails.
+pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
+    let pins = request
+        .product_release
+        .as_ref()
+        .ok_or_else(|| RenderError::InvalidWorkflow("product_release_pins_missing".to_owned()))?;
+    let install = join_argv_for_run(&pins.install_runner_build_tools_argv)?;
+    let build = format!(
+        "set -eu\n{}\ncp crates/velnor-runner/target/release/velnor-host velnor-host\ntest -s velnor-host",
+        join_argv_for_run(&pins.runner_build_argv)?
+    );
+    let macos = runs_on_yaml(MACOS_RUNS_ON)?;
+    let files = [HOST_BIN, CHECKSUMS];
+    Ok(document(
+        "macOS binary release",
+        vec![
+            build_job(
+                "build-binary",
+                "Build velnor-host",
+                macos.clone(),
+                120,
+                vec![
+                    generator_release::mise_setup_step(pins, ReleaseTarget::MacosArm64)?,
+                    run_step("Install pinned Rust", &install),
+                    run_step("Build velnor-host", &build),
+                    run_step("Verify Mach-O architecture", BINARY_VERIFY),
+                    run_step("Checksum built bytes", BINARY_SUM),
+                ],
+                "Upload binary asset",
+                &files,
+            ),
+            attest_job(
+                "attest-binary",
+                "Attest velnor-host",
+                macos.clone(),
+                "build-binary",
+                "binary-assets",
+                &files,
+            ),
+            publish_job(
+                macos,
+                &Publish {
+                    id: "publish-binary",
+                    name: "Publish velnor-host",
+                    needs: "attest-binary",
+                    artifact: "binary-assets",
+                    prefix: "binary",
+                    notes: "velnor-host built from ${GITHUB_SHA}.",
+                    files: &files,
+                },
+            ),
+        ],
+    ))
+}
+
+fn build_job(
     id: &str,
     name: &str,
     runs_on: Yaml,
@@ -30,26 +179,21 @@ pub(super) fn build_job(
     upload_name: &str,
     files: &[&str],
 ) -> (String, Yaml) {
-    let mut prefixed = vec![checkout_step(
-        "${{ needs['release-eligibility'].outputs.source_sha }}",
-    )];
+    let mut prefixed = vec![checkout_step()];
     prefixed.append(&mut steps);
     prefixed.push(upload_step(upload_name, artifact_name(id), files));
     finish(
         id,
-        with_needs(
-            with_permissions(base(name, runs_on, timeout), build_permissions()),
-            &[release_eligibility::JOB_ID],
-        ),
+        with_permissions(base(name, runs_on, timeout), build_permissions()),
         prefixed,
     )
 }
 
-pub(super) fn attest_job(
+fn attest_job(
     id: &str,
     name: &str,
     runs_on: Yaml,
-    needs: &[&str],
+    needs: &str,
     artifact: &str,
     files: &[&str],
 ) -> (String, Yaml) {
@@ -63,18 +207,17 @@ pub(super) fn attest_job(
     )
 }
 
-pub(super) struct Publish<'a> {
-    pub(super) id: &'a str,
-    pub(super) name: &'a str,
-    pub(super) needs: &'a [&'a str],
-    pub(super) artifact: &'a str,
-    pub(super) prefix: &'a str,
-    pub(super) notes: &'a str,
-    pub(super) files: &'a [&'a str],
-    pub(super) workflow_path: &'a str,
+struct Publish<'a> {
+    id: &'a str,
+    name: &'a str,
+    needs: &'a str,
+    artifact: &'a str,
+    prefix: &'a str,
+    notes: &'a str,
+    files: &'a [&'a str],
 }
 
-pub(super) fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
+fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
     finish(
         spec.id,
         with_needs(
@@ -82,18 +225,12 @@ pub(super) fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
             spec.needs,
         ),
         vec![
-            checkout_step("${{ needs['release-eligibility'].outputs.source_sha }}"),
-            release_eligibility::mise_step(),
-            run_step(
-                "Install pinned GitHub CLI",
-                &format!(
-                    "mise --no-config --no-env --no-hooks install gh@{}",
-                    release_eligibility::GH_VERSION
-                ),
-            ),
+            checkout_step(),
             download_step(spec.artifact),
-            release_eligibility::check_step(spec.workflow_path),
-            publish_step(&release_command(spec.prefix, spec.notes, spec.files)),
+            identified_publish_step(
+                product_release_family::PUBLISH_STEP_ID,
+                &release_command(spec.prefix, spec.notes, spec.files),
+            ),
         ],
     )
 }
@@ -106,23 +243,7 @@ fn artifact_name(build_id: &str) -> &'static str {
     }
 }
 
-pub(super) fn mise_step() -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Setup Mise")),
-        ("uses".to_owned(), Yaml::str(MISE_USES)),
-        (
-            "with".to_owned(),
-            Yaml::Map(vec![
-                ("cache".to_owned(), Yaml::str("false")),
-                ("env".to_owned(), Yaml::str("false")),
-                ("install".to_owned(), Yaml::str("false")),
-                ("version".to_owned(), Yaml::str(MISE_VERSION)),
-            ]),
-        ),
-    ])
-}
-
-fn checkout_step(ref_value: &str) -> Yaml {
+fn checkout_step() -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Check out")),
         ("uses".to_owned(), Yaml::str(CHECKOUT_USES)),
@@ -131,7 +252,6 @@ fn checkout_step(ref_value: &str) -> Yaml {
             Yaml::Map(vec![
                 ("fetch-depth".to_owned(), Yaml::str("1")),
                 ("persist-credentials".to_owned(), Yaml::str("false")),
-                ("ref".to_owned(), Yaml::str(ref_value)),
             ]),
         ),
     ])
@@ -183,10 +303,10 @@ fn with_permissions(mut fields: Vec<(String, Yaml)>, perms: Yaml) -> Vec<(String
     fields
 }
 
-fn with_needs(mut fields: Vec<(String, Yaml)>, needs: &[&str]) -> Vec<(String, Yaml)> {
+fn with_needs(mut fields: Vec<(String, Yaml)>, needs: &str) -> Vec<(String, Yaml)> {
     fields.push((
         "needs".to_owned(),
-        Yaml::Seq(needs.iter().map(|need| Yaml::str(*need)).collect()),
+        Yaml::Seq(vec![Yaml::str(needs.to_owned())]),
     ));
     fields
 }
@@ -240,28 +360,12 @@ fn release_command(prefix: &str, notes: &str, files: &[&str]) -> String {
     )
 }
 
-pub(super) fn document(name: &str, jobs: Vec<(String, Yaml)>) -> Yaml {
+fn document(name: &str, jobs: Vec<(String, Yaml)>) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
         (
             "on".to_owned(),
-            Yaml::Map(vec![(
-                "workflow_dispatch".to_owned(),
-                Yaml::Map(vec![(
-                    "inputs".to_owned(),
-                    Yaml::Map(vec![(
-                        "source_sha".to_owned(),
-                        Yaml::Map(vec![
-                            (
-                                "description".to_owned(),
-                                Yaml::str("Exact tested main commit to build and publish"),
-                            ),
-                            ("required".to_owned(), Yaml::Bool(true)),
-                            ("type".to_owned(), Yaml::str("string")),
-                        ]),
-                    )]),
-                )]),
-            )]),
+            Yaml::Map(vec![("workflow_dispatch".to_owned(), Yaml::Map(vec![]))]),
         ),
         (
             "permissions".to_owned(),

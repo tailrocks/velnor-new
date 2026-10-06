@@ -17,10 +17,11 @@ Repository: <repo>
 .github/actions/velnor-tool-seed/action.yml
 .github/workflows/ci.yml
 .github/workflows/freshness.yml
-.github/workflows/generator-release.yml
-.github/workflows/image-release.yml
-.github/workflows/macos-binary-release.yml
 .github/workflows/owned-tools.yml
+.github/workflows/product-release-binary.yml
+.github/workflows/product-release-generator.yml
+.github/workflows/product-release-images.yml
+.github/workflows/product-release.yml
 .github/workflows/qualification.yml
 mise.lock not found; Velnor will not create or refresh it
 mise.toml is read-only input; Velnor never modifies it

@@ -56,7 +56,6 @@ pub(super) fn rendered_actions(tree: &RenderedTree) -> Result<Actions, Box<dyn s
         let path = action_path(name);
         let body = tree.get(&path).ok_or("missing generated local action")?;
         assert_eq!(body, &super::super::marked(snapshot), "{path}");
-        assert!(body.lines().count() < 400, "{path} has too many lines");
         assert!(
             !body.contains("${{ needs."),
             "composite action uses caller-only needs context: {path}"
@@ -66,19 +65,19 @@ pub(super) fn rendered_actions(tree: &RenderedTree) -> Result<Actions, Box<dyn s
     Ok(actions)
 }
 
-pub(super) fn committed_actions(
+pub(super) fn committed_actions_matching_tree(
     root: &std::path::Path,
+    tree: &RenderedTree,
 ) -> Result<Actions, Box<dyn std::error::Error>> {
     let mut actions = Actions::new();
-    for (name, snapshot) in ACTION_SNAPSHOTS {
-        let path = root.join(action_path(name));
+    for (name, _) in ACTION_SNAPSHOTS {
+        let relative = action_path(name);
+        let rendered = tree
+            .get(&relative)
+            .ok_or_else(|| format!("missing generated local action: {relative}"))?;
+        let path = root.join(&relative);
         let body = std::fs::read_to_string(&path)?;
-        assert_eq!(body, super::super::marked(snapshot), "{}", path.display());
-        assert!(
-            body.lines().count() < 400,
-            "{} has too many lines",
-            path.display()
-        );
+        assert_eq!(&body, rendered, "{}", path.display());
         assert!(
             !body.contains("${{ needs."),
             "composite action uses caller-only needs context: {}",

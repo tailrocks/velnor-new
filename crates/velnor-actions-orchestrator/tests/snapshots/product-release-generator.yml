@@ -1,24 +1,65 @@
-name: Generator release
+name: velnor-actions generator release jobs
 "on":
-  workflow_dispatch: {}
+  workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        required: true
+      workflow_authority_sha:
+        type: string
+        required: true
+      ci_run_id:
+        type: string
+        required: true
+      ci_attempt:
+        type: string
+        required: true
+      release_action:
+        type: string
+        required: true
+      caller_run_id:
+        type: string
+        required: true
+      caller_attempt:
+        type: string
+        required: true
 permissions:
   contents: read
-concurrency:
-  group: generator-release-${{ github.repository }}-${{ github.ref }}
-  cancel-in-progress: false
+env:
+  VELNOR_SOURCE_SHA: ${{ inputs.source_sha }}
+  VELNOR_WORKFLOW_AUTHORITY_SHA: ${{ inputs.workflow_authority_sha }}
+  VELNOR_CI_RUN_ID: ${{ inputs.ci_run_id }}
+  VELNOR_CI_ATTEMPT: ${{ inputs.ci_attempt }}
+  VELNOR_RELEASE_ACTION: ${{ inputs.release_action }}
+  VELNOR_CALLER_RUN_ID: ${{ inputs.caller_run_id }}
+  VELNOR_CALLER_ATTEMPT: ${{ inputs.caller_attempt }}
 jobs:
+  verify-release-caller:
+    name: Verify caller release authority
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Verify delegated release authority
+        shell: bash
+        run: "set -euo pipefail\n[[ \"$GITHUB_REPOSITORY\" == 'tailrocks/velnor-new' ]]\n[[ \"$GITHUB_REF\" == 'refs/heads/main' ]]\n[[ \"$GITHUB_WORKFLOW_REF\" == 'tailrocks/velnor-new/.github/workflows/product-release.yml@refs/heads/main' ]]\n[[ \"$GITHUB_EVENT_NAME\" == 'workflow_dispatch' ]]\n[[ \"$GITHUB_SHA\" == \"$VELNOR_SOURCE_SHA\" && \"$GITHUB_WORKFLOW_SHA\" == \"$VELNOR_WORKFLOW_AUTHORITY_SHA\" ]]\n[[ \"$GITHUB_RUN_ID\" == \"$VELNOR_CALLER_RUN_ID\" && \"$GITHUB_RUN_ATTEMPT\" == \"$VELNOR_CALLER_ATTEMPT\" ]]\n[[ \"$VELNOR_SOURCE_SHA\" =~ ^[0-9a-f]{40}$ && \"$VELNOR_WORKFLOW_AUTHORITY_SHA\" =~ ^[0-9a-f]{40}$ ]]\n[[ \"$VELNOR_CI_RUN_ID\" =~ ^[0-9]+$ && \"$VELNOR_CI_ATTEMPT\" =~ ^[0-9]+$ ]]\n[[ \"$VELNOR_RELEASE_ACTION\" == build || \"$VELNOR_RELEASE_ACTION\" == complete ]]"
   verify-release-source:
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
       actions: read
       contents: read
+    needs:
+      - verify-release-caller
+    if: inputs.release_action == 'build'
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: "1"
           persist-credentials: "false"
+          ref: ${{ inputs.source_sha }}
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -56,17 +97,22 @@ jobs:
     permissions:
       actions: write
       contents: read
-    needs:
-      - verify-release-source
     outputs:
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
       artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+    needs:
+      - verify-release-caller
+      - verify-release-source
+    if: inputs.release_action == 'build'
+    env:
+      VELNOR_RELEASE_TARGET: x86_64-unknown-linux-gnu
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: "1"
           persist-credentials: "false"
+          ref: ${{ inputs.source_sha }}
       - name: Build Linux velnor-actions
         uses: ./.github/actions/generator-release-build-linux # zizmor: ignore[self-repository]
       - name: Upload Linux assets
@@ -80,10 +126,14 @@ jobs:
   qualify-linux:
     runs-on: ubuntu-26.04
     timeout-minutes: 120
+    permissions: {}
     needs:
+      - verify-release-caller
       - build-linux
       - candidate-manifest
-    permissions: {}
+    if: inputs.release_action == 'build'
+    env:
+      VELNOR_RELEASE_TARGET: x86_64-unknown-linux-gnu
     steps:
       - name: Fetch exact public source without an action post hook
         shell: bash
@@ -104,14 +154,17 @@ jobs:
       contents: read
       id-token: write
     needs:
+      - verify-release-caller
       - build-linux
       - qualify-linux
+    if: inputs.release_action == 'build'
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: "1"
           persist-credentials: "false"
+          ref: ${{ inputs.source_sha }}
       - name: Attest Linux velnor-actions
         uses: ./.github/actions/generator-release-attest-linux # zizmor: ignore[self-repository]
         with:
@@ -122,17 +175,22 @@ jobs:
     permissions:
       actions: write
       contents: read
-    needs:
-      - verify-release-source
     outputs:
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
       artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+    needs:
+      - verify-release-caller
+      - verify-release-source
+    if: inputs.release_action == 'build'
+    env:
+      VELNOR_RELEASE_TARGET: aarch64-apple-darwin
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: "1"
           persist-credentials: "false"
+          ref: ${{ inputs.source_sha }}
       - name: Build macOS velnor-actions
         uses: ./.github/actions/generator-release-build-macos # zizmor: ignore[self-repository]
       - name: Upload macOS assets
@@ -146,10 +204,14 @@ jobs:
   qualify-macos:
     runs-on: macos-15
     timeout-minutes: 120
+    permissions: {}
     needs:
+      - verify-release-caller
       - build-macos
       - candidate-manifest
-    permissions: {}
+    if: inputs.release_action == 'build'
+    env:
+      VELNOR_RELEASE_TARGET: aarch64-apple-darwin
     steps:
       - name: Fetch exact public source without an action post hook
         shell: bash
@@ -170,14 +232,17 @@ jobs:
       contents: read
       id-token: write
     needs:
+      - verify-release-caller
       - build-macos
       - qualify-macos
+    if: inputs.release_action == 'build'
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: "1"
           persist-credentials: "false"
+          ref: ${{ inputs.source_sha }}
       - name: Attest macOS velnor-actions
         uses: ./.github/actions/generator-release-attest-macos # zizmor: ignore[self-repository]
         with:
@@ -188,17 +253,22 @@ jobs:
     permissions:
       actions: write
       contents: read
-    needs:
-      - verify-release-source
     outputs:
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
       artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+    needs:
+      - verify-release-caller
+      - verify-release-source
+    if: inputs.release_action == 'build'
+    env:
+      VELNOR_RELEASE_TARGET: x86_64-apple-darwin
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: "1"
           persist-credentials: "false"
+          ref: ${{ inputs.source_sha }}
       - name: Build macOS x86_64 velnor-actions
         uses: ./.github/actions/generator-release-build-macos-intel # zizmor: ignore[self-repository]
       - name: Upload macOS x86_64 assets
@@ -212,10 +282,14 @@ jobs:
   qualify-macos-intel:
     runs-on: macos-15-intel
     timeout-minutes: 120
+    permissions: {}
     needs:
+      - verify-release-caller
       - build-macos-intel
       - candidate-manifest
-    permissions: {}
+    if: inputs.release_action == 'build'
+    env:
+      VELNOR_RELEASE_TARGET: x86_64-apple-darwin
     steps:
       - name: Fetch exact public source without an action post hook
         shell: bash
@@ -236,14 +310,17 @@ jobs:
       contents: read
       id-token: write
     needs:
+      - verify-release-caller
       - build-macos-intel
       - qualify-macos-intel
+    if: inputs.release_action == 'build'
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: "1"
           persist-credentials: "false"
+          ref: ${{ inputs.source_sha }}
       - name: Attest macOS x86_64 velnor-actions
         uses: ./.github/actions/generator-release-attest-macos-intel # zizmor: ignore[self-repository]
         with:
@@ -254,20 +331,23 @@ jobs:
     permissions:
       actions: write
       contents: read
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      manifest_sha256: ${{ steps.manifest_digest.outputs.manifest_sha256 }}
     needs:
+      - verify-release-caller
       - verify-release-source
       - build-linux
       - build-macos
       - build-macos-intel
-    outputs:
-      artifact_id: ${{ steps.upload.outputs.artifact-id }}
-      manifest_sha256: ${{ steps.manifest_digest.outputs.manifest_sha256 }}
+    if: inputs.release_action == 'build'
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: "1"
           persist-credentials: "false"
+          ref: ${{ inputs.source_sha }}
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -347,19 +427,22 @@ jobs:
       contents: read
       id-token: write
     needs:
+      - verify-release-caller
+      - attest-linux
+      - attest-macos
+      - attest-macos-intel
       - candidate-manifest
       - build-linux
       - build-macos
       - build-macos-intel
-      - attest-linux
-      - attest-macos
-      - attest-macos-intel
+    if: inputs.release_action == 'build'
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: "1"
           persist-credentials: "false"
+          ref: ${{ inputs.source_sha }}
       - name: Attest generator release manifest
         uses: ./.github/actions/generator-release-attest-manifest # zizmor: ignore[self-repository]
         with:
@@ -374,7 +457,10 @@ jobs:
     permissions:
       actions: write
       contents: write
+    environment:
+      name: generator-release
     needs:
+      - verify-release-caller
       - attest-linux
       - attest-macos
       - attest-macos-intel
@@ -383,14 +469,14 @@ jobs:
       - build-linux
       - build-macos
       - build-macos-intel
-    environment:
-      name: generator-release
+    if: always() && inputs.release_action == 'build' && needs.attest-linux.result == 'success' && needs.attest-macos.result == 'success' && needs.attest-macos-intel.result == 'success' && needs.attest-manifest.result == 'success'
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: "1"
           persist-credentials: "false"
+          ref: ${{ inputs.source_sha }}
       - name: Publish generator release
         uses: ./.github/actions/generator-release-publish # zizmor: ignore[self-repository]
         with:
