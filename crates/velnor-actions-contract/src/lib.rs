@@ -7,6 +7,7 @@
 //! Derivation formulas are normative; example strings in docs are illustrative.
 
 pub mod archive;
+mod branch;
 pub mod cachekey;
 pub mod candidate_manifest;
 pub mod canonical;
@@ -33,6 +34,7 @@ pub mod tooling;
 pub mod vcs;
 pub mod workflow;
 pub use archive::{ArchiveInputs, archive_id};
+pub use branch::is_valid_branch_name;
 pub use canonical::{
     CompatibilityInputs, Digest, StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity,
     TaskInput, canonical_json_bytes, canonical_json_str, compatibility_id, digest_b3, input_digest,

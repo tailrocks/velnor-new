@@ -377,3 +377,4 @@ fn render_merged(
         shared: files,
     })
 }
+

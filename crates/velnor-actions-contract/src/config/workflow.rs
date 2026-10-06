@@ -119,7 +119,7 @@ impl WorkflowConfig {
             ));
         }
         if let Some(branch) = &self.default_branch
-            && (branch.trim().is_empty() || branch.contains(' ') || branch.contains(".."))
+            && !crate::is_valid_branch_name(branch)
         {
             return Err(ContractError::config(
                 file,
@@ -244,5 +244,29 @@ mod tests {
             .validate("config.toml")
             .expect_err("reserved ID fails");
         assert!(error.to_string().contains("bad_verification_task_id"));
+    }
+
+    #[test]
+    fn default_branch_rejects_yaml_and_git_injection() {
+        for branch in [
+            "",
+            "feature/x y",
+            "main\non: [push]",
+            "main;git status",
+            "${{ github.ref }}",
+            "release/../main",
+            "main.lock",
+        ] {
+            let mut config = named("CI");
+            config.default_branch = Some(branch.to_owned());
+            let err = config
+                .validate("config.toml")
+                .expect_err("malformed default branch must fail");
+            assert!(err.to_string().contains("malformed_branch"), "{err}");
+        }
+
+        let mut config = named("CI");
+        config.default_branch = Some("release/1.2".to_owned());
+        assert_eq!(config.validate("config.toml"), Ok(()));
     }
 }
