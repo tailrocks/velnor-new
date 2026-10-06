@@ -3,9 +3,10 @@
 //! Each call grows or shrinks by one. A missing sample holds the previous count.
 //! The first advertisement starts at one so a high ceiling cannot stampede.
 
-// Live sampling is macOS-only; the parse helpers below exist on other
-// platforms solely for unit tests, so the import follows the same gate.
-#[cfg(any(test, target_os = "macos"))]
+// Live sampling is macOS-only; only command() uses Command, so the
+// import is macOS-only too. (The parse helpers below are
+// any(test, macos) because unit tests cover them on Linux.)
+#[cfg(target_os = "macos")]
 use std::process::Command;
 
 const GROW_LOAD_PER_CPU_MILLIS: u32 = 750;
