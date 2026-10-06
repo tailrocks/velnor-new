@@ -295,7 +295,7 @@ fn mbx_experiment_target_is_current_unqualified_release() {
         "the experiment target must stay separate from the production pin"
     );
     let inventory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../.velnor/freshness-inventory.json");
+        .join("../../../.velnor/freshness-inventory.json");
     let inventory = std::fs::read_to_string(inventory).expect("freshness inventory readable");
     let action = inventory
         .split("\"key\": \"jdx/mr-boxington-action\"")

@@ -11,11 +11,11 @@ flate2 = { workspace = true }
 lzma-rust2 = { workspace = true }
 tar = { workspace = true }
 zip = { workspace = true }
-velnor-actions-actionlint = { version = "=0.1.1", path = "../velnor-actions-actionlint" }
+velnor-actions-actionlint = { version = "=0.1.1", path = "../adapters/velnor-actions-actionlint" }
 velnor-actions-contract = { version = "=0.1.1", path = "../core/velnor-actions-contract" }
-velnor-actions-mise = { version = "=0.1.1", path = "../velnor-actions-mise" }
-velnor-actions-rust = { version = "=0.1.1", path = "../velnor-actions-rust" }
-velnor-actions-tofu = { version = "=0.1.1", path = "../velnor-actions-tofu" }
+velnor-actions-mise = { version = "=0.1.1", path = "../adapters/velnor-actions-mise" }
+velnor-actions-rust = { version = "=0.1.1", path = "../adapters/velnor-actions-rust" }
+velnor-actions-tofu = { version = "=0.1.1", path = "../adapters/velnor-actions-tofu" }
 velnor-actions-workflow-renderer = { version = "=0.1.1", path = "../velnor-actions-workflow-renderer" }
 rustix = { workspace = true }
 serde = { workspace = true }

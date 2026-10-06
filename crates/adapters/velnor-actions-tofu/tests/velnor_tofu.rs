@@ -102,7 +102,7 @@ mod support {
     /// Absolute path of the repo-root shared fixture `name`.
     pub(crate) fn fixture_dir(name: &str) -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../fixtures")
+            .join("../../../fixtures")
             .join(name)
     }
 

@@ -197,9 +197,9 @@ fn catalog_pins_ignore_project_selectors() -> Result<(), String> {
 fn mise_lock_neither_present_nor_tracked() -> Result<(), String> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
-        .nth(2)
+        .nth(3)
         .map(std::path::Path::to_path_buf)
-        .ok_or_else(|| "crate is not two levels below the workspace root".to_owned())?;
+        .ok_or_else(|| "crate is not three levels below the workspace root".to_owned())?;
     assert!(
         !root.join("mise.lock").exists(),
         "Velnor must not create mise.lock"

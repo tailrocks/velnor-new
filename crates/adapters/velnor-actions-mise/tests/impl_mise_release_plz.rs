@@ -335,7 +335,7 @@ fn coordinator_command_selects_pinned_tools() {
 #[test]
 fn repo_policy_mirror_covers_release_plz() {
     let path = format!(
-        "{}/../../.velnor/version-policy.toml",
+        "{}/../../../.velnor/version-policy.toml",
         env!("CARGO_MANIFEST_DIR")
     );
     let text = std::fs::read_to_string(path).expect("repo version-policy exists");
@@ -349,7 +349,7 @@ fn repo_policy_mirror_covers_release_plz() {
 #[test]
 fn freshness_inventory_mirrors_release_plz() {
     let path = format!(
-        "{}/../../.velnor/freshness-inventory.json",
+        "{}/../../../.velnor/freshness-inventory.json",
         env!("CARGO_MANIFEST_DIR")
     );
     let text = std::fs::read_to_string(path).expect("freshness inventory exists");

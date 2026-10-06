@@ -4,7 +4,7 @@ use velnor_actions_mise::catalog::lock::{LockError, verify_version_policy};
 
 fn policy_path() -> String {
     format!(
-        "{}/../../.velnor/version-policy.toml",
+        "{}/../../../.velnor/version-policy.toml",
         env!("CARGO_MANIFEST_DIR")
     )
 }

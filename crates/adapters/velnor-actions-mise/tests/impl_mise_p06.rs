@@ -309,7 +309,7 @@ fn carries_profile(argv: &[std::ffi::OsString], want: &str) -> bool {
 }
 
 /// This repository's own root `mise.toml` bytes (P07-9 reconciliation).
-const REPO_MISE_TOML: &str = include_str!("../../../mise.toml");
+const REPO_MISE_TOML: &str = include_str!("../../../../mise.toml");
 
 #[test]
 fn repo_wrapper_reconciles_with_local_mbx_pin() {
