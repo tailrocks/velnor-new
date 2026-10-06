@@ -319,32 +319,29 @@ fn every_workspace_member_is_classified() {
         .parent()
         .and_then(std::path::Path::parent)
         .expect("crate lives two levels under the workspace root");
-    let mut members = Vec::new();
-    let crates = std::fs::read_dir(root.join("crates")).expect("crates dir lists");
-    for entry in crates {
-        let manifest = entry.expect("dir entry reads").path().join("Cargo.toml");
-        if !manifest.is_file() {
-            continue;
-        }
-        let text = std::fs::read_to_string(&manifest).expect("member manifest reads");
-        let mut in_package = false;
-        for line in text.lines() {
-            if line.trim() == "[package]" {
-                in_package = true;
-            } else if line.starts_with('[') {
-                in_package = false;
-            } else if in_package && line.trim_start().starts_with("name = ") {
-                let name = line
-                    .trim_start()
-                    .trim_start_matches("name = ")
-                    .trim()
-                    .trim_matches('"');
-                members.push(name.to_owned());
-                break;
-            }
-        }
-    }
-    assert!(!members.is_empty(), "workspace scan must find members");
+    let manifest: toml::Value = toml::from_str(
+        &std::fs::read_to_string(root.join("Cargo.toml")).expect("workspace manifest reads"),
+    )
+    .expect("workspace manifest parses");
+    let members = manifest["workspace"]["members"]
+        .as_array()
+        .expect("workspace members are explicit paths");
+    assert!(!members.is_empty(), "workspace must declare members");
+    let members: Vec<String> = members
+        .iter()
+        .map(|member| {
+            let path = member.as_str().expect("workspace member is a path");
+            let manifest: toml::Value = toml::from_str(
+                &std::fs::read_to_string(root.join(path).join("Cargo.toml"))
+                    .expect("member manifest reads"),
+            )
+            .expect("member manifest parses");
+            manifest["package"]["name"]
+                .as_str()
+                .expect("workspace member declares its package name")
+                .to_owned()
+        })
+        .collect();
     for member in &members {
         let known = [
             "velnor-actions-orchestrator",
