@@ -637,3 +637,75 @@ Native rules:
 
 Helper gaps: 993 / 115 / 219 / 8 / 6 / 4, total 1345 —
 unchanged to the finding (no case splits on this tree yet).
+
+## Slice 6: CI/docs/toolchain (2026-10-06)
+
+- Canonical config paths: added the one missing `requires-*` file,
+  `rust-toolchain.toml` (`channel = "1.98.1"`). Toolchain trio
+  3 → 0 (`layout-requires-rust-toolchain`,
+  `toolchain-mise-parity`, `toolchain-ci-parity` — every
+  workflow's `toolchain:` refs already pin 1.98.x). All other
+  required paths (`Cargo.toml`, `Cargo.lock`, `mise.toml`,
+  `rustfmt.toml`, `clippy.toml`, `deny.toml`,
+  `.config/nextest.toml`, `renovate.json`, `.alint.yml`) were
+  already present.
+- Mise-authoritative tool versions: `mise.toml [tools] rust =
+  "1.98.1"` was already the source the generator emits
+  (`toolchain: 1.98.1`, `rust@1.98.1`, `+1.98.1`); the new
+  `toolchain_file_tracks_mise` pin test (cli
+  `impl_repo_policy.rs`) locks `rust-toolchain.toml` channel ==
+  `1.98.1` and semver-minor-equal to mise. Velnor treats both
+  files as read-only input (regen now reports
+  "`rust-toolchain.toml` is read-only input").
+- Policy lane (generated, not hand-edited): the `alint` support
+  job in `ci.yml` gains a `Materialize Rust policy` step
+  (`support.rs`: `RUST_POLICY_VERSION 0.1.1` + asset sha256,
+  emitted via scrubbed `shell_step`, no `#[path]`/contract
+  changes). The step downloads the release tarball, verifies the
+  sha256 (fail-closed, probed), materializes `.cache/rust-policy`
+  (gitignored), installs the helper to `~/.local/bin`, and
+  appends `GITHUB_PATH`; runner asset selected from
+  `$RUNNER_OS-$RUNNER_ARCH` (emitted scripts forbid command
+  substitution). Renderer hoists the scrub overlay to job level,
+  so the whole lane runs credential-free. Probed: alint 0.16.1
+  (the pinned action binary) evaluates the v0.1.1 adapter
+  byte-identically to 0.17.0 (1535/27·10), so NO alint bump, NO
+  freshness update set, and the v0.16.1 hold (issue #6) stands.
+  The emitted script was executed in a sandbox: materializes,
+  cleans its temp dir, exits 1 on sha mismatch.
+- Regen: `velnor-actions generate` in place; only `ci.yml`
+  changes (the other 5 workflows + actions + actionlint.yaml +
+  AGENTS.md reproduce byte-identically, and in-place equals the
+  preview). The delta is exactly the runner-merge fallout
+  (nested deny check, nested lock in cache keys, nested fetch
+  step, `crates/tools/*` paths, recomputed digests) plus the new
+  lane step. Job IDs unchanged (21/21), so `policy/ci-recipes.json`
+  stays valid and GAP-CI-* stays 0.
+- Nextest CI profile: already existed (`.config/nextest.toml`
+  `[profile.ci]`) and generated CI already runs
+  `nextest run --profile ci --no-tests fail`; verified, no change.
+- Tests: new `velnor_alint_job_materializes_policy_before_running`
+  (renderer `impl_renderer_tree.rs`: lane pins + step order) and
+  `toolchain_file_tracks_mise` pass. Renderer suite 397/399
+  (2 pre-existing archive failures, byte-identical set); cli +
+  orchestrator 1430/1454 (identical 24-failure baseline set —
+  stale `WORKSPACE_ROOTS`/`MEMBERS`/classification pins owned by
+  later slices; the 2 toolchain-named failures reproduce without
+  the new file). `cargo fmt --check` clean; workspace
+  `clippy --all-targets` exit 0 (1 pre-existing pedantic warning
+  in a slice-4a mise test file). Workspace `nextest list` 3370
+  (3368 + 2 new). `Cargo.lock` untouched.
+- Known gaps left for the generator slice: `ci-build-runs-on` ×6
+  (a `build` job on `ubuntu-latest` in every workflow — needs a
+  per-kind job design, especially release/qualification
+  workflows, not a sixth emission tweak); freshness-inventory
+  coverage for the policy-artifact pin (inventory schema has no
+  slot; the pin is version+sha enforced at runtime).
+
+### Before/after counts (slice 6)
+
+Native rules: toolchain trio 3 → 0; everything else unchanged
+(`tests-no-test-files-in-src` 155, `tests-only-rust` 17,
+`size-lib-main-150` 6, `ci-build-runs-on` 6, `size-file-400` 2,
+`tests-dir-present` 1, `policy-gaps` 1345). Total 1535 → 1532
+(30 passing · 7 failing). Helper gaps unchanged at 1345.

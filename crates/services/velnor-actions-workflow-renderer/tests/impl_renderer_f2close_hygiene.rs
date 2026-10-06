@@ -188,7 +188,8 @@ fn velnor_policy_renders_with_empty_matrix() -> Result<(), RenderError> {
     }
     assert!(!text.contains("velnor-task:"), "empty matrix:\n{text}");
     let start = text.find("alint:").expect("alint job");
-    let window = snip(&text, start, 1600);
+    let run_at = text[start..].find("Run Alint").expect("alint run step") + start;
+    let window = snip(&text, run_at, 1600);
     for input in [
         "path: .",
         "config: .alint.yml",

@@ -179,9 +179,40 @@ pub(crate) fn insert_support_job(
     Ok(())
 }
 
-/// Fixed Alint job: checkout plus the full-SHA Alint action.
+/// Pinned `tailrocks/rust-repository-policy` release materialized for the policy lane.
+///
+/// The adapter (`.alint.yml`) extends `./.cache/rust-policy/...`, which is
+/// gitignored, and shells out to the `rust-repository-policy` helper, so the
+/// `alint` job reproduces the S2 adapter contract before running Alint.
+/// Version plus asset SHA-256, verified at runtime; bump both together.
+/// Freshness-inventory coverage for this pin is a known gap (the inventory
+/// schema has no slot for it) — see the policy rollout record.
+pub(crate) const RUST_POLICY_VERSION: &str = "0.1.1";
+/// SHA-256 of the `rust-repository-policy-<version>.tar.gz` release asset.
+pub(crate) const RUST_POLICY_SHA256: &str =
+    "3aeb63a996df1f453b07e1647282ff7005b84306a02ce2d8bea63e6c66b424d5";
+
+/// Policy-prerequisite step: fetch, verify, and materialize the pinned policy.
+///
+/// Anonymous download of a public release asset (no API, no auth), so the
+/// plain scrubbed shell fits: the step executes no repository code and needs
+/// no ambient credentials. Runner asset selected from `$RUNNER_OS-$RUNNER_ARCH`
+/// (no command substitution allowed in emitted scripts).
+fn policy_materialize_step() -> Result<Step, RenderError> {
+    let script = format!(
+        "set -eu; case \"$RUNNER_OS-$RUNNER_ARCH\" in Linux-X64) POLICY_ASSET=\"linux-x86_64\";; macOS-ARM64) POLICY_ASSET=\"macos-arm64\";; *) echo \"unsupported runner for rust policy\" >&2; exit 1;; esac; POLICY_TMP=\"$RUNNER_TEMP/velnor-policy-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"; rm -rf \"$POLICY_TMP\"; mkdir -p \"$POLICY_TMP\" .cache/rust-policy \"$HOME/.local/bin\"; curl -sSL -o \"$POLICY_TMP/policy.tar.gz\" \"https://github.com/tailrocks/rust-repository-policy/releases/download/v{RUST_POLICY_VERSION}/rust-repository-policy-{RUST_POLICY_VERSION}.tar.gz\"; printf \"%s  %s\\n\" \"{RUST_POLICY_SHA256}\" \"$POLICY_TMP/policy.tar.gz\" | sha256sum -c -; tar xzf \"$POLICY_TMP/policy.tar.gz\" -C .cache/rust-policy --strip-components=1; cp \".cache/rust-policy/bin/$POLICY_ASSET/rust-repository-policy\" \"$HOME/.local/bin/rust-repository-policy\"; chmod +x \"$HOME/.local/bin/rust-repository-policy\"; printf \"%s\\n\" \"$HOME/.local/bin\" >> \"$GITHUB_PATH\"; rm -rf \"$POLICY_TMP\""
+    );
+    steps::shell_step(
+        "Materialize Rust policy",
+        vec!["sh".to_owned(), "-c".to_owned(), script],
+        BTreeMap::new(),
+    )
+}
+
+/// Fixed Alint job: checkout, policy materialization, the full-SHA Alint action.
 pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
     let checkout = steps::checkout_step(&ctx.checkout_uses)?;
+    let materialize = policy_materialize_step()?;
     let mut with = BTreeMap::new();
     with.insert("path".to_owned(), ".".to_owned());
     with.insert("config".to_owned(), ".alint.yml".to_owned());
@@ -200,6 +231,7 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
         environment: None,
         steps: vec![
             checkout,
+            materialize,
             Step {
                 name: "Run Alint".to_owned(),
                 id: None,

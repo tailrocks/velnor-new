@@ -274,6 +274,17 @@ fn rust_version_tracks_toolchain() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// `rust-toolchain.toml` is hand-maintained (Velnor never modifies it) and
+/// MUST track the Mise-authoritative Rust version at semver-minor.
+#[test]
+fn toolchain_file_tracks_mise() -> Result<(), Box<dyn Error>> {
+    let channel = quoted_value(&read("rust-toolchain.toml")?, "channel")?;
+    let mise = quoted_value(&read("mise.toml")?, "rust = ")?;
+    assert_eq!(channel, "1.98.1", "toolchain channel drift");
+    assert_eq!(minor(&channel), minor(&mise), "mise drift");
+    Ok(())
+}
+
 #[test]
 fn members_inherit_workspace_settings() -> Result<(), Box<dyn Error>> {
     for (dir, _) in MEMBERS

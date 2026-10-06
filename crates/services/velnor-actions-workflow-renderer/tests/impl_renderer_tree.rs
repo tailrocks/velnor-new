@@ -245,6 +245,41 @@ fn velnor_policy_renders_validators_only() -> Result<(), RenderError> {
 }
 
 #[test]
+fn velnor_alint_job_materializes_policy_before_running() -> Result<(), RenderError> {
+    let ir = fixture_ir()?;
+    let mut ctx = fixture_ctx();
+    ctx.validator_commands = validator_commands();
+    let support =
+        WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Bootstrap);
+    let text = render_workflow_ir(
+        &ir,
+        WorkflowPolicy::VelnorRepositoryV1,
+        Some(&support),
+        &ctx,
+    )?;
+    let alint_at = text.find("  alint:").expect("alint job");
+    let lane = &text[alint_at..];
+    for pin in [
+        "Materialize Rust policy",
+        "rust-repository-policy-0.1.1.tar.gz",
+        "3aeb63a996df1f453b07e1647282ff7005b84306a02ce2d8bea63e6c66b424d5",
+        ".cache/rust-policy",
+        "sha256sum -c",
+        "GITHUB_PATH",
+    ] {
+        assert!(lane.contains(pin), "policy lane misses {pin}");
+    }
+    let materialize_at = lane.find("Materialize Rust policy").expect("lane step");
+    let run_at = lane.find("Run Alint").expect("run step");
+    let checkout_at = lane.find("Checkout").expect("checkout step");
+    assert!(
+        checkout_at < materialize_at && materialize_at < run_at,
+        "policy lane out of order"
+    );
+    Ok(())
+}
+
+#[test]
 fn rendered_yaml_contains_no_private_subcommands() -> Result<(), RenderError> {
     let ir = fixture_ir()?;
     let mut ctx = fixture_ctx();
