@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use velnor_actions_contract::digest_b3;
-use velnor_actions_rust::{TOOLING_INPUT_INVALID, inspect_toolchain_file};
+use velnor_actions_rust_core::{TOOLING_INPUT_INVALID, inspect_toolchain_file};
 
 /// Tool-input paths checked on every plan and generate.
 pub const TOOL_INPUT_PATHS: [&str; 3] = ["rust-toolchain.toml", "mise.toml", "mise.lock"];
@@ -128,7 +128,7 @@ fn check_toolchain(path: &str, bytes: Option<&[u8]>) -> ToolInputCheck {
 }
 
 /// Sorted unique finding codes from adapter findings.
-fn finding_codes(findings: &[velnor_actions_rust::ToolFinding]) -> Vec<String> {
+fn finding_codes(findings: &[velnor_actions_rust_core::ToolFinding]) -> Vec<String> {
     let mut codes: Vec<String> = findings
         .iter()
         .map(|finding| finding.code.clone())
@@ -139,7 +139,7 @@ fn finding_codes(findings: &[velnor_actions_rust::ToolFinding]) -> Vec<String> {
 }
 
 /// Invalid problem from adapter findings, if the adapter flagged any.
-fn invalid_problem(findings: &[velnor_actions_rust::ToolFinding]) -> Option<String> {
+fn invalid_problem(findings: &[velnor_actions_rust_core::ToolFinding]) -> Option<String> {
     findings.iter().find_map(|finding| {
         (finding.code == TOOLING_INPUT_INVALID).then(|| {
             finding
@@ -151,7 +151,7 @@ fn invalid_problem(findings: &[velnor_actions_rust::ToolFinding]) -> Option<Stri
 }
 
 /// Extracted channel, components, and targets from an adapter spec.
-fn spec_values(spec: Option<&velnor_actions_rust::ToolchainSpec>) -> BTreeMap<String, String> {
+fn spec_values(spec: Option<&velnor_actions_rust_core::ToolchainSpec>) -> BTreeMap<String, String> {
     let mut values = BTreeMap::new();
     let Some(spec) = spec else {
         return values;

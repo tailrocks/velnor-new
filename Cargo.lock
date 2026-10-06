@@ -3517,6 +3517,7 @@ dependencies = [
  "velnor-actions-contract",
  "velnor-actions-mise",
  "velnor-actions-rust",
+ "velnor-actions-rust-core",
  "velnor-actions-tofu",
  "velnor-actions-tofu-core",
  "velnor-actions-workflow-renderer",
@@ -3525,6 +3526,16 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-rust"
+version = "0.1.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "velnor-actions-contract",
+ "velnor-actions-rust-core",
+]
+
+[[package]]
+name = "velnor-actions-rust-core"
 version = "0.1.1"
 dependencies = [
  "serde",

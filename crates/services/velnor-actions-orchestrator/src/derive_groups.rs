@@ -18,9 +18,10 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::{ArchivePlan, NextestArchive, NextestDriver, SortedInventory};
 use velnor_actions_rust::{
-    CompileDriver, DeriveInputs, RustExecutionProfile, TaskGroup, TaskKind, derive_task_groups,
-    derive_workspace_fmt_if_explicit, expand_shards_for_group,
+    DeriveInputs, TaskGroup, TaskKind, derive_task_groups, derive_workspace_fmt_if_explicit,
+    expand_shards_for_group,
 };
+use velnor_actions_rust_core::{CompileDriver, RustExecutionProfile};
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
@@ -151,7 +152,7 @@ pub(crate) fn derive_for_config(
 /// Returns [`OrchestratorError::Config`] naming crate, configuration,
 /// and feature when no workspace crate declares a requested feature.
 fn resolve_features(
-    package: &velnor_actions_rust::PackageRecord,
+    package: &velnor_actions_rust_core::PackageRecord,
     requested: &[String],
     union: &BTreeSet<String>,
     configuration: &str,

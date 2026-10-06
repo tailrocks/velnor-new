@@ -1,5 +1,5 @@
 use super::*;
-use crate::profile::NextestProfile;
+use velnor_actions_rust_core::profile::NextestProfile;
 
 /// Minimal group exercising every converted field.
 pub(super) fn group() -> TaskGroup {

@@ -8,9 +8,11 @@ use crate::support::{Outcome, TempDir};
 use velnor_actions_contract::ProposedTask;
 use velnor_actions_rust::tasks::{DigestSlot, RustTaskIdentityExtension, TaskGroup, TaskKind};
 use velnor_actions_rust::{
-    CompileDriver, Evidence, EvidenceStrength, GroupExtensionInputs, NextestProfile, TestRunner,
-    adapter_entry_metadata, entry_metadata_for_task, extension_for_proposal, propose_task,
-    resolve_closure_at_root,
+    GroupExtensionInputs, adapter_entry_metadata, entry_metadata_for_task, extension_for_proposal,
+    propose_task, resolve_closure_at_root,
+};
+use velnor_actions_rust_core::{
+    CompileDriver, Evidence, EvidenceStrength, NextestProfile, TestRunner,
 };
 
 /// Fully-loaded group exercising every converted field.

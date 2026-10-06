@@ -274,7 +274,7 @@ fn cache_layers(prep: &GenerationPreparation) -> String {
         layers.push("Cargo sources");
     }
     if prep.discovery.workspaces.iter().any(|workspace| {
-        workspace.profile.compile_driver == velnor_actions_rust::CompileDriver::Mbx
+        workspace.profile.compile_driver == velnor_actions_rust_core::CompileDriver::Mbx
     }) {
         layers.push("MBX compilation objects");
     }

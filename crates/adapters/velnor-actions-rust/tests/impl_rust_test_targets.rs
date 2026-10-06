@@ -1,8 +1,9 @@
 //! `test = false` target handling: no test commands for test-less crates.
 use velnor_actions_rust::tasks::cargo_payload_argv;
-use velnor_actions_rust::{
-    CompileDriver, DeriveInputs, NextestProfile, PackageRecord, ProfileSource,
-    RustExecutionProfile, TargetRecord, TaskKind, TestRunner, derive_task_groups, propose_task,
+use velnor_actions_rust::{DeriveInputs, TaskKind, derive_task_groups, propose_task};
+use velnor_actions_rust_core::{
+    CompileDriver, NextestProfile, PackageRecord, ProfileSource, RustExecutionProfile,
+    TargetRecord, TestRunner,
 };
 
 /// Target entry for fixtures.

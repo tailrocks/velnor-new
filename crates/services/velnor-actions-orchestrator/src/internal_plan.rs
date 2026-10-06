@@ -20,7 +20,8 @@ use velnor_actions_contract::{
     VcsInputs, component_id_for_unit, digest_b3, input_digest,
 };
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_rust::{CompileDriver, Evidence, entry_metadata_for_task};
+use velnor_actions_rust::entry_metadata_for_task;
+use velnor_actions_rust_core::{CompileDriver, Evidence};
 
 use crate::discover::Discovery;
 use crate::internal_plan::identities::ExtensionBundle;

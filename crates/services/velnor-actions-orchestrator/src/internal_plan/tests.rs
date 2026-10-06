@@ -6,7 +6,8 @@ use super::*;
 use velnor_actions_contract::validate_digest;
 use velnor_actions_contract::{ProposedTask, digest_b3};
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
+use velnor_actions_rust::{TaskGroup, TaskKind};
+use velnor_actions_rust_core::{CompileDriver, NextestProfile, TestRunner};
 
 /// Minimal proposal with kind, task ID, driver, and runner.
 fn group(kind: TaskKind, task_id: &str, driver: CompileDriver, runner: TestRunner) -> ProposedTask {

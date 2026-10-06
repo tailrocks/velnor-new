@@ -1,7 +1,7 @@
 //! Test preparation command matches the selected test execution.
 use velnor_actions_contract::ContractError;
 use velnor_actions_rust::tasks::{TaskGroup, TaskKind, cargo_payload_with_profile};
-use velnor_actions_rust::{CompileDriver, NextestProfile, TestRunner};
+use velnor_actions_rust_core::{CompileDriver, NextestProfile, TestRunner};
 
 fn group(kind: TaskKind) -> TaskGroup {
     TaskGroup {

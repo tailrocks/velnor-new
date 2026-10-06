@@ -5,7 +5,7 @@ use velnor_actions_rust::tasks::{
     DigestSlot, ExtensionInputs, RustTaskIdentityExtension, SlotState, TaskKind,
     parse_rerun_changed, require_nextest_for_shards, shard_task_id, shards_allowed,
 };
-use velnor_actions_rust::{CompileDriver, TestRunner};
+use velnor_actions_rust_core::{CompileDriver, TestRunner};
 
 /// Identity extension for one Nextest package task.
 fn extension() -> RustTaskIdentityExtension {

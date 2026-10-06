@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 
 use crate::release_support::{doc, graph_of, manifest, pkg, registry, root_of, select_of};
 use crate::support::{Outcome, TempDir};
-use velnor_actions_rust::{
+use velnor_actions_rust_core::{
     DEFAULT_TAG_PATTERN, DepKind, EmitOptions, ReleaseError, ReleaseRequest, ReleaseScope,
     ResolvedScope, emit_bootstrap_config, emit_release_plz_config, select_release_set,
 };

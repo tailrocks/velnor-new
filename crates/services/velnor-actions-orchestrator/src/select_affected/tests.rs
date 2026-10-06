@@ -1,4 +1,4 @@
-use velnor_actions_rust::{
+use velnor_actions_rust_core::{
     CompileDriver, NextestProfile, PackageRecord, ProfileSource, RustExecutionProfile, TestRunner,
     WorkspaceRecord,
 };

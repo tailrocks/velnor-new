@@ -5,7 +5,7 @@ use serde_json::Value;
 
 use crate::release_support::{doc, pkg, root_of, select_of};
 use crate::support::{Outcome, TempDir};
-use velnor_actions_rust::{
+use velnor_actions_rust_core::{
     DEFAULT_TAG_PATTERN, EmitOptions, ExistingTag, ReleaseError, ReleaseScope, TagOutcome,
     TagState, VersionGroup, classify_tag, emit_bootstrap_config, emit_release_plz_config,
     resolve_version_groups,

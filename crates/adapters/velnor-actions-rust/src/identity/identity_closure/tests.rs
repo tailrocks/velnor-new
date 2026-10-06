@@ -38,14 +38,14 @@ pub(super) fn group(kind: crate::tasks::TaskKind) -> TaskGroup {
         target_flags: Vec::new(),
         no_test_targets: false,
         package_arg: None,
-        compile_driver: crate::profile::CompileDriver::Cargo,
-        test_runner: crate::profile::TestRunner::CargoNextest,
+        compile_driver: velnor_actions_rust_core::profile::CompileDriver::Cargo,
+        test_runner: velnor_actions_rust_core::profile::TestRunner::CargoNextest,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-        nextest_profile: crate::profile::NextestProfile::Default,
+        nextest_profile: velnor_actions_rust_core::profile::NextestProfile::Default,
         run_ignored: None,
     }
 }

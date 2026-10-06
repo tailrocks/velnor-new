@@ -7,7 +7,7 @@ use velnor_actions_contract::{
     DeclaredCompileDriver, DeclaredTestRunner, RustStackConfig, is_generated_marker_line,
 };
 use velnor_actions_mise::{parse_cargo_wrapper, parse_nextest_config};
-use velnor_actions_rust::{
+use velnor_actions_rust_core::{
     CompileDriver, EvidenceFile, MiseWrapperInput, NextestConfigInput, ProfileInputs, TestRunner,
     WorkspaceRecord, detect_profile, is_generated_output,
 };
@@ -36,7 +36,7 @@ pub(crate) fn profile_for_workspace(
     index: &FileIndex,
     record: &WorkspaceRecord,
     rust: Option<&RustStackConfig>,
-) -> Result<velnor_actions_rust::ProfileOutcome, OrchestratorError> {
+) -> Result<velnor_actions_rust_core::ProfileOutcome, OrchestratorError> {
     let tool_config = tool_config_input(root);
     let cargo_a = read_optional(root, ".cargo/config.toml");
     let cargo_b = read_optional(root, ".cargo/config");

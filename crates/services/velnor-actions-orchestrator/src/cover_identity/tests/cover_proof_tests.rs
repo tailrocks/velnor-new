@@ -6,7 +6,7 @@
 use super::*;
 
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_rust::CompileDriver;
+use velnor_actions_rust_core::CompileDriver;
 
 /// Live proof dimensions for `task_id`: graph, toolchain, platform.
 fn live_proof_dims(

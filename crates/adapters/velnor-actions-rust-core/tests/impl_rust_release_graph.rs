@@ -7,7 +7,7 @@ use crate::release_support::{
     DepOpt, dep, doc, graph_of, manifest, pkg, registry, root_of, select_of,
 };
 use crate::support::{Outcome, TempDir};
-use velnor_actions_rust::{DepKind, ReleaseError, ReleaseScope};
+use velnor_actions_rust_core::{DepKind, ReleaseError, ReleaseScope};
 
 #[test]
 fn unparseable_and_unsatisfied_requirements_fail() -> Outcome {

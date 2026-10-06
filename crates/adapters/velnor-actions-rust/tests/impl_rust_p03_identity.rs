@@ -6,8 +6,10 @@
 use velnor_actions_rust::identity::{UnresolvedInput, normalize_identity_path, unresolved_inputs};
 use velnor_actions_rust::tasks::{DigestSlot, RustTaskIdentityExtension, parse_rerun_changed};
 use velnor_actions_rust::{
-    CompileDriver, DeriveInputs, GroupExtensionInputs, PackageRecord, ProfileSource,
-    RustExecutionProfile, TargetRecord, TaskGroup, TaskKind, TestRunner, derive_task_groups,
+    DeriveInputs, GroupExtensionInputs, TaskGroup, TaskKind, derive_task_groups,
+};
+use velnor_actions_rust_core::{
+    CompileDriver, PackageRecord, ProfileSource, RustExecutionProfile, TargetRecord, TestRunner,
 };
 
 /// Test outcome boxing every error type.
@@ -52,7 +54,7 @@ fn profile() -> RustExecutionProfile {
         evidence: Vec::new(),
         driver_source: ProfileSource::Detected,
         runner_source: ProfileSource::Detected,
-        nextest_profile: velnor_actions_rust::NextestProfile::Default,
+        nextest_profile: velnor_actions_rust_core::NextestProfile::Default,
         nextest_config: None,
         run_ignored: None,
     }

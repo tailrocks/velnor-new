@@ -13,8 +13,9 @@ pub(crate) use registry::detector_entries;
 use registry::{DETECTORS, detected_projects};
 
 use velnor_actions_mise::ArchivePlan;
-use velnor_actions_rust::{
-    Recommendation, RustExecutionProfile, WorkspaceRecord, dedupe_workspaces, propose_task,
+use velnor_actions_rust::propose_task;
+use velnor_actions_rust_core::{
+    Recommendation, RustExecutionProfile, WorkspaceRecord, dedupe_workspaces,
 };
 
 use crate::OrchestratorError;
@@ -36,7 +37,7 @@ pub struct PlannedWorkspace {
     /// Profile recommendations.
     pub recommendations: Vec<Recommendation>,
     /// Blocking profile findings; `generate` fails closed when non-empty.
-    pub findings: Vec<velnor_actions_rust::ProfileFinding>,
+    pub findings: Vec<velnor_actions_rust_core::ProfileFinding>,
 }
 
 /// Full detection output feeding planning and rendering.

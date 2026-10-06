@@ -7,6 +7,7 @@
     "velnor-actions-mise",
     "velnor-actions-orchestrator",
     "velnor-actions-rust",
+    "velnor-actions-rust-core",
     "velnor-actions-tofu",
     "velnor-actions-tofu-core",
     "velnor-actions-workflow-renderer",

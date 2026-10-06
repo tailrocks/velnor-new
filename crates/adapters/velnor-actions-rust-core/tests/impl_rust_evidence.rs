@@ -1,5 +1,5 @@
 //! Profile evidence cases.
-use velnor_actions_rust::{
+use velnor_actions_rust_core::{
     CompileDriver, EvidenceFile, NEXTEST_RECOMMENDATION, PERSIST_EVIDENCE, ProfileError,
     ProfileInputs, TestRunner, detect_profile, evidence_scan_excluded, is_generated_output,
 };
@@ -10,7 +10,7 @@ fn file<'a>(path: &'a str, content: &'a str) -> EvidenceFile<'a> {
 }
 
 /// Recommendation codes of an outcome, in order.
-fn codes(outcome: &velnor_actions_rust::ProfileOutcome) -> Vec<&str> {
+fn codes(outcome: &velnor_actions_rust_core::ProfileOutcome) -> Vec<&str> {
     outcome
         .recommendations
         .iter()

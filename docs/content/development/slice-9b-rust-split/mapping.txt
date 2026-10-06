@@ -1,0 +1,4 @@
+before=3381 after=3381 removed=78 added=78
+All removed tests reappear under velnor-actions-rust-core (binary rename only),
+except impl_rust_negative::manifest_depends_only_on_contract renamed to
+..._contract_and_core (same binary). No test added or dropped.

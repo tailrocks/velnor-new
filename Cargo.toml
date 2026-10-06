@@ -3,6 +3,7 @@ members = [
     "crates/adapters/velnor-actions-actionlint",
     "crates/adapters/velnor-actions-mise",
     "crates/adapters/velnor-actions-rust",
+    "crates/adapters/velnor-actions-rust-core",
     "crates/adapters/velnor-actions-tofu",
     "crates/adapters/velnor-actions-tofu-core",
     "crates/apps/velnor-actions-cli",

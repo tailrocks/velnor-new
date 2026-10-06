@@ -1,5 +1,5 @@
 //! Gap C cases: marker compatibility, durability, declarations, conflicts.
-use velnor_actions_rust::{
+use velnor_actions_rust_core::{
     CompileDriver, EvidenceFile, PROFILE_CONFLICT_CODE, ProfileError, ProfileInputs, ProfileSource,
     TRANSIENT_EVIDENCE_CODE, TestRunner, detect_profile, is_generated_output,
 };

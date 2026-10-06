@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 
 use crate::support::{Outcome, TempDir};
-use velnor_actions_rust::{
+use velnor_actions_rust_core::{
     DEFAULT_TAG_PATTERN, EmitOptions, PublicationGraph, RegistryState, ReleaseError,
     ReleaseRequest, ReleaseScope, ReleaseSelection, ResolvedScope, VersionGroup,
     emit_release_plz_config, parse_metadata_json, publication_graph, resolve_version_groups,

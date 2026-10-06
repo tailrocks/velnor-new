@@ -1,9 +1,9 @@
 //! Task-group derivation cases.
 use velnor_actions_contract::validate_task_id;
-use velnor_actions_rust::{
-    CompileDriver, DeriveInputs, NextestProfile, PackageRecord, ProfileSource,
-    RustExecutionProfile, TargetRecord, TaskKind, TestRunner, derive_task_groups,
-    derive_workspace_fmt,
+use velnor_actions_rust::{DeriveInputs, TaskKind, derive_task_groups, derive_workspace_fmt};
+use velnor_actions_rust_core::{
+    CompileDriver, NextestProfile, PackageRecord, ProfileSource, RustExecutionProfile,
+    TargetRecord, TestRunner,
 };
 
 /// Target entry for fixtures.

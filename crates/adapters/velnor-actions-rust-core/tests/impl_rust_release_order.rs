@@ -4,7 +4,7 @@ use crate::impl_rust_release_modes::{
 };
 use crate::support::{Outcome, TempDir};
 use serde_json::{Value, json};
-use velnor_actions_rust::{DepKind, ReleaseError, ReleaseScope};
+use velnor_actions_rust_core::{DepKind, ReleaseError, ReleaseScope};
 
 #[test]
 fn dependency_chain_publishes_leaves_first() -> Outcome {

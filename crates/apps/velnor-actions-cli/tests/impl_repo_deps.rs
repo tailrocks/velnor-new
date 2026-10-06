@@ -21,11 +21,13 @@ fn expected_internal(dir: &str) -> Vec<&str> {
             "velnor-actions-contract",
             "velnor-actions-mise",
             "velnor-actions-rust",
+            "velnor-actions-rust-core",
             "velnor-actions-tofu",
             "velnor-actions-tofu-core",
             "velnor-actions-workflow-renderer",
         ],
         "velnor-actions-tofu" => vec!["velnor-actions-contract", "velnor-actions-tofu-core"],
+        "velnor-actions-rust" => vec!["velnor-actions-contract", "velnor-actions-rust-core"],
         "velnor-actions-cli" => vec!["velnor-actions-orchestrator"],
         _ => vec!["velnor-actions-contract"],
     }
@@ -110,10 +112,8 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
                 }
             }
             // Cargo maps dependency hyphens to underscores in Rust identifiers.
-            assert!(
-                dep_referenced(dir, &key.replace('-', "_"))?,
-                "{dir} never uses {key}"
-            );
+            let used = dep_referenced(dir, &key.replace('-', "_"))?;
+            assert!(used, "{dir} never uses {key}");
         }
     }
     Ok(())

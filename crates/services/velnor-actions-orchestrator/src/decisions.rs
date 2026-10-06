@@ -22,7 +22,7 @@ use velnor_actions_contract::{
     RunnerImageEvidence, Stack, TaskReport, TaskStatus, Trust, WorkflowEvent, join_runner_temp,
     task_report_id_for_task, validate_run_key,
 };
-use velnor_actions_rust::SelectionBroadening;
+use velnor_actions_rust_core::SelectionBroadening;
 
 use crate::OrchestratorError;
 use crate::internal::internal_contract;
@@ -268,7 +268,7 @@ pub(crate) fn broadening_for_path(path: &str) -> Option<SelectionBroadening> {
     for stack in Stack::all() {
         match stack {
             Stack::Rust => {
-                if let Some(class) = velnor_actions_rust::selection_broadening(path) {
+                if let Some(class) = velnor_actions_rust_core::selection_broadening(path) {
                     return Some(class);
                 }
             }

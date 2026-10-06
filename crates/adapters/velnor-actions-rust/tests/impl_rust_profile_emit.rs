@@ -1,11 +1,27 @@
 //! Resolved Nextest profile emission into payload argv.
 
 use velnor_actions_rust::tasks::{TaskGroup, TaskKind, cargo_payload_with_profile};
-use velnor_actions_rust::{
-    CompileDriver, NextestProfile, ProfileInputs, TestRunner, detect_profile,
+use velnor_actions_rust_core::{
+    CompileDriver, NextestConfigInput, NextestProfile, ProfileInputs, TestRunner, detect_profile,
 };
 
-use crate::impl_rust_p06::{ci_config, default_config};
+/// Nextest config input declaring `[profile.ci]` at `line`.
+fn ci_config(path: &str, line: u32) -> NextestConfigInput {
+    NextestConfigInput {
+        path: path.to_owned(),
+        profiles: vec!["ci".to_owned()],
+        ci_line: Some(line),
+    }
+}
+
+/// Nextest config input without `[profile.ci]`.
+fn default_config(path: &str) -> NextestConfigInput {
+    NextestConfigInput {
+        path: path.to_owned(),
+        profiles: vec!["linux".to_owned()],
+        ci_line: None,
+    }
+}
 
 fn profile_group(kind: TaskKind, runner: TestRunner) -> TaskGroup {
     TaskGroup {

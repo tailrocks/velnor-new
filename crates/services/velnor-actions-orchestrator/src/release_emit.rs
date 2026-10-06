@@ -15,7 +15,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{ReleaseAuthentication, RustReleaseConfig};
 use velnor_actions_mise::{MetadataDiscovery, ToolCatalog};
-use velnor_actions_rust::release_select::{
+use velnor_actions_rust_core::release_select::{
     DEFAULT_REGISTRY, ReleaseRequest as SelectRequest, ReleaseScope, ReleaseSelection,
     select_release_set,
 };

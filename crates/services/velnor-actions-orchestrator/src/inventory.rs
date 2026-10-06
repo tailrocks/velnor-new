@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{CandidateOutcome, Stack, StackCandidate};
 use velnor_actions_mise::{MetadataDiscovery, MetadataQualification, ToolCatalog};
-use velnor_actions_rust::{WorkspaceRecord, parse_metadata_json};
+use velnor_actions_rust_core::{WorkspaceRecord, parse_metadata_json};
 
 use crate::OrchestratorError;
 use crate::decisions::{MetadataFailure, classify_metadata_failure};

@@ -4,7 +4,8 @@
 
 use super::*;
 
-use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
+use velnor_actions_rust::{TaskGroup, TaskKind};
+use velnor_actions_rust_core::{CompileDriver, NextestProfile, TestRunner};
 
 /// Digest over every envelope dimension for flip comparisons.
 fn digest_full(

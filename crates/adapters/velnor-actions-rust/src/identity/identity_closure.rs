@@ -81,7 +81,7 @@ pub fn unresolved_inputs(ext: &RustTaskIdentityExtension) -> Vec<UnresolvedInput
         unresolved.push(UnresolvedInput::NextestConfig);
     }
     if ext.task_kind == crate::tasks::TaskKind::Build
-        && ext.test_runner == crate::profile::TestRunner::CargoNextest
+        && ext.test_runner == velnor_actions_rust_core::profile::TestRunner::CargoNextest
         && ext.archive.is_none()
     {
         unresolved.push(UnresolvedInput::ArchiveSource);

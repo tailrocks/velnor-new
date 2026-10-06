@@ -84,7 +84,7 @@ fn mbx_probe_vector_is_byte_exact() {
 }
 
 /// Minimal proposal with one compile driver.
-fn group_with_driver(driver: velnor_actions_rust::CompileDriver) -> ProposedTask {
+fn group_with_driver(driver: velnor_actions_rust_core::CompileDriver) -> ProposedTask {
     let group = velnor_actions_rust::TaskGroup {
         task_id: "stack/rust/root/clippy/default".to_owned(),
         package_id: String::new(),
@@ -100,14 +100,14 @@ fn group_with_driver(driver: velnor_actions_rust::CompileDriver) -> ProposedTask
         no_test_targets: false,
         package_arg: None,
         compile_driver: driver,
-        test_runner: velnor_actions_rust::TestRunner::CargoTest,
+        test_runner: velnor_actions_rust_core::TestRunner::CargoTest,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
         uses_clock: false,
         uses_random: false,
         run_ignored: None,
-        nextest_profile: velnor_actions_rust::NextestProfile::Default,
+        nextest_profile: velnor_actions_rust_core::NextestProfile::Default,
     };
     let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
     task.validate().expect("fixture valid");

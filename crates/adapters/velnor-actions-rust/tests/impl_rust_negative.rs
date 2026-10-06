@@ -8,7 +8,7 @@ fn manifest_dir() -> PathBuf {
 }
 
 #[test]
-fn manifest_depends_only_on_contract() {
+fn manifest_depends_only_on_contract_and_core() {
     let text = std::fs::read_to_string(manifest_dir().join("Cargo.toml"));
     let Ok(text) = text else {
         panic!("crate manifest must be readable");
@@ -35,7 +35,10 @@ fn manifest_depends_only_on_contract() {
     }
     assert_eq!(
         workspace,
-        BTreeSet::from(["velnor-actions-contract".to_owned()])
+        BTreeSet::from([
+            "velnor-actions-contract".to_owned(),
+            "velnor-actions-rust-core".to_owned()
+        ])
     );
 }
 
@@ -56,30 +59,35 @@ const FORBIDDEN_TOKENS: &[&str] = &[
 
 #[test]
 fn rust_src_never_writes_tool_files() {
-    let src = manifest_dir().join("src");
-    let entries = std::fs::read_dir(&src);
-    let Ok(entries) = entries else {
-        panic!("src directory must be readable");
-    };
+    let dirs = [
+        manifest_dir().join("src"),
+        manifest_dir().join("../velnor-actions-rust-core/src"),
+    ];
     let mut checked = 0;
-    for entry in entries {
-        let Ok(entry) = entry else {
-            panic!("src entries must be readable");
+    for src in &dirs {
+        let entries = std::fs::read_dir(src);
+        let Ok(entries) = entries else {
+            panic!("src directory must be readable");
         };
-        let path = entry.path();
-        if path.extension().is_none_or(|ext| ext != "rs") {
-            continue;
-        }
-        let Ok(text) = std::fs::read_to_string(&path) else {
-            panic!("source file must be readable: {}", path.display());
-        };
-        checked += 1;
-        for token in FORBIDDEN_TOKENS {
-            assert!(
-                !text.contains(token),
-                "forbidden token {token} in {}",
-                path.display()
-            );
+        for entry in entries {
+            let Ok(entry) = entry else {
+                panic!("src entries must be readable");
+            };
+            let path = entry.path();
+            if path.extension().is_none_or(|ext| ext != "rs") {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                panic!("source file must be readable: {}", path.display());
+            };
+            checked += 1;
+            for token in FORBIDDEN_TOKENS {
+                assert!(
+                    !text.contains(token),
+                    "forbidden token {token} in {}",
+                    path.display()
+                );
+            }
         }
     }
     assert!(checked > 0, "at least one source file must be scanned");

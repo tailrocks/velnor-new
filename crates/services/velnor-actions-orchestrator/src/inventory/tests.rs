@@ -5,7 +5,7 @@
 
 use std::cell::Cell;
 
-use velnor_actions_rust::PackageRecord;
+use velnor_actions_rust_core::PackageRecord;
 
 use super::*;
 

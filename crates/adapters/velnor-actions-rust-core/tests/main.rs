@@ -1,34 +1,26 @@
 //! Integration test entry point; cases live in the sibling files.
-#[path = "impl_adapter_wire_rust.rs"]
-mod impl_adapter_wire_rust;
-#[path = "impl_rust.rs"]
-mod impl_rust;
-#[path = "impl_rust_argv.rs"]
-mod impl_rust_argv;
-#[path = "impl_rust_detect.rs"]
-mod impl_rust_detect;
-#[path = "impl_rust_f2a.rs"]
-mod impl_rust_f2a;
-#[path = "impl_rust_f2b.rs"]
-mod impl_rust_f2b;
-#[path = "impl_rust_gates.rs"]
-mod impl_rust_gates;
-#[path = "impl_rust_nested.rs"]
-mod impl_rust_nested;
-#[path = "impl_rust_negative.rs"]
-mod impl_rust_negative;
-#[path = "impl_rust_p03_identity.rs"]
-mod impl_rust_p03_identity;
-#[path = "impl_rust_profile_emit.rs"]
-mod impl_rust_profile_emit;
-#[path = "impl_rust_propose_parity.rs"]
-mod impl_rust_propose_parity;
-#[path = "impl_rust_tasks.rs"]
-mod impl_rust_tasks;
-#[path = "impl_rust_test_preparation.rs"]
-mod impl_rust_test_preparation;
-#[path = "impl_rust_test_targets.rs"]
-mod impl_rust_test_targets;
+#[path = "impl_rust_evidence.rs"]
+mod impl_rust_evidence;
+#[path = "impl_rust_gapc.rs"]
+mod impl_rust_gapc;
+#[path = "impl_rust_metadata.rs"]
+mod impl_rust_metadata;
+#[path = "impl_rust_p06.rs"]
+mod impl_rust_p06;
+#[path = "impl_rust_release_emit.rs"]
+mod impl_rust_release_emit;
+#[path = "impl_rust_release_graph.rs"]
+mod impl_rust_release_graph;
+#[path = "impl_rust_release_modes.rs"]
+mod impl_rust_release_modes;
+#[path = "impl_rust_release_order.rs"]
+mod impl_rust_release_order;
+#[path = "impl_rust_release_select.rs"]
+mod impl_rust_release_select;
+#[path = "impl_rust_toolfiles.rs"]
+mod impl_rust_toolfiles;
+#[path = "release_support.rs"]
+mod release_support;
 
 /// Shared inline-fixture support (no fixture files outside `tests/`).
 mod support {

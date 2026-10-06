@@ -121,8 +121,8 @@ fn check_group(
             return Err("shard_input_mismatch".into());
         }
     }
-    let nextest = velnor_actions_rust::TestRunner::parse(&first.runner)
-        .is_ok_and(|runner| runner == velnor_actions_rust::TestRunner::CargoNextest);
+    let nextest = velnor_actions_rust_core::TestRunner::parse(&first.runner)
+        .is_ok_and(|runner| runner == velnor_actions_rust_core::TestRunner::CargoNextest);
     if !nextest {
         return Err("sharding_requires_nextest".into());
     }

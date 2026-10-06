@@ -1,5 +1,5 @@
 //! P06 detection cases: structural wrappers, Nextest configs, selection.
-use velnor_actions_rust::{
+use velnor_actions_rust_core::{
     AMBIGUOUS_DRIVER_CODE, CompileDriver, MiseWrapperInput, NEXTEST_RECOMMENDATION,
     NextestConfigInput, NextestProfile, PERSIST_EVIDENCE, ProfileError, ProfileInputs,
     ProfileSource, SHADOWED_NEXTEST_CONFIG, TestRunner, detect_profile,
@@ -44,7 +44,7 @@ pub(crate) fn default_config(path: &str) -> NextestConfigInput {
 }
 
 /// Recommendation codes of an outcome, in order.
-fn codes(outcome: &velnor_actions_rust::ProfileOutcome) -> Vec<&str> {
+fn codes(outcome: &velnor_actions_rust_core::ProfileOutcome) -> Vec<&str> {
     outcome
         .recommendations
         .iter()
@@ -209,7 +209,7 @@ fn no_evidence_defaults_with_profile_fields() {
 fn nextest_config_conflicts_with_cargo_test_invocation() {
     let inputs = ProfileInputs {
         nextest_configs: vec![ci_config(".config/nextest.toml", 4)],
-        executables: vec![velnor_actions_rust::EvidenceFile {
+        executables: vec![velnor_actions_rust_core::EvidenceFile {
             path: "scripts/test.sh",
             content: "cargo test --package a\n",
         }],
@@ -274,7 +274,7 @@ fn distinct_wrappers_are_ambiguous() {
 fn mbx_invocation_against_other_wrapper_is_ambiguous() {
     let inputs = ProfileInputs {
         mise_wrappers: vec![other_wrapper("mise.toml", 3, "sccache")],
-        executables: vec![velnor_actions_rust::EvidenceFile {
+        executables: vec![velnor_actions_rust_core::EvidenceFile {
             path: ".mise/tasks/test",
             content: "#!/bin/sh\nmbx test --package a\n",
         }],

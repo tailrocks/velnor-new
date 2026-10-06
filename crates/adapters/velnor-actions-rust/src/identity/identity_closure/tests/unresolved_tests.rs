@@ -64,7 +64,7 @@ fn proven_absence_binds_without_blocking() {
 #[test]
 fn unresolved_ignores_composite_spellings() {
     let mut cargo = group(crate::tasks::TaskKind::Build);
-    cargo.test_runner = crate::profile::TestRunner::CargoTest;
+    cargo.test_runner = velnor_actions_rust_core::profile::TestRunner::CargoTest;
     let mut spoofed = cargo.identity_extension(&inputs(
         DigestSlot::Known("lock".to_owned()),
         DigestSlot::Known("nextest".to_owned()),
@@ -78,7 +78,7 @@ fn unresolved_ignores_composite_spellings() {
         "substring sniffing must not resurrect: {spoofed:?}"
     );
     let mut test = group(crate::tasks::TaskKind::Test);
-    test.test_runner = crate::profile::TestRunner::CargoTest;
+    test.test_runner = velnor_actions_rust_core::profile::TestRunner::CargoTest;
     let mut kind_spoof = test.identity_extension(&inputs(
         DigestSlot::Unknown("unprobed".to_owned()),
         DigestSlot::Unknown("unprobed".to_owned()),

@@ -57,7 +57,8 @@ fn tofu_drift_fails_the_bridge_closed() {
 
 #[test]
 fn rust_tasks_keep_the_rust_envelope() {
-    use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
+    use velnor_actions_rust::{TaskGroup, TaskKind};
+    use velnor_actions_rust_core::{CompileDriver, NextestProfile, TestRunner};
     let group = TaskGroup {
         task_id: "stack/rust/root/clippy/default".to_owned(),
         package_id: "demo".to_owned(),

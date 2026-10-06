@@ -1,6 +1,7 @@
 use super::*;
 use crate::clippy_groups::ClippyMemoryPlan;
-use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
+use velnor_actions_rust::{TaskGroup, TaskKind};
+use velnor_actions_rust_core::{CompileDriver, NextestProfile, TestRunner};
 /// Discovery shell carrying only task proposals.
 pub(super) fn discovery(groups: Vec<ProposedTask>) -> Discovery {
     Discovery {

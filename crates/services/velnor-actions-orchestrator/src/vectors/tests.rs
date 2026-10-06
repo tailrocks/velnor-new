@@ -1,5 +1,5 @@
 use super::*;
-use velnor_actions_rust::{CompileDriver, TestRunner};
+use velnor_actions_rust_core::{CompileDriver, TestRunner};
 
 /// Owned argv expectation from literals.
 fn argv_of(parts: &[&str]) -> Vec<String> {

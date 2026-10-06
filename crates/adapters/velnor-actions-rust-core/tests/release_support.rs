@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 
 use crate::support::TempDir;
-use velnor_actions_rust::{
+use velnor_actions_rust_core::{
     PublicationGraph, RegistryState, ReleaseError, ReleaseRequest, ReleaseScope, ReleaseSelection,
     parse_metadata_json, publication_graph, select_release_set,
 };

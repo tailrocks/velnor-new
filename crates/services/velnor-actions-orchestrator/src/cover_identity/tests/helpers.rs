@@ -53,7 +53,8 @@ pub(super) fn plan_with(task_ids: &[&str]) -> Plan {
 }
 /// Discovery with one plain proposal per task ID, all unchanged.
 pub(super) fn discovery_with(task_ids: &[&str]) -> Discovery {
-    use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
+    use velnor_actions_rust::{TaskGroup, TaskKind};
+    use velnor_actions_rust_core::{CompileDriver, NextestProfile, TestRunner};
     Discovery {
         mise_checks: Vec::new(),
         statuses: Vec::new(),

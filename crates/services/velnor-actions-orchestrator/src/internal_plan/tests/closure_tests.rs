@@ -5,7 +5,8 @@
 use super::*;
 
 use velnor_actions_contract::{ProposedTask, Provenance, TaskInputClosure, digest_b3};
-use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
+use velnor_actions_rust::{TaskGroup, TaskKind};
+use velnor_actions_rust_core::{CompileDriver, NextestProfile, TestRunner};
 
 /// Minimal proposal with `declared` inputs and `reads` flag.
 fn group(declared: Vec<String>, reads: bool) -> ProposedTask {

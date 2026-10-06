@@ -1,7 +1,7 @@
 use velnor_actions_mise::ArchivePlan;
-use velnor_actions_rust::{
-    CompileDriver, NextestProfile, ProfileSource, RustExecutionProfile, TaskGroup, TaskKind,
-    TestRunner,
+use velnor_actions_rust::{TaskGroup, TaskKind};
+use velnor_actions_rust_core::{
+    CompileDriver, NextestProfile, ProfileSource, RustExecutionProfile, TestRunner,
 };
 
 use super::plan_shard_archive;

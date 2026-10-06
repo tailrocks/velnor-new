@@ -107,7 +107,7 @@ fn fail_on_blocking_findings(prep: &GenerationPreparation) -> Result<(), Orchest
         return Err(OrchestratorError::Profile {
             problem: format!(
                 "{}: {}",
-                velnor_actions_rust::TRANSIENT_EVIDENCE_CODE,
+                velnor_actions_rust_core::TRANSIENT_EVIDENCE_CODE,
                 blockers.join("; ")
             ),
         });

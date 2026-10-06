@@ -6,8 +6,8 @@
 use serde::Serialize;
 use velnor_actions_contract::ContractError;
 
-use crate::profile::{CompileDriver, TestRunner};
 use crate::tasks::TaskKind;
+use velnor_actions_rust_core::profile::{CompileDriver, TestRunner};
 
 /// Provenance of one digest slot (lockfile, Nextest config).
 ///

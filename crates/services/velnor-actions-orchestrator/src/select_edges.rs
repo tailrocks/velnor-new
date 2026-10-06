@@ -8,7 +8,7 @@ use velnor_actions_contract::{
     ContractError, EdgeKind, ProposedTask, TaskEdge, TaskGraph, TaskNode, digest_b3,
 };
 use velnor_actions_mise::GitRequest;
-use velnor_actions_rust::{local_edge_pairs, manifest_edges};
+use velnor_actions_rust_core::{local_edge_pairs, manifest_edges};
 
 use crate::discover::Discovery;
 use crate::git_paths::split_nul_paths;

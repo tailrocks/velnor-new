@@ -10,7 +10,8 @@ use velnor_actions_contract::cachekey::{
 use velnor_actions_contract::component_id_for_unit;
 use velnor_actions_contract::{ProposedTask, digest_b3, validate_digest};
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_rust::{CompileDriver, LocalEdge, TaskKind, TestRunner, WorkspaceRecord};
+use velnor_actions_rust::TaskKind;
+use velnor_actions_rust_core::{CompileDriver, LocalEdge, TestRunner, WorkspaceRecord};
 
 #[test]
 fn lanes_follow_responsibility_never_ordinals() {
@@ -113,7 +114,7 @@ fn formats_stay_single_and_graphs_relocate() {
     let record = |id: &str| WorkspaceRecord {
         workspace_root: String::new(),
         members: vec![id.to_owned()],
-        packages: vec![velnor_actions_rust::PackageRecord {
+        packages: vec![velnor_actions_rust_core::PackageRecord {
             id: id.to_owned(),
             name: "a".to_owned(),
             version: "0.1.0".to_owned(),
@@ -127,7 +128,7 @@ fn formats_stay_single_and_graphs_relocate() {
         edges: vec![LocalEdge {
             from: id.to_owned(),
             to: id.to_owned(),
-            kind: velnor_actions_rust::DepKind::Normal,
+            kind: velnor_actions_rust_core::DepKind::Normal,
             optional: false,
             target: None,
         }],

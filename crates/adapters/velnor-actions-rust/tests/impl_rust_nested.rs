@@ -12,7 +12,7 @@ use std::path::Path;
 use serde_json::json;
 
 use crate::support::{Outcome, TempDir};
-use velnor_actions_rust::{DepKind, MetadataError, parse_metadata_json};
+use velnor_actions_rust_core::{DepKind, MetadataError, parse_metadata_json};
 
 /// Absolute manifest path text for `relative` under `root`.
 fn manifest(root: &Path, relative: &str) -> String {

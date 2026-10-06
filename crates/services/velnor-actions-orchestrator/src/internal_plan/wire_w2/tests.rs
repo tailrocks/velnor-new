@@ -6,7 +6,8 @@ use super::reuse_stages::{ExpectedReuseIdentity, ObservedRestoreMeta};
 use super::*;
 use velnor_actions_contract::ProposedTask;
 use velnor_actions_mise::CachedTaskDescriptor;
-use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
+use velnor_actions_rust::{TaskGroup, TaskKind};
+use velnor_actions_rust_core::{CompileDriver, NextestProfile, TestRunner};
 
 /// Minimal proposal with kind, task ID, and nondeterminism flags.
 fn group(kind: TaskKind, task_id: &str) -> ProposedTask {

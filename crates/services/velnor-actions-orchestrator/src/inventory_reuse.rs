@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use velnor_actions_rust::WorkspaceRecord;
+use velnor_actions_rust_core::WorkspaceRecord;
 
 /// Manifest-to-slot index; each record indexed once, lookups `O(log n)`.
 #[derive(Debug, Default)]

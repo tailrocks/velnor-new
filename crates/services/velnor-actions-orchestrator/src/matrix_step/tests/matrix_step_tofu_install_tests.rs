@@ -9,7 +9,8 @@ use super::*;
 use crate::clippy_groups::ClippyMemoryPlan;
 use crate::discover::Discovery;
 use velnor_actions_contract::{Job, ProposedTask, WorkflowPolicy};
-use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
+use velnor_actions_rust::{TaskGroup, TaskKind};
+use velnor_actions_rust_core::{CompileDriver, NextestProfile, TestRunner};
 
 /// Runnable fixture proposal for one package (test kind, no gates).
 fn group(package: &str) -> ProposedTask {

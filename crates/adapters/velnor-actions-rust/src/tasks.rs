@@ -2,7 +2,7 @@
 
 use velnor_actions_contract::{ContractError, manifest_key_for_cargo_manifest, task_id_for_stack};
 
-use crate::{
+use velnor_actions_rust_core::{
     metadata::PackageRecord,
     profile::{CompileDriver, NextestProfile, RustExecutionProfile, TestRunner},
 };

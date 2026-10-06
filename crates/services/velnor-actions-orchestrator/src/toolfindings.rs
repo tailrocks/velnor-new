@@ -5,7 +5,7 @@
 //! the supplying file, suggest a manual action, and never write.
 
 use velnor_actions_contract::Finding;
-use velnor_actions_rust::MISSING_RECOMMENDED_INPUT;
+use velnor_actions_rust_core::MISSING_RECOMMENDED_INPUT;
 
 use crate::toolcheck::{ToolInputCheck, ToolParse};
 
@@ -29,7 +29,7 @@ pub fn tool_check_lines(checks: &[ToolInputCheck]) -> Vec<String> {
         if let Some(problem) = problem {
             lines.push(format!(
                 "{}: {}: {problem}; fix it manually, Velnor continues with its pinned tools",
-                velnor_actions_rust::TOOLING_INPUT_INVALID,
+                velnor_actions_rust_core::TOOLING_INPUT_INVALID,
                 check.path
             ));
         }

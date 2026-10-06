@@ -11,7 +11,7 @@ use std::path::Path;
 
 use velnor_actions_contract::{ProposedTask, WorkflowEvent};
 use velnor_actions_mise::GitRequest;
-use velnor_actions_rust::SelectionBroadening;
+use velnor_actions_rust_core::SelectionBroadening;
 
 use crate::decisions::{broadening_for_path, selection_broadens_for_path};
 use crate::discover::Discovery;
@@ -343,7 +343,7 @@ fn untracked_files(root: &Path) -> Result<BTreeSet<String>, String> {
 /// Generated execution uses Velnor's exact pins, so these repository inputs
 /// feed inspection findings only; a task consuming one must declare it.
 fn is_advisory_toolfile(path: &str) -> bool {
-    path == ".mise.toml" || velnor_actions_rust::is_known_toolfile(path)
+    path == ".mise.toml" || velnor_actions_rust_core::is_known_toolfile(path)
 }
 
 #[cfg(test)]

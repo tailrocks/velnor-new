@@ -13,7 +13,7 @@ use std::ffi::OsString;
 use std::path::Path;
 
 use velnor_actions_mise::GitRequest;
-use velnor_actions_rust::release_select::ReleaseSelection;
+use velnor_actions_rust_core::release_select::ReleaseSelection;
 use velnor_actions_workflow_renderer::release_spec::validate_source_sha;
 
 use crate::OrchestratorError;

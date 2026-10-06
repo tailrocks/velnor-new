@@ -14,7 +14,7 @@ use velnor_actions_orchestrator::{
     GenerateOptions, OrchestratorError, PlanOutputMode, generate, plan_internal, plan_outputs,
     prepare,
 };
-use velnor_actions_rust::parse_metadata_json;
+use velnor_actions_rust_core::parse_metadata_json;
 use velnor_actions_workflow_renderer::MAX_WORKFLOW_BYTES;
 
 use self::perf_fixtures_p13::{malformed_repo, nested_path_dep_repo, nested_repo, workspace_repo};

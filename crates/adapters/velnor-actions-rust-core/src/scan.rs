@@ -9,7 +9,8 @@ fn is_word_char(ch: char) -> bool {
 }
 
 /// Truncate `line` at the first `#` starting a comment.
-pub(crate) fn strip_comment(line: &str) -> &str {
+#[must_use]
+pub fn strip_comment(line: &str) -> &str {
     let mut start = 0;
     while let Some(pos) = line[start..].find('#') {
         let absolute = start + pos;
@@ -54,7 +55,8 @@ pub(crate) fn starts_with_word(text: &str, word: &str) -> bool {
 }
 
 /// Whether `line` invokes command `name` (pins and action slugs excluded).
-pub(crate) fn has_command(line: &str, name: &str) -> bool {
+#[must_use]
+pub fn has_command(line: &str, name: &str) -> bool {
     let mut search = line;
     let mut offset = 0;
     while let Some(pos) = find_word(search, name) {
@@ -82,7 +84,8 @@ fn invocation_edges(before: &str, after: &str) -> bool {
 }
 
 /// Whether `first` is immediately followed by `second` as the next word.
-pub(crate) fn has_adjacent(line: &str, first: &str, second: &str) -> bool {
+#[must_use]
+pub fn has_adjacent(line: &str, first: &str, second: &str) -> bool {
     let mut search = line;
     while let Some(pos) = find_word(search, first) {
         let rest = search[pos + first.len()..].trim_start();

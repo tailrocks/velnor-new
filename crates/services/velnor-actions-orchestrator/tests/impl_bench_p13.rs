@@ -9,7 +9,7 @@
 use std::collections::BTreeSet;
 
 use velnor_actions_orchestrator::prepare;
-use velnor_actions_rust::parse_metadata_json;
+use velnor_actions_rust_core::parse_metadata_json;
 
 use crate::impl_common::TestResult;
 use crate::impl_perf_p13::perf_fixtures_p13::{

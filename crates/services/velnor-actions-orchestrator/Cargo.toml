@@ -15,6 +15,7 @@ velnor-actions-actionlint = { version = "=0.1.1", path = "../../adapters/velnor-
 velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
 velnor-actions-mise = { version = "=0.1.1", path = "../../adapters/velnor-actions-mise" }
 velnor-actions-rust = { version = "=0.1.1", path = "../../adapters/velnor-actions-rust" }
+velnor-actions-rust-core = { version = "=0.1.1", path = "../../adapters/velnor-actions-rust-core" }
 velnor-actions-tofu = { version = "=0.1.1", path = "../../adapters/velnor-actions-tofu" }
 velnor-actions-tofu-core = { version = "=0.1.1", path = "../../adapters/velnor-actions-tofu-core" }
 velnor-actions-workflow-renderer = { version = "=0.1.1", path = "../velnor-actions-workflow-renderer" }

@@ -4,7 +4,9 @@ use velnor_actions_rust::tasks::{
     TaskGroup, TaskKind, cargo_payload_argv, cargo_payload_with_profile, entry_metadata,
     evidence_id,
 };
-use velnor_actions_rust::{CompileDriver, Evidence, EvidenceStrength, NextestProfile, TestRunner};
+use velnor_actions_rust_core::{
+    CompileDriver, Evidence, EvidenceStrength, NextestProfile, TestRunner,
+};
 
 fn group(kind: TaskKind) -> TaskGroup {
     TaskGroup {

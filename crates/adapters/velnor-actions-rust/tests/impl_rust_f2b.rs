@@ -3,9 +3,11 @@ use std::path::PathBuf;
 
 use velnor_actions_rust::tasks::{DigestSlot, parse_rerun_changed};
 use velnor_actions_rust::{
-    CompileDriver, EvidenceFile, NextestProfile, ProfileInputs, TaskGroup, TaskKind, TestRunner,
-    committed_profile_differs, detect_profile, inspect_toolchain_file, is_generated_output,
-    read_committed_profile_for_comparison,
+    TaskGroup, TaskKind, committed_profile_differs, read_committed_profile_for_comparison,
+};
+use velnor_actions_rust_core::{
+    CompileDriver, EvidenceFile, NextestProfile, ProfileInputs, TestRunner, detect_profile,
+    inspect_toolchain_file, is_generated_output,
 };
 
 /// One derived group for producer-identity checks.
@@ -122,36 +124,45 @@ fn toolchain_inspection_never_fails_never_writes() {
 
 #[test]
 fn rust_never_inspects_mise_files() {
-    let src = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
-    let entries = std::fs::read_dir(&src).expect("src readable");
-    for entry in entries {
-        let entry = entry.expect("entry");
-        let path = entry.path();
-        if path.extension().is_none_or(|ext| ext != "rs") {
-            continue;
-        }
-        let text = std::fs::read_to_string(&path).expect("readable");
-        let name = path
-            .file_name()
-            .expect("name")
-            .to_string_lossy()
-            .into_owned();
-        for (index, line) in text.lines().enumerate() {
-            let mentions =
-                line.contains("mise.toml") || line.contains("mise.lock") || line.contains("MISE_");
-            if !mentions {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let dirs = [
+        root.join("src"),
+        root.join("../velnor-actions-rust-core/src"),
+    ];
+    for src in &dirs {
+        let entries = std::fs::read_dir(src).expect("src readable");
+        for entry in entries {
+            let entry = entry.expect("entry");
+            let path = entry.path();
+            if path.extension().is_none_or(|ext| ext != "rs") {
                 continue;
             }
-            assert!(
-                name == "toolfiles.rs" || name == "evidence.rs",
-                "mise mention outside router/classifier: {name}"
-            );
-            assert!(
-                !line.contains("parse") && !line.contains("from_str") && !line.contains("inspect"),
-                "rust must route or classify mise files, never parse them ({}:{})",
-                name,
-                index + 1
-            );
+            let text = std::fs::read_to_string(&path).expect("readable");
+            let name = path
+                .file_name()
+                .expect("name")
+                .to_string_lossy()
+                .into_owned();
+            for (index, line) in text.lines().enumerate() {
+                let mentions = line.contains("mise.toml")
+                    || line.contains("mise.lock")
+                    || line.contains("MISE_");
+                if !mentions {
+                    continue;
+                }
+                assert!(
+                    name == "toolfiles.rs" || name == "evidence.rs",
+                    "mise mention outside router/classifier: {name}"
+                );
+                assert!(
+                    !line.contains("parse")
+                        && !line.contains("from_str")
+                        && !line.contains("inspect"),
+                    "rust must route or classify mise files, never parse them ({}:{})",
+                    name,
+                    index + 1
+                );
+            }
         }
     }
 }

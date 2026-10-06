@@ -17,7 +17,8 @@ use velnor_actions_mise::{
     restore::MissReason,
     reuse::{ReusePlan, plan_reuse},
 };
-use velnor_actions_rust::{CompileDriver, is_nextest_kind};
+use velnor_actions_rust::is_nextest_kind;
+use velnor_actions_rust_core::CompileDriver;
 
 use self::reuse_stages::{ExpectedReuseIdentity, ObservedRestoreMeta, verify_reused_pipeline};
 use crate::{OrchestratorError, internal::internal};

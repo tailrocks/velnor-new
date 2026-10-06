@@ -6,10 +6,13 @@ use velnor_actions_rust::tasks::{
     DigestSlot, ExtensionInputs, RustTaskIdentityExtension, parse_rerun_changed,
 };
 use velnor_actions_rust::{
-    CompileDriver, DepKind, DeriveInputs, Evidence, EvidenceStrength, GroupExtensionInputs,
-    LocalEdge, NextestProfile, PackageRecord, ProfileSource, RustExecutionProfile, TargetRecord,
-    TaskKind, TestRunner, adapter_entry_metadata, derive_task_groups, evidence_scan_excluded,
-    expand_shards_for_group, local_edge_pairs,
+    DeriveInputs, GroupExtensionInputs, TaskKind, adapter_entry_metadata, derive_task_groups,
+    expand_shards_for_group,
+};
+use velnor_actions_rust_core::{
+    CompileDriver, DepKind, Evidence, EvidenceStrength, LocalEdge, NextestProfile, PackageRecord,
+    ProfileSource, RustExecutionProfile, TargetRecord, TestRunner, evidence_scan_excluded,
+    local_edge_pairs,
 };
 
 /// Target entry for fixtures.

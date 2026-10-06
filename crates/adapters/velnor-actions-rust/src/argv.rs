@@ -12,9 +12,9 @@ use std::ffi::OsString;
 use velnor_actions_contract::{ContractError, split_shard_suffix, task_id_for_stack};
 
 use crate::detect::manifest_for_key;
-use crate::evidence::Evidence;
-use crate::profile::{CompileDriver, TestRunner};
 use crate::tasks::{TaskGroup, TaskKind};
+use velnor_actions_rust_core::evidence::Evidence;
+use velnor_actions_rust_core::profile::{CompileDriver, TestRunner};
 
 /// Derive one shard task ID from an unsharded base ID.
 /// # Errors

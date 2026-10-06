@@ -7,6 +7,8 @@
 
 use std::fmt;
 
+use velnor_actions_contract::Stack;
+
 /// Tool-file name owned by the Rust adapter.
 pub const RUST_TOOLCHAIN_FILE: &str = "rust-toolchain.toml";
 
@@ -185,7 +187,7 @@ impl std::error::Error for ToolInspectError {}
 pub fn stack_for_symbol(path: &str) -> Option<&'static str> {
     let name = file_name(path);
     if OWNED_SYMBOLS.contains(&name) {
-        Some(crate::STACK_ID)
+        Some(Stack::Rust.id())
     } else if FOREIGN_TOOL_FILES.contains(&name) {
         Some("mise")
     } else {

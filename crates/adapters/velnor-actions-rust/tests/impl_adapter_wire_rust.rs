@@ -7,9 +7,12 @@ use velnor_actions_rust::tasks::{
     DigestSlot, ExtensionInputs, RustTaskIdentityExtension, TaskGroup, TaskKind, cargo_payload_argv,
 };
 use velnor_actions_rust::{
-    CompileDriver, DeriveInputs, GroupExtensionInputs, NextestProfile, PackageRecord,
-    ProfileSource, RUSTDOCFLAGS_ENV, RustExecutionProfile, TargetRecord, TestRunner,
-    cargo_payload_env, derive_task_groups, derive_workspace_fmt_if_explicit,
+    DeriveInputs, GroupExtensionInputs, RUSTDOCFLAGS_ENV, cargo_payload_env, derive_task_groups,
+    derive_workspace_fmt_if_explicit,
+};
+use velnor_actions_rust_core::{
+    CompileDriver, NextestProfile, PackageRecord, ProfileSource, RustExecutionProfile,
+    TargetRecord, TestRunner,
 };
 
 fn target(kind: &str) -> TargetRecord {

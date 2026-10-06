@@ -13,10 +13,10 @@ pub use self::identity_closure::{UnresolvedInput, normalize_identity_path, unres
 use velnor_actions_contract::{ContractError, ProposedTask, component_id_for_unit};
 
 use crate::argv::{entry_metadata, require_nextest_for_shards, shards_allowed};
-use crate::evidence::Evidence;
-use crate::profile::{CompileDriver, TestRunner};
 use crate::task_identity::{DigestSlot, ExtensionInputs, RustTaskIdentityExtension};
 use crate::tasks::{TaskGroup, TaskKind};
+use velnor_actions_rust_core::evidence::Evidence;
+use velnor_actions_rust_core::profile::{CompileDriver, TestRunner};
 
 /// Digests and build facts the orchestrator supplies per extension.
 #[derive(Debug, Clone)]

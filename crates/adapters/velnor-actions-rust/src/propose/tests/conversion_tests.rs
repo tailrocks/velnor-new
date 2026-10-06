@@ -1,8 +1,8 @@
 use super::super::propose_task;
 use super::group;
-use crate::profile::{CompileDriver, TestRunner};
 use crate::tasks::{TaskKind, cargo_payload_with_profile};
 use velnor_actions_contract::ResourceClass;
+use velnor_actions_rust_core::profile::{CompileDriver, TestRunner};
 
 /// Conversion copies ids/edges and precomputes adapter facts.
 #[test]

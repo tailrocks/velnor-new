@@ -100,7 +100,8 @@ fn union_of_base_and_head_graphs_selects_removed_consumers() {
 
 #[test]
 fn declared_inputs_select_their_package() {
-    use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
+    use velnor_actions_rust::{TaskGroup, TaskKind};
+    use velnor_actions_rust_core::{CompileDriver, NextestProfile, TestRunner};
     let mut discovery = two_package_discovery();
     let group = TaskGroup {
         task_id: "stack/rust/a/clippy/default".to_owned(),

@@ -23,8 +23,12 @@ fn intake_adapter_dependency_direction() -> TestResult {
         let manifest: toml::Table = toml::from_str(&text)?;
         if let Some(deps) = manifest.get("dependencies").and_then(toml::Value::as_table) {
             for name in deps.keys() {
+                // SIZE-split foundations ride as `{adapter}-core` children.
+                let core_child = name == &format!("velnor-actions-{adapter}-core");
                 assert!(
-                    !name.starts_with("velnor-actions-") || name == "velnor-actions-contract",
+                    !name.starts_with("velnor-actions-")
+                        || name == "velnor-actions-contract"
+                        || core_child,
                     "{adapter} must not depend on {name}"
                 );
             }

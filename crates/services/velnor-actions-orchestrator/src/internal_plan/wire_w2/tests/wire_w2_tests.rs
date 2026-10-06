@@ -177,7 +177,7 @@ fn archive_gate_binds_sources_and_refuses_unbound() {
         TaskKind::Nextest,
         "stack/rust/root/nextest/default/shard-1-of-2",
     );
-    sharded.identity.compile_driver = velnor_actions_rust::CompileDriver::Cargo
+    sharded.identity.compile_driver = velnor_actions_rust_core::CompileDriver::Cargo
         .as_str()
         .to_owned();
     let check = |task: &ProposedTask, source: Option<&str>| {

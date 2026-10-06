@@ -16,8 +16,8 @@ use velnor_actions_contract::{
 
 use crate::cargo_env::cargo_payload_env;
 use crate::detect::manifest_for_key;
-use crate::profile::{CompileDriver, TestRunner};
 use crate::tasks::{TaskGroup, TaskKind, cargo_payload_with_profile};
+use velnor_actions_rust_core::profile::{CompileDriver, TestRunner};
 
 impl TaskKind {
     /// Parse a kind token; unknown tokens fail closed.

@@ -1,5 +1,5 @@
 //! Read-only `rust-toolchain.toml` inspection cases.
-use velnor_actions_rust::{
+use velnor_actions_rust_core::{
     MISSING_RECOMMENDED_INPUT, TOOLING_INPUT_INVALID, ToolInspectError, inspect_toolchain_file,
     is_owned_tool_file, stack_for_symbol,
 };

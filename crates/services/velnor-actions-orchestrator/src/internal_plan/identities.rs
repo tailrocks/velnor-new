@@ -10,7 +10,8 @@ use velnor_actions_contract::{
     ContractError, ProposedTask, Stack, component_id_for_unit, digest_b3,
 };
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
-use velnor_actions_rust::{CompileDriver, DepKind, WorkspaceRecord, tool_needs};
+use velnor_actions_rust::tool_needs;
+use velnor_actions_rust_core::{CompileDriver, DepKind, WorkspaceRecord};
 
 use super::snapshot::{ExecutionSnapshot, canonical_digest, platform_id_for};
 use crate::discover::Discovery;

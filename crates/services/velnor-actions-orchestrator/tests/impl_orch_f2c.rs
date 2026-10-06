@@ -212,15 +212,15 @@ fn clippy_task() -> Result<velnor_actions_contract::ProposedTask, Box<dyn std::e
         target_flags: Vec::new(),
         no_test_targets: false,
         package_arg: None,
-        compile_driver: velnor_actions_rust::CompileDriver::Cargo,
-        test_runner: velnor_actions_rust::TestRunner::CargoTest,
+        compile_driver: velnor_actions_rust_core::CompileDriver::Cargo,
+        test_runner: velnor_actions_rust_core::TestRunner::CargoTest,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
         uses_clock: false,
         uses_random: false,
         run_ignored: None,
-        nextest_profile: velnor_actions_rust::NextestProfile::Default,
+        nextest_profile: velnor_actions_rust_core::NextestProfile::Default,
     };
     let task = velnor_actions_rust::propose_task(&group)?;
     task.validate()?;
