@@ -107,9 +107,7 @@ fn assert_release_fixture_generation_requirements() {
         "{fixture_check}"
     );
     assert!(
-        fixture_check.contains(
-            r#"cp "$ROOT/fixtures/consumer-release-manifest.json" "$manifest""#
-        ),
+        fixture_check.contains(r#"cp "$ROOT/fixtures/consumer-release-manifest.json" "$manifest""#),
         "{fixture_check}"
     );
     assert!(

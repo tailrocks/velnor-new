@@ -43,7 +43,6 @@ pub(crate) const EXPECTED_ACTIONS: &[(&str, &str)] = &[
     ("actions/cache/save", "CACHE_ACTION"),
     ("jdx/mr-boxington-action", "MR_BOXINGTON_ACTION"),
     ("asamarts/alint", "ALINT_ACTION"),
-    ("Swatinem/rust-cache", "RUST_CACHE_ACTION"),
     (
         "aws-actions/configure-aws-credentials",
         "AWS_CREDENTIALS_ACTION",

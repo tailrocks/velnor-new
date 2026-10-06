@@ -1,7 +1,7 @@
 //! Publish-script fixture writers shared by release integration tests.
 
-use super::{Failure, REPOSITORY, SOURCE_SHA, manifest};
 use super::super::assets;
+use super::{Failure, REPOSITORY, SOURCE_SHA, manifest};
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -20,10 +20,7 @@ pub(super) fn copy_release_helpers(root: &Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub(super) fn write_candidate_records(
-    root: &Path,
-    case: Failure,
-) -> Result<(), Box<dyn Error>> {
+pub(super) fn write_candidate_records(root: &Path, case: Failure) -> Result<(), Box<dyn Error>> {
     let products = [assets::LINUX, assets::MACOS_ARM64, assets::MACOS_X86_64];
     for (index, product) in products.into_iter().enumerate() {
         let directory = root.join(product.directory);

@@ -85,9 +85,7 @@ fn response_text(response: &mut ureq::http::Response<ureq::Body>) -> Result<Stri
     let first = encodings.next();
     let encoding = match first {
         None => "identity".to_owned(),
-        Some(value) if encodings.next().is_none() => {
-            value.trim().to_ascii_lowercase()
-        }
+        Some(value) if encodings.next().is_none() => value.trim().to_ascii_lowercase(),
         _ => {
             return Err("unsupported Content-Encoding: duplicate coding headers".to_owned());
         }
@@ -100,9 +98,7 @@ fn response_text(response: &mut ureq::http::Response<ureq::Body>) -> Result<Stri
         .read_to_end(&mut encoded)
         .map_err(|error| format!("response read failed ({error})"))?;
     if encoded.len() > FETCH_CAP {
-        return Err(format!(
-            "encoded response exceeds {FETCH_CAP} bytes"
-        ));
+        return Err(format!("encoded response exceeds {FETCH_CAP} bytes"));
     }
     let decoded = decode_body(&encoding, &encoded)?;
     Ok(String::from_utf8_lossy(&decoded).into_owned())
@@ -316,9 +312,7 @@ pub(super) fn decode_body(encoding: &str, encoded: &[u8]) -> Result<Vec<u8>, Str
         _ => return Err(format!("unsupported Content-Encoding: {encoding}")),
     };
     if decoded.len() > FETCH_CAP {
-        return Err(format!(
-            "decompressed response exceeds {FETCH_CAP} bytes"
-        ));
+        return Err(format!("decompressed response exceeds {FETCH_CAP} bytes"));
     }
     Ok(decoded)
 }

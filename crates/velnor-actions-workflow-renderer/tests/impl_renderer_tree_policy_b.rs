@@ -5,9 +5,7 @@ use velnor_actions_workflow_renderer::{
     RenderError, checkout_step, merge_step, render_workflow_ir, shell_step,
 };
 
-use crate::impl_renderer_tree_policy::{
-    LABEL, checkout_pin, fixture_ctx, fixture_ir, task_job,
-};
+use crate::impl_renderer_tree_policy::{LABEL, checkout_pin, fixture_ctx, fixture_ir, task_job};
 
 #[test]
 fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {

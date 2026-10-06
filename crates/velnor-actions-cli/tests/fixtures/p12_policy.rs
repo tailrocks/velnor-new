@@ -368,7 +368,7 @@ fn action_const_wiring_is_mapped() -> Result<(), Box<dyn Error>> {
         assert!(inventory.contains(key), "expected action set misses {key}");
     }
     assert!(
-        !script.contains("Swatinem/rust-cache"),
+        !inventory.contains("Swatinem/rust-cache"),
         "retired action remains mapped"
     );
     Ok(())

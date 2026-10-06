@@ -100,7 +100,9 @@ fn accept_with_deadline(listener: &TcpListener) -> Option<TcpStream> {
         if let Ok((stream, _)) = listener.accept() {
             // Accepted sockets inherit the listener's nonblocking mode on
             // macOS; the request/response loops below assume blocking I/O.
-            let _ = stream.set_nonblocking(false);
+            if stream.set_nonblocking(false).is_err() {
+                continue;
+            }
             return Some(stream);
         }
         thread::sleep(Duration::from_millis(5));

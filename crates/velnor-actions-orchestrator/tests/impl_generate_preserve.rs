@@ -124,12 +124,19 @@ fn dispatch_switch_preserves_custom_actions_and_removes_shared_outputs() -> Test
         &GenerateOptions::default(),
         Some(ExecutionMode::Hosted),
     )?;
+    // V2 tools-cache actions are always emitted with cache lanes (PR38);
+    // only demo/lane-shared actions must stay out of hosted output.
     assert!(
-        hosted
-            .files_written
-            .iter()
-            .all(|path| path == ".github/actions/velnor-tool-seed/action.yml"
-                || !path.starts_with(".github/actions/")),
+        hosted.files_written.iter().all(|path| {
+            [
+                ".github/actions/velnor-tool-seed/action.yml",
+                ".github/actions/u26/action.yml",
+                ".github/actions/velnor-tools-cache-restore/action.yml",
+                ".github/actions/velnor-tools-prelude-u26/action.yml",
+            ]
+            .contains(&path.as_str())
+                || !path.starts_with(".github/actions/")
+        }),
         "hosted output has no lane-shared action: {:?}",
         hosted.files_written
     );

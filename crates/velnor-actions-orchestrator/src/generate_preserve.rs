@@ -192,6 +192,26 @@ fn generated_shared_action(
     {
         return Ok(false);
     }
+    first_line_is_generated_marker(source)
+}
+
+/// Recognize generated helper scripts by exact path shape and marker.
+///
+/// Unmarked files under `scripts/` stay repository-owned; only a marked
+/// file is generator-owned and skipped during preserve-copy.
+fn generated_marked_script(
+    relative: &Path,
+    source: &Path,
+    metadata: &std::fs::Metadata,
+) -> Result<bool, OrchestratorError> {
+    if relative.components().count() != 2 || !relative.starts_with("scripts") || !metadata.is_file()
+    {
+        return Ok(false);
+    }
+    first_line_is_generated_marker(source)
+}
+
+fn first_line_is_generated_marker(source: &Path) -> Result<bool, OrchestratorError> {
     let file = fs::File::open(source).map_err(|error| io(source, &error))?;
     let mut reader = std::io::BufReader::new(file);
     let limit = MARKER_PREFIX.len().max(OLD_MARKER_PREFIX.len());
@@ -215,7 +235,10 @@ fn copy_entry(
     directories: &mut Vec<(PathBuf, std::fs::Permissions)>,
 ) -> Result<bool, OrchestratorError> {
     let metadata = std::fs::symlink_metadata(source).map_err(|error| io(source, &error))?;
-    if generator_owned(relative) || generated_shared_action(relative, source, &metadata)? {
+    if generator_owned(relative)
+        || generated_shared_action(relative, source, &metadata)?
+        || generated_marked_script(relative, source, &metadata)?
+    {
         return Ok(false);
     }
     if metadata.is_symlink() {

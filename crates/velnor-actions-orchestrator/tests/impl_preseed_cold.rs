@@ -55,12 +55,15 @@ esac
     #[test]
     fn cold_preseed_preflight_needs_prepared_rust_and_not_a_warm_mise_cache() -> TestResult {
         let temp = tempfile::tempdir()?;
-        let state = temp.path().join("empty-mise-state");
-        let stub_bin = temp.path().join("stub-bin");
+        // TMPDIR may itself traverse a symlink (macOS /var); the generated
+        // preflight refuses symlinked RUNNER_TEMP by design, so canonicalize.
+        let temp_root = std::fs::canonicalize(temp.path())?;
+        let state = temp_root.join("empty-mise-state");
+        let stub_bin = temp_root.join("stub-bin");
         fs::create_dir_all(&state)?;
         fs::create_dir_all(&stub_bin)?;
-        let log = temp.path().join("mise.log");
-        let rust_template = temp.path().join("rust-template");
+        let log = temp_root.join("mise.log");
+        let rust_template = temp_root.join("rust-template");
         write_executable(&stub_bin.join("mise"), MISE_STUB)?;
         write_executable(&rust_template, RUSTC_STUB)?;
 
@@ -68,7 +71,7 @@ esac
         let rust_install = install_step("Prepare pinned tools", vec![PinnedTool::Rust], &catalog)?;
         let preflight = preflight_step(&catalog)?;
         let cold_env = runner_env(
-            &temp.path().join("cold-runner"),
+            &temp_root.join("cold-runner"),
             &stub_bin,
             &state,
             &log,
@@ -78,7 +81,7 @@ esac
             !run_step(&preflight, &cold_env)?.status.success(),
             "cold pinned Rust lookup must fail closed"
         );
-        let runner_temp = temp.path().join("prepared-runner");
+        let runner_temp = temp_root.join("prepared-runner");
         let ready_env = runner_env(&runner_temp, &stub_bin, &state, &log, &rust_template)?;
         assert!(
             run_step(&rust_install, &ready_env)?.status.success(),

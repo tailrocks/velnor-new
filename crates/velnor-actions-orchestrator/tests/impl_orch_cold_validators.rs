@@ -36,9 +36,13 @@ mod unix {
         ));
         let path = std::env::join_paths(paths)?;
         let mut command = Command::new(&argv[0]);
+        // The combined argv stages under $RUNNER_TEMP; hermetic scratch keeps
+        // it off the ambient filesystem (and off a read-only /).
+        let runner_temp = log.parent().unwrap_or(log).join("runner-temp");
         Ok(command
             .args(&argv[1..])
             .env("PATH", path)
+            .env("RUNNER_TEMP", runner_temp)
             .env("VELNOR_MISE_STUB_LOG", log)
             .env("MISE_AUTO_INSTALL", "false")
             .env("MISE_EXEC_AUTO_INSTALL", "false")
@@ -53,7 +57,7 @@ mod unix {
         let stub = bin.join("mise");
         fs::write(
             &stub,
-            "#!/bin/sh\nset -eu\nverb=\nscan=0\nfor arg do\n  case $arg in\n    install|exec) verb=$arg; scan=1 ;;\n    --|&&|\\;|\\|\\|) scan=0 ;;\n    *@*) if [ \"$scan\" = 1 ]; then\n      case $verb in\n        install) printf '%s\\n' \"$arg\" >> \"$VELNOR_MISE_STUB_LOG\" ;;\n        exec) grep -Fqx \"$arg\" \"$VELNOR_MISE_STUB_LOG\" ;;\n      esac\n    fi ;;\n  esac\ndone\ncase $verb in\n  install) [ \"${GH_TOKEN+x}\" = x ]; [ \"${MISE_GITHUB_TOKEN+x}\" = x ] ;;\n  exec) [ \"${GH_TOKEN+x}\" != x ]; [ \"${MISE_GITHUB_TOKEN+x}\" != x ] ;;\n  *) exit 2 ;;\nesac\n",
+            "#!/bin/sh\nset -eu\nverb=\nscan=0\nfor arg do\n  case $arg in\n    install|exec) verb=$arg; scan=1 ;;\n    --|\\&\\&|\\;|\\|\\|) scan=0 ;;\n    *@*) if [ \"$scan\" = 1 ]; then\n      case $verb in\n        install) printf '%s\\n' \"$arg\" >> \"$VELNOR_MISE_STUB_LOG\" ;;\n        exec) grep -Fqx \"$arg\" \"$VELNOR_MISE_STUB_LOG\" ;;\n      esac\n    fi ;;\n  esac\ndone\ncase $verb in\n  install) [ \"${GH_TOKEN+x}\" = x ]; [ \"${MISE_GITHUB_TOKEN+x}\" = x ] ;;\n  exec) [ \"${GH_TOKEN+x}\" != x ]; [ \"${MISE_GITHUB_TOKEN+x}\" != x ] ;;\n  *) exit 2 ;;\nesac\n",
         )?;
         let mut mode = fs::metadata(&stub)?.permissions();
         mode.set_mode(0o755);
