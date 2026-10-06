@@ -1,0 +1,4 @@
+before_sha256=a325c8c2f6834575e440b03c2ba67f94256072754ac7787fea718be6f01fef6a  /opt/velnor-task-fixtures/20261005/opentofu-1.13.1-official-provenance-20261005T1902Z/install/tofu
+OpenTofu v1.13.1
+on linux_amd64
+after_sha256=a325c8c2f6834575e440b03c2ba67f94256072754ac7787fea718be6f01fef6a  /opt/velnor-task-fixtures/20261005/opentofu-1.13.1-official-provenance-20261005T1902Z/install/tofu

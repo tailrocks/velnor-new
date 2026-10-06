@@ -1,0 +1,6 @@
+# Velnor formatter baseline (rust-quality-contract §6).
+# Checked with `cargo fmt --all -- --check` through Mise.
+# No unstable options are part of this baseline.
+edition = "2024"
+style_edition = "2024"
+newline_style = "Unix"
