@@ -1,14 +1,16 @@
 //! I/O hardening cases: config sample, MBX transport.
 
+use crate::impl_common::git_fixture;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 use tempfile::TempDir;
+use velnor_actions_contract::DetectionStatus;
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_mise::cache::validate_sources_path;
-use velnor_actions_orchestrator::prepare;
+use velnor_actions_orchestrator::{finalized_jobs, prepare};
 use velnor_actions_workflow_renderer::steps::{
     CompileDriver, TASK_ARTIFACTS_DIR, cache_action_step, mbx_steps_for_driver,
 };
@@ -20,7 +22,10 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Run git with inherited failure context.
 fn git(args: &[&str], cwd: &Path) -> TestResult {
-    let status = Command::new("git").args(args).current_dir(cwd).status()?;
+    let status = git_fixture::command(cwd)?
+        .args(args)
+        .current_dir(cwd)
+        .status()?;
     assert!(status.success(), "git {args:?} failed");
     Ok(())
 }
@@ -112,12 +117,63 @@ fn repo_config_sample_parses_through_prepare() -> TestResult {
             prep.config.workflow.policy,
             WorkflowPolicy::VelnorRepositoryV1
         );
-        assert_eq!(prep.config.discovery.exclude, vec!["fixtures/**"]);
+        assert_eq!(
+            prep.config.discovery.exclude,
+            vec!["fixtures/**", "crates/**/tests/fixtures/**"]
+        );
         // The live sample pins the branch: config wins over origin/HEAD so CI
         // checkouts (which create no origin/HEAD) still resolve the branch.
         assert_eq!(prep.default_branch, "main");
         Ok(())
     })
+}
+
+#[test]
+fn repo_sample_excludes_nested_cargo_test_fixtures_before_admission() -> TestResult {
+    without_ambient_identity(
+        "repo_sample_excludes_nested_cargo_test_fixtures_before_admission",
+        || {
+            let sample = repo_sample_text()?;
+            let repo = make_sample_repo(&sample)?;
+            let root = repo.path();
+            let fixture =
+                "crates/velnor-actions-mise/tests/fixtures/mbx-synchronous/registry-fixture";
+            let manifest = format!("{fixture}/Cargo.toml");
+            let source = root.join(fixture).join("src");
+            fs::create_dir_all(&source)?;
+            fs::write(
+                root.join(&manifest),
+                "[package]\nname = \"mbx-synchronous-registry-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            )?;
+            fs::write(source.join("lib.rs"), "pub fn fixture() {}\n")?;
+
+            let prep = prepare(root)?;
+            assert!(
+                prep.discovery.statuses.iter().all(|status| match status {
+                    DetectionStatus::Selected(project)
+                    | DetectionStatus::Ignored { project, .. } => project.manifest != manifest,
+                }),
+                "nested fixture entered detection status"
+            );
+            assert!(
+                prep.discovery
+                    .workspaces
+                    .iter()
+                    .flat_map(|workspace| &workspace.record.packages)
+                    .all(|package| package.manifest != manifest),
+                "nested fixture entered package inventory"
+            );
+            assert!(
+                prep.discovery
+                    .proposals
+                    .iter()
+                    .all(|task| task.display_name != "mbx-synchronous-registry-fixture"),
+                "nested fixture entered task proposals"
+            );
+            finalized_jobs(&prep)?;
+            Ok(())
+        },
+    )
 }
 
 #[test]

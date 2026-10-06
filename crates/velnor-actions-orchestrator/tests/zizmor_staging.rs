@@ -1,9 +1,10 @@
 //! Staging-only zizmor config cases: zero-ignore staging config over full-SHA refs.
 
+use crate::git_fixture;
+
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use tempfile::TempDir;
 use velnor_actions_actionlint::actions::{
@@ -23,7 +24,10 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Run git with inherited failure context.
 fn git(args: &[&str], cwd: &Path) -> TestResult {
-    let status = Command::new("git").args(args).current_dir(cwd).status()?;
+    let status = git_fixture::command(cwd)?
+        .args(args)
+        .current_dir(cwd)
+        .status()?;
     assert!(status.success(), "git {args:?} failed");
     Ok(())
 }

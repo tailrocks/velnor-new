@@ -1,4 +1,8 @@
 use super::{LINUX, qualification_script, verify_provenance_in_directory};
+
+#[path = "../../test_support/git_fixture.rs"]
+mod git_fixture;
+
 use std::error::Error;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -37,9 +41,8 @@ fn wrong_checksum_filename_stops_before_candidate_execution() -> Result<(), Box<
         directory.join(LINUX.sidecar),
         format!("{}  unrelated-binary\n", "a".repeat(64)),
     )?;
-    let sha = Command::new("git")
+    let sha = git_fixture::command(&root)?
         .args(["rev-parse", "HEAD"])
-        .current_dir(&root)
         .output()?;
     if !sha.status.success() {
         return Err("cannot read candidate source SHA".into());

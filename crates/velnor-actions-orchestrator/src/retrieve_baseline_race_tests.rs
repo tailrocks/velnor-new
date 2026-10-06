@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::cover::revalidate::cover_revalidate_fixtures::{manifest_for, plan_for};
+use std::cell::RefCell;
 use velnor_actions_contract::{BaselineProof, PlanBaseline, canonical_json_bytes, digest_b3};
 
 fn selected_fixture() -> (Plan, crate::merge::BaselineManifest) {
@@ -40,49 +41,49 @@ fn required_preserves_plan_selected_run_and_digest_after_newer_run() {
     let (plan, parent) = selected_fixture();
     let base = parent.source_commit.clone();
     let bytes = canonical_json_bytes(&parent).expect("selected bytes");
+    let archive = crate::cover::shard_baseline::archive::test_archive("baseline.json", &bytes);
     let value = serde_json::to_value(&plan).expect("downloaded plan");
     let required = tempfile::tempdir().expect("required stage");
-    let mut calls = Vec::new();
+    let calls = RefCell::new(Vec::new());
     let staged = retrieve_baseline_using(required.path(), &value, |typed| {
-        let selected = planned::resolve_planned(typed, "o/r", "testmain", |args| {
-            let args: Vec<_> = args
-                .iter()
-                .map(|arg| arg.to_string_lossy().into_owned())
-                .collect();
-            calls.push(args.clone());
-            if args[0] == "run" && args[1] == "list" {
-                return Ok(serde_json::json!([{"databaseId":8,"headSha":base,
-                    "event":"push","conclusion":"success","headBranch":"testmain",
-                    "attempt":1}])
-                .to_string());
-            }
-            if args[0] == "run" {
-                assert_eq!(args[2], "7", "newer run never replaces selected run");
-                let at = args
+        let selected = planned::resolve_planned(
+            typed,
+            "o/r",
+            "testmain",
+            |args| {
+                let args: Vec<_> = args
                     .iter()
-                    .position(|arg| arg == "--dir")
-                    .expect("dir flag")
-                    + 1;
-                let destination = Path::new(&args[at]);
-                std::fs::create_dir(destination).expect("download dir");
-                std::fs::write(destination.join("baseline.json"), &bytes).expect("download");
-                Ok(String::new())
-            } else if args[1].ends_with("/artifacts") {
-                Ok(serde_json::json!({"artifacts":[{"id":99,
-                    "name":parent.artifact_name,"expired":false}]})
-                .to_string())
-            } else {
+                    .map(|arg| arg.to_string_lossy().into_owned())
+                    .collect();
+                calls.borrow_mut().push(args.clone());
+                if args[1].contains("/artifacts?name=") {
+                    return Ok(serde_json::json!({"total_count":1,"artifacts":[{"id":99,
+                        "name":parent.artifact_name,"expired":false,
+                        "size_in_bytes":archive.len(),"digest":format!("sha256:{}",
+                            crate::cover_identity::generator::sha256_hex(&archive))}]})
+                    .to_string());
+                }
                 assert!(args[1].ends_with("/runs/7/attempts/1"));
                 Ok(serde_json::json!({"id":7,"run_attempt":1,"head_sha":base,
                     "event":"push","status":"completed","conclusion":"success",
                     "head_branch":"testmain","path":".github/workflows/ci.yml",
                     "repository":{"full_name":"o/r"}})
                 .to_string())
-            }
-        })
+            },
+            |args| {
+                let args: Vec<_> = args
+                    .iter()
+                    .map(|arg| arg.to_string_lossy().into_owned())
+                    .collect();
+                calls.borrow_mut().push(args.clone());
+                assert_eq!(args, ["api", "repos/o/r/actions/artifacts/99/zip"]);
+                Ok(archive.clone())
+            },
+        )
         .expect("selected authenticated parent");
         stage_manifest(required.path(), &selected)
     });
+    let calls = calls.into_inner();
     assert!(staged);
     assert_eq!(
         std::fs::read(required.path().join("baseline.json")).expect("staged proof"),

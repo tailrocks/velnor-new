@@ -77,14 +77,9 @@ fn default_branch_prefers_config_then_origin_head() -> TestResult {
     git(&["commit", "-m", "seed"], origin.path())?;
     let parent = TempDir::new()?;
     let clone_path = parent.path().join("clone");
-    git(
-        &[
-            "clone",
-            &origin.path().display().to_string(),
-            &clone_path.display().to_string(),
-        ],
-        parent.path(),
-    )?;
+    let output =
+        super::git_clone_fixture::clone_fixture(origin.path(), &clone_path)?.output()?;
+    assert!(output.status.success(), "{:?}", output.stderr);
     fs::create_dir_all(clone_path.join(".velnor"))?;
     fs::write(clone_path.join(".velnor/config.toml"), "schema = 1\n")?;
     fs::write(

@@ -5,7 +5,7 @@ Detected stacks
   Rust: selected
   Workspace crates: 13
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib, test; depends on velnor-actions-contract]
-    - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, test; depends on velnor-actions-orchestrator]
+    - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, example, test; depends on velnor-actions-orchestrator]
     - velnor-actions-contract (crates/velnor-actions-contract/Cargo.toml) [lib, test]
     - velnor-actions-mise (crates/velnor-actions-mise/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-tofu]
     - velnor-actions-orchestrator (crates/velnor-actions-orchestrator/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-mise, velnor-actions-rust, velnor-actions-tofu, velnor-actions-workflow-renderer]
