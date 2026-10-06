@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "crates/velnor-actions-contract",
-    "crates/velnor-archive-guard",
+    "crates/tools/velnor-archive-guard",
     "crates/velnor-actions-rust",
     "crates/velnor-actions-mise",
     "crates/velnor-actions-actionlint",
@@ -9,10 +9,10 @@ members = [
     "crates/velnor-actions-orchestrator",
     "crates/velnor-actions-cli",
     "crates/velnor-actions-tofu",
-    "crates/runner/velnor-runner-cli",
-    "crates/runner/velnor-runner-core",
-    "crates/runner/velnor-runner-github",
-    "crates/runner/velnor-runner-host",
+    "crates/tools/velnor-runner-cli",
+    "crates/tools/velnor-runner-core",
+    "crates/tools/velnor-runner-github",
+    "crates/tools/velnor-runner-host",
 ]
 resolver = "3"
 

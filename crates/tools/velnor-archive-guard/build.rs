@@ -10,6 +10,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let root = manifest
         .parent()
         .and_then(Path::parent)
+        .and_then(Path::parent)
         .ok_or("workspace root is missing")?;
     let (fingerprint, watched) = archive_guard_inputs::fingerprint(root)?;
     for source in watched {

@@ -100,6 +100,7 @@ fn reports_a_lowercase_source_fingerprint() -> Result<(), Box<dyn Error>> {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(Path::parent)
+        .and_then(Path::parent)
         .ok_or("workspace root is missing")?;
     let (expected, _) = archive_guard_inputs::fingerprint(workspace)?;
     assert_eq!(fingerprint, format!("{expected}\n"));
