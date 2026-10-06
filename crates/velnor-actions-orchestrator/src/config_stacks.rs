@@ -91,6 +91,7 @@ impl PartialStacks {
 mod tests {
     use super::*;
     use crate::config::{CONFIG_REL, load_config};
+    use velnor_actions_contract::WorkflowTask;
 
     /// Write `body` as `.velnor/config.toml` under a fresh temp root.
     fn rooted(body: &str) -> tempfile::TempDir {
@@ -122,20 +123,39 @@ mod tests {
     }
 
     #[test]
-    fn workflow_verification_tasks_parse_and_default_empty() {
+    fn workflow_task_union_parses_variants_and_defaults_empty() {
         let load = load_config;
         let root = rooted(
-            "schema = 1\n[[workflow.tasks]]\nid = \"native-swift-format\"\nkind = \"verification\"\nmise_task = \"desktop-format-check\"\nrunner = \"macos-arm64\"\ntimeout_minutes = 10\n",
+            "schema = 1\n[[workflow.tasks]]\nkind = \"build\"\nid = \"native-desktop\"\nmise_task = \"desktop-ci\"\ntools = [\"mr-boxington\", \"rust\"]\nrunner = \"macos-26-arm64\"\ntimeout_minutes = 120\ncargo_build_jobs = 2\nnextest_test_threads = 2\n[[workflow.tasks]]\nkind = \"verification\"\nid = \"native-swift-format\"\nmise_task = \"desktop-format-check\"\nrunner = \"macos-arm64\"\ntimeout_minutes = 10\n",
         );
-        let config = load(root.path()).expect("verification task");
-        let task = config.workflow.tasks.first().expect("declared task");
-        assert_eq!(task.id, "native-swift-format");
-        assert_eq!(task.mise_task, "desktop-format-check");
-        assert_eq!(task.runner.runs_on(), "macos-15");
+        let config = load(root.path()).expect("workflow task variants");
+        let Some(WorkflowTask::Build(build)) = config.workflow.tasks.first() else {
+            panic!("first declared task is build")
+        };
+        assert_eq!(build.id, "native-desktop");
+        assert_eq!(build.mise_task, "desktop-ci");
+        assert_eq!(build.tools, ["mr-boxington", "rust"]);
+        assert_eq!(build.runner.runs_on(), "macos-26");
+        assert_eq!(build.cargo_build_jobs, 2);
+        assert_eq!(build.nextest_test_threads, 2);
+        let Some(WorkflowTask::Verification(verification)) = config.workflow.tasks.get(1) else {
+            panic!("second declared task is verification")
+        };
+        assert_eq!(verification.id, "native-swift-format");
+        assert_eq!(verification.mise_task, "desktop-format-check");
+        assert_eq!(verification.runner.runs_on(), "macos-15");
 
         let root = rooted("schema = 1\n");
         let config = load(root.path()).expect("minimal config");
         assert!(config.workflow.tasks.is_empty());
+
+        let legacy = rooted(
+            "schema = 1\n[[workflow.build_tasks]]\nid = \"native-desktop\"\nmise_task = \"desktop-ci\"\ntools = [\"mr-boxington\", \"rust\"]\nrunner = \"macos-26-arm64\"\ntimeout_minutes = 120\ncargo_build_jobs = 2\nnextest_test_threads = 2\n",
+        );
+        assert!(
+            load(legacy.path()).is_err(),
+            "parallel task list is rejected"
+        );
     }
 
     #[test]

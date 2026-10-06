@@ -8,6 +8,7 @@
 mod api;
 mod attach;
 mod baseline_publish;
+mod build_tasks;
 mod check_evidence;
 mod check_runtime;
 mod clippy_groups;
@@ -46,6 +47,9 @@ mod matrix_step;
 mod mbx_preflight;
 mod merge;
 mod merge_request;
+mod native_mise_tasks;
+mod native_tool_input;
+mod native_tool_lock;
 mod noop_report;
 mod obligation_order;
 mod origin;

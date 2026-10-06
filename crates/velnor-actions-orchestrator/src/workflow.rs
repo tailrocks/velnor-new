@@ -23,6 +23,10 @@ use velnor_actions_workflow_renderer::render::{
     PUBLISH_JOB_ID, RenderContext, WORKFLOW_PATH,
 };
 use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
+use velnor_actions_workflow_renderer::{
+    WorkflowTaskPolicy, build_build_task_job, build_native_image_job,
+    build_verification_task_job,
+};
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
@@ -32,6 +36,8 @@ use crate::workflow_jobs::{final_job, lint_job, plan_job};
 
 #[path = "workflow_context.rs"]
 mod workflow_context;
+#[path = "native_image_tasks.rs"]
+mod native_image_tasks;
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
 
@@ -107,6 +113,7 @@ fn build_plan_job(
 ///
 /// Returns contract, render-context, or tool-request errors.
 pub(crate) fn build_workflow(
+    root: &std::path::Path,
     config: &VelnorConfig,
     branch: &str,
     label: &str,
@@ -117,7 +124,27 @@ pub(crate) fn build_workflow(
     let catalog = ToolCatalog::pinned();
     let version = env!("CARGO_PKG_VERSION").to_owned();
     let policy = config.workflow.policy;
-    let verification_tasks = crate::verification_tasks::policies(config)?;
+    let verification_policies = crate::verification_tasks::policies(config, discovery)?;
+    let build_policies = crate::build_tasks::policies(config, discovery)?;
+    let native_image_policies = native_image_tasks::policies(root, config)?;
+    let mut workflow_tasks = verification_policies
+        .iter()
+        .cloned()
+        .map(WorkflowTaskPolicy::Verification)
+        .chain(
+            build_policies
+                .iter()
+                .cloned()
+                .map(WorkflowTaskPolicy::Build),
+        )
+        .chain(
+            native_image_policies
+                .iter()
+                .cloned()
+                .map(WorkflowTaskPolicy::NativeImage),
+        )
+        .collect::<Vec<_>>();
+    workflow_tasks.sort_by(|left, right| left.id().cmp(right.id()));
     let use_mbx = plan_uses_mbx(discovery);
     let support = support_workflow(policy, config.workflow.generator_validation, discovery);
     let mut jobs = BTreeMap::new();
@@ -159,7 +186,7 @@ pub(crate) fn build_workflow(
         required_ids.push(id.clone());
         jobs.insert(id, job);
     }
-    crate::verification_tasks::insert_jobs(&mut jobs, &verification_tasks)?;
+    insert_workflow_task_jobs(&mut jobs, &workflow_tasks)?;
     insert_gate_jobs(&mut jobs, label, branch, &required_ids, acquire, &catalog)?;
     wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
     let ir = workflow_ir(config, branch, jobs);
@@ -170,7 +197,7 @@ pub(crate) fn build_workflow(
         &catalog,
         discovery,
         use_rust,
-        verification_tasks,
+        workflow_tasks,
     )?;
     let actionlint = actionlint_input(config, &version, label);
     Ok(WorkflowPlan {
@@ -198,6 +225,35 @@ fn workflow_ir(config: &VelnorConfig, branch: &str, jobs: BTreeMap<String, Job>)
         },
         jobs,
     }
+}
+
+/// Insert task jobs from the single validated variant-dispatched inventory.
+fn insert_workflow_task_jobs(
+    jobs: &mut BTreeMap<String, Job>,
+    tasks: &[WorkflowTaskPolicy],
+) -> Result<(), OrchestratorError> {
+    for task in tasks {
+        let (id, job) = match task {
+            WorkflowTaskPolicy::Verification(policy) => (
+                policy.job_id(),
+                build_verification_task_job(policy, CHECKOUT_USES)?,
+            ),
+            WorkflowTaskPolicy::Build(policy) => (
+                policy.job_id(),
+                build_build_task_job(policy, CHECKOUT_USES)?,
+            ),
+            WorkflowTaskPolicy::NativeImage(policy) => (
+                policy.job_id(),
+                build_native_image_job(policy, CHECKOUT_USES)?,
+            ),
+        };
+        if jobs.insert(id.clone(), job).is_some() {
+            return Err(OrchestratorError::Contract {
+                problem: format!("workflow_task_job_collision:{id}"),
+            });
+        }
+    }
+    Ok(())
 }
 
 fn support_workflow(

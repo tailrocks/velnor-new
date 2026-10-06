@@ -6,6 +6,9 @@
 mod action_ref;
 pub mod agents_md;
 mod artifact_paths;
+mod build_task_jobs;
+mod build_task_mise;
+mod build_task_mise_tools;
 pub mod cache_elect;
 pub mod cache_p08;
 mod cache_p08_detect;
@@ -31,6 +34,7 @@ pub mod marker;
 mod matrix;
 mod matrix_output_mode;
 mod mbx_gc_policy;
+mod native_image_jobs;
 pub mod msrv;
 pub mod overlap;
 pub mod owned_tool_publication;
@@ -66,13 +70,24 @@ mod tool_seed_test_support;
 pub mod toolchain_env;
 pub mod tree;
 mod verification_jobs;
+mod verification_task_mise;
 mod workflow_policy;
 mod workflow_size;
+mod workflow_task_jobs;
 pub mod yaml;
 
 pub use artifact_paths::{
     CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR, PRESEED_OUTPUT_DIR_EXPR,
     PRESEED_STAGE_DIR_EXPR,
+};
+pub use build_task_jobs::{
+    BUILD_TASK_DEVELOPER_DIR, BuildTaskArtifact, BuildTaskPolicy, BuildTaskTool,
+    CARGO_BINSTALL_ONLY_ENV, INSTALL_BUILD_TASK_BOOTSTRAP_NAME, RUN_BUILD_TASK_NAME,
+    VERIFY_BUILD_TASK_MACOS_NAME, VERIFY_BUILD_TASK_MBX_NAME, build_build_task_job,
+};
+pub use native_image_jobs::{
+    NativeImageTaskPolicy, RUN_NATIVE_IMAGE_TASK_NAME, VERIFY_NATIVE_IMAGE_HOST_NAME,
+    VERIFY_NATIVE_IMAGE_SOURCE_NAME, build_native_image_job,
 };
 pub use candidate::{
     VERIFY_MANIFEST_NAME, candidate_artifact_name, candidate_manifest_verify_script,
@@ -136,6 +151,7 @@ pub use verification_jobs::{
     build_verification_task_job,
 };
 pub use workflow_size::MAX_WORKFLOW_BYTES;
+pub use workflow_task_jobs::WorkflowTaskPolicy;
 pub use yaml::{Yaml, quote_scalar, render_yaml};
 
 pub use error::RenderError;

@@ -50,7 +50,7 @@ fn context() -> RenderContext {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
-        verification_tasks: Vec::new(),
+        workflow_tasks: Vec::new(),
         plan_consumer_env: BTreeMap::new(),
     }
 }

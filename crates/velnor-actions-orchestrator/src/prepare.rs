@@ -81,6 +81,7 @@ fn prepare_inner(
     let fetch_roots = lockful_roots(&canonical, &discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
     let workflow = build_workflow(
+        &canonical,
         &config,
         &default_branch,
         &runner_label,

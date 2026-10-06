@@ -10,8 +10,8 @@ use velnor_actions_actionlint::overrides::{
     ActionPinOverride as ApprovedOverride, ApprovedPinCatalog,
 };
 use velnor_actions_contract::{
-    GeneratorLock, RELEASE_MANIFEST_FILENAME, ReleaseManifest, ReleaseTarget, Step, VelnorConfig,
-    VerificationRunner, check_release_artifact,
+    BuildTaskRunner, GeneratorLock, RELEASE_MANIFEST_FILENAME, ReleaseManifest, ReleaseTarget,
+    Step, VelnorConfig, VerificationRunner, check_release_artifact,
 };
 use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_workflow_renderer::{
@@ -71,6 +71,21 @@ pub(crate) fn resolve_verification_mise_setup(
     let sha256 = match runner {
         VerificationRunner::LinuxX64 => MISE_BINARY_SHA256_LINUX_X64,
         VerificationRunner::MacosArm64 => MISE_BINARY_SHA256_MACOS_ARM64,
+    };
+    Ok(MiseSetup {
+        uses: mise_action_uses(config)?,
+        version: MISE_VERSION.to_owned(),
+        sha256: sha256.to_owned(),
+    })
+}
+
+/// Resolve cache-off Mise setup for the native macOS build runner.
+pub(crate) fn resolve_build_task_mise_setup(
+    config: &VelnorConfig,
+    runner: BuildTaskRunner,
+) -> Result<MiseSetup, OrchestratorError> {
+    let sha256 = match runner {
+        BuildTaskRunner::Macos26Arm64 => MISE_BINARY_SHA256_MACOS_ARM64,
     };
     Ok(MiseSetup {
         uses: mise_action_uses(config)?,

@@ -123,7 +123,7 @@ fn no_cargo_checks_gate_required_without_becoming_rust_jobs() {
     .expect("config");
     let config = crate::config::load_config(root.path()).expect("defaulted config");
     let workflow =
-        crate::workflow::build_workflow(&config, "main", "ubuntu-26.04", &discovery, &[])
+        crate::workflow::build_workflow(root.path(), &config, "main", "ubuntu-26.04", &discovery, &[])
             .expect("named checks workflow");
     assert_eq!(workflow.ir.jobs["check-ffi"].display_name, "Check / ffi");
     assert!(
@@ -365,7 +365,7 @@ fn ignored_rust_candidate_keeps_plan_inventory_toolchain() {
     .expect("config");
     let config = crate::config::load_config(root.path()).expect("defaulted config");
     let workflow =
-        crate::workflow::build_workflow(&config, "main", "ubuntu-26.04", &discovery, &[])
+        crate::workflow::build_workflow(root.path(), &config, "main", "ubuntu-26.04", &discovery, &[])
             .expect("ignored Rust workflow");
     let plan = &workflow.ir.jobs["plan"];
     assert!(

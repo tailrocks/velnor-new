@@ -71,7 +71,7 @@ pub fn named_check_lanes(
         if job.check_runner.is_none() {
             continue;
         }
-        let lanes = match placement_for(execution, dispatch, lane_class(id), id, job)? {
+        let lanes = match placement_for(config, execution, dispatch, lane_class(id), id, job)? {
             Placement::HostedOnly | Placement::ScaleSetOnly => vec![NamedCheckLane {
                 variant: None,
                 job_id: id.clone(),

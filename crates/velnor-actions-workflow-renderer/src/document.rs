@@ -263,7 +263,7 @@ fn job_to_yaml(
     });
     let mut job_env = if step_has_env
         && ctx
-            .verification_tasks
+            .workflow_tasks
             .iter()
             .any(|task| task.owns_job_id(id))
     {
