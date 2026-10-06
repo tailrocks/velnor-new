@@ -65,6 +65,19 @@ pub(crate) fn idle(polled: &Poll) -> Idle {
     }
 }
 
+/// Subject of a redelivered assigned poll. Other polls have no exception.
+#[must_use]
+pub(super) fn mint_subject(polled: &Poll) -> Option<String> {
+    let Poll::Batch(batch) = polled else {
+        return None;
+    };
+    if idle(polled) != Idle::Launch {
+        return None;
+    }
+    let (_, request_id) = assignment(polled).ok().flatten()?;
+    Some(format!("m{}r{request_id}", batch.message_id))
+}
+
 fn absent_census_progress(batch: &velnor_runner_github::ParsedBatch) -> bool {
     batch.statistics.is_none() && (batch.jobs.is_empty() || crate::assign::progress_only(batch))
 }

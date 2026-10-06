@@ -1,7 +1,9 @@
 //! A launch row without worker IDs stays occupied until cleanup is proven.
 
 use crate::launch::{Admit, admission};
-use crate::launch_harness::{absent, assigned_wait, open, started_progress, started_wait};
+use crate::launch_harness::{
+    absent, assigned_wait, available, open, started_progress, started_wait,
+};
 use crate::stage::PairEngine;
 use crate::worker::{
     CreateProjection, VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole,
@@ -98,6 +100,17 @@ async fn idless_uncertain_rows_keep_both_slots() -> Result<(), String> {
     assert!(rows.iter().all(|row| !row.cleanup_proven));
     absent(&scratch.file())
 }
+#[tokio::test]
+async fn own_idless_uncertain_row_does_not_block_its_mint() -> Result<(), String> {
+    let (scratch, journal) = open("idless-self-launch").await?;
+    uncertain_without_ids(&journal, "m4r41").await?;
+    let decision = admission(&Idle, &journal, 1, 1, 0, &available(&[41]))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(decision, Admit::Start { stop: true });
+    absent(&scratch.file())
+}
+
 #[tokio::test]
 async fn own_idless_uncertain_row_keeps_its_reservation() -> Result<(), String> {
     let (scratch, journal) = open("idless-self").await?;
