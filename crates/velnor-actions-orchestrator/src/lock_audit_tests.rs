@@ -1,7 +1,7 @@
 //! Install-audit glue tests: extraction failures block, labels gate loudly.
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::jobs::ValidatorKind;
+use velnor_actions_contract::workflow::validator_kind::ValidatorKind;
 use velnor_actions_contract::{
     Concurrency, Job, JobTimeout, Permissions, Step, StepKind, Trigger, WorkflowIr,
 };

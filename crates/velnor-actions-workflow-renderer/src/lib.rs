@@ -105,7 +105,7 @@ pub use steps::{
     mbx_step_for_driver, merge_step, plan_step, publish_step, scan_for_private_subcommands,
     shell_step, validate_uses, write_request_step,
 };
-pub use tree::{render_tree, render_tree_with_extra};
+pub use tree::{render_tree, render_tree_with_extra, render_tree_with_preserved};
 pub use yaml::{Yaml, quote_scalar, render_yaml};
 
 pub use error::RenderError;

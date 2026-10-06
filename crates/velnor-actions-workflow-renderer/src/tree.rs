@@ -5,7 +5,9 @@
 //! adds the validated release family. Rendering the workflow bytes stays in
 //! [`crate::render`]; this module assembles and validates the generated tree.
 
-use velnor_actions_contract::{AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET};
+use velnor_actions_contract::{
+    AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET, PULL_REQUEST_TEMPLATE_PATH,
+};
 
 use crate::agents_md;
 use crate::render::{ACTIONLINT_PATH, WORKFLOW_PATH};
@@ -104,6 +106,9 @@ pub fn render_tree(
 /// Extras (the release family) pass the same marker, token, and path
 /// gates; base-path collisions and duplicate paths fail closed. Files are
 /// sorted by path, so an empty `extra` renders exactly [`render_tree`].
+/// A repository-owned PR template rides separately via
+/// [`render_tree_with_preserved`]: preserved bytes skip the marker and
+/// token gates but never the path gates.
 ///
 /// # Errors
 ///
@@ -112,6 +117,38 @@ pub fn render_tree_with_extra(
     workflow_bytes: &str,
     actionlint_bytes: &str,
     extra: &[RenderedFile],
+    version: &str,
+) -> Result<RenderedTree, RenderError> {
+    render_tree_full(workflow_bytes, actionlint_bytes, extra, None, version)
+}
+
+/// Assemble the generated tree plus one preserved repository-owned file.
+///
+/// `preserved` carries the existing [`PULL_REQUEST_TEMPLATE_PATH`] bytes
+/// (or `None` when the repository has no template): the path is
+/// validated and collision-checked like every extra, but the bytes skip
+/// the generated-marker and private-subcommand gates — GitHub renders
+/// the template and it never executes. Files are sorted by path, so
+/// `None` renders exactly [`render_tree_with_extra`].
+///
+/// # Errors
+///
+/// Returns [`RenderError`] for marker, token, path, or collision failures.
+pub fn render_tree_with_preserved(
+    workflow_bytes: &str,
+    actionlint_bytes: &str,
+    extra: &[RenderedFile],
+    preserved: Option<&RenderedFile>,
+    version: &str,
+) -> Result<RenderedTree, RenderError> {
+    render_tree_full(workflow_bytes, actionlint_bytes, extra, preserved, version)
+}
+
+fn render_tree_full(
+    workflow_bytes: &str,
+    actionlint_bytes: &str,
+    extra: &[RenderedFile],
+    preserved: Option<&RenderedFile>,
     version: &str,
 ) -> Result<RenderedTree, RenderError> {
     marker::check_first_line(workflow_bytes, version)?;
@@ -140,17 +177,19 @@ pub fn render_tree_with_extra(
         marker::check_first_line(&file.bytes, version)?;
         steps::scan_for_private_subcommands(&file.bytes)?;
         guard::validate_tree_path(&file.path)?;
-        if file.path == ACTIONLINT_PATH
-            || file.path == WORKFLOW_PATH
-            || file.path == AGENTS_MD_PATH
-            || file.path == CLAUDE_MD_PATH
-        {
+        check_base_collision(&file.path)?;
+        files.push(file.clone());
+    }
+    if let Some(template) = preserved {
+        if template.path != PULL_REQUEST_TEMPLATE_PATH {
             return Err(RenderError::UnsafePath(format!(
-                "tree_path_collision:{}",
-                file.path
+                "preserved_path_rejected:{}",
+                template.path
             )));
         }
-        files.push(file.clone());
+        guard::validate_tree_path(&template.path)?;
+        check_base_collision(&template.path)?;
+        files.push(template.clone());
     }
     files.sort_by(|left, right| left.path.cmp(&right.path));
     for pair in files.windows(2) {
@@ -165,4 +204,84 @@ pub fn render_tree_with_extra(
     }];
 
     Ok(RenderedTree { files, symlinks })
+}
+
+/// Reject extras colliding with the four fixed base paths.
+fn check_base_collision(path: &str) -> Result<(), RenderError> {
+    if path == ACTIONLINT_PATH
+        || path == WORKFLOW_PATH
+        || path == AGENTS_MD_PATH
+        || path == CLAUDE_MD_PATH
+    {
+        return Err(RenderError::UnsafePath(format!(
+            "tree_path_collision:{path}"
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Marked file bytes for the base inputs.
+    fn marked(body: &str) -> String {
+        marker::with_marker("0.1.0", body).expect("marked")
+    }
+
+    #[test]
+    fn preserved_none_matches_extra() {
+        let workflow = marked("workflow: true\n");
+        let actionlint = marked("actionlint: true\n");
+        let plain = render_tree_with_extra(&workflow, &actionlint, &[], "0.1.0").expect("plain");
+        let none =
+            render_tree_with_preserved(&workflow, &actionlint, &[], None, "0.1.0").expect("none");
+        assert_eq!(plain, none);
+    }
+
+    #[test]
+    fn preserved_template_rides_unmarked_and_unscanned() {
+        let workflow = marked("workflow: true\n");
+        let actionlint = marked("actionlint: true\n");
+        // No generated marker; mentions the runbook without tripping gates.
+        let template = RenderedFile {
+            path: PULL_REQUEST_TEMPLATE_PATH.to_owned(),
+            bytes: "## Checklist\n\nSee the velnor-actions runbook.\n".to_owned(),
+        };
+        let tree =
+            render_tree_with_preserved(&workflow, &actionlint, &[], Some(&template), "0.1.0")
+                .expect("preserved");
+        assert_eq!(
+            tree.get(PULL_REQUEST_TEMPLATE_PATH),
+            Some("## Checklist\n\nSee the velnor-actions runbook.\n")
+        );
+        let mut sorted = tree.paths();
+        sorted.sort();
+        assert_eq!(tree.paths(), sorted, "paths stay sorted");
+    }
+
+    #[test]
+    fn preserved_rejects_foreign_paths_and_collisions() {
+        let workflow = marked("workflow: true\n");
+        let actionlint = marked("actionlint: true\n");
+        let foreign = RenderedFile {
+            path: ".github/CODEOWNERS".to_owned(),
+            bytes: "owned\n".to_owned(),
+        };
+        let err = render_tree_with_preserved(&workflow, &actionlint, &[], Some(&foreign), "0.1.0")
+            .expect_err("foreign path rejected");
+        assert!(err.to_string().contains("preserved_path_rejected"), "{err}");
+        let extra = RenderedFile {
+            path: PULL_REQUEST_TEMPLATE_PATH.to_owned(),
+            bytes: marked("extra\n"),
+        };
+        let template = RenderedFile {
+            path: PULL_REQUEST_TEMPLATE_PATH.to_owned(),
+            bytes: "template\n".to_owned(),
+        };
+        let err =
+            render_tree_with_preserved(&workflow, &actionlint, &[extra], Some(&template), "0.1.0")
+                .expect_err("collision duplicates");
+        assert!(err.to_string().contains("tree_path_duplicate"), "{err}");
+    }
 }

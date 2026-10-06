@@ -14,6 +14,7 @@ pub mod qualification;
 pub mod report;
 pub mod timeout;
 pub mod trust;
+pub mod validator_kind;
 pub use artifacts::{
     CANDIDATE_ATTESTATION_FILENAME, CANDIDATE_EVIDENCE_SUBDIR, FINAL_JSON_FILENAME,
     MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, check_matrix_agreement, matrix_json_bytes,
@@ -28,9 +29,9 @@ pub use jobs::{
     CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH,
     PLAN_DISPLAY_NAME, PLAN_JOB_ID, REQUIRED_CONDITION, REQUIRED_DISPLAY_NAME, REQUIRED_JOB_ID,
     RequiredCheckMigration, STALE_WORKFLOW_PATHS, ScheduleTrigger, TOFU_DISPLAY_PREFIX,
-    TOFU_JOB_ID_PREFIX, ValidatorKind, WORKFLOW_DISPLAY_NAME, assign_crate_job_ids,
-    crate_display_label, crate_display_name, is_crate_job_id, is_safe_display_name,
-    slugify_segment, tofu_display_name, validate_job_id,
+    TOFU_JOB_ID_PREFIX, WORKFLOW_DISPLAY_NAME, assign_crate_job_ids, crate_display_label,
+    crate_display_name, is_crate_job_id, is_safe_display_name, slugify_segment, tofu_display_name,
+    validate_job_id,
 };
 pub use lanes::{LaneClass, expand_workflow, lane_class};
 pub use needs::{
@@ -52,3 +53,4 @@ pub use report::{
 };
 pub use timeout::JobTimeout;
 pub use trust::{Trust, trust_for_event};
+pub use validator_kind::ValidatorKind;

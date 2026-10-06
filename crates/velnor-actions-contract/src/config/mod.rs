@@ -33,7 +33,7 @@ pub use stacks::{
 pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG, RunnerSelection,
-    VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,
+    VelnorSupportWorkflow, VerifyConfig, WorkflowConfig, WorkflowPolicy,
 };
 
 use crate::errors::ContractError;

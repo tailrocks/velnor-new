@@ -21,6 +21,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             generator_validation: velnor_actions_contract::GeneratorValidation::Bootstrap,
             max_parallel_jobs: 2,
             runner_label: None,
+            verify: velnor_actions_contract::VerifyConfig::default(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,

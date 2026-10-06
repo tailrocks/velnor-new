@@ -84,7 +84,8 @@ const SAMPLE_BODY: &str = r#"schema = 1
 
 # Velnor replaces the entire .github tree on generate. Keep CODEOWNERS at the
 # repository root or under docs/ (both are GitHub-recognized); anything inside
-# .github is removed.
+# .github is removed, except an existing .github/PULL_REQUEST_TEMPLATE.md,
+# which is preserved byte-for-byte.
 
 # Optional workflow display and policy settings. Omitted values use Velnor defaults.
 # [workflow]
@@ -94,6 +95,12 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # runner_label = "ubuntu-24.04" # Exact older pinned runner for compat; omit for the ubuntu-26.04 default.
 # generator_validation = "bootstrap"  # Generator validation mode.
 # max_parallel_jobs = 2                # Maximum generated matrix concurrency.
+
+# Optional verification jobs, one support job per entry, all covered by the
+# required gate. Unknown names fail generate. Enabled jobs may need
+# repository-owned policy files (.alint.yml, .zizmor.yml).
+# [workflow.verify]
+# jobs = ["zizmor", "alint", "markdownlint", "strict-json", "frontmatter-id", "link-check", "native-validators"]
 
 # Optional resource limits for generated jobs.
 # [resources]

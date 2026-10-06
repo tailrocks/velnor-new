@@ -152,6 +152,13 @@ keep any required content in Velnor configuration or another repository
 location. If generation fails, the existing .github directory remains
 unchanged.
 
+The one exception is an existing repository-owned
+.github/PULL_REQUEST_TEMPLATE.md, which generate MUST carry into the new
+tree byte-for-byte (missing stays missing). A non-file, oversize, or
+non-UTF-8 template MUST fail generation before any write. Preserved
+bytes skip the generated marker and token gates (GitHub renders the
+template; it never executes) but never the path gates.
+
 With --output-dir PATH, PATH is the exact fresh preview root. It MUST be absent
 or empty; the command writes PATH/.github there, prints its absolute path, and
 modifies no repository file. Callers MUST choose a unique directory under /tmp
