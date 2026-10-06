@@ -3,8 +3,8 @@ use super::*;
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::{
-    PlanGenerator, PlanRunner, QualificationDispatch, QualificationPhase, RunnerSelection, Trust,
-    WorkflowEvent, plan_id_for_run,
+    PlanGenerator, PlanRunner, QualificationDispatch, QualificationPhase, QualificationRunRef,
+    RunnerSelection, Trust, WorkflowEvent, plan_id_for_run,
 };
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -93,7 +93,7 @@ fn merge_requires_identical_qualification_provenance() {
     let plan = qualification_plan(planned.clone());
     assert!(is_coherent(&plan, &request(Some(planned.clone()))));
 
-    let mutations: [fn(&mut QualificationDispatch); 11] = [
+    let mutations: [fn(&mut QualificationDispatch); 12] = [
         |value| value.campaign = "campaign-b".to_owned(),
         |value| value.phase = QualificationPhase::Warm,
         |value| value.repository = "other/project".to_owned(),
@@ -108,6 +108,12 @@ fn merge_requires_identical_qualification_provenance() {
         |value| value.source_sha = "2123456789abcdef0123456789abcdef01234567".to_owned(),
         |value| value.run_id += 1,
         |value| value.run_attempt += 1,
+        |value| {
+            value.predecessor = Some(QualificationRunRef {
+                run_id: 122,
+                run_attempt: 1,
+            });
+        },
     ];
     for mutate in mutations {
         let mut actual = planned.clone();
