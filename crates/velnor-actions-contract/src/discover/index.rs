@@ -257,9 +257,16 @@ fn walk_link(
     cache_admission: &CacheAdmission,
 ) -> Result<(), IndexError> {
     cache_admission.ensure_cache_root_unchanged()?;
-    let target = link
-        .canonicalize()
-        .map_err(|_| IndexError::SymlinkLoop(show(link)))?;
+    let target = match link.canonicalize() {
+        Ok(target) => target,
+        // A dangling link indexes under its own path like any
+        // untracked entry; only loops fail.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            record_file(root, link, files, skipped_non_utf8)?;
+            return Ok(());
+        }
+        Err(_) => return Err(IndexError::SymlinkLoop(show(link))),
+    };
     if cache_admission.target_is_reserved(&target) {
         return Ok(());
     }

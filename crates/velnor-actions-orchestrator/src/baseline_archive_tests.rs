@@ -3,7 +3,7 @@
 use super::*;
 use std::io::Write as _;
 
-fn metadata(id: u64, bytes: &[u8]) -> BaselineArtifactMetadata {
+pub(crate) fn metadata(id: u64, bytes: &[u8]) -> BaselineArtifactMetadata {
     BaselineArtifactMetadata {
         id,
         size_in_bytes: u64::try_from(bytes.len()).expect("archive size"),
@@ -381,21 +381,4 @@ fn only_one_exact_regular_manifest_entry_is_accepted() {
     set_u16(&mut symlink, central + 4, (3 << 8) | 0x14);
     set_u32(&mut symlink, central + 38, 0o120_777 << 16);
     assert!(extract_baseline(&metadata(99, &symlink), &symlink).is_err());
-}
-
-#[test]
-fn staged_manifest_is_exclusive_and_keeps_admitted_bytes() {
-    let root = tempfile::tempdir().expect("staging root");
-    let payload = br#"{"schema":2}"#;
-    let archive = test_archive("baseline.json", payload);
-    let metadata = metadata(99, &archive);
-    let artifact_name = format!("velnor-baseline-{}-b3-{}", "a".repeat(40), "b".repeat(64));
-    let path = stage_baseline_archive(root.path(), &artifact_name, &metadata, &archive)
-        .expect("stage admitted archive");
-    assert_eq!(std::fs::read(&path).expect("read staged bytes"), payload);
-    assert!(stage_baseline_archive(root.path(), &artifact_name, &metadata, &archive).is_err());
-    assert_eq!(
-        std::fs::read(&path).expect("preserved staged bytes"),
-        payload
-    );
 }

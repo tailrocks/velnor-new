@@ -214,11 +214,26 @@ fn copy_preserves_modes_and_literal_symlinks() -> TestResult {
         fs::metadata(github.join("scripts"))?.permissions().mode() & 0o777,
         0o750
     );
+    assert_eq!(fs::read_link(&dangling)?, Path::new("../missing"));
+    let dangling_metadata = fs::symlink_metadata(&dangling)?;
+    assert!(dangling_metadata.is_symlink());
+    #[cfg(target_os = "macos")]
+    assert_eq!(dangling_metadata.permissions().mode() & 0o777, 0o750);
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn raw_mode_conversion_checks_narrowing_and_keeps_wide_modes() -> TestResult {
     assert_eq!(
-        fs::read_link(github.join("dangling"))?,
-        Path::new("../missing")
+        super::checked_raw_mode::<u16>(0o750, Path::new("dangling"))?,
+        0o750
     );
-    assert!(fs::symlink_metadata(github.join("dangling"))?.is_symlink());
+    assert!(super::checked_raw_mode::<u16>(u32::MAX, Path::new("dangling")).is_err());
+    assert_eq!(
+        super::checked_raw_mode::<u32>(u32::MAX, Path::new("dangling"))?,
+        u32::MAX
+    );
     Ok(())
 }
 

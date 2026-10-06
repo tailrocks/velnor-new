@@ -7,6 +7,8 @@ mod impl_renderer_acquire;
 mod impl_renderer_cache_script;
 #[path = "impl_renderer_cache_steps.rs"]
 mod impl_renderer_cache_steps;
+#[path = "impl_renderer_cache_steps_b.rs"]
+mod impl_renderer_cache_steps_b;
 #[path = "impl_renderer_cache_t22.rs"]
 mod impl_renderer_cache_t22;
 #[path = "impl_renderer_f2close.rs"]

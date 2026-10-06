@@ -90,6 +90,21 @@ fn c4_restore_and_mbx_precede_fetch_with_offline_skip() {
         None,
     ];
     assert!(sources::check_restore_before_fetch(&good, true).is_ok());
+    let good_names = [
+        "Checkout",
+        "Prepare pinned tools",
+        "Restore Cargo sources",
+        "Setup MBX",
+        "Fetch Cargo sources",
+        "Clippy",
+    ]
+    .iter()
+    .map(ToString::to_string)
+    .collect::<Vec<_>>();
+    assert!(
+        sources::check_steps_before_fetch(&good_names, &["Restore Cargo sources", "Setup MBX"])
+            .is_ok()
+    );
     let fetch_first = [
         Some(StepRole::Checkout),
         Some(StepRole::CargoSourcesFetch),
@@ -97,6 +112,22 @@ fn c4_restore_and_mbx_precede_fetch_with_offline_skip() {
         Some(StepRole::CargoSourcesRestore),
     ];
     assert!(sources::check_restore_before_fetch(&fetch_first, true).is_err());
+    let fetch_first_names = [
+        "Checkout",
+        "Fetch Cargo sources",
+        "Setup MBX",
+        "Restore Cargo sources",
+    ]
+    .iter()
+    .map(ToString::to_string)
+    .collect::<Vec<_>>();
+    assert!(
+        sources::check_steps_before_fetch(
+            &fetch_first_names,
+            &["Restore Cargo sources", "Setup MBX"]
+        )
+        .is_err()
+    );
     assert_eq!(
         sources::fetch_decision(true, "no_entry").expect("skip"),
         sources::FetchDecision::OfflineSkip

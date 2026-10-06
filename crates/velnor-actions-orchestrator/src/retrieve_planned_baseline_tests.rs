@@ -226,8 +226,11 @@ fn real_api_manifest(run_id: u64, run_attempt: u64, source: &str) -> BaselineMan
 /// Fixture fields came from the real Actions REST attempt endpoints on 2026-10-04.
 #[test]
 fn real_api_attempt_fixtures_authenticate_original_attempt_identity() {
-    let successful_original =
-        real_api_manifest(37163556069, 1, "47815c83b9eeadbaf84b741918fffa7ea550da89");
+    let successful_original = real_api_manifest(
+        37_163_556_069,
+        1,
+        "47815c83b9eeadbaf84b741918fffa7ea550da89",
+    );
     assert!(authentic_attempt(
         include_str!("../tests/fixtures/github-run-37163556069-attempt-1.json"),
         &successful_original,
@@ -236,10 +239,16 @@ fn real_api_attempt_fixtures_authenticate_original_attempt_identity() {
         ".github/workflows/ci.yml"
     ));
 
-    let failed_original =
-        real_api_manifest(37157003048, 1, "9a249e9ab99a019ab7ba0e6f835dee406827db20");
-    let successful_retry =
-        real_api_manifest(37157003048, 2, "9a249e9ab99a019ab7ba0e6f835dee406827db20");
+    let failed_original = real_api_manifest(
+        37_157_003_048,
+        1,
+        "9a249e9ab99a019ab7ba0e6f835dee406827db20",
+    );
+    let successful_retry = real_api_manifest(
+        37_157_003_048,
+        2,
+        "9a249e9ab99a019ab7ba0e6f835dee406827db20",
+    );
     assert!(!authentic_attempt(
         include_str!("../tests/fixtures/github-run-37157003048-attempt-1.json"),
         &failed_original,

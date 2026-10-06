@@ -33,7 +33,7 @@ fn legacy_task_job() -> Job {
 }
 
 /// Bare IR shell shared by the attach fixtures.
-fn bare_ir(jobs: BTreeMap<String, velnor_actions_contract::Job>) -> WorkflowIr {
+pub(super) fn bare_ir(jobs: BTreeMap<String, velnor_actions_contract::Job>) -> WorkflowIr {
     WorkflowIr {
         name: "CI".to_owned(),
         triggers: Trigger {
@@ -210,6 +210,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
             candidate: None,
             preseed: false,
             verification_tasks: Vec::new(),
+            pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
             plan_consumer_env: std::collections::BTreeMap::new(),
         },
         actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),
@@ -311,6 +312,7 @@ fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
             candidate: None,
             preseed: false,
             verification_tasks: Vec::new(),
+            pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
             plan_consumer_env: BTreeMap::new(),
         },
         actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),

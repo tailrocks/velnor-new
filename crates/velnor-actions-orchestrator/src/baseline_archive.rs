@@ -149,3 +149,6 @@ pub(crate) fn test_archive(name: &str, payload: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 #[path = "baseline_archive_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "baseline_archive_tests_b.rs"]
+mod tests_b;

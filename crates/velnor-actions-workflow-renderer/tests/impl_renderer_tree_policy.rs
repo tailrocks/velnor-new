@@ -1,12 +1,12 @@
 //! Workflow/tree invariant cases (triggers, concurrency, candidate, gates).
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, JobTimeout, Permissions, Step, Trigger, ValidatorKind,
-    WorkflowIr, WorkflowPolicy,
+    Concurrency, Job, JobTimeout, Permissions, Step, Trigger, ValidatorKind, WorkflowIr,
+    WorkflowPolicy,
 };
 use velnor_actions_workflow_renderer::{
-    CANDIDATE_JOB_ID, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, CandidateSpec, RenderContext,
-    RenderError, ValidatorCommand, checkout_step, plan_step, render_workflow_ir, with_marker,
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, RenderError, ValidatorCommand,
+    checkout_step, plan_step, render_workflow_ir, with_marker,
 };
 
 #[path = "impl_renderer_tree_policy_candidates.rs"]
@@ -30,6 +30,7 @@ pub(crate) fn fixture_ctx() -> RenderContext {
         candidate: None,
         preseed: false,
         verification_tasks: Vec::new(),
+        pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         plan_consumer_env: std::collections::BTreeMap::new(),
     }
 }

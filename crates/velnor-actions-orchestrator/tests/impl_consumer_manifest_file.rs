@@ -136,13 +136,23 @@ fn absent_manifest_fails_closed_without_provenance() {
 }
 
 #[test]
-fn absent_manifest_fails_prepare_in_all_build_modes() -> TestResult {
+#[cfg(debug_assertions)]
+fn debug_absent_file_keeps_standin() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     fs::remove_file(repo.path().join(".velnor/release-manifest.json"))?;
-    let err = prepare(repo.path()).expect_err("missing consumer provenance fails closed");
-    let text = err.to_string();
-    assert!(text.contains("consumer_requires_release_install"), "{text}");
-    assert!(text.contains("official"), "{text}");
+    let prep = prepare(repo.path())?;
+    let yaml = velnor_actions_workflow_renderer::render_workflow_ir(
+        &prep.workflow.ir,
+        prep.config.workflow.policy,
+        prep.workflow.support.as_ref(),
+        &prep.workflow.context,
+    )
+    .map_err(|err| format!("render: {err}"))?;
+    let version = env!("CARGO_PKG_VERSION");
+    let expect = format!(
+        "https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-x86_64-unknown-linux-gnu"
+    );
+    assert!(yaml.contains(&expect), "debug stand-in preserved:\n{yaml}");
     Ok(())
 }
 

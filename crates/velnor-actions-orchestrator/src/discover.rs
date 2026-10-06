@@ -5,8 +5,7 @@ use std::path::Path;
 
 use velnor_actions_contract::{
     DETECTION_SCHEMA, DetectionStatus, FileIndex, ProposedTask, RustStackConfig, VelnorConfig,
-    WorkflowPolicy, apply_stack_ignores, check_candidate_outcomes, check_duplicates,
-    selected_projects,
+    apply_stack_ignores, check_candidate_outcomes, check_duplicates, selected_projects,
 };
 #[path = "discovery_registry.rs"]
 mod registry;
@@ -61,11 +60,18 @@ pub struct Discovery {
     pub clippy_memory: ClippyMemoryPlan,
     /// Non-fatal generation recommendations.
     pub recommendations: Vec<String>,
-    /// Release-manifest text from the committed repo file.
+    /// Release-manifest text for consumer policy from the committed file.
     ///
-    /// Only `ConsumerV1` reads it; absent files remain `None` so consumer
-    /// acquisition fails closed with `consumer_requires_release_install`.
+    /// Consumer debug builds fall back to a stand-in when the file is absent
+    /// (flagged by [`Discovery::consumer_manifest_stand_in`], warned at
+    /// generation); release builds keep `None` so generation fails
+    /// closed with `consumer_requires_release_install`.
     pub consumer_manifest_json: Option<String>,
+    /// Whether the manifest text above is the debug-only stand-in.
+    ///
+    /// False for Velnor policy and release builds. `generate` warns when
+    /// consumer policy uses the debug stand-in; `plan` stays silent.
+    pub consumer_manifest_stand_in: bool,
     /// Whether non-UTF-8 names require broad selection.
     pub skipped_non_utf8: bool,
     /// Tofu plan note: ignore marker or table-less evidence advisory.
@@ -147,13 +153,8 @@ fn discover_inner(
     let clippy_memory = clippy_memory_groups(&proposals);
     let recommendations =
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
-    // Velnor's source policy bootstraps from source or its generator lock.
-    // Only consumer policy reads the installed-product manifest.
-    let consumer_manifest_json = if config.workflow.policy == WorkflowPolicy::ConsumerV1 {
-        consumer_manifest::consumer_manifest_text(root)?
-    } else {
-        None
-    };
+    let (consumer_manifest_json, consumer_manifest_stand_in) =
+        consumer_manifest::for_policy(root, config.workflow.policy)?;
     Ok(Discovery {
         mise_checks,
         statuses,
@@ -164,6 +165,7 @@ fn discover_inner(
         clippy_memory,
         recommendations,
         consumer_manifest_json,
+        consumer_manifest_stand_in,
         skipped_non_utf8,
         tofu_note: tofu_step.note,
         tofu_units,

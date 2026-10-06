@@ -360,3 +360,7 @@ mod tests;
 #[cfg(test)]
 #[path = "pins_tests_b.rs"]
 mod tests_b;
+
+#[cfg(test)]
+#[path = "pins_manifest_tests.rs"]
+mod pins_manifest_tests;
