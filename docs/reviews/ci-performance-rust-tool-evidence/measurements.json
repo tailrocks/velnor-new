@@ -1,0 +1,22 @@
+[
+  {
+    "name": "bootstrap",
+    "exit": 0,
+    "seconds": 0.26521325000794604
+  },
+  {
+    "name": "cold",
+    "exit": 0,
+    "seconds": 42.64219712500926
+  },
+  {
+    "name": "warm",
+    "exit": 0,
+    "seconds": 0.03521933301817626
+  },
+  {
+    "name": "third",
+    "exit": 0,
+    "seconds": 0.03125583298970014
+  }
+]

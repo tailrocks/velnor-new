@@ -133,6 +133,7 @@ fn missing_roots_key_rejected() {
 fn absent_tofu_table_stays_valid_and_schema_stable() {
     assert_eq!(VelnorConfig::SCHEMA, 1);
     let stacks = StacksConfig {
+        workloads: Vec::new(),
         ignore: Vec::new(),
         rust: None,
         tofu: None,
@@ -167,12 +168,14 @@ fn literal_root_spelling_is_an_ordinary_directory() {
 fn tofu_is_a_registered_ignorable_stack() {
     assert!(VelnorConfig::REGISTERED_STACKS.contains(&"tofu"));
     let stacks = StacksConfig {
+        workloads: Vec::new(),
         ignore: vec!["tofu".to_owned()],
         rust: None,
         tofu: None,
     };
     assert!(stacks.validate("config.toml").is_ok());
     let stacks = StacksConfig {
+        workloads: Vec::new(),
         ignore: vec!["cobol".to_owned()],
         rust: None,
         tofu: None,

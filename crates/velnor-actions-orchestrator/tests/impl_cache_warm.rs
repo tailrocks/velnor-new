@@ -1,18 +1,11 @@
-//! P08 warm-reuse proof: identical renders reuse, deltas re-key.
-//!
-//! Renders the same two-crate workspace twice from scratch and asserts the
-//! warm-run contract: identical inputs produce identical cache keys (so a
-//! warm runner restores instead of fetching), the fetch step carries the
-//! offline-skip branch, and lockfile deltas change the cache identity.
-//! Lock CONTENT deltas re-key at runtime via `hashFiles` (same template,
-//! different resolved key); the hosted seed/warm pair in
-//! `docs/implemented/performance.md` shows both sides of that branch.
+//! Deterministic source emission, offline reader branches, and tool repair order.
+//! These structural fixtures do not establish fresh hosted runner performance.
 
 use std::collections::BTreeMap;
 use std::fs;
 
 use velnor_actions_contract::StepKind;
-use velnor_actions_mise::{PREPARE_RUST_COMPONENTS_STEP, cache_sources};
+use velnor_actions_mise::PREPARE_RUST_COMPONENTS_STEP;
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::{SETUP_MISE_NAME, render::WORKFLOW_PATH};
 
@@ -47,11 +40,12 @@ fn make_workspace(lock: &str, mbx: bool) -> Result<tempfile::TempDir, Box<dyn st
     }
     fs::write(root.join("Cargo.lock"), lock)?;
     if mbx {
-        let cargo_dir = root.join(".cargo");
-        fs::create_dir_all(&cargo_dir)?;
         fs::write(
-            cargo_dir.join("config.toml"),
-            "[build]\nrustc-wrapper = \"mbx\"\n",
+            root.join(".velnor/config.toml"),
+            format!(
+                "{}\n[stacks.rust]\ncompile_driver = \"mbx\"\n",
+                config_with_branch()
+            ),
         )?;
     }
     Ok(dir)
@@ -79,18 +73,12 @@ fn yaml_for(lock: &str, mbx: bool) -> Result<String, Box<dyn std::error::Error>>
         .to_owned())
 }
 
-/// Every `key:`/`cache_key:`/`shared-key:` value in render order.
+/// Explicit transport keys in render order.
 fn cache_keys(yaml: &str) -> Vec<String> {
-    let mut keys = Vec::new();
-    for line in yaml.lines() {
-        let trimmed = line.trim();
-        for prefix in ["key: ", "cache_key: ", "shared-key: "] {
-            if let Some(value) = trimmed.strip_prefix(prefix) {
-                keys.push(value.trim_matches('"').to_owned());
-            }
-        }
-    }
-    keys
+    yaml.lines()
+        .filter_map(|line| line.trim().strip_prefix("key: "))
+        .map(|value| value.trim_matches('"').to_owned())
+        .collect()
 }
 
 #[test]
@@ -114,7 +102,10 @@ fn fetch_carries_offline_skip_branch() -> TestResult {
         let prep = prepare(repo.path())?;
         let mut seen_probe = false;
         for (id, job) in &prep.workflow.ir.jobs {
-            if !id.starts_with("rust-") {
+            if !id.starts_with("rust-")
+                || job.source_producer.is_some()
+                || job.tool_producer.is_some()
+            {
                 continue;
             }
             for step in &job.steps {
@@ -122,58 +113,54 @@ fn fetch_carries_offline_skip_branch() -> TestResult {
                     continue;
                 };
                 let script = run.join(" ");
-                if step.name == "Fetch Cargo sources" {
+                if step.name.starts_with("Fetch Cargo sources") {
                     for need in [
-                        "metadata --locked --offline",
+                        "--offline",
                         "sources hit, skipping fetch",
                         "sources miss (source_missing)",
-                        "cargo fetch --locked",
+                        "--locked",
                     ] {
                         assert!(script.contains(need), "{id} fetch misses {need}");
+                    }
+                    if step.name.contains("(selected ") {
+                        assert!(run.windows(2).any(|pair| pair == ["cargo", "tree"]));
+                        assert!(
+                            run.windows(2)
+                                .any(|pair| pair == ["-e", "normal,build,dev"])
+                        );
+                        assert!(script.contains("native_tree_selected_containing"));
+                    } else {
+                        assert!(script.contains("fetch --locked --offline"));
+                        assert!(script.contains("cargo fetch --locked"));
                     }
                     seen_probe = true;
                 }
             }
         }
         assert!(seen_probe, "crate fetch probe present (mbx={mbx})");
-        let yaml = yaml_for(&lock_for(&["a", "b"]), mbx)?;
-        let driver = if mbx { "mbx" } else { "cargo" };
         let mut obligations = 0;
-        for line in yaml.lines().filter(|line| line.contains("run:")) {
-            let is_obligation = ["clippy", "build", "test", "nextest", "doc", "fmt"]
-                .iter()
-                .any(|task| line.contains(&format!("{driver} {task}")));
-            if is_obligation {
+        for job in prep.workflow.ir.jobs.values() {
+            for step in &job.steps {
+                let StepKind::Shell { run, env } = &step.kind else {
+                    continue;
+                };
+                if !env
+                    .get("VELNOR_TASK_ID")
+                    .is_some_and(|id| id.starts_with("stack/rust/"))
+                {
+                    continue;
+                }
                 obligations += 1;
-                assert!(line.contains("--offline"), "offline obligation: {line}");
+                assert!(
+                    run.join(" ").contains("--offline"),
+                    "offline obligation: {}",
+                    step.name
+                );
             }
         }
         assert!(obligations >= 2, "obligations present (mbx={mbx})");
     }
     Ok(())
-}
-
-#[test]
-fn probe_outcome_maps_to_skip_or_explicit_fetch() {
-    assert_eq!(
-        cache_sources::fetch_decision(true, "no_entry").expect("skip"),
-        cache_sources::FetchDecision::OfflineSkip
-    );
-    for reason in [
-        "no_entry",
-        "source_missing",
-        "cache_unavailable",
-        "cache_corrupt",
-    ] {
-        assert_eq!(
-            cache_sources::fetch_decision(false, reason).expect("fetch"),
-            cache_sources::FetchDecision::ExplicitFetch {
-                miss_reason: reason
-            },
-            "{reason} fetches explicitly"
-        );
-    }
-    assert!(cache_sources::fetch_decision(false, "bogus").is_err());
 }
 
 /// Step names per job id in YAML emission order.
@@ -198,137 +185,131 @@ fn yaml_steps(yaml: &str) -> BTreeMap<String, Vec<String>> {
     jobs
 }
 
-/// R22: every Rust job reinstalls clippy/rustfmt after cache restore.
-///
-/// Cold-install-always policy: the fixed `rustup component add` step
-/// is unconditional (no `if:`), so it runs on cold AND warm runs alike;
-/// ordered after `Setup Mise`, a component-less restored toolchain
-/// (upstream jdx/mise-action#215) is repaired before any obligation.
-/// Pinned at IR level (unconditionality) and YAML level (final order).
+/// Cold and warm computation jobs repair components before obligations.
 #[test]
-fn rust_components_install_unconditionally_after_restore() -> TestResult {
+fn rust_components_repair_after_restore_before_obligations() -> TestResult {
     for mbx in [false, true] {
         let repo = make_workspace(&lock_for(&["a", "b"]), mbx)?;
         let prep = prepare(repo.path())?;
         let jobs = finalized_jobs(&prep)?;
-        let mut rust_jobs = 0;
-        for (id, job) in &jobs {
-            if id != "plan" && !id.starts_with("rust-") {
-                continue;
-            }
-            rust_jobs += usize::from(id.starts_with("rust-"));
-            let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
-            let missing =
-                |what: &str| std::io::Error::other(format!("{id} misses {what} (mbx={mbx})"));
-            let setup = names
-                .iter()
-                .position(|name| *name == SETUP_MISE_NAME)
-                .ok_or_else(|| missing("setup"))?;
-            let components = names
-                .iter()
-                .position(|name| *name == PREPARE_RUST_COMPONENTS_STEP)
-                .ok_or_else(|| missing("components"))?;
-            assert!(
-                setup < components,
-                "{id}: components install after restore (mbx={mbx})"
-            );
-            let step = &job.steps[components];
-            assert!(
-                step.condition.is_none(),
-                "{id}: unconditional install runs cold AND warm (mbx={mbx})"
-            );
-            let StepKind::Shell { run, .. } = &step.kind else {
-                return Err(missing("shell components payload").into());
-            };
-            for token in [
-                "rustup",
-                "component",
-                "add",
-                "--toolchain",
-                "clippy",
-                "rustfmt",
-            ] {
-                assert!(
-                    run.join(" ").contains(token),
-                    "{id} payload misses {token} (mbx={mbx})"
-                );
-            }
-        }
-        assert_eq!(rust_jobs, 2, "both fixture crates watched (mbx={mbx})");
         let tree = render_staged_tree(&prep)?;
-        let yaml = tree
-            .get(WORKFLOW_PATH)
-            .ok_or_else(|| std::io::Error::other("missing workflow"))?;
+        let yaml = tree.get(WORKFLOW_PATH).ok_or("workflow")?;
         let emitted = yaml_steps(yaml);
         for id in ["plan", "rust-a", "rust-b"] {
-            let names = emitted
-                .get(id)
-                .ok_or_else(|| std::io::Error::other(format!("missing {id}")))?;
-            let at = |want: &str| {
+            let job = jobs.get(id).ok_or("computation job")?;
+            assert!(job.source_producer.is_none());
+            let at = |name: &str| {
+                job.steps
+                    .iter()
+                    .position(|step| step.name == name)
+                    .ok_or_else(|| std::io::Error::other(format!("{id} misses {name}")))
+            };
+            let restore = at("Restore Mise tools")?;
+            let components = at(PREPARE_RUST_COMPONENTS_STEP)?;
+            assert!(restore < components, "{id} repair after tools restore");
+            assert!(
+                at(SETUP_MISE_NAME)? < components,
+                "{id} bootstrap before repair"
+            );
+            assert_component_repair(&job.steps[components], id)?;
+            let names = emitted.get(id).ok_or("emitted computation job")?;
+            let emitted_at = |name: &str| {
                 names
                     .iter()
-                    .position(|name| name == want)
-                    .ok_or_else(|| std::io::Error::other(format!("{id} misses {want}")))
+                    .position(|got| got == name)
+                    .ok_or("emitted step")
             };
-            assert!(
-                at(SETUP_MISE_NAME)? < at(PREPARE_RUST_COMPONENTS_STEP)?,
-                "{id}: emitted components follow restore (mbx={mbx})"
-            );
-            if id.starts_with("rust-") {
-                assert!(
-                    at(PREPARE_RUST_COMPONENTS_STEP)? < at("Clippy")?,
-                    "{id}: components precede obligations (mbx={mbx})"
-                );
+            assert!(emitted_at("Restore Mise tools")? < emitted_at(PREPARE_RUST_COMPONENTS_STEP)?);
+            if id != "plan" {
+                assert!(components < at("Clippy")?, "repair before obligation");
+                assert!(emitted_at(PREPARE_RUST_COMPONENTS_STEP)? < emitted_at("Clippy")?);
             }
         }
     }
     Ok(())
 }
 
+fn assert_component_repair(step: &velnor_actions_contract::Step, id: &str) -> TestResult {
+    if id == "plan" {
+        assert_eq!(
+            step.condition.as_deref(),
+            Some(velnor_actions_workflow_renderer::early_plan::NEEDS_CARGO_CONDITION),
+            "Plan repairs whenever Cargo preparation is needed"
+        );
+    } else {
+        assert!(step.condition.is_none(), "cold and warm computation repair");
+    }
+    let StepKind::Shell { run, .. } = &step.kind else {
+        return Err("component repair must use native fixed argv".into());
+    };
+    for token in [
+        "rustup",
+        "component",
+        "add",
+        "--toolchain",
+        "clippy",
+        "rustfmt",
+    ] {
+        assert!(run.join(" ").contains(token), "repair misses {token}");
+    }
+    Ok(())
+}
+
 #[test]
-fn lockfile_delta_changes_cache_identity() -> TestResult {
-    let lock = lock_for(&["a", "b"]);
-    // Driver delta: MBX and Cargo-only repos use disjoint cache shapes.
-    let mbx_keys = cache_keys(&yaml_for(&lock, true)?);
-    let cargo_keys = cache_keys(&yaml_for(&lock, false)?);
-    assert!(
-        mbx_keys
-            .iter()
-            .any(|key| key.contains("velnor-v1-sources-")),
-        "mbx snapshot: {mbx_keys:?}"
-    );
-    assert!(
-        cargo_keys
-            .iter()
-            .any(|key| key.starts_with("velnor-cargo-")),
-        "cargo shared key: {cargo_keys:?}"
-    );
-    assert!(
-        !mbx_keys.iter().any(|key| key.starts_with("velnor-cargo-")),
-        "mbx never stacks rust-cache: {mbx_keys:?}"
-    );
-    // Lock CONTENT deltas re-key at runtime through `hashFiles`: the
-    // template is stable across renders, the resolved key is not.
-    for key in &mbx_keys {
-        if key.contains("velnor-v1-sources-") {
-            assert!(key.contains("hashFiles("), "content-pinned: {key}");
+fn lockfile_delta_changes_literal_source_identity() -> TestResult {
+    for mbx in [false, true] {
+        let lock = lock_for(&["a", "b"]);
+        let first = source_identities(&lock, mbx)?;
+        // A semantic lock package change must alter the admitted literal cohort.
+        let changed = lock.replace("version = \"0.1.0\"", "version = \"0.2.0\"");
+        let second = source_identities(&changed, mbx)?;
+        assert!(!first.is_empty(), "source cohort present");
+        assert_ne!(first, second, "lock content rekeys source cohorts");
+        for identity in first.iter().chain(&second) {
+            assert!(identity.starts_with("velnor-v4-cargo-source-public-"));
+            assert!(!identity.contains("hashFiles("));
+            assert!(!identity.contains("${{"));
+        }
+        let repo = make_workspace(&lock, mbx)?;
+        fs::remove_file(repo.path().join("Cargo.lock"))?;
+        let prep = prepare(repo.path())?;
+        assert!(
+            prep.workflow
+                .ir
+                .jobs
+                .values()
+                .all(|job| job.source_producer.is_none())
+        );
+        let tree = render_staged_tree(&prep)?;
+        let yaml = tree.get(WORKFLOW_PATH).ok_or("workflow")?;
+        assert!(!yaml.contains("Restore Cargo sources"));
+        assert!(!yaml.contains("Save Cargo sources"));
+    }
+    Ok(())
+}
+
+fn source_identities(lock: &str, mbx: bool) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let repo = make_workspace(lock, mbx)?;
+    if lock.contains("version = \"0.2.0\"") {
+        for member in ["a", "b"] {
+            let manifest = repo.path().join(format!("members/{member}/Cargo.toml"));
+            let body = fs::read_to_string(&manifest)?;
+            fs::write(
+                manifest,
+                body.replace("version = \"0.1.0\"", "version = \"0.2.0\""),
+            )?;
         }
     }
-    // Lockless emits no sources cache at all: removing the lock removes reuse.
-    let repo = make_workspace(&lock, true)?;
-    fs::remove_file(repo.path().join("Cargo.lock"))?;
     let prep = prepare(repo.path())?;
-    let tree = render_staged_tree(&prep)?;
-    let yaml = tree
-        .get(WORKFLOW_PATH)
-        .ok_or_else(|| std::io::Error::other("missing workflow"))?;
-    assert!(
-        !yaml.contains("Restore Cargo sources"),
-        "lockless restores nothing"
-    );
-    assert!(
-        !yaml.contains("Save Cargo sources"),
-        "lockless saves nothing"
-    );
-    Ok(())
+    Ok(prep
+        .workflow
+        .ir
+        .jobs
+        .values()
+        .filter_map(|job| {
+            job.source_producer
+                .as_ref()
+                .map(|meta| meta.source_identity.clone())
+        })
+        .collect())
 }

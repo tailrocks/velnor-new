@@ -1,5 +1,5 @@
 //! T21 provider-cache end to end: fail-closed reuse claims,
-//! hit-still-runs planning, and one elected saver per root key.
+//! hit-still-runs planning, and one pure producer per root key.
 //!
 //! Provider entries accelerate init; they never replace validate
 //! execution and never mint reuse.
@@ -7,11 +7,20 @@ use std::fs;
 
 use serde_json::json;
 use tempfile::TempDir;
-use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan, StepKind};
+use velnor_actions_contract::{
+    FinalStatus, Job, ObligationDecision, Plan, SourceProducerRole, StepKind,
+};
 use velnor_actions_orchestrator::{finalized_jobs, plan_internal, prepare};
 
 use super::impl_common::{TestResult, git, git_line, passing_reports};
 use super::impl_orch_core::{merge, merge_request, success_jobs};
+
+/// A complete public-registry lock used by positive provider-cache fixtures.
+const PUBLIC_PROVIDER_LOCK: &str = r#"provider "registry.opentofu.org/hashicorp/null" {
+  version = "3.2.1"
+  hashes = ["h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="]
+}
+"#;
 
 /// Git-initialized pure-tofu repo: `config` plus `files`, no Cargo.
 fn make_pure_tofu_repo(
@@ -45,7 +54,9 @@ fn two_root_config() -> String {
 fn two_root_files() -> Vec<(&'static str, &'static str)> {
     vec![
         ("stacks/a/main.tf", "variable \"a\" {}\n"),
+        ("stacks/a/.terraform.lock.hcl", PUBLIC_PROVIDER_LOCK),
         ("stacks/b/main.tf", "variable \"b\" {}\n"),
+        ("stacks/b/.terraform.lock.hcl", PUBLIC_PROVIDER_LOCK),
     ]
 }
 
@@ -81,7 +92,10 @@ fn provider_hit_still_runs_init_and_validate() -> TestResult {
     use velnor_actions_mise::restore_evidence::{RestoreObservation, verify_provider_restore};
     let bytes = b"provider bytes".to_vec();
     let hit = RestoreObservation {
-        entry_path: "tofu-cache/root-0123456789ab/provider".to_owned(),
+        entry_path: format!(
+            "tofu-cache/{}/provider",
+            velnor_actions_tofu::tofu_root_locator("").expect("root locator")
+        ),
         entry_bytes: bytes.clone(),
         expected_digest: digest_b3(&bytes),
         expected_compat: digest_b3(b"compat"),
@@ -117,7 +131,7 @@ fn tofu_reuse_claims_fail_closed_at_merge() -> TestResult {
         &plan_json,
         &matrix,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     let report = merge(&request)?;
     assert_eq!(report.status, FinalStatus::PlanningFailed);
@@ -129,11 +143,9 @@ fn tofu_reuse_claims_fail_closed_at_merge() -> TestResult {
     Ok(())
 }
 
-/// Every finalized tofu job saves exactly its own restored key under
-/// the push-only gate; the plan job saves nothing.
+/// Consumers restore read-only; one pure producer saves each public key.
 #[test]
-fn finalized_tofu_jobs_save_exactly_their_restored_key() -> TestResult {
-    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
+fn finalized_tofu_jobs_use_pure_producers_for_provider_saves() -> TestResult {
     let dir = make_pure_tofu_repo(&two_root_config(), &two_root_files())?;
     let jobs = finalized_jobs(&prepare(dir.path())?)?;
     let plan = jobs.get("plan").ok_or("plan job")?;
@@ -143,34 +155,166 @@ fn finalized_tofu_jobs_save_exactly_their_restored_key() -> TestResult {
             .all(|step| step.name != "Save Tofu providers"),
         "the plan job never inits so never saves"
     );
-    let mut keys = Vec::new();
+    let mut consumer_keys = Vec::new();
+    let mut producer_keys = Vec::new();
+    let producer_ids: Vec<&String> = jobs
+        .iter()
+        .filter(|(_, job)| job.source_producer.is_some())
+        .map(|(id, _)| id)
+        .collect();
     for (id, job) in jobs.iter().filter(|(id, _)| id.starts_with("tofu-")) {
-        let restore = job
-            .steps
-            .iter()
-            .find(|step| step.name == "Restore Tofu providers")
-            .ok_or(format!("{id} restores providers"))?;
-        let StepKind::Action { with, .. } = &restore.kind else {
-            return Err(format!("{id} restore must be an action step").into());
-        };
-        let key = with.get("key").ok_or("restore key")?.clone();
-        let path = with.get("path").ok_or("restore path")?.clone();
-        let saves: Vec<_> = job
-            .steps
-            .iter()
-            .filter(|step| step.name == "Save Tofu providers")
-            .collect();
-        assert_eq!(saves.len(), 1, "{id} saves once");
-        let save = saves[0];
-        assert_eq!(save.condition.as_deref(), Some(CACHE_SAVE_CONDITION));
-        let StepKind::Action { with: inputs, .. } = &save.kind else {
-            return Err(format!("{id} save must be an action step").into());
-        };
-        assert_eq!(inputs.get("key"), Some(&key), "{id} saves its own key");
-        assert_eq!(inputs.get("path"), Some(&path), "{id} saves its own path");
-        keys.push(key);
+        if job.source_producer.is_some() {
+            let guard = jobs
+                .iter()
+                .find(|(_, consumer)| {
+                    consumer.source_producer.is_none()
+                        && consumer.needs.iter().any(|need| need == id)
+                })
+                .and_then(|(_, consumer)| consumer.condition.as_deref())
+                .and_then(consumer_guard)
+                .ok_or(format!("{id} consumer guard"))?;
+            producer_keys.push(assert_producer_job(job, id, guard)?);
+        } else {
+            consumer_keys.push(assert_consumer_job(job, id, &producer_ids)?);
+        }
     }
-    assert_eq!(keys.len(), 2, "one tofu job per root");
-    assert_ne!(keys[0], keys[1], "per-root keys stay distinct");
+    assert_eq!(consumer_keys.len(), 2, "one consumer per root");
+    assert_eq!(producer_ids.len(), 2, "one producer per root");
+    consumer_keys.sort();
+    producer_keys.sort();
+    assert_eq!(
+        consumer_keys, producer_keys,
+        "consumer restores producer keys"
+    );
+    assert_ne!(
+        producer_keys[0], producer_keys[1],
+        "per-root keys stay distinct"
+    );
     Ok(())
+}
+
+fn assert_producer_job(
+    job: &Job,
+    id: &str,
+    guard: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
+    assert_eq!(job.display_name, "Public OpenTofu providers", "{id}");
+    assert_eq!(
+        job.needs,
+        vec!["plan".to_owned()],
+        "{id} has no consumer obligations"
+    );
+    let condition = job.condition.as_deref().ok_or(format!("{id} condition"))?;
+    assert_eq!(
+        condition,
+        format!("{CACHE_SAVE_CONDITION} && ({guard})"),
+        "{id} preserves the selected consumer guard"
+    );
+    let metadata = job.source_producer.as_ref().ok_or("producer metadata")?;
+    assert_eq!(metadata.role, SourceProducerRole::Tofu, "{id} role");
+    assert!(!job.steps.iter().any(|step| {
+        step.name == "Init for validate"
+            || step.name == "Validate"
+            || matches!(&step.kind, StepKind::Action { uses, .. } if uses.starts_with("actions/checkout@"))
+    }), "{id} stays source-only");
+    let export = job
+        .steps
+        .iter()
+        .position(|step| step.name == "Export verified OpenTofu providers")
+        .ok_or(format!("{id} exports providers"))?;
+    let save = job
+        .steps
+        .iter()
+        .position(|step| step.name == "Save Tofu providers")
+        .ok_or(format!("{id} saves providers"))?;
+    assert!(export < save, "{id} verifies before save");
+    assert!(
+        save_condition(job, save),
+        "{id} save is push and verification gated"
+    );
+    let StepKind::Action { with, .. } = &job.steps[save].kind else {
+        return Err(format!("{id} save must be an action step").into());
+    };
+    let key = with.get("key").ok_or("producer save key")?.clone();
+    assert_literal_provider_key(&key, id);
+    assert_eq!(
+        metadata.source_identity, key,
+        "{id} metadata binds save key"
+    );
+    Ok(key)
+}
+
+fn consumer_guard(condition: &str) -> Option<&str> {
+    condition
+        .strip_prefix("always() && needs.plan.result == 'success' && (")
+        .and_then(|guard| guard.strip_suffix(')'))
+}
+
+fn save_condition(job: &Job, save: usize) -> bool {
+    job.steps[save]
+        .condition
+        .as_deref()
+        .is_some_and(|condition| {
+            condition.starts_with(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION)
+                && condition.contains("outputs.verified == 'true'")
+        })
+}
+
+fn assert_consumer_job(
+    job: &Job,
+    id: &str,
+    producer_ids: &[&String],
+) -> Result<String, Box<dyn std::error::Error>> {
+    let restore = job
+        .steps
+        .iter()
+        .find(|step| step.name == "Restore Tofu providers")
+        .ok_or(format!("{id} restores providers"))?;
+    let StepKind::Action { with, .. } = &restore.kind else {
+        return Err(format!("{id} restore must be an action step").into());
+    };
+    let key = with.get("key").ok_or("restore key")?.clone();
+    assert_literal_provider_key(&key, id);
+    assert!(
+        job.steps
+            .iter()
+            .all(|step| step.name != "Save Tofu providers"),
+        "{id} consumer never saves"
+    );
+    assert_eq!(
+        job.needs
+            .iter()
+            .filter(|need| producer_ids.iter().any(|producer| *producer == *need))
+            .count(),
+        1,
+        "{id} waits on one source producer"
+    );
+    let condition = job.condition.as_deref().ok_or(format!("{id} condition"))?;
+    assert!(
+        condition.contains("always()"),
+        "{id} runs after skipped producer"
+    );
+    assert!(
+        condition.contains("needs.plan.result == 'success'"),
+        "{id} still requires Plan success"
+    );
+    Ok(key)
+}
+
+fn assert_literal_provider_key(key: &str, id: &str) {
+    assert!(
+        key.starts_with("velnor-v2-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-"),
+        "{id} key shape: {key}"
+    );
+    assert!(
+        !key.contains("hashFiles(") && !key.contains("${{"),
+        "{id} key is literal"
+    );
+    assert!(
+        key.rsplit('-').next().is_some_and(
+            |digest| digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+        ),
+        "{id} key carries source digest: {key}"
+    );
 }

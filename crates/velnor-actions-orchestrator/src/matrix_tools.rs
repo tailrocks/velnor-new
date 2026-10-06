@@ -4,18 +4,10 @@
 //! `matrix_step` re-exports the constructors so call sites stay put.
 
 use velnor_actions_contract::Step;
-use velnor_actions_mise::{
-    PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools, ToolCatalog, ToolHomes,
-};
+use velnor_actions_mise::{PinnedTool, PreparePinnedTools, ToolCatalog, ToolHomes};
 
 use crate::OrchestratorError;
 use crate::utf8::{strings_of, strings_of_env};
-
-#[path = "matrix_suite.rs"]
-mod suite;
-#[cfg(test)]
-pub(crate) use suite::crate_suite_tools;
-pub(crate) use suite::{SuiteTools, suite_tools_for_tasks};
 
 /// Crate-job driver tools per role: Rust only when the job carries
 /// rust obligations, plus MBX only on MBX evidence, plus Opentofu
@@ -34,33 +26,25 @@ pub(crate) fn task_driver_tools(
     tools
 }
 
-/// Typed `Prepare pinned tools` step for the crate-job tool set.
-///
-/// Driver toolchain per role (Rust only for rust obligations, plus
-/// Opentofu for tofu jobs) plus Nextest when used, plus the
-/// `generate` validators only when `needs_validators` holds (see
-/// [`suite_tools_for_tasks`]). The set is exact and pinned
-/// by test: drivers, conditional validators, optional Nextest,
-/// nothing else. Pure-tofu roles carry no owned-homes triple in the
-/// step env; every other role keeps it.
-///
-/// # Errors
-///
-/// Returns a contract error when the Mise adapter rejects the request.
+#[path = "matrix_suite.rs"]
+mod suite;
+pub(crate) use suite::{SuiteTools, crate_suite_tools};
+
+/// Select the complete tool set before its preparation source identity is built.
 #[expect(
     clippy::fn_params_excessive_bools,
-    reason = "five independent install flags mirror the driver selection"
+    reason = "four independent driver flags precede the audited suite requirements"
 )]
-pub(crate) fn prepare_crate_tools_step(
+pub(crate) fn selected_crate_tools(
     catalog: &ToolCatalog,
     use_rust: bool,
     use_mbx: bool,
     use_nextest: bool,
     use_opentofu: bool,
-    needs_validators: bool,
-) -> Result<Step, OrchestratorError> {
-    let mut tools = task_driver_tools(use_rust, use_mbx, use_opentofu);
-    if needs_validators {
+    suite: SuiteTools,
+) -> Vec<PinnedTool> {
+    let mut tools = task_driver_tools(use_rust, use_mbx, use_opentofu || suite.opentofu);
+    if suite.generate_validators {
         tools.extend([
             PinnedTool::Actionlint,
             PinnedTool::Shellcheck,
@@ -68,19 +52,57 @@ pub(crate) fn prepare_crate_tools_step(
         ]);
     }
     tools.extend(use_nextest.then_some(PinnedTool::Nextest));
+    tools.extend(suite.python.then_some(PinnedTool::Python));
+    for tool in &mut tools {
+        if matches!(tool, PinnedTool::Rust | PinnedTool::RustDesktop) {
+            *tool = catalog.compiler_tool();
+        }
+    }
+    tools
+}
+
+/// Typed `Prepare pinned tools` step for the crate-job tool set.
+///
+/// Driver toolchain per role (Rust only for rust obligations, plus
+/// Opentofu for tofu jobs) plus Nextest when used, plus the
+/// suite tools from the single audited registry (see
+/// [`crate_suite_tools`]). The set is exact and pinned
+/// by test: drivers, conditional validators, optional Nextest,
+/// nothing else. Full preparation carries its canonical home bindings;
+/// Rust selectors additionally bind the compiler toolchain.
+///
+/// # Errors
+///
+/// Returns a contract error when the Mise adapter rejects the request.
+#[expect(
+    clippy::fn_params_excessive_bools,
+    reason = "four independent driver flags precede the audited suite requirements"
+)]
+pub(crate) fn prepare_crate_tools_step(
+    catalog: &ToolCatalog,
+    use_rust: bool,
+    use_mbx: bool,
+    use_nextest: bool,
+    use_opentofu: bool,
+    suite: SuiteTools,
+    label: &str,
+) -> Result<Step, OrchestratorError> {
+    let tools = selected_crate_tools(catalog, use_rust, use_mbx, use_nextest, use_opentofu, suite);
     let prepare = PreparePinnedTools::new(tools, ToolHomes::runner_temp()).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
         }
     })?;
-    let run = strings_of(prepare.argv(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
+    let run =
+        strings_of(prepare.argv_for_host(catalog, crate::workloads::host_for_runner(label)?)?)
+            .map_err(|problem| OrchestratorError::Contract { problem })?;
     let env = if use_rust {
         strings_of_env(&prepare.env(catalog))
     } else {
-        strings_of_env(&prepare.env_without_homes())
+        strings_of_env(&PreparePinnedTools::env_for_domain(
+            velnor_actions_contract::ToolCacheDomain::Full,
+        ))
     }
     .map_err(|problem| OrchestratorError::Contract { problem })?;
-    velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
-        .map_err(OrchestratorError::from)
+    crate::workflow_jobs::rust_tools_prepare::prepare_step(run, env, use_rust, catalog)
 }

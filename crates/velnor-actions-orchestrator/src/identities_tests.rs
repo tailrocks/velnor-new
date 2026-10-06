@@ -228,7 +228,7 @@ fn tofu_task(kind: &str) -> ProposedTask {
     use std::ffi::OsString;
     use velnor_actions_contract::{CachePolicy, IdentityInputs, ResourceClass, ResourceDemand};
     ProposedTask {
-        task_id: format!("stack/tofu/root/{kind}/default"),
+        task_id: format!("stack/tofu/dir-/{kind}/default"),
         stack_id: "tofu".to_owned(),
         component_id: "tofu:".to_owned(),
         task_kind: kind.to_owned(),
@@ -251,7 +251,7 @@ fn tofu_task(kind: &str) -> ProposedTask {
         },
         identity: IdentityInputs {
             unit_id: String::new(),
-            unit_key: "root".to_owned(),
+            unit_key: "dir-".to_owned(),
             unit_path: String::new(),
             project_root: ".".to_owned(),
             target: "host".to_owned(),
@@ -324,6 +324,8 @@ fn tofu_cache_format_is_distinct_and_valid() {
 /// Minimal discovery with no workspaces or tool checks.
 fn empty_discovery() -> crate::discover::Discovery {
     crate::discover::Discovery {
+        rust_inventory: None,
+        raw_inventories: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: Vec::new(),

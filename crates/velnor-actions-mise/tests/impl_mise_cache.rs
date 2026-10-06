@@ -22,7 +22,7 @@ fn sample_descriptor() -> CachedTaskDescriptor {
         outputs: vec!["report.json".to_owned()],
         command_inputs: vec!["cargo clippy --version".to_owned()],
         env: BTreeMap::from([("RUSTFLAGS".to_owned(), "-D warnings".to_owned())]),
-        tools: vec!["rust@1.98.1".to_owned()],
+        tools: vec!["rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()],
         dep_keys: Vec::new(),
     }
 }

@@ -2,14 +2,15 @@
 //!
 //! The plan artifact already exports every covered task ID through its
 //! obligations; this module encodes that set for the plan job's
-//! `covered_tasks` output and builds each obligation step's generated
-//! `if:` skip gate over it. Encoding wraps comma-joined sorted IDs in
+//! `covered_tasks` output and builds job allocation and obligation-step
+//! `if:` gates over it. Encoding wraps comma-joined sorted IDs in
 //! commas (`,a,b,`), so `contains` matches whole IDs only: task IDs
 //! never contain commas, and the empty set encodes as the empty
 //! string, which matches nothing and executes everything.
 
-use velnor_actions_contract::{ObligationDecision, Plan, validate_task_id};
+use velnor_actions_contract::{CrateObligation, ObligationDecision, Plan, validate_task_id};
 // Re-exported: the CLI emits this exact output name (single-sourced).
+pub use velnor_actions_contract::PLAN_CARGO_FALLBACK_OUTPUT;
 pub use velnor_actions_workflow_renderer::COVERED_TASKS_OUTPUT;
 
 use crate::OrchestratorError;
@@ -90,6 +91,26 @@ pub(crate) fn skip_condition(task_id: &str) -> Result<String, OrchestratorError>
     validate_task_id(task_id).map_err(internal_contract)?;
     Ok(format!(
         "!contains(needs.plan.outputs.{COVERED_TASKS_OUTPUT}, ',{task_id},')"
+    ))
+}
+
+/// Allocate a crate runner only when at least one obligation lacks coverage.
+///
+/// The status predicate avoids GitHub's implicit `success()` dependency gate:
+/// an intentionally omitted earlier lane must not suppress later selected
+/// work. A failed plan or cancellation still prevents allocation. Missing
+/// coverage output matches nothing, preserving conservative execution.
+pub(crate) fn job_condition(obligations: &[CrateObligation]) -> Result<String, OrchestratorError> {
+    if obligations.is_empty() {
+        return Err(crate::internal::internal("crate_empty"));
+    }
+    let mut conditions = Vec::with_capacity(obligations.len());
+    for obligation in obligations {
+        conditions.push(skip_condition(&obligation.task_id)?);
+    }
+    Ok(format!(
+        "!cancelled() && needs.plan.result == 'success' && ({})",
+        conditions.join(" || ")
     ))
 }
 

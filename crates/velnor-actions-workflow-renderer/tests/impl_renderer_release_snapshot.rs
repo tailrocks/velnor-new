@@ -43,6 +43,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
+      actions: read
       contents: read
       pull-requests: none
       id-token: none
@@ -68,6 +69,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
+      actions: none
       contents: write
       pull-requests: write
       id-token: none
@@ -80,12 +82,13 @@ jobs:
     timeout-minutes: 10
     environment: crates-io
     permissions:
+      actions: read
       contents: write
       pull-requests: read
       id-token: write
     needs:
       - release-preflight
-    if: github.repository == 'acme/widgets' && github.event.inputs.plan == 'plan-1' && github.event.inputs.source_sha == '0123456789abcdef0123456789abcdef01234567'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.repository == 'acme/widgets' && github.event.inputs.plan == 'plan-1' && github.event.inputs.source_sha == '0123456789abcdef0123456789abcdef01234567'
     steps:
       - name: Checkout
         uses: actions/checkout@0000000000000000000000000000000000000000
@@ -108,6 +111,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
+      actions: none
       contents: read
       pull-requests: read
       id-token: none

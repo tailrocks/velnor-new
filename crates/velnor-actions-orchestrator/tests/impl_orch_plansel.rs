@@ -259,7 +259,7 @@ pub(crate) fn merge_status(
         &plan_value,
         &serde_json::to_value(reports).unwrap_or(Json::Null),
     );
-    let mut request = serde_json::json!({"schema": 1, "run_key": "local", "actual_event": plan_value.get("event").cloned().unwrap_or(Json::Null), "plan": plan, "matrix": plan.matrix, "matrix_reports": reports, "task_reports": task_files, "required_job_ids": ["plan"], "required_jobs": [{"job_id": "plan", "conclusion": "success"}], "shard_proofs": proofs});
+    let mut request = serde_json::json!({"schema": 1, "run_key": "local", "actual_scope": "affected", "actual_event": plan_value.get("event").cloned().unwrap_or(Json::Null), "plan": plan, "matrix": plan.matrix, "matrix_reports": reports, "task_reports": task_files, "required_job_ids": ["plan"], "required_jobs": [{"job_id": "plan", "conclusion": "success"}], "shard_proofs": proofs});
     for (key, value) in extra.as_object().ok_or("not an object")? {
         request[key] = value.clone();
     }

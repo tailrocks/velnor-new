@@ -144,6 +144,7 @@ fn checkout_resolution_binds_content_and_absence() {
         &toolchain,
         &platform,
         &mut velnor_actions_tofu::FileCache::new(),
+        None,
     )
     .expect("closure");
     assert!(
@@ -176,6 +177,7 @@ fn checkout_resolution_binds_content_and_absence() {
         &toolchain,
         &platform,
         &mut velnor_actions_tofu::FileCache::new(),
+        None,
     )
     .expect("closure");
     assert_eq!(digest_of(&closure), digest_of(&again));
@@ -187,6 +189,7 @@ fn checkout_resolution_binds_content_and_absence() {
         &toolchain,
         &platform,
         &mut velnor_actions_tofu::FileCache::new(),
+        None,
     )
     .expect("closure");
     assert!(missing.verify_complete().is_err());
@@ -198,6 +201,7 @@ fn checkout_resolution_binds_content_and_absence() {
         &toolchain,
         &platform,
         &mut velnor_actions_tofu::FileCache::new(),
+        None,
     )
     .expect("closure");
     assert!(dirty.verify_complete().is_err());
@@ -205,7 +209,7 @@ fn checkout_resolution_binds_content_and_absence() {
 }
 
 #[test]
-fn source_edits_flip_and_classes_exclude_explicitly() {
+fn source_edits_flip_without_inferred_class_absence() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let root = tmp.path();
     std::fs::write(root.join("Cargo.toml"), "[package]\n").expect("manifest");
@@ -223,6 +227,7 @@ fn source_edits_flip_and_classes_exclude_explicitly() {
             &toolchain,
             &platform,
             &mut velnor_actions_tofu::FileCache::new(),
+            None,
         )
         .expect("closure")
     };
@@ -230,17 +235,6 @@ fn source_edits_flip_and_classes_exclude_explicitly() {
     std::fs::write(root.join("src/lib.rs"), "pub fn f() {}\npub fn g() {}\n").expect("edit");
     assert_ne!(before, digest_of(&resolve(root)));
     let clippy = resolve(root);
-    for (name, marker) in [
-        ("docs", "kind_does_not_render_docs"),
-        ("fixtures", "kind_does_not_execute_tests"),
-    ] {
-        match &clippy.inputs[name] {
-            Provenance::AbsentProven { evidence } => {
-                assert!(evidence.contains(marker), "{evidence}");
-            }
-            other => panic!("{name} must exclude explicitly: {other:?}"),
-        }
-    }
     assert!(clippy.verify_complete().is_ok());
 }
 
@@ -277,7 +271,7 @@ fn tofu_task(kind: &str, unit: &str) -> ProposedTask {
     use std::ffi::OsString;
     use velnor_actions_contract::{CachePolicy, IdentityInputs, ResourceClass, ResourceDemand};
     ProposedTask {
-        task_id: format!("stack/tofu/root/{kind}/default"),
+        task_id: format!("stack/tofu/dir-/{kind}/default"),
         stack_id: "tofu".to_owned(),
         component_id: format!("tofu:{unit}"),
         task_kind: kind.to_owned(),
@@ -300,7 +294,7 @@ fn tofu_task(kind: &str, unit: &str) -> ProposedTask {
         },
         identity: IdentityInputs {
             unit_id: String::new(),
-            unit_key: "root".to_owned(),
+            unit_key: "dir-".to_owned(),
             unit_path: unit.to_owned(),
             project_root: ".".to_owned(),
             target: "host".to_owned(),
@@ -333,6 +327,7 @@ fn tofu_dispatch_resolves_closure() {
         "t",
         "p",
         &mut velnor_actions_tofu::FileCache::new(),
+        None,
     )
     .expect("tofu converts");
     assert!(closure.unknown_inputs().is_empty());
@@ -353,6 +348,7 @@ fn tofu_dispatch_rejects_unknown_kind() {
         "t",
         "p",
         &mut velnor_actions_tofu::FileCache::new(),
+        None,
     )
     .expect_err("unknown kind");
     assert!(err.to_string().contains("unknown_kind"), "{err}");
@@ -371,6 +367,7 @@ fn closure_dispatch_rejects_unregistered_stack() {
         "t",
         "p",
         &mut velnor_actions_tofu::FileCache::new(),
+        None,
     )
     .expect_err("bogus");
     assert!(err.to_string().contains("unregistered_stack"), "{err}");

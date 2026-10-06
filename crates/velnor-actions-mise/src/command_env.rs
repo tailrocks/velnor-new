@@ -7,12 +7,24 @@
 use std::ffi::OsString;
 use std::process::Command;
 
+impl crate::ToolHomes {
+    /// Pure isolation and owned-home environment for preparation payloads.
+    #[must_use]
+    pub fn prepare_env(&self, catalog: &crate::ToolCatalog) -> Vec<(OsString, OsString)> {
+        let mut env = crate::command::IsolatedCommand::env_overlay();
+        env.extend(self.env(catalog));
+        env
+    }
+}
+
 /// Isolation environment applied to every spawned process.
-pub const ISOLATION_ENV: [(&str, &str); 4] = [
+/// Rustup1.29.1 config accepts only literal0 to prevent implicit installs.
+pub const ISOLATION_ENV: [(&str, &str); 5] = [
     ("MISE_NO_CONFIG", "1"),
     ("MISE_NO_ENV", "1"),
     ("MISE_NO_HOOKS", "1"),
     ("MISE_LOCKFILE", "0"),
+    ("RUSTUP_AUTO_INSTALL", "0"),
 ];
 
 /// Environment disabling implicit tool installation for verification runs.
@@ -166,7 +178,7 @@ pub fn is_reserved_env_key(key: &str) -> bool {
     if MISE_ALLOWED_EXTRAS.contains(&key) {
         return false;
     }
-    if key.starts_with("MISE_") {
+    if key.starts_with("MISE_") || key == "RUSTUP_AUTO_INSTALL" {
         return true;
     }
     if TOFU_ALLOWED_EXTRAS.contains(&key) {
@@ -178,11 +190,15 @@ pub fn is_reserved_env_key(key: &str) -> bool {
     is_denied_credential_key(key) || is_denied_endpoint_key(key)
 }
 
-/// True for ambient-only tofu/checkpoint families: stripped from every
-/// inherited parent before spawn (Velnor's own pairs arrive via the
-/// fixed overlays after the strip, so constructor-set values survive).
+/// True for ambient-only control families and owned wrapper authority.
+/// Source-qualified wrapper authority arrives only through typed overlays;
+/// an ambient path/digest pair never establishes authority.
 fn is_stripped_ambient_key(key: &str) -> bool {
-    key.starts_with("TF_") || key.starts_with("TOFU_") || key.starts_with("CHECKPOINT_")
+    key.starts_with("TF_")
+        || key.starts_with("TOFU_")
+        || key.starts_with("CHECKPOINT_")
+        || key.starts_with("MISE_OWNED_CARGO_WRAPPER")
+        || key == "RUSTUP_AUTO_INSTALL"
 }
 
 /// Redact secret-looking values for `Debug`: names stay, values become
@@ -250,7 +266,7 @@ impl EnvPolicy {
     ///
     /// The pure contract behind the spawner: inheriting policies keep
     /// the parent minus stripped credentials, endpoints, and
-    /// tofu/checkpoint ambient families; repo-task keeps the proxy
+    /// tofu/checkpoint families and ambient wrapper authority; repo-task keeps the proxy
     /// passthrough only; and every policy appends `additions` (the
     /// isolation overlay plus validated extras) last.
     #[must_use]
@@ -298,7 +314,8 @@ pub fn proxy_passthrough(parent: &[(OsString, OsString)]) -> Vec<(OsString, OsSt
 ///
 /// The nine known names strip unconditionally; pattern-shaped names
 /// (`CARGO_REGISTRIES_*`, `*_TOKEN`) and the tofu/checkpoint ambient
-/// families (`TF_*`, `TOFU_*`, `CHECKPOINT_*`) strip by scanning the
+/// families (`TF_*`, `TOFU_*`, `CHECKPOINT_*`) and ambient owned wrapper
+/// authority strip by scanning the
 /// live parent environment, since no fixed list can enumerate them.
 pub(crate) fn strip_credentials(command: &mut Command, policy: EnvPolicy) {
     let allowed = policy.allowed_credentials();
@@ -325,14 +342,20 @@ pub(crate) fn strip_credentials(command: &mut Command, policy: EnvPolicy) {
 /// Velnor-owned toolchain environment for one Cargo invocation.
 #[must_use]
 pub fn toolchain_env(rustup: &str, cargo: &str, toolchain: &str) -> Vec<(OsString, OsString)> {
-    [
-        (MISE_RUSTUP_HOME_ENV, rustup),
-        (MISE_CARGO_HOME_ENV, cargo),
+    let data = std::path::Path::new(rustup).with_file_name("mise");
+    let mut env: Vec<_> = [
+        ("MISE_DATA_DIR", data.to_str().unwrap_or("")),
         (RUSTUP_TOOLCHAIN_ENV, toolchain),
     ]
-    .iter()
+    .into_iter()
     .map(|(key, value)| (OsString::from(key), OsString::from(value)))
-    .collect()
+    .collect();
+    env.extend(
+        velnor_actions_contract::workflow::tool_producer::homes::bind(rustup, cargo)
+            .into_iter()
+            .map(|(key, value)| (OsString::from(key), OsString::from(value))),
+    );
+    env
 }
 
 pub(crate) fn pairs_of<const N: usize>(table: &[(&str, &str); N]) -> Vec<(OsString, OsString)> {

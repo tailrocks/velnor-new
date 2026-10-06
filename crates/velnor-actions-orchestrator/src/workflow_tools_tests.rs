@@ -6,6 +6,8 @@ use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, PinnedTool};
 
 fn empty_discovery() -> Discovery {
     Discovery {
+        rust_inventory: None,
+        raw_inventories: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: Vec::new(),
@@ -56,10 +58,17 @@ fn non_rust_consumer_plan_omits_rust_install_and_components() {
     let StepKind::Shell { run, env } = &prepare.kind else {
         panic!("shell prepare")
     };
-    assert!(!run.contains(&catalog.tool_spec(PinnedTool::Rust)));
-    for key in ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME", "RUSTUP_TOOLCHAIN"] {
-        assert!(!env.contains_key(key), "no irrelevant Rust home: {key}");
+    assert!(
+        !run.contains(
+            &catalog
+                .tool_spec(PinnedTool::Rust)
+                .expect("qualified selector")
+        )
+    );
+    for (key, value) in velnor_actions_contract::ToolCacheDomain::Full.home_environment() {
+        assert_eq!(env.get(&key), Some(&value), "Full owns {key}");
     }
+    assert!(!env.contains_key("RUSTUP_TOOLCHAIN"));
     assert!(
         !plan
             .steps
@@ -95,4 +104,50 @@ fn rust_proposals_require_rust_even_without_inventory_records() {
         .proposals
         .push(velnor_actions_rust::propose_task(&group).expect("Rust proposal"));
     assert!(plan_uses_rust(&discovery, WorkflowPolicy::ConsumerV1));
+}
+
+#[test]
+fn covered_format_skips_report_staging_and_upload_together() {
+    let profile = velnor_actions_rust::RustExecutionProfile {
+        compile_driver: CompileDriver::Cargo,
+        test_runner: TestRunner::CargoTest,
+        evidence: Vec::new(),
+        driver_source: velnor_actions_rust::ProfileSource::Detected,
+        runner_source: velnor_actions_rust::ProfileSource::Detected,
+        nextest_profile: velnor_actions_rust::NextestProfile::Default,
+        nextest_config: None,
+    };
+    let group =
+        velnor_actions_rust::derive_workspace_fmt("Cargo.toml", &profile, "default", "host")
+            .expect("workspace format group");
+    let task = velnor_actions_rust::propose_task(&group).expect("format proposal");
+    let expected_condition = format!(
+        "always() && !contains(steps.plan.outputs.covered_tasks, ',{},')",
+        task.task_id
+    );
+    let mut discovery = empty_discovery();
+    discovery.proposals.push(task);
+    let steps = wire_w1::workspace_format_report_steps(&discovery).expect("report steps");
+    assert_eq!(steps.len(), 2, "staging immediately precedes upload");
+    assert_eq!(steps[0].name, "Stage report payload");
+    assert!(matches!(
+        &steps[0].kind,
+        StepKind::Internal { operation }
+            if operation == velnor_actions_workflow_renderer::steps::STAGE_REPORTS_OPERATION
+    ));
+    assert_eq!(
+        steps[1].name,
+        velnor_actions_workflow_renderer::CRATE_REPORT_UPLOAD_NAME
+    );
+    for step in &steps {
+        assert_eq!(step.condition.as_deref(), Some(expected_condition.as_str()));
+    }
+    let StepKind::Action { with, .. } = &steps[1].kind else {
+        panic!("report upload must be pinned action");
+    };
+    assert_eq!(
+        with["path"],
+        "${{ runner.temp }}/velnor/report-payload/r${{ github.run_id }}-a${{ github.run_attempt }}"
+    );
+    assert_eq!(with["if-no-files-found"], "error");
 }

@@ -1,0 +1,201 @@
+{
+  "scope": "Local synthetic complete opaque inventory plus metadata observation cost; not hosted cache qualification or successful strict warm export evidence",
+  "schema": "velnor-opaque-inventory-v1",
+  "source_sha256": "2b63dfc6f238b281a35b1aa59f9bbace5cf35149fe6587ab7d658dd8d38fe197",
+  "source_files_sha256": {
+    "crates/velnor-actions-mise/src/metadata_container.py": "3bba7f21fc728bea94c1d8202611537a1f8791585313e126a7a00b0249823fb1",
+    "crates/velnor-actions-mise/src/opaque_inventory_metadata.py": "a0246209d02c71cb7d23c962a71d82473bb28b45be3e6e0be174b2131d166077",
+    "crates/velnor-actions-mise/src/opaque_inventory.py": "9e947a56eef32e740e419819cef7f7f7fa8800796326e76dff574065f882bfc0"
+  },
+  "host": {
+    "platform": "Darwin",
+    "release": "27.0.0",
+    "machine": "arm64",
+    "python": "3.9.6 (default, Aug 25 2026, 21:26:21) \n[Clang 21.0.0 (clang-2100.3.34.2)]"
+  },
+  "invocation": [
+    "/usr/bin/python3",
+    "-I",
+    "-S",
+    "-c",
+    "<fixed concatenated opaque_inventory_source()>",
+    "<synthetic temporary owned root>",
+    "[\"mise\", \"rustup\", \"cargo/bin\", \"cargo/.crates.toml\", \"cargo/.crates2.json\"]",
+    "record",
+    "record",
+    "summary"
+  ],
+  "samples_per_fixture": 3,
+  "method": "Fixture creation excluded; wall clock spans subprocess start through complete summary exit. Sequential observations of the same fixture; OS filesystem caches uncontrolled. Canonical Tools roots; files under mise and other roots absent. Metadata recorded, not stripped. No percentile claims.",
+  "prior_comparable": "docs/reviews/ci-performance-snapshot-evidence/observer-local.json matches file count and total byte count; prior sample used a different observer algorithm and one observation",
+  "results": [
+    {
+      "count": 500,
+      "bytes": 131072000,
+      "bytes_per_file": 262144,
+      "observations": [
+        {
+          "index": 1,
+          "elapsed_nanoseconds": 185716833,
+          "elapsed_seconds": 0.185716833,
+          "returncode": 0,
+          "stdout": "b98c779b8d5011eaa2dd08fe126e3f1ca2cc3ab7c45c3ac0b0dbd6b218b1774c 500 131072000\n",
+          "stderr": ""
+        },
+        {
+          "index": 2,
+          "elapsed_nanoseconds": 179153250,
+          "elapsed_seconds": 0.17915325,
+          "returncode": 0,
+          "stdout": "b98c779b8d5011eaa2dd08fe126e3f1ca2cc3ab7c45c3ac0b0dbd6b218b1774c 500 131072000\n",
+          "stderr": ""
+        },
+        {
+          "index": 3,
+          "elapsed_nanoseconds": 185132292,
+          "elapsed_seconds": 0.185132292,
+          "returncode": 0,
+          "stdout": "b98c779b8d5011eaa2dd08fe126e3f1ca2cc3ab7c45c3ac0b0dbd6b218b1774c 500 131072000\n",
+          "stderr": ""
+        }
+      ],
+      "successful": true,
+      "stable_digest": true
+    },
+    {
+      "count": 2000,
+      "bytes": 2000,
+      "bytes_per_file": 1,
+      "observations": [
+        {
+          "index": 1,
+          "elapsed_nanoseconds": 277646917,
+          "elapsed_seconds": 0.277646917,
+          "returncode": 0,
+          "stdout": "68a6f590c64258c84c8624a8c4e4a8c827bc65709839fdd23f8de33c2ef7d900 2000 2000\n",
+          "stderr": ""
+        },
+        {
+          "index": 2,
+          "elapsed_nanoseconds": 264774208,
+          "elapsed_seconds": 0.264774208,
+          "returncode": 0,
+          "stdout": "68a6f590c64258c84c8624a8c4e4a8c827bc65709839fdd23f8de33c2ef7d900 2000 2000\n",
+          "stderr": ""
+        },
+        {
+          "index": 3,
+          "elapsed_nanoseconds": 291003167,
+          "elapsed_seconds": 0.291003167,
+          "returncode": 0,
+          "stdout": "68a6f590c64258c84c8624a8c4e4a8c827bc65709839fdd23f8de33c2ef7d900 2000 2000\n",
+          "stderr": ""
+        }
+      ],
+      "successful": true,
+      "stable_digest": true
+    }
+  ],
+  "passed": true,
+  "historical_series": [
+    {
+      "scope": "Local synthetic complete opaque inventory plus metadata observation cost; not hosted cache qualification or successful strict warm export evidence",
+      "schema": "velnor-opaque-inventory-v1",
+      "source_sha256": "5f1c3df6ab4e03833ba025d3d2923b49e3bb104af41150558d88937fed9e7118",
+      "source_files_sha256": {
+        "crates/velnor-actions-mise/src/opaque_inventory_metadata.py": "a0246209d02c71cb7d23c962a71d82473bb28b45be3e6e0be174b2131d166077",
+        "crates/velnor-actions-mise/src/opaque_inventory.py": "56826c0122311719c3197e723613012ba974f7d561b71aa0fb47b7eca26f4855"
+      },
+      "host": {
+        "platform": "Darwin",
+        "release": "27.0.0",
+        "machine": "arm64",
+        "python": "3.9.6 (default, Aug 25 2026, 21:26:21) \n[Clang 21.0.0 (clang-2100.3.34.2)]"
+      },
+      "invocation": [
+        "/usr/bin/python3",
+        "-I",
+        "-S",
+        "-c",
+        "<fixed concatenated opaque_inventory_source()>",
+        "<synthetic temporary owned root>",
+        "[\"mise\", \"rustup\", \"cargo/bin\", \"cargo/.crates.toml\", \"cargo/.crates2.json\"]",
+        "record",
+        "record",
+        "summary"
+      ],
+      "samples_per_fixture": 3,
+      "method": "Fixture creation excluded; wall clock spans subprocess start through complete summary exit. Sequential observations of the same fixture; OS filesystem caches uncontrolled. Canonical Tools roots; files under mise and other roots absent. Metadata recorded, not stripped. No percentile claims.",
+      "prior_comparable": "docs/reviews/ci-performance-snapshot-evidence/observer-local.json matches file count and total byte count; prior sample used a different observer algorithm and one observation",
+      "results": [
+        {
+          "count": 500,
+          "bytes": 131072000,
+          "bytes_per_file": 262144,
+          "observations": [
+            {
+              "index": 1,
+              "elapsed_nanoseconds": 164079125,
+              "elapsed_seconds": 0.164079125,
+              "returncode": 0,
+              "stdout": "b98c779b8d5011eaa2dd08fe126e3f1ca2cc3ab7c45c3ac0b0dbd6b218b1774c 500 131072000\n",
+              "stderr": ""
+            },
+            {
+              "index": 2,
+              "elapsed_nanoseconds": 152244125,
+              "elapsed_seconds": 0.152244125,
+              "returncode": 0,
+              "stdout": "b98c779b8d5011eaa2dd08fe126e3f1ca2cc3ab7c45c3ac0b0dbd6b218b1774c 500 131072000\n",
+              "stderr": ""
+            },
+            {
+              "index": 3,
+              "elapsed_nanoseconds": 152780875,
+              "elapsed_seconds": 0.152780875,
+              "returncode": 0,
+              "stdout": "b98c779b8d5011eaa2dd08fe126e3f1ca2cc3ab7c45c3ac0b0dbd6b218b1774c 500 131072000\n",
+              "stderr": ""
+            }
+          ],
+          "successful": true,
+          "stable_digest": true
+        },
+        {
+          "count": 2000,
+          "bytes": 2000,
+          "bytes_per_file": 1,
+          "observations": [
+            {
+              "index": 1,
+              "elapsed_nanoseconds": 200181375,
+              "elapsed_seconds": 0.200181375,
+              "returncode": 0,
+              "stdout": "68a6f590c64258c84c8624a8c4e4a8c827bc65709839fdd23f8de33c2ef7d900 2000 2000\n",
+              "stderr": ""
+            },
+            {
+              "index": 2,
+              "elapsed_nanoseconds": 188604542,
+              "elapsed_seconds": 0.188604542,
+              "returncode": 0,
+              "stdout": "68a6f590c64258c84c8624a8c4e4a8c827bc65709839fdd23f8de33c2ef7d900 2000 2000\n",
+              "stderr": ""
+            },
+            {
+              "index": 3,
+              "elapsed_nanoseconds": 200499041,
+              "elapsed_seconds": 0.200499041,
+              "returncode": 0,
+              "stdout": "68a6f590c64258c84c8624a8c4e4a8c827bc65709839fdd23f8de33c2ef7d900 2000 2000\n",
+              "stderr": ""
+            }
+          ],
+          "successful": true,
+          "stable_digest": true
+        }
+      ],
+      "passed": true
+    }
+  ]
+}

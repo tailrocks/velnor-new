@@ -3,7 +3,7 @@
 //! Formatting runs in `plan` per selected stack config through
 //! pinned Mise; the fixed argv arrives from the orchestrator's Mise
 //! vectors. The renderer validates the Mise shape and anchors the step
-//! between helper staging and the freshness/plan closure.
+//! after the plan that supplies report identity and trusted coverage.
 
 use std::collections::BTreeMap;
 
@@ -28,10 +28,9 @@ pub fn format_step(argv: Vec<String>, env: &BTreeMap<String, String>) -> Result<
     steps::shell_step(FORMAT_STEP_NAME, argv, env.clone())
 }
 
-/// Insert `Format` into the plan job between staging and freshness.
+/// Insert `Format` into the plan job after planning.
 ///
-/// Anchors before the freshness check when present, else before the
-/// `plan-v1` step, else before plan publish; without a plan job there is
+/// Anchors after the `plan-v1` step, else before plan publish; without a plan job there is
 /// nothing to close over. Re-running never duplicates the step.
 /// # Errors
 pub fn ensure_plan_format(
@@ -62,16 +61,14 @@ fn check_format_shape(format: &Step) -> Result<(), RenderError> {
     }
 }
 
-/// Insert before freshness, else plan, else publish, else at the end.
+/// Insert after plan, else before publish, else at the end.
 fn format_insert_at(plan: &Job) -> usize {
     plan.steps
         .iter()
-        .position(|step| step.name == closure::CHECK_GENERATED_NAME)
-        .or_else(|| {
-            plan.steps.iter().position(|step| {
-                matches!(&step.kind, StepKind::Internal { operation } if operation == steps::PLAN_OPERATION)
-            })
+        .position(|step| {
+            matches!(&step.kind, StepKind::Internal { operation } if operation == steps::PLAN_OPERATION)
         })
+        .map(|at| at + 1)
         .or_else(|| {
             plan.steps
                 .iter()

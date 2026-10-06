@@ -136,119 +136,45 @@ pub fn overlap_ratio(spans: &[(u64, u64)]) -> f64 {
     1.0 - (union as f64 / total as f64)
 }
 
-/// Per-task timing breakdown with separately measured slots (par §9).
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct TaskTiming {
-    /// Queue wait before dispatch.
-    pub queue_ms: u64,
-    /// Runner provisioning.
-    pub runner_ms: u64,
-    /// Task-body wall time.
-    pub task_ms: u64,
-    /// Cache restore/save handling.
-    pub cache_ms: u64,
-    /// Preparation before the payload.
-    pub prep_ms: u64,
-    /// Artifact downloads.
-    pub download_ms: u64,
-    /// Compiler wall time.
-    pub compiler_ms: u64,
-    /// MBX object handling.
-    pub mbx_ms: u64,
-    /// Test execution proper.
-    pub test_ms: u64,
-    /// Lock waits.
-    pub lock_wait_ms: u64,
-}
-
-impl TaskTiming {
-    /// Sum of separately measured slots.
-    #[must_use]
-    pub fn accounted_total(&self) -> u64 {
-        self.queue_ms
-            .saturating_add(self.runner_ms)
-            .saturating_add(self.task_ms)
-            .saturating_add(self.cache_ms)
-            .saturating_add(self.prep_ms)
-            .saturating_add(self.download_ms)
-            .saturating_add(self.compiler_ms)
-            .saturating_add(self.mbx_ms)
-            .saturating_add(self.test_ms)
-            .saturating_add(self.lock_wait_ms)
-    }
-
-    /// Parent-exclusive time: overlapped children never double-count.
-    #[must_use]
-    pub fn exclusive_ms(wall_ms: u64, children_union_ms: u64) -> u64 {
-        wall_ms.saturating_sub(children_union_ms)
-    }
-}
-
-/// Contract rendering of one scheduler timing breakdown (PAR-9.2).
-#[must_use]
-pub fn contract_timing(timing: &TaskTiming) -> velnor_actions_contract::TaskTiming {
-    velnor_actions_contract::TaskTiming {
-        queue_ms: timing.queue_ms,
-        runner_ms: timing.runner_ms,
-        task_ms: timing.task_ms,
-        cache_ms: timing.cache_ms,
-        prep_ms: timing.prep_ms,
-        download_ms: timing.download_ms,
-        compiler_ms: timing.compiler_ms,
-        mbx_ms: timing.mbx_ms,
-        test_ms: timing.test_ms,
-        lock_wait_ms: timing.lock_wait_ms,
-    }
-}
-
-/// Timing breakdown for one measured task duration (PAR-9.2).
+/// Timing from the obligation wrapper's measured task wall clock.
 ///
-/// The obligation wrapper measures only the task-body wall, so the
-/// measured duration lands in the `task_ms` slot and every other
-/// slot reads zero; unmeasured durations stay absent, never
-/// fabricated. Renders through [`contract_timing`] so scheduler and
-/// contract math agree by construction.
+/// Category measurements remain unknown. Task wall includes its children,
+/// so no additive total is inferred from it.
 #[must_use]
 pub fn measured_timing(duration_ms: Option<u64>) -> Option<velnor_actions_contract::TaskTiming> {
-    duration_ms.map(|elapsed| {
-        contract_timing(&TaskTiming {
-            task_ms: elapsed,
-            ..TaskTiming::default()
-        })
+    duration_ms.map(|elapsed| velnor_actions_contract::TaskTiming {
+        task_ms: Some(elapsed),
+        task_source: Some(velnor_actions_contract::TaskTimingSource::TaskWrapperWall),
+        ..velnor_actions_contract::TaskTiming::default()
     })
-}
-
-/// Sum one timing breakdown over many tasks, slot by slot.
-#[must_use]
-pub fn aggregate_timings(timings: &[TaskTiming]) -> TaskTiming {
-    let mut total = TaskTiming::default();
-    for timing in timings {
-        total.queue_ms = total.queue_ms.saturating_add(timing.queue_ms);
-        total.runner_ms = total.runner_ms.saturating_add(timing.runner_ms);
-        total.task_ms = total.task_ms.saturating_add(timing.task_ms);
-        total.cache_ms = total.cache_ms.saturating_add(timing.cache_ms);
-        total.prep_ms = total.prep_ms.saturating_add(timing.prep_ms);
-        total.download_ms = total.download_ms.saturating_add(timing.download_ms);
-        total.compiler_ms = total.compiler_ms.saturating_add(timing.compiler_ms);
-        total.mbx_ms = total.mbx_ms.saturating_add(timing.mbx_ms);
-        total.test_ms = total.test_ms.saturating_add(timing.test_ms);
-        total.lock_wait_ms = total.lock_wait_ms.saturating_add(timing.lock_wait_ms);
-    }
-    total
 }
 
 /// One owner per data path (cache §2): path prefix plus owning layer.
 ///
-/// Roots mirror the renderer cache templates: tools, Cargo sources,
-/// action-managed MBX objects, per-lane target dirs, and task artifacts.
+/// Roots derive from the renderer's full tools, planning tools and Cargo
+/// source payloads, plus MBX objects, per-lane targets and task artifacts.
 #[must_use]
-pub fn cache_ownership_table() -> Vec<(&'static str, &'static str)> {
-    vec![
-        ("~/.local/share/mise", "catalog/tools"),
-        ("$CARGO_HOME/registry", "velnor/sources"),
-        ("$CARGO_HOME/git", "velnor/sources"),
-        ("mr-boxington-action/objects", "mr-boxington/MBX"),
-        ("$RUNNER_TEMP/velnor/target/", "job/target"),
-        ("$MISE_TASK_CACHE_DIR/task-artifacts/v2", "mise/task-result"),
-    ]
+pub fn cache_ownership_table() -> Vec<(String, &'static str)> {
+    use velnor_actions_contract::CacheSnapshotDomain;
+    use velnor_actions_workflow_renderer::steps::{TARGET_DIR_PREFIX, TASK_ARTIFACTS_DIR};
+
+    let mut owners = Vec::new();
+    for (layer, owner) in [
+        (CacheSnapshotDomain::Tools, "catalog/tools"),
+        (CacheSnapshotDomain::PlanningTools, "catalog/planning-tools"),
+        (CacheSnapshotDomain::Sources, "velnor/sources"),
+    ] {
+        owners.extend(
+            layer
+                .roots()
+                .iter()
+                .map(|root| (format!("${{{{ runner.temp }}}}/velnor/{root}"), owner)),
+        );
+    }
+    owners.extend([
+        ("mr-boxington-action/objects".to_owned(), "mr-boxington/MBX"),
+        (TARGET_DIR_PREFIX.to_owned(), "job/target"),
+        (TASK_ARTIFACTS_DIR.to_owned(), "mise/task-result"),
+    ]);
+    owners
 }

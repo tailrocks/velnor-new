@@ -8,22 +8,27 @@ use velnor_actions_contract::{Step, StepKind};
 use crate::{
     RenderError,
     steps::{
-        FETCH_OPERATION, MERGE_OPERATION, PLAN_OPERATION, PUBLISH_OPERATION,
-        WRITE_REQUEST_OPERATION, scan_for_private_subcommands,
+        EARLY_PLAN_OPERATION, FETCH_OPERATION, MERGE_OPERATION, PLAN_OPERATION, PUBLISH_OPERATION,
+        STAGE_REPORTS_OPERATION, WRITE_REQUEST_OPERATION, scan_for_private_subcommands,
     },
 };
 
 /// Split an internal operation into env op plus request-file target op.
 ///
-/// `plan-v1`/`merge-v1`/`fetch-reports-v1`/`publish-baseline-v1` target
-/// themselves (fetch takes no request file; its input root is the
-/// runner-temp velnor directory); `write-request-v1:<target>` gates on
-/// `write-request-v1` while materializing the target's request file.
+/// `plan-v1`/`merge-v1`/`fetch-reports-v1`/`stage-reports-v1`/
+/// `publish-baseline-v1` target themselves (fetch and report staging take no
+/// request file; their input roots are under runner temp);
+/// `write-request-v1:<target>` gates on `write-request-v1` while materializing
+/// the target's request file.
 /// # Errors
 pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), RenderError> {
+    if operation == EARLY_PLAN_OPERATION {
+        return Ok((operation, PLAN_OPERATION));
+    }
     if operation == PLAN_OPERATION
         || operation == MERGE_OPERATION
         || operation == FETCH_OPERATION
+        || operation == STAGE_REPORTS_OPERATION
         || operation == PUBLISH_OPERATION
     {
         return Ok((operation, operation));
@@ -51,6 +56,7 @@ pub fn internal_step(name: &str, operation: &str) -> Result<Step, RenderError> {
     split_internal_operation(operation)?;
     scan_for_private_subcommands(name)?;
     Ok(Step {
+        id: None,
         name: name.to_owned(),
         condition: None,
         kind: StepKind::Internal {
@@ -68,6 +74,7 @@ pub fn write_request_step(target: &str) -> Result<Step, RenderError> {
         )));
     }
     Ok(Step {
+        id: None,
         name: "Write request".to_owned(),
         condition: None,
         kind: StepKind::Internal {
@@ -80,6 +87,7 @@ pub fn write_request_step(target: &str) -> Result<Step, RenderError> {
 #[must_use]
 pub fn plan_step() -> Step {
     Step {
+        id: None,
         name: "Plan".to_owned(),
         condition: None,
         kind: StepKind::Internal {
@@ -92,6 +100,7 @@ pub fn plan_step() -> Step {
 #[must_use]
 pub fn merge_step() -> Step {
     Step {
+        id: None,
         name: "Merge reports".to_owned(),
         condition: None,
         kind: StepKind::Internal {
@@ -104,10 +113,24 @@ pub fn merge_step() -> Step {
 #[must_use]
 pub fn publish_step() -> Step {
     Step {
+        id: None,
         name: "Publish baseline".to_owned(),
         condition: None,
         kind: StepKind::Internal {
             operation: PUBLISH_OPERATION.to_owned(),
+        },
+    }
+}
+
+/// Fixed report-payload staging step (`stage-reports-v1`).
+#[must_use]
+pub fn stage_reports_step() -> Step {
+    Step {
+        id: None,
+        name: "Stage report payload".to_owned(),
+        condition: Some("always()".to_owned()),
+        kind: StepKind::Internal {
+            operation: STAGE_REPORTS_OPERATION.to_owned(),
         },
     }
 }

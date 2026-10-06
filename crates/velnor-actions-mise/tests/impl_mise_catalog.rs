@@ -9,21 +9,18 @@ use velnor_actions_mise::{
 
 #[test]
 fn pinned_catalog_matches_qualified_versions() {
-    assert_eq!(MISE_VERSION, "2026.9.18");
+    assert_eq!(MISE_VERSION, "2026.10.0");
     let catalog = ToolCatalog::pinned();
     assert_eq!(catalog.version(PinnedTool::Rust), "1.98.1");
-    assert_eq!(catalog.version(PinnedTool::MrBoxington), "1.21.0");
+    assert_eq!(catalog.version(PinnedTool::MrBoxington), "1.21.1");
     assert_eq!(catalog.version(PinnedTool::Gh), "2.102.0");
     assert_eq!(catalog.version(PinnedTool::Actionlint), "1.7.12");
     assert_eq!(catalog.version(PinnedTool::Shellcheck), "0.11.0");
     assert_eq!(catalog.version(PinnedTool::Zizmor), "1.30.1");
     assert_eq!(catalog.version(PinnedTool::Nextest), "0.9.146");
     assert_eq!(catalog.version(PinnedTool::Opentofu), "1.13.1");
-    assert_eq!(catalog.version(PinnedTool::Reuse), "6.2.0");
-    assert_eq!(catalog.version(PinnedTool::Python), "3.14.8");
-    assert_eq!(catalog.version(PinnedTool::Uv), "0.12.22");
     assert_eq!(RUST_VERSION, "1.98.1");
-    assert_eq!(MR_BOXINGTON_VERSION, "1.21.0");
+    assert_eq!(MR_BOXINGTON_VERSION, "1.21.1");
     assert_eq!(GH_VERSION, "2.102.0");
     assert_eq!(ACTIONLINT_VERSION, "1.7.12");
     assert_eq!(SHELLCHECK_VERSION, "0.11.0");
@@ -35,41 +32,67 @@ fn pinned_catalog_matches_qualified_versions() {
 #[test]
 fn tool_specs_use_registry_names() {
     let catalog = ToolCatalog::pinned();
-    assert_eq!(catalog.tool_spec(PinnedTool::Rust), "rust@1.98.1");
     assert_eq!(
-        catalog.tool_spec(PinnedTool::MrBoxington),
-        "mr-boxington@1.21.0"
+        catalog.tool_spec(PinnedTool::Rust).expect("generic Rust"),
+        "rust[profile=minimal,components=clippy,rustfmt]@1.98.1"
     );
-    assert_eq!(catalog.tool_spec(PinnedTool::Gh), "gh@2.102.0");
     assert_eq!(
-        catalog.tool_spec(PinnedTool::Actionlint),
+        catalog
+            .tool_spec(PinnedTool::MrBoxington)
+            .expect("generic MBX"),
+        "mr-boxington@1.21.1"
+    );
+    assert_eq!(
+        catalog.tool_spec(PinnedTool::Gh).expect("generic Gh"),
+        "gh@2.102.0"
+    );
+    assert_eq!(
+        catalog
+            .tool_spec(PinnedTool::Actionlint)
+            .expect("generic actionlint"),
         "actionlint@1.7.12"
     );
     assert_eq!(
-        catalog.tool_spec(PinnedTool::Shellcheck),
+        catalog
+            .tool_spec(PinnedTool::Shellcheck)
+            .expect("generic shellcheck"),
         "shellcheck@0.11.0"
     );
-    assert_eq!(catalog.tool_spec(PinnedTool::Zizmor), "zizmor@1.30.1");
     assert_eq!(
-        catalog.tool_spec(PinnedTool::Nextest),
+        catalog
+            .tool_spec(PinnedTool::Zizmor)
+            .expect("generic zizmor"),
+        "zizmor@1.30.1"
+    );
+    assert_eq!(
+        catalog
+            .tool_spec(PinnedTool::Nextest)
+            .expect("generic nextest"),
         "aqua:nextest-rs/nextest/cargo-nextest@0.9.146"
     );
-    assert_eq!(catalog.tool_spec(PinnedTool::Opentofu), "opentofu@1.13.1");
-    assert_eq!(catalog.tool_spec(PinnedTool::Python), "python@3.14.8");
-    assert_eq!(catalog.tool_spec(PinnedTool::Uv), "uv@0.12.22");
     assert_eq!(
-        catalog.tool_spec(PinnedTool::Reuse),
-        "pipx:reuse[extras=charset-normalizer,uvx_args=\"--python 3.14.8 --no-python-downloads\"]@6.2.0"
+        catalog
+            .native_tool_spec(DistributionHost::MacosArm64, PinnedTool::Opentofu)
+            .expect("qualified OpenTofu"),
+        catalog
+            .native_distribution(DistributionHost::MacosArm64, PinnedTool::Opentofu)
+            .expect("qualified OpenTofu record")
+            .selector()
     );
     assert_eq!(
-        catalog.tool_specs(&[PinnedTool::Rust, PinnedTool::MrBoxington]),
-        vec!["rust@1.98.1".to_owned(), "mr-boxington@1.21.0".to_owned()]
+        catalog
+            .tool_specs(&[PinnedTool::Rust, PinnedTool::MrBoxington])
+            .expect("generic tool specs"),
+        vec![
+            "rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned(),
+            "mr-boxington@1.21.1".to_owned()
+        ]
     );
 }
 
 #[test]
 fn tool_names_roundtrip_and_reject_aliases() {
-    assert_eq!(PinnedTool::ALL.len(), 12);
+    assert_eq!(PinnedTool::ALL.len(), 28);
     for tool in PinnedTool::ALL {
         assert_eq!(PinnedTool::from_tool_name(tool.tool_name()), Ok(tool));
     }
@@ -79,7 +102,7 @@ fn tool_names_roundtrip_and_reject_aliases() {
         "cargo",
         "rustc",
         "cargo-nextest",
-        "node",
+        "nodejs",
         "",
     ] {
         assert!(
@@ -94,11 +117,8 @@ fn tool_names_roundtrip_and_reject_aliases() {
 
 #[test]
 fn exact_version_validation_accepts_only_pins() {
-    for version in ["1.98.1", "2026.9.18", "0.11.0", "10.20.30"] {
-        assert!(
-            validate_exact_version("rust", version).is_ok(),
-            "version must be accepted: {version}"
-        );
+    for version in ["1.98.1", "2026.10.0", "0.11.0", "10.20.30"] {
+        assert!(validate_exact_version("rust", version).is_ok());
     }
     for version in [
         "v1.9.0",
@@ -110,13 +130,7 @@ fn exact_version_validation_accepts_only_pins() {
         "1..3",
         "1.2.3.4",
     ] {
-        assert!(
-            matches!(
-                validate_exact_version("rust", version),
-                Err(MiseError::InvalidToolVersion { .. })
-            ),
-            "version must be rejected: {version}"
-        );
+        assert!(validate_exact_version("rust", version).is_err());
     }
 }
 
@@ -146,30 +160,30 @@ fn tool_file_values_never_become_pins() {
 #[test]
 fn catalog_new_validates_every_slot() {
     let catalog = ToolCatalog::new(
-        "1.98.1", "1.21.0", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.1",
+        "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.1",
     );
     assert!(catalog.is_ok());
     assert!(matches!(
         ToolCatalog::new(
-            "latest", "1.21.0", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.1"
+            "latest", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.1"
         ),
         Err(MiseError::InvalidToolVersion { .. })
     ));
     assert!(matches!(
         ToolCatalog::new(
-            "1.98.1", "1.21.0", "2.102.0", "1.7.12", "0.11.0", "v1.30.1", "0.9.146", "1.13.1"
+            "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "v1.30.1", "0.9.146", "1.13.1"
         ),
         Err(MiseError::InvalidToolVersion { .. })
     ));
     assert!(matches!(
         ToolCatalog::new(
-            "1.98.1", "1.21.0", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "latest", "1.13.1"
+            "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "latest", "1.13.1"
         ),
         Err(MiseError::InvalidToolVersion { .. })
     ));
     assert!(matches!(
         ToolCatalog::new(
-            "1.98.1", "1.21.0", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "latest"
+            "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "latest"
         ),
         Err(MiseError::InvalidToolVersion { .. })
     ));
@@ -235,9 +249,10 @@ fn opentofu_catalog_digest_binds_qualified_artifact() {
         "https://github.com/opentofu/opentofu/releases/tag/v1.13.1"
     );
     assert!(identity.validate("catalog").is_ok());
-    let spec = catalog.tool_spec(PinnedTool::Opentofu);
-    assert_eq!(spec, "opentofu@1.13.1");
-    assert!(!spec.contains(':'), "mise selector stays bare shorthand");
+    let spec = catalog
+        .native_tool_spec(DistributionHost::MacosArm64, PinnedTool::Opentofu)
+        .expect("qualified OpenTofu");
+    assert!(spec.contains("opentofu"), "selector addresses OpenTofu");
 }
 
 #[test]
@@ -280,7 +295,7 @@ fn opentofu_digest_follows_qualified_version_only() {
             .is_ok()
     );
     let moved = ToolCatalog::new(
-        "1.98.1", "1.21.0", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.0",
+        "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.0",
     )
     .expect("exact catalog");
     let err = moved

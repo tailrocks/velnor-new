@@ -30,6 +30,8 @@ pub struct ProviderHashCount {
     pub address: String,
     /// Entries in the `hashes` array (0 when missing or not an array).
     pub hashes: usize,
+    /// Literal selected version, absent for malformed or missing selections.
+    pub version: Option<String>,
 }
 
 /// Count the `hashes` entries of one native `provider` block.
@@ -44,14 +46,24 @@ pub(crate) fn provider_hash_count(block: &hcl::Block) -> ProviderHashCount {
         .first()
         .map_or_else(String::new, |label| label.as_str().to_owned());
     let mut hashes = 0;
+    let mut version = None;
     for attribute in block.body().attributes() {
         if attribute.key.as_str() == "hashes"
             && let hcl::Expression::Array(items) = &attribute.expr
         {
             hashes = items.len();
         }
+        if attribute.key.as_str() == "version"
+            && let hcl::Expression::String(value) = &attribute.expr
+        {
+            version = Some(value.clone());
+        }
     }
-    ProviderHashCount { address, hashes }
+    ProviderHashCount {
+        address,
+        hashes,
+        version,
+    }
 }
 
 /// Lockfile slot at `root`: content, proven absence, or unknown.
@@ -104,6 +116,8 @@ pub(crate) fn lock_relative(unit_path: &str) -> String {
 pub struct LockfileSpec {
     /// Provider addresses from `provider` blocks, sorted unique.
     pub providers: Vec<String>,
+    /// Exact address/version pairs, missing malformed selections excluded.
+    pub selections: Vec<(String, String)>,
 }
 
 /// Outcome of one lockfile inspection.
@@ -151,6 +165,7 @@ pub fn inspect_lockfile(
             file,
             spec: Some(LockfileSpec {
                 providers: Vec::new(),
+                selections: Vec::new(),
             }),
             findings: Vec::new(),
         });
@@ -172,6 +187,16 @@ pub fn inspect_lockfile(
                 file,
                 spec: Some(LockfileSpec {
                     providers: provider_addresses(&model),
+                    selections: model
+                        .provider_hash_counts
+                        .iter()
+                        .filter_map(|entry| {
+                            entry
+                                .version
+                                .as_ref()
+                                .map(|version| (entry.address.clone(), version.clone()))
+                        })
+                        .collect(),
                 }),
                 findings,
             })

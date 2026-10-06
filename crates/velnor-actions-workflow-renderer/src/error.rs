@@ -6,6 +6,8 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum RenderError {
+    /// An otherwise qualified helper exceeds a measured transport limit.
+    UnsupportedHelperTransport(crate::source_helper_budget::TransportBudgetExceeded),
     /// Contract IR validation failed.
     Contract(velnor_actions_contract::ContractError),
     /// Workflow IR violates a renderer-enforced invariant.
@@ -39,6 +41,11 @@ pub enum RenderError {
 impl Display for RenderError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::UnsupportedHelperTransport(budget) => write!(
+                f,
+                "source_helper_transport:{}:{}:{}",
+                budget.reason, budget.measured, budget.limit
+            ),
             Self::Contract(err) => write!(f, "contract: {err}"),
             Self::InvalidWorkflow(problem) => write!(f, "invalid workflow: {problem}"),
             Self::PolicyRejected { policy, problem } => {

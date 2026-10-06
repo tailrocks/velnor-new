@@ -26,7 +26,7 @@ fn homes() -> Result<ToolHomes, String> {
 /// Every mise-owned argv shape, including the program token.
 fn all_mise_vectors() -> Result<Vec<Vec<OsString>>, String> {
     let catalog = pinned();
-    let specs = vec!["rust@1.98.1".to_owned()];
+    let specs = vec!["rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()];
     let payload = vec![OsString::from("cargo"), OsString::from("--version")];
     let mut vectors = vec![
         IsolatedCommand::mise_exec(&specs, &payload)
@@ -41,25 +41,32 @@ fn all_mise_vectors() -> Result<Vec<Vec<OsString>>, String> {
             payload[1..].to_vec(),
         )
         .map_err(|err| err.to_string())?
-        .argv(&catalog),
+        .argv(&catalog)
+        .map_err(|err| err.to_string())?,
         MiseInstall::new(vec![PinnedTool::Rust])
             .map_err(|err| err.to_string())?
-            .argv(&catalog),
+            .argv(&catalog)
+            .map_err(|err| err.to_string())?,
         MetadataDiscovery::new(PathBuf::from("demo/Cargo.toml"))
             .map_err(|err| err.to_string())?
-            .argv(&catalog),
+            .argv(&catalog)
+            .map_err(|err| err.to_string())?,
         MetadataQualification::new(PathBuf::from("Cargo.toml"))
             .map_err(|err| err.to_string())?
-            .argv(&catalog),
+            .argv(&catalog)
+            .map_err(|err| err.to_string())?,
         PreparePinnedTools::new(vec![PinnedTool::Rust], homes()?)
             .map_err(|err| err.to_string())?
-            .argv(&catalog),
+            .argv(&catalog)
+            .map_err(|err| err.to_string())?,
         VerifyPreparedInputs::new(PathBuf::from("Cargo.toml"), homes()?)
             .map_err(|err| err.to_string())?
-            .argv(&catalog),
+            .argv(&catalog)
+            .map_err(|err| err.to_string())?,
         CandidateBuild::new()
             .map_err(|err| err.to_string())?
-            .argv(&catalog),
+            .argv(&catalog)
+            .map_err(|err| err.to_string())?,
     ];
     vectors.extend(nextest_vectors(&catalog)?);
     let verify = VerifyToolchain::new(
@@ -76,7 +83,7 @@ fn all_mise_vectors() -> Result<Vec<Vec<OsString>>, String> {
         },
     )
     .map_err(|err| err.to_string())?;
-    vectors.extend(verify.probes(&catalog));
+    vectors.extend(verify.probes(&catalog).map_err(|err| err.to_string())?);
     let lookup = BaselineLookup::new(
         "0123456789abcdef0123456789abcdef01234567",
         "ci.yml",
@@ -110,11 +117,15 @@ fn nextest_vectors(catalog: &ToolCatalog) -> Result<Vec<Vec<OsString>>, String> 
     Ok(vec![
         NextestArchive::new(NextestDriver::Cargo, "demo", &[], None)
             .map_err(|err| err.to_string())?
-            .argv(catalog),
-        NextestList::new(NextestDriver::Cargo, partition).argv(catalog),
+            .argv(catalog)
+            .map_err(|err| err.to_string())?,
+        NextestList::new(NextestDriver::Cargo, partition)
+            .argv(catalog)
+            .map_err(|err| err.to_string())?,
         NextestRun::new(NextestDriver::Cargo, partition, "m-abc", "p1")
             .map_err(|err| err.to_string())?
-            .argv(catalog),
+            .argv(catalog)
+            .map_err(|err| err.to_string())?,
     ])
 }
 
@@ -179,12 +190,16 @@ fn catalog_pins_ignore_project_selectors() -> Result<(), String> {
     assert_eq!(catalog, ToolCatalog::pinned());
     let first = CandidateBuild::new().map_err(|err| err.to_string())?;
     let second = CandidateBuild::new().map_err(|err| err.to_string())?;
-    assert_eq!(first.argv(&pinned()), second.argv(&pinned()));
+    assert_eq!(
+        first.argv(&pinned()).map_err(|err| err.to_string())?,
+        second.argv(&pinned()).map_err(|err| err.to_string())?
+    );
     assert!(
         first
             .argv(&pinned())
+            .map_err(|err| err.to_string())?
             .iter()
-            .any(|arg| arg == "mr-boxington@1.21.0"),
+            .any(|arg| arg == "mr-boxington@1.21.1"),
         "exact MBX invocation never downgrades"
     );
     Ok(())

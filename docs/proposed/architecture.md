@@ -63,14 +63,9 @@ the sole repository-structure linter and runs as a separate Actions job.
 | `velnor-actions-native` | Closed isolated Swift, Node, Java, OCI, APT, Homebrew, Ruby, Shell and REUSE domain proposals and fixed semantic helper sources | Other domains, Rust/Cargo semantics, Mise syntax/catalog, subprocesses, workflow topology, or YAML |
 | `velnor-actions-mise` | Mise version/tool selection, command construction, read-only `mise.toml`/`mise.lock` inspection, environment isolation, task-cache integration, execution of tool requests through a fixed Mise subprocess wrapper | Cargo metadata/graph rules, `rust-toolchain.toml`, stack discovery, GitHub YAML, or other stack semantics |
 | `velnor-actions-actionlint` | Pinned actionlint capability/version metadata, generated `.github/actionlint.yaml`, invocation, and actionlint-specific pre-write validation | Rust/Cargo, Mise execution, generic YAML rendering, or workflow planning |
-| `velnor-actions-workflow-renderer` | Stack-neutral GitHub Actions YAML from workflow IR and the closed Foundation SOURCE compiled document: jobs, matrices, steps, triggers, permissions, and syntax supported by pinned actionlint | Rust/Cargo, Mise syntax, repository scanning, subprocesses, or stack-specific policy |
+| `velnor-actions-workflow-renderer` | Stack-neutral GitHub Actions YAML from workflow IR: jobs, matrices, steps, triggers, permissions, and syntax supported by pinned actionlint | Rust/Cargo, Mise syntax, repository scanning, subprocesses, or stack-specific policy |
 | `velnor-actions-orchestrator` | Compose stack adapter, Mise adapter, contract, and renderer; plan obligations, apply selection/cache evidence, schedule resource-safe tasks, coordinate generation and writes | Parsing Cargo/Mise inputs, YAML templates, CLI parsing, building shell commands, or launching processes |
 | `velnor-actions-cli` | Clap parser, typed dispatch, concise human plan report, generation output, exit codes; declares binary `velnor-actions` | Planning rules, Cargo/Mise policies, YAML/Mise rendering, or orchestration algorithms |
-
-Foundation SOURCE qualification is a closed compiled-document exception to ordinary WorkflowIR serialization.
-The renderer owns exact `yml.in` bytes, template digest, single action marker substitution, fixed output path, and managed version marker.
-Its only inputs are an immutable syntax-validated full-SHA action reference and explicit generator version; caller template/path/YAML/body, publication trust, and runtime authority are forbidden.
-The orchestrator retains authenticated publication tuple/action-descriptor evidence, repository policy/identity admission, and safe external preview coordination. This exception grants no runner or native execution behavior.
 
 `velnor-actions` is the executable declared by package `velnor-actions-cli`.
 Clap help MUST describe a stack-generic GitHub Actions workflow generator.
@@ -240,7 +235,7 @@ a compilation task, so it always uses Cargo even when subsequent compilation
 uses MBX:
 
 ```text
-mise --no-config exec rust@<exact> -- cargo metadata --format-version 1 --no-deps --manifest-path <manifest>
+mise --no-config exec rust@<exact> -- cargo metadata --format-version 1 --locked --no-deps --manifest-path <manifest>
 ```
 
 The output is Cargo metadata JSON format version 1. `--no-deps` avoids fetching third-party dependencies but sets the resolved `resolve` graph to null. It still exposes each workspace package's manifest dependency declarations, including local `path` values. Velnor MUST build its conservative local-package graph from those declarations and connect each path to the package whose manifest Cargo reports. It MUST include every declared local path edge, including optional and target-specific edges, so feature differences cannot omit a reverse dependent. The command MUST use exact tool arguments and MUST NOT read or write project Mise files. Nonzero status, invalid JSON, or unsupported metadata version fails that candidate and the plan; Velnor MUST NOT parse Cargo manifests or Rust source as fallback.
@@ -254,11 +249,10 @@ mise --no-config exec rust@<exact> -- cargo metadata --format-version 1 --locked
 This uses the same explicit tool pins and Cargo metadata command. Missing offline dependencies are `preparation_incomplete`, not a reason to fetch or produce a partial resolution. Velnor's own manifest-to-model adapter consumes the JSON; the `cargo_metadata` crate MAY deserialize it but MUST NOT execute Cargo. The plan job MUST NOT wait for full resolution merely to compute conservative local reverse dependencies.
 
 When the workspace has no `Cargo.lock`, discovery still uses the
-`--no-deps` command above (which needs no lockfile). Resolution
-qualification MUST take an explicit unpinned path: run the qualification
-command without `--locked` but still with `--offline`, record
-`lockfile_absent_unpinned` in the plan, and MUST NOT fetch from the
-network. A missing lockfile MUST NOT silently enable network access; any
+`--locked --no-deps` command above (which needs no lockfile and proves neither lockfile presence nor full resolution). Resolution
+qualification commands MUST retain `--locked --offline` and fail when the lockfile
+is absent; discovery success MUST NOT qualify a resolved dependency graph.
+A missing lockfile MUST NOT silently enable network access; any
 offline resolution failure is `preparation_incomplete`. All metadata
 subprocesses keep the `--no-config` family; manifest paths are
 canonicalized, escape fails closed, and no repository write occurs.

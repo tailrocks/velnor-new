@@ -8,17 +8,20 @@ use velnor_actions_contract::{
     ObligationDecision, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner,
     RunnerSelection, Trust,
 };
+use velnor_actions_mise::RuntimePaths;
 
 /// Plan with `base`, one obligation, and a verifiable generator.
 fn lookup_plan(base: Option<&str>) -> Plan {
     let digest = digest_b3(b"digest");
     Plan {
+        producers: Default::default(),
         schema: 1,
         run_key: "local".to_owned(),
         plan_id: "plan-local".to_owned(),
         base: base.map(str::to_owned),
         head: "head".to_owned(),
         event: WorkflowEvent::PullRequest,
+        scope: velnor_actions_contract::VerificationScope::Affected,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,
@@ -33,10 +36,19 @@ fn lookup_plan(base: Option<&str>) -> Plan {
         packages: Vec::new(),
         obligations: vec![PlanObligation {
             task_id: "stack/rust/root/clippy/default".to_owned(),
+            job_id: "rust-demo".to_owned(),
             decision: ObligationDecision::Execute,
             reason: "selected".to_owned(),
             task_digest: digest.clone(),
             input_digest: digest.clone(),
+            execution_identity: velnor_actions_contract::TaskExecutionIdentity::new(
+                &velnor_actions_contract::digest_b3(b"fixture-graph"),
+                &velnor_actions_contract::digest_b3(b"fixture-toolchain"),
+                &velnor_actions_contract::digest_b3(b"fixture-mbx"),
+                &velnor_actions_contract::digest_b3(b"fixture-platform"),
+                "default",
+            )
+            .expect("execution identity"),
             closure_digest: digest,
             baseline_proof: None,
         }],
@@ -60,6 +72,7 @@ fn lookup_inputs<'a>(
         workflow: ".github/workflows/ci.yml",
         catalog,
         repository: Some("o/r"),
+        runtime: RuntimePaths::full(),
     }
 }
 

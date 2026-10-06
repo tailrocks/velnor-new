@@ -1,19 +1,15 @@
-//! P08 cache fixtures: per-job keys/paths plus the service-report path.
-//!
-//! Renders a two-crate workspace (MBX and Cargo-only variants) and asserts
-//! every job's cache identity: one shared sources key and path set, one
-//! qualified Mise key shape per tool union (never job-suffixed), a single
-//! plan writer, and restore-before-fetch order. The service-report test
-//! pins the `gh cache list --json` reporting path on a fixed format sample
-//! (live numbers live in `docs/implemented/performance.md`, never here).
+//! Structural cache fixtures for Rust computation and isolated source producers.
+//! Literal source cohorts and canonical paths prove emission, not hosted reuse.
 
 use std::collections::BTreeMap;
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::{SourceBoundOperation, SourceProducerRole, Step, StepKind};
 use velnor_actions_mise::{cache_sources, cache_trust};
-use velnor_actions_orchestrator::{GenerationPreparation, prepare, render_staged_tree};
+use velnor_actions_orchestrator::{
+    GenerationPreparation, finalized_jobs, prepare, render_staged_tree,
+};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{TestResult, config_with_branch, fixture_manifest_json, git};
@@ -53,11 +49,12 @@ fn make_workspace(mbx: bool) -> Result<TempDir, Box<dyn std::error::Error>> {
         "version = 4\n\n[[package]]\nname = \"a\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"b\"\nversion = \"0.1.0\"\n",
     )?;
     if mbx {
-        let cargo_dir = root.join(".cargo");
-        fs::create_dir_all(&cargo_dir)?;
         fs::write(
-            cargo_dir.join("config.toml"),
-            "[build]\nrustc-wrapper = \"mbx\"\n",
+            root.join(".velnor/config.toml"),
+            format!(
+                "{}\n[stacks.rust]\ncompile_driver = \"mbx\"\n",
+                config_with_branch()
+            ),
         )?;
     }
     Ok(dir)
@@ -93,14 +90,16 @@ fn job_steps<'a>(
         .ok_or_else(|| std::io::Error::other(format!("missing {job}")).into())
 }
 
-/// Crate-job ids in render order (every `rust-*` job).
+/// Rust computation jobs, excluding typed source/tool producers.
 fn crate_jobs(prep: &GenerationPreparation) -> Vec<String> {
     prep.workflow
         .ir
         .jobs
-        .keys()
-        .filter(|id| id.starts_with("rust-"))
-        .cloned()
+        .iter()
+        .filter(|(id, job)| {
+            id.starts_with("rust-") && job.source_producer.is_none() && job.tool_producer.is_none()
+        })
+        .map(|(id, _)| id.clone())
         .collect()
 }
 
@@ -120,68 +119,74 @@ fn action_inputs<'a>(
     Err(std::io::Error::other(format!("missing {name}")).into())
 }
 
-/// (`job`, `cache_key`) pairs in render order (setup is render-inserted).
-fn mise_keys_by_job(yaml: &str) -> Vec<(String, String)> {
-    let mut out = Vec::new();
-    let mut job = String::new();
-    let mut in_jobs = false;
-    for line in yaml.lines() {
-        if line == "jobs:" {
-            in_jobs = true;
-            continue;
-        }
-        if in_jobs && line.starts_with("  ") && !line.starts_with("   ") && line.ends_with(':') {
-            line.trim().trim_end_matches(':').clone_into(&mut job);
-        }
-        if let Some(value) = line.trim().strip_prefix("cache_key: ") {
-            out.push((job.clone(), value.trim_matches('"').to_owned()));
-        }
-    }
-    out
-}
-
-/// Every cache `path:` input entry (one quoted line, `\n`-separated).
-fn cache_path_entries(yaml: &str) -> Vec<String> {
-    yaml.lines()
-        .filter(|line| line.trim().starts_with("path: "))
-        .flat_map(|line| {
-            line.trim()
-                .strip_prefix("path: ")
-                .unwrap_or("")
-                .trim_matches('"')
-                .split("\\n")
-                .map(str::to_owned)
-                .collect::<Vec<_>>()
+/// Source producer membership, rather than its generated job-id spelling.
+fn source_jobs(prep: &GenerationPreparation) -> Vec<(&str, &velnor_actions_contract::Job)> {
+    prep.workflow
+        .ir
+        .jobs
+        .iter()
+        .filter_map(|(id, job)| {
+            job.source_producer
+                .as_ref()
+                .filter(|meta| meta.role == SourceProducerRole::Cargo)
+                .map(|_| (id.as_str(), job))
         })
         .collect()
 }
 
 #[test]
-fn per_job_sources_keys_identical_plan_and_crates() -> TestResult {
-    let (_repo, prep) = prep_for(true)?;
-    let crates = crate_jobs(&prep);
-    assert_eq!(crates.len(), 2, "two crate jobs: {crates:?}");
-    let plan_restore = action_inputs(job_steps(&prep, "plan")?, "Restore Cargo sources")?
-        .get("key")
-        .cloned();
-    let plan_save = action_inputs(job_steps(&prep, "plan")?, "Save Cargo sources")?
-        .get("key")
-        .cloned();
-    assert_eq!(plan_restore, plan_save, "writer restores what it saves");
-    let key = plan_restore.ok_or("plan key")?;
-    assert!(
-        key.starts_with("velnor-v1-sources-"),
-        "shared prefix: {key}"
-    );
-    assert!(key.contains("hashFiles("), "lock-pinned: {key}");
-    for job in &crates {
-        let got = action_inputs(job_steps(&prep, job)?, "Restore Cargo sources")?
-            .get("key")
-            .cloned();
-        assert_eq!(got.as_deref(), Some(key.as_str()), "{job} restores the key");
-    }
-    for banned in ["-plan-", "-demo", "rust-"] {
-        assert!(!key.contains(banned), "no job id in key: {key}");
+fn sources_restore_matches_its_literal_producer_cohort() -> TestResult {
+    for mbx in [false, true] {
+        let (_repo, prep) = prep_for(mbx)?;
+        let producers = source_jobs(&prep);
+        assert!(!producers.is_empty(), "source producers present");
+        let crates = crate_jobs(&prep);
+        assert_eq!(crates, ["rust-a", "rust-b"]);
+        for id in std::iter::once("plan").chain(crates.iter().map(String::as_str)) {
+            let restore = action_inputs(job_steps(&prep, id)?, "Restore Cargo sources")?;
+            let prefix = restore.get("restore-keys").ok_or("source prefix")?;
+            let (producer_id, producer) = producers
+                .iter()
+                .find(|(_, job)| {
+                    job.source_producer.as_ref().is_some_and(|meta| {
+                        prefix == &format!("{}-snapshot-", meta.source_identity)
+                    })
+                })
+                .ok_or("matching source producer")?;
+            let meta = producer.source_producer.as_ref().ok_or("source metadata")?;
+            assert!(
+                meta.source_identity
+                    .starts_with("velnor-v4-cargo-source-public-")
+            );
+            assert!(
+                !meta.source_identity.contains("${{"),
+                "literal source cohort"
+            );
+            assert_eq!(
+                restore["key"],
+                format!(
+                    "{}-lookup-${{{{github.run_id}}}}-${{{{github.run_attempt}}}}",
+                    meta.source_identity
+                )
+            );
+            let save = action_inputs(&producer.steps, "Save Cargo sources")?;
+            assert_eq!(save["key"], meta.save_key());
+            assert_eq!(save["path"], restore["path"]);
+            let consumer = &prep.workflow.ir.jobs[id];
+            assert_eq!(
+                consumer
+                    .needs
+                    .iter()
+                    .any(|need| need.as_str() == *producer_id),
+                id != "plan"
+            );
+            assert!(
+                !producer
+                    .needs
+                    .iter()
+                    .any(|need| need.as_str() == *producer_id)
+            );
+        }
     }
     Ok(())
 }
@@ -189,154 +194,174 @@ fn per_job_sources_keys_identical_plan_and_crates() -> TestResult {
 #[test]
 fn per_job_mise_keys_qualified_without_job_suffix() -> TestResult {
     for mbx in [false, true] {
-        let yaml = yaml_for(mbx)?;
-        let pairs = mise_keys_by_job(&yaml);
-        assert!(pairs.len() >= 3, "plan plus crates (mbx={mbx}): {pairs:?}");
-        for (job, key) in &pairs {
-            assert!(!job.is_empty(), "key inside a job: {key}");
-            assert!(key.starts_with("mise-v1-"), "qualified: {key}");
+        let (_repo, prep) = prep_for(mbx)?;
+        let jobs = finalized_jobs(&prep)?;
+        let mut keys = BTreeMap::new();
+        for id in ["plan", "rust-a", "rust-b"] {
+            let with = action_inputs(&jobs[id].steps, "Restore Mise tools")?;
+            let key = with.get("restore-keys").ok_or("tool prefix")?;
+            assert!(key.starts_with("mise-v3-"), "qualified: {key}");
             assert!(!key.contains("latest"), "pinned: {key}");
-            for role in ["-plan", "rust-", "-a-", "-b-"] {
-                assert!(!key.contains(role), "no role suffix: {key}");
+            for role in ["-plan-", "rust-", "-a-", "-b-"] {
+                assert!(!key.contains(role), "no job suffix: {key}");
             }
+            keys.insert(id, key.clone());
         }
-        let key_for = |want: &str| {
-            pairs
-                .iter()
-                .find(|(job, _)| job == want)
-                .map(|(_, key)| key.clone())
-        };
-        assert_eq!(
-            key_for("rust-a"),
-            key_for("rust-b"),
-            "identical unions share (mbx={mbx}): {pairs:?}"
-        );
-        assert!(key_for("rust-a").is_some() && key_for("plan").is_some());
+        assert_eq!(keys["rust-a"], keys["rust-b"], "identical tool unions");
     }
     Ok(())
 }
 
 #[test]
 fn sources_paths_cover_owned_subset_only() -> TestResult {
-    let (_repo, prep) = prep_for(true)?;
-    let expected = cache_sources::sources_cache_paths(SHARED_HOME).expect("subset");
-    assert_eq!(expected.len(), 6, "sufficient subset");
-    let mut jobs = vec!["plan".to_owned()];
-    jobs.extend(crate_jobs(&prep));
-    for job in &jobs {
-        let steps = job_steps(&prep, job)?;
-        let restore = action_inputs(steps, "Restore Cargo sources")?
-            .get("path")
-            .cloned()
-            .ok_or("restore paths")?;
-        let archived: Vec<String> = restore.split('\n').map(str::to_owned).collect();
-        cache_sources::validate_sources_subset(&archived, SHARED_HOME).expect("valid");
-        assert_eq!(archived, expected, "{job} archives the subset");
-    }
-    let yaml = yaml_for(true)?;
-    let entries = cache_path_entries(&yaml);
-    assert!(!entries.is_empty(), "path inputs present");
-    let mut snapshot = 0;
-    for entry in &entries {
-        for banned in ["credentials", "registry/src", "~/.cargo"] {
-            assert!(
-                !entry.contains(banned),
-                "snapshot excludes {banned}: {entry}"
-            );
-        }
-        if entry.starts_with(&format!("{SHARED_HOME}/")) {
-            snapshot += 1;
-            assert!(
-                expected.iter().any(|ok| ok == entry),
-                "owned-home entries are the subset: {entry}"
-            );
-        }
-    }
-    assert!(snapshot >= 6, "snapshot paths rendered: {snapshot}");
-    Ok(())
-}
-
-#[test]
-fn single_writer_plan_saves_crates_restore_only() -> TestResult {
-    let yaml = yaml_for(true)?;
-    assert_eq!(
-        yaml.matches("Save Cargo sources").count(),
-        1,
-        "exactly one save step"
-    );
-    let (_repo, prep) = prep_for(true)?;
-    let plan: Vec<String> = job_steps(&prep, "plan")?
-        .iter()
-        .map(|step| step.name.clone())
-        .collect();
-    assert!(cache_sources::is_trusted_writer("plan"));
-    assert!(!cache_sources::is_trusted_writer("rust-a"));
-    let fetch = plan.iter().position(|n| n == "Fetch Cargo sources");
-    let save = plan.iter().position(|n| n == "Save Cargo sources");
-    assert!(fetch < save, "save after the writer fetch: {plan:?}");
-    for job in crate_jobs(&prep) {
-        let names: Vec<String> = job_steps(&prep, &job)?
-            .iter()
-            .map(|step| step.name.clone())
+    for mbx in [false, true] {
+        let (_repo, prep) = prep_for(mbx)?;
+        let expected: Vec<String> = ["registry/index", "registry/cache", "git/db"]
+            .into_iter()
+            .map(|suffix| format!("{SHARED_HOME}/{suffix}"))
             .collect();
+        assert_eq!(cache_sources::sources_cache_paths(SHARED_HOME)?, expected);
+        let mut transports = 0;
+        for job in prep.workflow.ir.jobs.values() {
+            for step in &job.steps {
+                if ![
+                    "Restore Cargo sources",
+                    "Save Cargo sources",
+                    "Verify Cargo source publication",
+                ]
+                .contains(&step.name.as_str())
+                {
+                    continue;
+                }
+                let with = action_inputs(&job.steps, &step.name)?;
+                let paths: Vec<String> = with["path"].split('\n').map(str::to_owned).collect();
+                assert_eq!(paths, expected, "canonical ordered roots");
+                cache_sources::validate_sources_subset(&paths, SHARED_HOME)?;
+                transports += 1;
+            }
+        }
+        assert!(transports >= 6, "readers and producer transports present");
+        let yaml = yaml_for(mbx)?;
         assert!(
-            names.contains(&"Restore Cargo sources".to_owned()),
-            "{job}: {names:?}"
-        );
-        assert!(
-            !names.contains(&"Save Cargo sources".to_owned()),
-            "{job} never saves: {names:?}"
+            yaml.contains(&expected.join("\\n")),
+            "canonical roots emitted"
         );
     }
     Ok(())
 }
 
 #[test]
-fn restore_mbx_fetch_order_every_crate_job() -> TestResult {
-    let (_repo, prep) = prep_for(true)?;
-    for job in crate_jobs(&prep) {
-        let names: Vec<String> = job_steps(&prep, &job)?
-            .iter()
-            .map(|step| step.name.clone())
-            .collect();
-        cache_sources::check_restore_before_fetch(&names, true).expect("order");
-        let at = |want: &str| names.iter().position(|n| n == want);
-        let (Some(restore), Some(mbx), Some(fetch)) = (
-            at("Restore Cargo sources"),
-            at("Restore MBX objects"),
-            at("Fetch Cargo sources"),
-        ) else {
-            return Err(format!("{job} misses cache steps: {names:?}").into());
-        };
-        assert!(restore < mbx && mbx < fetch, "{job}: {names:?}");
-    }
-    Ok(())
-}
-
-#[test]
-fn cargo_only_shared_registry_single_shape() -> TestResult {
-    let (_repo, prep) = prep_for(false)?;
-    let mut jobs = vec!["plan".to_owned()];
-    jobs.extend(crate_jobs(&prep));
-    let mut shared = String::new();
-    for job in &jobs {
-        let with = action_inputs(job_steps(&prep, job)?, "Restore Cargo registry")?;
-        let key = with.get("shared-key").cloned().ok_or("shared-key")?;
-        assert!(key.starts_with("velnor-cargo-"), "shared prefix: {key}");
-        if shared.is_empty() {
-            shared.clone_from(&key);
+fn only_pure_source_producers_publish_after_verification() -> TestResult {
+    for mbx in [false, true] {
+        let (_repo, prep) = prep_for(mbx)?;
+        let producers = source_jobs(&prep);
+        assert!(!producers.is_empty());
+        for (id, job) in &prep.workflow.ir.jobs {
+            let saves: Vec<_> = job
+                .steps
+                .iter()
+                .filter(|step| step.name == "Save Cargo sources")
+                .collect();
+            let Some(meta) = &job.source_producer else {
+                assert!(saves.is_empty(), "{id} computation cannot publish sources");
+                continue;
+            };
+            if meta.role != SourceProducerRole::Cargo {
+                continue;
+            }
+            assert_eq!(saves.len(), 1, "one publisher per cohort");
+            assert_eq!(
+                saves[0].condition.as_deref(),
+                Some(meta.save_condition().as_str())
+            );
+            let verify = job
+                .steps
+                .iter()
+                .position(|step| step.id.as_ref() == Some(&meta.verification_step))
+                .ok_or("source verification")?;
+            let save = job
+                .steps
+                .iter()
+                .position(|step| step.id.as_ref() == Some(&meta.save_step))
+                .ok_or("source publication")?;
+            assert!(verify < save, "verified before save");
+            assert!(
+                matches!(&job.steps[verify].kind, StepKind::SourceBoundHelper { invocation, .. }
+                if invocation.descriptor().operation() == SourceBoundOperation::RustSourceProducer)
+            );
+            assert!(
+                !job.steps
+                    .iter()
+                    .any(|step| step.name.starts_with("Fetch Cargo sources"))
+            );
+            let publication = action_inputs(&job.steps, "Verify Cargo source publication")?;
+            assert_eq!(publication["lookup-only"], "true");
+            assert_eq!(publication["key"], meta.save_key());
         }
-        assert_eq!(key, shared, "{job} shares the registry key");
-        let save = with.get("save-if").cloned().unwrap_or_default();
         assert_eq!(
-            save,
-            if job == "plan" { "true" } else { "false" },
-            "{job} save-if"
+            yaml_for(mbx)?.matches("Save Cargo sources").count(),
+            producers.len()
         );
+    }
+    Ok(())
+}
+
+#[test]
+fn both_source_and_mbx_restore_before_crate_fetch() -> TestResult {
+    let (_repo, prep) = prep_for(true)?;
+    for id in crate_jobs(&prep) {
+        let steps = job_steps(&prep, &id)?;
+        let at = |name: &str| steps.iter().position(|step| step.name.starts_with(name));
+        let fetch = at("Fetch Cargo sources").ok_or("fetch")?;
+        assert!(at("Restore Cargo sources").ok_or("sources restore")? < fetch);
+        assert!(at("Restore MBX objects").ok_or("MBX restore")? < fetch);
+    }
+    Ok(())
+}
+
+#[test]
+fn cargo_only_uses_readonly_source_transport_without_compiler_cache() -> TestResult {
+    let (_repo, prep) = prep_for(false)?;
+    for id in std::iter::once("plan".to_owned()).chain(crate_jobs(&prep)) {
+        let steps = job_steps(&prep, &id)?;
+        let with = action_inputs(steps, "Restore Cargo sources")?;
+        assert!(with["restore-keys"].starts_with("velnor-v4-cargo-source-public-"));
+        assert!(!with.contains_key("save-if"));
+        assert!(!steps.iter().any(|step| step.name == "Save Cargo sources"));
     }
     let yaml = yaml_for(false)?;
-    assert!(!yaml.contains("mr-boxington-action"), "no MBX stacked");
-    assert!(!yaml.contains("Save Cargo sources"), "no snapshot save");
+    assert!(!yaml.contains("mr-boxington-action"));
+    assert!(!yaml.contains("Swatinem/rust-cache"));
+    assert!(
+        yaml.contains("Save Cargo sources"),
+        "pure producer owns publication"
+    );
+    Ok(())
+}
+
+#[test]
+fn checkout_cargo_config_disables_optional_public_producer() -> TestResult {
+    let repo = make_workspace(true)?;
+    fs::create_dir(repo.path().join(".cargo"))?;
+    fs::write(
+        repo.path().join(".cargo/config.toml"),
+        "[build]\nrustc-wrapper = \"mbx\"\n",
+    )?;
+    let prep = prepare(repo.path())?;
+    assert!(source_jobs(&prep).is_empty());
+    for id in crate_jobs(&prep) {
+        let steps = job_steps(&prep, &id)?;
+        assert!(
+            steps
+                .iter()
+                .any(|step| step.name.starts_with("Fetch Cargo sources"))
+        );
+        assert!(
+            !steps
+                .iter()
+                .any(|step| step.name == "Restore Cargo sources")
+        );
+    }
     Ok(())
 }
 

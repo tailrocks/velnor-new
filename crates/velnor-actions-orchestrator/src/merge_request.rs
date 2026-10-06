@@ -32,13 +32,15 @@ mod needs_channel;
 
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::{NEEDS_EXPECTED_ENV, canonical_json_str, parse_strict_json};
+use velnor_actions_contract::{
+    NEEDS_EXPECTED_ENV, VerificationScope, canonical_json_str, parse_strict_json,
+};
 
 use self::needs_channel::{NEEDS_ENV, parse_needs};
 use crate::OrchestratorError;
-use crate::internal::{internal, internal_contract};
+use crate::internal::internal_contract;
 use crate::internal_request::resolve_run_key;
-use crate::request_event::workflow_event_for;
+use crate::request_event::{request_scope, workflow_event_for};
 
 /// Assemble one canonical merge request from a run directory.
 ///
@@ -99,7 +101,8 @@ pub(crate) fn assemble_with_needs(
     event_payload: Option<&str>,
 ) -> Result<String, OrchestratorError> {
     let mut errors = Vec::new();
-    let actual_event = resolve_actual_event(event_name, event_payload, &mut errors);
+    let (actual_event, actual_scope) =
+        resolve_actual_event_scope(event_name, event_payload, &mut errors);
     let plan = read_json(run_dir, "plan.json", "plan", true, &mut errors);
     let matrix = read_json(run_dir, "matrix.json", "matrix", true, &mut errors);
     let (reports, task_reports) = crate::retrieve_reports::read_staged_reports(
@@ -108,20 +111,40 @@ pub(crate) fn assemble_with_needs(
         &run_dir.join("reports"),
         &mut errors,
     );
+    let (action_begins, action_reports) = crate::merge::action_admission::read_staged_actions(
+        &plan,
+        &run_dir.join("reports"),
+        &mut errors,
+    );
+    let (helper_begins, helper_reports) = crate::merge::helper_admission::read_staged_helpers(
+        &plan,
+        &run_dir.join("reports"),
+        &mut errors,
+    );
     let baseline = read_json(run_dir, "baseline.json", "baseline", false, &mut errors);
     let (inventory, jobs) = parse_needs(needs, expected, &mut errors);
+    let producer_reports = crate::merge::producer_reports::read(&plan, needs, &mut errors);
+    let actual_producer_context =
+        crate::internal::plan_producers::capture_merge(event_payload, needs);
     let attestation = read_attestation(run_dir, &inventory, &mut errors);
     let request = serde_json::json!({
         "schema": 1,
         "run_key": run_key,
         "actual_event": actual_event,
+        "actual_scope": actual_scope,
+        "actual_producer_context": actual_producer_context,
         "candidate_attestation": attestation,
         "plan": plan,
         "matrix": matrix,
         "matrix_reports": reports,
         "task_reports": task_reports,
+        "action_begins": action_begins,
+        "action_reports": action_reports,
+        "helper_begins": helper_begins,
+        "helper_reports": helper_reports,
         "required_job_ids": inventory,
         "required_jobs": jobs,
+        "producer_reports": producer_reports,
         "assembly_errors": errors,
         "baseline_manifest": baseline,
     });
@@ -148,25 +171,24 @@ fn read_attestation(
     read_json(run_dir, &relpath, "candidate_attestation", true, errors)
 }
 
-/// Merge-time triggering event from explicit GitHub parts.
+/// Resolve the runner event and its independently observed verification scope.
 ///
-/// The merge job runs in the same run as the plan job, so its
-/// `GITHUB_EVENT_NAME` is the ground truth the plan's stamped event
-/// must match; a forged plan artifact claiming a stronger event (push
-/// trust on PR content) fails closed at merge instead of inheriting
-/// its own stamp. Resolution shares [`workflow_event_for`] with plan
-/// requests so fork handling can never disagree. Only `pull_request`
-/// requires the payload (fork detection); every other event resolves
-/// from the name alone, but a present-but-malformed payload still
-/// fails closed (a corrupt runner channel proves nothing).
-fn resolve_actual_event(
+/// The event name and payload are runner inputs. The plan artifact is never
+/// consulted, so a forged plan cannot choose the scope that merge records.
+/// Event resolution may succeed while scope parsing fails (manual dispatch
+/// with malformed `inputs.scope`); keeping the event in that case lets merge
+/// report the missing scope explicitly.
+fn resolve_actual_event_scope(
     event_name: Option<&str>,
     event_payload: Option<&str>,
     errors: &mut Vec<String>,
-) -> Option<velnor_actions_contract::WorkflowEvent> {
+) -> (
+    Option<velnor_actions_contract::WorkflowEvent>,
+    Option<VerificationScope>,
+) {
     let Some(name) = event_name.filter(|name| !name.trim().is_empty()) else {
         errors.push("missing_actual_event".to_owned());
-        return None;
+        return (None, None);
     };
     let payload = match event_payload {
         Some(text) => {
@@ -174,72 +196,71 @@ fn resolve_actual_event(
                 payload
             } else {
                 errors.push("malformed_actual_payload".to_owned());
-                return None;
+                return (None, None);
             }
         }
-        None if name == "pull_request" => {
+        None if matches!(name, "pull_request" | "workflow_dispatch") => {
             errors.push("missing_actual_payload".to_owned());
-            return None;
+            return (None, None);
         }
         None => serde_json::Value::Null,
     };
-    match workflow_event_for(name, &payload) {
-        Ok(event) => Some(event),
+    let event = match workflow_event_for(name, &payload) {
+        Ok(event) => event,
+        Err(OrchestratorError::Internal { problem }) => {
+            errors.push(problem);
+            return (None, None);
+        }
+        Err(_) => {
+            errors.push("actual_event_error".to_owned());
+            return (None, None);
+        }
+    };
+    let scope = match request_scope::scope_for(event, &payload) {
+        Ok(scope) => Some(scope),
         Err(OrchestratorError::Internal { problem }) => {
             errors.push(problem);
             None
         }
         Err(_) => {
-            errors.push("actual_event_error".to_owned());
+            errors.push("actual_scope_error".to_owned());
             None
         }
-    }
+    };
+    (Some(event), scope)
 }
 
-/// Materialize the merge request from the environment and run directory.
+/// Assemble and exclusively write one merge request from explicit runner
+/// event parts.
 ///
-/// Resolves the run key from `GITHUB_RUN_ID`/`GITHUB_RUN_ATTEMPT` and the
-/// run directory from `RUNNER_TEMP`, then delegates to
-/// [`write_merge_request_to`].
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for missing env or unwritable
-/// paths; [`OrchestratorError::Io`] for unreadable artifact JSON.
-pub(crate) fn write_merge_request(request_path: &Path) -> Result<PathBuf, OrchestratorError> {
-    let run_key = resolve_run_key(None)?;
-    let temp = std::env::var_os("RUNNER_TEMP")
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| internal("missing_runner_temp"))?;
-    let anchor = Path::new(&temp).to_path_buf();
-    let run_dir = anchor.join("velnor").join(&run_key);
-    write_merge_request_to(request_path, &run_key, &run_dir, &anchor)
-}
-
-/// Assemble and exclusively write one merge request file.
-///
-/// The file is written exclusively (a pre-existing file errors, never
-/// overwritten), matching the plan request writer. Missing inputs are
-/// recorded in the request, not refused here. Parents are created
-/// under `anchor` with symlink refusal, like the plan request writer.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for a pre-existing request
-/// file, anchor escapes, or unwritable paths.
-pub(crate) fn write_merge_request_to(
+/// The merge operation is selected by [`crate::internal_request::write_request_parts`],
+/// which already has the runner event name and payload. Passing those parts
+/// through keeps scope derivation independent from the downloaded plan.
+/// Missing or malformed event scope is recorded in `assembly_errors` so the
+/// merge emits a closed diagnostic verdict.
+pub(crate) fn write_merge_request_parts(
     request_path: &Path,
-    run_key: &str,
-    run_dir: &Path,
+    event_name: &str,
+    event_payload: &str,
     anchor: &Path,
 ) -> Result<PathBuf, OrchestratorError> {
-    let path = request_path.to_path_buf();
-    let request = assemble_merge_request(run_key, run_dir)?;
-    if let Some(parent) = path.parent() {
+    let run_key = resolve_run_key(None)?;
+    let run_dir = anchor.join("velnor").join(&run_key);
+    let needs = std::env::var(NEEDS_ENV).ok();
+    let expected = std::env::var(NEEDS_EXPECTED_ENV).ok();
+    let request = assemble_with_needs(
+        &run_key,
+        &run_dir,
+        needs.as_deref(),
+        expected.as_deref(),
+        Some(event_name),
+        Some(event_payload),
+    )?;
+    if let Some(parent) = request_path.parent() {
         crate::exclusive_write::create_dir_no_symlink(anchor, parent)?;
     }
-    crate::exclusive_write::write_exclusive(&path, request.as_bytes(), "request")?;
-    Ok(path)
+    crate::exclusive_write::write_exclusive(request_path, request.as_bytes(), "request")?;
+    Ok(request_path.to_path_buf())
 }
 
 /// Maximum bytes read from one assembled JSON artifact.
@@ -307,14 +328,23 @@ mod actual_event_strict_tests {
     fn duplicate_payload_keys_fail_closed() {
         let mut errors = Vec::new();
         let dup = r#"{"pull_request":{"head":{"repo":{"fork":false}}},"pull_request":{}}"#;
-        assert!(resolve_actual_event(Some("pull_request"), Some(dup), &mut errors).is_none());
+        assert_eq!(
+            resolve_actual_event_scope(Some("pull_request"), Some(dup), &mut errors),
+            (None, None),
+        );
         assert!(
             errors.iter().any(|err| err == "malformed_actual_payload"),
             "{errors:?}"
         );
         let mut errors = Vec::new();
         let valid = r#"{"pull_request":{"head":{"repo":{"fork":true}}}}"#;
-        assert!(resolve_actual_event(Some("pull_request"), Some(valid), &mut errors).is_some());
+        assert_eq!(
+            resolve_actual_event_scope(Some("pull_request"), Some(valid), &mut errors),
+            (
+                Some(velnor_actions_contract::WorkflowEvent::Fork),
+                Some(VerificationScope::Affected),
+            ),
+        );
         assert!(errors.is_empty(), "{errors:?}");
     }
 }

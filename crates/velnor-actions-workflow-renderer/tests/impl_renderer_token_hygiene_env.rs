@@ -60,31 +60,12 @@ fn benign_mbx_cache_mode_env_passes() -> Result<(), RenderError> {
 }
 
 #[test]
-fn nested_fetch_exemption_requires_generator_shape() -> Result<(), RenderError> {
-    // Genuine nested names stay exempt with unscrubbed ambient env.
+fn source_fetch_requires_scrub_for_all_names() -> Result<(), RenderError> {
+    // Source preparation reads Cargo config: real and lookalike names scrub.
     for name in [
+        "Fetch Cargo sources",
         "Fetch Cargo sources (nested/Cargo.toml)",
         "Fetch Cargo sources (a/b/Cargo.toml)",
-    ] {
-        let allowed = job(
-            "plan",
-            "Plan",
-            Vec::new(),
-            vec![
-                checkout_step(&checkout_pin())?,
-                ambient_shell_step(name, vec!["true".to_owned()], BTreeMap::new())?,
-                plan_step(),
-            ],
-        );
-        render_workflow_ir(
-            &fixture_ir(vec![allowed]),
-            WorkflowPolicy::ConsumerV1,
-            None,
-            &fixture_ctx(),
-        )?;
-    }
-    // Crafted lookalikes are NOT exempt: unscrubbed env fails coverage.
-    for name in [
         "Fetch Cargo sources (x",
         "Fetch Cargo sources (nested/Cargo.toml",
         "Fetch Cargo sources (nested/Cargo.toml))",

@@ -1,0 +1,8 @@
+name: Cache qualification
+on: push
+cache-mode: 'read${{ github.event_name }}'
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo qualified

@@ -126,19 +126,152 @@ def info_row(check, subject, detail=""):
     row(check, subject, "info", detail)
 
 
-def rust_const(path, name):
-    """Extract `pub const NAME: &str = "value";` or emit a fail row."""
+def rust_without_comments(text, subject="mise compiled qualification"):
+    result = []
+    index = 0
+    while index < len(text):
+        if text[index] == '"':
+            start = index
+            index += 1
+            while index < len(text):
+                if text[index] == "\\":
+                    index += 2
+                elif text[index] == '"':
+                    index += 1
+                    break
+                else:
+                    index += 1
+            else:
+                fail_row("local-pin", subject, "unterminated source string")
+                return None
+            result.append(text[start:index])
+        elif text.startswith("//", index):
+            end = text.find("\n", index)
+            index = len(text) if end == -1 else end
+            result.append(" ")
+        elif text.startswith("/*", index):
+            depth = 1
+            index += 2
+            while index < len(text) and depth:
+                if text.startswith("/*", index):
+                    depth += 1
+                    index += 2
+                elif text.startswith("*/", index):
+                    depth -= 1
+                    index += 2
+                else:
+                    index += 1
+            if depth:
+                fail_row("local-pin", subject, "unterminated source comment")
+                return None
+            result.append(" ")
+        else:
+            result.append(text[index])
+            index += 1
+    return "".join(result)
+
+
+
+def rust_source(path):
+    subject = f"{path} (compiled source)"
     try:
         with open(f"{root}/{path}", encoding="utf-8") as handle:
-            text = handle.read()
+            return rust_without_comments(handle.read(), subject)
     except OSError as err:
-        fail_row("local-pin", f"{path}::{name}", f"unreadable ({err})")
+        fail_row("local-pin", subject, f"unreadable ({err})")
         return None
-    match = re.search(rf'pub const {name}:\s*&str\s*=\s*"([^"]*)";', text)
-    if not match:
-        fail_row("local-pin", f"{path}::{name}", f"missing const {name}")
+
+
+def authority_symbol_supported(text, symbol, declaration_start, path):
+    """The supported authority grammar excludes conditional/rebound symbols."""
+    subject = f"{path}::{symbol}"
+    if text[:declaration_start].rstrip().endswith("]") or "#![" in text:
+        fail_row("local-pin", subject, "unsupported authority attribute")
+        return False
+    for imported in re.findall(r"\buse\s+([^;]+);", text, re.S):
+        if "*" in imported or re.search(rf"\b{re.escape(symbol)}\b", imported):
+            fail_row("local-pin", subject, "unsupported authority import binding")
+            return False
+    return True
+
+
+def rust_const_expression(path, name, visibility="pub", strict_authority=False):
+    """Require one supported live declaration, never a commented mirror."""
+    text = rust_source(path)
+    if text is None:
+        return None
+    declarations = list(re.finditer(
+        rf"(?<!\w)(?:pub(?:\([^)]*\))?\s+)?const\s+{re.escape(name)}\b[^;]*;",
+        text, re.M))
+    expected = rf'\s*{re.escape(visibility)}\s+const\s+{re.escape(name)}:\s*&str\s*=\s*(.+);'
+    if len(declarations) != 1:
+        fail_row("local-pin", f"{path}::{name}", f"missing or duplicate const {name}")
+        return None
+    if strict_authority and not authority_symbol_supported(text, name, declarations[0].start(), path):
+        return None
+    match = re.fullmatch(expected, declarations[0].group(0), re.S)
+    if match is None:
+        fail_row("local-pin", f"{path}::{name}", f"unsupported const {name} declaration")
+        return None
+    return match.group(1).strip()
+
+
+def rust_const(path, name, visibility="pub", strict_authority=False):
+    """Extract one exact source literal with its required visibility."""
+    expression = rust_const_expression(path, name, visibility, strict_authority)
+    if expression is None:
+        return None
+    match = re.fullmatch(r'"([^"\\]*)"', expression)
+    if match is None:
+        fail_row("local-pin", f"{path}::{name}", f"unsupported literal const {name}")
         return None
     return match.group(1)
+
+
+def authority_module_supported(path, module, filename, visibility=""):
+    source = rust_source(path)
+    if source is None:
+        return False
+    declarations = re.findall(rf"(?<!\w)(?:pub\s+)?mod\s+{module}\b[^;]*;", source, re.M)
+    bindings = list(re.finditer(
+        rf'#\[path\s*=\s*"{re.escape(filename)}"\]\s*{visibility}mod\s+{module}\s*;', source))
+    if len(declarations) != 1 or len(bindings) != 1:
+        fail_row("local-pin", f"{path}::{module}", "missing, duplicate, or misaligned native module binding")
+        return False
+    return authority_symbol_supported(source, module, bindings[0].start(), path)
+
+
+def profile_version(name):
+    """Resolve only the three explicit compiled selection authority chains."""
+    qualification = "crates/velnor-actions-mise/src/catalog_qualification.rs"
+    profiles = {
+        "java": (WORKLOAD_CATALOG, "JAVA", "super::qualification::", "java"),
+        "gradle": (WORKLOAD_CATALOG, "GRADLE", "super::qualification::", "gradle"),
+        "cargo-semver-checks": ("crates/velnor-actions-mise/src/catalog.rs",
+                               "CARGO_SEMVER_CHECKS", "qualification::", "semver"),
+    }
+    catalog, prefix, namespace, record = profiles[name]
+    const = f"{prefix}_VERSION"
+    selection = f"{prefix}_SELECTION_VERSION"
+    module = f"{record}_records"
+    filename = f"catalog_qualification_{record}.rs"
+    authority = f"crates/velnor-actions-mise/src/{filename}"
+    for path, symbol, expected in (
+            (catalog, const, f"{namespace}{selection}"),
+            (qualification, selection, f"{module}::VERSION")):
+        expression = rust_const_expression(path, symbol, strict_authority=True)
+        if expression is None:
+            return None
+        if expression != expected:
+            fail_row("local-pin", f"{path}::{symbol}", f"unsupported selection alias: expected {expected}")
+            return None
+    if name == "cargo-semver-checks" and not authority_module_supported(
+            catalog, "qualification", "catalog_qualification.rs", r"pub\s+"):
+        return None
+    if not authority_module_supported(qualification, module, filename):
+        return None
+    return rust_const(authority, "VERSION", "pub(super)", strict_authority=True)
+
 
 
 def parse_iso_date(text):
@@ -152,8 +285,13 @@ def parse_iso_date(text):
 
 
 def norm_version(text):
-    """Compare versions ignoring a leading `v` and build metadata."""
-    return (text or "").strip().removeprefix("v").split("+", 1)[0]
+    """Compare numeric pins with the catalog's exact upstream tag forms."""
+    version = (text or "").strip()
+    for prefix in ("bun-v", "swift-", "cargo-nextest-", "jq-", "v"):
+        if version.startswith(prefix):
+            version = version.removeprefix(prefix)
+            break
+    return version.removesuffix("-RELEASE").split("+", 1)[0]
 
 
 def parse_timestamp(text):
@@ -186,7 +324,7 @@ if not isinstance(inv, dict):
 for key in sorted(inv):
     if key not in ("schema", "check_interval_hours", "max_exception_days",
                    "checked_at", "tools", "actions", "runner", "exceptions",
-                   "temporary_holds"):
+                   "temporary_holds", "delivery_tools", "native_authorities"):
         info_row("inventory-shape", key, "unrecognized top-level key")
 
 if inv.get("schema") != 1:
@@ -217,7 +355,7 @@ except (OSError, tomllib.TOMLDecodeError) as err:
 if policy is not None:
     for key in sorted(policy):
         if key in ("tools", "github_runner_images", "actions",
-                   "validation-tools"):
+                   "validation-tools", "delivery-tools", "native-authorities"):
             continue
         if key not in ("schema", "channel", "registry",
                        "check_interval_hours", "max_exception_days"):
@@ -250,7 +388,9 @@ if policy is not None:
                  "weakens policy: must be <= 14")
 
 # --- Local pins: code constants == reviewed inventory pins (VER-0.1).
-CATALOG = "crates/velnor-actions-mise/src/catalog.rs"
+CATALOG = "crates/velnor-actions-mise/src/catalog_pins.rs"
+WORKLOAD_CATALOG = "crates/velnor-actions-mise/src/catalog_workloads.rs"
+DESKTOP_CATALOG = "crates/velnor-actions-mise/src/catalog_rust_desktop.rs"
 ACTIONS = "crates/velnor-actions-actionlint/src/actions.rs"
 TOOLS = "crates/velnor-actions-actionlint/src/tools.rs"
 CAPABILITIES = "crates/velnor-actions-actionlint/src/capabilities.rs"
@@ -268,10 +408,29 @@ EXPECTED_TOOLS = {
     "nextest": "NEXTEST_VERSION",
     "opentofu": "OPENTOFU_VERSION",
     "release-plz": "RELEASE_PLZ_VERSION",
+    "cargo-semver-checks": "CARGO_SEMVER_CHECKS_VERSION",
+    "bun": "BUN_VERSION",
+    "swift": "SWIFT_VERSION",
+    "ruby": "RUBY_VERSION",
     "reuse": "REUSE_VERSION",
+    "java": "JAVA_VERSION",
+    "gradle": "GRADLE_VERSION",
     "python": "PYTHON_VERSION",
     "uv": "UV_VERSION",
+    "cargo-audit": "CARGO_AUDIT_VERSION",
+    "cargo-deny": "CARGO_DENY_VERSION",
+    "alint": "ALINT_VERSION",
+    "node": "NODE_VERSION",
+    "boltffi": "BOLTFFI_VERSION",
+    "xcodegen": "XCODEGEN_VERSION",
+    "jq": "JQ_VERSION",
+    "rust-desktop": "DESKTOP_RUST_VERSION",
+    "swiftlint": "SWIFTLINT_VERSION",
+    "periphery": "PERIPHERY_VERSION",
 }
+WORKLOAD_TOOLS = {"bun", "swift", "ruby", "reuse", "java", "gradle", "python", "uv",
+                  "cargo-audit", "cargo-deny", "alint", "node", "boltffi", "xcodegen", "jq",
+                  "swiftlint", "periphery"}
 EXPECTED_ACTIONS = {
     "jdx/mise-action": "MISE_ACTION",
     "actions/checkout": "CHECKOUT_ACTION",
@@ -282,6 +441,18 @@ EXPECTED_ACTIONS = {
     "jdx/mr-boxington-action": "MR_BOXINGTON_ACTION",
     "asamarts/alint": "ALINT_ACTION",
     "Swatinem/rust-cache": "RUST_CACHE_ACTION",
+    "docker/setup-buildx-action": "SETUP_BUILDX_ACTION",
+    "docker/login-action": "LOGIN_ACTION",
+    "docker/build-push-action": "BUILD_PUSH_ACTION",
+    "actions/configure-pages": "CONFIGURE_PAGES_ACTION",
+    "actions/upload-pages-artifact": "UPLOAD_PAGES_ARTIFACT_ACTION",
+    "actions/deploy-pages": "DEPLOY_PAGES_ACTION",
+    "actions/attest": "ATTEST_ACTION",
+}
+EXPECTED_DELIVERY_TOOLS = {
+    "buildx": ("BUILDX_VERSION", None),
+    "buildkit": ("BUILDKIT_VERSION", "BUILDKIT_IMAGE_DIGEST"),
+    "sbom-scanner": ("SBOM_SCANNER_VERSION", "SBOM_SCANNER_IMAGE_DIGEST"),
 }
 
 
@@ -303,16 +474,254 @@ for tool in tools:
                  f"entry must be an object, got {tool!r}")
         continue
     name = tool.get("name")
+    if name in seen_tools:
+        fail_row("inventory-shape", str(name), "duplicate tool")
     seen_tools.add(name)
     const = EXPECTED_TOOLS.get(name)
     if const is None:
         fail_row("local-pin", f"tool {name}",
                  "inventory entry outside the expected tool set")
         continue
-    pin_row(f"tool {name} ({CATALOG}::{const})",
-            rust_const(CATALOG, const), tool.get("pinned"))
+    source = ("crates/velnor-actions-mise/src/catalog.rs" if name == "cargo-semver-checks" else
+              DESKTOP_CATALOG if name == "rust-desktop" else
+              WORKLOAD_CATALOG if name in WORKLOAD_TOOLS else CATALOG)
+    pin_row(f"tool {name} ({source}::{const})",
+            (profile_version(name) if name in ("java", "gradle", "cargo-semver-checks") else
+             rust_const(source, const)), tool.get("pinned"))
 for name in sorted(set(EXPECTED_TOOLS) - seen_tools):
     fail_row("local-pin", f"tool {name}", "inventory row missing")
+
+MISE_QUALIFICATIONS = "crates/velnor-actions-mise/src/catalog_qualification_records.rs"
+MISE_ARTIFACTS = {
+    "x86_64-unknown-linux-gnu": ("LinuxAmd64", "linux-x64"),
+    "aarch64-unknown-linux-gnu": ("LinuxArm64", "linux-arm64.tar.gz"),
+    "aarch64-apple-darwin": ("MacosArm64", "macos-arm64.tar.gz"),
+}
+
+
+
+def mise_constructor_identity(constructor):
+    expected = {name: name for name in ("tool", "host", "asset_format")}
+    expected.update({name: f"{name}: asset.{name}()" for name in (
+        "selector", "asset_url", "archive_sha256", "binary_sha256", "binary_member",
+        "source_repository", "source_commit", "source_tree", "owner", "version", "abi")})
+    expected.update({
+        "selection_version": "selection_version: asset.version()",
+        "installed_binary_relative_path": "installed_binary_relative_path: None",
+        "launch_entries": "launch_entries: &[]",
+        "source_lineage": "source_lineage: &[]",
+        "install_plan": "install_plan: None",
+        "provisioning_mode": "provisioning_mode: ProvisioningMode::Official",
+    })
+    found = {}
+    for value in constructor.split(","):
+        value = value.strip()
+        if not value:
+            continue
+        match = re.fullmatch(r"(\w+)(?:\s*:\s*(.+))?", value, re.S)
+        if match is None or match.group(1) in found:
+            break
+        name = match.group(1)
+        found[name] = name if match.group(2) is None else f"{name}: {match.group(2).strip()}"
+    else:
+        if found == expected:
+            return True
+    fail_row("local-pin", "mise compiled qualification", "unsupported official qualification constructor identity")
+    return False
+
+
+def mise_source_constructor_identity(constructor, source):
+    expected = {name: name for name in (
+        "host", "asset_url", "archive_sha256", "binary_sha256", "asset_format", "binary_member")}
+    expected.update({
+        "tool": "tool: SourceBuildBootstrapTool::Mise",
+        "selector": f'selector: "github:jdx/mise@{source["version"]}"',
+        "source_repository": 'source_repository: "https://github.com/jdx/mise"',
+        "source_commit": f'source_commit: "{source["source_commit"]}"',
+        "source_tree": f'source_tree: "{source["source_tree"]}"',
+        "owner": 'owner: "jdx/mise"',
+        "version": f'version: "{source["version"]}"',
+        "abi": f'abi: "mise-cli-v{source["version"]}"',
+    })
+    values = [value.strip() for value in constructor.split(",") if value.strip()]
+    if len(values) == len(expected) and set(values) == set(expected.values()):
+        return True
+    fail_row("local-pin", "mise compiled qualification", "unsupported source bootstrap constructor identity")
+    return False
+
+
+def mise_qualification_records():
+    subject = "mise compiled qualification"
+    source_path = "crates/velnor-actions-mise/src/catalog_source_build_bootstrap.rs"
+    if not authority_module_supported("crates/velnor-actions-mise/src/catalog.rs",
+            "source_build_bootstrap", "catalog_source_build_bootstrap.rs", r"pub\s+") or not authority_module_supported(
+            "crates/velnor-actions-mise/src/catalog_qualification.rs", "records", "catalog_qualification_records.rs"):
+        return None
+    adapter = rust_source(MISE_QUALIFICATIONS)
+    text = rust_source(source_path)
+    if adapter is None or text is None:
+        return None
+    expected_imports = ['super::super::source_build_bootstrap::{self,SourceBuildBootstrapFormat,SourceBuildBootstrapHost,SourceBuildBootstrapTool,}', 'super::{DistributionAssetFormat,DistributionHost,DistributionTool,ProvisioningMode,QualifiedDistribution,}', 'crate::MiseError']
+    if sorted("".join(value.split()) for value in re.findall(r"\buse\s+([^;]+);", adapter, re.S)) != sorted(expected_imports) or "#[" in adapter or "#![" in adapter:
+        fail_row("local-pin", subject, "unsupported official qualification source binding")
+        return None
+    supported = re.sub(r'#\[cfg\(test\)\]\s*#\[path\s*=\s*"catalog_source_build_bootstrap_tests.rs"\]\s*mod tests;', "", text)
+    supported = supported.replace("#[must_use]", "").replace("#[derive(Debug, Clone, Copy, PartialEq, Eq)]", "")
+    if "#[" in supported or "#![" in supported or re.search(r"\buse\b", supported):
+        fail_row("local-pin", subject, "unsupported source bootstrap authority binding")
+        return None
+    functions = list(re.finditer(r"\bfn\s+official\s*\(", adapter))
+    official = re.search(r"pub\(super\) fn official\(.+?(?=pub\(super\) fn required)", adapter, re.S)
+    if len(functions) != 1 or official is None:
+        fail_row("local-pin", subject, "missing or duplicate official qualification function")
+        return None
+    body = official.group(0)
+    prefix, separator, constructor = body.partition("QualifiedDistribution {")
+    expected = 'pub(super)fnofficial(tool:DistributionTool,host:DistributionHost,)->Result<QualifiedDistribution,MiseError>{letsource_tool=matchtool{DistributionTool::Mise=>SourceBuildBootstrapTool::Mise,DistributionTool::Mbx=>SourceBuildBootstrapTool::Mbx,_=>returnErr(absent(tool,host,"officialinstalled-bytequalification")),};letsource_host=matchhost{DistributionHost::LinuxAmd64=>SourceBuildBootstrapHost::LinuxAmd64,DistributionHost::LinuxArm64=>SourceBuildBootstrapHost::LinuxArm64,DistributionHost::MacosArm64=>SourceBuildBootstrapHost::MacosArm64,};letasset=source_build_bootstrap::official(source_tool,source_host);letasset_format=matchasset.asset_format(){SourceBuildBootstrapFormat::Binary=>DistributionAssetFormat::Binary,SourceBuildBootstrapFormat::TarGzip=>DistributionAssetFormat::TarGzip,};'
+    if "".join(prefix.split()) != expected or not separator:
+        fail_row("local-pin", subject, "unsupported official qualification source adapter")
+        return None
+    constructors = re.findall(r"QualifiedDistribution\s*\{([^{}]+)\}\s*\.validate\(\)\s*\}\s*$", body)
+    if len(constructors) != 1:
+        fail_row("local-pin", subject, "unsupported official qualification constructor shape")
+        return None
+    if not mise_constructor_identity(constructors[0]):
+        return None
+    dispatch = re.findall(r"pub const fn official\(\s*tool:\s*SourceBuildBootstrapTool\s*,\s*host:\s*SourceBuildBootstrapHost\s*,?\s*\)\s*->\s*SourceBuildBootstrapAsset\s*\{([^{}]+)\{([^{}]+)\}\s*\}", text)
+    expected_dispatch = "SourceBuildBootstrapTool::Mise=>mise(host),SourceBuildBootstrapTool::Mbx=>mbx(host),"
+    if len(re.findall(r"\bfn\s+official\s*\(", text)) != 1 or len(dispatch) != 1 or "".join(dispatch[0][0].split()) != "matchtool" or "".join(dispatch[0][1].split()) != expected_dispatch:
+        fail_row("local-pin", subject, "unsupported source bootstrap dispatch")
+        return None
+    for field in ("selector", "asset_url", "archive_sha256", "binary_sha256", "asset_format",
+                  "binary_member", "source_repository", "source_commit", "source_tree", "owner", "version", "abi"):
+        getters = re.findall(rf"pub const fn {field}\(&self\)\s*->[^{{]+\{{([^{{}}]+)\}}", text)
+        if len(getters) != 1 or getters[0].strip() != f"self.{field}":
+            fail_row("local-pin", subject, "unsupported source bootstrap accessor identity")
+            return None
+    functions = list(re.finditer(r"\bfn\s+mise\s*\(", text))
+    official = re.search(r"const fn mise\(.+?(?=const fn mbx)", text, re.S)
+    if len(functions) != 1 or official is None:
+        fail_row("local-pin", subject, "missing or duplicate source bootstrap function")
+        return None
+    body = official.group(0)
+    guard = re.match(r"const\s+fn\s+mise\(\s*host:\s*SourceBuildBootstrapHost\s*\)\s*->\s*SourceBuildBootstrapAsset\s*\{\s*(let\b.+)", body, re.S)
+    if guard is None:
+        fail_row("local-pin", subject, "unsupported source bootstrap function")
+        return None
+    body = guard.group(1)
+    matches = re.findall(r"\Alet\s*\(\s*asset_url\s*,\s*archive_sha256\s*,\s*binary_sha256\s*,\s*asset_format\s*,\s*binary_member\s*\)\s*=\s*match\s+host\s*\{([^{}]+)\};\s*SourceBuildBootstrapAsset", body)
+    if len(matches) != 1:
+        fail_row("local-pin", subject, "tuple fields must forward unchanged from supported host match")
+        return None
+    tuple_pattern = r'SourceBuildBootstrapHost::(\w+)\s*=>\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*SourceBuildBootstrapFormat::(\w+)\s*,\s*"([^"]*)"\s*,?\s*\)'
+    tuples = re.findall(tuple_pattern, matches[0])
+    if re.sub(tuple_pattern, "", matches[0]).strip(" \t\r\n,"):
+        fail_row("local-pin", subject, "unsupported qualified host match arm")
+        return None
+    hosts = [values[0] for values in tuples]
+    arms = re.findall(r"SourceBuildBootstrapHost::(\w+)\s*=>", matches[0])
+    if hosts != arms or len(hosts) != len(set(hosts)) or set(hosts) != {host for host, _ in MISE_ARTIFACTS.values()}:
+        fail_row("local-pin", subject, "missing, duplicate, or unknown qualified host")
+        return None
+    constructors = re.findall(r"SourceBuildBootstrapAsset\s*\{([^{}]+)\}\s*\}\s*$", body)
+    if len(constructors) != 1 or any(len(re.findall(
+            rf"(?:^|,)\s*{field}\s*(?=,|$)", constructors[0])) != 1
+            for field in ("asset_url", "archive_sha256", "binary_sha256", "asset_format", "binary_member")):
+        fail_row("local-pin", subject, "tuple fields must forward unchanged in supported qualification constructor")
+        return None
+    fields = {}
+    for field in ("source_repository", "source_commit", "source_tree", "version"):
+        values = re.findall(rf'(?:^|,)\s*{field}:\s*"([^"]+)"\s*(?=,|$)', constructors[0])
+        if len(values) != 1:
+            fail_row("local-pin", subject, f"missing or duplicate source field {field}")
+            return None
+        fields[field] = values[0]
+    if not mise_source_constructor_identity(constructors[0], fields):
+        return None
+    if fields["source_repository"] != "https://github.com/jdx/mise" or any(
+            not re.fullmatch(r"[0-9a-f]{40}", fields[key]) for key in ("source_commit", "source_tree")):
+        fail_row("local-pin", subject, "invalid compiled source identity")
+        return None
+    records = {host: (url, archive, binary, format_name, member)
+               for host, url, archive, binary, format_name, member in tuples}
+    if any(not re.fullmatch(r"[0-9a-f]{64}", digest)
+           for _, archive, binary, _, _ in records.values() for digest in (archive, binary)):
+        fail_row("local-pin", subject, "malformed compiled qualification digest")
+        return None
+    for host, (_, archive, binary, format_name, member) in records.items():
+        expected = ("Binary", "") if host == "LinuxAmd64" else ("TarGzip", "mise/bin/mise")
+        if (format_name, member) != expected or (format_name == "Binary" and archive != binary):
+            fail_row("local-pin", subject, "unsupported compiled qualification container or member")
+            return None
+    return (fields, records)
+
+
+def verify_mise_artifact(entry, mise, spec, qualification):
+    target = entry["target"]
+    subject = f"mise binary {target}"
+    before = len(failures)
+    host, suffix = spec
+    source, records = qualification
+    asset_url, archive_digest, binary_digest, format_name, member = records[host]
+    digest = entry.get("installed_binary_sha256")
+    qualified = entry.get("qualified_installed_binary_sha256")
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        fail_row("inventory-shape", subject, "malformed installed binary SHA256")
+    pin_row(subject, binary_digest, digest)
+    if qualified != digest:
+        fail_row("source-evidence", subject, "installed binary digest has no matching qualification")
+    archive = entry.get("archive_sha256", digest if format_name == "Binary" else None)
+    if archive != archive_digest:
+        fail_row("local-pin", subject, "archive digest differs from compiled qualification")
+    commit = entry.get("source_commit")
+    if not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}", commit) \
+            or commit != mise.get("source_commit_sha") or commit != source["source_commit"]:
+        fail_row("source-evidence", subject, "artifact source commit differs from Mise source identity")
+    if entry.get("source_tree") != source["source_tree"] or mise.get("source_tree_sha") != source["source_tree"]:
+        fail_row("source-evidence", subject, "artifact source tree differs from compiled source identity")
+    version = mise.get("pinned")
+    url = f"https://github.com/jdx/mise/releases/download/v{version}/mise-v{version}-{suffix}"
+    if entry.get("artifact") != url or asset_url != url or version != source["version"]:
+        fail_row("source-evidence", subject, "artifact URL differs from pinned official release asset")
+    if entry.get("archive_member", "") != member:
+        fail_row("source-evidence", subject, "archive member must identify installed Mise executable")
+    if entry.get("asset_format") != {"Binary": "binary", "TarGzip": "tar-gzip"}[format_name]:
+        fail_row("source-evidence", subject, "asset format differs from compiled qualification container")
+    if entry.get("binary_member") != member:
+        fail_row("source-evidence", subject, "binary member differs from compiled qualification member")
+    if len(failures) == before:
+        pass_row("source-evidence", subject, "qualified installed executable source identity")
+
+
+def verify_mise_artifacts():
+    qualification = mise_qualification_records()
+    if qualification is None:
+        return
+    matches = [tool for tool in tools if isinstance(tool, dict) and tool.get("name") == "mise"]
+    if len(matches) != 1:
+        fail_row("inventory-shape", "mise native artifacts", "requires exactly one Mise tool row")
+        return
+    mise = matches[0]
+    artifacts = mise.get("native_artifacts")
+    if not isinstance(artifacts, list):
+        fail_row("inventory-shape", "mise native artifacts", "must be a list")
+        return
+    seen = set()
+    for entry in artifacts:
+        if not isinstance(entry, dict) or not isinstance(entry.get("target"), str):
+            fail_row("inventory-shape", "mise native artifacts", "malformed artifact record")
+            continue
+        target = entry["target"]
+        if target not in MISE_ARTIFACTS or target in seen:
+            fail_row("inventory-shape", "mise native artifacts", f"unknown or duplicate target {target!r}")
+            continue
+        seen.add(target)
+        verify_mise_artifact(entry, mise, MISE_ARTIFACTS[target], qualification)
+    for target in sorted(set(MISE_ARTIFACTS) - seen):
+        fail_row("local-pin", f"mise binary {target}", "artifact inventory row missing")
+
+
+verify_mise_artifacts()
 
 action_pinned = {}
 for action in inv.get("actions", []):
@@ -321,6 +730,8 @@ for action in inv.get("actions", []):
                  f"entry must be an object, got {action!r}")
         continue
     key = action.get("key")
+    if key in action_pinned:
+        fail_row("inventory-shape", str(key), "duplicate action")
     action_pinned[key] = action
     prefix = EXPECTED_ACTIONS.get(key)
     if prefix is None:
@@ -335,6 +746,159 @@ for action in inv.get("actions", []):
             action.get("pinned_sha"))
 for key in sorted(set(EXPECTED_ACTIONS) - set(action_pinned)):
     fail_row("local-pin", f"action {key}", "inventory row missing")
+
+delivery_tools = inv.get("delivery_tools", [])
+if not isinstance(delivery_tools, list):
+    fail_row("inventory-shape", "delivery tools", "must be a list")
+    delivery_tools = []
+delivery_pinned = {}
+for tool in delivery_tools:
+    if not isinstance(tool, dict) or tool.get("name") not in EXPECTED_DELIVERY_TOOLS:
+        fail_row("inventory-shape", "delivery tools", "unknown or malformed entry")
+        continue
+    name = tool["name"]
+    if name in delivery_pinned:
+        fail_row("inventory-shape", name, "duplicate delivery tool")
+    delivery_pinned[name] = tool
+    version_const, digest_const = EXPECTED_DELIVERY_TOOLS[name]
+    pin_row(f"delivery tool {name}", rust_const(ACTIONS, version_const), tool.get("pinned"))
+    if digest_const:
+        pin_row(f"delivery image {name}", rust_const(ACTIONS, digest_const), tool.get("image_digest"))
+        if tool.get("qualified_image_digest") != tool.get("image_digest"):
+            fail_row("local-pin", name, "delivery image digest has no matching qualification")
+for name in sorted(set(EXPECTED_DELIVERY_TOOLS) - set(delivery_pinned)):
+    fail_row("local-pin", name, "delivery inventory row missing")
+
+# Native authorities prove their scoped immutable sources, never latest releases.
+HOMEBREW = "crates/velnor-actions-mise/src/catalog_homebrew.rs"
+GRADLE_AUTHORITY = "crates/velnor-actions-mise/src/catalog_gradle.rs"
+NATIVE_AUTHORITIES = {
+    "homebrew-source": ("homebrew-native-source", HOMEBREW, {
+        "homebrew-version": ("VERSION", r"\d+\.\d+\.\d+"),
+        "homebrew-source-sha": ("SOURCE_SHA", r"[0-9a-f]{40}"),
+        "homebrew-source-url": ("SOURCE_URL", r"https://github\.com/Homebrew/brew/tree/[0-9a-f]{40}"),
+    }),
+    "homebrew-portable-ruby": ("homebrew-vendored-ruby", HOMEBREW, {
+        "homebrew-portable-ruby-version": ("PORTABLE_RUBY_VERSION", r"\d+\.\d+\.\d+"),
+        "homebrew-portable-ruby-x86_64-linux-sha256": ("PORTABLE_RUBY_X86_64_LINUX_SHA256", r"[0-9a-f]{64}"),
+        "homebrew-portable-ruby-arm64-linux-sha256": ("PORTABLE_RUBY_ARM64_LINUX_SHA256", r"[0-9a-f]{64}"),
+    }),
+    "gradle-wrapper": ("gradle-workload-wrapper", GRADLE_AUTHORITY, {
+        "gradle-wrapper-version": ("GRADLE_WRAPPER_VERSION", r"\d+\.\d+\.\d+"),
+        "gradle-wrapper-distribution-sha256": ("GRADLE_WRAPPER_DISTRIBUTION_SHA256", r"[0-9a-f]{64}"),
+        "gradle-wrapper-script-sha256": ("GRADLE_WRAPPER_SCRIPT_SHA256", r"[0-9a-f]{64}"),
+        "gradle-wrapper-jar-sha256": ("GRADLE_WRAPPER_JAR_SHA256", r"[0-9a-f]{64}"),
+        "gradle-wrapper-bootstrap-version": ("BOOTSTRAP_VERSION", r"\d+\.\d+\.\d+"),
+        "gradle-wrapper-bootstrap-source-sha": ("BOOTSTRAP_SOURCE_SHA", r"[0-9a-f]{40}"),
+    }),
+    "postgres-fixture": ("gradle-postgres-fixture", GRADLE_AUTHORITY, {
+        "postgres-fixture-image": ("POSTGRES_FIXTURE_IMAGE", r"postgres:\d+\.\d+-trixie@sha256:[0-9a-f]{64}"),
+    }),
+}
+
+
+def native_authority_sources(name, compiled):
+    if name.startswith("homebrew-"):
+        sha = rust_const(HOMEBREW, "SOURCE_SHA")
+        if sha is None:
+            return None
+        source_url = f"https://github.com/Homebrew/brew/tree/{sha}"
+        if name == "homebrew-source":
+            if compiled["homebrew-source-url"] != source_url:
+                fail_row("source-evidence", name, "source URL does not bind source commit")
+                return None
+            return [source_url]
+        return [f"https://raw.githubusercontent.com/Homebrew/brew/{sha}/Library/Homebrew/vendor/{file}"
+                for file in ("portable-ruby-version", "portable-ruby-x86_64-linux", "portable-ruby-arm64-linux")]
+    if name == "postgres-fixture":
+        digest = compiled["postgres-fixture-image"].split("@", 1)[1]
+        return [f"https://registry-1.docker.io/v2/library/postgres/manifests/{digest}"]
+    sha = compiled["gradle-wrapper-bootstrap-source-sha"]
+    version = compiled["gradle-wrapper-version"]
+    expected = {
+        "BOOTSTRAP_TEMPLATE_SOURCE": f"https://github.com/gradle/gradle/blob/{sha}/platforms/jvm/plugins-application/src/main/resources/org/gradle/api/internal/plugins/unixStartScript.txt",
+        "BOOTSTRAP_JAR_SOURCE": f"https://raw.githubusercontent.com/gradle/gradle/{sha}/gradle/wrapper/gradle-wrapper.jar",
+        "DISTRIBUTION_CHECKSUM_SOURCE": f"https://services.gradle.org/distributions/gradle-{version}-bin.zip.sha256",
+    }
+    before = len(failures)
+    for constant, source in expected.items():
+        actual = rust_const(GRADLE_AUTHORITY, constant)
+        if actual is not None and actual != source:
+            fail_row("source-evidence", name, f"{constant} does not bind compiled source commit or engine version")
+    return list(expected.values()) if len(failures) == before else None
+
+
+def native_authority_rows():
+    entries = inv.get("native_authorities")
+    if not isinstance(entries, list):
+        fail_row("inventory-shape", "native authorities", "must be a list")
+        return {}
+    rows = {}
+    fields = {"name", "scope", "pins", "evidence_kind", "sources", "checked_at"}
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
+            fail_row("inventory-shape", "native authorities", "malformed entry")
+            continue
+        name = entry["name"]
+        if name not in NATIVE_AUTHORITIES or set(entry) != fields or name in rows:
+            fail_row("inventory-shape", name, "unknown, duplicate, or invalid native fields")
+            continue
+        rows[name] = entry
+    return rows
+
+
+def verify_native_authority(name, spec, entry, native_policy):
+    scope, path, bindings = spec
+    subject = f"native {name}"
+    before = len(failures)
+    if entry is None:
+        fail_row("local-pin", subject, "inventory row missing")
+        return
+    pins = entry.get("pins")
+    if not isinstance(pins, dict) or set(pins) != set(bindings):
+        fail_row("inventory-shape", subject, "missing or unknown native pins")
+        return
+    compiled = {}
+    for key, (constant, pattern) in bindings.items():
+        value = rust_const(path, constant)
+        compiled[key] = value
+        if not isinstance(pins[key], str) or not re.fullmatch(pattern, pins[key]):
+            fail_row("inventory-shape", key, "malformed native pin")
+        pin_row(subject + " " + key, value, pins[key])
+        if native_policy.get(key) != pins[key]:
+            fail_row("policy-mirror", key, "native policy/inventory mismatch")
+        else:
+            pass_row("policy-mirror", key, pins[key])
+    if len(failures) != before:
+        return
+    sources = native_authority_sources(name, compiled)
+    if sources is None:
+        return
+    evidence_sources = entry.get("sources")
+    if entry.get("scope") != scope or entry.get("evidence_kind") != "immutable-source":
+        fail_row("source-evidence", subject, "invalid immutable authority scope or evidence kind")
+    elif not isinstance(evidence_sources, list) or any(not isinstance(url, str) for url in evidence_sources) \
+            or sorted(evidence_sources) != sorted(sources):
+        fail_row("source-evidence", subject, "sources do not match immutable compiled authority")
+    else:
+        stamp = entry.get("checked_at")
+        moment = parse_timestamp(stamp) if isinstance(stamp, str) and re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})", stamp) else None
+        age = (NOW - moment).total_seconds() / 3600 if moment is not None else None
+        if age is None or age < -0.1 or age > interval:
+            fail_row("source-evidence", subject, "missing, malformed, future, or stale evidence timestamp")
+        else:
+            pass_row("source-evidence", subject, f"qualified immutable authority, evidence {entry['checked_at']}")
+
+
+native_policy = policy.get("native-authorities") if policy is not None else None
+native_keys = {key for _, _, bindings in NATIVE_AUTHORITIES.values() for key in bindings}
+if not isinstance(native_policy, dict) or set(native_policy) != native_keys:
+    fail_row("policy-mirror", "native authorities", "missing or unknown policy keys")
+    native_policy = native_policy if isinstance(native_policy, dict) else {}
+native_rows = native_authority_rows()
+for name, spec in NATIVE_AUTHORITIES.items():
+    verify_native_authority(name, spec, native_rows.get(name), native_policy)
 
 tool_pinned = {tool.get("name"): tool.get("pinned") for tool in tools}
 pin_row("tool actionlint mirror (capabilities.rs)",
@@ -378,6 +942,20 @@ if policy is not None:
                      f"policy={got!r} inventory={want!r}")
         else:
             pass_row("policy-mirror", f"tool {name}", str(got))
+    delivery_policy = policy.get("delivery-tools", {})
+    if not isinstance(delivery_policy, dict):
+        fail_row("policy-mirror", "delivery tools", "must be a table")
+        delivery_policy = {}
+    expected_delivery_keys = set(EXPECTED_DELIVERY_TOOLS)
+    for name, (_, digest_const) in EXPECTED_DELIVERY_TOOLS.items():
+        tool = delivery_pinned.get(name, {})
+        pin_row(f"delivery policy {name}", delivery_policy.get(name), tool.get("pinned"))
+        if digest_const:
+            key = f"{name}-image-digest"
+            expected_delivery_keys.add(key)
+            pin_row(f"delivery policy {key}", delivery_policy.get(key), tool.get("image_digest"))
+    if set(delivery_policy) != expected_delivery_keys:
+        fail_row("policy-mirror", "delivery tools", "missing or unknown policy keys")
     images = (policy.get("github_runner_images") or {}).get("linux_x64") or {}
     if images.get("default") != runner.get("default"):
         fail_row("policy-mirror", "runner default",
@@ -755,6 +1333,9 @@ for tool in tools:
     name = tool.get("name")
     freshness_row(name, tool, tool.get("pinned"), tool.get("qualified"),
                   tool.get("latest"))
+for tool in delivery_tools:
+    if isinstance(tool, dict):
+        freshness_row(tool.get("name"), tool, tool.get("pinned"), tool.get("qualified"), tool.get("latest"))
 for key, action in sorted(action_pinned.items()):
     pinned = (action.get("pinned_version"), action.get("pinned_sha"))
     qualified = (action.get("qualified_version"),
@@ -768,7 +1349,7 @@ freshness_row("runner", runner, runner.get("default"), runner.get("default"))
 # midnight, and expiry arithmetic must match UTC evidence timestamps.
 today = NOW.date()
 lock_names = {entry.get("name") for entry in (locked or [])}
-known_subjects = set(EXPECTED_TOOLS) | set(EXPECTED_ACTIONS) | \
+known_subjects = set(EXPECTED_TOOLS) | set(EXPECTED_ACTIONS) | set(EXPECTED_DELIVERY_TOOLS) | \
     lock_names | set(supported)
 if runner.get("default"):
     known_subjects.add(runner.get("default"))
@@ -924,21 +1505,103 @@ def github_tag(payload):
     return None
 
 
-def sniff_latest(source, body):
+COMMUNITY_SOURCE = "https://api.github.com/repos/graalvm/graalvm-ce-builds/releases?per_page=10"
+COMMUNITY_PAGES = 3
+COMMUNITY_TARGETS = {"linux-aarch64", "linux-x64", "macos-aarch64"}
+
+
+def community_release(release):
+    """Map one stable provider release by asset identity, never tag arithmetic."""
+    if not isinstance(release, dict):
+        raise ValueError("Community release must be an object")
+    if release.get("draft") is True or release.get("prerelease") is True:
+        return None
+    if release.get("draft") is not False or release.get("prerelease") is not False:
+        raise ValueError("Community release lacks stable flags")
+    assets = release.get("assets")
+    if not isinstance(assets, list):
+        raise ValueError("Community release lacks assets")
+    cohort, targets = set(), set()
+    tag = release.get("tag_name")
+    for asset in assets:
+        if not isinstance(asset, dict) or not isinstance(asset.get("name"), str):
+            raise ValueError("Community asset lacks name")
+        name = asset["name"]
+        if not name.startswith("graalvm-community-jdk-25") or not name.endswith("_bin.tar.gz"):
+            continue
+        match = re.fullmatch(r"graalvm-community-jdk-(?:(25i[1-9]\d*)-)?"
+                             r"(25(?:\.(?:0|[1-9]\d*)){2,})_"
+                             r"(linux-aarch64|linux-x64|macos-aarch64|macos-x64)_bin\.tar\.gz", name)
+        if not match:
+            raise ValueError("malformed Community JDK25 asset")
+        if match[3] not in COMMUNITY_TARGETS:
+            continue
+        if not isinstance(tag, str) or not re.fullmatch(r"(?:graal|jdk)-[0-9]+(?:\.[0-9]+)*", tag):
+            raise ValueError("malformed Community release tag")
+        official = "https://github.com/graalvm/graalvm-ce-builds/releases/"
+        if release.get("html_url") != official + "tag/" + tag:
+            raise ValueError("Community release provider mismatch")
+        if asset.get("browser_download_url") != official + "download/" + tag + "/" + name:
+            raise ValueError("Community asset URL mismatch")
+        if not re.fullmatch(r"sha256:[0-9a-f]{64}", asset.get("digest") or ""):
+            raise ValueError("Community asset lacks SHA256 digest")
+        if match[3] in targets:
+            raise ValueError("duplicate Community target asset")
+        targets.add(match[3])
+        cohort.add((match[1], match[2]))
+    if not targets:
+        return None
+    if targets != COMMUNITY_TARGETS or len(cohort) != 1:
+        raise ValueError("incomplete or ambiguous Community JDK25 cohort")
+    return next(iter(cohort))[1]
+
+
+def community_latest(source, body):
+    """At most three 10-release pages; absent/malformed cohorts fail closed."""
+    if source != COMMUNITY_SOURCE and not source.startswith("file://"):
+        raise ValueError("Community freshness requires official release listing")
+    versions = []
+    for page in range(1, COMMUNITY_PAGES + 1):
+        if len(body.encode("utf-8")) > FETCH_CAP:
+            raise ValueError("Community release page exceeds fetch cap")
+        payload = json.loads(body)
+        if not isinstance(payload, list) or len(payload) > 10:
+            raise ValueError("Community freshness requires bounded release list")
+        versions.extend(version for release in payload
+                        if (version := community_release(release)) is not None)
+        if len(payload) < 10 or source.startswith("file://") or page == COMMUNITY_PAGES:
+            break
+        body = fetch_text(COMMUNITY_SOURCE + f"&page={page + 1}")
+    if not versions:
+        raise ValueError("no maintained Community JDK25 cohort within lookup bound")
+    return max(versions, key=lambda value: tuple(map(int, value.split("."))))
+
+
+def sniff_latest(source, body, community_java=False):
+    if community_java:
+        return community_latest(source, body)
+    if source == "https://www.python.org/downloads/" or source.startswith("file://"):
+        match = re.search(r"Download Python (\d+\.\d+\.\d+)", body)
+        if match:
+            return match.group(1)
+        if source == "https://www.python.org/downloads/":
+            return None
     try:
         payload = json.loads(body)
     except ValueError:
         payload = None
     if payload is not None:
+        if (source == "https://nodejs.org/dist/index.json" or source.startswith("file://")) \
+                and isinstance(payload, list) \
+                and any(isinstance(entry, dict) and "lts" in entry for entry in payload):
+            versions = [entry.get("version") for entry in payload
+                        if isinstance(entry, dict) and entry.get("lts")
+                        and re.fullmatch(r"v24\.\d+\.\d+", entry.get("version", ""))]
+            return max(versions, key=lambda v: tuple(map(int, v[1:].split(".")))) if versions else None
         if "crates.io/api/v1/crates/" in source \
                 and isinstance(payload, dict):
             crate = payload.get("crate") or {}
             return crate.get("max_version")
-        info = payload.get("info") if isinstance(payload, dict) else None
-        if isinstance(info, dict):
-            version = info.get("version")
-            if isinstance(version, str) and re.fullmatch(r"\d+\.\d+\.\d+", version):
-                return version
         tag = github_tag(payload)
         if tag:
             return tag
@@ -946,9 +1609,6 @@ def sniff_latest(source, body):
             else {}
         if crate.get("max_version"):
             return crate["max_version"]
-    python = re.search(r">Download Python (\d+\.\d+\.\d+)<", body)
-    if python:
-        return python.group(1)
     match = re.search(r"\[pkg\.rust\]\s*\nversion\s*=\s*\""
                       r"(\d+\.\d+\.\d+)", body)
     if not match:
@@ -958,11 +1618,11 @@ def sniff_latest(source, body):
 
 if check_upstream:
     stamp = NOW.strftime("%Y-%m-%dT%H:%M:%SZ")
-    for tool in tools:
+    for tool in tools + delivery_tools:
         name = tool.get("name")
         source = tool.get("source", "")
         try:
-            latest = sniff_latest(source, fetch_text(source))
+            latest = sniff_latest(source, fetch_text(source), name == "java")
         except Exception as err:  # noqa: BLE001 - probe maps all to failed
             fail_row("upstream-probe", name,
                      f"lookup_failed ({err}); source {source}, "

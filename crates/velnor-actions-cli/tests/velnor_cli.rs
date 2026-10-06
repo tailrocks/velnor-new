@@ -21,6 +21,8 @@ mod impl_cli_protocol;
 mod impl_cli_report;
 #[path = "impl_cli_smoke.rs"]
 mod impl_cli_smoke;
+#[path = "impl_cli_task_clock.rs"]
+mod impl_cli_task_clock;
 #[path = "impl_cli_tmp.rs"]
 mod impl_cli_tmp;
 #[path = "impl_cli_verify_local.rs"]

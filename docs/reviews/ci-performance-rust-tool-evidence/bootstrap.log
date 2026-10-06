@@ -1,0 +1,19 @@
+info: profile set to minimal
+info: default host tuple is aarch64-apple-darwin
+info: skipping toolchain installation
+
+
+Rust is installed now. Great!
+
+To get started you need Cargo's bin directory 
+(/tmp/velnor-rust-final-pin-proof/cargo/bin) in your PATH
+environment variable. This has not been done automatically.
+
+To configure your current shell, you need to source
+the corresponding env file under /tmp/velnor-rust-final-pin-proof/cargo.
+
+Consider running the right command for your shell (note the leading DOT):
+. "/tmp/velnor-rust-final-pin-proof/cargo/env"           # For 
+sh/ash/dash/pdksh/zsh
+source "/tmp/velnor-rust-final-pin-proof/cargo/env.nu"   # For nushell
+source "/tmp/velnor-rust-final-pin-proof/cargo/env.tcsh" # For tcsh

@@ -13,24 +13,26 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_actionlint::{
-    PinnedActionRef,
-    actions::{MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION},
-};
 use velnor_actions_contract::{
-    CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Stack, Step, WorkflowPolicy,
-    crate_display_name, matrix_id_for_task_group, matrix_key_for_id, tofu_display_name,
+    CrateJob, CrateObligation, Job, ProposedTask, Stack, Step, WorkflowPolicy, crate_display_name,
+    matrix_id_for_task_group, matrix_key_for_id, tofu_display_name,
 };
-use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
+use velnor_actions_mise::ToolCatalog;
 use velnor_actions_rust::task_kind_rank;
-use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
-use velnor_actions_workflow_renderer::steps::{CompileDriver as RenderDriver, mbx_step_for_driver};
+use velnor_actions_workflow_renderer::steps::CompilerDriver;
 
 use crate::OrchestratorError;
 use crate::crate_job_ids::{assign_group_ids, group_is_tofu, group_runnable};
 use crate::discover::Discovery;
 use crate::internal::internal;
 use crate::matrix_step::step_name_for;
+
+#[path = "crate_jobs_render.rs"]
+mod render;
+use render::render_job;
+
+#[path = "crate_obligation_helpers.rs"]
+pub(crate) mod helpers;
 
 #[path = "crate_jobs_stage.rs"]
 mod stage;
@@ -44,7 +46,9 @@ pub(crate) struct CrateBuild {
     /// `(job_id, job)` pairs in deterministic job-ID order.
     pub(crate) jobs: Vec<(String, Job)>,
     /// Render-driver selection per crate job ID.
-    pub(crate) drivers: BTreeMap<String, RenderDriver>,
+    pub(crate) drivers: BTreeMap<String, CompilerDriver>,
+    /// Exact source records retained from obligation compilation.
+    pub(crate) helper_records: Vec<velnor_actions_contract::CompiledSourceHelper>,
 }
 
 /// Build one ordered IR job per runnable crate from discovery proposals.
@@ -83,28 +87,28 @@ pub(crate) fn build_crate_jobs(
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
     let mut tofu_ids = Vec::new();
+    let mut helper_records = Vec::new();
     for ((package_id, configuration), tasks) in &grouped {
         let first = tasks.first().ok_or_else(|| internal("crate_empty"))?;
+        let runner_label = crate::workloads::runner_for_task(first, label);
+        let scoped_catalog = crate::workloads::catalog_for_configuration(catalog, configuration)
+            .map_err(|error| OrchestratorError::Contract {
+                problem: error.to_string(),
+            })?;
+        let catalog = &scoped_catalog;
         let key = (package_id.clone(), configuration.clone());
         let job_id = assigned
             .get(&key)
             .ok_or_else(|| internal("crate_job_id_missing"))?
             .clone();
         let manifest = first.identity.unit_path.clone();
-        let display = if group_is_tofu(tasks) {
-            tofu_display_name(&first.display_name)
-        } else {
-            crate_display_name(&first.display_name, &manifest, configuration)
-        };
+        let display = group_display(tasks, first, configuration, &manifest);
         let use_rust = tasks.iter().any(|task| is_rust(task));
         let use_mbx = tasks.iter().any(|task| is_mbx(task));
         let use_nextest = tasks.iter().any(|task| is_nextest(task));
         let use_opentofu = tasks.iter().any(|task| is_opentofu(task));
-        let driver = if use_mbx {
-            RenderDriver::Mbx
-        } else {
-            RenderDriver::Cargo
-        };
+        let driver = driver_for(use_mbx);
+        let (obligations, bindings) = compile_obligations(tasks, catalog, runner_label)?;
         let model = CrateJob {
             job_id: job_id.clone(),
             display_name: display,
@@ -112,24 +116,29 @@ pub(crate) fn build_crate_jobs(
             package_id: package_id.clone(),
             manifest,
             configuration: configuration.clone(),
-            obligations: obligations_for(tasks, catalog)?,
+            obligations,
         };
         model.validate()?;
-        let repo_has_mbx = crate::workflow::plan_uses_mbx(discovery);
-        let mut job = render_job(
+        let selected_roots =
+            crate::source_prep::selected_fetch_roots(discovery, tasks, fetch_roots);
+        let _desktop_profile = crate::workloads::identity_recipe::desktop_profile(tasks)?;
+        let provider_descriptor = crate::tofu_cache_source::descriptor_for_tasks(tasks);
+        let (mut job, records) = render_job(
             label,
-            crate::matrix_step::suite_tools_for_tasks(policy, tasks)?,
+            policy,
             &model,
             catalog,
-            fetch_roots,
+            &selected_roots,
             use_rust,
             use_mbx,
             use_nextest,
             use_opentofu,
-            repo_has_mbx,
             acquire,
             max_parallel_jobs,
+            provider_descriptor.as_ref(),
+            &bindings,
         )?;
+        helper_records.extend(records);
         // Allowlisted custom tasks run after the fixed obligations; the
         // pre-loop rejection above guarantees this is empty today.
         job.steps.extend(custom_steps.iter().cloned());
@@ -141,7 +150,34 @@ pub(crate) fn build_crate_jobs(
     }
     stage::stage_tofu_root_jobs(&mut jobs, &tofu_ids, max_parallel_jobs);
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
-    Ok(CrateBuild { jobs, drivers })
+    Ok(CrateBuild {
+        jobs,
+        drivers,
+        helper_records,
+    })
+}
+
+fn group_display(
+    tasks: &[&ProposedTask],
+    first: &ProposedTask,
+    configuration: &str,
+    manifest: &str,
+) -> String {
+    if crate::crate_job_ids::group_is_workload(tasks) {
+        velnor_actions_contract::workload_display_name(&first.display_name, configuration)
+    } else if group_is_tofu(tasks) {
+        tofu_display_name(&first.display_name)
+    } else {
+        crate_display_name(&first.display_name, manifest, configuration)
+    }
+}
+
+fn driver_for(use_mbx: bool) -> CompilerDriver {
+    if use_mbx {
+        CompilerDriver::Mbx
+    } else {
+        CompilerDriver::Cargo
+    }
 }
 
 /// True when the task becomes a crate-job obligation.
@@ -155,48 +191,98 @@ pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
 
 /// Obligation order rank for one task, dispatched by stack.
 fn obligation_rank(task: &ProposedTask) -> u32 {
-    match Stack::from_id(&task.stack_id) {
-        Some(Stack::Tofu) => velnor_actions_tofu::task_kind_rank(&task.task_kind),
-        _ => task_kind_rank(&task.task_kind),
+    obligation_kind_rank(&task.stack_id, &task.task_kind)
+}
+
+/// Generator sequencing authority shared by planned report validation.
+pub(crate) fn obligation_kind_rank(stack: &str, kind: &str) -> u32 {
+    match Stack::from_id(stack) {
+        Some(Stack::Tofu) => velnor_actions_tofu::task_kind_rank(kind),
+        Some(Stack::Workload) => crate::workloads::rank(kind),
+        _ => task_kind_rank(kind),
     }
 }
 
 /// Ordered validated obligations for one crate's tasks.
-fn obligations_for(
+pub(crate) fn compile_obligations(
     tasks: &[&ProposedTask],
     catalog: &ToolCatalog,
-) -> Result<Vec<CrateObligation>, OrchestratorError> {
+    label: &str,
+) -> Result<(Vec<CrateObligation>, helpers::SourceBindings), OrchestratorError> {
     let executed: BTreeSet<&str> = tasks.iter().map(|task| task.task_id.as_str()).collect();
     let mut ordered = tasks.to_vec();
     ordered.sort_by(|left, right| {
         (obligation_rank(left), &left.task_id).cmp(&(obligation_rank(right), &right.task_id))
     });
     let mut obligations = Vec::with_capacity(ordered.len());
+    let mut bindings = helpers::SourceBindings::default();
     for task in ordered {
-        obligations.push(obligation_for(task, &executed, catalog)?);
+        let compiled = obligation_for(task, &executed, catalog, label)?;
+        if let Some(binding) = compiled.native {
+            bindings.insert_source_binding(&compiled.obligation, binding)?;
+        }
+        if let Some(recipe) = compiled.compiler {
+            bindings.insert_compiler_recipe(&compiled.obligation, recipe)?;
+        }
+        obligations.push(compiled.obligation);
     }
-    Ok(obligations)
+    Ok((obligations, bindings))
 }
 
-/// One obligation: identities, same-crate gates, fixed argv.
+struct CompiledObligation {
+    obligation: CrateObligation,
+    native: Option<crate::helper_obligation_binding::ProposalHelperBinding>,
+    compiler: Option<crate::rust_report_wrapper::RustReportWrapper>,
+}
+
+/// One original proposal supplies its execution identity and owned recipe.
 fn obligation_for(
     task: &ProposedTask,
     executed: &BTreeSet<&str>,
     catalog: &ToolCatalog,
-) -> Result<CrateObligation, OrchestratorError> {
-    let argv = crate::vectors::task_argv(task, catalog)?;
-    let toolchain = crate::internal_plan::toolchain_id(task, catalog)?;
-    let digest = crate::internal::plan_obligation::task_digest(&task.task_id, &argv, &toolchain)?;
+    label: &str,
+) -> Result<CompiledObligation, OrchestratorError> {
+    let compiler =
+        crate::rust_report_wrapper::RustReportWrapper::from_proposal(task, catalog, label)?;
+    let helper = crate::helper_obligation_binding::binding_for_proposal(
+        task,
+        catalog,
+        env!("CARGO_PKG_VERSION"),
+        label,
+    )?;
+    if let Some(binding) = &helper {
+        binding.record.validate_binding()?;
+    }
+    let (argv, digest) = if let Some(recipe) = &compiler {
+        (recipe.argv().to_vec(), recipe.task_digest().to_owned())
+    } else {
+        let argv = crate::vectors::task_argv_for_runner(task, catalog, label)?;
+        let toolchain = crate::internal_plan::toolchain_id_for_runner(task, catalog, label)?;
+        let digest = crate::internal::plan_obligation::task_digest(
+            &task.task_id,
+            &argv,
+            &toolchain,
+            helper.as_ref().map(|binding| &binding.descriptor),
+            helper
+                .as_ref()
+                .and_then(|binding| binding.native_recipe.as_ref()),
+        )?;
+        (argv, digest)
+    };
     let matrix_id = matrix_id_for_task_group(&task.stack_id, &task.task_id)?;
     let matrix_key = matrix_key_for_id(&matrix_id)?;
-    Ok(CrateObligation {
-        task_id: task.task_id.clone(),
-        kind: task.task_kind.clone(),
-        step_name: step_name_for(&task.task_kind, &task.task_id),
-        gated_by: gates_for(task, executed),
-        matrix_key,
-        task_digest: digest,
-        run: argv,
+    Ok(CompiledObligation {
+        obligation: CrateObligation {
+            task_id: task.task_id.clone(),
+            kind: task.task_kind.clone(),
+            step_name: step_name_for(&task.task_kind, &task.task_id),
+            gated_by: gates_for(task, executed),
+            matrix_key,
+            task_digest: digest,
+            run: argv,
+        },
+        native: helper,
+        compiler,
     })
 }
 
@@ -218,162 +304,6 @@ fn gates_for(task: &ProposedTask, executed: &BTreeSet<&str>) -> Vec<String> {
     gates
 }
 
-/// Render one validated crate model to its fixed IR job.
-///
-/// P08 order: helper staging, plan download (report identities bind
-/// the plan), restore shared sources (or Cargo-only registry), the
-/// per-root provider restore on opentofu roles, then MBX objects,
-/// then probe-and-fetch, then report-wrapped obligations, then one
-/// always-on crate-report upload carrying every entry. Readers never
-/// save. Rust setup (components, restore, fetch) emits only for rust
-/// roles; pure-tofu roles carry the opentofu driver with no Rust
-/// setup, mixed roles the union.
-#[expect(
-    clippy::too_many_arguments,
-    clippy::fn_params_excessive_bools,
-    reason = "one call site threads job scope plus driver selection"
-)]
-fn render_job(
-    label: &str,
-    suite_tools: crate::matrix_step::SuiteTools,
-    model: &CrateJob,
-    catalog: &ToolCatalog,
-    fetch_roots: &[String],
-    use_rust: bool,
-    use_mbx: bool,
-    use_nextest: bool,
-    use_opentofu: bool,
-    repo_has_mbx: bool,
-    acquire: Option<&Step>,
-    max_parallel_jobs: u32,
-) -> Result<Job, OrchestratorError> {
-    let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
-    steps.extend(acquire.cloned());
-    steps.push(crate::matrix_step::download_plan_step()?);
-    steps.push(crate::matrix_step::prepare_crate_tools_step(
-        catalog,
-        use_rust,
-        use_mbx,
-        use_nextest,
-        use_opentofu || suite_tools.opentofu,
-        suite_tools.generate_validators,
-    )?);
-    if use_rust {
-        steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
-    }
-    steps.extend(restore_step_for_crate(
-        label,
-        catalog,
-        fetch_roots,
-        use_rust,
-        use_mbx,
-        repo_has_mbx,
-    )?);
-    if use_opentofu {
-        let root = crate::tofu_cache::tofu_root_for_obligations(&model.obligations)?;
-        steps.push(crate::tofu_cache::restore_step_for_tofu_root(
-            label, catalog, &root,
-        )?);
-    }
-    steps.extend(mbx_objects_step(catalog, use_mbx)?);
-    if use_rust {
-        steps.extend(crate::source_prep::fetch_steps_for_crate(
-            catalog,
-            fetch_roots,
-        )?);
-    }
-    steps.extend(crate::workflow::wire_w1::maybe_task_cache_steps(
-        None,
-        TaskCacheMode::Off,
-        "",
-    )?);
-    for (index, obligation) in model.obligations.iter().enumerate() {
-        let downstream: Vec<String> = model.obligations[index + 1..]
-            .iter()
-            .map(|later| later.task_id.clone())
-            .collect();
-        // The first obligation declares the root job's concurrency cap;
-        // the renderer turns the marker into `strategy.max-parallel`.
-        let cap = (index == 0 && use_opentofu).then_some(max_parallel_jobs);
-        steps.push(crate::matrix_step::obligation_step(
-            obligation,
-            catalog,
-            &downstream,
-            cap,
-        )?);
-    }
-    steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
-    Ok(Job {
-        display_name: model.display_name.clone(),
-        runs_on: label.to_owned(),
-        timeout_minutes: JobTimeout::CRATE,
-        needs: vec![PLAN_JOB_ID.to_owned()],
-        condition: None,
-        permissions: None,
-        environment: None,
-        steps,
-    })
-}
-
-/// Restore step for one crate: shared sources, or Cargo-only registry.
-///
-/// Lockless emits nothing, and tofu roles restore providers through
-/// the separate provider-cache step (never here). Cargo-only repos
-/// (no MBX anywhere) restore via pinned `rust-cache` (read-only);
-/// every other lockful crate restores the shared `actions/cache`
-/// snapshot (read-only, never saves the shared key).
-fn restore_step_for_crate(
-    label: &str,
-    catalog: &ToolCatalog,
-    fetch_roots: &[String],
-    use_rust: bool,
-    use_mbx: bool,
-    repo_has_mbx: bool,
-) -> Result<Option<Step>, OrchestratorError> {
-    if !use_rust || fetch_roots.is_empty() {
-        return Ok(None);
-    }
-    let target = velnor_actions_contract::target_for_runner_label(label).ok_or_else(|| {
-        OrchestratorError::Contract {
-            problem: format!("bad_label:{label}"),
-        }
-    })?;
-    let rust = catalog.version(PinnedTool::Rust);
-    if !use_mbx && !repo_has_mbx {
-        let shared = format!(
-            "{}-{target}-{rust}",
-            crate::source_cache::RUST_CACHE_SHARED_PREFIX
-        );
-        return crate::source_cache::rust_cache_step(&shared, false).map(Some);
-    }
-    let key = crate::source_cache::sources_cache_key(target, rust, fetch_roots)?;
-    let prefix = crate::source_cache::sources_restore_prefix(&key);
-    crate::source_cache::sources_restore_step(&key, &[prefix]).map(Some)
-}
-
-/// MBX objects restore for MBX crates only (WF-3.52).
-///
-/// The action installs the catalog MBX pin through its `version` input,
-/// so action setup and the Mise-selected compiler share one proven
-/// identity instead of a floating `latest` executable.
-fn mbx_objects_step(
-    catalog: &ToolCatalog,
-    use_mbx: bool,
-) -> Result<Option<Step>, OrchestratorError> {
-    if !use_mbx {
-        return Ok(None);
-    }
-    let uses = PinnedActionRef::new(
-        "jdx/mr-boxington-action",
-        None,
-        MR_BOXINGTON_ACTION_SHA,
-        MR_BOXINGTON_ACTION_VERSION,
-    )?
-    .uses_value();
-    let mbx = catalog.version(PinnedTool::MrBoxington);
-    Ok(mbx_step_for_driver(&uses, RenderDriver::Mbx, mbx)?)
-}
-
 #[cfg(test)]
 #[path = "crate_jobs_tests.rs"]
 mod crate_jobs_tests;
@@ -393,3 +323,7 @@ mod crate_jobs_tofu_tests;
 #[cfg(test)]
 #[path = "crate_jobs_upload_tests.rs"]
 mod crate_jobs_upload_tests;
+
+#[cfg(test)]
+#[path = "crate_jobs_source_helper_tests.rs"]
+mod source_helper_tests;

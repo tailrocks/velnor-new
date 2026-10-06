@@ -1,328 +1,256 @@
-//! Release publish gates: OIDC purity, config binding, bootstrap token.
-use crate::impl_renderer_release_gates::{
-    ENV, FORGE_ENV, REPO, SHA, binding, bootstrap, gated_spec, invalid, job, job_steps,
-    policy_checkout, publish_argv, shell, source_checkout, spec, with_steps,
-};
-use std::collections::BTreeMap;
-use velnor_actions_contract::{Step, StepKind};
+//! Release publication scopes, evidence bindings, and receipt channels.
+use velnor_actions_contract::{SourceBoundOperation, StepKind};
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::release_gates::check_release_jobs;
-use velnor_actions_workflow_renderer::release_jobs::{ReleaseJobSpec, ReleaseRole};
-use velnor_actions_workflow_renderer::release_spec::publish_gate_condition;
-use velnor_actions_workflow_renderer::release_tree::{
-    RELEASE_BOOTSTRAP_CONFIG_PATH, RELEASE_CONFIG_PATH,
+use velnor_actions_workflow_renderer::release_jobs::ReleaseWorkflowSpec;
+use velnor_actions_workflow_renderer::{
+    ARTIFACT_RETENTION_DAYS, RUN_KEY_EXPR, UPLOAD_ARTIFACT_USES,
 };
 
-#[test]
-fn oidc_publish_carries_zero_token_material() -> Result<(), RenderError> {
-    assert!(check_release_jobs(&gated_spec()?, &binding()).is_ok());
-    let leaked = with_steps(
-        gated_spec()?,
-        "release-publish",
-        vec![
-            policy_checkout(Some("false"))?,
-            source_checkout(SHA, Some("true"))?,
-            shell(
-                "Publish",
-                &publish_argv(RELEASE_CONFIG_PATH),
-                &[
-                    ("TOKEN", "${{ secrets.CARGO_REGISTRY_TOKEN }}"),
-                    FORGE_ENV[0],
-                ],
-            ),
-        ],
-    )
-    .expect("job");
-    assert!(
-        invalid(check_release_jobs(&leaked, &binding()))
-            .expect("reject")
-            .starts_with("secret_outside_bootstrap:")
-    );
-    let tokened = with_steps(
-        gated_spec()?,
-        "release-publish",
-        vec![
-            policy_checkout(Some("false"))?,
-            source_checkout(SHA, Some("true"))?,
-            shell(
-                "Publish",
-                &publish_argv(RELEASE_CONFIG_PATH),
-                &[("CARGO_REGISTRY_TOKEN", "x"), FORGE_ENV[0]],
-            ),
-        ],
-    )
-    .expect("job");
-    assert!(
-        invalid(check_release_jobs(&tokened, &binding()))
-            .expect("reject")
-            .starts_with("registry_token_outside_bootstrap:")
-    );
-    Ok(())
-}
+use super::impl_renderer_release_gates::{
+    BOOTSTRAP_ENV, ENV, bootstrap_spec, gated_spec, invalid, job_steps, with_steps,
+};
 
-#[test]
-fn publish_binds_the_exact_generated_config() -> Result<(), RenderError> {
-    let unbound = with_steps(
-        gated_spec()?,
-        "release-publish",
-        vec![
-            policy_checkout(Some("false"))?,
-            source_checkout(SHA, Some("true"))?,
-            shell("Publish", &["release-plz", "release"], &FORGE_ENV),
-        ],
-    )
-    .expect("job");
-    assert_eq!(
-        invalid(check_release_jobs(&unbound, &binding())).expect("reject"),
-        "missing_config_binding:release-publish"
-    );
-    let swapped = with_steps(
-        gated_spec()?,
-        "release-publish",
-        vec![
-            policy_checkout(Some("false"))?,
-            source_checkout(SHA, Some("true"))?,
-            shell(
-                "Publish",
-                &publish_argv(RELEASE_BOOTSTRAP_CONFIG_PATH),
-                &FORGE_ENV,
-            ),
-        ],
-    )
-    .expect("job");
-    assert_eq!(
-        invalid(check_release_jobs(&swapped, &binding())).expect("reject"),
-        "missing_config_binding:release-publish"
-    );
-    Ok(())
-}
-
-#[test]
-fn release_plz_steps_require_the_forge_binding() -> Result<(), RenderError> {
-    for job_id in ["release-publish", "release-preflight"] {
-        let steps = if job_id == "release-publish" {
-            vec![
-                policy_checkout(Some("false"))?,
-                source_checkout(SHA, Some("true"))?,
-                shell("Publish", &publish_argv(RELEASE_CONFIG_PATH), &[]),
-            ]
-        } else {
-            vec![
-                policy_checkout(Some("false"))?,
-                source_checkout(SHA, Some("false"))?,
-                shell("Run", &publish_argv(RELEASE_CONFIG_PATH), &[]),
-            ]
-        };
-        let unbound = with_steps(gated_spec()?, job_id, steps).expect("job");
-        assert_eq!(
-            invalid(check_release_jobs(&unbound, &binding())).expect("reject"),
-            format!("missing_forge_binding:{job_id}"),
-            "for {job_id}"
-        );
-    }
-    let forged_argv = with_steps(
-        gated_spec()?,
-        "release-publish",
-        vec![
-            policy_checkout(Some("false"))?,
-            source_checkout(SHA, Some("true"))?,
-            shell(
-                "Publish",
-                &[
-                    "release-plz",
-                    "release",
-                    "--config",
-                    RELEASE_CONFIG_PATH,
-                    "${{ secrets.GITHUB_TOKEN }}",
-                ],
-                &FORGE_ENV,
-            ),
-        ],
-    )
-    .expect("job");
-    assert!(
-        invalid(check_release_jobs(&forged_argv, &binding()))
-            .expect("reject")
-            .starts_with("secret_outside_bootstrap:")
-    );
-    Ok(())
-}
-
-#[test]
-fn bootstrap_binds_exactly_one_env_token() -> Result<(), RenderError> {
-    let gate = publish_gate_condition(REPO, &bootstrap());
-    let token_job = job(
-        ReleaseRole::PublishBootstrap,
-        vec![
-            policy_checkout(Some("false"))?,
-            source_checkout(SHA, Some("true"))?,
-            shell(
-                "Publish",
-                &publish_argv(RELEASE_BOOTSTRAP_CONFIG_PATH),
-                &[
-                    (
-                        "CARGO_REGISTRY_TOKEN",
-                        "${{ secrets.CARGO_REGISTRY_TOKEN }}",
-                    ),
-                    FORGE_ENV[0],
-                ],
-            ),
-        ],
-        Some(&gate),
-        Some(ENV),
-    );
-    let mut jobs: BTreeMap<String, ReleaseJobSpec> = gated_spec()?.jobs.clone();
-    jobs.insert("release-bootstrap".to_owned(), token_job);
-    assert!(check_release_jobs(&spec(jobs.clone()), &binding()).is_ok());
-    let argv_secret = shell(
-        "Publish",
-        &[
-            "release-plz",
-            "release",
-            "--config",
-            RELEASE_BOOTSTRAP_CONFIG_PATH,
-            "${{ secrets.X }}",
-        ],
-        &FORGE_ENV,
-    );
-    let mut leaked = jobs.clone();
-    leaked.get_mut("release-bootstrap").expect("job").steps = vec![
-        policy_checkout(Some("false"))?,
-        source_checkout(SHA, Some("true"))?,
-        argv_secret,
-    ];
-    assert!(
-        invalid(check_release_jobs(&spec(leaked), &binding()))
-            .expect("reject")
-            .starts_with("secret_in_argv:")
-    );
-    let mut unbound = jobs.clone();
-    unbound.get_mut("release-bootstrap").expect("job").steps = vec![
-        policy_checkout(Some("false"))?,
-        source_checkout(SHA, Some("true"))?,
-        shell(
-            "Publish",
-            &publish_argv(RELEASE_BOOTSTRAP_CONFIG_PATH),
-            &FORGE_ENV,
-        ),
-    ];
-    assert!(
-        invalid(check_release_jobs(&spec(unbound), &binding()))
-            .expect("reject")
-            .starts_with("bootstrap_token_binding:")
-    );
-    let mut wrong_key = jobs;
-    wrong_key.get_mut("release-bootstrap").expect("job").steps = vec![
-        policy_checkout(Some("false"))?,
-        source_checkout(SHA, Some("true"))?,
-        shell(
-            "Publish",
-            &publish_argv(RELEASE_BOOTSTRAP_CONFIG_PATH),
-            &[
-                ("TOKEN", "${{ secrets.CARGO_REGISTRY_TOKEN }}"),
-                FORGE_ENV[0],
-            ],
-        ),
-    ];
-    assert!(
-        invalid(check_release_jobs(&spec(wrong_key), &binding()))
-            .expect("reject")
-            .starts_with("bootstrap_token_binding:")
-    );
-    Ok(())
-}
-
-#[test]
-fn verification_bypasses_are_rejected_on_publish_argv() -> Result<(), RenderError> {
-    for flag in [
-        "--no-verify",
-        "--allow-dirty",
-        "--no_verify",
-        "--allow_dirty",
-    ] {
-        let argv = [
-            "release-plz",
-            "release",
-            "--config",
-            RELEASE_CONFIG_PATH,
-            flag,
-        ];
-        let dirty = with_steps(
-            gated_spec()?,
-            "release-publish",
-            vec![
-                policy_checkout(Some("false"))?,
-                source_checkout(SHA, Some("true"))?,
-                shell("Publish", &argv, &FORGE_ENV),
-            ],
-        )
-        .expect("job");
-        assert_eq!(
-            invalid(check_release_jobs(&dirty, &binding())).expect("reject"),
-            "verify_bypass:release-publish",
-            "for {flag}"
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn dispatch_inputs_stay_out_of_publish_steps() -> Result<(), RenderError> {
-    let interpolated = with_steps(
-        gated_spec()?,
-        "release-publish",
-        vec![
-            policy_checkout(Some("false"))?,
-            source_checkout(SHA, Some("true"))?,
-            shell(
-                "Publish",
-                &[
-                    "release-plz",
-                    "release",
-                    "--config",
-                    RELEASE_CONFIG_PATH,
-                    "inputs.plan",
-                ],
-                &FORGE_ENV,
-            ),
-        ],
-    )
-    .expect("job");
-    assert!(
-        invalid(check_release_jobs(&interpolated, &binding()))
-            .expect("reject")
-            .starts_with("dispatch_input_in_steps:")
-    );
-    Ok(())
-}
-
-#[test]
-fn reconcile_is_credential_free_and_internal_ops_rejected() -> Result<(), RenderError> {
-    let leaked = with_steps(
-        gated_spec()?,
-        "release-reconcile",
-        vec![shell("Run", &["echo", "${{ secrets.TOKEN }}"], &[])],
-    )
-    .expect("job");
-    assert!(
-        invalid(check_release_jobs(&leaked, &binding()))
-            .expect("reject")
-            .starts_with("secret_outside_bootstrap:")
-    );
-    let internal = Step {
-        name: "Plan".to_owned(),
-        condition: None,
-        kind: StepKind::Internal {
-            operation: "plan-v1".to_owned(),
-        },
+fn mutate_helper_env(
+    workflow: ReleaseWorkflowSpec,
+    job_id: &str,
+    operation: SourceBoundOperation,
+    key: &str,
+    value: &str,
+) -> ReleaseWorkflowSpec {
+    let mut steps = job_steps(&workflow, job_id).expect("release job");
+    let step = steps
+        .iter_mut()
+        .find(|step| {
+            matches!(&step.kind, StepKind::SourceBoundHelper { invocation, .. }
+                if invocation.descriptor().operation() == operation)
+        })
+        .expect("release helper");
+    let StepKind::SourceBoundHelper { env, .. } = &mut step.kind else {
+        unreachable!("matched source helper")
     };
-    let mut steps = job_steps(&gated_spec()?, "release-preflight").expect("job");
-    steps.push(internal);
-    let injected = with_steps(gated_spec()?, "release-preflight", steps).expect("job");
-    assert!(
-        invalid(check_release_jobs(&injected, &binding()))
-            .expect("reject")
-            .starts_with("release_internal_op:")
+    env.insert(key.to_owned(), value.to_owned());
+    with_steps(workflow, job_id, steps).expect("release job")
+}
+
+fn helper_env(
+    workflow: &ReleaseWorkflowSpec,
+    job_id: &str,
+    operation: SourceBoundOperation,
+) -> std::collections::BTreeMap<String, String> {
+    job_steps(workflow, job_id)
+        .expect("release job")
+        .into_iter()
+        .find_map(|step| match step.kind {
+            StepKind::SourceBoundHelper { invocation, env }
+                if invocation.descriptor().operation() == operation =>
+            {
+                Some(env)
+            }
+            _ => None,
+        })
+        .expect("release helper")
+}
+
+#[test]
+fn oidc_and_bootstrap_scopes_cannot_mix_token_material() -> Result<(), RenderError> {
+    let oidc = mutate_helper_env(
+        gated_spec()?,
+        "release-registry-publish",
+        SourceBoundOperation::RustRegistryPublish,
+        "CARGO_REGISTRY_TOKEN",
+        "${{ secrets.CARGO_REGISTRY_TOKEN }}",
+    );
+    assert!(invalid(check_release_jobs(&oidc)).is_some());
+
+    let bootstrap = mutate_helper_env(
+        bootstrap_spec()?,
+        "release-registry-publish",
+        SourceBoundOperation::RustRegistryPublish,
+        "ACTIONS_ID_TOKEN_REQUEST_URL",
+        "${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}",
+    );
+    assert!(invalid(check_release_jobs(&bootstrap)).is_some());
+
+    let forge = mutate_helper_env(
+        gated_spec()?,
+        "release-forge-publish",
+        SourceBoundOperation::RustForgePublish,
+        "CARGO_REGISTRY_TOKEN",
+        "${{ secrets.CARGO_REGISTRY_TOKEN }}",
+    );
+    assert!(invalid(check_release_jobs(&forge)).is_some());
+    Ok(())
+}
+
+#[test]
+fn proof_policy_source_and_artifact_handles_are_independently_bound() -> Result<(), RenderError> {
+    let source = mutate_helper_env(
+        gated_spec()?,
+        "release-preflight",
+        SourceBoundOperation::ReleaseAdmissionDefaultBranch,
+        "APPROVED_SOURCE_SHA",
+        super::impl_renderer_release_gates::OTHER_SHA,
+    );
+    assert!(invalid(check_release_jobs(&source)).is_some());
+
+    let policy = mutate_helper_env(
+        gated_spec()?,
+        "release-preflight",
+        SourceBoundOperation::RustReleaseForgePreflight,
+        "RELEASE_RECONCILE_POLICY",
+        "forged-policy",
+    );
+    assert!(invalid(check_release_jobs(&policy)).is_some());
+
+    let artifact = mutate_helper_env(
+        gated_spec()?,
+        "release-registry-publish",
+        SourceBoundOperation::RustRegistryArtifactProof,
+        "RELEASE_PACKAGE_ARTIFACT_ID",
+        "${{ needs.release-forge-publish.outputs.forge-receipt-artifact-id }}",
+    );
+    assert!(invalid(check_release_jobs(&artifact)).is_some());
+    Ok(())
+}
+
+fn assert_receipt_channel(
+    workflow: &ReleaseWorkflowSpec,
+    job_id: &str,
+    expected_id: &str,
+    prefix: &str,
+    path: &str,
+    expected_always: bool,
+) {
+    let steps = job_steps(workflow, job_id).expect("release job");
+    let Some(last) = steps.last() else {
+        panic!("release channel")
+    };
+    let StepKind::Action {
+        env, uses, with, ..
+    } = &last.kind
+    else {
+        panic!("release channel action")
+    };
+    assert_eq!(last.id.as_ref().map(|id| id.as_str()), Some(expected_id));
+    assert_eq!(
+        last.condition.as_deref(),
+        expected_always.then_some("always()")
+    );
+    assert!(env.is_empty());
+    assert_eq!(uses, UPLOAD_ARTIFACT_USES);
+    let expected_name = format!("velnor-release-{prefix}-{RUN_KEY_EXPR}");
+    assert_eq!(with.get("name"), Some(&expected_name));
+    assert_eq!(with.get("path").map(String::as_str), Some(path));
+    assert_eq!(
+        with.get("if-no-files-found").map(String::as_str),
+        Some("error")
+    );
+    assert_eq!(with.get("retention-days").map(String::as_str), Some("30"));
+    assert_eq!(ARTIFACT_RETENTION_DAYS, 30);
+}
+
+#[test]
+fn final_receipt_channels_are_always_and_exactly_role_owned() -> Result<(), RenderError> {
+    let workflow = gated_spec()?;
+    for (job_id, expected_id, prefix, path, expected_always) in [
+        (
+            "release-package",
+            "release-package-artifact",
+            "package",
+            "release-package",
+            false,
+        ),
+        (
+            "release-preflight",
+            "release-preflight-artifact",
+            "preflight",
+            "release-preflight/evidence.json",
+            false,
+        ),
+        (
+            "release-registry-publish",
+            "release-registry-receipt-artifact",
+            "registry",
+            "release-registry/receipt.json",
+            true,
+        ),
+        (
+            "release-forge-publish",
+            "release-forge-receipt-artifact",
+            "forge",
+            "release-forge/receipt.json",
+            true,
+        ),
+        (
+            "release-reconcile",
+            "release-reconcile-receipt-artifact",
+            "reconcile",
+            "release-receipt/receipt.json",
+            true,
+        ),
+        (
+            "release-preparation-source",
+            "release-proposal-artifact",
+            "proposal",
+            "release-proposal/evidence.json",
+            false,
+        ),
+        (
+            "release-preparation",
+            "release-preparation-receipt-artifact",
+            "preparation",
+            "release-preparation/evidence.json",
+            true,
+        ),
+    ] {
+        assert_receipt_channel(
+            &workflow,
+            job_id,
+            expected_id,
+            prefix,
+            path,
+            expected_always,
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn bootstrap_preparation_stays_neutral() -> Result<(), RenderError> {
+    let workflow = bootstrap_spec()?;
+    assert!(check_release_jobs(&workflow).is_ok());
+    for job_id in ["release-preparation-source", "release-preparation"] {
+        let job = workflow.jobs.get(job_id).expect("preparation job");
+        assert_eq!(
+            job.environment.as_deref(),
+            if job_id == "release-preparation" {
+                Some(ENV)
+            } else {
+                None
+            }
+        );
+        for step in &job.steps {
+            if let StepKind::SourceBoundHelper { env, .. } = &step.kind {
+                assert!(!env.contains_key("CARGO_REGISTRY_TOKEN"));
+                assert!(!env.contains_key("ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
+            }
+        }
+    }
+    let publish = helper_env(
+        &workflow,
+        "release-registry-publish",
+        SourceBoundOperation::RustRegistryPublish,
+    );
+    assert_eq!(
+        publish.get("CARGO_REGISTRY_TOKEN").map(String::as_str),
+        Some("${{ secrets.CARGO_REGISTRY_TOKEN }}")
+    );
+    assert_eq!(
+        workflow.jobs["release-registry-publish"]
+            .environment
+            .as_deref(),
+        Some(BOOTSTRAP_ENV)
     );
     Ok(())
 }

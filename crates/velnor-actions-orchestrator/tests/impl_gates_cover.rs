@@ -294,7 +294,7 @@ fn merge_rejects_covered_claims_without_manifest() -> TestResult {
     let request = serde_json::json!({
         "schema": 1,
         "run_key": "local",
-        "actual_event": "pull_request",
+        "actual_scope": "affected", "actual_event": "pull_request",
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": reports,
@@ -325,6 +325,7 @@ fn merge_group_classifies_like_pull_request() -> TestResult {
             "base": base,
             "head": head,
             "event": event,
+            "scope": if event == "schedule" { "full" } else { "affected" },
             "root": root.display().to_string(),
         });
         let response = plan_internal(&request.to_string())?;
@@ -344,7 +345,14 @@ fn merge_group_classifies_like_pull_request() -> TestResult {
         velnor_actions_contract::Trust::Pr,
         "speculative merge content stays PR-scoped"
     );
-    let push = plan_for("push")?;
-    assert_eq!(push.trust, velnor_actions_contract::Trust::Trusted);
+    for event in ["push", "schedule", "workflow_dispatch"] {
+        let plan = plan_for(event)?;
+        plan.validate()?;
+        assert_eq!(
+            plan.trust,
+            velnor_actions_contract::Trust::Pr,
+            "{event} without protected branch evidence stays PR-scoped"
+        );
+    }
     Ok(())
 }

@@ -8,16 +8,15 @@ use velnor_actions_contract::{
     ContractError, EdgeKind, ProposedTask, TaskEdge, TaskGraph, TaskNode, digest_b3,
 };
 use velnor_actions_mise::GitRequest;
-use velnor_actions_rust::{local_edge_pairs, manifest_edges};
 
-use crate::discover::Discovery;
 use crate::git_paths::split_nul_paths;
 use crate::schedule::resource_exclusions;
-use crate::select_affected::manifest_dir;
 use crate::validators::{validate_diff_rev, validate_select_diff_args, validate_select_show_args};
 
-/// Max base manifests fetched; beyond this, broaden instead of reading.
-const MAX_BASE_MANIFEST_BATCH: usize = 512;
+#[path = "select_base_graph.rs"]
+mod package_graph;
+
+pub(crate) use package_graph::{base_graph, candidate_graph};
 
 /// Head paths added since base: manifests absent at base, skipped by batch.
 ///
@@ -54,12 +53,12 @@ fn filtered_files(
 ) -> Result<BTreeSet<String>, String> {
     validate_diff_rev(base, "bad_base")?;
     validate_diff_rev(head, "bad_head")?;
-    let range = format!("{base}...{head}");
     let mut args = vec![
         OsString::from("--name-only"),
         OsString::from("--no-renames"),
         OsString::from(format!("--diff-filter={filter}")),
-        OsString::from(range),
+        OsString::from(base),
+        OsString::from(head),
         OsString::from("--"),
     ];
     validate_select_diff_args(&args).map_err(|err| err.to_string())?;
@@ -71,63 +70,6 @@ fn filtered_files(
         .require_success("git")
         .map_err(|err| err.to_string())?;
     split_nul_paths(&output.stdout)
-}
-
-/// Head local-path edges from discovery records, as neutral pairs.
-///
-/// Converted at the rust boundary via [`local_edge_pairs`]; selection
-/// never sees adapter edge types.
-pub(crate) fn head_edges(discovery: &Discovery) -> Vec<(String, String)> {
-    let mut edges = Vec::new();
-    for workspace in &discovery.workspaces {
-        edges.extend(local_edge_pairs(&workspace.record.edges));
-    }
-    edges
-}
-
-/// Base local-path edges from base-revision manifests, in head-id space.
-///
-/// Every wanted manifest is read at `base` with one `git show` each; path
-/// dependencies resolve to the head package owning the target directory, so
-/// removed or renamed edges still select their head consumers. Manifests
-/// added since base are new and contribute nothing; over-cap sets and
-/// fetch or parse failures are errors that broaden via the caller.
-pub(crate) fn base_edges(
-    root: &Path,
-    base: &str,
-    head: &str,
-    discovery: &Discovery,
-) -> Result<Vec<(String, String)>, String> {
-    let mut packages: Vec<(String, String)> = Vec::new();
-    let mut wanted: Vec<(String, String)> = Vec::new();
-    for workspace in &discovery.workspaces {
-        for package in &workspace.record.packages {
-            if package.in_workspace && !package.external {
-                packages.push((manifest_dir(&package.manifest), package.id.clone()));
-                wanted.push((package.manifest.clone(), package.id.clone()));
-            }
-        }
-    }
-    let added = added_files(root, base, head)?;
-    wanted.retain(|(manifest, _)| !added.contains(manifest));
-    if wanted.len() > MAX_BASE_MANIFEST_BATCH {
-        return Err("base_batch_over_cap".to_owned());
-    }
-    let specs: Vec<&str> = wanted
-        .iter()
-        .map(|(manifest, _)| manifest.as_str())
-        .collect();
-    let texts = base_manifests(root, base, &specs)?;
-    let mut edges = Vec::new();
-    for ((manifest, id), text) in wanted.iter().zip(texts.iter()) {
-        edges.extend(manifest_edges(
-            text,
-            id,
-            &manifest_dir(manifest),
-            &packages,
-        )?);
-    }
-    Ok(local_edge_pairs(&edges))
 }
 
 /// Base contents of every wanted manifest via one `git show` each.

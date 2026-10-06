@@ -21,6 +21,11 @@ mod identities_tests;
 mod internal_plan_tests;
 #[path = "snapshot.rs"]
 pub(crate) mod snapshot;
+#[path = "internal_plan_toolchain.rs"]
+mod toolchain;
+pub(crate) use toolchain::toolchain_id_for_runner;
+#[path = "workload_identity.rs"]
+pub(crate) mod workload_identity;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -29,7 +34,6 @@ use velnor_actions_contract::{
     ProposedTask, Stack, StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity, TaskInput,
     VcsInputs, component_id_for_unit, digest_b3, input_digest,
 };
-use velnor_actions_mise::ToolCatalog;
 use velnor_actions_rust::{CompileDriver, Evidence, entry_metadata_for_task};
 
 use crate::discover::Discovery;
@@ -86,6 +90,9 @@ pub(crate) fn adapter_metadata(
     task: &ProposedTask,
     evidence: &[Evidence],
 ) -> Result<serde_json::Value, ContractError> {
+    if Stack::from_id(&task.stack_id) == Some(Stack::Workload) {
+        return workload_identity::metadata(task);
+    }
     if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
         let ids: Vec<String> = evidence
             .iter()
@@ -145,7 +152,9 @@ pub(crate) fn cache_ids_for(
     toolchain: &str,
 ) -> Result<EntryCacheIds, ContractError> {
     let workspace_id = digest_b3(task.identity.unit_path.as_bytes());
-    let format_id = if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
+    let format_id = if Stack::from_id(&task.stack_id) == Some(Stack::Workload) {
+        digest_b3(b"workload-no-cache-v1")
+    } else if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
         identities::cache_format_id_for_tofu()
     } else {
         identities::cache_format_id_for(CompileDriver::parse(&task.identity.compile_driver)?)
@@ -166,14 +175,6 @@ pub(crate) fn cache_ids_for(
 /// derives from the responsibility-based lane digest, never an ordinal.
 pub(crate) fn target_dir_for_lane_id(lane_id: &str) -> String {
     velnor_actions_workflow_renderer::steps::target_dir_for_lane(lane_id)
-}
-
-/// Toolchain identity digest for one task.
-pub(crate) fn toolchain_id(
-    task: &ProposedTask,
-    catalog: &ToolCatalog,
-) -> Result<String, ContractError> {
-    identities::toolchain_digest_for(task, catalog)
 }
 
 /// Record task-cache reuse outputs on entry metadata (REUSE-3, CACHE-2.8).
@@ -215,6 +216,10 @@ pub(crate) struct IdentityInputs<'a> {
     pub(crate) extension: StackExtension,
     /// Canonical digest over the task's complete input closure.
     pub(crate) closure_digest: &'a str,
+    /// Exact compiled native execution identity before semantic hashing.
+    pub(crate) helper_obligation: Option<&'a velnor_actions_contract::HelperObligationDescriptor>,
+    /// Independent native source owner's exact closed semantic recipe.
+    pub(crate) native_recipe: Option<&'a velnor_actions_contract::NativeValidationDescriptor>,
 }
 
 /// Input digest over the contract identity envelope.
@@ -226,14 +231,19 @@ pub(crate) struct IdentityInputs<'a> {
 /// misses it.
 pub(crate) fn task_identity_digest(inputs: &IdentityInputs<'_>) -> Result<String, ContractError> {
     let task = inputs.task;
+    if task.stack_id == velnor_actions_tofu::STACK_ID {
+        velnor_actions_tofu::normalized_root_for_proposal(task)?;
+    }
     let mut dependencies = task.depends_on.clone();
     dependencies.sort();
     let mut features = task.identity.features.clone();
     features.sort();
     let mut flags = task.identity.flags.clone();
     flags.sort();
-    let root = if task.stack_id == velnor_actions_tofu::STACK_ID {
-        velnor_actions_tofu::normalized_root_for_proposal(task)?;
+    let root = if matches!(
+        Stack::from_id(&task.stack_id),
+        Some(Stack::Workload | Stack::Tofu)
+    ) {
         task.identity.project_root.as_str()
     } else {
         project_root_of(inputs.manifest)
@@ -275,6 +285,8 @@ pub(crate) fn task_identity_digest(inputs: &IdentityInputs<'_>) -> Result<String
             target: inputs.generator.target.clone(),
         },
         stack_extension: inputs.extension.clone(),
+        helper_obligation: inputs.helper_obligation.cloned(),
+        native_recipe: inputs.native_recipe.cloned(),
     };
     input_digest(&identity)
 }
@@ -334,6 +346,7 @@ pub(crate) fn plan_packages(discovery: &Discovery, selected: &BTreeSet<&str>) ->
         }
     }
     packages.extend(tofu_packages(discovery, selected));
+    packages.extend(workload_identity::packages(discovery, selected));
     packages.sort_by(|left, right| left.package_id.cmp(&right.package_id));
     packages
 }

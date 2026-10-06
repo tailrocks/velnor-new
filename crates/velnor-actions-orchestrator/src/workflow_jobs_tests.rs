@@ -4,12 +4,15 @@
 
 use super::*;
 use velnor_actions_contract::StepKind;
+use velnor_actions_mise::PREPARE_PINNED_TOOLS_STEP;
 
 /// Internal operation of one step, if any.
 fn operation_of(step: &Step) -> Option<&str> {
     match &step.kind {
         StepKind::Internal { operation } => Some(operation),
-        StepKind::Action { .. } | StepKind::Shell { .. } => None,
+        StepKind::Action { .. } | StepKind::Shell { .. } | StepKind::SourceBoundHelper { .. } => {
+            None
+        }
     }
 }
 
@@ -81,6 +84,62 @@ fn plan_job_checks_out_full_history_for_archaeology() {
     assert!(
         !with.contains_key("fetch-depth"),
         "lint stays shallow: {with:?}"
+    );
+}
+
+#[test]
+fn consumer_attempts_planning_before_every_rust_preparation_step() {
+    let job = plan_job(
+        "ubuntu-26.04",
+        Some(checkout_action().expect("acquire position fixture")),
+        &ToolCatalog::pinned(),
+        true,
+        true,
+        true,
+        false,
+        &[String::new()],
+    )
+    .expect("consumer plan");
+    let early_at = job
+        .steps
+        .iter()
+        .position(|step| {
+            operation_of(step)
+                == Some(velnor_actions_workflow_renderer::steps::EARLY_PLAN_OPERATION)
+        })
+        .expect("early attempt");
+    let plan_at = job
+        .steps
+        .iter()
+        .position(|step| operation_of(step) == Some(PLAN_OPERATION))
+        .expect("stable plan");
+    let small = job
+        .steps
+        .iter()
+        .find(|step| step.name == "Prepare planning tools")
+        .expect("small planning tools");
+    let StepKind::Shell { run, env } = &small.kind else {
+        panic!("planning shell")
+    };
+    assert!(!env.contains_key("RUSTUP_HOME"));
+    assert!(
+        run.iter()
+            .all(|word| !word.contains("rust@") && !word.contains("mr-boxington@"))
+    );
+    assert!(early_at < plan_at);
+    for step in &job.steps[early_at + 1..plan_at] {
+        assert!(
+            step.condition.as_ref().is_some_and(|condition| {
+                condition
+                    .contains(velnor_actions_workflow_renderer::early_plan::NEEDS_CARGO_CONDITION)
+            }),
+            "fallback preparation must require Cargo: {}",
+            step.name
+        );
+    }
+    assert!(
+        job.steps[plan_at].condition.is_none(),
+        "stable outputs always materialize"
     );
 }
 
@@ -168,24 +227,26 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
             prepare_at.is_some_and(|prepare| Some(prepare) < write_at && Some(prepare) < plan_at),
             "prepare must precede request and plan: {names:?}"
         );
-        let StepKind::Shell { run, env } = &job.steps[prepare_at.expect("prepare step")].kind
+        let StepKind::SourceBoundHelper { invocation, env } =
+            &job.steps[prepare_at.expect("prepare step")].kind
         else {
-            panic!("prepare must be a shell step: {names:?}");
+            panic!("Rust prepare must bind compiled source: {names:?}");
         };
+        let owner = velnor_actions_mise::catalog::rust_prepare::record_for_invocation(
+            invocation,
+            env,
+            env!("CARGO_PKG_VERSION"),
+        )
+        .expect("exact preparation owner environment");
+        let install = velnor_actions_mise::catalog::rust_prepare::install_argv(
+            owner.invocation(),
+            env!("CARGO_PKG_VERSION"),
+        )
+        .expect("owner-bound Rust installation");
+        let run = &install;
         assert_eq!(run[0], "mise");
         let install_at = run.iter().position(|arg| arg == "install");
-        let mut specs = vec![
-            catalog.tool_spec(PinnedTool::Rust),
-            catalog.tool_spec(PinnedTool::Actionlint),
-            catalog.tool_spec(PinnedTool::Shellcheck),
-            catalog.tool_spec(PinnedTool::Zizmor),
-        ];
-        if use_mbx {
-            specs.insert(1, catalog.tool_spec(PinnedTool::MrBoxington));
-        }
-        if use_nextest {
-            specs.push(catalog.tool_spec(PinnedTool::Nextest));
-        }
+        let specs = expected_plan_install_specs(&catalog, use_mbx, use_nextest);
         assert_eq!(
             install_at.map(|at| &run[at + 1..]),
             Some(specs.as_slice()),
@@ -206,67 +267,6 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
             "prepare pins the lockfile off so installs never rewrite it: {env:?}"
         );
     }
-}
-
-#[test]
-fn pure_tofu_plan_drops_all_rust_setup() {
-    use velnor_actions_mise::PREPARE_RUST_COMPONENTS_STEP;
-
-    use crate::source_prep::FETCH_SOURCES_STEP;
-    let catalog = ToolCatalog::pinned();
-    let job = plan_job(
-        "ubuntu-26.04",
-        None,
-        &catalog,
-        false,
-        false,
-        false,
-        true,
-        &[],
-    )
-    .expect("plan job");
-    let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
-    assert!(
-        !names.contains(&PREPARE_RUST_COMPONENTS_STEP),
-        "no components step: {names:?}"
-    );
-    assert!(
-        !names
-            .iter()
-            .any(|name| name.starts_with(FETCH_SOURCES_STEP)),
-        "no {FETCH_SOURCES_STEP}: {names:?}"
-    );
-    let prepare_at = names
-        .iter()
-        .position(|name| *name == PREPARE_PINNED_TOOLS_STEP)
-        .expect("prepare step");
-    let StepKind::Shell { run, env } = &job.steps[prepare_at].kind else {
-        panic!("prepare must be a shell step: {names:?}");
-    };
-    let install_at = run
-        .iter()
-        .position(|arg| arg == "install")
-        .expect("install argv");
-    let specs = &run[install_at + 1..];
-    assert_eq!(
-        specs,
-        [
-            catalog.tool_spec(PinnedTool::Actionlint),
-            catalog.tool_spec(PinnedTool::Shellcheck),
-            catalog.tool_spec(PinnedTool::Zizmor),
-            catalog.tool_spec(PinnedTool::Opentofu),
-        ]
-        .as_slice(),
-        "pure-tofu plan installs opentofu plus validators: {run:?}"
-    );
-    for key in ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME", "RUSTUP_TOOLCHAIN"] {
-        assert!(!env.contains_key(key), "prepare carries no {key}: {env:?}");
-    }
-    assert_eq!(
-        env.get("MISE_NO_CONFIG").map(String::as_str),
-        Some("1"),
-        "isolation overlay stays: {env:?}"
-    );
 }
 
 #[test]
@@ -305,4 +305,41 @@ fn final_job_needs_plan_crates_and_lint() {
     );
     let job = final_job("ubuntu-26.04", &[], None, &catalog).expect("final job");
     assert_eq!(job.needs, [PLAN_JOB_ID.to_owned(), LINT_JOB_ID.to_owned()]);
+}
+
+fn expected_plan_install_specs(
+    catalog: &ToolCatalog,
+    use_mbx: bool,
+    use_nextest: bool,
+) -> Vec<String> {
+    let mut specs = vec![
+        catalog
+            .tool_spec(PinnedTool::Rust)
+            .expect("qualified selector"),
+        catalog
+            .tool_spec(PinnedTool::Actionlint)
+            .expect("qualified selector"),
+        catalog
+            .tool_spec(PinnedTool::Shellcheck)
+            .expect("qualified selector"),
+        catalog
+            .tool_spec(PinnedTool::Zizmor)
+            .expect("qualified selector"),
+    ];
+    if use_mbx {
+        specs.insert(
+            1,
+            catalog
+                .tool_spec(PinnedTool::MrBoxington)
+                .expect("qualified selector"),
+        );
+    }
+    if use_nextest {
+        specs.push(
+            catalog
+                .tool_spec(PinnedTool::Nextest)
+                .expect("qualified selector"),
+        );
+    }
+    specs
 }

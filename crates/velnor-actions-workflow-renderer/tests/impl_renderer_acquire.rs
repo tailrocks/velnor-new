@@ -1,13 +1,38 @@
 //! Helper provisioning: staged-helper gate plus provenance typing.
 use std::collections::BTreeMap;
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract::{StepKind, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
     ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, HelperProvenance, RELEASE_COMMIT_ENV, RenderError,
     STAGED_BINARY_PREFIX, acquire_velnor_step, checkout_step, merge_step, plan_step,
-    provision_acquire_step,
+    provision_acquire_step, render_workflow_ir,
 };
 
 use super::impl_renderer_fixtures::*;
+
+#[test]
+fn early_planning_cannot_bypass_admission_through_nonstrict_render() -> Result<(), RenderError> {
+    let early_job = job(
+        "plan",
+        "Plan",
+        Vec::new(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            acquire_fixture()?,
+            velnor_actions_workflow_renderer::early_plan::early_plan_step()?,
+            plan_step(),
+        ],
+    );
+    assert!(
+        render_workflow_ir(
+            &fixture_ir(vec![early_job]),
+            WorkflowPolicy::ConsumerV1,
+            None,
+            &fixture_ctx(),
+        )
+        .is_err_and(|error| format!("{error:?}").contains("early_plan_requires_strict_admission"))
+    );
+    Ok(())
+}
 
 #[test]
 fn strict_rejects_unstaged_internal() -> Result<(), RenderError> {
@@ -50,21 +75,14 @@ fn strict_rejects_unstaged_internal() -> Result<(), RenderError> {
 #[test]
 fn provenance_release_ok_seed_fails() -> Result<(), RenderError> {
     let staged = format!("{STAGED_BINARY_PREFIX}{VERSION}");
-    let argv = vec![
-        "sh".to_owned(),
-        "-c".to_owned(),
-        format!(
-            "curl \"$VELNOR_ASSET_URL\" -o {staged} && echo \"$VELNOR_ASSET_SHA256\" | sha256sum -c -"
-        ),
-    ];
     let provenance = HelperProvenance::ReleaseAsset {
         url: "https://example.invalid/r".to_owned(),
         sha256: "c".repeat(64),
         commit: "c".repeat(40),
     };
-    let step = provision_acquire_step(&provenance, argv)?;
+    let step = provision_acquire_step(&provenance, &staged)?;
     assert_eq!(step.name, ACQUIRE_NAME);
-    let err = provision_acquire_step(&HelperProvenance::SeedRequired, Vec::new())
+    let err = provision_acquire_step(&HelperProvenance::SeedRequired, &staged)
         .expect_err("seed must fail closed");
     assert!(format!("{err:?}").contains("seed_required"), "{err:?}");
     Ok(())
@@ -73,22 +91,13 @@ fn provenance_release_ok_seed_fails() -> Result<(), RenderError> {
 #[test]
 fn provenance_commit_records_and_validates() -> Result<(), RenderError> {
     let staged = format!("{STAGED_BINARY_PREFIX}{VERSION}");
-    let argv = || {
-        vec![
-            "sh".to_owned(),
-            "-c".to_owned(),
-            format!(
-                "curl \"$VELNOR_ASSET_URL\" -o {staged} && echo \"$VELNOR_ASSET_SHA256\" | sha256sum -c -"
-            ),
-        ]
-    };
     let commit = "d".repeat(40);
     let provenance = HelperProvenance::ReleaseAsset {
         url: "https://example.invalid/r".to_owned(),
         sha256: "c".repeat(64),
         commit: commit.clone(),
     };
-    let step = provision_acquire_step(&provenance, argv())?;
+    let step = provision_acquire_step(&provenance, &staged)?;
     let StepKind::Shell { env, .. } = &step.kind else {
         panic!("acquire must be a shell step");
     };
@@ -108,7 +117,7 @@ fn provenance_commit_records_and_validates() -> Result<(), RenderError> {
             commit: bad.clone(),
         };
         assert!(
-            provision_acquire_step(&provenance, argv())
+            provision_acquire_step(&provenance, &staged)
                 .is_err_and(|err| format!("{err:?}").contains("bad_release_commit")),
             "malformed commit must fail: {bad:?}"
         );
@@ -117,7 +126,7 @@ fn provenance_commit_records_and_validates() -> Result<(), RenderError> {
 }
 
 #[test]
-fn acquire_requires_verify_wiring() {
+fn acquisition_factory_rejects_invalid_staged_paths() {
     let staged = format!("{STAGED_BINARY_PREFIX}{VERSION}");
     let env = BTreeMap::from([
         (ASSET_SHA_ENV.to_owned(), "a".repeat(64)),
@@ -127,9 +136,25 @@ fn acquire_requires_verify_wiring() {
         ),
         (RELEASE_COMMIT_ENV.to_owned(), "b".repeat(40)),
     ]);
-    let bare = vec!["fetch".to_owned(), staged];
-    assert!(
-        acquire_velnor_step(bare, &env)
-            .is_err_and(|err| { format!("{err:?}").contains("acquire_without_verify") })
-    );
+    let step = acquire_velnor_step(&staged, &env).expect("canonical acquire step");
+    let StepKind::Shell { run, .. } = &step.kind else {
+        panic!("acquire must be a shell step");
+    };
+    let script = run.last().expect("inline acquire script");
+    assert!(script.contains("--proto '=https'"));
+    assert!(script.contains(ASSET_URL_ENV));
+    assert!(script.contains(ASSET_SHA_ENV));
+    assert!(script.contains("sha256sum -c -"));
+    assert!(script.contains("chmod +x"));
+    for invalid in [
+        format!("{staged}; touch /tmp/pwned"),
+        format!("{staged}$(touch /tmp/pwned)"),
+        format!("{staged}/child"),
+        "/tmp/velnor-actions-0.1.0".to_owned(),
+    ] {
+        assert!(
+            acquire_velnor_step(&invalid, &env).is_err(),
+            "invalid staged path accepted: {invalid}"
+        );
+    }
 }

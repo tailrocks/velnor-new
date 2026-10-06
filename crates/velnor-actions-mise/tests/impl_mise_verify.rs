@@ -70,19 +70,22 @@ fn verify_proves_cargo_route_with_one_probe() -> Result<(), String> {
     assert_eq!(step.driver(), RouteDriver::Cargo);
     assert_eq!(step.runner(), TestRunner::CargoTest);
     assert_eq!(step.runner().as_str(), "cargo_test");
-    assert_eq!(step.specs(), &["rust@1.98.1".to_owned()]);
+    assert_eq!(
+        step.specs(),
+        &["rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()]
+    );
     assert!(velnor_actions_contract::is_valid_digest(
         step.cache_format_id()
     ));
     assert_eq!(
-        step.probes(&pinned()),
+        step.probes(&pinned()).map_err(|err| err.to_string())?,
         vec![strings(&[
             "mise",
             "--no-config",
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
+            "rust[profile=minimal,components=clippy,rustfmt]@1.98.1",
             "--",
             "cargo",
             "--version",
@@ -108,11 +111,14 @@ fn verify_mbx_route_reports_tool_without_cargo_test_probe() -> Result<(), String
     .map_err(|err| err.to_string())?;
     assert_eq!(
         step.specs(),
-        &["rust@1.98.1".to_owned(), "mr-boxington@1.21.0".to_owned()]
+        &[
+            "rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned(),
+            "mr-boxington@1.21.1".to_owned()
+        ]
     );
-    let probes = step.probes(&catalog);
+    let probes = step.probes(&catalog).map_err(|err| err.to_string())?;
     assert_eq!(probes.len(), 1, "route probe covers cargo_test: {probes:?}");
-    assert!(probes[0].iter().any(|arg| arg == "mr-boxington@1.21.0"));
+    assert!(probes[0].iter().any(|arg| arg == "mr-boxington@1.21.1"));
     assert_eq!(probes[0].last(), Some(&OsString::from("--version")));
     assert_eq!(step.target(), "x86_64-unknown-linux-gnu");
     assert_eq!(step.platform(), "ubuntu-26.04");
@@ -125,7 +131,7 @@ fn verify_nextest_adds_runner_probe_per_driver() -> Result<(), String> {
     let cargo = verify(RouteDriver::Cargo, TestRunner::CargoNextest)?;
     assert_eq!(cargo.runner().as_str(), "cargo_nextest");
     assert_eq!(
-        cargo.probes(&catalog),
+        cargo.probes(&catalog).map_err(|err| err.to_string())?,
         vec![
             strings(&[
                 "mise",
@@ -133,7 +139,7 @@ fn verify_nextest_adds_runner_probe_per_driver() -> Result<(), String> {
                 "--no-env",
                 "--no-hooks",
                 "exec",
-                "rust@1.98.1",
+                "rust[profile=minimal,components=clippy,rustfmt]@1.98.1",
                 "--",
                 "cargo",
                 "--version",
@@ -144,7 +150,7 @@ fn verify_nextest_adds_runner_probe_per_driver() -> Result<(), String> {
                 "--no-env",
                 "--no-hooks",
                 "exec",
-                "rust@1.98.1",
+                "rust[profile=minimal,components=clippy,rustfmt]@1.98.1",
                 "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
                 "--",
                 "cargo",
@@ -154,7 +160,7 @@ fn verify_nextest_adds_runner_probe_per_driver() -> Result<(), String> {
         ]
     );
     let mbx = verify(RouteDriver::Mbx, TestRunner::CargoNextest)?;
-    let probes = mbx.probes(&catalog);
+    let probes = mbx.probes(&catalog).map_err(|err| err.to_string())?;
     assert_eq!(probes.len(), 2);
     assert_eq!(
         probes[1],
@@ -164,8 +170,8 @@ fn verify_nextest_adds_runner_probe_per_driver() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
-            "mr-boxington@1.21.0",
+            "rust[profile=minimal,components=clippy,rustfmt]@1.98.1",
+            "mr-boxington@1.21.1",
             "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
             "--",
             "mbx",
@@ -181,7 +187,7 @@ fn verify_commands_match_probes_and_env() -> Result<(), String> {
     let catalog = pinned();
     let step = verify(RouteDriver::Cargo, TestRunner::CargoNextest)?;
     let commands = step.commands(&catalog).map_err(|err| err.to_string())?;
-    let probes = step.probes(&catalog);
+    let probes = step.probes(&catalog).map_err(|err| err.to_string())?;
     assert_eq!(commands.len(), probes.len());
     for (command, probe) in commands.iter().zip(probes.iter()) {
         assert_eq!(command.program(), "mise");
@@ -194,6 +200,7 @@ fn verify_commands_match_probes_and_env() -> Result<(), String> {
         ("MISE_NO_ENV", "1"),
         ("MISE_NO_HOOKS", "1"),
         ("MISE_LOCKFILE", "0"),
+        ("RUSTUP_AUTO_INSTALL", "0"),
         ("MISE_AUTO_INSTALL", "false"),
         ("MISE_EXEC_AUTO_INSTALL", "false"),
         ("MISE_RUSTUP_HOME", "/velnor/rustup"),
@@ -206,7 +213,7 @@ fn verify_commands_match_probes_and_env() -> Result<(), String> {
             "missing {key}={value}: {env:?}"
         );
     }
-    assert_eq!(env.len(), 9, "exact step env, no drift: {env:?}");
+    assert_eq!(env.len(), 11, "exact step env, no drift: {env:?}");
     Ok(())
 }
 

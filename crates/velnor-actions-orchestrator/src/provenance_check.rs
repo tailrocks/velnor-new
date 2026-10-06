@@ -166,9 +166,8 @@ pub(crate) fn validate_provenance(
 
 /// Validate one task entry: identities, run binding, freshness, proof.
 ///
-/// Every entry passes every check: a structured proof adds its binding
-/// check on top instead of replacing the identity, run, and freshness
-/// checks. The observing run must be the carrying manifest's own run:
+/// Every entry requires structured proof in addition to its identity, run
+/// and freshness checks. The observing run must be the carrying manifest's own run:
 /// an entry "observed" by any other run is a carried-proof identity
 /// mismatch. A same-run proof run is success-bound by the manifest's
 /// own trusted checks; a forwarded proof requires authenticated lineage
@@ -195,10 +194,12 @@ pub(crate) fn validate_task_entry(
         .as_ref()
         .is_none_or(|proof| proof.validate().is_ok());
     reject(fresh_ok, "bad_external_data")?;
-    if let Some(proof) = &task.proof {
-        proof.validate().map_err(|_| "bad_task_proof".to_owned())?;
-        reject(proof_matches_task(proof, task), "proof_mismatch")?;
-    }
+    let proof = task
+        .proof
+        .as_ref()
+        .ok_or_else(|| "missing_task_proof".to_owned())?;
+    proof.validate().map_err(|_| "bad_task_proof".to_owned())?;
+    reject(proof_matches_task(proof, task), "proof_mismatch")?;
     Ok(())
 }
 

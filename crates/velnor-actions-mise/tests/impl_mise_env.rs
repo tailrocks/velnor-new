@@ -7,6 +7,9 @@ use velnor_actions_mise::{
     RUSTUP_TOOLCHAIN_ENV, ToolCatalog, is_allowed_mise_subcommand, toolchain_env,
 };
 
+#[path = "impl_mise_env_tofu.rs"]
+mod tofu;
+
 #[test]
 fn toolchain_env_names_are_exact() {
     assert_eq!(MISE_RUSTUP_HOME_ENV, "MISE_RUSTUP_HOME");
@@ -33,27 +36,28 @@ fn rustup_toolchain_is_exact_catalog_pin() -> Result<(), String> {
 }
 
 #[test]
-fn toolchain_env_triple_is_exact() {
+fn toolchain_env_has_exact_owned_roots_and_catalog_pin() {
+    let expected = [
+        ("MISE_DATA_DIR", "/velnor/mise"),
+        ("RUSTUP_TOOLCHAIN", "1.98.1"),
+        ("CARGO_HOME", "/velnor/cargo"),
+        ("MISE_CARGO_HOME", "/velnor/cargo"),
+        ("MISE_RUSTUP_HOME", "/velnor/rustup"),
+        ("RUSTUP_HOME", "/velnor/rustup"),
+    ]
+    .into_iter()
+    .map(|(key, value)| (OsString::from(key), OsString::from(value)))
+    .collect::<Vec<_>>();
     assert_eq!(
         toolchain_env("/velnor/rustup", "/velnor/cargo", "1.98.1"),
-        vec![
-            (
-                OsString::from("MISE_RUSTUP_HOME"),
-                OsString::from("/velnor/rustup")
-            ),
-            (
-                OsString::from("MISE_CARGO_HOME"),
-                OsString::from("/velnor/cargo")
-            ),
-            (OsString::from("RUSTUP_TOOLCHAIN"), OsString::from("1.98.1")),
-        ]
+        expected,
     );
 }
 
 #[test]
 fn exec_disables_implicit_install() -> Result<(), String> {
     let command = IsolatedCommand::mise_exec(
-        &["rust@1.98.1".to_owned()],
+        &["rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()],
         &[OsString::from("cargo"), OsString::from("--version")],
     )
     .map_err(|err| err.to_string())?;
@@ -67,7 +71,7 @@ fn exec_disables_implicit_install() -> Result<(), String> {
     let overlay = IsolatedCommand::env_overlay();
     assert!(
         !overlay.iter().any(|(key, _)| key == "MISE_AUTO_INSTALL"),
-        "shared overlay stays the quartet: {overlay:?}"
+        "shared overlay keeps the rustup install gate: {overlay:?}"
     );
     Ok(())
 }
@@ -75,13 +79,15 @@ fn exec_disables_implicit_install() -> Result<(), String> {
 #[test]
 fn auto_install_predicate_separates_exec_from_install() -> Result<(), String> {
     let exec = IsolatedCommand::mise_exec(
-        &["rust@1.98.1".to_owned()],
+        &["rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()],
         &[OsString::from("cargo"), OsString::from("--version")],
     )
     .map_err(|err| err.to_string())?;
     assert!(exec.disables_auto_install());
-    let install = IsolatedCommand::mise_install(&["rust@1.98.1".to_owned()])
-        .map_err(|err| err.to_string())?;
+    let install = IsolatedCommand::mise_install(&[
+        "rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned(),
+    ])
+    .map_err(|err| err.to_string())?;
     assert!(!install.disables_auto_install());
     let extended = exec
         .with_env(&toolchain_env("/velnor/rustup", "/velnor/cargo", "1.98.1"))
@@ -92,8 +98,10 @@ fn auto_install_predicate_separates_exec_from_install() -> Result<(), String> {
 
 #[test]
 fn install_and_direct_keep_install_enabled() -> Result<(), String> {
-    let install = IsolatedCommand::mise_install(&["rust@1.98.1".to_owned()])
-        .map_err(|err| err.to_string())?;
+    let install = IsolatedCommand::mise_install(&[
+        "rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned(),
+    ])
+    .map_err(|err| err.to_string())?;
     assert!(
         !install
             .full_env()
@@ -114,14 +122,14 @@ fn install_and_direct_keep_install_enabled() -> Result<(), String> {
 #[test]
 fn with_env_appends_toolchain_pairs() -> Result<(), String> {
     let command = IsolatedCommand::mise_exec(
-        &["rust@1.98.1".to_owned()],
+        &["rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()],
         &[OsString::from("cargo"), OsString::from("--version")],
     )
     .map_err(|err| err.to_string())?;
     let extra = toolchain_env("/velnor/rustup", "/velnor/cargo", "1.98.1");
     let extended = command.with_env(&extra).map_err(|err| err.to_string())?;
     let full = extended.full_env();
-    assert_eq!(&full[full.len() - 3..], extra.as_slice());
+    assert_eq!(&full[full.len() - extra.len()..], extra.as_slice());
     assert!(
         full.iter().any(|(key, _)| key == "MISE_EXEC_AUTO_INSTALL"),
         "verification disable survives extension: {full:?}"
@@ -171,9 +179,11 @@ fn oidc_token_pair_never_reaches_task_env() -> Result<(), String> {
         assert!(CREDENTIAL_ENV_KEYS.contains(&key), "{key} in strip set");
         assert!(is_reserved_env_key(key), "{key} reserved");
         let pair = [(OsString::from(key), OsString::from("sentinel"))];
-        let exec =
-            IsolatedCommand::mise_exec(&["rust@1.98.1".to_owned()], &[OsString::from("cargo")])
-                .map_err(|err| err.to_string())?;
+        let exec = IsolatedCommand::mise_exec(
+            &["rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()],
+            &[OsString::from("cargo")],
+        )
+        .map_err(|err| err.to_string())?;
         assert!(
             matches!(
                 exec.with_env(&pair),
@@ -207,9 +217,11 @@ fn endpoint_selectors_are_reserved_and_unsettable() -> Result<(), String> {
         assert!(is_denied_endpoint_key(key), "{key} must match");
         assert!(is_reserved_env_key(key), "{key} reserved");
         let pair = [(OsString::from(key), OsString::from("sentinel"))];
-        let exec =
-            IsolatedCommand::mise_exec(&["rust@1.98.1".to_owned()], &[OsString::from("cargo")])
-                .map_err(|err| err.to_string())?;
+        let exec = IsolatedCommand::mise_exec(
+            &["rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()],
+            &[OsString::from("cargo")],
+        )
+        .map_err(|err| err.to_string())?;
         assert!(
             matches!(
                 exec.with_env(&pair),
@@ -236,12 +248,16 @@ fn mise_prefix_is_reserved_except_owned_homes() -> Result<(), String> {
         "MISE_NO_CONFIG",
         "MISE_LOCKFILE",
         "MISE_SUDO",
+        "MISE_OWNED_CARGO_WRAPPER",
+        "MISE_OWNED_CARGO_WRAPPER_SHA256",
     ] {
         assert!(is_reserved_env_key(key), "{key} reserved");
         let pair = [(OsString::from(key), OsString::from("sentinel"))];
-        let exec =
-            IsolatedCommand::mise_exec(&["rust@1.98.1".to_owned()], &[OsString::from("cargo")])
-                .map_err(|err| err.to_string())?;
+        let exec = IsolatedCommand::mise_exec(
+            &["rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()],
+            &[OsString::from("cargo")],
+        )
+        .map_err(|err| err.to_string())?;
         assert!(
             matches!(
                 exec.with_env(&pair),
@@ -262,79 +278,45 @@ fn mise_prefix_is_reserved_except_owned_homes() -> Result<(), String> {
 }
 
 #[test]
-fn tofu_families_are_reserved_except_automation_pair() {
-    for key in [
-        "TF_DATA_DIR",
-        "TF_CLI_CONFIG_FILE",
-        "TF_PLUGIN_CACHE_DIR",
-        "TF_VAR_secret",
-        "TF_CLI_ARGS",
-        "TF_CLI_ARGS_plan",
-        "TF_TOKEN_app",
-        "TF_WORKSPACE",
-        "TF_LOG",
-        "TF_LOG_PATH",
-        "TF_REGISTRY_CLIENT_TIMEOUT",
-        "TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE",
-        "TOFU_FUTURE_KEY",
-        "CHECKPOINT_DISABLE",
-        "CHECKPOINT_TIMEOUT",
-    ] {
-        assert!(is_reserved_env_key(key), "{key} reserved");
-    }
-    for key in ["TF_IN_AUTOMATION", "TF_INPUT"] {
-        assert!(!is_reserved_env_key(key), "{key} stays allowed");
-    }
+fn caller_cannot_supply_a_complete_owned_wrapper_authority_pair() {
+    let declared = [
+        (
+            OsString::from("MISE_OWNED_CARGO_WRAPPER"),
+            OsString::from("/tmp/velnor/mise/installs/mr-boxington/mbx"),
+        ),
+        (
+            OsString::from("MISE_OWNED_CARGO_WRAPPER_SHA256"),
+            OsString::from("a".repeat(64)),
+        ),
+    ];
+    assert!(matches!(
+        IsolatedCommand::repo_task("sh", Vec::new(), &declared),
+        Err(MiseError::InvalidStepInput { field, value })
+            if field == "MISE_OWNED_CARGO_WRAPPER" && value == "reserved_env_key"
+    ));
 }
 
 #[test]
-fn tofu_reserved_keys_fail_loud_via_with_env_and_repo_task() -> Result<(), String> {
-    for key in [
-        "TF_DATA_DIR",
-        "TF_CLI_CONFIG_FILE",
-        "TF_VAR_hostile",
-        "TF_CLI_ARGS_plan",
-        "CHECKPOINT_DISABLE",
-    ] {
-        let pair = [(OsString::from(key), OsString::from("sentinel"))];
-        let exec =
-            IsolatedCommand::mise_exec(&["rust@1.98.1".to_owned()], &[OsString::from("cargo")])
-                .map_err(|err| err.to_string())?;
-        assert!(
-            matches!(
-                exec.with_env(&pair),
-                Err(MiseError::InvalidStepInput { field, value })
-                    if field == key && value == "reserved_env_key"
-            ),
-            "{key} must fail loud via with_env"
-        );
-        let declared = vec![(OsString::from(key), OsString::from("sentinel"))];
-        assert!(
-            matches!(
-                IsolatedCommand::repo_task("sh", Vec::new(), &declared),
-                Err(MiseError::InvalidStepInput { field, value })
-                    if field == key && value == "reserved_env_key"
-            ),
-            "{key} must fail loud via repo_task"
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn automation_pair_appends_as_allowed_extra() -> Result<(), String> {
-    let command = IsolatedCommand::mise_exec(
-        &["rust@1.98.1".to_owned()],
-        &[OsString::from("cargo"), OsString::from("--version")],
+fn caller_cannot_set_rustup_auto_install() -> Result<(), String> {
+    assert!(is_reserved_env_key("RUSTUP_AUTO_INSTALL"));
+    let exec = IsolatedCommand::mise_exec(
+        &["rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()],
+        &[OsString::from("cargo")],
     )
     .map_err(|err| err.to_string())?;
-    let pair = vec![
-        (OsString::from("TF_IN_AUTOMATION"), OsString::from("1")),
-        (OsString::from("TF_INPUT"), OsString::from("0")),
-    ];
-    let extended = command.with_env(&pair).map_err(|err| err.to_string())?;
-    let full = extended.full_env();
-    assert_eq!(&full[full.len() - 2..], pair.as_slice());
+    for value in ["0", "1", "false", ""] {
+        let declared = [(OsString::from("RUSTUP_AUTO_INSTALL"), OsString::from(value))];
+        for result in [
+            exec.clone().with_env(&declared),
+            IsolatedCommand::repo_task("sh", Vec::new(), &declared),
+        ] {
+            assert!(matches!(
+                result,
+                Err(MiseError::InvalidStepInput { field, value })
+                    if field == "RUSTUP_AUTO_INSTALL" && value == "reserved_env_key"
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -370,10 +352,15 @@ fn subcommand_allowlist_is_exec_install_run() {
 
 #[test]
 fn every_built_mise_subcommand_is_allowlisted() -> Result<(), String> {
-    let exec = IsolatedCommand::mise_exec(&["rust@1.98.1".to_owned()], &[OsString::from("cargo")])
-        .map_err(|err| err.to_string())?;
-    let install = IsolatedCommand::mise_install(&["rust@1.98.1".to_owned()])
-        .map_err(|err| err.to_string())?;
+    let exec = IsolatedCommand::mise_exec(
+        &["rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()],
+        &[OsString::from("cargo")],
+    )
+    .map_err(|err| err.to_string())?;
+    let install = IsolatedCommand::mise_install(&[
+        "rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned(),
+    ])
+    .map_err(|err| err.to_string())?;
     for argv in [exec.argv(), install.argv()] {
         assert_eq!(argv[0], OsString::from("mise"));
         let subcommand = argv

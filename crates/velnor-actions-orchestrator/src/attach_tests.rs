@@ -13,12 +13,19 @@ use velnor_actions_workflow_renderer::render::{RenderContext, WORKFLOW_PATH};
 /// Minimal crate job covering the crate attach branch.
 fn legacy_task_job() -> Job {
     Job {
+        cache_mode: None,
         display_name: "Rust / demo".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         timeout_minutes: JobTimeout::CRATE,
         needs: vec![PLAN_JOB_ID.to_owned()],
         condition: None,
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps: vec![crate::workflow::wire_w1::checkout_step().expect("checkout")],
     }
@@ -27,9 +34,12 @@ fn legacy_task_job() -> Job {
 /// Bare IR shell shared by the attach fixtures.
 fn bare_ir(jobs: BTreeMap<String, velnor_actions_contract::Job>) -> WorkflowIr {
     WorkflowIr {
+        cache_mode: velnor_actions_contract::CacheMode::Read,
+        run_name: None,
         name: "CI".to_owned(),
         triggers: Trigger {
             pull_request_types: Vec::new(),
+            push_tags: Vec::new(),
             push_branches: Vec::new(),
             merge_group: false,
             workflow_dispatch: None,
@@ -88,7 +98,7 @@ fn lock_acquire_inserts_digest_verified_stage() {
         ),
         (
             "publish-baseline".to_owned(),
-            baseline_publish_job("ubuntu-26.04", "main", None).expect("publish job"),
+            baseline_publish_job("ubuntu-26.04", "main", None, &catalog).expect("publish job"),
         ),
     ]));
     assert!(attach_lock_acquire(&mut ir, &lock, "ubuntu-26.04", "0.1.0").is_ok());
@@ -215,10 +225,12 @@ fn preseed_attach_builds_once_and_sets_mode() {
             ),
             (
                 "publish-baseline".to_owned(),
-                baseline_publish_job("ubuntu-26.04", "main", None).expect("publish job"),
+                baseline_publish_job("ubuntu-26.04", "main", None, &catalog).expect("publish job"),
             ),
         ])),
         support: None,
+        receipt_drafts: Vec::new(),
+        mbx_finalization: Default::default(),
         context: RenderContext {
             generator_version: "0.1.0".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
@@ -229,6 +241,9 @@ fn preseed_attach_builds_once_and_sets_mode() {
             candidate: None,
             preseed: false,
             plan_consumer_env: std::collections::BTreeMap::new(),
+            source_helpers: Vec::new(),
+            native_pages_approvals: Vec::new(),
+            native_publish_approvals: Vec::new(),
         },
         actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),
     };
@@ -314,6 +329,8 @@ fn preseed_fixture(use_mbx: bool, fetch_roots: &[String]) -> WorkflowPlan {
             ),
         ])),
         support: None,
+        receipt_drafts: Vec::new(),
+        mbx_finalization: Default::default(),
         context: RenderContext {
             generator_version: "0.1.0".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
@@ -324,6 +341,9 @@ fn preseed_fixture(use_mbx: bool, fetch_roots: &[String]) -> WorkflowPlan {
             candidate: None,
             preseed: false,
             plan_consumer_env: BTreeMap::new(),
+            source_helpers: Vec::new(),
+            native_pages_approvals: Vec::new(),
+            native_publish_approvals: Vec::new(),
         },
         actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),
     }
@@ -344,8 +364,7 @@ fn assert_owned_homes(steps: &[Step], name: &str) {
 }
 
 #[test]
-fn preseed_restores_mbx_builds_after_sources_with_homes() {
-    use velnor_actions_workflow_renderer::cache_p08::SAVE_SOURCES_NAME;
+fn unqualified_cache_preserves_current_source_preseed_build_and_homes() {
     use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
     let mut plan = preseed_fixture(true, &[String::new()]);
     attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").expect("attach");
@@ -357,42 +376,19 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
             .position(|step| *step == name)
             .unwrap_or_else(|| panic!("missing {name}: {names:?}"))
     };
-    let (restore, mbx, probe, build, verify, save) = (
-        at(RESTORE_SOURCES_NAME),
-        at(MBX_RESTORE_NAME),
+    assert!(
+        !names.contains(&MBX_RESTORE_NAME),
+        "unqualified restore: {names:?}"
+    );
+    let (probe, build, verify) = (
         at(crate::source_prep::FETCH_SOURCES_STEP),
         at(PRESEED_BUILD_NAME),
         at(PRESEED_VERIFY_NAME),
-        at(SAVE_SOURCES_NAME),
     );
-    assert!(
-        restore < mbx && mbx < probe && probe < build && build < verify && verify < save,
-        "preseed order: {names:?}"
-    );
+    assert!(probe < build && build < verify, "preseed order: {names:?}");
     assert_owned_homes(steps, PRESEED_BUILD_NAME);
     assert_owned_homes(steps, PRESEED_VERIFY_NAME);
 }
 
-#[test]
-fn preseed_skips_mbx_restore_for_cargo_only_plans() {
-    use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
-    let mut plan = preseed_fixture(false, &[String::new()]);
-    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").expect("attach");
-    let steps = &plan.ir.jobs["plan"].steps;
-    let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
-    assert!(
-        !names.contains(&MBX_RESTORE_NAME),
-        "cargo-only plans stay rust-cache-only: {names:?}"
-    );
-    let probe = names
-        .iter()
-        .position(|step| *step == crate::source_prep::FETCH_SOURCES_STEP)
-        .expect("sources step");
-    let build = names
-        .iter()
-        .position(|step| *step == PRESEED_BUILD_NAME)
-        .expect("build step");
-    assert!(probe < build, "build anchors after sources: {names:?}");
-    assert_owned_homes(steps, PRESEED_BUILD_NAME);
-    assert_owned_homes(steps, PRESEED_VERIFY_NAME);
-}
+#[path = "attach_preseed_cargo_tests.rs"]
+mod cargo_preseed;

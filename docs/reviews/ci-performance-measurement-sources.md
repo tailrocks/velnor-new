@@ -138,6 +138,39 @@ No nightly flag, `RUSTC_BOOTSTRAP`, profiling flag or linker override was added.
 
 ## Remaining qualification limits
 
+### Native interface candidate
+
+The upstream source candidate now has immutable completed reports, typed native
+subprocess observations, actual package-resolution snapshots and immutable
+enrollment/ACK/failure receipts. ACKs bind the exact typed event and digest;
+checked reconciliation includes cumulative counters, durations and per-unit
+outputs. This remains a candidate until the exact source/build/catalog gate
+passes. A local native integrity result is separate from hosted qualification.
+
+The original owning Cargo capture retains private proof of the same spawned
+child, terminal status and both stream EOF boundaries. Mutating its public or
+private retained representation invalidates that proof. The native gate joins
+actual emitted/restored output paths and retained file identities/digests to
+Cargo artifact filenames. It does not derive native unit identity from artifact
+names. A wrapper cache hit still requires Cargo `fresh=false`; it may have no
+actual compiler subprocess. Duplicate paths, repeated unbound invocations,
+unknown outcomes and orphan process rows cannot establish that relation.
+
+Startup shim hashes and immutable dispatch snapshots do not establish complete
+admission by themselves. A native ledger must close atomically and prove every
+accepted enrollment terminal before publication. Detached or late dispatch
+cannot silently disappear into a compiler-zero claim. An admission-limited
+result needs an explicit lifetime and exclusions; broad task coverage remains
+unknown when those exclusions matter. No task is killed or changed for telemetry.
+
+Build-script executable replacement currently breaks the original compiled
+output relation unless its native transformation owner supplies a separate
+supported witness. A Cargo build-script message still cannot prove execution.
+Rustdoc hit finalization is a real subprocess; Cargo JSON does not expose a
+general independent rustdoc output/unit identity. Separate linker duration
+remains unavailable: compiler/link work is combined. These unavailable relations
+must remain explicit, while genuine measured process counters survive.
+
 T01–T03 still need fresh hosted runners, immutable candidate/configuration and
 an isolated namespace. Aggregate v5 counters alone cannot prove zero avoidable
 eligible third-party compilation. Full obligation correctness, task-result

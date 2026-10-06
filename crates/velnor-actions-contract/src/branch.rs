@@ -10,21 +10,15 @@
 /// start with a dot or hyphen, end with a dot or `.lock`, or contain `..`.
 #[must_use]
 pub fn is_valid_branch_name(value: &str) -> bool {
-    !value.is_empty()
+    crate::is_valid_git_ref_fragment(value)
         && value.len() <= 255
         && value != "HEAD"
-        && !value.contains("..")
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'-' | b'_' | b'.'))
-        && value.split('/').all(|part| {
-            !part.is_empty()
-                && !part.starts_with(['.', '-'])
-                && !part.ends_with('.')
-                && part
-                    .rsplit_once('.')
-                    .is_none_or(|(_, suffix)| suffix != "lock")
-        })
+        && value
+            .split('/')
+            .all(|part| !part.starts_with('-') && !part.ends_with('.'))
 }
 
 #[cfg(test)]

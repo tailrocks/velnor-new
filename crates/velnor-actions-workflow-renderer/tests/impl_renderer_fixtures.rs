@@ -8,12 +8,11 @@ use velnor_actions_workflow_renderer::{
     ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, MiseSetup,
     RELEASE_COMMIT_ENV, RenderContext, RenderError, STAGED_BINARY_PREFIX, ValidatorCommand,
     acquire_velnor_step, checkout_step, plan_step, render_workflow_ir, render_workflow_ir_strict,
-    shell_step,
+    setup::MiseBootstrap, shell_step,
 };
 
 pub(crate) const VERSION: &str = "0.1.0";
 pub(crate) const LABEL: &str = "ubuntu-26.04";
-pub(crate) const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
 pub(crate) const MISE_VERSION: &str = "2026.9.18";
 pub(crate) const MISE_SHA256: &str =
     "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4";
@@ -24,10 +23,80 @@ pub(crate) fn checkout_pin() -> String {
 }
 
 pub(crate) fn mise() -> MiseSetup {
+    mise_setup(MISE_VERSION, MISE_SHA256)
+}
+
+use sha2::{Digest, Sha256};
+use velnor_actions_contract::{
+    CompiledSourceHelper, HelperInvocation, SourceBoundHelper, SourceBoundOperation,
+    ToolCacheDomain,
+};
+
+fn mise_setup(version: &str, sha256: &str) -> MiseSetup {
+    let domains = [
+        ToolCacheDomain::Planning,
+        ToolCacheDomain::Full,
+        ToolCacheDomain::NpmBootstrap,
+        ToolCacheDomain::BunBootstrap,
+        ToolCacheDomain::TofuBootstrap,
+        ToolCacheDomain::GradleBootstrap,
+    ];
+    let labels = [
+        "ubuntu-26.04",
+        "ubuntu-24.04",
+        "ubuntu-22.04",
+        "ubuntu-26.04-arm",
+        "ubuntu-24.04-arm",
+        "macos-26",
+        "macos-15",
+        "macos-26-intel",
+        "macos-15-intel",
+    ];
+    let source = velnor_actions_contract::generated_source("0.1.0", "exit 0\n")
+        .expect("neutral fixture source");
+    let digest = Sha256::digest(source.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    let operation = SourceBoundOperation::MiseBootstrap;
+    let descriptor = SourceBoundHelper::compiled(operation, operation.path(), &digest)
+        .expect("fixture descriptor");
+    let invocation =
+        HelperInvocation::compiled(descriptor, Vec::new(), Vec::new()).expect("fixture invocation");
+    let mut bootstraps = BTreeMap::new();
+    for domain in domains {
+        for label in labels
+            .into_iter()
+            .filter(|label| velnor_actions_contract::tool_target_for_runner_label(label).is_some())
+        {
+            let target = velnor_actions_contract::tool_target_for_runner_label(label)
+                .expect("supported fixture runner label");
+            let environment = BTreeMap::from([
+                ("MISE_DATA_DIR".to_owned(), domain.root().to_owned()),
+                ("VELNOR_MISE_SHA256".to_owned(), sha256.to_owned()),
+                ("VELNOR_MISE_VERSION".to_owned(), version.to_owned()),
+                ("VELNOR_MISE_TARGET".to_owned(), target.to_owned()),
+                (
+                    "VELNOR_QUALIFIED_TOOL_IDENTITY".to_owned(),
+                    format!("qualified-tools@{}", "a".repeat(64)),
+                ),
+            ]);
+            let helper = CompiledSourceHelper::compiled(invocation.clone(), source.clone())
+                .expect("fixture record")
+                .with_environment(environment);
+            bootstraps.insert(
+                (domain, label.to_owned()),
+                MiseBootstrap {
+                    target: target.to_owned(),
+                    binary_sha256: sha256.to_owned(),
+                    helper,
+                },
+            );
+        }
+    }
     MiseSetup {
-        uses: MISE_USES.to_owned(),
-        version: MISE_VERSION.to_owned(),
-        sha256: MISE_SHA256.to_owned(),
+        version: version.to_owned(),
+        bootstraps,
     }
 }
 
@@ -42,16 +111,20 @@ pub(crate) fn fixture_ctx() -> RenderContext {
         candidate: None,
         preseed: false,
         plan_consumer_env: std::collections::BTreeMap::new(),
+        native_pages_approvals: Vec::new(),
+        native_publish_approvals: Vec::new(),
+        source_helpers: mise()
+            .bootstraps
+            .into_values()
+            .map(|bootstrap| bootstrap.helper)
+            .collect(),
     }
 }
 
 pub(crate) fn acquire_fixture() -> Result<Step, RenderError> {
     let staged = format!("{STAGED_BINARY_PREFIX}{VERSION}");
-    let script = format!(
-        "mkdir -p $RUNNER_TEMP/velnor/bin && curl -fsSL \"$VELNOR_ASSET_URL\" -o {staged} && echo \"$VELNOR_ASSET_SHA256  {staged}\" | sha256sum -c - && chmod +x {staged}"
-    );
     acquire_velnor_step(
-        vec!["sh".to_owned(), "-c".to_owned(), script],
+        &staged,
         &BTreeMap::from([
             (ASSET_SHA_ENV.to_owned(), "a".repeat(64)),
             (
@@ -82,12 +155,19 @@ pub(crate) fn job(id: &str, display: &str, needs: Vec<String>, steps: Vec<Step>)
     (
         id.to_owned(),
         Job {
+            cache_mode: None,
             display_name: display.to_owned(),
             runs_on: LABEL.to_owned(),
             timeout_minutes: JobTimeout::CRATE,
             needs,
             condition: None,
             permissions: None,
+            tool_producer: None,
+            mbx_producer: None,
+            source_producer: None,
+            native_pages_deploy: None,
+            native_publish: None,
+            outputs: Vec::new(),
             environment: None,
             steps,
         },
@@ -96,12 +176,15 @@ pub(crate) fn job(id: &str, display: &str, needs: Vec<String>, steps: Vec<Step>)
 
 pub(crate) fn fixture_ir(jobs: Vec<(String, Job)>) -> WorkflowIr {
     WorkflowIr {
+        cache_mode: velnor_actions_contract::CacheMode::Read,
+        run_name: None,
         name: "CI".to_owned(),
         triggers: Trigger {
             pull_request_types: ["opened", "synchronize", "reopened", "ready_for_review"]
                 .iter()
                 .map(ToString::to_string)
                 .collect(),
+            push_tags: Vec::new(),
             push_branches: vec!["main".to_owned()],
             merge_group: true,
             workflow_dispatch: None,

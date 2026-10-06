@@ -6,8 +6,9 @@ use std::path::Path;
 use velnor_actions_contract::{Plan, canonical_json_bytes, digest_b3};
 use velnor_actions_mise::ToolCatalog;
 
-use crate::cover::shard::BaselineLookup;
+use crate::cover::shard_baseline::{self, BaselineLookup};
 use crate::merge::BaselineManifest;
+use crate::run_select::BaselineArtifactReceipt;
 
 /// Fetch only the plan-selected parent, bypassing arbitrary staged input.
 ///
@@ -38,12 +39,24 @@ pub(super) fn retrieve_typed_baseline_to(
     let Some(branch) = super::default_branch_for(catalog, run_dir, repo) else {
         return false;
     };
-    let Some(parent) = resolve_planned(plan, repo, &branch, |args| {
-        BaselineLookup::run(catalog, run_dir, args)
-    }) else {
+    let Some(parent) = resolve_planned(
+        plan,
+        repo,
+        &branch,
+        |args| BaselineLookup::run(catalog, run_dir, args),
+        |lookup, receipt| {
+            shard_baseline::artifact_transport::download_archive(
+                catalog,
+                run_dir,
+                lookup,
+                receipt,
+                velnor_actions_mise::RuntimePaths::full(),
+            )
+        },
+    ) else {
         return false;
     };
-    super::stage_manifest(run_dir, &parent)
+    super::stage_manifest(run_dir, parent.manifest())
 }
 
 /// Exact claim extracted only after strict typed plan validation.
@@ -68,11 +81,16 @@ impl ParentClaim {
             name: raw.get("artifact_name")?.as_str()?.to_owned(),
             digest: raw.get("manifest_digest")?.as_str()?.to_owned(),
         };
-        let derived = crate::cover_baseline::lookup_artifact_name(plan, &claim.base).ok()?;
-        (plan.base.as_deref() == Some(&claim.base)
-            && claim.name == derived
-            && claim.artifact_id == crate::cover_compat::baseline_artifact_numeric_id(&derived))
-        .then_some(claim)
+        let compatibility = crate::cover_compat::baseline_compat_for_plan(plan).ok()?;
+        let derived =
+            velnor_actions_contract::artifact_id_for_baseline(&claim.base, &compatibility).ok()?;
+        if plan.base.as_deref() != Some(&claim.base)
+            || claim.name != derived
+            || claim.artifact_id != crate::cover_compat::baseline_artifact_numeric_id(&derived)
+        {
+            return None;
+        }
+        Some(claim)
     }
 
     fn matches(&self, manifest: &BaselineManifest) -> bool {
@@ -90,44 +108,46 @@ pub(super) fn resolve_planned(
     repo: &str,
     branch: &str,
     mut run: impl FnMut(Vec<OsString>) -> Result<String, String>,
-) -> Option<BaselineManifest> {
+    mut download: impl FnMut(&BaselineLookup, &BaselineArtifactReceipt) -> Result<Vec<u8>, String>,
+) -> Option<shard_baseline::AcquiredBaseline> {
     let claim = ParentClaim::from_plan(plan)?;
     let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
     let lookup = BaselineLookup::new(&claim.base, workflow, branch, repo).ok()?;
     let listed = run(lookup.artifacts_args(claim.run_id)).ok()?;
-    crate::run_select::select_baseline_artifact(&listed, &claim.name).ok()?;
-    let temp = tempfile::tempdir().ok()?;
-    run(lookup
-        .download_args(&claim.name, claim.run_id, temp.path())
-        .ok()?)
-    .ok()?;
-    let payload = read_parent(temp.path(), &claim)?;
-    let endpoint = format!(
-        "repos/{repo}/actions/runs/{}/attempts/{}",
-        claim.run_id, payload.run_attempt
-    );
-    let text = run(vec![OsString::from("api"), OsString::from(endpoint)]).ok()?;
-    authentic_attempt(&text, &payload, repo, branch, workflow).then_some(payload)
-}
-
-/// Exact single-file archive layout and digest, never a staged plan parent.
-fn read_parent(dir: &Path, claim: &ParentClaim) -> Option<BaselineManifest> {
-    let entry = dir.join(&claim.name);
-    let text = crate::retrieve_reports::read_staged_text(
-        &entry.join("baseline.json"),
-        crate::retrieve_reports::MAX_STAGED_REPORT_BYTES,
+    let receipts = crate::run_select::select_named_baseline_artifacts(
+        &listed,
+        &claim.name,
+        &claim.base,
+        branch,
+        claim.run_id,
     )
     .ok()?;
-    let value = crate::internal_plan::snapshot::parse_canonical_json(&text).ok()?;
-    let candidate: BaselineManifest = serde_json::from_value(value).ok()?;
-    let manifest = crate::cover_baseline::baseline_entry_for(
-        &entry,
-        &claim.base,
-        claim.run_id,
-        candidate.run_attempt,
-        claim.artifact_id,
-    )?;
-    claim.matches(&manifest).then_some(manifest)
+    let mut acquired_match = None;
+    for receipt in receipts {
+        let Ok(bytes) = download(&lookup, &receipt) else {
+            continue;
+        };
+        let Ok(verified) = shard_baseline::artifact_transport::verify_archive(receipt, &bytes)
+        else {
+            continue;
+        };
+        if !claim.matches(verified.manifest()) {
+            continue;
+        }
+        let attempt = verified.manifest().run_attempt;
+        let Ok(record) = run(lookup.attempt_args(claim.run_id, attempt)) else {
+            continue;
+        };
+        let Ok(acquired) =
+            shard_baseline::artifact_transport::authenticate_attempt(verified, &record, &lookup)
+        else {
+            continue;
+        };
+        if acquired_match.replace(acquired).is_some() {
+            return None;
+        }
+    }
+    acquired_match
 }
 
 /// GitHub's exact attempt record independently binds publication provenance.
@@ -154,7 +174,11 @@ pub(crate) fn authentic_attempt(
         && run["status"] == "completed"
         && run["conclusion"] == "success"
         && run["head_branch"] == branch
-        && run["path"] == workflow
+        && crate::cover::shard_baseline::artifact_transport::attempt_path_matches(
+            &run["path"],
+            workflow,
+            branch,
+        )
         && run["repository"]["full_name"]
             .as_str()
             .and_then(crate::origin::validate_repository_slug)

@@ -1,13 +1,11 @@
-//! P08 Cargo source preparation: shared snapshot, offline skip, single writer.
+//! P08 Cargo source preparation: locked offline probe and explicit fetch.
 //!
 //! Gate 1 orders resolution after preparation, but P08 restores the shared
-//! sources snapshot and configures MBX BEFORE any fetch: when the metadata
-//! probe proves all locked sources present, the step skips online fetch and
-//! obligations run `--offline`; a cold/incomplete cache fetches through this
-//! explicit path and records the miss in the job log. Steps are gated on
-//! lockfile presence (lockless emits nothing). The plan job is the single
-//! race-safe trusted writer (owned homes, saves once); crate jobs restore
-//! read-only and never save the shared key.
+//! configures MBX BEFORE any fetch: when the offline fetch probe proves all
+//! locked sources present, the step skips online fetch and obligations run
+//! `--offline`; a cold/incomplete home fetches through this explicit path and
+//! records the miss in the job log. Steps are gated on lockfile presence
+//! (lockless emits nothing).
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -17,6 +15,17 @@ use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
 use crate::OrchestratorError;
 use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
+
+#[path = "source_transport.rs"]
+mod transport;
+pub(crate) use transport::SourceTransportAdmission;
+
+#[path = "source_producer.rs"]
+pub(crate) mod producer;
+
+#[path = "source_scope.rs"]
+mod scope;
+pub(crate) use scope::selected_fetch_roots;
 
 /// Display name of the root-workspace fetch step.
 pub(crate) const FETCH_SOURCES_STEP: &str = "Fetch Cargo sources";
@@ -91,7 +100,7 @@ pub(crate) fn lockful_roots(root: &Path, workspaces: &[PlannedWorkspace]) -> Vec
     roots
 }
 
-/// Fetch steps for crate jobs (readers): probe, skip when warm, else fetch.
+/// Fetch steps for crate jobs: probe, skip when warm, else fetch.
 ///
 /// Env is the validated obligation contract, so fetch and consumer match
 /// by construction. Rust-only: callers emit no fetch for pure-tofu roles.
@@ -106,10 +115,7 @@ pub(crate) fn fetch_steps_for_crate(
     fetch_steps_with(catalog, roots, &env)
 }
 
-/// Fetch steps for the plan job (trusted writer): same owned homes.
-///
-/// The writer seeds the shared snapshot at the same Cargo-home expression
-/// readers restore, so save and restore never disagree on location.
+/// Fetch steps for the plan job.
 /// # Errors
 ///
 /// Returns contract errors for rejected roots or step-env failures.
@@ -123,7 +129,7 @@ pub(crate) fn fetch_steps_for_plan(
 
 /// One probe-and-fetch `sh -c` step per lockful root.
 ///
-/// The script runs `cargo metadata --locked --offline` first: success
+/// The script runs `cargo fetch --locked --offline` first: success
 /// skips online fetch (warm path); failure fetches explicitly and echoes
 /// the miss reason. Nested roots name their manifest in argv and step name.
 /// # Errors
@@ -137,7 +143,7 @@ fn fetch_steps_with(
     let mut steps = Vec::with_capacity(roots.len());
     for root in roots {
         validate_root(root)?;
-        let script = fetch_script(catalog, root);
+        let script = fetch_script(catalog, root)?;
         let manifest = workspace_manifest(root);
         let name = if root.is_empty() {
             FETCH_SOURCES_STEP.to_owned()
@@ -145,7 +151,7 @@ fn fetch_steps_with(
             format!("{FETCH_SOURCES_STEP} ({manifest})")
         };
         steps.push(
-            velnor_actions_workflow_renderer::ambient_shell_step(
+            velnor_actions_workflow_renderer::shell_step(
                 &name,
                 vec!["sh".to_owned(), "-c".to_owned(), script],
                 env.clone(),
@@ -158,28 +164,34 @@ fn fetch_steps_with(
     Ok(steps)
 }
 
-/// Fixed probe-and-fetch script for one root (manifest quoted, no injection).
+/// Fixed probe-and-fetch script for one selected locked workspace.
 ///
-/// Runs from the cargo isolation dir with an absolute manifest path,
-/// so repo `.cargo/config.toml` (credential-providers, source
-/// replacement) is never read while ambient auth is in scope.
-fn fetch_script(catalog: &ToolCatalog, root: &str) -> String {
-    let spec = catalog.tool_spec(PinnedTool::Rust);
+/// Cargo 1.98.1 fetch supports target filtering, but no package or feature
+/// selection. Fetching the complete locked workspace is the sound fallback:
+/// unlike default-feature metadata, it checks optional and target-specific
+/// sources that later offline obligations may need. The same Cargo operation
+/// owns the offline probe and online fill; neither compiles repository code.
+/// Inputs are selected workspace roots, never a recursive manifest glob.
+///
+/// Runs from the checkout, matching the obligation Cargo config search.
+/// The shell-step constructor unsets credentials before repository source
+/// replacement or credential-provider configuration can be consumed. Mise
+/// remains isolated from repository configuration, environment, and hooks.
+fn fetch_script(catalog: &ToolCatalog, root: &str) -> Result<String, OrchestratorError> {
+    let spec = catalog.tool_spec(PinnedTool::Rust)?;
     let base = format!("mise --no-config --no-env --no-hooks exec {spec} -- cargo");
     let manifest = format!(" {}", isolated_manifest_flag(root));
-    let probe = format!("{base} metadata --locked --offline{manifest} >/dev/null 2>&1");
+    let probe = format!("{base} fetch --locked --offline{manifest} >/dev/null 2>&1");
     let fetch = format!("{base} fetch --locked{manifest}");
-    format!(
-        "{}if {probe}; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; {fetch}; fi",
-        cargo_isolation_prefix()
-    )
+    Ok(format!(
+        "{}if {probe}; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching complete_locked_workspace\"; {fetch}; fi",
+        "cd \"$GITHUB_WORKSPACE\" && "
+    ))
 }
 
 /// Reject roots unsafe for shell interpolation or cache keys.
 ///
-/// Thin error mapping over the contract single source (shared with the
-/// renderer's ambient-auth exemption, so both sides agree by
-/// construction instead of mirroring the predicate).
+/// Thin error mapping over the contract single source for roots.
 pub(crate) fn validate_root(root: &str) -> Result<(), OrchestratorError> {
     velnor_actions_contract::validate_fetch_root(root).map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
@@ -206,12 +218,13 @@ mod tests {
         assert_eq!(steps[0].name, FETCH_SOURCES_STEP);
         let (run, env) = shell_parts(&steps[0].kind).expect("fetch must be a shell step");
         assert_eq!(&run[..2], ["sh", "-c"]);
-        let spec = catalog.tool_spec(PinnedTool::Rust);
+        let spec = catalog
+            .tool_spec(PinnedTool::Rust)
+            .expect("qualified Rust selector");
         for need in [
-            "mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\"".to_owned(),
-            "cd \"$RUNNER_TEMP/velnor/cargo-clean\"".to_owned(),
+            "cd \"$GITHUB_WORKSPACE\"".to_owned(),
             format!("mise --no-config --no-env --no-hooks exec {spec} -- cargo"),
-            "metadata --locked --offline".to_owned(),
+            "fetch --locked --offline".to_owned(),
             "cargo fetch --locked".to_owned(),
             "--manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"".to_owned(),
             "sources hit, skipping fetch".to_owned(),
@@ -221,7 +234,7 @@ mod tests {
         }
         assert!(
             env.get("MISE_CARGO_HOME").is_some_and(|v| !v.is_empty()),
-            "writer uses owned homes"
+            "plan fetch uses owned homes"
         );
     }
 
@@ -257,29 +270,27 @@ mod tests {
             "ACTIONS_RUNTIME_TOKEN",
         ] {
             assert!(
-                !got.contains_key(key),
-                "crate fetch must never carry a credential {key}"
+                got.get(key).is_some_and(String::is_empty),
+                "crate fetch must scrub credential {key}"
             );
         }
         let shared = crate::matrix_step::task_step_env(&catalog, &BTreeMap::new(), true)
             .expect("shared crate env");
-        assert_eq!(
-            got, &shared,
-            "fetch must match obligation steps by construction"
-        );
+        for (key, value) in &shared {
+            assert_eq!(got.get(key), Some(value), "fetch contract {key}");
+        }
     }
 
     #[test]
-    fn plan_fetch_uses_owned_homes_for_shared_snapshot() {
+    fn plan_fetch_uses_owned_homes() {
         let catalog = ToolCatalog::pinned();
         let steps = fetch_steps_for_plan(&catalog, &[String::new()]).expect("fetch steps");
         let (_, got) = shell_parts(&steps[0].kind).expect("fetch must be a shell step");
         let shared = crate::matrix_step::task_step_env(&catalog, &BTreeMap::new(), true)
             .expect("shared env");
-        assert_eq!(
-            got, &shared,
-            "writer and readers share one Cargo home expression"
-        );
+        for (key, value) in &shared {
+            assert_eq!(got.get(key), Some(value), "plan fetch contract {key}");
+        }
     }
 
     #[test]
@@ -304,3 +315,7 @@ mod tests {
         assert!(crates.is_empty() && plan.is_empty());
     }
 }
+
+#[cfg(test)]
+#[path = "source_prep_behavior_tests.rs"]
+mod behavior_tests;

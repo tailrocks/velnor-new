@@ -117,7 +117,10 @@ fn validate_reports_executed_after_provider_cache_hit() -> TestResult {
     use velnor_actions_mise::restore_evidence::{RestoreObservation, verify_provider_restore};
     let bytes = b"provider bytes".to_vec();
     let hit = RestoreObservation {
-        entry_path: "tofu-cache/root-0123456789ab/provider".to_owned(),
+        entry_path: format!(
+            "tofu-cache/{}/provider",
+            velnor_actions_tofu::tofu_root_locator("").expect("root locator")
+        ),
         entry_bytes: bytes.clone(),
         expected_digest: digest_b3(&bytes),
         expected_compat: digest_b3(b"compat"),
@@ -159,7 +162,7 @@ fn validate_reports_executed_after_provider_cache_hit() -> TestResult {
         not_selected_reason: None,
         cache: CacheOutcome {
             layer: CacheLayer::TofuProviders,
-            key: "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-stacks-a-0123456789ab-${{hashFiles('stacks/a/.terraform.lock.hcl')}}"
+            key: "velnor-v2-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-stacks-a-0123456789ab-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                 .to_owned(),
             result: CacheResult::Hit,
             miss_reason: None,
@@ -188,7 +191,7 @@ fn validate_reports_executed_after_provider_cache_hit() -> TestResult {
         &serde_json::to_value(&plan)?,
         &serde_json::to_value(&plan.matrix)?,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     assert_eq!(merge(&request)?.status, FinalStatus::Passed);
     Ok(())

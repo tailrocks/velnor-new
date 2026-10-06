@@ -5,12 +5,12 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/dogf
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./dogfood/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/plan.stderr.txt
-aea48c6a3b2af28baa0947e4b110719530c76fd5b6751aa00740a23f59c54947  ./dogfood/plan.txt
+17607d90fe5d3dade65af2bdc2ba943a5e0a69a68554c8d974154146c818ef1a  ./dogfood/plan.txt
 b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./dogfood/preview/.github/actionlint.yaml
 a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./dogfood/preview/.github/AGENTS.md
-59ad40cdc50c699e253906d01c6b5f8f822ecb715ef3a00e139c1c0d70d0f895  ./dogfood/preview/.github/workflows/ci.yml
+970bce7ae7b61d9af173912596e241b39f43f193297951d0173d1c2dea876728  ./dogfood/preview/.github/workflows/ci.yml
 0d41b05d10d4da7b26a719f82908f2a47e7224ed93ef3383d81a6d45179fb5d8  ./dogfood/preview/.github/workflows/freshness.yml
-cb5189ea30c4cc0e2ab9764dae9453eead03dc8803e50b729174cad6956e6baa  ./dogfood/tree.sha256
+8b4944b1753d3539bd3211104e11367c6708bd8c96acfa98799601f898c0d6a6  ./dogfood/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./empty-suite/generate.exit
 ad04762376231d91f329e9ea333a60490f11b04bee74582984c20b87018dd92c  ./empty-suite/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/generate.stdout.txt

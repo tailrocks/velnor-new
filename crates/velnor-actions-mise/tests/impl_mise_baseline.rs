@@ -1,7 +1,7 @@
 //! Exact-base baseline lookup cases (PAR-5.10).
 use std::ffi::OsString;
 use std::path::PathBuf;
-use velnor_actions_mise::{BaselineLookup, MiseError, ToolCatalog};
+use velnor_actions_mise::{BaselineLookup, MiseError, RuntimePaths, ToolCatalog};
 
 const BASE: &str = "0123456789abcdef0123456789abcdef01234567";
 
@@ -132,6 +132,21 @@ fn baseline_lookup_commands_carry_baseline_policy() -> Result<(), String> {
         debug.contains("Baseline"),
         "baseline lookup must carry Baseline: {debug}"
     );
+    Ok(())
+}
+
+#[test]
+fn baseline_lookup_can_bind_the_compiled_planning_root() -> Result<(), String> {
+    let catalog = pinned();
+    let lookup = lookup()?;
+    let command = lookup
+        .command_with_runtime(&catalog, lookup.list_args(), RuntimePaths::planning())
+        .map_err(|err| err.to_string())?;
+    let env = command.full_env();
+    assert!(env.iter().any(|(key, value)| {
+        key == "MISE_DATA_DIR" && value == "${{ runner.temp }}/velnor/planning/mise"
+    }));
+    assert!(format!("{command:?}").contains("Baseline"));
     Ok(())
 }
 

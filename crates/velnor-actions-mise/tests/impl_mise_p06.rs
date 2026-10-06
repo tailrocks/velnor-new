@@ -182,10 +182,14 @@ fn nextest_empty_and_malformed() {
 #[test]
 fn nextest_four_combos_argv() {
     let catalog = ToolCatalog::pinned();
-    let rust = catalog.tool_spec(PinnedTool::Rust);
-    let mbx = catalog.tool_spec(PinnedTool::MrBoxington);
-    let nextest = catalog.tool_spec(PinnedTool::Nextest);
-    assert!(rust.starts_with("rust@"), "{rust}");
+    let rust = catalog.tool_spec(PinnedTool::Rust).expect("generic Rust");
+    let mbx = catalog
+        .tool_spec(PinnedTool::MrBoxington)
+        .expect("generic MBX");
+    let nextest = catalog
+        .tool_spec(PinnedTool::Nextest)
+        .expect("generic nextest");
+    assert!(rust.starts_with("rust["), "{rust}");
     assert!(mbx.starts_with("mr-boxington@"), "{mbx}");
     assert!(nextest.contains("nextest@"), "{nextest}");
     for driver in [NextestDriver::Cargo, NextestDriver::Mbx] {
@@ -197,7 +201,7 @@ fn nextest_four_combos_argv() {
             let payload = argv_text(&archive.payload());
             assert_eq!(payload[0], program, "{driver:?}/{profile}");
             assert!(payload.windows(2).any(|w| w == ["--profile", profile]));
-            let full = argv_text(&archive.argv(&catalog));
+            let full = argv_text(&archive.argv(&catalog).expect("archive selector"));
             assert_eq!(full[0], "mise");
             assert!(full.contains(&rust), "{driver:?}/{profile} rust");
             assert!(full.contains(&nextest), "{driver:?}/{profile} nextest");
@@ -218,7 +222,7 @@ fn nextest_four_combos_argv() {
             let payload = argv_text(&run.payload());
             assert_eq!(payload[0], program);
             assert!(payload.windows(2).any(|w| w == ["--profile", profile]));
-            let full = argv_text(&run.argv(&catalog));
+            let full = argv_text(&run.argv(&catalog).expect("run selector"));
             assert!(full.contains(&nextest));
             assert_eq!(full.contains(&mbx), driver == NextestDriver::Mbx);
         }
@@ -246,7 +250,9 @@ fn nextest_default_constructors_match_ci() {
 #[test]
 fn consumed_config_selects_emitted_profile() {
     let catalog = ToolCatalog::pinned();
-    let nextest = catalog.tool_spec(PinnedTool::Nextest);
+    let nextest = catalog
+        .tool_spec(PinnedTool::Nextest)
+        .expect("generic nextest");
     let driver = NextestDriver::Mbx;
     for (content, want) in [
         (REPO_NEXTEST, "ci"),
@@ -259,7 +265,7 @@ fn consumed_config_selects_emitted_profile() {
         let archive =
             NextestArchive::with_profile(driver, "demo", &[], None, selected).expect("archive");
         assert!(carries_profile(&archive.payload(), want), "{want}");
-        let full = argv_text(&archive.argv(&catalog));
+        let full = argv_text(&archive.argv(&catalog).expect("archive selector"));
         assert!(full.contains(&nextest), "{want}");
         let list = NextestList::with_profile(driver, partition, selected).expect("list");
         assert!(carries_profile(&list.payload(), want), "{want}");
@@ -320,11 +326,13 @@ fn repo_wrapper_reconciles_with_local_mbx_pin() {
         "root wrapper must resolve MBX from the local exact pin"
     );
     let catalog = ToolCatalog::pinned();
-    let spec = catalog.tool_spec(PinnedTool::MrBoxington);
+    let spec = catalog
+        .tool_spec(PinnedTool::MrBoxington)
+        .expect("generic MBX");
     assert_eq!(spec, format!("mr-boxington@{MR_BOXINGTON_VERSION}"));
     let install = velnor_actions_mise::MiseInstall::new(vec![PinnedTool::MrBoxington])
         .expect("mbx install request");
-    let argv = argv_text(&install.argv(&catalog));
+    let argv = argv_text(&install.argv(&catalog).expect("install selector"));
     assert_eq!(argv[0], "mise");
     assert!(
         argv.contains(&"--no-config".to_owned()),

@@ -4,10 +4,10 @@ use std::collections::BTreeMap;
 use velnor_actions_workflow_renderer::toolchain_env::{
     CREDENTIAL_UNSET_VARS, STEP_CREDENTIAL_DENYLIST, STEP_ENDPOINT_DENYLIST,
     STEP_ISOLATION_DENYLIST, STEP_TF_ALLOWLIST, STEP_TF_DENYLIST_PREFIXES, TOOLCHAIN_HOME_KEYS,
-    checked_project_task_env, checked_task_env, credential_scrub, credential_unset_prelude,
-    is_denied_credential_key, is_denied_endpoint_key, is_denied_tf_key, reject_denied_step_keys,
-    reject_denied_tf_keys, reject_privileged_task_keys, with_credential_scrub, with_env_unset_argv,
-    with_toolchain_homes,
+    check_toolchain_homes, checked_project_task_env, checked_task_env, credential_scrub,
+    credential_unset_prelude, is_denied_credential_key, is_denied_endpoint_key, is_denied_tf_key,
+    reject_denied_step_keys, reject_denied_tf_keys, reject_privileged_task_keys,
+    with_credential_scrub, with_env_unset_argv, with_toolchain_homes,
 };
 
 #[test]
@@ -132,6 +132,28 @@ fn checked_task_env_merges_triple_over_validated_base() {
         Some("${{ matrix.task_id }}")
     );
     assert_eq!(merged.get("MISE_NO_CONFIG").map(String::as_str), Some("1"));
+    assert_eq!(
+        merged.get("RUSTUP_AUTO_INSTALL").map(String::as_str),
+        Some("0")
+    );
+}
+
+#[test]
+fn rustup_install_guard_is_owned_and_validated() {
+    for value in ["0", "1", "false", ""] {
+        let base = BTreeMap::from([("RUSTUP_AUTO_INSTALL".to_owned(), value.to_owned())]);
+        let mut env = checked_task_env(&base, "/r/rustup", "/r/cargo", "1.98.1").expect("trusted");
+        assert_eq!(
+            env.get("RUSTUP_AUTO_INSTALL").map(String::as_str),
+            Some("0")
+        );
+        if value != "0" {
+            env.insert("RUSTUP_AUTO_INSTALL".to_owned(), value.to_owned());
+            assert!(check_toolchain_homes(&env).is_err());
+        }
+        env.remove("RUSTUP_AUTO_INSTALL");
+        assert!(check_toolchain_homes(&env).is_err());
+    }
 }
 
 #[test]
@@ -179,12 +201,14 @@ fn isolation_denylist_names_exact_privileged_set() {
     assert_eq!(
         STEP_ISOLATION_DENYLIST,
         [
+            "MISE_DATA_DIR",
             "MISE_NO_CONFIG",
             "MISE_NO_ENV",
             "MISE_NO_HOOKS",
             "MISE_LOCKFILE",
             "MISE_AUTO_INSTALL",
             "MISE_EXEC_AUTO_INSTALL",
+            "RUSTUP_AUTO_INSTALL",
         ]
     );
     for denied in STEP_ISOLATION_DENYLIST {
@@ -202,8 +226,14 @@ fn isolation_denylist_names_exact_privileged_set() {
 #[test]
 fn project_task_env_rejects_hook_escape_keys() {
     assert!(reject_privileged_task_keys(&BTreeMap::new()).is_ok());
-    for hostile in STEP_ISOLATION_DENYLIST {
-        for value in ["0", "false", "1"] {
+    for hostile in STEP_ISOLATION_DENYLIST.into_iter().chain([
+        "MISE_OWNED_CARGO_WRAPPER",
+        "MISE_OWNED_CARGO_WRAPPER_SHA256",
+        "MISE_ENV",
+        "MISE_CONFIG_FILE",
+        "MISE_FUTURE_AUTHORITY",
+    ]) {
+        for value in ["0", "false", "1", ""] {
             let base = BTreeMap::from([(hostile.to_owned(), value.to_owned())]);
             let err = reject_privileged_task_keys(&base).expect_err("privileged must fail");
             assert!(

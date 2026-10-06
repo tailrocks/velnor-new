@@ -25,7 +25,8 @@
 
 use std::collections::BTreeMap;
 
-use crate::catalog::{PinnedTool, ToolCatalog};
+use crate::MiseError;
+use crate::catalog::{PinnedTool, ToolCatalog, qualification::DistributionHost};
 
 /// One locked tool: pinned version plus per-platform checksums.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,6 +89,7 @@ impl InstallCoverage {
 pub fn mise_platform_for_target(triple: &str) -> Option<&'static str> {
     match triple {
         "x86_64-unknown-linux-gnu" => Some("linux-x64"),
+        "aarch64-unknown-linux-gnu" => Some("linux-arm64"),
         "aarch64-apple-darwin" => Some("macos-arm64"),
         "x86_64-apple-darwin" => Some("macos-x64"),
         _ => None,
@@ -252,19 +254,6 @@ fn line_problem(index: usize, problem: &str) -> String {
     format!("line {}: {problem}", index.saturating_add(1))
 }
 
-/// Lock keys a catalog tool may appear under: the registry name plus
-/// the backend-qualified spec prefix (Nextest's aqua path).
-fn lock_keys_for(tool: PinnedTool, catalog: &ToolCatalog) -> Vec<String> {
-    let mut keys = vec![tool.tool_name().to_owned()];
-    let spec = catalog.tool_spec(tool);
-    if let Some(prefix) = spec.split_once('@').map(|(head, _)| head.to_owned())
-        && prefix != keys[0]
-    {
-        keys.push(prefix);
-    }
-    keys
-}
-
 /// One emitted install to audit: display name, expected pin version,
 /// and the exact lock key the emitted spec addresses.
 ///
@@ -282,32 +271,67 @@ pub struct InstallSubject {
     pub lock_key: String,
 }
 
-/// Resolve an emitted install spec (`key@version`) to its audit subject.
+/// Resolve an exact emitted selector using the actual installation host.
 ///
-/// The key must name a catalog tool (registry name or backend-qualified
-/// spec prefix); the recorded lock key is the spec's key verbatim. The
-/// spec version must equal the catalog pin exactly: a drifted spec is
-/// unauditable (the caller blocks it), never silently re-pinned to the
-/// pin it should have carried. Lock-side drift stays a later advisory.
-#[must_use]
-pub fn subject_for_install_spec(spec: &str, catalog: &ToolCatalog) -> Option<InstallSubject> {
-    let (key, version) = spec.split_once('@')?;
+/// The closed key grammar only identifies a candidate slot. The host's
+/// qualified selector must equal the complete emitted value before audit.
+/// # Errors
+/// Rejects recognized native tools lacking host installation qualification.
+pub fn subject_for_install_spec(
+    spec: &str,
+    catalog: &ToolCatalog,
+    host: DistributionHost,
+) -> Result<Option<InstallSubject>, MiseError> {
+    let Some((key, version)) = spec.rsplit_once('@') else {
+        return Ok(None);
+    };
     if key.is_empty() || version.is_empty() {
-        return None;
+        return Ok(None);
     }
-    let tool = PinnedTool::ALL.iter().find(|tool| {
-        lock_keys_for(**tool, catalog)
-            .iter()
-            .any(|known| known == key)
-    })?;
-    if version != catalog.version(*tool) {
-        return None;
+    let candidate = match native_slot(key) {
+        Some(tool) => Some(tool),
+        None => generic_slot(spec, catalog)?,
+    };
+    let Some(tool) = candidate else {
+        return Ok(None);
+    };
+    let expected = if ToolCatalog::requires_native_host(tool) {
+        catalog.native_tool_spec(host, tool)?
+    } else {
+        catalog.tool_spec(tool)?
+    };
+    if expected != spec {
+        return Ok(None);
     }
-    Some(InstallSubject {
-        display: format!("{}@{}", tool.tool_name(), catalog.version(*tool)),
-        expected_version: catalog.version(*tool).to_owned(),
-        lock_key: key.to_owned(),
-    })
+    Ok(Some(InstallSubject {
+        display: format!("{}@{}", tool.tool_name(), catalog.version(tool)),
+        expected_version: version.to_owned(),
+        lock_key: key.split('[').next().unwrap_or(key).to_owned(),
+    }))
+}
+
+fn generic_slot(spec: &str, catalog: &ToolCatalog) -> Result<Option<PinnedTool>, MiseError> {
+    for tool in PinnedTool::ALL {
+        if !ToolCatalog::requires_native_host(tool) && catalog.tool_spec(tool)? == spec {
+            return Ok(Some(tool));
+        }
+    }
+    Ok(None)
+}
+
+/// Candidate grammar grants no authority; exact host selector comparison does.
+fn native_slot(key: &str) -> Option<PinnedTool> {
+    match key.split('[').next()? {
+        "bun" | "http:bun" => Some(PinnedTool::Bun),
+        "node" | "http:node" => Some(PinnedTool::Node),
+        "opentofu" | "http:opentofu" => Some(PinnedTool::Opentofu),
+        "python" | "http:python" => Some(PinnedTool::Python),
+        "uv" | "http:uv" => Some(PinnedTool::Uv),
+        "java" | "http:graalvm-community-jdk" => Some(PinnedTool::Java),
+        "gradle" | "http:gradle" => Some(PinnedTool::Gradle),
+        "http:cargo-semver-checks" => Some(PinnedTool::CargoSemverChecks),
+        _ => None,
+    }
 }
 
 /// True for a checksum shape mise can enforce (`scheme:hex`).

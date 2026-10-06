@@ -9,23 +9,31 @@ use crate::impl_e2e_wiring::{JobText, StepText};
 const RESTORE_TOOLS_TEXT: &str = "Restore Mise tools";
 const SAVE_TOOLS_TEXT: &str = "Save Mise tools";
 
-/// Tools restores stay built-in (never a manual restore step, never a
-/// role-suffixed `mise-tools-v1-` key); at most one `Save Mise tools`
-/// step per job, carrying the shared `mise-v1-` key under the push-only
+/// Tools restores use the canonical explicit payload; at most one `Save Mise tools`
+/// step per job, carrying the shared `mise-v2-` key under the push-only
 /// gate (P08: one saver per key, PRs read-only).
 pub(crate) fn check_tools_save_shape(job: &JobText) -> Result<(), String> {
     let mut saves = 0;
+    let mut restore = None;
     for step in &job.steps {
         if step.name == RESTORE_TOOLS_TEXT {
-            return Err(format!("{}: tools restores stay built-in", job.id));
+            restore = Some(step);
         }
         if step.body.contains("key: mise-tools-v1-") {
             return Err(format!("{}: role-suffixed tools key must go", job.id));
         }
         if step.name == SAVE_TOOLS_TEXT {
             saves += 1;
+            let restore = restore.ok_or_else(|| format!("{}: save without restore", job.id))?;
+            if cache_payload(&restore.body).is_none()
+                || cache_payload(&restore.body) != cache_payload(&step.body)
+            {
+                return Err(format!("{}: tools restore/save payload differs", job.id));
+            }
             for need in [
-                "key: mise-v1-",
+                "key: mise-v2-",
+                "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+                "steps.velnor-tools-cache.outputs.cache-hit != 'true'",
                 "if: success() && github.event_name == 'push'",
             ] {
                 if !step.body.contains(need) {
@@ -40,7 +48,7 @@ pub(crate) fn check_tools_save_shape(job: &JobText) -> Result<(), String> {
     Ok(())
 }
 
-/// Exactly one `Save Mise tools` step per restored `mise-v1-` key across
+/// Exactly one `Save Mise tools` step per restored `mise-v2-` key across
 /// the tree, archiving that same key.
 pub(crate) fn check_one_tools_saver_per_key(jobs: &[JobText]) -> Result<(), String> {
     use std::collections::BTreeMap;
@@ -66,7 +74,7 @@ pub(crate) fn check_one_tools_saver_per_key(jobs: &[JobText]) -> Result<(), Stri
     Ok(())
 }
 
-/// Every `mise-v1-` key restored by a `Setup Mise` step in the tree.
+/// Every `mise-v2-` key declared by a `Setup Mise` step in the tree.
 fn restored_tools_keys(jobs: &[JobText]) -> std::collections::BTreeSet<String> {
     let mut restored = std::collections::BTreeSet::new();
     for job in jobs {
@@ -89,4 +97,10 @@ fn save_step_key(job: &JobText, step: &StepText) -> Result<String, String> {
         }
     }
     Err(format!("{}: tools save without key", job.id))
+}
+
+/// Preserve path order and exact spellings from emitted cache input.
+fn cache_payload(body: &str) -> Option<&str> {
+    body.lines()
+        .find_map(|line| line.trim().strip_prefix("path: "))
 }

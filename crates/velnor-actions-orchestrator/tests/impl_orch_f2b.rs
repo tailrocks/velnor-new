@@ -211,46 +211,32 @@ fn baselines_expire_on_schedule() {
 
 #[test]
 fn exact_base_candidates_require_later_provenance() {
-    use velnor_actions_orchestrator::run_select::{
-        select_baseline_artifact, select_exact_base_candidates,
-    };
+    use velnor_actions_orchestrator::run_select::select_exact_base_run;
     let base = "a".repeat(40);
     let other = "b".repeat(40);
     let runs = serde_json::json!([
         {"databaseId": 1, "headSha": other, "headBranch": "t", "event": "push", "conclusion": "success", "attempt": 1},
-        {"databaseId": 2, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "failure", "attempt": 1},
         {"databaseId": 3, "headSha": base, "headBranch": "t", "event": "pull_request", "conclusion": "success", "attempt": 1},
-        {"databaseId": 4, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "success"},
         {"databaseId": 5, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "success", "attempt": 3},
     ]);
     assert_eq!(
-        select_exact_base_candidates(&runs.to_string(), &base, "t"),
-        Ok(vec![2, 5])
+        select_exact_base_run(&runs.to_string(), &base, "t"),
+        Ok(velnor_actions_orchestrator::run_select::SelectedBaseRun {
+            run_id: 5,
+            attempt: 3,
+        })
     );
-    assert!(select_exact_base_candidates(&runs.to_string(), &"c".repeat(40), "t").is_err());
-    assert!(select_exact_base_candidates("not json", &base, "t").is_err());
-    assert!(select_exact_base_candidates("[]", &base, "t").is_err());
+    assert!(select_exact_base_run(&runs.to_string(), &"c".repeat(40), "t").is_err());
+    assert!(select_exact_base_run("not json", &base, "t").is_err());
+    assert!(select_exact_base_run("[]", &base, "t").is_err());
     let unattested = serde_json::json!([
         {"databaseId": 6, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "success"},
         {"databaseId": 7, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "success", "attempt": 0},
     ]);
     assert!(
-        select_exact_base_candidates(&unattested.to_string(), &base, "t").is_err(),
+        select_exact_base_run(&unattested.to_string(), &base, "t").is_err(),
         "runs without attempt evidence never select"
     );
-    let listed = serde_json::json!({"artifacts": [
-        {"id": 8, "name": "other", "expired": false},
-        {"id": 9, "name": "velnor-baseline-x", "expired": true},
-        {"id": 10, "name": "velnor-baseline-x", "expired": false},
-    ]});
-    assert_eq!(
-        select_baseline_artifact(&listed.to_string(), "velnor-baseline-x"),
-        Ok(10)
-    );
-    assert!(select_baseline_artifact(&listed.to_string(), "missing").is_err());
-    assert!(select_baseline_artifact("not json", "velnor-baseline-x").is_err());
-    let array = serde_json::json!([{"databaseId": 11, "name": "n", "expired": false}]);
-    assert_eq!(select_baseline_artifact(&array.to_string(), "n"), Ok(11));
 }
 
 #[test]

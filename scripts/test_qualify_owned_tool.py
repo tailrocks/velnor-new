@@ -299,10 +299,13 @@ class QualifierAdmissionTests(unittest.TestCase):
         admitted = self.admit()
         self.arguments.tool = "mbx"
         with patch.object(QUALIFIER, "admit", return_value=admitted), \
+                patch.object(QUALIFIER, "observe_admitted_mbx", side_effect=ValueError(
+                    "MBX native qualification is unavailable")) as observe, \
                 patch.object(QUALIFIER.subprocess, "run") as run:
             with self.assertRaisesRegex(ValueError, "MBX native qualification is unavailable"):
                 QUALIFIER.qualify(self.arguments)
             run.assert_not_called()
+            observe.assert_called_once()
         self.assertFalse(self.arguments.receipt.exists())
         self.assertFalse(self.arguments.report.exists())
 

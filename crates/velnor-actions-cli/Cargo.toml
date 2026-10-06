@@ -23,3 +23,4 @@ path = "tests/velnor_cli.rs"
 
 [dev-dependencies]
 serde_json = { workspace = true }
+velnor-actions-mise = { version = "=0.1.0", path = "../velnor-actions-mise" }

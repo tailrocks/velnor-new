@@ -14,7 +14,9 @@ use std::path::Path;
 use crate::metadata::{MetadataError, posix};
 
 /// Dependency edge kind.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub enum DepKind {
     /// Normal dependency.
     Normal,
@@ -25,7 +27,8 @@ pub enum DepKind {
 }
 
 /// One declared local path edge between first-party packages.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct LocalEdge {
     /// Cargo package id of the dependent.
     pub from: String,
@@ -44,7 +47,8 @@ pub struct LocalEdge {
 /// The target names a known manifest outside this workspace, so the edge
 /// cannot join this workspace's local graph. Recorded so the skip is
 /// never silent; unknown targets fail parsing instead of landing here.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SkippedPathEdge {
     /// Cargo package id of the dependent.
     pub from: String,

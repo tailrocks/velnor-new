@@ -7,14 +7,15 @@ use std::collections::BTreeMap;
 use std::ffi::OsString;
 
 use velnor_actions_contract::{Job, JobTimeout, Step};
-use velnor_actions_mise::{
-    PREPARE_PINNED_TOOLS_STEP, PinnedTool, PinnedToolExec, PreparePinnedTools, ToolCatalog,
-    ToolHomes,
-};
+use velnor_actions_mise::catalog::rust_prepare::RustPrepareDomain;
+use velnor_actions_mise::{PinnedTool, PinnedToolExec, PreparePinnedTools, ToolCatalog, ToolHomes};
 use velnor_actions_workflow_renderer::render::{FINAL_CONDITION, FINAL_DISPLAY_NAME, PLAN_JOB_ID};
 use velnor_actions_workflow_renderer::steps::{
     MERGE_OPERATION, PLAN_OPERATION, merge_step, plan_step, write_request_step,
 };
+
+#[path = "rust_tools_prepare.rs"]
+pub(crate) mod rust_tools_prepare;
 
 use crate::OrchestratorError;
 use crate::source_prep::fetch_steps_for_plan;
@@ -26,8 +27,12 @@ pub(crate) const LINT_JOB_ID: &str = "actionlint";
 /// Display name of the always-on workflow-lint job.
 pub(crate) const LINT_DISPLAY_NAME: &str = "Actionlint";
 
-/// Planner job: checkout, pinned-tool install, optional Acquire, request, plan.
+/// Planner job: verified consumer analysis precedes Cargo preparation.
 ///
+/// Consumers acquire the helper and prepare only Gh plus generation validators
+/// before attempting authenticated Cargo-free planning. A typed cache miss
+/// enables full tool, component, and source preparation. Repository dogfood
+/// follows its fresh source-build path without this boundary.
 /// `Prepare pinned tools` installs the exact catalog tools the later steps consume
 /// through fail-closed `mise exec`, per role: Rust plus the detected MBX driver
 /// for the format/build steps, Nextest when any leg selects it, Opentofu when any
@@ -64,33 +69,78 @@ pub(crate) fn plan_job(
     fetch_roots: &[String],
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![checkout_history_action()?];
-    let prepare = prepare_pinned_tools_step(
-        catalog,
-        plan_tools(use_rust, use_mbx, use_nextest, use_opentofu),
-        use_rust,
-    )?;
-    steps.push(prepare);
+    let early = acquire.is_some();
+    if let Some(acquire) = acquire {
+        steps.extend(consumer_planning_steps(acquire, catalog)?);
+    }
+    let expensive_at = steps.len();
+    let mut tools = plan_tools(use_rust, use_mbx, use_nextest, use_opentofu);
+    if early {
+        tools.retain(|tool| {
+            !matches!(
+                tool,
+                PinnedTool::Actionlint | PinnedTool::Shellcheck | PinnedTool::Zizmor
+            )
+        });
+    }
+    if !tools.is_empty() {
+        steps.push(prepare_pinned_tools_step_for_runner(
+            catalog, tools, use_rust, label,
+        )?);
+    }
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
-    let cached =
-        crate::workflow_jobs_cache::cache_steps_for_plan(label, catalog, use_mbx, fetch_roots)?;
-    steps.extend(cached.restore);
     steps.extend(fetch_steps_for_plan(catalog, fetch_roots)?);
-    steps.extend(cached.save);
-    steps.extend(acquire);
-    steps.push(request_step(PLAN_OPERATION)?);
+    if !early {
+        steps.push(request_step(PLAN_OPERATION)?);
+    }
+    if early {
+        for step in &mut steps[expensive_at..] {
+            velnor_actions_workflow_renderer::early_plan::require_cargo(step);
+        }
+    }
     steps.push(plan_step());
+    steps.push(velnor_actions_workflow_renderer::analysis_publication::upload_step()?);
     Ok(Job {
+        cache_mode: None,
         display_name: "Plan".to_owned(),
         runs_on: label.to_owned(),
         timeout_minutes: JobTimeout::PLAN,
         needs: Vec::new(),
         condition: None,
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps,
     })
+}
+
+/// Only the verified helper and pinned planning tools precede the Cargo boundary.
+fn consumer_planning_steps(
+    acquire: Step,
+    catalog: &ToolCatalog,
+) -> Result<Vec<Step>, OrchestratorError> {
+    let prepare = prepare_planning_tools_step(
+        catalog,
+        vec![
+            PinnedTool::Gh,
+            PinnedTool::Actionlint,
+            PinnedTool::Shellcheck,
+            PinnedTool::Zizmor,
+        ],
+    )?;
+    Ok(vec![
+        acquire,
+        prepare,
+        request_step(PLAN_OPERATION)?,
+        velnor_actions_workflow_renderer::early_plan::early_plan_step()?,
+    ])
 }
 
 /// Always-on lint job: checkout plus pinned actionlint over the tree.
@@ -104,15 +154,22 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
     .map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
     })?;
-    let argv = strings_of(exec.argv(catalog))
+    let argv = strings_of(exec.argv(catalog)?)
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     Ok(Job {
+        cache_mode: None,
         display_name: LINT_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
         timeout_minutes: JobTimeout::VALIDATOR,
         needs: Vec::new(),
         condition: None,
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps: vec![
             checkout_action()?,
@@ -155,20 +212,28 @@ pub(crate) fn final_job(
     needs.push(LINT_JOB_ID.to_owned());
     let mut steps = Vec::new();
     steps.extend(acquire);
-    steps.push(prepare_pinned_tools_step(
+    steps.push(prepare_pinned_tools_step_for_runner(
         catalog,
         vec![PinnedTool::Gh],
-        true,
+        false,
+        label,
     )?);
     steps.push(request_step(MERGE_OPERATION)?);
     steps.push(merge_step());
     Ok(Job {
+        cache_mode: None,
         display_name: FINAL_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
         timeout_minutes: JobTimeout::REQUIRED,
         needs,
         condition: Some(FINAL_CONDITION.to_owned()),
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps,
     })
@@ -204,37 +269,77 @@ fn plan_tools(
     tools
 }
 
-/// Typed `Prepare pinned tools` step for one exact tool set.
-///
-/// Homes use the runner-temp expression form: shell `$VAR` never expands
-/// in the `env:` position that carries these paths. Pure-tofu roles
-/// (`use_rust` false) carry no owned-homes triple; every other role
-/// keeps it.
-/// # Errors
-///
-/// Returns a contract error when the Mise adapter rejects the request.
-fn prepare_pinned_tools_step(
+/// Select installations using the actual workflow runner's qualified host.
+pub(crate) fn prepare_pinned_tools_step_for_runner(
     catalog: &ToolCatalog,
     tools: Vec<PinnedTool>,
     use_rust: bool,
+    label: &str,
 ) -> Result<Step, OrchestratorError> {
+    let host = velnor_actions_contract::tool_target_for_runner_label(label)
+        .and_then(velnor_actions_mise::catalog::qualification::DistributionHost::for_target)
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: format!("prepare_pinned_tools_host:{label}"),
+        })?;
+    prepare_tools_step_in_domain(
+        catalog,
+        tools,
+        use_rust,
+        RustPrepareDomain::Tools,
+        Some(host),
+    )
+}
+
+/// Minimal helper installation owns its dedicated planning bootstrap domain.
+pub(crate) fn prepare_planning_tools_step(
+    catalog: &ToolCatalog,
+    tools: Vec<PinnedTool>,
+) -> Result<Step, OrchestratorError> {
+    let mut step = prepare_tools_step_in_domain(
+        catalog,
+        tools,
+        false,
+        RustPrepareDomain::PlanningBootstrap,
+        None,
+    )?;
+    step.name = "Prepare planning tools".to_owned();
+    Ok(step)
+}
+
+fn prepare_tools_step_in_domain(
+    catalog: &ToolCatalog,
+    mut tools: Vec<PinnedTool>,
+    use_rust: bool,
+    domain: RustPrepareDomain,
+    host: Option<velnor_actions_mise::catalog::qualification::DistributionHost>,
+) -> Result<Step, OrchestratorError> {
+    let install_rust = tools
+        .iter()
+        .any(|tool| matches!(tool, PinnedTool::Rust | PinnedTool::RustDesktop));
+    for tool in &mut tools {
+        if matches!(tool, PinnedTool::Rust | PinnedTool::RustDesktop) {
+            *tool = catalog.compiler_tool();
+        }
+    }
     let homes = ToolHomes::runner_temp();
     let prepare =
         PreparePinnedTools::new(tools, homes).map_err(|err| OrchestratorError::Contract {
             problem: err.to_string(),
         })?;
-    let run = strings_of(prepare.argv(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
+    let argv = match host {
+        Some(host) => prepare.argv_for_host(catalog, host)?,
+        None => prepare.argv(catalog)?,
+    };
+    let run = strings_of(argv).map_err(|problem| OrchestratorError::Contract { problem })?;
     let env = if use_rust {
         strings_of_env(&prepare.env(catalog))
     } else {
-        strings_of_env(&prepare.env_without_homes())
+        strings_of_env(&PreparePinnedTools::env_for_domain(
+            domain.bootstrap_domain(),
+        ))
     }
     .map_err(|problem| OrchestratorError::Contract { problem })?;
-    velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
-        .map_err(|err| OrchestratorError::Contract {
-            problem: err.to_string(),
-        })
+    rust_tools_prepare::prepare_step_in_domain(run, env, install_rust, catalog, domain)
 }
 
 /// Typed write-request step for one internal target, mapped to contract errors.
@@ -257,3 +362,7 @@ fn checkout_history_action() -> Result<Step, OrchestratorError> {
 #[cfg(test)]
 #[path = "workflow_jobs_tests.rs"]
 mod workflow_jobs_tests;
+
+#[cfg(test)]
+#[path = "workflow_full_home_tests.rs"]
+mod full_home_tests;

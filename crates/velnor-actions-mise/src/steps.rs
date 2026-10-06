@@ -1,18 +1,21 @@
 //! Typed `Prepare pinned tools` step requests (task §2, workflow §3).
 //!
-//! Both contracts name the same bootstrap step: install exact catalog
-//! tools through the fixed `mise install` invocation with project
-//! config, env files, hooks, and lockfile writes disabled, under
-//! Velnor-owned tool homes. This module owns the fixed argv plus the
-//! step env; renderers serialize, never invent.
+//! Exact catalog installation and fixed step argv under owned tool homes.
+//! Project config, env files, hooks and lockfile writes stay disabled.
 
 use std::ffi::OsString;
 use std::path::PathBuf;
 
 use crate::catalog::{PinnedTool, ToolCatalog};
-use crate::command::{IsolatedCommand, NO_AUTO_INSTALL_ENV, mise_argv_tail, toolchain_env};
+use crate::command::{IsolatedCommand, mise_argv_tail};
 use crate::error::MiseError;
 use crate::requests::{MetadataQualification, MiseInstall};
+
+#[path = "steps_host.rs"]
+mod host;
+
+#[path = "steps_homes.rs"]
+mod homes;
 
 /// Contract-fixed display name shared by task-execution §2 step 1 and
 /// workflow §3 step 3. Emitters use this const, never a retyped string.
@@ -29,76 +32,6 @@ pub struct ToolHomes {
     rustup_home: String,
     /// Velnor-owned `MISE_CARGO_HOME` value.
     cargo_home: String,
-}
-
-impl ToolHomes {
-    /// Velnor-owned tool homes under runner temp (expression form).
-    ///
-    /// Shell `$VAR` never expands in the `env:` position that carries
-    /// these paths; the `${{ runner.temp }}` expression form does.
-    #[must_use]
-    pub fn runner_temp() -> Self {
-        Self {
-            rustup_home: "${{ runner.temp }}/velnor/rustup".to_owned(),
-            cargo_home: "${{ runner.temp }}/velnor/cargo".to_owned(),
-        }
-    }
-
-    /// Bind the two owned home values.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidStepInput`] for an empty home.
-    pub fn new(rustup_home: &str, cargo_home: &str) -> Result<Self, MiseError> {
-        if rustup_home.is_empty() {
-            return Err(invalid_input("rustup_home", rustup_home));
-        }
-        if cargo_home.is_empty() {
-            return Err(invalid_input("cargo_home", cargo_home));
-        }
-        Ok(Self {
-            rustup_home: rustup_home.to_owned(),
-            cargo_home: cargo_home.to_owned(),
-        })
-    }
-
-    /// Velnor-owned `MISE_RUSTUP_HOME` value.
-    #[must_use]
-    pub fn rustup_home(&self) -> &str {
-        &self.rustup_home
-    }
-
-    /// Velnor-owned `MISE_CARGO_HOME` value.
-    #[must_use]
-    pub fn cargo_home(&self) -> &str {
-        &self.cargo_home
-    }
-
-    /// Exact home env triple: both owned homes plus the exact
-    /// `RUSTUP_TOOLCHAIN` pin from the catalog.
-    #[must_use]
-    pub fn env(&self, catalog: &ToolCatalog) -> Vec<(OsString, OsString)> {
-        toolchain_env(
-            &self.rustup_home,
-            &self.cargo_home,
-            &catalog.rustup_toolchain(),
-        )
-    }
-
-    /// Full env for a pinned `exec` verification step.
-    ///
-    /// Isolation quartet, install-disable pair, plus the owned-homes
-    /// triple: the step runs the prepared toolchain, and a missing tool
-    /// fails as a preparation error instead of installing.
-    #[must_use]
-    pub fn exec_env(&self, catalog: &ToolCatalog) -> Vec<(OsString, OsString)> {
-        let mut env = IsolatedCommand::env_overlay();
-        for (key, value) in NO_AUTO_INSTALL_ENV {
-            env.push((OsString::from(key), OsString::from(value)));
-        }
-        env.extend(self.env(catalog));
-        env
-    }
 }
 
 /// Bootstrap installation of exact catalog tools as one named step.
@@ -147,12 +80,13 @@ impl PreparePinnedTools {
     }
 
     /// Full mise argument vector including the program.
-    #[must_use]
-    pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
+    /// # Errors
+    /// Returns an error when the selected tool lacks catalog authority.
+    pub fn argv(&self, catalog: &ToolCatalog) -> Result<Vec<OsString>, MiseError> {
         self.install.argv(catalog)
     }
 
-    /// Full step env: isolation overlay plus the owned-homes triple.
+    /// Full step env: isolation overlay, four homes, data root and compiler pin.
     ///
     /// Matches [`Self::command`]'s spawner env exactly; the
     /// correspondence is pinned by test, not by construction comment.
@@ -163,16 +97,14 @@ impl PreparePinnedTools {
         env
     }
 
-    /// Step env without the owned-homes triple: isolation overlay only.
-    ///
-    /// Pure-tofu roles install no Rust toolchain, so their prepare
-    /// step carries no rustup/cargo homes; config, env files, hooks,
-    /// and lockfile writes stay disabled as in [`Self::env`]. Render
-    /// only: local installs always run under owned homes, so this
-    /// matches no spawner env.
+    /// Step environment from the selected data domain, without compiler authority.
     #[must_use]
-    pub fn env_without_homes(&self) -> Vec<(OsString, OsString)> {
-        IsolatedCommand::env_overlay()
+    pub fn env_for_domain(
+        domain: velnor_actions_contract::ToolCacheDomain,
+    ) -> Vec<(OsString, OsString)> {
+        let mut env = IsolatedCommand::env_overlay();
+        env.extend(ToolHomes::domain_home_env(domain));
+        env
     }
 
     /// Isolated command running this installation under the owned homes.
@@ -180,7 +112,7 @@ impl PreparePinnedTools {
     /// # Errors
     ///
     /// Returns [`MiseError::EmptyToolchain`] only if the tool list were
-    /// empty, which the constructor rules out.
+    /// empty, which the constructor rules out. Catalog selection errors propagate.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         self.install
             .command(catalog)?
@@ -195,18 +127,14 @@ pub const PREPARE_RUST_COMPONENTS_STEP: &str = "Prepare Rust components";
 /// Rust components the prepare step guarantees, sorted.
 const RUST_COMPONENTS: [&str; 2] = ["clippy", "rustfmt"];
 
-/// Pinned-toolchain rustup program for the fixed components payload.
-///
-/// The source-policy gate bans bare `"rustup"` spellings; this alias is
-/// the acknowledgement: the only sanctioned direct `rustup` invocation,
-/// fixed argv under Velnor-owned homes (see the type docs).
+/// Sanctioned pinned-toolchain rustup invocation under owned homes.
 const FORBIDDEN_ACKNOWLEDGED_RUSTUP: &str = "rustup";
 
 /// Fixed `rustup component add` for the pinned toolchain as one named step.
 ///
-/// Mise installs the pinned Rust toolchain with rustup's minimal profile
-/// and ignores tool options on config-less CLI specs, so clippy/rustfmt
-/// arrive through this step instead of `tool_spec`. This is the pinned
+/// Mise installs the pinned Rust toolchain with typed minimal-profile
+/// options including clippy/rustfmt. This idempotent owner operation
+/// also verifies/fills their availability after restoration. This is the pinned
 /// toolchain's own rustup running one fixed deterministic argv that writes
 /// only the Velnor-owned `RUSTUP_HOME` during the online prepare phase:
 /// Mise installing components, not an ad hoc installer. The explicit
@@ -245,12 +173,13 @@ impl PrepareRustComponents {
     }
 
     /// Full mise argument vector including the program.
-    #[must_use]
-    pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
-        let specs = catalog.tool_specs(&[PinnedTool::Rust]);
+    /// # Errors
+    /// Returns an error when the selected tool lacks catalog authority.
+    pub fn argv(&self, catalog: &ToolCatalog) -> Result<Vec<OsString>, MiseError> {
+        let specs = Self::tool_specs(catalog)?;
         let mut argv = vec![OsString::from("mise")];
         argv.extend(mise_argv_tail("exec", &specs, &Self::payload(catalog)));
-        argv
+        Ok(argv)
     }
 
     /// Full step env: isolation plus install-disable plus owned homes.
@@ -267,9 +196,9 @@ impl PrepareRustComponents {
     /// # Errors
     ///
     /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
-    /// empty, which construction rules out.
+    /// empty, which construction rules out. Catalog selection errors propagate.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
-        let specs = catalog.tool_specs(&[PinnedTool::Rust]);
+        let specs = Self::tool_specs(catalog)?;
         IsolatedCommand::mise_exec(&specs, &Self::payload(catalog))?
             .with_env(&self.homes.env(catalog))
     }
@@ -285,6 +214,14 @@ impl PrepareRustComponents {
         ];
         payload.extend(RUST_COMPONENTS.iter().map(OsString::from));
         payload
+    }
+
+    fn tool_specs(catalog: &ToolCatalog) -> Result<Vec<String>, MiseError> {
+        let mut tools = vec![catalog.compiler_tool()];
+        if catalog.rust_uses_mbx() {
+            tools.push(PinnedTool::MrBoxington);
+        }
+        catalog.tool_specs(&tools)
     }
 }
 
@@ -338,8 +275,9 @@ impl VerifyPreparedInputs {
     }
 
     /// Full mise argument vector including the program.
-    #[must_use]
-    pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
+    /// # Errors
+    /// Returns an error when the selected tool lacks catalog authority.
+    pub fn argv(&self, catalog: &ToolCatalog) -> Result<Vec<OsString>, MiseError> {
         self.qualification.argv(catalog)
     }
 
@@ -357,7 +295,7 @@ impl VerifyPreparedInputs {
     /// # Errors
     ///
     /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
-    /// empty, which the constructor rules out.
+    /// empty, which the constructor rules out. Catalog selection errors propagate.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         self.qualification
             .command(catalog)?
@@ -390,3 +328,7 @@ fn invalid_input(field: &str, value: &str) -> MiseError {
         value: value.to_owned(),
     }
 }
+
+#[cfg(test)]
+#[path = "tool_homes_domain_tests.rs"]
+mod tool_homes_domain_tests;

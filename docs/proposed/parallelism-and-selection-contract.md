@@ -177,16 +177,25 @@ For PR, merge-group, and protected default-branch push planning, resolve the
 baseline after inventory and obligation identities are known. The base is the
 PR base SHA, merge-group base SHA, or push event's `before` SHA, respectively.
 The pinned `gh` CLI MUST be a Mise-managed tool. The orchestrator asks the Mise
-adapter to execute fixed `gh run list`/`gh run download` arguments through the
-pinned Mise environment, passing only the full base SHA, generated workflow
-path, protected default-branch name, and expected artifact name. It filters
-results again for exact `headSha`, `refs/heads/<default>`, `event=push`, and
-successful conclusion; it then downloads by exact run ID and artifact name
-into a fresh temporary directory. It accepts no arbitrary URL, run ID, shell
-fragment, or artifact wildcard from project config. After reading and
-validating `baseline.json`, it removes the downloaded archive and extracted
-temporary files. This avoids a second GitHub HTTP client and reuses Mise as the
-tool installer.
+adapter to execute fixed `gh` arguments through the pinned Mise environment,
+passing only the validated repository, full base SHA, generated workflow path,
+protected default-branch name, and expected artifact name. It filters the run
+listing for exact `headSha`, `headBranch`, `event=push`, and successful
+conclusion. For that exact run ID, it lists artifacts through the GitHub API
+and collects unexpired entries with the exact expected name and matching run,
+commit, and branch metadata. Since the canonical name may have multiple
+immutable service IDs across attempts, each candidate is checked against the
+requested manifest identity and authenticated run attempt. Exactly one
+candidate must match; zero or ambiguous authenticated matches fail closed. It
+downloads only from the API ZIP endpoint for a candidate's immutable artifact
+ID. Each candidate's service receipt must have a positive ID, a valid SHA-256
+digest, and a size from 1 byte through 8 MiB;
+the in-memory response must match both the advertised size and digest before
+parsing. ZIP admission accepts one regular `baseline.json` of at most 1 MiB,
+validates local and central metadata and any deflate data descriptor, and
+rejects unsafe flags, extra entries, ZIP64, encryption, and malformed layout.
+The archive is never extracted or written to disk. No arbitrary URL, run ID,
+shell fragment, or artifact wildcard may come from project config.
 
 Generated workflow permissions are `contents: read` and `actions: read`; the planning process receives `${{ github.token }}` only as `GH_TOKEN`, which must never be printed or inherited by task execution. Before any repository task starts, Velnor removes `GH_TOKEN`, `GITHUB_TOKEN`, `ACTIONS_RUNTIME_TOKEN`, and other undeclared action credential variables from the child environment. No `pull_request_target`, PR write token, wildcard artifact download, executable in the baseline, or PR-produced proof is allowed. The published baseline contains evidence only: no source, executable, credentials, or task-cache directories. If `gh` is missing, API access fails, or download fails, planning records `baseline_unavailable` and schedules affected obligations normally; it still fails if the Rust inventory itself is incomplete.
 

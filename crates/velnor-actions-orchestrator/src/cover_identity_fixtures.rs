@@ -12,18 +12,20 @@ use velnor_actions_contract::{
     PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, RunnerSelection, Trust,
     WorkflowEvent, canonical_json_bytes, digest_b3,
 };
-use velnor_actions_mise::ToolCatalog;
+use velnor_actions_mise::{RuntimePaths, ToolCatalog};
 
 /// Plan carrying one execute obligation per `task_ids`.
 pub(super) fn plan_with(task_ids: &[&str]) -> Plan {
     let digest = digest_b3(b"digest");
     Plan {
+        producers: Default::default(),
         schema: 1,
         run_key: "local".to_owned(),
         plan_id: "plan-local".to_owned(),
         base: None,
         head: "head".to_owned(),
         event: WorkflowEvent::PullRequest,
+        scope: velnor_actions_contract::VerificationScope::Affected,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,
@@ -40,11 +42,13 @@ pub(super) fn plan_with(task_ids: &[&str]) -> Plan {
             .iter()
             .map(|id| PlanObligation {
                 task_id: (*id).to_owned(),
+                job_id: "rust-demo".to_owned(),
                 decision: ObligationDecision::Execute,
                 reason: "selected".to_owned(),
                 task_digest: digest.clone(),
                 input_digest: digest.clone(),
                 closure_digest: digest.clone(),
+                execution_identity: fixture_execution_identity(id),
                 baseline_proof: None,
             })
             .collect(),
@@ -68,7 +72,7 @@ pub(super) fn manifest_with(entries: &[(&str, &str)]) -> BaselineManifest {
     let commit = "a".repeat(40);
     let name = format!("velnor-baseline-{commit}-{digest}");
     BaselineManifest {
-        schema: 2,
+        schema: 3,
         repository_id: digest_b3("github.com/o/r".as_bytes()),
         source_commit: commit.clone(),
         ref_: "refs/heads/testmain".to_owned(),
@@ -95,16 +99,52 @@ pub(super) fn manifest_with(entries: &[(&str, &str)]) -> BaselineManifest {
                 carried_from: None,
                 observed_run_id: 7,
                 external_data: None,
-                proof: None,
+                proof: Some(fixture_task_proof(id, &digest)),
             })
             .collect(),
     }
 }
 
+/// Baseline dimensions matching the ordinary Rust proposal fixture.
+fn fixture_execution_identity(id: &str) -> velnor_actions_contract::TaskExecutionIdentity {
+    let discovery = discovery_with(&[id]);
+    let task = &discovery.proposals[0];
+    let snapshot = ExecutionSnapshot::build(&discovery);
+    let bundle = extension_bundle_with_snapshot(&snapshot, &discovery, task, None, None);
+    let catalog = ToolCatalog::pinned();
+    crate::internal_plan::identities::execution_identity_for(
+        task,
+        &bundle,
+        &catalog,
+        &toolchain_id_for_runner(task, &catalog, "ubuntu-26.04").expect("toolchain"),
+        &platform_id_for_group("ubuntu-26.04", task).expect("platform"),
+    )
+    .expect("execution identity")
+}
+
+/// Structured proof bound to the same ordinary execution dimensions.
+fn fixture_task_proof(id: &str, digest: &str) -> ManifestTaskProof {
+    let identity = fixture_execution_identity(id);
+    ManifestTaskProof::new(
+        id,
+        digest,
+        digest,
+        identity.graph_digest(),
+        identity.toolchain_id(),
+        identity.mbx_digest(),
+        identity.platform_id(),
+        identity.profile(),
+        7,
+    )
+    .expect("task proof")
+}
+
 /// Discovery with one plain proposal per task ID, all unchanged.
-pub(super) fn discovery_with(task_ids: &[&str]) -> Discovery {
+pub(crate) fn discovery_with(task_ids: &[&str]) -> Discovery {
     use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
     Discovery {
+        rust_inventory: None,
+        raw_inventories: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: task_ids
@@ -154,7 +194,7 @@ pub(super) fn discovery_with(task_ids: &[&str]) -> Discovery {
 }
 
 /// Baseline inputs over a temp checkout root.
-pub(super) fn inputs<'a>(
+pub(crate) fn inputs<'a>(
     root: &'a std::path::Path,
     catalog: &'a ToolCatalog,
 ) -> BaselineInputs<'a> {
@@ -164,6 +204,7 @@ pub(super) fn inputs<'a>(
         workflow: ".github/workflows/ci.yml",
         catalog,
         repository: None,
+        runtime: RuntimePaths::full(),
     }
 }
 
@@ -172,9 +213,9 @@ pub(super) fn inputs<'a>(
 /// Coverage tests never run on hand-built provenance: the manifest
 /// must validate exactly like production evidence, and the digest
 /// binds its canonical bytes.
-pub(super) fn provenance_for(manifest: &BaselineManifest) -> ValidatedProvenance {
+pub(crate) fn provenance_for(manifest: &BaselineManifest) -> ValidatedProvenance {
     let expected = ProvenanceExpectations {
-        base: "a".repeat(40),
+        base: manifest.source_commit.clone(),
         branch: "testmain".to_owned(),
         workflow_path: ".github/workflows/ci.yml".to_owned(),
         generator_version: "0.1.0".to_owned(),
@@ -194,7 +235,7 @@ pub(super) fn stale_closure() -> String {
 }
 
 /// Source files backing a content-bound closure in `root`.
-pub(super) fn seed_sources(root: &std::path::Path) {
+pub(crate) fn seed_sources(root: &std::path::Path) {
     std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\n").expect("manifest");
     std::fs::create_dir(root.join("src")).expect("src");
     std::fs::write(root.join("src/lib.rs"), "pub fn f() {}\n").expect("source");
@@ -220,7 +261,7 @@ pub(super) fn live_closure_digest(
         Some(root),
         nextest_config_for(discovery, task).as_deref(),
     );
-    let toolchain = toolchain_id(task, catalog).expect("toolchain");
+    let toolchain = toolchain_id_for_runner(task, catalog, "ubuntu-26.04").expect("toolchain");
     let platform = platform_id_for_group("ubuntu-26.04", task).expect("platform");
     let closure = resolve_closure_at_root(
         root,
@@ -230,7 +271,106 @@ pub(super) fn live_closure_digest(
         &toolchain,
         &platform,
         &mut velnor_actions_tofu::FileCache::new(),
+        None,
     )
     .expect("closure");
     canonical_digest(&closure).expect("digest")
+}
+
+/// Conservative fixture classification; refinement needs separate qualification.
+pub(super) fn selection(ids: &[&str]) -> crate::select::ChangedSelection {
+    crate::select::ChangedSelection {
+        affected: ids.iter().map(|id| (*id).to_owned()).collect(),
+        proof_refinable: Default::default(),
+    }
+}
+
+/// Original checkout evidence retained while a real Git fixture changes topology.
+pub(crate) struct OriginalBaseline {
+    manifest: BaselineManifest,
+    task_id: String,
+}
+
+impl OriginalBaseline {
+    pub(crate) fn capture(root: &std::path::Path, discovery: &Discovery, unit_path: &str) -> Self {
+        let task = discovery
+            .proposals
+            .iter()
+            .find(|task| task.identity.unit_path == unit_path && task.task_kind == "clippy")
+            .expect("original clippy");
+        let catalog = ToolCatalog::pinned();
+        let live = live_closure_digest(root, discovery, &task.task_id, &catalog);
+        let snapshot = ExecutionSnapshot::build(discovery).with_checkout(root);
+        let bundle = extension_bundle_with_snapshot(&snapshot, discovery, task, Some(root), None);
+        let mut manifest = manifest_with(&[(&task.task_id, &live)]);
+        let commit = velnor_actions_mise::GitRequest::rev_parse(vec!["HEAD".into()])
+            .run_in(root)
+            .expect("original commit");
+        assert!(commit.success, "original checkout must be committed");
+        manifest.source_commit = String::from_utf8(commit.stdout)
+            .expect("commit UTF8")
+            .trim()
+            .to_owned();
+        let digest = digest_b3(b"digest");
+        manifest.artifact_name = format!("velnor-baseline-{}-{digest}", manifest.source_commit);
+        manifest.artifact_id =
+            crate::cover_compat::baseline_artifact_numeric_id(&manifest.artifact_name);
+        manifest.tasks[0].proof = Some(
+            ManifestTaskProof::new(
+                &task.task_id,
+                &digest,
+                &digest,
+                bundle.graph_digest(),
+                &toolchain_id_for_runner(task, &catalog, "ubuntu-26.04").expect("toolchain"),
+                &live_mbx_digest(task, &catalog),
+                &platform_id_for_group("ubuntu-26.04", task).expect("platform"),
+                &task.configuration,
+                7,
+            )
+            .expect("original proof"),
+        );
+        let _verified = provenance_for(&manifest);
+        Self {
+            manifest,
+            task_id: task.task_id.clone(),
+        }
+    }
+
+    pub(crate) fn check(
+        &self,
+        root: &std::path::Path,
+        discovery: &Discovery,
+        changed: &crate::select::ChangedSelection,
+    ) -> (u32, Vec<String>) {
+        let catalog = ToolCatalog::pinned();
+        // Keep original task/input identities equal to isolate the live proof/closure gate.
+        let mut plan = plan_with(&[&self.task_id]);
+        if let Some(task) = discovery
+            .proposals
+            .iter()
+            .find(|task| task.task_id == self.task_id)
+        {
+            let snapshot = ExecutionSnapshot::build(discovery).with_checkout(root);
+            let bundle =
+                extension_bundle_with_snapshot(&snapshot, discovery, task, Some(root), None);
+            plan.obligations[0].execution_identity =
+                crate::internal_plan::identities::execution_identity_for(
+                    task,
+                    &bundle,
+                    &catalog,
+                    &toolchain_id_for_runner(task, &catalog, "ubuntu-26.04").expect("toolchain"),
+                    &platform_id_for_group("ubuntu-26.04", task).expect("platform"),
+                )
+                .expect("execution identity");
+        }
+        let covered = apply_coverage(
+            &mut plan,
+            &self.manifest,
+            &provenance_for(&self.manifest),
+            discovery,
+            Some(changed),
+            &inputs(root, &catalog),
+        );
+        (covered, plan.warnings)
+    }
 }

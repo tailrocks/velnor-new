@@ -10,8 +10,8 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_contract::{FinalReport, RunnerSelection};
 use velnor_actions_orchestrator::{
-    OrchestratorError, finalized_jobs, init_config, merge_internal, plan_internal, plan_text,
-    prepare, resolve_root,
+    OrchestratorError, finalized_jobs, init_config, merge_internal, plan_internal,
+    plan_text_checked, prepare, resolve_root,
 };
 
 use crate::impl_common::{
@@ -159,7 +159,7 @@ fn internal_merge_aggregates_reports() -> TestResult {
     let merge_request = serde_json::json!({
         "schema": 1,
         "run_key": "local",
-        "actual_event": "pull_request",
+        "actual_scope": "affected", "actual_event": "pull_request",
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": [],
@@ -180,7 +180,7 @@ fn internal_merge_aggregates_reports() -> TestResult {
     let merge_request = serde_json::json!({
         "schema": 1,
         "run_key": "local",
-        "actual_event": "pull_request",
+        "actual_scope": "affected", "actual_event": "pull_request",
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": reports,
@@ -283,7 +283,7 @@ fn unknown_override_key_rejected_with_key_path() -> TestResult {
     );
     // Policy-owned alint overrides reject like unknown keys (§2, GitHub Action defaults).
     let repo = make_repo(
-        "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[actions.overrides]\n\"asamarts/alint\" = { version = \"v0.16.1\", sha = \"9f9d34ba0eae3888299b9e570f43338b0e7f2cdb\" }\n",
+        "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[actions.overrides]\n\"asamarts/alint\" = { version = \"v0.17.0\", sha = \"d93c0283b19dd78afcd8a4b303f1556a7759ba81\" }\n",
     )?;
     let m = err_of(prepare(repo.path()), "alint override rejected")?.to_string();
     assert!(m.contains("actions.overrides.asamarts/alint"));
@@ -360,7 +360,7 @@ fn plan_job_lines_come_from_finalized_jobs() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let prep = prepare(repo.path())?;
     let jobs = finalized_jobs(&prep)?;
-    let text = plan_text(&prep, &jobs);
+    let text = plan_text_checked(&prep)?;
     assert!(!jobs.is_empty(), "finalized jobs exist");
     for (id, job) in &jobs {
         let line = format!("- {id} ({} steps)", job.steps.len());

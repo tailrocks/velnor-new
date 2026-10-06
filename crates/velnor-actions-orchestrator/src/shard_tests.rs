@@ -4,8 +4,8 @@
 //! lookup module keeps the file size gate.
 
 use super::*;
-use crate::run_select::select_exact_base_candidates;
-use velnor_actions_mise::ToolCatalog;
+use crate::run_select::{SelectedBaseRun, select_exact_base_run};
+use velnor_actions_mise::{RuntimePaths, ToolCatalog};
 
 #[test]
 fn lookup_args_are_fixed_and_validated() {
@@ -31,16 +31,27 @@ fn lookup_args_are_fixed_and_validated() {
         {"databaseId": 2, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "success", "attempt": 2},
     ]);
     assert_eq!(
-        select_exact_base_candidates(&runs.to_string(), &base, "t"),
-        Ok(vec![2])
+        select_exact_base_run(&runs.to_string(), &base, "t"),
+        Ok(SelectedBaseRun {
+            run_id: 2,
+            attempt: 2,
+        })
     );
-    assert!(select_exact_base_candidates(&runs.to_string(), &"c".repeat(40), "t").is_err());
+    assert!(select_exact_base_run(&runs.to_string(), &"c".repeat(40), "t").is_err());
     let args: Vec<String> = lookup
         .artifacts_args(7)
         .iter()
         .map(|a| a.to_string_lossy().into_owned())
         .collect();
-    assert_eq!(args, ["api", "repos/o/r/actions/runs/7/artifacts"]);
+    assert_eq!(
+        args,
+        [
+            "api",
+            "repos/o/r/actions/runs/7/artifacts",
+            "--paginate",
+            "--slurp",
+        ]
+    );
 }
 
 #[test]
@@ -48,28 +59,31 @@ fn lookup_without_exact_artifact_misses_before_spawning() {
     let base = "a".repeat(40);
     let catalog = ToolCatalog::pinned();
     let tmp = tempfile::tempdir().expect("tempdir");
-    let miss = |artifact: Option<&str>| {
+    let miss = |compatibility: &str| {
+        let artifact = format!("velnor-baseline-{base}-{compatibility}");
         resolve_manifests(
             &catalog,
             tmp.path(),
             &base,
             ".github/workflows/ci.yml",
             "testmain",
-            artifact,
+            &artifact,
             None,
+            RuntimePaths::full(),
         )
         .expect_err("miss")
     };
-    assert_eq!(miss(None), "baseline_no_exact_artifact");
-    assert_eq!(miss(Some("")), "baseline_no_exact_artifact");
+    assert_eq!(miss(""), "baseline_no_exact_artifact");
+    assert_eq!(miss("not-a-digest"), "baseline_no_exact_artifact");
     let malformed = resolve_manifests(
         &catalog,
         tmp.path(),
         "short",
         ".github/workflows/ci.yml",
         "testmain",
+        "not-a-digest",
         None,
-        None,
+        RuntimePaths::full(),
     )
     .expect_err("inputs");
     assert_eq!(malformed, "base_must_be_full_sha");

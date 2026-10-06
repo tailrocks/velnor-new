@@ -16,7 +16,7 @@ A real OpenTofu repository gets generated GitHub Actions with no Cargo
 project, no custom-shell escape hatch, and no lost IaC verification:
 
 1. `tofu fmt -check` over the established formatting scope.
-2. Per-root `init -backend=false -input=false -lockfile=readonly`.
+2. Per-root `init -json -backend=false -input=false -lockfile=readonly`.
 3. Real `tofu validate` in the initialized root.
 4. Failure/cancellation/missing-report/preparation-error propagation to
    Required.
@@ -103,7 +103,7 @@ Evidence:
 | F1 zero non-test `TaskGroup` in orchestrator outside one rust-adaptation module | **PASS** | only `derive_groups.rs` (feature/shard derivation); `select_affected` + `cover_identity_fixtures` uses are `#[cfg(test)]` |
 | F2 zero new `serde_json::Value` on discovery/proposal/identity paths; tofu extension gets a required-slot validator | **PASS** (constraint) | zero hits at live head; refactor adds none; `tofu-task-identity-v1` validator lands in Phase B |
 | F3 one reverse-closure owner over neutral edges; zero tofu graph/scheduler types | **PASS** | `contract::reverse_closure<N: Ord + Clone>` is the single owner; `rust/src/graph.rs` holds no copy; `select_affected` converts via rust-owned `local_edge_pairs` |
-| F4 renderer/transport/CLI own no tofu domain decisions (argv/flags, root selection, lock/version/scope); no `RenderDriver` variant | **PASS** | renderer holds tofu representation only (step templates, writer election, layer arms), pinned by the `impl_renderer_tofu_leak` symbol test; CLI src zero tofu hits; mise `tofu_exec` pure ctor, no selection rules |
+| F4 renderer/transport/CLI own no tofu domain decisions (argv/flags, root selection, lock/version/scope); no `RenderDriver` variant | **PASS** | renderer holds tofu representation only (step templates, source-bound helper admission, layer arms), pinned by the `impl_renderer_tofu_leak` symbol test; CLI src zero tofu hits; mise `tofu_exec` pure ctor, no selection rules |
 | F5 one `REGISTERED_STACKS`; neutral detector records; neutral identity inputs; 7→8 arch tests amended with enforcement intact | **PASS except T08** | M1 deletes the rust mirror; detectors already return `StackCandidate`; lane/platform/toolchain take `&ProposedTask`; T08 (eighth crate) is Phase-B-gated |
 | F6 skew items re-verified | **PASS** | custom-task allowlist IS in `RustStackConfig` at live head (`stacks.rs:57-60`, spec F06 correct); `DetectorEntry` is `(&str,u32,fn)`; `CrateJob` keeps `package_id` + `"Rust / "` gate while `CrateObligation` is neutral; placeholder digest fails closed (`validate_identities`); `release.yml` on main |
 | F7 consumer parity (recursive fmt + readonly backend-less init + validate; module→root selection; hosted labels; no `velnor-workflow` residue) | **PENDING Phase B/E** | requires tofu behavior; rationale recorded, not waived |
@@ -163,7 +163,29 @@ module dirs never auto-promoted to roots; cycles/missing-target = error;
 unknown/dynamic/external → select ALL roots with recorded reason.
 
 Task kinds `Fmt`/`InitForValidate`/`Validate`; IDs
-`stack/tofu/root/<kind>/<config>`; argv with `-chdir` FIRST; Fmt independent,
+`stack/tofu/<root-key>/<kind>/<config>`, where `<root-key>` is `dir-`
+followed by the lowercase hexadecimal encoding of the exact normalized UTF-8
+root bytes. Repository root uses empty bytes (`dir-`); literal directory `root`
+uses `dir-726f6f74`. Keys decode strictly: legacy keys, malformed hex, invalid
+UTF-8, and noncanonical root paths are errors. Root spellings never normalize
+hyphens, underscores, case, separators, or Unicode. Proposals carry the actual
+directory in `identity.project_root`; consumers with a proposal use that path
+rather than infer a directory from an opaque identity. Generated data/cache/home
+storage paths use full domain-separated root digest locators, so long valid
+source roots do not expand into overlong output paths. Locators never grant
+root authority. Generation rejects a locator bound to different exact roots;
+private directories admit exact root-key owner markers before reuse or writes.
+Task IDs retain the complete root key. Every adapter admission checks task ID,
+unit key, unit ID, project root, unit path, component, and native payload against
+that one root.
+Provider cache keys obey the cache API's 512-character bound using full,
+domain-separated root and source digests. Exported payloads carry the exact
+root key in a regular single-link `.velnor-root-key` file. Candidate imports
+compare its exact bytes before invoking native tools; consumer mismatches are
+cache misses and run the mandatory native checks without the imported cache.
+Hash locators never replace exact root admission.
+argv with `-chdir`
+FIRST; Fmt independent,
 Validate depends on same-root Init (shared private `TF_DATA_DIR`, one init
 per root per attempt); one fmt invocation per non-overlapping scope.
 
@@ -202,7 +224,10 @@ per root per attempt); one fmt invocation per non-overlapping scope.
 - **M3:** fail-closed merge for every report defect incl. missing plan +
   empty matrix on tofu-affecting PRs; keep `if-no-files-found:error`.
 - **M4:** typed-constructor CLI config: `plugin_cache_dir` + `disable_checkpoint`
-  only; no credentials/helpers/overrides/mirrors; controlled `HOME`.
+  + `provider_installation { direct {} }`; no credentials/helpers/overrides/
+  mirrors; controlled `HOME`. Explicit direct installation disables implied
+  filesystem mirrors; public-provider transport admits only qualified public
+  registry source addresses from the committed lock.
 - **M5:** tofu job steps contain no `secrets.*`/`github.token`, no `gh` tool
   (generator asserts; YAML grep test).
 - **M6:** CI mise invocations use `--no-config --no-env --no-hooks` +
@@ -238,15 +263,31 @@ Per-role tools: pure-tofu plan = opentofu + actionlint/shellcheck/zizmor
 only + provider-cache restore; actionlint/required/validators unchanged;
 mixed = union; removal is a distinct behavior-change commit.
 Provider cache: closed layer `tofu-providers`, key
-`velnor-v1-tofu-providers-<target>-<tofu>-<root-slug>-${{hashFiles(...)}}`
-(≤512 B), no trust-namespace segment in static keys: event trust is
-unknowable at generation (like the rust sources key), so isolation
-holds via exact-key restore, push-gated saves, and runner branch
-scoping, and every tofu hit still faces lock-verified readonly init
-plus mandatory validate; transport = plugin-cache dir
-only (job-private `$RUNNER_TEMP/velnor/tofu-cache/<slug>`), restore before
-init; per-root job saves only its own root-scoped key (plan never inits so
-never saves); push-gated trusted save; restore still faces readonly init;
+`velnor-v2-tofu-providers-<target>-<tofu>-<root-digest>-<source-digest>`
+(≤512 B), exact-key restore only. The root digest is full and domain separated;
+restored payloads must also prove exact root-key bytes before native cache use.
+The source digest binds the immutable
+generation-captured lock, exact public provider selections, direct-only
+installation policy, and compiled producer source. Prior mutable consumer
+entries cannot match this producer identity. A separate trusted producer
+runs native readonly init on synthetic provider requirements without a
+checkout, backend, credentials, state, or provider execution. It exports
+only selected regular provider files and the exact root-key receipt after
+native checksum verification, prunes
+empty directories, rejects links and special files, and normalizes metadata.
+Only that producer saves, after verification; task jobs consume read-only
+snapshots and always run lock-verified readonly init plus mandatory validate.
+Consumers await producer completion and still execute when it fails or
+has no cache. The compiled init helper reads native JSON diagnostics. Only
+the pinned installer's modified-cache-package error permits a second readonly
+init with fresh data and direct installation without a plugin cache. Every
+error diagnostic must match that branch; lock, configuration, authentication,
+and network errors propagate. After that classified error, the helper
+quarantines owned init data and rebuilds at the same data path, preserving
+native module manifests. Retry failure propagates; mandatory validate uses
+successful native output. The repository lock stays unchanged.
+Transport = job-private provider files under
+`$RUNNER_TEMP/velnor/tofu-cache/<slug>`; data directories stay excluded.
 hit MUST still run init+validate (T23). Compiler reuse stays under
 `rust-quality-contract.md` §3 (MBX profiles); this layer caches provider
 artifacts only. Env: approved

@@ -46,12 +46,14 @@ fn fixture_plan() -> (Plan, String) {
     )
     .expect("entry derives");
     let plan = Plan {
+        producers: Default::default(),
         schema: 1,
         run_key: "local".to_owned(),
         plan_id: plan_id_for_run("local").expect("plan id"),
         base: None,
         head: "HEAD".to_owned(),
         event: WorkflowEvent::PullRequest,
+        scope: velnor_actions_contract::VerificationScope::Affected,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,
@@ -66,10 +68,19 @@ fn fixture_plan() -> (Plan, String) {
         packages: Vec::new(),
         obligations: vec![PlanObligation {
             task_id: CLIPPY.to_owned(),
+            job_id: "rust-demo".to_owned(),
             decision: ObligationDecision::Execute,
             reason: "selected".to_owned(),
             task_digest: task_digest.clone(),
             input_digest: digest(11),
+            execution_identity: velnor_actions_contract::TaskExecutionIdentity::new(
+                &velnor_actions_contract::digest_b3(b"fixture-graph"),
+                &velnor_actions_contract::digest_b3(b"fixture-toolchain"),
+                &velnor_actions_contract::digest_b3(b"fixture-mbx"),
+                &velnor_actions_contract::digest_b3(b"fixture-platform"),
+                "default",
+            )
+            .expect("execution identity"),
             closure_digest: digest(21),
             baseline_proof: None,
         }],
@@ -197,7 +208,7 @@ fn noop_rejects_contradictions() {
         task_digest: digest(9),
     };
     let err = write_noop_report_to("local", CLIPPY, 0, &drifted, temp.path()).expect_err("digest");
-    assert!(err.to_string().contains("noop_digest_mismatch"), "{err}");
+    assert!(err.to_string().contains("task_digest_mismatch"), "{err}");
     assert!(
         write_noop_report_to(
             "local",
@@ -252,5 +263,48 @@ fn noop_digest_key_is_disjoint_from_exec_digest_key() {
     assert_ne!(
         TASK_DIGEST_ENV, OBLIGATION_TASK_DIGEST_ENV,
         "exec steps bake the obligation digest into every obligation env; aliasing makes the report op fail noop_half_present on every executed task"
+    );
+}
+
+#[test]
+fn covered_noop_still_requires_exact_canonical_frame_digest() {
+    let (mut plan, expected) = fixture_plan();
+    let task_id = CLIPPY;
+    let commit = "a".repeat(40);
+    let name = format!("velnor-baseline-{commit}-{}", digest(7));
+    let proof = velnor_actions_contract::BaselineProof::new(
+        &commit,
+        7,
+        crate::cover_compat::baseline_artifact_numeric_id(&name),
+        &name,
+        &digest(8),
+    )
+    .expect("baseline proof");
+    plan.obligations[0].decision =
+        velnor_actions_contract::ObligationDecision::CoveredByTrustedBaseline;
+    plan.obligations[0].baseline_proof = Some(proof);
+    plan.matrix.include.clear();
+    plan.validate().expect("covered fixture");
+    for value in [
+        String::new(),
+        "invalid".to_owned(),
+        velnor_actions_contract::digest_b3(b"stale-frame"),
+    ] {
+        let temp = staged_run(&plan);
+        let request = NoOpRequest {
+            reason: NotSelectedReason::Unsupported,
+            task_digest: value,
+        };
+        assert!(write_noop_report_to("local", task_id, 0, &request, temp.path()).is_err());
+    }
+    let temp = staged_run(&plan);
+    let request = NoOpRequest {
+        reason: NotSelectedReason::Unsupported,
+        task_digest: expected,
+    };
+    assert_eq!(
+        write_noop_report_to("local", task_id, 0, &request, temp.path())
+            .expect("exact covered identity"),
+        0
     );
 }

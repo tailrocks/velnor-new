@@ -92,7 +92,7 @@ pub fn is_denied_tf_key(key: &str) -> bool {
         .any(|prefix| key.starts_with(prefix))
 }
 
-/// Merge the toolchain-home triple into a step env map.
+/// Merge owned toolchain homes and disable Rustup's implicit installation.
 #[must_use]
 pub fn with_toolchain_homes(
     env: &BTreeMap<String, String>,
@@ -101,17 +101,23 @@ pub fn with_toolchain_homes(
     toolchain: &str,
 ) -> BTreeMap<String, String> {
     let mut merged = env.clone();
+    let data = std::path::Path::new(rustup_home).with_file_name("mise");
+    merged.insert(
+        "MISE_DATA_DIR".to_owned(),
+        data.to_string_lossy().into_owned(),
+    );
     for (key, value) in [
         (TOOLCHAIN_HOME_KEYS[0], rustup_home),
         (TOOLCHAIN_HOME_KEYS[1], cargo_home),
         (TOOLCHAIN_HOME_KEYS[2], toolchain),
+        ("RUSTUP_AUTO_INSTALL", "0"),
     ] {
         merged.insert(key.to_owned(), value.to_owned());
     }
     merged
 }
 
-/// Require the toolchain-home triple in a Cargo step env.
+/// Require owned toolchain homes and Rustup's exact implicit-install guard.
 /// # Errors
 pub fn check_toolchain_homes(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
     for key in TOOLCHAIN_HOME_KEYS {
@@ -120,6 +126,11 @@ pub fn check_toolchain_homes(env: &BTreeMap<String, String>) -> Result<(), Rende
                 "missing_toolchain_home:{key}"
             )));
         }
+    }
+    if env.get("RUSTUP_AUTO_INSTALL").map(String::as_str) != Some("0") {
+        return Err(RenderError::BadCommand(
+            "rustup_auto_install_not_disabled".to_owned(),
+        ));
     }
     Ok(())
 }
@@ -270,26 +281,34 @@ pub(crate) fn unset_prefix_len(argv: &[String]) -> usize {
 
 /// Isolation keys forbidden in project-task step env (P07-7 hook escape).
 ///
-/// The isolation quartet plus the install-disable pair. Trusted generated
+/// The isolation quartet plus Mise and Rustup install-disable keys. Trusted generated
 /// steps carry these from the Mise adapter's single source; untrusted
 /// project-task declarations must never smuggle them in to re-enable
 /// hooks, config, or implicit installs. Mirrors the Mise adapter's
 /// reserved set minus credentials (denied separately above) without
 /// depending on it.
-pub const STEP_ISOLATION_DENYLIST: [&str; 6] = [
+pub const STEP_ISOLATION_DENYLIST: [&str; 8] = [
+    "MISE_DATA_DIR",
     "MISE_NO_CONFIG",
     "MISE_NO_ENV",
     "MISE_NO_HOOKS",
     "MISE_LOCKFILE",
     "MISE_AUTO_INSTALL",
     "MISE_EXEC_AUTO_INSTALL",
+    "RUSTUP_AUTO_INSTALL",
 ];
 
-/// Reject privileged isolation keys in a project-task step env map.
+/// Reject Mise and Rustup installation control keys in project-task env.
+///
+/// Reserve the complete family except the two owned tool homes, matching
+/// the Mise adapter. Newly added authority keys cannot become caller inputs.
 /// # Errors
 pub fn reject_privileged_task_keys(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
-    for key in STEP_ISOLATION_DENYLIST {
-        if env.contains_key(key) {
+    for key in env.keys() {
+        if key == "RUSTUP_AUTO_INSTALL"
+            || key.starts_with("MISE_")
+                && ![TOOLCHAIN_HOME_KEYS[0], TOOLCHAIN_HOME_KEYS[1]].contains(&key.as_str())
+        {
             return Err(RenderError::BadCommand(format!(
                 "privileged_task_env:{key}"
             )));

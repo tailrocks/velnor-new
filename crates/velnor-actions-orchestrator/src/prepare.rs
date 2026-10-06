@@ -1,5 +1,8 @@
 //! Validated generation input shared by `plan` and `generate`.
 
+#[path = "verification_observer.rs"]
+mod verification_observer;
+
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
@@ -10,8 +13,13 @@ use crate::OrchestratorError;
 use crate::config::load_config;
 use crate::decisions::runner_image_evidence;
 use crate::discover::{Discovery, discover};
+use crate::inventory::InventoryProvider;
 use crate::source_prep::lockful_roots;
 use crate::workflow::{DEFAULT_RUNNER_LABEL, WorkflowPlan, build_workflow};
+
+#[cfg(test)]
+#[path = "prepare_inventory_tests.rs"]
+mod inventory_tests;
 
 /// Canonical repository identity allowed the Velnor-repository policy.
 const VELNOR_IDENTITY: &str = "tailrocks/velnor-new";
@@ -48,6 +56,14 @@ pub struct GenerationPreparation {
 ///
 /// Returns root, config, branch, identity, discovery, or workflow errors.
 pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> {
+    prepare_with_inventory(root, InventoryProvider::FreshCargo)
+}
+
+/// Prepare through fresh Cargo or an authenticated, current inventory.
+pub(crate) fn prepare_with_inventory(
+    root: &Path,
+    inventory: InventoryProvider<'_>,
+) -> Result<GenerationPreparation, OrchestratorError> {
     let canonical = root
         .canonicalize()
         .map_err(|err| OrchestratorError::io(root.display().to_string(), err.to_string()))?;
@@ -59,15 +75,23 @@ pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> 
     let config = load_config(&canonical)?;
     let default_branch = resolve_default_branch(&canonical, &config)?;
     check_velnor_identity(&canonical, &config)?;
-    let mut discovery = discover(&canonical, &config)?;
+    let mut discovery = discover(&canonical, &config, inventory)?;
     let fetch_roots = lockful_roots(&canonical, &discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
-    let workflow = build_workflow(
+    let mut workflow = build_workflow(
+        &canonical,
         &config,
         &default_branch,
         &runner_label,
         &discovery,
         &fetch_roots,
+    )?;
+    attach_verification_observer(
+        &canonical,
+        &config,
+        &default_branch,
+        &runner_label,
+        &mut workflow,
     )?;
     let runner_image = runner_image_evidence();
     let audit = crate::lock_audit::audit_prepare_installs(
@@ -75,6 +99,13 @@ pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> 
         &workflow.ir,
         &runner_label,
         &workflow.context.validator_commands,
+    );
+    discovery.recommendations.extend(
+        workflow
+            .mbx_finalization
+            .unsupported
+            .iter()
+            .map(|domain| format!("mbx_cache_cold:{}:{}", domain.job_id, domain.reason)),
     );
     discovery.recommendations.extend(audit.recommendation);
     discovery
@@ -95,6 +126,34 @@ pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> 
     })
 }
 
+/// Bind an optional protected observer to the repository's exact origin.
+fn attach_verification_observer(
+    root: &Path,
+    config: &VelnorConfig,
+    branch: &str,
+    label: &str,
+    workflow: &mut WorkflowPlan,
+) -> Result<(), OrchestratorError> {
+    if !config
+        .workflow
+        .verification
+        .as_ref()
+        .is_some_and(|verification| verification.alert)
+    {
+        return Ok(());
+    }
+    let repository = crate::release_emit::release_identity::origin_repository(root)?;
+    let records = verification_observer::attach_observer(
+        &mut workflow.ir.jobs,
+        config,
+        &repository,
+        branch,
+        label,
+    )?;
+    workflow.context.source_helpers.extend(records);
+    Ok(())
+}
+
 /// Runner label plus provenance from the config override or the default.
 pub(crate) fn runner_label_for(config: &VelnorConfig) -> (String, RunnerSelection) {
     match &config.workflow.runner_label {
@@ -107,8 +166,16 @@ pub(crate) fn runner_label_for(config: &VelnorConfig) -> (String, RunnerSelectio
 }
 
 /// Default branch from the config override or local `origin/HEAD`.
-fn resolve_default_branch(root: &Path, config: &VelnorConfig) -> Result<String, OrchestratorError> {
+pub(crate) fn resolve_default_branch(
+    root: &Path,
+    config: &VelnorConfig,
+) -> Result<String, OrchestratorError> {
     if let Some(branch) = &config.workflow.default_branch {
+        if !velnor_actions_contract::is_valid_branch_name(branch) {
+            return Err(OrchestratorError::DefaultBranch {
+                problem: "malformed_branch".to_owned(),
+            });
+        }
         return Ok(branch.clone());
     }
     let output = GitRequest::rev_parse(vec![
@@ -137,11 +204,7 @@ fn resolve_default_branch(root: &Path, config: &VelnorConfig) -> Result<String, 
 /// Strip the `origin/` prefix, rejecting empty or malformed branches.
 fn branch_from_origin_head(text: &str) -> Option<String> {
     let branch = text.strip_prefix("origin/").unwrap_or(text);
-    if branch.is_empty()
-        || branch.contains(char::is_whitespace)
-        || branch.contains("..")
-        || branch == "HEAD"
-    {
+    if !velnor_actions_contract::is_valid_branch_name(branch) {
         return None;
     }
     Some(branch.to_owned())
@@ -226,4 +289,28 @@ pub(crate) fn split_host_path(url: &str) -> Option<(&str, &str)> {
         return None;
     }
     Some((host, path))
+}
+
+#[cfg(test)]
+mod branch_tests {
+    use super::branch_from_origin_head;
+
+    #[test]
+    fn discovered_default_branch_uses_literal_authority() {
+        assert_eq!(
+            branch_from_origin_head("origin/release/1.2"),
+            Some("release/1.2".to_owned())
+        );
+        for branch in [
+            "origin/main'||true||'",
+            "origin/a|b",
+            "origin/a&b",
+            "origin/a.lock",
+            "origin/HEAD",
+            "origin/a\tb",
+            "origin/.a",
+        ] {
+            assert_eq!(branch_from_origin_head(branch), None, "{branch:?}");
+        }
+    }
 }

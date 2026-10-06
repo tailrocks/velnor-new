@@ -1,0 +1,110 @@
+//! Closed desktop compiler authority, separate from the root Rust pin.
+
+use super::{PinnedTool, RustInstallOptions, ToolCatalog, rust_bootstrap::RustHost};
+use crate::MiseError;
+
+/// Compiler required by the reviewed native desktop adapter.
+pub const DESKTOP_RUST_VERSION: &str = "1.99.0";
+
+/// Scoped compiler role; arbitrary repository versions never enter this enum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RustCompilerRole {
+    /// Default generator/workspace authority.
+    RootLinux,
+    /// Fixed root compiler for source-only Mac release tooling.
+    ReleaseMac,
+    /// Native desktop authority on macOS arm64.
+    DesktopMac,
+    /// Protected native delivery with source-only Cargo.
+    DesktopSourceMac,
+}
+
+impl RustCompilerRole {
+    /// Exact supported compiler selected by the role.
+    #[must_use]
+    pub const fn compiler_tool(self) -> PinnedTool {
+        match self {
+            Self::RootLinux | Self::ReleaseMac => PinnedTool::Rust,
+            Self::DesktopMac | Self::DesktopSourceMac => PinnedTool::RustDesktop,
+        }
+    }
+
+    /// Host ABI bound to the closed compiler role.
+    #[must_use]
+    pub const fn host(self) -> RustHost {
+        match self {
+            Self::RootLinux => RustHost::LinuxAmd64,
+            Self::ReleaseMac | Self::DesktopMac | Self::DesktopSourceMac => RustHost::MacosArm64,
+        }
+    }
+
+    /// Installation options required by the role's actual validation.
+    #[must_use]
+    pub fn options(self) -> RustInstallOptions {
+        match self {
+            Self::RootLinux | Self::ReleaseMac => RustInstallOptions::required(),
+            Self::DesktopMac => RustInstallOptions::desktop(),
+            Self::DesktopSourceMac => RustInstallOptions::desktop_source(),
+        }
+    }
+}
+
+impl ToolCatalog {
+    /// Scope the catalog to a known desktop workload; all numeric pins remain.
+    ///
+    /// # Errors
+    /// Rejects workload kinds outside the closed native desktop adapter.
+    pub fn for_native_kind(&self, kind: &str) -> Result<Self, MiseError> {
+        if !matches!(kind, "native_xcode_project_ci" | "native_swift_package_ci") {
+            return Err(MiseError::InvalidStepInput {
+                field: "native_rust_kind".to_owned(),
+                value: kind.to_owned(),
+            });
+        }
+        let mut scoped = self.clone();
+        scoped.rust_role = RustCompilerRole::DesktopMac;
+        Ok(scoped)
+    }
+
+    /// Protected delivery selects the same closed native compiler without MBX.
+    ///
+    /// # Errors
+    /// Rejects workload kinds outside the closed native desktop adapter.
+    pub fn for_native_source_kind(&self, kind: &str) -> Result<Self, MiseError> {
+        let mut scoped = self.for_native_kind(kind)?;
+        scoped.rust_role = RustCompilerRole::DesktopSourceMac;
+        Ok(scoped)
+    }
+
+    /// Whether this compiler role requires Mise's nested MBX wrapper.
+    #[must_use]
+    pub const fn rust_uses_mbx(&self) -> bool {
+        matches!(self.rust_role, RustCompilerRole::DesktopMac)
+    }
+
+    pub(super) fn desktop_compiler_options(&self) -> RustInstallOptions {
+        if self.rust_role == RustCompilerRole::DesktopSourceMac {
+            RustInstallOptions::desktop_source()
+        } else {
+            RustInstallOptions::desktop()
+        }
+    }
+
+    /// Selected compiler role's exact tool identity.
+    #[must_use]
+    pub const fn compiler_tool(&self) -> PinnedTool {
+        self.rust_role.compiler_tool()
+    }
+
+    /// Selected compiler role's exact host ABI.
+    #[must_use]
+    pub const fn rust_host(&self) -> RustHost {
+        self.rust_role.host()
+    }
+
+    /// Typed options bind profile/components/targets and nested MBX routing.
+    #[must_use]
+    pub fn rust_install_options(&self) -> RustInstallOptions {
+        self.rust_role.options()
+    }
+}

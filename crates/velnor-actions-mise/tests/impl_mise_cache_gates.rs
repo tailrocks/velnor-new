@@ -2,7 +2,7 @@
 
 use velnor_actions_contract::digest_b3;
 use velnor_actions_mise::cache::{
-    QualifiedTaskDef, TaskCacheMode, mode_for_event, qualify_reuse, save_allowed, task_run_argv,
+    QualifiedTaskDef, TaskCacheMode, mode_for_event, qualify_reuse, task_run_argv,
     validate_sources_path, validate_task_def_path, verify_reused_outputs,
 };
 use velnor_actions_mise::restore_evidence::{RestoreObservation, classify_restore};
@@ -73,7 +73,13 @@ fn modes_follow_event_kind() {
         mode_for_event("release").expect("release"),
         TaskCacheMode::Off
     );
-    assert!(mode_for_event("schedule").is_err());
+    for event in ["schedule", "workflow_dispatch"] {
+        assert_eq!(
+            mode_for_event(event).expect("verification event"),
+            TaskCacheMode::ReadOnly
+        );
+    }
+    assert!(mode_for_event("issue_comment").is_err());
 }
 
 /// Task definitions live under runner temp only, never `.mise/tasks`.
@@ -210,32 +216,6 @@ fn restore_classification_uses_precise_reasons() {
     check("malformed recorded digest", &obs, "input_digest_mismatch");
 }
 
-/// Every layer saves only producer-successful pushes.
-///
-/// Failed runs never save on any layer, and non-push events never save
-/// through this path; unknown trust scopes deny closed.
-#[test]
-fn saves_gate_on_push_and_pass_for_all_layers() {
-    for layer in ["trusted", "pr"] {
-        assert!(save_allowed(layer, "push", true), "{layer} push saves");
-        assert!(!save_allowed(layer, "push", false), "{layer} failed run");
-        for event in [
-            "pull_request",
-            "merge_group",
-            "fork",
-            "release",
-            "local",
-            "schedule",
-        ] {
-            assert!(!save_allowed(layer, event, true), "{layer} {event}");
-            assert!(!save_allowed(layer, event, false), "{layer} {event}");
-        }
-    }
-    assert!(!save_allowed("unknown", "push", true));
-    assert!(!save_allowed("", "push", true));
-}
-
-/// Reuse requires every declared output present with a matching digest.
 #[test]
 fn reused_outputs_verify_presence_and_digests() {
     let bytes = b"report-bytes".to_vec();

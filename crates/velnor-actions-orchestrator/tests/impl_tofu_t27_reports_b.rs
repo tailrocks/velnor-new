@@ -4,7 +4,7 @@
 //!
 //! A change inside a module shared by one root selects exactly that
 //! root's triple end to end. PR plans stamp `pull_request`/`pr`,
-//! merged-main pushes stamp `push`/`trusted`, and a merge under the
+//! unprotected merged-main pushes stamp `push`/`pr`, and a merge under the
 //! wrong event fails trust coherence closed.
 use std::fs;
 use std::path::Path;
@@ -13,6 +13,7 @@ use serde_json::json;
 use tempfile::TempDir;
 use velnor_actions_contract::{FinalStatus, Plan, Trust, WorkflowEvent};
 use velnor_actions_orchestrator::plan_internal;
+use velnor_actions_tofu::key_for_root;
 
 use super::impl_common::{TestResult, git, git_line, passing_reports};
 use super::impl_orch_core::{merge, merge_request, success_jobs};
@@ -67,7 +68,7 @@ fn merge_passing(plan: &Plan) -> Result<FinalStatus, Box<dyn std::error::Error>>
         &plan_value,
         &serde_json::to_value(&plan.matrix)?,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     Ok(merge(&request)?.status)
 }
@@ -85,10 +86,10 @@ fn tofu_shared_module_change_rides_plan_to_passed() -> TestResult {
     let head = commit(root, "head")?;
     let (plan, _) = plan_pr(root, Some(&base), &head)?;
     assert_eq!(plan.matrix.include.len(), 6, "full universe planned");
+    let root_key = key_for_root("stacks/a");
+    let root_prefix = format!("stack/tofu/{root_key}/");
     for obligation in &plan.obligations {
-        let affected = obligation
-            .task_id
-            .starts_with("stack/tofu/dir-737461636b732f61/");
+        let affected = obligation.task_id.starts_with(&root_prefix);
         assert_eq!(
             obligation.reason == "affected_by_change",
             affected,
@@ -97,7 +98,7 @@ fn tofu_shared_module_change_rides_plan_to_passed() -> TestResult {
             obligation.reason
         );
     }
-    let hit: Vec<&str> = reasons_for(&plan, "stacks/a");
+    let hit: Vec<&str> = reasons_for(&plan, &root_key);
     assert_eq!(hit.len(), 3, "calling triple propagates: {hit:?}");
     assert_eq!(merge_passing(&plan)?, FinalStatus::Passed);
     Ok(())
@@ -131,7 +132,7 @@ fn tofu_pr_plan_stamps_pr_event_and_trust() -> TestResult {
     Ok(())
 }
 
-/// A merged-main push stamps the push event and trusted scope.
+/// A merged-main push stamps the push event without granting protected trust.
 #[test]
 fn tofu_push_plan_stamps_push_event_and_trust() -> TestResult {
     let dir = make_pure_tofu_repo(
@@ -158,7 +159,7 @@ fn tofu_push_plan_stamps_push_event_and_trust() -> TestResult {
     let plan: Plan = serde_json::from_value(value["plan"].clone())?;
     plan.validate()?;
     assert_eq!(plan.event, WorkflowEvent::Push);
-    assert_eq!(plan.trust, Trust::Trusted);
+    assert_eq!(plan.trust, Trust::Pr);
     assert!(!plan.obligations.is_empty(), "push plans tofu work");
     assert_eq!(merge_passing(&plan)?, FinalStatus::Passed);
     Ok(())
@@ -181,16 +182,17 @@ fn tofu_event_mismatch_fails_required_planning_failed() -> TestResult {
     let (plan, _) = plan_pr(root, Some(&base), &head)?;
     let (pushed, _) = plan_push(root, Some(&base), &head)?;
     assert_eq!(pushed.event, WorkflowEvent::Push);
-    assert_eq!(pushed.trust, Trust::Trusted);
+    assert_eq!(pushed.trust, Trust::Pr);
     let reports = passing_reports(&plan)?;
     let plan_value = serde_json::to_value(&plan)?;
     let mut request = merge_request(
         &plan_value,
         &serde_json::to_value(&plan.matrix)?,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     request["actual_event"] = json!("push");
+    request["actual_scope"] = serde_json::json!("affected");
     let report = merge(&request)?;
     assert_eq!(report.status, FinalStatus::PlanningFailed);
     assert!(

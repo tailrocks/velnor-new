@@ -13,7 +13,7 @@ fn tampered_reports_rejected() -> TestResult {
             &plan,
             &matrix,
             &serde_json::to_value(&reports)?,
-            &success_jobs(),
+            &success_jobs(&plan),
         );
         Ok(merge(&request)?.status)
     };

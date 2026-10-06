@@ -126,7 +126,7 @@ fn consumer_plan_installs_validators_before_check_generated() -> TestResult {
         PinnedTool::Zizmor,
     ]
     .iter()
-    .map(|tool| catalog.tool_spec(*tool))
+    .map(|tool| catalog.tool_spec(*tool).expect("qualified selector"))
     .collect::<Vec<_>>();
     let body = &steps[prepare_at].1;
     check_install_specs(body, &specs).map_err(|err| format!("{err}\n{yaml}"))?;
@@ -151,7 +151,9 @@ fn mbx_evidence_adds_driver_to_plan_install() -> TestResult {
     let steps = plan_steps(&yaml);
     let prepare_at = step_index(&steps, "Prepare pinned tools").ok_or("missing Prepare step")?;
     let catalog = ToolCatalog::pinned();
-    let spec = catalog.tool_spec(PinnedTool::MrBoxington);
+    let spec = catalog
+        .tool_spec(PinnedTool::MrBoxington)
+        .expect("qualified selector");
     assert!(
         steps[prepare_at].1.contains(&spec),
         "install misses {spec}:\n{}",

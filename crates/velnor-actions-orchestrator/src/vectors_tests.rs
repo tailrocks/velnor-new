@@ -126,7 +126,9 @@ fn task_payload_program_follows_route_driver() {
 #[test]
 fn task_runner_tools_follow_test_runner() {
     let catalog = ToolCatalog::pinned();
-    let nextest = catalog.tool_spec(PinnedTool::Nextest);
+    let nextest = catalog
+        .tool_spec(PinnedTool::Nextest)
+        .expect("qualified selector");
     for (runner, want) in [
         (TestRunner::CargoTest, false),
         (TestRunner::CargoNextest, true),
@@ -213,9 +215,16 @@ fn tofu_task_argv_routes_through_pinned_opentofu() {
     let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
     task.validate().expect("fixture valid");
     let catalog = ToolCatalog::pinned();
-    let argv = task_argv(&task, &catalog).expect("task argv");
+    let argv = task_argv_for_runner(&task, &catalog, "ubuntu-24.04").expect("task argv");
     assert!(
-        argv.contains(&catalog.tool_spec(PinnedTool::Opentofu)),
+        argv.contains(
+            &catalog
+                .native_tool_spec(
+                    velnor_actions_mise::catalog::qualification::DistributionHost::LinuxAmd64,
+                    PinnedTool::Opentofu,
+                )
+                .expect("qualified selector")
+        ),
         "opentofu spec: {argv:?}"
     );
     assert!(
@@ -240,7 +249,7 @@ fn tofu_subdir_payload_runs_under_chdir_first() {
     };
     let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
     let catalog = ToolCatalog::pinned();
-    let argv = task_argv(&task, &catalog).expect("task argv");
+    let argv = task_argv_for_runner(&task, &catalog, "ubuntu-24.04").expect("task argv");
     let at = argv.iter().position(|arg| arg == "--").expect("separator");
     assert_eq!(
         &argv[at + 1..],
@@ -263,8 +272,27 @@ fn candidate_build_delegates_to_mise_constructor() {
     let owned = CandidateBuild::new()
         .expect("mise build")
         .argv(&catalog)
+        .expect("candidate build argv")
         .into_iter()
         .map(|arg| arg.into_string().expect("utf8"))
         .collect::<Vec<_>>();
     assert_eq!(mine, owned);
+}
+
+#[test]
+fn actual_runner_rejects_foreign_compiler_roles() {
+    let catalog = ToolCatalog::pinned();
+    let task = group_with_driver(CompileDriver::Cargo);
+    for label in ["ubuntu-24.04-arm", "macos-26", "unknown-runner"] {
+        assert!(
+            task_argv_for_runner(&task, &catalog, label).is_err(),
+            "{label}"
+        );
+        assert!(
+            crate::internal_plan::toolchain_id_for_runner(&task, &catalog, label).is_err(),
+            "{label}",
+        );
+    }
+    assert!(task_argv_for_runner(&task, &catalog, "ubuntu-24.04").is_ok());
+    assert!(crate::internal_plan::toolchain_id_for_runner(&task, &catalog, "ubuntu-24.04").is_ok(),);
 }

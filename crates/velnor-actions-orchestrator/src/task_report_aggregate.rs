@@ -3,6 +3,9 @@
 //! Split from `task_report` so the report module keeps the 400-line
 //! gate; the aggregate shape is unchanged.
 
+#[path = "report_staging.rs"]
+pub(crate) mod report_staging;
+
 use velnor_actions_contract::{
     MatrixEntry, MatrixReport, MatrixStatus, MatrixTaskEntry, Plan, TaskReport, TaskStatus,
     report_id_for_matrix,

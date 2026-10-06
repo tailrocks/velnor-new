@@ -3,6 +3,7 @@
 //! Declared via `#[path]` from `task_report.rs` under `cfg(test)`.
 //! Plan fixtures live in the sibling `task_report_tests` module.
 
+use super::task_report_tests::fixture_digest;
 use std::fs;
 
 use tempfile::TempDir;
@@ -77,9 +78,26 @@ fn merge_flips_not_run_to_executed_end_to_end() {
     assert_eq!(verdict.counts.executed, 0);
     assert!(verdict.counts.not_run > 0);
 
-    write_task_report_to("local", CLIPPY, 0, None, &[TEST.to_owned()], temp.path())
-        .expect("clippy");
-    write_task_report_to("local", TEST, 0, None, &[], temp.path()).expect("test");
+    write_task_report_to(
+        "local",
+        CLIPPY,
+        &fixture_digest(CLIPPY),
+        0,
+        None,
+        &[TEST.to_owned()],
+        temp.path(),
+    )
+    .expect("clippy");
+    write_task_report_to(
+        "local",
+        TEST,
+        &fixture_digest(TEST),
+        0,
+        None,
+        &[],
+        temp.path(),
+    )
+    .expect("test");
     stage_downloads(&plan, &temp);
 
     let full = assemble_with_needs(
@@ -117,8 +135,16 @@ fn merge_fails_failing_obligation_and_blocks_downstream() {
     let run = temp.path().join("velnor").join("local");
     let needs = Some(r#"{"plan":"success"}"#);
 
-    let reported =
-        write_task_report_to("local", CLIPPY, 1, None, &[], temp.path()).expect("clippy fails");
+    let reported = write_task_report_to(
+        "local",
+        CLIPPY,
+        &fixture_digest(CLIPPY),
+        1,
+        None,
+        &[],
+        temp.path(),
+    )
+    .expect("clippy fails");
     assert_eq!(reported, 1);
     let skipped = write_skip_reports(&plan, CLIPPY, &[TEST.to_owned()], temp.path())
         .expect("downstream skips");
@@ -199,9 +225,26 @@ fn merge_lists_shared_job_artifact_once() {
     plan.matrix.include[1].artifact_id = shared.clone();
     plan.validate().expect("shared-job plan validates");
     let temp = staged_run(&plan, "local");
-    write_task_report_to("local", CLIPPY, 0, None, &[TEST.to_owned()], temp.path())
-        .expect("clippy");
-    write_task_report_to("local", TEST, 0, None, &[], temp.path()).expect("test");
+    write_task_report_to(
+        "local",
+        CLIPPY,
+        &fixture_digest(CLIPPY),
+        0,
+        None,
+        &[TEST.to_owned()],
+        temp.path(),
+    )
+    .expect("clippy");
+    write_task_report_to(
+        "local",
+        TEST,
+        &fixture_digest(TEST),
+        0,
+        None,
+        &[],
+        temp.path(),
+    )
+    .expect("test");
     stage_downloads(&plan, &temp);
     let run = temp.path().join("velnor").join("local");
     let full = assemble_with_needs(
@@ -266,7 +309,7 @@ fn provider_hit_validate_execution_aggregates_executed() {
         not_selected_reason: None,
         cache: CacheOutcome {
             layer: CacheLayer::TofuProviders,
-            key: "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-stacks-a-0123456789ab"
+            key: "velnor-v2-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-stacks-a-0123456789ab"
                 .to_owned(),
             result: CacheResult::Hit,
             miss_reason: None,

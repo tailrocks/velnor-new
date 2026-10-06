@@ -77,8 +77,12 @@ pub(crate) fn task_argv(
     task: &ProposedTask,
     catalog: &ToolCatalog,
 ) -> Result<Vec<String>, OrchestratorError> {
-    if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
-        return tofu_task_argv(task, catalog);
+    match Stack::require_known(&task.stack_id).map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })? {
+        Stack::Tofu => return tofu_task_argv(task, catalog),
+        Stack::Workload => return crate::workloads::argv(task, catalog),
+        Stack::Rust => {}
     }
     let driver = RouteDriver::from_compile_driver(&task.identity.compile_driver);
     let mut tools = driver.map_or(vec![PinnedTool::Rust], RouteDriver::tools);
@@ -91,7 +95,30 @@ pub(crate) fn task_argv(
             problem: err.to_string(),
         }
     })?;
-    strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
+    strings_of(exec.argv(catalog)?).map_err(|problem| OrchestratorError::Contract { problem })
+}
+
+/// Resolve native commands using the emitted job's actual runner.
+pub(crate) fn task_argv_for_runner(
+    task: &ProposedTask,
+    catalog: &ToolCatalog,
+    label: &str,
+) -> Result<Vec<String>, OrchestratorError> {
+    if Stack::from_id(&task.stack_id) == Some(Stack::Workload) {
+        return crate::workloads::argv_for_runner(task, catalog, label);
+    }
+    if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
+        let exec = PinnedToolExec::new(
+            vec![PinnedTool::Opentofu],
+            OsStr::new("tofu"),
+            task.payload.clone(),
+        )?;
+        return strings_of(exec.argv_for_host(catalog, crate::workloads::host_for_runner(label)?)?)
+            .map_err(|problem| OrchestratorError::Contract { problem });
+    }
+    let host = crate::workloads::host_for_runner(label)?;
+    let _selector = catalog.native_tool_spec(host, catalog.compiler_tool())?;
+    task_argv(task, catalog)
 }
 
 /// V1 fixed vector for one tofu task: pinned `opentofu`, program `tofu`.
@@ -109,7 +136,7 @@ fn tofu_task_argv(
     .map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
     })?;
-    strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
+    strings_of(exec.argv(catalog)?).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
 /// Fixed vector: pinned tools plus a literal payload through Mise.
@@ -127,7 +154,7 @@ fn exec_argv(
     .map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
     })?;
-    strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
+    strings_of(exec.argv(catalog)?).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
 /// Fixed validator-job vector: privilege-dropping `cargo deny`.
@@ -329,7 +356,7 @@ pub(crate) fn candidate_build_argv(
     let build = CandidateBuild::new().map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
     })?;
-    strings_of(build.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
+    strings_of(build.argv(catalog)?).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
 /// Fixed candidate build plus qualification vectors.

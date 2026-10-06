@@ -18,7 +18,7 @@ fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectation
     let anchor = digest_b3("github.com/o/r".as_bytes());
     let name = baseline_artifact_name(base, &digest).expect("name");
     let manifest = BaselineManifest {
-        schema: 2,
+        schema: crate::internal_plan::snapshot::CANONICAL_SCHEMA_VERSION,
         repository_id: anchor.clone(),
         source_commit: base.to_owned(),
         ref_: "refs/heads/testmain".to_owned(),

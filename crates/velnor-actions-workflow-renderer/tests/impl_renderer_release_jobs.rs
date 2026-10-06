@@ -1,34 +1,37 @@
-//! Release role, permission, shape, and workflow-graph cases.
 use std::collections::BTreeMap;
+
 use velnor_actions_workflow_renderer::RenderError;
+use velnor_actions_workflow_renderer::release_artifact_channels::{job_outputs, upload_step};
 use velnor_actions_workflow_renderer::release_jobs::{
     ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec,
 };
-use velnor_actions_workflow_renderer::release_permissions::{JobPermissions, PermissionLevel};
+use velnor_actions_workflow_renderer::release_permissions::JobPermissions;
 use velnor_actions_workflow_renderer::release_spec::{
     BootstrapPlan, DispatchInput, ReleaseConcurrency, ReleaseTriggers, publish_gate_condition,
+    reconcile_gate_condition,
 };
 use velnor_actions_workflow_renderer::shell_step;
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 const REPO: &str = "acme/widgets";
-const LABEL: &str = "ubuntu-24.04";
-const ENV: &str = "crates-io";
+const LABEL: &str = "ubuntu-26.04";
+const PUBLISH_ENV: &str = "auth-active";
+const BOOTSTRAP_ENV: &str = "auth-bootstrap";
 
-/// Extract the `InvalidWorkflow` payload; `None` unless the exact rejection fired.
-fn invalid(result: Result<(), RenderError>) -> Option<String> {
+/// Extract the exact invalid-workflow payload.
+pub(crate) fn invalid(result: Result<(), RenderError>) -> Option<String> {
     match result {
         Err(RenderError::InvalidWorkflow(text)) => Some(text),
         Err(_) | Ok(()) => None,
     }
 }
 
-fn bootstrap() -> BootstrapPlan {
+pub(crate) fn bootstrap() -> BootstrapPlan {
     BootstrapPlan {
         plan_id: "plan-1".to_owned(),
         repository: REPO.to_owned(),
         source_sha: SHA.to_owned(),
-        registry: "crates_io".to_owned(),
+        registry: "crates-io".to_owned(),
         packages: BTreeMap::from([("widgets".to_owned(), "1.2.3".to_owned())]),
         version: None,
     }
@@ -43,11 +46,11 @@ fn bound_input(name: &str, default: &str) -> DispatchInput {
     }
 }
 
-fn job(
+pub(crate) fn job(
     role: ReleaseRole,
     needs: &[&str],
     condition: Option<&str>,
-    env: Option<&str>,
+    environment: Option<&str>,
 ) -> Result<ReleaseJobSpec, RenderError> {
     let step = shell_step(
         "Run",
@@ -56,324 +59,253 @@ fn job(
     )?;
     Ok(ReleaseJobSpec {
         role,
-        display_name: format!("Release {}", role.as_str()),
+        display_name: role.job_id().to_owned(),
         runs_on: LABEL.to_owned(),
         timeout_minutes: velnor_actions_contract::JobTimeout::RELEASE,
         needs: needs.iter().map(ToString::to_string).collect(),
         condition: condition.map(str::to_owned),
-        environment: env.map(str::to_owned),
+        environment: environment.map(str::to_owned),
         permissions: JobPermissions::expected(role),
-        steps: vec![step],
+        steps: vec![step, upload_step(role)?],
+        outputs: job_outputs(role)?,
     })
 }
 
-fn spec() -> Result<ReleaseWorkflowSpec, RenderError> {
-    let gate = publish_gate_condition(REPO, &bootstrap());
-    let jobs = BTreeMap::from([
-        (
-            "release-preparation".to_owned(),
-            job(ReleaseRole::Preparation, &[], None, None)?,
-        ),
-        (
-            "release-preflight".to_owned(),
-            job(ReleaseRole::Preflight, &["release-preparation"], None, None)?,
-        ),
-        (
-            "release-publish".to_owned(),
+fn jobs_for(
+    plan: &BootstrapPlan,
+    preparation: bool,
+) -> Result<BTreeMap<String, ReleaseJobSpec>, RenderError> {
+    let gate = publish_gate_condition(REPO, plan, "main");
+    let reconcile = reconcile_gate_condition(REPO, plan, "main");
+    let registry = if plan.version.is_some() {
+        ReleaseRole::RegistryPublishBootstrap
+    } else {
+        ReleaseRole::RegistryPublishOidc
+    };
+    let registry_environment = if plan.version.is_some() {
+        BOOTSTRAP_ENV
+    } else {
+        PUBLISH_ENV
+    };
+    let mut jobs = BTreeMap::new();
+    let entries = base_entries(
+        registry,
+        gate.as_str(),
+        reconcile.as_str(),
+        registry_environment,
+    );
+    for (role, mut needs, condition, environment) in entries {
+        if registry == ReleaseRole::RegistryPublishBootstrap {
+            for need in &mut needs {
+                if *need == ReleaseRole::RegistryPublishOidc.job_id() {
+                    *need = ReleaseRole::RegistryPublishBootstrap.job_id();
+                }
+            }
+        }
+        jobs.insert(
+            role.job_id().to_owned(),
+            job(role, &needs, condition, environment)?,
+        );
+    }
+    if preparation {
+        jobs.insert(
+            ReleaseRole::PreparationAnonymous.job_id().to_owned(),
+            job(ReleaseRole::PreparationAnonymous, &[], None, None)?,
+        );
+        jobs.insert(
+            ReleaseRole::PreparationForge.job_id().to_owned(),
             job(
-                ReleaseRole::PublishOidc,
-                &["release-preflight"],
-                Some(&gate),
-                Some(ENV),
+                ReleaseRole::PreparationForge,
+                &[ReleaseRole::PreparationAnonymous.job_id()],
+                Some(gate.as_str()),
+                Some(PUBLISH_ENV),
             )?,
+        );
+    }
+    Ok(jobs)
+}
+
+fn base_entries<'a>(
+    registry: ReleaseRole,
+    gate: &'a str,
+    reconcile: &'a str,
+    environment: &'a str,
+) -> Vec<(
+    ReleaseRole,
+    Vec<&'static str>,
+    Option<&'a str>,
+    Option<&'a str>,
+)> {
+    vec![
+        (ReleaseRole::PackageAnonymous, vec![], None, None),
+        (
+            ReleaseRole::PreflightForge,
+            vec![ReleaseRole::PackageAnonymous.job_id()],
+            None,
+            None,
         ),
         (
-            "release-reconcile".to_owned(),
-            job(
-                ReleaseRole::Reconcile,
-                &["release-publish"],
-                Some("always()"),
-                None,
-            )?,
+            registry,
+            vec![
+                ReleaseRole::PackageAnonymous.job_id(),
+                ReleaseRole::PreflightForge.job_id(),
+            ],
+            Some(gate),
+            Some(environment),
         ),
-    ]);
+        (
+            ReleaseRole::ForgePublish,
+            vec![
+                ReleaseRole::PackageAnonymous.job_id(),
+                ReleaseRole::PreflightForge.job_id(),
+                ReleaseRole::RegistryPublishOidc.job_id(),
+            ],
+            Some(gate),
+            Some(environment),
+        ),
+        (
+            ReleaseRole::Reconcile,
+            vec![
+                ReleaseRole::PackageAnonymous.job_id(),
+                ReleaseRole::PreflightForge.job_id(),
+                ReleaseRole::RegistryPublishOidc.job_id(),
+                ReleaseRole::ForgePublish.job_id(),
+            ],
+            Some(reconcile),
+            None,
+        ),
+    ]
+}
+
+fn workflow(version: Option<&str>, preparation: bool) -> Result<ReleaseWorkflowSpec, RenderError> {
+    let mut plan = bootstrap();
+    plan.version = version.map(str::to_owned);
+    let mut dispatch_inputs = vec![
+        bound_input("plan", &plan.plan_id),
+        bound_input("source_sha", SHA),
+    ];
+    if let Some(version) = &plan.version {
+        dispatch_inputs.push(bound_input("version", version));
+    }
     Ok(ReleaseWorkflowSpec {
         name: "Velnor Release".to_owned(),
         repository: REPO.to_owned(),
         triggers: ReleaseTriggers {
             push_branches: vec!["main".to_owned()],
             schedule: None,
-            dispatch_inputs: vec![
-                bound_input("plan", "plan-1"),
-                bound_input("source_sha", SHA),
-            ],
+            dispatch_inputs,
         },
         concurrency: ReleaseConcurrency {
             group: "release-acme/widgets".to_owned(),
             cancel_in_progress: false,
         },
-        jobs,
-        bootstrap: bootstrap(),
-        publish_environment: ENV.to_owned(),
-        bootstrap_environment: "crates-io-bootstrap".to_owned(),
+        jobs: jobs_for(&plan, preparation)?,
+        preparation_enabled: preparation,
+        helper_registry: super::impl_renderer_release_gates::bootstrap_fixture::helper_registry(),
+        support_sources: super::impl_renderer_release_gates::bootstrap_fixture::support_sources(),
+        bootstrap_tools: super::impl_renderer_release_gates::bootstrap_tools(),
+        reconciliation: authority::reconciliation(&plan),
+        bootstrap: plan,
+        publish_environment: PUBLISH_ENV.to_owned(),
+        bootstrap_environment: BOOTSTRAP_ENV.to_owned(),
     })
 }
 
+pub(crate) fn spec() -> Result<ReleaseWorkflowSpec, RenderError> {
+    workflow(None, false)
+}
+
+pub(crate) fn preparation_spec() -> Result<ReleaseWorkflowSpec, RenderError> {
+    workflow(None, true)
+}
+
+pub(crate) fn bootstrap_spec() -> Result<ReleaseWorkflowSpec, RenderError> {
+    workflow(Some("1.2.3"), false)
+}
+
 #[test]
-fn role_names_validation_and_matrix_are_exact() {
-    let names = [
-        (ReleaseRole::Preparation, "preparation", false),
-        (ReleaseRole::Preflight, "preflight", true),
-        (ReleaseRole::PublishOidc, "publish-oidc", false),
-        (ReleaseRole::PublishBootstrap, "publish-bootstrap", false),
-        (ReleaseRole::Reconcile, "reconcile", true),
+fn role_names_and_ids_are_closed() {
+    let expected = [
+        (
+            ReleaseRole::SourceSnapshotForge,
+            "source-snapshot-forge",
+            "release-source-snapshot",
+            true,
+        ),
+        (
+            ReleaseRole::PackageAnonymous,
+            "package-anonymous",
+            "release-package",
+            true,
+        ),
+        (
+            ReleaseRole::PreflightForge,
+            "preflight-forge",
+            "release-preflight",
+            true,
+        ),
+        (
+            ReleaseRole::RegistryPublishOidc,
+            "registry-publish-oidc",
+            "release-registry-publish",
+            false,
+        ),
+        (
+            ReleaseRole::RegistryPublishBootstrap,
+            "registry-publish-bootstrap",
+            "release-registry-publish",
+            false,
+        ),
+        (
+            ReleaseRole::ForgePublish,
+            "forge-publish",
+            "release-forge-publish",
+            false,
+        ),
+        (
+            ReleaseRole::Reconcile,
+            "reconcile",
+            "release-reconcile",
+            true,
+        ),
+        (
+            ReleaseRole::PreparationAnonymous,
+            "preparation-anonymous",
+            "release-preparation-source",
+            true,
+        ),
+        (
+            ReleaseRole::PreparationForge,
+            "preparation-forge",
+            "release-preparation",
+            false,
+        ),
     ];
-    for (role, name, validation) in names {
+    for (role, name, id, validation) in expected {
         assert_eq!(role.as_str(), name);
-        assert_eq!(role.is_validation(), validation, "for {name}");
+        assert_eq!(role.job_id(), id);
+        assert_eq!(role.is_validation(), validation);
     }
-    let prep = JobPermissions::expected(ReleaseRole::Preparation);
-    assert_eq!(prep.contents, PermissionLevel::Write);
-    assert_eq!(prep.pull_requests, PermissionLevel::Write);
-    assert_eq!(prep.id_token, PermissionLevel::None);
-    let oidc = JobPermissions::expected(ReleaseRole::PublishOidc);
-    assert_eq!(oidc.id_token, PermissionLevel::Write);
-    let token = JobPermissions::expected(ReleaseRole::PublishBootstrap);
-    assert_eq!(token.id_token, PermissionLevel::None);
-    assert_eq!(token.contents, PermissionLevel::Write);
-    let flight = JobPermissions::expected(ReleaseRole::Preflight);
-    assert_eq!(flight.contents, PermissionLevel::Read);
-    assert_eq!(flight.pull_requests, PermissionLevel::None);
 }
 
 #[test]
-fn permission_rules_bind_oidc_and_validation_roles() {
-    let oidc = JobPermissions::expected(ReleaseRole::PublishOidc);
-    assert!(oidc.validate(ReleaseRole::PublishOidc, Some(ENV)).is_ok());
-    assert_eq!(
-        invalid(oidc.validate(ReleaseRole::PublishOidc, None)).expect("reject"),
-        "id_token_without_environment"
-    );
-    let elevated = JobPermissions {
-        contents: PermissionLevel::Write,
-        ..JobPermissions::expected(ReleaseRole::Preflight)
-    };
-    assert_eq!(
-        invalid(elevated.validate(ReleaseRole::Preflight, None)).expect("reject"),
-        "contents_write_on_validation"
-    );
-    let drifted = JobPermissions {
-        pull_requests: PermissionLevel::Write,
-        ..JobPermissions::expected(ReleaseRole::Reconcile)
-    };
-    assert_eq!(
-        invalid(drifted.validate(ReleaseRole::Reconcile, None)).expect("reject"),
-        "permission_matrix:reconcile"
-    );
-}
-
-#[test]
-fn shape_rejects_malformed_jobs() -> Result<(), RenderError> {
-    let mut empty = job(ReleaseRole::Preflight, &[], None, None)?;
+fn job_shape_rejects_malformed_jobs() -> Result<(), RenderError> {
+    let mut empty = job(ReleaseRole::PreflightForge, &[], None, None)?;
     empty.steps.clear();
-    assert!(
-        invalid(empty.validate_shape("release-preflight"))
-            .expect("reject")
-            .starts_with("empty_steps:")
-    );
-    let mut label = job(ReleaseRole::Preflight, &[], None, None)?;
-    for bad in [
-        "ubuntu-latest",
-        "self-hosted",
-        "macos-15",
-        "ubuntu-${{ matrix.os }}",
-    ] {
+    assert!(invalid(empty.validate_shape(ReleaseRole::PreflightForge.job_id())).is_some());
+    let mut label = job(ReleaseRole::PreflightForge, &[], None, None)?;
+    for bad in ["ubuntu-latest", "self-hosted", "macos-15"] {
         label.runs_on = bad.to_owned();
-        assert!(
-            invalid(label.validate_shape("release-preflight"))
-                .expect("reject")
-                .starts_with("unpinned_label:")
-        );
+        assert!(invalid(label.validate_shape(label.role.job_id())).is_some());
     }
-    let mut display = job(ReleaseRole::Preflight, &[], None, None)?;
+    let mut display = job(ReleaseRole::PreflightForge, &[], None, None)?;
     display.display_name = "bad ${{ x }}".to_owned();
-    assert!(
-        invalid(display.validate_shape("release-preflight"))
-            .expect("reject")
-            .starts_with("bad_job_display:")
-    );
-    let mut secreted = job(ReleaseRole::PublishOidc, &[], None, Some(ENV))?;
-    secreted.condition = Some("secrets.TOKEN != ''".to_owned());
-    assert!(
-        invalid(secreted.validate_shape("release-publish"))
-            .expect("reject")
-            .starts_with("bad_condition:")
-    );
+    assert!(invalid(display.validate_shape(display.role.job_id())).is_some());
     Ok(())
 }
 
-#[test]
-fn spec_accepts_four_roles_and_optional_bootstrap() -> Result<(), RenderError> {
-    assert!(spec()?.validate().is_ok());
-    let mut with_token = spec()?;
-    let gate = publish_gate_condition(REPO, &bootstrap());
-    with_token.jobs.insert(
-        "release-bootstrap".to_owned(),
-        job(
-            ReleaseRole::PublishBootstrap,
-            &["release-preflight"],
-            Some(&gate),
-            Some(ENV),
-        )?,
-    );
-    with_token
-        .jobs
-        .get_mut("release-reconcile")
-        .expect("reconcile")
-        .needs
-        .push("release-bootstrap".to_owned());
-    assert!(with_token.validate().is_ok());
-    Ok(())
-}
+#[path = "impl_renderer_release_authority.rs"]
+pub(crate) mod authority;
 
-#[test]
-fn role_set_rejects_gaps_and_duplicates() -> Result<(), RenderError> {
-    let mut gap = spec()?;
-    gap.jobs.remove("release-reconcile").expect("remove");
-    assert!(
-        invalid(gap.validate())
-            .expect("reject")
-            .starts_with("release_role_set:")
-    );
-    let mut duplicate = spec()?;
-    duplicate.jobs.insert(
-        "release-extra".to_owned(),
-        job(ReleaseRole::Preparation, &[], None, None)?,
-    );
-    assert!(
-        invalid(duplicate.validate())
-            .expect("reject")
-            .starts_with("release_role_set:")
-    );
-    let mut branded = spec()?;
-    let held = branded.jobs.remove("release-preflight").expect("remove");
-    branded.jobs.insert("velnor-preflight".to_owned(), held);
-    assert!(branded.validate().is_err(), "branded ids stay reserved");
-    Ok(())
-}
-
-#[test]
-fn needs_graph_rejects_unknown_self_and_backward_edges() -> Result<(), RenderError> {
-    let mut unknown = spec()?;
-    unknown
-        .jobs
-        .get_mut("release-preflight")
-        .expect("preflight")
-        .needs
-        .push("ghost".to_owned());
-    assert!(
-        invalid(unknown.validate())
-            .expect("reject")
-            .starts_with("unknown_need:")
-    );
-    let mut looping = spec()?;
-    looping
-        .jobs
-        .get_mut("release-preflight")
-        .expect("preflight")
-        .needs = vec!["release-preflight".to_owned()];
-    assert!(
-        invalid(looping.validate())
-            .expect("reject")
-            .starts_with("self_need:")
-    );
-    let mut backward = spec()?;
-    backward
-        .jobs
-        .get_mut("release-preflight")
-        .expect("preflight")
-        .needs = vec!["release-publish".to_owned()];
-    assert!(
-        invalid(backward.validate())
-            .expect("reject")
-            .starts_with("backward_need:")
-    );
-    Ok(())
-}
-
-#[test]
-fn publish_and_reconcile_conditions_are_exact() -> Result<(), RenderError> {
-    let mut loose = spec()?;
-    loose
-        .jobs
-        .get_mut("release-publish")
-        .expect("publish")
-        .condition = Some("true".to_owned());
-    assert!(
-        invalid(loose.validate())
-            .expect("reject")
-            .starts_with("publish_gate_mismatch:")
-    );
-    let mut missing = spec()?;
-    missing
-        .jobs
-        .get_mut("release-publish")
-        .expect("publish")
-        .condition = None;
-    assert!(
-        invalid(missing.validate())
-            .expect("reject")
-            .starts_with("publish_gate_mismatch:")
-    );
-    let mut lazy = spec()?;
-    lazy.jobs
-        .get_mut("release-reconcile")
-        .expect("reconcile")
-        .condition = Some("success()".to_owned());
-    assert!(
-        invalid(lazy.validate())
-            .expect("reject")
-            .starts_with("reconcile_condition:")
-    );
-    Ok(())
-}
-
-#[test]
-fn publish_follows_preflight_and_reconcile_follows_publish() -> Result<(), RenderError> {
-    let mut direct = spec()?;
-    direct
-        .jobs
-        .get_mut("release-publish")
-        .expect("publish")
-        .needs
-        .clear();
-    assert!(
-        invalid(direct.validate())
-            .expect("reject")
-            .starts_with("publish_without_preflight:")
-    );
-    let mut early = spec()?;
-    early
-        .jobs
-        .get_mut("release-reconcile")
-        .expect("reconcile")
-        .needs
-        .clear();
-    assert!(
-        invalid(early.validate())
-            .expect("reject")
-            .starts_with("reconcile_without_publish:")
-    );
-    Ok(())
-}
-
-#[test]
-fn bootstrap_repository_mismatch_fails_closed() -> Result<(), RenderError> {
-    let mut forked = spec()?;
-    forked.bootstrap.repository = "mallory/widgets".to_owned();
-    assert_eq!(
-        invalid(forked.validate()).expect("reject"),
-        "bootstrap_repository_mismatch"
-    );
-    Ok(())
-}
+#[path = "impl_renderer_release_graph.rs"]
+mod graph;

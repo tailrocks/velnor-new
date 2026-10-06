@@ -6,15 +6,10 @@ pub(crate) mod provenance_check;
 #[path = "provenance_resolve.rs"]
 pub(crate) mod provenance_resolve;
 
-use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use std::collections::BTreeSet;
-
-use velnor_actions_contract::{
-    Plan, PlanBaseline, WorkflowEvent, canonical_json_bytes, digest_b3, validate_digest,
-};
-use velnor_actions_mise::BaselineLookup as MiseBaselineLookup;
+use velnor_actions_contract::{Plan, PlanBaseline, WorkflowEvent, canonical_json_bytes, digest_b3};
+use velnor_actions_mise::RuntimePaths;
 
 use self::provenance_check::{
     ProvenanceExpectations, baseline_can_carry, publish_event_eligible,
@@ -28,9 +23,6 @@ use crate::decisions::baseline_expired;
 use crate::discover::Discovery;
 use crate::internal::internal_contract;
 use crate::merge::BaselineManifest;
-
-/// Maximum accepted `baseline.json` bytes: evidence stays bounded.
-const MAX_BASELINE_MANIFEST_BYTES: usize = 1_048_576;
 
 /// Current Unix time; clock failure fails closed (all dated baselines expire).
 pub(crate) fn unix_now() -> u64 {
@@ -58,6 +50,8 @@ pub(crate) struct BaselineInputs<'a> {
     /// must never leak in here (it once poisoned CI runs whose
     /// runner env described a different repository than the target).
     pub(crate) repository: Option<&'a str>,
+    /// Compiled Mise runtime domain for baseline `gh` calls.
+    pub(crate) runtime: RuntimePaths,
 }
 
 /// Classify obligations against baseline evidence, or execute everything.
@@ -76,7 +70,7 @@ pub(crate) fn apply_baseline(
     inputs: BaselineInputs<'_>,
     manifest: Option<BaselineManifest>,
     discovery: &Discovery,
-    changed: Option<&BTreeSet<String>>,
+    changed: Option<&crate::select::ChangedSelection>,
 ) -> Result<(), OrchestratorError> {
     // No lock fill: the plan generator always names the running binary,
     // so a source build can never emit a release-pinned identity.
@@ -194,7 +188,7 @@ fn lookup_manifest(plan: &mut Plan, inputs: BaselineInputs<'_>) -> Option<Baseli
         return None;
     }
     let artifact = match lookup_artifact_name(plan, &base) {
-        Ok(name) => name,
+        Ok(artifact) => artifact,
         Err(reason) => {
             mark_unavailable(plan, &reason);
             return None;
@@ -206,110 +200,15 @@ fn lookup_manifest(plan: &mut Plan, inputs: BaselineInputs<'_>) -> Option<Baseli
         &base,
         inputs.workflow,
         inputs.branch,
-        Some(&artifact),
+        &artifact,
         inputs.repository,
+        inputs.runtime,
     ) {
-        Ok(found) => {
-            let mut found = found.into_iter();
-            let first = found.next();
-            if first.is_none() {
-                mark_unavailable(plan, "baseline_not_found");
-            }
-            first
-        }
+        Ok(found) => Some(found.manifest().clone()),
         Err(reason) => {
             mark_unavailable(plan, &reason);
             None
         }
-    }
-}
-
-/// Baseline download argv for one exact artifact (PAR-5.10).
-///
-/// Only exact-name downloads exist: without a known artifact name there
-/// is no bounded download, so no command is returned and the lookup
-/// fails closed to execute-all. The whole-run download fallback is gone.
-/// `--repo` pins the download to the expected repository, and a
-/// malformed repo slug yields no command instead of an unscoped one.
-pub(crate) fn baseline_download_args(
-    base: &str,
-    workflow: &str,
-    branch: &str,
-    artifact: Option<&str>,
-    run_id: u64,
-    dir: &Path,
-    repo: &str,
-) -> Vec<OsString> {
-    if let Some(name) = artifact.filter(|name| !name.is_empty())
-        && let Ok(lookup) = MiseBaselineLookup::new(base, workflow, branch, name)
-        && let Some(repo) = crate::origin::validate_repository_slug(repo)
-    {
-        let mut args = lookup.download_args(run_id, dir);
-        args.push(OsString::from("--repo"));
-        args.push(OsString::from(repo));
-        return args;
-    }
-    Vec::new()
-}
-
-/// One exact-base baseline from a download entry (PAR-5.5).
-///
-/// The entry directory must carry exactly `baseline.json` (single-file
-/// bounded UTF-8, no other payload) with matching source commit, run,
-/// attempt, artifact id, and artifact name. The entry dir and the
-/// payload reject symlinks (the payload opens `NOFOLLOW` and validates
-/// via the open handle through the shared staged reader); reads stop
-/// past the size bound, duplicate JSON keys are rejected (never
-/// last-wins), and old canonical schemas fail closed via the migration
-/// gate.
-pub(crate) fn baseline_entry_for(
-    dir: &Path,
-    base: &str,
-    expected_run_id: u64,
-    expected_attempt: u64,
-    expected_artifact_id: u64,
-) -> Option<BaselineManifest> {
-    let name = dir.file_name()?.to_str()?;
-    let rest = name.strip_prefix(&format!("velnor-baseline-{base}-"))?;
-    if validate_digest(rest).is_err() {
-        return None;
-    }
-    if crate::retrieve_reports::path_is_symlink(dir) {
-        return None;
-    }
-    let mut count = 0u32;
-    let mut payload: Option<PathBuf> = None;
-    for entry in std::fs::read_dir(dir).ok()? {
-        let entry = entry.ok()?;
-        count += 1;
-        if entry.file_name() == "baseline.json" {
-            payload = Some(entry.path());
-        }
-    }
-    if count != 1 {
-        return None;
-    }
-    let payload = payload?;
-    if payload.file_name()?.to_str()? != "baseline.json" {
-        return None;
-    }
-    let bound = u64::try_from(MAX_BASELINE_MANIFEST_BYTES).unwrap_or(u64::MAX);
-    let bytes = crate::retrieve_reports::read_staged_bytes(&payload, bound).ok()?;
-    let text = std::str::from_utf8(&bytes).ok()?;
-    let value = crate::internal_plan::snapshot::parse_canonical_json(text).ok()?;
-    let manifest: BaselineManifest = serde_json::from_value(value).ok()?;
-    if crate::internal_plan::snapshot::check_canonical_version(manifest.schema).is_err() {
-        return None;
-    }
-    if manifest.source_commit == base
-        && manifest.run_id == expected_run_id
-        && manifest.run_attempt == expected_attempt
-        && manifest.artifact_id == expected_artifact_id
-        && manifest.artifact_name == name
-    {
-        Some(manifest)
-    } else {
-        None
     }
 }
 

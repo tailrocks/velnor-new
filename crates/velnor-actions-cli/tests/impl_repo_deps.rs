@@ -19,6 +19,7 @@ fn expected_internal(dir: &str) -> Vec<&str> {
             "velnor-actions-actionlint",
             "velnor-actions-contract",
             "velnor-actions-mise",
+            "velnor-actions-native",
             "velnor-actions-rust",
             "velnor-actions-tofu",
             "velnor-actions-workflow-renderer",
@@ -77,6 +78,9 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // Mandatory native ownership tests parse Rust paths/imports; runtime
         // adapters never depend on or invoke this analyzer.
         "syn",
+        // Source-qualified ZIP artifact admission (default features disabled,
+        // only deflate enabled by the pinned workspace dependency).
+        "zip",
         // Reviewed HCL structural parser for the tofu stack (T10, S8):
         // `hcl` renames `hcl-rs` 0.19.8 (Q1 pre-qualified; MSRV
         // compile-gated at 1.98.1); default features only, facade-owned
@@ -92,6 +96,16 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
                 continue;
             }
             assert!(allowed.contains(&key), "{dir} uses {key}");
+            if key == "zip" {
+                assert_eq!(dir, "crates/velnor-actions-orchestrator");
+                let workspace = read("Cargo.toml")?;
+                let pin = workspace
+                    .lines()
+                    .find(|line| line.starts_with("zip = "))
+                    .ok_or("missing ZIP workspace authority")?;
+                assert!(pin.contains("default-features = false"));
+                assert!(pin.contains("features = [\"deflate\"]"));
+            }
             if key == "syn" {
                 assert_eq!(dir, "crates/velnor-actions-native");
                 let doc = p11_toml::parse(&body)?;
@@ -108,6 +122,7 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
                     // P09 atomic directory exchange (no net/pty/terminal).
                     let narrow = feature == "derive"
                         || (key == "rustix" && feature == "fs")
+                        || (key == "zip" && feature == "deflate")
                         || (key == "syn" && ["full", "parsing", "visit"].contains(&feature));
                     assert!(narrow, "{dir}/{key} feature {feature}");
                 }

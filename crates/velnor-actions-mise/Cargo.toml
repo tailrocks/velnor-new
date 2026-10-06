@@ -12,10 +12,14 @@ workspace = true
 [dependencies]
 velnor-actions-contract = { version = "=0.1.0", path = "../velnor-actions-contract" }
 serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { version = "=0.11.0" }
+sha1 = { workspace = true }
 
 [[test]]
 name = "velnor_mise"
 path = "tests/velnor_mise.rs"
 
 [dev-dependencies]
+syn = { version = "=3.0.6", default-features = false, features = ["full", "parsing", "visit"] }
 velnor-actions-tofu = { version = "=0.1.0", path = "../velnor-actions-tofu" }

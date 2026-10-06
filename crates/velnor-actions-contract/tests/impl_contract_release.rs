@@ -18,6 +18,7 @@ fn valid_release() -> RustReleaseConfig {
         tag_name: "{{ package }}-v{{ version }}".to_owned(),
         bootstrap: None,
         version_groups: BTreeMap::new(),
+        expected_owners: BTreeMap::from([("demo-crate".to_owned(), vec!["user:1".to_owned()])]),
     }
 }
 
@@ -196,6 +197,9 @@ fn release_validates_manifest_environment_and_tag() {
 fn release_version_groups_are_non_lockstep_and_allowlist_bound() {
     let mut grouped = valid_release();
     grouped.packages = vec!["aaa-crate".to_owned(), "demo-crate".to_owned()];
+    grouped
+        .expected_owners
+        .insert("aaa-crate".to_owned(), vec!["user:1".to_owned()]);
     grouped.version_groups = BTreeMap::from([(
         "core".to_owned(),
         vec!["aaa-crate".to_owned(), "demo-crate".to_owned()],
@@ -240,6 +244,7 @@ fn release_wired_into_stack_validation_with_key_paths() {
     use velnor_actions_contract::{RustConfiguration, RustStackConfig};
     let stack = RustStackConfig {
         configurations: vec![RustConfiguration {
+            feature_mode: velnor_actions_contract::RustFeatureMode::Selected,
             name: "default".to_owned(),
             features: vec!["default".to_owned()],
             target: "host".to_owned(),

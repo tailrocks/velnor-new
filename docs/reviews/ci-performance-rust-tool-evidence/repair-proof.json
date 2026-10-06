@@ -1,0 +1,5 @@
+{
+  "self_update_disabled": "version = \"12\"\ndefault_toolchain = \"1.98.1-aarch64-apple-darwin\"\nprofile = \"minimal\"\nauto_self_update = \"disable\"\n\n[overrides]\n",
+  "proxy_version": "rustfmt 1.9.0-stable (48a229ceae 2026-09-01)\n",
+  "proxy_same_inode": true
+}

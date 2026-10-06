@@ -137,8 +137,9 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
             "pins.rs".to_owned(),
             "qualify.rs".to_owned(),
             "source_prep.rs".to_owned(),
+            "tofu_config_step.rs".to_owned(),
         ]),
-        "fixed sh wrappers live in matrix_step/pins/qualify/source_prep only"
+        "shell wrappers stay confined to the approved fixed-template owners"
     );
     Ok(())
 }

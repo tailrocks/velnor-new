@@ -5,18 +5,25 @@ use std::path::Path;
 
 use velnor_actions_contract::{
     DETECTION_SCHEMA, DetectedProject, DetectionStatus, DetectorEntry, FileIndex, ProposedTask,
-    RustStackConfig, Stack, StackCandidate, VelnorConfig, apply_stack_ignores,
-    check_candidate_outcomes, check_duplicates, selected_projects,
+    Stack, StackCandidate, VelnorConfig, apply_stack_ignores, check_candidate_outcomes,
+    check_duplicates, selected_projects,
 };
-use velnor_actions_mise::ArchivePlan;
 use velnor_actions_rust::{
-    Recommendation, RustExecutionProfile, WorkspaceRecord, dedupe_workspaces, propose_task,
+    Recommendation, RustExecutionProfile, WorkspaceRecord, dedupe_workspaces,
 };
+
+#[path = "discover_derive.rs"]
+mod derive;
+use derive::derive_all;
+
+#[path = "discover_capture.rs"]
+mod capture;
+use capture::publishable_inventories;
 
 use crate::OrchestratorError;
 use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 use crate::discover_index::build_file_index;
-use crate::inventory::{qualify_workspaces, run_inventories};
+use crate::inventory::{InventoryProvider, qualify_workspaces, run_inventories};
 use crate::recommendations::collect_recommendations;
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 use crate::toolcheck::{ToolInputCheck, check_tool_inputs};
@@ -41,6 +48,10 @@ const RELEASE_MANIFEST_REL: &str = ".velnor/release-manifest.json";
 /// Full detection output feeding planning and rendering.
 #[derive(Debug, Clone)]
 pub struct Discovery {
+    /// Authenticated analysis proof retained for exact base-graph reuse.
+    pub(crate) rust_inventory: Option<crate::analysis_inventory::ValidatedInventory>,
+    /// Complete qualified Rust records eligible for authenticated publication.
+    pub(crate) raw_inventories: Vec<(String, WorkspaceRecord)>,
     /// Per-project selection states.
     pub statuses: Vec<DetectionStatus>,
     /// Selected workspaces with profiles.
@@ -87,8 +98,13 @@ pub struct Discovery {
 ///
 /// Returns discovery, detection, inventory, profile, preparation, or
 /// contract errors when any stage fails.
-pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, OrchestratorError> {
+pub(crate) fn discover(
+    root: &Path,
+    config: &VelnorConfig,
+    inventory: InventoryProvider<'_>,
+) -> Result<Discovery, OrchestratorError> {
     let (index, skipped_non_utf8) = build_file_index(root, &config.discovery.exclude)?;
+    inventory.validate_current(root, index.files())?;
     let mut candidates = Vec::new();
     let mut previous = "";
     for (stack_id, schema, detect) in DETECTORS {
@@ -107,20 +123,27 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     })?;
     let initial = apply_stack_ignores(projects, &config.stacks.ignore);
     let ((outcomes, inventories), tofu_units) =
-        run_inventories(root, &candidates, index.files(), &mut reads)?;
+        run_inventories(root, &candidates, index.files(), &mut reads, inventory)?;
     let statuses = check_candidate_outcomes(initial, &outcomes).map_err(|err| {
         OrchestratorError::Detection {
             problem: err.to_string(),
         }
     })?;
+    let raw_inventories = inventories.clone();
     let workspaces = plan_workspaces(root, &index, &statuses, inventories, config)?;
-    qualify_workspaces(root, &workspaces)?;
-    let (proposals, fallbacks) = derive_all(config, &index, &workspaces, &statuses)?;
+    qualify_workspaces(root, &workspaces, inventory)?;
+    let raw_inventories =
+        publishable_inventories(&candidates, &outcomes, raw_inventories, &workspaces);
+    let (mut proposals, fallbacks) = derive_all(config, &index, &workspaces, &statuses)?;
+    crate::select_tofu::qualify_provider_transport(root, &mut proposals, &mut reads);
     let clippy_memory = clippy_memory_groups(&proposals);
     let recommendations =
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
     let (consumer_manifest_json, consumer_manifest_stand_in) = consumer_manifest_text(root)?;
+    inventory.validate_current(root, index.files())?;
     Ok(Discovery {
+        rust_inventory: inventory.validated().cloned(),
+        raw_inventories,
         statuses,
         workspaces,
         proposals,
@@ -175,6 +198,11 @@ fn detected_projects(
                 }
                 tofu.push(candidate.clone());
             }
+            Ok(Stack::Workload) => {
+                return Err(OrchestratorError::Detection {
+                    problem: "workload_has_no_automatic_detector".to_owned(),
+                });
+            }
             Err(err) => {
                 return Err(OrchestratorError::Detection {
                     problem: err.to_string(),
@@ -189,6 +217,7 @@ fn detected_projects(
         match stack {
             Stack::Rust => projects.extend(rust_projects.clone()),
             Stack::Tofu => projects.extend(tofu_projects.clone()),
+            Stack::Workload => {}
         }
     }
     Ok(projects)
@@ -323,55 +352,6 @@ fn plan_workspaces(
     }
     planned.sort_by(|left, right| left.record.workspace_root.cmp(&right.record.workspace_root));
     Ok(planned)
-}
-
-/// Derive every task proposal (rust groups plus tofu triples) and fallbacks.
-fn derive_all(
-    config: &VelnorConfig,
-    index: &FileIndex,
-    workspaces: &[PlannedWorkspace],
-    statuses: &[DetectionStatus],
-) -> Result<
-    (
-        Vec<ProposedTask>,
-        Vec<crate::derive_groups::FeatureFallback>,
-    ),
-    OrchestratorError,
-> {
-    let rust = config
-        .stacks
-        .rust
-        .clone()
-        .unwrap_or_else(RustStackConfig::default_config);
-    let explicit_fmt = index.contains("rustfmt.toml") || index.contains(".rustfmt.toml");
-    let union = crate::derive_groups::declared_union(workspaces, index);
-    let mut groups = Vec::new();
-    let mut fallbacks = Vec::new();
-    let mut archives = ArchivePlan::new();
-    for workspace in workspaces {
-        for config_name in &rust.configurations {
-            let (derived, narrowed) = crate::derive_groups::derive_for_config(
-                config,
-                index,
-                workspace,
-                config_name,
-                explicit_fmt,
-                &mut archives,
-                &union,
-            )?;
-            groups.extend(derived);
-            fallbacks.extend(narrowed);
-        }
-    }
-    let mut proposals = Vec::with_capacity(groups.len());
-    for group in &groups {
-        let task = propose_task(group)?;
-        task.validate()?;
-        proposals.push(task);
-    }
-    proposals.extend(crate::select_tofu::derive_tofu(statuses, index.files())?);
-    proposals.sort_by(|left, right| left.task_id.cmp(&right.task_id));
-    Ok((proposals, fallbacks))
 }
 
 /// Workspace-root manifest path for a workspace root.

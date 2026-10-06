@@ -6,11 +6,11 @@ use std::path::Path;
 use velnor_actions_actionlint::config::{
     ZizmorConfigInput, ZizmorWorkflowText, render_zizmor_yaml,
 };
-use velnor_actions_mise::{PinnedTool, ToolCatalog};
+use velnor_actions_mise::{PinnedTool, RuntimePaths, ToolCatalog};
 use velnor_actions_workflow_renderer::render::RenderedTree;
 
 use crate::OrchestratorError;
-use crate::validate::{diagnose, is_workflow_path, pinned_output};
+use crate::validate::{diagnose, is_workflow_path, pinned_output_in_runtime};
 
 /// Staging-only zizmor config at the staging root, never generated.
 const ZIZMOR_CONFIG: &str = ".zizmor.yml";
@@ -43,8 +43,12 @@ pub(crate) fn write_zizmor_config(
         .map_err(|err| OrchestratorError::io(dest.display().to_string(), err.to_string()))
 }
 
-/// Run pinned zizmor offline over the staged tree with its config.
-pub(crate) fn run_zizmor(catalog: &ToolCatalog, staging: &Path) -> Result<(), OrchestratorError> {
+/// Run pinned zizmor under a compiled runtime domain.
+pub(crate) fn run_zizmor_in_runtime(
+    catalog: &ToolCatalog,
+    staging: &Path,
+    runtime: RuntimePaths,
+) -> Result<(), OrchestratorError> {
     let args = [
         "--offline",
         "--no-progress",
@@ -54,12 +58,13 @@ pub(crate) fn run_zizmor(catalog: &ToolCatalog, staging: &Path) -> Result<(), Or
         ZIZMOR_CONFIG,
         ".",
     ];
-    let output = pinned_output(
+    let output = pinned_output_in_runtime(
         catalog,
         "zizmor",
         vec![PinnedTool::Zizmor],
         args.iter().map(OsString::from).collect(),
         staging,
+        runtime,
     )?;
     if output.success {
         Ok(())

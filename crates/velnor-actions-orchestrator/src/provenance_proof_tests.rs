@@ -12,7 +12,7 @@ fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectation
     let anchor = digest_b3("github.com/o/r".as_bytes());
     let name = baseline_artifact_name(base, &digest).expect("name");
     let manifest = BaselineManifest {
-        schema: 2,
+        schema: crate::internal_plan::snapshot::CANONICAL_SCHEMA_VERSION,
         repository_id: anchor.clone(),
         source_commit: base.to_owned(),
         ref_: "refs/heads/testmain".to_owned(),
@@ -54,7 +54,20 @@ fn task_entry(digest: &str, proof_run_id: u64) -> BaselineTaskEntry {
         carried_from: None,
         observed_run_id: 7,
         external_data: None,
-        proof: None,
+        proof: Some(
+            velnor_actions_contract::ManifestTaskProof::new(
+                "stack/rust/root/clippy/default",
+                digest,
+                digest,
+                digest,
+                digest,
+                digest,
+                digest,
+                "default",
+                proof_run_id,
+            )
+            .expect("proof"),
+        ),
     }
 }
 
@@ -119,6 +132,20 @@ fn forwarded_proof_runs_fail_closed() {
     let (mut manifest, expected) = manifest_and_expected(&base);
     let mut forwarded = forwarded;
     forwarded.task_id = "stack/rust/root/fmt/default".to_owned();
+    forwarded.proof = Some(
+        velnor_actions_contract::ManifestTaskProof::new(
+            &forwarded.task_id,
+            &digest,
+            &digest,
+            &digest,
+            &digest,
+            &digest,
+            &digest,
+            "default",
+            forwarded.proof_run_id,
+        )
+        .expect("proof"),
+    );
     manifest.tasks = vec![same, forwarded];
     assert_eq!(
         validate_provenance(&manifest, &digest_b3(b"m"), &expected).expect_err("mixed"),

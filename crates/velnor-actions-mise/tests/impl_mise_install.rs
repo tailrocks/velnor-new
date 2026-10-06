@@ -15,15 +15,15 @@ fn install_argv_is_byte_exact() -> Result<(), String> {
     let request = MiseInstall::new(vec![PinnedTool::Rust, PinnedTool::MrBoxington])
         .map_err(|err| err.to_string())?;
     assert_eq!(
-        request.argv(&pinned()),
+        request.argv(&pinned()).map_err(|err| err.to_string())?,
         strings(&[
             "mise",
             "--no-config",
             "--no-env",
             "--no-hooks",
             "install",
-            "rust@1.98.1",
-            "mr-boxington@1.21.0",
+            "rust[profile=minimal,components=clippy,rustfmt]@1.98.1",
+            "mr-boxington@1.21.1",
         ])
     );
     Ok(())
@@ -31,22 +31,30 @@ fn install_argv_is_byte_exact() -> Result<(), String> {
 
 #[test]
 fn install_carries_specs_only() -> Result<(), String> {
-    let request = MiseInstall::new(PinnedTool::ALL.to_vec()).map_err(|err| err.to_string())?;
-    let argv = request.argv(&pinned());
+    let request = MiseInstall::new(vec![
+        PinnedTool::Rust,
+        PinnedTool::MrBoxington,
+        PinnedTool::Gh,
+        PinnedTool::Actionlint,
+        PinnedTool::Shellcheck,
+        PinnedTool::Zizmor,
+        PinnedTool::Nextest,
+    ])
+    .map_err(|err| err.to_string())?;
+    let argv = request.argv(&pinned()).map_err(|err| err.to_string())?;
     assert_eq!(argv[4], OsString::from("install"));
     assert!(
         !argv.iter().any(|arg| arg == "--"),
         "install takes specs, never a payload separator: {argv:?}"
     );
     for spec in [
-        "rust@1.98.1",
-        "mr-boxington@1.21.0",
+        "rust[profile=minimal,components=clippy,rustfmt]@1.98.1",
+        "mr-boxington@1.21.1",
         "gh@2.102.0",
         "actionlint@1.7.12",
         "shellcheck@0.11.0",
         "zizmor@1.30.1",
         "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
-        "opentofu@1.13.1",
     ] {
         assert!(argv.iter().any(|arg| arg == spec), "missing spec: {spec}");
     }
@@ -65,7 +73,10 @@ fn install_empty_toolchain_rejected() {
 fn install_command_matches_argv_and_keeps_install_enabled() -> Result<(), String> {
     let request = MiseInstall::new(vec![PinnedTool::Rust]).map_err(|err| err.to_string())?;
     let command = request.command(&pinned()).map_err(|err| err.to_string())?;
-    assert_eq!(command.argv(), request.argv(&pinned()));
+    assert_eq!(
+        command.argv(),
+        request.argv(&pinned()).map_err(|err| err.to_string())?
+    );
     assert_eq!(command.program(), "mise");
     let env = command.full_env();
     for present in [
@@ -73,12 +84,17 @@ fn install_command_matches_argv_and_keeps_install_enabled() -> Result<(), String
         "MISE_NO_ENV",
         "MISE_NO_HOOKS",
         "MISE_LOCKFILE",
+        "RUSTUP_AUTO_INSTALL",
     ] {
         assert!(
             env.iter().any(|(key, _)| key == present),
             "isolated install keeps {present}: {env:?}"
         );
     }
+    assert!(
+        env.iter()
+            .any(|(key, value)| key == "RUSTUP_AUTO_INSTALL" && value == "0")
+    );
     for blocked in ["MISE_AUTO_INSTALL", "MISE_EXEC_AUTO_INSTALL"] {
         assert!(
             !env.iter().any(|(key, _)| key == blocked),
@@ -96,11 +112,16 @@ fn install_specs_come_only_from_catalog() -> Result<(), String> {
     .map_err(|err| err.to_string())?;
     let request = MiseInstall::new(vec![PinnedTool::Rust, PinnedTool::MrBoxington])
         .map_err(|err| err.to_string())?;
-    let argv = request.argv(&catalog);
-    assert!(argv.iter().any(|arg| arg == "rust@1.97.0"));
+    let argv = request.argv(&catalog).map_err(|err| err.to_string())?;
+    assert!(
+        argv.iter()
+            .any(|arg| arg == "rust[profile=minimal,components=clippy,rustfmt]@1.97.0")
+    );
     assert!(argv.iter().any(|arg| arg == "mr-boxington@1.18.0"));
     assert!(
-        !argv.iter().any(|arg| arg == "rust@1.98.1"),
+        !argv
+            .iter()
+            .any(|arg| arg == "rust[profile=minimal,components=clippy,rustfmt]@1.98.1"),
         "no pinned fallback may leak in: {argv:?}"
     );
     Ok(())
@@ -109,7 +130,7 @@ fn install_specs_come_only_from_catalog() -> Result<(), String> {
 #[test]
 fn cargo_profile_install_mentions_no_mbx() -> Result<(), String> {
     let request = MiseInstall::new(vec![PinnedTool::Rust]).map_err(|err| err.to_string())?;
-    let argv = request.argv(&pinned());
+    let argv = request.argv(&pinned()).map_err(|err| err.to_string())?;
     assert!(
         !argv.iter().any(
             |arg| arg.to_string_lossy().contains("boxington") || arg.to_string_lossy() == "mbx"
@@ -127,7 +148,7 @@ fn cargo_profile_exec_invokes_no_mbx() -> Result<(), String> {
         strings(&["--version"]),
     )
     .map_err(|err| err.to_string())?;
-    let argv = exec.argv(&pinned());
+    let argv = exec.argv(&pinned()).map_err(|err| err.to_string())?;
     assert!(
         !argv.iter().any(
             |arg| arg.to_string_lossy().contains("boxington") || arg.to_string_lossy() == "mbx"
@@ -141,7 +162,7 @@ fn cargo_profile_exec_invokes_no_mbx() -> Result<(), String> {
 fn mbx_install_carries_exact_mbx_spec() -> Result<(), String> {
     let request = MiseInstall::new(vec![PinnedTool::Rust, PinnedTool::MrBoxington])
         .map_err(|err| err.to_string())?;
-    let argv = request.argv(&pinned());
-    assert!(argv.iter().any(|arg| arg == "mr-boxington@1.21.0"));
+    let argv = request.argv(&pinned()).map_err(|err| err.to_string())?;
+    assert!(argv.iter().any(|arg| arg == "mr-boxington@1.21.1"));
     Ok(())
 }

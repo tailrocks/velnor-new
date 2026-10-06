@@ -366,17 +366,17 @@ fn bootstrap_plan_validates_every_identity() {
 #[test]
 fn publish_gate_binds_repo_plan_and_source_exactly() {
     let plan = bootstrap();
-    let gate = publish_gate_condition(REPO, &plan);
+    let gate = publish_gate_condition(REPO, &plan, "main");
     assert_eq!(
         gate,
         format!(
-            "github.repository == '{REPO}' && github.event.inputs.plan == '{}' && github.event.inputs.source_sha == '{SHA}'",
+            "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref == format('refs/heads/{{0}}', github.event.repository.default_branch) && github.repository == '{REPO}' && github.event.inputs.plan == '{}' && github.event.inputs.source_sha == '{SHA}'",
             plan.plan_id,
         ),
         "gate snapshot"
     );
     assert!(!gate.contains("github.sha"), "never the workflow SHA");
     assert!(!gate.contains("github.ref"), "never a mutable ref");
-    let forked = publish_gate_condition("mallory/widgets", &plan);
+    let forked = publish_gate_condition("mallory/widgets", &plan, "main");
     assert_ne!(gate, forked, "forks fail the gate");
 }

@@ -1,4 +1,4 @@
-//! Pinned action refs against the 9-entry allowlist.
+//! Pinned action refs against the 16-entry allowlist.
 //!
 //! Every ref pins `repo[/path]@sha` plus a `# vX.Y.Z` comment; no
 //! mutable-tag exceptions exist.
@@ -6,7 +6,7 @@
 use crate::ActionlintError;
 
 /// Exhaustive allowlist of `owner/repo[/path]` action keys.
-pub const ALLOWED_ACTIONS: [&str; 9] = [
+pub const ALLOWED_ACTIONS: [&str; 16] = [
     "jdx/mise-action",
     "actions/checkout",
     "actions/download-artifact",
@@ -16,6 +16,13 @@ pub const ALLOWED_ACTIONS: [&str; 9] = [
     "jdx/mr-boxington-action",
     "asamarts/alint",
     "Swatinem/rust-cache",
+    "docker/setup-buildx-action",
+    "docker/login-action",
+    "docker/build-push-action",
+    "actions/configure-pages",
+    "actions/upload-pages-artifact",
+    "actions/deploy-pages",
+    "actions/attest",
 ];
 
 /// Action key for the repository-policy Alint job's pinned ref.
@@ -25,10 +32,10 @@ pub const ALINT_ACTION: &str = "asamarts/alint";
 pub const CHECKOUT_ACTION: &str = "actions/checkout";
 
 /// Qualified `asamarts/alint` release.
-/// Source: `https://api.github.com/repos/asamarts/alint/releases/latest`; checked 2026-09-28.
-pub const ALINT_ACTION_VERSION: &str = "v0.16.1";
-/// Full commit SHA for [`ALINT_ACTION_VERSION`] (verified upstream tag `v0.16.1`, 2026-09-04).
-pub const ALINT_ACTION_SHA: &str = "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb";
+/// Source: `https://api.github.com/repos/asamarts/alint/releases/latest`; checked 2026-10-02.
+pub const ALINT_ACTION_VERSION: &str = "v0.17.0";
+/// Full commit SHA for [`ALINT_ACTION_VERSION`] (verified upstream tag `v0.17.0`, 2026-10-02).
+pub const ALINT_ACTION_SHA: &str = "d93c0283b19dd78afcd8a4b303f1556a7759ba81";
 
 /// Qualified `jdx/mise-action` release.
 ///
@@ -62,9 +69,9 @@ pub const CACHE_ACTION_VERSION: &str = "v6.1.0";
 pub const CACHE_ACTION_SHA: &str = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 /// Qualified `jdx/mr-boxington-action` release.
 /// Source: `https://api.github.com/repos/jdx/mr-boxington-action/releases`; checked 2026-09-28.
-pub const MR_BOXINGTON_ACTION_VERSION: &str = "v1.5.0";
+pub const MR_BOXINGTON_ACTION_VERSION: &str = "v1.6.0";
 /// Full commit SHA for [`MR_BOXINGTON_ACTION_VERSION`] (`v1` moves with it).
-pub const MR_BOXINGTON_ACTION_SHA: &str = "9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3";
+pub const MR_BOXINGTON_ACTION_SHA: &str = "1687e54eb349cadf61fa38b5813a77875489e8e6";
 
 /// Action key for the Cargo-only Rust cache (P08-7, never with MBX).
 pub const RUST_CACHE_ACTION: &str = "Swatinem/rust-cache";
@@ -73,6 +80,48 @@ pub const RUST_CACHE_ACTION: &str = "Swatinem/rust-cache";
 pub const RUST_CACHE_ACTION_VERSION: &str = "v2.9.2";
 /// Full commit SHA for [`RUST_CACHE_ACTION_VERSION`].
 pub const RUST_CACHE_ACTION_SHA: &str = "6323deb102c322ba6fcbdcafc7e3dddab59af2b6";
+
+/// Qualified `docker/setup-buildx-action` release; official tag and action metadata checked 2026-10-02.
+pub const SETUP_BUILDX_ACTION_VERSION: &str = "v4.4.1";
+/// Full upstream commit SHA for [`SETUP_BUILDX_ACTION_VERSION`].
+pub const SETUP_BUILDX_ACTION_SHA: &str = "f87e5991a6d7451dcb8d9637bfbc97413f497069";
+/// Qualified `docker/login-action` release; official tag and action metadata checked 2026-10-02.
+pub const LOGIN_ACTION_VERSION: &str = "v4.6.0";
+/// Full upstream commit SHA for [`LOGIN_ACTION_VERSION`].
+pub const LOGIN_ACTION_SHA: &str = "dbcb813823bdd20940b903addbd779551569679f";
+/// Qualified `docker/build-push-action` release; official tag and action metadata checked 2026-10-02.
+pub const BUILD_PUSH_ACTION_VERSION: &str = "v7.4.0";
+/// Full upstream commit SHA for [`BUILD_PUSH_ACTION_VERSION`].
+pub const BUILD_PUSH_ACTION_SHA: &str = "c3c9e263c25d99ce0380d002d59b67737d91b0dc";
+/// Qualified `actions/configure-pages` release; official tag and action metadata checked 2026-10-02.
+pub const CONFIGURE_PAGES_ACTION_VERSION: &str = "v6.0.0";
+/// Full upstream commit SHA for [`CONFIGURE_PAGES_ACTION_VERSION`].
+pub const CONFIGURE_PAGES_ACTION_SHA: &str = "45bfe0192ca1faeb007ade9deae92b16b8254a0d";
+/// Qualified `actions/upload-pages-artifact` release; official tag and action metadata checked 2026-10-02.
+pub const UPLOAD_PAGES_ARTIFACT_ACTION_VERSION: &str = "v5.0.0";
+/// Full upstream commit SHA for [`UPLOAD_PAGES_ARTIFACT_ACTION_VERSION`].
+pub const UPLOAD_PAGES_ARTIFACT_ACTION_SHA: &str = "fc324d3547104276b827a68afc52ff2a11cc49c9";
+/// Qualified `actions/deploy-pages` release; official tag and action metadata checked 2026-10-02.
+pub const DEPLOY_PAGES_ACTION_VERSION: &str = "v5.0.1";
+/// Full upstream commit SHA for [`DEPLOY_PAGES_ACTION_VERSION`].
+pub const DEPLOY_PAGES_ACTION_SHA: &str = "368f82528645a54fb793d4d04e342629a3f51346";
+/// Qualified `actions/attest` release; official tag and action metadata checked 2026-10-02.
+pub const ATTEST_ACTION_VERSION: &str = "v4.2.2";
+/// Full upstream commit SHA for [`ATTEST_ACTION_VERSION`].
+pub const ATTEST_ACTION_SHA: &str = "1e69f48acb82d1966a394da916b4c1698aa569d6";
+
+/// Buildx action runtime pin; official docker/buildx release checked 2026-10-02.
+pub const BUILDX_VERSION: &str = "0.37.2";
+/// `BuildKit` runtime version bound to the immutable image index below.
+pub const BUILDKIT_VERSION: &str = "0.33.1";
+/// Official moby/buildkit index; computed digest equals registry header, Linux amd64/arm64.
+pub const BUILDKIT_IMAGE_DIGEST: &str =
+    "sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea";
+/// Official docker/buildkit-syft-scanner release checked 2026-10-02.
+pub const SBOM_SCANNER_VERSION: &str = "1.12.0";
+/// Official scanner image index; computed digest equals registry header, Linux amd64/arm64.
+pub const SBOM_SCANNER_IMAGE_DIGEST: &str =
+    "sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9";
 
 /// One pinned action reference: `repo[/path]@sha` plus version comment.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -149,8 +149,24 @@ fn closure_input_names_pinned() -> Outcome {
     dir.write("proto/a.proto", "syntax = \"proto3\";\n")?;
     let group = group();
     let task = propose_task(&group).expect("valid group proposes");
-    let closure =
-        resolve_closure_at_root(dir.path(), &task, None, "graph", "toolchain", "platform")?;
+    let closure = resolve_closure_at_root(
+        dir.path(),
+        &task,
+        None,
+        "graph",
+        "toolchain",
+        "platform",
+        &velnor_actions_rust::semantic_inputs::SemanticInventory {
+            paths: vec![
+                "crates/a/Cargo.toml".to_owned(),
+                "crates/a/src/lib.rs".to_owned(),
+                "proto/a.proto".to_owned(),
+            ],
+            provenance: velnor_actions_contract::Provenance::Known {
+                digest: "checkout".to_owned(),
+            },
+        },
+    )?;
     assert_eq!(closure.task_id, task.task_id);
     let names: Vec<&str> = closure.inputs.keys().map(String::as_str).collect();
     assert_eq!(
@@ -158,10 +174,8 @@ fn closure_input_names_pinned() -> Outcome {
         vec![
             "cargo_config",
             "declared_extra:0:proto/a.proto",
-            "docs",
             "driver",
             "features",
-            "fixtures",
             "kind",
             "local_deps",
             "lockfile",
@@ -170,7 +184,6 @@ fn closure_input_names_pinned() -> Outcome {
             "platform",
             "profile",
             "runner",
-            "schemas",
             "source_tree",
             "target",
             "toolchain",
@@ -190,9 +203,133 @@ fn closure_vcs_unknown_with_undeclared_reads() -> Outcome {
     let mut group = group();
     group.undeclared_reads = true;
     let task = propose_task(&group).expect("valid group proposes");
-    let closure =
-        resolve_closure_at_root(dir.path(), &task, None, "graph", "toolchain", "platform")?;
+    let closure = resolve_closure_at_root(
+        dir.path(),
+        &task,
+        None,
+        "graph",
+        "toolchain",
+        "platform",
+        &velnor_actions_rust::semantic_inputs::SemanticInventory {
+            paths: vec![
+                "crates/a/Cargo.toml".to_owned(),
+                "crates/a/src/lib.rs".to_owned(),
+                "proto/a.proto".to_owned(),
+            ],
+            provenance: velnor_actions_contract::Provenance::Known {
+                digest: "checkout".to_owned(),
+            },
+        },
+    )?;
     assert_eq!(closure.unknown_inputs(), vec!["vcs"]);
     assert!(closure.verify_complete().is_err());
+    Ok(())
+}
+
+/// Complete plain local packages permit narrow source proof.
+fn semantic_fixture() -> Result<
+    (
+        TempDir,
+        velnor_actions_rust::semantic_inputs::SemanticInventory,
+    ),
+    Box<dyn std::error::Error>,
+> {
+    let dir = TempDir::create("semantic-local")?;
+    let files = [
+        (
+            "Cargo.toml",
+            "[workspace]\nmembers = ['crates/a', 'crates/b', 'crates/c']\n",
+        ),
+        (
+            "crates/a/Cargo.toml",
+            "[package]\nname = 'a'\nversion = '0.1.0'\n[dependencies]\nb = { path = '../b' }\n",
+        ),
+        ("crates/a/src/lib.rs", "pub fn a() -> u8 { 1 }\n"),
+        ("crates/a/README.md", "unconsumed documentation\n"),
+        (
+            "crates/b/Cargo.toml",
+            "[package]\nname = 'b'\nversion = '0.1.0'\n",
+        ),
+        ("crates/b/src/lib.rs", "pub fn b() -> u8 { 1 }\n"),
+        (
+            "crates/c/Cargo.toml",
+            "[package]\nname = 'c'\nversion = '0.1.0'\n",
+        ),
+        ("crates/c/src/lib.rs", "pub fn c() -> u8 { 1 }\n"),
+        ("proto/a.proto", "syntax = 'proto3';\n"),
+    ];
+    for (path, text) in files {
+        dir.write(path, text)?;
+    }
+    let inventory = velnor_actions_rust::semantic_inputs::SemanticInventory {
+        paths: files.iter().map(|(path, _)| (*path).to_owned()).collect(),
+        provenance: velnor_actions_contract::Provenance::Known {
+            digest: "inventory".to_owned(),
+        },
+    };
+    Ok((dir, inventory))
+}
+
+#[test]
+fn semantic_dependency_bytes_change_proof_but_unconsumed_docs_and_members_do_not() -> Outcome {
+    let (dir, inventory) = semantic_fixture()?;
+    let task = propose_task(&group())?;
+    let resolve = || {
+        resolve_closure_at_root(
+            dir.path(),
+            &task,
+            None,
+            "graph",
+            "tools",
+            "platform",
+            &inventory,
+        )
+    };
+    let before = resolve()?;
+    before.verify_complete()?;
+    let bytes = serde_json::to_vec(&before)?;
+    dir.write("crates/a/README.md", "updated unconsumed docs\n")?;
+    dir.write("crates/c/src/lib.rs", "pub fn c() -> u8 { 2 }\n")?;
+    assert_eq!(serde_json::to_vec(&resolve()?)?, bytes);
+    dir.write("crates/b/src/lib.rs", "pub fn b() -> u8 { 2 }\n")?;
+    assert_ne!(serde_json::to_vec(&resolve()?)?, bytes);
+    Ok(())
+}
+
+#[test]
+fn included_docs_and_native_build_inputs_are_unknown_until_complete_proof() -> Outcome {
+    let (dir, inventory) = semantic_fixture()?;
+    let task = propose_task(&group())?;
+    dir.write(
+        "crates/a/src/lib.rs",
+        "pub const DOC: &str = include_str!(\"../README.md\");\n",
+    )?;
+    let docs = resolve_closure_at_root(
+        dir.path(),
+        &task,
+        None,
+        "graph",
+        "tools",
+        "platform",
+        &inventory,
+    )?;
+    assert!(docs.verify_complete().is_err());
+    assert!(docs.unknown_inputs().contains(&"source_tree"));
+    dir.write("crates/a/src/lib.rs", "pub fn a() -> u8 { 1 }\n")?;
+    dir.write(
+        "crates/a/build.rs",
+        "fn main() { cc::Build::new().file(\"native.c\").compile(\"native\"); }\n",
+    )?;
+    dir.write("crates/a/native.c", "int a(void) { return 1; }\n")?;
+    let native = resolve_closure_at_root(
+        dir.path(),
+        &task,
+        None,
+        "graph",
+        "tools",
+        "platform",
+        &inventory,
+    )?;
+    assert!(native.verify_complete().is_err());
     Ok(())
 }

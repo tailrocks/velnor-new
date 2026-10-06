@@ -12,7 +12,8 @@ use crate::errors::ContractError;
 use crate::ids::{validate_matrix_key, validate_task_id};
 use crate::validate_digest;
 use crate::workflow::jobs::{
-    TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX, is_safe_display_name, validate_job_id,
+    CRATE_JOB_ID_PREFIX, TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX, WORKLOAD_DISPLAY_PREFIX,
+    WORKLOAD_JOB_ID_PREFIX, is_safe_display_name, validate_job_id,
 };
 
 /// One logical obligation inside a crate job (per task, individually reported).
@@ -39,7 +40,7 @@ pub struct CrateObligation {
 pub struct CrateJob {
     /// Stable collision-safe job ID.
     pub job_id: String,
-    /// Display name (`Rust / <label>`, or `OpenToFu — <root>` under `tofu-`).
+    /// Display name matching the Rust, `OpenToFu`, or Workload job namespace.
     pub display_name: String,
     /// Cargo package name (empty only with folder-fallback display).
     pub package_name: String,
@@ -57,15 +58,22 @@ impl CrateJob {
     /// Validate ordering, uniqueness, gates, and label hygiene.
     ///
     /// The display prefix partitions with the ID namespace: `tofu-`
-    /// jobs render `OpenToFu — <root>`, every other crate job keeps
-    /// the byte-identical `Rust / <label>` contract.
+    /// jobs render `OpenToFu — <root>`, `workload-` jobs render
+    /// `Workload / <name>`, and `rust-` jobs render `Rust / <label>`.
     /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         validate_job_id(&self.job_id)?;
         let prefix = if self.job_id.starts_with(TOFU_JOB_ID_PREFIX) {
             TOFU_DISPLAY_PREFIX
-        } else {
+        } else if self.job_id.starts_with(WORKLOAD_JOB_ID_PREFIX) {
+            WORKLOAD_DISPLAY_PREFIX
+        } else if self.job_id.starts_with(CRATE_JOB_ID_PREFIX) {
             "Rust / "
+        } else {
+            return Err(ContractError::identity(
+                "crate_job.job_id",
+                format!("unknown_namespace:{}", self.job_id),
+            ));
         };
         if self.display_name.trim().is_empty()
             || !self.display_name.starts_with(prefix)

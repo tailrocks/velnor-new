@@ -18,15 +18,15 @@ fn candidate_build_argv_is_byte_exact() -> Result<(), String> {
     assert_eq!(CANDIDATE_BUILD_BIN, "velnor-actions");
     let build = CandidateBuild::new().map_err(|err| err.to_string())?;
     assert_eq!(
-        build.argv(&pinned()),
+        build.argv(&pinned()).map_err(|err| err.to_string())?,
         strings(&[
             "mise",
             "--no-config",
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
-            "mr-boxington@1.21.0",
+            "rust[profile=minimal,components=clippy,rustfmt]@1.98.1",
+            "mr-boxington@1.21.1",
             "--",
             "mbx",
             "build",
@@ -47,7 +47,10 @@ fn candidate_build_command_matches_argv() -> Result<(), String> {
     let build = CandidateBuild::new().map_err(|err| err.to_string())?;
     let command = build.command(&catalog).map_err(|err| err.to_string())?;
     assert_eq!(command.program(), "mise");
-    assert_eq!(command.argv(), build.argv(&catalog));
+    assert_eq!(
+        command.argv(),
+        build.argv(&catalog).map_err(|err| err.to_string())?
+    );
     assert!(
         command.disables_auto_install(),
         "candidate build must not fetch tools: {command:?}"
@@ -62,11 +65,14 @@ fn candidate_build_specs_come_only_from_catalog() -> Result<(), String> {
     )
     .map_err(|err| err.to_string())?;
     let build = CandidateBuild::new().map_err(|err| err.to_string())?;
-    let argv = build.argv(&catalog);
-    assert!(argv.iter().any(|arg| arg == "rust@1.97.0"));
+    let argv = build.argv(&catalog).map_err(|err| err.to_string())?;
+    assert!(
+        argv.iter()
+            .any(|arg| arg == "rust[profile=minimal,components=clippy,rustfmt]@1.97.0")
+    );
     assert!(argv.iter().any(|arg| arg == "mr-boxington@1.18.0"));
     assert!(
-        !argv.iter().any(|arg| arg == "mr-boxington@1.21.0"),
+        !argv.iter().any(|arg| arg == "mr-boxington@1.21.1"),
         "no pinned fallback may leak in: {argv:?}"
     );
     Ok(())

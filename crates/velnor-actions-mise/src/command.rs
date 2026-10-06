@@ -6,8 +6,14 @@ mod env;
 mod git;
 #[path = "command_output.rs"]
 mod output;
+#[path = "command_process.rs"]
+mod process;
+#[path = "command_runtime.rs"]
+mod runtime;
 #[path = "command_tofu.rs"]
 mod tofu;
+#[path = "command_workload.rs"]
+mod workload;
 
 pub use self::env::{
     CREDENTIAL_ALLOWLIST_BASELINE, CREDENTIAL_ALLOWLIST_BOOTSTRAP, CREDENTIAL_ENV_KEYS,
@@ -23,14 +29,15 @@ pub use self::output::{
     CancelHandle, ProcessOutput, SPAWN_CANCELLED_MESSAGE, SPAWN_TIMEOUT_MESSAGE_PREFIX,
     is_cancel_or_timeout,
 };
-use self::output::{read_capped, signal_of};
+pub use crate::runtime_paths::MISE_DATA_DIR_ENV;
 
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::error::MiseError;
+use crate::runtime_paths::RuntimePaths;
 
 /// Mise global flags, always placed before the subcommand.
 ///
@@ -65,6 +72,8 @@ pub struct IsolatedCommand {
     cwd: Option<PathBuf>,
     extra_env: Vec<(OsString, OsString)>,
     policy: EnvPolicy,
+    runtime_paths: Option<RuntimePaths>,
+    resolved_git: Option<git::native::ResolvedGitExecutable>,
 }
 
 impl std::fmt::Debug for IsolatedCommand {
@@ -75,7 +84,7 @@ impl std::fmt::Debug for IsolatedCommand {
             .field("cwd", &self.cwd)
             .field("extra_env", &redact_env_for_debug(&self.extra_env))
             .field("policy", &self.policy)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -110,7 +119,7 @@ impl IsolatedCommand {
         declared: &[(OsString, OsString)],
     ) -> Result<Self, MiseError> {
         for (key, _) in declared {
-            if is_reserved_env_key(&key.to_string_lossy()) {
+            if key == "MISE_DATA_DIR" || is_reserved_env_key(&key.to_string_lossy()) {
                 return Err(MiseError::InvalidStepInput {
                     field: key.to_string_lossy().into_owned(),
                     value: "reserved_env_key".to_owned(),
@@ -123,14 +132,9 @@ impl IsolatedCommand {
             cwd: None,
             extra_env: declared.to_vec(),
             policy: EnvPolicy::RepoTask,
+            runtime_paths: None,
+            resolved_git: None,
         })
-    }
-
-    /// Override the working directory for this invocation.
-    #[must_use]
-    pub fn with_cwd(mut self, cwd: PathBuf) -> Self {
-        self.cwd = Some(cwd);
-        self
     }
 
     /// Append extras; reserved keys fail loud naming the key.
@@ -139,7 +143,29 @@ impl IsolatedCommand {
     pub fn with_env(mut self, extra: &[(OsString, OsString)]) -> Result<Self, MiseError> {
         for pair in extra {
             let key = pair.0.to_string_lossy();
-            if is_reserved_env_key(&key) || (self.program == "git" && key == "GIT_OPTIONAL_LOCKS") {
+            if key == MISE_DATA_DIR_ENV
+                && self
+                    .runtime_paths
+                    .is_some_and(|paths| pair.1 != paths.mise_data_dir())
+            {
+                return Err(MiseError::InvalidStepInput {
+                    field: key.into_owned(),
+                    value: "runtime_path_override".to_owned(),
+                });
+            }
+            let owned_data = key == "MISE_DATA_DIR"
+                && extra.iter().any(|(name, value)| {
+                    name == MISE_RUSTUP_HOME_ENV
+                        && std::path::Path::new(value)
+                            .with_file_name("mise")
+                            .as_os_str()
+                            == pair.1
+                });
+            if (is_reserved_env_key(&key) && !owned_data)
+                || (git::is_discovery_git(&self)
+                    && (key.starts_with("GIT_") || key == "PATH" || is_git_loader_key(&key)))
+                || (self.program == "git" && key == "GIT_OPTIONAL_LOCKS")
+            {
                 return Err(MiseError::InvalidStepInput {
                     field: key.into_owned(),
                     value: "reserved_env_key".to_owned(),
@@ -148,16 +174,6 @@ impl IsolatedCommand {
             self.extra_env.push(pair.clone());
         }
         Ok(self)
-    }
-
-    /// Reassign the typed env policy (crate-internal constructors only).
-    ///
-    /// The only caller is the pinned-exec constructor, which selects
-    /// [`EnvPolicy::Baseline`] for the `gh` baseline-lookup tool; every
-    /// other command keeps the policy its own constructor assigned.
-    pub(crate) fn with_policy(mut self, policy: EnvPolicy) -> Self {
-        self.policy = policy;
-        self
     }
 
     /// Program executed directly.
@@ -197,12 +213,6 @@ impl IsolatedCommand {
         let mut env = Self::env_overlay();
         env.extend(self.extra_env.iter().cloned());
         env
-    }
-
-    /// Full child env over a parent snapshot (pure [`Self::run`] contract).
-    #[must_use]
-    pub fn spawn_env(&self, parent: &[(OsString, OsString)]) -> Vec<(OsString, OsString)> {
-        self.policy.child_env(parent, &self.full_env())
     }
 
     /// Whether implicit installation is disabled (effective last-wins value).
@@ -249,62 +259,24 @@ impl IsolatedCommand {
         timeout: Duration,
         cancel: &CancelHandle,
     ) -> Result<ProcessOutput, MiseError> {
-        let program = self.program.to_string_lossy().into_owned();
-        let fail = |message: &str| MiseError::SpawnFailed {
-            program: program.clone(),
-            message: message.to_owned(),
-        };
-        if cancel.is_cancelled() {
-            return Err(fail(SPAWN_CANCELLED_MESSAGE));
-        }
-        let mut child = self
-            .command()
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|err| fail(&err.to_string()))?;
-        let (stdout, stderr) = (child.stdout.take(), child.stderr.take());
-        let out_reader = std::thread::spawn(move || read_capped(stdout, cap));
-        let err_reader = std::thread::spawn(move || read_capped(stderr, cap));
-        let deadline = Instant::now() + timeout;
-        loop {
-            if cancel.is_cancelled() {
-                drop((child.kill(), child.wait(), out_reader, err_reader));
-                return Err(fail(SPAWN_CANCELLED_MESSAGE));
-            }
-            let status = child.try_wait().map_err(|err| fail(&err.to_string()))?;
-            if let Some(status) = status {
-                let (out, out_capped) = out_reader
-                    .join()
-                    .map_err(|_| fail("reader_panicked:stdout"))?;
-                let (err, err_capped) = err_reader
-                    .join()
-                    .map_err(|_| fail("reader_panicked:stderr"))?;
-                if out_capped || err_capped {
-                    let stream = if out_capped { "stdout" } else { "stderr" };
-                    return Err(fail(&format!("{stream}_limit_exceeded:{cap}")));
-                }
-                let code = status.code();
-                let success = status.success();
-                return Ok(ProcessOutput {
-                    stdout: out,
-                    stderr: err,
-                    code,
-                    signal: signal_of(status),
-                    success,
-                });
-            }
-            if Instant::now() >= deadline {
-                drop((child.kill(), child.wait(), out_reader, err_reader));
-                let message = format!("{SPAWN_TIMEOUT_MESSAGE_PREFIX}{}", timeout.as_secs());
-                return Err(fail(&message));
-            }
-            std::thread::sleep(Duration::from_millis(5));
-        }
+        git::run(self, cap, timeout, cancel)
     }
 
-    fn command(&self) -> Command {
-        let mut command = Command::new(&self.program);
+    fn command(&self) -> Result<Command, MiseError> {
+        let program = match &self.resolved_git {
+            Some(executable) if git::is_discovery_git(self) => {
+                executable.verify()?;
+                executable.path().as_os_str()
+            }
+            Some(_) => {
+                return Err(MiseError::InvalidStepInput {
+                    field: "git_native".to_owned(),
+                    value: "git_native_command_identity".to_owned(),
+                });
+            }
+            None => &self.program,
+        };
+        let mut command = Command::new(program);
         command.args(&self.args);
         if self.policy == EnvPolicy::RepoTask {
             command.env_clear();
@@ -315,14 +287,33 @@ impl IsolatedCommand {
         } else {
             strip_credentials(&mut command, self.policy);
         }
-        for (key, value) in self.full_env() {
+        let parent: Vec<(OsString, OsString)> = std::env::vars_os().collect();
+        if git::is_discovery_git(self) {
+            for (key, _) in &parent {
+                if key.to_string_lossy().starts_with("GIT_")
+                    || is_git_loader_key(&key.to_string_lossy())
+                {
+                    command.env_remove(key);
+                }
+            }
+        }
+        let resolved = self
+            .resolved_env(&parent)
+            .ok_or_else(|| MiseError::SpawnFailed {
+                program: self.program.to_string_lossy().into_owned(),
+                message: "missing_runner_temp_for_runtime_paths".to_owned(),
+            })?;
+        for (key, value) in resolved {
             command.env(key, value);
+        }
+        if git::is_discovery_git(self) {
+            command.envs(git::DISCOVERY_DIAGNOSTIC_ENV);
         }
         if let Some(cwd) = &self.cwd {
             command.current_dir(cwd);
         }
         command.stdin(Stdio::null());
-        command
+        Ok(command)
     }
 
     fn mise_with_subcommand(
@@ -354,6 +345,8 @@ impl IsolatedCommand {
             cwd: None,
             extra_env,
             policy,
+            runtime_paths: None,
+            resolved_git: None,
         })
     }
 }
@@ -374,4 +367,12 @@ pub(crate) fn mise_install_argv_tail(specs: &[String]) -> Vec<OsString> {
     args.push(OsString::from("install"));
     args.extend(specs.iter().map(OsString::from));
     args
+}
+
+/// Loader overrides can execute code or write traces before Git startup.
+/// Ambient shared libraries remain part of the trusted native tool boundary.
+fn is_git_loader_key(key: &str) -> bool {
+    key.starts_with("LD_")
+        || key.starts_with("DYLD_")
+        || matches!(key, "GLIBC_TUNABLES" | "GCONV_PATH")
 }

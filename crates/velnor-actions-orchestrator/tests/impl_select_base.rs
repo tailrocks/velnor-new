@@ -26,7 +26,12 @@ fn merge_checkout_repo() -> Result<(TempDir, String, String, String), Box<dyn st
     )?;
     let feature = commit(root, "feat")?;
     git(&["checkout", "testmain"], root)?;
-    git(&["merge", "--no-ff", "feature", "-m", "merge"], root)?;
+    git(&["merge", "--no-ff", "--no-commit", "feature"], root)?;
+    fs::write(
+        root.join("alpha/src/lib.rs"),
+        "pub fn integration_only() {}\n",
+    )?;
+    commit(root, "merge")?;
     let merge_head = git_line(&["rev-parse", "HEAD"], root)?;
     assert_eq!(git_line(&["rev-parse", "HEAD^2"], root)?, feature);
     Ok((repo, base, feature, merge_head))
@@ -207,12 +212,83 @@ fn push_missing_base_tags_comparison_unavailable() -> TestResult {
 
 #[test]
 fn merge_checkout_accepts_head2_for_pr() -> TestResult {
-    let (repo, base, feature, _merge) = merge_checkout_repo()?;
+    let (repo, base, feature, merge) = merge_checkout_repo()?;
     let root = repo.path();
     let (plan, _warnings) = plan_pr(root, Some(&base), &feature)?;
-    assert_eq!(plan.head, feature, "planned the merge parent");
+    assert_eq!(plan.head, merge, "plan binds actual integration candidate");
     assert!(selects_both(&plan), "universe kept: {:?}", plan.task_ids);
+    assert_all_changed(&plan);
     plan.validate()?;
+    Ok(())
+}
+
+#[test]
+fn advanced_pr_base_rejects_stale_merge_and_accepts_fresh_candidate() -> TestResult {
+    let (repo, base, feature, stale_merge) = merge_checkout_repo()?;
+    let root = repo.path();
+    git(&["checkout", "-b", "advanced", &base], root)?;
+    fs::write(root.join("alpha/src/lib.rs"), "pub fn advanced_base() {}\n")?;
+    let advanced_base = commit(root, "base advanced")?;
+    git(&["checkout", "--detach", &stale_merge], root)?;
+    for event in ["pull_request", "fork"] {
+        let request = serde_json::json!({
+            "schema": 1, "run_key": "local", "base": advanced_base,
+            "head": feature, "event": event, "root": root.display().to_string(),
+        });
+        let error = plan_internal(&request.to_string()).expect_err("stale integration rejected");
+        assert!(
+            error.to_string().contains("checkout_base_mismatch"),
+            "{error}"
+        );
+    }
+    git(&["checkout", "advanced"], root)?;
+    git(
+        &["merge", "--no-ff", "feature", "-m", "fresh candidate"],
+        root,
+    )?;
+    let fresh_merge = git_line(&["rev-parse", "HEAD"], root)?;
+    let (plan, warnings) = plan_pr(root, Some(&advanced_base), &feature)?;
+    assert_eq!(plan.head, fresh_merge);
+    assert_eq!(plan.base.as_deref(), Some(advanced_base.as_str()));
+    assert!(
+        reasons_for(&plan, "alpha")
+            .iter()
+            .all(|reason| *reason == "forced_uncached")
+    );
+    assert!(
+        reasons_for(&plan, "beta")
+            .iter()
+            .all(|reason| *reason == "affected_by_change")
+    );
+    assert!(warnings.is_empty(), "fresh exact base: {warnings:?}");
+    Ok(())
+}
+
+#[test]
+fn merge_checkout_without_event_base_is_rejected() -> TestResult {
+    let (repo, _base, feature, _merge) = merge_checkout_repo()?;
+    let error = plan_pr(repo.path(), None, &feature).expect_err("base binding required");
+    assert!(
+        error.to_string().contains("checkout_base_mismatch"),
+        "{error}"
+    );
+    Ok(())
+}
+
+#[test]
+fn divergent_push_compares_exact_before_and_after_trees() -> TestResult {
+    let repo = make_ws_repo(false)?;
+    let root = repo.path();
+    commit(root, "common")?;
+    git(&["branch", "replacement"], root)?;
+    fs::write(root.join("alpha/src/lib.rs"), "pub fn before_only() {}\n")?;
+    let base = commit(root, "before")?;
+    git(&["checkout", "replacement"], root)?;
+    fs::write(root.join("beta/src/lib.rs"), "pub fn after_only() {}\n")?;
+    let head = commit(root, "after")?;
+    let (plan, warnings) = plan_push(root, Some(&base), &head)?;
+    assert_all_changed(&plan);
+    assert!(warnings.is_empty(), "exact tree comparison: {warnings:?}");
     Ok(())
 }
 

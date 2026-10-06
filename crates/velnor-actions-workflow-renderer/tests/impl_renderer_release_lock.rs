@@ -187,10 +187,10 @@ fn registry_accepts_hyphenated_names() -> Result<(), RenderError> {
 
 #[test]
 fn publish_gate_binds_repo_plan_source() {
-    let gate = publish_gate_condition(REPOSITORY, &bootstrap());
+    let gate = publish_gate_condition(REPOSITORY, &bootstrap(), "main");
     assert!(gate.contains(REPOSITORY), "{gate}");
     assert!(gate.contains(PLAN_ID), "{gate}");
     assert!(gate.contains(SHA), "{gate}");
-    let fork_gate = publish_gate_condition("evil/fork", &bootstrap());
+    let fork_gate = publish_gate_condition("evil/fork", &bootstrap(), "main");
     assert_ne!(gate, fork_gate, "fork repo must change the gate");
 }

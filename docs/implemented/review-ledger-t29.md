@@ -251,3 +251,11 @@ pins), B4 (both), B9. New-symbol pins (B2 const)
 additionally fail to compile at base by construction.
 Composition pins over unchanged behavior (B6, B13, C3) are green at
 base by design; their value is regression coverage.
+
+The Tofu root identity migration supersedes A2's reserved-directory rejection:
+`dir-` plus full lowercase UTF-8 hex distinguishes the repository root from
+literal `root`, and strict decoding rejects the former ambiguous key spellings.
+Generated storage uses full root digest locators with exact root owner proof
+and generation collision rejection rather than truncated root hashes. Provider cache digest locators require exact root-key payload
+proof before import.
+Cargo manifest keys retain their separate contract.

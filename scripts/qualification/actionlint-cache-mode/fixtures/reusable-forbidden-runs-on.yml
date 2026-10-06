@@ -1,0 +1,6 @@
+on: push
+jobs:
+  call:
+    cache-mode: write
+    uses: owner/repository/.github/workflows/build.yml@0123456789012345678901234567890123456789
+    runs-on: ubuntu-latest

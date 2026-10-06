@@ -40,9 +40,9 @@ fn velnor_workspace() -> Result<TempDir, Box<dyn std::error::Error>> {
     fs::write(root.join(".velnor/generator.lock"), lock_text()?)?;
     fs::write(
         root.join("Cargo.toml"),
-        "[workspace]\nmembers = [\n  \"crates/velnor-actions-cli\",\n  \"crates/velnor-actions-contract\",\n]\n",
+        "[workspace]\nmembers = [\n  \"crates/velnor-actions-cli\",\n  \"crates/demo\",\n]\n",
     )?;
-    for name in ["velnor-actions-cli", "velnor-actions-contract"] {
+    for name in ["velnor-actions-cli", "demo"] {
         let dir = root.join("crates").join(name);
         fs::create_dir_all(dir.join("src"))?;
         fs::write(
@@ -138,19 +138,11 @@ fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
         for spec in trio {
             assert!(cli.contains(spec), "cli suite spawns validators: {cli}");
         }
-        let contract = runs
-            .get("rust-velnor-actions-contract")
-            .ok_or("contract crate job missing")?;
+        let demo = runs.get("rust-demo").ok_or("demo crate job missing")?;
         for spec in trio {
-            assert!(
-                !contract.contains(spec),
-                "contract must trim {spec}: {contract}"
-            );
+            assert!(!demo.contains(spec), "demo must trim {spec}: {demo}");
         }
-        assert!(
-            contract.contains("rust@"),
-            "contract keeps its driver: {contract}"
-        );
+        assert!(demo.contains("rust@"), "demo keeps its driver: {demo}");
         let required = runs.get("required").ok_or("required missing")?;
         assert!(required.contains("gh@"), "required installs gh: {required}");
         for spec in trio {
@@ -179,7 +171,11 @@ fn every_emitted_install_argv_carries_no_config() -> TestResult {
         let request = MiseInstall::new(vec![PinnedTool::Rust]).map_err(|err| err.to_string())?;
         let step = PreparePinnedTools::new(vec![PinnedTool::Rust], ToolHomes::runner_temp())
             .map_err(|err| err.to_string())?;
-        for argv in [install.argv(), request.argv(&catalog), step.argv(&catalog)] {
+        for argv in [
+            install.argv(),
+            request.argv(&catalog)?,
+            step.argv(&catalog)?,
+        ] {
             let tokens = argv_text(&argv);
             let at = tokens
                 .iter()

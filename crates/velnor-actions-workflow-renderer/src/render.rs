@@ -3,29 +3,44 @@
 //! Fail-closed gates: exact triggers, concurrency, single runner label,
 //! consumer support rejection, and candidate-never-plans invariants.
 //! The strict entrypoint additionally mandates Mise setup, staged
-//! helpers, and the plan anchor; the legacy entrypoint preserves the
-//! previous contract for in-flight callers.
+//! helpers, and the plan anchor. The basic entrypoint accepts read-only jobs
+//! without phased planning or producer authority.
 
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CI_WORKFLOW_PATH, Concurrency, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
+    CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
-    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, Trigger, ValidatorKind, VelnorSupportWorkflow,
-    WorkflowIr, WorkflowPolicy,
+    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ValidatorKind, VelnorSupportWorkflow, WorkflowIr,
+    WorkflowPolicy,
 };
 
 use crate::{
-    RenderError, cache_p08, closure, commands, document, final_steps, guard, marker, matrix, msrv,
+    RenderError, cache_p08, closure, commands, document, final_steps, guard, marker, matrix,
     preseed_closure, steps, support, yaml::render_yaml,
 };
+
+#[path = "render_admission.rs"]
+mod admission;
+use admission::merged_jobs;
 
 pub use crate::matrix::{
     COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
     MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
 };
 pub use crate::setup::MiseSetup;
+
+/// Materialize support jobs before executable producer cohorts are derived.
+/// # Errors
+/// Rejects inconsistent validator or candidate policy inputs.
+pub fn merge_support_jobs(
+    jobs: &mut BTreeMap<String, Job>,
+    workflow: Option<&VelnorSupportWorkflow>,
+    context: &RenderContext,
+) -> Result<(), RenderError> {
+    support::merge_support_jobs(jobs, workflow, context)
+}
 
 /// Generated workflow path inside the repository.
 ///
@@ -57,7 +72,7 @@ pub const CANDIDATE_JOB_ID: &str = "candidate";
 /// Baseline-publish job ID: runs after the final gate passes.
 pub const PUBLISH_JOB_ID: &str = "publish-baseline";
 /// Full-SHA Alint pin for the repository-policy `alint` job.
-pub const ALINT_USES: &str = "asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb";
+pub const ALINT_USES: &str = "asamarts/alint@d93c0283b19dd78afcd8a4b303f1556a7759ba81";
 /// Pinned Alint binary release tag for the step's `version:` input.
 ///
 /// Per the action's `action.yml`, a SHA-pinned `uses:` falls back to
@@ -66,7 +81,7 @@ pub const ALINT_USES: &str = "asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7
 /// release); the renderer cannot depend on that crate, so
 /// `scripts/check-freshness.sh` pins this mirror to the reviewed
 /// `asamarts/alint` inventory row instead of trusting the duplication.
-pub const ALINT_BINARY_VERSION: &str = "v0.16.1";
+pub const ALINT_BINARY_VERSION: &str = "v0.17.0";
 
 /// Caller-supplied validated scalars the IR cannot carry.
 #[derive(Debug, Clone)]
@@ -98,6 +113,12 @@ pub struct RenderContext {
     /// failed `generate` on ambient homes after plan fetch moved to
     /// owned homes).
     pub plan_consumer_env: BTreeMap<String, String>,
+    /// Exact source and invocation records supplied by compiled operation owners.
+    pub source_helpers: Vec<velnor_actions_contract::CompiledSourceHelper>,
+    /// Generation-only approvals from the compiled native deployment factory.
+    pub native_pages_approvals: Vec<crate::pages_approval::NativePagesApproval>,
+    /// Exact generation-only native public attestation workflow approvals.
+    pub native_publish_approvals: Vec<crate::native_publish_approval::NativePublishApproval>,
 }
 
 /// One fixed validator-job shell step: kind plus display name plus argv.
@@ -131,6 +152,7 @@ impl RenderContext {
     /// Returns [`RenderError`] describing the first invalid scalar.
     pub fn validate(&self) -> Result<(), RenderError> {
         marker::validate_version(&self.generator_version)?;
+        crate::source_helper::validate_registry(&self.source_helpers, &self.generator_version)?;
         guard::validate_runs_on(&self.runs_on)?;
         guard::validate_staged_binary(&self.staged_binary, &self.generator_version)?;
         guard::validate_request_dir(&self.request_dir)?;
@@ -168,12 +190,13 @@ pub fn render_workflow_ir(
     ctx: &RenderContext,
 ) -> Result<String, RenderError> {
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
+    admission::require_nonstrict_readonly(&jobs)?;
     closure::insert_plan_closure(&mut jobs, ctx)?;
     closure::insert_request_closure(&mut jobs)?;
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
-    render_merged(ir, &jobs, ctx)
+    render_merged(ir, &jobs, ctx, false)
 }
 
 /// Strict render: setup insertion plus staged-helper and anchor gates.
@@ -196,8 +219,22 @@ pub fn render_workflow_ir_strict(
     ctx: &RenderContext,
     mise: &MiseSetup,
 ) -> Result<String, RenderError> {
+    Ok(render_workflow_ir_strict_with_jobs(ir, policy, support, ctx, mise)?.0)
+}
+
+/// Strictly render and return the exact internally finalized jobs used by YAML.
+/// # Errors
+/// Rejects the same invalid pins, context, workflow, and staging as strict rendering.
+pub fn render_workflow_ir_strict_with_jobs(
+    ir: &WorkflowIr,
+    policy: WorkflowPolicy,
+    support: Option<&VelnorSupportWorkflow>,
+    ctx: &RenderContext,
+    mise: &MiseSetup,
+) -> Result<(String, BTreeMap<String, Job>), RenderError> {
     let jobs = finalize_jobs(ir, policy, support, ctx, mise)?;
-    render_merged(ir, &jobs, ctx)
+    let yaml = render_merged(ir, &jobs, ctx, true)?;
+    Ok((yaml, jobs))
 }
 
 /// Finalize jobs exactly as `generate` writes them: policy merge, setup
@@ -221,20 +258,27 @@ pub fn finalize_jobs(
     mise.validate()?;
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
     for (id, job) in &mut jobs {
+        if id == "verification-observer" {
+            continue;
+        }
+        if cache_p08::tool_roles::validate_tool_producer(job, mise, &ctx.source_helpers)? {
+            continue;
+        }
         let always = id == PLAN_JOB_ID || id == TASK_JOB_ID;
-        let target =
-            velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
+        let target = velnor_actions_contract::tool_target_for_runner_label(&job.runs_on)
+            .ok_or_else(|| {
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
-        cache_p08::ensure_setup_p08(id, job, mise, always, target)?;
+        cache_p08::ensure_setup_p08(id, job, mise, always, target, &ctx.source_helpers)?;
+        if crate::early_plan::has_early_plan(job) {
+            cache_p08::phases::validate_prefix(job, mise, target, ctx)?;
+        }
         cache_p08::check_no_rust_cache_with_mbx(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
-    // Writer election needs every setup inserted: one saver per key.
-    cache_p08::elect_mise_cache_writers(&mut jobs)?;
-    // Provider election needs every restore inserted: one saver per key.
-    cache_p08::elect_tofu_provider_savers(&mut jobs)?;
+    // Only structurally admitted pure jobs may export executable snapshots.
+    cache_p08::validate_tool_consumers(&jobs, mise, &ctx.source_helpers)?;
     closure::check_plan_anchor(&jobs)?;
     preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
     closure::insert_plan_closure(&mut jobs, ctx)?;
@@ -259,43 +303,12 @@ pub fn action_pins(jobs: &BTreeMap<String, Job>) -> Vec<String> {
     pins.into_iter().collect()
 }
 
-/// Validate context/IR plus policy merge and support invariants.
-fn merged_jobs(
-    ir: &WorkflowIr,
-    policy: WorkflowPolicy,
-    support: Option<&VelnorSupportWorkflow>,
-    ctx: &RenderContext,
-) -> Result<BTreeMap<String, Job>, RenderError> {
-    ctx.validate()?;
-    if ctx.preseed && policy != WorkflowPolicy::VelnorRepositoryV1 {
-        return Err(RenderError::PolicyRejected {
-            policy: "consumer-v1".to_owned(),
-            problem: "preseed_requires_velnor_policy".to_owned(),
-        });
-    }
-    ir.validate().map_err(RenderError::Contract)?;
-    check_triggers(&ir.triggers)?;
-    check_concurrency(&ir.concurrency)?;
-    check_single_label(ir, &ctx.runs_on)?;
-    let mut jobs = ir.jobs.clone();
-    match policy {
-        WorkflowPolicy::ConsumerV1 => support::reject_consumer_support(&jobs, support)?,
-        WorkflowPolicy::VelnorRepositoryV1 => {
-            support::merge_support_jobs(&mut jobs, support, ctx)?;
-        }
-    }
-    msrv::check_no_msrv(&jobs)?;
-    support::check_candidate_invariants(&jobs)?;
-    support::check_final_gate(&jobs)?;
-    support::check_token_hygiene(&jobs)?;
-    Ok(jobs)
-}
-
 /// Emit matrix strategy plus the quoted, marked workflow text.
 fn render_merged(
     ir: &WorkflowIr,
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
+    cache_writers_admitted: bool,
 ) -> Result<String, RenderError> {
     let matrix = matrix::task_matrix_of(jobs)?;
     let caps = matrix::crate_job_caps(jobs)?;
@@ -304,57 +317,17 @@ fn render_merged(
     } else {
         jobs.clone()
     };
-    let mut document = document::workflow_to_yaml(ir, &jobs, ctx)?;
+    let mut document = document::workflow_to_yaml(ir, &jobs, ctx, cache_writers_admitted)?;
     if let Some((source, max_parallel)) = &matrix {
         matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
     } else {
         matrix::attach_plan_outputs(&mut document)?;
     }
+    crate::plan_fallback::attach(&mut document)?;
     matrix::attach_crate_job_caps(&mut document, &caps)?;
     matrix::insert_publish_step_id(&mut document)?;
     let document = crate::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
     steps::scan_for_private_subcommands(&text)?;
     Ok(text)
-}
-
-/// Require the exact trigger shape: 4 PR types, one push branch, merge group.
-fn check_triggers(triggers: &Trigger) -> Result<(), RenderError> {
-    let expected: Vec<String> = EXPECTED_PR_TYPES.iter().map(ToString::to_string).collect();
-    if triggers.pull_request_types != expected {
-        return Err(RenderError::InvalidWorkflow("bad_pr_triggers".to_owned()));
-    }
-    let branch_ok = triggers.push_branches.len() == 1
-        && triggers.push_branches.first().is_some_and(|branch| {
-            !branch.trim().is_empty() && !branch.chars().any(char::is_whitespace)
-        });
-    if !branch_ok {
-        return Err(RenderError::InvalidWorkflow("bad_push_branch".to_owned()));
-    }
-    if !triggers.merge_group {
-        return Err(RenderError::InvalidWorkflow(
-            "missing_merge_group".to_owned(),
-        ));
-    }
-    Ok(())
-}
-
-/// Require the exact concurrency group plus PR-only cancel.
-fn check_concurrency(concurrency: &Concurrency) -> Result<(), RenderError> {
-    if concurrency.group != CONCURRENCY_GROUP
-        || concurrency.cancel_in_progress != CONCURRENCY_CANCEL
-    {
-        return Err(RenderError::InvalidWorkflow("bad_concurrency".to_owned()));
-    }
-    Ok(())
-}
-
-/// Require every job to use the single context label.
-fn check_single_label(ir: &WorkflowIr, label: &str) -> Result<(), RenderError> {
-    for (id, job) in &ir.jobs {
-        if job.runs_on != label {
-            return Err(RenderError::InvalidWorkflow(format!("label_mismatch:{id}")));
-        }
-    }
-    Ok(())
 }

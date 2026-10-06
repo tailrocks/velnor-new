@@ -330,9 +330,9 @@ fn assembly_rejects_duplicate_keys_in_staged_json() {
 fn request_file_writes_exclusively() {
     let dir = staged("{}", &[]);
     let file = dir.path().join("sub").join("merge-v1-request.json");
-    let written = write_merge_request_to(&file, "local", dir.path(), dir.path()).expect("write");
+    let written = write_merge_request_parts(&file, "push", "{}", dir.path()).expect("write");
     assert_eq!(written, file);
-    let err = write_merge_request_to(&file, "local", dir.path(), dir.path()).expect_err("exists");
+    let err = write_merge_request_parts(&file, "push", "{}", dir.path()).expect_err("exists");
     assert!(err.to_string().contains("request_exists"), "{err}");
 }
 

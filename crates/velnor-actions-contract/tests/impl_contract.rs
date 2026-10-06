@@ -22,6 +22,7 @@ fn config_validation_reports_key_paths() {
             generator_validation: GeneratorValidation::Bootstrap,
             max_parallel_jobs: 2,
             runner_label: None,
+            verification: None,
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -32,9 +33,11 @@ fn config_validation_reports_key_paths() {
             by_manifest: BTreeMap::from([("crates/large/Cargo.toml".to_owned(), 2)]),
         },
         stacks: StacksConfig {
+            workloads: Vec::new(),
             ignore: vec![],
             rust: Some(RustStackConfig {
                 configurations: vec![RustConfiguration {
+                    feature_mode: velnor_actions_contract::RustFeatureMode::Selected,
                     name: "default".to_owned(),
                     features: vec!["default".to_owned()],
                     target: "host".to_owned(),
@@ -50,6 +53,7 @@ fn config_validation_reports_key_paths() {
             exclude: vec!["vendor/**".to_owned()],
         },
         actions: ActionsConfig::default(),
+        delivery: velnor_actions_contract::config::DeliveryConfig::default(),
     };
     assert_eq!(valid.validate(".velnor/config.toml"), Ok(()));
     let support = WorkflowPolicy::ConsumerV1.support_workflow(GeneratorValidation::Bootstrap);
@@ -92,6 +96,7 @@ fn runner_label_uses_exact_catalog_match() {
             generator_validation: velnor_actions_contract::GeneratorValidation::Bootstrap,
             max_parallel_jobs: 2,
             runner_label: None,
+            verification: None,
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -102,12 +107,14 @@ fn runner_label_uses_exact_catalog_match() {
             by_manifest: BTreeMap::new(),
         },
         stacks: StacksConfig {
+            workloads: Vec::new(),
             ignore: vec![],
             rust: None,
             tofu: None,
         },
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),
+        delivery: velnor_actions_contract::config::DeliveryConfig::default(),
     };
     assert!(RUNNER_LABEL_CATALOG.contains(&LATEST_RUNNER_LABEL));
     for label in RUNNER_LABEL_CATALOG {
@@ -154,6 +161,7 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
             generator_validation: GeneratorValidation::Bootstrap,
             max_parallel_jobs: 2,
             runner_label: None,
+            verification: None,
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -164,9 +172,11 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
             by_manifest: BTreeMap::new(),
         },
         stacks: StacksConfig {
+            workloads: Vec::new(),
             ignore: vec![],
             rust: Some(RustStackConfig {
                 configurations: vec![RustConfiguration {
+                    feature_mode: velnor_actions_contract::RustFeatureMode::Selected,
                     name: "Default".to_owned(),
                     features: vec![],
                     target: "host".to_owned(),
@@ -180,6 +190,7 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
         },
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),
+        delivery: velnor_actions_contract::config::DeliveryConfig::default(),
     };
     let Err(ContractError::Config {
         key_path, problem, ..
@@ -211,7 +222,7 @@ fn actions_overrides_validate_allowlist_and_pin_shape() {
     let alint = ActionsConfig {
         overrides: BTreeMap::from([(
             "asamarts/alint".to_owned(),
-            pin("9f9d34ba0eae3888299b9e570f43338b0e7f2cdb", "v0.16.1"),
+            pin("d93c0283b19dd78afcd8a4b303f1556a7759ba81", "v0.17.0"),
         )]),
     };
     // Alint pin is policy-owned, not overridable (version-policy.md §2, GitHub Action defaults).

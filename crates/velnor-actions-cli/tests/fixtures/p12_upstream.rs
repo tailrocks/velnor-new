@@ -18,128 +18,44 @@ type ProbeRow = (&'static str, &'static str, &'static str);
 
 /// (inventory source URL, canned file, canned body) for every probe row.
 fn probe_rows() -> Vec<ProbeRow> {
-    let mut rows = probe_tool_rows();
-    rows.extend([
-        (
-            "https://pypi.org/pypi/reuse/json",
-            "reuse.json",
-            "{\"info\":{\"version\":\"6.2.0\"}}",
-        ),
-        (
-            "https://www.python.org/downloads/",
-            "python.html",
-            "<a>Download Python 3.14.8</a>",
-        ),
-        (
-            "https://api.github.com/repos/astral-sh/uv/releases/latest",
-            "uv.json",
-            "{\"tag_name\":\"0.12.22\"}",
-        ),
-    ]);
-    rows.extend(probe_action_rows());
-    rows
+    harness::probe_rows()
 }
 
-/// Canned upstream bodies for tool inventory rows.
-fn probe_tool_rows() -> Vec<ProbeRow> {
-    vec![
-        (
-            "https://api.github.com/repos/jdx/mise/releases/latest",
-            "mise.json",
-            "{\"tag_name\": \"v2026.9.16\"}",
-        ),
-        (
-            "https://static.rust-lang.org/dist/channel-rust-stable.toml",
-            "rust.toml",
-            "[pkg.rust]\nversion = \"1.98.1 (48a229cea 2026-09-01)\"\n",
-        ),
-        (
-            "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
-            "mbx.json",
-            "[{\"tag_name\": \"v1.20.0-beta\", \"prerelease\": true}, {\"tag_name\": \"v1.19.0\"}]",
-        ),
-        (
-            "https://api.github.com/repos/cli/cli/releases/latest",
-            "gh.json",
-            "{\"tag_name\": \"v2.101.0\"}",
-        ),
-        (
-            "https://api.github.com/repos/rhysd/actionlint/releases/latest",
-            "actionlint.json",
-            "{\"tag_name\": \"v1.7.12\"}",
-        ),
-        (
-            "https://api.github.com/repos/koalaman/shellcheck/releases/latest",
-            "shellcheck.json",
-            "{\"tag_name\": \"v0.11.0\"}",
-        ),
-        (
-            "https://api.github.com/repos/zizmorcore/zizmor/releases/latest",
-            "zizmor.json",
-            "{\"tag_name\": \"v1.30.1\"}",
-        ),
-        (
-            "https://crates.io/api/v1/crates/cargo-nextest",
-            "nextest.json",
-            "{\"crate\": {\"max_version\": \"0.9.146\"}}",
-        ),
-        (
-            "https://api.github.com/repos/opentofu/opentofu/releases/latest",
-            "opentofu.json",
-            "{\"tag_name\": \"v1.13.1\"}",
-        ),
-        (
-            "https://crates.io/api/v1/crates/release-plz",
-            "release-plz.json",
-            "{\"crate\": {\"max_version\": \"0.3.169\"}}",
-        ),
-    ]
+#[test]
+fn community_latest_reads_jdk_assets_instead_of_release_tag() -> Result<(), Box<dyn Error>> {
+    let fixture = probe_fixture("p12-community-cohorts")?;
+    let run = harness::run_script(&fixture.dir, &["--check-upstream"])?;
+    harness::assert_clean(&run);
+    assert!(has_pass(&run, "upstream-probe", "java"), "{}", run.stdout);
+    harness::cleanup(&fixture);
+    Ok(())
 }
 
-/// Canned upstream bodies for action inventory rows.
-fn probe_action_rows() -> Vec<ProbeRow> {
-    vec![
-        (
-            "https://api.github.com/repos/jdx/mise-action/releases/latest",
-            "mise-action.json",
-            "{\"tag_name\": \"v4.3.0\"}",
-        ),
-        (
-            "https://api.github.com/repos/actions/checkout/releases/latest",
-            "checkout.json",
-            "{\"tag_name\": \"v7.0.1\"}",
-        ),
-        (
-            "https://api.github.com/repos/actions/download-artifact/releases/latest",
-            "download.json",
-            "{\"tag_name\": \"v8.0.1\"}",
-        ),
-        (
-            "https://api.github.com/repos/actions/upload-artifact/releases/latest",
-            "upload.json",
-            "{\"tag_name\": \"v7.0.1\"}",
-        ),
-        (
-            "https://api.github.com/repos/actions/cache/releases/latest",
-            "cache.json",
-            "{\"tag_name\": \"v6.1.0\"}",
-        ),
-        (
-            "https://api.github.com/repos/jdx/mr-boxington-action/releases",
-            "mbx-action.json",
-            "[{\"tag_name\": \"v1.5.0\"}]",
-        ),
-        (
-            "https://api.github.com/repos/asamarts/alint/releases/latest",
-            "alint.json",
-            "{\"tag_name\": \"v0.16.1\"}",
-        ),
-        (
-            "https://api.github.com/repos/Swatinem/rust-cache/tags",
-            "rust-cache.json",
-            "[{\"name\": \"v2.9.2\"}]",
-        ),
-    ]
+#[test]
+fn community_selected_qualified_pin_stays_stale_against_newer_assets() -> Result<(), Box<dyn Error>>
+{
+    let fixture = probe_fixture("p12-community-stale")?;
+    let path = fixture.dir.join("upstream/java.json");
+    let body = std::fs::read_to_string(&path)?
+        .replace("25.0.4.1.1", "25.0.4.1.2")
+        .replace("graal-25.4.4.1.1", "graal-25.4.4.1.2");
+    std::fs::write(path, body)?;
+    let run = harness::run_script(&fixture.dir, &["--check-upstream"])?;
+    harness::assert_fail(&run, "stale pin");
+    assert!(run.stdout.contains("latest='25.0.4.1.2'"), "{}", run.stdout);
+    assert!(!has_pass(&run, "upstream-probe", "java"), "{}", run.stdout);
+    harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
+fn node_latest_selects_only_the_24_lts_release_line() -> Result<(), Box<dyn Error>> {
+    let fixture = probe_fixture("p12-node-lts")?;
+    let run = harness::run_script(&fixture.dir, &["--check-upstream"])?;
+    harness::assert_clean(&run);
+    assert!(has_pass(&run, "upstream-probe", "node"), "{}", run.stdout);
+    harness::cleanup(&fixture);
+    Ok(())
 }
 
 /// Passing fixture with every probe source rewritten to canned `file://` URLs.
@@ -222,7 +138,7 @@ fn probe_rows_carry_source_and_check_time() -> Result<(), Box<dyn Error>> {
         .iter()
         .filter(|line| line.contains("\"check\":\"upstream-probe\""))
         .collect();
-    assert_eq!(probe.len(), 23, "22 rows + runner note:\n{}", run.stdout);
+    assert_eq!(probe.len(), 48, "47 rows + runner note:\n{}", run.stdout);
     for line in probe {
         if line.contains("\"subject\":\"runner\"") {
             assert!(

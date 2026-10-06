@@ -2,9 +2,8 @@
 
 use velnor_actions_orchestrator::decisions::preview_unique_dir;
 use velnor_actions_orchestrator::schedule::{
-    TaskTiming, aggregate_timings, assign_lanes, cache_ownership_table, distribute_by_weight,
-    effective_weight, fanout_worthwhile, overlap_ratio, partition_count, resource_exclusions,
-    sequential_reference,
+    assign_lanes, cache_ownership_table, distribute_by_weight, effective_weight, fanout_worthwhile,
+    overlap_ratio, partition_count, resource_exclusions, sequential_reference,
 };
 
 use crate::impl_common::TestResult;
@@ -79,26 +78,33 @@ fn sequential_reference_is_sorted_set() {
 }
 
 #[test]
-fn timings_measure_slots_without_double_count() {
-    let timing = TaskTiming {
-        queue_ms: 1,
-        runner_ms: 2,
-        task_ms: 3,
-        cache_ms: 4,
-        prep_ms: 5,
-        download_ms: 6,
-        compiler_ms: 7,
-        mbx_ms: 8,
-        test_ms: 9,
-        lock_wait_ms: 10,
-    };
-    assert_eq!(timing.accounted_total(), 55);
-    assert_eq!(TaskTiming::exclusive_ms(100, 30), 70);
-    assert_eq!(TaskTiming::exclusive_ms(10, 30), 0);
-    let total = aggregate_timings(&[timing.clone(), timing]);
-    assert_eq!(total.queue_ms, 2);
-    assert_eq!(total.lock_wait_ms, 20);
-    assert_eq!(total.accounted_total(), 110);
+fn timings_preserve_unknown_categories_and_measured_zero() {
+    use velnor_actions_orchestrator::schedule::measured_timing;
+    assert!(measured_timing(None).is_none());
+    for elapsed in [0, 3] {
+        let timing = measured_timing(Some(elapsed)).expect("measured wall");
+        assert_eq!(timing.task_ms, Some(elapsed));
+        assert_eq!(
+            timing.task_source,
+            Some(velnor_actions_contract::TaskTimingSource::TaskWrapperWall)
+        );
+        assert_eq!(
+            timing.slots(),
+            [
+                None,
+                None,
+                Some(elapsed),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None
+            ]
+        );
+        assert!(timing.validate().is_ok());
+    }
 }
 
 #[test]
@@ -115,27 +121,52 @@ fn overlap_ratio_stays_descriptive() {
 
 #[test]
 fn cache_paths_have_single_owners() {
+    use velnor_actions_contract::CacheSnapshotDomain;
+    use velnor_actions_mise::cache_sources::SOURCE_SUBSET;
     use velnor_actions_workflow_renderer::steps::{
-        TARGET_DIR_PREFIX, TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH,
+        TARGET_DIR_PREFIX, TASK_ARTIFACTS_DIR, tool_payload_paths,
     };
     let table = cache_ownership_table();
     let mut seen: std::collections::BTreeMap<&str, &str> = std::collections::BTreeMap::new();
     for (path, owner) in &table {
         assert!(seen.insert(path, owner).is_none(), "duplicate path {path}");
     }
-    assert!(table.len() >= 5, "all five layers owned");
+    assert_eq!(
+        table.len(),
+        12,
+        "full tools, planning tools, sources and remaining owners"
+    );
     for (index, (left, _)) in table.iter().enumerate() {
         for (other, _) in table.iter().skip(index + 1) {
             assert!(
-                !left.starts_with(other) && !other.starts_with(left),
+                !left.starts_with(other.as_str()) && !other.starts_with(left.as_str()),
                 "{left} vs {other}"
             );
         }
     }
-    let paths: Vec<&str> = table.iter().map(|(path, _)| *path).collect();
+    let paths: Vec<&str> = table.iter().map(|(path, _)| path.as_str()).collect();
     assert!(paths.contains(&TARGET_DIR_PREFIX), "target lane owner");
-    assert!(paths.contains(&TOOLS_CACHE_PATH), "tool owner");
     assert!(paths.contains(&TASK_ARTIFACTS_DIR), "task-result owner");
+    let owned = |owner| {
+        table
+            .iter()
+            .filter(|(_, found)| *found == owner)
+            .map(|(path, _)| path.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(owned("catalog/tools"), tool_payload_paths());
+    let planning: Vec<_> = CacheSnapshotDomain::PlanningTools
+        .roots()
+        .iter()
+        .map(|root| format!("${{{{ runner.temp }}}}/velnor/{root}"))
+        .collect();
+    assert_eq!(planning.len(), 1);
+    assert_eq!(owned("catalog/planning-tools"), planning);
+    let sources: Vec<_> = SOURCE_SUBSET
+        .iter()
+        .map(|root| format!("{}/{root}", "${{ runner.temp }}/velnor/cargo"))
+        .collect();
+    assert_eq!(owned("velnor/sources"), sources);
     assert!(
         !paths.iter().any(|path| path.contains("candidate")),
         "candidate artifacts are run-scoped, never cache-owned"
@@ -151,17 +182,6 @@ fn preview_dirs_are_unique_tmp_roots() {
         assert!(dir.starts_with(std::env::temp_dir()), "{}", dir.display());
         assert!(!dir.exists(), "absent until written");
     }
-}
-
-#[test]
-fn failed_tasks_never_save_results() {
-    use velnor_actions_mise::cache::save_allowed;
-    for event in ["push", "pull_request", "merge_group"] {
-        assert!(!save_allowed("trusted", event, false), "{event}");
-    }
-    assert!(save_allowed("trusted", "push", true));
-    assert!(!save_allowed("trusted", "pull_request", true));
-    assert!(!save_allowed("trusted", "merge_group", true));
 }
 
 #[test]

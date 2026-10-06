@@ -52,7 +52,7 @@ fn undiscovered_and_unknown_groups_never_cover() {
     let mut plan = plan_with(&[rust, unknown]);
     let stale = stale_closure();
     let manifest = manifest_with(&[(rust, &stale), (unknown, &stale)]);
-    let unchanged = Some(BTreeSet::new());
+    let unchanged = Some(selection(&[]));
     let tmp = tempfile::tempdir().expect("tempdir");
     let catalog = ToolCatalog::pinned();
     let covered = apply_coverage(
@@ -82,7 +82,7 @@ fn undiscovered_and_unknown_groups_never_cover() {
 fn matching_closure_covers() {
     let rust = "stack/rust/root/clippy/default";
     let mut plan = plan_with(&[rust]);
-    let unchanged = Some(BTreeSet::new());
+    let unchanged = Some(selection(&[]));
     let tmp = tempfile::tempdir().expect("tempdir");
     seed_sources(tmp.path());
     let catalog = ToolCatalog::pinned();
@@ -108,7 +108,7 @@ fn matching_closure_covers() {
 #[test]
 fn stale_closure_with_empty_changed_set_executes() {
     let rust = "stack/rust/root/clippy/default";
-    let unchanged = Some(BTreeSet::new());
+    let unchanged = Some(selection(&[]));
     let tmp = tempfile::tempdir().expect("tempdir");
     seed_sources(tmp.path());
     let catalog = ToolCatalog::pinned();
@@ -152,7 +152,7 @@ fn incomplete_closure_refuses() {
         .push("missing/input.proto".to_owned());
     let stale = stale_closure();
     let manifest = manifest_with(&[(rust, &stale)]);
-    let unchanged = Some(BTreeSet::new());
+    let unchanged = Some(selection(&[]));
     let tmp = tempfile::tempdir().expect("tempdir");
     seed_sources(tmp.path());
     let catalog = ToolCatalog::pinned();
@@ -183,7 +183,7 @@ fn undeclared_reads_refuse_with_warning() {
     let mut plan = plan_with(&[rust]);
     let stale = stale_closure();
     let manifest = manifest_with(&[(rust, &stale)]);
-    let unchanged = Some(BTreeSet::new());
+    let unchanged = Some(selection(&[]));
     let tmp = tempfile::tempdir().expect("tempdir");
     let catalog = ToolCatalog::pinned();
     let covered = apply_coverage(
@@ -210,7 +210,7 @@ fn changed_work_executes_despite_identity_match() {
     let mut plan = plan_with(&[rust]);
     let stale = stale_closure();
     let manifest = manifest_with(&[(rust, &stale)]);
-    let changed = Some(BTreeSet::from(["demo".to_owned()]));
+    let changed = Some(selection(&["demo"]));
     let tmp = tempfile::tempdir().expect("tempdir");
     let catalog = ToolCatalog::pinned();
     let covered = apply_coverage(
@@ -229,7 +229,7 @@ fn changed_work_executes_despite_identity_match() {
 fn advisory_needs_fresh_external_data() {
     let advisory = "stack/rust/root/advisory/default";
     let mut plan = plan_with(&[advisory]);
-    let unchanged = Some(BTreeSet::new());
+    let unchanged = Some(selection(&[]));
     let tmp = tempfile::tempdir().expect("tempdir");
     seed_sources(tmp.path());
     let catalog = ToolCatalog::pinned();

@@ -1,0 +1,45 @@
+import groovy.json.JsonSlurper
+import java.nio.charset.Charset
+import java.security.MessageDigest
+import org.gradle.api.tasks.compile.JavaCompile
+
+def home = new File(System.getenv('GRADLE_USER_HOME')).canonicalFile
+def project = new File(System.getenv('VELNOR_GRADLE_PRODUCER_PROJECT')).canonicalFile
+def working = new File(System.getenv('VELNOR_GRADLE_PRODUCER_WORKING')).canonicalFile
+def source = new File(project, 'processor-target-validation/src/main/java/com/chainargos/processor/binding/RpcEndpointBinding.java').canonicalFile
+def sourceDigest = '5860e10d5ce8657e00b38824fd8a68888bfab44397e9aaa8fd8df300a9c43ba4'
+def javaRuntime = System.getenv('VELNOR_GRADLE_PRODUCER_JAVA_RUNTIME')
+def gradleVersion = System.getenv('VELNOR_GRADLE_PRODUCER_GRADLE_VERSION')
+def sha256 = { File file -> MessageDigest.getInstance('SHA-256').digest(file.bytes).encodeHex().toString() }
+def artifactManifest = new File(home, 'velnor-public-artifacts.json').canonicalFile
+def permitted = new JsonSlurper().parse(artifactManifest).collect { it.sha256 } as Set
+
+gradle.settingsEvaluated { settings ->
+    if (settings.rootDir.canonicalFile != project) throw new GradleException('Producer root changed')
+    settings.buildCache.remote = null
+    settings.buildCache.local.directory = working
+    settings.buildCache.local.enabled = true
+    settings.buildCache.local.push = true
+}
+
+gradle.taskGraph.whenReady { graph ->
+    if (gradle.gradleVersion != gradleVersion) throw new GradleException('Gradle pin changed')
+    if (graph.allTasks.size() != 1) throw new GradleException('Producer task graph widened')
+    def task = graph.allTasks[0]
+    if (!(task instanceof JavaCompile) || task.path != ':processor-target-validation:compileJava') throw new GradleException('Producer task changed')
+    if (task.project.rootDir.canonicalFile != project || !source.isFile() || source.canonicalFile != source || sha256(source) != sourceDigest) throw new GradleException('Producer source changed')
+    if (task.source.files != [source] as Set) throw new GradleException('Producer source set changed')
+    if (task.options.compilerArgs != ['-parameters'] || !task.options.compilerArgumentProviders.empty || task.options.fork) throw new GradleException('Producer compiler flags changed')
+    if (task.options.annotationProcessorPath != null && !task.options.annotationProcessorPath.files.empty) throw new GradleException('Producer annotation processors enabled')
+    if (task.options.sourcepath != null && !task.options.sourcepath.files.empty) throw new GradleException('Producer source path widened')
+    if (task.options.bootstrapClasspath != null && !task.options.bootstrapClasspath.files.empty) throw new GradleException('Producer bootstrap classpath widened')
+    if (task.options.extensionDirs != null && !task.options.extensionDirs.empty) throw new GradleException('Producer extension path widened')
+    if (Charset.defaultCharset().name() != 'UTF-8' || task.options.encoding != null || task.sourceCompatibility != '25' || task.targetCompatibility != '25') throw new GradleException('Producer Java inputs changed')
+    def compiler = task.javaCompiler.get().metadata
+    if (compiler.languageVersion.asInt() != 25 || compiler.javaRuntimeVersion != javaRuntime || compiler.vendor != 'GraalVM Community') throw new GradleException('Producer Java tool changed')
+    if (compiler.installationPath.asFile.canonicalFile != new File(System.getenv('JAVA_HOME')).canonicalFile) throw new GradleException('Producer JAVA_HOME changed')
+    if (task.destinationDirectory.get().asFile.canonicalFile != new File(project, 'processor-target-validation/build/classes/java/main').canonicalFile) throw new GradleException('Producer output changed')
+    def classpath = task.classpath.files
+    if (classpath.size() != permitted.size() || classpath.any { file -> !file.isFile() || file.canonicalFile != file || !permitted.contains(sha256(file)) } || (classpath.collect { file -> sha256(file) } as Set) != permitted) throw new GradleException('Producer classpath not public')
+    task.inputs.property('velnorNativeCompilerPolicy', 'processor-java-v2-gradle9.5.1-community25.0.4.1+1-jvmci-25.3-b22')
+}

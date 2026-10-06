@@ -7,7 +7,7 @@ use crate::RenderError;
 /// Marker text before the version (re-exported from the contract crate).
 pub use velnor_actions_contract::MARKER_PREFIX;
 /// Marker text after the version.
-pub const MARKER_SUFFIX: &str = "; edit .velnor/config.toml and regenerate.";
+pub use velnor_actions_contract::MARKER_SUFFIX;
 
 /// Build the exact first-line marker for a generator version.
 ///
@@ -16,7 +16,7 @@ pub const MARKER_SUFFIX: &str = "; edit .velnor/config.toml and regenerate.";
 /// Returns [`RenderError::BadVersion`] when the version is malformed.
 pub fn marker_for_version(version: &str) -> Result<String, RenderError> {
     validate_version(version)?;
-    Ok(format!("{MARKER_PREFIX}{version}{MARKER_SUFFIX}"))
+    velnor_actions_contract::marker_for_version(version).map_err(RenderError::Contract)
 }
 
 /// Check that `text` starts with the exact marker line for `version`.
@@ -56,10 +56,7 @@ pub fn with_marker(version: &str, body: &str) -> Result<String, RenderError> {
 ///
 /// Returns [`RenderError::BadVersion`] when the version is malformed.
 pub fn validate_version(version: &str) -> Result<(), RenderError> {
-    let ok = !version.is_empty()
-        && version
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'+' | b'_'));
+    let ok = velnor_actions_contract::is_marker_version(version);
     if ok {
         Ok(())
     } else {

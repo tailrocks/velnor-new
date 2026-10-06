@@ -274,45 +274,10 @@ impl CacheIdentity {
     }
 }
 
-/// Build `velnor-v1-<layer>-<trust>-<compat>-<snapshot>` (≤512 bytes).
-/// # Errors
-pub fn cache_key(
-    layer: &str,
-    trust: &str,
-    compatibility: &str,
-    snapshot: &str,
-) -> Result<String, ContractError> {
-    if !matches!(layer, "sources" | "mbx" | "task" | "tofu-providers") {
-        return Err(ContractError::identity("cache.layer", "unknown_layer"));
-    }
-    if !matches!(trust, "trusted" | "pr") {
-        return Err(ContractError::identity("cache.trust", "unknown_trust"));
-    }
-    validate_digest(compatibility)?;
-    validate_digest(snapshot)?;
-    let key = format!("velnor-v1-{layer}-{trust}-{compatibility}-{snapshot}");
-    if key.len() > MAX_CACHE_KEY_BYTES {
-        return Err(ContractError::identity("cache.key", "key_too_long"));
-    }
-    Ok(key)
-}
+#[path = "cache_key_format.rs"]
+mod key_format;
 
-/// Build a same-compat restore prefix (snapshot omitted).
-/// # Errors
-pub fn restore_prefix(
-    layer: &str,
-    trust: &str,
-    compatibility: &str,
-) -> Result<String, ContractError> {
-    if !matches!(layer, "sources" | "mbx" | "task" | "tofu-providers") {
-        return Err(ContractError::identity("cache.layer", "unknown_layer"));
-    }
-    if !matches!(trust, "trusted" | "pr") {
-        return Err(ContractError::identity("cache.trust", "unknown_trust"));
-    }
-    validate_digest(compatibility)?;
-    Ok(format!("velnor-v1-{layer}-{trust}-{compatibility}-"))
-}
+pub use key_format::{TOFU_PROVIDERS_KEY_PREFIX, cache_key, restore_prefix};
 
 #[cfg(test)]
 mod tests {

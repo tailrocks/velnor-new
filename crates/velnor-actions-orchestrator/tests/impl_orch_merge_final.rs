@@ -29,7 +29,7 @@ fn orch_core_final_counts_cover_nine_slots() -> TestResult {
         &serde_json::to_value(&plan)?,
         &matrix,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     let final_report = merge(&request)?;
     assert_eq!(final_report.status, FinalStatus::Passed);
@@ -60,7 +60,7 @@ fn orch_core_final_report_carries_no_cache_inputs() -> TestResult {
         &serde_json::to_value(&plan)?,
         &matrix,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     let text = serde_json::to_string(&merge(&request)?)?;
     assert!(!text.contains("cache"), "aggregate only:\n{text}");

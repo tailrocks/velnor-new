@@ -14,7 +14,20 @@ fn tofu_group(root: &str, kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTa
         configuration: "default".to_owned(),
         no_targets: false,
     };
-    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    let mut task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    task.identity.environment.insert(
+        crate::select_tofu::PUBLIC_PROVIDER_TRANSPORT.to_owned(),
+        "true".to_owned(),
+    );
+    let descriptor = crate::tofu_cache_source::ProviderExportDescriptor {
+        root: root.to_owned(),
+        selections: vec![("registry.opentofu.org/hashicorp/random".to_owned(), "3.6.3".to_owned())],
+        lock_content: "provider \"registry.opentofu.org/hashicorp/random\" {\n  version = \"3.6.3\"\n  hashes = [\"h1:fixture\"]\n}\n".to_owned(),
+    };
+    task.identity.environment.insert(
+        crate::select_tofu::TOFU_PROVIDER_EXPORT.to_owned(),
+        serde_json::to_string(&descriptor).expect("fixture descriptor"),
+    );
     task.validate().expect("fixture valid");
     task
 }
@@ -81,13 +94,52 @@ fn provider_restore_precedes_init_obligation() {
     let with = step_inputs(job, "Restore Tofu providers");
     let key = with.get("key").expect("restore key");
     assert!(
-        key.starts_with("velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-b3-"),
+        key.starts_with("velnor-v2-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-b3-"),
         "{key}"
     );
     assert!(
-        key.ends_with("${{hashFiles('stacks/a/.terraform.lock.hcl')}}"),
+        !key.contains("${{")
+            && key
+                .rsplit('-')
+                .next()
+                .is_some_and(|digest| digest.len() == 64),
         "{key}"
     );
+}
+
+#[test]
+fn unqualified_provider_roots_keep_validation_without_transport() {
+    for value in [None, Some("false")] {
+        let mut tasks = tofu_triples(&["stacks/private"]);
+        for task in &mut tasks {
+            task.identity
+                .environment
+                .remove(crate::select_tofu::PUBLIC_PROVIDER_TRANSPORT);
+            if let Some(value) = value {
+                task.identity.environment.insert(
+                    crate::select_tofu::PUBLIC_PROVIDER_TRANSPORT.to_owned(),
+                    value.to_owned(),
+                );
+            }
+        }
+        let found = build_crate_jobs(
+            "ubuntu-26.04",
+            WorkflowPolicy::ConsumerV1,
+            &crate_jobs_tests::discovery(tasks),
+            &ToolCatalog::pinned(),
+            &[],
+            &[],
+            None,
+            2,
+        )
+        .expect("private root still builds");
+        let names = crate_jobs_tests::names(&found.jobs[0].1);
+        assert!(!names.contains(&"Restore Tofu providers"));
+        assert!(!names.contains(&"Save Tofu providers"));
+        assert!(names.contains(&"Prepare isolated Tofu configuration"));
+        assert!(names.contains(&"Init for validate"));
+        assert!(names.contains(&"Validate"));
+    }
 }
 
 #[test]
@@ -119,12 +171,24 @@ fn provider_restore_keys_are_per_root() {
     assert_ne!(keys[0], keys[1], "each root owns its key");
     assert!(
         keys.iter()
-            .any(|key| key.ends_with("${{hashFiles('stacks/a/.terraform.lock.hcl')}}")),
+            .any(|key| key.contains(&velnor_actions_contract::digest_b3(
+                format!(
+                    "tofu-provider-root-v1\n{}",
+                    velnor_actions_tofu::key_for_root("stacks/a")
+                )
+                .as_bytes()
+            ))),
         "{keys:?}"
     );
     assert!(
         keys.iter()
-            .any(|key| key.ends_with("${{hashFiles('stacks/b/.terraform.lock.hcl')}}")),
+            .any(|key| key.contains(&velnor_actions_contract::digest_b3(
+                format!(
+                    "tofu-provider-root-v1\n{}",
+                    velnor_actions_tofu::key_for_root("stacks/b")
+                )
+                .as_bytes()
+            ))),
         "{keys:?}"
     );
 }
@@ -152,7 +216,7 @@ fn rust_jobs_carry_no_provider_restore() {
 }
 
 #[test]
-fn mixed_job_restores_both_sources_and_providers() {
+fn mixed_job_restores_providers_before_obligations() {
     use velnor_actions_tofu::TofuTaskKind;
     let mut rust = crate_jobs_tests::group("demo", TaskKind::Clippy, &[]);
     let tofu = tofu_group("stacks/a", TofuTaskKind::Validate);
@@ -171,10 +235,6 @@ fn mixed_job_restores_both_sources_and_providers() {
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1, "shared group renders once");
     let names = crate_jobs_tests::names(&found.jobs[0].1);
-    assert!(
-        names.contains(&"Restore Cargo sources") || names.contains(&"Restore Cargo registry"),
-        "mixed restores sources: {names:?}"
-    );
     assert!(
         names.contains(&"Restore Tofu providers"),
         "mixed restores providers: {names:?}"
@@ -195,9 +255,13 @@ fn mixed_job_restores_both_sources_and_providers() {
 
 #[test]
 fn provider_key_rejects_unknown_targets() {
-    let err =
-        crate::tofu_cache::tofu_providers_cache_key("mips-unknown-linux", "1.13.1", "stacks/a")
-            .expect_err("unknown targets fail closed");
+    let err = crate::tofu_cache::tofu_providers_cache_key(
+        "mips-unknown-linux",
+        "1.13.1",
+        "stacks/a",
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    )
+    .expect_err("unknown targets fail closed");
     assert!(err.to_string().contains("bad_target"), "unexpected {err:?}");
 }
 
@@ -208,7 +272,8 @@ fn provider_key_rejects_loose_tofu_versions() {
             crate::tofu_cache::tofu_providers_cache_key(
                 "x86_64-unknown-linux-gnu",
                 version,
-                "stacks/a"
+                "stacks/a",
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
             )
             .is_err(),
             "{version:?} must fail closed"
@@ -218,7 +283,8 @@ fn provider_key_rejects_loose_tofu_versions() {
         crate::tofu_cache::tofu_providers_cache_key(
             "x86_64-unknown-linux-gnu",
             "1.13.1",
-            "stacks/a"
+            "stacks/a",
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
         )
         .is_ok(),
         "the qualified pin builds"
@@ -238,9 +304,13 @@ fn provider_key_rejects_unsafe_roots() {
         "a\\b",
         "a\nb",
     ] {
-        let err =
-            crate::tofu_cache::tofu_providers_cache_key("x86_64-unknown-linux-gnu", "1.13.1", root)
-                .expect_err("unsafe roots fail closed");
+        let err = crate::tofu_cache::tofu_providers_cache_key(
+            "x86_64-unknown-linux-gnu",
+            "1.13.1",
+            root,
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        )
+        .expect_err("unsafe roots fail closed");
         assert!(
             err.to_string().contains("unsafe_fetch_root"),
             "{root:?}: {err}"
@@ -251,9 +321,13 @@ fn provider_key_rejects_unsafe_roots() {
 #[test]
 fn provider_key_rejects_leading_dash_roots() {
     for root in ["-evil", "-chdir"] {
-        let err =
-            crate::tofu_cache::tofu_providers_cache_key("x86_64-unknown-linux-gnu", "1.13.1", root)
-                .expect_err("leading-dash roots fail closed");
+        let err = crate::tofu_cache::tofu_providers_cache_key(
+            "x86_64-unknown-linux-gnu",
+            "1.13.1",
+            root,
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        )
+        .expect_err("leading-dash roots fail closed");
         assert!(
             err.to_string().contains("leading_dash_root"),
             "{root:?}: {err}"
@@ -262,26 +336,49 @@ fn provider_key_rejects_leading_dash_roots() {
 }
 
 #[test]
-fn provider_key_rejects_overlong_keys_from_deep_roots() {
-    let deep = format!("{}leaf", "nest/".repeat(200));
-    let err =
-        crate::tofu_cache::tofu_providers_cache_key("x86_64-unknown-linux-gnu", "1.13.1", &deep)
-            .expect_err("deep roots overflow the key");
-    assert!(err.to_string().contains("key_too_long"), "{err}");
-    let roomy = format!("{}leaf", "nest/".repeat(20));
-    assert!(
-        crate::tofu_cache::tofu_providers_cache_key("x86_64-unknown-linux-gnu", "1.13.1", &roomy,)
-            .is_ok(),
-        "ordinary nesting builds"
-    );
+fn provider_key_rejects_runtime_and_unqualified_source_digests() {
+    for digest in [
+        "",
+        "${{hashFiles('.terraform.lock.hcl')}}",
+        "b3-012345",
+        "ABCDEF",
+    ] {
+        let error = crate::tofu_cache::tofu_providers_cache_key(
+            "x86_64-unknown-linux-gnu",
+            "1.13.1",
+            "",
+            digest,
+        )
+        .expect_err("source digest must be literal lower hexadecimal");
+        assert!(error.to_string().contains("invalid_provider_source_digest"));
+    }
 }
 
 #[test]
-fn provider_cache_rejects_different_exact_roots_in_one_group() {
-    let tasks = tofu_triples(&["", "root"]);
-    let refs: Vec<_> = tasks.iter().collect();
-    let obligations = obligations_for(&refs, &ToolCatalog::pinned()).expect("obligations");
-    let err = crate::tofu_cache::tofu_root_for_obligations(&obligations)
-        .expect_err("distinct roots cannot share a provider cache");
-    assert!(err.to_string().contains("tofu_mixed_roots"), "{err}");
+fn provider_key_bounds_long_roots_and_preserves_root_identity() {
+    let deep = format!("{}leaf", "nest/".repeat(200));
+    let digest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    let key = crate::tofu_cache::tofu_providers_cache_key(
+        "x86_64-unknown-linux-gnu",
+        "1.13.1",
+        &deep,
+        digest,
+    )
+    .expect("long roots use full root hash locator");
+    assert!(key.len() <= velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES);
+    let first = crate::tofu_cache::tofu_providers_cache_key(
+        "x86_64-unknown-linux-gnu",
+        "1.13.1",
+        "",
+        digest,
+    )
+    .expect("repository root");
+    let second = crate::tofu_cache::tofu_providers_cache_key(
+        "x86_64-unknown-linux-gnu",
+        "1.13.1",
+        "root",
+        digest,
+    )
+    .expect("literal root directory");
+    assert_ne!(first, second);
 }

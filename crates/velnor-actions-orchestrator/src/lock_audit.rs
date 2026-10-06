@@ -26,15 +26,20 @@ use std::collections::BTreeSet;
 use std::io::Read;
 use std::path::Path;
 
-use velnor_actions_contract::{Step, StepKind, WorkflowIr, target_for_runner_label};
+use velnor_actions_contract::{WorkflowIr, tool_target_for_runner_label};
 use velnor_actions_mise::toolfiles::lockfile::{
     InstallCoverage, InstallSubject, audit_install_coverage, mise_platform_for_target,
-    parse_mise_lockfile, subject_for_install_spec,
+    parse_mise_lockfile,
 };
-use velnor_actions_mise::{MISE_LOCK_FILE, PREPARE_PINNED_TOOLS_STEP, ToolCatalog};
+use velnor_actions_mise::{MISE_LOCK_FILE, ToolCatalog};
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 
 use crate::vectors::validator_install_pin;
+
+#[path = "lock_catalog_subjects.rs"]
+mod catalog_subjects;
+#[path = "lock_prepare_specs.rs"]
+mod prepare;
 
 /// Audit outcome: one advisory summary plus fail-closed diagnostics.
 pub(crate) struct LockAuditOutcome {
@@ -88,51 +93,31 @@ pub(crate) fn audit_prepare_installs(
 ) -> LockAuditOutcome {
     let catalog = ToolCatalog::pinned();
     let mut blocking = Vec::new();
-    let mut subjects: Vec<InstallSubject> = Vec::new();
+    let mut groups = catalog_subjects::Subjects::new();
     for (id, job) in &ir.jobs {
-        for step in &job.steps {
-            if step.name != PREPARE_PINNED_TOOLS_STEP {
-                continue;
-            }
-            let Some(specs) = prepare_specs(id, step, &mut blocking) else {
-                continue;
-            };
-            if specs.is_empty() {
-                blocking.push(bare_install(id));
-                continue;
-            }
-            for spec in specs {
-                match subject_for_install_spec(&spec, &catalog) {
-                    Some(subject) => subjects.push(subject),
-                    None => blocking.push(format!("unauditable_install_spec:{spec}")),
-                }
-            }
-        }
+        catalog_subjects::collect(id, job, &catalog, &mut groups, &mut blocking);
     }
+    let mut subjects = Vec::new();
     for command in validator_commands {
         audit_validator_command(command, &mut subjects, &mut blocking);
     }
-    subjects.sort_by(|left, right| left.display.cmp(&right.display));
-    subjects.dedup();
-    if subjects.is_empty() && blocking.is_empty() {
+    if !subjects.is_empty() {
+        match tool_target_for_runner_label(label).and_then(mise_platform_for_target) {
+            Some(platform) => groups
+                .entry(platform.to_owned())
+                .or_default()
+                .extend(subjects),
+            None => blocking.push(format!("unauditable_validator_host:{label}")),
+        }
+    }
+    if groups.is_empty() && blocking.is_empty() {
         return LockAuditOutcome {
             recommendation: None,
             blocking,
         };
     }
-    let Some(platform) = target_for_runner_label(label)
-        .and_then(mise_platform_for_target)
-        .map(str::to_owned)
-    else {
-        return LockAuditOutcome {
-            recommendation: Some(format!(
-                "tool_install_unverified:cannot audit installs (unsupported runner label {label})"
-            )),
-            blocking,
-        };
-    };
     let lock_text = capped_read(&root.join(MISE_LOCK_FILE), MISE_LOCK_FILE, &mut blocking);
-    audit_against_lock(lock_text.as_deref(), &subjects, &platform, blocking)
+    catalog_subjects::audit(lock_text.as_deref(), groups, blocking)
 }
 
 /// Bare-install diagnostic: zero specs means versions would come from
@@ -141,28 +126,6 @@ fn bare_install(id: &str) -> String {
     format!(
         "bare_install_step:{id} installs zero specs (versions would come from mise.toml); emit explicit specs"
     )
-}
-
-/// Specs from a Prepare step's plain argv; a Prepare step always
-/// installs, so a missing or unclassifiable vector blocks as a
-/// generator bug.
-fn prepare_specs(id: &str, step: &Step, blocking: &mut Vec<String>) -> Option<Vec<String>> {
-    let StepKind::Shell { run, .. } = &step.kind else {
-        blocking.push(format!("unauditable_prepare_argv:{id}:not_a_shell_step"));
-        return None;
-    };
-    let tokens: Vec<&str> = run.iter().map(String::as_str).collect();
-    match classify_mise_vectors(&tokens) {
-        MiseVectors::Install(specs) => Some(specs),
-        MiseVectors::NotInstall => {
-            blocking.push(format!("unauditable_prepare_argv:{id}:no_install"));
-            None
-        }
-        MiseVectors::Unclassifiable(detail) => {
-            blocking.push(format!("unauditable_prepare_argv:{id}:{detail}"));
-            None
-        }
-    }
 }
 
 /// Audit one validator command's install contribution.

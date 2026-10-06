@@ -16,15 +16,12 @@ use velnor_actions_orchestrator::{
 use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 
 use crate::impl_common::{
-    TestResult, config_with_branch, fixture_manifest_json, git, make_repo, plan_for, root_manifest,
+    TestResult, config_with_branch, fixture_manifest_json, git, make_repo, plan_for,
     without_ambient_identity,
 };
 
 /// Minimal lockfile making a fixture lockful (fetch/restore emitted).
 const FAKE_LOCK: &str = "version = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n";
-
-/// Config for an audited repository fixture.
-const VELNOR_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n";
 
 /// Velnor-policy fixture with canonical origin plus release manifest.
 fn make_velnor_repo() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
@@ -44,12 +41,18 @@ fn make_velnor_repo() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
         root,
     )?;
     fs::create_dir_all(root.join(".velnor"))?;
-    fs::write(root.join(".velnor/config.toml"), VELNOR_CONFIG)?;
+    fs::write(
+        root.join(".velnor/config.toml"),
+        "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n",
+    )?;
     fs::write(
         root.join(".velnor/release-manifest.json"),
         fixture_manifest_json(),
     )?;
-    fs::write(root.join("Cargo.toml"), root_manifest(VELNOR_CONFIG))?;
+    fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )?;
     fs::create_dir_all(root.join("src"))?;
     fs::write(root.join("src/lib.rs"), "pub fn f() {}\n")?;
     Ok(dir)

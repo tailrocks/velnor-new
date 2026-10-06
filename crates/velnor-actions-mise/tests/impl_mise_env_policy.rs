@@ -55,7 +55,10 @@ fn hostile_tofu_parent() -> Vec<(OsString, OsString)> {
 }
 
 fn bootstrap() -> Result<IsolatedCommand, String> {
-    IsolatedCommand::mise_install(&["rust@1.98.1".to_owned()]).map_err(|err| err.to_string())
+    IsolatedCommand::mise_install(&[
+        "rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()
+    ])
+    .map_err(|err| err.to_string())
 }
 
 fn baseline() -> Result<IsolatedCommand, String> {
@@ -71,7 +74,7 @@ fn baseline() -> Result<IsolatedCommand, String> {
 
 fn verify() -> Result<IsolatedCommand, String> {
     IsolatedCommand::mise_exec(
-        &["rust@1.98.1".to_owned()],
+        &["rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()],
         &[OsString::from("cargo"), OsString::from("--version")],
     )
     .map_err(|err| err.to_string())
@@ -86,25 +89,65 @@ fn repo_task() -> Result<IsolatedCommand, String> {
     IsolatedCommand::repo_task("sh", Vec::new(), &declared).map_err(|err| err.to_string())
 }
 
+#[test]
+fn owned_cargo_wrapper_authority_rejects_extras_for_every_policy() -> Result<(), String> {
+    for key in [
+        "MISE_OWNED_CARGO_WRAPPER",
+        "MISE_OWNED_CARGO_WRAPPER_SHA256",
+    ] {
+        for (policy, command) in [
+            ("bootstrap", bootstrap()?),
+            ("baseline", baseline()?),
+            ("verify", verify()?),
+            ("discovery", discovery()),
+            ("repo_task", repo_task()?),
+        ] {
+            let error = command
+                .with_env(&[pair(key, "caller-controlled")])
+                .expect_err("wrapper authority must reject caller extras");
+            assert!(
+                matches!(error, velnor_actions_mise::MiseError::InvalidStepInput {
+                field, value
+            } if field == key && value == "reserved_env_key"),
+                "{policy:?}: {key}"
+            );
+        }
+    }
+    Ok(())
+}
+
 /// Endpoint selectors never survive any policy: `GH_HOST` would
 /// reroute `gh` (and any kept token) to an attacker host, and
 /// `GH_CONFIG_DIR` would load attacker-controlled auth.
 #[test]
-fn endpoint_selectors_strip_for_every_policy() -> Result<(), String> {
-    let mut parent = parent_snapshot();
-    parent.push(pair("GH_HOST", "evil.example"));
-    parent.push(pair("GH_CONFIG_DIR", "/tmp/evil"));
-    parent.push(pair("GH_ENTERPRISE_TOKEN", "__SENTINEL__"));
-    let cases: Vec<(&str, Vec<(OsString, OsString)>)> = vec![
-        ("bootstrap", bootstrap()?.spawn_env(&parent)),
-        ("baseline", baseline()?.spawn_env(&parent)),
-        ("verify", verify()?.spawn_env(&parent)),
-        ("discovery", discovery().spawn_env(&parent)),
-        ("repo_task", repo_task()?.spawn_env(&parent)),
-    ];
-    for (label, env) in &cases {
-        for key in ["GH_HOST", "GH_CONFIG_DIR", "GH_ENTERPRISE_TOKEN"] {
-            assert!(!has(env, key), "{label}: {key} must strip: {env:?}");
+fn endpoint_selectors_strip_and_rustup_install_is_disabled_for_every_policy() -> Result<(), String>
+{
+    for auto_install in ["0", "1", "false", ""] {
+        let mut parent = parent_snapshot();
+        parent.push(pair("RUSTUP_AUTO_INSTALL", auto_install));
+        parent.push(pair("GH_HOST", "evil.example"));
+        parent.push(pair("GH_CONFIG_DIR", "/tmp/evil"));
+        parent.push(pair("GH_ENTERPRISE_TOKEN", "__SENTINEL__"));
+        let cases: Vec<(&str, Vec<(OsString, OsString)>)> = vec![
+            ("bootstrap", bootstrap()?.spawn_env(&parent)),
+            ("baseline", baseline()?.spawn_env(&parent)),
+            ("verify", verify()?.spawn_env(&parent)),
+            ("discovery", discovery().spawn_env(&parent)),
+            ("repo_task", repo_task()?.spawn_env(&parent)),
+        ];
+        for (label, env) in &cases {
+            for key in ["GH_HOST", "GH_CONFIG_DIR", "GH_ENTERPRISE_TOKEN"] {
+                assert!(!has(env, key), "{label}: {key} must strip: {env:?}");
+            }
+            let rustup_gate: Vec<_> = env
+                .iter()
+                .filter(|(key, _)| key == "RUSTUP_AUTO_INSTALL")
+                .collect();
+            assert_eq!(
+                rustup_gate,
+                [&pair("RUSTUP_AUTO_INSTALL", "0")],
+                "{label}: {auto_install:?}"
+            );
         }
     }
     Ok(())

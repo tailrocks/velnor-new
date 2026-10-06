@@ -6,6 +6,7 @@ use crate::ids::{
     validate_run_key, validate_task_id, validate_task_report_id,
 };
 use crate::workflow::plan::WorkflowEvent;
+use crate::workflow::timing::TaskTiming;
 use crate::workflow::trust::Trust;
 use serde::{Deserialize, Serialize};
 /// Per-task machine-readable report.
@@ -63,56 +64,6 @@ pub struct TaskReport {
     /// Measured timing breakdown, when collected (par §9).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timing: Option<TaskTiming>,
-}
-/// Measured per-slot task timing in milliseconds (par §9).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TaskTiming {
-    /// Queue wait before dispatch.
-    pub queue_ms: u64,
-    /// Runner provisioning.
-    pub runner_ms: u64,
-    /// Task-body wall time.
-    pub task_ms: u64,
-    /// Cache restore/save handling.
-    pub cache_ms: u64,
-    /// Preparation before the payload.
-    pub prep_ms: u64,
-    /// Artifact downloads.
-    pub download_ms: u64,
-    /// Compiler wall time.
-    pub compiler_ms: u64,
-    /// MBX object handling.
-    pub mbx_ms: u64,
-    /// Test execution proper.
-    pub test_ms: u64,
-    /// Lock waits.
-    pub lock_wait_ms: u64,
-}
-impl TaskTiming {
-    /// Sum of separately measured slots.
-    #[must_use]
-    pub fn accounted_total(&self) -> u64 {
-        self.slots()
-            .iter()
-            .fold(0, |sum, slot| sum.saturating_add(*slot))
-    }
-    /// All slots in canonical order.
-    #[must_use]
-    pub fn slots(&self) -> [u64; 10] {
-        [
-            self.queue_ms,
-            self.runner_ms,
-            self.task_ms,
-            self.cache_ms,
-            self.prep_ms,
-            self.download_ms,
-            self.compiler_ms,
-            self.mbx_ms,
-            self.test_ms,
-            self.lock_wait_ms,
-        ]
-    }
 }
 /// Task execution status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -253,6 +204,15 @@ impl TaskReport {
     /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         check_schema(self.schema)?;
+        if let Some(timing) = &self.timing {
+            timing.validate()?;
+            if timing.task_ms != self.duration_ms {
+                return Err(ContractError::identity(
+                    "timing.task_ms",
+                    "duration_mismatch",
+                ));
+            }
+        }
         validate_run_key(&self.run_key)?;
         validate_matrix_key(&self.matrix_key)?;
         check_matrix_id(&self.matrix_id, &self.matrix_key)?;

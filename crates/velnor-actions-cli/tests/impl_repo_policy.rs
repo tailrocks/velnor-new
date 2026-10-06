@@ -14,6 +14,12 @@ mod p11_compiler;
 mod p11_metadata;
 #[path = "fixtures/p11_toml.rs"]
 pub(crate) mod p11_toml;
+#[path = "fixtures/p12_artifact_descriptor.rs"]
+mod p12_artifact_descriptor;
+#[path = "fixtures/p12_community_java.rs"]
+mod p12_community_java;
+#[path = "fixtures/p12_delivery.rs"]
+mod p12_delivery;
 #[path = "fixtures/p12_harness.rs"]
 mod p12_harness;
 #[path = "fixtures/p12_live.rs"]
@@ -26,6 +32,8 @@ mod p12_mutants;
 mod p12_policy;
 #[path = "fixtures/p12_policy_b.rs"]
 mod p12_policy_b;
+#[path = "fixtures/p12_profile_pins.rs"]
+mod p12_profile_pins;
 #[path = "fixtures/p12_upstream.rs"]
 mod p12_upstream;
 

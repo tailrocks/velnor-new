@@ -10,6 +10,7 @@
 use std::fs;
 
 use velnor_actions_contract::Plan;
+use velnor_actions_tofu::key_for_root;
 
 use crate::impl_common::{TestResult, git, git_line};
 use crate::impl_perf_p13::perf_harness_p13::{
@@ -144,10 +145,11 @@ fn bench_tofu_root_change() -> TestResult {
         .filter(|(_, reason)| *reason == "affected_by_change")
         .collect();
     assert_eq!(affected.len(), 3, "touched triple only: {affected:?}");
+    let root_prefix = format!("stack/tofu/{}/", key_for_root("stacks/r003"));
     assert!(
         affected
             .iter()
-            .all(|(task, _)| task.contains(&velnor_actions_tofu::key_for_root("stacks/r003"))),
+            .all(|(task, _)| task.starts_with(&root_prefix)),
         "{affected:?}"
     );
     let metadata_ms = index_baseline_ms(root)?;

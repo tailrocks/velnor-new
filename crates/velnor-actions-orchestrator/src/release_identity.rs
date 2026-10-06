@@ -164,6 +164,21 @@ pub(crate) fn workspace_slug(manifest_path: &str) -> String {
     }
 }
 
+/// Derive the serialized publication lock from the exact release identities.
+pub(crate) fn release_concurrency(
+    registry: &str,
+    repository: &str,
+    manifest: &str,
+) -> Result<velnor_actions_workflow_renderer::release_spec::ReleaseConcurrency, OrchestratorError> {
+    Ok(
+        velnor_actions_workflow_renderer::release_spec::lock::stable_lock_group(
+            registry,
+            repository,
+            &workspace_slug(manifest),
+        )?,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

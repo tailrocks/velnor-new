@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    GeneratorLock, Step, WorkflowIr, is_crate_job_id, target_for_runner_label,
+    GeneratorLock, SourceBoundOperation, Step, WorkflowIr, is_crate_job_id, target_for_runner_label,
 };
 use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::cache_p08::{RESTORE_SOURCES_NAME, RUST_CACHE_NAME};
@@ -23,6 +23,25 @@ use crate::OrchestratorError;
 use crate::pins::lock_acquire_step;
 use crate::vectors::{candidate_build_argv, mbx_probe_argv};
 use crate::workflow::WorkflowPlan;
+
+/// Rebuild tool preparation authority after attach, preserving other compiled owners.
+pub(crate) fn requalify_source_helpers(
+    workflow: &mut WorkflowPlan,
+    version: &str,
+) -> Result<(), OrchestratorError> {
+    let rust_records = crate::workflow::collect_rust_source_helpers(&workflow.ir, version)?;
+    workflow.context.source_helpers.retain(|record| {
+        !matches!(
+            record.invocation().descriptor().operation(),
+            SourceBoundOperation::MiseToolPrepare
+                | SourceBoundOperation::RustPrepareRootLinux
+                | SourceBoundOperation::RustPrepareDesktopMac
+                | SourceBoundOperation::RustPrepareDesktopSourceMac
+        )
+    });
+    workflow.context.source_helpers.extend(rust_records);
+    Ok(())
+}
 
 /// Attach lock-backed Acquire steps to plan, final, publish, and crate jobs.
 ///
@@ -74,8 +93,7 @@ pub(crate) fn attach_lock_acquire(
 
 /// Attach explicit pre-seed build-once steps (Velnor policy, no lock).
 ///
-/// The plan job restores the MBX object store (shared-snapshot plans),
-/// builds the helper once from the checked-out source with the fixed §4
+/// The plan job builds the helper once from the checked-out source with the fixed §4
 /// vector after the fetch steps that guarantee sources present, verifies
 /// the MBX compile output plus its pinned route, records the source
 /// commit in a manifest, uploads the exactly-named artifact, and stages
@@ -115,7 +133,6 @@ pub(crate) fn attach_preseed(
             problem: "plan_job_missing".to_owned(),
         });
     };
-    insert_plan_mbx_restore(&catalog, &mut plan.steps)?;
     let at = preseed_anchor(&plan.steps);
     plan.steps.splice(at..at, plan_steps);
     let Some(final_gate) = workflow.ir.jobs.get_mut(FINAL_JOB_ID) else {
@@ -170,44 +187,6 @@ fn after_prepare(steps: &[Step]) -> usize {
         .iter()
         .position(|step| step.name == PREPARE_PINNED_TOOLS_STEP)
         .map_or(1, |index| index + 1)
-}
-
-/// Insert the plan-job MBX objects restore ahead of fetch (pre-seed only).
-///
-/// The pre-seed build compiles through MBX on every repo, so the plan
-/// job warms the object store exactly like an MBX crate job: right after
-/// the shared-sources restore, ahead of fetch. Plans without a shared
-/// restore (cargo-only rust-cache writers, lockless) stay untouched: an
-/// MBX step beside a rust-cache writer would trip the P08 one-owner
-/// gate, and there is nothing to warm without sources.
-fn insert_plan_mbx_restore(
-    catalog: &ToolCatalog,
-    steps: &mut Vec<Step>,
-) -> Result<(), OrchestratorError> {
-    use velnor_actions_actionlint::PinnedActionRef;
-    use velnor_actions_actionlint::actions::{
-        MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION,
-    };
-    let Some(restore_at) = steps
-        .iter()
-        .position(|step| step.name == RESTORE_SOURCES_NAME)
-    else {
-        return Ok(());
-    };
-    let uses = PinnedActionRef::new(
-        "jdx/mr-boxington-action",
-        None,
-        MR_BOXINGTON_ACTION_SHA,
-        MR_BOXINGTON_ACTION_VERSION,
-    )?
-    .uses_value();
-    let restore = velnor_actions_workflow_renderer::steps::mbx_objects_step(
-        &uses,
-        false,
-        catalog.version(PinnedTool::MrBoxington),
-    )?;
-    steps.insert(restore_at + 1, restore);
-    Ok(())
 }
 
 /// Insert index for the plan-job pre-seed build block.

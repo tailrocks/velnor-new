@@ -6,7 +6,7 @@ use super::p12_harness as harness;
 
 const INVENTORY: &str = ".velnor/freshness-inventory.json";
 const POLICY: &str = ".velnor/version-policy.toml";
-const CATALOG: &str = "crates/velnor-actions-mise/src/catalog.rs";
+const CATALOG: &str = "crates/velnor-actions-mise/src/catalog_pins.rs";
 
 /// Passing fixture with every probe source rewritten to canned `file://` URLs.
 fn probe_fixture(prefix: &str) -> Result<harness::Fixture, Box<dyn Error>> {
@@ -204,22 +204,21 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
         "supported = [\"ubuntu-26.04\", \"ubuntu-24.04\", \"ubuntu-22.04\"]",
         "[validation-tools]",
         "cargo-mutants = \"27.1.0\"",
-        "mise = \"2026.9.18\"",
-        "rust = \"1.98.1\"",
-        "mr-boxington = \"1.21.0\"",
-        "gh = \"2.102.0\"",
-        "actionlint = \"1.7.12\"",
-        "shellcheck = \"0.11.0\"",
-        "zizmor = \"1.30.1\"",
-        "nextest = \"0.9.146\"",
     ] {
         assert!(policy.contains(marker), "policy misses {marker}");
     }
+    let catalog = velnor_actions_mise::ToolCatalog::pinned();
+    for tool in velnor_actions_mise::PinnedTool::ALL {
+        let marker = format!("{} = \"{}\"", tool.tool_name(), catalog.version(tool));
+        assert!(policy.contains(&marker), "policy misses {marker}");
+    }
+    let mise = format!("mise = \"{}\"", velnor_actions_mise::MISE_VERSION);
+    assert!(policy.contains(&mise), "policy misses {mise}");
     let tables = policy
         .lines()
         .filter(|line| line.trim() == "[[actions]]")
         .count();
-    assert_eq!(tables, 9, "nine action mirrors");
+    assert_eq!(tables, 16, "sixteen action mirrors");
     let mutants = crate::impl_repo_policy::read(".cargo/mutants.toml")?;
     assert!(
         mutants.contains("# pinned: cargo-mutants = \"27.1.0\""),

@@ -7,6 +7,7 @@ use crate::clippy_groups::ClippyMemoryPlan;
 use crate::crate_job_ids::job_id_for_member;
 use crate::matrix_step::shard_suffix;
 use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
+use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 
 /// Runnable fixture proposal for one package/kind pair.
 pub(super) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> ProposedTask {
@@ -42,6 +43,8 @@ pub(super) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> Propose
 /// Discovery shell carrying only task proposals.
 pub(super) fn discovery(groups: Vec<ProposedTask>) -> Discovery {
     Discovery {
+        rust_inventory: None,
+        raw_inventories: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: groups,
@@ -218,30 +221,6 @@ fn shards_name_their_index() {
 }
 
 #[test]
-fn drivers_follow_per_crate_selection() {
-    let mut mbx = group("demo", TaskKind::Clippy, &[]);
-    mbx.identity.compile_driver = CompileDriver::Mbx.as_str().to_owned();
-    let cargo = group("nested", TaskKind::Clippy, &[]);
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::ConsumerV1,
-        &discovery(vec![mbx, cargo]),
-        &ToolCatalog::pinned(),
-        &[],
-        &[],
-        None,
-        2,
-    )
-    .expect("crate jobs");
-    assert_eq!(found.drivers["rust-demo"], RenderDriver::Mbx);
-    assert_eq!(found.drivers["rust-nested"], RenderDriver::Cargo);
-    let steps = names(&found.jobs[0].1);
-    assert!(steps.contains(&"Restore MBX objects"), "{steps:?}");
-    let steps = names(&found.jobs[1].1);
-    assert!(!steps.contains(&"Restore MBX objects"), "{steps:?}");
-}
-
-#[test]
 fn empty_groups_build_no_jobs() {
     let found = build_crate_jobs(
         "ubuntu-26.04",
@@ -303,6 +282,7 @@ fn nonempty_custom_tasks_reject_with_zero_groups() {
 #[test]
 fn acquire_stages_before_report_wrappers() {
     let acquire = Step {
+        id: None,
         name: "Acquire Velnor".to_owned(),
         condition: None,
         kind: velnor_actions_contract::StepKind::Shell {
@@ -348,9 +328,15 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
     use velnor_actions_mise::PinnedTool;
     let catalog = ToolCatalog::pinned();
     let trio = [
-        catalog.tool_spec(PinnedTool::Actionlint),
-        catalog.tool_spec(PinnedTool::Shellcheck),
-        catalog.tool_spec(PinnedTool::Zizmor),
+        catalog
+            .tool_spec(PinnedTool::Actionlint)
+            .expect("qualified selector"),
+        catalog
+            .tool_spec(PinnedTool::Shellcheck)
+            .expect("qualified selector"),
+        catalog
+            .tool_spec(PinnedTool::Zizmor)
+            .expect("qualified selector"),
     ];
     let found = build_crate_jobs(
         "ubuntu-26.04",
@@ -359,7 +345,6 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
             group("velnor-actions-orchestrator", TaskKind::Test, &[]),
             group("velnor-actions-cli", TaskKind::Test, &[]),
             group("velnor-actions-contract", TaskKind::Test, &[]),
-            group("velnor-actions-native", TaskKind::Test, &[]),
         ]),
         &catalog,
         &[],
@@ -368,7 +353,7 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
         2,
     )
     .expect("crate jobs");
-    assert_eq!(found.jobs.len(), 4);
+    assert_eq!(found.jobs.len(), 3);
     for (id, job) in &found.jobs {
         let run = prepare_run(job);
         let spawning = id == "rust-velnor-actions-orchestrator" || id == "rust-velnor-actions-cli";
@@ -380,8 +365,15 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
             );
         }
         assert!(
-            run.contains(&catalog.tool_spec(PinnedTool::Rust)),
+            run.contains(
+                &catalog
+                    .tool_spec(PinnedTool::Rust)
+                    .expect("qualified selector")
+            ),
             "{id} keeps its driver: {run:?}"
         );
     }
 }
+
+#[path = "crate_jobs_mbx_selection_tests.rs"]
+mod mbx_selection;

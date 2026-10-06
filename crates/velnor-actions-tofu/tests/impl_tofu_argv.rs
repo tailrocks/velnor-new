@@ -55,6 +55,7 @@ fn init_root_shape_is_exact() -> Result<(), ContractError> {
         text(TofuTaskKind::InitForValidate, "")?,
         [
             "init",
+            "-json",
             "-backend=false",
             "-input=false",
             "-lockfile=readonly",

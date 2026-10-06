@@ -74,6 +74,30 @@ fn display_gate_partitions_by_id_namespace() {
 }
 
 #[test]
+fn workload_display_matches_only_workload_namespace() {
+    assert!(job("workload-docs", "Workload / docs").validate().is_ok());
+    for (id, display) in [
+        ("workload-docs", "Rust / docs"),
+        ("workload-docs", "OpenToFu — docs"),
+        ("rust-docs", "Workload / docs"),
+        ("tofu-docs", "Workload / docs"),
+        ("workload-docs", "Workload / ${{secrets.TOKEN}}"),
+    ] {
+        assert!(job(id, display).validate().is_err(), "{id}: {display}");
+    }
+}
+
+#[test]
+fn crate_job_rejects_orchestration_namespace() {
+    for id in ["plan", "required", "actionlint", "unknown-demo"] {
+        let error = job(id, "Rust / demo")
+            .validate()
+            .expect_err("invalid namespace");
+        assert!(error.to_string().contains("unknown_namespace"), "{error}");
+    }
+}
+
+#[test]
 fn crate_job_rejects_self_gate() {
     let mut job = job("tofu-stacks-a", "OpenToFu — stacks/a");
     let task_id = job.obligations[0].task_id.clone();

@@ -24,15 +24,15 @@ fn archive_argv_is_byte_exact_per_driver() -> Result<(), String> {
     )
     .map_err(|err| err.to_string())?;
     assert_eq!(
-        mbx.argv(&pinned()),
+        mbx.argv(&pinned()).map_err(|err| err.to_string())?,
         strings(&[
             "mise",
             "--no-config",
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
-            "mr-boxington@1.21.0",
+            "rust[profile=minimal,components=clippy,rustfmt]@1.98.1",
+            "mr-boxington@1.21.1",
             "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
             "--",
             "mbx",
@@ -55,7 +55,7 @@ fn archive_argv_is_byte_exact_per_driver() -> Result<(), String> {
     );
     let cargo = NextestArchive::new(NextestDriver::Cargo, "demo", &[], None)
         .map_err(|err| err.to_string())?;
-    let argv = cargo.argv(&pinned());
+    let argv = cargo.argv(&pinned()).map_err(|err| err.to_string())?;
     let split = argv.iter().position(|arg| arg == "--").expect("separator");
     assert_eq!(argv[split + 1], OsString::from("cargo"));
     assert!(
@@ -79,15 +79,15 @@ fn list_argv_is_byte_exact() -> Result<(), String> {
     assert_eq!(partition.partition_arg(), "hash:2/4");
     let list = NextestList::new(NextestDriver::Mbx, partition);
     assert_eq!(
-        list.argv(&pinned()),
+        list.argv(&pinned()).map_err(|err| err.to_string())?,
         strings(&[
             "mise",
             "--no-config",
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
-            "mr-boxington@1.21.0",
+            "rust[profile=minimal,components=clippy,rustfmt]@1.98.1",
+            "mr-boxington@1.21.1",
             "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
             "--",
             "mbx",
@@ -118,7 +118,7 @@ fn run_argv_is_byte_exact_with_no_tests_fail() -> Result<(), String> {
         "shard-1-of-1",
     )
     .map_err(|err| err.to_string())?;
-    let argv = run.argv(&pinned());
+    let argv = run.argv(&pinned()).map_err(|err| err.to_string())?;
     assert_eq!(
         argv,
         strings(&[
@@ -127,8 +127,8 @@ fn run_argv_is_byte_exact_with_no_tests_fail() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
-            "mr-boxington@1.21.0",
+            "rust[profile=minimal,components=clippy,rustfmt]@1.98.1",
+            "mr-boxington@1.21.1",
             "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
             "--",
             "mbx",
@@ -153,12 +153,14 @@ fn run_argv_is_byte_exact_with_no_tests_fail() -> Result<(), String> {
 #[test]
 fn partitions_never_carry_compile_inputs() -> Result<(), String> {
     let partition = NextestPartition::new(1, 2).map_err(|err| err.to_string())?;
-    for argv in [
-        NextestList::new(NextestDriver::Cargo, partition).argv(&pinned()),
-        NextestRun::new(NextestDriver::Cargo, partition, "m-abc", "p1")
-            .map_err(|err| err.to_string())?
-            .argv(&pinned()),
-    ] {
+    let list_argv = NextestList::new(NextestDriver::Cargo, partition)
+        .argv(&pinned())
+        .map_err(|err| err.to_string())?;
+    let run_argv = NextestRun::new(NextestDriver::Cargo, partition, "m-abc", "p1")
+        .map_err(|err| err.to_string())?
+        .argv(&pinned())
+        .map_err(|err| err.to_string())?;
+    for argv in [list_argv, run_argv] {
         for token in ["build", "--package", "--cargo-profile", "--features"] {
             assert!(
                 !argv.iter().any(|arg| arg == token),
@@ -239,7 +241,7 @@ fn nextest_commands_match_argv() -> Result<(), String> {
             .command(&pinned())
             .map_err(|err| err.to_string())?
             .argv(),
-        archive.argv(&pinned())
+        archive.argv(&pinned()).map_err(|err| err.to_string())?
     );
     let partition = NextestPartition::new(1, 1).map_err(|err| err.to_string())?;
     let list = NextestList::new(NextestDriver::Cargo, partition);
@@ -247,7 +249,7 @@ fn nextest_commands_match_argv() -> Result<(), String> {
         list.command(&pinned())
             .map_err(|err| err.to_string())?
             .argv(),
-        list.argv(&pinned())
+        list.argv(&pinned()).map_err(|err| err.to_string())?
     );
     let run = NextestRun::new(NextestDriver::Cargo, partition, "m-abc", "p1")
         .map_err(|err| err.to_string())?;
@@ -255,7 +257,7 @@ fn nextest_commands_match_argv() -> Result<(), String> {
         run.command(&pinned())
             .map_err(|err| err.to_string())?
             .argv(),
-        run.argv(&pinned())
+        run.argv(&pinned()).map_err(|err| err.to_string())?
     );
     Ok(())
 }

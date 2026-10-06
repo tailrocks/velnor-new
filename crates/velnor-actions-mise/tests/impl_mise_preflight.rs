@@ -11,8 +11,11 @@ fn cargo_proof_pins_exact_toolchain_without_wrapper() -> Result<(), String> {
     let proof = prove_route(&pinned(), RouteDriver::Cargo, "cargo-1", "gen-7")
         .map_err(|err| err.to_string())?;
     assert_eq!(proof.driver(), RouteDriver::Cargo);
-    assert_eq!(proof.specs(), &["rust@1.98.1".to_owned()]);
-    let invocation = proof.invocation(&pinned());
+    assert_eq!(
+        proof.specs(),
+        &["rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()]
+    );
+    let invocation = proof.invocation(&pinned()).map_err(|err| err.to_string())?;
     assert_eq!(
         invocation,
         [
@@ -21,7 +24,7 @@ fn cargo_proof_pins_exact_toolchain_without_wrapper() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
+            "rust[profile=minimal,components=clippy,rustfmt]@1.98.1",
             "--",
             "cargo",
             "--version",
@@ -49,10 +52,13 @@ fn mbx_proof_reports_tool_version_and_invocation() -> Result<(), String> {
     assert_eq!(proof.driver(), RouteDriver::Mbx);
     assert_eq!(
         proof.specs(),
-        &["rust@1.98.1".to_owned(), "mr-boxington@1.21.0".to_owned()]
+        &[
+            "rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned(),
+            "mr-boxington@1.21.1".to_owned()
+        ]
     );
-    let invocation = proof.invocation(&pinned());
-    assert!(invocation.iter().any(|arg| arg == "mr-boxington@1.21.0"));
+    let invocation = proof.invocation(&pinned()).map_err(|err| err.to_string())?;
+    assert!(invocation.iter().any(|arg| arg == "mr-boxington@1.21.1"));
     assert_eq!(
         invocation.last(),
         Some(&OsString::from("--version")),
@@ -99,7 +105,10 @@ fn proof_command_matches_invocation() -> Result<(), String> {
     let proof = prove_route(&pinned(), RouteDriver::Cargo, "cargo-1", "gen-7")
         .map_err(|err| err.to_string())?;
     let command = proof.command(&pinned()).map_err(|err| err.to_string())?;
-    assert_eq!(command.argv(), proof.invocation(&pinned()));
+    assert_eq!(
+        command.argv(),
+        proof.invocation(&pinned()).map_err(|err| err.to_string())?
+    );
     assert_eq!(command.program(), "mise");
     Ok(())
 }

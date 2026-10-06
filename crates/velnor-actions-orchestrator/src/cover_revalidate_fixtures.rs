@@ -30,7 +30,7 @@ pub(crate) fn manifest_for(commit: &str) -> BaselineManifest {
     let compat = digest_b3(b"compat");
     let name = format!("velnor-baseline-{commit}-{compat}");
     BaselineManifest {
-        schema: 2,
+        schema: 3,
         repository_id: digest_b3(b"repo"),
         source_commit: commit.to_owned(),
         ref_: "refs/heads/testmain".to_owned(),
@@ -46,14 +46,27 @@ pub(crate) fn manifest_for(commit: &str) -> BaselineManifest {
         artifact_name: name,
         tasks: vec![crate::merge::required_evidence::BaselineTaskEntry {
             task_id: "stack/rust/root/clippy/default".to_owned(),
-            task_digest: task,
-            input_digest: inputs,
+            task_digest: task.clone(),
+            input_digest: inputs.clone(),
             closure_digest: closure,
             proof_run_id: 7,
             carried_from: None,
             observed_run_id: 7,
             external_data: None,
-            proof: None,
+            proof: Some(
+                velnor_actions_contract::ManifestTaskProof::new(
+                    "stack/rust/root/clippy/default",
+                    &task,
+                    &inputs,
+                    &digest_b3(b"graph"),
+                    &digest_b3(b"toolchain"),
+                    &digest_b3(b"mbx"),
+                    &digest_b3(b"platform"),
+                    "default",
+                    7,
+                )
+                .expect("task proof"),
+            ),
         }],
         parent: None,
         expires_at_unix: None,
@@ -75,12 +88,14 @@ pub(crate) fn plan_for(manifest: &BaselineManifest, base: Option<&str>) -> Plan 
     )
     .expect("proof");
     Plan {
+        producers: Default::default(),
         schema: 1,
         run_key: "local".to_owned(),
         plan_id: "plan-local".to_owned(),
         base: base.map(str::to_owned),
         head: "head".to_owned(),
         event: WorkflowEvent::PullRequest,
+        scope: velnor_actions_contract::VerificationScope::Affected,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,
@@ -95,11 +110,20 @@ pub(crate) fn plan_for(manifest: &BaselineManifest, base: Option<&str>) -> Plan 
         packages: Vec::new(),
         obligations: vec![PlanObligation {
             task_id: "stack/rust/root/clippy/default".to_owned(),
+            job_id: "rust-demo".to_owned(),
             decision: ObligationDecision::CoveredByTrustedBaseline,
             reason: "covered_by_trusted_baseline".to_owned(),
-            task_digest: task,
-            input_digest: inputs,
+            task_digest: task.clone(),
+            input_digest: inputs.clone(),
             closure_digest: closure,
+            execution_identity: velnor_actions_contract::TaskExecutionIdentity::new(
+                &digest_b3(b"graph"),
+                &digest_b3(b"toolchain"),
+                &digest_b3(b"mbx"),
+                &digest_b3(b"platform"),
+                "default",
+            )
+            .expect("execution identity"),
             baseline_proof: Some(proof),
         }],
         matrix: PlanMatrix {

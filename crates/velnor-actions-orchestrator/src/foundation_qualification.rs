@@ -3,9 +3,7 @@
 use std::path::Path;
 
 use velnor_actions_contract::WorkflowPolicy;
-use velnor_actions_workflow_renderer::{
-    RenderedFile, RenderedTree, foundation_qualification as document,
-};
+use velnor_actions_workflow_renderer::{RenderedFile, RenderedTree, marker};
 
 use crate::OrchestratorError;
 use crate::cover_identity::generator::sha256_hex as source_sha256;
@@ -13,18 +11,16 @@ use crate::cover_identity::generator::sha256_hex as source_sha256;
 #[path = "foundation_qualification_source.rs"]
 mod source;
 
-const WORKFLOW_PATH: &str = document::WORKFLOW_PATH;
-
-/// Planned path owned by the same policy gate as source rendering.
-pub(crate) fn planned_path(policy: WorkflowPolicy) -> Option<&'static str> {
-    (policy == WorkflowPolicy::VelnorRepositoryV1).then_some(WORKFLOW_PATH)
-}
+const WORKFLOW_PATH: &str = ".github/workflows/foundation-qualification.yml";
+const TEMPLATE: &str = include_str!("foundation_qualification_workflow.yml.in");
+const TEMPLATE_SHA256: &str = "01acba73d0dd12facb25f0985e9141ab16f6fb8941fdc72f54aa10f31914b6a7";
+const ACTION_MARKER: &str = "__FOUNDATION_ACTION_REF__";
 
 /// Register only generator-owned source qualification infrastructure.
 pub(crate) fn files(
     prep: &crate::prepare::GenerationPreparation,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
-    if planned_path(prep.config.workflow.policy).is_none() {
+    if prep.config.workflow.policy != WorkflowPolicy::VelnorRepositoryV1 {
         return Ok(Vec::new());
     }
     crate::prepare::check_velnor_identity(&prep.root, &prep.config)?;
@@ -53,10 +49,10 @@ fn files_for_policy(
     policy: WorkflowPolicy,
     published: &source::PublishedFoundationSource,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
-    if planned_path(policy).is_none() {
+    if policy != WorkflowPolicy::VelnorRepositoryV1 {
         return Ok(Vec::new());
     }
-    render(published)
+    render(published, TEMPLATE)
 }
 
 fn preview_with_source(
@@ -66,7 +62,7 @@ fn preview_with_source(
 ) -> Result<Vec<String>, OrchestratorError> {
     let root = crate::resolve_root(root)?;
     let config = crate::config::load_config(&root)?;
-    if planned_path(config.workflow.policy).is_none() {
+    if config.workflow.policy != WorkflowPolicy::VelnorRepositoryV1 {
         return Err(OrchestratorError::IdentityRejected {
             problem: "foundation_qualification_requires_velnor_repository_policy".to_owned(),
         });
@@ -81,22 +77,22 @@ fn preview_with_source(
     Ok(tree.paths())
 }
 
-/// Authenticate publication upstream; delegate only neutral serialization inputs.
+/// Equivalent to the publication owner's single-marker build API.
+/// The argument is issued only by the compiled source publication owner.
 fn render(
     published: &source::PublishedFoundationSource,
+    template: &str,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
-    let action = document::SourceActionReference::new(published.action_reference())?;
-    let file = document::render(&action, env!("CARGO_PKG_VERSION")).map_err(|error| {
-        if matches!(&error, velnor_actions_workflow_renderer::RenderError::InvalidWorkflow(
-            problem
-        ) if problem == "foundation_qualification_source_template_identity")
-        {
-            invalid("source_template_identity")
-        } else {
-            error.into()
-        }
-    })?;
-    Ok(vec![file])
+    if source_sha256(template.as_bytes()) != TEMPLATE_SHA256
+        || template.matches(ACTION_MARKER).count() != 1
+    {
+        return Err(invalid("source_template_identity"));
+    }
+    let body = template.replace(ACTION_MARKER, published.action_reference());
+    Ok(vec![RenderedFile {
+        path: WORKFLOW_PATH.to_owned(),
+        bytes: marker::with_marker(env!("CARGO_PKG_VERSION"), &body)?,
+    }])
 }
 
 fn invalid(problem: &str) -> OrchestratorError {

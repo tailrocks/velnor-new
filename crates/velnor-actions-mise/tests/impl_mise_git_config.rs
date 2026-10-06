@@ -1,5 +1,6 @@
 //! P10 `git config` cases: allowlist shape plus live origin reads in a
 //! normal repo and a linked worktree through the typed `GitRequest`.
+#[cfg(test)]
 #[path = "../../test_support/git_fixture.rs"]
 pub(crate) mod git_fixture;
 

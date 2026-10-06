@@ -8,8 +8,8 @@ use velnor_actions_workflow_renderer::steps::{
 };
 use velnor_actions_workflow_renderer::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, RenderError, STAGED_BINARY_PREFIX,
-    checkout_step, join_argv_for_run, plan_step, quote_run_arg, quote_scalar, render_workflow_ir,
-    shell_step,
+    checkout_step, join_argv_for_run, plan_step, quote_literal_run_arg, quote_run_arg,
+    quote_scalar, render_workflow_ir, shell_step,
 };
 
 fn pin(name: &str) -> String {
@@ -67,6 +67,18 @@ fn run_quoting_preserves_runner_expansion() {
     assert_eq!(quote_run_arg("plain"), "plain");
     assert_eq!(quote_run_arg("with space"), "'with space'");
     assert_eq!(quote_run_arg("it's"), "'it''\\'''s'");
+}
+
+#[test]
+fn literal_run_arguments_preserve_immutable_argv_json() {
+    let argv_json = r#"["$RUNNER_TEMP/target","${HOME}","$(touch marker)","`id`","it's"]"#;
+    assert_eq!(
+        quote_literal_run_arg(argv_json),
+        r#"'["$RUNNER_TEMP/target","${HOME}","$(touch marker)","`id`","it'\''s"]'"#,
+    );
+    assert_eq!(quote_literal_run_arg(""), "''");
+    assert_eq!(quote_literal_run_arg("plain"), "'plain'");
+    assert_eq!(quote_literal_run_arg("it's"), "'it'\\''s'");
 }
 
 #[test]
@@ -195,6 +207,9 @@ fn emit_ctx() -> RenderContext {
         candidate: None,
         preseed: false,
         plan_consumer_env: std::collections::BTreeMap::new(),
+        source_helpers: Vec::new(),
+        native_pages_approvals: Vec::new(),
+        native_publish_approvals: Vec::new(),
     }
 }
 
@@ -204,6 +219,7 @@ fn emit_triggers() -> Trigger {
             .iter()
             .map(ToString::to_string)
             .collect(),
+        push_tags: Vec::new(),
         push_branches: vec!["main".to_owned()],
         merge_group: true,
         workflow_dispatch: None,
@@ -224,12 +240,19 @@ fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
     jobs.insert(
         "plan".to_owned(),
         Job {
+            cache_mode: None,
             display_name: "Plan".to_owned(),
             runs_on: EMIT_LABEL.to_owned(),
             timeout_minutes: JobTimeout::PLAN,
             needs: Vec::new(),
             condition: None,
             permissions: None,
+            tool_producer: None,
+            mbx_producer: None,
+            source_producer: None,
+            native_pages_deploy: None,
+            native_publish: None,
+            outputs: Vec::new(),
             environment: None,
             steps: vec![
                 checkout_step(&pin("actions/checkout"))?,
@@ -243,6 +266,8 @@ fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
         },
     );
     let ir = WorkflowIr {
+        cache_mode: velnor_actions_contract::CacheMode::Read,
+        run_name: None,
         name: "CI".to_owned(),
         triggers: emit_triggers(),
         permissions: Permissions::default(),

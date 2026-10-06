@@ -1,0 +1,298 @@
+{
+  "schema": 1,
+  "recorded_utc": "2026-10-03T03:04:15.111139+00:00",
+  "scope": "source-only host proofs; no compiled Rust execution or adopted Foundation qualification",
+  "source_program": "OriginalFilesystem",
+  "assets": [
+    {
+      "name": "source_archive_inventory_common",
+      "sha256": "0c864278d484399f655c99f7ab00b4db0c52359c0f0c0644d4e5d7792b2f1a3f",
+      "bytes": 4535,
+      "lines": 115
+    },
+    {
+      "name": "metadata_container",
+      "sha256": "3bba7f21fc728bea94c1d8202611537a1f8791585313e126a7a00b0249823fb1",
+      "bytes": 732,
+      "lines": 15
+    },
+    {
+      "name": "source_archive_inventory_fs",
+      "sha256": "c3df6bb98858800ccfba3ed56f10bf4b75b01817e160320ac67bd33b36dc1bf8",
+      "bytes": 2479,
+      "lines": 57
+    },
+    {
+      "name": "opaque_inventory_metadata",
+      "sha256": "a0246209d02c71cb7d23c962a71d82473bb28b45be3e6e0be174b2131d166077",
+      "bytes": 5942,
+      "lines": 131
+    },
+    {
+      "name": "source_archive_inventory_leaf",
+      "sha256": "fc0a7a36b68c7ad0a47564054a2b70d07f62f80f0aac76d84d86492def86a4dc",
+      "bytes": 4042,
+      "lines": 82
+    },
+    {
+      "name": "source_archive_inventory_walk",
+      "sha256": "eaa2088d7c384fe56a71b09bf4bebb48dfdd0da33050578de4ea69ae4c0ba488",
+      "bytes": 2709,
+      "lines": 59
+    },
+    {
+      "name": "source_archive_inventory",
+      "sha256": "5004ac3fc718e2690eaaa6f5843a3557a9dceaa9dbbd3612f972ef699fd06f76",
+      "bytes": 5089,
+      "lines": 120
+    },
+    {
+      "name": "source_archive_inventory_original",
+      "sha256": "781150aae9d84cd52c50bcca54f590aa82925358f67a2a15cb2e40d2f38d9b08",
+      "bytes": 1903,
+      "lines": 37
+    }
+  ],
+  "ordered_template_sha256": "52e15df73d4318006e93758c9230b2347720a02d20bbd8cce0e4f3ba15afc131",
+  "snapshot_reconstructed_body": {
+    "sha256": "5b3da3b31e345a3938e4f9ba6825f14b64868db891ec2b70d387dc03b6c8d03f",
+    "lines": 198,
+    "bytes": 68632,
+    "construction": "fixed getter sources + compact sorted serde-equivalent JSON hex + exact PRELOAD + exact ENTRY + closed10domain template; Rust getter not executed"
+  },
+  "snapshot_script20": {
+    "status": "PASS",
+    "execution": "/bin/sh invokes /usr/bin/python3 -I -S",
+    "stale_state": "seeded digest=stale/changed=true; final digest empty/changed=false; available=false; no output digest",
+    "probes": [
+      {
+        "domain": "tools",
+        "phase": "before",
+        "status": "PASS"
+      },
+      {
+        "domain": "tools",
+        "phase": "after",
+        "status": "PASS"
+      },
+      {
+        "domain": "planning_tools",
+        "phase": "before",
+        "status": "PASS"
+      },
+      {
+        "domain": "planning_tools",
+        "phase": "after",
+        "status": "PASS"
+      },
+      {
+        "domain": "npm_bootstrap",
+        "phase": "before",
+        "status": "PASS"
+      },
+      {
+        "domain": "npm_bootstrap",
+        "phase": "after",
+        "status": "PASS"
+      },
+      {
+        "domain": "bun_bootstrap",
+        "phase": "before",
+        "status": "PASS"
+      },
+      {
+        "domain": "bun_bootstrap",
+        "phase": "after",
+        "status": "PASS"
+      },
+      {
+        "domain": "tofu_bootstrap",
+        "phase": "before",
+        "status": "PASS"
+      },
+      {
+        "domain": "tofu_bootstrap",
+        "phase": "after",
+        "status": "PASS"
+      },
+      {
+        "domain": "gradle_bootstrap",
+        "phase": "before",
+        "status": "PASS"
+      },
+      {
+        "domain": "gradle_bootstrap",
+        "phase": "after",
+        "status": "PASS"
+      },
+      {
+        "domain": "sources",
+        "phase": "before",
+        "status": "PASS"
+      },
+      {
+        "domain": "sources",
+        "phase": "after",
+        "status": "PASS"
+      },
+      {
+        "domain": "bun_downloads",
+        "phase": "before",
+        "status": "PASS"
+      },
+      {
+        "domain": "bun_downloads",
+        "phase": "after",
+        "status": "PASS"
+      },
+      {
+        "domain": "npm_downloads",
+        "phase": "before",
+        "status": "PASS"
+      },
+      {
+        "domain": "npm_downloads",
+        "phase": "after",
+        "status": "PASS"
+      },
+      {
+        "domain": "gradle_dependencies",
+        "phase": "before",
+        "status": "PASS"
+      },
+      {
+        "domain": "gradle_dependencies",
+        "phase": "after",
+        "status": "PASS"
+      }
+    ]
+  },
+  "fixture4": {
+    "status": "PASS",
+    "execution": "exact fixed Rust fixture Python entries with reconstructed checked loader; Rust tests not executed",
+    "synthetic": {
+      "count": 3,
+      "scope": "metadata_records bypass only; strict schema2 bytes/newline/mode/directlink/escape/invalid roots; no whole-manifest admission"
+    },
+    "actual": {
+      "count": 1,
+      "scope": "raw metadata_records+xattr digest change, strict unsupported-metadata rejection, public None capability rejection"
+    }
+  },
+  "python_units": [
+    {
+      "suite": "source_archive_inventory_original_test.py",
+      "status": "PASS",
+      "stderr": "............s.........\n----------------------------------------------------------------------\nRan 22 tests in 0.051s\n\nOK (skipped=1)\n"
+    },
+    {
+      "suite": "source_archive_inventory_test.py",
+      "status": "PASS",
+      "stderr": "............\n----------------------------------------------------------------------\nRan 12 tests in 0.012s\n\nOK\n"
+    },
+    {
+      "suite": "inventory_loader_test.py",
+      "status": "PASS",
+      "stderr": "....\n----------------------------------------------------------------------\nRan 4 tests in 0.191s\n\nOK\n"
+    }
+  ],
+  "original22": {
+    "executed": 21,
+    "skipped": 1,
+    "skip_reason": "native Darwin UID mutation requires privilege",
+    "scope": "actual raw filesystem primitives; schema3 dev/ino/uid/gid/mtime_ns/ctime_ns including anchored owner; no atime",
+    "tests_declared": 22,
+    "passed": 21
+  },
+  "base12": {
+    "actual": 9,
+    "synthetic": 3,
+    "scope": "stable file/hash/hardlink/AppleDouble/FIFO/specialmode primitives and explicitly metadata-bypassed synthetic compatibility"
+  },
+  "authority": {
+    "archive_capability": null,
+    "warm_available": false,
+    "original_context_granted": false,
+    "compiled_rust_executed": false,
+    "foundation_qualified": false,
+    "qualified_performance_claim": false
+  },
+  "historical_reports": "unchanged; prior reconstructed214bfa body digest superseded by current source identity",
+  "sdk_per_spawn_inode_stop": {
+    "status": "PASS_CONTROLLED_SYNTHETIC_QUALIFICATION",
+    "scope": "independently reviewed real private context/actual filesystem inode mutation STOP with three explicit synthetic qualification seams; actual qualified canonical SDK execution unavailable"
+  },
+  "independent_review": {
+    "reported_by": "repair_snapshots parent, final reviewer evidence",
+    "current_body48": {
+      "status": "PASS",
+      "count": 48,
+      "snapshot_body_sha256": "5b3da3b31e345a3938e4f9ba6825f14b64868db891ec2b70d387dc03b6c8d03f",
+      "ordered_template_sha256": "52e15df73d4318006e93758c9230b2347720a02d20bbd8cce0e4f3ba15afc131",
+      "scope": "source-only current body probes; no compiled Rust or Foundation claim"
+    },
+    "sdk_attenuation9": {
+      "status": "PASS",
+      "count": 9,
+      "scope": "actual filesystem inventory -> SDK attenuation mtime/owner/inode STOP primitives; facade context validation bypass only",
+      "canonical_private_seven_root_context_granted": false,
+      "qualification_granted": false
+    },
+    "actual_canonical_sdk_per_spawn_inode_stop": "unit PASS under controlled synthetic qualification; actual qualification unavailable"
+  },
+  "independent_bridge_current": {
+    "reported_by": "repair_snapshots parent, independent bridge review",
+    "suite": "source_intent_cold_current_test.py",
+    "distinct_new_tests": 2,
+    "combined_tests_declared": 39,
+    "combined_passed": 38,
+    "combined_skipped": 1,
+    "skip_reason": "Linux FD availability",
+    "scope": "real private FreshColdInstallationContext and core descriptor; three fixture seams: Foundation profile, witness-current predicate, SDK qualification",
+    "actual_genesis": false,
+    "remaining_requirements": [],
+    "canonical_sdk_full_inode_stop_acceptance": "PASS in controlled synthetic qualification only; actual qualified execution remains unavailable"
+  },
+  "independent_bridge_strengthened": {
+    "reported_by": "repair_snapshots parent, independent strengthened bridge review",
+    "tests_passed": 2,
+    "subcases_passed": 27,
+    "matrix": "3 actual post-grant filesystem mutations x 9 SDK tool accesses",
+    "assertions": "distinct inode replacement with identical bytes/mode/mtime; complete access matrix; owner mutation",
+    "scope": "real private fresh context/core anchored FD with actual metadata/hash; exactly three synthetic seams: profile, witness freshness, SDK qualification",
+    "unit_canonical_private_context_stop": "PASS under controlled synthetic qualification",
+    "actual_qualified_foundation": "UNAVAILABLE",
+    "actual_installation_genesis": "UNAVAILABLE",
+    "actual_sdk_qualification": "UNAVAILABLE",
+    "warm_claim": false
+  },
+  "legacy_removal": {
+    "obsolete_product_files_removed": [
+      "crates/velnor-actions-mise/src/opaque_inventory.rs",
+      "crates/velnor-actions-mise/src/opaque_inventory.py"
+    ],
+    "obsolete_export_removed": true,
+    "obsolete_guard_literal_removed": true,
+    "old_product_getter_schema_module_path_references": 0,
+    "remaining_old_test_sentinel": "negative absence assertion only",
+    "metadata_reader_retained": "opaque_inventory_metadata.py",
+    "historical_reports_unchanged": true,
+    "post_removal_units": {
+      "loader": 4,
+      "base": 12,
+      "original_declared": 22,
+      "original_passed": 21,
+      "original_uid_skipped": 1
+    },
+    "rustfmt_scoped_skip_children_check": "PASS",
+    "cargo_git_executed": false
+  },
+  "rust_integration_review": {
+    "status": "RESOLVED_SOURCE_ONLY",
+    "finding": "E0603: external shared-core fixture imports inventory_loader while lib.rs module declaration is private",
+    "owner": "root coordinator owns minimal public module or public reexport fix",
+    "compiled_rust_execution": "not performed by this agent",
+    "core_hashes_changed": false,
+    "resolution": "root restored pub mod inventory_loader; exact zero-argument compiled factory public; source inspection confirmed; Rust compilation still not executed by this agent"
+  }
+}

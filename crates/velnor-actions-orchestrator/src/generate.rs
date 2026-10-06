@@ -2,11 +2,16 @@
 //! In-place commits exchange atomically on Linux/macOS, else fall back
 //! to a guarded two-rename commit preserving old output on failure.
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use velnor_actions_actionlint::render_actionlint_yaml;
+use velnor_actions_contract::Job;
+use velnor_actions_mise::RuntimePaths;
 use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
-use velnor_actions_workflow_renderer::render::{RenderedTree, render_workflow_ir_strict};
+use velnor_actions_workflow_renderer::render::{RenderedTree, render_workflow_ir_strict_with_jobs};
 use velnor_actions_workflow_renderer::steps::rehead_actionlint_marker;
 use velnor_actions_workflow_renderer::tree::render_tree_with_extra;
 
@@ -15,7 +20,8 @@ use crate::finalized::owned_preparation;
 use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 use crate::provenance::{ProfileProvenance, profile_provenance};
-use crate::validate::validate_staged;
+
+type RenderedGeneration = (RenderedTree, BTreeMap<String, Job>);
 
 /// Filesystem guards: snapshots, destination validation, and ownership.
 #[path = "generate_guards.rs"]
@@ -65,12 +71,22 @@ pub fn generate(
     prep: &GenerationPreparation,
     opts: &GenerateOptions,
 ) -> Result<GenerateReport, OrchestratorError> {
+    generate_in_runtime(prep, opts, RuntimePaths::full())
+}
+
+/// Generate under an explicit compiled Mise runtime domain.
+pub(crate) fn generate_in_runtime(
+    prep: &GenerationPreparation,
+    opts: &GenerateOptions,
+    runtime: RuntimePaths,
+) -> Result<GenerateReport, OrchestratorError> {
     fail_on_blocking_findings(prep)?;
     let tools = ToolSnapshot::capture(&prep.root);
     let tofu_roots = crate::select_tofu::tofu_selected_roots(&prep.discovery.statuses);
     let tofu_locks = velnor_actions_tofu::TofuLockSnapshot::capture(&prep.root, &tofu_roots);
-    let tree = render_staged_tree(prep)?;
-    let validated_by = validate_staged(&tree)?;
+    let owned = owned_preparation(prep)?;
+    let tree = render_owned_staged_tree(&owned)?;
+    let validated_by = crate::validate::validate_staged_in_runtime(&tree, runtime)?;
     tools.verify(&prep.root)?;
     tofu_locks
         .verify(&prep.root)
@@ -84,7 +100,7 @@ pub fn generate(
     };
     Ok(GenerateReport {
         files_written: tree.paths(),
-        recommendations: prep.discovery.recommendations.clone(),
+        recommendations: owned.discovery.recommendations.clone(),
         validated_by,
         profiles: profile_provenance(prep),
         warnings,
@@ -123,16 +139,30 @@ fn fail_on_blocking_findings(prep: &GenerationPreparation) -> Result<(), Orchest
 /// Returns lock, render, actionlint, or unsafe-path errors.
 pub fn render_staged_tree(prep: &GenerationPreparation) -> Result<RenderedTree, OrchestratorError> {
     let owned = owned_preparation(prep)?;
-    let tree = render_all(&owned)?;
+    render_owned_staged_tree(&owned)
+}
+
+/// Render an already attached preparation without repeating finalization.
+pub(crate) fn render_owned_staged_tree(
+    owned: &GenerationPreparation,
+) -> Result<RenderedTree, OrchestratorError> {
+    Ok(render_owned_staged_tree_with_jobs(owned)?.0)
+}
+
+/// Share one strict renderer finalization between checked tree and plan job report.
+pub(crate) fn render_owned_staged_tree_with_jobs(
+    owned: &GenerationPreparation,
+) -> Result<RenderedGeneration, OrchestratorError> {
+    let (tree, jobs) = render_all(owned)?;
     check_tree_paths(&tree)?;
-    Ok(tree)
+    Ok((tree, jobs))
 }
 
 /// Render base files plus release extras into the marker-checked tree, in memory only.
-fn render_all(prep: &GenerationPreparation) -> Result<RenderedTree, OrchestratorError> {
+fn render_all(prep: &GenerationPreparation) -> Result<RenderedGeneration, OrchestratorError> {
     let version = env!("CARGO_PKG_VERSION");
     let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
-    let workflow = render_workflow_ir_strict(
+    let (workflow, jobs) = render_workflow_ir_strict_with_jobs(
         &prep.workflow.ir,
         prep.config.workflow.policy,
         prep.workflow.support.as_ref(),
@@ -142,10 +172,19 @@ fn render_all(prep: &GenerationPreparation) -> Result<RenderedTree, Orchestrator
     let actionlint = render_actionlint_yaml(&prep.workflow.actionlint)?;
     let actionlint = rehead_actionlint_marker(&actionlint.yaml, version)?;
     let mut extra = crate::release_emit::release_files(prep, &mise)?;
+    extra.extend(crate::delivery_emit::delivery_files(prep)?);
     extra.extend(crate::freshness_emit::freshness_files(prep)?);
-    extra.extend(crate::foundation_qualification::files(prep)?);
+    extra.extend(crate::owned_tool_publication::files(prep)?);
+    extra.extend(prep.workflow.mbx_finalization.review_files(version)?);
+    extra.extend(
+        velnor_actions_workflow_renderer::source_helper::source_helper_files(
+            &prep.workflow.context.source_helpers,
+            version,
+        )?,
+    );
+    let extra = crate::delivery_emit::unique_support_files(extra)?;
     let tree = render_tree_with_extra(&workflow, &actionlint, &extra, version)?;
-    Ok(tree)
+    Ok((tree, jobs))
 }
 
 /// Validate every rendered path lexically plus symlink-prefix probing.
@@ -202,19 +241,9 @@ fn replace_in_place(
     }
     let staging = tempfile::tempdir_in(root)
         .map_err(|err| OrchestratorError::io(root.display().to_string(), err.to_string()))?;
-    let permissions = preserve::root_permissions(&target)?;
-    // Existing roots stage as siblings: read-only directory moves must stay
-    // within one parent on macOS. Restore the final mode before publication.
-    let staged = if permissions.is_some() {
-        staging.path().to_path_buf()
-    } else {
-        staging.path().join(".github")
-    };
-    let directories = preserve::copy_repository_content(&target, &staged)?;
-    preserve::check_generated_collisions(&staged, tree)?;
+    let staged = staging.path().join(".github");
+    preserve::copy_repository_content(&target, &staged)?;
     write_tree(&staged, tree)?;
-    preserve::restore_directory_permissions(directories)?;
-    preserve::restore_root_permissions(&staged, permissions)?;
     if !same_filesystem(staging.path(), root)? {
         return Err(OrchestratorError::Contract {
             problem: "cross_filesystem_staging".to_owned(),
@@ -303,12 +332,8 @@ fn write_preview(
         guard::check_no_symlink(&canonical, &rel, is_symlink)?;
     }
     let github = canonical.join(".github");
-    let permissions = preserve::root_permissions(&prep.root.join(".github"))?;
-    let directories = preserve::copy_repository_content(&prep.root.join(".github"), &github)?;
-    preserve::check_generated_collisions(&github, tree)?;
-    write_tree(&github, tree)?;
-    preserve::restore_directory_permissions(directories)?;
-    preserve::restore_root_permissions(&github, permissions)
+    preserve::copy_repository_content(&prep.root.join(".github"), &github)?;
+    write_tree(&github, tree)
 }
 
 /// Staged tree writing: regular files and symbolic links.

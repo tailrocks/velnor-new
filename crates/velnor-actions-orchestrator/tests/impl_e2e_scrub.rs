@@ -49,11 +49,7 @@ fn emitted_yaml_keeps_ambient_auth_steps_unscrubbed() -> TestResult {
     let yaml = tree
         .get(WORKFLOW_PATH)
         .ok_or("missing workflow in staged tree")?;
-    for name in [
-        "Prepare pinned tools",
-        "Prepare Rust components",
-        "Fetch Cargo sources",
-    ] {
+    for name in ["Prepare pinned tools", "Prepare Rust components"] {
         let block = step_block(yaml, name).ok_or_else(|| format!("missing ambient step {name}"))?;
         assert!(
             !block.contains("GITHUB_TOKEN: \"\""),
@@ -68,6 +64,10 @@ fn emitted_yaml_keeps_ambient_auth_steps_unscrubbed() -> TestResult {
             "{name} must not wrap argv:\n{block}"
         );
     }
+    let fetch = step_block(yaml, "Fetch Cargo sources").ok_or("missing source preparation")?;
+    assert!(fetch.contains("GITHUB_TOKEN: \"\""));
+    assert!(fetch.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
+    assert!(fetch.contains("cd \\\"$GITHUB_WORKSPACE\\\""));
     Ok(())
 }
 

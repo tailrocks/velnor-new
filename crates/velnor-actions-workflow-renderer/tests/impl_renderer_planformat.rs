@@ -1,4 +1,4 @@
-//! Plan `Format` step: insertion between staging and freshness.
+//! Plan `Format` step: planning supplies its report identity first.
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::StepKind;
@@ -25,7 +25,7 @@ fn format_env() -> BTreeMap<String, String> {
 }
 
 #[test]
-fn plan_format_inserts_between_staging_and_plan() -> Result<(), RenderError> {
+fn plan_format_runs_after_plan_and_freshness() -> Result<(), RenderError> {
     let plan = job(
         "plan",
         "Plan",
@@ -49,7 +49,7 @@ fn plan_format_inserts_between_staging_and_plan() -> Result<(), RenderError> {
         .collect();
     assert_eq!(
         names,
-        ["Checkout", "Acquire Velnor", FORMAT_STEP_NAME, "Plan"]
+        ["Checkout", "Acquire Velnor", "Plan", FORMAT_STEP_NAME]
     );
     let format = jobs["plan"]
         .steps
@@ -71,8 +71,13 @@ fn plan_format_inserts_between_staging_and_plan() -> Result<(), RenderError> {
         .iter()
         .position(|name| name == CHECK_GENERATED_NAME);
     assert!(
-        format_at.is_some_and(|at| Some(at) < fresh_at),
-        "format precedes freshness: {rendered:?}"
+        format_at.is_some_and(|at| Some(at) > fresh_at),
+        "format follows freshness: {rendered:?}"
+    );
+    let plan_at = rendered.iter().position(|name| name == "Plan");
+    assert!(
+        format_at.is_some_and(|at| Some(at) > plan_at),
+        "format follows plan: {rendered:?}"
     );
     Ok(())
 }

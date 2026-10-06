@@ -1,0 +1,131 @@
+{
+  "schema": "velnor.rustup.source-authority.v1",
+  "observed_at": "2026-10-03",
+  "repository": "rust-lang/rustup",
+  "tag": {
+    "name": "1.29.1",
+    "ref": "refs/tags/1.29.1",
+    "tag_object_sha": "3b0a80f56f91d9c1f102d431d853de9fac3fc444",
+    "tag_object_url": "https://api.github.com/repos/rust-lang/rustup/git/tags/3b0a80f56f91d9c1f102d431d853de9fac3fc444",
+    "commit_sha": "d95a37b6ab92cc1e455d1576039333c97ca3e2c5",
+    "commit_url": "https://api.github.com/repos/rust-lang/rustup/git/commits/d95a37b6ab92cc1e455d1576039333c97ca3e2c5",
+    "tree_sha": "a346236d560c33eaaadced018b78581e3b45d245",
+    "tree_url": "https://api.github.com/repos/rust-lang/rustup/git/trees/a346236d560c33eaaadced018b78581e3b45d245?recursive=1",
+    "parent_sha": "2d7c4f4cbf7facfb4a3a9a236714d20beab6a7d1",
+    "tag_signature": {
+      "verified": true,
+      "reason": "valid",
+      "verified_at": "2026-09-01T12:28:15Z"
+    }
+  },
+  "raw_response_digests": [
+    {
+      "kind": "git_ref_api",
+      "url": "https://api.github.com/repos/rust-lang/rustup/git/ref/tags/1.29.1",
+      "bytes": 335,
+      "sha256": "a8566b0469039fac5cd5e05bf7cbcde57dfbddaad83c48d6affe5f8487a41070"
+    },
+    {
+      "kind": "annotated_tag_api",
+      "url": "https://api.github.com/repos/rust-lang/rustup/git/tags/3b0a80f56f91d9c1f102d431d853de9fac3fc444",
+      "bytes": 1868,
+      "sha256": "cd861780ccf3e9f5e1ebdc82763a1dbe594bc15c0358f60d8fe8ddff1e530d06"
+    },
+    {
+      "kind": "commit_api",
+      "url": "https://api.github.com/repos/rust-lang/rustup/git/commits/d95a37b6ab92cc1e455d1576039333c97ca3e2c5",
+      "bytes": 1116,
+      "sha256": "f9da6eb0fc572bd287a9f35e1c7927926b556b33e637c3d9a290d647191e4001"
+    },
+    {
+      "kind": "tree_api",
+      "url": "https://api.github.com/repos/rust-lang/rustup/git/trees/a346236d560c33eaaadced018b78581e3b45d245?recursive=1",
+      "bytes": 84014,
+      "sha256": "bedab4e97c87f64991be8f0d2c37055444a54f7b178f150a9c745ba7bd3c7c38"
+    }
+  ],
+  "source_files": {
+    "self_update": {
+      "path": "src/cli/self_update.rs",
+      "blob_sha1": "88bc516f81f928e2b507ce1da5ebcabc15c0faf3",
+      "bytes": 49342,
+      "url": "https://raw.githubusercontent.com/rust-lang/rustup/d95a37b6ab92cc1e455d1576039333c97ca3e2c5/src/cli/self_update.rs",
+      "sha256": "9818be3c1bd458564ada504d40012eb0a294877a91d31dc82479fa55cee9ddf3",
+      "line_evidence": [
+        {
+          "lines": "113-120",
+          "fact": "Installer documentation says installation copies the running binary to the binary directory."
+        },
+        {
+          "lines": "237-245",
+          "fact": "install_rust invokes install_bins before toolchain work."
+        },
+        {
+          "lines": "771-785",
+          "fact": "install_bins derives process.cargo_home()/bin/rustup, removes an existing destination, copies current_exe there, makes it executable, then installs proxies."
+        }
+      ]
+    },
+    "copy_implementation": {
+      "path": "src/utils/mod.rs",
+      "blob_sha1": "414a5687a4e3b4ee69b605374566494eae7baa9b",
+      "bytes": 17412,
+      "url": "https://raw.githubusercontent.com/rust-lang/rustup/d95a37b6ab92cc1e455d1576039333c97ca3e2c5/src/utils/mod.rs",
+      "sha256": "cef2885180b369adce398fdb623a97db502f78214d3b38b197a52f83c60ce0fc",
+      "line_evidence": [
+        {
+          "lines": "260-265",
+          "fact": "copy_file_symlink_to_source delegates to copy_file_impl with preserve_symlink=false."
+        },
+        {
+          "lines": "267-284",
+          "fact": "For a regular source file, copy_file_impl calls fs::copy(src, dest); a symlink source takes the explicit symlink branch."
+        }
+      ]
+    },
+    "cargo_lock": {
+      "path": "Cargo.lock",
+      "blob_sha1": "08a6440acf3191674be9f511b36be85836a262fa",
+      "bytes": 85756,
+      "url": "https://raw.githubusercontent.com/rust-lang/rustup/d95a37b6ab92cc1e455d1576039333c97ca3e2c5/Cargo.lock",
+      "sha256": "e59d639200d7537ad696c367f3585d84ddc8df35f856b77337237cf47534b1a0",
+      "rustup_package_lines": "2078-2081",
+      "rustup_package": {
+        "name": "rustup",
+        "version": "1.29.1"
+      }
+    }
+  },
+  "archives": [
+    {
+      "host": "x86_64-unknown-linux-gnu",
+      "url": "https://static.rust-lang.org/rustup/archive/1.29.1/x86_64-unknown-linux-gnu/rustup-init",
+      "bytes": 21113232,
+      "sha256": "dda7234360b7f578ca8b0ddcb80145646fa61a67c1720a5abc7051b35c9fcb71",
+      "checksum_url": "https://static.rust-lang.org/rustup/archive/1.29.1/x86_64-unknown-linux-gnu/rustup-init.sha256",
+      "checksum_response_bytes": 80,
+      "checksum_response_sha256": "4fc18589178b3e0a5fde3300804aa8af80c9724f91edbc3cbcf2dabb7e73ea88",
+      "checksum_text": "dda7234360b7f578ca8b0ddcb80145646fa61a67c1720a5abc7051b35c9fcb71 *./rustup-init"
+    },
+    {
+      "host": "aarch64-apple-darwin",
+      "url": "https://static.rust-lang.org/rustup/archive/1.29.1/aarch64-apple-darwin/rustup-init",
+      "bytes": 11319056,
+      "sha256": "ec1b9233e7f72990ecd8e62063fa7f6c3dfc2bec8e97f88bff165f9100ac696a",
+      "checksum_url": "https://static.rust-lang.org/rustup/archive/1.29.1/aarch64-apple-darwin/rustup-init.sha256",
+      "checksum_response_bytes": 80,
+      "checksum_response_sha256": "aeb82390eb4732eb5c3dcf9e1d489d322c6546230b0e5dd7bfe4c70256c3ba06",
+      "checksum_text": "ec1b9233e7f72990ecd8e62063fa7f6c3dfc2bec8e97f88bff165f9100ac696a *./rustup-init"
+    }
+  ],
+  "qualification": {
+    "claim": "At signed annotated tag 1.29.1, the installer path copies its current rustup-init executable into process.cargo_home()/bin/rustup; for the direct downloaded regular archive file, the immutable utility source uses fs::copy, so destination bytes are unchanged, then marks the destination executable.",
+    "archive_checks": "Both official 1.29.1 archive downloads matched their official .sha256 response bytes.",
+    "limits": [
+      "The source proof binds behavior to commit d95a37b6ab92cc1e455d1576039333c97ca3e2c5 and the locked rustup package version; it does not prove a reproducible build correspondence between either archive executable and this source tree.",
+      "Archive digest identity and source/tree identity are separate. No claim is made that matching archive bytes were built from this commit without an independent signed or reproducible-build attestation.",
+      "Rustup source derives the destination from process.cargo_home(); Velnor ownership of CARGO_HOME is established by the caller's qualified workflow, not by this upstream source proof.",
+      "The byte-copy statement applies to the regular downloaded rustup-init file. Upstream has an explicit symlink-source branch, which is outside the direct curl archive case."
+    ]
+  }
+}

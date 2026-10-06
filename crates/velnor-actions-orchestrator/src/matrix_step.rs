@@ -10,6 +10,7 @@ use velnor_actions_workflow_renderer::plan_format::FORMAT_STEP_NAME;
 use velnor_actions_workflow_renderer::steps::{INTERNAL_OP_ENV, STAGED_BINARY_PREFIX};
 
 use crate::OrchestratorError;
+use crate::task_clock::START_OP;
 use crate::task_report::{DOWNSTREAM_IDS_ENV, EXIT_CODE_ENV, REPORT_OP, START_MS_ENV, TASK_ID_ENV};
 
 #[path = "matrix_tools.rs"]
@@ -19,10 +20,8 @@ mod tools;
 mod tofu_env;
 
 #[cfg(test)]
-pub(crate) use tools::crate_suite_tools;
-#[cfg(test)]
-pub(crate) use tools::task_driver_tools;
-pub(crate) use tools::{SuiteTools, prepare_crate_tools_step, suite_tools_for_tasks};
+pub(crate) use tools::{SuiteTools, task_driver_tools};
+pub(crate) use tools::{crate_suite_tools, prepare_crate_tools_step};
 
 /// `Documentation` obligation step name.
 #[cfg(test)]
@@ -45,6 +44,7 @@ pub(crate) const OBLIGATION_MATRIX_KEY_ENV: &str = "VELNOR_MATRIX_KEY";
 pub(crate) fn step_name_for(kind: &str, task_id: &str) -> String {
     let base = match obligation_stack(task_id) {
         Some(Stack::Tofu) => velnor_actions_tofu::step_base_name(kind, FORMAT_STEP_NAME),
+        Some(Stack::Workload) => crate::workloads::step_name(kind),
         _ => step_base_name(kind, FORMAT_STEP_NAME),
     };
     match shard_suffix(task_id) {
@@ -71,6 +71,7 @@ fn obligation_stack(task_id: &str) -> Option<Stack> {
 fn payload_env_for_obligation(task_id: &str, kind: &str) -> Vec<(OsString, OsString)> {
     match obligation_stack(task_id) {
         Some(Stack::Tofu) => velnor_actions_tofu::payload_env_for_kind(kind),
+        Some(Stack::Workload) => Vec::new(),
         _ => payload_env_for_kind(kind),
     }
 }
@@ -118,15 +119,10 @@ pub(crate) fn task_step_env(
             .iter()
             .map(|(key, value)| (key.clone(), value.clone())),
     );
-    if let Some(data_dir) = tofu_env::tofu_data_dir_for_extra(extra)? {
-        base.insert(velnor_actions_tofu::TF_DATA_DIR_ENV.to_owned(), data_dir);
+    if let Some(task_id) = extra.get(TASK_ID_ENV) {
+        base.extend(crate::workloads::cache::task_env(task_id));
     }
-    if let Some(cache_dir) = tofu_env::tofu_plugin_cache_dir_for_extra(extra)? {
-        base.insert(
-            velnor_actions_tofu::TF_PLUGIN_CACHE_DIR_ENV.to_owned(),
-            cache_dir,
-        );
-    }
+    base.extend(tofu_env::isolation_env_for_extra(extra)?);
     if !needs_rust {
         toolchain_env::reject_denied_step_keys(&base).map_err(OrchestratorError::from)?;
         return Ok(base);
@@ -227,14 +223,32 @@ pub(crate) fn obligation_step(
         );
     }
     check_identity_env_contract(&identity, &obligation.task_id)?;
-    let needs_rust = obligation_stack(&obligation.task_id) != Some(Stack::Tofu);
-    let env = task_step_env(catalog, &identity, needs_rust)?;
+    let needs_rust = obligation_stack(&obligation.task_id) == Some(Stack::Rust)
+        || (obligation_stack(&obligation.task_id) == Some(Stack::Workload)
+            && obligation
+                .task_id
+                .rsplit('/')
+                .next()
+                .is_some_and(crate::workloads::requires_rust));
+    let mut env = task_step_env(catalog, &identity, needs_rust)?;
+    let is_node = obligation_stack(&obligation.task_id) == Some(Stack::Workload)
+        && obligation.task_id.ends_with("/node_ci");
+    if is_node {
+        env.extend(crate::workloads::node_env_for_argv(&obligation.run)?);
+    }
     let joined =
         velnor_actions_workflow_renderer::join_argv_for_run(&obligation.run).map_err(|err| {
             OrchestratorError::Contract {
                 problem: err.to_string(),
             }
         })?;
+    let joined = if obligation_stack(&obligation.task_id) == Some(Stack::Tofu) {
+        format!("{}{joined}", crate::tofu_config_step::isolation_prefix())
+    } else if is_node {
+        format!("{}{joined}", crate::workloads::node_isolation_prefix())
+    } else {
+        joined
+    };
     let start = start_path_for_key(&obligation.matrix_key);
     let run = report_wrapper_argv(&joined, &helper_path_for_version(), &start);
     let mut step = velnor_actions_workflow_renderer::shell_step(&obligation.step_name, run, env)
@@ -280,9 +294,9 @@ pub(crate) fn helper_path_for_version() -> String {
 
 /// `sh -c` argv wrapping one joined command with report capture.
 ///
-/// Stamps the wall-clock start to a per-entry file first (argv
+/// Stamps the portable helper's wall-clock start to a per-entry file (argv
 /// validation forbids `$(...)`, so the stamp travels via file, never
-/// substitution), runs the obligation, captures `$?`, reads the stamp
+/// substitution), discards failed captures, runs the obligation, captures `$?`, reads the stamp
 /// back, reports through the staged helper's [`REPORT_OP`], then exits
 /// with the obligation code (helper failure surfaces only on an
 /// otherwise passing obligation, so failures never mask each other).
@@ -295,53 +309,9 @@ pub(crate) fn report_wrapper_argv(joined: &str, helper: &str, start_path: &str) 
         "sh".to_owned(),
         "-c".to_owned(),
         format!(
-            "date +%s%3N > \"{start_path}\"; {joined}; code=$?; read -r start_ms rest < \"{start_path}\"; {EXIT_CODE_ENV}=\"$code\" {START_MS_ENV}=\"$start_ms\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\""
+            "{INTERNAL_OP_ENV}={START_OP} \"{helper}\" > \"{start_path}\"; stamp_code=$?; if [ \"$stamp_code\" -ne 0 ]; then true > \"{start_path}\"; fi; {joined}; code=$?; start_ms=; if [ \"$stamp_code\" -eq 0 ]; then read -r start_ms rest < \"{start_path}\"; fi; {EXIT_CODE_ENV}=\"$code\" {START_MS_ENV}=\"$start_ms\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\""
         ),
     ]
-}
-
-/// `sh -c` argv saving one joined command's exit to an outcome file.
-///
-/// Two-phase shape for the plan-job workspace Format: the plan does
-/// not exist yet at format time, so the wrapper records `$?` plus the
-/// wall-clock start stamp, and a post-plan step reports through
-/// [`deferred_report_argv`].
-pub(crate) fn outcome_wrapper_argv(
-    joined: &str,
-    outcome_path: &str,
-    start_path: &str,
-) -> Vec<String> {
-    vec![
-        "sh".to_owned(),
-        "-c".to_owned(),
-        format!(
-            "date +%s%3N > \"{start_path}\"; {joined}; code=$?; echo \"$code\" > \"{outcome_path}\"; exit \"$code\""
-        ),
-    ]
-}
-
-/// `sh -c` argv reporting one saved outcome through the staged helper.
-///
-/// Reads the exit code and start stamp the outcome wrapper saved (a
-/// missing file leaves the value empty and the helper fails closed),
-/// then invokes [`REPORT_OP`]; the step exits with the helper's code.
-pub(crate) fn deferred_report_argv(
-    outcome_path: &str,
-    helper: &str,
-    start_path: &str,
-) -> Vec<String> {
-    vec![
-        "sh".to_owned(),
-        "-c".to_owned(),
-        format!(
-            "read -r code rest < \"{outcome_path}\"; read -r start_ms rest < \"{start_path}\"; {EXIT_CODE_ENV}=\"$code\" {START_MS_ENV}=\"$start_ms\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\""
-        ),
-    ]
-}
-
-/// Shell-spelled outcome file for one matrix key under runner temp.
-pub(crate) fn outcome_path_for_key(matrix_key: &str) -> String {
-    format!("$RUNNER_TEMP/velnor/outcome-{matrix_key}")
 }
 
 /// Shell-spelled start-stamp file for one matrix key under runner temp.
@@ -358,6 +328,11 @@ pub(crate) fn download_plan_step() -> Result<Step, OrchestratorError> {
     })
 }
 
+/// Stage the closed report inventory before the always-on job upload.
+pub(crate) fn stage_reports_step() -> Step {
+    velnor_actions_workflow_renderer::steps::stage_reports_step()
+}
+
 /// One always-on crate-report upload carrying a job's every entry.
 pub(crate) fn crate_upload_step(job_id: &str) -> Result<Step, OrchestratorError> {
     velnor_actions_workflow_renderer::crate_job_report_upload_step(job_id).map_err(|err| {
@@ -370,6 +345,10 @@ pub(crate) fn crate_upload_step(job_id: &str) -> Result<Step, OrchestratorError>
 #[cfg(test)]
 #[path = "matrix_step_tests.rs"]
 mod matrix_step_tests;
+
+#[cfg(all(test, unix))]
+#[path = "../tests/fixtures/task_clock_wrapper.rs"]
+mod task_clock_wrapper_tests;
 
 #[cfg(test)]
 #[path = "matrix_step_tofu_tests.rs"]

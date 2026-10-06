@@ -32,9 +32,18 @@ def natural(value, positive=False):
     return type(value) is int and value >= (1 if positive else 0)
 
 
+def planning_gh():
+    executable = os.environ.get("VELNOR_ADMISSION_PLANNING_GH", "")
+    require(executable and os.path.isabs(executable) and
+            os.path.normpath(executable) == executable and
+            os.path.basename(executable) == "gh", "planning_gh_path")
+    return executable
+
+
 def api(path, binary=False):
+    executable = planning_gh()
     result = subprocess.run(
-        ["gh", "api", "--hostname", "github.com", "--method", "GET", path], check=True,
+        [executable, "api", "--hostname", "github.com", "--method", "GET", path], check=True,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120,
     )
     require(len(result.stdout) <= 16 * 1024 * 1024, "oversize_api")

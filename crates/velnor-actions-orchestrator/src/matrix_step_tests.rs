@@ -95,16 +95,27 @@ fn report_wrapper_stamps_start_and_hands_env_to_helper() {
     assert_eq!(&argv[..2], ["sh".to_owned(), "-c".to_owned()]);
     let script = &argv[2];
     assert!(
-        script.contains("date +%s%3N > \"/tmp/start\"; "),
+        script.starts_with(&format!(
+            "{INTERNAL_OP_ENV}={START_OP} \"/tmp/h\" > \"/tmp/start\"; "
+        )),
         "start stamp first after unset prelude: {script}"
     );
     assert!(
-        script.contains("read -r start_ms rest < \"/tmp/start\""),
+        script.contains(
+            "start_ms=; if [ \"$stamp_code\" -eq 0 ]; then read -r start_ms rest < \"/tmp/start\""
+        ),
         "stamp read back: {script}"
     );
     for env in [EXIT_CODE_ENV, START_MS_ENV] {
         assert!(script.contains(env), "helper env {env}: {script}");
     }
+    assert!(
+        script.contains(
+            "stamp_code=$?; if [ \"$stamp_code\" -ne 0 ]; then true > \"/tmp/start\"; fi;"
+        ),
+        "failed captures are truncated and never read: {script}"
+    );
+    assert!(!script.contains("date "), "helper owns the portable clock");
     assert!(
         script.contains(&format!("{START_MS_ENV}=\"$start_ms\"")),
         "stamp handed to helper: {script}"
@@ -118,40 +129,6 @@ fn report_wrapper_stamps_start_and_hands_env_to_helper() {
         !script.contains("$("),
         "no command substitution (file handoff only): {script}"
     );
-}
-
-#[test]
-fn outcome_and_deferred_share_one_start_file() {
-    let outcome = outcome_path_for_key("m-abc");
-    let start = start_path_for_key("m-abc");
-    assert_eq!(outcome, "$RUNNER_TEMP/velnor/outcome-m-abc");
-    assert_eq!(start, "$RUNNER_TEMP/velnor/start-m-abc");
-    let save = outcome_wrapper_argv("true", &outcome, &start);
-    assert!(
-        save[2].starts_with(&format!("date +%s%3N > \"{start}\"; ")),
-        "outcome stamps start first (no unset prelude on outcome): {}",
-        save[2]
-    );
-    assert!(
-        save[2].contains(&format!("echo \"$code\" > \"{outcome}\"")),
-        "{}",
-        save[2]
-    );
-    let report = deferred_report_argv(&outcome, "/tmp/h", &start);
-    assert!(
-        report[2].contains(&format!("read -r start_ms rest < \"{start}\"")),
-        "deferred reads stamp: {}",
-        report[2]
-    );
-    assert!(
-        report[2].contains(&format!("{START_MS_ENV}=\"$start_ms\"")),
-        "deferred hands stamp: {}",
-        report[2]
-    );
-    for argv in [&save, &report] {
-        velnor_actions_workflow_renderer::validate_command_argv(argv).expect("valid wrapper");
-        assert!(!argv[2].contains("$("), "file handoff only: {}", argv[2]);
-    }
 }
 
 #[test]
@@ -224,20 +201,14 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
     );
     assert_eq!(
         env.get(TF_DATA_DIR_ENV).map(String::as_str),
-        Some(
-            velnor_actions_tofu::tofu_data_dir_under(
-                velnor_actions_mise::runtime_paths::TOFU_DATA_BASE_EXPR,
-                "",
-            )
-            .expect("data dir")
-            .as_str(),
-        ),
+        Some("${{ runner.temp }}/velnor/tofu-data/root-af1349b9f5f9"),
         "tofu steps isolate the per-root data dir"
     );
-    assert!(
-        !env.contains_key(TF_CLI_CONFIG_FILE_ENV),
-        "temp CLI config stays local-only until a materialization step lands"
+    assert_eq!(
+        env.get(TF_CLI_CONFIG_FILE_ENV).map(String::as_str),
+        Some("${{ runner.temp }}/velnor/tofu-home/root-af1349b9f5f9/cli.tfrc")
     );
+    assert_eq!(env["XDG_CONFIG_HOME"], format!("{}/config", env["HOME"]));
     let step = obligation_step(&obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
     let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
         panic!("obligation must be a shell step");

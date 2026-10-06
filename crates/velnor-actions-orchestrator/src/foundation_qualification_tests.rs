@@ -1,17 +1,38 @@
 use super::*;
 
 #[test]
+fn source_template_is_exact_reviewed_publication_owner_bytes() {
+    assert_eq!(source_sha256(TEMPLATE.as_bytes()), TEMPLATE_SHA256);
+    assert_eq!(TEMPLATE.matches(ACTION_MARKER).count(), 1);
+}
+
+#[test]
 fn native_qualification_retains_first_action_and_exact_fixed_policy() {
     let published = source::fixture();
     let files = files_for_policy(WorkflowPolicy::VelnorRepositoryV1, &published)
         .expect("source-only render");
     assert_eq!(files.len(), 1);
     assert_eq!(files[0].path, WORKFLOW_PATH);
-    let action = document::SourceActionReference::new(published.action_reference())
-        .expect("neutral reviewed reference");
-    let expected =
-        document::render(&action, env!("CARGO_PKG_VERSION")).expect("renderer-owned document");
-    assert_eq!(files[0].bytes, expected.bytes);
+    let body = files[0].bytes.split_once('\n').expect("marker").1;
+    assert_eq!(
+        body,
+        TEMPLATE.replace(ACTION_MARKER, published.action_reference())
+    );
+    let first_step = body.find("      - name:").expect("first step");
+    let second_step = body[first_step + 1..]
+        .find("      - name:")
+        .map(|index| index + first_step + 1)
+        .expect("upload step");
+    let first = &body[first_step..second_step];
+    assert!(first.contains(published.action_reference()));
+    assert!(!first.contains("run:"));
+    assert!(!first.contains("checkout@"));
+    assert!(!first.contains("cache@"));
+    assert!(body.contains("runs-on: ubuntu-26.04"));
+    assert!(body.contains("permissions:\n  contents: read\n"));
+    assert!(body.contains("on:\n  workflow_dispatch:\n"));
+    assert!(body.contains("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"));
+    assert!(!body.contains(ACTION_MARKER));
 }
 
 #[test]
@@ -21,6 +42,17 @@ fn consumer_policy_never_registers_foundation_qualification() {
             .expect("consumer policy")
             .is_empty()
     );
+}
+
+#[test]
+fn mutated_template_rejects_before_render() {
+    for template in [
+        TEMPLATE.replace("ubuntu-26.04", "ubuntu-latest"),
+        TEMPLATE.replace(ACTION_MARKER, "caller/repository/action@main"),
+        format!("{TEMPLATE}\nuses: {ACTION_MARKER}\n"),
+    ] {
+        assert!(render(&source::fixture(), &template).is_err());
+    }
 }
 
 fn repository(policy: &str, origin: &str) -> tempfile::TempDir {
@@ -62,7 +94,7 @@ fn pure_source_preview_does_not_discover_or_replace_repository_content() {
     assert_eq!(paths, vec![WORKFLOW_PATH.to_owned()]);
     assert_eq!(
         std::fs::read_to_string(destination.path().join(WORKFLOW_PATH)).expect("preview bytes"),
-        render(&source::fixture()).expect("same factory")[0].bytes
+        render(&source::fixture(), TEMPLATE).expect("same factory")[0].bytes
     );
     assert_eq!(
         std::fs::read_to_string(root.path().join(".github/CODEOWNERS")).expect("preserved owner"),

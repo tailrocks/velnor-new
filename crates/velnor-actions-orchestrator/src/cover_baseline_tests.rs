@@ -40,7 +40,7 @@ fn manifest_json(base: &str, name: &str) -> serde_json::Value {
     let digest = digest_b3(b"d");
     let numeric = crate::cover_compat::baseline_artifact_numeric_id(name);
     serde_json::json!({
-        "schema": 2,
+        "schema": 3,
         "repository_id": digest,
         "source_commit": base,
         "ref": "refs/heads/testmain",
@@ -100,12 +100,14 @@ fn marker_plan(marker: &str) -> velnor_actions_contract::Plan {
     };
     let digest = digest_b3(b"d");
     Plan {
+        producers: Default::default(),
         schema: 1,
         run_key: "local".to_owned(),
         plan_id: "plan-local".to_owned(),
         base: Some("a".repeat(40)),
         head: "head".to_owned(),
         event: WorkflowEvent::PullRequest,
+        scope: velnor_actions_contract::VerificationScope::Affected,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,
@@ -120,11 +122,20 @@ fn marker_plan(marker: &str) -> velnor_actions_contract::Plan {
         packages: Vec::new(),
         obligations: vec![PlanObligation {
             task_id: "stack/rust/root/clippy/default".to_owned(),
+            job_id: "rust-demo".to_owned(),
             decision: ObligationDecision::Execute,
             reason: "selected".to_owned(),
             task_digest: digest.clone(),
             input_digest: digest.clone(),
-            closure_digest: digest,
+            closure_digest: digest.clone(),
+            execution_identity: velnor_actions_contract::TaskExecutionIdentity::new(
+                &digest_b3(b"graph"),
+                &digest_b3(b"toolchain"),
+                &digest_b3(b"mbx"),
+                &digest_b3(b"platform"),
+                "default",
+            )
+            .expect("execution identity"),
             baseline_proof: None,
         }],
         matrix: PlanMatrix {
@@ -139,6 +150,8 @@ fn marker_plan(marker: &str) -> velnor_actions_contract::Plan {
 /// Discovery without task groups.
 fn empty_discovery() -> crate::discover::Discovery {
     crate::discover::Discovery {
+        rust_inventory: None,
+        raw_inventories: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: Vec::new(),
@@ -197,7 +210,7 @@ fn forwarded_manifest(slug: &str, base: &str) -> BaselineManifest {
     let digest = digest_b3(b"d");
     let name = super::provenance_check::baseline_artifact_name(base, &digest).expect("name");
     BaselineManifest {
-        schema: 2,
+        schema: 3,
         repository_id: digest_b3(format!("github.com/{slug}").as_bytes()),
         source_commit: base.to_owned(),
         ref_: "refs/heads/testmain".to_owned(),
@@ -215,12 +228,25 @@ fn forwarded_manifest(slug: &str, base: &str) -> BaselineManifest {
             task_id: "stack/rust/root/clippy/default".to_owned(),
             task_digest: digest.clone(),
             input_digest: digest.clone(),
-            closure_digest: digest,
+            closure_digest: digest.clone(),
             proof_run_id: 5,
             carried_from: None,
             observed_run_id: 7,
             external_data: None,
-            proof: None,
+            proof: Some(
+                velnor_actions_contract::ManifestTaskProof::new(
+                    "stack/rust/root/clippy/default",
+                    &digest.clone(),
+                    &digest.clone(),
+                    &digest_b3(b"graph"),
+                    &digest_b3(b"toolchain"),
+                    &digest_b3(b"mbx"),
+                    &digest_b3(b"platform"),
+                    "default",
+                    5,
+                )
+                .expect("task proof"),
+            ),
         }],
         parent: None,
         expires_at_unix: None,
@@ -247,6 +273,7 @@ fn forwarded_proof_marks_baseline_unavailable() {
         workflow: ".github/workflows/ci.yml",
         catalog: &catalog,
         repository: None,
+        runtime: velnor_actions_mise::RuntimePaths::full(),
     };
     apply_baseline(
         &mut plan,
@@ -302,6 +329,7 @@ fn source_build_keeps_marker_without_lock_fill() {
         workflow: ".github/workflows/ci.yml",
         catalog: &catalog,
         repository: None,
+        runtime: velnor_actions_mise::RuntimePaths::full(),
     };
     apply_baseline(
         &mut plan,
@@ -319,77 +347,5 @@ fn source_build_keeps_marker_without_lock_fill() {
     );
 }
 
-/// Attempt and artifact pins: a claim of attempt 1 never loads when the
-/// run succeeded on attempt 3, and a foreign artifact id never loads.
-#[test]
-fn baseline_entry_pins_attempt_and_artifact() {
-    let base = "a".repeat(40);
-    let name = format!("velnor-baseline-{base}-{}", digest_b3(b"c"));
-    let numeric = crate::cover_compat::baseline_artifact_numeric_id(&name);
-    let tmp = tempfile::tempdir().expect("tempdir");
-    let entry = tmp.path().join(&name);
-    std::fs::create_dir(&entry).expect("entry");
-    let manifest = manifest_json(&base, &name);
-    std::fs::write(entry.join("baseline.json"), manifest.to_string()).expect("manifest");
-    assert!(
-        baseline_entry_for(&entry, &base, 7, 3, numeric).is_none(),
-        "claims attempt 1, success on 3"
-    );
-    assert!(
-        baseline_entry_for(&entry, &base, 7, 1, numeric.wrapping_add(1)).is_none(),
-        "foreign artifact id"
-    );
-    assert!(baseline_entry_for(&entry, &base, 7, 1, numeric).is_some());
-}
-
-/// Symlink, traversal, and size gates: a linked payload, a linked entry
-/// dir, a directory payload, and an oversize payload never load, even
-/// when every name and claim is otherwise valid.
-#[test]
-fn baseline_entry_rejects_links_and_oversize() {
-    let base = "a".repeat(40);
-    let name = format!("velnor-baseline-{base}-{}", digest_b3(b"c"));
-    let numeric = crate::cover_compat::baseline_artifact_numeric_id(&name);
-    #[cfg(unix)]
-    {
-        let manifest = manifest_json(&base, &name).to_string();
-        let tmp = tempfile::tempdir().expect("tempdir");
-        std::fs::write(tmp.path().join("real.json"), &manifest).expect("real");
-        let linked = tmp.path().join(&name);
-        std::fs::create_dir(&linked).expect("linked");
-        std::os::unix::fs::symlink(tmp.path().join("real.json"), linked.join("baseline.json"))
-            .expect("link");
-        assert!(
-            baseline_entry_for(&linked, &base, 7, 1, numeric).is_none(),
-            "symlinked payload rejects even at a live target"
-        );
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let target = tmp.path().join("target");
-        std::fs::create_dir(&target).expect("target");
-        std::fs::write(target.join("baseline.json"), &manifest).expect("manifest");
-        let via = tmp.path().join(&name);
-        std::os::unix::fs::symlink(&target, &via).expect("dir link");
-        assert!(
-            baseline_entry_for(&via, &base, 7, 1, numeric).is_none(),
-            "symlinked entry dir rejects"
-        );
-    }
-    let tmp = tempfile::tempdir().expect("tempdir");
-    let entry = tmp.path().join(&name);
-    std::fs::create_dir(&entry).expect("entry");
-    std::fs::create_dir(entry.join("baseline.json")).expect("dir payload");
-    assert!(
-        baseline_entry_for(&entry, &base, 7, 1, numeric).is_none(),
-        "directory payload rejects"
-    );
-    std::fs::remove_dir(entry.join("baseline.json")).expect("rmdir");
-    let big = format!(
-        r#"{{"schema":2,"pad":"{}"}}"#,
-        "p".repeat(MAX_BASELINE_MANIFEST_BYTES)
-    );
-    std::fs::write(entry.join("baseline.json"), big).expect("big");
-    assert!(
-        baseline_entry_for(&entry, &base, 7, 1, numeric).is_none(),
-        "oversize payload rejects"
-    );
-}
+#[path = "cover_baseline_entry_security_tests.rs"]
+mod entry_security;

@@ -8,6 +8,9 @@ use std::path::Path;
 pub(crate) use velnor_actions_contract::ClosureBuilder;
 use velnor_actions_contract::{ContractError, ProposedTask, Stack, TaskInputClosure};
 
+#[path = "checkout_inputs.rs"]
+pub(crate) mod checkout_inputs;
+
 /// Resolve one proposed task's closure against the checkout at `root`.
 ///
 /// Closed per-stack dispatch: each adapter resolves its own tasks.
@@ -26,8 +29,24 @@ pub(crate) fn resolve_closure_at_root(
     toolchain_id: &str,
     platform_id: &str,
     reads: &mut velnor_actions_tofu::FileCache,
+    checkout: Option<&velnor_actions_rust::semantic_inputs::SemanticInventory>,
 ) -> Result<TaskInputClosure, ContractError> {
+    let fallback;
+    let checkout = match checkout {
+        Some(checkout) => checkout,
+        None => {
+            fallback = checkout_inputs::collect(root);
+            &fallback
+        }
+    };
     match Stack::require_known(&task.stack_id)? {
+        Stack::Workload => Ok(super::workload_identity::closure(
+            task,
+            &checkout.provenance,
+            graph_digest,
+            toolchain_id,
+            platform_id,
+        )),
         Stack::Rust => velnor_actions_rust::resolve_closure_at_root(
             root,
             task,
@@ -35,6 +54,7 @@ pub(crate) fn resolve_closure_at_root(
             graph_digest,
             toolchain_id,
             platform_id,
+            checkout,
         ),
         Stack::Tofu => velnor_actions_tofu::resolve_closure_at_root(
             root,

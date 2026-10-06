@@ -22,8 +22,38 @@ fn c1_inventory_lists_every_runtime_path_with_one_owner() {
     }
     assert_eq!(inv.len(), 8, "exact inventory size");
     assert_eq!(
+        paths::owner_for("cargo-binaries").expect("binary owner"),
+        "catalog/tools"
+    );
+    let owned = inv
+        .iter()
+        .map(|entry| (entry.path, entry.owner))
+        .collect::<Vec<_>>();
+    assert!(
+        transport::check_no_double_owner(&owned).is_ok(),
+        "runtime inventory owners cannot overlap"
+    );
+    assert_eq!(
         paths::owner_for("tofu-provider-cache").expect("owner"),
         "velnor/tofu-providers"
+    );
+}
+
+#[test]
+fn c1_planning_runtime_has_a_distinct_compiled_mise_root() {
+    let full = paths::RuntimePaths::full();
+    let planning = paths::RuntimePaths::planning();
+    assert_eq!(full.domain(), paths::RuntimePathDomain::Full);
+    assert_eq!(planning.domain(), paths::RuntimePathDomain::Planning);
+    assert_eq!(full.mise_data_dir(), paths::MISE_DATA_DIR);
+    assert_eq!(
+        planning.mise_data_dir(),
+        "${{ runner.temp }}/velnor/planning/mise"
+    );
+    assert_ne!(full.mise_data_dir(), planning.mise_data_dir());
+    assert_eq!(
+        planning.mise_data_env(),
+        ("MISE_DATA_DIR", "${{ runner.temp }}/velnor/planning/mise")
     );
 }
 
@@ -43,10 +73,13 @@ fn c1_dangling_symlink_never_counts_as_warm() {
 fn c3_subset_lives_at_real_home_without_credentials() {
     let home = "${{ runner.temp }}/velnor/cargo";
     let got = sources::sources_cache_paths(home).expect("paths");
-    assert_eq!(got.len(), 6);
+    assert_eq!(got.len(), 3);
     assert!(sources::validate_sources_subset(&got, home).is_ok());
     assert!(sources::sources_cache_paths("").is_err());
     for bad in [
+        format!("{home}/bin"),
+        format!("{home}/.crates.toml"),
+        format!("{home}/.crates2.json"),
         format!("{home}/credentials.toml"),
         format!("{home}/registry/src/x"),
         format!("{home}/../escape"),
@@ -60,60 +93,20 @@ fn c3_subset_lives_at_real_home_without_credentials() {
 }
 
 #[test]
-fn c3_single_trusted_writer_never_races() {
-    assert!(sources::is_trusted_writer("plan"));
-    for role in ["rust-a", "rust-b", "lint", "required", ""] {
-        assert!(!sources::is_trusted_writer(role), "{role} must not save");
-    }
-}
-
-#[test]
-fn c4_restore_and_mbx_precede_fetch_with_offline_skip() {
-    let good = [
-        "Checkout",
-        "Prepare pinned tools",
-        "Restore Cargo sources",
-        "Restore MBX objects",
-        "Fetch Cargo sources",
-        "Clippy",
-    ]
-    .iter()
-    .map(ToString::to_string)
-    .collect::<Vec<_>>();
-    assert!(sources::check_restore_before_fetch(&good, true).is_ok());
-    let fetch_first = [
-        "Checkout",
-        "Fetch Cargo sources",
-        "Restore MBX objects",
-        "Restore Cargo sources",
-    ]
-    .iter()
-    .map(ToString::to_string)
-    .collect::<Vec<_>>();
-    assert!(sources::check_restore_before_fetch(&fetch_first, true).is_err());
-    assert_eq!(
-        sources::fetch_decision(true, "no_entry").expect("skip"),
-        sources::FetchDecision::OfflineSkip
-    );
-    let miss = sources::fetch_decision(false, "no_entry").expect("fetch");
-    assert!(matches!(miss, sources::FetchDecision::ExplicitFetch { .. }));
-    assert!(sources::fetch_decision(false, "bogus").is_err());
-}
-
-#[test]
 fn c5_qualified_transport_is_objects_plus_shared_with_numbers() {
     assert_eq!(
-        transport::QUALIFIED_TRANSPORT,
+        transport::SELECTED_TRANSPORT,
         transport::MbxTransport::ObjectsPlusSharedSources
     );
-    assert!(transport::is_qualified(
+    assert!(transport::is_selected(
         transport::MbxTransport::ObjectsPlusSharedSources
     ));
-    assert!(!transport::is_qualified(
+    assert!(!transport::is_selected(
         transport::MbxTransport::TargetPerCrate
     ));
-    let target = transport::numbers_for(transport::MbxTransport::TargetPerCrate);
-    let objects = transport::numbers_for(transport::MbxTransport::ObjectsPlusSharedSources);
+    let target = transport::estimated_numbers_for(transport::MbxTransport::TargetPerCrate);
+    let objects =
+        transport::estimated_numbers_for(transport::MbxTransport::ObjectsPlusSharedSources);
     assert!(objects.stored_mib < target.stored_mib, "stored must shrink");
     assert!(
         objects.duplicate_mib < target.duplicate_mib,
@@ -167,7 +160,7 @@ fn c9_pr_save_needs_action_support_and_forks_stay_read_only() {
     }
     assert_eq!(
         velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION,
-        "success() && github.event_name == 'push'"
+        "success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)"
     );
 }
 

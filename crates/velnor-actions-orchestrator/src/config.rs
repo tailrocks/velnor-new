@@ -4,7 +4,9 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::Deserialize;
-use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig};
+use velnor_actions_contract::config::{
+    ActionPinOverride, ActionsConfig, DeliveryConfig, VerificationConfig,
+};
 use velnor_actions_contract::{
     DiscoveryConfig, GeneratorValidation, ResourcesConfig, TestShardingConfig, VelnorConfig,
     WorkflowConfig, WorkflowPolicy,
@@ -111,6 +113,9 @@ struct PartialConfig {
     /// Actions section.
     #[serde(default)]
     actions: PartialActions,
+    /// Optional native delivery families.
+    #[serde(default)]
+    delivery: DeliveryConfig,
 }
 
 /// Workflow section with every value optional.
@@ -129,6 +134,9 @@ struct PartialWorkflow {
     max_parallel_jobs: Option<u32>,
     /// Pinned runner-label override.
     runner_label: Option<String>,
+    /// Optional main-workflow verification cadence and dispatch settings.
+    #[serde(default)]
+    verification: Option<VerificationConfig>,
 }
 
 /// Resources section with every value optional.
@@ -184,6 +192,7 @@ impl PartialConfig {
             stacks: self.stacks.materialize()?,
             discovery: self.discovery.materialize(),
             actions: self.actions.materialize(),
+            delivery: self.delivery,
         })
     }
 }
@@ -200,6 +209,7 @@ impl PartialWorkflow {
                 .unwrap_or(GeneratorValidation::Bootstrap),
             max_parallel_jobs: self.max_parallel_jobs.unwrap_or(2),
             runner_label: self.runner_label,
+            verification: self.verification,
         }
     }
 }

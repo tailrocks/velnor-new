@@ -182,13 +182,14 @@ impl VerifyToolchain {
 
     /// Probe argv vectors including the program: route probe first,
     /// runner probe second when Nextest is selected.
-    #[must_use]
-    pub fn probes(&self, catalog: &ToolCatalog) -> Vec<Vec<OsString>> {
-        let mut probes = vec![self.route.invocation(catalog)];
+    /// # Errors
+    /// Returns an error when the selected tool lacks catalog authority.
+    pub fn probes(&self, catalog: &ToolCatalog) -> Result<Vec<Vec<OsString>>, MiseError> {
+        let mut probes = vec![self.route.invocation(catalog)?];
         if let Some(probe) = &self.runner_probe {
-            probes.push(probe.argv(catalog));
+            probes.push(probe.argv(catalog)?);
         }
-        probes
+        Ok(probes)
     }
 
     /// Full step env: isolation plus install-disable plus owned homes.
@@ -211,7 +212,7 @@ impl VerifyToolchain {
     /// # Errors
     ///
     /// Returns [`MiseError::EmptyCommand`] only if a fixed probe were
-    /// empty, which construction rules out.
+    /// empty, which construction rules out. Catalog selection errors propagate.
     pub fn commands(&self, catalog: &ToolCatalog) -> Result<Vec<IsolatedCommand>, MiseError> {
         let homes = self.homes.env(catalog);
         let mut commands = vec![self.route.command(catalog)?.with_env(&homes)?];

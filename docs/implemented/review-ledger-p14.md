@@ -112,31 +112,37 @@ counter-evidence after a tried-and-reverted implementation (see below).
   `impl_mise_p08.rs:99`, `impl_orch_p08.rs:146`. Live numbers live in R11.
 - R08: one owner per path (`mise/src/runtime_paths.rs:45`) + subset validation
   wired at render; tests `impl_mise_p08.rs:9`, `impl_renderer_p08.rs:106`.
-- R09: plan-only save (`workflow_jobs_cache.rs:27`), readers restore-only
-  (`crate_jobs.rs:329`); push-gated saves only (`ci.yml`); tests
-  `impl_orch_p08.rs:87`, `c11_cache_saves_push_only_prs_and_forks_read_only`.
-- R10: owned-home subset rejecting `~/.cargo`/credentials
-  (`mise/src/cache_sources.rs:47`); offline-probe→skip else explicit fetch
-  (`source_prep.rs:106`); `--offline` on cargo cmds in `ci.yml`.
-- R11: per-job cache fixture (`impl_cache_fixtures.rs`: shared sources
-  keys/paths, qualified Mise identities, single plan writer,
-  restore<MBX<fetch order); sequential-run evidence in
-  `cache-measurements.md` (seed `36754512444`, warm `36760724180`, green
-  `36777030585` @`695752e`: 21 entries / 1263.95 MiB stored, 12.3% of the
-  assumed 10 GiB quota, zero evictions, per-job transfer/durations);
-  `summarize_cache_usage` reporting path (`cache_trust.rs`, post-hoc by
-  design — render stays hermetic).
-- R12: `impl_cache_warm.rs` renders twice with identical inputs and asserts
-  byte-identical workflows + identical keys, the offline-skip branch in
-  every crate fetch step, `--offline` on every obligation, and disjoint
-  MBX/Cargo shapes; hosted warm/green show zero fetch re-download;
-  local `cacheprobe` fixture replays both branches verbatim.
-- R13: `Step.condition` in contract IR with validation, serialized as
-  step-level `if:` in both renderers (`document.rs`); Save Cargo sources
-  plus every Setup Mise `cache_save` gated on `github.event_name ==
-  'push'`; PRs (same-repo or fork) restore read-only; policy recorded in
-  the Gate 4 doc; tests `c11_cache_saves_push_only_prs_and_forks_read_only`,
-  `step_conditions_serialize_as_if_with_upload_default`.
+- R09: isolated Cargo source producers own publication; Plan and computation
+  consumers restore only (`source_producer.rs`, `source_producer_job.rs`).
+  Structural integration evidence: `workflow_source_integration_tests.rs`;
+  renderer admission: `cache_source_roles.rs`. Server cache mode restricts
+  writes to admitted producers; authenticated payload receipts remain pending
+  qualification in `../reviews/cache-producer-public-receipt-design.md`.
+- R10: canonical owned-home subset rejects ambient Cargo paths, credentials,
+  extracted registry sources and tool binaries (`mise/src/cache_sources.rs`).
+  `source_producer_transport.rs` shares path generation and validation across
+  reader, save and publication lookup. Selected consumer probes use locked
+  Cargo tree offline first (`source_producer_reader.rs`); producer verification
+  uses the source-bound helper. Transport subset tests cover actual steps.
+- R11: current source transport evidence lives in
+  `source_producer_transport.rs` and `workflow_source_integration_tests.rs`.
+  Historical sequential-run measurements in `cache-measurements.md` describe
+  the former Plan-writer workflow (seed `36754512444`, warm `36760724180`,
+  green `36777030585` @`695752e`: 21 entries / 1263.95 MiB stored, 12.3% of
+  the assumed 10 GiB quota, zero evictions, per-job transfer/durations).
+  `summarize_cache_usage` remains a post-hoc service-report diagnostic;
+  render stays hermetic. Those runs do not qualify current producer provenance.
+- R12: deterministic rendering and current source identity/consumer-probe
+  assertions live in `impl_cache_warm.rs`. Historical hosted warm/green runs
+  and `cacheprobe` replay cover the former fetch implementation; current
+  producer and consumer hosted qualification remains separate.
+- R13: source saves and publication lookup use typed producer verification
+  conditions (`source_producer_transport.rs`, contract `source_producer.rs`).
+  Workflow cache mode is read; admitted producer jobs request literal write
+  with the protected default-branch push gate (`workflow/cache_mode.rs`).
+  Renderer checks producer scheduling, compiled helper, publication and report
+  bindings (`cache_source_roles.rs`). Receipt admission before payload use
+  remains required to close PR-scope shadow-cache provenance.
 - R14: main tree is `ci.yml` only, `name: CI`; stale removal by whole-tree
   swap (`generate.rs:208`); test `impl_renderer_tree.rs:116`. The scheduled
   `freshness.yml` probe (P12-4) stands alongside under the Velnor policy;

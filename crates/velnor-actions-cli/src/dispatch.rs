@@ -3,7 +3,8 @@
 //! The private gate requires `VELNOR_INTERNAL_OP` plus the exact request file
 //! in `VELNOR_REQUEST_FILE`: `write-request-v1` needs GitHub event env and no
 //! pre-existing file, `plan-v1`/`merge-v1`/`publish-baseline-v1` need a
-//! pre-existing request file, `fetch-reports-v1`/`write-task-report-v1`
+//! pre-existing request file, `fetch-reports-v1`/`write-task-start-v1`/`write-task-report-v1`/
+//! `stage-reports-v1`
 //! need runner temp plus the numeric run ID instead, and
 //! `write-preseed-manifest-v1` needs runner temp only. Anything else falls
 //! through to Clap, so public behavior is byte-identical with or without
@@ -16,17 +17,25 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use velnor_actions_orchestrator::{
-    COVERED_TASKS_OUTPUT, FETCH_OP, GenerateOptions, MERGE_OP, OrchestratorError, PLAN_OP,
-    PRESEED_MANIFEST_OP, PUBLISH_OP, REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, generate,
-    init_config, merge_internal, merge_passed, plan_internal, plan_outputs, plan_text_checked,
-    prepare, publish_final_report, publish_plan_files, resolve_root, response_path_for,
-    retrieve_reports, write_preseed_manifest, write_request, write_task_report,
+    ACTION_BEGIN_OP, ACTION_REPORT_OP, FETCH_OP, GenerateOptions, MERGE_OP, OrchestratorError,
+    PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, REPORT_OP, REQUEST_FILE_ENV, STAGE_REPORTS_OP,
+    WRITE_REQUEST_OP, begin_action_report, generate, init_config, merge_internal, merge_passed,
+    plan_text_checked, prepare, publish_final_report, resolve_root, response_path_for,
+    retrieve_reports, stage_reports, write_action_report, write_preseed_manifest, write_request,
+    write_task_report,
 };
 
 use crate::args::{Cli, Command};
 use crate::dispatch_publish::run_publish_internal;
-#[path = "dispatch_foundation_qualification.rs"]
-mod foundation_qualification;
+#[path = "dispatch_plan.rs"]
+mod planning;
+use planning::{run_early_plan, run_plan_internal};
+#[path = "dispatch_helper_report.rs"]
+mod helper_report;
+#[path = "dispatch_owned_tool_publication.rs"]
+mod owned_publication;
+#[path = "dispatch_task_clock.rs"]
+mod task_clock;
 
 /// Environment variable selecting the private operation. Never printed.
 const OP_ENV: &str = "VELNOR_INTERNAL_OP";
@@ -46,12 +55,20 @@ enum InternalOp {
     WriteRequest,
     /// Plan operation.
     Plan,
+    /// Try authenticated planning before Cargo setup.
+    EarlyPlan,
     /// Merge operation.
     Merge,
     /// Matrix-report fetch operation.
     Fetch,
     /// Task-report production operation.
     Report,
+    /// Bind an action to its planned source and task.
+    ActionBegin,
+    /// Report the upstream action outcome.
+    ActionReport,
+    /// Stage plan-expected report payloads for upload.
+    StageReports,
     /// Pre-seed manifest-writing operation.
     PreseedManifest,
     /// Baseline-publish operation.
@@ -76,10 +93,11 @@ pub(crate) fn run_public() -> ExitCode {
         Command::Plan => run_plan(),
         Command::Generate {
             output_dir,
-            foundation_qualification_only,
+            owned_tool_candidates_only,
+            owned_tool_candidates_push,
         } => {
-            if foundation_qualification_only {
-                foundation_qualification::run(output_dir)
+            if owned_tool_candidates_only {
+                owned_publication::run(output_dir, owned_tool_candidates_push)
             } else {
                 run_generate(output_dir)
             }
@@ -93,27 +111,41 @@ pub(crate) fn run_public() -> ExitCode {
 /// to Clap; bare invocations then fail with the usage diagnostic (exit 2),
 /// keeping public behavior byte-identical with or without the environment.
 pub(crate) fn try_internal() -> Option<ExitCode> {
+    if let Some(result) = helper_report::try_internal().or_else(task_clock::try_internal) {
+        return Some(result);
+    }
     let request = gate_request()?;
     Some(run_internal(&request))
 }
 
 /// Check the private gate: known op plus request-file presence by op.
 ///
-/// Fetch and report take no request file: they need the runner-temp
+/// Fetch, report, and report-staging operations take no request file: they need the runner-temp
 /// velnor directory plus the numeric run ID instead. The manifest op
 /// takes no request file either: runner temp scopes its output.
 fn gate_request() -> Option<InternalRequest> {
     let op = match env::var(OP_ENV).as_deref() {
         Ok(tag) if tag == WRITE_REQUEST_OP => InternalOp::WriteRequest,
         Ok(tag) if tag == PLAN_OP => InternalOp::Plan,
+        Ok("plan-early-v1") => InternalOp::EarlyPlan,
         Ok(tag) if tag == MERGE_OP => InternalOp::Merge,
         Ok(tag) if tag == FETCH_OP => InternalOp::Fetch,
         Ok(tag) if tag == REPORT_OP => InternalOp::Report,
+        Ok(tag) if tag == ACTION_BEGIN_OP => InternalOp::ActionBegin,
+        Ok(tag) if tag == ACTION_REPORT_OP => InternalOp::ActionReport,
+        Ok(tag) if tag == STAGE_REPORTS_OP => InternalOp::StageReports,
         Ok(tag) if tag == PRESEED_MANIFEST_OP => InternalOp::PreseedManifest,
         Ok(tag) if tag == PUBLISH_OP => InternalOp::Publish,
         _ => return None,
     };
-    if op == InternalOp::Fetch || op == InternalOp::Report {
+    if matches!(
+        op,
+        InternalOp::Fetch
+            | InternalOp::Report
+            | InternalOp::ActionBegin
+            | InternalOp::ActionReport
+            | InternalOp::StageReports
+    ) {
         if env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
             return runner_velnor_dir().map(|path| InternalRequest { op, path });
         }
@@ -137,12 +169,17 @@ fn gate_request() -> Option<InternalRequest> {
                 return None;
             }
         }
-        InternalOp::Plan | InternalOp::Merge | InternalOp::Publish => {
+        InternalOp::Plan | InternalOp::EarlyPlan | InternalOp::Merge | InternalOp::Publish => {
             if !path.is_file() {
                 return None;
             }
         }
-        InternalOp::Fetch | InternalOp::Report | InternalOp::PreseedManifest => {}
+        InternalOp::Fetch
+        | InternalOp::Report
+        | InternalOp::ActionBegin
+        | InternalOp::ActionReport
+        | InternalOp::StageReports
+        | InternalOp::PreseedManifest => {}
     }
     Some(InternalRequest { op, path })
 }
@@ -166,6 +203,7 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             Err(error) => fail_internal(&error.to_string()),
         },
         InternalOp::Plan => run_plan_internal(&request.path),
+        InternalOp::EarlyPlan => run_early_plan(&request.path),
         InternalOp::Merge => run_merge_internal(&request.path),
         InternalOp::Fetch => match retrieve_reports() {
             Ok(_) => ExitCode::SUCCESS,
@@ -175,62 +213,23 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             Ok(_) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
         },
+        InternalOp::ActionBegin => match begin_action_report() {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
+        InternalOp::ActionReport => match write_action_report() {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
+        InternalOp::StageReports => match stage_reports() {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
         InternalOp::PreseedManifest => match write_preseed_manifest() {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
         },
         InternalOp::Publish => run_publish_internal(&request.path),
-    }
-}
-
-/// Read the request, run the planner, publish files, write response plus outputs.
-fn run_plan_internal(path: &Path) -> ExitCode {
-    let text = match fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(error) => return fail_internal(&format!("read request: {error}")),
-    };
-    let response = match plan_internal(&text) {
-        Ok(response) => response,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    let sibling = match response_path_for(path) {
-        Ok(sibling) => sibling,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    if let Err(error) = fs::write(&sibling, &response) {
-        return fail_internal(&format!("write response: {error}"));
-    }
-    let Some(runner_temp) = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty()) else {
-        return fail_internal("missing runner temp");
-    };
-    if let Err(error) = publish_plan_files(&response, &Path::new(&runner_temp).join("velnor")) {
-        return fail_internal(&error.to_string());
-    }
-    let outputs = match plan_outputs(&response) {
-        Ok(outputs) => outputs,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    let Some(output_path) = env::var_os(GITHUB_OUTPUT_ENV).filter(|value| !value.is_empty()) else {
-        return fail_internal("missing github output");
-    };
-    let mut body = format!("matrix={}\nplan={}\n", outputs.matrix, outputs.plan);
-    // Always emitted, even when empty: the skip gate reads this output
-    // through GitHub's evaluator, so an explicitly empty value keeps
-    // the contract independent of unset-output semantics.
-    body.push_str(COVERED_TASKS_OUTPUT);
-    body.push('=');
-    body.push_str(&outputs.covered_tasks);
-    body.push('\n');
-    match fs::OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(&output_path)
-        .and_then(|mut file| {
-            use std::io::Write;
-            file.write_all(body.as_bytes())
-        }) {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => fail_internal(&format!("append outputs: {error}")),
     }
 }
 

@@ -1,0 +1,283 @@
+//! Closed distribution authority shared by installation, probes and cache identities.
+
+use crate::MiseError;
+
+#[path = "catalog_qualification_bun.rs"]
+mod bun_records;
+#[path = "catalog_qualification_gh.rs"]
+mod gh_records;
+#[path = "catalog_qualification_gradle_bootstrap.rs"]
+mod gradle_bootstrap_records;
+#[path = "catalog_qualification_gradle_consumer.rs"]
+mod gradle_consumer_records;
+#[path = "catalog_qualification_gradle.rs"]
+mod gradle_records;
+#[path = "catalog_qualification_java.rs"]
+mod java_records;
+#[path = "catalog_qualification_mbx.rs"]
+mod mbx_records;
+#[path = "catalog_qualification_native.rs"]
+mod native;
+#[path = "catalog_qualification_node.rs"]
+mod node_records;
+#[path = "catalog_qualification_python.rs"]
+mod python_records;
+#[path = "catalog_qualification_records.rs"]
+mod records;
+#[path = "catalog_qualification_release_plz.rs"]
+mod release_plz_records;
+#[path = "catalog_qualification_semver.rs"]
+mod semver_records;
+#[path = "catalog_qualification_tofu.rs"]
+mod tofu_records;
+#[path = "catalog_qualification_uv.rs"]
+mod uv_records;
+pub use native::qualified_toolset_digest;
+#[path = "catalog_qualification_identity.rs"]
+mod identity;
+#[path = "catalog_qualification_validate.rs"]
+mod validation;
+#[cfg(test)]
+use validation::validate_distribution_version;
+use validation::validate_install_path;
+#[cfg(test)]
+#[path = "catalog_qualification_native_tests.rs"]
+mod native_tests;
+#[cfg(test)]
+#[path = "catalog_qualification_tests.rs"]
+mod tests;
+
+#[path = "catalog_qualification_types.rs"]
+mod types;
+pub use types::{
+    DistributionAssetFormat, DistributionHost, DistributionRequirement, DistributionTool,
+    ProvisioningMode,
+};
+#[path = "catalog_qualification_install.rs"]
+mod install;
+pub use install::{
+    QualifiedInstallBackend, QualifiedInstallEnvironment, QualifiedInstallPlan,
+    QualifiedLaunchEntry, QualifiedLaunchKind, QualifiedSourceLineage,
+};
+
+#[path = "catalog_qualification_audit.rs"]
+mod audit;
+pub use audit::{AuditedLaunchEntry, NativeDistributionAudit};
+
+#[path = "catalog_qualification_go.rs"]
+mod go;
+pub use go::{QualifiedBuildCompiler, SourceBuildCompilerHost, official_go};
+/// Exact source builder Go compiler; this is not a consumer runtime tool pin.
+pub const GO_SOURCE_COMPILER_VERSION: &str = go::GO_VERSION;
+
+/// Exact Community JDK catalog selection, separate from its reported build banner.
+pub const JAVA_SELECTION_VERSION: &str = java_records::VERSION;
+/// Community distribution source provider; compiler lineage remains separately bound.
+pub const JAVA_SOURCE_REPOSITORY: &str = java_records::RELEASE_REPOSITORY;
+/// Exact Community release provider source commit.
+pub const JAVA_SOURCE_COMMIT: &str = java_records::RELEASE_COMMIT;
+/// Exact managed standalone Gradle distribution; wrapper versions are separate.
+pub const GRADLE_SELECTION_VERSION: &str = gradle_records::VERSION;
+/// Exact API compatibility validator admitted by the closed archive authority.
+pub const CARGO_SEMVER_CHECKS_SELECTION_VERSION: &str = semver_records::VERSION;
+/// Exact API compatibility validator source repository.
+pub const CARGO_SEMVER_CHECKS_SOURCE_REPOSITORY: &str = semver_records::SOURCE_REPOSITORY;
+/// Exact API compatibility validator source commit.
+pub const CARGO_SEMVER_CHECKS_SOURCE_COMMIT: &str = semver_records::SOURCE_COMMIT;
+/// Exact stock release coordinator native CLI selection.
+pub const RELEASE_PLZ_SELECTION_VERSION: &str = release_plz_records::VERSION;
+/// Exact stock release coordinator source repository.
+pub const RELEASE_PLZ_SOURCE_REPOSITORY: &str = release_plz_records::SOURCE_REPOSITORY;
+/// Exact stock release coordinator source commit.
+pub const RELEASE_PLZ_SOURCE_COMMIT: &str = release_plz_records::SOURCE_COMMIT;
+
+/// Validated distribution; callers cannot fabricate asset URLs or provenance.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QualifiedDistribution {
+    tool: DistributionTool,
+    host: DistributionHost,
+    selector: &'static str,
+    asset_url: &'static str,
+    archive_sha256: &'static str,
+    binary_sha256: &'static str,
+    asset_format: DistributionAssetFormat,
+    binary_member: &'static str,
+    source_repository: &'static str,
+    source_commit: &'static str,
+    source_tree: &'static str,
+    owner: &'static str,
+    version: &'static str,
+    selection_version: &'static str,
+    abi: &'static str,
+    provisioning_mode: ProvisioningMode,
+    installed_binary_relative_path: Option<&'static str>,
+    launch_entries: &'static [QualifiedLaunchEntry],
+    source_lineage: &'static [QualifiedSourceLineage],
+    install_plan: Option<QualifiedInstallPlan>,
+}
+
+impl QualifiedDistribution {
+    /// Exact catalog/backend selection version, separate from the reported tool banner.
+    #[must_use]
+    pub const fn selection_version(&self) -> &'static str {
+        self.selection_version
+    }
+
+    /// Qualified official release, for upstream artifact auditing.
+    ///
+    /// # Errors
+    /// Rejects hosts/tools lacking measured binary and source records.
+    pub fn qualify_official(
+        tool: DistributionTool,
+        host: DistributionHost,
+    ) -> Result<Self, MiseError> {
+        match tool {
+            DistributionTool::Mise => records::official(tool, host),
+            DistributionTool::Mbx => mbx_records::official(host),
+            _ => Err(MiseError::Contract {
+                problem: "native distribution audit requires an explicit exact version".to_owned(),
+            }),
+        }
+    }
+
+    /// Distribution required by generated workflows.
+    ///
+    /// # Errors
+    /// Fails until the owned distribution has real publication and qualification evidence.
+    pub fn require_for_generator(
+        tool: DistributionTool,
+        host: DistributionHost,
+        requirement: DistributionRequirement,
+    ) -> Result<Self, MiseError> {
+        if requirement.tool() != tool {
+            return Err(MiseError::Contract {
+                problem: "distribution requirement does not match requested tool".to_owned(),
+            });
+        }
+        let distribution = records::required(tool, host)?.validate()?;
+        if distribution.tool != tool
+            || distribution.host != host
+            || distribution.provisioning_mode != requirement.provisioning_mode()
+        {
+            return Err(MiseError::Contract {
+                problem: "distribution qualification does not satisfy requested behavior"
+                    .to_owned(),
+            });
+        }
+        Ok(distribution)
+    }
+
+    /// Exact installation selector.
+    #[must_use]
+    pub const fn selector(&self) -> &'static str {
+        self.selector
+    }
+    /// Qualified download URL.
+    #[must_use]
+    pub const fn asset_url(&self) -> &'static str {
+        self.asset_url
+    }
+    /// Downloaded artifact SHA256 (standalone executable or archive).
+    #[must_use]
+    pub const fn archive_sha256(&self) -> &'static str {
+        self.archive_sha256
+    }
+    /// Installed executable SHA256.
+    #[must_use]
+    pub const fn binary_sha256(&self) -> &'static str {
+        self.binary_sha256
+    }
+    /// Qualified asset container format.
+    #[must_use]
+    pub const fn asset_format(&self) -> DistributionAssetFormat {
+        self.asset_format
+    }
+    /// Explicit archive executable member; empty for standalone executable assets.
+    #[must_use]
+    pub const fn binary_member(&self) -> &'static str {
+        self.binary_member
+    }
+    /// Repository owning the qualified source.
+    #[must_use]
+    pub const fn source_repository(&self) -> &'static str {
+        self.source_repository
+    }
+    /// Exact source commit.
+    #[must_use]
+    pub const fn source_commit(&self) -> &'static str {
+        self.source_commit
+    }
+    /// Exact source tree.
+    #[must_use]
+    pub const fn source_tree(&self) -> &'static str {
+        self.source_tree
+    }
+    /// Distribution owner (upstream and owned builds have distinct identities).
+    #[must_use]
+    pub const fn owner(&self) -> &'static str {
+        self.owner
+    }
+    /// Owner's own release version.
+    #[must_use]
+    pub const fn version(&self) -> &'static str {
+        self.version
+    }
+    /// Qualified executable/provisioning contract ABI; host binds the target ABI.
+    #[must_use]
+    pub const fn abi(&self) -> &'static str {
+        self.abi
+    }
+    /// Qualified provisioning behavior.
+    #[must_use]
+    pub const fn provisioning_mode(&self) -> ProvisioningMode {
+        self.provisioning_mode
+    }
+    /// Qualified host.
+    #[must_use]
+    pub const fn host(&self) -> DistributionHost {
+        self.host
+    }
+    /// Qualified tool.
+    #[must_use]
+    pub const fn tool(&self) -> DistributionTool {
+        self.tool
+    }
+
+    /// Qualified executable and interpreter input closure.
+    #[must_use]
+    pub const fn launch_entries(&self) -> &'static [QualifiedLaunchEntry] {
+        self.launch_entries
+    }
+    /// Provider and upstream source identities beyond the primary source.
+    #[must_use]
+    pub const fn source_lineage(&self) -> &'static [QualifiedSourceLineage] {
+        self.source_lineage
+    }
+    /// Measured installer transforms required before any native launch.
+    /// # Errors
+    /// Rejects records that only qualify release artifact bytes.
+    pub fn required_install_plan(&self) -> Result<&QualifiedInstallPlan, MiseError> {
+        self.install_plan
+            .as_ref()
+            .ok_or_else(|| MiseError::Contract {
+                problem: "qualified_native_installer_transform_absent".to_owned(),
+            })
+    }
+
+    /// Measured executable path relative to the owned Mise data directory.
+    /// # Errors
+    /// Rejects absent installation evidence or a noncanonical relative path.
+    pub fn required_installed_binary_path(&self) -> Result<&'static str, MiseError> {
+        let path = self
+            .installed_binary_relative_path
+            .ok_or_else(|| MiseError::Contract {
+                problem: "qualified_installed_binary_path_unqualified".to_owned(),
+            })?;
+        validate_install_path(path)?;
+        Ok(path)
+    }
+}
+
+#[cfg(test)]
+#[path = "catalog_qualification_gh_tests.rs"]
+mod gh_tests;

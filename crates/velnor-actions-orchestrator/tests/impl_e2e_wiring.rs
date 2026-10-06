@@ -122,18 +122,13 @@ fn setup_is_early(_job: &JobText, at: usize) -> bool {
     at <= 1
 }
 
-/// Setup Mise must enable the qualified built-in cache: `cache:true` with
-/// an explicit tool-union `cache_key` (never the workspace-hashing default
-/// that ELOOPs on the symlink-loop fixture, never a job-role suffix).
-/// Every setup restores read-only (`cache_save: "false"`): the pinned
-/// action saves only inside its disabled `install` leg, so no setup may
-/// promise a built-in save. Push-gated saves are explicit `Save Mise
-/// tools` steps on the elected writer per key.
+/// Setup disables implicit caching; canonical transport owns the tool payload.
+/// Its tool-union key identifies the independently elected writer.
 fn check_setup_cache_on(job: &JobText) -> Result<(), String> {
     for step in job.steps.iter().filter(|s| s.name == "Setup Mise") {
         for need in [
-            "cache: \"true\"",
-            "cache_key: mise-v1-",
+            "cache: \"false\"",
+            "cache_key: mise-v2-",
             "cache_save: \"false\"",
         ] {
             if !step.body.contains(need) {

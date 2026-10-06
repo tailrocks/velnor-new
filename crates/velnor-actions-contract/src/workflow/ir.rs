@@ -1,15 +1,26 @@
 //! Stack-neutral GitHub Actions workflow IR.
 use super::jobs::{ScheduleTrigger, is_safe_display_name};
 use super::permissions::{PermissionLevel, Permissions};
+pub use super::step::{Step, StepKind};
 use super::timeout::JobTimeout;
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+#[cfg(test)]
+#[path = "mbx_role_tests.rs"]
+mod mbx_role_tests;
+#[path = "job_producer_validation.rs"]
+mod producer_validation;
 /// Stack-neutral GitHub Actions workflow IR.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkflowIr {
+    /// Mandatory literal cache-service default; generated workflows require read.
+    pub cache_mode: super::cache_mode::CacheMode,
     /// Workflow display name.
     pub name: String,
+    /// Optional workflow run display name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_name: Option<String>,
     /// Event triggers.
     pub triggers: Trigger,
     /// Workflow permissions.
@@ -20,46 +31,28 @@ pub struct WorkflowIr {
     pub jobs: BTreeMap<String, Job>,
 }
 /// Event triggers for generated workflows.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Trigger {
     /// Pull-request event types.
     pub pull_request_types: Vec<String>,
     /// Push branches (exactly the default branch).
     pub push_branches: Vec<String>,
+    /// Closed supported tag patterns (currently `v*`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub push_tags: Vec<String>,
     /// Whether `merge_group` is enabled.
     pub merge_group: bool,
-    /// Optional `workflow_dispatch` inputs (exact-plan bootstrap dispatch).
+    /// Optional typed manual-dispatch inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workflow_dispatch: Option<WorkflowDispatch>,
     /// Optional cron schedule.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schedule: Option<ScheduleTrigger>,
 }
-/// Typed `workflow_dispatch` inputs (exact-plan references only).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkflowDispatch {
-    /// Dispatch inputs, sorted by name, unique.
-    pub inputs: Vec<DispatchInput>,
-}
-/// One typed dispatch input (always rendered as `type: string`).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DispatchInput {
-    /// Input name (`[a-z0-9-_]`).
-    pub name: String,
-    /// Whether the dispatcher must supply a value.
-    pub required: bool,
-    /// Optional default value (ASCII, no control characters).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub default: Option<String>,
-}
-
-impl DispatchInput {
-    /// Rendered input type: always `string`, never boolean/choice.
-    pub const INPUT_TYPE: &'static str = "string";
-}
+pub use super::dispatch::{DispatchInput, DispatchInputType, WorkflowDispatch};
 
 /// Concurrency group.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Concurrency {
     /// Concurrency group expression.
     pub group: String,
@@ -67,8 +60,11 @@ pub struct Concurrency {
     pub cancel_in_progress: String,
 }
 /// One workflow job.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Job {
+    /// Literal cache-service override; absent jobs inherit the workflow read mode.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_mode: Option<super::cache_mode::CacheMode>,
     /// Stable display name.
     pub display_name: String,
     /// Literal versioned Ubuntu label.
@@ -87,85 +83,75 @@ pub struct Job {
     /// Optional protected environment bound to this job.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub environment: Option<String>,
+    /// Closed isolated source-producing role and evidence bindings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_producer: Option<super::source_producer::SourceProducer>,
+    /// Closed isolated complete tool payload producer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_producer: Option<super::tool_producer::PureToolProducer>,
+    /// Closed isolated publication of authenticated native MBX data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mbx_producer: Option<super::mbx_producer::PureMbxProducer>,
+    /// Closed native Pages deployment authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_pages_deploy: Option<super::pages::NativePagesDeploy>,
+    /// Closed public GitHub attestation authority; generation approval is separate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_publish: Option<super::native_publish::NativePublishRole>,
+    /// Closed references to outputs from declared action and native helper steps.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub outputs: Vec<super::outputs::JobOutput>,
     /// Ordered steps.
     pub steps: Vec<Step>,
 }
-/// Runtime gate for cache saves: producer success on pushes (trusted scope).
-///
-/// A step-level `if:` REPLACES GitHub's default `success()`, so the gate
-/// must restate it: without `success()`, the save step would run after a
-/// failed producer and poison the trusted layer with failed output.
-/// `pull_request` runs — same-repo or fork — restore read-only: the pinned
-/// cache actions have no PR-scoped save support, so a PR save could never
-/// promote safely. Push runs save into the repository that owns the run
-/// (GitHub cache scope is per-repo), keeping fork pushes confined to the
-/// fork. The Mise adapter's trust predicates implement this same policy
-/// over runtime values; this string is its generation-time spelling.
-pub const CACHE_SAVE_CONDITION: &str = "success() && github.event_name == 'push'";
-/// `env:` spelling of the push-only writer policy for cache-mode inputs.
-///
-/// Evaluates to `write` on push runs and `read` everywhere else, so a
-/// cache action that saves from its post step restores on every event
-/// but only ever writes on push (same policy as
-/// [`CACHE_SAVE_CONDITION`], in the value position the mode supports).
-pub const CACHE_MODE_PUSH_WRITE_EXPR: &str =
-    "${{ github.event_name == 'push' && 'write' || 'read' }}";
+pub use super::cache_trust::{
+    CACHE_DEFAULT_BRANCH_WRITE_EXPR, CACHE_MODE_PUSH_WRITE_EXPR, CACHE_MODE_PUSH_WRITE_INNER,
+    CACHE_SAVE_CONDITION, CACHE_TRUSTED_PUSH_EXPR,
+};
 
-/// One workflow step.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Step {
-    /// Step name.
-    pub name: String,
-    /// Run condition (`if`), serialized by the workflow renderer.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub condition: Option<String>,
-    /// Step payload.
-    #[serde(flatten)]
-    pub kind: StepKind,
-}
-/// Step payload variants.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum StepKind {
-    /// Pinned GitHub Action step.
-    Action {
-        /// Full-SHA `uses` reference.
-        uses: String,
-        /// Action inputs.
-        #[serde(default)]
-        with: BTreeMap<String, String>,
-        /// Step environment (applies to main and post phases alike).
-        #[serde(default)]
-        env: BTreeMap<String, String>,
-    },
-    /// Fixed shell argv step.
-    Shell {
-        /// Fixed argument vector.
-        run: Vec<String>,
-        /// Fixed environment.
-        #[serde(default)]
-        env: BTreeMap<String, String>,
-    },
-    /// Fixed internal planner/aggregation step.
-    Internal {
-        /// Internal operation name.
-        operation: String,
-    },
-}
 impl WorkflowIr {
     /// Validate names, permissions, triggers, jobs, and step payloads.
     ///
     /// Effective permissions are per job (override or workflow level):
-    /// `id-token: write` requires a job environment, `contents: write` is
+    /// `id-token: write` requires an approved closed role and environment; `contents: write` is
     /// forbidden in pull-request-triggered workflows, and write-all is
     /// rejected everywhere.
     /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
+        super::cache_mode::validate_workflow(self)?;
         if self.name.trim().is_empty() {
             return Err(ContractError::identity("workflow.name", "empty_name"));
         }
+        if self
+            .run_name
+            .as_ref()
+            .is_some_and(|name| name.trim().is_empty() || name.chars().any(char::is_control))
+        {
+            return Err(ContractError::identity(
+                "workflow.run_name",
+                "invalid_run_name",
+            ));
+        }
         if self.permissions.is_write_all() {
             return Err(ContractError::identity("workflow.permissions", "write_all"));
+        }
+        if matches!(self.permissions.issues, PermissionLevel::Write) {
+            return Err(ContractError::identity(
+                "workflow.permissions",
+                "issues_write_needs_observer_override",
+            ));
+        }
+        if matches!(self.permissions.pages, PermissionLevel::Write) {
+            return Err(ContractError::identity(
+                "workflow.permissions",
+                "pages_write_needs_native_deploy_override",
+            ));
+        }
+        if matches!(self.permissions.attestations, PermissionLevel::Write) {
+            return Err(ContractError::identity(
+                "workflow.permissions",
+                "attestations_write_needs_closed_override",
+            ));
         }
         self.triggers.validate()?;
         if self.concurrency.group.trim().is_empty() {
@@ -181,6 +167,13 @@ impl WorkflowIr {
         let pr_triggered = !self.triggers.pull_request_types.is_empty();
         for (id, job) in &self.jobs {
             job.validate(id, &ids, &self.permissions, pr_triggered)?;
+            super::observer::validate_observer(id, job, &self.permissions, &self.triggers)?;
+            if let Some(publish) = &job.native_publish {
+                publish.validate(job, self)?;
+            }
+            if let Some(deploy) = &job.native_pages_deploy {
+                deploy.validate(job, self)?;
+            }
         }
         Ok(())
     }
@@ -188,66 +181,22 @@ impl WorkflowIr {
 impl Trigger {
     /// Validate dispatch inputs and schedule (other fields pass through).
     fn validate(&self) -> Result<(), ContractError> {
+        if self.push_tags.len() > 1
+            || self
+                .push_tags
+                .iter()
+                .any(|pattern| !matches!(pattern.as_str(), "v*" | "v[0-9]*"))
+        {
+            return Err(ContractError::identity(
+                "trigger.push_tags",
+                "unsupported_tag_patterns",
+            ));
+        }
         if let Some(dispatch) = &self.workflow_dispatch {
             dispatch.validate()?;
         }
         if let Some(schedule) = &self.schedule {
             schedule.validate()?;
-        }
-        Ok(())
-    }
-}
-impl WorkflowDispatch {
-    /// Validate input names (charset, sorted, unique) and defaults.
-    fn validate(&self) -> Result<(), ContractError> {
-        let names: Vec<&str> = self
-            .inputs
-            .iter()
-            .map(|input| input.name.as_str())
-            .collect();
-        let mut sorted = names.clone();
-        sorted.sort_unstable();
-        if sorted != names {
-            return Err(ContractError::identity(
-                "trigger.dispatch.inputs",
-                "must_be_sorted",
-            ));
-        }
-        let unique: BTreeSet<&str> = names.iter().copied().collect();
-        if unique.len() != names.len() {
-            return Err(ContractError::identity(
-                "trigger.dispatch.inputs",
-                "duplicate_input",
-            ));
-        }
-        for input in &self.inputs {
-            input.validate()?;
-        }
-        Ok(())
-    }
-}
-impl DispatchInput {
-    /// Validate name charset and default value safety.
-    fn validate(&self) -> Result<(), ContractError> {
-        let name = self.name.as_str();
-        let charset = name
-            .bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'-' | b'_'));
-        if name.is_empty() || !charset {
-            return Err(ContractError::identity(
-                "trigger.dispatch.inputs.name",
-                format!("bad_name:{name}"),
-            ));
-        }
-        if let Some(default) = &self.default {
-            let safe =
-                !default.is_empty() && default.bytes().all(|b| b.is_ascii_graphic() || b == b' ');
-            if !safe {
-                return Err(ContractError::identity(
-                    "trigger.dispatch.inputs.default",
-                    format!("bad_default:{name}"),
-                ));
-            }
         }
         Ok(())
     }
@@ -285,6 +234,33 @@ impl Job {
                 ));
             }
         }
+        self.validate_permissions(id, workflow, pr_triggered)?;
+        if self.steps.is_empty() {
+            return Err(ContractError::identity(
+                "job.steps",
+                format!("empty_steps:{id}"),
+            ));
+        }
+        self.validate_producers()?;
+        super::step::validate_step_ids(&self.steps)?;
+        super::outputs::validate_job_outputs(&self.outputs, &self.steps)?;
+        for step in &self.steps {
+            step.validate(id)?;
+        }
+        Ok(())
+    }
+}
+impl Job {
+    fn validate_producers(&self) -> Result<(), ContractError> {
+        producer_validation::validate(self)
+    }
+
+    fn validate_permissions(
+        &self,
+        id: &str,
+        workflow: &Permissions,
+        pr_triggered: bool,
+    ) -> Result<(), ContractError> {
         if self
             .permissions
             .as_ref()
@@ -304,10 +280,35 @@ impl Job {
             ));
         }
         let effective = self.permissions.as_ref().unwrap_or(workflow);
-        if matches!(effective.id_token, PermissionLevel::Write) && self.environment.is_none() {
+        if matches!(effective.pages, PermissionLevel::Write) && self.native_pages_deploy.is_none() {
+            return Err(ContractError::identity(
+                "job.permissions",
+                format!("pages_write_needs_native_deploy_role:{id}"),
+            ));
+        }
+        if matches!(effective.id_token, PermissionLevel::Write)
+            && self.environment.is_none()
+            && self.native_publish.is_none()
+        {
             return Err(ContractError::identity(
                 "job.environment",
                 format!("id_token_write_needs_environment:{id}"),
+            ));
+        }
+        if matches!(effective.id_token, PermissionLevel::Write)
+            && self.native_pages_deploy.is_none()
+            && self.native_publish.is_none()
+        {
+            return Err(ContractError::identity(
+                "job.permissions",
+                format!("id_token_write_needs_closed_role:{id}"),
+            ));
+        }
+        if matches!(effective.attestations, PermissionLevel::Write) && self.native_publish.is_none()
+        {
+            return Err(ContractError::identity(
+                "job.permissions",
+                format!("attestations_write_needs_closed_role:{id}"),
             ));
         }
         if pr_triggered && matches!(effective.contents, PermissionLevel::Write) {
@@ -315,61 +316,6 @@ impl Job {
                 "job.permissions",
                 format!("contents_write_on_pr:{id}"),
             ));
-        }
-        if self.steps.is_empty() {
-            return Err(ContractError::identity(
-                "job.steps",
-                format!("empty_steps:{id}"),
-            ));
-        }
-        for step in &self.steps {
-            step.validate(id)?;
-        }
-        Ok(())
-    }
-}
-impl Step {
-    /// Validate one step payload.
-    fn validate(&self, job: &str) -> Result<(), ContractError> {
-        if self.name.trim().is_empty() {
-            return Err(ContractError::identity(
-                "step.name",
-                format!("empty_name:{job}"),
-            ));
-        }
-        if let Some(condition) = &self.condition
-            && (condition.trim().is_empty() || condition.bytes().any(|b| b == b'\n' || b == b'\r'))
-        {
-            return Err(ContractError::identity(
-                "step.condition",
-                format!("bad_condition:{job}"),
-            ));
-        }
-        match &self.kind {
-            StepKind::Action { uses, .. } => {
-                if uses.trim().is_empty() {
-                    return Err(ContractError::identity(
-                        "step.uses",
-                        format!("empty_uses:{job}"),
-                    ));
-                }
-            }
-            StepKind::Shell { run, .. } => {
-                if run.is_empty() || run.iter().any(|arg| arg.trim().is_empty()) {
-                    return Err(ContractError::identity(
-                        "step.run",
-                        format!("bad_argv:{job}"),
-                    ));
-                }
-            }
-            StepKind::Internal { operation } => {
-                if operation.trim().is_empty() {
-                    return Err(ContractError::identity(
-                        "step.operation",
-                        format!("empty_operation:{job}"),
-                    ));
-                }
-            }
         }
         Ok(())
     }

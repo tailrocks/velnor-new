@@ -1,0 +1,11 @@
+
+running 6 tests
+test opaque_inventory::tests::opaque_inventory_rejects_escaped_duplicate_and_absolute_roots ... ok
+test opaque_inventory::tests::opaque_inventory_observes_bytes_and_newline_names_without_execution ... ok
+test opaque_inventory::tests::opaque_inventory_records_xattrs_and_rejects_export_metadata ... ok
+test opaque_inventory::tests::opaque_inventory_observes_modes_and_confines_links_to_selected_roots ... ok
+test health_integration_tests::shared_inventory_detects_hardlink_groups_and_private_metadata ... ok
+test health_integration_tests::inventory_detects_payload_topology_and_marker_damage_before_execution ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.14s
+

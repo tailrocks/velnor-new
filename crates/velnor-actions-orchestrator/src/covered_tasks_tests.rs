@@ -11,10 +11,19 @@ fn obligation(task_id: &str, decision: ObligationDecision) -> PlanObligation {
     let digest = digest_b3(b"digest");
     PlanObligation {
         task_id: task_id.to_owned(),
+        job_id: "rust-demo".to_owned(),
         decision,
         reason: "test".to_owned(),
         task_digest: digest.clone(),
         input_digest: digest.clone(),
+        execution_identity: velnor_actions_contract::TaskExecutionIdentity::new(
+            &velnor_actions_contract::digest_b3(b"fixture-graph"),
+            &velnor_actions_contract::digest_b3(b"fixture-toolchain"),
+            &velnor_actions_contract::digest_b3(b"fixture-mbx"),
+            &velnor_actions_contract::digest_b3(b"fixture-platform"),
+            "default",
+        )
+        .expect("execution identity"),
         closure_digest: digest,
         baseline_proof: None,
     }
@@ -27,12 +36,14 @@ fn plan_with(obligations: Vec<PlanObligation>) -> Plan {
         .map(|obligation| obligation.task_id.clone())
         .collect();
     Plan {
+        producers: Default::default(),
         schema: 1,
         run_key: "local".to_owned(),
         plan_id: "plan-local".to_owned(),
         base: None,
         head: "head".to_owned(),
         event: WorkflowEvent::PullRequest,
+        scope: velnor_actions_contract::VerificationScope::Affected,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,
@@ -141,4 +152,50 @@ fn skip_condition_rejects_malformed_ids() {
             "malformed IDs must never reach generated expressions: {bad:?}"
         );
     }
+}
+
+#[test]
+fn job_selection_requires_any_uncovered_obligation_before_allocation() {
+    let task = |task_id: &str| CrateObligation {
+        task_id: task_id.to_owned(),
+        kind: "clippy".to_owned(),
+        step_name: "Clippy".to_owned(),
+        gated_by: Vec::new(),
+        matrix_key: "clippy".to_owned(),
+        task_digest: digest_b3(b"task"),
+        run: vec!["true".to_owned()],
+    };
+    let condition = job_condition(&[
+        task("stack/rust/a/clippy/default"),
+        task("stack/rust/a/test/default"),
+    ])
+    .expect("condition");
+    assert_eq!(
+        condition,
+        "!cancelled() && needs.plan.result == 'success' && (!contains(needs.plan.outputs.covered_tasks, ',stack/rust/a/clippy/default,') || !contains(needs.plan.outputs.covered_tasks, ',stack/rust/a/test/default,'))"
+    );
+    assert!(job_condition(&[]).is_err(), "empty lane must fail closed");
+}
+
+#[test]
+fn empty_partial_complete_and_reuse_outputs_select_soundly() {
+    let ids = ["stack/rust/a/clippy/default", "stack/rust/a/test/default"];
+    let allocates = |encoded: &str| ids.iter().any(|id| !encoded.contains(&format!(",{id},")));
+    assert!(allocates(""), "missing output executes");
+    assert!(
+        allocates(",stack/rust/a/clippy/default,"),
+        "partial coverage executes"
+    );
+    assert!(!allocates(
+        ",stack/rust/a/clippy/default,stack/rust/a/test/default,"
+    ));
+    let reused = plan_with(
+        ids.iter()
+            .map(|id| obligation(id, ObligationDecision::ReusedFromTaskCache))
+            .collect(),
+    );
+    assert!(
+        allocates(&CoveredTasks::for_plan(&reused).encode()),
+        "unqualified task reuse cannot omit a runner"
+    );
 }

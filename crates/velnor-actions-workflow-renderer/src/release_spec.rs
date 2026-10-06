@@ -106,8 +106,7 @@ impl ReleaseTriggers {
             return Err(RenderError::InvalidWorkflow("no_push_branch".to_owned()));
         }
         for branch in &self.push_branches {
-            let glob = branch.contains(['*', '?', '[', ']', '!']);
-            if !is_clean_text(branch, 128) || branch.contains(char::is_whitespace) || glob {
+            if !velnor_actions_contract::is_valid_branch_name(branch) {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "bad_push_branch:{branch}"
                 )));
@@ -234,9 +233,13 @@ impl BootstrapPlan {
 /// version is the authorization; routine publishers resolve versions at
 /// runtime and carry no generation-time version.
 #[must_use]
-pub fn publish_gate_condition(repository: &str, bootstrap: &BootstrapPlan) -> String {
+pub fn publish_gate_condition(
+    repository: &str,
+    bootstrap: &BootstrapPlan,
+    trusted_branch: &str,
+) -> String {
     let base = format!(
-        "github.repository == '{repository}' && github.event.inputs.plan == '{}' && github.event.inputs.source_sha == '{}'",
+        "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/{trusted_branch}' && github.ref == format('refs/heads/{{0}}', github.event.repository.default_branch) && github.repository == '{repository}' && github.event.inputs.plan == '{}' && github.event.inputs.source_sha == '{}'",
         bootstrap.plan_id, bootstrap.source_sha
     );
     match &bootstrap.version {
@@ -244,3 +247,25 @@ pub fn publish_gate_condition(repository: &str, bootstrap: &BootstrapPlan) -> St
         None => base,
     }
 }
+
+/// Reconcile incomplete attempts only under the same approved publication authority.
+#[must_use]
+pub fn reconcile_gate_condition(
+    repository: &str,
+    bootstrap: &BootstrapPlan,
+    branch: &str,
+) -> String {
+    format!(
+        "always() && needs.release-preflight.result == 'success' && ({})",
+        publish_gate_condition(repository, bootstrap, branch)
+    )
+}
+
+/// Fixed, read-only CI admission for an immutable release candidate.
+#[path = "release_admission.rs"]
+pub mod admission;
+
+/// Immutable approval bound to package evidence and reconciliation.
+#[path = "release_reconcile_policy.rs"]
+pub mod reconcile_policy;
+pub use reconcile_policy::ReleaseReconcilePolicy;

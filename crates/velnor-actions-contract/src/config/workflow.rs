@@ -3,6 +3,8 @@ use crate::errors::ContractError;
 use crate::workflow::ValidatorKind;
 use serde::{Deserialize, Serialize};
 
+use super::VerificationConfig;
+
 /// Latest pinned runner label: the default when `workflow.runner_label` is absent.
 ///
 /// Qualified 2026-09-28 (`ubuntu-latest` then pointed at 24.04; 26.04 is the
@@ -38,6 +40,9 @@ pub struct WorkflowConfig {
     /// Pinned older runner-label override; omit for latest.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runner_label: Option<String>,
+    /// Optional main-workflow verification cadence and dispatch settings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification: Option<VerificationConfig>,
 }
 
 /// Workflow policy selector.
@@ -112,7 +117,7 @@ impl WorkflowConfig {
             ));
         }
         if let Some(branch) = &self.default_branch
-            && (branch.trim().is_empty() || branch.contains(' ') || branch.contains(".."))
+            && !crate::is_valid_branch_name(branch)
         {
             return Err(ContractError::config(
                 file,
@@ -128,6 +133,9 @@ impl WorkflowConfig {
                 "workflow.runner_label",
                 format!("unsupported_label:{label}"),
             ));
+        }
+        if let Some(verification) = &self.verification {
+            verification.validate(file)?;
         }
         Ok(())
     }
@@ -146,7 +154,29 @@ mod tests {
             generator_validation: GeneratorValidation::Bootstrap,
             max_parallel_jobs: 2,
             runner_label: None,
+            verification: None,
         }
+    }
+
+    #[test]
+    fn workflow_branch_rejects_injection_before_emission() {
+        for branch in [
+            "main'||true||'",
+            "a|b",
+            "a\nb",
+            "a\tb",
+            "${{github.ref}}",
+            "a.lock",
+            "-a",
+        ] {
+            let mut config = named("CI");
+            config.default_branch = Some(branch.to_owned());
+            let error = config.validate("config.toml").expect_err("unsafe branch");
+            assert!(error.to_string().contains("malformed_branch"), "{error}");
+        }
+        let mut config = named("CI");
+        config.default_branch = Some("release/1.2".to_owned());
+        assert!(config.validate("config.toml").is_ok());
     }
 
     #[test]

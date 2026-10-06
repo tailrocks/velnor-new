@@ -13,21 +13,23 @@ pub(crate) mod generator;
 mod cover_identity_tests;
 // Structured-proof tests live apart for the same reason.
 #[cfg(test)]
+#[path = "cover_missing_proof_tests.rs"]
+mod cover_missing_proof_tests;
+#[cfg(test)]
 #[path = "cover_proof_tests.rs"]
 mod cover_proof_tests;
 // Test fixtures live apart so the test module keeps its size gate.
 #[cfg(test)]
 #[path = "cover_identity_fixtures.rs"]
-mod cover_identity_fixtures;
+pub(crate) mod cover_identity_fixtures;
 
-use std::collections::BTreeSet;
 use std::path::Path;
 
 use velnor_actions_contract::{
     BaselineProof, ManifestTaskProof, ObligationDecision, Plan, PlanObligation, ProposedTask,
-    Stack, digest_b3, validate_rust_extension, validate_tofu_extension,
+    Stack, validate_rust_extension, validate_tofu_extension,
 };
-use velnor_actions_rust::{extension_for_proposal, tool_needs};
+use velnor_actions_rust::extension_for_proposal;
 
 use crate::cover_baseline::BaselineInputs;
 use crate::cover_baseline::provenance_check::ValidatedProvenance;
@@ -38,9 +40,17 @@ use crate::external_data::{
 };
 use crate::internal::plan_obligation::{changed_keys, member_changed};
 use crate::internal_plan::closure::resolve_closure_at_root;
-use crate::internal_plan::identities::{extension_bundle_with_snapshot, platform_id_for_group};
+
+#[path = "cover_refinement.rs"]
+mod refinement;
+
+#[path = "cover_prune.rs"]
+mod prune;
+use crate::internal_plan::identities::{
+    extension_bundle_with_snapshot, live_mbx_digest, platform_id_for_group,
+};
 use crate::internal_plan::snapshot::{ExecutionSnapshot, canonical_digest};
-use crate::internal_plan::{nextest_config_for, toolchain_id};
+use crate::internal_plan::{nextest_config_for, toolchain_id_for_runner};
 use crate::merge::BaselineManifest;
 
 pub(crate) use self::generator::{SOURCE_BUILD_REASON, is_source_build};
@@ -75,7 +85,7 @@ fn cover_closure_digest(
     );
     let mut reads = velnor_actions_tofu::FileCache::new();
     verify_cover_extension(task, root, &bundle, &mut reads)?;
-    let Ok(toolchain) = toolchain_id(task, catalog) else {
+    let Ok(toolchain) = toolchain_id_for_runner(task, catalog, label) else {
         return Err("toolchain_unresolvable".to_owned());
     };
     let Ok(platform) = platform_id_for_group(label, task) else {
@@ -89,6 +99,7 @@ fn cover_closure_digest(
         &toolchain,
         &platform,
         &mut reads,
+        Some(snapshot.checkout_inputs()),
     ) else {
         return Err("closure_unresolvable".to_owned());
     };
@@ -112,6 +123,9 @@ fn verify_cover_extension(
     bundle: &crate::internal_plan::identities::ExtensionBundle,
     reads: &mut velnor_actions_tofu::FileCache,
 ) -> Result<(), String> {
+    if Stack::from_id(&task.stack_id) == Some(Stack::Workload) {
+        return Err("undeclared_inputs".to_owned());
+    }
     if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
         let ext = crate::internal_plan::tofu_extension_for(task, root, bundle, reads)
             .map_err(|_| "extension_unverified:unparsable_spelling".to_owned())?;
@@ -128,27 +142,6 @@ fn verify_cover_extension(
     }
     validate_rust_extension(&ext.to_stack_extension())
         .map_err(|err| format!("extension_unverified:{err}"))
-}
-
-/// Live mbx dimension for one task: the compile driver plus the
-/// catalog's mbx pin when the driver runs through mbx.
-///
-/// Cargo-driven tasks bind no mbx pin, so a pin bump never invalidates
-/// their proofs; mbx-driven tasks bind the exact pin, so a proof from
-/// another mbx version refuses. Tofu tasks bind no mbx pin through an
-/// explicit arm, never the rust unknown-spelling fallthrough.
-fn live_mbx_digest(task: &ProposedTask, catalog: &velnor_actions_mise::ToolCatalog) -> String {
-    let mbx = if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
-        false
-    } else {
-        tool_needs(&task.identity.compile_driver, &task.identity.test_runner).mbx
-    };
-    let pin = mbx.then(|| catalog.version(velnor_actions_mise::PinnedTool::MrBoxington));
-    canonical_digest(&serde_json::json!({
-        "driver": task.identity.compile_driver,
-        "mbx_pin": pin,
-    }))
-    .unwrap_or_else(|_| digest_b3(b"mbx_error"))
 }
 
 /// Structured proof verified against live task identity.
@@ -175,7 +168,8 @@ fn verify_proof_live(
     if proof.graph_digest() != bundle.graph_digest() {
         return Err("proof_graph_mismatch".to_owned());
     }
-    let toolchain = toolchain_id(task, catalog).map_err(|_| "toolchain_unresolvable".to_owned())?;
+    let toolchain = toolchain_id_for_runner(task, catalog, label)
+        .map_err(|_| "toolchain_unresolvable".to_owned())?;
     if proof.toolchain_id() != toolchain {
         return Err("proof_toolchain_mismatch".to_owned());
     }
@@ -245,18 +239,26 @@ fn mark_covered(
 ///
 /// A carried proof compares all five dimensions against live identity;
 /// drift refuses with its miss warning, and a match passes silently.
-/// Entries without a proof pass through untouched.
+/// Missing proof refuses coverage, even when opaque digests match.
 fn gate_proof(
     warnings: &mut Vec<String>,
     label: &str,
-    task: &crate::merge::required_evidence::BaselineTaskEntry,
+    candidate: (
+        &crate::merge::required_evidence::BaselineTaskEntry,
+        &PlanObligation,
+    ),
     proposal: &ProposedTask,
     snapshot: &ExecutionSnapshot,
     discovery: &Discovery,
     inputs: &BaselineInputs<'_>,
 ) -> bool {
+    let (task, obligation) = candidate;
     let Some(proof) = &task.proof else {
-        return true;
+        warnings.push(format!(
+            "baseline_miss:{}:missing_task_proof",
+            proposal.task_id
+        ));
+        return false;
     };
     if let Err(reason) = verify_proof_live(
         snapshot,
@@ -268,6 +270,13 @@ fn gate_proof(
         label,
     ) {
         warnings.push(format!("baseline_miss:{}:{reason}", proposal.task_id));
+        return false;
+    }
+    if !obligation.execution_identity.matches_proof(proof) {
+        warnings.push(format!(
+            "baseline_miss:{}:proof_plan_identity_mismatch",
+            proposal.task_id
+        ));
         return false;
     }
     true
@@ -310,14 +319,14 @@ pub(crate) fn apply_coverage(
     manifest: &BaselineManifest,
     provenance: &ValidatedProvenance,
     discovery: &Discovery,
-    changed: Option<&BTreeSet<String>>,
+    changed: Option<&crate::select::ChangedSelection>,
     inputs: &BaselineInputs<'_>,
 ) -> u32 {
     let universe: Vec<_> = discovery.proposals.iter().collect();
     let keys = changed
-        .map(|set| changed_keys(&universe, set))
+        .map(|set| changed_keys(&universe, &set.affected))
         .unwrap_or_default();
-    let snapshot = ExecutionSnapshot::build(discovery);
+    let snapshot = ExecutionSnapshot::build(discovery).with_checkout(inputs.root);
     let mut covered = 0u32;
     for obligation in &mut plan.obligations {
         let proposal = discovery
@@ -344,7 +353,7 @@ pub(crate) fn apply_coverage(
         if !gate_proof(
             &mut plan.warnings,
             &plan.runner.label,
-            task,
+            (task, obligation),
             proposal,
             &snapshot,
             discovery,
@@ -352,7 +361,9 @@ pub(crate) fn apply_coverage(
         ) {
             continue;
         }
-        if member_changed(proposal, changed, &keys) {
+        if member_changed(proposal, changed, &keys)
+            && !refinement::permits(proposal, changed, &universe, task)
+        {
             continue;
         }
         if let Err(reason) = verified_closure_digest(
@@ -380,20 +391,6 @@ pub(crate) fn apply_coverage(
             ));
         }
     }
-    prune_to_execute(plan);
+    prune::prune_to_execute(plan);
     covered
-}
-
-/// Drop covered matrix entries and deselect fully-covered packages.
-fn prune_to_execute(plan: &mut Plan) {
-    plan.matrix.include.retain(|entry| {
-        plan.obligations
-            .iter()
-            .any(|ob| ob.task_id == entry.task_id && ob.decision == ObligationDecision::Execute)
-    });
-    for package in &mut plan.packages {
-        package.selected = plan.obligations.iter().any(|ob| {
-            ob.decision == ObligationDecision::Execute && package.tasks.contains(&ob.task_id)
-        });
-    }
 }

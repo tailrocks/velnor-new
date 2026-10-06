@@ -1,19 +1,11 @@
-//! Secret redaction: `Debug` never carries credential material.
-//!
-//! [`ReleaseRequest`] already redacts its token; these cases prove the
-//! redaction survives the typed chain into [`PinnedToolExec`] and
-//! [`IsolatedCommand`], that secret-looking env values redact while
-//! ordinary values stay visible, and that `CARGO_REGISTRY_TOKEN` is a
-//! reserved key (a repo task carrying it would silently disable OIDC).
+//! Generic command diagnostics redact credentials while retaining argv shape.
 use std::ffi::OsString;
-use std::path::PathBuf;
 
-use velnor_actions_mise::catalog::release_plz::ReleaseRequest;
 use velnor_actions_mise::command::is_reserved_env_key;
 use velnor_actions_mise::{IsolatedCommand, PinnedTool, PinnedToolExec, ToolCatalog};
 
 fn tokened_argv() -> Vec<OsString> {
-    ["release", "--config", "r.toml", "--token", "sekrit-value"]
+    ["verify", "--token", "sekrit-value"]
         .iter()
         .map(OsString::from)
         .collect()
@@ -22,8 +14,8 @@ fn tokened_argv() -> Vec<OsString> {
 #[test]
 fn pinned_exec_debug_redacts_token_value() {
     let exec = PinnedToolExec::new(
-        vec![PinnedTool::Rust, PinnedTool::ReleasePlz],
-        std::ffi::OsStr::new("release-plz"),
+        vec![PinnedTool::Rust],
+        std::ffi::OsStr::new("credential-probe"),
         tokened_argv(),
     )
     .expect("exec");
@@ -35,10 +27,10 @@ fn pinned_exec_debug_redacts_token_value() {
 
 #[test]
 fn isolated_command_debug_redacts_token_value() {
-    let command = ReleaseRequest::release_with_token(PathBuf::from("r.toml"), "sekrit-value")
-        .expect("tokened")
-        .command(&ToolCatalog::pinned())
-        .expect("command");
+    let mut payload = vec![OsString::from("credential-probe")];
+    payload.extend(tokened_argv());
+    let command =
+        IsolatedCommand::mise_exec(&["rust@1.98.1".to_owned()], &payload).expect("command");
     let debug = format!("{command:?}");
     assert!(!debug.contains("sekrit-value"), "token leaked: {debug}");
     assert!(debug.contains("--token"), "flag shape kept: {debug}");
@@ -47,26 +39,18 @@ fn isolated_command_debug_redacts_token_value() {
 }
 
 #[test]
-fn oidc_command_debug_has_no_token_shape() {
-    let command = ReleaseRequest::release(PathBuf::from("r.toml"))
-        .expect("oidc")
-        .command(&ToolCatalog::pinned())
-        .expect("command");
-    let debug = format!("{command:?}");
-    assert!(!debug.contains("--token"), "no token flag: {debug}");
-    assert!(!debug.contains("<redacted>"), "no marker: {debug}");
-}
-
-#[test]
 fn secret_env_redacts_while_plain_values_stay_visible() {
-    let specs = ToolCatalog::pinned().tool_specs(&[PinnedTool::Rust]);
+    let specs = ToolCatalog::pinned()
+        .tool_specs(&[PinnedTool::Rust])
+        .expect("tool specs");
     let payload = [OsString::from("cargo"), OsString::from("--version")];
     let command = IsolatedCommand::mise_exec(&specs, &payload)
         .expect("exec")
         .with_env(&[
             (OsString::from("MY_API_KEY"), OsString::from("sekrit-value")),
             (OsString::from("VELNOR_TASK_RUN"), OsString::from("ok")),
-        ]);
+        ])
+        .expect("environment");
     let debug = format!("{command:?}");
     assert!(!debug.contains("sekrit-value"), "secret leaked: {debug}");
     assert!(debug.contains("MY_API_KEY"), "name kept: {debug}");
@@ -85,7 +69,9 @@ fn registry_token_is_reserved() {
         IsolatedCommand::repo_task("sh", Vec::new(), &declared).is_err(),
         "repo tasks must reject the registry token"
     );
-    let specs = ToolCatalog::pinned().tool_specs(&[PinnedTool::Rust]);
+    let specs = ToolCatalog::pinned()
+        .tool_specs(&[PinnedTool::Rust])
+        .expect("tool specs");
     let payload = [OsString::from("cargo"), OsString::from("--version")];
     let command = IsolatedCommand::mise_exec(&specs, &payload).expect("exec");
     assert!(

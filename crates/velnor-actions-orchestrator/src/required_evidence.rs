@@ -17,12 +17,15 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    FinalReport, JobConclusion, ObligationDecision, Plan, RequiredJobResult,
+    FinalReport, JobConclusion, ObligationDecision, Plan, RequiredJobResult, is_crate_job_id,
 };
 
 use super::MergeRequest;
 use crate::cover::Signals;
 use crate::internal::internal_contract;
+
+#[path = "required_producer_roles.rs"]
+pub(crate) mod producer_roles;
 
 /// One trusted-baseline task proof: identities plus provenance run IDs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,7 +108,8 @@ pub(crate) fn check_required_evidence(
     signals: &mut Signals,
     miss_reasons: &mut BTreeSet<String>,
 ) {
-    check_job_inventory(request, signals, miss_reasons);
+    check_job_inventory(plan, request, signals, miss_reasons);
+    check_producer_inventory(plan, request, signals, miss_reasons);
     check_obligation_proofs(plan, signals, miss_reasons);
     if !request.assembly_errors.is_empty() {
         signals.planning_failed = true;
@@ -113,8 +117,68 @@ pub(crate) fn check_required_evidence(
     }
 }
 
+/// Producer declarations and observations cover an exact independent inventory.
+fn check_producer_inventory(
+    plan: &Plan,
+    request: &MergeRequest,
+    signals: &mut Signals,
+    miss_reasons: &mut BTreeSet<String>,
+) {
+    let mut observed = BTreeSet::new();
+    for report in &request.producer_reports {
+        let admission = plan
+            .producers
+            .entries
+            .iter()
+            .find(|entry| entry.job_id == report.job_id);
+        if !observed.insert(report.job_id.as_str())
+            || admission.is_none_or(|entry| !report.matches(entry))
+        {
+            signals.planning_failed = true;
+            miss_reasons.insert("cache_corrupt".to_owned());
+        }
+    }
+    for admission in &plan.producers.entries {
+        if !request.required_job_ids.contains(&admission.job_id)
+            || !producer_roles::isolated(plan, admission)
+        {
+            signals.planning_failed = true;
+            miss_reasons.insert("cache_corrupt".to_owned());
+        }
+        if let Some(job) = request
+            .required_jobs
+            .iter()
+            .find(|job| job.job_id == admission.job_id)
+        {
+            if matches!(
+                job.conclusion,
+                JobConclusion::Success | JobConclusion::Failure
+            ) && !plan.producers.eligible(admission, plan)
+            {
+                signals.planning_failed = true;
+                miss_reasons.insert("trust_scope_mismatch".to_owned());
+            }
+            if matches!(
+                job.conclusion,
+                JobConclusion::Success | JobConclusion::Failure
+            ) && !observed.contains(admission.job_id.as_str())
+            {
+                signals.planning_failed = true;
+                miss_reasons.insert("no_entry".to_owned());
+            }
+            if job.conclusion == JobConclusion::Skipped
+                && observed.contains(admission.job_id.as_str())
+            {
+                signals.planning_failed = true;
+                miss_reasons.insert("cache_corrupt".to_owned());
+            }
+        }
+    }
+}
+
 /// Exact-set validator conclusions; an empty inventory never passes.
 fn check_job_inventory(
+    plan: &Plan,
     request: &MergeRequest,
     signals: &mut Signals,
     miss_reasons: &mut BTreeSet<String>,
@@ -148,6 +212,14 @@ fn check_job_inventory(
         signals.planning_failed = true;
         miss_reasons.insert("no_entry".to_owned());
     }
+    if plan
+        .obligations
+        .iter()
+        .any(|ob| !expected.contains(ob.job_id.as_str()))
+    {
+        signals.planning_failed = true;
+        miss_reasons.insert("no_entry".to_owned());
+    }
 }
 
 /// Every non-execute disposition carries verifiable proof.
@@ -173,16 +245,68 @@ fn check_obligation_proofs(
     }
 }
 
-/// Fold required job conclusions; skipped is never success.
-pub(crate) fn fold_jobs(jobs: &[RequiredJobResult], signals: &mut Signals) {
-    for job in jobs {
+/// Fold task conclusions and exact isolated producer dispositions.
+///
+/// The validated plan binds every obligation to its static job. Coverage
+/// proofs are independently revalidated before this fold; their failure
+/// signals remain authoritative. Producer skips require their fixed scheduling
+/// predicate to be false. Explicit advisory failures retain cold consumer work;
+/// no producer outcome covers an obligation or excuses missing task evidence.
+pub(crate) fn fold_jobs(plan: &Plan, request: &MergeRequest, signals: &mut Signals) {
+    for job in &request.required_jobs {
+        if let Some(admission) = plan
+            .producers
+            .entries
+            .iter()
+            .find(|entry| entry.job_id == job.job_id)
+        {
+            if !producer_roles::isolated(plan, admission) {
+                signals.planning_failed = true;
+                continue;
+            }
+            let report = request
+                .producer_reports
+                .iter()
+                .find(|report| report.job_id == job.job_id);
+            if job.conclusion == JobConclusion::Skipped && !plan.producers.eligible(admission, plan)
+            {
+                continue;
+            }
+            if producer_roles::advisory_failure(admission, job.conclusion, report) {
+                continue;
+            }
+            if admission.policy == velnor_actions_contract::ProducerPolicy::Mandatory
+                && job.conclusion == JobConclusion::Success
+                && !report.is_some_and(|report| report.terminal_success(admission, job.conclusion))
+            {
+                signals.failed = true;
+            }
+        }
         match job.conclusion {
             JobConclusion::Success => {}
             JobConclusion::Cancelled => signals.cancelled = true,
+            JobConclusion::Skipped if job_is_covered(plan, &job.job_id) => {}
             JobConclusion::Skipped | JobConclusion::Neutral => signals.not_run = true,
             JobConclusion::Failure | JobConclusion::Missing => signals.failed = true,
         }
     }
+}
+
+/// Nonempty crate obligation group whose every member has baseline proof.
+fn job_is_covered(plan: &Plan, job_id: &str) -> bool {
+    if !is_crate_job_id(job_id) {
+        return false;
+    }
+    let mut obligations = plan
+        .obligations
+        .iter()
+        .filter(|ob| ob.job_id == job_id)
+        .peekable();
+    obligations.peek().is_some()
+        && obligations.all(|ob| {
+            ob.decision == ObligationDecision::CoveredByTrustedBaseline
+                && ob.baseline_proof.is_some()
+        })
 }
 
 /// Reported validator outcomes: observed results plus `missing` markers.

@@ -98,12 +98,19 @@ pub fn msrv_job(
 ) -> Result<Job, RenderError> {
     spec.validate()?;
     Ok(Job {
+        cache_mode: None,
         display_name: format!("MSRV {}", spec.package),
         runs_on: label.to_owned(),
         timeout_minutes: JobTimeout::MSRV,
         needs: Vec::new(),
         condition: None,
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps: vec![
             steps::checkout_step(checkout_uses)?,

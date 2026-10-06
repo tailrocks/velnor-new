@@ -1,16 +1,18 @@
 //! Exact-base baseline lookup and manifest resolution.
 //!
-//! Finds exact-base candidates through pinned `gh`, downloads the
-//! single exact named artifact, and keeps temp entries matching the exact
-//! base, run, original successful attempt, id, and shape.
+//! Selects one successful exact-base run through pinned `gh`, then authenticates
+//! its exact-name artifact by service ID/digest and its manifest's API attempt.
 
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
-use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
+use velnor_actions_mise::{PinnedTool, PinnedToolExec, RuntimePaths, ToolCatalog};
 
-use crate::merge::BaselineManifest;
-use crate::run_select::{select_baseline_artifact, select_exact_base_candidates};
+use crate::run_select::{select_baseline_artifacts, select_exact_base_run};
+
+#[path = "baseline_artifact_transport.rs"]
+pub(crate) mod artifact_transport;
+pub(crate) use artifact_transport::AcquiredBaseline;
 
 /// Exact-base baseline lookup through pinned `gh` (par §5).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,8 +74,8 @@ impl BaselineLookup {
     ///
     /// `--repo` pins the lookup to the expected repository: without it
     /// `gh` would resolve the repo from the mutable git origin. The
-    /// listing carries the current attempt only for candidate discovery;
-    /// the original proof attempt is authenticated through its exact API.
+    /// successful summary supplies the current attempt as an upper bound;
+    /// each publication attempt is authenticated through its exact API.
     #[must_use]
     pub(crate) fn list_args(&self) -> Vec<OsString> {
         let fields = "databaseId,headSha,event,conclusion,headBranch,attempt";
@@ -102,40 +104,34 @@ impl BaselineLookup {
     ///
     /// The path names the expected repository explicitly: no
     /// `{owner}`/`{repo}` template ever resolves from the mutable git
-    /// origin. The response proves the exact baseline artifact exists
-    /// unexpired before any download is attempted.
+    /// origin. The selector checks pagination completeness and artifact
+    /// identity, including expiry, before any download is attempted.
     #[must_use]
     pub(crate) fn artifacts_args(&self, run_id: u64) -> Vec<OsString> {
         [
             "api",
             &format!("repos/{}/actions/runs/{run_id}/artifacts", self.repo),
+            "--paginate",
+            "--slurp",
         ]
         .iter()
         .map(OsString::from)
         .collect()
     }
 
-    /// Single named artifacts extract directly into `--dir`; place that
-    /// directory under the name expected by the manifest reader.
-    /// # Errors
-    /// Rejects artifact names that could escape the staging directory.
-    pub(crate) fn download_args(
-        &self,
-        artifact: &str,
-        run_id: u64,
-        staging: &Path,
-    ) -> Result<Vec<OsString>, String> {
-        velnor_actions_contract::validate_artifact_id(artifact)
-            .map_err(|_| "baseline_no_exact_artifact".to_owned())?;
-        Ok(crate::cover_baseline::baseline_download_args(
-            &self.base_sha,
-            &self.workflow,
-            &self.branch,
-            Some(artifact),
-            run_id,
-            &staging.join(artifact),
-            &self.repo,
-        ))
+    /// Fixed API path for one original workflow attempt.
+    #[must_use]
+    pub(crate) fn attempt_args(&self, run_id: u64, attempt: u64) -> Vec<OsString> {
+        [
+            "api",
+            &format!(
+                "repos/{}/actions/runs/{run_id}/attempts/{attempt}",
+                self.repo
+            ),
+        ]
+        .iter()
+        .map(OsString::from)
+        .collect()
     }
 
     /// Run fixed `gh` args under the pinned catalog in `root`.
@@ -144,10 +140,20 @@ impl BaselineLookup {
         root: &Path,
         args: Vec<OsString>,
     ) -> Result<String, String> {
+        Self::run_in_runtime(catalog, root, args, RuntimePaths::full())
+    }
+
+    /// Run fixed `gh` args under an explicit compiled runtime domain.
+    pub(crate) fn run_in_runtime(
+        catalog: &ToolCatalog,
+        root: &Path,
+        args: Vec<OsString>,
+        runtime: RuntimePaths,
+    ) -> Result<String, String> {
         let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args);
         let exec = exec.map_err(|err| err.to_string())?;
         let output = exec
-            .command(catalog)
+            .command_with_runtime(catalog, runtime)
             .map_err(|err| err.to_string())?
             .with_cwd(PathBuf::from(root))
             .run()
@@ -161,10 +167,9 @@ impl BaselineLookup {
 
 /// Maximum accepted `gh` stdout bytes for lookup and retrieve calls.
 ///
-/// Listings and download receipts are kilobytes; one megabyte fails
-/// closed on runaway output before JSON parsing instead of buffering
-/// megabytes the selectors never need. (The spawn layer caps pipes at
-/// 8 MiB; this is the tighter call-site bound.)
+/// One megabyte fails closed before JSON parsing; the artifact selector
+/// separately requires every page and entry within its count bound. (The
+/// spawn layer caps pipes at 8 MiB; this is the tighter call-site bound.)
 const MAX_GH_STDOUT_BYTES: usize = 1 << 20;
 
 /// Decode `gh` stdout with an explicit size cap.
@@ -180,16 +185,14 @@ fn gh_stdout_checked(output: &velnor_actions_mise::ProcessOutput) -> Result<Stri
         .map_err(|_| "baseline_unavailable".to_owned())
 }
 
-/// Resolve exact-base manifests: list, select, pin, download, filter.
+/// Resolve one exact-base baseline from a bounded run summary and a complete
+/// artifact listing.
 ///
-/// Only one exact named artifact ever downloads: without a known
-/// artifact name there is no bounded download, so the lookup misses
-/// before spawning anything. A whole-run download fallback does not
-/// exist. Every `gh` call carries the expected repository explicitly;
-/// a conflicted or unresolvable repo misses before spawning anything.
-/// The exact artifact must exist unexpired before download; its original
-/// successful attempt is authenticated independently from live service
-/// metadata. A later retry never relabels the immutable artifact's proof.
+/// The artifact name derives only from base and compatibility. The successful
+/// run summary selects the run and bounds the allowed manifest attempt.
+/// Service metadata binds the run; the exact attempt API response binds the
+/// manifest attempt. Every `gh` call carries the expected repository
+/// explicitly; unavailable evidence misses to full work.
 /// # Errors
 pub(crate) fn resolve_manifests(
     catalog: &ToolCatalog,
@@ -197,87 +200,91 @@ pub(crate) fn resolve_manifests(
     base: &str,
     workflow: &str,
     branch: &str,
-    artifact: Option<&str>,
+    artifact_name: &str,
     repository: Option<&str>,
-) -> Result<Vec<BaselineManifest>, String> {
+    runtime: RuntimePaths,
+) -> Result<AcquiredBaseline, String> {
     BaselineLookup::validate_inputs(base, workflow, branch)?;
-    let Some(artifact) = artifact.filter(|name| !name.is_empty()) else {
-        return Err("baseline_no_exact_artifact".to_owned());
-    };
-    velnor_actions_contract::validate_artifact_id(artifact)
+    let prefix = format!("velnor-baseline-{base}-");
+    let compatibility = artifact_name
+        .strip_prefix(&prefix)
+        .ok_or_else(|| "baseline_no_exact_artifact".to_owned())?;
+    let canonical = velnor_actions_contract::artifact_id_for_baseline(base, compatibility)
         .map_err(|_| "baseline_no_exact_artifact".to_owned())?;
+    if canonical != artifact_name {
+        return Err("baseline_no_exact_artifact".to_owned());
+    }
     let repo = resolve_lookup_repo(root, repository)?;
     let lookup = BaselineLookup::new(base, workflow, branch, &repo)?;
-    resolve_with(&lookup, artifact, |args| {
-        BaselineLookup::run(catalog, root, args)
-    })
+    resolve_with(
+        &lookup,
+        artifact_name,
+        compatibility,
+        |args| BaselineLookup::run_in_runtime(catalog, root, args, runtime),
+        |receipt| artifact_transport::download_archive(catalog, root, &lookup, receipt, runtime),
+    )
 }
 
-/// One transport-injected normal lookup, retaining original publication proof.
+/// One transport-injected normal lookup, retaining authenticated receipts.
 fn resolve_with(
     lookup: &BaselineLookup,
-    artifact: &str,
+    expected: &str,
+    compatibility: &str,
     mut run: impl FnMut(Vec<OsString>) -> Result<String, String>,
-) -> Result<Vec<BaselineManifest>, String> {
+    mut download: impl FnMut(&crate::run_select::BaselineArtifactReceipt) -> Result<Vec<u8>, String>,
+) -> Result<AcquiredBaseline, String> {
     let text = run(lookup.list_args())?;
-    for run_id in select_exact_base_candidates(&text, &lookup.base_sha, &lookup.branch)? {
-        let Ok(listed) = run(lookup.artifacts_args(run_id)) else {
+    let selected = select_exact_base_run(&text, &lookup.base_sha, &lookup.branch)?;
+    let listed = run(lookup.artifacts_args(selected.run_id))?;
+    let receipts = select_baseline_artifacts(
+        &listed,
+        expected,
+        &lookup.base_sha,
+        compatibility,
+        &lookup.branch,
+        selected.run_id,
+    )?;
+    if receipts.is_empty() {
+        return Err("baseline_not_found".to_owned());
+    }
+    let mut verified_matches = Vec::new();
+    for receipt in receipts {
+        let Ok(bytes) = download(&receipt) else {
             continue;
         };
-        if select_baseline_artifact(&listed, artifact).is_err() {
+        let Ok(verified) = artifact_transport::verify_archive(receipt, &bytes) else {
+            continue;
+        };
+        let attempt = verified.manifest().run_attempt;
+        if attempt > selected.attempt {
             continue;
         }
-        if let Ok(parent) = download_authenticated(lookup, artifact, run_id, &mut run) {
-            return Ok(vec![parent]);
-        }
+        let Ok(record) = run(lookup.attempt_args(selected.run_id, attempt)) else {
+            continue;
+        };
+        let Ok(acquired) = artifact_transport::authenticate_attempt(verified, &record, lookup)
+        else {
+            continue;
+        };
+        verified_matches.push(acquired);
     }
-    Err("baseline_unavailable".to_owned())
-}
-
-/// Read an exact artifact and authenticate its original successful attempt.
-fn download_authenticated(
-    lookup: &BaselineLookup,
-    artifact: &str,
-    run_id: u64,
-    run: &mut impl FnMut(Vec<OsString>) -> Result<String, String>,
-) -> Result<BaselineManifest, String> {
-    let temp = tempfile::tempdir().map_err(|_| "baseline_unavailable".to_owned())?;
-    run(lookup.download_args(artifact, run_id, temp.path())?)?;
-    let path = temp.path().join(artifact).join("baseline.json");
-    let text = crate::retrieve_reports::read_staged_text(
-        &path,
-        crate::retrieve_reports::MAX_STAGED_REPORT_BYTES,
-    )
-    .map_err(|_| "baseline_unavailable".to_owned())?;
-    let value = crate::internal_plan::snapshot::parse_canonical_json(&text)
-        .map_err(|_| "baseline_unavailable".to_owned())?;
-    let candidate: BaselineManifest =
-        serde_json::from_value(value).map_err(|_| "baseline_unavailable".to_owned())?;
-    let mut found = collect_manifests(
-        temp.path(),
-        &lookup.base_sha,
-        run_id,
-        candidate.run_attempt,
-        artifact,
-    )?;
-    let parent = found
-        .pop()
-        .ok_or_else(|| "baseline_unavailable".to_owned())?;
-    let endpoint = format!(
-        "repos/{}/actions/runs/{run_id}/attempts/{}",
-        lookup.repo, parent.run_attempt
-    );
-    let record = run(vec![OsString::from("api"), OsString::from(endpoint)])?;
-    if !crate::retrieve_baseline::authentic_attempt(
-        &record,
-        &parent,
-        &lookup.repo,
-        &lookup.branch,
-        &lookup.workflow,
-    ) {
-        return Err("baseline_unauthenticated".to_owned());
+    let newest_attempt = verified_matches
+        .iter()
+        .map(|acquired| acquired.attempt_receipt().run_attempt)
+        .max();
+    let Some(newest_attempt) = newest_attempt else {
+        return Err("baseline_unavailable".to_owned());
+    };
+    let mut newest_matches = verified_matches
+        .into_iter()
+        .filter(|acquired| acquired.attempt_receipt().run_attempt == newest_attempt);
+    let Some(newest) = newest_matches.next() else {
+        return Err("baseline_unavailable".to_owned());
+    };
+    if newest_matches.next().is_some() {
+        return Err("baseline_artifact_ambiguous".to_owned());
     }
-    Ok(parent)
+    Ok(newest)
 }
 
 /// Repository slug scoping every lookup `gh` call.
@@ -297,40 +304,6 @@ fn resolve_lookup_repo(root: &Path, repository: Option<&str>) -> Result<String, 
     expected
         .slug
         .ok_or_else(|| "baseline_repo_unresolved".to_owned())
-}
-
-/// Keep temp artifacts matching the exact base, run, attempt, id, shape.
-///
-/// The expected numeric ID derives from the artifact name, matching
-/// the publisher-written fingerprint; the service listing ID never
-/// binds manifest bytes.
-fn collect_manifests(
-    dir: &Path,
-    base: &str,
-    run_id: u64,
-    attempt: u64,
-    artifact: &str,
-) -> Result<Vec<BaselineManifest>, String> {
-    let expected = crate::cover_compat::baseline_artifact_numeric_id(artifact);
-    let mut out = Vec::new();
-    let entries = std::fs::read_dir(dir).map_err(|_| "baseline_unavailable".to_owned())?;
-    for entry in entries {
-        let entry = entry.map_err(|_| "baseline_unavailable".to_owned())?;
-        if let Some(manifest) = crate::cover_baseline::baseline_entry_for(
-            &entry.path(),
-            base,
-            run_id,
-            attempt,
-            expected,
-        ) {
-            out.push(manifest);
-        }
-    }
-    if out.is_empty() {
-        return Err("baseline_unavailable".to_owned());
-    }
-    out.sort_by(|left, right| left.artifact_name.cmp(&right.artifact_name));
-    Ok(out)
 }
 
 #[cfg(test)]

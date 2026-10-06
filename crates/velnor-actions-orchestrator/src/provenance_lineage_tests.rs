@@ -38,7 +38,23 @@ fn carried_origin_survives_multiple_successful_runs_and_merge() {
 #[test]
 fn arbitrary_historical_run_without_parent_fails() {
     let mut manifest = manifest_for(&"a".repeat(40));
-    manifest.tasks[0].proof_run_id = 5;
+    let task = &mut manifest.tasks[0];
+    task.proof_run_id = 5;
+    let proof = task.proof.as_ref().expect("proof");
+    task.proof = Some(
+        velnor_actions_contract::ManifestTaskProof::new(
+            proof.task_id(),
+            proof.task_digest(),
+            proof.input_digest(),
+            proof.graph_digest(),
+            proof.toolchain_id(),
+            proof.mbx_digest(),
+            proof.platform_id(),
+            proof.profile(),
+            task.proof_run_id,
+        )
+        .expect("proof"),
+    );
     assert_eq!(
         validate_manifest_lineage(&manifest),
         Err("originating_run_unverified".to_owned())

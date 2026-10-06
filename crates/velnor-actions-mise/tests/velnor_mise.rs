@@ -11,6 +11,8 @@ mod impl_mise_build;
 mod impl_mise_cache;
 #[path = "impl_mise_cache_gates.rs"]
 mod impl_mise_cache_gates;
+#[path = "impl_mise_cache_snapshot.rs"]
+mod impl_mise_cache_snapshot;
 #[path = "impl_mise_cache_t22.rs"]
 mod impl_mise_cache_t22;
 #[path = "impl_mise_catalog.rs"]
@@ -29,10 +31,22 @@ mod impl_mise_gate6;
 mod impl_mise_git;
 #[path = "impl_mise_git_config.rs"]
 mod impl_mise_git_config;
+#[path = "impl_mise_git_index.rs"]
+mod impl_mise_git_index;
+#[path = "impl_mise_git_index_delegates.rs"]
+mod impl_mise_git_index_delegates;
+#[path = "impl_mise_git_objects.rs"]
+mod impl_mise_git_objects;
+#[path = "impl_mise_git_owned_config.rs"]
+mod impl_mise_git_owned_config;
+#[path = "impl_mise_git_refs.rs"]
+mod impl_mise_git_refs;
 #[path = "impl_mise_install.rs"]
 mod impl_mise_install;
 #[path = "impl_mise_isolation.rs"]
 mod impl_mise_isolation;
+#[path = "impl_mise_java_versions.rs"]
+mod impl_mise_java_versions;
 #[path = "impl_mise_lock.rs"]
 mod impl_mise_lock;
 #[path = "impl_mise_lockfile.rs"]
@@ -49,14 +63,14 @@ mod impl_mise_nextest_plan;
 mod impl_mise_p06;
 #[path = "impl_mise_p08.rs"]
 mod impl_mise_p08;
+#[path = "impl_mise_planning_snapshot.rs"]
+mod impl_mise_planning_snapshot;
 #[path = "impl_mise_policy.rs"]
 mod impl_mise_policy;
 #[path = "impl_mise_preflight.rs"]
 mod impl_mise_preflight;
 #[path = "impl_mise_redaction.rs"]
 mod impl_mise_redaction;
-#[path = "impl_mise_release_modes.rs"]
-mod impl_mise_release_modes;
 #[path = "impl_mise_release_plz.rs"]
 mod impl_mise_release_plz;
 #[path = "impl_mise_requests.rs"]
@@ -65,6 +79,12 @@ mod impl_mise_requests;
 mod impl_mise_restore;
 #[path = "impl_mise_reuse.rs"]
 mod impl_mise_reuse;
+#[path = "impl_mise_snapshot.rs"]
+mod impl_mise_snapshot;
+#[path = "impl_mise_snapshot_domains.rs"]
+mod impl_mise_snapshot_domains;
+#[path = "impl_mise_source_archive_inventory.rs"]
+mod impl_mise_source_archive_inventory;
 #[path = "impl_mise_steps.rs"]
 mod impl_mise_steps;
 #[path = "impl_mise_surface.rs"]
@@ -79,3 +99,10 @@ mod impl_mise_tofu_t27;
 mod impl_mise_tofu_t27_realbin;
 #[path = "impl_mise_verify.rs"]
 mod impl_mise_verify;
+#[path = "impl_mise_wrapper_authority.rs"]
+mod impl_mise_wrapper_authority;
+
+#[path = "impl_mise_rust_desktop.rs"]
+mod impl_mise_rust_desktop;
+#[path = "impl_mise_rust_health.rs"]
+mod impl_mise_rust_health;

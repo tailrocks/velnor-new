@@ -143,11 +143,15 @@ fn w1_lint_run_embeds_crate_tool_specs() -> TestResult {
 fn w1_catalog_matches_actionlint_crate_pins() {
     let catalog = ToolCatalog::pinned();
     assert_eq!(
-        catalog.tool_spec(PinnedTool::Actionlint),
+        catalog
+            .tool_spec(PinnedTool::Actionlint)
+            .expect("qualified selector"),
         ActionlintToolchain::pinned().mise_tool_spec()
     );
     assert_eq!(
-        catalog.tool_spec(PinnedTool::Shellcheck),
+        catalog
+            .tool_spec(PinnedTool::Shellcheck)
+            .expect("qualified selector"),
         ShellcheckToolchain::pinned().mise_tool_spec()
     );
     assert_eq!(
@@ -199,7 +203,7 @@ fn w1_candidate_build_matches_mise_constructor() -> TestResult {
         let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
         let catalog = ToolCatalog::pinned();
         let want = CandidateBuild::new()?
-            .argv(&catalog)
+            .argv(&catalog)?
             .into_iter()
             .map(|arg| arg.into_string().map_err(|_| "non-utf8"))
             .collect::<Result<Vec<_>, _>>()?
@@ -234,7 +238,11 @@ fn w1_validators_carry_deny_machete_zizmor_in_order() -> TestResult {
         assert!(zizmor.contains("Run zizmor"), "zizmor step:\n{zizmor}");
         let catalog = ToolCatalog::pinned();
         assert!(
-            zizmor.contains(&catalog.tool_spec(PinnedTool::Zizmor)),
+            zizmor.contains(
+                &catalog
+                    .tool_spec(PinnedTool::Zizmor)
+                    .expect("qualified selector")
+            ),
             "{zizmor}"
         );
         assert!(zizmor.contains("--no-online-audits"), "{zizmor}");

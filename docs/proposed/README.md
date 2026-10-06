@@ -24,7 +24,10 @@ globs. These are not CLI flags.
 | MBX | Reusable Rust compilation work and compiler resource coordination | Test pass/fail results |
 | GitHub Actions | Scheduling generated jobs and reporting required check status | Velnor's project discovery and cache validity rules |
 
-`generate` replaces `.github/` as one complete tree. `init` separately creates
+`generate` preserves repository-owned nonworkflow `.github/` entries, then
+replaces the directory with their staged copy and the generated outputs. Exact
+ownership and preservation rules live in [generated-file §3](generated-file-contract.md).
+`init` separately creates
 the user-owned `.velnor/config.toml` sample. The path is
 `GitHub step → pinned tools → Mise command → stack task`; Velnor Actions scans
 the repo and renders that workflow. `plan` shows a text summary; `generate

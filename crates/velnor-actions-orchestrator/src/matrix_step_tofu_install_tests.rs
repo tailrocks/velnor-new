@@ -1,7 +1,7 @@
 //! Tofu-install classification tests: suites that spawn `tofu`.
 //!
 //! Declared via `#[path]` from `matrix_step.rs` under `cfg(test)`.
-//! Classification and render-level install proof use the shared suite registry.
+//! Uses the single suite registry and proves actual render-level installation.
 
 use super::*;
 use crate::clippy_groups::ClippyMemoryPlan;
@@ -43,6 +43,8 @@ fn group(package: &str) -> ProposedTask {
 /// Discovery shell carrying only task proposals.
 fn discovery(groups: Vec<ProposedTask>) -> Discovery {
     Discovery {
+        rust_inventory: None,
+        raw_inventories: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: groups,
@@ -77,7 +79,7 @@ fn prepare_run(job: &Job) -> Vec<String> {
 
 #[test]
 fn tofu_install_follows_executed_suite_per_policy() {
-    // Only the Mise suite spawns real tofu; obligation drivers are separate.
+    // Only the audited Mise suite executes real OpenTofu binaries.
     for package in [
         "velnor-actions-orchestrator",
         "velnor-actions-cli",
@@ -87,7 +89,7 @@ fn tofu_install_follows_executed_suite_per_policy() {
         "velnor-actions-tofu",
         "velnor-actions-workflow-renderer",
         "velnor-actions-actionlint",
-        "demo",
+        "velnor-actions-native",
     ] {
         assert!(
             !crate_suite_tools(WorkflowPolicy::ConsumerV1, Some(package))
@@ -128,10 +130,16 @@ fn tofu_install_follows_executed_suite_per_policy() {
 fn mise_crate_job_prepare_installs_opentofu() {
     use velnor_actions_mise::PinnedTool;
     let catalog = ToolCatalog::pinned();
-    let opentofu = catalog.tool_spec(PinnedTool::Opentofu);
+    let opentofu = catalog
+        .native_tool_spec(
+            velnor_actions_mise::catalog::qualification::DistributionHost::LinuxAmd64,
+            PinnedTool::Opentofu,
+        )
+        .expect("qualified selector");
     assert_eq!(
-        opentofu, "opentofu@1.13.1",
-        "render pin names the catalog spec"
+        opentofu,
+        "http:opentofu[url=\"https://github.com/opentofu/opentofu/releases/download/v1.13.1/tofu_1.13.1_linux_amd64.tar.gz\",checksum=\"sha256:378ada19d4bc70c43732004e8159be771b23b9a5afdf059e5f8a2b3fa2c70a69\",strip_components=0]@1.13.1",
+        "render pin names the qualified catalog spec"
     );
     let found = crate::crate_jobs::build_crate_jobs(
         "ubuntu-26.04",

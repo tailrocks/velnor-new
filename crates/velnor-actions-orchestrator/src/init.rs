@@ -82,9 +82,9 @@ fn sample_text() -> Result<String, OrchestratorError> {
 /// Commented sample body from cli-contract section 4.
 const SAMPLE_BODY: &str = r#"schema = 1
 
-# Velnor replaces the entire .github tree on generate. Keep CODEOWNERS at the
-# repository root or under docs/ (both are GitHub-recognized); anything inside
-# .github is removed.
+# Velnor owns .github/workflows/ and its exact generated instruction, actionlint,
+# and release config paths. Other .github entries (including CODEOWNERS) survive
+# generation and previews with their bytes, permissions, and symlink targets.
 
 # Optional workflow display and policy settings. Omitted values use Velnor defaults.
 # [workflow]
@@ -109,6 +109,27 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # [stacks]
 # ignore = []                           # Example: ["rust"].
 
+# Optional named native workloads, sorted by name. Operations use fixed argv;
+# roots and inputs are explicit repository-relative paths. No raw shell/commands.
+# Enable only operations matching the repository's declared contract:
+# bun_ci runs frozen install/build/test; docker_build builds root/Dockerfile;
+# swift_test builds and tests a Swift package. No universal commands are inferred.
+# [[stacks.workloads]]
+# name = "bun-web"
+# kind = "bun_ci"
+# root = "web"
+# inputs = ["web/bun.lock", "web/package.json"]
+# [[stacks.workloads]]
+# name = "docker-service"
+# kind = "docker_build"
+# root = "service"
+# inputs = ["service/Dockerfile"]
+# [[stacks.workloads]]
+# name = "swift-desktop"
+# kind = "swift_test"
+# root = "desktop"
+# inputs = ["desktop/Package.resolved", "desktop/Package.swift"]
+
 # Optional Rust task configuration. The Rust detector is automatic in V1.
 # [stacks.rust]
 # configurations = [{ name = "default", features = ["default"], target = "host" }]
@@ -128,7 +149,7 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # "actions/cache/save" = { version = "v6.1.0", sha = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9" }
 # "actions/upload-artifact" = { version = "v7.0.1", sha = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" }
 # "actions/download-artifact" = { version = "v8.0.1", sha = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" }
-# "jdx/mr-boxington-action" = { version = "v1.5.0", sha = "9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3" }
+# "jdx/mr-boxington-action" = { version = "v1.6.0", sha = "1687e54eb349cadf61fa38b5813a77875489e8e6" }
 # "Swatinem/rust-cache" = { version = "v2.9.2", sha = "6323deb102c322ba6fcbdcafc7e3dddab59af2b6" }
 # Values must be an allowlisted action's matching release version and full SHA.
 "#;

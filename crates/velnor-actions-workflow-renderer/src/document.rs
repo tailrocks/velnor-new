@@ -4,31 +4,45 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{
-    Job, Permissions, Step, StepKind, Trigger, WorkflowIr,
-    workflow::{ir::DispatchInput, permissions::PermissionLevel},
-};
+use velnor_actions_contract::{Job, Step, StepKind, WorkflowIr};
 
 use crate::{
     RenderError, commands,
     render::{FINAL_JOB_ID, RenderContext},
-    steps::{self, INTERNAL_OP_ENV, REQUEST_FILE_ENV},
+    steps,
     yaml::Yaml,
 };
+
+#[path = "document_headers.rs"]
+mod headers;
+#[path = "document_inputs.rs"]
+mod inputs;
+#[path = "document_env.rs"]
+mod operation_env;
+use headers::{permissions_to_yaml, triggers_to_yaml};
 
 /// Build the workflow document: name, on, permissions, concurrency, jobs.
 pub(crate) fn workflow_to_yaml(
     ir: &WorkflowIr,
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
+    cache_writers_admitted: bool,
 ) -> Result<Yaml, RenderError> {
+    crate::cache_mode::validate_document(ir, jobs, cache_writers_admitted)?;
+    let mut effective = ir.clone();
+    effective.jobs = jobs.clone();
+    crate::native_publish_approval::validate_approvals(&effective, &ctx.native_publish_approvals)?;
     let needs_env = needs_channel_envs(jobs)?;
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
         rendered_jobs.push((id.clone(), job_to_yaml(id, job, ctx, &needs_env)?));
     }
-    Ok(Yaml::Map(vec![
+    let mut entries = vec![
         ("name".to_owned(), Yaml::str(ir.name.clone())),
+        (
+            "cache-mode".to_owned(),
+            Yaml::str(ir.cache_mode.as_str().to_owned()),
+        ),
         ("on".to_owned(), triggers_to_yaml(&ir.triggers)),
         (
             "permissions".to_owned(),
@@ -40,97 +54,20 @@ pub(crate) fn workflow_to_yaml(
                 ("group".to_owned(), Yaml::str(ir.concurrency.group.clone())),
                 (
                     "cancel-in-progress".to_owned(),
-                    Yaml::str(ir.concurrency.cancel_in_progress.clone()),
+                    match ir.concurrency.cancel_in_progress.as_str() {
+                        "true" => Yaml::Bool(true),
+                        "false" => Yaml::Bool(false),
+                        expression => Yaml::str(expression),
+                    },
                 ),
             ]),
         ),
         ("jobs".to_owned(), Yaml::Map(rendered_jobs)),
-    ]))
-}
-
-/// YAML spelling of one contract permission level.
-fn level_str(level: PermissionLevel) -> &'static str {
-    match level {
-        PermissionLevel::None => "none",
-        PermissionLevel::Read => "read",
-        PermissionLevel::Write => "write",
-    }
-}
-
-/// Render permissions: contents/actions always, grants beyond none explicit.
-///
-/// The CI default stays exactly `contents: read` plus `actions: read`;
-/// wider scopes render only when the IR grants them, so validated
-/// overrides are never silently dropped.
-fn permissions_to_yaml(permissions: &Permissions) -> Yaml {
-    let mut entries = vec![
-        (
-            "contents".to_owned(),
-            Yaml::str(level_str(permissions.contents).to_owned()),
-        ),
-        (
-            "actions".to_owned(),
-            Yaml::str(level_str(permissions.actions).to_owned()),
-        ),
     ];
-    if !matches!(permissions.pull_requests, PermissionLevel::None) {
-        entries.push((
-            "pull-requests".to_owned(),
-            Yaml::str(level_str(permissions.pull_requests).to_owned()),
-        ));
+    if let Some(run_name) = &ir.run_name {
+        entries.insert(1, ("run-name".to_owned(), Yaml::str(run_name.clone())));
     }
-    if !matches!(permissions.id_token, PermissionLevel::None) {
-        entries.push((
-            "id-token".to_owned(),
-            Yaml::str(level_str(permissions.id_token).to_owned()),
-        ));
-    }
-    Yaml::Map(entries)
-}
-
-/// Render triggers: PR types, one push branch, schedule, dispatch, merge group.
-fn triggers_to_yaml(triggers: &Trigger) -> Yaml {
-    let pr_types: Vec<Yaml> = triggers
-        .pull_request_types
-        .iter()
-        .map(|kind| Yaml::str(kind.clone()))
-        .collect();
-    let branches: Vec<Yaml> = triggers
-        .push_branches
-        .iter()
-        .map(|branch| Yaml::str(branch.clone()))
-        .collect();
-    let mut entries = vec![
-        (
-            "pull_request".to_owned(),
-            Yaml::Map(vec![("types".to_owned(), Yaml::Seq(pr_types))]),
-        ),
-        (
-            "push".to_owned(),
-            Yaml::Map(vec![("branches".to_owned(), Yaml::Seq(branches))]),
-        ),
-    ];
-    if let Some(schedule) = &triggers.schedule {
-        let crons: Vec<Yaml> = schedule
-            .cron
-            .iter()
-            .map(|cron| Yaml::Map(vec![("cron".to_owned(), Yaml::str(cron.clone()))]))
-            .collect();
-        entries.push(("schedule".to_owned(), Yaml::Seq(crons)));
-    }
-    if let Some(dispatch) = &triggers.workflow_dispatch {
-        let inputs: Vec<(String, Yaml)> = dispatch
-            .inputs
-            .iter()
-            .map(|input| (input.name.clone(), dispatch_input_to_yaml(input)))
-            .collect();
-        entries.push((
-            "workflow_dispatch".to_owned(),
-            Yaml::Map(vec![("inputs".to_owned(), Yaml::Map(inputs))]),
-        ));
-    }
-    entries.push(("merge_group".to_owned(), Yaml::Null));
-    Yaml::Map(entries)
+    Ok(Yaml::Map(entries))
 }
 
 /// Derive the merge `needs` channel from the gate job's `needs`.
@@ -155,21 +92,6 @@ fn needs_channel_envs(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Strin
     Ok(vec![conclusions.channel_env(), conclusions.expected_env()])
 }
 
-/// Render one typed dispatch input: fixed string type, required, default.
-fn dispatch_input_to_yaml(input: &DispatchInput) -> Yaml {
-    let mut fields = vec![
-        (
-            "type".to_owned(),
-            Yaml::str(DispatchInput::INPUT_TYPE.to_owned()),
-        ),
-        ("required".to_owned(), Yaml::Bool(input.required)),
-    ];
-    if let Some(default) = &input.default {
-        fields.push(("default".to_owned(), Yaml::str(default.clone())));
-    }
-    Yaml::Map(fields)
-}
-
 /// Render one job: name, runs-on, timeout, environment, permissions, needs, if, steps.
 fn job_to_yaml(
     id: &str,
@@ -177,6 +99,9 @@ fn job_to_yaml(
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
 ) -> Result<Yaml, RenderError> {
+    velnor_actions_contract::workflow::step::validate_step_ids(&job.steps)
+        .map_err(RenderError::Contract)?;
+    validate_native_pages_approval(job, ctx)?;
     steps::scan_for_private_subcommands(&job.display_name)?;
     let mut entries = vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
@@ -186,6 +111,9 @@ fn job_to_yaml(
             Yaml::Int(i64::from(job.timeout_minutes.minutes())),
         ),
     ];
+    if let Some(mode) = job.cache_mode {
+        entries.push(("cache-mode".to_owned(), Yaml::str(mode.as_str().to_owned())));
+    }
     if let Some(environment) = &job.environment {
         entries.push(("environment".to_owned(), Yaml::str(environment.clone())));
     }
@@ -204,12 +132,48 @@ fn job_to_yaml(
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
     }
+    if !job.outputs.is_empty() {
+        velnor_actions_contract::workflow::outputs::validate_job_outputs(&job.outputs, &job.steps)
+            .map_err(RenderError::Contract)?;
+        entries.push((
+            "outputs".to_owned(),
+            Yaml::Map(
+                job.outputs
+                    .iter()
+                    .map(|output| (output.name.clone(), Yaml::str(output.value.expression())))
+                    .collect(),
+            ),
+        ));
+    }
     let mut rendered_steps = Vec::with_capacity(job.steps.len());
     for step in &job.steps {
-        rendered_steps.push(step_to_yaml(id, step, ctx, needs_envs)?);
+        rendered_steps.push(step_to_yaml(
+            id,
+            step,
+            ctx,
+            needs_envs,
+            crate::early_plan::has_early_plan(job),
+            &job.runs_on,
+        )?);
     }
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
     Ok(Yaml::Map(entries))
+}
+
+fn validate_native_pages_approval(job: &Job, ctx: &RenderContext) -> Result<(), RenderError> {
+    if let Some(role) = &job.native_pages_deploy
+        && ctx
+            .native_pages_approvals
+            .iter()
+            .filter(|approval| approval.admits(role))
+            .count()
+            != 1
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "unapproved_native_pages_deploy".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 /// True for the final job's plan download (fetch is gated inline below).
@@ -223,43 +187,6 @@ fn is_verdict_download(step: &Step) -> bool {
     ) && step.name == crate::closure::DOWNLOAD_PLAN_NAME
 }
 
-/// Env for one internal step: op plus request file, fetch carries auth.
-///
-/// The fetch op takes no request file; it reads the plan from the
-/// run directory and authenticates `gh` with the job token plus the
-/// repository slug (fixed literals, never caller input). Token hygiene
-/// still gates IR-level `GH_TOKEN` (see `support`); this render-time
-/// pair is fixed by construction for the fetch step only. Merge-family
-/// steps in the final job additionally carry the finalized `needs`
-/// conclusions channel plus the rendered expected inventory, so the
-/// merge binds required validators to the committed workflow.
-fn internal_env(
-    op: &str,
-    target: &str,
-    ctx: &RenderContext,
-    needs_envs: &[(String, String)],
-) -> Yaml {
-    if op == steps::FETCH_OPERATION {
-        return Yaml::Map(vec![
-            ("GH_REPO".to_owned(), Yaml::str("${{ github.repository }}")),
-            ("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")),
-            (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
-        ]);
-    }
-    let request = format!("{}/{target}-request.json", ctx.request_dir);
-    let mut env = vec![(INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned()))];
-    for (key, value) in needs_envs {
-        env.push((key.clone(), Yaml::str(value.clone())));
-    }
-    env.push((REQUEST_FILE_ENV.to_owned(), Yaml::str(request)));
-    if op == steps::PLAN_OPERATION && target == steps::PLAN_OPERATION {
-        for (key, value) in &ctx.plan_consumer_env {
-            env.push((key.clone(), Yaml::str(value.clone())));
-        }
-    }
-    Yaml::Map(env)
-}
-
 /// Render one action step: name, condition, pin, inputs, step env.
 ///
 /// Step env (cache modes) renders after `with:`; absent env renders
@@ -271,6 +198,7 @@ fn action_step_to_yaml(
     with: &BTreeMap<String, String>,
     env: &BTreeMap<String, String>,
 ) -> Result<Yaml, RenderError> {
+    crate::analysis_publication::validate_upload_binding(job_id, step)?;
     steps::validate_uses(uses)?;
     for (key, value) in with {
         crate::expressions::check_with_key(key)?;
@@ -279,7 +207,7 @@ fn action_step_to_yaml(
         steps::scan_for_private_subcommands(value)?;
     }
     commands::validate_env(env)?;
-    let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+    let mut entries = crate::steps_plain::step_header(step)?;
     if let Some(condition) = &step.condition {
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
@@ -318,14 +246,19 @@ fn step_to_yaml(
     step: &Step,
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
+    early: bool,
+    runs_on: &str,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&step.name)?;
     match &step.kind {
         StepKind::Action { uses, with, env } => action_step_to_yaml(job_id, step, uses, with, env),
+        StepKind::SourceBoundHelper { invocation, env } => {
+            crate::source_helper::step_to_yaml(step, invocation, env, &ctx.source_helpers, runs_on)
+        }
         StepKind::Shell { run, env } => {
             commands::validate_command_argv(run)?;
             commands::validate_env(env)?;
-            let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+            let mut entries = crate::steps_plain::step_header(step)?;
             if let Some(condition) = &step.condition {
                 steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
@@ -345,7 +278,7 @@ fn step_to_yaml(
         }
         StepKind::Internal { operation } => {
             let (op, target) = steps::split_internal_operation(operation)?;
-            let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+            let mut entries = crate::steps_plain::step_header(step)?;
             if let Some(condition) = &step.condition {
                 steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
@@ -359,7 +292,10 @@ fn step_to_yaml(
             } else {
                 &[]
             };
-            entries.push(("env".to_owned(), internal_env(op, target, ctx, channel)));
+            entries.push((
+                "env".to_owned(),
+                operation_env::internal_env(op, target, ctx, channel, early),
+            ));
             entries.push((
                 "run".to_owned(),
                 Yaml::str(commands::quote_run_arg(&ctx.staged_binary)),

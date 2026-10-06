@@ -21,6 +21,7 @@ fn wf_contract_surface_has_no_utility_fields() {
         top,
         [
             "actions",
+            "delivery",
             "discovery",
             "resources",
             "schema",
@@ -43,7 +44,8 @@ fn wf_contract_surface_has_no_utility_fields() {
         section("workflow").join(","),
         "generator_validation,max_parallel_jobs,name,policy"
     );
-    assert_eq!(section("stacks").join(","), "ignore");
+    assert_eq!(section("stacks").join(","), "ignore,workloads");
+    assert!(section("delivery").is_empty());
     let text = serde_json::to_string(&value).expect("text");
     for forbidden in ["shell", "uses", "yaml", "command", "argv", "mise_task"] {
         assert!(!text.contains(forbidden), "leaked {forbidden}");
@@ -72,6 +74,7 @@ fn assert_contract_modules(root: &str) {
         modules,
         [
             "archive",
+            "branch",
             "cachekey",
             "candidate_manifest",
             "canonical",
@@ -84,6 +87,7 @@ fn assert_contract_modules(root: &str) {
             "finding",
             "formats",
             "freshness",
+            "git_ref",
             "graph",
             "ids",
             "manifest",

@@ -41,6 +41,8 @@ pub(crate) fn reuse_event_name(event: WorkflowEvent) -> &'static str {
         WorkflowEvent::Push => "push",
         WorkflowEvent::MergeGroup => "merge_group",
         WorkflowEvent::Local => "local",
+        WorkflowEvent::Schedule => "schedule",
+        WorkflowEvent::WorkflowDispatch => "workflow_dispatch",
     }
 }
 

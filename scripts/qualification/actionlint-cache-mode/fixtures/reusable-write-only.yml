@@ -1,0 +1,6 @@
+on: push
+cache-mode: write-only
+jobs:
+  call:
+    cache-mode: write-only
+    uses: owner/repository/.github/workflows/build.yml@0123456789012345678901234567890123456789

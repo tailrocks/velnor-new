@@ -9,7 +9,7 @@ use velnor_actions_workflow_renderer::tofu_cache::{
     TOFU_PROVIDERS_SAVE_USES, tofu_providers_path_ok, tofu_providers_save_step,
 };
 
-const KEY: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-root-0123456789ab-${{hashFiles('.terraform.lock.hcl')}}";
+const KEY: &str = "velnor-v2-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-root-0123456789ab-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 const PATH: &str = "${{ runner.temp }}/velnor/tofu-cache/root-0123456789ab";
 
 #[test]

@@ -133,3 +133,21 @@ and must remain distinct from green CI and `PERF_VERIFIED`.
    late-produced snapshot persistence and exact candidate/proof identities.
 4. Record unavailable execution or measurement with the exact reason. No waiver
    or old successful run closes a performance gate.
+
+## Prior obligation registry source maps
+
+All five external `prior-obligation-registry-candidates.json` files preserve
+immutable prior authority, exact source references, native phase candidates,
+workflow event and runner contracts, and explicit unsupported/unavailable
+families. Source-only tasks without adoption evidence are excluded from the
+historical required universe. Independent comparisons checked recipes,
+dependency/service scopes, nested event parameters and complete prior job
+inventories. Private recipes remain outside this public checkout.
+
+These are candidate maps, with zero adopted native registry entries. No profile
+digest is fabricated from reduced current configuration. Adapter-shaped
+candidates, missing exact fixture descriptors and unsupported execution families
+remain distinct. Rust, OpenTofu, release and security obligations outside the
+native registry are preserved explicitly; an empty native list proves no
+retirement or zero required work. Adoption, execution qualification and rollout
+remain pending.

@@ -20,6 +20,8 @@ fn selected(root: &str) -> DetectionStatus {
 /// Minimal discovery carrying tofu statuses plus selection records.
 fn discovery_with(statuses: Vec<DetectionStatus>, units: Vec<TofuSelectionUnit>) -> Discovery {
     Discovery {
+        rust_inventory: None,
+        raw_inventories: Vec::new(),
         statuses,
         workspaces: Vec::new(),
         proposals: Vec::new(),
@@ -61,7 +63,7 @@ fn chdir_findings_name_each_subdir_root_once() {
         }
     }
     let mut warnings = Vec::new();
-    push_chdir_findings(&discovery, &mut warnings).expect("valid proposal roots");
+    push_chdir_findings(&discovery, &mut warnings);
     assert_eq!(
         warnings,
         vec![
@@ -80,7 +82,7 @@ fn chdir_findings_name_each_subdir_root_once() {
         .proposals
         .push(velnor_actions_tofu::propose_task(&group).expect("proposes"));
     let mut silent = Vec::new();
-    push_chdir_findings(&root_only, &mut silent).expect("valid repo root");
+    push_chdir_findings(&root_only, &mut silent);
     assert!(silent.is_empty());
 }
 
@@ -138,16 +140,12 @@ fn derive_tofu_merges_nested_fmt_scopes() {
     let fmt_no_targets = |unit: &str| {
         tasks
             .iter()
-            .find(|task| task.task_kind == "fmt" && task.identity.unit_id == unit)
+            .find(|task| task.task_kind == "fmt" && task.identity.unit_id == key_for_root(unit))
             .map(|task| task.no_targets)
     };
+    assert_eq!(fmt_no_targets(""), Some(false), "outer fmt runs");
     assert_eq!(
-        fmt_no_targets(&key_for_root("")),
-        Some(false),
-        "outer fmt runs"
-    );
-    assert_eq!(
-        fmt_no_targets(&key_for_root("stacks/a")),
+        fmt_no_targets("stacks/a"),
         Some(true),
         "covered inner fmt skips"
     );
@@ -234,14 +232,4 @@ fn no_tofu_roots_passes_through_without_git() {
     assert_eq!(rust, changed);
     assert!(tofu.is_empty());
     assert!(warnings.is_empty());
-}
-
-#[test]
-fn chdir_findings_reject_contradictory_root_authorities() {
-    let mut discovery = discovery_with(Vec::new(), Vec::new());
-    discovery.proposals = derive_tofu(&[selected("root")], &[]).expect("proposals");
-    discovery.proposals[0].identity.project_root = ".".to_owned();
-    let err = push_chdir_findings(&discovery, &mut Vec::new())
-        .expect_err("changed root authority must fail");
-    assert!(err.to_string().contains("proposal_root_mismatch"), "{err}");
 }

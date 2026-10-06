@@ -1,6 +1,7 @@
 //! `Prepare pinned tools` and `Verify prepared inputs` step cases (TASK-2.1, TASK-2.5, WF-3.39).
 use std::ffi::OsString;
 use std::path::PathBuf;
+use velnor_actions_contract::ToolCacheDomain;
 use velnor_actions_mise::{
     MiseError, PREPARE_PINNED_TOOLS_STEP, PREPARE_RUST_COMPONENTS_STEP, PinnedTool,
     PreparePinnedTools, PrepareRustComponents, ToolCatalog, ToolHomes, VERIFY_PREPARED_INPUTS_STEP,
@@ -39,15 +40,15 @@ fn prepare_step_name_matches_both_contracts() {
 #[test]
 fn prepare_pinned_tools_argv_is_fixed_install() -> Result<(), String> {
     assert_eq!(
-        prepare()?.argv(&pinned()),
+        prepare()?.argv(&pinned()).map_err(|err| err.to_string())?,
         strings(&[
             "mise",
             "--no-config",
             "--no-env",
             "--no-hooks",
             "install",
-            "rust@1.98.1",
-            "mr-boxington@1.21.0",
+            "rust[profile=minimal,components=clippy,rustfmt]@1.98.1",
+            "mr-boxington@1.21.1",
         ])
     );
     Ok(())
@@ -61,8 +62,12 @@ fn prepare_pinned_tools_env_disables_knobs_and_carries_homes() -> Result<(), Str
         ("MISE_NO_ENV", "1"),
         ("MISE_NO_HOOKS", "1"),
         ("MISE_LOCKFILE", "0"),
+        ("RUSTUP_AUTO_INSTALL", "0"),
         ("MISE_RUSTUP_HOME", "/velnor/rustup"),
         ("MISE_CARGO_HOME", "/velnor/cargo"),
+        ("RUSTUP_HOME", "/velnor/rustup"),
+        ("CARGO_HOME", "/velnor/cargo"),
+        ("MISE_DATA_DIR", "/velnor/mise"),
         ("RUSTUP_TOOLCHAIN", "1.98.1"),
     ] {
         assert!(env_has(&env, key, value), "missing {key}={value}: {env:?}");
@@ -73,28 +78,46 @@ fn prepare_pinned_tools_env_disables_knobs_and_carries_homes() -> Result<(), Str
             "explicit install must stay enabled: {blocked}"
         );
     }
-    assert_eq!(env.len(), 7, "exact step env, no drift: {env:?}");
+    assert_eq!(env.len(), 11, "exact step env, no drift: {env:?}");
     Ok(())
 }
 
 #[test]
-fn prepare_pinned_tools_env_without_homes_is_isolation_only() -> Result<(), String> {
-    let step = prepare()?;
-    let env = step.env_without_homes();
-    let expected: Vec<(OsString, OsString)> = [
+fn prepare_pinned_tools_domain_env_carries_only_owned_domain_homes() {
+    let isolation: Vec<(OsString, OsString)> = [
         ("MISE_NO_CONFIG", "1"),
         ("MISE_NO_ENV", "1"),
         ("MISE_NO_HOOKS", "1"),
         ("MISE_LOCKFILE", "0"),
+        ("RUSTUP_AUTO_INSTALL", "0"),
     ]
     .into_iter()
     .map(|(key, value)| (OsString::from(key), OsString::from(value)))
     .collect();
+    for domain in [
+        ToolCacheDomain::Planning,
+        ToolCacheDomain::NpmBootstrap,
+        ToolCacheDomain::BunBootstrap,
+        ToolCacheDomain::TofuBootstrap,
+        ToolCacheDomain::GradleBootstrap,
+    ] {
+        assert_eq!(
+            PreparePinnedTools::env_for_domain(domain),
+            isolation,
+            "{}",
+            domain.name()
+        );
+    }
+    let mut expected = isolation;
+    expected.extend(ToolHomes::runner_temp().home_env());
     assert_eq!(
-        env, expected,
-        "triple-less prepare env is the exact isolation overlay: {env:?}"
+        PreparePinnedTools::env_for_domain(ToolCacheDomain::Full),
+        expected
     );
-    Ok(())
+    assert!(
+        !expected.iter().any(|(key, _)| key == "RUSTUP_TOOLCHAIN"),
+        "domain ownership does not select a compiler"
+    );
 }
 
 #[test]
@@ -102,7 +125,10 @@ fn prepare_pinned_tools_command_matches_step() -> Result<(), String> {
     let step = prepare()?;
     let command = step.command(&pinned()).map_err(|err| err.to_string())?;
     assert_eq!(command.program(), "mise");
-    assert_eq!(command.argv(), step.argv(&pinned()));
+    assert_eq!(
+        command.argv(),
+        step.argv(&pinned()).map_err(|err| err.to_string())?
+    );
     assert_eq!(command.full_env(), step.env(&pinned()));
     Ok(())
 }
@@ -124,10 +150,15 @@ fn prepare_pinned_tools_specs_come_only_from_catalog() -> Result<(), String> {
     .map_err(|err| err.to_string())?;
     let step =
         PreparePinnedTools::new(vec![PinnedTool::Rust], homes()?).map_err(|err| err.to_string())?;
-    let argv = step.argv(&catalog);
-    assert!(argv.iter().any(|arg| arg == "rust@1.97.0"));
+    let argv = step.argv(&catalog).map_err(|err| err.to_string())?;
     assert!(
-        !argv.iter().any(|arg| arg == "rust@1.98.1"),
+        argv.iter()
+            .any(|arg| arg == "rust[profile=minimal,components=clippy,rustfmt]@1.97.0")
+    );
+    assert!(
+        !argv
+            .iter()
+            .any(|arg| arg == "rust[profile=minimal,components=clippy,rustfmt]@1.98.1"),
         "no pinned fallback may leak in: {argv:?}"
     );
     assert!(env_has(&step.env(&catalog), "RUSTUP_TOOLCHAIN", "1.97.0"));
@@ -162,14 +193,14 @@ fn prepared_inputs_argv_is_locked_offline_qualification() -> Result<(), String> 
     );
     assert_eq!(step.homes().rustup_home(), "/velnor/rustup");
     assert_eq!(
-        step.argv(&pinned()),
+        step.argv(&pinned()).map_err(|err| err.to_string())?,
         strings(&[
             "mise",
             "--no-config",
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
+            "rust[profile=minimal,components=clippy,rustfmt]@1.98.1",
             "--",
             "cargo",
             "metadata",
@@ -191,22 +222,29 @@ fn prepared_inputs_env_matches_command() -> Result<(), String> {
         .map_err(|err| err.to_string())?;
     let command = step.command(&catalog).map_err(|err| err.to_string())?;
     assert_eq!(command.program(), "mise");
-    assert_eq!(command.argv(), step.argv(&catalog));
+    assert_eq!(
+        command.argv(),
+        step.argv(&catalog).map_err(|err| err.to_string())?
+    );
     assert_eq!(command.full_env(), step.env(&catalog));
     assert!(command.disables_auto_install());
     let env = step.env(&catalog);
     for (key, value) in [
         ("MISE_NO_CONFIG", "1"),
         ("MISE_LOCKFILE", "0"),
+        ("RUSTUP_AUTO_INSTALL", "0"),
         ("MISE_AUTO_INSTALL", "false"),
         ("MISE_EXEC_AUTO_INSTALL", "false"),
         ("MISE_RUSTUP_HOME", "/velnor/rustup"),
         ("MISE_CARGO_HOME", "/velnor/cargo"),
+        ("RUSTUP_HOME", "/velnor/rustup"),
+        ("CARGO_HOME", "/velnor/cargo"),
+        ("MISE_DATA_DIR", "/velnor/mise"),
         ("RUSTUP_TOOLCHAIN", "1.98.1"),
     ] {
         assert!(env_has(&env, key, value), "missing {key}={value}: {env:?}");
     }
-    assert_eq!(env.len(), 9, "exact step env, no drift: {env:?}");
+    assert_eq!(env.len(), 13, "exact step env, no drift: {env:?}");
     Ok(())
 }
 
@@ -243,15 +281,19 @@ fn tool_homes_exec_env_is_verification_env() -> Result<(), String> {
         ("MISE_NO_ENV", "1"),
         ("MISE_NO_HOOKS", "1"),
         ("MISE_LOCKFILE", "0"),
+        ("RUSTUP_AUTO_INSTALL", "0"),
         ("MISE_AUTO_INSTALL", "false"),
         ("MISE_EXEC_AUTO_INSTALL", "false"),
         ("MISE_RUSTUP_HOME", "/velnor/rustup"),
         ("MISE_CARGO_HOME", "/velnor/cargo"),
+        ("RUSTUP_HOME", "/velnor/rustup"),
+        ("CARGO_HOME", "/velnor/cargo"),
+        ("MISE_DATA_DIR", "/velnor/mise"),
         ("RUSTUP_TOOLCHAIN", "1.98.1"),
     ] {
         assert!(env_has(&env, key, value), "missing {key}={value}: {env:?}");
     }
-    assert_eq!(env.len(), 9, "exact step env, no drift: {env:?}");
+    assert_eq!(env.len(), 13, "exact step env, no drift: {env:?}");
     let qualified = VerifyPreparedInputs::new(PathBuf::from("Cargo.toml"), homes()?)
         .map_err(|err| err.to_string())?;
     assert_eq!(
@@ -272,14 +314,14 @@ fn rust_components_argv_is_fixed_rustup_add() -> Result<(), String> {
     );
     assert_eq!(PrepareRustComponents::components(), ["clippy", "rustfmt"]);
     assert_eq!(
-        request.argv(&pinned()),
+        request.argv(&pinned()).map_err(|err| err.to_string())?,
         strings(&[
             "mise",
             "--no-config",
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
+            "rust[profile=minimal,components=clippy,rustfmt]@1.98.1",
             "--",
             "rustup",
             "component",
@@ -298,7 +340,10 @@ fn rust_components_command_matches_step() -> Result<(), String> {
     let catalog = pinned();
     let request = PrepareRustComponents::new(homes()?);
     let command = request.command(&catalog).map_err(|err| err.to_string())?;
-    assert_eq!(command.argv(), request.argv(&catalog));
+    assert_eq!(
+        command.argv(),
+        request.argv(&catalog).map_err(|err| err.to_string())?
+    );
     assert_eq!(command.full_env(), request.env(&catalog));
     assert!(command.disables_auto_install());
     assert!(env_has(

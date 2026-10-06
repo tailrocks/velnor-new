@@ -9,9 +9,8 @@
 //! Every gate fails closed with a `publish_refused:*` reason: wrong
 //! event, unprotected ref, unanchored repository, head or plan-event
 //! mismatch, unverifiable generator, malformed source commit, or an
-//! unproven reuse disposition. Covered obligations are skipped, never
-//! carried forward: this run executed no proof for them, and a carried
-//! proof without originating attestation fails validation downstream.
+//! unproven reuse disposition. Covered obligations carry authenticated
+//! parent evidence while preserving the original execution run.
 //! Before staging, the op self-checks the manifest through the same
 //! [`validate_provenance`](crate::cover_baseline::provenance_check::validate_provenance)
 //! consumers run, so publish and consume agree by construction.
@@ -30,16 +29,21 @@ use crate::internal_request::resolve_run_key;
 use crate::merge::BaselineManifest;
 use crate::request_event::{request_refs, workflow_event_for};
 
+#[path = "baseline_publish_evidence.rs"]
+mod evidence;
+
 /// Publish operation tag.
 pub const PUBLISH_OP: &str = "publish-baseline-v1";
+#[path = "baseline_publish_authority.rs"]
+mod authority;
 /// Staged baseline filename inside the run directory.
 pub(crate) const BASELINE_FILENAME: &str = "baseline.json";
 
 /// `publish-baseline-v1` request: push refs plus protected-branch evidence.
 ///
 /// Materialized at the request boundary from the GitHub environment;
-/// the op consumes this file and reads no `GITHUB_*` ambient state
-/// itself. Unknown fields (including caller-supplied manifest
+/// publication independently binds these facts to current runner authority.
+/// Unknown fields (including caller-supplied manifest
 /// metadata) reject via `deny_unknown_fields`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -69,6 +73,10 @@ struct PublishRequest {
 pub struct PublishOutputs {
     /// Derived `velnor-baseline-<commit>-<compat>` artifact name.
     pub artifact_name: String,
+    /// True only when this attempt produced new baseline bytes to upload.
+    pub upload_needed: bool,
+    /// Original successful attempt of the referenced immutable baseline.
+    pub baseline_run_attempt: u64,
 }
 
 /// Materialize one canonical publish request from explicit inputs.
@@ -93,8 +101,8 @@ pub(crate) fn write_publish_request(
     anchor: &Path,
 ) -> Result<PathBuf, OrchestratorError> {
     let path = request_path.to_path_buf();
-    let payload: serde_json::Value =
-        serde_json::from_str(payload_json).map_err(|_| internal("malformed_event_payload"))?;
+    let payload =
+        parse_strict_json(payload_json).map_err(|_| internal("malformed_event_payload"))?;
     let event = workflow_event_for(event_name, &payload)?;
     let (_, head) = request_refs(event, &payload, github_sha)?;
     let request = serde_json::json!({
@@ -143,6 +151,7 @@ pub fn baseline_publish(
     request_json: &str,
     runner_temp: &Path,
 ) -> Result<PublishOutputs, OrchestratorError> {
+    authority::RunnerPublicationAuthority::capture()?.verify(&publish_request(request_json)?)?;
     let run_key = resolve_run_key(None)?;
     baseline_publish_to(request_json, &run_key, runner_temp)
 }
@@ -162,22 +171,60 @@ pub(crate) fn baseline_publish_to(
     run_key: &str,
     runner_temp: &Path,
 ) -> Result<PublishOutputs, OrchestratorError> {
+    baseline_publish_with_lookup(
+        request_json,
+        run_key,
+        runner_temp,
+        evidence::lookup_existing,
+    )
+}
+
+/// Testable core; production lookup authenticates immutable service evidence.
+fn baseline_publish_with_lookup(
+    request_json: &str,
+    run_key: &str,
+    runner_temp: &Path,
+    lookup: impl FnOnce(
+        &PublishRequest,
+        &velnor_actions_contract::Plan,
+        u64,
+        &Path,
+    ) -> Result<Option<BaselineManifest>, OrchestratorError>,
+) -> Result<PublishOutputs, OrchestratorError> {
     velnor_actions_contract::validate_run_key(run_key).map_err(internal_contract)?;
     let request = publish_request(request_json)?;
     let (run_id, run_attempt) = ci_run_ids(run_key)?;
     publish_gate(&request)?;
     let plan = crate::task_report::load_plan(run_key, runner_temp)?;
     bind_plan(&request, &plan)?;
-    let manifest = publish_manifest(&request, &plan, run_id, run_attempt)?;
+    evidence::current_report(&plan, runner_temp)?;
+    let dir = runner_temp.join("velnor").join(run_key);
+    if let Some(existing) = lookup(&request, &plan, run_id, &dir)? {
+        evidence::qualify_existing(&request, &plan, &existing, run_id, run_attempt)?;
+        return Ok(PublishOutputs {
+            artifact_name: existing.artifact_name,
+            upload_needed: false,
+            baseline_run_attempt: existing.run_attempt,
+        });
+    }
+    let prior = evidence::publication_evidence(&request, &plan, runner_temp)?;
+    let manifest = publish_manifest(&request, &plan, run_id, run_attempt, prior.as_ref())?;
     self_check(&request, &manifest)?;
     let bytes = canonical_json_bytes(&manifest).map_err(internal_contract)?;
     let path = runner_temp
         .join("velnor")
         .join(run_key)
+        .join("published")
         .join(BASELINE_FILENAME);
+    crate::exclusive_write::create_dir_no_symlink(
+        runner_temp,
+        path.parent().ok_or_else(|| internal("publish_path"))?,
+    )?;
     crate::exclusive_write::write_exclusive(&path, &bytes, "baseline")?;
     Ok(PublishOutputs {
         artifact_name: manifest.artifact_name,
+        upload_needed: true,
+        baseline_run_attempt: run_attempt,
     })
 }
 
@@ -220,7 +267,7 @@ fn publish_gate(request: &PublishRequest) -> Result<(), OrchestratorError> {
     let protected = request
         .default_branch
         .as_deref()
-        .filter(|branch| !branch.is_empty() && !branch.chars().any(char::is_whitespace))
+        .filter(|branch| velnor_actions_contract::is_valid_branch_name(branch))
         .map(|branch| format!("refs/heads/{branch}"));
     if protected.is_none() || request.git_ref.as_ref() != protected.as_ref() {
         return Err(internal("publish_refused:unprotected_ref"));
@@ -250,46 +297,28 @@ fn bind_plan(
     if plan.event != WorkflowEvent::Push {
         return Err(internal("publish_refused:plan_event_mismatch"));
     }
+    if plan.trust != velnor_actions_contract::Trust::Trusted {
+        return Err(internal("publish_refused:untrusted_plan"));
+    }
     Ok(())
 }
 
-/// Build the trusted manifest over the plan's executed obligations.
+/// Build the trusted manifest over direct and authenticated carried tasks.
 ///
 /// Compatibility derives from the plan alone so later lookups name
-/// this exact artifact; covered obligations are skipped (never
-/// carried), and any reuse disposition refuses outright.
+/// this exact artifact; parent lineage preserves covered executions,
+/// and any unqualified reuse disposition refuses outright.
 fn publish_manifest(
     request: &PublishRequest,
     plan: &velnor_actions_contract::Plan,
     run_id: u64,
     run_attempt: u64,
+    prior: Option<&BaselineManifest>,
 ) -> Result<BaselineManifest, OrchestratorError> {
     if is_unverifiable_generator_sha(&plan.generator.sha256) {
         return Err(internal("publish_refused:generator_unverifiable"));
     }
-    let mut tasks = Vec::new();
-    for obligation in &plan.obligations {
-        match obligation.decision {
-            velnor_actions_contract::ObligationDecision::Execute => {
-                tasks.push(crate::merge::required_evidence::BaselineTaskEntry {
-                    task_id: obligation.task_id.clone(),
-                    task_digest: obligation.task_digest.clone(),
-                    input_digest: obligation.input_digest.clone(),
-                    closure_digest: obligation.closure_digest.clone(),
-                    proof_run_id: run_id,
-                    carried_from: None,
-                    observed_run_id: run_id,
-                    external_data: None,
-                    proof: None,
-                });
-            }
-            velnor_actions_contract::ObligationDecision::CoveredByTrustedBaseline => {}
-            velnor_actions_contract::ObligationDecision::ReusedFromTaskCache => {
-                return Err(internal("publish_refused:unproven_reuse"));
-            }
-        }
-    }
-    tasks.sort_by(|left, right| left.task_id.cmp(&right.task_id));
+    let tasks = evidence::published_tasks(plan, run_id, prior)?;
     let compat =
         crate::cover_compat::baseline_compat_for_plan(plan).map_err(|reason| internal(&reason))?;
     let name = velnor_actions_contract::artifact_id_for_baseline(&request.head, &compat)
@@ -320,8 +349,8 @@ fn publish_manifest(
         artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
         artifact_name: name,
         tasks,
-        parent: None,
-        expires_at_unix: None,
+        parent: prior.cloned().map(Box::new),
+        expires_at_unix: prior.and_then(|parent| parent.expires_at_unix),
     })
 }
 

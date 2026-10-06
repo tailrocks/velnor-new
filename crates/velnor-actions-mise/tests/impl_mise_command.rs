@@ -9,7 +9,7 @@ use velnor_actions_mise::{
 };
 
 fn specs() -> Vec<String> {
-    vec!["rust@1.98.1".to_owned()]
+    vec!["rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()]
 }
 
 fn payload() -> Vec<OsString> {
@@ -21,7 +21,7 @@ fn payload() -> Vec<OsString> {
 }
 
 #[test]
-fn isolation_env_carries_the_quartet() {
+fn isolation_env_disables_repo_inputs_and_rustup_auto_install() {
     assert_eq!(
         ISOLATION_ENV,
         [
@@ -29,6 +29,7 @@ fn isolation_env_carries_the_quartet() {
             ("MISE_NO_ENV", "1"),
             ("MISE_NO_HOOKS", "1"),
             ("MISE_LOCKFILE", "0"),
+            ("RUSTUP_AUTO_INSTALL", "0"),
         ]
     );
     let overlay = IsolatedCommand::env_overlay();
@@ -51,7 +52,7 @@ fn mise_argv_places_globals_before_subcommand() -> Result<(), String> {
             OsString::from("--no-env"),
             OsString::from("--no-hooks"),
             OsString::from("exec"),
-            OsString::from("rust@1.98.1"),
+            OsString::from("rust[profile=minimal,components=clippy,rustfmt]@1.98.1"),
             OsString::from("--"),
             OsString::from("cargo"),
             OsString::from("metadata"),
@@ -74,7 +75,9 @@ fn separator_splits_specs_from_payload() -> Result<(), String> {
     let split = argv.iter().position(|arg| arg == "--").unwrap_or(0);
     assert_eq!(
         argv[..split].last().map(OsString::as_os_str),
-        Some(OsStr::new("rust@1.98.1"))
+        Some(OsStr::new(
+            "rust[profile=minimal,components=clippy,rustfmt]@1.98.1"
+        ))
     );
     assert_eq!(argv[split + 1], OsString::from("cargo"));
     Ok(())

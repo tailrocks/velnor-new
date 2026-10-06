@@ -23,7 +23,6 @@ use velnor_actions_rust::{
 };
 
 use crate::OrchestratorError;
-use crate::config::CONFIG_REL;
 use crate::discover::{PlannedWorkspace, workspace_manifest};
 
 /// One configuration whose applied features differ from the request.
@@ -96,8 +95,7 @@ pub(crate) fn derive_for_config(
         if !package.in_workspace || package.external || !index.contains(&package.manifest) {
             continue;
         }
-        let (features, fallback) =
-            resolve_features(package, &rust_config.features, union, &rust_config.name)?;
+        let (features, fallback) = crate::rust_features::resolve(package, rust_config, union)?;
         fallbacks.extend(fallback);
         let inputs = DeriveInputs {
             package,
@@ -136,65 +134,6 @@ pub(crate) fn derive_for_config(
         groups.push(fmt);
     }
     Ok((groups, fallbacks))
-}
-
-/// Intersect one configuration request with one crate's declared features.
-///
-/// The lone `default` sentinel and the empty list pass through untouched:
-/// they carry no per-crate names to resolve. Otherwise every requested
-/// name must exist in the workspace union (typos fail closed naming the
-/// crate), the crate applies the sorted intersection, and an empty
-/// intersection falls back to the crate's own default features.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Config`] naming crate, configuration,
-/// and feature when no workspace crate declares a requested feature.
-fn resolve_features(
-    package: &velnor_actions_rust::PackageRecord,
-    requested: &[String],
-    union: &BTreeSet<String>,
-    configuration: &str,
-) -> Result<(Vec<String>, Option<FeatureFallback>), OrchestratorError> {
-    if requested.len() == 1 && requested[0] == "default" {
-        return Ok((requested.to_vec(), None));
-    }
-    if requested.is_empty() {
-        return Ok((Vec::new(), None));
-    }
-    for feature in requested {
-        if !union.contains(feature) {
-            return Err(OrchestratorError::config(
-                CONFIG_REL,
-                "stacks.rust.configurations.features",
-                format!("unknown_feature:{configuration}:{}:{feature}", package.name),
-            ));
-        }
-    }
-    let declared: BTreeSet<&str> = package.features.iter().map(String::as_str).collect();
-    let mut applied: Vec<String> = requested
-        .iter()
-        .filter(|feature| declared.contains(feature.as_str()))
-        .cloned()
-        .collect();
-    applied.sort();
-    applied.dedup();
-    let mut sorted = requested.to_vec();
-    sorted.sort();
-    sorted.dedup();
-    if applied == sorted {
-        return Ok((applied, None));
-    }
-    if applied.is_empty() {
-        applied = vec!["default".to_owned()];
-    }
-    let fallback = FeatureFallback {
-        package_name: package.name.clone(),
-        configuration: configuration.to_owned(),
-        requested: sorted,
-        applied: applied.clone(),
-    };
-    Ok((applied, Some(fallback)))
 }
 
 /// Expand test groups into per-shard groups when sharding exceeds one.

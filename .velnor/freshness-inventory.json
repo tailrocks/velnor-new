@@ -1,7 +1,7 @@
 {
   "actions": [
     {
-      "checked_at": "2026-10-01T18:39:41Z",
+      "checked_at": "2026-10-02T19:54:23Z",
       "key": "jdx/mise-action",
       "latest": "v5.0.1",
       "pinned_sha": "9149ea85001c7435d5a66bb127d6a1b6227cb0a5",
@@ -9,10 +9,13 @@
       "qualified_sha": "9149ea85001c7435d5a66bb127d6a1b6227cb0a5",
       "qualified_version": "v5.0.0",
       "source": "https://api.github.com/repos/jdx/mise-action/releases/latest",
-      "status": "held"
+      "status": "held",
+      "source_sha256": "7056f6f66b3cc372b507492e33fd516e890d6a9dae5d3576155e4dc63b3477c7",
+      "published_at": "2026-09-30T22:37:15Z",
+      "pin_sha_verified": true
     },
     {
-      "checked_at": "2026-10-01T18:39:41Z",
+      "checked_at": "2026-10-02T19:54:23Z",
       "key": "actions/checkout",
       "latest": "v7.0.1",
       "pinned_sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
@@ -20,10 +23,13 @@
       "qualified_sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
       "qualified_version": "v7.0.1",
       "source": "https://api.github.com/repos/actions/checkout/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "15acdede088b17023cdbbcea4ede7e6ed93c6f3be85202506e545a7f4da1d834",
+      "published_at": "2026-07-20T15:10:05Z",
+      "pin_sha_verified": true
     },
     {
-      "checked_at": "2026-10-01T18:39:41Z",
+      "checked_at": "2026-10-02T19:54:24Z",
       "key": "actions/download-artifact",
       "latest": "v8.0.1",
       "pinned_sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
@@ -31,10 +37,13 @@
       "qualified_sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
       "qualified_version": "v8.0.1",
       "source": "https://api.github.com/repos/actions/download-artifact/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "5160878f01ca82c77d2b4fd652d73ef150024accbf58fc1f165af165bbae6875",
+      "published_at": "2026-03-11T15:44:25Z",
+      "pin_sha_verified": true
     },
     {
-      "checked_at": "2026-10-01T18:39:41Z",
+      "checked_at": "2026-10-02T19:54:24Z",
       "key": "actions/upload-artifact",
       "latest": "v7.0.1",
       "pinned_sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -42,10 +51,13 @@
       "qualified_sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
       "qualified_version": "v7.0.1",
       "source": "https://api.github.com/repos/actions/upload-artifact/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "86c5f1ac21ba0a4e7648ebd4ab82b1fe11f14c70aef5d7531e235d152088b03f",
+      "published_at": "2026-04-10T17:31:14Z",
+      "pin_sha_verified": true
     },
     {
-      "checked_at": "2026-10-01T18:39:41Z",
+      "checked_at": "2026-10-02T19:54:24Z",
       "key": "actions/cache/restore",
       "latest": "v6.1.0",
       "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -53,10 +65,13 @@
       "qualified_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
       "qualified_version": "v6.1.0",
       "source": "https://api.github.com/repos/actions/cache/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "fab1cd173714779bcd8cf67c96c3a29f04323b5a5389ad404afcd17abfb36e53",
+      "published_at": "2026-06-26T19:17:06Z",
+      "pin_sha_verified": true
     },
     {
-      "checked_at": "2026-10-01T18:39:41Z",
+      "checked_at": "2026-10-02T19:54:24Z",
       "key": "actions/cache/save",
       "latest": "v6.1.0",
       "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -64,44 +79,149 @@
       "qualified_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
       "qualified_version": "v6.1.0",
       "source": "https://api.github.com/repos/actions/cache/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "fab1cd173714779bcd8cf67c96c3a29f04323b5a5389ad404afcd17abfb36e53",
+      "published_at": "2026-06-26T19:17:06Z",
+      "pin_sha_verified": true
     },
     {
-      "checked_at": "2026-10-01T18:39:41Z",
+      "checked_at": "2026-10-02T19:54:58Z",
       "key": "jdx/mr-boxington-action",
-      "latest": "v1.5.0",
-      "pinned_sha": "9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3",
-      "pinned_version": "v1.5.0",
-      "qualified_sha": "9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3",
-      "qualified_version": "v1.5.0",
-      "source": "https://api.github.com/repos/jdx/mr-boxington-action/releases",
-      "status": "current"
+      "latest": "v1.6.0",
+      "pinned_sha": "1687e54eb349cadf61fa38b5813a77875489e8e6",
+      "pinned_version": "v1.6.0",
+      "qualified_sha": "1687e54eb349cadf61fa38b5813a77875489e8e6",
+      "qualified_version": "v1.6.0",
+      "source": "https://api.github.com/repos/jdx/mr-boxington-action/releases?per_page=100",
+      "status": "current",
+      "source_sha256": "9a09fbbd5d85ecbe99406d1eba4693ee6f9fa8fff620b4271702da287a978a53",
+      "published_at": "2026-10-02T10:02:20Z",
+      "pin_sha_verified": true,
+      "qualification_scope": "immutable upstream source independently reviewed; hosted cache behavior unqualified"
     },
     {
-      "checked_at": "2026-10-01T18:39:41Z",
+      "checked_at": "2026-10-02T19:54:25Z",
       "key": "asamarts/alint",
       "latest": "v0.17.0",
-      "pinned_sha": "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb",
-      "pinned_version": "v0.16.1",
-      "qualified_sha": "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb",
-      "qualified_version": "v0.16.1",
+      "pinned_sha": "d93c0283b19dd78afcd8a4b303f1556a7759ba81",
+      "pinned_version": "v0.17.0",
+      "qualified_sha": "d93c0283b19dd78afcd8a4b303f1556a7759ba81",
+      "qualified_version": "v0.17.0",
       "source": "https://api.github.com/repos/asamarts/alint/releases/latest",
-      "status": "held"
+      "status": "current",
+      "source_sha256": "6d4ffcc35f1aea87a3858670e40b4a67eebd4d6efc9178fb0bac4651b16f939f",
+      "published_at": "2026-10-01T05:27:59Z",
+      "pin_sha_verified": true,
+      "qualification_scope": "official exact source and paired actual config/action flags compatibility; repository policy failures identical, hosted performance unqualified"
     },
     {
-      "checked_at": "2026-10-01T18:39:41Z",
+      "checked_at": "2026-10-02T19:54:57Z",
       "key": "Swatinem/rust-cache",
       "latest": "v2.9.2",
       "pinned_sha": "6323deb102c322ba6fcbdcafc7e3dddab59af2b6",
       "pinned_version": "v2.9.2",
       "qualified_sha": "6323deb102c322ba6fcbdcafc7e3dddab59af2b6",
       "qualified_version": "v2.9.2",
-      "source": "https://api.github.com/repos/Swatinem/rust-cache/tags",
-      "status": "current"
+      "source": "https://api.github.com/repos/Swatinem/rust-cache/tags?per_page=100",
+      "status": "current",
+      "source_sha256": "be2d551501d2370cd0c1467a21838df81937d7fb6cd274a5f23b653b755d9799",
+      "published_at": "2026-08-06T06:26:27Z",
+      "pin_sha_verified": true
+    },
+    {
+      "key": "docker/setup-buildx-action",
+      "checked_at": "2026-10-02T20:04:38Z",
+      "latest": "v4.4.1",
+      "pinned_version": "v4.4.1",
+      "qualified_version": "v4.4.1",
+      "pinned_sha": "f87e5991a6d7451dcb8d9637bfbc97413f497069",
+      "qualified_sha": "f87e5991a6d7451dcb8d9637bfbc97413f497069",
+      "source": "https://api.github.com/repos/docker/setup-buildx-action/releases/latest",
+      "status": "current",
+      "metadata_sha256": "9c55229011a0566758962f36c74309c8ab06f8905a5997591a6a46319401ab38",
+      "qualification_scope": "official action release, tag and metadata source independently verified; hosted workflow behavior unqualified"
+    },
+    {
+      "key": "docker/login-action",
+      "checked_at": "2026-10-02T20:04:38Z",
+      "latest": "v4.6.0",
+      "pinned_version": "v4.6.0",
+      "qualified_version": "v4.6.0",
+      "pinned_sha": "dbcb813823bdd20940b903addbd779551569679f",
+      "qualified_sha": "dbcb813823bdd20940b903addbd779551569679f",
+      "source": "https://api.github.com/repos/docker/login-action/releases/latest",
+      "status": "current",
+      "metadata_sha256": "e65e6bdc57fc10adcee036a393229aae6b9a9f451b69528f4ff50d4b0e93f156",
+      "qualification_scope": "official action release, tag and metadata source independently verified; hosted workflow behavior unqualified"
+    },
+    {
+      "key": "docker/build-push-action",
+      "checked_at": "2026-10-02T20:04:38Z",
+      "latest": "v7.4.0",
+      "pinned_version": "v7.4.0",
+      "qualified_version": "v7.4.0",
+      "pinned_sha": "c3c9e263c25d99ce0380d002d59b67737d91b0dc",
+      "qualified_sha": "c3c9e263c25d99ce0380d002d59b67737d91b0dc",
+      "source": "https://api.github.com/repos/docker/build-push-action/releases/latest",
+      "status": "current",
+      "metadata_sha256": "5c1ade75252eabe541b96cc39a2165a07c8850f9bcd3f9b75f5394fbdfb215fd",
+      "qualification_scope": "official action release, tag and metadata source independently verified; hosted workflow behavior unqualified"
+    },
+    {
+      "key": "actions/configure-pages",
+      "checked_at": "2026-10-02T20:04:38Z",
+      "latest": "v6.0.0",
+      "pinned_version": "v6.0.0",
+      "qualified_version": "v6.0.0",
+      "pinned_sha": "45bfe0192ca1faeb007ade9deae92b16b8254a0d",
+      "qualified_sha": "45bfe0192ca1faeb007ade9deae92b16b8254a0d",
+      "source": "https://api.github.com/repos/actions/configure-pages/releases/latest",
+      "status": "current",
+      "metadata_sha256": "55f1486ae3901c69be182cea1c1e3313954c78be626751a85b19ddaf14ae8da6",
+      "qualification_scope": "official action release, tag and metadata source independently verified; hosted workflow behavior unqualified"
+    },
+    {
+      "key": "actions/upload-pages-artifact",
+      "checked_at": "2026-10-02T20:04:38Z",
+      "latest": "v5.0.0",
+      "pinned_version": "v5.0.0",
+      "qualified_version": "v5.0.0",
+      "pinned_sha": "fc324d3547104276b827a68afc52ff2a11cc49c9",
+      "qualified_sha": "fc324d3547104276b827a68afc52ff2a11cc49c9",
+      "source": "https://api.github.com/repos/actions/upload-pages-artifact/releases/latest",
+      "status": "current",
+      "metadata_sha256": "f84e759011e0c497e696f5bce4ebb5fbe9bbdc5aea309b73795283fa139c1558",
+      "qualification_scope": "official action release, tag and metadata source independently verified; hosted workflow behavior unqualified"
+    },
+    {
+      "key": "actions/deploy-pages",
+      "checked_at": "2026-10-02T20:04:38Z",
+      "latest": "v5.0.1",
+      "pinned_version": "v5.0.1",
+      "qualified_version": "v5.0.1",
+      "pinned_sha": "368f82528645a54fb793d4d04e342629a3f51346",
+      "qualified_sha": "368f82528645a54fb793d4d04e342629a3f51346",
+      "source": "https://api.github.com/repos/actions/deploy-pages/releases/latest",
+      "status": "current",
+      "metadata_sha256": "64c44539fba53559a157b5de16c01d3ab91dbc999c1b98b5c0b2fc3528d5d059",
+      "qualification_scope": "official action release, tag and metadata source independently verified; hosted workflow behavior unqualified"
+    },
+    {
+      "key": "actions/attest",
+      "checked_at": "2026-10-02T20:04:38Z",
+      "latest": "v4.2.2",
+      "pinned_version": "v4.2.2",
+      "qualified_version": "v4.2.2",
+      "pinned_sha": "1e69f48acb82d1966a394da916b4c1698aa569d6",
+      "qualified_sha": "1e69f48acb82d1966a394da916b4c1698aa569d6",
+      "source": "https://api.github.com/repos/actions/attest/releases/latest",
+      "status": "current",
+      "metadata_sha256": "9e4a1b808433f9ec87120b534e11fc35469a039bdbdc62b019441444c9ad0449",
+      "qualification_scope": "official action release, tag and metadata source independently verified; hosted workflow behavior unqualified"
     }
   ],
   "check_interval_hours": 24,
-  "checked_at": "2026-10-01T18:39:41Z",
+  "checked_at": "2026-10-02T19:55:25Z",
   "exceptions": [],
   "max_exception_days": 14,
   "runner": {
@@ -112,7 +232,10 @@
       "ubuntu-26.04",
       "ubuntu-24.04",
       "ubuntu-22.04"
-    ]
+    ],
+    "checked_at": "2026-10-02T19:55:25Z",
+    "latest": "ubuntu-26.04",
+    "source_sha256": "1d71bbaf34024a309c7b4ac9fea29e28c79bcf6f8616ff54bb2ee62e085b38be"
   },
   "schema": 1,
   "temporary_holds": [
@@ -133,107 +256,207 @@
       "key": "jdx/mise-action",
       "owner": "@donbeave",
       "reason": "upstream moved mid-consolidation; VER-3.2 update set tracked in #6, rust bump needs maintainer qualification decision"
-    },
-    {
-      "expires": "2026-10-15",
-      "granted": "2026-10-01",
-      "held_version": "v0.16.1",
-      "issue": "#6",
-      "key": "asamarts/alint",
-      "owner": "@donbeave",
-      "reason": "upstream moved mid-consolidation; VER-3.2 update set tracked in #6, rust bump needs maintainer qualification decision"
     }
   ],
   "tools": [
     {
-      "checked_at": "2026-10-01T18:39:41Z",
-      "latest": "v2026.9.18",
+      "checked_at": "2026-10-02T19:54:43Z",
+      "latest": "v2026.10.0",
       "name": "mise",
-      "pinned": "2026.9.18",
-      "qualified": "2026.9.18",
+      "pinned": "2026.10.0",
+      "qualified": "2026.10.0",
       "source": "https://api.github.com/repos/jdx/mise/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "dca7cd710ac3f662bd681133125ac3d2dc7b9e90d035fce2e2dbde6715e170c2",
+      "published_at": "2026-10-02T01:42:32Z",
+      "qualification_scope": "immutable source identity; behavior qualification pending targeted tests and hosted cache proof",
+      "source_commit_sha": "bc11f90c74eba23bf0d7350efb540e62fb7d9ffd",
+      "native_artifacts": [
+        {
+          "target": "aarch64-unknown-linux-gnu",
+          "artifact": "https://github.com/jdx/mise/releases/download/v2026.10.0/mise-v2026.10.0-linux-arm64.tar.gz",
+          "archive_sha256": "107c5e46693cdfeb1fdec91717078b298d6fcc9ebbd14f8333917cfe37965138",
+          "installed_binary_sha256": "4b8cacffac83e8493fc5d1eef25f6365edba73ccbed5a1f3987b7cb3f5079656",
+          "archive_member": "mise/bin/mise",
+          "source_commit": "bc11f90c74eba23bf0d7350efb540e62fb7d9ffd",
+          "qualification_scope": "downloaded archive and extracted binary match official checksums; signature metadata retained but crypto unverified; hosted runner support/cache performance unqualified",
+          "qualified_installed_binary_sha256": "4b8cacffac83e8493fc5d1eef25f6365edba73ccbed5a1f3987b7cb3f5079656",
+          "source_tree": "172af04ce7a3cbc05920575992459a8e7d92135a",
+          "asset_format": "tar-gzip",
+          "binary_member": "mise/bin/mise"
+        },
+        {
+          "target": "aarch64-apple-darwin",
+          "artifact": "https://github.com/jdx/mise/releases/download/v2026.10.0/mise-v2026.10.0-macos-arm64.tar.gz",
+          "archive_sha256": "e6a966e44f871403df905d50019ca6f7b84624ddfe1d5c095f5bc3f18709259e",
+          "installed_binary_sha256": "8d2007efdae0c2b64e3955257533e6ec17197bc2fdcbc5dd8f6847f92881deea",
+          "archive_member": "mise/bin/mise",
+          "source_commit": "bc11f90c74eba23bf0d7350efb540e62fb7d9ffd",
+          "qualification_scope": "downloaded archive and extracted binary match official checksums; signature metadata retained but crypto unverified; hosted runner support/cache performance unqualified",
+          "qualified_installed_binary_sha256": "8d2007efdae0c2b64e3955257533e6ec17197bc2fdcbc5dd8f6847f92881deea",
+          "source_tree": "172af04ce7a3cbc05920575992459a8e7d92135a",
+          "asset_format": "tar-gzip",
+          "binary_member": "mise/bin/mise"
+        },
+        {
+          "target": "x86_64-unknown-linux-gnu",
+          "artifact": "https://github.com/jdx/mise/releases/download/v2026.10.0/mise-v2026.10.0-linux-x64",
+          "installed_binary_sha256": "57ced973f968b8fbab07aa8e32bd7077d4a357e200a22356d98963c723c6de0a",
+          "source_commit": "bc11f90c74eba23bf0d7350efb540e62fb7d9ffd",
+          "qualification_scope": "downloaded standalone binary matches official checksum manifest and API digest; runtime and hosted cache behavior unqualified",
+          "qualified_installed_binary_sha256": "57ced973f968b8fbab07aa8e32bd7077d4a357e200a22356d98963c723c6de0a",
+          "source_tree": "172af04ce7a3cbc05920575992459a8e7d92135a",
+          "asset_format": "binary",
+          "binary_member": ""
+        }
+      ],
+      "source_tree_sha": "172af04ce7a3cbc05920575992459a8e7d92135a"
     },
     {
-      "checked_at": "2026-10-01T18:39:41Z",
+      "checked_at": "2026-10-02T19:55:25Z",
       "latest": "1.99.0",
       "name": "rust",
       "pinned": "1.98.1",
       "qualified": "1.98.1",
       "source": "https://static.rust-lang.org/dist/channel-rust-stable.toml",
-      "status": "held"
+      "status": "held",
+      "source_sha256": "ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2"
     },
     {
-      "checked_at": "2026-10-01T18:39:41Z",
-      "latest": "v1.21.0",
+      "checked_at": "2026-10-02T19:54:43Z",
+      "latest": "v1.21.1",
       "name": "mr-boxington",
-      "pinned": "1.21.0",
-      "qualified": "1.21.0",
+      "pinned": "1.21.1",
+      "qualified": "1.21.1",
       "source": "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "67741cadeddac8d06aba1ed97578ca2e39c0165fe55614c9c5f24b6f2219e8dd",
+      "published_at": "2026-10-02T12:50:15Z",
+      "qualification_scope": "immutable source identity; behavior qualification pending targeted tests and hosted cache proof"
     },
     {
-      "checked_at": "2026-10-01T18:39:41Z",
+      "checked_at": "2026-10-02T19:54:43Z",
       "latest": "v2.102.0",
       "name": "gh",
       "pinned": "2.102.0",
       "qualified": "2.102.0",
       "source": "https://api.github.com/repos/cli/cli/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "33732ee5b9204d11b332be4cb5a92445a1c2bdc5373d5f711ca8fb917c259e35",
+      "published_at": "2026-09-30T02:40:02Z"
     },
     {
-      "checked_at": "2026-10-01T18:39:41Z",
+      "checked_at": "2026-10-02T19:54:43Z",
       "latest": "v1.7.12",
       "name": "actionlint",
       "pinned": "1.7.12",
       "qualified": "1.7.12",
       "source": "https://api.github.com/repos/rhysd/actionlint/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "38c071bd4c1d710911a03902c6e6b3aef3fba86762d0f9237f15769f1a92907b",
+      "published_at": "2026-03-30T17:49:21Z"
     },
     {
-      "checked_at": "2026-10-01T18:39:41Z",
+      "checked_at": "2026-10-02T19:54:43Z",
       "latest": "v0.11.0",
       "name": "shellcheck",
       "pinned": "0.11.0",
       "qualified": "0.11.0",
       "source": "https://api.github.com/repos/koalaman/shellcheck/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "3258167c932f0f82538987cb17cfcee545b6fcf109d0182e6ac254a2868130eb",
+      "published_at": "2025-08-04T00:27:19Z"
     },
     {
-      "checked_at": "2026-10-01T18:39:41Z",
+      "checked_at": "2026-10-02T19:54:43Z",
       "latest": "v1.30.1",
       "name": "zizmor",
       "pinned": "1.30.1",
       "qualified": "1.30.1",
       "source": "https://api.github.com/repos/zizmorcore/zizmor/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "f22793694e6c4e80f695dff994de677003f0d281040da504d48f8fde6a32f900",
+      "published_at": "2026-09-09T05:34:10Z"
     },
     {
-      "checked_at": "2026-10-01T18:39:41Z",
+      "checked_at": "2026-10-02T19:54:44Z",
       "latest": "0.9.146",
       "name": "nextest",
       "pinned": "0.9.146",
       "qualified": "0.9.146",
       "source": "https://crates.io/api/v1/crates/cargo-nextest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "2f174af016b6f0ad1e77eaa3c6e9d60ae78c76cf24f7ba7461adc480b85a4674",
+      "published_at": "2026-09-21T18:39:40.614185Z"
     },
     {
-      "checked_at": "2026-10-01T21:05:00Z",
+      "checked_at": "2026-10-02T19:54:44Z",
       "latest": "v1.13.1",
       "name": "opentofu",
       "pinned": "1.13.1",
       "qualified": "1.13.1",
       "source": "https://api.github.com/repos/opentofu/opentofu/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "2d33b4f188d7660efc201428804c75d5133ed85f938f5b5532d3a66c0a528c82",
+      "published_at": "2026-10-01T17:15:15Z"
     },
     {
-      "checked_at": "2026-10-01T18:39:41Z",
+      "checked_at": "2026-10-02T19:54:44Z",
       "latest": "0.3.169",
       "name": "release-plz",
       "pinned": "0.3.169",
       "qualified": "0.3.169",
       "source": "https://crates.io/api/v1/crates/release-plz",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "3312bcaa2c77eb414dc8cd1c82d26367c9ccae8c7b02b8677479c2cf70873a5d",
+      "published_at": "2026-09-19T10:32:25.588592Z"
+    },
+    {
+      "name": "bun",
+      "checked_at": "2026-10-02T23:10:55.504718+00:00",
+      "pinned": "1.4.2",
+      "latest": "1.4.2",
+      "source": "https://api.github.com/repos/oven-sh/bun/releases/latest",
+      "pin_tag": "bun-v1.4.2",
+      "pin_commit_sha": "744846f844374847c902b5e7fd59b4342a51ef99",
+      "qualified": "1.4.2",
+      "status": "current",
+      "qualification_scope": "official source/artifact identity; local immutable macOS ARM64 paired frozen install/build,692unit and72functional browser tests pass;2visual failures identical with16PNG byte equality and9format violations unchanged; hosted Linux, three-run cache performance and signatures unqualified",
+      "source_sha256": "c9d4670963d5191e341dbbfcf3d279ba171db0f56000279bf0edbf1cced9b688",
+      "source_tree_sha": "22bf02488635ecf658474da0264016217f3064e8",
+      "qualification_evidence": "docs/reviews/ci-performance-bun-node-upgrade.md",
+      "qualified_native_artifacts": [
+        {
+          "target": "aarch64-apple-darwin",
+          "artifact": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-darwin-aarch64.zip",
+          "archive_sha256": "90987a3a16d7db556d886ac3d551e7b6d3edf0a1cf43acaed622e8676be1d12f",
+          "installed_binary_sha256": "35d20dd0263e5c950194434b925454fdfa9ba6e4467da960410fa05b08a7a5b5"
+        }
+      ]
+    },
+    {
+      "name": "swift",
+      "checked_at": "2026-10-02T19:52:35.362223Z",
+      "pinned": "6.4.0",
+      "latest": "6.4.0",
+      "source": "https://api.github.com/repos/swiftlang/swift/releases/latest",
+      "pin_tag": "swift-6.4.0-RELEASE",
+      "pin_commit_sha": "b8189d766d86ad7fc8106787d6ce9e402f38dd72",
+      "qualified": "6.4.0",
+      "status": "current",
+      "qualification_scope": "immutable source identity only; runtime behavior and hosted performance unqualified"
+    },
+    {
+      "name": "ruby",
+      "checked_at": "2026-10-02T19:52:35.362223Z",
+      "pinned": "4.0.7",
+      "latest": "4.0.7",
+      "source": "https://api.github.com/repos/ruby/ruby/releases/latest",
+      "pin_tag": "v4.0.7",
+      "pin_commit_sha": "229531a6cfbf07e3caef30dbac24a2a3f3fed482",
+      "qualified": "4.0.7",
+      "status": "current",
+      "qualification_scope": "immutable source identity only; runtime behavior and hosted performance unqualified"
     },
     {
       "name": "reuse",
@@ -245,10 +468,43 @@
       "pin_commit_sha": "a1bb792acda6fd0724936b4ebbdbc8eceb9c0459",
       "qualified": "6.2.0",
       "status": "current",
-      "qualification_scope": "official source and PyPI source archive identity plus local macOS ARM64 REUSE6.2.0 install on exact Python3.14.8/uv0.12.22 and immutable jackin-role-action reuse lint compatibility; Linux runtime and hosted performance unqualified",
-      "qualification_report": "docs/reviews/python-uv-upgrade-evidence.json",
-      "qualification_source": "https://pypi.org/pypi/reuse/6.2.0/json",
-      "distribution_archive_sha256": "4feae057a2334c9a513e6933cdb9be819d8b822f3b5b435a36138bd218897d23"
+      "qualification_scope": "immutable source identity only; runtime behavior and hosted performance unqualified"
+    },
+    {
+      "name": "java",
+      "pinned": "25.0.4.1.1",
+      "qualified": "25.0.4.1.1",
+      "latest": "25.0.4.1.1",
+      "source": "https://api.github.com/repos/graalvm/graalvm-ce-builds/releases?per_page=10",
+      "source_sha256": "529bfccd35c1a170a484d4d6fb64e544cbf92a8fbd5355995c68529fc1cea888",
+      "checked_at": "2026-10-02T23:21:24.053405+00:00",
+      "status": "current",
+      "provider": "GraalVM Community",
+      "freshness_cohort": "maintained GraalVM Community JDK25 across provider release trains",
+      "pin_tag": "graal-25.4.4.1.1",
+      "pin_commit_sha": "885c1b1865fb7aa81df90a00dfc85ede3af4370b",
+      "source_tree_sha": "6ce622805f4924001b0a06f55d83984893f9d80c",
+      "upstream_source_commit": "95ce1499c8c96ab7d5a6697c5b4bf42160f3b68b",
+      "upstream_source_tree": "daea2d0f35a623a38fb10846c92f1d69e4aa2b37",
+      "reported_runtime": "25.0.4.1.1+1-jvmci-25.4-b23",
+      "qualification_scope": "official Community provider/source/archive identities and exact Mac HTTP installation identity; independently reviewed actual wrapper9.5.1 cold, second, third, relocation and Gradle push=false warm reuse, equal native fingerprints and output bytes, source/dependency negatives; warm files were not filesystem immutable; per-run structured argv/exit receipts unavailable; no managedGradle9.8, Linux runtime, signatures, hosted performance qualification",
+      "native_compatibility_proof_sha256": "f7aad713724b6bebe9c8b246002ce5bbb1b46a9c133db1db2d66b070d7ddf025",
+      "native_compatibility_review_sha256": "06cea0b4fb3e59eb92f3b7b92818898b97826a283ca5838aee1f3e6f5a81c37d"
+    },
+    {
+      "name": "gradle",
+      "checked_at": "2026-10-02T21:48:42.252227+00:00",
+      "pinned": "9.8.0",
+      "latest": "9.8.0",
+      "source": "https://api.github.com/repos/gradle/gradle/releases/latest",
+      "pin_tag": "v9.8.0",
+      "pin_commit_sha": "a927be5e08efe79e0b87ada06c762dde6bb9f8b8",
+      "qualified": "9.8.0",
+      "status": "current",
+      "qualification_scope": "separate managed Gradle role official source/distribution identity and sole-registry Mac HTTP installation health; audited consumer wrapperengine9.5.1/bootstrap9.4.1 remains distinct source-bound authority; native consumer correctness, Linux installation, signatures and hosted performance unqualified",
+      "source_sha256": "6511678601b11f47a2fbd32dfc522f4b8995432bc6ebaab51b1bd5ac04d47680",
+      "source_tree_sha": "56fedb055e013a3bfddde6905d6a7adad1047398",
+      "pin_artifact_digest": "bafd5ce9cfaea0fbccfdc8439a1ac42fbd4cd9c89dc9a988228d8a2639a58e6c"
     },
     {
       "name": "python",
@@ -292,6 +548,2861 @@
       "installed_binary_sha256": "cf9ecd3dce5aed97bba9aa71b6217140eac437c6678412ba81a8af45ac6f1a4c",
       "qualification_report": "docs/reviews/python-uv-upgrade-evidence.json",
       "pin_tree_sha": "87b1502eb7c676c9cc906e5a91cc0d13068fd27d"
+    },
+    {
+      "name": "cargo-audit",
+      "checked_at": "2026-10-02T19:52:35.362223Z",
+      "latest": "0.22.2",
+      "source": "https://crates.io/api/v1/crates/cargo-audit",
+      "registry_checksum": "700c2b240f7fd330c24b675fe429f73a5b676531fcc6300400b2b67f155ba12a",
+      "download_url": "https://crates.io/api/v1/crates/cargo-audit/0.22.2/download",
+      "pinned": "0.22.2",
+      "qualified": "0.22.2",
+      "status": "current",
+      "qualification_scope": "immutable source identity only; runtime behavior and hosted performance unqualified"
+    },
+    {
+      "name": "cargo-deny",
+      "checked_at": "2026-10-02T19:52:35.362223Z",
+      "latest": "0.20.2",
+      "source": "https://crates.io/api/v1/crates/cargo-deny",
+      "registry_checksum": "e528dfcbe739af7ce37a77d3d6df1b29dd6887b1c701d888820c0f16b864f737",
+      "download_url": "https://crates.io/api/v1/crates/cargo-deny/0.20.2/download",
+      "pinned": "0.20.2",
+      "qualified": "0.20.2",
+      "status": "current",
+      "qualification_scope": "immutable source identity only; runtime behavior and hosted performance unqualified"
+    },
+    {
+      "name": "alint",
+      "checked_at": "2026-10-02T19:52:35.362223Z",
+      "pinned": "0.17.0",
+      "latest": "0.17.0",
+      "source": "https://api.github.com/repos/asamarts/alint/releases/latest",
+      "qualified": "0.17.0",
+      "status": "current",
+      "qualification_scope": "official exact source and paired actual config/action flags compatibility; repository policy failures identical, hosted performance unqualified",
+      "pin_commit_sha": "d93c0283b19dd78afcd8a4b303f1556a7759ba81"
+    },
+    {
+      "name": "node",
+      "pinned": "24.21.0",
+      "qualified": "24.21.0",
+      "latest": "24.21.0",
+      "source": "https://nodejs.org/dist/index.json",
+      "checked_at": "2026-10-02T23:10:55.401354+00:00",
+      "status": "current",
+      "pin_commit_sha": "955266bfdd854cd280dffd47548673914484e4c0",
+      "qualification_scope": "official maintained24LTS source/artifact identity; local immutable macOS ARM64 wallet npm ci/typecheck/build and native npm fixture pass with npm11.19.0/ABI137;5locked dependency vulnerabilities remain (4moderate,1high); hosted Linux, three-run cache performance and signatures unqualified",
+      "freshness_cohort": "24 LTS",
+      "source_sha256": "700401a06eb352ec19100649afbf767f76db33f194b22a9b903b3ff48e3bc482",
+      "source_tree_sha": "4988d1b262c878669f7c32ddb3960752c97d3a10",
+      "qualification_evidence": "docs/reviews/ci-performance-bun-node-upgrade.md",
+      "pin_tag": "v24.21.0",
+      "qualified_native_artifacts": [
+        {
+          "target": "aarch64-apple-darwin",
+          "artifact": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-darwin-arm64.tar.xz",
+          "archive_sha256": "6239d4cf92d864487ec8cd3615038f7b67e7f58b77b21cd2f09ea9fbd68065fe",
+          "installed_binary_sha256": "e4b5a3af0e05c75de2eae013904145f40fe7fc2a6e6f17510128bf45cca4e79b",
+          "qualification_scope": "immutable wallet consumer paired compatibility using this downloaded xz archive; local macOS ARM64 only"
+        },
+        {
+          "target": "aarch64-apple-darwin",
+          "artifact": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-darwin-arm64.tar.gz",
+          "archive_sha256": "bed7eea5325e1108f32ce5228ddd6a5f0f08a499ee42aa7442aea583702f6057",
+          "installed_binary_sha256": "e4b5a3af0e05c75de2eae013904145f40fe7fc2a6e6f17510128bf45cca4e79b",
+          "qualification_scope": "independently verified fresh exact checksummed HTTP installation, archive/extraction/installed Node npm npx bytes and runtime identity; local macOS ARM64 only; no hosted/cache performance/signature proof"
+        }
+      ]
+    },
+    {
+      "name": "boltffi",
+      "pinned": "0.30.1",
+      "qualified": "0.30.1",
+      "latest": "0.31.0",
+      "source": "https://api.github.com/repos/boltffi/boltffi/releases/latest",
+      "checked_at": "2026-10-02T21:07:57.362494+00:00",
+      "status": "stale",
+      "pin_tag": "v0.30.1",
+      "pin_commit_sha": "2e6320a6d92cb591d22b908477f3a47da7ebc9bc",
+      "pin_source": "https://github.com/boltffi/boltffi/tree/2e6320a6d92cb591d22b908477f3a47da7ebc9bc",
+      "pin_release_source": "https://github.com/boltffi/boltffi/releases/tag/v0.30.1",
+      "published_at": "2026-09-28T21:40:15Z",
+      "pin_published_at": "2026-08-17T20:50:01Z",
+      "source_sha256": "2150451f6213166b83cee89340f717821ca2ec999706466fe585470043180f6e",
+      "pin_release_immutable": false,
+      "pin_artifact_digests": [
+        {
+          "name": "boltffi-darwin-aarch64.tar.gz",
+          "digest": "sha256:ce3a47b5c398cbb9c327098a612b431f30db15d353d62cee4e4637540fa8321a",
+          "browser_download_url": "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-darwin-aarch64.tar.gz"
+        },
+        {
+          "name": "boltffi-darwin-aarch64.tar.gz.sha256",
+          "digest": "sha256:ff135480b7d9f3b2af81887a43ac35a8798cf851fc4dc68b06fe555d35b7f62b",
+          "browser_download_url": "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-darwin-aarch64.tar.gz.sha256"
+        },
+        {
+          "name": "boltffi-darwin-x86_64.tar.gz",
+          "digest": "sha256:9f827785d201b224e41ad8a6a4905df3b3746367572228f1f328f72eef5deaa2",
+          "browser_download_url": "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-darwin-x86_64.tar.gz"
+        },
+        {
+          "name": "boltffi-darwin-x86_64.tar.gz.sha256",
+          "digest": "sha256:315a2c3b140a3b4b8e87210d93d1cc156f29c7ec443027ce9e209d77f3394737",
+          "browser_download_url": "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-darwin-x86_64.tar.gz.sha256"
+        },
+        {
+          "name": "boltffi-linux-aarch64-musl.tar.gz",
+          "digest": "sha256:4ba96694eedb9f522b90ddc8d9fbecfce44c391403fb46ca8755581293472691",
+          "browser_download_url": "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-linux-aarch64-musl.tar.gz"
+        },
+        {
+          "name": "boltffi-linux-aarch64-musl.tar.gz.sha256",
+          "digest": "sha256:a3dc2cda8be06743395987bec0dc0578d931a8170e65c6fa33654ae4f42e7091",
+          "browser_download_url": "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-linux-aarch64-musl.tar.gz.sha256"
+        },
+        {
+          "name": "boltffi-linux-aarch64.tar.gz",
+          "digest": "sha256:ec4d6a94cd5c032e8a381a824deddf97c724e7e3f43d86050e4df9f86e2e7b41",
+          "browser_download_url": "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-linux-aarch64.tar.gz"
+        },
+        {
+          "name": "boltffi-linux-aarch64.tar.gz.sha256",
+          "digest": "sha256:4df53401b036c1800f9bb4ba5bac99bd6cf4071eeeeffd02ab6de3ee6539ac0f",
+          "browser_download_url": "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-linux-aarch64.tar.gz.sha256"
+        },
+        {
+          "name": "boltffi-linux-x86_64-musl.tar.gz",
+          "digest": "sha256:4b9d5873263e459b8155ce6d0b64b9b184dea09d47a32cb586116b888c7c26af",
+          "browser_download_url": "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-linux-x86_64-musl.tar.gz"
+        },
+        {
+          "name": "boltffi-linux-x86_64-musl.tar.gz.sha256",
+          "digest": "sha256:15a6d35630175f400cf6594e551cb0a371e8c0e245807bd6cd80e59dc94c5dde",
+          "browser_download_url": "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-linux-x86_64-musl.tar.gz.sha256"
+        },
+        {
+          "name": "boltffi-linux-x86_64.tar.gz",
+          "digest": "sha256:342af5abf855dcea1b88b1f2fd8b72ba09083f0d8eab7a0930b954539defce4a",
+          "browser_download_url": "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-linux-x86_64.tar.gz"
+        },
+        {
+          "name": "boltffi-linux-x86_64.tar.gz.sha256",
+          "digest": "sha256:f77865e565203b9219360ad48cd7d2d3004f81dd8a1cdf60bf84dd9ab7e13319",
+          "browser_download_url": "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-linux-x86_64.tar.gz.sha256"
+        },
+        {
+          "name": "boltffi-windows-arm64.zip",
+          "digest": "sha256:643d85a8a431a111f9dd5d61dab3c3f4b472f18518376b2ec29ce407a00f3dfa",
+          "browser_download_url": "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-windows-arm64.zip"
+        },
+        {
+          "name": "boltffi-windows-arm64.zip.sha256",
+          "digest": "sha256:3c9bcbbcf6cec6b3b862cfae5a40a848002d0a2b3349909710730d2aec5594e5",
+          "browser_download_url": "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-windows-arm64.zip.sha256"
+        },
+        {
+          "name": "boltffi-windows-x86_64.zip",
+          "digest": "sha256:0cf1df0bfebd6fb52af46c94802bc0283f20fe055de5a5333d546eb9940b7fa3",
+          "browser_download_url": "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-windows-x86_64.zip"
+        },
+        {
+          "name": "boltffi-windows-x86_64.zip.sha256",
+          "digest": "sha256:3a796f0144df5af4ec2fcfde8eab3e0dfde479723ed039f06ff366a3458863d0",
+          "browser_download_url": "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-windows-x86_64.zip.sha256"
+        }
+      ],
+      "qualification_scope": "verified immutable source/release metadata only; actual hosted workload and cache performance unqualified"
+    },
+    {
+      "name": "xcodegen",
+      "pinned": "2.46.0",
+      "qualified": "2.46.0",
+      "latest": "2.46.0",
+      "source": "https://api.github.com/repos/yonaskolb/XcodeGen/releases/latest",
+      "checked_at": "2026-10-02T21:07:57.362494+00:00",
+      "status": "current",
+      "pin_tag": "2.46.0",
+      "pin_commit_sha": "8445e778451c7e44237b90281bde622d764b0084",
+      "pin_source": "https://github.com/yonaskolb/XcodeGen/tree/8445e778451c7e44237b90281bde622d764b0084",
+      "pin_release_source": "https://github.com/yonaskolb/XcodeGen/releases/tag/2.46.0",
+      "published_at": "2026-07-16T06:43:31Z",
+      "pin_published_at": "2026-07-16T06:43:31Z",
+      "source_sha256": "d5d7b5728f52aeebd47f2922da9b1c1cf43f446d4e372e2ffe7484235a2d4209",
+      "pin_release_immutable": false,
+      "pin_artifact_digests": [
+        {
+          "name": "xcodegen.artifactbundle.zip",
+          "digest": "sha256:ef6d0a23bfb7393387f98e321ffd78a487231172e2e78c48d3c26275c263fd0c",
+          "browser_download_url": "https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.artifactbundle.zip"
+        },
+        {
+          "name": "xcodegen.zip",
+          "digest": "sha256:4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806",
+          "browser_download_url": "https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip"
+        }
+      ],
+      "qualification_scope": "verified immutable source/release metadata only; actual hosted workload and cache performance unqualified"
+    },
+    {
+      "name": "jq",
+      "pinned": "1.8.2",
+      "qualified": "1.8.2",
+      "latest": "1.8.2",
+      "source": "https://api.github.com/repos/jqlang/jq/releases/latest",
+      "checked_at": "2026-10-02T21:07:57.362494+00:00",
+      "status": "current",
+      "pin_tag": "jq-1.8.2",
+      "pin_commit_sha": "34f7186b86743a083a589741b6cea95293524108",
+      "pin_source": "https://github.com/jqlang/jq/tree/34f7186b86743a083a589741b6cea95293524108",
+      "pin_release_source": "https://github.com/jqlang/jq/releases/tag/jq-1.8.2",
+      "published_at": "2026-06-20T14:11:27Z",
+      "pin_published_at": "2026-06-20T14:11:27Z",
+      "source_sha256": "1fc87e594f9b0f313b378964f883ba2626e92eea016b97ff2fb69a790e104265",
+      "pin_release_immutable": false,
+      "pin_artifact_digests": [
+        {
+          "name": "jq-1.8.2.tar.gz",
+          "digest": "sha256:71b8d6e8f5fe81f6c6d0d110e3892251f6ce76ed095abd315e26e6e1193af3af",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-1.8.2.tar.gz"
+        },
+        {
+          "name": "jq-1.8.2.zip",
+          "digest": "sha256:332dd9ae07c19fb47f6e8c4dd973a141064c0d35363c254235ee84d2d9e0167c",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-1.8.2.zip"
+        },
+        {
+          "name": "jq-attestation.json",
+          "digest": "sha256:01e9619236573939473c0f2eb2c5c38dc0f066fbdc89a5357a6f3f2954e00eed",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-attestation.json"
+        },
+        {
+          "name": "jq-linux-amd64",
+          "digest": "sha256:b1c22172dd303f3be49e935aa56aa48a8b7a46e0bc838b4997d3bb451495870f",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-amd64"
+        },
+        {
+          "name": "jq-linux-arm64",
+          "digest": "sha256:8b85c817833814ddca00a144c33705546355afccf0cf39b188f3cdb48b852309",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-arm64"
+        },
+        {
+          "name": "jq-linux-armel",
+          "digest": "sha256:d88f6bd640ef8909b3deb587f12c03a0ed38fe8bd5e2e882e2b1bf88f5dab8d2",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-armel"
+        },
+        {
+          "name": "jq-linux-armhf",
+          "digest": "sha256:78458244fb546469b4042e9e07cf78714ef6848895eb9515df76b4eb0b1dc992",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-armhf"
+        },
+        {
+          "name": "jq-linux-i386",
+          "digest": "sha256:ba996e8ce436973e2f39e2639405a37e8c81ba8c722b71c83996278ad0af16dd",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-i386"
+        },
+        {
+          "name": "jq-linux-mips",
+          "digest": "sha256:1e9930ef7c4e69a49c2e5e9a1a5b1240a36d10123fa8524952ddeaedc039ad72",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-mips"
+        },
+        {
+          "name": "jq-linux-mips64",
+          "digest": "sha256:34e53f8df8298fd609f8e3dcc7eae1d8a741976f289909286601443caf64229a",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-mips64"
+        },
+        {
+          "name": "jq-linux-mips64el",
+          "digest": "sha256:eb382d2419aa99c82b8fb1cbb0d1cfa3da71b0852108f9140ca1ddcfd3d33d81",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-mips64el"
+        },
+        {
+          "name": "jq-linux-mips64r6",
+          "digest": "sha256:365c0bcda2e695ab1e6f3372094d812e914784c03aa45ca4b67b93cc54fc78d9",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-mips64r6"
+        },
+        {
+          "name": "jq-linux-mips64r6el",
+          "digest": "sha256:01bfe1a1579cfac74a680870031e1d4bdd500040fae18fd9e2a27ada8e555a80",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-mips64r6el"
+        },
+        {
+          "name": "jq-linux-mipsel",
+          "digest": "sha256:9570c9dcbd7d0de85b16a00046a3e5a9ba72aabe4b85c8f5f8b5927aed8d664e",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-mipsel"
+        },
+        {
+          "name": "jq-linux-mipsr6",
+          "digest": "sha256:d2105ab249e66dc14465982d4b8b3e8cf0e6301eb606fa6116dfe0bfacbfb918",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-mipsr6"
+        },
+        {
+          "name": "jq-linux-mipsr6el",
+          "digest": "sha256:5e66dcad39eaa2d1e5b2eb01e2f378a3bfdf0ee2ebeb571cc87512ca4f38dec6",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-mipsr6el"
+        },
+        {
+          "name": "jq-linux-powerpc",
+          "digest": "sha256:d60c33574fdeab53ae15feb37598249ce4ab6a344adde6f22abba38cf7a8de6e",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-powerpc"
+        },
+        {
+          "name": "jq-linux-ppc64el",
+          "digest": "sha256:0dba61281e525ced2111bc00c8bd8078100e8822c33bfb35feee95314bbeeea2",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-ppc64el"
+        },
+        {
+          "name": "jq-linux-riscv64",
+          "digest": "sha256:a96e5a78a7b2c5a0575bc2a10dda4b20d84efd8c02c8806539ee5f5e57603e8d",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-riscv64"
+        },
+        {
+          "name": "jq-linux-s390x",
+          "digest": "sha256:42b3306c786e3352e3097b8aa03ca0e5631bdc7a6bf133bb8ddd9e4b148d20c8",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-s390x"
+        },
+        {
+          "name": "jq-linux64",
+          "digest": "sha256:b1c22172dd303f3be49e935aa56aa48a8b7a46e0bc838b4997d3bb451495870f",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux64"
+        },
+        {
+          "name": "jq-macos-amd64",
+          "digest": "sha256:e94b266e3c26690550006abe63152b782280f4e14374accdf04cbde844f00bc0",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-macos-amd64"
+        },
+        {
+          "name": "jq-macos-arm64",
+          "digest": "sha256:2d75340ba57a4b4b4c8708a21c2dc8e958a48aaa8bba13b27f77f6e4c0eca07e",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-macos-arm64"
+        },
+        {
+          "name": "jq-osx-amd64",
+          "digest": "sha256:e94b266e3c26690550006abe63152b782280f4e14374accdf04cbde844f00bc0",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-osx-amd64"
+        },
+        {
+          "name": "jq-win64.exe",
+          "digest": "sha256:a6fc67fedaf9128a3309a1e2ebb8b986aeccf70122ee46d2cb4849e423f0c627",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-win64.exe"
+        },
+        {
+          "name": "jq-windows-amd64.exe",
+          "digest": "sha256:a6fc67fedaf9128a3309a1e2ebb8b986aeccf70122ee46d2cb4849e423f0c627",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-windows-amd64.exe"
+        },
+        {
+          "name": "jq-windows-arm64.exe",
+          "digest": "sha256:083b5377392bc57cf27052b6d20a2d927770683bca844632901ff38b4b7b0ac7",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-windows-arm64.exe"
+        },
+        {
+          "name": "jq-windows-i386.exe",
+          "digest": "sha256:a99cb668f95bdd788d9ee20529613b115e5d2a0d7f9127ee6976607e878558ba",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-windows-i386.exe"
+        },
+        {
+          "name": "sha256sum.txt",
+          "digest": "sha256:dc86824a41c165ece971ff691aff6e08bbfe6e1d1f531688b47ee78c283a85cd",
+          "browser_download_url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/sha256sum.txt"
+        }
+      ],
+      "qualification_scope": "verified immutable source/release metadata only; actual hosted workload and cache performance unqualified"
+    },
+    {
+      "name": "rust-desktop",
+      "pinned": "1.99.0",
+      "qualified": "1.99.0",
+      "latest": "1.99.0",
+      "source": "https://static.rust-lang.org/dist/channel-rust-stable.toml",
+      "checked_at": "2026-10-02T21:48:42.256894+00:00",
+      "status": "current",
+      "pin_source": "https://static.rust-lang.org/dist/channel-rust-1.99.0.toml",
+      "pin_source_sha256": "ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2",
+      "pin_published_at": "2026-10-01",
+      "published_at": "2026-10-01",
+      "source_sha256": "ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2",
+      "pin_artifact_digests": [
+        {
+          "name": "rust",
+          "target": "aarch64-apple-darwin",
+          "available": true,
+          "url": "https://static.rust-lang.org/dist/2026-10-01/rust-1.99.0-aarch64-apple-darwin.tar.gz",
+          "hash": "f35e7c5b2cf63e67c075d323e4d6b87501219311f09744ab24caecb761c96643",
+          "xz_url": "https://static.rust-lang.org/dist/2026-10-01/rust-1.99.0-aarch64-apple-darwin.tar.xz",
+          "xz_hash": "0306e4813a6fa7d4353de68f0bb9a8216b4ca04b1cdee409d0e301f958e55dd2",
+          "components": [
+            {
+              "pkg": "rustc",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "cargo",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "rust-docs",
+              "target": "aarch64-apple-darwin"
+            }
+          ],
+          "extensions": [
+            {
+              "pkg": "rust-src",
+              "target": "*"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-pc-windows-gnullvm"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-pc-windows-msvc"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-unknown-freebsd"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-unknown-linux-ohos"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "arm-unknown-linux-gnueabi"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "arm-unknown-linux-gnueabihf"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "armv7-unknown-linux-gnueabihf"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "i686-pc-windows-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "i686-pc-windows-msvc"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "i686-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "loongarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "loongarch64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "powerpc-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "powerpc64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "powerpc64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "powerpc64le-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "powerpc64le-unknown-linux-musl"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "riscv64gc-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "riscv64gc-unknown-linux-musl"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "s390x-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "sparcv9-sun-solaris"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-apple-darwin"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-pc-solaris"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-pc-windows-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-pc-windows-gnullvm"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-pc-windows-msvc"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-unknown-freebsd"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-unknown-illumos"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-unknown-netbsd"
+            },
+            {
+              "pkg": "rustc-docs",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-ios"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-ios-macabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-ios-sim"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-tvos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-tvos-sim"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-visionos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-visionos-sim"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-watchos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-watchos-sim"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-linux-android"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-pc-windows-gnullvm"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-pc-windows-msvc"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-freebsd"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-fuchsia"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-linux-ohos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-none"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-none-softfloat"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-uefi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "arm-linux-androideabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "arm-unknown-linux-gnueabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "arm-unknown-linux-gnueabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "arm-unknown-linux-musleabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "arm-unknown-linux-musleabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "arm64ec-pc-windows-msvc"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv5te-unknown-linux-gnueabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv5te-unknown-linux-musleabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7-linux-androideabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7-unknown-linux-gnueabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7-unknown-linux-gnueabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7-unknown-linux-musleabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7-unknown-linux-musleabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7-unknown-linux-ohos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7a-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7a-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7r-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7r-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv8r-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i586-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i586-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-linux-android"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-pc-windows-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-pc-windows-gnullvm"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-pc-windows-msvc"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-unknown-freebsd"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-unknown-uefi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "loongarch32-unknown-none"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "loongarch32-unknown-none-softfloat"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "loongarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "loongarch64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "loongarch64-unknown-none"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "loongarch64-unknown-none-softfloat"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "nvptx64-nvidia-cuda"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "powerpc-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "powerpc64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "powerpc64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "powerpc64le-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "powerpc64le-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv32i-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv32im-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv32imac-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv32imafc-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv32imc-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv64a23-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv64gc-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv64gc-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv64gc-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv64imac-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "s390x-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "s390x-unknown-none-softfloat"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "sparc64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "sparcv9-sun-solaris"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv6m-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7a-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7a-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7em-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7em-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7m-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7neon-linux-androideabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7neon-unknown-linux-gnueabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7r-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7r-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv8m.base-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv8m.main-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv8m.main-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv8r-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "wasm32-unknown-emscripten"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "wasm32-unknown-unknown"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "wasm32-wasip1"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "wasm32-wasip1-threads"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "wasm32-wasip2"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "wasm32v1-none"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-apple-darwin"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-apple-ios"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-apple-ios-macabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-fortanix-unknown-sgx"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-linux-android"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-pc-solaris"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-pc-windows-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-pc-windows-gnullvm"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-pc-windows-msvc"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-freebsd"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-fuchsia"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-illumos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-gnuasan"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-gnumsan"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-gnutsan"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-gnux32"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-ohos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-netbsd"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-none"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-redox"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-uefi"
+            },
+            {
+              "pkg": "rust-analysis",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "rust-analyzer-preview",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "clippy-preview",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "rustfmt-preview",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "llvm-tools-preview",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "miri-preview",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "rust-docs-json-preview",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "rustc-codegen-cranelift-preview",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "llvm-bitcode-linker-preview",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "rustc-codegen-gcc-preview",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "gcc-x86_64-unknown-linux-gnu-preview",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "enzyme-preview",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "offload-preview",
+              "target": "aarch64-apple-darwin"
+            }
+          ]
+        },
+        {
+          "name": "rust",
+          "target": "aarch64-unknown-linux-gnu",
+          "available": true,
+          "url": "https://static.rust-lang.org/dist/2026-10-01/rust-1.99.0-aarch64-unknown-linux-gnu.tar.gz",
+          "hash": "42214e693ec00733e2a591e67c13af98faf02a82934108a9f37afd247b376dd0",
+          "xz_url": "https://static.rust-lang.org/dist/2026-10-01/rust-1.99.0-aarch64-unknown-linux-gnu.tar.xz",
+          "xz_hash": "5a30ce742be0835d9b23fc862db5cbbbc71464e1c9b1fca22917e10e4ba32a92",
+          "components": [
+            {
+              "pkg": "rustc",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "cargo",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-docs",
+              "target": "aarch64-unknown-linux-gnu"
+            }
+          ],
+          "extensions": [
+            {
+              "pkg": "rust-src",
+              "target": "*"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-pc-windows-gnullvm"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-pc-windows-msvc"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-unknown-freebsd"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-unknown-linux-ohos"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "arm-unknown-linux-gnueabi"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "arm-unknown-linux-gnueabihf"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "armv7-unknown-linux-gnueabihf"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "i686-pc-windows-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "i686-pc-windows-msvc"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "i686-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "loongarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "loongarch64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "powerpc-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "powerpc64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "powerpc64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "powerpc64le-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "powerpc64le-unknown-linux-musl"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "riscv64gc-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "riscv64gc-unknown-linux-musl"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "s390x-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "sparcv9-sun-solaris"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-apple-darwin"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-pc-solaris"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-pc-windows-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-pc-windows-gnullvm"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-pc-windows-msvc"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-unknown-freebsd"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-unknown-illumos"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-unknown-netbsd"
+            },
+            {
+              "pkg": "rustc-docs",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-ios"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-ios-macabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-ios-sim"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-tvos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-tvos-sim"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-visionos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-visionos-sim"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-watchos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-watchos-sim"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-linux-android"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-pc-windows-gnullvm"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-pc-windows-msvc"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-freebsd"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-fuchsia"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-linux-ohos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-none"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-none-softfloat"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-uefi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "arm-linux-androideabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "arm-unknown-linux-gnueabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "arm-unknown-linux-gnueabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "arm-unknown-linux-musleabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "arm-unknown-linux-musleabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "arm64ec-pc-windows-msvc"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv5te-unknown-linux-gnueabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv5te-unknown-linux-musleabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7-linux-androideabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7-unknown-linux-gnueabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7-unknown-linux-gnueabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7-unknown-linux-musleabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7-unknown-linux-musleabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7-unknown-linux-ohos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7a-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7a-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7r-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7r-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv8r-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i586-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i586-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-linux-android"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-pc-windows-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-pc-windows-gnullvm"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-pc-windows-msvc"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-unknown-freebsd"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-unknown-uefi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "loongarch32-unknown-none"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "loongarch32-unknown-none-softfloat"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "loongarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "loongarch64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "loongarch64-unknown-none"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "loongarch64-unknown-none-softfloat"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "nvptx64-nvidia-cuda"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "powerpc-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "powerpc64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "powerpc64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "powerpc64le-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "powerpc64le-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv32i-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv32im-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv32imac-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv32imafc-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv32imc-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv64a23-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv64gc-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv64gc-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv64gc-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv64imac-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "s390x-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "s390x-unknown-none-softfloat"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "sparc64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "sparcv9-sun-solaris"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv6m-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7a-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7a-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7em-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7em-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7m-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7neon-linux-androideabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7neon-unknown-linux-gnueabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7r-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7r-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv8m.base-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv8m.main-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv8m.main-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv8r-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "wasm32-unknown-emscripten"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "wasm32-unknown-unknown"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "wasm32-wasip1"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "wasm32-wasip1-threads"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "wasm32-wasip2"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "wasm32v1-none"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-apple-darwin"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-apple-ios"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-apple-ios-macabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-fortanix-unknown-sgx"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-linux-android"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-pc-solaris"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-pc-windows-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-pc-windows-gnullvm"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-pc-windows-msvc"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-freebsd"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-fuchsia"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-illumos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-gnuasan"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-gnumsan"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-gnutsan"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-gnux32"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-ohos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-netbsd"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-none"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-redox"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-uefi"
+            },
+            {
+              "pkg": "rust-analysis",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-analyzer-preview",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "clippy-preview",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustfmt-preview",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "llvm-tools-preview",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "miri-preview",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-docs-json-preview",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-codegen-cranelift-preview",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "llvm-bitcode-linker-preview",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-codegen-gcc-preview",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "gcc-x86_64-unknown-linux-gnu-preview",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "enzyme-preview",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "offload-preview",
+              "target": "aarch64-unknown-linux-gnu"
+            }
+          ]
+        },
+        {
+          "name": "rust",
+          "target": "x86_64-unknown-linux-gnu",
+          "available": true,
+          "url": "https://static.rust-lang.org/dist/2026-10-01/rust-1.99.0-x86_64-unknown-linux-gnu.tar.gz",
+          "hash": "de0581ca9d732295a6474cfbd02461db27d69acd5050a8206523a8d6fa1599db",
+          "xz_url": "https://static.rust-lang.org/dist/2026-10-01/rust-1.99.0-x86_64-unknown-linux-gnu.tar.xz",
+          "xz_hash": "891c6366d7100feda0bca4c03ce63f3c9ac827cbebbc283e7433061d42c6a376",
+          "components": [
+            {
+              "pkg": "rustc",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "cargo",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-docs",
+              "target": "x86_64-unknown-linux-gnu"
+            }
+          ],
+          "extensions": [
+            {
+              "pkg": "rust-src",
+              "target": "*"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-pc-windows-gnullvm"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-pc-windows-msvc"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-unknown-freebsd"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "aarch64-unknown-linux-ohos"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "arm-unknown-linux-gnueabi"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "arm-unknown-linux-gnueabihf"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "armv7-unknown-linux-gnueabihf"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "i686-pc-windows-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "i686-pc-windows-msvc"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "i686-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "loongarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "loongarch64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "powerpc-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "powerpc64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "powerpc64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "powerpc64le-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "powerpc64le-unknown-linux-musl"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "riscv64gc-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "riscv64gc-unknown-linux-musl"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "s390x-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "sparcv9-sun-solaris"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-apple-darwin"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-pc-solaris"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-pc-windows-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-pc-windows-gnullvm"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-pc-windows-msvc"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-unknown-freebsd"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-unknown-illumos"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rustc-dev",
+              "target": "x86_64-unknown-netbsd"
+            },
+            {
+              "pkg": "rustc-docs",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-darwin"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-ios"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-ios-macabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-ios-sim"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-tvos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-tvos-sim"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-visionos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-visionos-sim"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-watchos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-apple-watchos-sim"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-linux-android"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-pc-windows-gnullvm"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-pc-windows-msvc"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-freebsd"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-fuchsia"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-linux-ohos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-none"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-none-softfloat"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "aarch64-unknown-uefi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "arm-linux-androideabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "arm-unknown-linux-gnueabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "arm-unknown-linux-gnueabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "arm-unknown-linux-musleabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "arm-unknown-linux-musleabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "arm64ec-pc-windows-msvc"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv5te-unknown-linux-gnueabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv5te-unknown-linux-musleabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7-linux-androideabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7-unknown-linux-gnueabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7-unknown-linux-gnueabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7-unknown-linux-musleabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7-unknown-linux-musleabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7-unknown-linux-ohos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7a-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7a-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7r-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv7r-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "armv8r-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i586-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i586-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-linux-android"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-pc-windows-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-pc-windows-gnullvm"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-pc-windows-msvc"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-unknown-freebsd"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "i686-unknown-uefi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "loongarch32-unknown-none"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "loongarch32-unknown-none-softfloat"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "loongarch64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "loongarch64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "loongarch64-unknown-none"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "loongarch64-unknown-none-softfloat"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "nvptx64-nvidia-cuda"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "powerpc-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "powerpc64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "powerpc64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "powerpc64le-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "powerpc64le-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv32i-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv32im-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv32imac-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv32imafc-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv32imc-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv64a23-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv64gc-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv64gc-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv64gc-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "riscv64imac-unknown-none-elf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "s390x-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "s390x-unknown-none-softfloat"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "sparc64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "sparcv9-sun-solaris"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv6m-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7a-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7a-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7em-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7em-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7m-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7neon-linux-androideabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7neon-unknown-linux-gnueabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7r-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv7r-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv8m.base-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv8m.main-none-eabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv8m.main-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "thumbv8r-none-eabihf"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "wasm32-unknown-emscripten"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "wasm32-unknown-unknown"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "wasm32-wasip1"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "wasm32-wasip1-threads"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "wasm32-wasip2"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "wasm32v1-none"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-apple-darwin"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-apple-ios"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-apple-ios-macabi"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-fortanix-unknown-sgx"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-linux-android"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-pc-solaris"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-pc-windows-gnu"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-pc-windows-gnullvm"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-pc-windows-msvc"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-freebsd"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-fuchsia"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-illumos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-gnuasan"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-gnumsan"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-gnutsan"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-gnux32"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-musl"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-linux-ohos"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-netbsd"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-none"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-redox"
+            },
+            {
+              "pkg": "rust-std",
+              "target": "x86_64-unknown-uefi"
+            },
+            {
+              "pkg": "rust-analysis",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-analyzer-preview",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "clippy-preview",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustfmt-preview",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "llvm-tools-preview",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "miri-preview",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rust-docs-json-preview",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-codegen-cranelift-preview",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "llvm-bitcode-linker-preview",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "rustc-codegen-gcc-preview",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "gcc-x86_64-unknown-linux-gnu-preview",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "enzyme-preview",
+              "target": "x86_64-unknown-linux-gnu"
+            },
+            {
+              "pkg": "offload-preview",
+              "target": "x86_64-unknown-linux-gnu"
+            }
+          ]
+        },
+        {
+          "name": "rustc",
+          "target": "aarch64-apple-darwin",
+          "available": true,
+          "url": "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-aarch64-apple-darwin.tar.gz",
+          "hash": "2f6b9c9cdc9c2e87ab2e27335e8bb0c4dbe4daea486e39030b66980058f74353",
+          "xz_url": "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-aarch64-apple-darwin.tar.xz",
+          "xz_hash": "334a66714ca316d71bbe5efe44f71762d0b276cea73be2987374693a837f7450"
+        },
+        {
+          "name": "rustc",
+          "target": "aarch64-unknown-linux-gnu",
+          "available": true,
+          "url": "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-aarch64-unknown-linux-gnu.tar.gz",
+          "hash": "6780ebb1b8ae66cc5d37ebfdc70b18fe775b1083c997f4e2c963d45a7eec59bc",
+          "xz_url": "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-aarch64-unknown-linux-gnu.tar.xz",
+          "xz_hash": "89c0f1a3a44df63c95e5d5f2ba093d0a12c5f5f57f8635f8a7a0ce50cf86600e"
+        },
+        {
+          "name": "rustc",
+          "target": "x86_64-unknown-linux-gnu",
+          "available": true,
+          "url": "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-x86_64-unknown-linux-gnu.tar.gz",
+          "hash": "238e72b8617f79bc96f27a5bfeb1a208b5755fe1a48f8bc190fe403ef6d54ab8",
+          "xz_url": "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-x86_64-unknown-linux-gnu.tar.xz",
+          "xz_hash": "77171ba2a0345fdf2abc4fedda55d6de078dae7a68527c28be8c77dcc9604bd5"
+        },
+        {
+          "name": "cargo",
+          "target": "aarch64-apple-darwin",
+          "available": true,
+          "url": "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-aarch64-apple-darwin.tar.gz",
+          "hash": "318b85c276b43134102fb49bbb54bfd0757e5cce47a772461149aeab5adea2ab",
+          "xz_url": "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-aarch64-apple-darwin.tar.xz",
+          "xz_hash": "76abff0ad79a10a3152dff640ea0d8b3c37637d9300bf55da41b95c3ddc069c1"
+        },
+        {
+          "name": "cargo",
+          "target": "aarch64-unknown-linux-gnu",
+          "available": true,
+          "url": "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-aarch64-unknown-linux-gnu.tar.gz",
+          "hash": "f8b85e84b0514b69e17e3bad1c2dec7526f4a40cec565d233bbdcb66484dd9e0",
+          "xz_url": "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-aarch64-unknown-linux-gnu.tar.xz",
+          "xz_hash": "113229fcc16cc1ba004923a4cc275fbf3281dafaaf8b97269f9c00189d497fd4"
+        },
+        {
+          "name": "cargo",
+          "target": "x86_64-unknown-linux-gnu",
+          "available": true,
+          "url": "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-x86_64-unknown-linux-gnu.tar.gz",
+          "hash": "c2b8ba1f59e7a230aa5522684f3f7aa620b98e5ad37683a5e5cf9b41f534fa1e",
+          "xz_url": "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-x86_64-unknown-linux-gnu.tar.xz",
+          "xz_hash": "d7674918d28093097614cd9728b6ca60db9ea3038f640f0bd1e9a4188c7568ce"
+        },
+        {
+          "name": "rust-std",
+          "target": "aarch64-apple-darwin",
+          "available": true,
+          "url": "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-aarch64-apple-darwin.tar.gz",
+          "hash": "3589b3a6c6470d590aa5aa7fa1a4af0101103847761a5372a7300b0aa85699c6",
+          "xz_url": "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-aarch64-apple-darwin.tar.xz",
+          "xz_hash": "a7c6de8aa21e7c31163a7656295b321bb85f5dce55ed8ea95ac9ac561202bb5b"
+        },
+        {
+          "name": "rust-std",
+          "target": "aarch64-unknown-linux-gnu",
+          "available": true,
+          "url": "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-aarch64-unknown-linux-gnu.tar.gz",
+          "hash": "cdffa7100206633ccfd2514ea7781b4211813bf04c831a509240e1cda5308512",
+          "xz_url": "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-aarch64-unknown-linux-gnu.tar.xz",
+          "xz_hash": "1cf7e2ef58ed1cfa6f1adea18e155cbf254c1951f39e5f5e3376879f55fd64a4"
+        },
+        {
+          "name": "rust-std",
+          "target": "x86_64-unknown-linux-gnu",
+          "available": true,
+          "url": "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-x86_64-unknown-linux-gnu.tar.gz",
+          "hash": "1dcaa01beb6bc78fdb13815b4f15214719167c58e3d79fbdf214591f8c195ee1",
+          "xz_url": "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-x86_64-unknown-linux-gnu.tar.xz",
+          "xz_hash": "3e58dff2d0b72196b5ea4e90536e174d400de88564a52694686b81e091169933"
+        },
+        {
+          "name": "clippy-preview",
+          "target": "aarch64-apple-darwin",
+          "available": true,
+          "url": "https://static.rust-lang.org/dist/2026-10-01/clippy-1.99.0-aarch64-apple-darwin.tar.gz",
+          "hash": "d13d16085280bd652d4a77041073264719c9ee92f33702f9dce2ee86777c92b1",
+          "xz_url": "https://static.rust-lang.org/dist/2026-10-01/clippy-1.99.0-aarch64-apple-darwin.tar.xz",
+          "xz_hash": "c31a0765ed31d98515a09a13b44486048873d90ac75bb1e6690a17fb36a5d4e2"
+        },
+        {
+          "name": "clippy-preview",
+          "target": "aarch64-unknown-linux-gnu",
+          "available": true,
+          "url": "https://static.rust-lang.org/dist/2026-10-01/clippy-1.99.0-aarch64-unknown-linux-gnu.tar.gz",
+          "hash": "18b0a743b8b6952ec6271edd385c8af8517de2d3eba5939f8bebd0f9ba99ffbd",
+          "xz_url": "https://static.rust-lang.org/dist/2026-10-01/clippy-1.99.0-aarch64-unknown-linux-gnu.tar.xz",
+          "xz_hash": "42e49dc02d29949395c0c072585961f6c9b5408110236087828d4e2f94ca96ef"
+        },
+        {
+          "name": "clippy-preview",
+          "target": "x86_64-unknown-linux-gnu",
+          "available": true,
+          "url": "https://static.rust-lang.org/dist/2026-10-01/clippy-1.99.0-x86_64-unknown-linux-gnu.tar.gz",
+          "hash": "4b3b972738f6b8e0e55065e273a972cc25fccf53629b4308eec67d6a66a8cf4a",
+          "xz_url": "https://static.rust-lang.org/dist/2026-10-01/clippy-1.99.0-x86_64-unknown-linux-gnu.tar.xz",
+          "xz_hash": "982442e32ad8dd3f0bb3a30db74038da5f71fd9bf1a865cc71da8ea5d4ec71ec"
+        },
+        {
+          "name": "rustfmt-preview",
+          "target": "aarch64-apple-darwin",
+          "available": true,
+          "url": "https://static.rust-lang.org/dist/2026-10-01/rustfmt-1.99.0-aarch64-apple-darwin.tar.gz",
+          "hash": "c8d86490e38920ab7783483dc828695a9a678eff541c5fa793f165b374e87312",
+          "xz_url": "https://static.rust-lang.org/dist/2026-10-01/rustfmt-1.99.0-aarch64-apple-darwin.tar.xz",
+          "xz_hash": "8b1436085c081e5efa88febadf667171a7a107073d168cd32b249a8eb70800da"
+        },
+        {
+          "name": "rustfmt-preview",
+          "target": "aarch64-unknown-linux-gnu",
+          "available": true,
+          "url": "https://static.rust-lang.org/dist/2026-10-01/rustfmt-1.99.0-aarch64-unknown-linux-gnu.tar.gz",
+          "hash": "6dd2fc9666ca97f366a8d581e46ca115ebcc962e9717d72ff4b9422c0c99551d",
+          "xz_url": "https://static.rust-lang.org/dist/2026-10-01/rustfmt-1.99.0-aarch64-unknown-linux-gnu.tar.xz",
+          "xz_hash": "4b9162fef99fd5246d2f83a2430c144e9bb9095aac6d1de0aaebde45ec01e09a"
+        },
+        {
+          "name": "rustfmt-preview",
+          "target": "x86_64-unknown-linux-gnu",
+          "available": true,
+          "url": "https://static.rust-lang.org/dist/2026-10-01/rustfmt-1.99.0-x86_64-unknown-linux-gnu.tar.gz",
+          "hash": "9fc3a87d3d4f6e5e2bd87e6fb8779b7a95831f533cb8cc8ae1304a797c648733",
+          "xz_url": "https://static.rust-lang.org/dist/2026-10-01/rustfmt-1.99.0-x86_64-unknown-linux-gnu.tar.xz",
+          "xz_hash": "b22c09ab9e258ec5571da170d88bd1624a4ea602e6d70d95720c5b47494cadce"
+        }
+      ],
+      "qualification_scope": "independently verified immutable Jackin source and normal shipping Rust1.99 archive,35external ABI exports,frozen strict Swift6 link and constructor/drop runtime,source-derived XCFramework,5native harnesses,78XCTest+2SwiftTesting zero failures on local Xcode27/SDK27; source-only compiler preparation, no MBX/cache/performance proof; required Xcode26.6/SDK26.5 hosted qualification remains open",
+      "pin_commit_sha": "b940084d7eb6a299eb4bfeb8e34901bc051e7ac4",
+      "source_tree_sha": "6913117a864d5d61315111b926f9768f91c505a5",
+      "normal_archive_sha256": "1fda7040db08cda50278171c4b449a71db33fc227941e79dbf0473180543c771",
+      "independent_review_sha256": "3187b857a394e803b4c409cc8533e4a2c9d6624805807630fedf27b624f8a07c"
+    },
+    {
+      "name": "swiftlint",
+      "pinned": "0.65.1",
+      "qualified": "0.65.1",
+      "latest": "0.65.1",
+      "source": "https://api.github.com/repos/realm/SwiftLint/releases/latest",
+      "checked_at": "2026-10-02T21:21:59.059126+00:00",
+      "status": "current",
+      "pin_tag": "0.65.1",
+      "pin_commit_sha": "6aba03e3d8302b33f106e0f922210f35ca4b52cf",
+      "published_at": "2026-08-21T20:29:47Z",
+      "source_sha256": "d03a40908ebd3301389d45f8354e9e489a051a1ab34deb95c4c5eb55a96078b0",
+      "pin_artifact_digests": [
+        {
+          "name": "bazel.tar.gz",
+          "digest": "sha256:ba76492a67197543419d8a20c0f1d371260e76609acf0a411f5a8af8b15d19ab",
+          "browser_download_url": "https://github.com/realm/SwiftLint/releases/download/0.65.1/bazel.tar.gz"
+        },
+        {
+          "name": "bazel.tar.gz.sha256",
+          "digest": "sha256:10d88d0b4cf5d695371136c3902e153f0a75f8e39afea781e84b39bac0669c71",
+          "browser_download_url": "https://github.com/realm/SwiftLint/releases/download/0.65.1/bazel.tar.gz.sha256"
+        },
+        {
+          "name": "portable_swiftlint.zip",
+          "digest": "sha256:c1e429b0599cf1b516f369a2d9ec04eaf0e436f3c12b637df8851fa52ff694d0",
+          "browser_download_url": "https://github.com/realm/SwiftLint/releases/download/0.65.1/portable_swiftlint.zip"
+        },
+        {
+          "name": "SwiftLint.amd64.msi",
+          "digest": "sha256:833fac63c3f8f8e4bef7c2ed3be7aeb956e07e0be4c80d73b43ed62f69d0deb8",
+          "browser_download_url": "https://github.com/realm/SwiftLint/releases/download/0.65.1/SwiftLint.amd64.msi"
+        },
+        {
+          "name": "SwiftLint.amd64.zip",
+          "digest": "sha256:7bc65a2eb0829cb16c358ec1725577b9dbd2bb987e924193f1e12f45b458e074",
+          "browser_download_url": "https://github.com/realm/SwiftLint/releases/download/0.65.1/SwiftLint.amd64.zip"
+        },
+        {
+          "name": "SwiftLint.arm64.msi",
+          "digest": "sha256:18ece5fb2b2ec0c195a9fabf6e667c47cf326aad87bfe1640ba54c6155d57776",
+          "browser_download_url": "https://github.com/realm/SwiftLint/releases/download/0.65.1/SwiftLint.arm64.msi"
+        },
+        {
+          "name": "SwiftLint.arm64.zip",
+          "digest": "sha256:caeb95d6f066c1a81be1d002aa71e7104ac888d77d1b5119fa974b07439589ea",
+          "browser_download_url": "https://github.com/realm/SwiftLint/releases/download/0.65.1/SwiftLint.arm64.zip"
+        },
+        {
+          "name": "SwiftLint.pkg",
+          "digest": "sha256:3fb0202842701762880cc2cf04fc394398bab3f16a04dd76e000e02d07e32486",
+          "browser_download_url": "https://github.com/realm/SwiftLint/releases/download/0.65.1/SwiftLint.pkg"
+        },
+        {
+          "name": "SwiftLintBinary.artifactbundle.zip",
+          "digest": "sha256:c3a1d77647ca18c1b7e9be7dbc6cd4490d26422f28814b76370244ff61970869",
+          "browser_download_url": "https://github.com/realm/SwiftLint/releases/download/0.65.1/SwiftLintBinary.artifactbundle.zip"
+        },
+        {
+          "name": "swiftlint_linux_amd64.zip",
+          "digest": "sha256:caeed6f4a679c35539ffaf124f6c4ab4a8416917f7d8796279dc52b74026059d",
+          "browser_download_url": "https://github.com/realm/SwiftLint/releases/download/0.65.1/swiftlint_linux_amd64.zip"
+        },
+        {
+          "name": "swiftlint_linux_arm64.zip",
+          "digest": "sha256:9ffa52f478e6d8eb485d37d14715ffac90abc81c58f3370d598bf75be05605f8",
+          "browser_download_url": "https://github.com/realm/SwiftLint/releases/download/0.65.1/swiftlint_linux_arm64.zip"
+        }
+      ],
+      "qualification_scope": "official exact tool source/release and asset digest metadata; isolated macOS acquisition probes separately passed; hosted workload/performance unqualified"
+    },
+    {
+      "name": "periphery",
+      "pinned": "3.8.0",
+      "qualified": "3.8.0",
+      "latest": "3.8.0",
+      "source": "https://api.github.com/repos/peripheryapp/periphery/releases/latest",
+      "checked_at": "2026-10-02T21:21:59.059126+00:00",
+      "status": "current",
+      "pin_tag": "3.8.0",
+      "pin_commit_sha": "a2db299196ae774cd644c79fa6b1f67556d78de8",
+      "published_at": "2026-07-25T08:22:11Z",
+      "source_sha256": "cc0eafdc5cc4c14965b172ac271006e04232982baa35056bdaf1effc8da9e22e",
+      "pin_artifact_digests": [
+        {
+          "name": "periphery-3.8.0.artifactbundle.zip",
+          "digest": "sha256:a9c7bfb1483dde1f4b660bc64183161fde3b519b7392add51ec8fe8b846cf494",
+          "browser_download_url": "https://github.com/peripheryapp/periphery/releases/download/3.8.0/periphery-3.8.0.artifactbundle.zip"
+        },
+        {
+          "name": "periphery-3.8.0.zip",
+          "digest": "sha256:07d4e286e31dd79164df39097e0b59f533c94badbe18158464a455ea88a166d7",
+          "browser_download_url": "https://github.com/peripheryapp/periphery/releases/download/3.8.0/periphery-3.8.0.zip"
+        },
+        {
+          "name": "periphery-bazel-3.8.0.zip",
+          "digest": "sha256:05dfd11b50c69b17863b0ec9d2fcada56b2619bec1602d55aef2a3f232253e21",
+          "browser_download_url": "https://github.com/peripheryapp/periphery/releases/download/3.8.0/periphery-bazel-3.8.0.zip"
+        }
+      ],
+      "qualification_scope": "official exact tool source/release and asset digest metadata; isolated macOS acquisition probes separately passed; hosted workload/performance unqualified"
+    },
+    {
+      "name": "cargo-semver-checks",
+      "pinned": "0.50.0",
+      "qualified": "0.50.0",
+      "latest": "0.50.0",
+      "status": "current",
+      "source": "https://api.github.com/repos/obi1kenobi/cargo-semver-checks/releases/latest",
+      "checked_at": "2026-10-02T23:23:46.824015+00:00",
+      "published_at": "2026-08-01T17:02:28Z",
+      "source_sha256": "ae2c04f0d8bd9d35541cad86b81d261075e63af4f3adecb4448e6cf6ebd0ac45",
+      "pin_tag": "v0.50.0",
+      "pin_commit_sha": "4297e8b5f6306531375ba2ba332171e5792b4c38",
+      "pin_tree_sha": "4f640b40228b0162141eb1d10961b4c1b5029189",
+      "pin_source": "https://github.com/obi1kenobi/cargo-semver-checks/tree/4297e8b5f6306531375ba2ba332171e5792b4c38",
+      "provider": "exact checksummed HTTP official archive",
+      "qualified_native_artifacts": [
+        {
+          "target": "x86_64-unknown-linux-gnu",
+          "artifact": "https://github.com/obi1kenobi/cargo-semver-checks/releases/download/v0.50.0/cargo-semver-checks-x86_64-unknown-linux-gnu.tar.gz",
+          "archive_sha256": "52a65dc88dc53fa8b57d6087954eb52cda149ca03bcfca78ce3fdecd23f893c4",
+          "binary_member": "cargo-semver-checks",
+          "binary_sha256": "bb749b764d3dde32b37ace1e86d5601f1033e06c8a5579e18ee67323c145ed3a",
+          "qualification_scope": "official archive downloaded and extracted executable hashed without execution; Linux runtime unqualified"
+        },
+        {
+          "target": "aarch64-unknown-linux-gnu",
+          "artifact": "https://github.com/obi1kenobi/cargo-semver-checks/releases/download/v0.50.0/cargo-semver-checks-aarch64-unknown-linux-gnu.tar.gz",
+          "archive_sha256": "e35f435ea322659381f52e7034bb4f0470108f5b267d29f13cf08152fa4af29b",
+          "binary_member": "cargo-semver-checks",
+          "binary_sha256": "f87889a5e26b6ee6f7656e8494c37842ab041349b04e5084a66c144df2ccc02b",
+          "qualification_scope": "official archive downloaded and extracted executable hashed without execution; Linux runtime unqualified"
+        },
+        {
+          "artifact": "https://github.com/obi1kenobi/cargo-semver-checks/releases/download/v0.50.0/cargo-semver-checks-aarch64-apple-darwin.tar.gz",
+          "archive_sha256": "f99f928d67501c29e8410026f27a54cf799fb13611c3b4a6a58f2772cf7e3799",
+          "binary_member": "cargo-semver-checks",
+          "binary_sha256": "9ce8bc0cd0a5f0f1aa8b5728d9745104adf774fb84970847cc9901b55f61a3a1",
+          "target": "aarch64-apple-darwin",
+          "qualification_scope": "independently reviewed canonical HTTP acquisition and supplied locked/offline rustdoc JSON file API analysis; Rust1.98.0, compatible0 and removed public trait100; no default manifest/dependency or anonymous publisher qualification"
+        }
+      ],
+      "qualification_scope": "official source and three archives verified; independently reviewed actual Mac canonical HTTP installation and executable identity; actual locked/offline Rust1.98.0 supplied rustdoc JSON file analysis across genuine published baseline1.70.2 and diagnostic current1.71.0: compatible exit0, public trait removal exit100; default checker generation, manifest/dependency lint coverage, anonymous release-plz update, Linux runtime and hosted performance unqualified",
+      "locked_file_api_proof_sha256": "28cff98add4ddeedf3a6a98fdc15ff53d089978161dc4dcc588f5c21d9bbaf26",
+      "locked_file_api_review_sha256": "a80e6247367460912738cc9aa55177f79f03e73ba20234f0686ea1410a4d12f0"
+    }
+  ],
+  "delivery_tools": [
+    {
+      "name": "buildx",
+      "pinned": "0.37.2",
+      "qualified": "0.37.2",
+      "latest": "v0.37.2",
+      "source": "https://api.github.com/repos/docker/buildx/releases/latest",
+      "status": "current",
+      "checked_at": "2026-10-02T20:04:38Z",
+      "qualification_scope": "official release API and published asset digest metadata only; binary downloads, runtime behavior and hosted performance unqualified"
+    },
+    {
+      "name": "buildkit",
+      "pinned": "0.33.1",
+      "qualified": "0.33.1",
+      "latest": "v0.33.1",
+      "source": "https://api.github.com/repos/moby/buildkit/releases/latest",
+      "status": "current",
+      "checked_at": "2026-10-02T20:04:38Z",
+      "qualification_scope": "Official release/tag/metadata API reads; registry manifest hash verified. Hosted workflow not executed.",
+      "image_digest": "sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea",
+      "qualified_image_digest": "sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea"
+    },
+    {
+      "name": "sbom-scanner",
+      "pinned": "1.12.0",
+      "qualified": "1.12.0",
+      "latest": "v1.12.0",
+      "source": "https://api.github.com/repos/docker/buildkit-syft-scanner/releases/latest",
+      "status": "current",
+      "checked_at": "2026-10-02T20:04:38Z",
+      "qualification_scope": "Official release/tag/metadata API reads; registry manifest hash verified. Hosted workflow not executed.",
+      "image_digest": "sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9",
+      "qualified_image_digest": "sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9"
+    }
+  ],
+  "native_authorities": [
+    {
+      "name": "homebrew-source",
+      "scope": "homebrew-native-source",
+      "pins": {
+        "homebrew-version": "7.0.7",
+        "homebrew-source-sha": "8e858db5584704dcd469b8e826228c0d5a5a94f6",
+        "homebrew-source-url": "https://github.com/Homebrew/brew/tree/8e858db5584704dcd469b8e826228c0d5a5a94f6"
+      },
+      "evidence_kind": "immutable-source",
+      "sources": [
+        "https://github.com/Homebrew/brew/tree/8e858db5584704dcd469b8e826228c0d5a5a94f6"
+      ],
+      "checked_at": "2026-10-02T21:07:57.362494Z"
+    },
+    {
+      "name": "homebrew-portable-ruby",
+      "scope": "homebrew-vendored-ruby",
+      "pins": {
+        "homebrew-portable-ruby-version": "4.0.7",
+        "homebrew-portable-ruby-x86_64-linux-sha256": "bf2a9bf102694d40084ed436b06a1566dded60a519f4d1879c90c81046e11081",
+        "homebrew-portable-ruby-arm64-linux-sha256": "c9b75dd6bd9578921f3ce739dacae8866698c3399c0f83574a5d5fadda2aab2d"
+      },
+      "evidence_kind": "immutable-source",
+      "sources": [
+        "https://raw.githubusercontent.com/Homebrew/brew/8e858db5584704dcd469b8e826228c0d5a5a94f6/Library/Homebrew/vendor/portable-ruby-version",
+        "https://raw.githubusercontent.com/Homebrew/brew/8e858db5584704dcd469b8e826228c0d5a5a94f6/Library/Homebrew/vendor/portable-ruby-x86_64-linux",
+        "https://raw.githubusercontent.com/Homebrew/brew/8e858db5584704dcd469b8e826228c0d5a5a94f6/Library/Homebrew/vendor/portable-ruby-arm64-linux"
+      ],
+      "checked_at": "2026-10-02T21:07:57.362494Z"
+    },
+    {
+      "name": "gradle-wrapper",
+      "scope": "gradle-workload-wrapper",
+      "pins": {
+        "gradle-wrapper-version": "9.5.1",
+        "gradle-wrapper-distribution-sha256": "bafc141b619ad6350fd975fc903156dd5c151998cc8b058e8c1044ab5f7b031f",
+        "gradle-wrapper-script-sha256": "aed171fb114f82e6eaea4970a245a200e0582a7dcc8ec0891ca41b6e4a62b754",
+        "gradle-wrapper-jar-sha256": "55243ef57851f12b070ad14f7f5bb8302daceeebc5bce5ece5fa6edb23e1145c",
+        "gradle-wrapper-bootstrap-version": "9.4.1",
+        "gradle-wrapper-bootstrap-source-sha": "2d6327017519d23b96af35865dc997fcb544fb40"
+      },
+      "evidence_kind": "immutable-source",
+      "sources": [
+        "https://github.com/gradle/gradle/blob/2d6327017519d23b96af35865dc997fcb544fb40/platforms/jvm/plugins-application/src/main/resources/org/gradle/api/internal/plugins/unixStartScript.txt",
+        "https://raw.githubusercontent.com/gradle/gradle/2d6327017519d23b96af35865dc997fcb544fb40/gradle/wrapper/gradle-wrapper.jar",
+        "https://services.gradle.org/distributions/gradle-9.5.1-bin.zip.sha256"
+      ],
+      "checked_at": "2026-10-02T21:25:32Z"
+    },
+    {
+      "name": "postgres-fixture",
+      "scope": "gradle-postgres-fixture",
+      "pins": {
+        "postgres-fixture-image": "postgres:18.6-trixie@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280"
+      },
+      "evidence_kind": "immutable-source",
+      "sources": [
+        "https://registry-1.docker.io/v2/library/postgres/manifests/sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280"
+      ],
+      "checked_at": "2026-10-02T21:25:32Z"
     }
   ]
 }

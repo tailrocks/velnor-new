@@ -22,7 +22,7 @@ pub const CHDIR_FINDING_TAG: &str = "path.cwd";
 /// Fixed tofu payload argv for one kind in one root.
 ///
 /// Fmt is `fmt -check -recursive -no-color`, init is `init
-/// -backend=false -input=false -lockfile=readonly -no-color`,
+/// -json -backend=false -input=false -lockfile=readonly -no-color`,
 /// validate is `validate -no-color`, each prefixed with `-chdir
 /// <root>` for subdir roots. Readonly init never repairs the lock:
 /// a missing or stale lock fails with the S4 marker instead of
@@ -52,7 +52,7 @@ pub fn tofu_payload_argv(kind: TofuTaskKind, root: &str) -> Result<Vec<OsString>
             argv.push(flag("-no-color"));
         }
         TofuTaskKind::InitForValidate => {
-            argv.extend([flag("init"), flag("-backend=false")]);
+            argv.extend([flag("init"), flag("-json"), flag("-backend=false")]);
             argv.extend([flag("-input=false"), flag("-lockfile=readonly")]);
             argv.push(flag("-no-color"));
         }

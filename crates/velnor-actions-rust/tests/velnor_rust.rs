@@ -41,6 +41,8 @@ mod impl_rust_release_modes;
 mod impl_rust_release_order;
 #[path = "impl_rust_release_select.rs"]
 mod impl_rust_release_select;
+#[path = "impl_rust_release_selected_obligations.rs"]
+mod impl_rust_release_selected_obligations;
 #[path = "impl_rust_tasks.rs"]
 mod impl_rust_tasks;
 #[path = "impl_rust_test_targets.rs"]

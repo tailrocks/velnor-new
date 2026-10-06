@@ -38,8 +38,8 @@ requests; the orchestrator MUST NOT launch processes or construct shell text.
 Internal workflow steps MUST NOT be exposed as subcommands. The sole
 non-CLI internal entrypoint is a bare invocation (no CLI arguments)
 with `VELNOR_INTERNAL_OP` naming a versioned typed operation
-(`write-request-v1`, `plan-v1`, `merge-v1`, `fetch-reports-v1`, or
-`write-task-report-v1`) plus its gate inputs. `plan-v1` and `merge-v1`
+(`write-request-v1`, `plan-v1`, `merge-v1`, `fetch-reports-v1`,
+`write-task-start-v1`, or `write-task-report-v1`) plus its gate inputs. `plan-v1` and `merge-v1`
 read schema-1 JSON from the existing request file at
 `VELNOR_REQUEST_FILE` and write the schema-1 JSON result to the sibling
 `<op>-response.json` derived from the `<op>-request.json` file name;
@@ -47,12 +47,22 @@ read schema-1 JSON from the existing request file at
 environment and the runner-temp anchor (`RUNNER_TEMP`, which the request
 path must sit under), and materializes the request file; `fetch-reports-v1`
 takes no request file and instead requires the runner-temp velnor
-directory plus the numeric run ID; `write-task-report-v1` takes no
+directory plus the numeric run ID; `write-task-start-v1` uses the same
+report environment gate, takes no request file, and writes decimal Unix
+milliseconds plus a newline to stdout using the helper's Rust clock.
+An unusable clock emits no bytes, leaving telemetry unknown. The fixed
+wrapper redirects this output into its start file and clears that file
+when capture fails, then initializes the read value to empty so failed
+reads cannot reuse an inherited stamp. `write-task-report-v1` takes no
 request file and instead requires the runner-temp velnor directory,
 the run environment, and the obligation env (`VELNOR_TASK_ID`,
-`VELNOR_EXIT_CODE`, optional `VELNOR_DOWNSTREAM_TASK_IDS`), resolving
+`VELNOR_EXIT_CODE`, optional `VELNOR_DOWNSTREAM_TASK_IDS` and
+`VELNOR_START_MS`), resolving
 the obligation against the downloaded plan and writing the validated
-task plus single-task matrix reports.
+task plus single-task matrix reports. Optional start telemetry measures
+elapsed wall time through the same Rust clock; real zero remains zero,
+while absent, malformed, future, or unusable-clock measurements remain
+unknown. No GNU/BSD system timestamp format participates in measurement.
 Versioned tags replace the earlier unversioned op vocabulary, which had
 no names for request materialization or report retrieval. Any CLI
 argument — including `--help`, `--version`, and public commands —
@@ -62,8 +72,10 @@ environment set; generated steps always invoke the helper bare, and
 stray arguments fail closed through Clap's usage diagnostic (exit 2).
 An unsatisfiable gate (unknown op, missing inputs) on a bare invocation
 likewise falls through to Clap and fails with the usage diagnostic
-(exit 2). A satisfied gate that fails operationally exits 1 with empty
-stdout and a one-line stderr diagnostic. Helper staging and version
+(exit 2). A satisfied gate that fails operationally exits 1 with a
+one-line stderr diagnostic and empty stdout, except that a failed clock
+stdout write may leave partial bytes which the wrapper MUST discard.
+Helper staging and version
 rules are in §6 and [workflow §3](workflow-contract.md).
 
 ## 2. Repository root
@@ -283,7 +295,10 @@ configuration values use hardcoded defaults; unknown keys, invalid values, and
 unsupported stack settings fail before any output replacement.
 
 Without `--output-dir`, the destination is the repository root. Velnor MUST
-replace the generated `.github` tree from scratch after rendering succeeds.
+preserve repository-owned nonworkflow `.github` entries in staging, write the
+generator-owned entries, then replace the combined tree after validation.
+Ownership and byte/mode/symlink preservation follow
+[generated-file §3](generated-file-contract.md).
 The replacement MUST be atomic at the directory level: a failed scan, plan,
 render, or validation leaves the previous `.github` tree unchanged. No
 generated file may be written outside `.github` during this command. Project
@@ -291,7 +306,8 @@ generated file may be written outside `.github` during this command. Project
 MUST remain byte-for-byte unchanged.
 
 `--output-dir PATH` is preview mode. PATH is the exact preview root; Velnor
-writes `PATH/.github`. PATH MUST be fresh and empty (or absent); Velnor MUST
+writes `PATH/.github` with the same preserved entries and generated outputs as
+in-place generation. PATH MUST be fresh and empty (or absent); Velnor MUST
 refuse a non-empty destination rather than replace unrelated files. The caller
 chooses a unique path for each preview. Velnor MUST NOT modify the repository,
 including `.github` or `.velnor/config.toml`. The canonical preview invocation
@@ -336,10 +352,10 @@ verified candidate artifact. No other step may invoke the candidate.
 
 `plan` writes its report to stdout. `generate` writes human-readable
 recommendations about optional tooling files and detection findings to stderr.
-When `generate` replaces the `.github` tree, it MUST also list every
-removed path that was not Velnor-generated output on stderr (see
-[generated-file §3](generated-file-contract.md)); previews report the
-same list without modifying the repository.
+Generator ownership includes all workflow paths; repository-owned nonworkflow
+entries are preserved in both generation modes under
+[generated-file §3](generated-file-contract.md). The generated-file list names
+generated outputs, without relabeling preserved entries as generated.
 Neither `plan` nor `generate` has JSON or format-selection options. The
 generated workflow is the machine-readable product; detailed plans and reports
 remain internal and are validated by the orchestrator and workflow's final

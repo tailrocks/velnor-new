@@ -5,13 +5,13 @@ use std::path::Path;
 
 use velnor_actions_contract::GeneratorLock;
 use velnor_actions_mise::catalog::lock::{load_text, parse_generator_lock, verify_version_policy};
-use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog};
+use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, RuntimePaths, ToolCatalog};
 use velnor_actions_workflow_renderer::render::RenderedTree;
 
 use crate::OrchestratorError;
 use crate::generate::write_tree;
-use crate::validate_shell::{run_shellcheck_bodies, run_shellcheck_probe};
-use crate::validate_zizmor::{run_zizmor, write_zizmor_config};
+use crate::validate_shell::{run_shellcheck_bodies_in_runtime, run_shellcheck_probe_in_runtime};
+use crate::validate_zizmor::{run_zizmor_in_runtime, write_zizmor_config};
 
 /// Velnor-repository-only bootstrap lock (never read for consumers).
 const GENERATOR_LOCK_REL: &str = ".velnor/generator.lock";
@@ -28,27 +28,26 @@ const WORKFLOWS_DIR: &str = ".github/workflows/";
 /// Cap for validator diagnostics embedded in errors.
 const DIAG_CAP: usize = 4000;
 
-/// Validate the rendered tree in isolated staging; fail closed.
-///
-/// Runs before any replace or preview write, so any validator failure,
-/// tool failure, or empty workflow set leaves all output untouched.
-/// Returns the sorted pinned-validator specs that accepted the tree.
-pub(crate) fn validate_staged(tree: &RenderedTree) -> Result<Vec<String>, OrchestratorError> {
+/// Validate the rendered tree with validators bound to one compiled runtime.
+pub(crate) fn validate_staged_in_runtime(
+    tree: &RenderedTree,
+    runtime: RuntimePaths,
+) -> Result<Vec<String>, OrchestratorError> {
     let staging = tempfile::tempdir().map_err(|err| {
         OrchestratorError::io(std::env::temp_dir().display().to_string(), err.to_string())
     })?;
     write_tree(&staging.path().join(".github"), tree)?;
     let workflows = staged_workflows(tree)?;
     let catalog = ToolCatalog::pinned();
-    run_actionlint(&catalog, staging.path(), &workflows)?;
-    run_shellcheck_probe(&catalog, staging.path())?;
+    run_actionlint(&catalog, staging.path(), &workflows, runtime)?;
+    run_shellcheck_probe_in_runtime(&catalog, staging.path(), runtime)?;
     write_zizmor_config(staging.path(), tree)?;
-    run_zizmor(&catalog, staging.path())?;
-    run_shellcheck_bodies(&catalog, staging.path(), &workflows)?;
+    run_zizmor_in_runtime(&catalog, staging.path(), runtime)?;
+    run_shellcheck_bodies_in_runtime(&catalog, staging.path(), &workflows, runtime)?;
     let mut validated = vec![
-        catalog.tool_spec(PinnedTool::Actionlint),
-        catalog.tool_spec(PinnedTool::Shellcheck),
-        catalog.tool_spec(PinnedTool::Zizmor),
+        catalog.tool_spec(PinnedTool::Actionlint)?,
+        catalog.tool_spec(PinnedTool::Shellcheck)?,
+        catalog.tool_spec(PinnedTool::Zizmor)?,
     ];
     validated.sort();
     Ok(validated)
@@ -131,14 +130,16 @@ fn run_actionlint(
     catalog: &ToolCatalog,
     staging: &Path,
     workflows: &[String],
+    runtime: RuntimePaths,
 ) -> Result<(), OrchestratorError> {
     let args = actionlint_argv(workflows);
-    let output = pinned_output(
+    let output = pinned_output_in_runtime(
         catalog,
         "actionlint",
         vec![PinnedTool::Actionlint, PinnedTool::Shellcheck],
         args,
         staging,
+        runtime,
     )?;
     if output.success {
         Ok(())
@@ -150,13 +151,14 @@ fn run_actionlint(
     }
 }
 
-/// Execute one pinned tool in staging; spawn failure fails closed.
-pub(crate) fn pinned_output(
+/// Execute one pinned validator under a compiled runtime domain.
+pub(crate) fn pinned_output_in_runtime(
     catalog: &ToolCatalog,
     tool: &str,
     tools: Vec<PinnedTool>,
     args: Vec<OsString>,
     staging: &Path,
+    runtime: RuntimePaths,
 ) -> Result<ProcessOutput, OrchestratorError> {
     let program = OsString::from(tool);
     let exec = PinnedToolExec::new(tools, &program, args).map_err(|err| {
@@ -165,12 +167,12 @@ pub(crate) fn pinned_output(
             problem: err.to_string(),
         }
     })?;
-    let command = exec
-        .command(catalog)
-        .map_err(|err| OrchestratorError::Validation {
+    let command = exec.command_with_runtime(catalog, runtime).map_err(|err| {
+        OrchestratorError::Validation {
             tool: tool.to_owned(),
             problem: err.to_string(),
-        })?;
+        }
+    })?;
     command
         .with_cwd(staging.to_path_buf())
         .run()

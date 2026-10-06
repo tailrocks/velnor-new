@@ -21,6 +21,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             generator_validation: velnor_actions_contract::GeneratorValidation::Bootstrap,
             max_parallel_jobs: 2,
             runner_label: None,
+            verification: None,
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -31,12 +32,14 @@ pub(crate) fn valid_config() -> VelnorConfig {
             by_manifest: BTreeMap::new(),
         },
         stacks: StacksConfig {
+            workloads: Vec::new(),
             ignore: vec![],
             rust: None,
             tofu: None,
         },
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),
+        delivery: velnor_actions_contract::config::DeliveryConfig::default(),
     }
 }
 
@@ -44,12 +47,14 @@ pub(crate) fn valid_config() -> VelnorConfig {
 pub(crate) fn sample_plan(run_key: &str) -> Result<Plan, ContractError> {
     let entry = sample_entry(run_key)?;
     Ok(Plan {
+        producers: velnor_actions_contract::ProducerInventory::default(),
         schema: 1,
         run_key: run_key.to_owned(),
         plan_id: plan_id_for_run(run_key)?,
         base: None,
         head: "ab".repeat(20),
         event: WorkflowEvent::PullRequest,
+        scope: velnor_actions_contract::VerificationScope::Affected,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,
@@ -71,10 +76,18 @@ pub(crate) fn sample_plan(run_key: &str) -> Result<Plan, ContractError> {
         }],
         obligations: vec![PlanObligation {
             task_id: TASK.to_owned(),
+            job_id: "plan".to_owned(),
             decision: ObligationDecision::Execute,
             reason: "changed".to_owned(),
             task_digest: digest_b3(b"task"),
             input_digest: digest_b3(b"inputs"),
+            execution_identity: velnor_actions_contract::TaskExecutionIdentity::new(
+                &velnor_actions_contract::digest_b3(b"fixture-graph"),
+                &velnor_actions_contract::digest_b3(b"fixture-toolchain"),
+                &velnor_actions_contract::digest_b3(b"fixture-mbx"),
+                &velnor_actions_contract::digest_b3(b"fixture-platform"),
+                "default",
+            )?,
             closure_digest: digest_b3(b"closure"),
             baseline_proof: None,
         }],

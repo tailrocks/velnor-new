@@ -110,6 +110,12 @@ fn parse_default_branch_accepts_only_strict_names() {
         "a;b",
         "x://y",
         "a\"b",
+        "a'b",
+        "a|b",
+        "a&b",
+        "a.lock",
+        "a//b",
+        "\" main\"",
         "\"unterminated",
     ] {
         assert_eq!(parse_default_branch(bad), None, "rejects {bad:?}");

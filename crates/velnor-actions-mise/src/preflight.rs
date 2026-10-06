@@ -103,8 +103,9 @@ impl RouteProof {
     }
 
     /// Full probe invocation including the program.
-    #[must_use]
-    pub fn invocation(&self, catalog: &ToolCatalog) -> Vec<OsString> {
+    /// # Errors
+    /// Returns an error when the selected tool lacks catalog authority.
+    pub fn invocation(&self, catalog: &ToolCatalog) -> Result<Vec<OsString>, MiseError> {
         self.probe.argv(catalog)
     }
 
@@ -113,7 +114,7 @@ impl RouteProof {
     /// # Errors
     ///
     /// Returns [`MiseError::EmptyCommand`] only if the fixed probe were
-    /// empty, which construction rules out.
+    /// empty, which construction rules out. Catalog selection errors propagate.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         self.probe.command(catalog)
     }
@@ -144,7 +145,7 @@ pub fn prove_route(
         problem: err.to_string(),
     })?;
     let tools = driver.tools();
-    let specs = catalog.tool_specs(&tools);
+    let specs = catalog.tool_specs(&tools)?;
     let probe = PinnedToolExec::new(
         tools,
         OsStr::new(driver.program()),

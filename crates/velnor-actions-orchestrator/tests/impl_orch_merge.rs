@@ -46,7 +46,7 @@ fn orch_core_merge_counts_cover_five_states() -> TestResult {
         &serde_json::to_value(&plan)?,
         &matrix,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     let final_report = merge(&request)?;
     let counts = &final_report.counts;
@@ -79,8 +79,12 @@ fn orch_core_all_covered_merges_passed() -> TestResult {
         assert!(!plan.task_ids.is_empty(), "fixture must select work");
         let (plan_json, manifest) = covered_plan(&plan)?;
         let matrix = plan_json["matrix"].clone();
-        let mut request =
-            merge_request(&plan_json, &matrix, &serde_json::json!([]), &success_jobs());
+        let mut request = merge_request(
+            &plan_json,
+            &matrix,
+            &serde_json::json!([]),
+            &success_jobs(&plan),
+        );
         request["baseline_manifest"] = manifest;
         let final_report = merge(&request)?;
         assert_eq!(final_report.status, FinalStatus::Passed);
@@ -96,7 +100,12 @@ fn orch_core_covered_claim_binds_original_proof_run() -> TestResult {
     let (mut plan_json, manifest) = covered_plan(&plan)?;
     plan_json["obligations"][0]["baseline_proof"]["run_id"] = serde_json::json!(8);
     let matrix = plan_json["matrix"].clone();
-    let mut request = merge_request(&plan_json, &matrix, &serde_json::json!([]), &success_jobs());
+    let mut request = merge_request(
+        &plan_json,
+        &matrix,
+        &serde_json::json!([]),
+        &success_jobs(&plan),
+    );
     request["baseline_manifest"] = manifest;
     assert_eq!(merge(&request)?.status, FinalStatus::PlanningFailed);
     Ok(())
@@ -238,7 +247,7 @@ fn blocked_tasks_resolve_below_cancelled() -> TestResult {
             &serde_json::to_value(&plan)?,
             &serde_json::to_value(&plan.matrix)?,
             &serde_json::to_value(reports)?,
-            &success_jobs(),
+            &success_jobs(&plan),
         );
         merge(&request)
     };

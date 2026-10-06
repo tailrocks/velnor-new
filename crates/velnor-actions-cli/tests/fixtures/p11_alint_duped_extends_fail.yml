@@ -8,10 +8,12 @@
 #
 # `extends` pins the five pr-1 R04 bundles (OSS, GitHub Actions, Rust,
 # lockfiles, no-tracked-artifacts), deduped: the review example repeats
-# the GHA bundle. Verified on the pinned alint 0.16.1 (`alint
-# validate-config` loads 46 bundled rules; `alint check
-# --fail-on-warning` is green). Re-verify every bundle/level change with
-# the pinned binary: `alint validate-config` plus `alint check`.
+# the GHA bundle. Historical fixture validation on pinned Alint 0.16.1
+# loaded 46 bundled rules and `alint check --fail-on-warning` was green.
+# The 0.17.0 paired config/action-flag compatibility evidence is recorded in
+# `docs/reviews/ci-performance-freshness-audit.md`; it does not claim the
+# current repository check is green. Re-verify each change with the pinned
+# binary: `alint validate-config` plus `alint check`.
 # Rust edition 2024 is NOT a literal `toml_path_equals` rule here: every
 # member declares `edition.workspace = true`, so literal equality on
 # `$.package.edition` would reject all seven manifests. Adoption §4
@@ -131,13 +133,10 @@ rules:
     level: error
     message: "src/lib.rs and src/main.rs MUST stay under 150 physical lines (§5)"
 
-  # Same-id override of bundled `gha-pin-actions-to-sha`: identical check
-  # (paths/query/regex copied from the 0.16.1 bundle), demoted to info.
-  # `uses: asamarts/alint@v0.16.1` is a recorded reviewed-tag exception
-  # (version-policy §2, line-scoped `.zizmor.yml` ignore pinned by the repo
-  # policy test); the finding must stay visible, but CI runs alint with
-  # `fail-on-warning`, so warning level would fail the gate until the
-  # renderer pins alint by SHA. Never weaken the query or regex here.
+  # Negative fixture for the retired v0.16.1 reviewed-tag carveout: its
+  # same-id demotion is forbidden. Current policy pins Alint v0.17.0 by SHA;
+  # no tag exception or `.zizmor.yml` ignore remains. Never weaken the query
+  # or regex copied from the original bundle.
   - id: gha-pin-actions-to-sha
     kind: yaml_path_matches
     paths:
@@ -147,4 +146,4 @@ rules:
     matches: ^(\./.*|docker://[^@]+@sha256:[a-f0-9]{64}|[a-zA-Z0-9._/-]+@[a-f0-9]{40})$
     if_present: true
     level: info
-    message: "Third-party action is not pinned to a commit SHA (reviewed-tag exception tracked in .zizmor.yml)"
+    message: "Third-party action is not pinned to a commit SHA (legacy reviewed-tag exception removed)"

@@ -18,7 +18,7 @@ fn descriptor(task: &str) -> CachedTaskDescriptor {
         outputs: vec!["target/debug/app".to_owned()],
         command_inputs: vec!["rustc --version".to_owned()],
         env: BTreeMap::new(),
-        tools: vec!["rust@1.98.1".to_owned()],
+        tools: vec!["rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()],
         dep_keys: Vec::new(),
     }
 }

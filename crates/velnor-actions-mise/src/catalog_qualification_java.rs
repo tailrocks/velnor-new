@@ -1,0 +1,243 @@
+//! Audited latest Community `GraalVM` Java 25.0.4.1.1 distribution.
+//!
+//! The three official release archives were downloaded and checked against
+//! the release API digests and official SHA files. Their complete extracted
+//! closures were recorded; `java`, `javac`, and `native-image` are bound below.
+//! The isolated macOS HTTP probe also measured the installed root and runtime.
+//! Linux records remain archive-only until a host installation probe exists.
+
+use super::{
+    DistributionAssetFormat, DistributionHost, DistributionTool, ProvisioningMode,
+    QualifiedDistribution, QualifiedInstallBackend, QualifiedInstallEnvironment,
+    QualifiedInstallPlan, QualifiedLaunchEntry, QualifiedLaunchKind, QualifiedSourceLineage,
+};
+use crate::MiseError;
+
+/// Exact Community JDK selection version.
+pub(super) const VERSION: &str = "25.0.4.1.1";
+/// Release provider repository, used by the selected catalog profile.
+pub(super) const RELEASE_REPOSITORY: &str = "https://github.com/graalvm/graalvm-ce-builds";
+/// Immutable Community release tag commit, used by the selected catalog profile.
+pub(super) const RELEASE_COMMIT: &str = "885c1b1865fb7aa81df90a00dfc85ede3af4370b";
+
+const REPORTED_RUNTIME_VERSION: &str = "25.0.4.1.1+1-jvmci-25.4-b23";
+const GRAALVM_VERSION: &str = "25.4.4.1.1";
+const RELEASE_TAG: &str = "graal-25.4.4.1.1";
+const RELEASE_TREE: &str = "6ce622805f4924001b0a06f55d83984893f9d80c";
+const RELEASE_OWNER: &str = "graalvm/graalvm-ce-builds";
+const GRAAL_REPOSITORY: &str = "https://github.com/oracle/graal";
+const GRAAL_COMMIT: &str = "95ce1499c8c96ab7d5a6697c5b4bf42160f3b68b";
+const GRAAL_TREE: &str = "daea2d0f35a623a38fb10846c92f1d69e4aa2b37";
+const MACOS_ROOT: &str = "installs/http-graalvm-community-jdk/25.0.4.1.1";
+const MACOS_JAVA_HOME: &str = "Contents/Home";
+const MACOS_BIN_PATH: &str = "Contents/Home/bin";
+const MACOS_JAVA_PATH: &str =
+    "installs/http-graalvm-community-jdk/25.0.4.1.1/Contents/Home/bin/java";
+const MACOS_JAVAC_PATH: &str =
+    "installs/http-graalvm-community-jdk/25.0.4.1.1/Contents/Home/bin/javac";
+const MACOS_NATIVE_IMAGE_PATH: &str =
+    "installs/http-graalvm-community-jdk/25.0.4.1.1/Contents/Home/lib/svm/bin/native-image";
+const MACOS_TRANSFORM_ABI: &str = "graalvm-community-jdk-http-strip1-bin-contents-home-v1";
+
+const SOURCE_LINEAGE: &[QualifiedSourceLineage] = &[
+    QualifiedSourceLineage {
+        name: "graal",
+        repository: GRAAL_REPOSITORY,
+        commit: GRAAL_COMMIT,
+        tree: GRAAL_TREE,
+        version: GRAALVM_VERSION,
+    },
+    QualifiedSourceLineage {
+        name: "graalvm-community-jdk",
+        repository: GRAAL_REPOSITORY,
+        commit: GRAAL_COMMIT,
+        tree: GRAAL_TREE,
+        version: REPORTED_RUNTIME_VERSION,
+    },
+    QualifiedSourceLineage {
+        name: "graalvm-ce-builds",
+        repository: RELEASE_REPOSITORY,
+        commit: RELEASE_COMMIT,
+        tree: RELEASE_TREE,
+        version: RELEASE_TAG,
+    },
+];
+
+const LINUX_AMD64_LAUNCH: &[QualifiedLaunchEntry] = &[
+    QualifiedLaunchEntry {
+        archive_member: "graalvm-community-25.4.4.1.1+1.1/bin/java",
+        installed_relative_path: None,
+        sha256: "489bc8ef27770e9d222d8e55f0a8f5aa0800f821eb01ba2479e2ffd5882c0f8b",
+        kind: QualifiedLaunchKind::Executable,
+    },
+    QualifiedLaunchEntry {
+        archive_member: "graalvm-community-25.4.4.1.1+1.1/bin/javac",
+        installed_relative_path: None,
+        sha256: "815fb39526e463daa54bab9ee17f68787fcbc13a2f27ac775a6043753c36e41b",
+        kind: QualifiedLaunchKind::Executable,
+    },
+    QualifiedLaunchEntry {
+        archive_member: "graalvm-community-25.4.4.1.1+1.1/lib/svm/bin/native-image",
+        installed_relative_path: None,
+        sha256: "178129e4b68f78cffd42d9762bb1c7415cc01836537d9b8835657193a1837276",
+        kind: QualifiedLaunchKind::Executable,
+    },
+];
+
+const LINUX_ARM64_LAUNCH: &[QualifiedLaunchEntry] = &[
+    QualifiedLaunchEntry {
+        archive_member: "graalvm-community-25.4.4.1.1+1.1/bin/java",
+        installed_relative_path: None,
+        sha256: "3a8ad26224ad9626992c9516fff4e806cbd4883c253416976966656a5fc5a483",
+        kind: QualifiedLaunchKind::Executable,
+    },
+    QualifiedLaunchEntry {
+        archive_member: "graalvm-community-25.4.4.1.1+1.1/bin/javac",
+        installed_relative_path: None,
+        sha256: "773e2fbe22a95829efd1a567649d64ce6a96196ab56e6b59b7463bc8515d1575",
+        kind: QualifiedLaunchKind::Executable,
+    },
+    QualifiedLaunchEntry {
+        archive_member: "graalvm-community-25.4.4.1.1+1.1/lib/svm/bin/native-image",
+        installed_relative_path: None,
+        sha256: "671e6bc88094fdf16de9b7739ade7725de186c7f03e5e4869b191781355a97aa",
+        kind: QualifiedLaunchKind::Executable,
+    },
+];
+
+const MACOS_ARM64_LAUNCH: &[QualifiedLaunchEntry] = &[
+    QualifiedLaunchEntry {
+        archive_member: "graalvm-community-25.4.4.1.1+1.1/Contents/Home/bin/java",
+        installed_relative_path: Some(MACOS_JAVA_PATH),
+        sha256: "b50abd5156d99cb2392fe7c63e72d489f6a3df51474da809fc1999800f8687a2",
+        kind: QualifiedLaunchKind::Executable,
+    },
+    QualifiedLaunchEntry {
+        archive_member: "graalvm-community-25.4.4.1.1+1.1/Contents/Home/bin/javac",
+        installed_relative_path: Some(MACOS_JAVAC_PATH),
+        sha256: "6a7f9bfa3eb7956739a83da0ba271a3ad160143affb41bbe373ffc6a6bb2b397",
+        kind: QualifiedLaunchKind::Executable,
+    },
+    QualifiedLaunchEntry {
+        archive_member: "graalvm-community-25.4.4.1.1+1.1/Contents/Home/lib/svm/bin/native-image",
+        installed_relative_path: Some(MACOS_NATIVE_IMAGE_PATH),
+        sha256: "945ade53a56827d60c8bb9755490dfcf60fe5af5cb48a3c91436867c37b91812",
+        kind: QualifiedLaunchKind::Executable,
+    },
+];
+
+const MACOS_ENVIRONMENT: &[QualifiedInstallEnvironment] = &[
+    QualifiedInstallEnvironment {
+        name: "JAVA_HOME",
+        relative_path: MACOS_JAVA_HOME,
+    },
+    QualifiedInstallEnvironment {
+        name: "PATH",
+        relative_path: MACOS_BIN_PATH,
+    },
+];
+
+const MACOS_INSTALL: QualifiedInstallPlan = QualifiedInstallPlan {
+    backend: QualifiedInstallBackend::MiseHttp,
+    strip_components: 1,
+    bin_path: MACOS_BIN_PATH,
+    root_relative_path: MACOS_ROOT,
+    transform_abi: MACOS_TRANSFORM_ABI,
+    environment: MACOS_ENVIRONMENT,
+};
+
+/// Build the exact latest Community release for one supported host.
+pub(super) fn official(
+    host: DistributionHost,
+    version: &str,
+) -> Result<QualifiedDistribution, MiseError> {
+    if version != VERSION {
+        return Err(absent(host, version));
+    }
+    let (
+        asset_url,
+        archive_sha256,
+        binary_sha256,
+        binary_member,
+        launch_entries,
+        installed_binary_relative_path,
+        install_plan,
+    ) = match host {
+        DistributionHost::LinuxAmd64 => (
+            "https://github.com/graalvm/graalvm-ce-builds/releases/download/graal-25.4.4.1.1/graalvm-community-jdk-25i4-25.0.4.1.1_linux-x64_bin.tar.gz",
+            "05ccbbe783210b6886ff7b08fcd0b061c5dce4852b05db87284fc0e24abb08e2",
+            "489bc8ef27770e9d222d8e55f0a8f5aa0800f821eb01ba2479e2ffd5882c0f8b",
+            "graalvm-community-25.4.4.1.1+1.1/bin/java",
+            LINUX_AMD64_LAUNCH,
+            None,
+            None,
+        ),
+        DistributionHost::LinuxArm64 => (
+            "https://github.com/graalvm/graalvm-ce-builds/releases/download/graal-25.4.4.1.1/graalvm-community-jdk-25i4-25.0.4.1.1_linux-aarch64_bin.tar.gz",
+            "e5f5e2f59643cf96765c741dc00b206f86c69c8c1bf843fe26050c871e0e2dbc",
+            "3a8ad26224ad9626992c9516fff4e806cbd4883c253416976966656a5fc5a483",
+            "graalvm-community-25.4.4.1.1+1.1/bin/java",
+            LINUX_ARM64_LAUNCH,
+            None,
+            None,
+        ),
+        DistributionHost::MacosArm64 => (
+            "https://github.com/graalvm/graalvm-ce-builds/releases/download/graal-25.4.4.1.1/graalvm-community-jdk-25i4-25.0.4.1.1_macos-aarch64_bin.tar.gz",
+            "4ec9932aa4aab1afca0ea31982d32d6f956615c61fe21a227b49756b25adda4f",
+            "b50abd5156d99cb2392fe7c63e72d489f6a3df51474da809fc1999800f8687a2",
+            "graalvm-community-25.4.4.1.1+1.1/Contents/Home/bin/java",
+            MACOS_ARM64_LAUNCH,
+            Some(MACOS_JAVA_PATH),
+            Some(MACOS_INSTALL),
+        ),
+    };
+    QualifiedDistribution {
+        tool: DistributionTool::Java,
+        host,
+        selector: selector(host),
+        asset_url,
+        archive_sha256,
+        binary_sha256,
+        asset_format: DistributionAssetFormat::TarGzip,
+        binary_member,
+        source_repository: RELEASE_REPOSITORY,
+        source_commit: RELEASE_COMMIT,
+        source_tree: RELEASE_TREE,
+        owner: RELEASE_OWNER,
+        version: REPORTED_RUNTIME_VERSION,
+        selection_version: VERSION,
+        abi: "graalvm-community-jdk-25.4.4.1.1+1.1",
+        provisioning_mode: ProvisioningMode::Official,
+        installed_binary_relative_path,
+        launch_entries,
+        source_lineage: SOURCE_LINEAGE,
+        install_plan,
+    }
+    .validate()
+}
+
+fn selector(host: DistributionHost) -> &'static str {
+    match host {
+        DistributionHost::LinuxAmd64 => concat!(
+            "http:graalvm-community-jdk",
+            "[url=\"https://github.com/graalvm/graalvm-ce-builds/releases/download/graal-25.4.4.1.1/graalvm-community-jdk-25i4-25.0.4.1.1_linux-x64_bin.tar.gz\",checksum=\"sha256:05ccbbe783210b6886ff7b08fcd0b061c5dce4852b05db87284fc0e24abb08e2\",strip_components=1,bin_path=\"bin\"]@25.0.4.1.1"
+        ),
+        DistributionHost::LinuxArm64 => concat!(
+            "http:graalvm-community-jdk",
+            "[url=\"https://github.com/graalvm/graalvm-ce-builds/releases/download/graal-25.4.4.1.1/graalvm-community-jdk-25i4-25.0.4.1.1_linux-aarch64_bin.tar.gz\",checksum=\"sha256:e5f5e2f59643cf96765c741dc00b206f86c69c8c1bf843fe26050c871e0e2dbc\",strip_components=1,bin_path=\"bin\"]@25.0.4.1.1"
+        ),
+        DistributionHost::MacosArm64 => concat!(
+            "http:graalvm-community-jdk",
+            "[url=\"https://github.com/graalvm/graalvm-ce-builds/releases/download/graal-25.4.4.1.1/graalvm-community-jdk-25i4-25.0.4.1.1_macos-aarch64_bin.tar.gz\",checksum=\"sha256:4ec9932aa4aab1afca0ea31982d32d6f956615c61fe21a227b49756b25adda4f\",strip_components=1,bin_path=\"Contents/Home/bin\"]@25.0.4.1.1"
+        ),
+    }
+}
+
+fn absent(host: DistributionHost, version: &str) -> MiseError {
+    MiseError::Contract {
+        problem: format!(
+            "qualified latest Community GraalVM Java absent: {} / {version}",
+            host.abi()
+        ),
+    }
+}

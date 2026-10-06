@@ -1,0 +1,1928 @@
+{
+  "platform": "darwin",
+  "python": "3.9.6 (default, Aug 25 2026, 21:26:21) \n[Clang 21.0.0 (clang-2100.3.34.2)]",
+  "invocation": [
+    "/usr/bin/python3",
+    "-I",
+    "-S",
+    "-c",
+    "<fixed concatenated source>"
+  ],
+  "source_sha256": "6558d0128f12ed361d64b473b7abe32440f38efcdb4bed81c16242be802019ce",
+  "cases": [
+    {
+      "name": "same-byte-count-content-repair",
+      "passed": true,
+      "detail": {
+        "before_bytes": 7,
+        "after_bytes": 7
+      }
+    },
+    {
+      "name": "mode-change",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "opaque-newline-and-invalid-utf8",
+      "passed": true,
+      "detail": {
+        "inventory": {
+          "status": 0,
+          "stdout": "d4e41def953703b63ba68a7fdee56a27b96913d46e9af7d2d50428fc303283cf 2 50",
+          "stderr": ""
+        },
+        "invalid_utf8_filename": "filesystem rejected non-UTF8 filename: errno 92"
+      }
+    },
+    {
+      "name": "opaque-filenames-affect-digest",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "dot-git-included",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "tmp-included",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "symlink-target-change",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "source-symlink-rejected",
+      "passed": true,
+      "detail": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "velnor: opaque inventory unavailable"
+      }
+    },
+    {
+      "name": "confined-valid-link",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "confined-outside-root-rejected",
+      "passed": true,
+      "detail": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "velnor: opaque inventory unavailable"
+      }
+    },
+    {
+      "name": "hardlink-topology-change",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "missing-root-recorded",
+      "passed": true,
+      "detail": {
+        "status": 0,
+        "stdout": "67541c9f78db1ba78ac785b648347b4f8f5afdfc479f4b3f5dc7e1a96bc13194 0 0",
+        "stderr": ""
+      }
+    },
+    {
+      "name": "missing-to-existing-change",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "invalid-roots-['../tree']",
+      "passed": true,
+      "detail": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "velnor: opaque inventory unavailable"
+      }
+    },
+    {
+      "name": "invalid-roots-['/tmp']",
+      "passed": true,
+      "detail": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "velnor: opaque inventory unavailable"
+      }
+    },
+    {
+      "name": "invalid-roots-['tree', 'tree']",
+      "passed": true,
+      "detail": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "velnor: opaque inventory unavailable"
+      }
+    },
+    {
+      "name": "linked-ancestor-rejected",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "xattr-record-change",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "xattr-strict-reject",
+      "passed": true,
+      "detail": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "velnor: opaque inventory unavailable"
+      }
+    },
+    {
+      "name": "flags-record-change",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "flags-strict-reject",
+      "passed": true,
+      "detail": {
+        "status": 1,
+        "stdout": "",
+        "stderr": "velnor: opaque inventory unavailable"
+      }
+    },
+    {
+      "name": "acl-command",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "acl-record-change",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "acl-specific-record-and-strict-reject",
+      "passed": true,
+      "detail": {
+        "stdout": "1\nrejected\n",
+        "stderr": ""
+      }
+    },
+    {
+      "name": "bsdtar-action-create-flags",
+      "passed": true,
+      "detail": {
+        "argv": [
+          "/usr/bin/tar",
+          "--posix",
+          "-cf",
+          "/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/velnor-inventory-proof-050wkdiw/cache.tar",
+          "--exclude",
+          "/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/velnor-inventory-proof-050wkdiw/cache.tar",
+          "-P",
+          "-C",
+          "/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/velnor-inventory-proof-050wkdiw",
+          "--files-from",
+          "/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/velnor-inventory-proof-050wkdiw/manifest.txt"
+        ],
+        "stderr": "",
+        "listing": "tree/\ntree/ordinary\ntree/hard\ntree/payload.tmp\ntree/newline\\nfilename\ntree/.git/\ntree/.git/config\n"
+      }
+    },
+    {
+      "name": "bsdtar-canary-archived",
+      "passed": true,
+      "detail": {
+        "canary_present": true
+      }
+    },
+    {
+      "name": "bsdtar-canary-restored",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "archive-full-delta",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "native-clean-metadata-rejection-documented",
+      "passed": true,
+      "detail": {
+        "attributes": [
+          "com.apple.provenance"
+        ],
+        "inventory": {
+          "status": 1,
+          "stdout": "",
+          "stderr": "velnor: opaque inventory unavailable"
+        }
+      }
+    },
+    {
+      "name": "size-opaque_inventory_metadata.py",
+      "passed": true,
+      "detail": {
+        "lines": 126,
+        "functions": {
+          "_metadata_digest": 6,
+          "_metadata_darwin_library": 16,
+          "_metadata_darwin_xattrs": 25,
+          "_metadata_darwin_acl": 31,
+          "metadata_records": 28
+        }
+      }
+    },
+    {
+      "name": "size-opaque_inventory.py",
+      "passed": true,
+      "detail": {
+        "lines": 125,
+        "functions": {
+          "owned_paths": 22,
+          "opaque_inventory": 11,
+          "inventory_main": 12,
+          "__init__": 9,
+          "record": 3,
+          "visit": 21,
+          "link": 8,
+          "file": 11
+        }
+      }
+    },
+    {
+      "name": "public-source-concatenates-both-fixed-files",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "generated-shell-missing-before",
+      "passed": true,
+      "detail": {
+        "stdout": "velnor: sources snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\n",
+        "stderr": ""
+      }
+    },
+    {
+      "name": "generated-shell-missing-after",
+      "passed": true,
+      "detail": {
+        "stdout": "velnor: sources snapshot phase=after files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\n",
+        "stderr": ""
+      }
+    },
+    {
+      "name": "generated-shell-opaque-before",
+      "passed": true,
+      "detail": {
+        "stdout": "velnor: sources snapshot phase=before files=1 bytes=7 hash_seconds=0 hash_resolution_seconds=1 digest=06e7cce421880985e7f191a39b268736a53509410154bf6a96879c4c9ff28ec4\n",
+        "stderr": ""
+      }
+    },
+    {
+      "name": "generated-shell-native-metadata-suppresses-export",
+      "passed": true,
+      "detail": {
+        "stdout": "",
+        "stderr": "velnor: opaque inventory unavailable\nvelnor: sources snapshot unavailable; export suppressed\n"
+      }
+    },
+    {
+      "name": "generated-shell-source-symlink-suppressed",
+      "passed": true,
+      "detail": {
+        "stdout": "",
+        "stderr": "velnor: opaque inventory unavailable\nvelnor: sources snapshot unavailable; export suppressed\n"
+      }
+    }
+  ],
+  "passed": true,
+  "universal_factory": {
+    "engine_source_sha256": "6558d0128f12ed361d64b473b7abe32440f38efcdb4bed81c16242be802019ce",
+    "wrapper_source_sha256": "25eb83869695e55a5d27950249f095a75947dadf385ca3714038f263f30991c5",
+    "factory_source_sha256": "abeb9c2fc864991b86b0bfb9a8279a307f4495a6f46a48d6852068a12d0b6eaa",
+    "domain_registry_sha256": "4eb8667fbb7e165a1a58a37554dc026cde44adae9db75e36e0dbac59cd5642ca",
+    "construction": "Exact snapshot_source() replacement and domain_case format, roots and names parsed from ALL registry; no Cargo",
+    "cases": [
+      {
+        "name": "universal-tools-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: tools snapshot phase=before files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\n",
+          "stderr": "",
+          "output": "digest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-tools-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: tools snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\n",
+          "stderr": "",
+          "output": "changed=false\ndigest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\n",
+          "environment": "VELNOR_TOOLS_SNAPSHOT_DIGEST=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\nVELNOR_TOOLS_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "universal-planning_tools-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: planning_tools snapshot phase=before files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\n",
+          "stderr": "",
+          "output": "digest=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-planning_tools-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: planning_tools snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\n",
+          "stderr": "",
+          "output": "changed=false\ndigest=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\n",
+          "environment": "VELNOR_PLANNING_TOOLS_SNAPSHOT_DIGEST=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\nVELNOR_PLANNING_TOOLS_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "universal-npm_bootstrap-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: npm_bootstrap snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\n",
+          "stderr": "",
+          "output": "digest=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-npm_bootstrap-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: npm_bootstrap snapshot phase=after files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\n",
+          "stderr": "",
+          "output": "changed=false\ndigest=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\n",
+          "environment": "VELNOR_NPM_BOOTSTRAP_SNAPSHOT_DIGEST=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\nVELNOR_NPM_BOOTSTRAP_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "universal-bun_bootstrap-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: bun_bootstrap snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\n",
+          "stderr": "",
+          "output": "digest=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-bun_bootstrap-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: bun_bootstrap snapshot phase=after files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\n",
+          "stderr": "",
+          "output": "changed=false\ndigest=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\n",
+          "environment": "VELNOR_BUN_BOOTSTRAP_SNAPSHOT_DIGEST=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\nVELNOR_BUN_BOOTSTRAP_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "universal-tofu_bootstrap-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: tofu_bootstrap snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\n",
+          "stderr": "",
+          "output": "digest=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-tofu_bootstrap-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: tofu_bootstrap snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\n",
+          "stderr": "",
+          "output": "changed=false\ndigest=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\n",
+          "environment": "VELNOR_TOFU_BOOTSTRAP_SNAPSHOT_DIGEST=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\nVELNOR_TOFU_BOOTSTRAP_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "universal-gradle_bootstrap-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: gradle_bootstrap snapshot phase=before files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\n",
+          "stderr": "",
+          "output": "digest=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-gradle_bootstrap-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: gradle_bootstrap snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\n",
+          "stderr": "",
+          "output": "changed=false\ndigest=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\n",
+          "environment": "VELNOR_GRADLE_BOOTSTRAP_SNAPSHOT_DIGEST=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\nVELNOR_GRADLE_BOOTSTRAP_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "universal-sources-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: sources snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\n",
+          "stderr": "",
+          "output": "digest=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-sources-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: sources snapshot phase=after files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\n",
+          "stderr": "",
+          "output": "changed=false\ndigest=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_DIGEST=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\nVELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "universal-bun_downloads-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: bun_downloads snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\n",
+          "stderr": "",
+          "output": "digest=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-bun_downloads-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: bun_downloads snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\n",
+          "stderr": "",
+          "output": "changed=false\ndigest=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\n",
+          "environment": "VELNOR_BUN_DOWNLOADS_SNAPSHOT_DIGEST=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\nVELNOR_BUN_DOWNLOADS_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "universal-npm_downloads-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: npm_downloads snapshot phase=before files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\n",
+          "stderr": "",
+          "output": "digest=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-npm_downloads-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: npm_downloads snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\n",
+          "stderr": "",
+          "output": "changed=false\ndigest=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\n",
+          "environment": "VELNOR_NPM_DOWNLOADS_SNAPSHOT_DIGEST=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\nVELNOR_NPM_DOWNLOADS_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "universal-gradle_dependencies-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: gradle_dependencies snapshot phase=before files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\n",
+          "stderr": "",
+          "output": "digest=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-gradle_dependencies-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: gradle_dependencies snapshot phase=after files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\n",
+          "stderr": "",
+          "output": "changed=false\ndigest=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\n",
+          "environment": "VELNOR_GRADLE_DEPENDENCIES_SNAPSHOT_DIGEST=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\nVELNOR_GRADLE_DEPENDENCIES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "universal-unknown-domain",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: unknown snapshot unavailable; export suppressed\n",
+          "output": null,
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-unknown-phase",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+          "output": null,
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-phase-binding-mismatch",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+          "output": null,
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-domain-binding-mismatch",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+          "output": null,
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-roots-binding-mismatch",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+          "output": null,
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-output-binding-mismatch",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+          "output": null,
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-opaque-before",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: sources snapshot phase=before files=1 bytes=7 hash_seconds=0 hash_resolution_seconds=1 digest=06e7cce421880985e7f191a39b268736a53509410154bf6a96879c4c9ff28ec4\n",
+          "stderr": "",
+          "output": "digest=06e7cce421880985e7f191a39b268736a53509410154bf6a96879c4c9ff28ec4\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-native-metadata-suppresses-export",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: opaque inventory unavailable\nvelnor: sources snapshot unavailable; export suppressed\n",
+          "output": null,
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-source-symlink-suppressed",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: opaque inventory unavailable\nvelnor: sources snapshot unavailable; export suppressed\n",
+          "output": null,
+          "environment": null
+        }
+      },
+      {
+        "name": "universal-shell-functions-under80",
+        "passed": true,
+        "detail": {
+          "unavailable": 3,
+          "prepare": 19,
+          "read_summary": 10,
+          "observe": 20
+        }
+      }
+    ],
+    "passed": true
+  },
+  "availability_factory": {
+    "engine_source_sha256": "6558d0128f12ed361d64b473b7abe32440f38efcdb4bed81c16242be802019ce",
+    "wrapper_source_sha256": "501d3cd54f65411fbd28ccb8f1d3ac1491cb1c8b9387f2ecfcee69a6dbbf407b",
+    "factory_source_sha256": "e3e4ab9fd6640419046f10237b78436b993f849d8636705b862070d6d08edc6e",
+    "domain_registry_sha256": "4eb8667fbb7e165a1a58a37554dc026cde44adae9db75e36e0dbac59cd5642ca",
+    "construction": "Exact snapshot_source() replacement and domain_case format, roots and names parsed from ALL registry; no Cargo",
+    "cases": [
+      {
+        "name": "availability-tools-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: tools snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\n",
+          "stderr": "",
+          "output": "available=false\ndigest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-tools-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: tools snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\navailable=true\n",
+          "environment": "VELNOR_TOOLS_SNAPSHOT_DIGEST=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\nVELNOR_TOOLS_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-planning_tools-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: planning_tools snapshot phase=before files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\n",
+          "stderr": "",
+          "output": "available=false\ndigest=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-planning_tools-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: planning_tools snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\navailable=true\n",
+          "environment": "VELNOR_PLANNING_TOOLS_SNAPSHOT_DIGEST=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\nVELNOR_PLANNING_TOOLS_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-npm_bootstrap-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: npm_bootstrap snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\n",
+          "stderr": "",
+          "output": "available=false\ndigest=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-npm_bootstrap-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: npm_bootstrap snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\navailable=true\n",
+          "environment": "VELNOR_NPM_BOOTSTRAP_SNAPSHOT_DIGEST=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\nVELNOR_NPM_BOOTSTRAP_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-bun_bootstrap-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: bun_bootstrap snapshot phase=before files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\n",
+          "stderr": "",
+          "output": "available=false\ndigest=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-bun_bootstrap-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: bun_bootstrap snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\navailable=true\n",
+          "environment": "VELNOR_BUN_BOOTSTRAP_SNAPSHOT_DIGEST=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\nVELNOR_BUN_BOOTSTRAP_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-tofu_bootstrap-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: tofu_bootstrap snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\n",
+          "stderr": "",
+          "output": "available=false\ndigest=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-tofu_bootstrap-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: tofu_bootstrap snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\navailable=true\n",
+          "environment": "VELNOR_TOFU_BOOTSTRAP_SNAPSHOT_DIGEST=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\nVELNOR_TOFU_BOOTSTRAP_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-gradle_bootstrap-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: gradle_bootstrap snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\n",
+          "stderr": "",
+          "output": "available=false\ndigest=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-gradle_bootstrap-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: gradle_bootstrap snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\navailable=true\n",
+          "environment": "VELNOR_GRADLE_BOOTSTRAP_SNAPSHOT_DIGEST=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\nVELNOR_GRADLE_BOOTSTRAP_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-sources-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: sources snapshot phase=before files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\n",
+          "stderr": "",
+          "output": "available=false\ndigest=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-sources-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: sources snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\navailable=true\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_DIGEST=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\nVELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-bun_downloads-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: bun_downloads snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\n",
+          "stderr": "",
+          "output": "available=false\ndigest=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-bun_downloads-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: bun_downloads snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\navailable=true\n",
+          "environment": "VELNOR_BUN_DOWNLOADS_SNAPSHOT_DIGEST=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\nVELNOR_BUN_DOWNLOADS_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-npm_downloads-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: npm_downloads snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\n",
+          "stderr": "",
+          "output": "available=false\ndigest=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-npm_downloads-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: npm_downloads snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\navailable=true\n",
+          "environment": "VELNOR_NPM_DOWNLOADS_SNAPSHOT_DIGEST=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\nVELNOR_NPM_DOWNLOADS_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-gradle_dependencies-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: gradle_dependencies snapshot phase=before files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\n",
+          "stderr": "",
+          "output": "available=false\ndigest=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-gradle_dependencies-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: gradle_dependencies snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\navailable=true\n",
+          "environment": "VELNOR_GRADLE_DEPENDENCIES_SNAPSHOT_DIGEST=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\nVELNOR_GRADLE_DEPENDENCIES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-unknown-domain",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: unknown snapshot unavailable; export suppressed\n",
+          "output": "available=false\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-unknown-phase",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+          "output": "available=false\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-phase-binding-mismatch",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+          "output": "available=false\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-domain-binding-mismatch",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+          "output": "available=false\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-roots-binding-mismatch",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+          "output": "available=false\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-output-binding-mismatch",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+          "output": "available=false\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-opaque-before",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: sources snapshot phase=before files=1 bytes=7 hash_seconds=0 hash_resolution_seconds=1 digest=06e7cce421880985e7f191a39b268736a53509410154bf6a96879c4c9ff28ec4\n",
+          "stderr": "",
+          "output": "available=false\ndigest=06e7cce421880985e7f191a39b268736a53509410154bf6a96879c4c9ff28ec4\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-native-metadata-suppresses-export",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: opaque inventory unavailable\nvelnor: sources snapshot unavailable; export suppressed\n",
+          "output": "available=false\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-source-symlink-suppressed",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: opaque inventory unavailable\nvelnor: sources snapshot unavailable; export suppressed\n",
+          "output": "available=false\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-unwritable-output-revokes-stale-changed",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/velnor-universal-proof-mhxbka_a/observer.sh: line 16: /var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/velnor-universal-proof-mhxbka_a/output: Is a directory\nvelnor: sources snapshot unavailable; export suppressed\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=true\nVELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-partial-output-write-revokes-stale-changed",
+        "passed": true,
+        "detail": {
+          "fault": "Kernel RLIMIT_FSIZE=256, output prefilled240bytes; initialfalse fits, subsequent output writes fail EFBIG; environment stays below limit",
+          "status": 0,
+          "stdout": "",
+          "stderr": "/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/velnor-universal-proof-mhxbka_a/observer.sh: line 383: cannot create temp file for here document: No space left on device\nvelnor: tools snapshot unavailable; export suppressed\n",
+          "output": "################################################################################################################################################################################################################################################available=false\n",
+          "environment": "VELNOR_TOOLS_SNAPSHOT_CHANGED=true\nVELNOR_TOOLS_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "universal-shell-functions-under80",
+        "passed": true,
+        "detail": {
+          "unavailable": 6,
+          "prepare": 19,
+          "read_summary": 10,
+          "observe": 21
+        }
+      }
+    ],
+    "passed": true
+  },
+  "availability_factory_before_init_fix": {
+    "engine_source_sha256": "6558d0128f12ed361d64b473b7abe32440f38efcdb4bed81c16242be802019ce",
+    "wrapper_source_sha256": "681eac5e99b85f54477ec3ee1222c291213e7dd4d1d472ecc24e85cf74b64212",
+    "factory_source_sha256": "abeb9c2fc864991b86b0bfb9a8279a307f4495a6f46a48d6852068a12d0b6eaa",
+    "domain_registry_sha256": "4eb8667fbb7e165a1a58a37554dc026cde44adae9db75e36e0dbac59cd5642ca",
+    "construction": "Exact snapshot_source() replacement and domain_case format, roots and names parsed from ALL registry; no Cargo",
+    "cases": [
+      {
+        "name": "availability-tools-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: tools snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\n",
+          "stderr": "",
+          "output": "available=false\ndigest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-tools-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: tools snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\navailable=true\n",
+          "environment": "VELNOR_TOOLS_SNAPSHOT_DIGEST=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\nVELNOR_TOOLS_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-planning_tools-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: planning_tools snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\n",
+          "stderr": "",
+          "output": "available=false\ndigest=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-planning_tools-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: planning_tools snapshot phase=after files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\navailable=true\n",
+          "environment": "VELNOR_PLANNING_TOOLS_SNAPSHOT_DIGEST=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\nVELNOR_PLANNING_TOOLS_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-npm_bootstrap-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: npm_bootstrap snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\n",
+          "stderr": "",
+          "output": "available=false\ndigest=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-npm_bootstrap-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: npm_bootstrap snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\navailable=true\n",
+          "environment": "VELNOR_NPM_BOOTSTRAP_SNAPSHOT_DIGEST=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\nVELNOR_NPM_BOOTSTRAP_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-bun_bootstrap-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: bun_bootstrap snapshot phase=before files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\n",
+          "stderr": "",
+          "output": "available=false\ndigest=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-bun_bootstrap-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: bun_bootstrap snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\navailable=true\n",
+          "environment": "VELNOR_BUN_BOOTSTRAP_SNAPSHOT_DIGEST=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\nVELNOR_BUN_BOOTSTRAP_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-tofu_bootstrap-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: tofu_bootstrap snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\n",
+          "stderr": "",
+          "output": "available=false\ndigest=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-tofu_bootstrap-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: tofu_bootstrap snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\navailable=true\n",
+          "environment": "VELNOR_TOFU_BOOTSTRAP_SNAPSHOT_DIGEST=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\nVELNOR_TOFU_BOOTSTRAP_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-gradle_bootstrap-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: gradle_bootstrap snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\n",
+          "stderr": "",
+          "output": "available=false\ndigest=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-gradle_bootstrap-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: gradle_bootstrap snapshot phase=after files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\navailable=true\n",
+          "environment": "VELNOR_GRADLE_BOOTSTRAP_SNAPSHOT_DIGEST=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\nVELNOR_GRADLE_BOOTSTRAP_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-sources-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: sources snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\n",
+          "stderr": "",
+          "output": "available=false\ndigest=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-sources-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: sources snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\navailable=true\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_DIGEST=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\nVELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-bun_downloads-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: bun_downloads snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\n",
+          "stderr": "",
+          "output": "available=false\ndigest=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-bun_downloads-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: bun_downloads snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\navailable=true\n",
+          "environment": "VELNOR_BUN_DOWNLOADS_SNAPSHOT_DIGEST=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\nVELNOR_BUN_DOWNLOADS_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-npm_downloads-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: npm_downloads snapshot phase=before files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\n",
+          "stderr": "",
+          "output": "available=false\ndigest=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-npm_downloads-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: npm_downloads snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\navailable=true\n",
+          "environment": "VELNOR_NPM_DOWNLOADS_SNAPSHOT_DIGEST=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\nVELNOR_NPM_DOWNLOADS_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-gradle_dependencies-cold-missing",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: gradle_dependencies snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\n",
+          "stderr": "",
+          "output": "available=false\ndigest=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-gradle_dependencies-warm-empty",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: gradle_dependencies snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\n",
+          "stderr": "",
+          "output": "available=false\nchanged=false\ndigest=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\navailable=true\n",
+          "environment": "VELNOR_GRADLE_DEPENDENCIES_SNAPSHOT_DIGEST=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\nVELNOR_GRADLE_DEPENDENCIES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-unknown-domain",
+        "passed": false,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: unknown snapshot unavailable; export suppressed\n",
+          "output": null,
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-unknown-phase",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+          "output": "available=false\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-phase-binding-mismatch",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+          "output": "available=false\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-domain-binding-mismatch",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+          "output": "available=false\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-roots-binding-mismatch",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+          "output": "available=false\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-output-binding-mismatch",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+          "output": "available=false\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-opaque-before",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "velnor: sources snapshot phase=before files=1 bytes=7 hash_seconds=0 hash_resolution_seconds=1 digest=06e7cce421880985e7f191a39b268736a53509410154bf6a96879c4c9ff28ec4\n",
+          "stderr": "",
+          "output": "available=false\ndigest=06e7cce421880985e7f191a39b268736a53509410154bf6a96879c4c9ff28ec4\navailable=true\n",
+          "environment": null
+        }
+      },
+      {
+        "name": "availability-native-metadata-suppresses-export",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: opaque inventory unavailable\nvelnor: sources snapshot unavailable; export suppressed\n",
+          "output": "available=false\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-source-symlink-suppressed",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "velnor: opaque inventory unavailable\nvelnor: sources snapshot unavailable; export suppressed\n",
+          "output": "available=false\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "availability-unwritable-output-revokes-stale-changed",
+        "passed": true,
+        "detail": {
+          "status": 0,
+          "stdout": "",
+          "stderr": "/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/velnor-universal-proof-l_xwn8vf/observer.sh: line 112: /var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/velnor-universal-proof-l_xwn8vf/output: Is a directory\nvelnor: sources snapshot unavailable; export suppressed\n",
+          "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=true\nVELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+        }
+      },
+      {
+        "name": "universal-shell-functions-under80",
+        "passed": true,
+        "detail": {
+          "unavailable": 6,
+          "prepare": 19,
+          "read_summary": 10,
+          "observe": 21
+        }
+      }
+    ],
+    "passed": false
+  },
+  "availability_factory_rejected_revisions": [
+    {
+      "engine_source_sha256": "6558d0128f12ed361d64b473b7abe32440f38efcdb4bed81c16242be802019ce",
+      "wrapper_source_sha256": "238549e66eebdd109a783fa68b9693d2cd80d7508edfa3929014339c05854082",
+      "factory_source_sha256": "abeb9c2fc864991b86b0bfb9a8279a307f4495a6f46a48d6852068a12d0b6eaa",
+      "domain_registry_sha256": "4eb8667fbb7e165a1a58a37554dc026cde44adae9db75e36e0dbac59cd5642ca",
+      "construction": "Exact snapshot_source() replacement and domain_case format, roots and names parsed from ALL registry; no Cargo",
+      "cases": [
+        {
+          "name": "availability-tools-cold-missing",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: tools snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\n",
+            "stderr": "",
+            "output": "available=false\ndigest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\navailable=true\n",
+            "environment": null
+          }
+        },
+        {
+          "name": "availability-tools-warm-empty",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: tools snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\n",
+            "stderr": "",
+            "output": "available=false\nchanged=false\ndigest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\navailable=true\n",
+            "environment": "VELNOR_TOOLS_SNAPSHOT_DIGEST=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\nVELNOR_TOOLS_SNAPSHOT_CHANGED=false\n"
+          }
+        },
+        {
+          "name": "availability-planning_tools-cold-missing",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: planning_tools snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\n",
+            "stderr": "",
+            "output": "available=false\ndigest=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\navailable=true\n",
+            "environment": null
+          }
+        },
+        {
+          "name": "availability-planning_tools-warm-empty",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: planning_tools snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\n",
+            "stderr": "",
+            "output": "available=false\nchanged=false\ndigest=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\navailable=true\n",
+            "environment": "VELNOR_PLANNING_TOOLS_SNAPSHOT_DIGEST=97e054cff06d38d94d5b2eeab7980a939dde4b6c7db1493eaab70f9803112d46\nVELNOR_PLANNING_TOOLS_SNAPSHOT_CHANGED=false\n"
+          }
+        },
+        {
+          "name": "availability-npm_bootstrap-cold-missing",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: npm_bootstrap snapshot phase=before files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\n",
+            "stderr": "",
+            "output": "available=false\ndigest=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\navailable=true\n",
+            "environment": null
+          }
+        },
+        {
+          "name": "availability-npm_bootstrap-warm-empty",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: npm_bootstrap snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\n",
+            "stderr": "",
+            "output": "available=false\nchanged=false\ndigest=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\navailable=true\n",
+            "environment": "VELNOR_NPM_BOOTSTRAP_SNAPSHOT_DIGEST=c0229b4048b2791d53430009f4319941edee79c82cc2ddbcde92db4ead6aac6b\nVELNOR_NPM_BOOTSTRAP_SNAPSHOT_CHANGED=false\n"
+          }
+        },
+        {
+          "name": "availability-bun_bootstrap-cold-missing",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: bun_bootstrap snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\n",
+            "stderr": "",
+            "output": "available=false\ndigest=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\navailable=true\n",
+            "environment": null
+          }
+        },
+        {
+          "name": "availability-bun_bootstrap-warm-empty",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: bun_bootstrap snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\n",
+            "stderr": "",
+            "output": "available=false\nchanged=false\ndigest=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\navailable=true\n",
+            "environment": "VELNOR_BUN_BOOTSTRAP_SNAPSHOT_DIGEST=d78a56be612776c0af7b608303b648e073deaa86260488c81df3df5c060299e7\nVELNOR_BUN_BOOTSTRAP_SNAPSHOT_CHANGED=false\n"
+          }
+        },
+        {
+          "name": "availability-tofu_bootstrap-cold-missing",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: tofu_bootstrap snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\n",
+            "stderr": "",
+            "output": "available=false\ndigest=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\navailable=true\n",
+            "environment": null
+          }
+        },
+        {
+          "name": "availability-tofu_bootstrap-warm-empty",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: tofu_bootstrap snapshot phase=after files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\n",
+            "stderr": "",
+            "output": "available=false\nchanged=false\ndigest=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\navailable=true\n",
+            "environment": "VELNOR_TOFU_BOOTSTRAP_SNAPSHOT_DIGEST=601f03f84888be6ce1ac07f6f72cc6edb2491d482a23a87c8d1aac6fa07e2dd8\nVELNOR_TOFU_BOOTSTRAP_SNAPSHOT_CHANGED=false\n"
+          }
+        },
+        {
+          "name": "availability-gradle_bootstrap-cold-missing",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: gradle_bootstrap snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\n",
+            "stderr": "",
+            "output": "available=false\ndigest=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\navailable=true\n",
+            "environment": null
+          }
+        },
+        {
+          "name": "availability-gradle_bootstrap-warm-empty",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: gradle_bootstrap snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\n",
+            "stderr": "",
+            "output": "available=false\nchanged=false\ndigest=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\navailable=true\n",
+            "environment": "VELNOR_GRADLE_BOOTSTRAP_SNAPSHOT_DIGEST=4b4639b474e973a9af709943ea2cb3b64078f1dccd0430bb1a93a29e6b7d9d31\nVELNOR_GRADLE_BOOTSTRAP_SNAPSHOT_CHANGED=false\n"
+          }
+        },
+        {
+          "name": "availability-sources-cold-missing",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: sources snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\n",
+            "stderr": "",
+            "output": "available=false\ndigest=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\navailable=true\n",
+            "environment": null
+          }
+        },
+        {
+          "name": "availability-sources-warm-empty",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: sources snapshot phase=after files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\n",
+            "stderr": "",
+            "output": "available=false\nchanged=false\ndigest=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\navailable=true\n",
+            "environment": "VELNOR_SOURCES_SNAPSHOT_DIGEST=fde338faa68031bb84374b60d4cd6f641a7fabe1dfcce6f85f21478760542a0b\nVELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+          }
+        },
+        {
+          "name": "availability-bun_downloads-cold-missing",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: bun_downloads snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\n",
+            "stderr": "",
+            "output": "available=false\ndigest=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\navailable=true\n",
+            "environment": null
+          }
+        },
+        {
+          "name": "availability-bun_downloads-warm-empty",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: bun_downloads snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\n",
+            "stderr": "",
+            "output": "available=false\nchanged=false\ndigest=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\navailable=true\n",
+            "environment": "VELNOR_BUN_DOWNLOADS_SNAPSHOT_DIGEST=769a39ca3ca34521d7959de71bc4bf89f40e65da81a0e5a627d33bf43d7c54ba\nVELNOR_BUN_DOWNLOADS_SNAPSHOT_CHANGED=false\n"
+          }
+        },
+        {
+          "name": "availability-npm_downloads-cold-missing",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: npm_downloads snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\n",
+            "stderr": "",
+            "output": "available=false\ndigest=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\navailable=true\n",
+            "environment": null
+          }
+        },
+        {
+          "name": "availability-npm_downloads-warm-empty",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: npm_downloads snapshot phase=after files=0 bytes=0 hash_seconds=1 hash_resolution_seconds=1 digest=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\n",
+            "stderr": "",
+            "output": "available=false\nchanged=false\ndigest=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\navailable=true\n",
+            "environment": "VELNOR_NPM_DOWNLOADS_SNAPSHOT_DIGEST=c0ab1d54378195d452098dd8c2debb05b5c58f6a3c9d4e6739917caad1a21106\nVELNOR_NPM_DOWNLOADS_SNAPSHOT_CHANGED=false\n"
+          }
+        },
+        {
+          "name": "availability-gradle_dependencies-cold-missing",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: gradle_dependencies snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\n",
+            "stderr": "",
+            "output": "available=false\ndigest=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\navailable=true\n",
+            "environment": null
+          }
+        },
+        {
+          "name": "availability-gradle_dependencies-warm-empty",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: gradle_dependencies snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\n",
+            "stderr": "",
+            "output": "available=false\nchanged=false\ndigest=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\navailable=true\n",
+            "environment": "VELNOR_GRADLE_DEPENDENCIES_SNAPSHOT_DIGEST=b6e7910d6a427ca17f3e3f9c169b70a6d5603d4035a7eb4a3253b2bbe0614359\nVELNOR_GRADLE_DEPENDENCIES_SNAPSHOT_CHANGED=false\n"
+          }
+        },
+        {
+          "name": "availability-unknown-domain",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "",
+            "stderr": "velnor: unknown snapshot unavailable; export suppressed\n",
+            "output": "available=false\n",
+            "environment": null
+          }
+        },
+        {
+          "name": "availability-unknown-phase",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "",
+            "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+            "output": "available=false\n",
+            "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+          }
+        },
+        {
+          "name": "availability-phase-binding-mismatch",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "",
+            "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+            "output": "available=false\n",
+            "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+          }
+        },
+        {
+          "name": "availability-domain-binding-mismatch",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "",
+            "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+            "output": "available=false\n",
+            "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+          }
+        },
+        {
+          "name": "availability-roots-binding-mismatch",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "",
+            "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+            "output": "available=false\n",
+            "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+          }
+        },
+        {
+          "name": "availability-output-binding-mismatch",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "",
+            "stderr": "velnor: sources snapshot unavailable; export suppressed\n",
+            "output": "available=false\n",
+            "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+          }
+        },
+        {
+          "name": "availability-opaque-before",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "velnor: sources snapshot phase=before files=1 bytes=7 hash_seconds=1 hash_resolution_seconds=1 digest=06e7cce421880985e7f191a39b268736a53509410154bf6a96879c4c9ff28ec4\n",
+            "stderr": "",
+            "output": "available=false\ndigest=06e7cce421880985e7f191a39b268736a53509410154bf6a96879c4c9ff28ec4\navailable=true\n",
+            "environment": null
+          }
+        },
+        {
+          "name": "availability-native-metadata-suppresses-export",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "",
+            "stderr": "velnor: opaque inventory unavailable\nvelnor: sources snapshot unavailable; export suppressed\n",
+            "output": "available=false\n",
+            "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+          }
+        },
+        {
+          "name": "availability-source-symlink-suppressed",
+          "passed": true,
+          "detail": {
+            "status": 0,
+            "stdout": "",
+            "stderr": "velnor: opaque inventory unavailable\nvelnor: sources snapshot unavailable; export suppressed\n",
+            "output": "available=false\n",
+            "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=false\n"
+          }
+        },
+        {
+          "name": "availability-unwritable-output-revokes-stale-changed",
+          "passed": false,
+          "detail": {
+            "status": 0,
+            "stdout": "",
+            "stderr": "/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/velnor-universal-proof-6yyxbuf5/observer.sh: line 15: /var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/velnor-universal-proof-6yyxbuf5/output: Is a directory\nvelnor: sources snapshot unavailable; export suppressed\n",
+            "environment": "VELNOR_SOURCES_SNAPSHOT_CHANGED=true\n"
+          }
+        },
+        {
+          "name": "universal-shell-functions-under80",
+          "passed": true,
+          "detail": {
+            "unavailable": 6,
+            "prepare": 19,
+            "read_summary": 10,
+            "observe": 21
+          }
+        }
+      ],
+      "passed": false
+    }
+  ],
+  "metadata_container_guard": {
+    "source_sha256": "2b63dfc6f238b281a35b1aa59f9bbace5cf35149fe6587ab7d658dd8d38fe197",
+    "scope": "Actual isolated complete inventory recording plus direct regular-file guard rejection/admission; direct file method deliberately does not execute filesystem metadata visitor. No metadata mocks. Whole strict export remains blocked by inherent Mac provenance; no successful strict whole export claim.",
+    "cases": [
+      {
+        "name": "._metadata",
+        "record": {
+          "status": 0,
+          "stdout": "f46ce6689f5810acb1a9e42426a3345728dbb4a71090282268f9f3cec87e841d 1 45\n",
+          "stderr": ""
+        },
+        "strict_direct_file_guard": {
+          "status": 1,
+          "stdout": "",
+          "stderr": "velnor: opaque inventory unavailable\n"
+        },
+        "passed": true
+      },
+      {
+        "name": "renamed-payload",
+        "record": {
+          "status": 0,
+          "stdout": "dfc8b03f3e98213ed31ff345d0da698fcbdbdb7b3ad6ed1011ef5167a55b6ff8 1 45\n",
+          "stderr": ""
+        },
+        "strict_direct_file_guard": {
+          "status": 1,
+          "stdout": "",
+          "stderr": "velnor: opaque inventory unavailable\n"
+        },
+        "passed": true
+      },
+      {
+        "name": "._ordinary",
+        "record": {
+          "status": 0,
+          "stdout": "c190ce97c104faad64fd30500ff181737fe61c8ff00eac84993f1324e2e07c30 1 16\n",
+          "stderr": ""
+        },
+        "strict_direct_file_guard": {
+          "status": 0,
+          "stdout": "accepted e4c1097fcc752171276beec87919cd74e3254d8547c47d445b56ef963563616e 1 16\n",
+          "stderr": ""
+        },
+        "passed": true
+      }
+    ],
+    "passed": true
+  },
+  "descriptor_leaf_guard": {
+    "source_sha256": "e3710bf049f05faf307c070e5474e684c54710067a03a5b86710c529cbb06b21",
+    "composition": [
+      "metadata_container.py",
+      "opaque_inventory_metadata.py",
+      "opaque_inventory.py"
+    ],
+    "scope": "Actual isolated direct regular-file method against real post-lstat leaf mutations; no metadata or IO mocks. Full filesystem visitor not exercised in these focused leaf guards; export qualification unchanged.",
+    "cases": [
+      {
+        "case": "valid",
+        "passed": true,
+        "elapsed_seconds": 0.147602834,
+        "returncode": 0,
+        "stdout": "8a41b8af8c4554cdd6c230bbebd3d041db477bfc65407ef94608e644f309c502 1 13\n",
+        "stderr": ""
+      },
+      {
+        "case": "symlink",
+        "passed": true,
+        "elapsed_seconds": 0.099664458,
+        "returncode": 1,
+        "stdout": "",
+        "stderr": "velnor: opaque inventory unavailable\n"
+      },
+      {
+        "case": "fifo",
+        "passed": true,
+        "elapsed_seconds": 0.089722417,
+        "returncode": 1,
+        "stdout": "",
+        "stderr": "velnor: opaque inventory unavailable\n"
+      },
+      {
+        "case": "replacement",
+        "passed": true,
+        "elapsed_seconds": 0.096163041,
+        "returncode": 1,
+        "stdout": "",
+        "stderr": "velnor: opaque inventory unavailable\n"
+      },
+      {
+        "case": "mode",
+        "passed": true,
+        "elapsed_seconds": 0.088360166,
+        "returncode": 1,
+        "stdout": "",
+        "stderr": "velnor: opaque inventory unavailable\n"
+      },
+      {
+        "case": "size",
+        "passed": true,
+        "elapsed_seconds": 0.089186708,
+        "returncode": 1,
+        "stdout": "",
+        "stderr": "velnor: opaque inventory unavailable\n"
+      }
+    ],
+    "passed": true
+  },
+  "special_mode_guard": {
+    "source_sha256": "c0ba56c1242913c6b6d4c2b3f3cb7d35534a2e1dcad2109eaf127189e59a7b2d",
+    "scope": "Actual complete isolated CLI inventory for directly selected regular file/directory roots; mode guard precedes metadata inspector. Direct visit separately verifies exact controlled mode failure. No metadata mocks or qualification change.",
+    "cases": [
+      {
+        "mode": "0o4755",
+        "directory": false,
+        "actual_mode": "0o4755",
+        "record_before": {
+          "status": 0,
+          "stdout": "34f51dbb9fd523d2ae7f1f8e678cf6de0517a28e7f0b74378c9ded25cc0769b1 1 16\n",
+          "stderr": ""
+        },
+        "record_after": {
+          "status": 0,
+          "stdout": "7136135a286f35f4612b79d83efb03d251edda69b6790b7a59850a0d2b640d65 1 16\n",
+          "stderr": ""
+        },
+        "strict": {
+          "status": 1,
+          "stdout": "",
+          "stderr": "velnor: opaque inventory unavailable\n"
+        },
+        "direct_visit": {
+          "status": 1,
+          "stdout": "unsupported inventory mode\n",
+          "stderr": ""
+        },
+        "passed": true
+      },
+      {
+        "mode": "0o2755",
+        "directory": false,
+        "actual_mode": "0o2755",
+        "record_before": {
+          "status": 0,
+          "stdout": "34f51dbb9fd523d2ae7f1f8e678cf6de0517a28e7f0b74378c9ded25cc0769b1 1 16\n",
+          "stderr": ""
+        },
+        "record_after": {
+          "status": 0,
+          "stdout": "ececcd453fdd106a220ce112b867ffbadfa41383543ad54708df4af7b473bbba 1 16\n",
+          "stderr": ""
+        },
+        "strict": {
+          "status": 1,
+          "stdout": "",
+          "stderr": "velnor: opaque inventory unavailable\n"
+        },
+        "direct_visit": {
+          "status": 1,
+          "stdout": "unsupported inventory mode\n",
+          "stderr": ""
+        },
+        "passed": true
+      },
+      {
+        "mode": "0o1755",
+        "directory": false,
+        "actual_mode": "0o1755",
+        "record_before": {
+          "status": 0,
+          "stdout": "34f51dbb9fd523d2ae7f1f8e678cf6de0517a28e7f0b74378c9ded25cc0769b1 1 16\n",
+          "stderr": ""
+        },
+        "record_after": {
+          "status": 0,
+          "stdout": "1d256cf7b9834f80a7ac85ebeb7e8fc9cb511e39855a69c3051330cf4d10d4c3 1 16\n",
+          "stderr": ""
+        },
+        "strict": {
+          "status": 1,
+          "stdout": "",
+          "stderr": "velnor: opaque inventory unavailable\n"
+        },
+        "direct_visit": {
+          "status": 1,
+          "stdout": "unsupported inventory mode\n",
+          "stderr": ""
+        },
+        "passed": true
+      },
+      {
+        "mode": "0o1777",
+        "directory": true,
+        "actual_mode": "0o1777",
+        "record_before": {
+          "status": 0,
+          "stdout": "618c65c5bd966ffd8b307997e7d624f39c8157964d7e170996967c64e14585bf 0 0\n",
+          "stderr": ""
+        },
+        "record_after": {
+          "status": 0,
+          "stdout": "8c9ccc689c8aebf08da77de9373b0877247b4373461007c0ec3c11fa7cd9e52a 0 0\n",
+          "stderr": ""
+        },
+        "strict": {
+          "status": 1,
+          "stdout": "",
+          "stderr": "velnor: opaque inventory unavailable\n"
+        },
+        "direct_visit": {
+          "status": 1,
+          "stdout": "unsupported inventory mode\n",
+          "stderr": ""
+        },
+        "passed": true
+      }
+    ],
+    "passed": true
+  }
+}

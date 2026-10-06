@@ -1,13 +1,13 @@
 //! F2 closure: cache layers and forbidden content.
 use std::collections::BTreeMap;
 use velnor_actions_contract::{GeneratorValidation, WorkflowPolicy};
-use velnor_actions_workflow_renderer::steps::{
-    TOOLS_RESTORE_USES, cache_action_step, tools_cache_key,
-};
+use velnor_actions_workflow_renderer::steps::{TOOLS_RESTORE_USES, cache_action_step};
 use velnor_actions_workflow_renderer::{
     ALINT_BINARY_VERSION, PUBLISH_PLAN_NAME, RenderError, merge_step, render_workflow_ir,
     shell_step,
 };
+
+use velnor_actions_workflow_renderer::cache_p08::mise_cache_key_for_tools;
 
 use super::impl_renderer_fixtures::*;
 
@@ -24,25 +24,25 @@ fn cache_action_rejects_empty_paths_and_keys() {
 
 #[test]
 fn tools_key_bounded_and_hashed() -> Result<(), RenderError> {
-    let key = tools_cache_key("x86_64-unknown-linux-gnu", "2026.9.16", "0.1.0", "plan")?;
-    for part in [
-        "mise-tools-v1",
+    let key = mise_cache_key_for_tools(
         "x86_64-unknown-linux-gnu",
         "2026.9.16",
-        "0.1.0",
-        "plan",
-        "hashFiles(",
-    ] {
+        &["rust@1.98.1".to_owned()],
+    )?;
+    for part in ["mise-v3", "x86_64-unknown-linux-gnu", "2026.9.16"] {
         assert!(key.contains(part), "missing {part}:\n{key}");
     }
     assert!(!key.contains(' '), "spaces:\n{key}");
     for bad in ["latest", "", "has space"] {
         assert!(
-            tools_cache_key("x86_64-unknown-linux-gnu", bad, "0.1.0", "plan").is_err(),
+            mise_cache_key_for_tools("x86_64-unknown-linux-gnu", bad, &["rust@1.98.1".to_owned()])
+                .is_err(),
             "version {bad} must fail"
         );
     }
-    assert!(tools_cache_key("riscv-none", "2026.9.16", "0.1.0", "plan").is_err());
+    assert!(
+        mise_cache_key_for_tools("riscv-none", "2026.9.16", &["rust@1.98.1".to_owned()]).is_err()
+    );
     Ok(())
 }
 
@@ -64,12 +64,12 @@ fn cache_layers_restore_independently() -> Result<(), RenderError> {
         &[],
         &[velnor_actions_workflow_renderer::steps::TASK_ARTIFACTS_DIR.to_owned()],
     )?;
-    let tools = velnor_actions_workflow_renderer::steps::tools_restore_step(&tools_cache_key(
-        "x86_64-unknown-linux-gnu",
-        "2026.9.16",
-        "0.1.0",
-        "plan",
-    )?)?;
+    let tools =
+        velnor_actions_workflow_renderer::steps::tools_restore_step(&mise_cache_key_for_tools(
+            "x86_64-unknown-linux-gnu",
+            "2026.9.16",
+            &["rust@1.98.1".to_owned()],
+        )?)?;
     for step in [&sources, &task, &tools] {
         let velnor_actions_contract::StepKind::Action { uses, .. } = &step.kind else {
             panic!("restore must be an action step");

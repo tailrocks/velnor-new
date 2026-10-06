@@ -6,16 +6,27 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{CandidateOutcome, Stack, StackCandidate};
-use velnor_actions_mise::{MetadataDiscovery, MetadataQualification, ToolCatalog};
+use velnor_actions_mise::{MetadataDiscovery, ToolCatalog};
 use velnor_actions_rust::{WorkspaceRecord, parse_metadata_json};
 
 use crate::OrchestratorError;
 use crate::decisions::{MetadataFailure, classify_metadata_failure};
-use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
 use crate::generate::ToolSnapshot;
 use crate::inventory_reuse::MemberIndex;
 use crate::safe_read::read_repo_file_cached;
 use crate::select_tofu::TofuSelectionUnit;
+
+#[path = "inventory_provider.rs"]
+mod provider;
+pub(crate) use provider::InventoryProvider;
+
+#[path = "inventory_qualify.rs"]
+mod qualify;
+pub(crate) use qualify::qualify_workspaces;
+
+#[cfg(test)]
+#[path = "inventory_cargo_probe.rs"]
+pub(crate) mod cargo_probe;
 
 /// Candidate outcomes plus successful manifest inventories.
 pub(crate) type Inventories = (Vec<CandidateOutcome>, Vec<(String, WorkspaceRecord)>);
@@ -38,6 +49,7 @@ pub(crate) fn run_inventories(
     candidates: &[StackCandidate],
     files: &[String],
     reads: &mut velnor_actions_tofu::FileCache,
+    inventory: InventoryProvider<'_>,
 ) -> Result<(Inventories, Vec<TofuSelectionUnit>), OrchestratorError> {
     let catalog = ToolCatalog::pinned();
     let mut manifests = Vec::with_capacity(candidates.len());
@@ -50,6 +62,7 @@ pub(crate) fn run_inventories(
         match Stack::require_known(&candidate.stack_id) {
             Ok(Stack::Rust) => rust_manifests.push(manifest.clone()),
             Ok(Stack::Tofu) => tofu_units.push(candidate.unit_root.as_str()),
+            Ok(Stack::Workload) => return Err(workload_detector_error()),
             Err(err) => {
                 return Err(OrchestratorError::Detection {
                     problem: err.to_string(),
@@ -58,9 +71,12 @@ pub(crate) fn run_inventories(
         }
     }
     let known: BTreeSet<String> = manifests.iter().cloned().collect();
-    let (rust_outcomes, inventories) = run_with(root, &rust_manifests, true, &|manifest| {
-        fetch_inventory(root, manifest, &catalog, &known)
-    })?;
+    let (rust_outcomes, inventories) = match inventory.cached_inventories(&rust_manifests)? {
+        Some(cached) => cached,
+        None => run_with(root, &rust_manifests, true, &|manifest| {
+            fetch_inventory(root, manifest, &catalog, &known)
+        })?,
+    };
     let mut tofu_outcomes = BTreeMap::new();
     let mut tofu_selection = Vec::new();
     for unit in tofu_units {
@@ -91,6 +107,7 @@ pub(crate) fn run_inventories(
                         }),
                 );
             }
+            Ok(Stack::Workload) => return Err(workload_detector_error()),
             Err(err) => {
                 return Err(OrchestratorError::Detection {
                     problem: err.to_string(),
@@ -108,9 +125,17 @@ fn manifest_for_candidate(candidate: &StackCandidate) -> Result<String, Orchestr
         Ok(Stack::Tofu) => Ok(velnor_actions_tofu::manifest_for_unit_root(
             &candidate.unit_root,
         )),
+        Ok(Stack::Workload) => Err(workload_detector_error()),
         Err(err) => Err(OrchestratorError::Detection {
             problem: err.to_string(),
         }),
+    }
+}
+
+/// Workloads come from validated configuration, never native detection.
+fn workload_detector_error() -> OrchestratorError {
+    OrchestratorError::Detection {
+        problem: "workload_has_no_native_detector".to_owned(),
     }
 }
 
@@ -303,12 +328,15 @@ fn fetch_inventory(
     catalog: &ToolCatalog,
     known: &BTreeSet<String>,
 ) -> Result<WorkspaceRecord, FetchFailure> {
+    #[cfg(test)]
+    cargo_probe::record_attempt().map_err(FetchFailure::Incomplete)?;
     let path: PathBuf = root.join(manifest);
     let request = MetadataDiscovery::new(path)
         .map_err(|err| FetchFailure::Incomplete(format!("bad_manifest_path:{err}")))?;
     let command = request
         .command(catalog)
-        .map_err(|err| FetchFailure::Incomplete(err.to_string()))?;
+        .map_err(|err| FetchFailure::Incomplete(err.to_string()))?
+        .with_cwd(root.to_path_buf());
     let auto_install_off = command.disables_auto_install();
     let output = command
         .run()
@@ -337,43 +365,6 @@ fn is_tool_missing(stderr: &str) -> bool {
         || text.contains("missing tool")
         || text.contains("tool missing")
         || text.contains("no such tool")
-}
-
-/// Qualify locked/offline resolution where a lockfile pins deps.
-/// A tool snapshot brackets the runs, failing closed on tool drift.
-/// # Errors
-/// Returns `preparation_incomplete` when a lockfile cannot be qualified.
-pub(crate) fn qualify_workspaces(
-    root: &Path,
-    workspaces: &[PlannedWorkspace],
-) -> Result<(), OrchestratorError> {
-    let tools = ToolSnapshot::capture(root);
-    let catalog = ToolCatalog::pinned();
-    for workspace in workspaces {
-        let prefix = workspace.record.workspace_root.clone();
-        let lock = workspace_lock(&prefix);
-        if !root.join(&lock).is_file() {
-            continue;
-        }
-        let manifest = workspace_manifest(&prefix);
-        let request = MetadataQualification::new(root.join(&manifest)).map_err(|err| {
-            OrchestratorError::PreparationIncomplete {
-                manifest: manifest.clone(),
-                problem: format!("bad_manifest_path:{err}"),
-            }
-        })?;
-        if let Err(err) = request.run(&catalog) {
-            let text = err.to_string();
-            let first = text.lines().next().unwrap_or("metadata_offline");
-            let short: String = first.chars().take(160).collect();
-            return Err(OrchestratorError::PreparationIncomplete {
-                manifest,
-                problem: format!("metadata_offline:{short}"),
-            });
-        }
-    }
-    tools.verify(root)?;
-    Ok(())
 }
 
 #[cfg(test)]

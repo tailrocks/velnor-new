@@ -129,7 +129,7 @@ fn negative_reports_missing_leg_fails_required() -> TestResult {
         &plan,
         &serde_json::to_value(&plan.matrix)?,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     let response = merge_internal(&request.to_string())?;
     let final_report: velnor_actions_contract::FinalReport = serde_json::from_str(&response)?;
@@ -172,7 +172,7 @@ fn negative_required_failed_leg_reports_red() -> TestResult {
         &plan,
         &serde_json::to_value(&plan.matrix)?,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     let response = merge_internal(&request.to_string())?;
     assert!(!merge_passed(&response)?, "failed merge never passes");
@@ -192,7 +192,7 @@ fn pipeline_positive_control_all_green() -> TestResult {
         &plan,
         &serde_json::to_value(&plan.matrix)?,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     let response = merge_internal(&request.to_string())?;
     assert!(merge_passed(&response)?, "green chain passes");

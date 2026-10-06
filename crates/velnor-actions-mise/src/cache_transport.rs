@@ -1,18 +1,21 @@
-//! P08 qualified MBX transport: objects + shared sources (not per-crate targets).
+//! P08 selected MBX transport and historical sizing hypothesis.
 //!
-//! # Measured comparison (7 crates, 2026-09-30)
+//! # Estimated comparison (7 crates, 2026-09-30)
 //!
-//! Service data (`gh cache list --repo tailrocks/velnor-new`, 16 entries,
+//! Historical service inventory (`gh cache list --repo tailrocks/velnor-new`, 16 entries,
 //! 982.26 MiB, all `mise-tools-v1-*` on `refs/pull/1/merge`; no Cargo/MBX
 //! entries): role-suffixed tools caches duplicate the same Mise inputs.
 //! Registry subset measured from `Cargo.lock` (58 registry deps):
 //! `.crate` files 9.32 MiB + extracted src 64.43 MiB + sparse index ~2 MiB
-//! = ~76 MiB full, ~12 MiB sufficient subset (cache+index, no src) per
-//! Cargo's CI guidance. Target measured from `target/debug/deps` (414 MiB
+//! = ~76 MiB full, ~12 MiB candidate subset (cache+index, no src).
+//! Local target inventory from `target/debug/deps` (414 MiB
 //! workspace: ~342 MiB shared deps + ~10 MiB unique per crate). Churn from
 //! `git log -20`: `Cargo.lock` 7/20 (35%), `crates/` 20/20 (100%).
 //!
-//! | Metric | (a) 7x target archives | (b) 7x objects + 1x registry | Winner |
+//! These derived figures were never a controlled cache-transport benchmark.
+//! They do not qualify warm reuse, transfer times, or current repository size.
+//!
+//! | Estimated metric | (a) 7x target archives | (b) 7x objects + 1x registry | Ratio |
 //! |---|---|---|
 //! | Stored bytes | 7x438=3066 MiB (2.99 GiB) | 7x110+12=782 MiB | (b) 4x smaller |
 //! | Cross-job duplicates | 2508 MiB (82% dup) | 600 MiB (77% of objects, registry shared) | (b) 4x less |
@@ -28,11 +31,12 @@
 //!
 //! Remote MBX infrastructure (server/S3 backend) is out of scope for V1
 //! (P08-12): this module rejects `server` backends; only the GitHub
-//! `objects` payload plus the shared sources cache is qualified.
+//! supported `objects` bundle plus shared sources is selected. Actual
+//! performance qualification requires fresh-runner measurements separately.
 
 use crate::error::MiseError;
 
-/// Qualified MBX GitHub-cache payloads.
+/// MBX GitHub-cache payload alternatives.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MbxTransport {
     /// Seven per-crate `target` archives (rejected: duplicates registry).
@@ -41,12 +45,12 @@ pub enum MbxTransport {
     ObjectsPlusSharedSources,
 }
 
-/// The qualified choice for V1.
-pub const QUALIFIED_TRANSPORT: MbxTransport = MbxTransport::ObjectsPlusSharedSources;
+/// The selected single-owner transport for V1, not a performance proof.
+pub const SELECTED_TRANSPORT: MbxTransport = MbxTransport::ObjectsPlusSharedSources;
 
-/// Measured stored bytes: 7x target (MiB, see module docs).
+/// Estimated stored bytes: 7x target (MiB, see module docs).
 pub const STORED_TARGET_MIB: u64 = 3066;
-/// Measured stored bytes: objects + shared (MiB).
+/// Estimated stored bytes: objects + shared (MiB).
 pub const STORED_OBJECTS_SHARED_MIB: u64 = 782;
 /// Cross-job duplicate bytes: target mode (MiB).
 pub const DUPLICATE_TARGET_MIB: u64 = 2508;
@@ -70,9 +74,9 @@ pub struct TransportNumbers {
     pub transfer_mib: u64,
 }
 
-/// Measured numbers for one transport.
+/// Historical estimates for one transport; never current measured telemetry.
 #[must_use]
-pub fn numbers_for(transport: MbxTransport) -> TransportNumbers {
+pub fn estimated_numbers_for(transport: MbxTransport) -> TransportNumbers {
     match transport {
         MbxTransport::TargetPerCrate => TransportNumbers {
             stored_mib: STORED_TARGET_MIB,
@@ -87,10 +91,10 @@ pub fn numbers_for(transport: MbxTransport) -> TransportNumbers {
     }
 }
 
-/// True when the transport is the qualified V1 choice.
+/// True when the transport is the selected V1 architecture.
 #[must_use]
-pub fn is_qualified(transport: MbxTransport) -> bool {
-    transport == QUALIFIED_TRANSPORT
+pub fn is_selected(transport: MbxTransport) -> bool {
+    transport == SELECTED_TRANSPORT
 }
 
 /// Reject a second owner for one path (P08-6).

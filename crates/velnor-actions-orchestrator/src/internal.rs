@@ -4,13 +4,26 @@
 #[path = "plan_obligation.rs"]
 pub(crate) mod plan_obligation;
 
+#[path = "analysis_plan.rs"]
+mod analysis_plan;
+#[path = "analysis_publication.rs"]
+pub(crate) mod analysis_publication;
+#[path = "plan_producers.rs"]
+pub(crate) mod plan_producers;
+
+pub use analysis_plan::{
+    EarlyPlanResult, plan_early_internal, plan_internal_with_analysis, read_early_response,
+    validate_early_response,
+};
+pub use analysis_publication::{AnalysisPublicationContext, AnalysisPublicationOutputs};
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
     ContractError, Plan, PlanBaseline, PlanMatrix, PlanRunner, ProposedTask, RunnerSelection,
-    WorkflowEvent, canonical_json_bytes, parse_strict_json, plan_id_for_run,
+    VerificationScope, WorkflowEvent, canonical_json_bytes, plan_id_for_run,
 };
 use velnor_actions_mise::ToolCatalog;
 
@@ -22,10 +35,9 @@ use crate::discover::Discovery;
 use crate::internal_plan::snapshot::ExecutionSnapshot;
 use crate::internal_plan::wire_w2::GroupWire;
 use crate::internal_plan::{default_generator, plan_packages};
-use crate::internal_request::resolve_run_key;
 use crate::merge::BaselineManifest;
-use crate::prepare::prepare;
-use crate::select::{classify_changed, select_universe, verify_checkout};
+use crate::prepare::GenerationPreparation;
+use crate::select::{classify_changed, select_universe};
 use crate::select_edges::plan_task_graph;
 
 pub use crate::internal_request::{
@@ -59,7 +71,7 @@ pub const MERGE_OP: &str = "merge-v1";
 /// running binary, so a hand-written request can never claim a release
 /// pin for a source build. Unknown fields (including `generator`)
 /// reject via `deny_unknown_fields`.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PlanRequest {
     /// Request schema; must be 1.
@@ -76,6 +88,9 @@ struct PlanRequest {
     head: String,
     /// Triggering event.
     event: WorkflowEvent,
+    /// Verification scope selected by the request boundary.
+    #[serde(default)]
+    scope: VerificationScope,
     /// Repository root override; defaults to the resolved root.
     #[serde(default)]
     root: Option<PathBuf>,
@@ -90,10 +105,17 @@ struct PlanRequest {
     /// run: the git origin is the fallback.
     #[serde(default)]
     repository: Option<String>,
+    /// Runner-owned publication facts; independently checked before export.
+    #[serde(default)]
+    publication_context: Option<AnalysisPublicationContext>,
+    /// Runner-owned facts for exact pure producer scheduling.
+    #[serde(default)]
+    producer_context: Option<velnor_actions_contract::ProducerEventContext>,
 }
 
 /// `plan-v1` response: schema plus plan and matrix copies.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct PlanResponse {
     /// Response schema; always 1.
     pub(crate) schema: u32,
@@ -117,23 +139,14 @@ pub(crate) struct PlanResponse {
 /// Returns [`OrchestratorError::Internal`] for malformed requests and
 /// discovery, selection, or validation failures.
 pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
-    let envelope = parse_strict_json(request_json).map_err(internal_contract)?;
-    let mut request: PlanRequest =
-        serde_json::from_value(envelope).map_err(|err| OrchestratorError::Internal {
-            problem: format!("malformed_request:{err}"),
-        })?;
-    check_schema(request.schema)?;
-    if request.op.as_deref().is_some_and(|op| op != PLAN_OP) {
-        return Err(internal("op_mismatch"));
-    }
-    let run_key = resolve_run_key(Some(request.run_key.as_str()))?;
-    request.run_key = run_key;
-    if request.head.trim().is_empty() {
-        return Err(internal("empty_head"));
-    }
-    let root = plan_root(request.root.as_deref())?;
-    verify_checkout(&root, request.event, &request.head)?;
-    let prep = prepare(&root)?;
+    analysis_plan::plan_fresh(request_json, None).map(|(response, _)| response)
+}
+
+/// Both inventory providers use the identical obligation planner.
+fn plan_prepared(
+    mut request: PlanRequest,
+    prep: &GenerationPreparation,
+) -> Result<String, OrchestratorError> {
     let catalog = ToolCatalog::pinned();
     let mut warnings = Vec::new();
     warnings.extend(crate::evidence::workspace_drift_warnings(
@@ -141,15 +154,19 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
         &prep.discovery.workspaces,
         &prep.runner_label,
     ));
-    let universe = select_universe(&prep.discovery, &mut warnings)?;
-    let changed = classify_changed(
-        &prep.root,
-        request.event,
-        request.base.as_deref(),
-        &request.head,
-        &prep.discovery,
-        &mut warnings,
-    );
+    let universe = select_universe(&prep.discovery, &mut warnings);
+    let changed = if request.scope == VerificationScope::Full {
+        None
+    } else {
+        classify_changed(
+            &prep.root,
+            request.event,
+            request.base.as_deref(),
+            &request.head,
+            &prep.discovery,
+            &mut warnings,
+        )
+    };
     let mut plan = build_plan(
         &request,
         &prep.discovery,
@@ -161,7 +178,33 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
         &catalog,
         warnings,
     )?;
-    let manifest = request.baseline_manifest.and_then(|value| {
+    plan.trust = AnalysisPublicationContext::runner_trust(request.event, &request.head, Some(prep));
+    let manifest = apply_scope_baseline(&mut request, &mut plan, prep, &catalog, changed.as_ref())?;
+    plan.producers = plan_producers::inventory(prep, request.producer_context.clone())?;
+    plan.validate().map_err(internal_contract)?;
+    check_matrix_budget(&plan.matrix)?;
+    let response = plan_response(plan, manifest);
+    serde_json::to_string(&response).map_err(|err| OrchestratorError::Internal {
+        problem: format!("response_encode:{err}"),
+    })
+}
+
+/// Apply baseline coverage only for affected verification.
+///
+/// Full verification deliberately never decodes caller-provided baseline
+/// bytes or performs a lookup; its unavailable reason is stamped by
+/// [`build_plan`].
+fn apply_scope_baseline(
+    request: &mut PlanRequest,
+    plan: &mut Plan,
+    prep: &GenerationPreparation,
+    catalog: &ToolCatalog,
+    changed: Option<&crate::select::ChangedSelection>,
+) -> Result<Option<BaselineManifest>, OrchestratorError> {
+    if request.scope == VerificationScope::Full {
+        return Ok(None);
+    }
+    let manifest = request.baseline_manifest.take().and_then(|value| {
         serde_json::from_value::<BaselineManifest>(value)
             .inspect_err(|_| {
                 plan.warnings
@@ -170,25 +213,21 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
             .ok()
     });
     apply_baseline(
-        &mut plan,
+        plan,
         request.event,
         BaselineInputs {
             branch: &prep.default_branch,
             root: &prep.root,
             workflow: velnor_actions_workflow_renderer::render::WORKFLOW_PATH,
-            catalog: &catalog,
+            catalog,
             repository: request.repository.as_deref(),
+            runtime: analysis_plan::plan_runtime(prep),
         },
         manifest.clone(),
         &prep.discovery,
-        changed.as_ref(),
+        changed,
     )?;
-    plan.validate().map_err(internal_contract)?;
-    check_matrix_budget(&plan.matrix)?;
-    let response = plan_response(plan, manifest);
-    serde_json::to_string(&response).map_err(|err| OrchestratorError::Internal {
-        problem: format!("response_encode:{err}"),
-    })
+    Ok(manifest)
 }
 
 /// Assemble the `plan-v1` response, staging trusted bytes when covered.
@@ -271,7 +310,7 @@ fn build_plan(
     discovery: &Discovery,
     root: &Path,
     universe: &[&ProposedTask],
-    changed: Option<&BTreeSet<String>>,
+    changed: Option<&crate::select::ChangedSelection>,
     label: &str,
     selection: RunnerSelection,
     catalog: &ToolCatalog,
@@ -283,12 +322,12 @@ fn build_plan(
     let mut digests = BTreeMap::new();
     let lanes = lane_table(universe);
     let keys = changed
-        .map(|set| changed_keys(universe, set))
+        .map(|set| changed_keys(universe, &set.affected))
         .unwrap_or_default();
     // The running binary names itself: no request override, no lock
     // fill, so a source build can never emit a release-pinned identity.
     let generator = default_generator();
-    let snapshot = ExecutionSnapshot::build(discovery);
+    let snapshot = ExecutionSnapshot::build(discovery).with_checkout(root);
     let mut reads = velnor_actions_tofu::FileCache::new();
     for task in universe {
         let wire = GroupWire {
@@ -301,7 +340,6 @@ fn build_plan(
                 task,
                 run_key: &request.run_key,
                 label,
-                lane: lanes.get(&task.task_id).copied().unwrap_or(0),
                 catalog,
                 wire,
                 changed: member_changed(task, changed, &keys),
@@ -339,7 +377,11 @@ fn build_plan(
             selection,
         },
         trust: velnor_actions_contract::trust_for_event(request.event),
-        baseline: PlanBaseline::unavailable(Some("baseline_lookup_deferred"))?,
+        scope: request.scope,
+        baseline: PlanBaseline::unavailable(Some(match request.scope {
+            VerificationScope::Affected => "baseline_lookup_deferred",
+            VerificationScope::Full => "full_verification",
+        }))?,
         generator,
         packages: plan_packages(discovery, &selected_ids),
         obligations,
@@ -347,5 +389,6 @@ fn build_plan(
         task_ids,
         warnings,
         edges,
+        producers: Default::default(),
     })
 }

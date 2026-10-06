@@ -239,7 +239,9 @@ pub fn validate_sources_path(path: &str) -> Result<(), MiseError> {
 pub fn mode_for_event(event: &str) -> Result<TaskCacheMode, MiseError> {
     match event {
         "local" => Ok(TaskCacheMode::LocalOnly),
-        "pull_request" | "merge_group" | "fork" => Ok(TaskCacheMode::ReadOnly),
+        "pull_request" | "merge_group" | "fork" | "schedule" | "workflow_dispatch" => {
+            Ok(TaskCacheMode::ReadOnly)
+        }
         "push" => Ok(TaskCacheMode::ReadWrite),
         "release" => Ok(TaskCacheMode::Off),
         _ => Err(MiseError::UnknownCacheMode {
@@ -382,15 +384,4 @@ fn ineligible(task: &str, reason: &str) -> MiseError {
         task: task.to_owned(),
         reason: reason.to_owned(),
     }
-}
-
-/// Save allowlist: producer-successful pushes only, for every layer.
-///
-/// A save needs its producer to have passed and a protected-push event;
-/// failed runs never save, and PR, fork, merge-group, release, local,
-/// and unknown events never save through this path (PR task caches are
-/// read-only; release caching is off). Unknown trust scopes deny closed.
-#[must_use]
-pub fn save_allowed(layer_trust: &str, event: &str, passed: bool) -> bool {
-    passed && event == "push" && matches!(layer_trust, "trusted" | "pr")
 }

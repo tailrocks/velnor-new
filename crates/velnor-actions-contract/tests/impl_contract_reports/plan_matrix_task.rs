@@ -3,7 +3,7 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
     let run_key = run_key_for_ci(3, 1);
     let entry = sample_entry(&run_key)?;
     let plan = Plan {
-        producers: Default::default(),
+        producers: velnor_actions_contract::ProducerInventory::default(),
         schema: 1,
         run_key: run_key.clone(),
         plan_id: plan_id_for_run(&run_key)?,
@@ -43,8 +43,7 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
                 &velnor_actions_contract::digest_b3(b"fixture-mbx"),
                 &velnor_actions_contract::digest_b3(b"fixture-platform"),
                 "default",
-            )
-            .expect("execution identity"),
+            )?,
             closure_digest: digest_b3(b"closure"),
             baseline_proof: None,
         }],

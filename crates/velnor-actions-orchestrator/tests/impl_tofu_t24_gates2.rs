@@ -6,8 +6,8 @@
 use velnor_actions_contract::{JobTimeout, digest_b3};
 use velnor_actions_mise::command::{OUTPUT_CAPTURE_LIMIT_BYTES, RUN_TIMEOUT_SECS};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
-use velnor_actions_tofu::kinds::TofuTaskKind;
 use velnor_actions_tofu::task_identity::{DigestSlot, ExtensionInputs, TofuTaskIdentityExtension};
+use velnor_actions_tofu::{key_for_root, kinds::TofuTaskKind};
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, WORKFLOW_PATH};
 
 use crate::impl_common::TestResult;
@@ -18,6 +18,7 @@ use crate::impl_tofu_t24_gates::{crate_src, is_crate_job, token_hits};
 
 /// Extension inputs over fixed digests for one root/kind.
 fn gate_inputs<'a>(
+    unit_id: &'a str,
     lock: DigestSlot,
     kind: TofuTaskKind,
     workspace: &'a str,
@@ -25,7 +26,7 @@ fn gate_inputs<'a>(
     config: &'a str,
 ) -> ExtensionInputs<'a> {
     ExtensionInputs {
-        unit_id: "root",
+        unit_id,
         workspace_id: workspace,
         profile: "default",
         manifest: "stacks/a",
@@ -48,8 +49,10 @@ fn gate5_cache_hit_never_replaces_validate() {
     let graph = digest_b3(b"graph");
     let config = digest_b3(b"config");
     let lock = || DigestSlot::Known(digest_b3(b"lock"));
+    let unit_id = key_for_root("stacks/a");
     for kind in [TofuTaskKind::InitForValidate, TofuTaskKind::Validate] {
         let ext = TofuTaskIdentityExtension::for_task(&gate_inputs(
+            &unit_id,
             lock(),
             kind,
             &workspace,
@@ -66,6 +69,7 @@ fn gate5_cache_hit_never_replaces_validate() {
         );
     }
     let fmt = TofuTaskIdentityExtension::for_task(&gate_inputs(
+        &unit_id,
         lock(),
         TofuTaskKind::Fmt,
         &workspace,
@@ -156,10 +160,9 @@ fn gate7_docs_only_runs_zero_tofu_operations() -> TestResult {
             .collect::<Vec<_>>()
     );
     for name in ["stacks/r000", "stacks/r001"] {
+        let key = key_for_root(name);
         assert!(
-            plan.packages
-                .iter()
-                .any(|row| row.package_id == velnor_actions_tofu::key_for_root(name)),
+            plan.packages.iter().any(|row| row.package_id == key),
             "{name} row present"
         );
     }

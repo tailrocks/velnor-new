@@ -17,6 +17,8 @@ pub fn extension_schema_for_stack(stack_id: &str) -> Option<&'static str> {
     match Stack::from_id(stack_id) {
         Some(Stack::Rust) => Some(RUST_EXTENSION_SCHEMA),
         Some(Stack::Tofu) => Some(TOFU_EXTENSION_SCHEMA),
+        // Native reads remain unqualified; no baseline may cover them.
+        Some(Stack::Workload) => None,
         None => None,
     }
 }
@@ -56,7 +58,7 @@ pub fn task_kind_segment(task_id: &str) -> Option<&str> {
 
 /// Manifest-key segment of a `stack/<sid>/...` task ID, if well-formed.
 ///
-/// Keys nest (`stack/tofu/stacks/vpc/fmt/default` keys `stacks/vpc`),
+/// Keys nest (`stack/rust/stacks/vpc/fmt/default` keys `stacks/vpc`),
 /// so the key is every segment between the stack ID and the trailing
 /// kind/configuration pair (a shard suffix strips first), mirroring
 /// the grammar's own parse. Internal obligations carry no key.
@@ -120,15 +122,15 @@ mod tests {
     #[test]
     fn key_segment_returns_nested_manifest_keys() {
         assert_eq!(
-            task_key_segment("stack/tofu/root/validate/default"),
-            Some("root".to_owned())
+            task_key_segment("stack/tofu/dir-/validate/default"),
+            Some("dir-".to_owned())
         );
         assert_eq!(
-            task_key_segment("stack/tofu/stacks/vpc/fmt/default"),
+            task_key_segment("stack/rust/stacks/vpc/fmt/default"),
             Some("stacks/vpc".to_owned())
         );
         assert_eq!(
-            task_key_segment("stack/tofu/stacks/a/init/default/shard-1-of-2"),
+            task_key_segment("stack/rust/stacks/a/init/default/shard-1-of-2"),
             Some("stacks/a".to_owned())
         );
         assert_eq!(
@@ -157,14 +159,21 @@ mod tests {
     }
 
     #[test]
+    fn native_workloads_refuse_baseline_coverage() {
+        assert_eq!(extension_schema_for_stack("workload"), None);
+        assert!(!coverage_schema_known("stack/workload/web/test/bun_ci"));
+        assert!(!reuse_eligible_for_schema("workload-task-identity-v1"));
+    }
+
+    #[test]
     fn tofu_schema_covers_tofu_tasks() {
         assert_eq!(
             extension_schema_for_stack("tofu"),
             Some(TOFU_EXTENSION_SCHEMA)
         );
-        assert!(coverage_schema_known("stack/tofu/root/validate/default"));
+        assert!(coverage_schema_known("stack/tofu/dir-/validate/default"));
         assert!(coverage_schema_known(
-            "stack/tofu/stacks/a/init/default/shard-1-of-2"
+            "stack/tofu/dir-737461636b732f61/init/default/shard-1-of-2"
         ));
         assert!(reuse_eligible_for_schema(TOFU_EXTENSION_SCHEMA));
     }

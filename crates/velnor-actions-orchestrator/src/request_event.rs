@@ -1,9 +1,13 @@
 //! Runner-observed event resolution shared by plan and merge.
 
-use velnor_actions_contract::WorkflowEvent;
+#[path = "request_scope.rs"]
+pub(crate) mod request_scope;
+
+use velnor_actions_contract::{VerificationScope, WorkflowEvent};
 
 use crate::OrchestratorError;
 use crate::internal::internal;
+use crate::validators::validate_diff_rev;
 
 /// Resolve one GitHub event name plus payload to a workflow event.
 ///
@@ -28,6 +32,8 @@ pub(crate) fn workflow_event_for(
         },
         "push" => Ok(WorkflowEvent::Push),
         "merge_group" => Ok(WorkflowEvent::MergeGroup),
+        "schedule" => Ok(WorkflowEvent::Schedule),
+        "workflow_dispatch" => Ok(WorkflowEvent::WorkflowDispatch),
         "local" => Ok(WorkflowEvent::Local),
         _ => Err(internal("unsupported_event")),
     }
@@ -44,6 +50,16 @@ pub(crate) fn request_refs(
     event: WorkflowEvent,
     payload: &serde_json::Value,
     github_sha: Option<&str>,
+) -> Result<(Option<String>, String), OrchestratorError> {
+    request_refs_for_scope(event, payload, github_sha, VerificationScope::Affected)
+}
+
+/// Resolve refs while applying the dispatch scope's optional base input.
+pub(crate) fn request_refs_for_scope(
+    event: WorkflowEvent,
+    payload: &serde_json::Value,
+    github_sha: Option<&str>,
+    scope: VerificationScope,
 ) -> Result<(Option<String>, String), OrchestratorError> {
     match event {
         WorkflowEvent::PullRequest => {
@@ -89,7 +105,49 @@ pub(crate) fn request_refs(
             let head = nonempty(github_sha).unwrap_or_else(|| "HEAD".to_owned());
             Ok((None, head))
         }
+        WorkflowEvent::Schedule => Ok((
+            None,
+            nonempty(github_sha).ok_or_else(|| internal("missing_schedule_head"))?,
+        )),
+        WorkflowEvent::WorkflowDispatch => dispatch_refs(payload, github_sha, scope),
     }
+}
+
+/// Resolve the runner head and optional typed `workflow_dispatch` base input.
+fn dispatch_refs(
+    payload: &serde_json::Value,
+    github_sha: Option<&str>,
+    scope: VerificationScope,
+) -> Result<(Option<String>, String), OrchestratorError> {
+    let head = nonempty(github_sha).ok_or_else(|| internal("missing_dispatch_head"))?;
+    let base = dispatch_base(payload)?;
+    let base = if scope == VerificationScope::Full {
+        None
+    } else {
+        base
+    };
+    Ok((base, head))
+}
+
+/// Parse and validate the optional dispatch base before scope can discard it.
+fn dispatch_base(payload: &serde_json::Value) -> Result<Option<String>, OrchestratorError> {
+    let Some(inputs) = payload.get("inputs") else {
+        return Ok(None);
+    };
+    let Some(inputs) = inputs.as_object() else {
+        return Err(internal("bad_base"));
+    };
+    let Some(value) = inputs.get("base_sha") else {
+        return Ok(None);
+    };
+    let Some(raw) = value.as_str() else {
+        return Err(internal("bad_base"));
+    };
+    let Some(base) = nonempty(Some(raw)) else {
+        return Ok(None);
+    };
+    validate_diff_rev(&base, "bad_base").map_err(|problem| internal(&problem))?;
+    Ok(Some(base))
 }
 
 /// Trimmed non-empty string, if any.

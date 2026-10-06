@@ -6,6 +6,15 @@ use velnor_actions_contract::reverse_closure;
 
 use crate::discover::Discovery;
 
+/// Workspace manifests carry member-wide inherited settings and topology.
+pub(crate) fn workspace_config_changed(discovery: &Discovery, changed: &BTreeSet<String>) -> bool {
+    discovery.workspaces.iter().any(|workspace| {
+        changed.contains(&crate::discover::workspace_manifest(
+            &workspace.record.workspace_root,
+        ))
+    })
+}
+
 /// Package IDs owning changed files plus their reverse closure.
 ///
 /// The closure runs over the union of the base and head graphs, so edges
@@ -16,6 +25,7 @@ pub(crate) fn affected_packages(
     changed: &BTreeSet<String>,
     base_edges: &[(String, String)],
     head_edges: &[(String, String)],
+    base_owners: &[(String, String)],
 ) -> BTreeSet<String> {
     let mut owners: Vec<(String, String)> = Vec::new();
     for workspace in &discovery.workspaces {
@@ -25,6 +35,7 @@ pub(crate) fn affected_packages(
             }
         }
     }
+    owners.extend_from_slice(base_owners);
     let mut owned = BTreeSet::new();
     for path in changed {
         if let Some(id) = deepest_owner(&owners, path) {
@@ -62,7 +73,11 @@ fn declared_owners(discovery: &Discovery, path: &str) -> Vec<String> {
 /// stray files and narrow selection to the root instead of broadening.
 /// With no nested packages every path is trivially classified —
 /// broadening and narrowing select the same single package.
-pub(crate) fn has_unowned_file(discovery: &Discovery, changed: &BTreeSet<String>) -> bool {
+pub(crate) fn has_unowned_file(
+    discovery: &Discovery,
+    changed: &BTreeSet<String>,
+    base_owners: &[(String, String)],
+) -> bool {
     let mut dirs = Vec::new();
     for workspace in &discovery.workspaces {
         for package in &workspace.record.packages {
@@ -74,6 +89,12 @@ pub(crate) fn has_unowned_file(discovery: &Discovery, changed: &BTreeSet<String>
             }
         }
     }
+    dirs.extend(
+        base_owners
+            .iter()
+            .filter(|(dir, _)| !dir.is_empty())
+            .map(|(dir, _)| dir.clone()),
+    );
     if dirs.is_empty() {
         return false;
     }
@@ -130,6 +151,8 @@ mod tests {
             has_build_script: false,
         };
         Discovery {
+            rust_inventory: None,
+            raw_inventories: Vec::new(),
             statuses: Vec::new(),
             feature_fallbacks: Vec::new(),
             workspaces: vec![PlannedWorkspace {
@@ -198,12 +221,12 @@ mod tests {
         let discovery = discovery_with(&[("root", "Cargo.toml"), ("a", "crates/a/Cargo.toml")]);
         let stray: BTreeSet<String> = ["docs/shared.md".to_owned()].into_iter().collect();
         assert!(
-            has_unowned_file(&discovery, &stray),
+            has_unowned_file(&discovery, &stray, &[]),
             "root prefix must not mask stray files"
         );
         let nested: BTreeSet<String> = ["crates/a/src/lib.rs".to_owned()].into_iter().collect();
         assert!(
-            !has_unowned_file(&discovery, &nested),
+            !has_unowned_file(&discovery, &nested, &[]),
             "nested paths stay classified"
         );
     }
@@ -213,10 +236,10 @@ mod tests {
         let discovery = discovery_with(&[("root", "Cargo.toml")]);
         let changed: BTreeSet<String> = ["docs/shared.md".to_owned()].into_iter().collect();
         assert!(
-            !has_unowned_file(&discovery, &changed),
+            !has_unowned_file(&discovery, &changed, &[]),
             "one package selects itself either way"
         );
-        let selected = affected_packages(&discovery, &changed, &[], &[]);
+        let selected = affected_packages(&discovery, &changed, &[], &[], &[]);
         assert_eq!(selected, ["root".to_owned()].into_iter().collect());
     }
 
@@ -224,7 +247,7 @@ mod tests {
     fn nested_change_selects_deepest_beside_root() {
         let discovery = discovery_with(&[("root", "Cargo.toml"), ("a", "crates/a/Cargo.toml")]);
         let changed: BTreeSet<String> = ["crates/a/src/lib.rs".to_owned()].into_iter().collect();
-        let selected = affected_packages(&discovery, &changed, &[], &[]);
+        let selected = affected_packages(&discovery, &changed, &[], &[], &[]);
         assert_eq!(selected, ["a".to_owned()].into_iter().collect());
     }
 
@@ -264,7 +287,7 @@ mod tests {
         }
         discovery.proposals = proposals;
         let changed: BTreeSet<String> = ["docs/shared.md".to_owned()].into_iter().collect();
-        let selected = affected_packages(&discovery, &changed, &[], &[]);
+        let selected = affected_packages(&discovery, &changed, &[], &[], &[]);
         assert!(
             selected.contains("a") && selected.contains("b"),
             "both declarers affected: {selected:?}"
@@ -277,13 +300,13 @@ mod tests {
         let changed: BTreeSet<String> = ["b/src/lib.rs".to_owned()].into_iter().collect();
         let base = vec![edge("a", "b")];
         let head: Vec<(String, String)> = Vec::new();
-        let selected = affected_packages(&discovery, &changed, &base, &head);
+        let selected = affected_packages(&discovery, &changed, &base, &head, &[]);
         assert_eq!(
             selected,
             ["a".to_owned(), "b".to_owned()].into_iter().collect(),
             "base-only edge selects its consumer"
         );
-        let selected = affected_packages(&discovery, &changed, &[], &head);
+        let selected = affected_packages(&discovery, &changed, &[], &head, &[]);
         assert_eq!(
             selected,
             ["b".to_owned()].into_iter().collect(),
@@ -322,7 +345,7 @@ mod tests {
         task.validate().expect("fixture valid");
         discovery.proposals = vec![task];
         let changed: BTreeSet<String> = ["docs/spec.md".to_owned()].into_iter().collect();
-        let selected = affected_packages(&discovery, &changed, &[], &[]);
+        let selected = affected_packages(&discovery, &changed, &[], &[], &[]);
         assert!(
             selected.contains("a"),
             "declared input selects package a: {selected:?}"

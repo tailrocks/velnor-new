@@ -3,7 +3,9 @@
 //! Declared via `#[path]` from `crate_jobs.rs` under `cfg(test)`.
 
 use super::*;
+use velnor_actions_mise::PinnedTool;
 use velnor_actions_rust::TaskKind;
+use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 
 /// Tofu proposal via the T12 adapter constructor.
 fn tofu_group(root: &str, kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTask {
@@ -20,12 +22,8 @@ fn tofu_group(root: &str, kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTa
 
 /// Provider restore present, rust restores absent, for pure-tofu names.
 fn assert_provider_restore_only(names: &[&str]) {
-    for rust in [
-        "Restore Cargo sources",
-        "Restore Cargo registry",
-        "Restore MBX objects",
-    ] {
-        assert!(!names.contains(&rust), "no rust-pinned {rust}: {names:?}");
+    for cache in ["Restore MBX objects"] {
+        assert!(!names.contains(&cache), "no MBX cache: {names:?}");
     }
     assert!(
         names.contains(&"Restore Tofu providers"),
@@ -44,7 +42,8 @@ fn tofu_obligations_order_fmt_init_validate() {
     let clippy = crate_jobs_tests::group("demo", TaskKind::Clippy, &[]);
     assert_eq!(obligation_rank(&clippy), task_kind_rank("clippy"));
     let tasks = vec![&validate, &fmt, &init];
-    let obligations = obligations_for(&tasks, &ToolCatalog::pinned()).expect("obligations build");
+    let (obligations, _) = compile_obligations(&tasks, &ToolCatalog::pinned(), "ubuntu-24.04")
+        .expect("obligations build");
     let kinds: Vec<&str> = obligations
         .iter()
         .map(|obligation| obligation.kind.as_str())
@@ -115,11 +114,22 @@ fn pure_tofu_group_renders_without_rust_setup() {
         panic!("prepare must be a shell step");
     };
     assert!(
-        !run.contains(&catalog.tool_spec(PinnedTool::Rust)),
+        !run.contains(
+            &catalog
+                .tool_spec(PinnedTool::Rust)
+                .expect("qualified selector")
+        ),
         "prepare installs no Rust: {run:?}"
     );
     assert!(
-        run.contains(&catalog.tool_spec(PinnedTool::Opentofu)),
+        run.contains(
+            &catalog
+                .native_tool_spec(
+                    velnor_actions_mise::catalog::qualification::DistributionHost::LinuxAmd64,
+                    PinnedTool::Opentofu,
+                )
+                .expect("qualified selector")
+        ),
         "prepare installs the opentofu driver: {run:?}"
     );
     for key in ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME", "RUSTUP_TOOLCHAIN"] {
@@ -182,8 +192,18 @@ fn mixed_group_keeps_the_rust_union() {
         panic!("prepare must be a shell step");
     };
     assert!(
-        run.contains(&catalog.tool_spec(PinnedTool::Rust))
-            && run.contains(&catalog.tool_spec(PinnedTool::Opentofu)),
+        run.contains(
+            &catalog
+                .tool_spec(PinnedTool::Rust)
+                .expect("qualified selector")
+        ) && run.contains(
+            &catalog
+                .native_tool_spec(
+                    velnor_actions_mise::catalog::qualification::DistributionHost::LinuxAmd64,
+                    PinnedTool::Opentofu,
+                )
+                .expect("qualified selector")
+        ),
         "mixed groups install the union: {run:?}"
     );
     assert!(
@@ -347,43 +367,5 @@ fn first_tofu_obligation_declares_the_cap() {
     }
 }
 
-#[test]
-fn all_tofu_groups_take_tofu_ids_mixed_keep_rust() {
-    use velnor_actions_contract::TOFU_JOB_ID_PREFIX;
-    use velnor_actions_tofu::TofuTaskKind;
-    let mut rust = crate_jobs_tests::group("demo", TaskKind::Clippy, &[]);
-    let tofu = tofu_group("stacks/a", TofuTaskKind::Validate);
-    rust.identity.unit_id.clone_from(&tofu.identity.unit_id);
-    rust.configuration.clone_from(&tofu.configuration);
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::ConsumerV1,
-        &crate_jobs_tests::discovery(vec![
-            rust,
-            tofu,
-            tofu_group("stacks/b", TofuTaskKind::Validate),
-        ]),
-        &ToolCatalog::pinned(),
-        &[],
-        &[],
-        None,
-        2,
-    )
-    .expect("crate jobs");
-    assert_eq!(found.jobs.len(), 2);
-    let mut ids: Vec<&str> = found.jobs.iter().map(|(id, _)| id.as_str()).collect();
-    ids.sort_unstable();
-    assert_eq!(ids.len(), 2);
-    assert!(
-        ids[0].starts_with("rust-"),
-        "mixed group keeps the rust union: {ids:?}"
-    );
-    assert_eq!(ids[1], format!("{TOFU_JOB_ID_PREFIX}stacks-b"));
-    for (id, job) in &found.jobs {
-        assert!(
-            velnor_actions_contract::is_crate_job_id(id),
-            "{id} stays a crate job"
-        );
-        assert_eq!(job.needs, vec![PLAN_JOB_ID.to_owned()], "{id} needs plan");
-    }
-}
+#[path = "crate_jobs_tofu_id_tests.rs"]
+mod ids;

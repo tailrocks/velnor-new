@@ -92,7 +92,7 @@ fn tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env() {
     use velnor_actions_rust::RUSTDOCFLAGS_ENV;
     let step =
         obligation_step(&tofu_obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
-    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
+    let velnor_actions_contract::StepKind::Shell { env, run } = &step.kind else {
         panic!("obligation must be a shell step");
     };
     assert_eq!(
@@ -103,6 +103,8 @@ fn tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env() {
         !env.contains_key(RUSTDOCFLAGS_ENV),
         "tofu must not carry doc env"
     );
+    let script = run.join(" ");
+    assert!(script.contains(&crate::tofu_config_step::isolation_prefix()));
 }
 
 #[test]
@@ -129,6 +131,12 @@ fn tofu_obligation_step_carries_isolated_cache_dir() {
     let data_slug = data.rsplit('/').next().expect("slug");
     let cache_slug = cache.rsplit('/').next().expect("slug");
     assert_eq!(data_slug, cache_slug, "one slug, two bases");
+    assert_eq!(
+        env["TF_CLI_CONFIG_FILE"],
+        format!("{}/cli.tfrc", env["HOME"])
+    );
+    assert_eq!(env["XDG_CONFIG_HOME"], format!("{}/config", env["HOME"]));
+    assert_ne!(env["HOME"], *cache);
 }
 
 #[test]
@@ -137,19 +145,4 @@ fn stackless_obligation_task_ids_keep_malformed_vocabulary() {
     bad.task_id = "bogus".to_owned();
     let err = obligation_step(&bad, &ToolCatalog::pinned(), &[], None).expect_err("must fail");
     assert!(err.to_string().contains("malformed_task_id"), "{err}");
-}
-
-#[test]
-fn tofu_isolation_rejects_noncanonical_task_root_keys() {
-    for key in ["root", "dir-ROOT", "dir-2e"] {
-        let extra = BTreeMap::from([(
-            TASK_ID_ENV.to_owned(),
-            format!("stack/tofu/{key}/validate/default"),
-        )]);
-        assert!(tofu_env::tofu_data_dir_for_extra(&extra).is_err(), "{key}");
-        assert!(
-            tofu_env::tofu_plugin_cache_dir_for_extra(&extra).is_err(),
-            "{key}"
-        );
-    }
 }

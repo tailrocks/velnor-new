@@ -9,22 +9,34 @@ mod impl_alint_negative;
 mod impl_contract;
 #[path = "impl_contract_conclusions.rs"]
 mod impl_contract_conclusions;
+#[path = "impl_contract_delivery.rs"]
+mod impl_contract_delivery;
+#[path = "impl_contract_gradle.rs"]
+mod impl_contract_gradle;
 #[path = "impl_contract_ids.rs"]
 mod impl_contract_ids;
 #[path = "impl_contract_job_ids.rs"]
 mod impl_contract_job_ids;
+#[path = "impl_contract_package_scripts.rs"]
+mod impl_contract_package_scripts;
+#[path = "impl_contract_package_update.rs"]
+mod impl_contract_package_update;
 #[path = "impl_contract_release.rs"]
 mod impl_contract_release;
 #[path = "impl_contract_release_ir.rs"]
 mod impl_contract_release_ir;
 #[path = "impl_contract_release_modes.rs"]
 mod impl_contract_release_modes;
+#[path = "impl_contract_release_owners.rs"]
+mod impl_contract_release_owners;
 #[path = "impl_contract_reports.rs"]
 mod impl_contract_reports;
 #[path = "impl_contract_targets.rs"]
 mod impl_contract_targets;
 #[path = "impl_contract_tofu_config.rs"]
 mod impl_contract_tofu_config;
+#[path = "impl_contract_workloads.rs"]
+mod impl_contract_workloads;
 #[path = "impl_remed_cache.rs"]
 mod impl_remed_cache;
 #[path = "impl_remed_cache_b.rs"]

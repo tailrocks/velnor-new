@@ -97,7 +97,11 @@ fn tofu_duplicate_report_fails_required_not_run() -> TestResult {
     let (_repo, plan) = plan_for_tofu_change("stacks/a/main.tf")?;
     let mut reports = passing_reports(&plan)?;
     reports.push(reports[0].clone());
-    let report = merge_reports(&plan, &serde_json::to_value(&reports)?, &success_jobs())?;
+    let report = merge_reports(
+        &plan,
+        &serde_json::to_value(&reports)?,
+        &success_jobs(&plan),
+    )?;
     assert_eq!(report.status, FinalStatus::NotRun);
     assert!(
         report.miss_reasons.contains(&"cache_corrupt".to_owned()),
@@ -142,7 +146,11 @@ fn tofu_unknown_report_fails_required_planning_failed() -> TestResult {
     };
     ghost.validate()?;
     reports.push(ghost);
-    let report = merge_reports(&plan, &serde_json::to_value(&reports)?, &success_jobs())?;
+    let report = merge_reports(
+        &plan,
+        &serde_json::to_value(&reports)?,
+        &success_jobs(&plan),
+    )?;
     assert_eq!(report.status, FinalStatus::PlanningFailed);
     assert!(
         report.miss_reasons.contains(&"cache_corrupt".to_owned()),
@@ -161,7 +169,11 @@ fn tofu_forged_task_digest_fails_required_planning_failed() -> TestResult {
     let forged = task_report_id_for_task("local", &reports[0].matrix_key, &wrong_digest)?;
     reports[0].tasks[0].task_report_id = forged.clone();
     reports[0].task_report_ids = vec![forged];
-    let report = merge_reports(&plan, &serde_json::to_value(&reports)?, &success_jobs())?;
+    let report = merge_reports(
+        &plan,
+        &serde_json::to_value(&reports)?,
+        &success_jobs(&plan),
+    )?;
     assert_eq!(report.status, FinalStatus::PlanningFailed);
     assert!(
         report.miss_reasons.contains(&"cache_corrupt".to_owned()),
@@ -177,7 +189,11 @@ fn tofu_stale_run_report_fails_required_not_run() -> TestResult {
     let (_repo, plan) = plan_for_tofu_change("stacks/a/main.tf")?;
     let mut reports = passing_reports(&plan)?;
     reports[0].run_key = "r1-a1".to_owned();
-    let report = merge_reports(&plan, &serde_json::to_value(&reports)?, &success_jobs())?;
+    let report = merge_reports(
+        &plan,
+        &serde_json::to_value(&reports)?,
+        &success_jobs(&plan),
+    )?;
     assert_eq!(report.status, FinalStatus::NotRun);
     assert!(
         report
@@ -200,7 +216,7 @@ fn tofu_wrong_source_task_file_fails_required_planning_failed() -> TestResult {
         &plan_value,
         &matrix,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     request["task_reports"][0]["event"] = json!("push");
     let report = merge(&request)?;
@@ -220,19 +236,20 @@ fn tofu_wrong_source_task_file_fails_required_planning_failed() -> TestResult {
 fn tofu_skipped_validator_fails_required_not_run() -> TestResult {
     let (_repo, plan) = plan_for_tofu_change("stacks/a/main.tf")?;
     let reports = passing_reports(&plan)?;
-    let jobs = json!([
-        {"job_id": "plan", "conclusion": "success"},
-        {"job_id": "actionlint", "conclusion": "success"},
-        {"job_id": "tofu-stacks-a", "conclusion": "skipped"},
-    ]);
+    let mut jobs = success_jobs(&plan);
+    let owner = &plan.matrix.include.first().ok_or("selected entry")?.job_id;
+    for job in jobs.as_array_mut().ok_or("jobs")? {
+        if job["job_id"].as_str() == Some(owner.as_str()) {
+            job["conclusion"] = json!("skipped");
+        }
+    }
     let plan_value = serde_json::to_value(&plan)?;
-    let mut request = merge_request(
+    let request = merge_request(
         &plan_value,
         &serde_json::to_value(&plan.matrix)?,
         &serde_json::to_value(&reports)?,
         &jobs,
     );
-    request["required_job_ids"] = json!(["plan", "actionlint", "tofu-stacks-a"]);
     assert_eq!(merge(&request)?.status, FinalStatus::NotRun);
     Ok(())
 }
@@ -242,19 +259,20 @@ fn tofu_skipped_validator_fails_required_not_run() -> TestResult {
 fn tofu_cancelled_validator_fails_required_cancelled() -> TestResult {
     let (_repo, plan) = plan_for_tofu_change("stacks/a/main.tf")?;
     let reports = passing_reports(&plan)?;
-    let jobs = json!([
-        {"job_id": "plan", "conclusion": "success"},
-        {"job_id": "actionlint", "conclusion": "success"},
-        {"job_id": "tofu-stacks-a", "conclusion": "cancelled"},
-    ]);
+    let mut jobs = success_jobs(&plan);
+    let owner = &plan.matrix.include.first().ok_or("selected entry")?.job_id;
+    for job in jobs.as_array_mut().ok_or("jobs")? {
+        if job["job_id"].as_str() == Some(owner.as_str()) {
+            job["conclusion"] = json!("cancelled");
+        }
+    }
     let plan_value = serde_json::to_value(&plan)?;
-    let mut request = merge_request(
+    let request = merge_request(
         &plan_value,
         &serde_json::to_value(&plan.matrix)?,
         &serde_json::to_value(&reports)?,
         &jobs,
     );
-    request["required_job_ids"] = json!(["plan", "actionlint", "tofu-stacks-a"]);
     assert_eq!(merge(&request)?.status, FinalStatus::Cancelled);
     Ok(())
 }
@@ -269,7 +287,11 @@ fn tofu_cancelled_task_fails_required_cancelled() -> TestResult {
         TaskStatus::Cancelled,
         MatrixStatus::Cancelled,
     )?;
-    let report = merge_reports(&plan, &serde_json::to_value(&reports)?, &success_jobs())?;
+    let report = merge_reports(
+        &plan,
+        &serde_json::to_value(&reports)?,
+        &success_jobs(&plan),
+    )?;
     assert_eq!(report.status, FinalStatus::Cancelled);
     Ok(())
 }

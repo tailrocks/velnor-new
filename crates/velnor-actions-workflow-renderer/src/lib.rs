@@ -3,30 +3,45 @@
 //! Validated IR plus fixed argv in, marked YAML out: no subprocesses, no
 //! stack or tool branching, quoting-only shell shaping.
 
+pub mod action_credentials;
 pub mod agents_md;
+pub mod analysis_publication;
 mod artifact_paths;
 pub mod cache_elect;
+pub mod cache_mbx_roles;
+mod cache_mode;
 pub mod cache_p08;
 mod cache_p08_detect;
+pub mod cache_producer_workflow;
 mod cache_steps;
+mod cache_tool_paths;
 mod candidate;
 pub mod closure;
 mod closure_paths;
 mod commands;
+pub mod delivery_tools;
 mod document;
+pub mod early_plan;
+mod early_prefix_admission;
 mod error;
 mod expressions;
 mod final_steps;
-pub mod foundation_qualification;
 pub mod freshness;
 pub mod guard;
 pub mod marker;
 mod matrix;
 pub mod msrv;
+pub mod native_publish_approval;
 pub mod overlap;
+pub mod owned_tool_publication;
+pub mod pages_approval;
+mod plan_fallback;
 pub mod plan_format;
 pub mod preseed;
 mod preseed_closure;
+mod receipt_preparation_admission;
+pub mod release_artifact_channels;
+pub mod release_bootstrap;
 pub mod release_checkout_gates;
 pub mod release_config;
 pub mod release_gates;
@@ -36,14 +51,19 @@ pub mod release_spec;
 pub mod release_tree;
 pub mod render;
 pub mod setup;
+pub mod source_helper;
+pub mod source_helper_budget;
 pub mod steps;
 mod steps_artifact;
 mod steps_internal;
 mod steps_plain;
 mod support;
 pub mod tofu_cache;
+pub mod tool_producer_steps;
 pub mod toolchain_env;
 pub mod tree;
+pub mod verification_observer;
+pub mod workflow_document;
 pub mod yaml;
 
 pub use artifact_paths::{
@@ -61,8 +81,10 @@ pub use closure::{
 };
 pub use commands::{
     check_no_bare_cargo, has_bare_env_expansion, join_argv_for_run, quote_env_path_for_run,
-    quote_run_arg, quote_run_line_env_paths, validate_command_argv, validate_env,
+    quote_literal_run_arg, quote_run_arg, quote_run_line_env_paths, validate_command_argv,
+    validate_env,
 };
+pub use early_prefix_admission::acquisition_argv;
 pub use guard::{SafeTreePath, check_no_symlink, join_within_root, validate_tree_path};
 pub use marker::{
     MARKER_PREFIX, MARKER_SUFFIX, check_first_line, marker_for_version, validate_version,
@@ -86,10 +108,10 @@ pub use render::{
     RenderedFile, RenderedSymlink, RenderedTree, TASK_JOB_ID, ValidatorCommand, WORKFLOW_PATH,
     action_pins, finalize_jobs, render_workflow_ir, render_workflow_ir_strict,
 };
-pub use setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
+pub use setup::{MiseBootstrap, SETUP_MISE_NAME, mise_setup_step};
 pub use steps::{
     ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, BASELINE_PUBLISH_UPLOAD_NAME,
-    CRATE_REPORT_UPLOAD_NAME, CompileDriver, DENY_STEP_NAME, FORBIDDEN_TOKENS, INTERNAL_OP_ENV,
+    CRATE_REPORT_UPLOAD_NAME, CompilerDriver, DENY_STEP_NAME, FORBIDDEN_TOKENS, INTERNAL_OP_ENV,
     MACHETE_STEP_NAME, MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION, PLAN_OPERATION,
     PUBLISH_OPERATION, PUBLISH_STEP_ID, RELEASE_COMMIT_ENV, REQUEST_DIR_PREFIX, REQUEST_FILE_ENV,
     RUN_KEY_EXPR, STAGED_BINARY_PREFIX, WRITE_PRESEED_MANIFEST_OPERATION, WRITE_REQUEST_OPERATION,
@@ -106,3 +128,5 @@ pub use error::RenderError;
 
 /// Renderer implementation version (typed Gate-2 renderer).
 pub const RENDERER_VERSION: u32 = 2;
+
+pub use workflow_document::{WorkflowDocumentContext, render_workflow_document};

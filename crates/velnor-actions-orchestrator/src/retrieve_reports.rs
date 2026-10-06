@@ -256,7 +256,7 @@ fn obligation_digests(plan: &serde_json::Value) -> BTreeMap<&str, &str> {
 
 /// Read one entry's matrix file from its job's artifact; home on success.
 ///
-/// The job artifact carries the whole run directory, so the entry's
+/// The job artifact carries a report-only payload, so the entry's
 /// report lives at `<matrix-key>/matrix-report.json` inside it. The
 /// artifact home, the nested parent, and the file itself reject
 /// symlinks (pre-checks plus a `NOFOLLOW` open validated via the

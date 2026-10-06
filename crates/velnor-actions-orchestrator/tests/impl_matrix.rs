@@ -184,7 +184,7 @@ fn ignored_rust_merges_to_no_work_never_passes() -> TestResult {
     // Zero obligations with green validators merge to no_work, and the
     // required gate stays red: no_work proves nothing validated.
     let matrix = serde_json::to_value(&plan.matrix)?;
-    let request = merge_request(&plan, &matrix, &serde_json::json!([]), &success_jobs());
+    let request = merge_request(&plan, &matrix, &serde_json::json!([]), &success_jobs(&plan));
     let final_report = merge(&request)?;
     final_report.validate()?;
     assert_eq!(final_report.status, FinalStatus::NoWork);
@@ -211,7 +211,7 @@ fn ignored_rust_merges_to_no_work_never_passes() -> TestResult {
         &plan,
         &matrix,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     let final_report = merge(&request)?;
     assert_eq!(final_report.status, FinalStatus::Passed);

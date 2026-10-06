@@ -1,7 +1,7 @@
 //! Typed GitHub token permission scopes for workflows and jobs.
 use serde::{Deserialize, Serialize};
 /// One GitHub token permission scope level.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PermissionLevel {
     /// Read-only access.
@@ -9,6 +9,7 @@ pub enum PermissionLevel {
     /// Read-write access.
     Write,
     /// No access.
+    #[default]
     None,
 }
 
@@ -23,10 +24,19 @@ pub struct Permissions {
     pub id_token: PermissionLevel,
     /// Actions scope.
     pub actions: PermissionLevel,
+    /// Issues scope (closed nightly observer only).
+    #[serde(default)]
+    pub issues: PermissionLevel,
+    /// GitHub attestation writes require a closed approved publication role.
+    #[serde(default)]
+    pub attestations: PermissionLevel,
+    /// Pages scope; writes require an authorized native deployment role.
+    #[serde(default)]
+    pub pages: PermissionLevel,
 }
 
 impl Permissions {
-    /// True when every scope is `write` (always rejected).
+    /// True when all core token scopes are `write` (always rejected).
     #[must_use]
     pub fn is_write_all(&self) -> bool {
         [
@@ -34,6 +44,7 @@ impl Permissions {
             self.pull_requests,
             self.id_token,
             self.actions,
+            self.issues,
         ]
         .iter()
         .all(|level| matches!(level, PermissionLevel::Write))
@@ -48,6 +59,9 @@ impl Default for Permissions {
             pull_requests: PermissionLevel::None,
             id_token: PermissionLevel::None,
             actions: PermissionLevel::Read,
+            issues: PermissionLevel::None,
+            pages: PermissionLevel::None,
+            attestations: PermissionLevel::None,
         }
     }
 }

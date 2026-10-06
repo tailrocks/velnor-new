@@ -194,6 +194,8 @@ fn reuse_event_names_match_mode_spellings() {
         WorkflowEvent::Push,
         WorkflowEvent::MergeGroup,
         WorkflowEvent::Local,
+        WorkflowEvent::Schedule,
+        WorkflowEvent::WorkflowDispatch,
     ] {
         let name = reuse_event_name(event);
         assert!(mode_for_event(name).is_ok(), "{name}");

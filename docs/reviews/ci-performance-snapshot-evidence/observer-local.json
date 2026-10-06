@@ -1,0 +1,25 @@
+{
+  "scope": "local synthetic observer cost only; not hosted cache qualification",
+  "platform": "Darwin",
+  "machine": "arm64",
+  "samples_per_fixture": 1,
+  "script_sha256": "982864ff1a3982575ef924dd41473f0681b606e2487db197e2fd9b15f01a56c5",
+  "results": [
+    {
+      "count": 500,
+      "bytes": 131072000,
+      "elapsed_seconds": 0.759608,
+      "returncode": 0,
+      "stdout": "velnor: tools snapshot phase=before files=500 bytes=131072000 hash_seconds=1 hash_resolution_seconds=1 digest=7247209f45d2c99c4094b966675e80ff10c4d6339cd372ce91e25789b20717af\n",
+      "stderr": ""
+    },
+    {
+      "count": 2000,
+      "bytes": 2000,
+      "elapsed_seconds": 0.724375,
+      "returncode": 0,
+      "stdout": "velnor: tools snapshot phase=before files=2000 bytes=2000 hash_seconds=1 hash_resolution_seconds=1 digest=ccce579479ce64de9c5d0939c7a25925403e8cd741117f74b44c33873c0bbb19\n",
+      "stderr": ""
+    }
+  ]
+}

@@ -301,9 +301,10 @@ fn cache_tofu_providers_layer_builds_keys_and_prefixes() -> Result<(), ContractE
     assert!(key.len() <= MAX_CACHE_KEY_BYTES);
     assert_eq!(
         key,
-        format!("velnor-v1-tofu-providers-trusted-{compat}-{snapshot}")
+        format!("velnor-v2-tofu-providers-trusted-{compat}-{snapshot}")
     );
     let prefix = restore_prefix("tofu-providers", "pr", &compat)?;
+    assert!(prefix.starts_with("velnor-v2-tofu-providers-pr-"));
     assert!(prefix.ends_with('-') && !prefix.contains(&snapshot));
     Ok(())
 }

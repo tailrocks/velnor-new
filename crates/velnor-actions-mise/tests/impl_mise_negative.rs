@@ -19,21 +19,20 @@ fn strings(items: &[&str]) -> Vec<OsString> {
 fn discovery_touches_no_project_mise_files() -> Result<(), String> {
     let request =
         MetadataDiscovery::new(PathBuf::from("/repo/Cargo.toml")).map_err(|err| err.to_string())?;
-    for argv in [request.argv(&pinned())] {
-        for arg in &argv {
-            let text = arg.to_string_lossy();
-            for forbidden in ["mise.toml", "mise.lock", ".mise", "mise-version"] {
-                assert!(
-                    !text.contains(forbidden),
-                    "discovery must not reference {forbidden}: {argv:?}"
-                );
-            }
+    let argv = request.argv(&pinned()).map_err(|err| err.to_string())?;
+    for arg in &argv {
+        let text = arg.to_string_lossy();
+        for forbidden in ["mise.toml", "mise.lock", ".mise", "mise-version"] {
+            assert!(
+                !text.contains(forbidden),
+                "discovery must not reference {forbidden}: {argv:?}"
+            );
         }
-        assert!(
-            argv.iter().any(|arg| arg == "/repo/Cargo.toml"),
-            "only the Cargo manifest is addressed: {argv:?}"
-        );
     }
+    assert!(
+        argv.iter().any(|arg| arg == "/repo/Cargo.toml"),
+        "only the Cargo manifest is addressed: {argv:?}"
+    );
     let command = request.command(&pinned()).map_err(|err| err.to_string())?;
     assert_eq!(command.program(), "mise");
     Ok(())
@@ -44,7 +43,10 @@ fn qualification_command_matches_argv() -> Result<(), String> {
     let request = MetadataQualification::new(PathBuf::from("/repo/Cargo.toml"))
         .map_err(|err| err.to_string())?;
     let command = request.command(&pinned()).map_err(|err| err.to_string())?;
-    assert_eq!(command.argv(), request.argv(&pinned()));
+    assert_eq!(
+        command.argv(),
+        request.argv(&pinned()).map_err(|err| err.to_string())?
+    );
     assert_eq!(command.program(), "mise");
     Ok(())
 }
@@ -116,8 +118,9 @@ fn specs_derive_only_from_catalog() -> Result<(), String> {
     assert!(
         discovery
             .argv(&catalog)
+            .map_err(|err| err.to_string())?
             .iter()
-            .any(|arg| arg == "rust@1.97.0")
+            .any(|arg| arg == "rust[profile=minimal,components=clippy,rustfmt]@1.97.0")
     );
     let exec = PinnedToolExec::new(
         vec![PinnedTool::Rust, PinnedTool::MrBoxington],
@@ -125,13 +128,17 @@ fn specs_derive_only_from_catalog() -> Result<(), String> {
         strings(&["--version"]),
     )
     .map_err(|err| err.to_string())?;
-    let argv = exec.argv(&catalog);
-    assert!(argv.iter().any(|arg| arg == "rust@1.97.0"));
+    let argv = exec.argv(&catalog).map_err(|err| err.to_string())?;
+    assert!(
+        argv.iter()
+            .any(|arg| arg == "rust[profile=minimal,components=clippy,rustfmt]@1.97.0")
+    );
     assert!(argv.iter().any(|arg| arg == "mr-boxington@1.18.0"));
     let install = MiseInstall::new(vec![PinnedTool::Nextest]).map_err(|err| err.to_string())?;
     assert!(
         install
             .argv(&catalog)
+            .map_err(|err| err.to_string())?
             .iter()
             .any(|arg| arg == "aqua:nextest-rs/nextest/cargo-nextest@0.9.145")
     );
@@ -189,15 +196,15 @@ fn candidate_build_vector_pins_implemented_trio_form() -> Result<(), String> {
     )
     .map_err(|err| err.to_string())?;
     assert_eq!(
-        exec.argv(&pinned()),
+        exec.argv(&pinned()).map_err(|err| err.to_string())?,
         strings(&[
             "mise",
             "--no-config",
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
-            "mr-boxington@1.21.0",
+            "rust[profile=minimal,components=clippy,rustfmt]@1.98.1",
+            "mr-boxington@1.21.1",
             "--",
             "mbx",
             "build",
@@ -231,7 +238,7 @@ fn gh_pinned_exec_is_exact() -> Result<(), String> {
         ]),
     )
     .map_err(|err| err.to_string())?;
-    let argv = exec.argv(&pinned());
+    let argv = exec.argv(&pinned()).map_err(|err| err.to_string())?;
     assert_eq!(argv[5], OsString::from("gh@2.102.0"));
     assert_eq!(argv[7], OsString::from("gh"));
     Ok(())
@@ -256,7 +263,7 @@ fn wrapper_preserves_sorted_features_and_target() -> Result<(), String> {
         payload[1..].to_vec(),
     )
     .map_err(|err| err.to_string())?;
-    let argv = exec.argv(&pinned());
+    let argv = exec.argv(&pinned()).map_err(|err| err.to_string())?;
     let split = argv.iter().position(|arg| arg == "--").expect("separator");
     assert_eq!(&argv[split + 1..], payload.as_slice());
     Ok(())
@@ -271,11 +278,12 @@ fn toolchain_probe_mechanism_routes_through_pins() -> Result<(), String> {
     ] {
         let exec = PinnedToolExec::new(tools, OsStr::new(program), strings(&["--version"]))
             .map_err(|err| err.to_string())?;
-        let argv = exec.argv(&pinned());
+        let argv = exec.argv(&pinned()).map_err(|err| err.to_string())?;
         assert_eq!(argv[0], OsString::from("mise"));
         assert_eq!(argv[4], OsString::from("exec"));
         assert!(
-            argv.iter().any(|arg| arg == "rust@1.98.1"),
+            argv.iter()
+                .any(|arg| arg == "rust[profile=minimal,components=clippy,rustfmt]@1.98.1"),
             "probe must use the exact pin: {argv:?}"
         );
     }

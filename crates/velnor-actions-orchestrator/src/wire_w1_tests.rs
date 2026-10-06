@@ -4,6 +4,27 @@
 
 use super::*;
 
+fn preparation_install(step: &Step) -> (Vec<String>, &std::collections::BTreeMap<String, String>) {
+    match &step.kind {
+        StepKind::SourceBoundHelper { invocation, env } => {
+            let owner = velnor_actions_mise::catalog::rust_prepare::record_for_invocation(
+                invocation,
+                env,
+                env!("CARGO_PKG_VERSION"),
+            )
+            .expect("exact preparation owner environment");
+            let install = velnor_actions_mise::catalog::rust_prepare::install_argv(
+                owner.invocation(),
+                env!("CARGO_PKG_VERSION"),
+            )
+            .expect("owner-bound Rust installation");
+            (install, env)
+        }
+        StepKind::Shell { run, env } => (run.clone(), env),
+        _ => panic!("prepare must bind Rust source or plain non-Rust installation"),
+    }
+}
+
 #[test]
 fn checkout_pins_canonical_ref_and_validates_inputs() {
     let step = checkout_step().expect("checkout step");
@@ -138,30 +159,43 @@ fn crate_tools_follow_selection_with_validators() {
             use_mbx,
             use_nextest,
             use_opentofu,
-            needs_validators,
+            crate::matrix_step::SuiteTools {
+                generate_validators: needs_validators,
+                ..crate::matrix_step::SuiteTools::NONE
+            },
+            "ubuntu-24.04",
         )
         .expect("step");
-        let StepKind::Shell { run, env } = &step.kind else {
-            panic!("prepare must be a shell step");
-        };
+        let (run, env) = preparation_install(&step);
         for tool in [
             PinnedTool::Actionlint,
             PinnedTool::Shellcheck,
             PinnedTool::Zizmor,
         ] {
             assert_eq!(
-                run.contains(&catalog.tool_spec(tool)),
+                run.contains(&catalog.tool_spec(tool).expect("qualified selector")),
                 needs_validators,
                 "trio installs only for validator-spawning suites: {run:?}"
             );
         }
-        let nextest = catalog.tool_spec(PinnedTool::Nextest);
+        let nextest = catalog
+            .tool_spec(PinnedTool::Nextest)
+            .expect("qualified selector");
         assert_eq!(run.contains(&nextest), use_nextest);
-        let mbx = catalog.tool_spec(PinnedTool::MrBoxington);
+        let mbx = catalog
+            .tool_spec(PinnedTool::MrBoxington)
+            .expect("qualified selector");
         assert_eq!(run.contains(&mbx), use_mbx);
-        let opentofu = catalog.tool_spec(PinnedTool::Opentofu);
+        let opentofu = catalog
+            .native_tool_spec(
+                velnor_actions_mise::catalog::qualification::DistributionHost::LinuxAmd64,
+                PinnedTool::Opentofu,
+            )
+            .expect("qualified selector");
         assert_eq!(run.contains(&opentofu), use_opentofu);
-        let rust = catalog.tool_spec(PinnedTool::Rust);
+        let rust = catalog
+            .tool_spec(PinnedTool::Rust)
+            .expect("qualified selector");
         assert_eq!(
             run.contains(&rust),
             use_rust,
@@ -198,12 +232,14 @@ fn crate_tools_install_exact_pinned_set() {
                 use_mbx,
                 use_nextest,
                 use_opentofu,
-                needs_validators,
+                crate::matrix_step::SuiteTools {
+                    generate_validators: needs_validators,
+                    ..crate::matrix_step::SuiteTools::NONE
+                },
+                "ubuntu-24.04",
             )
             .expect("step");
-            let StepKind::Shell { run, .. } = &step.kind else {
-                panic!("prepare must be a shell step");
-            };
+            let (run, _) = preparation_install(&step);
             let at = run
                 .iter()
                 .position(|arg| arg == "install")
@@ -211,23 +247,48 @@ fn crate_tools_install_exact_pinned_set() {
             let specs = &run[at + 1..];
             let mut expected = Vec::new();
             if use_rust {
-                expected.push(catalog.tool_spec(PinnedTool::Rust));
+                expected.push(
+                    catalog
+                        .tool_spec(PinnedTool::Rust)
+                        .expect("qualified selector"),
+                );
             }
             if use_mbx {
-                expected.push(catalog.tool_spec(PinnedTool::MrBoxington));
+                expected.push(
+                    catalog
+                        .tool_spec(PinnedTool::MrBoxington)
+                        .expect("qualified selector"),
+                );
             }
             if use_opentofu {
-                expected.push(catalog.tool_spec(PinnedTool::Opentofu));
+                expected.push(
+                    catalog
+                        .native_tool_spec(
+                            velnor_actions_mise::catalog::qualification::DistributionHost::LinuxAmd64,
+                            PinnedTool::Opentofu,
+                        )
+                        .expect("qualified selector"),
+                );
             }
             if needs_validators {
                 expected.extend([
-                    catalog.tool_spec(PinnedTool::Actionlint),
-                    catalog.tool_spec(PinnedTool::Shellcheck),
-                    catalog.tool_spec(PinnedTool::Zizmor),
+                    catalog
+                        .tool_spec(PinnedTool::Actionlint)
+                        .expect("qualified selector"),
+                    catalog
+                        .tool_spec(PinnedTool::Shellcheck)
+                        .expect("qualified selector"),
+                    catalog
+                        .tool_spec(PinnedTool::Zizmor)
+                        .expect("qualified selector"),
                 ]);
             }
             if use_nextest {
-                expected.push(catalog.tool_spec(PinnedTool::Nextest));
+                expected.push(
+                    catalog
+                        .tool_spec(PinnedTool::Nextest)
+                        .expect("qualified selector"),
+                );
             }
             assert_eq!(
                 specs,
@@ -236,7 +297,7 @@ fn crate_tools_install_exact_pinned_set() {
             );
             for absent in [PinnedTool::Gh, PinnedTool::ReleasePlz] {
                 assert!(
-                    !specs.contains(&catalog.tool_spec(absent)),
+                    !specs.contains(&catalog.tool_spec(absent).expect("qualified selector")),
                     "crate jobs never install {absent:?}: {specs:?}"
                 );
             }

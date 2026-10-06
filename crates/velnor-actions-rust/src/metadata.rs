@@ -15,7 +15,8 @@ use crate::metadata_edges::{EdgeResolution, RawPackage, convert_edge, manifest_d
 pub const METADATA_FORMAT_VERSION: u32 = 1;
 
 /// One Cargo target kind entry.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TargetRecord {
     /// Target kind (`lib`, `bin`, `test`, `example`, `bench`, `custom-build`).
     pub kind: String,
@@ -30,7 +31,8 @@ pub struct TargetRecord {
 }
 
 /// Retained per-package inventory from `cargo metadata`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PackageRecord {
     /// Opaque Cargo package id.
     pub id: String,
@@ -53,7 +55,8 @@ pub struct PackageRecord {
 }
 
 /// One parsed `cargo metadata` document.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct WorkspaceRecord {
     /// Repository-relative workspace root; empty for the repository root.
     pub workspace_root: String,

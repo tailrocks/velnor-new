@@ -6,6 +6,9 @@
 //! aspect each. Date helpers derive "today" from the system clock so
 //! evidence windows stay deterministic without external crates.
 
+#[path = "p12_probe_rows.rs"]
+mod probe_data;
+
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -119,43 +122,90 @@ pub(crate) fn assert_fail(run: &Run, needle: &str) {
     assert!(has_fail(run, needle), "missing {needle}:\n{}", run.stdout);
 }
 
+/// Source and policy files shared by every complete fixture.
+const FIXTURE_FILES: &[(&str, &str)] = &[
+    (
+        "crates/velnor-actions-mise/src/catalog.rs",
+        include_str!("p12_catalog.txt"),
+    ),
+    (
+        "crates/velnor-actions-mise/src/catalog_qualification_semver.rs",
+        include_str!("p12_catalog_qualification_semver.txt"),
+    ),
+    (
+        "crates/velnor-actions-mise/src/catalog_pins.rs",
+        include_str!("p12_catalog_pins.txt"),
+    ),
+    (
+        "crates/velnor-actions-mise/src/catalog_workloads.rs",
+        include_str!("p12_catalog_workloads.txt"),
+    ),
+    (
+        "crates/velnor-actions-mise/src/catalog_rust_desktop.rs",
+        include_str!("p12_catalog_rust_desktop.txt"),
+    ),
+    (
+        "crates/velnor-actions-mise/src/catalog_homebrew.rs",
+        include_str!("p12_catalog_homebrew.txt"),
+    ),
+    (
+        "crates/velnor-actions-mise/src/catalog_qualification.rs",
+        include_str!("p12_catalog_qualification.txt"),
+    ),
+    (
+        "crates/velnor-actions-mise/src/catalog_qualification_java.rs",
+        include_str!("p12_catalog_qualification_java.txt"),
+    ),
+    (
+        "crates/velnor-actions-mise/src/catalog_qualification_gradle.rs",
+        include_str!("p12_catalog_qualification_gradle.txt"),
+    ),
+    (
+        "crates/velnor-actions-mise/src/catalog_source_build_bootstrap.rs",
+        include_str!("p12_catalog_source_build_bootstrap.txt"),
+    ),
+    (
+        "crates/velnor-actions-mise/src/catalog_qualification_records.rs",
+        include_str!("p12_catalog_qualification_records.txt"),
+    ),
+    (
+        "crates/velnor-actions-mise/src/catalog_gradle.rs",
+        include_str!("p12_catalog_gradle.txt"),
+    ),
+    (
+        "crates/velnor-actions-actionlint/src/actions.rs",
+        include_str!("p12_actions.txt"),
+    ),
+    (
+        "crates/velnor-actions-actionlint/src/capabilities.rs",
+        include_str!("p12_capabilities.txt"),
+    ),
+    (
+        "crates/velnor-actions-actionlint/src/tools.rs",
+        include_str!("p12_tools.txt"),
+    ),
+    (
+        "crates/velnor-actions-actionlint/src/config.rs",
+        include_str!("p12_config.txt"),
+    ),
+    (
+        "crates/velnor-actions-workflow-renderer/src/render.rs",
+        include_str!("p12_render.txt"),
+    ),
+    (
+        ".velnor/version-policy.toml",
+        include_str!("p12_policy.toml"),
+    ),
+    ("Cargo.toml", include_str!("p12_workspace.toml")),
+    ("crates/aaa/Cargo.toml", include_str!("p12_aaa.toml")),
+    ("crates/bbb/Cargo.toml", include_str!("p12_bbb.toml")),
+    ("Cargo.lock", include_str!("p12_lock.toml")),
+];
+
 /// A complete supported inventory tree; the gate must pass on it.
 pub(crate) fn passing(prefix: &str) -> Result<Fixture, Box<dyn Error>> {
     let dir = crate::impl_cli_tmp::fresh_tempdir(prefix)?;
-    for (rel, body) in [
-        (
-            "crates/velnor-actions-mise/src/catalog.rs",
-            include_str!("p12_catalog.txt"),
-        ),
-        (
-            "crates/velnor-actions-actionlint/src/actions.rs",
-            include_str!("p12_actions.txt"),
-        ),
-        (
-            "crates/velnor-actions-actionlint/src/capabilities.rs",
-            include_str!("p12_capabilities.txt"),
-        ),
-        (
-            "crates/velnor-actions-actionlint/src/tools.rs",
-            include_str!("p12_tools.txt"),
-        ),
-        (
-            "crates/velnor-actions-actionlint/src/config.rs",
-            include_str!("p12_config.txt"),
-        ),
-        (
-            "crates/velnor-actions-workflow-renderer/src/render.rs",
-            include_str!("p12_render.txt"),
-        ),
-        (
-            ".velnor/version-policy.toml",
-            include_str!("p12_policy.toml"),
-        ),
-        ("Cargo.toml", include_str!("p12_workspace.toml")),
-        ("crates/aaa/Cargo.toml", include_str!("p12_aaa.toml")),
-        ("crates/bbb/Cargo.toml", include_str!("p12_bbb.toml")),
-        ("Cargo.lock", include_str!("p12_lock.toml")),
-    ] {
+    for &(rel, body) in FIXTURE_FILES {
         write(&dir, rel, body)?;
     }
     let inventory = include_str!("p12_inventory.json").replace("{CHECKED}", &days_iso(0)?);
@@ -174,115 +224,7 @@ pub(crate) fn cleanup(fixture: &Fixture) {
     crate::impl_cli_tmp::cleanup(&fixture.dir);
 }
 
-const TOOL_PROBE_ROWS: &[(&str, &str, &str)] = &[
-    (
-        "https://pypi.org/pypi/reuse/json",
-        "reuse.json",
-        "{\"info\":{\"version\":\"6.2.0\"}}",
-    ),
-    (
-        "https://www.python.org/downloads/",
-        "python.html",
-        "<a>Download Python 3.14.8</a>",
-    ),
-    (
-        "https://api.github.com/repos/astral-sh/uv/releases/latest",
-        "uv.json",
-        "{\"tag_name\":\"0.12.22\"}",
-    ),
-    (
-        "https://api.github.com/repos/jdx/mise/releases/latest",
-        "mise.json",
-        "{\"tag_name\": \"v2026.9.16\"}",
-    ),
-    (
-        "https://static.rust-lang.org/dist/channel-rust-stable.toml",
-        "rust.toml",
-        "[pkg.rust]\nversion = \"1.98.1 (48a229cea 2026-09-01)\"\n",
-    ),
-    (
-        "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
-        "mbx.json",
-        "[{\"tag_name\": \"v1.20.0-beta\", \"prerelease\": true}, {\"tag_name\": \"v1.19.0\"}]",
-    ),
-    (
-        "https://api.github.com/repos/cli/cli/releases/latest",
-        "gh.json",
-        "{\"tag_name\": \"v2.101.0\"}",
-    ),
-    (
-        "https://api.github.com/repos/rhysd/actionlint/releases/latest",
-        "actionlint.json",
-        "{\"tag_name\": \"v1.7.12\"}",
-    ),
-    (
-        "https://api.github.com/repos/koalaman/shellcheck/releases/latest",
-        "shellcheck.json",
-        "{\"tag_name\": \"v0.11.0\"}",
-    ),
-    (
-        "https://api.github.com/repos/zizmorcore/zizmor/releases/latest",
-        "zizmor.json",
-        "{\"tag_name\": \"v1.30.1\"}",
-    ),
-    (
-        "https://crates.io/api/v1/crates/cargo-nextest",
-        "nextest.json",
-        "{\"crate\": {\"max_version\": \"0.9.146\"}}",
-    ),
-    (
-        "https://api.github.com/repos/opentofu/opentofu/releases/latest",
-        "opentofu.json",
-        "{\"tag_name\": \"v1.13.1\"}",
-    ),
-];
-
-const ACTION_PROBE_ROWS: &[(&str, &str, &str)] = &[
-    (
-        "https://api.github.com/repos/Swatinem/rust-cache/tags",
-        "rust-cache.json",
-        "[{\"name\": \"v2.9.2\"}]",
-    ),
-    (
-        "https://api.github.com/repos/jdx/mise-action/releases/latest",
-        "mise-action.json",
-        "{\"tag_name\": \"v4.3.0\"}",
-    ),
-    (
-        "https://api.github.com/repos/actions/checkout/releases/latest",
-        "checkout.json",
-        "{\"tag_name\": \"v7.0.1\"}",
-    ),
-    (
-        "https://api.github.com/repos/actions/download-artifact/releases/latest",
-        "download.json",
-        "{\"tag_name\": \"v8.0.1\"}",
-    ),
-    (
-        "https://api.github.com/repos/actions/upload-artifact/releases/latest",
-        "upload.json",
-        "{\"tag_name\": \"v7.0.1\"}",
-    ),
-    (
-        "https://api.github.com/repos/actions/cache/releases/latest",
-        "cache.json",
-        "{\"tag_name\": \"v6.1.0\"}",
-    ),
-    (
-        "https://api.github.com/repos/jdx/mr-boxington-action/releases",
-        "mbx-action.json",
-        "[{\"tag_name\": \"v1.5.0\"}]",
-    ),
-    (
-        "https://api.github.com/repos/asamarts/alint/releases/latest",
-        "alint.json",
-        "{\"tag_name\": \"v0.16.1\"}",
-    ),
-];
-
 /// (inventory source URL, canned file, canned body) for every probe row.
 pub(crate) fn probe_rows() -> Vec<(&'static str, &'static str, &'static str)> {
-    let mut rows = TOOL_PROBE_ROWS.to_vec();
-    rows.extend_from_slice(ACTION_PROBE_ROWS);
-    rows
+    probe_data::probe_rows()
 }

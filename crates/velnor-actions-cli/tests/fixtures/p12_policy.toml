@@ -5,7 +5,7 @@ check_interval_hours = 24
 max_exception_days = 14
 
 [tools]
-mise = "2026.9.16"
+mise = "2026.10.0"
 rust = "1.98.1"
 mr-boxington = "1.19.0"
 gh = "2.101.0"
@@ -15,9 +15,25 @@ zizmor = "1.30.1"
 nextest = "0.9.146"
 opentofu = "1.13.1"
 release-plz = "0.3.169"
+bun = "1.4.2"
+node = "24.21.0"
+boltffi = "0.30.1"
+xcodegen = "2.46.0"
+jq = "1.8.2"
+swiftlint = "0.65.1"
+periphery = "3.8.0"
+rust-desktop = "1.99.0"
+swift = "6.4.0"
+ruby = "4.0.7"
 reuse = "6.2.0"
+java = "25.0.4.1.1"
+gradle = "9.8.0"
 python = "3.14.8"
 uv = "0.12.22"
+cargo-audit = "0.22.2"
+cargo-deny = "0.20.2"
+cargo-semver-checks = "0.50.0"
+alint = "0.17.0"
 
 [github_runner_images.linux_x64]
 default = "ubuntu-26.04"
@@ -61,14 +77,14 @@ reviewed = "2026-09-28"
 
 [[actions]]
 name = "jdx/mr-boxington-action"
-version = "v1.5.0"
-sha = "9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3"
+version = "v1.6.0"
+sha = "1687e54eb349cadf61fa38b5813a77875489e8e6"
 reviewed = "2026-09-28"
 
 [[actions]]
 name = "asamarts/alint"
-version = "v0.16.1"
-sha = "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb"
+version = "v0.17.0"
+sha = "d93c0283b19dd78afcd8a4b303f1556a7759ba81"
 reviewed = "2026-09-28"
 
 [[actions]]
@@ -77,5 +93,69 @@ version = "v2.9.2"
 sha = "6323deb102c322ba6fcbdcafc7e3dddab59af2b6"
 reviewed = "2026-09-28"
 
+[[actions]]
+name = "docker/setup-buildx-action"
+version = "v4.4.1"
+sha = "f87e5991a6d7451dcb8d9637bfbc97413f497069"
+reviewed = "2026-10-03"
+
+[[actions]]
+name = "docker/login-action"
+version = "v4.6.0"
+sha = "dbcb813823bdd20940b903addbd779551569679f"
+reviewed = "2026-10-03"
+
+[[actions]]
+name = "docker/build-push-action"
+version = "v7.4.0"
+sha = "c3c9e263c25d99ce0380d002d59b67737d91b0dc"
+reviewed = "2026-10-03"
+
+[[actions]]
+name = "actions/configure-pages"
+version = "v6.0.0"
+sha = "45bfe0192ca1faeb007ade9deae92b16b8254a0d"
+reviewed = "2026-10-03"
+
+[[actions]]
+name = "actions/upload-pages-artifact"
+version = "v5.0.0"
+sha = "fc324d3547104276b827a68afc52ff2a11cc49c9"
+reviewed = "2026-10-03"
+
+[[actions]]
+name = "actions/deploy-pages"
+version = "v5.0.1"
+sha = "368f82528645a54fb793d4d04e342629a3f51346"
+reviewed = "2026-10-03"
+
+[[actions]]
+name = "actions/attest"
+version = "v4.2.2"
+sha = "1e69f48acb82d1966a394da916b4c1698aa569d6"
+reviewed = "2026-10-03"
+
 [validation-tools]
 cargo-mutants = "27.1.0"
+
+[delivery-tools]
+buildx = "0.37.2"
+buildkit = "0.33.1"
+buildkit-image-digest = "sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea"
+sbom-scanner = "1.12.0"
+sbom-scanner-image-digest = "sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9"
+
+[native-authorities]
+homebrew-version = "7.0.7"
+homebrew-source-sha = "8e858db5584704dcd469b8e826228c0d5a5a94f6"
+homebrew-source-url = "https://github.com/Homebrew/brew/tree/8e858db5584704dcd469b8e826228c0d5a5a94f6"
+homebrew-portable-ruby-version = "4.0.7"
+homebrew-portable-ruby-x86_64-linux-sha256 = "bf2a9bf102694d40084ed436b06a1566dded60a519f4d1879c90c81046e11081"
+homebrew-portable-ruby-arm64-linux-sha256 = "c9b75dd6bd9578921f3ce739dacae8866698c3399c0f83574a5d5fadda2aab2d"
+gradle-wrapper-version = "9.5.1"
+gradle-wrapper-distribution-sha256 = "bafc141b619ad6350fd975fc903156dd5c151998cc8b058e8c1044ab5f7b031f"
+gradle-wrapper-script-sha256 = "aed171fb114f82e6eaea4970a245a200e0582a7dcc8ec0891ca41b6e4a62b754"
+gradle-wrapper-jar-sha256 = "55243ef57851f12b070ad14f7f5bb8302daceeebc5bce5ece5fa6edb23e1145c"
+gradle-wrapper-bootstrap-version = "9.4.1"
+gradle-wrapper-bootstrap-source-sha = "2d6327017519d23b96af35865dc997fcb544fb40"
+postgres-fixture-image = "postgres:18.6-trixie@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280"

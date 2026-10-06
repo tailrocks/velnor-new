@@ -1,38 +1,41 @@
-//! Audited repository suite owners and their executed tool requirements.
+//! Audited compiled repository suites and their executed tool requirements.
 
-use velnor_actions_contract::{ProposedTask, Stack, WorkflowPolicy};
+use velnor_actions_contract::WorkflowPolicy;
 
 use crate::OrchestratorError;
 
-/// Tools spawned by a compiled repository suite, beyond obligation drivers.
+/// Tools required by the compiled test suite, beyond obligation drivers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct SuiteTools {
     pub(crate) generate_validators: bool,
     pub(crate) opentofu: bool,
+    pub(crate) python: bool,
 }
 
 impl SuiteTools {
-    const NONE: Self = Self {
+    pub(crate) const NONE: Self = Self {
         generate_validators: false,
         opentofu: false,
+        python: false,
     };
 }
 
-/// One registry owns both execution axes. New suite owners require an audit.
-/// Native proposals depend only on contract and cannot spawn subprocesses;
-/// their ownership gate enforces that boundary.
+/// One registry owns all suite tool axes; new owners require an execution audit.
 fn registered_suite_tools(package: &str) -> Option<SuiteTools> {
     match package {
         "velnor-actions-orchestrator" | "velnor-actions-cli" => Some(SuiteTools {
             generate_validators: true,
-            opentofu: false,
+            ..SuiteTools::NONE
         }),
         "velnor-actions-mise" => Some(SuiteTools {
-            generate_validators: false,
             opentofu: true,
+            ..SuiteTools::NONE
+        }),
+        "velnor-actions-native" => Some(SuiteTools {
+            python: true,
+            ..SuiteTools::NONE
         }),
         "velnor-actions-contract"
-        | "velnor-actions-native"
         | "velnor-actions-rust"
         | "velnor-actions-tofu"
         | "velnor-actions-workflow-renderer"
@@ -41,12 +44,11 @@ fn registered_suite_tools(package: &str) -> Option<SuiteTools> {
     }
 }
 
-/// Resolve the suite's audited tools before constructing a crate job.
-/// Non-Rust obligations have no compiled suite; their drivers are selected
-/// separately. Consumer suites remain opaque and retain validator tools.
+/// Resolve audited suite tools before preparation constructs its source identity.
+/// Non-Rust obligations carry no compiled suite; consumers retain validator tools.
 ///
 /// # Errors
-/// Rejects an unregistered compiled suite under the repository policy.
+/// Rejects unregistered repository suites instead of silently trimming their tools.
 pub(crate) fn crate_suite_tools(
     policy: WorkflowPolicy,
     rust_package: Option<&str>,
@@ -54,7 +56,7 @@ pub(crate) fn crate_suite_tools(
     match policy {
         WorkflowPolicy::ConsumerV1 => Ok(SuiteTools {
             generate_validators: true,
-            opentofu: false,
+            ..SuiteTools::NONE
         }),
         WorkflowPolicy::VelnorRepositoryV1 => {
             rust_package.map_or(Ok(SuiteTools::NONE), |package| {
@@ -64,29 +66,6 @@ pub(crate) fn crate_suite_tools(
             })
         }
     }
-}
-
-/// Resolve the compiled Rust owner independently of the group's first task.
-///
-/// # Errors
-/// Rejects inconsistent Rust owners and unregistered repository suites.
-pub(crate) fn suite_tools_for_tasks(
-    policy: WorkflowPolicy,
-    tasks: &[&ProposedTask],
-) -> Result<SuiteTools, OrchestratorError> {
-    let mut rust_package = None;
-    for task in tasks
-        .iter()
-        .filter(|task| Stack::from_id(&task.stack_id) == Some(Stack::Rust))
-    {
-        if rust_package.is_some_and(|package| package != task.display_name) {
-            return Err(OrchestratorError::Contract {
-                problem: "inconsistent_repository_suite_owner".to_owned(),
-            });
-        }
-        rust_package = Some(task.display_name.as_str());
-    }
-    crate_suite_tools(policy, rust_package)
 }
 
 #[cfg(test)]

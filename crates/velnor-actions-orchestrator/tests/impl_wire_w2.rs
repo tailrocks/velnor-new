@@ -351,7 +351,7 @@ fn empty_matrix_folds_conclusions() -> TestResult {
     plan_value["edges"] = json!([]);
     let mut matrix = serde_json::to_value(&plan.matrix)?;
     matrix["include"] = json!([]);
-    let request = merge_request(&plan_value, &matrix, &json!([]), &success_jobs());
+    let request = merge_request(&plan_value, &matrix, &json!([]), &success_jobs(&plan));
     assert_eq!(merge(&request)?.status, C::FinalStatus::NoWork);
     let failed = json!([{"job_id": "plan", "conclusion": "failure"}]);
     let request = merge_request(&plan_value, &matrix, &json!([]), &failed);

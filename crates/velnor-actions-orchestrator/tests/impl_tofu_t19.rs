@@ -235,7 +235,7 @@ fn tofu_passed_round_trip() -> TestResult {
         &plan_value,
         &serde_json::to_value(&plan.matrix)?,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     assert_eq!(merge(&request)?.status, FinalStatus::Passed);
     Ok(())
@@ -289,6 +289,7 @@ fn missing_tofu_report_fails_required_closed() -> TestResult {
             .collect(),
     );
     value["actual_event"] = value["plan"]["event"].clone();
+    value["actual_scope"] = serde_json::json!("affected");
     let report: velnor_actions_contract::FinalReport =
         serde_json::from_str(&merge_internal(&value.to_string())?)?;
     assert_eq!(report.status, FinalStatus::PlanningFailed);
@@ -382,7 +383,7 @@ fn missing_plan_on_tofu_inventory_diagnoses_planning_failed() -> TestResult {
     let request = json!({
         "schema": 1,
         "run_key": "local",
-        "actual_event": "pull_request",
+        "actual_scope": "affected", "actual_event": "pull_request",
         "plan": plan,
         "matrix": null,
         "matrix_reports": [],

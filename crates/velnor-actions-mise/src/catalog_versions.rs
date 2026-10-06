@@ -8,19 +8,31 @@ use velnor_actions_contract::{FreshnessRequirement, validate_freshness_class};
 use super::PinnedTool;
 use crate::error::MiseError;
 
-/// Reject loose selectors: only exact `major.minor.patch` pins qualify.
+/// Reject loose selectors; Java also permits numeric vendor version elements.
+///
+/// Java's JEP 223 version numbers allow arbitrary downstream elements. Require
+/// at least three numeric elements here so major/minor requests remain loose.
+/// Reject leading zeros and a zero major. These are normalized Mise selectors,
+/// whose initial releases retain padding (`25.0.0`), rather than raw JEP 223
+/// version numbers, which omit trailing zero elements.
 ///
 /// # Errors
 ///
 /// Returns [`MiseError::InvalidToolVersion`] for empty, `v`-prefixed,
-/// `latest`, two-part, or non-numeric versions.
+/// `latest`, two-part, non-numeric, or non-Java extended versions.
 pub fn validate_exact_version(tool: &str, version: &str) -> Result<(), MiseError> {
     let exact = version.split('.').collect::<Vec<_>>();
-    let [major, minor, patch] = exact.as_slice() else {
+    if exact.len() < 3 || (tool != "java" && exact.len() != 3) {
         return Err(invalid_version(tool, version));
-    };
-    for part in [major, minor, patch] {
-        if part.is_empty() || !part.bytes().all(|byte| byte.is_ascii_digit()) {
+    }
+    if tool == "java" && exact.first().is_some_and(|part| *part == "0") {
+        return Err(invalid_version(tool, version));
+    }
+    for part in exact {
+        if part.is_empty()
+            || !part.bytes().all(|byte| byte.is_ascii_digit())
+            || (tool == "java" && part.len() > 1 && part.starts_with('0'))
+        {
             return Err(invalid_version(tool, version));
         }
     }
@@ -39,6 +51,9 @@ pub(crate) fn invalid_version(tool: &str, version: &str) -> MiseError {
 pub(crate) fn tool_source(tool: PinnedTool, version: &str) -> String {
     match tool {
         PinnedTool::Rust => "https://static.rust-lang.org/dist/channel-rust-stable.toml".to_owned(),
+        PinnedTool::RustDesktop => {
+            format!("https://static.rust-lang.org/dist/channel-rust-{version}.toml")
+        }
         PinnedTool::MrBoxington => {
             format!("https://github.com/jdx/mr-boxington/releases/tag/v{version}")
         }
@@ -59,12 +74,46 @@ pub(crate) fn tool_source(tool: PinnedTool, version: &str) -> String {
             format!("https://github.com/opentofu/opentofu/releases/tag/v{version}")
         }
         PinnedTool::ReleasePlz => format!("https://crates.io/api/v1/crates/release-plz/{version}"),
-        PinnedTool::Reuse => format!("https://pypi.org/pypi/reuse/{version}/json"),
-        PinnedTool::Python => format!(
-            "https://www.python.org/downloads/release/python-{}/",
-            version.replace('.', "")
+        PinnedTool::Bun => format!("https://github.com/oven-sh/bun/releases/tag/bun-v{version}"),
+        PinnedTool::Swift => {
+            format!("https://github.com/swiftlang/swift/releases/tag/swift-{version}-RELEASE")
+        }
+        PinnedTool::Ruby => format!("https://github.com/ruby/ruby/releases/tag/v{version}"),
+        PinnedTool::Reuse => format!("https://github.com/fsfe/reuse-tool/releases/tag/v{version}"),
+        PinnedTool::Java => format!(
+            "{}/tree/{}",
+            super::qualification::JAVA_SOURCE_REPOSITORY,
+            super::qualification::JAVA_SOURCE_COMMIT
         ),
+        PinnedTool::CargoAudit => {
+            format!("https://github.com/rustsec/rustsec/releases/tag/cargo-audit/v{version}")
+        }
+        PinnedTool::CargoDeny => {
+            format!("https://github.com/EmbarkStudios/cargo-deny/releases/tag/{version}")
+        }
+        PinnedTool::CargoSemverChecks => format!(
+            "{}/tree/{}",
+            super::qualification::CARGO_SEMVER_CHECKS_SOURCE_REPOSITORY,
+            super::qualification::CARGO_SEMVER_CHECKS_SOURCE_COMMIT
+        ),
+        PinnedTool::Alint => format!("https://github.com/asamarts/alint/releases/tag/v{version}"),
+        PinnedTool::Boltffi => {
+            format!("https://github.com/boltffi/boltffi/releases/tag/v{version}")
+        }
+        PinnedTool::Xcodegen => {
+            format!("https://github.com/yonaskolb/XcodeGen/releases/tag/{version}")
+        }
+        PinnedTool::Jq => format!("https://github.com/jqlang/jq/releases/tag/jq-{version}"),
+        PinnedTool::SwiftLint => {
+            format!("https://github.com/realm/SwiftLint/releases/tag/{version}")
+        }
+        PinnedTool::Periphery => {
+            format!("https://github.com/peripheryapp/periphery/releases/tag/{version}")
+        }
+        PinnedTool::Node => format!("https://github.com/nodejs/node/releases/tag/v{version}"),
+        PinnedTool::Python => format!("https://github.com/python/cpython/tree/v{version}"),
         PinnedTool::Uv => format!("https://github.com/astral-sh/uv/releases/tag/{version}"),
+        PinnedTool::Gradle => format!("https://github.com/gradle/gradle/releases/tag/v{version}"),
     }
 }
 

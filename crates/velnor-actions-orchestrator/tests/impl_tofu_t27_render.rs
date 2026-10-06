@@ -156,7 +156,7 @@ fn tofu_nondefault_backend_validates_without_backend_access() -> TestResult {
         );
         if entry.task_id.contains("/init/") {
             assert!(
-                entry.run.contains("init -backend=false -input=false"),
+                entry.run.contains("init -json -backend=false -input=false"),
                 "backend-less init: {}",
                 entry.run
             );
@@ -207,7 +207,7 @@ fn tofu_provider_free_root_runs_without_lock_claims() -> TestResult {
         &plan_value,
         &serde_json::to_value(&plan.matrix)?,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     assert_eq!(merge(&request)?.status, FinalStatus::Passed);
     Ok(())

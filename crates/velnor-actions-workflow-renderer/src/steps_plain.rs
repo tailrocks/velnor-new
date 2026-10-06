@@ -13,6 +13,15 @@ use crate::{RenderError, commands, yaml::Yaml};
 /// Revalidates refs, argv, and env at render time so a `Step` built
 /// outside the validated constructors cannot smuggle content through.
 pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
+    plain_step_to_yaml_with_helpers(step, &[], "")
+}
+
+/// Satellite rendering with an explicit compiled-source owner registry.
+pub(crate) fn plain_step_to_yaml_with_helpers(
+    step: &Step,
+    records: &[velnor_actions_contract::CompiledSourceHelper],
+    runs_on: &str,
+) -> Result<Yaml, RenderError> {
     crate::steps::scan_for_private_subcommands(&step.name)?;
     match &step.kind {
         StepKind::Action { uses, with, env } => {
@@ -21,7 +30,7 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
                 crate::steps::scan_for_private_subcommands(entry)?;
             }
             commands::validate_env(env)?;
-            let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+            let mut entries = step_header(step)?;
             if let Some(condition) = &step.condition {
                 crate::steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
@@ -38,7 +47,7 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
         StepKind::Shell { run, env } => {
             commands::validate_command_argv(run)?;
             commands::validate_env(env)?;
-            let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+            let mut entries = step_header(step)?;
             if let Some(condition) = &step.condition {
                 crate::steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
@@ -55,6 +64,9 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
         StepKind::Internal { .. } => Err(RenderError::InvalidWorkflow(
             "internal_op_rejected".to_owned(),
         )),
+        StepKind::SourceBoundHelper { invocation, env } => {
+            crate::source_helper::step_to_yaml(step, invocation, env, records, runs_on)
+        }
     }
 }
 
@@ -65,4 +77,14 @@ fn string_map_yaml(map: &std::collections::BTreeMap<String, String>) -> Yaml {
             .map(|(key, value)| (key.clone(), Yaml::str(value.clone())))
             .collect(),
     )
+}
+
+/// Common step header, with explicit identity only.
+pub(crate) fn step_header(step: &Step) -> Result<Vec<(String, Yaml)>, RenderError> {
+    let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+    if let Some(id) = &step.id {
+        id.validate().map_err(RenderError::Contract)?;
+        entries.push(("id".to_owned(), Yaml::str(id.as_str())));
+    }
+    Ok(entries)
 }

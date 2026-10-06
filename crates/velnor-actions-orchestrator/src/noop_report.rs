@@ -105,13 +105,11 @@ pub(crate) fn write_noop_report_to(
         return Err(internal("reason_with_failure"));
     }
     let plan = crate::task_report::load_plan(run_key, runner_temp)?;
+    crate::task_report::validate_expected_digest(&plan, task_id, &request.task_digest)?;
     if crate::covered_tasks::covered_by_baseline(&plan, task_id) {
         return Ok(0);
     }
     let (entry, digest) = entry_and_digest(&plan, task_id)?;
-    if digest != request.task_digest {
-        return Err(internal("noop_digest_mismatch"));
-    }
     let task = not_selected_report(&NotSelectedInputs {
         run_key: &plan.run_key,
         event: plan.event,

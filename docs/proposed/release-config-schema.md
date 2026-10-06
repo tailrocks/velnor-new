@@ -14,7 +14,7 @@ Reference for the typed config in `velnor-actions-contract`
 | `packages` | string list | `[]` | Sorted, unique, never auto-expanded; each matches Cargo name shape (letter/`_` start, then alnum/`-`/`_`). |
 | `environment` | string | `"release"` | Nonempty, unpadded, `[A-Za-z0-9-_/]` plus `.`, no empty/`..` segments. Binds the publish jobs. |
 | `authentication` | enum | `"trusted-publishing"` | `"trusted-publishing"` or `"bootstrap-token"` (kebab-case). Exactly one mode; modes never mix. |
-| `release_pr` | bool | `true` | Whether release-plz preparation PRs run. |
+| `release_pr` | bool | `true` | Whether anonymous pinned update and the fixed GitHub preparation PR coordinator run. |
 | `tag_name` | string | `"{{ package }}-v{{ version }}"` | Safe charset, balanced braces, must contain both `{{package}}` and `{{version}}` (whitespace-insensitive). |
 | `bootstrap` | table or absent | absent | Required iff `authentication = "bootstrap-token"`; forbidden otherwise (`missing_bootstrap_record` / `contradictory_authentication`). |
 | `version_groups` | string→string-list map | `{}` | Group names use package-name shape; members must be sorted, unique, listed in `packages`, and in at most one group. Non-lockstep: unchanged members are not forced to release. |

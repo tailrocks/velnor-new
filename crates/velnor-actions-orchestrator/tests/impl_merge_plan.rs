@@ -46,7 +46,7 @@ fn empty_diff_no_baseline_executes_all() -> TestResult {
         &plan,
         &serde_json::to_value(&plan.matrix)?,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     assert_eq!(merge(&request)?.status, FinalStatus::Passed);
 
@@ -55,7 +55,7 @@ fn empty_diff_no_baseline_executes_all() -> TestResult {
         &plan,
         &serde_json::to_value(&plan.matrix)?,
         &serde_json::json!([]),
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     assert_eq!(merge(&request)?.status, FinalStatus::NotRun);
 
@@ -94,7 +94,7 @@ fn missing_plan_merges_to_planning_failed() -> TestResult {
     let request = serde_json::json!({
         "schema": 1,
         "run_key": "local",
-        "actual_event": "pull_request",
+        "actual_scope": "affected", "actual_event": "pull_request",
         "plan": plan,
         "matrix": null,
         "matrix_reports": [],
@@ -120,7 +120,7 @@ fn hollow_plan_with_zero_entries_fails_closed() -> TestResult {
     plan.matrix.include.clear();
     plan.validate()?;
     let matrix = serde_json::to_value(&plan.matrix)?;
-    let request = merge_request(&plan, &matrix, &serde_json::json!([]), &success_jobs());
+    let request = merge_request(&plan, &matrix, &serde_json::json!([]), &success_jobs(&plan));
     let final_report = merge(&request)?;
     final_report.validate()?;
     assert_eq!(final_report.status, FinalStatus::PlanningFailed);
@@ -147,7 +147,7 @@ fn partial_hollow_plan_with_dropped_leg_fails_closed() -> TestResult {
         &plan,
         &matrix,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     let final_report = merge(&request)?;
     final_report.validate()?;
@@ -171,7 +171,7 @@ fn agreement_failures_carry_miss_tokens() -> TestResult {
         &plan,
         &serde_json::Value::Null,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     let final_report = merge(&request)?;
     assert_eq!(final_report.status, FinalStatus::PlanningFailed);
@@ -193,7 +193,7 @@ fn agreement_failures_carry_miss_tokens() -> TestResult {
         &plan,
         &trimmed,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     let final_report = merge(&request)?;
     assert_eq!(final_report.status, FinalStatus::PlanningFailed);
@@ -212,7 +212,7 @@ fn task_file_gaps_fail_closed() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     let matrix = serde_json::to_value(&plan.matrix)?;
     let good = passing_reports(&plan)?;
-    let jobs = success_jobs();
+    let jobs = success_jobs(&plan);
     let check = |request: &serde_json::Value, token: &str| -> TestResult {
         let final_report = merge(request)?;
         assert_eq!(final_report.status, FinalStatus::PlanningFailed);
@@ -269,8 +269,12 @@ fn covered_claim_binds_numeric_artifact_id() -> TestResult {
         let (plan_json, mut manifest) = covered_plan(&plan)?;
         manifest["artifact_id"] = serde_json::json!(10);
         let matrix = plan_json["matrix"].clone();
-        let mut request =
-            core_merge_request(&plan_json, &matrix, &serde_json::json!([]), &success_jobs());
+        let mut request = core_merge_request(
+            &plan_json,
+            &matrix,
+            &serde_json::json!([]),
+            &success_jobs(&plan),
+        );
         request["baseline_manifest"] = manifest;
         let final_report = core_merge(&request)?;
         assert_eq!(final_report.status, FinalStatus::PlanningFailed);
@@ -293,7 +297,7 @@ fn uncovered_leg_carries_miss_token() -> TestResult {
         &plan,
         &matrix,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     let final_report = merge(&request)?;
     assert_eq!(final_report.status, FinalStatus::NotRun);
@@ -317,7 +321,7 @@ fn revalidate_failures_carry_miss_tokens() -> TestResult {
             &plan_json,
             &covered_matrix,
             &serde_json::json!([]),
-            &success_jobs(),
+            &success_jobs(&plan),
         );
         let final_report = core_merge(&request)?;
         assert_eq!(final_report.status, FinalStatus::PlanningFailed);
@@ -337,7 +341,7 @@ fn revalidate_failures_carry_miss_tokens() -> TestResult {
             &plan_json,
             &covered_matrix,
             &serde_json::json!([]),
-            &success_jobs(),
+            &success_jobs(&plan),
         );
         request["baseline_manifest"] = manifest;
         let final_report = core_merge(&request)?;

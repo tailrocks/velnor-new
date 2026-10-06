@@ -217,6 +217,10 @@ pub(crate) fn revalidate_coverage_with_anchors(
         let bound = task.task_digest == obligation.task_digest
             && task.input_digest == obligation.input_digest
             && task.closure_digest == obligation.closure_digest
+            && task
+                .proof
+                .as_ref()
+                .is_some_and(|execution| obligation.execution_identity.matches_proof(execution))
             && proof.run_id() == task.proof_run_id
             && proof.source_commit() == manifest.source_commit
             && proof.artifact_id() == manifest.artifact_id

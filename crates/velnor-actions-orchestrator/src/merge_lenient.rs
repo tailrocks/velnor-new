@@ -16,7 +16,7 @@
 //! well-formed requests never reach this fallback.
 
 use serde::Deserialize;
-use velnor_actions_contract::{RequiredJobResult, WorkflowEvent};
+use velnor_actions_contract::{RequiredJobResult, VerificationScope, WorkflowEvent};
 
 use super::MergeRequest;
 use crate::cover::shard::{ResourceLimits, ShardProof};
@@ -32,6 +32,12 @@ struct LenientRequest {
     /// Merge-time triggering event captured at assembly.
     #[serde(default)]
     actual_event: Option<WorkflowEvent>,
+    /// Verification scope captured from the runner event.
+    #[serde(default)]
+    actual_scope: Option<VerificationScope>,
+    /// Producer scheduling facts from the runner context.
+    #[serde(default)]
+    actual_producer_context: Option<velnor_actions_contract::ProducerEventContext>,
     /// Head-bound candidate attestation; required in candidate mode.
     #[serde(default)]
     candidate_attestation: Option<serde_json::Value>,
@@ -46,10 +52,25 @@ struct LenientRequest {
     /// Per-task report files backing every aggregate entry.
     #[serde(default)]
     task_reports: Vec<serde_json::Value>,
+    /// Pre-action binding evidence.
+    #[serde(default)]
+    action_begins: Vec<serde_json::Value>,
+    /// Terminal Action API evidence.
+    #[serde(default)]
+    action_reports: Vec<serde_json::Value>,
+    /// Pre-execution compiled helper bindings.
+    #[serde(default)]
+    helper_begins: Vec<serde_json::Value>,
+    /// Terminal compiled helper evidence.
+    #[serde(default)]
+    helper_reports: Vec<serde_json::Value>,
     /// Declared validator inventory from the workflow `needs` channel.
     required_job_ids: Vec<String>,
     /// Observed validator conclusions covering the inventory exactly.
     required_jobs: Vec<RequiredJobResult>,
+    /// Terminal isolated producer evidence, parsed individually.
+    #[serde(default)]
+    producer_reports: Vec<serde_json::Value>,
     /// Assembly failure details; every entry fails the verdict.
     #[serde(default)]
     assembly_errors: Vec<String>,
@@ -97,17 +118,49 @@ pub(crate) fn lenient_request(envelope: &serde_json::Value) -> Option<MergeReque
         "unparsable_task_report",
         &mut assembly_errors,
     );
+    let action_begins = untyped_list(
+        raw.action_begins,
+        "unparsable_action_begin",
+        &mut assembly_errors,
+    );
+    let action_reports = untyped_list(
+        raw.action_reports,
+        "unparsable_action_report",
+        &mut assembly_errors,
+    );
+    let helper_begins = untyped_list(
+        raw.helper_begins,
+        "unparsable_helper_begin",
+        &mut assembly_errors,
+    );
+    let helper_reports = untyped_list(
+        raw.helper_reports,
+        "unparsable_helper_report",
+        &mut assembly_errors,
+    );
+    let producer_reports = untyped_list(
+        raw.producer_reports,
+        "unparsable_producer_report",
+        &mut assembly_errors,
+    );
     Some(MergeRequest {
         schema: raw.schema,
         run_key: raw.run_key,
         actual_event: raw.actual_event,
+        actual_scope: raw.actual_scope,
+        actual_producer_context: raw.actual_producer_context,
         candidate_attestation,
         plan,
         matrix,
         matrix_reports,
         task_reports,
+        action_begins,
+        action_reports,
+        helper_begins,
+        helper_reports,
         required_job_ids: raw.required_job_ids,
         required_jobs: raw.required_jobs,
+        producer_reports,
         assembly_errors,
         baseline_manifest,
         shard_proofs: raw.shard_proofs,

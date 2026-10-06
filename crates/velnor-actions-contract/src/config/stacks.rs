@@ -2,6 +2,7 @@
 use super::VelnorConfig;
 use super::release::RustReleaseConfig;
 use super::tofu::TofuStackConfig;
+use super::workloads::{WorkloadConfig, validate_workloads};
 use crate::errors::ContractError;
 use crate::ids::is_component_byte;
 use serde::{Deserialize, Serialize};
@@ -11,7 +12,7 @@ use std::collections::BTreeSet;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StacksConfig {
-    /// Sorted, duplicate-free exact registered stack IDs to ignore.
+    /// Sorted, duplicate-free detector stack IDs to ignore; workloads are required.
     #[serde(default)]
     pub ignore: Vec<String>,
     /// Rust stack options.
@@ -20,6 +21,9 @@ pub struct StacksConfig {
     /// Tofu stack options; absent means no tofu validation roots.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tofu: Option<TofuStackConfig>,
+    /// Explicit portable workloads, sorted by name.
+    #[serde(default)]
+    pub workloads: Vec<WorkloadConfig>,
 }
 
 /// Declared compile driver (`[stacks.rust] compile_driver`).
@@ -69,6 +73,7 @@ fn default_configurations() -> Vec<RustConfiguration> {
     vec![RustConfiguration {
         name: "default".to_owned(),
         features: vec!["default".to_owned()],
+        feature_mode: RustFeatureMode::Selected,
         target: "host".to_owned(),
     }]
 }
@@ -82,8 +87,24 @@ pub struct RustConfiguration {
     /// Cargo features for this variant.
     #[serde(default)]
     pub features: Vec<String>,
+    /// Feature selection policy; selected preserves the explicit feature list.
+    #[serde(default)]
+    pub feature_mode: RustFeatureMode,
     /// Target triple or `host`.
     pub target: String,
+}
+
+/// Cargo feature resolution for a configuration.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RustFeatureMode {
+    /// Explicit selected features; the default sentinel enables defaults.
+    #[default]
+    Selected,
+    /// Every declared package feature, including defaults.
+    All,
+    /// Explicit selected features together with each package's defaults.
+    DefaultAndSelected,
 }
 
 /// True for a render-safe Rust target: `host` or a lowercase triple over
@@ -172,6 +193,13 @@ impl StacksConfig {
             ));
         }
         for id in &self.ignore {
+            if id == "workload" {
+                return Err(ContractError::config(
+                    file,
+                    "stacks.ignore",
+                    "cannot_ignore_declared_workloads",
+                ));
+            }
             if !VelnorConfig::REGISTERED_STACKS.contains(&id.as_str()) {
                 return Err(ContractError::config(
                     file,
@@ -186,6 +214,7 @@ impl StacksConfig {
         if let Some(tofu) = &self.tofu {
             tofu.validate(file)?;
         }
+        validate_workloads(&self.workloads, file)?;
         Ok(())
     }
 }
@@ -203,6 +232,13 @@ impl RustStackConfig {
         }
         let mut names = BTreeSet::new();
         for config in &self.configurations {
+            if config.feature_mode == RustFeatureMode::All && !config.features.is_empty() {
+                return Err(ContractError::config(
+                    file,
+                    "stacks.rust.configurations.features",
+                    "all_features_cannot_have_selected_names",
+                ));
+            }
             if config.name.trim().is_empty() {
                 return Err(ContractError::config(
                     file,
@@ -324,6 +360,7 @@ mod tests {
         stack.configurations = vec![RustConfiguration {
             name: "default".to_owned(),
             features: Vec::new(),
+            feature_mode: super::RustFeatureMode::Selected,
             target: "${{ secrets.CARGO_REGISTRY_TOKEN }}".to_owned(),
         }];
         let err = stack.validate("config.toml").expect_err("PoC target fails");
@@ -332,5 +369,20 @@ mod tests {
         stack.custom_tasks = vec!["audit".to_owned(), "evil task".to_owned()];
         let err = stack.validate("config.toml").expect_err("bad task fails");
         assert!(err.to_string().contains("bad_custom_task"), "{err}");
+    }
+
+    #[test]
+    fn all_feature_policy_rejects_discarded_selected_names() {
+        let mut stack = RustStackConfig::default_config();
+        stack.configurations[0].feature_mode = super::RustFeatureMode::All;
+        let err = stack
+            .validate("config.toml")
+            .expect_err("ambiguous selection");
+        assert!(
+            err.to_string()
+                .contains("all_features_cannot_have_selected_names")
+        );
+        stack.configurations[0].features.clear();
+        assert!(stack.validate("config.toml").is_ok());
     }
 }

@@ -319,9 +319,15 @@ fn preview_bytes(
 #[test]
 fn four_combos_argv() -> TestResult {
     let catalog = ToolCatalog::pinned();
-    let rust = catalog.tool_spec(PinnedTool::Rust);
-    let mbx = catalog.tool_spec(PinnedTool::MrBoxington);
-    let nextest = catalog.tool_spec(PinnedTool::Nextest);
+    let rust = catalog
+        .tool_spec(PinnedTool::Rust)
+        .expect("qualified selector");
+    let mbx = catalog
+        .tool_spec(PinnedTool::MrBoxington)
+        .expect("qualified selector");
+    let nextest = catalog
+        .tool_spec(PinnedTool::Nextest)
+        .expect("qualified selector");
     for (use_mbx, use_nextest) in [(false, false), (false, true), (true, false), (true, true)] {
         let repo = make_repo(config_with_branch())?;
         let root = repo.path();

@@ -25,6 +25,9 @@ use crate::cover::shard::BaselineLookup;
 mod planned;
 pub(crate) use planned::authentic_attempt;
 pub(crate) use planned::retrieve_planned_baseline_to;
+#[path = "retrieve_existing_publication.rs"]
+mod existing;
+pub(crate) use existing::retrieve_existing_publication;
 
 /// Fetch the plan's exact baseline into `<run-dir>/baseline.json`.
 ///
@@ -38,8 +41,8 @@ pub(crate) fn retrieve_baseline_to(
     plan: &serde_json::Value,
     repo: &str,
 ) -> bool {
-    retrieve_baseline_using(run_dir, plan, |_| {
-        retrieve_planned_baseline_to(catalog, run_dir, plan, repo)
+    retrieve_baseline_using(run_dir, plan, |typed| {
+        planned::retrieve_typed_baseline_to(catalog, run_dir, typed, repo)
     })
 }
 

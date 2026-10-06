@@ -17,6 +17,7 @@ import tempfile
 from owned_tool_source import BASES, check_hash, descriptor, strict_json, validate_receipt
 from owned_tool_behavior import MISE_ABI, native_host_target, valid_mise_cases
 from source_qualification_execution import API_EVIDENCE_FILES, validate_execution_evidence
+from owned_mbx_observation import observe as observe_mbx, smoke_matches
 
 
 def require(condition, message):
@@ -145,6 +146,46 @@ def write_exclusive_bytes(path, content):
         stream.write(content)
 
 
+def observe_admitted_mbx(arguments, receipt, archive, input_digest, admission,
+                         admission_digest, api_documents, execution_directory):
+    with tempfile.TemporaryDirectory(prefix="owned-mbx-observation-") as temporary:
+        root = Path(temporary).resolve()
+        binary = root / "mbx"
+        with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as bundle:
+            stream = bundle.extractfile("mbx")
+            require(stream is not None, "admitted MBX binary unavailable")
+            binary.write_bytes(stream.read())
+        binary.chmod(0o500)
+        report = observe_mbx(binary, root, receipt, input_digest)
+        report_bytes = (json.dumps(report, sort_keys=True, indent=2) + "\n").encode()
+        observation_matches = (smoke_matches(report) and report.get("source") == receipt["source"] and
+            report.get("target") == arguments.target and
+            native_host_target(report.get("host")) == arguments.target and
+            report.get("artifact") == receipt["artifact"] and
+            report.get("binary_sha256") == receipt["artifact"]["binary_sha256"] and
+            report.get("candidate_receipt_sha256") == input_digest and
+            report.get("version") == receipt["version_banner"].strip() and
+            report.get("status") == "OBSERVED_MBX_SMOKE_ONLY" and
+            report.get("passed") is False and report.get("abi") is None and
+            report.get("native_authority") is None)
+        envelope = {"schema": 1, "status": ("MBX_NATIVE_QUALIFICATION_UNAVAILABLE"
+            if observation_matches else "MBX_OBSERVATION_REJECTED"),
+            "tool": "mbx", "target": arguments.target, "candidate": receipt,
+            "candidate_receipt_sha256": input_digest,
+            "artifact_admission": admission, "artifact_admission_sha256": admission_digest,
+            "execution_evidence": {"directory": execution_directory.name,
+                                   "api_sha256": admission["execution"]["api_sha256"]},
+            "observation_report_sha256": hashlib.sha256(report_bytes).hexdigest(),
+            "passed": False, "abi": None, "native_authority": None}
+        execution_directory.mkdir(mode=0o700)
+        for key, filename in API_EVIDENCE_FILES.items():
+            write_exclusive_bytes(execution_directory / filename, api_documents[key])
+        write_exclusive_bytes(arguments.report, report_bytes)
+        write_exclusive(arguments.receipt, envelope)
+        require(observation_matches, "MBX observation rejected; raw evidence preserved")
+        raise ValueError("MBX native qualification is unavailable; observations preserved")
+
+
 def qualify(arguments):
     execution_directory = arguments.receipt.parent / ("execution-" + arguments.target)
     require(arguments.receipt.absolute() != arguments.report.absolute(),
@@ -154,7 +195,9 @@ def qualify(arguments):
             "qualification destination already exists")
     helpers = archive_helpers()
     receipt, archive, input_digest, admission, admission_digest, api_documents = admit(arguments, helpers)
-    require(arguments.tool == "mise", "MBX native qualification is unavailable")
+    if arguments.tool == "mbx":
+        observe_admitted_mbx(arguments, receipt, archive, input_digest, admission,
+                            admission_digest, api_documents, execution_directory)
     with tempfile.TemporaryDirectory(prefix="owned-native-qualification-") as temporary:
         root = Path(temporary).resolve()
         binary = root / "mise"

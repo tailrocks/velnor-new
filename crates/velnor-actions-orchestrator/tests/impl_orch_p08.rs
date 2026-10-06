@@ -2,7 +2,7 @@
 //!
 //! Cargo-only fixtures use pinned `rust-cache` (registry-only, shared key);
 //! MBX fixtures use objects + one shared `actions/cache` snapshot (plan
-//! writes, crates read). Tools use the built-in Mise cache only.
+//! writes, crates read). Tools use one canonical explicit payload.
 
 use std::fs;
 
@@ -63,26 +63,19 @@ fn job_names(job: &str, mbx: bool) -> Result<Vec<String>, Box<dyn std::error::Er
 }
 
 #[test]
-fn c2_builtin_mise_restore_with_elected_tools_saves() -> TestResult {
+fn c2_explicit_canonical_tools_restore_and_elected_saves() -> TestResult {
     for mbx in [false, true] {
         let yaml = yaml_for(mbx)?;
-        assert!(
-            !yaml.contains("Restore Mise tools"),
-            "restores stay built-in (mbx={mbx})"
-        );
-        assert!(
-            yaml.contains("- name: Save Mise tools"),
-            "elected writers save (mbx={mbx})"
-        );
-        assert!(
-            !yaml.contains("mise-tools-v1-"),
-            "no role-suffixed tools keys (mbx={mbx})"
-        );
-        assert!(
-            yaml.contains("cache_key: mise-v1-"),
-            "built-in cache key (mbx={mbx})"
-        );
-        assert!(yaml.contains("cache: \"true\""), "built-in on (mbx={mbx})");
+        for need in [
+            "- name: Restore Mise tools",
+            "- name: Save Mise tools",
+            "cache_key: mise-v2-",
+            "cache: \"false\"",
+            "id: velnor-tools-cache",
+        ] {
+            assert!(yaml.contains(need), "tools cache misses {need} (mbx={mbx})");
+        }
+        assert!(!yaml.contains("mise-tools-v1-"), "retired tools keys");
     }
     Ok(())
 }
@@ -94,7 +87,7 @@ fn c3_sources_subset_at_owned_home_single_writer() -> TestResult {
         "${{ runner.temp }}/velnor/cargo/registry/cache",
         "${{ runner.temp }}/velnor/cargo/registry/index",
         "${{ runner.temp }}/velnor/cargo/git/db",
-        "velnor-v1-sources-",
+        "velnor-v2-sources-",
         "hashFiles('Cargo.lock')",
     ] {
         assert!(yaml.contains(need), "sources snapshot misses {need}");
@@ -134,7 +127,7 @@ fn c4_mbx_and_restore_precede_fetch_with_offline_skip() -> TestResult {
     );
     let yaml = yaml_for(true)?;
     for need in [
-        "metadata --locked --offline",
+        "fetch --locked --offline",
         "sources hit, skipping fetch",
         "sources miss (source_missing)",
         "cargo fetch --locked",
@@ -236,7 +229,10 @@ fn c10_only_plan_saves_producer_successful_deltas() -> TestResult {
     assert!(fetch < save, "save after the writer finishes: {plan:?}");
     // Cargo-only repo: rust-cache writers save via post on success only.
     let yaml = yaml_for(false)?;
-    assert!(yaml.contains("save-if: \"true\""), "writer saves");
+    assert!(
+        yaml.contains("save-if: ${{ github.event_name == 'push'"),
+        "writer saves only from trusted pushes"
+    );
     assert!(yaml.contains("save-if: \"false\""), "readers restore-only");
     Ok(())
 }
@@ -245,7 +241,7 @@ fn c10_only_plan_saves_producer_successful_deltas() -> TestResult {
 fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
     use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
     // IR: exactly one save step (plan writer), carrying the push-only gate;
-    // every other plan step (restores, fetch, obligations) stays ungated.
+    // restores, fetch, and obligations remain ungated.
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     fs::write(root.join("Cargo.lock"), demo_lock("demo"))?;
@@ -263,15 +259,16 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
             saves += 1;
             assert_eq!(
                 step.condition.as_deref(),
-                Some(CACHE_SAVE_CONDITION),
+                Some(format!("{CACHE_SAVE_CONDITION} && github.ref == format('refs/heads/{{0}}', github.event.repository.default_branch) && steps.velnor-sources-cache.outputs.cache-hit != 'true'").as_str()),
                 "save must be push-gated"
             );
+        } else if step.name == "Save Mise tools" {
+            let gate = step.condition.as_deref().ok_or("ungated tools save")?;
+            assert!(gate.starts_with(CACHE_SAVE_CONDITION));
+            assert!(gate.contains("github.event.repository.default_branch"));
+            assert!(gate.contains("steps.velnor-tools-cache.outputs.cache-hit != 'true'"));
         } else {
-            assert!(
-                step.condition.is_none(),
-                "only the save step is gated: {}",
-                step.name
-            );
+            assert!(step.condition.is_none(), "non-save gated: {}", step.name);
         }
     }
     assert_eq!(saves, 1, "single plan writer");
@@ -289,8 +286,8 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
     Ok(())
 }
 
-/// YAML: one push-gated tools save per restored `mise-v1-` key (plus the
-/// sources save), every setup restore-only.
+/// YAML: one push-gated tools save per restored `mise-v2-` key (plus the
+/// sources save), every setup disables its implicit cache.
 fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     let mut keys = std::collections::BTreeSet::new();
     for line in yaml.lines() {
@@ -321,7 +318,7 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     );
     for line in yaml.lines() {
         if let Some(key) = line.trim().strip_prefix("key: ")
-            && key.starts_with("mise-v1-")
+            && key.starts_with("mise-v2-")
         {
             assert!(
                 keys.contains(key),
@@ -341,3 +338,6 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     let demoted = yaml.matches("cache_save: \"false\"").count();
     assert_eq!(setups, demoted, "every setup restore-only:\n{yaml}");
 }
+
+#[path = "impl_orch_tools_payload.rs"]
+mod tools_payload;

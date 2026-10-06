@@ -3,6 +3,7 @@
 //! Run-string quoting and join cases live in
 //! `impl_renderer_steps_quote`.
 use std::collections::BTreeMap;
+use velnor_actions_contract::StepKind;
 use velnor_actions_workflow_renderer::{
     ASSET_SHA_ENV, ASSET_URL_ENV, RELEASE_COMMIT_ENV, RenderError, STAGED_BINARY_PREFIX,
     acquire_velnor_step, action_step, checkout_step, internal_step, merge_step, plan_step,
@@ -35,8 +36,8 @@ fn uses_validation_rejects_moving_refs_and_forbidden_actions() {
     assert!(validate_uses(&pin("actions/checkout")).is_ok());
     assert!(validate_uses("actions/checkout@main").is_err());
     assert!(validate_uses("actions/checkout@v4").is_err());
-    assert!(validate_uses("asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb").is_ok());
-    assert!(validate_uses("asamarts/alint@v0.16.1").is_err());
+    assert!(validate_uses("asamarts/alint@d93c0283b19dd78afcd8a4b303f1556a7759ba81").is_ok());
+    assert!(validate_uses("asamarts/alint@v0.17.0").is_err());
     assert!(validate_uses("actions/checkout@ABCDEF").is_err());
     assert!(validate_uses("actions/checkout").is_err());
     assert!(validate_uses("just-a-name").is_err());
@@ -121,33 +122,49 @@ fn acquire_template_requires_digest_and_staging() {
         "https://example.invalid/v0.1.0/bin".to_owned(),
     );
     env.insert(RELEASE_COMMIT_ENV.to_owned(), "b".repeat(40));
-    let wired = argv(&[
-        "sh",
-        "-c",
-        &format!(
-            "curl -fsSL \"$VELNOR_ASSET_URL\" -o {staged} && echo \"$VELNOR_ASSET_SHA256\" | sha256sum -c -"
-        ),
-    ]);
-    let good = acquire_velnor_step(wired.clone(), &env);
-    assert!(good.is_ok());
-    assert_eq!(
-        good.ok().map(|step| step.name),
-        Some("Acquire Velnor".to_owned())
-    );
+    let good = acquire_velnor_step(&staged, &env).expect("canonical acquire step");
+    assert_eq!(good.name, "Acquire Velnor");
+    let StepKind::Shell { run, .. } = &good.kind else {
+        panic!("acquire must be a shell step");
+    };
+    let script = run.last().expect("inline acquire script");
+    assert!(script.contains("curl -fsSL"));
+    assert!(script.contains("--proto '=https'"));
+    assert!(script.contains(ASSET_URL_ENV));
+    assert!(script.contains(ASSET_SHA_ENV));
+    assert!(script.contains("sha256sum -c -"));
+    assert!(script.contains(&staged));
+    assert!(script.contains("chmod +x"));
     let mut bad_sha = env.clone();
     bad_sha.insert(ASSET_SHA_ENV.to_owned(), "zzz".to_owned());
-    assert!(acquire_velnor_step(wired.clone(), &bad_sha).is_err());
+    assert!(acquire_velnor_step(&staged, &bad_sha).is_err());
     let mut bad_url = env.clone();
     bad_url.insert(
         ASSET_URL_ENV.to_owned(),
         "http://example.invalid/bin".to_owned(),
     );
-    assert!(acquire_velnor_step(wired.clone(), &bad_url).is_err());
+    assert!(acquire_velnor_step(&staged, &bad_url).is_err());
     let mut no_commit = env.clone();
     no_commit.remove(RELEASE_COMMIT_ENV);
-    assert!(acquire_velnor_step(wired.clone(), &no_commit).is_err());
-    assert!(acquire_velnor_step(argv(&["fetch", "/tmp/bin"]), &env).is_err());
-    assert!(acquire_velnor_step(argv(&["fetch", &staged]), &env).is_err());
+    assert!(acquire_velnor_step(&staged, &no_commit).is_err());
+    for invalid in [
+        format!("{staged}; touch /tmp/pwned"),
+        format!("{staged}$(touch /tmp/pwned)"),
+        format!("{staged}/child"),
+        "/tmp/velnor-actions-0.1.0".to_owned(),
+    ] {
+        assert!(
+            acquire_velnor_step(&invalid, &env).is_err(),
+            "invalid staged path accepted: {invalid}"
+        );
+    }
+    let mut bad_env = env;
+    bad_env.insert("PATH".to_owned(), "/tmp/attacker-bin".to_owned());
+    assert!(
+        acquire_velnor_step(&staged, &bad_env)
+            .is_err_and(|err| format!("{err:?}").contains("acquire_environment")),
+        "acquire env must reject ambient execution overrides"
+    );
 }
 
 #[test]

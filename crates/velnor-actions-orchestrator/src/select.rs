@@ -1,38 +1,80 @@
 //! Obligation universe and changed-work classification for `plan-v1`.
-//!
 //! The plan carries the full configured obligation universe; changed-work
-//! analysis only classifies obligations as changed (must execute) or
-//! unchanged (eligible for verified reuse/baseline coverage). Nothing is
+//! analysis classifies obligations conservatively and qualifies whether
+//! complete semantic proof may refine directory ownership hints. Nothing is
 //! ever removed for being unaffected: without proof, everything executes.
+
+#[path = "select_checkout.rs"]
+mod checkout;
+
+use checkout::head_sha;
+pub(crate) use checkout::verify_checkout;
 
 use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::path::Path;
 
-use velnor_actions_contract::{ProposedTask, WorkflowEvent};
+use velnor_actions_contract::{ProposedTask, Stack, WorkflowEvent};
 use velnor_actions_mise::GitRequest;
 use velnor_actions_rust::SelectionBroadening;
 
-use crate::OrchestratorError;
 use crate::decisions::{broadening_for_path, selection_broadens_for_path};
 use crate::discover::Discovery;
 use crate::git_paths::{NON_UTF8_PATH, split_nul_paths};
-use crate::internal::internal;
-use crate::select_affected::{affected_packages, has_unowned_file};
-use crate::select_edges::{base_edges, head_edges};
+use crate::select_affected::{affected_packages, has_unowned_file, workspace_config_changed};
+use crate::select_edges::{base_graph, candidate_graph};
 use crate::validators::{validate_diff_rev, validate_select_diff_args};
+
+#[cfg(test)]
+#[path = "select_evidence_tests.rs"]
+mod evidence_tests;
+
+/// Conservative directory hints plus qualified semantic-proof eligibility.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ChangedSelection {
+    /// Units that execute unless a permitted complete proof covers them.
+    pub(crate) affected: BTreeSet<String>,
+    /// Rust units whose hints an exact complete consumed-input proof may refine.
+    pub(crate) proof_refinable: BTreeSet<String>,
+}
+
+impl ChangedSelection {
+    /// A classification whose changed hints cannot be refined by coverage.
+    fn required(affected: BTreeSet<String>) -> Self {
+        Self {
+            affected,
+            proof_refinable: BTreeSet::new(),
+        }
+    }
+
+    /// Qualified ownership hints require live semantic proof before refinement.
+    fn qualified(affected: BTreeSet<String>) -> Self {
+        Self {
+            proof_refinable: affected.clone(),
+            affected,
+        }
+    }
+
+    /// Refinement is qualified only for the Rust semantic input resolver.
+    fn restrict_to_rust(mut self, tasks: &[ProposedTask]) -> Self {
+        for task in tasks {
+            if Stack::from_id(&task.stack_id) != Some(Stack::Rust) {
+                self.proof_refinable.remove(&task.identity.unit_id);
+            }
+        }
+        self
+    }
+}
 
 /// Full obligation universe: every task with applicable targets.
 ///
-/// Tasks without applicable targets record `valid_no_test_targets:<task-id>`.
-/// Tofu subdirectories additionally record one `path.cwd:<root>` caveat.
-///
-/// # Errors
-/// Returns contract errors for contradictory Tofu root identities.
+/// Targetless tasks are not obligations. Each omission is recorded as a
+/// `valid_no_test_targets:<task-id>` warning, never silent. Tofu
+/// subdir roots additionally record one `path.cwd:<root>` caveat each.
 pub(crate) fn select_universe<'a>(
     discovery: &'a Discovery,
     warnings: &mut Vec<String>,
-) -> Result<Vec<&'a ProposedTask>, OrchestratorError> {
+) -> Vec<&'a ProposedTask> {
     let mut kept = Vec::new();
     for task in &discovery.proposals {
         if task.no_targets {
@@ -41,16 +83,16 @@ pub(crate) fn select_universe<'a>(
             kept.push(task);
         }
     }
-    crate::select_tofu::push_chdir_findings(discovery, warnings)?;
-    Ok(kept)
+    crate::select_tofu::push_chdir_findings(discovery, warnings);
+    kept
 }
 
-/// Changed package IDs, or `None` when the comparison is unknown.
+/// Changed package hints and qualified uncertainty, or an unknown comparison.
 ///
 /// `None` marks every obligation changed (fail-open broad: the correct
 /// unknown-comparison behavior). An empty set means nothing changed, so
 /// obligations stay eligible for verified coverage instead of executing
-/// unconditionally. Push compares `before...head` when a base exists.
+/// unconditionally. Committed events compare exact base and candidate trees.
 pub(crate) fn classify_changed(
     root: &Path,
     event: WorkflowEvent,
@@ -58,7 +100,7 @@ pub(crate) fn classify_changed(
     head: &str,
     discovery: &Discovery,
     warnings: &mut Vec<String>,
-) -> Option<BTreeSet<String>> {
+) -> Option<ChangedSelection> {
     if discovery.skipped_non_utf8 {
         warnings.push(format!(
             "comparison_unavailable:{NON_UTF8_PATH}:all_changed"
@@ -75,6 +117,7 @@ pub(crate) fn classify_changed(
                 | WorkflowEvent::MergeGroup
                 | WorkflowEvent::Fork
                 | WorkflowEvent::Push
+                | WorkflowEvent::WorkflowDispatch
         ) {
             warnings.push("comparison_unavailable:missing_base:all_changed".to_owned());
         }
@@ -91,7 +134,7 @@ fn classify_local(
     root: &Path,
     discovery: &Discovery,
     warnings: &mut Vec<String>,
-) -> Option<BTreeSet<String>> {
+) -> Option<ChangedSelection> {
     let sha = match head_sha(root) {
         Ok(sha) => sha,
         Err(problem) => {
@@ -100,9 +143,10 @@ fn classify_local(
         }
     };
     let (changed, toolfiles) = local_change_set(root, warnings)?;
-    Some(affected_from_changed(
-        discovery, &changed, toolfiles, root, &sha, &sha, warnings,
-    ))
+    let mut selection =
+        affected_from_changed(discovery, &changed, toolfiles, root, &sha, &sha, warnings);
+    selection.proof_refinable.clear();
+    Some(selection)
 }
 
 /// Changed package IDs for one change set, broadening on risk.
@@ -119,7 +163,7 @@ fn affected_from_changed(
     base: &str,
     head: &str,
     warnings: &mut Vec<String>,
-) -> BTreeSet<String> {
+) -> ChangedSelection {
     let tasks = &discovery.proposals;
     let all_packages: BTreeSet<String> = tasks
         .iter()
@@ -134,48 +178,57 @@ fn affected_from_changed(
             }
             .to_owned(),
         );
-        return BTreeSet::new();
+        return ChangedSelection::required(BTreeSet::new());
     }
     if changed
         .iter()
         .any(|path| broadening_for_path(path) == Some(SelectionBroadening::Lockfile))
     {
         warnings.push("cargo_lock_changed:all_changed".to_owned());
-        return all_packages;
+        return ChangedSelection::required(all_packages);
     }
     if changed
         .iter()
         .any(|path| broadening_for_path(path) == Some(SelectionBroadening::RootConfig))
+        || workspace_config_changed(discovery, changed)
     {
         warnings.push("root_config_changed:all_changed".to_owned());
-        return all_packages;
+        return ChangedSelection::required(all_packages);
     }
     if let Some(warning) = changed
         .iter()
         .find_map(|path| selection_broadens_for_path(path))
     {
         warnings.push(warning.to_owned());
-        return all_packages;
+        return ChangedSelection::required(all_packages);
     }
     let Some((rust_changed, tofu_affected)) =
         crate::select_tofu::split_or_broaden(root, base, head, discovery, changed, warnings)
     else {
-        return all_packages;
+        return ChangedSelection::required(all_packages);
     };
-    if has_unowned_file(discovery, &rust_changed) {
-        warnings.push("unclassified_files:all_changed".to_owned());
-        return all_packages;
-    }
-    let head_edges = head_edges(discovery);
-    let mut affected = match base_edges(root, base, head, discovery) {
-        Ok(base_edges) => affected_packages(discovery, &rust_changed, &base_edges, &head_edges),
+    let graphs = base_graph(root, base, discovery)
+        .and_then(|base| candidate_graph(root, discovery).map(|candidate| (base, candidate)));
+    let (base_graph, candidate_graph) = match graphs {
+        Ok(graphs) => graphs,
         Err(problem) => {
             warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
-            return all_packages;
+            return ChangedSelection::required(all_packages);
         }
     };
+    let mut affected = affected_packages(
+        discovery,
+        &rust_changed,
+        &base_graph.edges,
+        &candidate_graph.edges,
+        &base_graph.owners,
+    );
     affected.extend(tofu_affected);
-    affected
+    if has_unowned_file(discovery, &rust_changed, &base_graph.owners) {
+        warnings.push("unclassified_files:all_changed".to_owned());
+        return ChangedSelection::qualified(all_packages).restrict_to_rust(tasks);
+    }
+    ChangedSelection::qualified(affected).restrict_to_rust(tasks)
 }
 
 /// True when one task counts as changed under the affected packages.
@@ -189,52 +242,6 @@ pub(crate) fn group_changed(
 ) -> bool {
     changed.contains(&task.identity.unit_id)
         || (task.identity.unit_id.is_empty() && changed_keys.contains(&task.identity.unit_key))
-}
-
-/// Verify the analyzed checkout matches the intended head.
-///
-/// Identities describe the working tree; a checkout at any other commit
-/// would validate the wrong tree. Push and merge-group runs resolve
-/// `HEAD` exactly; PR and fork runs additionally accept the merge
-/// checkout (`HEAD^2`), which is what would land. Local runs analyze
-/// the working tree itself and skip this check.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for checkout/head mismatch or
-/// unresolvable `HEAD`.
-pub(crate) fn verify_checkout(
-    root: &Path,
-    event: WorkflowEvent,
-    head: &str,
-) -> Result<(), OrchestratorError> {
-    if event == WorkflowEvent::Local {
-        return Ok(());
-    }
-    validate_diff_rev(head, "bad_head").map_err(|problem| internal(&problem))?;
-    let checkout = head_sha(root).map_err(|p| internal(&format!("bad_checkout:{p}")))?;
-    if checkout == head {
-        return Ok(());
-    }
-    if matches!(event, WorkflowEvent::PullRequest | WorkflowEvent::Fork)
-        && second_parent(root).as_deref() == Some(head)
-    {
-        return Ok(());
-    }
-    Err(internal("checkout_head_mismatch"))
-}
-
-/// Second parent of the checkout merge commit, if any.
-fn second_parent(root: &Path) -> Option<String> {
-    let output = GitRequest::rev_parse(vec![OsString::from("HEAD^2")])
-        .run_in(root)
-        .ok()?;
-    if !output.success {
-        return None;
-    }
-    let sha = output.stdout_text("git").ok()?.trim().to_owned();
-    validate_diff_rev(&sha, "bad_head").ok()?;
-    Some(sha)
 }
 
 /// Files changed between base and head via the allowlisted `diff` verb.
@@ -251,7 +258,8 @@ fn changed_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>
     let mut args = vec![
         OsString::from("--name-only"),
         OsString::from("--no-renames"),
-        OsString::from(format!("{base}...{head}")),
+        OsString::from(base),
+        OsString::from(head),
         OsString::from("--"),
     ];
     validate_select_diff_args(&args).map_err(|err| err.to_string())?;
@@ -354,23 +362,6 @@ fn tree_diff_names(root: &Path, cached: bool) -> Result<BTreeSet<String>, String
         .require_success("git")
         .map_err(|err| err.to_string())?;
     split_nul_paths(&output.stdout)
-}
-
-/// Resolve `HEAD` to a SHA for local comparison.
-fn head_sha(root: &Path) -> Result<String, String> {
-    let output = GitRequest::rev_parse(vec![OsString::from("HEAD")])
-        .run_in(root)
-        .map_err(|err| err.to_string())?;
-    if !output.success {
-        return Err("missing_head".to_owned());
-    }
-    let sha = output
-        .stdout_text("git")
-        .map_err(|err| err.to_string())?
-        .trim()
-        .to_owned();
-    validate_diff_rev(&sha, "bad_head")?;
-    Ok(sha)
 }
 
 /// Untracked non-ignored paths via the allowlisted `ls-files` verb.

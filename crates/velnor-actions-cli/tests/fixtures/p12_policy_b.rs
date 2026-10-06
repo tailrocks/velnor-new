@@ -86,7 +86,7 @@ fn blessed_standing_exception_passes() -> Result<(), Box<dyn Error>> {
         &fixture.dir,
         INVENTORY,
         "\"exceptions\":[]",
-        &format!("\"exceptions\":[{}]", blessed("v0.16.1")),
+        &format!("\"exceptions\":[{}]", blessed("v0.17.0")),
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_clean(&run);
@@ -114,7 +114,7 @@ fn blessed_standing_wrong_tag_fails() -> Result<(), Box<dyn Error>> {
 fn blessed_standing_missing_attribution_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-blessed-attr")?;
     let partial = "{\"key\":\"asamarts/alint\",\"kind\":\"mutable-tag\",\
-        \"tag\":\"v0.16.1\",\"expires\":null}";
+        \"tag\":\"v0.17.0\",\"expires\":null}";
     harness::mutate(
         &fixture.dir,
         INVENTORY,
@@ -168,16 +168,10 @@ fn dated_exception_missing_field_fails() -> Result<(), Box<dyn Error>> {
 #[test]
 fn non_object_entries_fail() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-shapes")?;
-    let row = "{\"name\":\"mise\",\"pinned\":\"2026.9.16\",\
-        \"qualified\":\"2026.9.16\",\
-        \"source\":\"https://api.github.com/repos/jdx/mise/releases/latest\",\
-        \"status\":\"current\"}";
-    harness::mutate(
-        &fixture.dir,
-        INVENTORY,
-        &format!("\"tools\":[{row}"),
-        "\"tools\":[42",
-    )?;
+    let path = fixture.dir.join(INVENTORY);
+    let mut inventory: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path)?)?;
+    inventory["tools"][0] = serde_json::json!(42);
+    std::fs::write(path, serde_json::to_string(&inventory)?)?;
     harness::mutate(
         &fixture.dir,
         INVENTORY,

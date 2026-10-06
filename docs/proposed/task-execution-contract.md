@@ -1,4 +1,4 @@
-**Status:** Proposed implementation specification. No task execution behavior is implemented.
+**Status:** Proposed execution contract with implementation references. Local implementation and regression evidence do not establish hosted performance qualification; track remaining gates in `velnor-actions-ci-performance-spec.md`.
 
 # Velnor Actions V1 Rust workflow-task execution contract
 
@@ -13,26 +13,55 @@ used in plans and reports only. Velnor V1 does not generate Mise task files.
 Each matrix job MUST expose these named steps. A step MAY be a validated no-op, but it MUST write a
 report explaining why.
 
-The job's action prelude checks out the selected commit with the pinned
-`actions/checkout` and `persist-credentials: false`, initializes the pinned Mise action without project config
-or environment loading, and uses Mise to install the exact selected Rust,
-components, and tools. Mise honors `components`/`profile` only from
-`mise.toml`, which config-less CI invocations cannot use, and installs
-the minimal rustup profile otherwise; so components arrive through the
-fixed `Prepare Rust components` step (`mise exec rust@<exact> --
-rustup component add --toolchain <exact>-<triple> clippy rustfmt`):
-the pinned toolchain's own rustup, deterministic, writing only
-Velnor-owned tool homes — Mise installing components, not an ad hoc
-installer. For an MBX profile only, it then invokes the pinned
-`jdx/mr-boxington-action` in `github-cache-mode: objects`; this action owns MBX
-object restore/save. For a Cargo profile, that action and MBX installation are
-absent. `actions/cache/restore` and `actions/cache/save` handle Cargo source
-archives and qualified Mise task artifacts, never MBX data.
+The job's action prelude checks out the selected commit with pinned
+`actions/checkout` and `persist-credentials: false`, bootstraps digest-verified
+Mise, and restores the canonical owned tool payload before preparation.
+Pinned Mise 2026.10.0 accepts typed backend CLI options without `mise.toml`:
+`rust[profile=minimal,components=clippy,rustfmt]@<exact>`, plus the selected
+role's required components and targets. `RustInstallOptions` constructs and
+validates these options; repository strings cannot supply arbitrary backend
+options. See `crates/velnor-actions-mise/src/catalog_rust_options.rs` and
+performance specification C01–C02.
+
+Rustup 1.29.1 bootstrap bytes are verified against the host-specific committed
+SHA256 before installation. Preparation validates the complete isolated
+Rustup tree against its bound inventory before running restored compiler
+bytes, repairs incomplete or damaged state through its owner, installs the
+exact typed closure through Mise, checks components/targets and executables,
+and records the resulting tree digest. Cargo proxies and Mise command
+wrappers are checked separately. The inventory detects accidental damage;
+it does not authenticate payloads against an attacker replacing both payload
+and inventory. Cache trust remains a separate boundary. Implementation:
+`catalog_rust_bootstrap.rs`, `catalog_rust_health.rs`,
+`catalog_rust_proxies.rs`, and `catalog_rust_prepare_body.rs` in the Mise crate.
+The named `Prepare Rust components` step verifies the installed closure;
+it is not the former unconditional component-add installation path.
+
+Source-bound helper preparation uses the typed `SourceBoundHelper` compiled
+inline path (`catalog_rust_prepare.rs`). This architecture is under active
+qualification; its presence does not prove hosted helper or cache gates.
+
+For an MBX profile only, the current generator invokes pinned
+`jdx/mr-boxington-action` in `github-cache-mode: objects`. Domain construction
+binds writer, workspace roots, configuration, Rust/MBX/action identities and
+runner image (`velnor-actions-orchestrator/src/mbx_domain.rs`). The official
+action still skips export after an exact hit and duplicates MBX installation;
+current domains alone do not satisfy C03–C04. The reviewed transport work
+must consume one digest/version-verified Mise installation and use supported
+MBX owner APIs to publish immutable snapshots only for useful new state,
+including later validation work. Local action/owner changes remain
+unpublished and lack hosted qualification. Never parse private MBX formats
+or treat an object hit as a successful obligation. Cargo profiles omit MBX.
+`actions/cache/restore` and `actions/cache/save` own canonical tool/source
+archives and qualified task artifacts, never raw MBX data.
 
 1. `Prepare pinned tools`: install exact Velnor policy tools through a fixed
-   Mise invocation that loads no project config (`--no-config` plus
-   `MISE_NO_CONFIG=1`; project env/hooks disabled, Velnor-owned tool
-   homes). Download bytes trust upstream TLS plus exact catalog pins;
+   Mise invocation with `--no-config`, `MISE_NO_CONFIG=1`, `--no-env`,
+   `--no-hooks`, their environment controls, and Velnor-owned tool homes.
+   These are required isolation controls; the pinned Mise early-initialization
+   `.miserc` path remains an active investigation, so complete suppression of
+   repository configuration is not yet proven. Download bytes trust upstream
+   TLS plus exact catalog pins;
    the committed `mise.lock` is never consulted at install time.
 2. `Verify toolchain`: verify Rust, selected compile driver, selected test
    runner, target, runner platform, and report optional tool-file findings.
@@ -59,8 +88,9 @@ the [parallelism and affected-work contract](parallelism-and-selection-contract.
 background/wait groups, resource bounds, exact baseline coverage, and complete test partitioning.
 Formatting runs once in `plan` unless the package has an explicit formatting configuration.
 
-All compile and test commands run through exact Velnor-pinned Mise tools with
-project config, env files, and hooks disabled. The Rust adapter records one
+All compile and test commands must run through exact Velnor-pinned Mise tools
+with project config, env files, and hooks disabled. The `.miserc`
+early-initialization gap above remains an explicit qualification limit. The Rust adapter records one
 `RustExecutionProfile` per workspace:
 
 ```text
@@ -148,8 +178,9 @@ mise --no-config exec <tool>@<exact-version>... -- <fixed executable> <fixed arg
 The generated workflow sets `MISE_RUSTUP_HOME`, `MISE_CARGO_HOME`, and exact
 `RUSTUP_TOOLCHAIN`, then runs the fixed command vector. Exec steps MUST NOT
 load or modify consumer `mise.toml`, `mise.lock`, or environment files;
-the install step loads no config either, so no generated step reads
-any repository config path. The lock audit is hygiene for local-dev
+installation uses the same isolation controls. The `.miserc`
+early-initialization investigation prevents claiming that no generated step
+can read any repository configuration path. The lock audit is hygiene for local-dev
 `mise install`, never runtime verification (checksums are TOFU; see
 [tooling-input §1.1](tooling-input-contract.md)). Each
 obligation writes one task report under

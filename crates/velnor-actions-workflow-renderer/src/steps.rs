@@ -8,12 +8,16 @@ use velnor_actions_contract::{Step, StepKind};
 
 use crate::{RenderError, commands, marker};
 
+mod actions;
+
+pub use actions::{action_step, action_step_with_env, checkout_step, validate_uses};
+
 pub use crate::cache_steps::{
-    CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompileDriver, MBX_ACTION_NAME, MBX_CACHE_MODE_ENV,
+    CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompilerDriver, MBX_ACTION_NAME, MBX_CACHE_MODE_ENV,
     MBX_RESTORE_NAME, NEVER_ARCHIVE_MARKERS, TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH,
-    TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES,
-    cache_action_step, check_cache_step_order, check_mbx_gating, is_never_archive_path,
-    mbx_objects_step, mbx_step_for_driver, tools_cache_key, tools_restore_step, tools_save_step,
+    TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step,
+    check_cache_step_order, check_mbx_gating, is_never_archive_path, mbx_objects_step,
+    mbx_step_for_driver, tool_payload_paths, tools_restore_step, tools_save_step,
 };
 
 pub use crate::steps_artifact::{
@@ -23,7 +27,7 @@ pub use crate::steps_artifact::{
 };
 pub(crate) use crate::steps_internal::split_internal_operation;
 pub use crate::steps_internal::{
-    internal_step, merge_step, plan_step, publish_step, write_request_step,
+    internal_step, merge_step, plan_step, publish_step, stage_reports_step, write_request_step,
 };
 
 /// Env key selecting the staged-binary internal operation.
@@ -32,6 +36,8 @@ pub const INTERNAL_OP_ENV: &str = "VELNOR_INTERNAL_OP";
 pub const REQUEST_FILE_ENV: &str = "VELNOR_REQUEST_FILE";
 /// Planner operation name.
 pub const PLAN_OPERATION: &str = "plan-v1";
+/// Cargo-free consumer planning attempt, followed by the stable plan step.
+pub const EARLY_PLAN_OPERATION: &str = "plan-early-v1";
 /// Pre-seed manifest-writing operation name.
 pub const WRITE_PRESEED_MANIFEST_OPERATION: &str = "write-preseed-manifest-v1";
 /// Report-merge operation name.
@@ -40,6 +46,8 @@ pub const MERGE_OPERATION: &str = "merge-v1";
 pub const PUBLISH_OPERATION: &str = "publish-baseline-v1";
 /// Matrix-report fetch operation name.
 pub const FETCH_OPERATION: &str = "fetch-reports-v1";
+/// Report-payload staging operation name.
+pub const STAGE_REPORTS_OPERATION: &str = "stage-reports-v1";
 /// Write-request operation name.
 pub const WRITE_REQUEST_OPERATION: &str = "write-request-v1";
 /// Required prefix of the digest-verified staged binary path.
@@ -112,91 +120,6 @@ pub fn scan_for_private_subcommands(text: &str) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Validate an `owner/repo@<40 hex>` action ref; branches are rejected.
-/// # Errors
-pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
-    let Some((name, sha)) = uses.split_once('@') else {
-        return Err(RenderError::BadActionRef(format!("missing_sha:{uses}")));
-    };
-    let Some((owner, repo)) = name.split_once('/') else {
-        return Err(RenderError::BadActionRef(format!("malformed_name:{uses}")));
-    };
-    if owner.is_empty() || repo.is_empty() || !is_action_name(name) {
-        return Err(RenderError::BadActionRef(format!("malformed_name:{uses}")));
-    }
-    if name.starts_with("actions/setup-") || name == "taiki-e/install-action" {
-        return Err(RenderError::BadActionRef(format!(
-            "forbidden_action:{uses}"
-        )));
-    }
-    if !velnor_actions_contract::ids::is_lower_hex_len(sha, 40) {
-        return Err(RenderError::BadActionRef(format!("unpinned_ref:{uses}")));
-    }
-    Ok(())
-}
-
-/// Checkout step without persisted credentials.
-/// # Errors
-pub fn checkout_step(uses: &str) -> Result<Step, RenderError> {
-    validate_uses(uses)?;
-    if !uses.starts_with("actions/checkout@") {
-        return Err(RenderError::BadActionRef(format!("not_checkout:{uses}")));
-    }
-    let with = BTreeMap::from([("persist-credentials".to_owned(), "false".to_owned())]);
-    action_step("Checkout", uses, with)
-}
-
-/// Validated pinned-action step.
-///
-/// Names share the step-name gate (no expressions); `with:` keys never
-/// carry expressions and values only allowlisted runner spans.
-/// # Errors
-pub fn action_step(
-    name: &str,
-    uses: &str,
-    with: BTreeMap<String, String>,
-) -> Result<Step, RenderError> {
-    action_step_with_env(name, uses, with, BTreeMap::new())
-}
-
-/// Validated action step with step-level environment.
-///
-/// Same gates as [`action_step`]; `env` renders as the step's `env:`
-/// map and applies to the action's main and post phases alike, which
-/// is what lets a cache mode gate the post-step save while the
-/// restore still runs on every event.
-/// # Errors
-pub fn action_step_with_env(
-    name: &str,
-    uses: &str,
-    with: BTreeMap<String, String>,
-    env: BTreeMap<String, String>,
-) -> Result<Step, RenderError> {
-    if name.trim().is_empty() {
-        return Err(RenderError::BadActionRef("empty_name".to_owned()));
-    }
-    crate::expressions::check_name_content(name)?;
-    validate_uses(uses)?;
-    scan_for_private_subcommands(name)?;
-    scan_for_private_subcommands(uses)?;
-    for (key, value) in &with {
-        crate::expressions::check_with_key(key)?;
-        crate::expressions::check_with_value(key, value)?;
-        scan_for_private_subcommands(key)?;
-        scan_for_private_subcommands(value)?;
-    }
-    crate::commands::validate_env(&env)?;
-    Ok(Step {
-        name: name.to_owned(),
-        condition: None,
-        kind: StepKind::Action {
-            uses: uses.to_owned(),
-            with,
-            env,
-        },
-    })
-}
-
 /// Validated fixed-argv shell step, scrubbed and unset by construction.
 ///
 /// The default posture for every `run:` step: env leaves carrying the
@@ -228,10 +151,10 @@ pub fn shell_step(
     commands::validate_env(&env)?;
     crate::toolchain_env::reject_denied_step_keys(&env)?;
     scan_for_private_subcommands(name)?;
-    let run = if commands::is_inline_shell(&argv) {
+    let run = if let Some(script_at) = commands::inline_script_index(&argv) {
         let mut scripted = argv;
-        let preluded = crate::toolchain_env::with_credential_unset_script(&scripted[2]);
-        scripted[2] = preluded;
+        let preluded = crate::toolchain_env::with_credential_unset_script(&scripted[script_at]);
+        scripted[script_at] = preluded;
         scripted
     } else {
         let mut run = crate::toolchain_env::with_env_unset_argv(&[]);
@@ -241,6 +164,7 @@ pub fn shell_step(
     let mut env_map = env;
     env_map.extend(crate::toolchain_env::credential_scrub());
     Ok(Step {
+        id: None,
         name: name.to_owned(),
         condition: None,
         kind: StepKind::Shell { run, env: env_map },
@@ -271,6 +195,7 @@ pub fn ambient_shell_step(
     commands::validate_env(&env)?;
     scan_for_private_subcommands(name)?;
     Ok(Step {
+        id: None,
         name: name.to_owned(),
         condition: None,
         kind: StepKind::Shell { run: argv, env },
@@ -339,9 +264,16 @@ pub fn candidate_attestation_script() -> String {
 /// URL, so the step carries the scrub overlay on top of its asset env.
 /// # Errors
 pub fn acquire_velnor_step(
-    argv: Vec<String>,
+    staged: &str,
     env: &BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
+    let argv = crate::early_prefix_admission::acquisition_argv(staged)?;
+    if env
+        .keys()
+        .any(|key| ![ASSET_SHA_ENV, ASSET_URL_ENV, RELEASE_COMMIT_ENV].contains(&key.as_str()))
+    {
+        return Err(RenderError::BadCommand("acquire_environment".to_owned()));
+    }
     commands::validate_command_argv(&argv)?;
     commands::validate_env(env)?;
     if env
@@ -362,23 +294,7 @@ pub fn acquire_velnor_step(
     {
         return Err(RenderError::BadCommand("bad_release_commit".to_owned()));
     }
-    if !argv.iter().any(|arg| arg.contains(STAGED_BINARY_PREFIX)) {
-        return Err(RenderError::BadCommand("unstaged_binary".to_owned()));
-    }
-    let downloads = argv.iter().any(|arg| arg.contains(ASSET_URL_ENV));
-    let verifies = argv.iter().any(|arg| arg.contains(ASSET_SHA_ENV));
-    if !downloads || !verifies {
-        return Err(RenderError::BadCommand("acquire_without_verify".to_owned()));
-    }
     shell_step(ACQUIRE_NAME, argv, env.clone())
-}
-
-/// True for `owner/repo` over alphanumerics plus `.-_`.
-fn is_action_name(name: &str) -> bool {
-    !name.is_empty()
-        && name
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'/' | b'.' | b'-' | b'_'))
 }
 
 /// Target-directory prefix isolating one lane.

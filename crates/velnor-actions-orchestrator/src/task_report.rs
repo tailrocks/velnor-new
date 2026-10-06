@@ -5,7 +5,7 @@
 //! zero artifacts and fail closed on `no_entry`/`source_missing`. This op
 //! closes the gap. Each obligation wrapper captures its exit code and
 //! invokes the staged helper here; the op resolves the obligation against
-//! the downloaded plan (digests stay plan-bound, never generator-baked)
+//! the downloaded plan and requires its baked execution digest to match
 //! and writes the validated `TaskReport` plus its entry's single-task
 //! `MatrixReport` through the contract canonical JSON — report bytes are
 //! produced by Rust, never shell-composed.
@@ -27,8 +27,13 @@ use velnor_actions_contract::{
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
+use crate::task_clock::now_ms;
 
+pub use crate::task_report_aggregate::report_staging::{STAGE_REPORTS_OP, stage_reports};
 pub(crate) use crate::task_report_aggregate::single_task_aggregate;
+#[path = "task_report_identity.rs"]
+mod identity;
+pub(crate) use identity::validate_expected_digest;
 
 /// Report-production operation tag.
 pub const REPORT_OP: &str = "write-task-report-v1";
@@ -79,6 +84,10 @@ pub fn write_task_report() -> Result<usize, OrchestratorError> {
             Path::new(&runner_temp),
         );
     }
+    let expected_digest = env::var(crate::matrix_step::OBLIGATION_TASK_DIGEST_ENV)
+        .ok()
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| internal("missing_task_digest"))?;
     let downstream_env = env::var(DOWNSTREAM_IDS_ENV).ok();
     let downstream = parse_downstream(downstream_env.as_deref());
     let start_ms = env::var(START_MS_ENV)
@@ -87,6 +96,7 @@ pub fn write_task_report() -> Result<usize, OrchestratorError> {
     write_task_report_to(
         &run_key,
         &task_id,
+        &expected_digest,
         exit_code,
         start_ms,
         &downstream,
@@ -111,6 +121,7 @@ pub fn write_task_report() -> Result<usize, OrchestratorError> {
 pub(crate) fn write_task_report_to(
     run_key: &str,
     task_id: &str,
+    expected_digest: &str,
     exit_code: i32,
     start_ms: Option<u64>,
     downstream: &[String],
@@ -121,6 +132,7 @@ pub(crate) fn write_task_report_to(
         return Err(internal("bad_exit_code"));
     }
     let plan = load_plan(run_key, runner_temp)?;
+    validate_expected_digest(&plan, task_id, expected_digest)?;
     if crate::covered_tasks::covered_by_baseline(&plan, task_id) {
         return Ok(0);
     }
@@ -154,24 +166,15 @@ fn parse_start_ms(raw: &str) -> Option<u64> {
     raw.parse::<u64>().ok()
 }
 
-/// Wall-clock now in unix millis; `None` when the clock is unusable.
-fn now_ms() -> Option<u64> {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .ok()
-        .and_then(|elapsed| u64::try_from(elapsed.as_millis()).ok())
-}
-
 /// Measured elapsed millis, or `None` when telemetry is absent.
 ///
-/// A present, non-future start always measures at least 1ms: absent,
-/// unparseable, future, or clockless telemetry stays unmeasured and
-/// is never labeled as measured.
+/// A present, non-future start retains the measured elapsed value, including
+/// zero. Absent, unparseable, future, or clockless telemetry stays unknown.
 fn elapsed_ms(start_ms: Option<u64>) -> Option<u64> {
     let (Some(start), Some(now)) = (start_ms, now_ms()) else {
         return None;
     };
-    now.checked_sub(start).map(|elapsed| elapsed.max(1))
+    now.checked_sub(start)
 }
 
 /// Split downstream IDs on commas, dropping blanks and duplicates.
@@ -276,7 +279,7 @@ fn flattened(entry: &MatrixEntry) -> Vec<&str> {
 /// # Errors
 ///
 /// Returns [`ContractError`] for derivation or validation failures.
-fn terminal_task_report(
+pub(crate) fn terminal_task_report(
     plan: &Plan,
     entry: &MatrixEntry,
     task_digest: &str,
@@ -363,37 +366,8 @@ mod task_report_cover_tests;
 mod task_report_merge_tests;
 #[cfg(test)]
 #[path = "task_report_tests.rs"]
-mod task_report_tests;
+pub(crate) mod task_report_tests;
 
 #[cfg(test)]
-mod load_plan_strict_tests {
-    use tempfile::TempDir;
-
-    use super::load_plan;
-    use super::task_report_tests::fixture_plan;
-
-    /// Stage one `plan.json` under a fake runner temp.
-    fn stage(text: &str) -> TempDir {
-        let dir = TempDir::new().expect("temp");
-        let run = dir.path().join("velnor").join("local");
-        std::fs::create_dir_all(&run).expect("run dir");
-        std::fs::write(run.join("plan.json"), text).expect("plan");
-        dir
-    }
-
-    #[test]
-    fn plan_read_is_bounded_and_duplicate_rejecting() {
-        let valid = serde_json::to_string(&fixture_plan()).expect("valid plan");
-        assert!(load_plan("local", stage(&valid).path()).is_ok());
-        let mut dup = valid;
-        dup.pop();
-        dup.push_str(r#","schema":1}"#);
-        let err = load_plan("local", stage(&dup).path()).expect_err("dup keys reject");
-        assert!(err.to_string().contains("unparsable_plan"), "{err}");
-        let bound = usize::try_from(crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES)
-            .expect("bound fits pointer width");
-        let err =
-            load_plan("local", stage(&" ".repeat(bound + 1)).path()).expect_err("oversize rejects");
-        assert!(err.to_string().contains("oversize"), "{err}");
-    }
-}
+#[path = "task_report_load_tests.rs"]
+mod load_plan_strict_tests;

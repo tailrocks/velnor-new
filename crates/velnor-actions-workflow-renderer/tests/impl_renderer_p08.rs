@@ -1,17 +1,17 @@
-//! P08 renderer cases: built-in Mise cache, sources paths, rust-cache gates.
+//! P08 renderer cases: canonical tool cache, source paths, rust-cache gates.
 
 use std::collections::BTreeMap;
 use velnor_actions_contract::{Job, JobTimeout, StepKind};
 use velnor_actions_workflow_renderer::cache_p08::{
     check_mbx_before_fetch, check_no_rust_cache_with_mbx, infer_job_tools,
-    mise_cache_key_for_tools, mise_setup_step_p08, tools_digest,
+    mise_cache_key_for_tools, tools_digest,
 };
 use velnor_actions_workflow_renderer::steps::cache_action_step;
 
 use super::impl_renderer_fixtures::*;
 
 #[test]
-fn builtin_key_shares_same_tools_without_job_id() {
+fn canonical_key_shares_same_tools_without_job_id() {
     let a = ["rust@1.98.1".to_owned(), "mr-boxington@1.19.0".to_owned()];
     let b = ["mr-boxington@1.19.0".to_owned(), "rust@1.98.1".to_owned()];
     let one = mise_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", &a).expect("key");
@@ -19,7 +19,7 @@ fn builtin_key_shares_same_tools_without_job_id() {
     assert_eq!(one, two, "tool order must not fork keys");
     assert!(!one.contains("plan") && !one.contains("rust-"), "{one}");
     assert!(
-        one.starts_with("mise-v1-x86_64-unknown-linux-gnu-2026.9.16-"),
+        one.starts_with("mise-v3-x86_64-unknown-linux-gnu-2026.9.16-"),
         "{one}"
     );
     let other = mise_cache_key_for_tools(
@@ -48,12 +48,19 @@ fn tools_digest_is_order_stable_short_hex() {
 #[test]
 fn job_tools_inferred_from_install_and_exec() {
     let job = Job {
+        cache_mode: None,
         display_name: "Demo".to_owned(),
         runs_on: LABEL.to_owned(),
         timeout_minutes: JobTimeout::CRATE,
         needs: Vec::new(),
         condition: None,
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps: vec![
             velnor_actions_workflow_renderer::shell_step(
@@ -90,12 +97,19 @@ fn job_tools_inferred_from_inline_shell_script() {
         && cd \"$RUNNER_TEMP/velnor/cargo-clean\" \
         && mise --no-config exec cargo-deny@0.20.2 -- cargo deny --locked check";
     let job = Job {
+        cache_mode: None,
         display_name: "Cargo Deny".to_owned(),
         runs_on: LABEL.to_owned(),
         timeout_minutes: JobTimeout::VALIDATOR,
         needs: Vec::new(),
         condition: None,
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps: vec![
             velnor_actions_workflow_renderer::ambient_shell_step(
@@ -114,12 +128,19 @@ fn job_tools_inferred_from_quoted_spec() {
     // A drift into quoted specs must still bootstrap instead of
     // silently dropping the setup step.
     let job = Job {
+        cache_mode: None,
         display_name: "Demo".to_owned(),
         runs_on: LABEL.to_owned(),
         timeout_minutes: JobTimeout::CRATE,
         needs: Vec::new(),
         condition: None,
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps: vec![
             velnor_actions_workflow_renderer::shell_step(
@@ -138,30 +159,29 @@ fn job_tools_inferred_from_quoted_spec() {
 }
 
 #[test]
-fn setup_p08_enables_builtin_cache_with_key() {
-    let key = mise_cache_key_for_tools(
-        "x86_64-unknown-linux-gnu",
-        "2026.9.16",
-        &["rust@1.98.1".to_owned()],
-    )
-    .expect("key");
-    let step = mise_setup_step_p08(&mise(), &key).expect("setup");
-    let StepKind::Action { with, .. } = &step.kind else {
-        panic!("setup must be an action step");
+fn setup_p08_uses_exact_owned_bootstrap_without_action_cache() {
+    let setup = mise();
+    let domain = velnor_actions_contract::ToolCacheDomain::Full;
+    let step = velnor_actions_workflow_renderer::mise_setup_step(&setup, domain, LABEL)
+        .expect("qualified setup");
+    let StepKind::SourceBoundHelper { invocation, env } = &step.kind else {
+        panic!("setup must be an owner-bound helper");
     };
-    assert_eq!(with.get("cache").map(String::as_str), Some("true"));
     assert_eq!(
-        with.get("cache_save").map(String::as_str),
-        Some("false"),
-        "setups restore-only: the action saves only inside its disabled install leg"
+        invocation,
+        setup.bootstraps[&(domain, LABEL.to_owned())]
+            .helper
+            .invocation()
     );
-    assert_eq!(
-        with.get("cache_key").map(String::as_str),
-        Some(key.as_str())
+    assert_eq!(env["MISE_DATA_DIR"], domain.root());
+    assert_eq!(env["VELNOR_MISE_VERSION"], MISE_VERSION);
+    assert_eq!(env["VELNOR_MISE_SHA256"], MISE_SHA256);
+    assert_eq!(env.len(), 5);
+    assert_eq!(env["VELNOR_MISE_TARGET"], "x86_64-unknown-linux-gnu");
+    assert!(!env.contains_key("cache"));
+    assert!(
+        velnor_actions_workflow_renderer::mise_setup_step(&setup, domain, "ubuntu-latest").is_err()
     );
-    assert_eq!(with.len(), 7);
-    assert!(mise_setup_step_p08(&mise(), "bad key").is_err());
-    assert!(mise_setup_step_p08(&mise(), "mise-tools-v1-plan").is_err());
 }
 
 #[test]
@@ -173,7 +193,6 @@ fn sources_subset_accepted_under_owned_home_only() {
         format!("{home}/registry/cache"),
         format!("{home}/registry/index"),
         format!("{home}/git/db"),
-        format!("{home}/.crates.toml"),
     ];
     assert!(
         cache_action_step(true, &uses, "sources", "k", &[], &good).is_ok(),
@@ -203,6 +222,7 @@ fn rust_cache_never_stacks_over_mbx() {
     )
     .expect("mbx");
     let rust_cache = velnor_actions_contract::Step {
+        id: None,
         name: "Restore Cargo registry".to_owned(),
         condition: None,
         kind: StepKind::Action {
@@ -212,22 +232,31 @@ fn rust_cache_never_stacks_over_mbx() {
         },
     };
     let both = Job {
+        cache_mode: None,
         display_name: "Both".to_owned(),
         runs_on: LABEL.to_owned(),
         timeout_minutes: JobTimeout::CRATE,
         needs: Vec::new(),
         condition: None,
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps: vec![mbx.clone(), rust_cache.clone()],
     };
     assert!(check_no_rust_cache_with_mbx("demo", &both).is_err());
     let cargo_only = Job {
+        cache_mode: None,
         steps: vec![rust_cache],
         ..both.clone()
     };
     assert!(check_no_rust_cache_with_mbx("demo", &cargo_only).is_ok());
     let mbx_only = Job {
+        cache_mode: None,
         steps: vec![mbx],
         ..both.clone()
     };
@@ -237,6 +266,7 @@ fn rust_cache_never_stacks_over_mbx() {
 #[test]
 fn mbx_restore_precedes_fetch() {
     let fetch = velnor_actions_contract::Step {
+        id: None,
         name: "Fetch Cargo sources".to_owned(),
         condition: None,
         kind: StepKind::Shell {
@@ -245,6 +275,7 @@ fn mbx_restore_precedes_fetch() {
         },
     };
     let mbx = velnor_actions_contract::Step {
+        id: None,
         name: "Restore MBX objects".to_owned(),
         condition: None,
         kind: StepKind::Action {
@@ -254,17 +285,25 @@ fn mbx_restore_precedes_fetch() {
         },
     };
     let good = Job {
+        cache_mode: None,
         display_name: "Good".to_owned(),
         runs_on: LABEL.to_owned(),
         timeout_minutes: JobTimeout::CRATE,
         needs: Vec::new(),
         condition: None,
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps: vec![mbx.clone(), fetch.clone()],
     };
     assert!(check_mbx_before_fetch("demo", &good).is_ok());
     let bad = Job {
+        cache_mode: None,
         steps: vec![fetch, mbx],
         ..good.clone()
     };
@@ -328,62 +367,5 @@ fn step_conditions_serialize_as_if_with_upload_default()
     Ok(())
 }
 
-#[test]
-fn strict_render_elects_single_writer_per_shared_key()
--> Result<(), velnor_actions_workflow_renderer::RenderError> {
-    use velnor_actions_workflow_renderer::{plan_step, shell_step};
-    let prepare = || {
-        shell_step(
-            "Prepare pinned tools",
-            vec![
-                "mise".to_owned(),
-                "install".to_owned(),
-                "rust@1.98.1".to_owned(),
-            ],
-            BTreeMap::new(),
-        )
-    };
-    let text = strict(
-        &fixture_ir(vec![
-            job(
-                "plan",
-                "Plan",
-                Vec::new(),
-                vec![prepare()?, acquire_fixture()?, plan_step()],
-            ),
-            job(
-                "rust-demo",
-                "Rust / demo",
-                vec!["plan".to_owned()],
-                vec![prepare()?],
-            ),
-        ]),
-        &fixture_ctx(),
-    )?;
-    let plan_at = text.find("\n  plan:\n").expect("plan block");
-    let crate_at = text.find("\n  rust-demo:\n").expect("crate block");
-    let (plan_block, crate_block) = text.split_at(crate_at);
-    let plan_block = &plan_block[plan_at..];
-    assert!(
-        plan_block.contains("- name: Save Mise tools"),
-        "plan wins the shared key:\n{text}"
-    );
-    assert!(
-        plan_block.contains("if: success() && github.event_name == 'push'"),
-        "winner saves push-only:\n{text}"
-    );
-    assert!(
-        !crate_block.contains("Save Mise tools"),
-        "crate restores read-only:\n{text}"
-    );
-    assert_eq!(
-        text.matches("- name: Save Mise tools").count(),
-        1,
-        "exactly one saver per key:\n{text}"
-    );
-    assert!(
-        !text.contains("cache_save: ${{"),
-        "no setup promises a built-in save:\n{text}"
-    );
-    Ok(())
-}
+#[path = "impl_renderer_p08_writer.rs"]
+mod writer;

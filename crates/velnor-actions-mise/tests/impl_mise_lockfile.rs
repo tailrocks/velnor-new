@@ -1,6 +1,6 @@
 //! `mise.lock` install-verification audit cases (G2).
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_mise::catalog::PinnedTool;
+use velnor_actions_mise::catalog::{PinnedTool, qualification::DistributionHost};
 use velnor_actions_mise::toolfiles::lockfile::{
     InstallCoverage, InstallSubject, audit_install_coverage, mise_platform_for_target,
     parse_mise_lockfile, subject_for_install_spec,
@@ -12,8 +12,10 @@ fn catalog() -> ToolCatalog {
 
 /// Audit subject for one catalog tool's emitted spec.
 fn subject(tool: PinnedTool, catalog: &ToolCatalog) -> Result<InstallSubject, String> {
-    let spec = catalog.tool_spec(tool);
-    subject_for_install_spec(&spec, catalog).ok_or_else(|| "emitted spec resolves".to_owned())
+    let spec = catalog.tool_spec(tool).map_err(|error| error.to_string())?;
+    subject_for_install_spec(&spec, catalog, DistributionHost::LinuxAmd64)
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "emitted spec resolves".to_owned())
 }
 
 fn checksum(hex: &str) -> String {
@@ -171,9 +173,15 @@ fn uppercase_checksums_verify() -> Result<(), String> {
 #[test]
 fn drifted_spec_version_does_not_resolve() {
     let catalog = catalog();
-    for spec in ["rust@1.97.0", "actionlint@1.7.11", "rust@latest", "rust@"] {
+    for spec in [
+        "rust[profile=minimal,components=clippy,rustfmt]@1.97.0",
+        "actionlint@1.7.11",
+        "rust@latest",
+        "rust@",
+    ] {
         assert_eq!(
-            subject_for_install_spec(spec, &catalog),
+            subject_for_install_spec(spec, &catalog, DistributionHost::LinuxAmd64)
+                .expect("generic drift has no native qualification requirement"),
             None,
             "{spec} must not resolve"
         );
@@ -185,6 +193,10 @@ fn platform_map_covers_supported_targets() {
     assert_eq!(
         mise_platform_for_target("x86_64-unknown-linux-gnu"),
         Some("linux-x64")
+    );
+    assert_eq!(
+        mise_platform_for_target("aarch64-unknown-linux-gnu"),
+        Some("linux-arm64")
     );
     assert_eq!(
         mise_platform_for_target("aarch64-apple-darwin"),
@@ -202,27 +214,41 @@ fn platform_map_covers_supported_targets() {
 fn every_catalog_spec_resolves_and_foreign_does_not() {
     let catalog = catalog();
     for tool in PinnedTool::ALL {
-        let spec = catalog.tool_spec(tool);
-        let subject = subject_for_install_spec(&spec, &catalog);
+        let spec = if ToolCatalog::requires_native_host(tool) {
+            catalog
+                .native_tool_spec(DistributionHost::MacosArm64, tool)
+                .expect("fixture uses independently qualified macOS ARM64 native records")
+        } else {
+            catalog
+                .tool_spec(tool)
+                .expect("generic catalog slot is host independent")
+        };
+        let subject = subject_for_install_spec(&spec, &catalog, DistributionHost::MacosArm64)
+            .expect("exact qualified fixture selectors are auditable");
         assert!(subject.is_some(), "{spec} must resolve");
         let subject = subject.expect("resolved");
         assert_eq!(
             subject.expected_version,
-            catalog.version(tool),
-            "{spec} pins the catalog version"
+            spec.rsplit_once('@').map_or("", |(_, version)| version),
+            "{spec} pins the exact selector version"
         );
-        let key = spec.split_once('@').map_or("", |(head, _)| head);
-        assert_eq!(subject.lock_key, key, "{spec} keeps its spec key");
+        let key = spec.rsplit_once('@').map_or("", |(head, _)| head);
+        assert_eq!(
+            subject.lock_key,
+            key.split('[').next().unwrap_or(key),
+            "{spec} keeps its canonical lock key"
+        );
     }
     for foreign in [
-        "cargo-deny@0.20.2",
-        "node@20.0.0",
+        "cargo-deny@0.20.1",
+        "http:foreign@20.0.0",
         "not-a-spec",
         "",
         "@1.0.0",
     ] {
         assert_eq!(
-            subject_for_install_spec(foreign, &catalog),
+            subject_for_install_spec(foreign, &catalog, DistributionHost::MacosArm64)
+                .expect("foreign grammar grants no native slot authority"),
             None,
             "{foreign} must not resolve"
         );
@@ -252,4 +278,46 @@ fn decoy_entry_under_alias_key_does_not_verify() -> Result<(), String> {
     let verdicts = audit_install_coverage(&lock, &[subject], "linux-x64");
     assert_eq!(verdicts[0], InstallCoverage::MissingEntry);
     Ok(())
+}
+
+#[test]
+fn missing_native_install_plan_is_an_audit_error() {
+    let catalog = catalog();
+    for host in [DistributionHost::LinuxAmd64, DistributionHost::LinuxArm64] {
+        for tool in [
+            PinnedTool::Node,
+            PinnedTool::Bun,
+            PinnedTool::Python,
+            PinnedTool::Uv,
+            PinnedTool::Java,
+            PinnedTool::Gradle,
+            PinnedTool::Opentofu,
+        ] {
+            let unqualified = format!("{}@{}", tool.tool_name(), catalog.version(tool));
+            assert!(
+                subject_for_install_spec(&unqualified, &catalog, host).is_err(),
+                "{tool:?} / {host:?} cannot hide missing installation authority"
+            );
+        }
+    }
+}
+
+#[test]
+fn native_selector_options_and_host_are_exact() {
+    let catalog = catalog();
+    let spec = catalog
+        .native_tool_spec(DistributionHost::MacosArm64, PinnedTool::Node)
+        .expect("macOS ARM64 Node fixture has measured installation plan");
+    let altered = spec.replace("strip_components=1", "strip_components=0");
+    assert!(
+        subject_for_install_spec(&altered, &catalog, DistributionHost::MacosArm64)
+            .expect("known macOS fixture qualification exists")
+            .is_none()
+    );
+    assert!(subject_for_install_spec(&spec, &catalog, DistributionHost::LinuxAmd64).is_err());
+    assert!(
+        subject_for_install_spec("node@24.21.0", &catalog, DistributionHost::MacosArm64)
+            .expect("known macOS fixture qualification exists")
+            .is_none()
+    );
 }
