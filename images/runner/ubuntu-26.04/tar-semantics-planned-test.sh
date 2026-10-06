@@ -19,6 +19,53 @@ case_strip_components_rejected_before_symlink_extract() {
   [ -z "$(find "$root/dest" -mindepth 1 -print -quit)" ] || return 1
 }
 
+case_many_directory_metadata() {
+  local root="$work/many-dir" i mode mtime forks old_path dir
+  local -a args=()
+  rm -rf -- "$root"
+  mkdir -p "$root/dest/repo" "$root/bin"
+  for i in $(seq 0 47); do
+    args+=(d "../ext/d$(printf '%02d' "$i")/" 0750 $((1600000000 + i)))
+    args+=(f "../ext/d$(printf '%02d' "$i")/child" "payload-$i")
+  done
+  write_ustar "$root/arc.tar" "${args[@]}" || return 1
+  cat >"$root/bin/touch" <<'EOF'
+#!/bin/sh
+printf 'touch\n' >>"$VELNOR_FORK_LOG"
+exec /usr/bin/touch "$@"
+EOF
+  cat >"$root/bin/stat" <<'EOF'
+#!/bin/sh
+printf 'stat\n' >>"$VELNOR_FORK_LOG"
+exec /usr/bin/stat "$@"
+EOF
+  cat >"$root/bin/chmod" <<'EOF'
+#!/bin/sh
+printf 'chmod\n' >>"$VELNOR_FORK_LOG"
+exec /bin/chmod "$@"
+EOF
+  chmod 0755 "$root/bin/touch" "$root/bin/stat" "$root/bin/chmod"
+  : >"$root/fork.log"
+  old_path="$PATH"
+  VELNOR_FORK_LOG="$root/fork.log" PATH="$root/bin:$PATH" \
+    bash "$shim" -xf "$root/arc.tar" -P -C "$root/dest/repo" || return 1
+  PATH="$old_path"
+  forks="$(wc -l <"$root/fork.log" | tr -d ' ')"
+  [ "$forks" = 0 ] || {
+    printf 'directory metadata forked %s times\n' "$forks" >&2
+    return 1
+  }
+  for i in $(seq 0 47); do
+    dir="$root/dest/ext/d$(printf '%02d' "$i")"
+    mode="$(stat -c %a "$dir")"
+    mtime="$(stat -c %Y "$dir")"
+    [ "$mode" = 750 ] && [ "$mtime" = $((1600000000 + i)) ] || {
+      printf 'many-dir mismatch i=%s mode=%s mtime=%s\n' "$i" "$mode" "$mtime" >&2
+      return 1
+    }
+  done
+}
+
 case_external_relative_symlink() {
   local root="$work/external-link" status=0
   rm -rf -- "$root"
@@ -170,6 +217,8 @@ case_grouped_external_restore() {
   [ "$count" -gt 0 ] || return 1
   rm -rf -- "$root"
   mkdir -p "$root/dest/workspace/repo" "$root/stage" "$root/bin"
+  records+=(d "../external/" 0750 1600000000)
+  records+=(d "../external/cache/" 0710 1600000001)
   for i in $(seq 1 "$count"); do
     file="$(printf 'file-%05d' "$i")"
     records+=(f "../external/cache/$file" "payload-$i")
@@ -210,6 +259,10 @@ EOF
     grep -qx "payload-$i" "$root/dest/workspace/external/cache/$file" || return 1
   done
   [ "$(find "$root/dest/workspace/external/cache" -type f | wc -l | tr -d ' ')" = "$count" ] || return 1
+  [ "$(stat -c %a "$root/dest/workspace/external")" = 750 ] || return 1
+  [ "$(stat -c %Y "$root/dest/workspace/external")" = 1600000000 ] || return 1
+  [ "$(stat -c %a "$root/dest/workspace/external/cache")" = 710 ] || return 1
+  [ "$(stat -c %Y "$root/dest/workspace/external/cache")" = 1600000001 ] || return 1
   [ -z "$(find "$root/stage" -mindepth 1 -print -quit)" ] || return 1
 }
 
@@ -231,4 +284,92 @@ EOF
   if grep -F -q 'Function not implemented' "$root/err"; then
     return 1
   fi
+}
+
+case_grouped_extract_failure_keeps_prior_mode() {
+  local root="$work/grouped-fail" real_busybox status=0 mode mtime
+  rm -rf -- "$root"
+  mkdir -p "$root/dest/workspace/repo" "$root/dest/workspace/external/cache" \
+    "$root/stage" "$root/bin"
+  chmod 0755 "$root/dest/workspace/external" "$root/dest/workspace/external/cache"
+  touch -d @1500000000 "$root/dest/workspace/external" \
+    "$root/dest/workspace/external/cache"
+  write_ustar "$root/arc.tar" \
+    d "../external/" 0750 1600000000 \
+    d "../external/cache/" 0710 1600000001 \
+    f "../external/cache/file-00001" "payload-1" || return 1
+  real_busybox="$(command -v busybox)"
+  cat >"$root/bin/busybox" <<'EOF'
+#!/bin/sh
+if [ "${1:-}" = tar ]; then
+  cat >/dev/null
+  exit 1
+fi
+exec "$VELNOR_REAL_BUSYBOX" "$@"
+EOF
+  chmod 0755 "$root/bin/busybox"
+  PATH="$root/bin:$PATH" \
+    VELNOR_REAL_BUSYBOX="$real_busybox" \
+    TMPDIR="$root/stage" \
+    bash "$shim" -xf "$root/arc.tar" -P -C "$root/dest/workspace/repo" \
+    >"$root/out" 2>"$root/err" || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'member extract failed' "$root/err" || return 1
+  mode="$(stat -c %a "$root/dest/workspace/external")"
+  mtime="$(stat -c %Y "$root/dest/workspace/external")"
+  [ "$mode" = 755 ] && [ "$mtime" = 1500000000 ] || return 1
+  mode="$(stat -c %a "$root/dest/workspace/external/cache")"
+  mtime="$(stat -c %Y "$root/dest/workspace/external/cache")"
+  [ "$mode" = 755 ] && [ "$mtime" = 1500000000 ] || return 1
+  [ ! -e "$root/dest/workspace/external/cache/file-00001" ] || return 1
+  [ -z "$(find "$root/stage" -name 'velnor-dir-meta.*' -print -quit)" ] || return 1
+}
+
+case_record_failure_keeps_mode() {
+  local root="$work/record-full" dir mode
+  rm -rf -- "$root"
+  dir="$root/d"
+  mkdir -p "$dir"
+  chmod 0550 "$dir"
+  printf '%s\0%s\0%s\0' "$dir" "$dir" 550 |
+    perl "$rundir/tar-dir-meta.pl" record /dev/full && return 1
+  mode="$(stat -c %a "$dir")"
+  [ "$mode" = 550 ]
+}
+
+case_short_restore_applies_complete_rows() {
+  local root="$work/short-restore" dir mode mtime status=0
+  rm -rf -- "$root"
+  dir="$root/d"
+  mkdir -p "$dir"
+  chmod 0700 "$dir"
+  printf '%s\0%s\0%s\0%s\0partial' "$dir" 550 1600000000.000000000 1 >"$root/state"
+  perl "$rundir/tar-dir-meta.pl" restore "$root/state" >"$root/err" 2>&1 || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'short record' "$root/err" || return 1
+  mode="$(stat -c %a "$dir")"
+  mtime="$(stat -c %Y "$dir")"
+  [ "$mode" = 550 ] && [ "$mtime" = 1600000000 ]
+}
+
+case_record_failure_removes_batch() {
+  local root="$work/batch-clean" status=0
+  rm -rf -- "$root"
+  mkdir -p "$root/tmp" "$root/tree/dir" "$root/bin"
+  printf 'exit 1;\n' >"$root/bin/tar-dir-meta.pl"
+  (
+    die() { exit 1; }
+    member_intended() { printf -v "$2" '%s' "$1"; }
+    dir_meta_file=""
+    _velnor_tar_here="$root/bin"
+    # shellcheck disable=SC1091
+    . "$rundir/tar-extract-plan.sh"
+    mem_type[1]=5
+    mem_strip[1]=dir
+    mem_name[1]=dir
+    mem_mode[1]=0755
+    TMPDIR="$root/tmp" record_directory_metadata "$root/tree" 1
+  ) || status=$?
+  [ "$status" -ne 0 ] || return 1
+  [ -z "$(find "$root/tmp" -name 'velnor-dir-batch.*' -print -quit)" ]
 }

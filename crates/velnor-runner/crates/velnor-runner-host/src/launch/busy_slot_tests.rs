@@ -6,7 +6,7 @@ use velnor_runner_github::{
 
 use super::inspect_tests::{DockerStub, launch_row, within};
 use super::steps::{Idle, idle};
-use super::{Ready, drive_ready};
+use super::{Ready, Rest, drive_ready};
 use crate::IntentState;
 use crate::launch_harness::{Mode, Script, absent, assigned_wait, available, open};
 
@@ -69,6 +69,11 @@ async fn busy_slot_does_not_ack_scale_assignment() -> Result<(), String> {
                 &journal,
                 &stub.docker,
                 1,
+                Rest {
+                    owner: "",
+                    repo: "",
+                    pat: "",
+                },
             ),
             "busy drive",
         )

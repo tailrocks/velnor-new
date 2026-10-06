@@ -194,7 +194,7 @@ fn parse_inner(value: &Value) -> Result<InnerJob, WireError> {
         .and_then(Value::as_str)
         .ok_or(WireError::Malformed)?;
     let request_id = value.get("runnerRequestId").and_then(Value::as_i64);
-    let job_id = numeric_job_id(value.get("jobId").and_then(Value::as_str));
+    let job_id = job_id_of(value);
     let labels = label_names(value.get("requestLabels"));
     let fields = object_fields(value);
     let kind = match kind_text {
@@ -263,9 +263,25 @@ fn optional_string(value: &Value, field: &str) -> Result<Option<String>, WireErr
     }
 }
 
+fn job_id_of(value: &Value) -> Option<String> {
+    match value.get("jobId")? {
+        Value::String(text) => numeric_job_id(Some(text)),
+        Value::Number(number) => positive_job_id(number.as_i64()),
+        _ => None,
+    }
+}
+
+fn positive_job_id(value: Option<i64>) -> Option<String> {
+    let number = value.filter(|item| *item > 0)?;
+    Some(number.to_string())
+}
+
 fn numeric_job_id(value: Option<&str>) -> Option<String> {
     let text = value?;
     if text.is_empty() || text.len() > 24 || !text.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    if text.bytes().all(|byte| byte == b'0') {
         return None;
     }
     Some(text.to_owned())

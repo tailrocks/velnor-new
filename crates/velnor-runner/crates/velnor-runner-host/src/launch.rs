@@ -3,10 +3,7 @@
 //! The journal row is committed before acquire, JIT, and Docker. JIT bytes are
 //! passed to the starter and are not written to the journal.
 
-use std::fmt;
 use std::future::Future;
-
-use zeroize::Zeroize;
 
 use velnor_runner_github::{
     Exchange, Poll, QueueSession, SessionRequest, Transport, TransportFail,
@@ -25,17 +22,22 @@ mod bind;
 mod busy_slot_tests;
 mod capacity;
 mod completion;
+mod drive;
 #[cfg(all(test, unix))]
 mod effect_tests;
 mod gate;
 mod inspect;
 #[cfg(all(test, unix))]
 mod inspect_tests;
+mod name_taken;
+mod runner_dir;
 
+pub(crate) use drive::{Drive, Lane, Rest};
 pub(crate) use inspect::classify_inspect;
 mod mint_origin;
 mod session;
 mod slot;
+mod steady;
 mod steps;
 #[cfg(test)]
 mod subject_tests;
@@ -49,6 +51,8 @@ pub(crate) use capacity::{
     Admit, Seat, admit, needs_running, parse_admit_target, parse_job_capacity, poll_limit,
     statistics_blocked, wide_poll_limit,
 };
+#[cfg(test)]
+pub(crate) use name_taken::{fail_unstarted, should_ack};
 #[cfg(test)]
 pub(crate) use steps::{Idle, idle};
 #[cfg(test)]
@@ -107,8 +111,17 @@ pub async fn launch_once(
     let mut link = admin_link(pat, owner, repo)?;
     let admin = Secret::new(link.token());
     let (session, row) = session::open_session(&mut link, set.id, admin.expose(), journal).await?;
-    let driven =
-        turn::poll_and_drive(&mut link, set.id, &session, admin.expose(), journal, docker).await;
+    let rest = Rest { owner, repo, pat };
+    let driven = turn::poll_and_drive(
+        &mut link,
+        set.id,
+        &session,
+        admin.expose(),
+        journal,
+        docker,
+        rest,
+    )
+    .await;
     let closed = session::close_session(
         &mut link,
         set.id,
@@ -119,56 +132,6 @@ pub async fn launch_once(
     )
     .await;
     report(set.id, driven, closed)
-}
-
-/// Call context. Tokens are redacted in [`Debug`] and zeroized on drop.
-pub(crate) struct Drive {
-    /// Scale-set id.
-    pub(crate) set_id: i64,
-    /// Queue path. No host.
-    pub(crate) queue_path: String,
-    /// Queue bearer.
-    pub(crate) queue_token: String,
-    /// Admin bearer.
-    pub(crate) admin_token: String,
-    /// Selected Docker engine identity, captured before a launch row is prepared.
-    pub(crate) docker_engine_id: Option<String>,
-}
-
-impl fmt::Debug for Drive {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("Drive")
-            .field("set_id", &self.set_id)
-            .field("queue_path", &self.queue_path)
-            .field("queue_token", &"[redacted]")
-            .field("admin_token", &"[redacted]")
-            .finish()
-    }
-}
-
-impl Drop for Drive {
-    fn drop(&mut self) {
-        self.queue_token.zeroize();
-        self.admin_token.zeroize();
-    }
-}
-
-/// Switch the client between the admin origin and the message host.
-pub(crate) trait Lane {
-    /// Use the admin origin for acquire, JIT, and session delete.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`EnsureError`] when the origin cannot be selected.
-    fn on_admin(&mut self) -> Result<(), EnsureError>;
-
-    /// Use the message-host origin for acknowledgement.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`EnsureError`] when the origin cannot be selected.
-    fn on_queue(&mut self) -> Result<(), EnsureError>;
 }
 
 /// Acquire, JIT, and start for one poll. No session create.
@@ -186,7 +149,7 @@ pub(crate) async fn drive_offer<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8], bind::Bind) -> F,
+    S: Fn(&str, &[u8], bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     if matches!(steps::idle(polled), steps::Idle::Scale) {
@@ -226,6 +189,7 @@ async fn scale_session(
     admin_token: &str,
     journal: &Journal,
     docker: &bollard::Docker,
+    rest: Rest<'_>,
 ) -> Result<Option<Started>, EnsureError> {
     let population = session
         .statistics()
@@ -233,13 +197,14 @@ async fn scale_session(
     if population <= 0 {
         return Ok(None);
     }
-    let ctx = Drive {
+    let mut ctx = Drive::from_rest(
         set_id,
-        queue_path: String::new(),
-        queue_token: session.token().to_owned(),
-        admin_token: admin_token.to_owned(),
-        docker_engine_id: engine_identity(docker).await.ok(),
-    };
+        String::new(),
+        session.token().to_owned(),
+        admin_token.to_owned(),
+        rest,
+    );
+    ctx.docker_engine_id = engine_identity(docker).await.ok();
     let admin = link.base().to_owned();
     let mut lane = HostLane {
         link,
@@ -283,6 +248,7 @@ async fn drive_ready<T>(
     journal: &Journal,
     docker: &bollard::Docker,
     capacity: u32,
+    rest: Rest<'_>,
 ) -> Result<Option<Started>, EnsureError>
 where
     T: Transport + Lane,
@@ -290,13 +256,14 @@ where
     if slot::busy(journal, docker, capacity).await? {
         return Ok(None);
     }
-    let ctx = Drive {
-        set_id: ready.set_id,
-        queue_path: ready.path,
-        queue_token: ready.session.token().to_owned(),
-        admin_token: ready.admin_token.to_owned(),
-        docker_engine_id: engine_identity(docker).await.ok(),
-    };
+    let mut ctx = Drive::from_rest(
+        ready.set_id,
+        ready.path,
+        ready.session.token().to_owned(),
+        ready.admin_token.to_owned(),
+        rest,
+    );
+    ctx.docker_engine_id = engine_identity(docker).await.ok();
     drive_offer(lane, &ctx, ready.polled, journal, |volume, jit, bind| {
         let volume = volume.to_owned();
         let payload = jit.to_vec();
@@ -322,13 +289,17 @@ fn ack_ready(
         },
         Poll::Empty => return Ok(()),
     };
-    let ctx = Drive {
-        set_id: 0,
-        queue_path: path,
-        queue_token: session.token().to_owned(),
-        admin_token: String::new(),
-        docker_engine_id: None,
-    };
+    let ctx = Drive::from_rest(
+        0,
+        path,
+        session.token().to_owned(),
+        String::new(),
+        Rest {
+            owner: "",
+            repo: "",
+            pat: "",
+        },
+    );
     let admin = link.base().to_owned();
     let mut lane = HostLane { link, admin, queue };
     steps::acknowledge(&mut lane, &ctx, &batch)
@@ -374,5 +345,9 @@ impl Lane for HostLane<'_> {
             return Ok(());
         };
         self.link.set_base(&origin)
+    }
+
+    fn use_github_api(&mut self) -> Result<(), EnsureError> {
+        self.link.set_base(crate::listen::GITHUB_API)
     }
 }

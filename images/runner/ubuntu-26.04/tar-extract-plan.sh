@@ -3,62 +3,30 @@
 record_directory_metadata() {
   local root="$1"
   shift
-  local index actual metadata intended mode mtime restore_index rest depth mask
+  local index actual intended mode mask batch
   mask="$(umask)"
+  batch="$(mktemp "${TMPDIR:-/tmp}/velnor-dir-batch.XXXXXX")"
   for index in "$@"; do
     [ "${mem_type[$index]}" = 5 ] || continue
     actual="$root/${mem_strip[$index]}"
     [ -d "$actual" ] && [ ! -L "$actual" ] || continue
-    metadata="$(stat -c '%y' -- "$actual")" || die "cannot read directory metadata: $actual"
     member_intended "${mem_name[$index]}" intended
-    mtime="$metadata"
     printf -v mode '%o' "$(( (0${mem_mode[$index]}) & ~(0${mask}) ))"
-    if [ -n "${dir_restore_index[$intended]:-}" ]; then
-      restore_index="${dir_restore_index[$intended]}"
-      dir_restore_mode[$restore_index]="$mode"
-      dir_restore_mtime[$restore_index]="$mtime"
-    else
-      restore_index="${#dir_restore_path[@]}"
-      dir_restore_index["$intended"]="$restore_index"
-      dir_restore_path[$restore_index]="$intended"
-      dir_restore_mode[$restore_index]="$mode"
-      dir_restore_mtime[$restore_index]="$mtime"
-      rest="$intended"
-      depth=0
-      while [[ "$rest" == */* ]]; do
-        depth=$((depth + 1))
-        rest="${rest#*/}"
-      done
-      dir_restore_depth[$restore_index]="$depth"
-    fi
-    chmod u+rwx -- "$actual" || die "cannot defer directory mode: $actual"
+    printf '%s\0%s\0%s\0' "$actual" "$intended" "$mode" >>"$batch"
   done
+  if [ -s "$batch" ]; then
+    [ -n "${dir_meta_file}" ] || dir_meta_file="$(mktemp "${TMPDIR:-/tmp}/velnor-dir-meta.XXXXXX")"
+    if ! perl "${_velnor_tar_here}/tar-dir-meta.pl" record "$dir_meta_file" <"$batch"; then
+      rm -f -- "$batch"
+      die "cannot record directory metadata"
+    fi
+  fi
+  rm -f -- "$batch"
 }
 
 restore_directory_metadata() {
-  local depth i path order status=0
-  [ "${#dir_restore_path[@]}" -gt 0 ] || return 0
-  order="$(for i in "${!dir_restore_path[@]}"; do
-    printf '%s %s\n' "${dir_restore_depth[$i]}" "$i"
-  done | sort -k1,1nr -k2,2n)" || {
-    printf 'cannot sort directory metadata\n' >&2
-    return 1
-  }
-  while read -r depth i; do
-    [ -n "$i" ] || continue
-    path="${dir_restore_path[$i]}"
-    [ -d "$path" ] && [ ! -L "$path" ] || continue
-    if ! chmod "${dir_restore_mode[$i]}" -- "$path"; then
-      printf 'cannot restore directory mode: %s\n' "$path" >&2
-      status=1
-      continue
-    fi
-    if ! touch -d "${dir_restore_mtime[$i]}" -- "$path"; then
-      printf 'cannot restore directory time: %s\n' "$path" >&2
-      status=1
-    fi
-  done <<<"$order"
-  return "$status"
+  [ -n "${dir_meta_file}" ] && [ -s "${dir_meta_file}" ] || return 0
+  perl "${_velnor_tar_here}/tar-dir-meta.pl" restore "$dir_meta_file"
 }
 
 extract_root_fifo() {
@@ -228,11 +196,10 @@ group_path_add() {
 
 plan_isolated_member() {
   local plan="$1" index="$2" actual intended candidate_base conflict stripped raw_name parent_key
-  local -n root_batch_ref=$3 staged_batch_ref=$4 group_kind_ref=$5 group_base_ref=$6
-  local -n staged_seen_ref=$7 staged_descendants_ref=$8
-  local -n destination_seen_ref=$9 destination_descendants_ref=${10}
-  local -n staged_base_ref=${11} staged_direct_ref=${12}
-  local -n parent_base_ref=${13}
+  local -n root_batch_ref=$3 staged_batch_ref=$4 group_kind_ref=$5 group_base_ref=$6 \
+    staged_seen_ref=$7 staged_descendants_ref=$8 destination_seen_ref=$9 \
+    destination_descendants_ref=${10} staged_base_ref=${11} staged_direct_ref=${12} \
+    parent_base_ref=${13}
   if [ "${#root_batch_ref[@]}" -gt 0 ]; then
     flush_root_group "$plan" "$3" "$5" "$6"
   fi

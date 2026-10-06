@@ -4,9 +4,11 @@ use std::sync::{Arc, Mutex};
 
 use velnor_runner_github::{InnerJob, InnerKind, ParsedBatch, Poll, Statistics};
 
-use crate::launch::{Idle, drive_offer, idle};
+use crate::journal::Outcome;
+use crate::launch::{Idle, drive_offer, fail_unstarted, idle};
 use crate::launch_harness::{
     CANARY, Mode, Script, absent, assigned_wait, available, ctx, open, started_progress,
+    started_wait,
 };
 use crate::launch_test_support::valid_worker_volume;
 use crate::{EnsureError, HostError, IntentState, Started};
@@ -25,6 +27,8 @@ fn statistics_advance_and_offers_stay() {
     assert_eq!(idle(&available(&[3, 4])), Idle::Blocked);
     assert_eq!(idle(&assigned_wait(7, 1)), Idle::Scale);
     assert_eq!(idle(&assigned_wait(7, 0)), Idle::Ack);
+    assert_eq!(idle(&started_wait(7, 1)), Idle::Scale);
+    assert_eq!(idle(&assigned_started(7, 4)), Idle::Ack);
     assert_eq!(idle(&assigned_wait(8, -1)), Idle::Blocked);
     assert_eq!(idle(&started_progress(11, 5)), Idle::Scale);
 
@@ -112,6 +116,104 @@ fn job(kind: InnerKind) -> InnerJob {
         result: None,
         fields: Vec::new(),
     }
+}
+
+fn assigned_started(message_id: i64, assigned: i64) -> Poll {
+    let mut assigned_job = job(InnerKind::Assigned);
+    assigned_job.request_id = Some(4);
+    let mut started_job = job(InnerKind::Started);
+    started_job.request_id = Some(4);
+    Poll::Batch(ParsedBatch {
+        message_id,
+        raw_body: String::new(),
+        statistics: Some(Statistics {
+            total_available_jobs: 0,
+            total_acquired_jobs: 0,
+            total_assigned_jobs: assigned,
+            total_running_jobs: 0,
+            total_registered_runners: 0,
+            total_busy_runners: 0,
+            total_idle_runners: 0,
+        }),
+        jobs: vec![assigned_job, started_job],
+    })
+}
+
+#[tokio::test]
+async fn started_replay_releases_the_unstarted_row() -> Result<(), String> {
+    let (scratch, journal) = open("started-replay").await?;
+    let id = journal
+        .begin("launch", "m100000776")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
+    let poll = assigned_started(100_000_776, 4);
+    let failed = fail_unstarted(&journal, &poll)
+        .await
+        .map_err(|err| err.to_string())?;
+    if !failed {
+        return Err("unstarted replay row was not failed".to_owned());
+    }
+    let state = journal.read(id).await.map_err(|err| err.to_string())?;
+    if state != IntentState::Failed {
+        return Err(format!("state {state:?}"));
+    }
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn name_taken_failure_releases_the_unstarted_scale_row() -> Result<(), String> {
+    let (scratch, journal) = open("name-taken").await?;
+    let id = journal
+        .begin("launch", "m100000769")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
+    let failed = fail_unstarted(&journal, &assigned_wait(100_000_769, 5))
+        .await
+        .map_err(|err| err.to_string())?;
+    if !failed {
+        return Err("unstarted row was not failed".to_owned());
+    }
+    let state = journal.read(id).await.map_err(|err| err.to_string())?;
+    if state != IntentState::Failed {
+        return Err(format!("state {state:?}"));
+    }
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn name_taken_keeps_a_row_that_has_a_container() -> Result<(), String> {
+    let (scratch, journal) = open("name-taken-live").await?;
+    let id = journal
+        .begin("launch", "m100000769")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .bind_worker(id, Some("runner-container"), None)
+        .await
+        .map_err(|err| err.to_string())?;
+    let failed = fail_unstarted(&journal, &assigned_wait(100_000_769, 5))
+        .await
+        .map_err(|err| err.to_string())?;
+    if failed {
+        return Err("container row was treated as a name collision".to_owned());
+    }
+    let state = journal.read(id).await.map_err(|err| err.to_string())?;
+    if state != IntentState::Uncertain {
+        return Err(format!("state {state:?}"));
+    }
+    absent(&scratch.file())
 }
 
 #[tokio::test]
@@ -204,7 +306,7 @@ async fn uncertain_acquire_does_not_ack() -> Result<(), String> {
     )
     .await;
     assert_eq!(replayed, Err(EnsureError::Uncertain));
-    assert!(replay.calls.is_empty());
+    assert_eq!(replay.calls, Vec::<&str>::new());
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].id, id);

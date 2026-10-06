@@ -8,7 +8,7 @@ use super::steps::scale_unacked;
 #[tokio::test]
 async fn a_second_statistics_name_mints_again() -> Result<(), String> {
     let (scratch, journal) = open("scale-subject").await?;
-    let mut first_starts = 0;
+    let first_starts = std::cell::Cell::new(0);
     let mut first = Script {
         calls: Vec::new(),
         mode: Mode::Ok,
@@ -19,7 +19,7 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
         &journal,
         "sone1",
         |_name, _jit, _bind| {
-            first_starts += 1;
+            first_starts.set(first_starts.get() + 1);
             async {
                 Ok(Started {
                     dind_id: "dind-1".to_owned(),
@@ -35,8 +35,8 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
         Some("runner-1")
     );
     assert_eq!(first.calls, ["jit"]);
-    assert_eq!(first_starts, 1);
-    let mut second_starts = 0;
+    assert_eq!(first_starts.get(), 1);
+    let second_starts = std::cell::Cell::new(0);
     let mut second = Script {
         calls: Vec::new(),
         mode: Mode::Ok,
@@ -47,7 +47,7 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
         &journal,
         "stwo2",
         |_name, _jit, _bind| {
-            second_starts += 1;
+            second_starts.set(second_starts.get() + 1);
             async {
                 Ok(Started {
                     dind_id: "dind-2".to_owned(),
@@ -63,8 +63,8 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
         Some("runner-2")
     );
     assert_eq!(second.calls, ["jit"]);
-    assert_eq!(second_starts, 1);
-    let mut replay_starts = 0;
+    assert_eq!(second_starts.get(), 1);
+    let replay_starts = std::cell::Cell::new(0);
     let mut replay = Script {
         calls: Vec::new(),
         mode: Mode::Ok,
@@ -75,7 +75,7 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
         &journal,
         "sone1",
         |_name, _jit, _bind| {
-            replay_starts += 1;
+            replay_starts.set(replay_starts.get() + 1);
             async {
                 Ok(Started {
                     dind_id: "dind-3".to_owned(),
@@ -88,7 +88,7 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
     .map_err(|err| err.to_string())?;
     assert_eq!(repeated, None);
     assert!(replay.calls.is_empty());
-    assert_eq!(replay_starts, 0);
+    assert_eq!(replay_starts.get(), 0);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].subject, "sone1");

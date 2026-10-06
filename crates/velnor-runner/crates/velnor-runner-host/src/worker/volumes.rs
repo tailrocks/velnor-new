@@ -232,9 +232,101 @@ fn target(role: WorkerVolumeRole) -> String {
     }
 }
 
+/// Only an exact name with exactly the worker and role labels is owned.
+///
+/// An unlabeled name, a foreign label, a partial label, or an extra label
+/// keeps the volume. Removal fails closed toward a leak, never a delete.
 fn owns(expected: &WorkerVolume, observed: &Volume) -> bool {
+    observed.labels.len() == 2 && labeled(expected, observed)
+}
+
+fn labeled(expected: &WorkerVolume, observed: &Volume) -> bool {
     observed.name == expected.name
         && observed.labels.get("velnor.worker").map(String::as_str)
             == Some(expected.worker.as_str())
         && observed.labels.get("velnor.role").map(String::as_str) == Some(expected.role.label())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use bollard::models::Volume;
+
+    use super::{WorkerVolume, WorkerVolumeRole, owns};
+
+    fn sample(name: &str, labels: &[(&str, &str)]) -> Volume {
+        Volume {
+            name: name.to_owned(),
+            driver: "local".to_owned(),
+            mountpoint: "/var/lib/docker/volumes/test".to_owned(),
+            created_at: None,
+            status: None,
+            labels: labels
+                .iter()
+                .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
+                .collect(),
+            scope: None,
+            cluster_volume: None,
+            options: HashMap::new(),
+            usage_data: None,
+        }
+    }
+
+    fn expected() -> WorkerVolume {
+        WorkerVolume {
+            worker: "w135".to_owned(),
+            name: "w135-work".to_owned(),
+            role: WorkerVolumeRole::Work,
+        }
+    }
+
+    #[test]
+    fn unlabeled_exact_name_is_kept() {
+        let volume = sample("w135-work", &[]);
+        assert!(!owns(&expected(), &volume));
+    }
+
+    #[test]
+    fn exact_labels_are_owned() {
+        let volume = sample(
+            "w135-work",
+            &[("velnor.worker", "w135"), ("velnor.role", "work")],
+        );
+        assert!(owns(&expected(), &volume));
+    }
+
+    #[test]
+    fn foreign_worker_label_is_kept() {
+        let volume = sample(
+            "w135-work",
+            &[("velnor.worker", "other"), ("velnor.role", "work")],
+        );
+        assert!(!owns(&expected(), &volume));
+    }
+
+    #[test]
+    fn partial_label_is_kept() {
+        let volume = sample("w135-work", &[("velnor.worker", "w135")]);
+        assert!(!owns(&expected(), &volume));
+    }
+
+    #[test]
+    fn extra_label_is_kept() {
+        let volume = sample(
+            "w135-work",
+            &[
+                ("velnor.worker", "w135"),
+                ("velnor.role", "work"),
+                ("other", "1"),
+            ],
+        );
+        assert!(!owns(&expected(), &volume));
+    }
+
+    #[test]
+    fn wrong_name_is_kept() {
+        let volume = sample("other", &[]);
+        assert!(!owns(&expected(), &volume));
+    }
 }

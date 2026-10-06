@@ -2,7 +2,7 @@
 
 use velnor_runner_github::Poll;
 
-use super::start_tests::{ready, zero_assignment_session};
+use super::start_tests::{ready, rest, zero_assignment_session};
 use super::start_turn;
 use crate::IntentState;
 use crate::journal::Outcome;
@@ -39,6 +39,7 @@ async fn idless_uncertain_reservation_blocks_turn_without_jit_or_ack() -> Result
         &journal,
         &docker.docker,
         1,
+        rest(),
         false,
     )
     .await;

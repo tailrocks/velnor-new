@@ -1,6 +1,6 @@
 //! Definite JIT rejection can release only an unacquired population reservation.
 
-use super::start_tests::{ready, zero_assignment_session};
+use super::start_tests::{ready, rest, zero_assignment_session};
 use super::start_turn;
 use crate::EnsureError;
 use crate::IntentState;
@@ -29,6 +29,7 @@ async fn definite_assigned_jit_rejection_releases_then_redelivery_retries() -> R
         &journal,
         &docker.docker,
         1,
+        rest(),
         false,
     )
     .await;
@@ -56,6 +57,7 @@ async fn definite_assigned_jit_rejection_releases_then_redelivery_retries() -> R
         &journal,
         &docker.docker,
         1,
+        rest(),
         false,
     )
     .await;

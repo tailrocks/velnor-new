@@ -99,6 +99,27 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
     })
 }
 
+/// Shared read-only seed. Not created or deleted with one worker.
+pub(crate) const SEED_VOLUME: &str = "volume:velnor-seed";
+/// Container path the workflow scripts read. Not a job input.
+pub(crate) const SEED_TARGET: &str = "/opt/velnor/seed";
+
+/// Private mounts plus the shared seed. The seed is not a worker volume.
+///
+/// # Errors
+///
+/// Returns [`HostError::ForbiddenMount`] when the seed mount is rejected.
+pub(crate) fn runner_mounts(mounts: &[Mount]) -> Result<Vec<Mount>, HostError> {
+    let mut out = mounts.to_vec();
+    let seed = Mount {
+        source: SEED_VOLUME.to_owned(),
+        target: SEED_TARGET.to_owned(),
+    };
+    reject_mount(&seed)?;
+    out.push(seed);
+    Ok(out)
+}
+
 /// Reject privileged runners, non-amd64 platforms, and host or token exposure.
 ///
 /// # Errors

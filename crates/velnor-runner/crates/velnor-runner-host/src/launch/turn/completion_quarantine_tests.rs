@@ -42,6 +42,10 @@ impl Lane for AckScript {
     fn on_queue(&mut self) -> Result<(), EnsureError> {
         Ok(())
     }
+
+    fn use_github_api(&mut self) -> Result<(), EnsureError> {
+        Ok(())
+    }
 }
 
 #[tokio::test]
@@ -58,6 +62,9 @@ async fn malformed_event_is_quarantined_then_later_offer_admits() -> Result<(), 
         queue_token: "queue-token".to_owned(),
         admin_token: "admin-token".to_owned(),
         docker_engine_id: None,
+        owner: String::new(),
+        repo: String::new(),
+        pat: String::new(),
     };
     let ack_batch = ParsedBatch {
         message_id: event.message_id,
@@ -115,6 +122,9 @@ async fn inbox_conflict_prevents_quarantine_ack() -> Result<(), String> {
         queue_token: "queue-token".to_owned(),
         admin_token: "admin-token".to_owned(),
         docker_engine_id: None,
+        owner: String::new(),
+        repo: String::new(),
+        pat: String::new(),
     };
     let batch = ParsedBatch {
         message_id: 59,
@@ -166,6 +176,9 @@ async fn overflow_body_survives_restart_and_mixed_offer_starts_once() -> Result<
         queue_token: "queue-token".to_owned(),
         admin_token: "admin-token".to_owned(),
         docker_engine_id: None,
+        owner: String::new(),
+        repo: String::new(),
+        pat: String::new(),
     };
     let starts = start_overflow_offer(&journal, &event, &context).await?;
     drop(journal);
@@ -197,9 +210,9 @@ async fn start_overflow_offer(
         calls: Vec::new(),
         mode: Mode::Ok,
     };
-    let mut starts = 0;
+    let starts = std::cell::Cell::new(0);
     let result = drive_offer(&mut first, context, event, journal, |volume, _, _| {
-        starts += usize::from(valid_worker_volume(volume));
+        starts.set(starts.get() + usize::from(valid_worker_volume(volume)));
         async {
             Ok(crate::worker::Started {
                 dind_id: "dind-128".to_owned(),
@@ -213,9 +226,9 @@ async fn start_overflow_offer(
         result.map(|started| started.runner_id),
         Some("runner-128".to_owned())
     );
-    assert_eq!(starts, 1);
+    assert_eq!(starts.get(), 1);
     assert_eq!(first.calls, ["acquire", "jit", "ack"]);
-    Ok(starts)
+    Ok(starts.get())
 }
 
 async fn verify_overflow_replay(
@@ -256,15 +269,15 @@ async fn verify_overflow_replay(
         calls: Vec::new(),
         mode: Mode::Ok,
     };
-    let mut start_count = starts;
+    let start_count = std::cell::Cell::new(starts);
     let again = drive_offer(&mut replay, context, event, &restarted, |_, _, _| {
-        start_count += 1;
+        start_count.set(start_count.get() + 1);
         async { Err(crate::HostError::Docker) }
     })
     .await
     .map_err(|error| error.to_string())?;
     assert!(again.is_none());
-    assert_eq!(start_count, 1);
+    assert_eq!(start_count.get(), 1);
     assert_eq!(replay.calls, ["ack"]);
     Ok(())
 }

@@ -71,7 +71,12 @@ where
     } = request;
     let encoded = match fetch_jit(lane, ctx, name) {
         Ok(encoded) => encoded,
-        Err(error) => return fail_jit(journal, id, origin, error).await,
+        Err(error) => {
+            return super::super::runner_dir::after_jit(
+                lane, ctx, journal, id, name, origin, error,
+            )
+            .await;
+        }
     };
     let bound = super::super::bind::Bind::new(journal, id);
     let Ok(volume) = crate::worker::new_worker_volume() else {
@@ -101,7 +106,7 @@ where
     Ok(Some(started))
 }
 
-async fn fail_jit(
+pub(super) async fn fail_jit(
     journal: &Journal,
     id: i64,
     origin: MintOrigin,

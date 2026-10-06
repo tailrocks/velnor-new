@@ -23,9 +23,11 @@ fn runner_create_opens_stdin_and_is_not_privileged() -> Result<(), HostError> {
     assert!(!spec.privileged);
     assert_eq!(spec.platform, "linux/amd64");
     assert_eq!(spec.image, "velnor-runner:ubuntu-26.04-2.337.0");
-    assert_eq!(spec.mounts.len(), 2);
+    assert_eq!(spec.mounts.len(), 3);
     assert_eq!(spec.mounts[0].source, "volume:worker_a");
     assert_eq!(spec.mounts[0].target, "/run");
+    assert_eq!(spec.mounts[2].source, "volume:velnor-seed");
+    assert_eq!(spec.mounts[2].target, "/opt/velnor/seed");
     assert!(
         spec.mounts
             .iter()
@@ -137,6 +139,12 @@ fn bollard_config_from_a_clean_plan_omits_canary() -> Result<(), HostError> {
         .as_ref()
         .ok_or(HostError::Docker)?;
     assert_eq!(host.privileged, Some(false));
+    let mounts = host.mounts.as_ref().ok_or(HostError::Docker)?;
+    assert_eq!(mounts.len(), 3);
+    assert_eq!(mounts[2].source.as_deref(), Some("velnor-seed"));
+    assert_eq!(mounts[2].target.as_deref(), Some("/opt/velnor/seed"));
+    assert_eq!(mounts[2].read_only, Some(true));
+    assert_eq!(mounts[0].read_only, None);
     let text = format!("{created:?}");
     assert!(!text.contains("canary-jit"));
     assert!(!text.to_ascii_lowercase().contains("jitconfig"));
@@ -160,6 +168,11 @@ fn bollard_config_from_a_clean_plan_omits_canary() -> Result<(), HostError> {
     assert_eq!(mounts[2].target.as_deref(), Some("/var/lib/docker"));
     assert_eq!(mounts[2].source.as_deref(), Some("worker_a-docker"));
     assert_eq!(mounts[2].typ, Some(MountType::VOLUME));
+    assert!(
+        mounts
+            .iter()
+            .all(|mount| mount.source.as_deref() != Some("velnor-seed"))
+    );
     let text = format!("{dind:?}");
     assert!(!text.contains("canary-jit"));
     assert!(!text.contains("/var/run/docker.sock"));

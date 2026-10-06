@@ -81,6 +81,7 @@ COPY tar-absolute.sh /usr/local/bin/tar-absolute.sh
 COPY tar-extract.sh /usr/local/bin/tar-extract.sh
 COPY tar-extract-plan.sh /usr/local/bin/tar-extract-plan.sh
 COPY tar-member.pl /usr/local/bin/tar-member.pl
+COPY tar-dir-meta.pl /usr/local/bin/tar-dir-meta.pl
 COPY tar-member-stream.pl /usr/local/bin/tar-member-stream.pl
 COPY tar-member-rewrite.pl /usr/local/bin/tar-member-rewrite.pl
 COPY tar-pax.pl /usr/local/bin/velnor-tar-pax

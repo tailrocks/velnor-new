@@ -39,6 +39,7 @@ pub(crate) enum Idle {
 /// Classify one poll. One available id is acquired. A positive current assigned
 /// population starts one runner before ack. Missing census allows only empty or
 /// start/completion-only batches to be acknowledged; it never implies zero jobs.
+/// A batch whose every assigned job already started is acknowledged.
 #[must_use]
 pub(crate) fn idle(polled: &Poll) -> Idle {
     match polled {
@@ -48,6 +49,8 @@ pub(crate) fn idle(polled: &Poll) -> Idle {
             Offer::Acquire { ids, .. } if ids.len() == 1 => Idle::Launch,
             Offer::Wait if may_ack(batch, true) => {
                 if absent_census_progress(batch) {
+                    Idle::Ack
+                } else if batch.statistics.is_some() && crate::assign::started_replay(batch) {
                     Idle::Ack
                 } else {
                     match assigned_population(batch) {
@@ -103,6 +106,23 @@ fn one_request<'a>(
 #[path = "steps/assigned_resume_tests.rs"]
 mod assigned_resume_tests;
 
+fn acquired_request<'a>(
+    ctx: &'a Drive,
+    batch: &'a velnor_runner_github::ParsedBatch,
+    journal: &'a Journal,
+    id: i64,
+    name: &'a str,
+) -> mint::Request<'a> {
+    mint::Request {
+        ctx,
+        batch: Some(batch),
+        journal,
+        id,
+        name,
+        origin: MintOrigin::AcquiredJob,
+    }
+}
+
 pub(super) async fn launch_id<T, S, F>(
     lane: &mut T,
     ctx: &Drive,
@@ -113,7 +133,7 @@ pub(super) async fn launch_id<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
+    S: Fn(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     lane.on_admin()?;
@@ -127,17 +147,13 @@ where
         return ack_bound(lane, ctx, batch, journal, id).await;
     }
     if !fresh {
+        if super::runner_dir::cleared_repeat(journal, id).await? {
+            return Err(EnsureError::NameCleared);
+        }
         if journal.claim_launch_jit(id).await.map_err(map_journal)? {
             return mint::run_claimed(
                 lane,
-                mint::Request {
-                    ctx,
-                    batch: Some(batch),
-                    journal,
-                    id,
-                    name: &name,
-                    origin: MintOrigin::AcquiredJob,
-                },
+                acquired_request(ctx, batch, journal, id, &name),
                 start,
             )
             .await;
@@ -164,14 +180,7 @@ where
                 .map_err(map_journal)?;
             mint::run(
                 lane,
-                mint::Request {
-                    ctx,
-                    batch: Some(batch),
-                    journal,
-                    id,
-                    name: &name,
-                    origin: MintOrigin::AcquiredJob,
-                },
+                acquired_request(ctx, batch, journal, id, &name),
                 start,
             )
             .await
@@ -204,7 +213,7 @@ pub(super) async fn scale_id<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
+    S: Fn(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     let name = format!("m{}", batch.message_id);
@@ -222,11 +231,10 @@ pub(super) async fn scale_unacked<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
+    S: Fn(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
-    // Subject is this session's runner name. A shared "scale" row stayed Done
-    // and blocked every later statistics mint, so an assigned job never got a runner.
+    // A shared Done "scale" row blocked later mints. The subject is this session.
     ensure_runner(lane, ctx, journal, name, name, None, start).await
 }
 
@@ -288,14 +296,68 @@ async fn ensure_runner<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
+    S: Fn(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     lane.on_admin()?;
-    let (id, fresh) = journal.begin_launch(subject).await.map_err(map_journal)?;
-    if docker_of(journal, id).await?.is_some() {
-        return finish_live(lane, ctx, journal, id, batch).await;
+    let mut extra = 1u8;
+    loop {
+        let (id, fresh) = journal.begin_launch(subject).await.map_err(map_journal)?;
+        if docker_of(journal, id).await?.is_some() {
+            return finish_live(lane, ctx, journal, id, batch).await;
+        }
+        if !fresh && stale_cleared(lane, ctx, journal, id, name, &mut extra).await? {
+            continue;
+        }
+        let minted = mint_attempt(lane, ctx, journal, id, name, batch, fresh, &start).await;
+        match minted {
+            Err(EnsureError::NameCleared) if extra > 0 => {
+                extra -= 1;
+            }
+            Err(EnsureError::NameCleared) => return Err(EnsureError::NameSteady),
+            other => return other,
+        }
     }
+}
+
+/// Clear one stale empty row. True retries the mint on a fresh row.
+async fn stale_cleared<T>(
+    lane: &mut T,
+    ctx: &Drive,
+    journal: &Journal,
+    id: i64,
+    name: &str,
+    extra: &mut u8,
+) -> Result<bool, EnsureError>
+where
+    T: velnor_runner_github::Transport + Lane,
+{
+    use super::runner_dir::Decision;
+    match super::runner_dir::release_empty(lane, ctx, journal, id, name).await? {
+        // The cleared row was not a mint. The next mint keeps its one retry.
+        Decision::Free if *extra > 0 => Ok(true),
+        // The row is already failed. A repeat must not hold the slot.
+        Decision::Free | Decision::Repeat => Err(EnsureError::NameSteady),
+        Decision::Live | Decision::Unknown => Ok(false),
+    }
+}
+
+/// Mint once on row `id`, claiming the JIT or binding the identity first.
+async fn mint_attempt<T, S, F>(
+    lane: &mut T,
+    ctx: &Drive,
+    journal: &Journal,
+    id: i64,
+    name: &str,
+    batch: Option<&velnor_runner_github::ParsedBatch>,
+    fresh: bool,
+    start: &S,
+) -> Result<Option<Started>, EnsureError>
+where
+    T: velnor_runner_github::Transport + Lane,
+    S: Fn(&str, &[u8], super::bind::Bind) -> F,
+    F: Future<Output = Result<Started, HostError>>,
+{
     if !fresh {
         if !journal.claim_launch_jit(id).await.map_err(map_journal)? {
             return hold(journal, id, EnsureError::Uncertain).await;
@@ -342,7 +404,7 @@ where
     .await
 }
 
-async fn finish_live<T>(
+pub(super) async fn finish_live<T>(
     lane: &mut T,
     ctx: &Drive,
     journal: &Journal,
@@ -410,7 +472,7 @@ where
     Ok(None)
 }
 
-async fn hold(
+pub(super) async fn hold(
     journal: &Journal,
     id: i64,
     error: EnsureError,
@@ -422,6 +484,16 @@ async fn hold(
     Err(error)
 }
 
+/// Settle one JIT error without the runner directory.
+pub(super) async fn fail_jit(
+    journal: &Journal,
+    id: i64,
+    origin: MintOrigin,
+    error: SessionError,
+) -> Result<Option<Started>, EnsureError> {
+    mint::fail_jit(journal, id, origin, error).await
+}
+
 async fn mark_done(journal: &Journal, id: i64) -> Result<(), EnsureError> {
     if journal.read(id).await.map_err(map_journal)? == crate::IntentState::Done {
         return Ok(());
@@ -429,7 +501,7 @@ async fn mark_done(journal: &Journal, id: i64) -> Result<(), EnsureError> {
     journal.finish(id, Outcome::Done).await.map_err(map_journal)
 }
 
-async fn docker_of(journal: &Journal, id: i64) -> Result<Option<String>, EnsureError> {
+pub(super) async fn docker_of(journal: &Journal, id: i64) -> Result<Option<String>, EnsureError> {
     let rows = journal.rows().await.map_err(map_journal)?;
     Ok(rows
         .into_iter()
@@ -437,7 +509,7 @@ async fn docker_of(journal: &Journal, id: i64) -> Result<Option<String>, EnsureE
         .and_then(|row| row.docker_id))
 }
 
-fn map_journal(error: HostError) -> EnsureError {
+pub(super) fn map_journal(error: HostError) -> EnsureError {
     match error {
         HostError::Endpoint => EnsureError::Endpoint,
         _ => EnsureError::Unexpected {

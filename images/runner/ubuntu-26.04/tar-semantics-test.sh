@@ -23,6 +23,7 @@ rundir="$(mktemp -d /tmp/tar-sem-layout.XXXXXX)"
 cp "$here/tar-shim.sh" "$here/tar-absolute.sh" "$here/tar-extract.sh" "$here/tar-extract-plan.sh" "$rundir/"
 cp "$here/tar-pax.pl" "$rundir/velnor-tar-pax"
 cp "$here/tar-member.pl" "$rundir/"
+cp "$here/tar-dir-meta.pl" "$rundir/"
 cp "$here/tar-member-stream.pl" "$rundir/"
 cp "$here/tar-member-rewrite.pl" "$rundir/"
 chmod 0755 "$rundir/tar-shim.sh" "$rundir/velnor-tar-pax" "$rundir/tar-member.pl"
@@ -409,10 +410,15 @@ run_case cargo-work-symlink case_cargo_work_symlink
 run_case cargo-bulk-parents case_cargo_bulk_parents
 run_case mode-and-mtime case_mode_and_mtime
 run_case directory-metadata case_directory_metadata
+run_case many-directory-metadata case_many_directory_metadata
+run_case record-failure-keeps-mode case_record_failure_keeps_mode
+run_case short-restore-applies-complete-rows case_short_restore_applies_complete_rows
+run_case record-failure-removes-batch case_record_failure_removes_batch
 run_case restrictive-parent-metadata case_restrictive_parent_metadata
 run_case rewritten-long-paths case_rewritten_long_paths
 run_case rewritten-pax-member case_rewritten_pax_member
 run_case grouped-external-restore case_grouped_external_restore
+run_case grouped-extract-failure-keeps-prior-mode case_grouped_extract_failure_keeps_prior_mode
 run_case empty-dir case_empty_dir
 run_case long-and-deep case_long_and_deep
 run_case gnu-enosys-still-extracts case_gnu_enosys_still_extracts

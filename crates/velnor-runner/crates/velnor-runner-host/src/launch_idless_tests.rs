@@ -1,7 +1,7 @@
 //! A launch row without worker IDs stays occupied until cleanup is proven.
 
 use crate::launch::{Admit, admission};
-use crate::launch_harness::{absent, assigned_wait, open, started_progress};
+use crate::launch_harness::{absent, assigned_wait, open, started_progress, started_wait};
 use crate::stage::PairEngine;
 use crate::worker::{
     CreateProjection, VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole,
@@ -207,5 +207,27 @@ async fn failed_row_with_partial_pair_keeps_its_slot() -> Result<(), String> {
             .iter()
             .any(|row| row.id == id && !row.cleanup_proven)
     );
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn full_slot_started_notice_is_acknowledged() -> Result<(), String> {
+    let (scratch, journal) = open("progress-full").await?;
+    let id = journal
+        .begin("launch", "m8")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .bind_worker(id, None, Some(&hex(1)))
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
+    let decision = admission(&Idle, &journal, 1, 1, 0, &started_wait(9, 5))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(decision, Admit::Ack { stop: false });
     absent(&scratch.file())
 }

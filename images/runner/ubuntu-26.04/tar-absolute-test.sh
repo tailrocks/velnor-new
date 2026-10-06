@@ -27,6 +27,9 @@ fi
 if [ -f "$here/tar-member.pl" ]; then
   cp "$here/tar-member.pl" "$rundir/"
 fi
+if [ -f "$here/tar-dir-meta.pl" ]; then
+  cp "$here/tar-dir-meta.pl" "$rundir/"
+fi
 if [ -f "$here/tar-member-rewrite.pl" ]; then
   cp "$here/tar-member-rewrite.pl" "$rundir/"
 fi

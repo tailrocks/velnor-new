@@ -14,11 +14,7 @@ dest_root=""
 isolated_any=0
 extract_all=0
 member_pl=""
-dir_restore_path=()
-dir_restore_mode=()
-dir_restore_mtime=()
-dir_restore_depth=()
-declare -A dir_restore_index=()
+dir_meta_file=""
 dir_metadata_restored=0
 
 cleanup_extract() {
@@ -42,8 +38,12 @@ cleanup_extract() {
     prod_pid=""
   fi
   if [ "${dir_metadata_restored}" -eq 0 ] && \
-    [ "${#dir_restore_path[@]}" -gt 0 ]; then
+    [ -n "${dir_meta_file}" ] && [ -s "${dir_meta_file}" ]; then
     restore_directory_metadata || true
+  fi
+  if [ -n "${dir_meta_file}" ]; then
+    rm -f -- "$dir_meta_file"
+    dir_meta_file=""
   fi
   if [ -n "${stage_dir}" ]; then
     rm -rf -- "$stage_dir"
@@ -312,9 +312,183 @@ extract_fast() {
   fi
 }
 
+# Leading "../" count must match. The remainder has no ".", "..", or empty part.
+member_prefix_rest() {
+  local name="$1"
+  local out="$2"
+  local n=0 value="$name" part
+  while [[ "$value" == ../* ]]; do
+    value="${value#../}"
+    n=$((n + 1))
+  done
+  [ "$n" -gt 0 ] && [ -n "$value" ] || return 1
+  part="$value"
+  while [ -n "$part" ]; do
+    case "${part%%/*}" in
+      "" | . | ..) return 1 ;;
+    esac
+    if [ "$part" = "${part%%/*}" ]; then
+      break
+    fi
+    part="${part#*/}"
+  done
+  if [ "$shared_prefix_count" -eq 0 ]; then
+    shared_prefix_count=$n
+  elif [ "$n" -ne "$shared_prefix_count" ]; then
+    return 1
+  fi
+  printf -v "$out" '%s' "$value"
+}
+
+# One BusyBox extract for a shared "../" prefix. BusyBox applies a directory
+# mode before its children and does not strip hardlink targets.
+shared_external_base() {
+  local i rest="" sample="" prefix="" k root joined intended
+  shared_base=""
+  shared_prefix_count=0
+  [ "$extract_all" -eq 1 ] && [ "${#mem_name[@]}" -gt 0 ] || return 1
+  for i in "${!mem_name[@]}"; do
+    case "${mem_type[$i]}" in
+      0 | 2 | 5) ;;
+      *) return 1 ;;
+    esac
+    member_prefix_rest "${mem_name[$i]}" rest || return 1
+    [ -n "$sample" ] || sample="${mem_name[$i]}"
+  done
+  for ((k = 0; k < shared_prefix_count; k++)); do
+    prefix+="../"
+  done
+  root="${chdir:-$PWD}"
+  norm_path "$root/$prefix" shared_base
+  [ -n "$shared_base" ] || return 1
+  member_prefix_rest "$sample" rest || return 1
+  if [ "$shared_base" = / ]; then
+    joined="/${rest%/}"
+  else
+    joined="$shared_base/${rest%/}"
+  fi
+  norm_path "$joined" joined
+  member_intended "$sample" intended
+  [ "$joined" = "$intended" ]
+}
+
+fail_shared_extract() {
+  rm -f -- "$1"
+  die "member extract failed"
+}
+
+extract_shared_external() {
+  local meta
+  meta="$(mktemp "${TMPDIR:-/tmp}/velnor-dir-meta.XXXXXX")"
+  mkdir -p -- "$shared_base"
+  stream_archive | perl /dev/fd/3 "$member_pl" "$shared_base" "$shared_prefix_count" "$meta" 3<<'PERL' | busybox tar -xf - -C "$shared_base" || fail_shared_extract "$meta"
+use strict;
+use warnings;
+use bytes;
+
+my ($script, $base, $count, $meta_path) = @ARGV;
+die "velnor-tar-member: bad prefix\n" if !defined $meta_path || $count !~ /^\d+$/ || $count < 1;
+open my $sf, "<", $script or die "velnor-tar-member: $script: $!\n";
+my $src = do { local $/; <$sf> };
+close $sf or die "velnor-tar-member: $script: $!\n";
+my $dir = $script;
+$dir =~ s{/[^/]+\z}{};
+my $marker = 'use FindBin qw($RealBin);';
+my $at = index $src, $marker;
+die "velnor-tar-member: cannot bind modules\n" if $at < 0;
+my $dir_lit = $dir;
+$dir_lit =~ s/\\/\\\\/g;
+$dir_lit =~ s/'/\\'/g;
+substr($src, $at, length($marker)) = "my \$RealBin = '$dir_lit';";
+$at = index $src, "my \$cmd = shift \@ARGV";
+die "velnor-tar-member: cannot bind modules\n" if $at < 0;
+substr($src, $at) = "";
+eval $src;
+die $@ if $@;
+
+open my $mf, ">:raw", $meta_path or die "velnor-tar-member: $meta_path: $!\n";
+my $mask = umask();
+my $gwritten = 0;
+
+sub record_dir {
+    my ($name, $hdr, $state) = @_;
+    my $rest = $name;
+    my $left = $count;
+    while ($left > 0) {
+        die "velnor-tar-member: prefix\n" if $rest !~ s{\A\.\./}{};
+        $left--;
+    }
+    $rest =~ s{/+\z}{};
+    die "velnor-tar-member: empty path\n" if $rest eq "" || $rest eq ".";
+    my $intended = $base eq "/" ? "/$rest" : "$base/$rest";
+    my $mode = parse_size(substr($hdr, 100, 8));
+    my $mtime;
+    if (exists $state->{local}{mtime}) {
+        $mtime = $state->{local}{mtime};
+    } elsif (exists $state->{global}{mtime}) {
+        $mtime = $state->{global}{mtime};
+    } else {
+        $mtime = parse_size(substr($hdr, 136, 12));
+    }
+    die "velnor-tar-member: bad mtime\n" if $mtime !~ /^\d+(?:\.\d+)?$/;
+    my $perm = $mode & ~$mask;
+    my $depth = ($intended =~ tr/\///);
+    printf {$mf} "%s\0%o\0%.9f\0%d\0", $intended, $perm, $mtime, $depth
+        or die "velnor-tar-member: write: $!\n";
+}
+
+sub patch_dir_mode {
+    my ($hdr) = @_;
+    my $mode = parse_size(substr($hdr, 100, 8)) | 0700;
+    die "velnor-tar-member: mode overflow\n" if $mode > 07777777;
+    substr($hdr, 100, 8) = sprintf("%07o\0", $mode);
+    substr($hdr, 148, 8) = "        ";
+    my $sum = 0;
+    $sum += ord $_ for split //, $hdr;
+    substr($hdr, 148, 8) = sprintf("%06o\0 ", $sum);
+    return $hdr;
+}
+
+walk(
+    sub {
+        my ($index, $type, $name, $link, $hdr, $size, $prelude, $globals, $state) = @_;
+        while ($gwritten < @$globals) {
+            print STDOUT $globals->[$gwritten] or die "velnor-tar-member: write: $!\n";
+            $gwritten++;
+        }
+        print STDOUT $prelude or die "velnor-tar-member: write: $!\n" if length $prelude;
+        my $rel = $name;
+        my $left = $count;
+        while ($left > 0) {
+            die "velnor-tar-member: prefix\n" if $rel !~ s{\A\.\./}{};
+            $left--;
+        }
+        $rel =~ s{/+\z}{};
+        my ($pax, $new) = rewrite_member($rel, $index, $hdr, $state);
+        if ($type eq "5") {
+            record_dir($name, $new, $state);
+            $new = patch_dir_mode($new);
+        }
+        print STDOUT $pax or die "velnor-tar-member: write: $!\n" if $pax ne "";
+        print STDOUT $new or die "velnor-tar-member: write: $!\n";
+        return (\*STDOUT, undef);
+    }
+);
+print STDOUT ("\0" x 1024) or die "velnor-tar-member: write: $!\n";
+close $mf or die "velnor-tar-member: $meta_path: $!\n";
+PERL
+  dir_meta_file="$meta"
+  restore_directory_metadata || die "cannot restore directory metadata"
+  dir_metadata_restored=1
+}
+
 extract_absolute() {
   member_tool
   load_members
+  if shared_external_base; then
+    extract_shared_external
+    return 0
+  fi
   if [ "$isolated_any" -eq 0 ]; then
     extract_fast
     return 0

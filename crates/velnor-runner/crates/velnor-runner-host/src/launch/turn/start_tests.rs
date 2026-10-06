@@ -31,6 +31,14 @@ pub(super) fn zero_assignment_session() -> Result<QueueSession, String> {
         .map_err(|error| error.to_string())
 }
 
+pub(super) fn rest() -> crate::launch::Rest<'static> {
+    crate::launch::Rest {
+        owner: "",
+        repo: "",
+        pat: "",
+    }
+}
+
 pub(super) fn ready<'a>(session: &'a QueueSession, polled: &'a Poll) -> Ready<'a> {
     Ready {
         set_id: 1,
@@ -67,6 +75,7 @@ async fn zero_initial_census_and_positive_poll_keep_jit_conflict_unacked() -> Re
         &journal,
         &docker.docker,
         2,
+        rest(),
         false,
     )
     .await;
@@ -117,6 +126,7 @@ async fn missing_status_keeps_the_slot_and_blocks_assignment() -> Result<(), Str
         &journal,
         &docker.docker,
         2,
+        rest(),
         false,
     )
     .await;
@@ -195,6 +205,7 @@ async fn uncertain_volume_keeps_cleanup_unproven_and_redelivery_unacked() -> Res
         &journal,
         &docker.docker,
         1,
+        rest(),
         false,
     )
     .await;
@@ -278,6 +289,7 @@ async fn bound_running_worker_acks_without_a_second_jit_request() -> Result<(), 
         &journal,
         &docker.docker,
         2,
+        rest(),
         false,
     )
     .await;
@@ -342,6 +354,7 @@ async fn bound_resource_keeps_assignment(
         &journal,
         &docker.docker,
         2,
+        rest(),
         false,
     )
     .await;
