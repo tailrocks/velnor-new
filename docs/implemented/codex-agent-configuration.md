@@ -70,3 +70,5 @@ env \
 ```
 
 For every local commit, add `VELNOR_REPO_POLICY_CHECK_LOCAL_IDENTITIES=1` to the `env` assignments. This required check also verifies that the effective Git author and committer identities match the repository-local identity above. API-submitted message validation may omit this setting. After an API merge, independently verify the actual remote commit message and author metadata.
+
+For manual checks, `cargo run --locked -p velnor-actions-cli --example validate_commit_trailers -- MESSAGE_FILE` (add `--check-local-identities` after the message path for local commits) runs the same trailer rules without the internal-op envelope.

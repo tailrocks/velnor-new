@@ -243,10 +243,12 @@ fn exact_base_run_filter_pins_provenance() {
         select_exact_base_run(&unattested.to_string(), &base, "t").is_err(),
         "runs without attempt evidence never select"
     );
-    let listed = serde_json::json!({"artifacts": [
+    let listed = serde_json::json!({"total_count": 3, "artifacts": [
         {"id": 8, "name": "other", "expired": false},
-        {"id": 9, "name": "velnor-baseline-x", "expired": true},
-        {"id": 10, "name": "velnor-baseline-x", "expired": false},
+        {"id": 9, "name": "velnor-baseline-x", "expired": true,
+         "size_in_bytes": 1, "digest": format!("sha256:{}", "b".repeat(64))},
+        {"id": 10, "name": "velnor-baseline-x", "expired": false,
+         "size_in_bytes": 1, "digest": format!("sha256:{}", "a".repeat(64))},
     ]});
     assert_eq!(
         select_baseline_artifact(&listed.to_string(), "velnor-baseline-x"),
@@ -254,8 +256,9 @@ fn exact_base_run_filter_pins_provenance() {
     );
     assert!(select_baseline_artifact(&listed.to_string(), "missing").is_err());
     assert!(select_baseline_artifact("not json", "velnor-baseline-x").is_err());
-    let array = serde_json::json!([{"databaseId": 11, "name": "n", "expired": false}]);
-    assert_eq!(select_baseline_artifact(&array.to_string(), "n"), Ok(11));
+    let array = serde_json::json!([{"id": 11, "name": "n", "expired": false,
+        "size_in_bytes": 1, "digest": format!("sha256:{}", "a".repeat(64))}]);
+    assert!(select_baseline_artifact(&array.to_string(), "n").is_err());
 }
 
 #[test]

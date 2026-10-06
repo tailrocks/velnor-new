@@ -6,7 +6,7 @@ Detected stacks
   Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Workspace crates: 14
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib, test; depends on velnor-actions-contract]
-    - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, test; depends on velnor-actions-freshness, velnor-actions-orchestrator]
+    - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, example, test; depends on velnor-actions-freshness, velnor-actions-orchestrator]
     - velnor-actions-contract (crates/velnor-actions-contract/Cargo.toml) [lib, test]
     - velnor-actions-freshness (crates/velnor-actions-freshness/Cargo.toml) [lib, test]
     - velnor-actions-mise (crates/velnor-actions-mise/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-tofu]

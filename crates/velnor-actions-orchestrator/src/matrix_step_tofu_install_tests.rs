@@ -174,6 +174,9 @@ fn every_workspace_member_is_classified_for_tofu() {
     let crates = std::fs::read_dir(root.join("crates")).expect("crates dir lists");
     for entry in crates {
         let manifest = entry.expect("dir entry reads").path().join("Cargo.toml");
+        if !manifest.is_file() {
+            continue;
+        }
         let text = std::fs::read_to_string(&manifest).expect("member manifest reads");
         let mut in_package = false;
         for line in text.lines() {

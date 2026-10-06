@@ -124,34 +124,20 @@ fn gh_stdout_cap_misses_before_parsing() {
 }
 
 #[test]
-fn exact_single_artifact_extracts_into_manifest_collection_directory() {
-    use crate::cover::revalidate::cover_revalidate_fixtures::manifest_for;
-    let base = "1".repeat(40);
-    let parent = manifest_for(&base);
-    let lookup =
-        BaselineLookup::new(&base, ".github/workflows/ci.yml", "testmain", "o/r").expect("lookup");
-    let temp = tempfile::tempdir().expect("staging");
-    let args = lookup
-        .download_args(&parent.artifact_name, 7, temp.path())
-        .expect("argv");
-    let position = args
-        .iter()
-        .position(|arg| arg == "--dir")
-        .expect("directory flag")
-        + 1;
-    let extraction = std::path::Path::new(&args[position]);
-    assert_eq!(extraction, temp.path().join(&parent.artifact_name));
-    // Model gh's single-artifact extraction: the payload is directly under
-    // `--dir`, with no automatically added artifact-name directory.
-    std::fs::create_dir(extraction).expect("extraction directory");
-    std::fs::write(
-        extraction.join("baseline.json"),
-        velnor_actions_contract::canonical_json_bytes(&parent).expect("canonical"),
+fn exact_artifact_zip_uses_service_id_endpoint() {
+    let lookup = BaselineLookup::new(
+        &"1".repeat(40),
+        ".github/workflows/ci.yml",
+        "testmain",
+        "o/r",
     )
-    .expect("downloaded manifest");
-    let found = collect_manifests(temp.path(), &base, 7, 1, &parent.artifact_name)
-        .expect("manifest collected");
-    assert_eq!(found.len(), 1);
-    assert_eq!(found[0].artifact_name, parent.artifact_name);
-    assert!(lookup.download_args("../escape", 7, temp.path()).is_err());
+    .expect("lookup");
+    assert_eq!(
+        lookup.artifact_zip_args(99),
+        Ok(vec![
+            "api".into(),
+            "repos/o/r/actions/artifacts/99/zip".into()
+        ])
+    );
+    assert!(lookup.artifact_zip_args(0).is_err());
 }

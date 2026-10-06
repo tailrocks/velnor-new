@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::Path;
 
-use crate::impl_common::{TestResult, config_with_branch, git, git_line, make_repo};
+use crate::impl_common::{TestResult, config_with_branch, git, git_fixture, git_line, make_repo};
 use velnor_actions_orchestrator::prepare;
 
 /// Write a minimal nested Rust crate for discovery assertions.
@@ -203,12 +203,11 @@ fn stage_raw_index_path(root: &Path, path: &[u8]) -> TestResult {
     use std::ffi::OsString;
     use std::io::Write;
     use std::os::unix::ffi::OsStringExt;
-    use std::process::{Command, Stdio};
+    use std::process::Stdio;
 
-    let mut command = Command::new("git");
+    let mut command = git_fixture::command(root)?;
     command
         .args(["hash-object", "-w", "-t", "blob", "--stdin"])
-        .current_dir(root)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped());
     let mut child = command.spawn()?;
@@ -222,10 +221,9 @@ fn stage_raw_index_path(root: &Path, path: &[u8]) -> TestResult {
     let object = String::from_utf8(output.stdout)?;
     let mut cache_info = format!("100644,{},", object.trim()).into_bytes();
     cache_info.extend_from_slice(path);
-    let output = Command::new("git")
+    let output = git_fixture::command(root)?
         .args(["update-index", "--add", "--cacheinfo"])
         .arg(OsString::from_vec(cache_info))
-        .current_dir(root)
         .output()?;
     assert!(
         output.status.success(),

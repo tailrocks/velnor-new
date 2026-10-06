@@ -264,6 +264,9 @@ mod tests {
         let mut members = Vec::new();
         for entry in fs::read_dir(root.join("crates")).expect("crates dir lists") {
             let manifest = entry.expect("dir entry reads").path().join("Cargo.toml");
+            if !manifest.is_file() {
+                continue;
+            }
             let text = fs::read_to_string(&manifest).expect("member manifest reads");
             let mut in_package = false;
             for line in text.lines() {

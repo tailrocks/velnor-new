@@ -39,7 +39,7 @@ release_pr = true
 tag_name = "{{ package }}-v{{ version }}"
 
 [discovery]
-exclude = ["fixtures/**"]
+exclude = ["fixtures/**", "crates/**/tests/fixtures/**"]
 
 [actions.overrides]
 

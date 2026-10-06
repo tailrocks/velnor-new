@@ -1,5 +1,7 @@
 //! Generate gate cases: fixed-point, determinism, matrix budget.
 
+use crate::impl_common::git_fixture;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
@@ -134,7 +136,7 @@ fn matrix_budget_enforced_never_truncated() -> TestResult {
     let root = repo.path();
     git(&["add", "."], root)?;
     git(&["commit", "-m", "wide"], root)?;
-    let output = std::process::Command::new("git")
+    let output = git_fixture::command(root)?
         .args(["rev-parse", "HEAD"])
         .current_dir(root)
         .output()?;

@@ -1,5 +1,8 @@
 //! Shared fixtures and helpers for orchestrator integration tests.
 
+#[path = "../../test_support/git_fixture.rs"]
+pub(crate) mod git_fixture;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -169,7 +172,7 @@ pub(crate) fn write_nextest_task(root: &Path) -> TestResult {
 
 /// Run git with inherited failure context.
 pub(crate) fn git(args: &[&str], cwd: &Path) -> TestResult {
-    let status = StdCommand::new("git")
+    let status = git_fixture::command(cwd)?
         .args(args)
         .current_dir(cwd)
         .status()?;
@@ -192,7 +195,7 @@ pub(crate) fn anchor_id() -> String {
 
 /// Single git stdout line.
 pub(crate) fn git_line(args: &[&str], cwd: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    let output = StdCommand::new("git")
+    let output = git_fixture::command(cwd)?
         .args(args)
         .current_dir(cwd)
         .output()?;
