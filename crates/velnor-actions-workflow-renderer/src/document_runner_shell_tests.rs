@@ -140,12 +140,13 @@ fn rustdocflags_remain_scoped_to_the_documentation_step() {
         .expect("workflow renders");
     let jobs = field(&rendered, "jobs").expect("jobs map");
     let task = field(jobs, "task").expect("task job");
-    let job_env = field(task, "env").expect("job environment");
-    assert_eq!(
-        field(job_env, "RUSTDOCFLAGS"),
-        None,
-        "task-specific rustdoc flags must not enter the job environment"
-    );
+    if let Some(job_env) = field(task, "env") {
+        assert_eq!(
+            field(job_env, "RUSTDOCFLAGS"),
+            None,
+            "task-specific rustdoc flags must not enter the job environment"
+        );
+    }
     let crate::yaml::Yaml::Seq(steps) = field(task, "steps").expect("job steps") else {
         panic!("steps must be a sequence");
     };

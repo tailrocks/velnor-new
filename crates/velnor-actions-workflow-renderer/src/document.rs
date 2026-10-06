@@ -261,21 +261,18 @@ fn job_to_yaml(
         StepKind::Shell { env, .. } | StepKind::Action { env, .. } => !env.is_empty(),
         StepKind::Internal { .. } => false,
     });
-    let mut job_env = if step_has_env {
-        if ctx
+    let mut job_env = if step_has_env
+        && ctx
             .verification_tasks
             .iter()
             .any(|task| task.owns_job_id(id))
-        {
-            // Verification jobs intentionally execute repository-declared
-            // Mise tasks, so they need Mise config while retaining the same
-            // credential scrub as every other repository-code step.
-            crate::toolchain_env::credential_scrub()
-        } else {
-            // Hoisted: ordinary jobs inherit the workflow-level env.
-            BTreeMap::new()
-        }
+    {
+        // Verification jobs intentionally execute repository-declared
+        // Mise tasks, so they need Mise config while retaining the same
+        // credential scrub as every other repository-code step.
+        crate::toolchain_env::credential_scrub()
     } else {
+        // Hoisted: ordinary jobs inherit the workflow-level env.
         BTreeMap::new()
     };
     if step_has_env {
