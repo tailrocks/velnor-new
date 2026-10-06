@@ -227,6 +227,10 @@ fn classify_exit_failure(stderr: &str) -> FetchFailure {
 /// `known` holds every discovered candidate manifest: path targets naming
 /// one are real packages outside this workspace (nested, parent, or
 /// sibling members) and skip instead of failing. Unknown targets fail.
+#[expect(
+    clippy::needless_option_as_deref,
+    reason = "the Option is intentionally reborrowed multiple times"
+)]
 fn fetch_inventory(
     root: &Path,
     manifest: &str,

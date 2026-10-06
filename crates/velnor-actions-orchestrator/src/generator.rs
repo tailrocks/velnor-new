@@ -45,6 +45,10 @@ pub(crate) fn current_exe_sha256_with_phase_timings(
         .ok()
         .and_then(|exe| std::fs::read(exe).ok())
         .map(|bytes| sha256_hex(&bytes));
+    #[expect(
+        clippy::needless_option_as_deref,
+        reason = "the original Option must remain available after this branch"
+    )]
     if let (Some(phases), Some(started)) = (phases.as_deref_mut(), started) {
         phases.generator_sha_us += started.elapsed().as_micros();
     }

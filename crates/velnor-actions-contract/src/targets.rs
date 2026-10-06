@@ -172,3 +172,6 @@ pub fn is_seed_tag_for_version(tag: &str, version: &str) -> bool {
             && suffix[1..].bytes().all(|b| b.is_ascii_digit())
     })
 }
+
+/// Version marker for the contract schema shell.
+pub const CONTRACT_VERSION: u32 = 0;

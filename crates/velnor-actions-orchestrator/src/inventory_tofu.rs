@@ -1,4 +1,4 @@
-//! Structural ToFu inventory analysis extracted from Cargo inventory flow.
+//! Structural `ToFu` inventory analysis extracted from Cargo inventory flow.
 
 use std::path::Path;
 

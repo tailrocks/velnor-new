@@ -118,6 +118,10 @@ fn discover_inner(
         problem: err.to_string(),
     })?;
     let initial = apply_stack_ignores(projects, &config.stacks.ignore);
+    #[expect(
+        clippy::needless_option_as_deref,
+        reason = "the original Option must remain available after this branch"
+    )]
     let inventory_result = match phases.as_deref_mut() {
         Some(phases) => {
             run_inventories_with_phase_timings(root, &candidates, index.files(), &mut reads, phases)

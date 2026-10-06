@@ -32,7 +32,6 @@ pub mod targets;
 pub mod tooling;
 pub mod vcs;
 pub mod workflow;
-
 pub use archive::{ArchiveInputs, archive_id};
 pub use canonical::{
     CompatibilityInputs, Digest, StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity,
@@ -118,8 +117,9 @@ pub use propose::{
 pub use secrets::is_secret_env_name;
 pub use strict_json::parse_strict_json;
 pub use targets::{
-    EXPECTED_REPOSITORY, RELEASE_MANIFEST_FILENAME, ReleaseTarget, SUPPORTED_TARGETS,
-    asset_filename, check_release_artifact, is_seed_tag_for_version, is_supported_target,
+    CONTRACT_VERSION, EXPECTED_REPOSITORY, RELEASE_MANIFEST_FILENAME, ReleaseTarget,
+    SUPPORTED_TARGETS, asset_filename, check_release_artifact, is_seed_tag_for_version,
+    is_supported_target,
 };
 pub use tooling::ToolIdentity;
 pub use vcs::VcsInputs;
@@ -146,6 +146,3 @@ pub use workflow::{
     task_report_relpath, tofu_display_name, trust_for_event, validate_final_report_id,
     validate_job_id, validate_matrix_run,
 };
-
-/// Version marker for the contract schema shell.
-pub const CONTRACT_VERSION: u32 = 0;

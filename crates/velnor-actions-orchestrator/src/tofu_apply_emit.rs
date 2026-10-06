@@ -1,4 +1,4 @@
-//! Protected post-merge OpenTofu apply workflow emission.
+//! Protected post-merge `OpenTofu` apply workflow emission.
 
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::RenderedFile;

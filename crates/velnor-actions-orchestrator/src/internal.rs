@@ -79,6 +79,10 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
     plan_internal_inner(request_json, None)
 }
 
+#[expect(
+    clippy::needless_option_as_deref,
+    reason = "the Option is intentionally reborrowed across planning stages"
+)]
 fn plan_internal_inner(
     request_json: &str,
     mut timings: Option<&mut phase_timing::PlanPhaseTimings>,
@@ -259,6 +263,10 @@ fn build_plan(
         .unwrap_or_default();
     // The running binary names itself: no request override, no lock
     // fill, so a source build can never emit a release-pinned identity.
+    #[expect(
+        clippy::needless_option_as_deref,
+        reason = "the original Option must remain available after this call"
+    )]
     let generator = default_generator_with_phase_timings(timings.as_deref_mut());
     let snapshot = ExecutionSnapshot::build(discovery);
     let mut reads = velnor_actions_tofu::FileCache::new();
