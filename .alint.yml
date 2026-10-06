@@ -1,163 +1,32 @@
-# Repository policy, enforced by asamarts/alint as its own CI job.
-# Local rules cover generic file/path requirements and agent-instruction
-# file integrity only. No dependency-architecture, Rust-syntax, or
-# test-layout claims: Alint cannot inspect those (see
-# docs/proposed/rust-quality-contract.md §1, §4).
+# S2 consumer adapter: extend the materialized strict profile, add the
+# one command rule the trust gate requires to live in the adopter's own
+# top-level config (never via extends).
 #
-# `extends` pins the five pr-1 R04 bundles (OSS, GitHub Actions, Rust,
-# lockfiles, no-tracked-artifacts), deduped: the review example repeats
-# the GHA bundle. Verified on the pinned alint 0.16.1 (`alint
-# validate-config` loads 46 bundled rules; `alint check
-# --fail-on-warning` is green). Re-verify every bundle/level change with
-# the pinned binary: `alint validate-config` plus `alint check`.
-# Rust edition 2024 is NOT a literal `toml_path_equals` rule here: every
-# member declares `edition.workspace = true`, so literal equality on
-# `$.package.edition` would reject all seven manifests. Adoption §4
-# requires the inheritance-aware form instead, enforced and tested by the
-# Rust policy suite (`cargo metadata` effective edition plus TOML
-# inheritance predicates in `crates/velnor-actions-cli/tests/fixtures/`).
+# Policy: tailrocks/rust-repository-policy v0.1.0
+# (sha256 4d6efd5ec023aabb53aca10d564b28bcf70c8197717d5bdc4e2e5e8da71afa1c),
+# materialized into .cache/rust-policy/ (gitignored; CI re-materializes
+# before `alint check`). Helper `rust-repository-policy` must be on PATH.
 #
-# Schema: alint config model (`version` + `rules`, each rule with
-# id/kind/level). The top-level `command` rule is trusted and checks only
-# each AGENTS.md's sibling CLAUDE.md symlink, which Alint has no native
-# symlink-target rule to express. Its `pair` rule checks existence only;
-# the command below checks the link type and target on the CI Linux runner.
-# Validate with the pinned alint binary: `alint validate-config`.
-# The 80-line function/method limit (§5, "using Clippy accounting") is NOT
-# expressed here — alint ships no function-level rule kind. It is enforced
-# by Clippy (`too_many_lines = "deny"` + `too-many-lines-threshold = 80`).
-#
-# §5 limits are hard errors. No baseline/ratchet: oversized files MUST be
-# split, never grandfathered (relabeling or exclusion to satisfy limits is
-# forbidden by §5).
+# Replaces the pre-rollout Velnor-local config (5 bundle extends + 9 local
+# rules: required-files, claude-is-agents-symlink,
+# agent-instructions-max-lines, agent-instructions-max-size, crates-only,
+# velnor-no-stray-cargo-lock, velnor-no-stray-npm-lock, rust-max-lines,
+# lib-main-max-lines). Reconciliation is sequenced in
+# docs/content/development/rust-policy-rollout.mdx: overlapping size rules
+# stay dropped (policy owns them); Velnor-specific rules return as
+# adapter-local additions once the migration slices land.
 version: 1
-
-# `fixtures/` holds adversarial test inputs (incl. a symlink loop and an
-# escape symlink the walker cannot traverse). It is not Velnor-owned
-# product code, so it is excluded from the walked index (ARCH-1.12).
-ignore:
-  - "fixtures/**"
-
+# Anti-evasion MUST be repeated here: `respect_gitignore: false` set in
+# the extended profile does NOT propagate to the consumer (probed
+# 2026-10-06 on alint 0.17.0: a gitignored 500-line file passed
+# size-file-400 through the extends chain until this line was added).
+respect_gitignore: false
 extends:
-  - alint://bundled/oss-baseline@v1
-  - alint://bundled/ci/github-actions@v1
-  - alint://bundled/rust@v1
-  - url: alint://bundled/hygiene/lockfiles@v1
-    except:
-      - lockfiles-no-nested-cargo
-      - lockfiles-no-nested-npm
-  - alint://bundled/hygiene/no-tracked-artifacts@v1
-
+  - ./.cache/rust-policy/profiles/rust-strict-v1.yml
 rules:
-  # Required repo-shape files (rust-quality-contract §1 / RQ-1.1).
-  - id: required-files
-    kind: file_exists
-    paths:
-      - Cargo.toml
-      - Cargo.lock
-      - clippy.toml
-      - deny.toml
-      - rustfmt.toml
-      - CODEOWNERS
-      - .alint.yml
-      - .config/nextest.toml
-      - AGENTS.md
+  - id: policy-gaps
+    kind: command_idempotent
+    command: ["rust-repository-policy", "check-gaps", "--root", "."]
+    files_from: stdout
+    files_pattern: "^\\S+ (\\S+?):\\d+:"
     level: error
-    message: "Repo-shape file is missing (rust-quality-contract §1)"
-
-  # Run against each real AGENTS.md and check its sibling. `pair` only checks
-  # partner existence and cannot enforce symlink type or target; this trusted
-  # command requires the relative target text to be exactly AGENTS.md.
-  - id: claude-is-agents-symlink
-    kind: command
-    paths: "**/AGENTS.md"
-    command:
-      - sh
-      - -c
-      - 'dir=$(dirname "$1") && test -L "$dir/CLAUDE.md" && test "$(readlink "$dir/CLAUDE.md")" = AGENTS.md'
-      - alint-claude-link
-      - "{path}"
-    level: error
-    message: "Each AGENTS.md must have a sibling CLAUDE.md symlink to AGENTS.md"
-
-  # Keep instruction files concise so they fit in agent context by default.
-  - id: agent-instructions-max-lines
-    kind: file_max_lines
-    paths: "**/AGENTS.md"
-    max_lines: 100
-    level: error
-    message: "AGENTS.md exceeds 100 lines; move detailed guidance into docs"
-
-  - id: agent-instructions-max-size
-    kind: file_max_size
-    paths: "**/AGENTS.md"
-    max_bytes: 16384
-    level: error
-    message: "AGENTS.md exceeds 16 KiB; move detailed guidance into docs"
-
-  # First-party Rust packages live only under crates/ (ARCH-1.10).
-  - id: crates-only
-    kind: file_absent
-    paths:
-      include: ["**/*.rs"]
-      exclude: ["crates/**"]
-    level: error
-    message: "First-party Rust sources MUST live under crates/"
-
-  # The bundled nested-lock rules are excepted above. These replacements
-  # still forbid stray locks, and name the two locks the bundles cannot see:
-  # the nested runner workspace, and the npm lock zizmor's `npm ci` requires.
-  - id: velnor-no-stray-cargo-lock
-    kind: file_absent
-    paths:
-      include: ["**/Cargo.lock"]
-      exclude:
-        - Cargo.lock
-        - crates/velnor-runner/Cargo.lock
-    level: error
-    message: "Stray Cargo.lock. Only the root lock and crates/velnor-runner/Cargo.lock are resolved."
-
-  - id: velnor-no-stray-npm-lock
-    kind: file_absent
-    paths:
-      include: ["**/package-lock.json"]
-      exclude:
-        - package-lock.json
-        - qualification/testcontainers/package-lock.json
-    level: error
-    message: "Stray package-lock.json. Only the root lock and qualification/testcontainers/package-lock.json are allowed."
-
-  # Hard size limits for new handwritten code, physical lines (RQ §5).
-  # Scoped to Velnor-owned product paths; fixtures are test inputs and
-  # lockfiles/vendored/generated output are classified elsewhere, so they
-  # are excluded here rather than relabeled (ARCH-1.12, RQ-5.2).
-  - id: rust-max-lines
-    kind: file_max_lines
-    paths:
-      include:
-        - "crates/velnor-actions-*/src/**/*.rs"
-        - "crates/velnor-actions-*/tests/**/*.rs"
-        - "crates/velnor-archive-guard/src/**/*.rs"
-        - "crates/velnor-archive-guard/tests/**/*.rs"
-        - "crates/velnor-runner/crates/*/src/**/*.rs"
-        - "crates/velnor-runner/crates/*/tests/**/*.rs"
-      exclude:
-        - "**/fixtures/**"
-        - "**/testdata/**"
-    max_lines: 400
-    level: error
-    message: "Rust source exceeds 400 physical lines (rust-quality-contract §5)"
-
-  - id: lib-main-max-lines
-    kind: file_max_lines
-    paths:
-      include:
-        - "crates/velnor-actions-*/src/lib.rs"
-        - "crates/velnor-actions-*/src/main.rs"
-        - "crates/velnor-archive-guard/src/lib.rs"
-        - "crates/velnor-archive-guard/src/main.rs"
-        - "crates/velnor-runner/crates/*/src/lib.rs"
-        - "crates/velnor-runner/crates/*/src/main.rs"
-    max_lines: 150
-    level: error
-    message: "src/lib.rs and src/main.rs MUST stay under 150 physical lines (§5)"

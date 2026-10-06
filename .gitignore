@@ -1,3 +1,4 @@
 .firecrawl/
 /target/
 .DS_Store
+.cache/
