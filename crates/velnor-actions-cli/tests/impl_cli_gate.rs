@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use crate::impl_cli_tmp::{cleanup, code, fresh_tempdir, spawn_isolated};
 
 /// Stage `<dir>/<name>` with `body`, creating parents.
-fn stage_request(dir: &Path, name: &str, body: &str) -> Result<PathBuf, Box<dyn Error>> {
+pub(super) fn stage_request(dir: &Path, name: &str, body: &str) -> Result<PathBuf, Box<dyn Error>> {
     std::fs::create_dir_all(dir)?;
     let path = dir.join(name);
     std::fs::write(&path, body)?;

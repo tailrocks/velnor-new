@@ -91,6 +91,7 @@ fn tofu_install_follows_executed_suite_per_policy() {
         "velnor-actions-tofu",
         "velnor-actions-workflow-renderer",
         "velnor-actions-actionlint",
+        "velnor-actions-freshness",
         "demo",
     ] {
         assert!(
@@ -110,6 +111,7 @@ fn tofu_install_follows_executed_suite_per_policy() {
         "velnor-actions-tofu",
         "velnor-actions-workflow-renderer",
         "velnor-actions-actionlint",
+        "velnor-actions-freshness",
         "demo",
     ] {
         assert!(
@@ -197,6 +199,7 @@ fn every_workspace_member_is_classified_for_tofu() {
             "velnor-actions-tofu",
             "velnor-actions-workflow-renderer",
             "velnor-actions-actionlint",
+            "velnor-actions-freshness",
             "velnor-archive-guard",
         ]
         .contains(&member.as_str());

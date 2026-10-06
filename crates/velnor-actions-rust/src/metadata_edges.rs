@@ -92,6 +92,8 @@ pub(crate) struct RawPackage {
     pub(crate) features: BTreeMap<String, Vec<String>>,
     #[serde(default)]
     pub(crate) dependencies: Vec<RawDependency>,
+    #[serde(default)]
+    pub(crate) metadata: Option<serde_json::Value>,
 }
 
 #[derive(Debug, serde::Deserialize)]

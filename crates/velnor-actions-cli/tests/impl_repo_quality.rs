@@ -1,7 +1,8 @@
-//! Quality-contract pins: spec §3 integration lives in QC; OC mirrors by ref.
+//! Quality-contract pins: QC and its verification extension own detail; OC mirrors by ref.
 //!
 //! T26 keeps `docs/proposed/rust-quality-contract.md` (QC) as the detailed
-//! owner of the spec §3 policy and reconciles the `opentofu-contract.md`
+//! owner of the spec §3 policy, with verification detail in its linked
+//! extension, and reconciles the `opentofu-contract.md`
 //! (OC) §§4.4–4.5 tofu mirrors by reference. These tests pin the §-level
 //! integration map, the eight-crate fix, the homonym notes, the two
 //! divergence resolutions, and the no-orphan rule (every original QC
@@ -9,8 +10,8 @@
 
 use std::error::Error;
 
-use crate::impl_repo_deps::physical_lines;
 use crate::impl_repo_policy::read;
+use crate::impl_repo_size::physical_lines;
 
 /// QC anchors added by the T26 integration, one per integrated clause.
 const INTEGRATION_ANCHORS: [&str; 9] = [
@@ -52,7 +53,7 @@ const OC_ANCHORS: [&str; 9] = [
     "H1's denylist governs ambient inheritance",
     "tofu fmt once per scope",
     "Verification detail is owned by",
-    "`rust-quality-contract.md` §9",
+    "`rust-verification-contract.md`",
 ];
 
 /// Quality-detail tokens that MUST NOT leak into the lean AGENTS.md.
@@ -73,8 +74,16 @@ fn is_pointer_only(body: &str) -> bool {
 #[test]
 fn qc_integrates_spec_section3() -> Result<(), Box<dyn Error>> {
     let qc = read("docs/proposed/rust-quality-contract.md")?;
+    let verification = read("docs/proposed/rust-verification-contract.md")?;
+    assert!(
+        qc.contains("rust-verification-contract.md"),
+        "QC §9 must link its binding verification extension"
+    );
     for anchor in INTEGRATION_ANCHORS {
-        assert!(qc.contains(anchor), "QC misses integrated clause {anchor}");
+        assert!(
+            qc.contains(anchor) || verification.contains(anchor),
+            "quality-contract set misses integrated clause {anchor}"
+        );
     }
     Ok(())
 }
@@ -84,7 +93,7 @@ fn qc_states_eight_member_workspace() -> Result<(), Box<dyn Error>> {
     let qc = read("docs/proposed/rust-quality-contract.md")?;
     for anchor in [
         "exactly the eight product package names",
-        "The eight V1 crates",
+        "The eight V1 product crates",
     ] {
         assert!(qc.contains(anchor), "QC misses eight-crate fix {anchor}");
     }
@@ -117,8 +126,12 @@ fn qc_disambiguates_homonyms() -> Result<(), Box<dyn Error>> {
 #[test]
 fn qc_keeps_original_normatives() -> Result<(), Box<dyn Error>> {
     let qc = read("docs/proposed/rust-quality-contract.md")?;
+    let verification = read("docs/proposed/rust-verification-contract.md")?;
     for anchor in ORIGINAL_ANCHORS {
-        assert!(qc.contains(anchor), "condensation orphaned {anchor}");
+        assert!(
+            qc.contains(anchor) || verification.contains(anchor),
+            "condensation orphaned {anchor}"
+        );
     }
     let policy = qc.matches("version-policy.md").count();
     assert!(policy >= 2, "version-policy cited only {policy}x (need 2)");

@@ -35,8 +35,8 @@ coordinates typed process requests. The Mise adapter owns process creation,
 argument validation, environment construction, and result capture for those
 requests; the orchestrator MUST NOT launch processes or construct shell text.
 
-Internal workflow steps MUST NOT be exposed as subcommands. The sole
-non-CLI internal entrypoint is a bare invocation (no CLI arguments)
+Internal workflow steps MUST NOT be exposed as subcommands. Product workflow
+operations use a bare invocation (no CLI arguments)
 with `VELNOR_INTERNAL_OP` naming a versioned typed operation
 (`write-request-v1`, `plan-v1`, `merge-v1`, `fetch-reports-v1`, or
 `write-task-report-v1`) plus its gate inputs. `plan-v1` and `merge-v1`
@@ -70,6 +70,19 @@ likewise falls through to Clap and fails with the usage diagnostic
 (exit 2). A satisfied gate that fails operationally exits 1 with empty
 stdout and a one-line stderr diagnostic. Helper staging and version
 rules are in §6 and [workflow §3](workflow-contract.md).
+
+Repository-maintenance checks use the separate private operation
+`VELNOR_INTERNAL_OP=repo-policy-v1` and the allowlisted
+`VELNOR_REPO_POLICY_ACTION` values `freshness`, `toolchain-specs`,
+`mise-version`, `workspace-members`, `library-members`, and `trailer-policy`.
+The `VELNOR_REPO_POLICY_ROOT` variable must name an existing directory.
+Optional upstream, advisory, and trailer-identity flags accept only absent,
+`0`, or `1`; trailer validation also requires an absolute existing message
+file. Unknown actions and malformed flags fail closed. The gate transports
+read-only operations to the repository-only `velnor-actions-freshness`
+support crate; the orchestrator, public command tree, V1 product task graph,
+and generated workflows MUST NOT depend on it. This adds no public command or
+executable.
 
 ## 2. Repository root
 

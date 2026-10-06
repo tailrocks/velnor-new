@@ -155,6 +155,7 @@ fn formats_stay_single_and_graphs_relocate() {
             targets: Vec::new(),
             features: Vec::new(),
             has_build_script: false,
+            v1_task_owner: velnor_actions_rust::VelnorV1TaskOwner::Project,
         }],
         edges: vec![LocalEdge {
             from: id.to_owned(),

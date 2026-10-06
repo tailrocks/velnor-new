@@ -26,7 +26,12 @@ pub(crate) fn fresh_tempdir(prefix: &str) -> Result<PathBuf, Box<dyn Error>> {
 
 /// Best-effort tempdir removal; cleanup must never fail a test.
 pub(crate) fn cleanup(dir: &Path) {
-    drop(std::fs::remove_dir_all(dir));
+    if let Err(error) = std::fs::remove_dir_all(dir) {
+        eprintln!(
+            "failed to clean CLI test fixture {}: {error}",
+            dir.display()
+        );
+    }
 }
 
 /// Spawn the `velnor-actions` binary with args, env, and cwd applied.

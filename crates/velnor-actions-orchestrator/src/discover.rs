@@ -244,7 +244,7 @@ fn derive_all(
         .clone()
         .unwrap_or_else(RustStackConfig::default_config);
     let explicit_fmt = index.contains("rustfmt.toml") || index.contains(".rustfmt.toml");
-    let union = crate::derive_groups::declared_union(workspaces, index);
+    let union = crate::derive_groups::declared_union(workspaces, index, config.workflow.policy);
     let mut groups = Vec::new();
     let mut fallbacks = Vec::new();
     let mut archives = ArchivePlan::new();
