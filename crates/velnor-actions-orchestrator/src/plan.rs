@@ -71,6 +71,7 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation, jobs: &BTree
     push(out, &format!("  {WORKFLOW_PATH}"));
     release_file_lines(out, prep);
     freshness_file_lines(out, prep);
+    owned_tool_file_lines(out, prep);
     tofu_apply_file_lines(out, prep);
     push(
         out,
@@ -157,6 +158,19 @@ fn freshness_file_lines(out: &mut String, prep: &GenerationPreparation) {
 fn tofu_apply_file_lines(out: &mut String, prep: &GenerationPreparation) {
     if crate::tofu_apply_emit::tofu_apply_enabled(prep) {
         push(out, &format!("  {TOFU_APPLY_WORKFLOW_PATH}"));
+    }
+}
+
+/// Owned-tool candidate workflow, exactly when `generate` emits it.
+///
+/// The checked entrypoint already rendered the staged tree (owned-tool
+/// files included) before this infallible section runs, so an error
+/// here means nothing is emitted.
+fn owned_tool_file_lines(out: &mut String, prep: &GenerationPreparation) {
+    if let Ok(files) = crate::owned_tool_publication::files(prep) {
+        for file in files {
+            push(out, &format!("  {}", file.path));
+        }
     }
 }
 

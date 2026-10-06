@@ -115,3 +115,57 @@ fn generate_output_dir_flag_parses() -> Result<(), Box<dyn Error>> {
     cleanup(&tmp);
     Ok(())
 }
+
+#[test]
+fn owned_candidates_mode_requires_explicit_preview_destination() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("args-owned-only")?;
+    let output = spawn(&["generate", "--owned-tool-candidates-only"], &[], &tmp)?;
+    assert_eq!(code(&output), 2);
+    git_init(&tmp)?;
+    let preview = tmp.join("preview");
+    let output = spawn(
+        &[
+            "generate",
+            "--owned-tool-candidates-only",
+            "--output-dir",
+            preview.to_str().unwrap_or("/"),
+        ],
+        &[],
+        &tmp,
+    )?;
+    assert_eq!(code(&output), 1, "parses, then fails on missing config");
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
+fn reviewed_push_requires_source_preview_category() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("args-owned-push")?;
+    let preview = tmp.join("preview");
+    let output = spawn(
+        &[
+            "generate",
+            "--owned-tool-candidates-push",
+            "--output-dir",
+            preview.to_str().unwrap_or("/"),
+        ],
+        &[],
+        &tmp,
+    )?;
+    assert_eq!(code(&output), 2);
+    git_init(&tmp)?;
+    let output = spawn(
+        &[
+            "generate",
+            "--owned-tool-candidates-only",
+            "--owned-tool-candidates-push",
+            "--output-dir",
+            preview.to_str().unwrap_or("/"),
+        ],
+        &[],
+        &tmp,
+    )?;
+    assert_eq!(code(&output), 1, "parses, then fails on missing config");
+    cleanup(&tmp);
+    Ok(())
+}

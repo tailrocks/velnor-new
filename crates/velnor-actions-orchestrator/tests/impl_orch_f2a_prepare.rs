@@ -30,8 +30,9 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         "{discover_calls:?}"
     );
     // Preparation discovers repository evidence, execution reloads the
-    // source-bound definition, and routing reloads before schema migration.
-    assert_eq!(config_calls.len(), 3, "{config_calls:?}");
+    // source-bound definition, routing reloads before schema migration,
+    // and the owned-tool preview reloads at its CLI-gated boundary.
+    assert_eq!(config_calls.len(), 4, "{config_calls:?}");
     assert!(
         config_calls
             .iter()
@@ -51,10 +52,17 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         "{config_calls:?}"
     );
     assert!(
+        config_calls
+            .iter()
+            .any(|call| call.starts_with("owned_tool_preview.rs")),
+        "{config_calls:?}"
+    );
+    assert!(
         config_calls.iter().all(|call| {
             call.starts_with("prepare.rs")
                 || call.starts_with("check_runtime.rs")
                 || call.starts_with("routing.rs")
+                || call.starts_with("owned_tool_preview.rs")
         }),
         "{config_calls:?}"
     );

@@ -17,5 +17,6 @@ c6873ba49e8c184dd71d7b80d55c9734ee4e491429a798f07d7e3c66285d729b  ./.github/work
 5f3fd4579e18d8b72e59c44ab8a79c946f6423b1f89ce56c61078e2d1b222386  ./.github/workflows/generator-release.yml
 449a92b014c2a8d59b1199b974e07a20b381d4ba453e0c424eb41e6e1475ba4a  ./.github/workflows/image-release.yml
 a9df89d2463188e8246ed680d91942e029adf4f037eb5ebec00d2898f7b5ca72  ./.github/workflows/macos-binary-release.yml
+b248e6f46de5d946ae80fcbf6091bf71b86a98e9e4d930c857c3a5719893b37e  ./.github/workflows/owned-tools.yml
 e9121df6404110be4bff2c01938999fb126186289a33683d090b13ff709db945  ./.github/workflows/qualification.yml
 link ./.github/CLAUDE.md -> AGENTS.md

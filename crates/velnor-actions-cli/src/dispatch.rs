@@ -27,6 +27,8 @@ use velnor_actions_orchestrator::{
 
 use crate::args::{Cli, Command};
 use crate::dispatch_publish::run_publish_internal;
+#[path = "dispatch_owned_tool_publication.rs"]
+mod owned_publication;
 
 /// Environment variable selecting the private operation. Never printed.
 const OP_ENV: &str = "VELNOR_INTERNAL_OP";
@@ -72,10 +74,16 @@ struct InternalRequest {
 ///
 /// Clap owns `--help`, `--version`, and usage errors (exit 2).
 pub(crate) fn run_public() -> ExitCode {
-    match Cli::parse().command {
+    let command = Cli::parse().command;
+    if command.is_owned_preview() {
+        return owned_publication::run_owned_command(command);
+    }
+    match command {
         Command::Init => run_init(),
         Command::Plan => run_plan(),
-        Command::Generate { output_dir, mode } => run_generate(output_dir, mode),
+        Command::Generate {
+            output_dir, mode, ..
+        } => run_generate(output_dir, mode),
         Command::Config { command } => crate::dispatch_config::run_config(&command),
     }
 }
