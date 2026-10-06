@@ -27,7 +27,7 @@ an ignore flag, a base/head selector, `--check`, a task ID, a report path, or
 any other option not listed above. Unknown flags and extra positional arguments
 MUST fail with Clap's usage diagnostic.
 
-`crates/velnor-actions-cli/src/main.rs` parses arguments and dispatches typed
+`crates/apps/velnor-actions-cli/src/main.rs` parses arguments and dispatches typed
 requests to `velnor-actions-orchestrator`. The CLI MUST NOT invoke Git, Cargo,
 Mise, MBX, Nextest, or GitHub CLI directly. Command parsing tests MUST live in
 separate test files. The orchestrator owns internal plan/task/report types and

@@ -221,7 +221,10 @@ fn velnor_policy_renders_with_empty_matrix() -> Result<(), RenderError> {
 
 #[test]
 fn repo_config_sets_velnor_repository_v1() -> Result<(), String> {
-    let path = format!("{}/../../../.velnor/config.toml", env!("CARGO_MANIFEST_DIR"));
+    let path = format!(
+        "{}/../../../.velnor/config.toml",
+        env!("CARGO_MANIFEST_DIR")
+    );
     let text = std::fs::read_to_string(&path).map_err(|err| format!("config:{err}"))?;
     let policy = text
         .lines()

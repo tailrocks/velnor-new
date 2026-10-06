@@ -216,7 +216,7 @@ Each task report MUST be JSON with this shape:
   "trust": "pr",
   "matrix_id": "pkg:velnor-actions-contract|features:default|target:host|profile:test",
   "matrix_key": "m-<16 lowercase hex characters>",
-  "task_id": "stack/rust/crates/velnor-actions-contract/clippy/default",
+  "task_id": "stack/rust/crates/core/velnor-actions-contract/clippy/default",
   "task_digest": "b3-<64 lowercase hex characters>",
   "status": "reused|executed|empty_partition|not_selected|failed|cancelled",
   "not_selected_reason": null,

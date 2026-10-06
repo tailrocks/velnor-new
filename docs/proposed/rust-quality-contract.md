@@ -117,7 +117,7 @@ snapshot is Rust 1.98.1 with MSRV 1.98. Never use a placeholder MSRV.
 
 ```toml
 [workspace]
-members = ["crates/velnor-actions-contract", "crates/velnor-actions-rust", "crates/velnor-actions-mise", "crates/velnor-actions-actionlint", "crates/velnor-actions-workflow-renderer", "crates/velnor-actions-orchestrator", "crates/velnor-actions-cli", "crates/velnor-actions-tofu"]
+members = ["crates/core/velnor-actions-contract", "crates/adapters/velnor-actions-rust", "crates/adapters/velnor-actions-mise", "crates/adapters/velnor-actions-actionlint", "crates/services/velnor-actions-workflow-renderer", "crates/services/velnor-actions-orchestrator", "crates/apps/velnor-actions-cli", "crates/adapters/velnor-actions-tofu"]
 resolver = "3"
 
 [workspace.package]

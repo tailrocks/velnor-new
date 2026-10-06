@@ -56,7 +56,7 @@ or an ENOSPC fix.
 The exact PR30 tree contains the cleanup script and the
 [focused regression suite](https://github.com/tailrocks/velnor-new/blob/fe0064cbb82d861653439faaf4a088186571dec6/scripts/test_prune_hosted_cargo_sources.py).
 Its generated-workflow hook is
-`crates/velnor-actions-workflow-renderer/src/mbx_bundle.rs`; it runs only after
+`crates/services/velnor-actions-workflow-renderer/src/mbx_bundle.rs`; it runs only after
 success on a protected default-branch push on GitHub-hosted Linux and targets
 `$RUNNER_TEMP/velnor/cargo`. Current `main` has no pruning script or cleanup
 hook; generated jobs still set `CARGO_HOME` to that path, as the [Mise ToolHomes constructor and env](https://github.com/tailrocks/velnor-new/blob/ccd4642ec382c7f67ec0ea7247f42de840e4cf2e/crates/velnor-actions-mise/src/steps.rs#L34-L44) and the [crate-job tool-step constructor](https://github.com/tailrocks/velnor-new/blob/ccd4642ec382c7f67ec0ea7247f42de840e4cf2e/crates/velnor-actions-orchestrator/src/matrix_tools.rs#L117-L137) and [obligation-step environment](https://github.com/tailrocks/velnor-new/blob/ccd4642ec382c7f67ec0ea7247f42de840e4cf2e/crates/velnor-actions-orchestrator/src/matrix_step.rs#L130-L139)

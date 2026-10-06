@@ -9,7 +9,7 @@ architectural rationale (never effort).
 - PR exclusion is by design and permanent: "MSRV verification belongs to
   the pinned toolchain-qualification workflow only" and any MSRV job or
   step in a PR render fails closed
-  (`crates/velnor-actions-workflow-renderer/src/msrv.rs:114-135`); the
+  (`crates/services/velnor-actions-workflow-renderer/src/msrv.rs:114-135`); the
   contract promises per-crate checks against the exact `rust-version`
   "not repeated on every pull request"
   (`docs/proposed/workflow-contract.md`, MSRV paragraph). Rationale:
@@ -28,12 +28,12 @@ architectural rationale (never effort).
 
 The contract models an optional cron schedule
 (`contract::workflow::ir::ScheduleTrigger`,
-`crates/velnor-actions-contract/src/workflow/ir.rs:33-35`) and the
+`crates/core/velnor-actions-contract/src/workflow/ir.rs:33-35`) and the
 renderer emits it when present
-(`crates/velnor-actions-workflow-renderer/src/document.rs:113-120`) —
+(`crates/services/velnor-actions-workflow-renderer/src/document.rs:113-120`) —
 but both emitters hardcode `schedule: None`: CI
-(`crates/velnor-actions-orchestrator/src/workflow.rs:137`) and release
-(`crates/velnor-actions-orchestrator/src/release_emit.rs:345`, "the
+(`crates/services/velnor-actions-orchestrator/src/workflow.rs:137`) and release
+(`crates/services/velnor-actions-orchestrator/src/release_emit.rs:345`, "the
 config schema carries no cron field, so emission invents none").
 Acceptance criteria: a config cron field, emission in at least the CI
 workflow, documented nightly-signal semantics (what a schedule run
@@ -54,13 +54,13 @@ fail-closed on API errors, and a fixture test with a canned API payload.
 
 Every Doc obligation in every matrix leg carries `RUSTDOCFLAGS=-D
 warnings`: application is by task kind in the single obligation
-constructor (`crates/velnor-actions-orchestrator/src/matrix_step.rs:207-214`),
+constructor (`crates/services/velnor-actions-orchestrator/src/matrix_step.rs:207-214`),
 fed by the typed per-kind payload
-(`crates/velnor-actions-rust/src/cargo_env.rs:21-29`), and a Doc group is
+(`crates/adapters/velnor-actions-rust/src/cargo_env.rs:21-29`), and a Doc group is
 derived for every package × configuration cell
-(`crates/velnor-actions-rust/src/tasks.rs:208-211` via
+(`crates/adapters/velnor-actions-rust/src/tasks.rs:208-211` via
 `derive_for_config` in
-`crates/velnor-actions-orchestrator/src/derive_groups.rs:77-106`).
+`crates/services/velnor-actions-orchestrator/src/derive_groups.rs:77-106`).
 Fallback/default-features cells are covered by the same path — there is
 no per-config special-casing to miss a leg. The plan identity envelope
 binds the same pairs (`internal_plan.rs:196-204`), so step env and

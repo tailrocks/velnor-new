@@ -100,13 +100,13 @@ deny.toml
 .velnor/config.toml
 .velnor/generator.lock
 .velnor/version-policy.toml
-crates/velnor-actions-contract/
-crates/velnor-actions-rust/
-crates/velnor-actions-mise/
-crates/velnor-actions-actionlint/
-crates/velnor-actions-workflow-renderer/
-crates/velnor-actions-orchestrator/
-crates/velnor-actions-cli/
+crates/core/velnor-actions-contract/
+crates/adapters/velnor-actions-rust/
+crates/adapters/velnor-actions-mise/
+crates/adapters/velnor-actions-actionlint/
+crates/services/velnor-actions-workflow-renderer/
+crates/services/velnor-actions-orchestrator/
+crates/apps/velnor-actions-cli/
 fixtures/rust-workspaces/
 .github/actionlint.yaml
 .github/workflows/ci.yml
@@ -287,13 +287,13 @@ Plan JSON MUST use schema version 1 and contain:
   "packages": [{
     "package_id": "<Cargo package ID>",
     "name": "velnor-actions-contract",
-    "manifest": "crates/velnor-actions-contract/Cargo.toml",
+    "manifest": "crates/core/velnor-actions-contract/Cargo.toml",
     "selected": false,
     "reasons": ["exact_baseline_identity"],
-    "tasks": ["stack/rust/crates/velnor-actions-contract/clippy/default"]
+    "tasks": ["stack/rust/crates/core/velnor-actions-contract/clippy/default"]
   }],
   "obligations": [{
-    "task_id": "stack/rust/crates/velnor-actions-contract/clippy/default",
+    "task_id": "stack/rust/crates/core/velnor-actions-contract/clippy/default",
     "decision": "covered_by_trusted_baseline",
     "reason": "exact_baseline_identity",
     "task_digest": "b3-<64 lowercase hex>",

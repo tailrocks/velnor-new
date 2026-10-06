@@ -11,7 +11,7 @@ the branch. Follow the order below exactly.
 
 - Old/new paths and check names:
   `RequiredCheckMigration::velnor_to_ci`
-  (`crates/velnor-actions-contract/src/workflow/jobs.rs`).
+  (`crates/core/velnor-actions-contract/src/workflow/jobs.rs`).
 - `velnor-actions plan` prints the same migration under
   `Required-check migration`; the last step carries
   `[EXTERNAL: repository admin]`.

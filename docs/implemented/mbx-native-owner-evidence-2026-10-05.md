@@ -19,7 +19,7 @@ reuse.
   The tracked working diff SHA-256 was
   `56f3598f8bacf97f779628f6fca45899b0fa7399575dc3e6edb75456c03018a2`;
   the untracked renderer test
-  `crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_native_owner.rs`
+  `crates/services/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_native_owner.rs`
   had SHA-256
   `79e5b8dceee54f2cd55d4121a3b632c10324e7b6c463433c0405dee2b54641d9`.
   These hashes identify the later documentation snapshot, not the earlier

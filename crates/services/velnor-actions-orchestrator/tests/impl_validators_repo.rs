@@ -45,7 +45,10 @@ fn fixture_manifest_json() -> String {
 
 /// Live repository sample text (the file under review for drift).
 fn repo_sample_text() -> Result<String, Box<dyn std::error::Error>> {
-    let path = format!("{}/../../../.velnor/config.toml", env!("CARGO_MANIFEST_DIR"));
+    let path = format!(
+        "{}/../../../.velnor/config.toml",
+        env!("CARGO_MANIFEST_DIR")
+    );
     Ok(fs::read_to_string(path)?)
 }
 

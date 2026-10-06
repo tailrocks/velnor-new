@@ -23,7 +23,8 @@ const REPO_FILE_LIST: &str =
 const STRAY_RS: &str = include_str!("../../../../fixtures/alint-negative/crates-only/stray.rs");
 const OVERSIZED_RS: &str =
     include_str!("../../../../fixtures/alint-negative/rust-max-lines/oversized.rs");
-const BIG_LIB_RS: &str = include_str!("../../../../fixtures/alint-negative/lib-main-max-lines/lib.rs");
+const BIG_LIB_RS: &str =
+    include_str!("../../../../fixtures/alint-negative/lib-main-max-lines/lib.rs");
 
 /// Required entries absent from `present` (mirrors `file_exists`).
 fn missing_required(present: &[&str]) -> Vec<&'static str> {

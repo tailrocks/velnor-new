@@ -95,10 +95,10 @@ it MUST NOT be reported as current (VER-3.4 gate rule).
 The scheduled producer is `.github/workflows/freshness.yml` (weekly
 `cron: 0 6 * * 1` plus `workflow_dispatch`), generated from the
 `ScheduleTrigger` contract
-(`crates/velnor-actions-contract/src/workflow/`, landed via P05, built
-by `crates/velnor-actions-workflow-renderer/src/freshness.rs` with
+(`crates/core/velnor-actions-contract/src/workflow/`, landed via P05, built
+by `crates/services/velnor-actions-workflow-renderer/src/freshness.rs` with
 schedule wiring in
-`crates/velnor-actions-orchestrator/src/freshness_emit.rs`). It runs
+`crates/services/velnor-actions-orchestrator/src/freshness_emit.rs`). It runs
 `scripts/check-freshness.sh --check-upstream` as a probe-only signal: it
 writes nothing back to the repository, so evidence timestamps still
 advance only through reviewed update sets, and the real-root

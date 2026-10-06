@@ -326,14 +326,14 @@ future stack adapters define their own versioned metadata:
 
 ```json
 {
-  "id": "stack:rust|task:stack/rust/crates/velnor-actions-contract/validation/default",
+  "id": "stack:rust|task:stack/rust/crates/core/velnor-actions-contract/validation/default",
   "matrix_key": "m-<16 lowercase hex characters>",
   "stack_id": "rust",
-  "task_id": "stack/rust/crates/velnor-actions-contract/validation/default",
+  "task_id": "stack/rust/crates/core/velnor-actions-contract/validation/default",
   "adapter_metadata": {
     "package_id": "path+file:///repo#velnor-actions-contract@0.1.0",
     "package_name": "velnor-actions-contract",
-    "manifest": "crates/velnor-actions-contract/Cargo.toml",
+    "manifest": "crates/core/velnor-actions-contract/Cargo.toml",
     "workspace": ".",
     "features": [],
     "target": "host",
@@ -343,11 +343,11 @@ future stack adapters define their own versioned metadata:
     "doctests": true
   },
   "execute_task_ids": {
-    "clippy": "stack/rust/crates/velnor-actions-contract/clippy/default",
-    "test_build": "stack/rust/crates/velnor-actions-contract/test-build/default",
-    "test_inventory": "stack/rust/crates/velnor-actions-contract/test-inventory/default",
-    "test_run": ["stack/rust/crates/velnor-actions-contract/test-run/default/shard-1-of-1"],
-    "doctest": "stack/rust/crates/velnor-actions-contract/doctest/default"
+    "clippy": "stack/rust/crates/core/velnor-actions-contract/clippy/default",
+    "test_build": "stack/rust/crates/core/velnor-actions-contract/test-build/default",
+    "test_inventory": "stack/rust/crates/core/velnor-actions-contract/test-inventory/default",
+    "test_run": ["stack/rust/crates/core/velnor-actions-contract/test-run/default/shard-1-of-1"],
+    "doctest": "stack/rust/crates/core/velnor-actions-contract/doctest/default"
   },
   "input_digest": "b3-<64 lowercase hex characters>",
   "report_id": "report-r123-a1-m-<16 lowercase hex characters>",

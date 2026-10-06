@@ -200,8 +200,14 @@ fn strictness_proofs_need_validating_constructors() -> Result<(), Box<dyn Error>
 #[test]
 fn strictness_no_proof_literals_anywhere() -> Result<(), Box<dyn Error>> {
     let mut files = tree_files("crates/core/velnor-actions-contract/src", "rs")?;
-    files.extend(tree_files("crates/core/velnor-actions-contract/tests", "rs")?);
-    files.extend(tree_files("crates/services/velnor-actions-orchestrator/src", "rs")?);
+    files.extend(tree_files(
+        "crates/core/velnor-actions-contract/tests",
+        "rs",
+    )?);
+    files.extend(tree_files(
+        "crates/services/velnor-actions-orchestrator/src",
+        "rs",
+    )?);
     files.extend(tree_files(
         "crates/services/velnor-actions-orchestrator/tests",
         "rs",

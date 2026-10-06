@@ -51,7 +51,10 @@ fn archive_dependency_policy_rejects_wrong_owner_pin_defaults_and_extra_features
         "zip = { version = \"=8.6.0\", default-features = false, features = [\"deflate-flate2\"] }";
     let owner = "crates/services/velnor-actions-orchestrator";
     assert!(reviewed_archive_dependency(owner, "zip", line));
-    for dir in ["crates/apps/velnor-actions-cli", "crates/adapters/velnor-actions-mise"] {
+    for dir in [
+        "crates/apps/velnor-actions-cli",
+        "crates/adapters/velnor-actions-mise",
+    ] {
         assert!(!reviewed_archive_dependency(dir, "zip", line));
     }
     for altered in [

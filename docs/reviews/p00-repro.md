@@ -11,7 +11,7 @@ and the exact pinned toolchain so the defect stays reproducible on paper.
 - Actions run: `36617447350` (FAILURE, 2026-09-29)
 - Failing job: `109575245197` (Rust-adapter Nextest task)
 - Failing test: `impl_rust_f2b::alint_config_holds_generic_rules_only`
-  (`crates/velnor-actions-rust/tests/impl_rust_f2b.rs:104`)
+  (`crates/adapters/velnor-actions-rust/tests/impl_rust_f2b.rs:104`)
 - Failing assertion: `text.contains("Generic file/path placement")`
   against `.alint.yml`, whose line 2 reads
   `Generic file/path requirements ...` — comment wording drifted,
@@ -23,7 +23,7 @@ and the exact pinned toolchain so the defect stays reproducible on paper.
 FAIL [   0.004s] ( 60/109) velnor-actions-rust::velnor_rust impl_rust_f2b::alint_config_holds_generic_rules_only
     test impl_rust_f2b::alint_config_holds_generic_rules_only ... FAILED
     test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 108 filtered out; finished in 0.00s
-    thread 'impl_rust_f2b::alint_config_holds_generic_rules_only' (3727) panicked at crates/velnor-actions-rust/tests/impl_rust_f2b.rs:104:5:
+    thread 'impl_rust_f2b::alint_config_holds_generic_rules_only' (3727) panicked at crates/adapters/velnor-actions-rust/tests/impl_rust_f2b.rs:104:5:
     assertion failed: text.contains("Generic file/path placement")
     Summary [   0.077s] 63/109 tests run: 62 passed, 1 failed, 0 skipped
     warning: 46/109 tests were not run due to test failure (run with --no-fail-fast to run all tests, or run with --max-fail)
@@ -36,7 +36,7 @@ Exit code 100.
 ## Exact CI command and pinned toolchain
 
 ```text
-mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --locked --offline --manifest-path crates/velnor-actions-rust/Cargo.toml --package velnor-actions-rust --no-tests fail
+mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.19.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --locked --offline --manifest-path crates/adapters/velnor-actions-rust/Cargo.toml --package velnor-actions-rust --no-tests fail
 ```
 
 | Tool | Pinned (CI-effective) | Source |
@@ -68,7 +68,7 @@ Detached worktree at `8ccc60c`, local cargo 1.98.1 (matches pin):
 ```text
 $ cargo test --locked --offline -p velnor-actions-rust --test velnor_rust impl_rust_f2b::alint_config_holds_generic_rules_only
 test impl_rust_f2b::alint_config_holds_generic_rules_only ... FAILED
-thread '...' panicked at crates/velnor-actions-rust/tests/impl_rust_f2b.rs:104:5:
+thread '...' panicked at crates/adapters/velnor-actions-rust/tests/impl_rust_f2b.rs:104:5:
 assertion failed: text.contains("Generic file/path placement")
 test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 108 filtered out
 ```

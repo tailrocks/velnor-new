@@ -56,7 +56,7 @@ never reset/deleted.
 `DetectedProject`, `ProposedTask` → `TaskNode`/`TaskGraph`, closed `Stack`
 dispatch. BR-28 lands the tofu fixture corpus (10 dirs, 77 files, no code).
 
-Add **`crates/velnor-actions-tofu`** (Phase B): stack ID `tofu`, Mise tool
+Add **`crates/adapters/velnor-actions-tofu`** (Phase B): stack ID `tofu`, Mise tool
 `opentofu`, executable `tofu` — distinct concepts, no aliases. Dependency
 direction: orchestrator → {contract, rust, tofu, mise, actionlint,
 renderer}; all adapters → contract only. Tofu owns domain semantics; Mise

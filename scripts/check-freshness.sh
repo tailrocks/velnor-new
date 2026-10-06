@@ -250,12 +250,12 @@ if policy is not None:
                  "weakens policy: must be <= 14")
 
 # --- Local pins: code constants == reviewed inventory pins (VER-0.1).
-CATALOG = "crates/velnor-actions-mise/src/catalog.rs"
-ACTIONS = "crates/velnor-actions-actionlint/src/actions.rs"
-TOOLS = "crates/velnor-actions-actionlint/src/tools.rs"
-CAPABILITIES = "crates/velnor-actions-actionlint/src/capabilities.rs"
-CONFIG = "crates/velnor-actions-actionlint/src/config.rs"
-RENDERER = "crates/velnor-actions-workflow-renderer/src/render.rs"
+CATALOG = "crates/adapters/velnor-actions-mise/src/catalog.rs"
+ACTIONS = "crates/adapters/velnor-actions-actionlint/src/actions.rs"
+TOOLS = "crates/adapters/velnor-actions-actionlint/src/tools.rs"
+CAPABILITIES = "crates/adapters/velnor-actions-actionlint/src/capabilities.rs"
+CONFIG = "crates/adapters/velnor-actions-actionlint/src/config.rs"
+RENDERER = "crates/services/velnor-actions-workflow-renderer/src/render.rs"
 
 EXPECTED_TOOLS = {
     "mise": "MISE_VERSION",

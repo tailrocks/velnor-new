@@ -36,7 +36,10 @@ pub(crate) const MEMBERS: [(&str, &str); 8] = [
         "velnor-actions-actionlint",
     ),
     ("crates/apps/velnor-actions-cli", "velnor-actions-cli"),
-    ("crates/core/velnor-actions-contract", "velnor-actions-contract"),
+    (
+        "crates/core/velnor-actions-contract",
+        "velnor-actions-contract",
+    ),
     ("crates/adapters/velnor-actions-mise", "velnor-actions-mise"),
     (
         "crates/services/velnor-actions-orchestrator",

@@ -88,7 +88,7 @@ counter-evidence after a tried-and-reverted implementation (see below).
 
 - R01: 7 `rust-*` jobs + 5 validators + plan + required in
   `.github/workflows/ci.yml`; `build_crate_jobs`
-  (`crates/velnor-actions-orchestrator/src/crate_jobs.rs:55`); test
+  (`crates/services/velnor-actions-orchestrator/src/crate_jobs.rs:55`); test
   `groups_obligations_into_one_ordered_job_per_crate` (`crate_jobs_tests.rs:58`).
 - R02: exact-set `check_required_evidence`
   (`orchestrator/src/required_evidence.rs:100`); no `strategy:` in `ci.yml`;

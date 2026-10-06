@@ -132,8 +132,8 @@ pub(crate) fn init_repo(dir: &Path) -> Result<(), Box<dyn Error>> {
 ///
 /// Placeholder values in this fixture are not release evidence.
 pub(crate) fn install_consumer_manifest(dir: &Path) -> Result<(), Box<dyn Error>> {
-    let source =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../fixtures/consumer-release-manifest.json");
+    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../fixtures/consumer-release-manifest.json");
     std::fs::copy(source, dir.join(".velnor/release-manifest.json"))?;
     Ok(())
 }

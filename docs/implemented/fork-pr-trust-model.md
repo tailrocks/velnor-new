@@ -2,18 +2,18 @@
 
 `ci.yml` renders `pull_request` / `push` / `merge_group` triggers only
 (`orchestrator::workflow::build_workflow`,
-`crates/velnor-actions-orchestrator/src/workflow.rs:130-138`; PR types
+`crates/services/velnor-actions-orchestrator/src/workflow.rs:130-138`; PR types
 `opened, synchronize, reopened, ready_for_review` at
-`crates/velnor-actions-workflow-renderer/src/render.rs:31`; dispatch and
+`crates/services/velnor-actions-workflow-renderer/src/render.rs:31`; dispatch and
 schedule are hardcoded `None`). Every job checks out the PR tree
 (plan: full-history checkout in
-`crates/velnor-actions-orchestrator/src/workflow_jobs.rs:49-78`; lint and
+`crates/services/velnor-actions-orchestrator/src/workflow_jobs.rs:49-78`; lint and
 validators: pinned checkout in `workflow_jobs.rs:81-116` and
-`crates/velnor-actions-workflow-renderer/src/support.rs:224-240`), so
+`crates/services/velnor-actions-workflow-renderer/src/support.rs:224-240`), so
 `Required` executes PR-controlled YAML. The helper asset coordinates
 (`VELNOR_ASSET_URL` / `VELNOR_ASSET_SHA256`) are PR-tree bytes too,
 rendered from the committed release manifest
-(`crates/velnor-actions-workflow-renderer/src/closure.rs:75-78`).
+(`crates/services/velnor-actions-workflow-renderer/src/closure.rs:75-78`).
 
 ## What a malicious-PR regen can do
 
@@ -34,13 +34,13 @@ expected set, never a committed inventory that was shrunk at generation
 time. This self-attestation limit is recorded in code, not discovered
 here: "The merge cannot distinguish legit regeneration from tampering;
 review is the trust root for the committed `needs` set"
-(`crates/velnor-actions-orchestrator/src/needs_channel.rs:10-18`).
+(`crates/services/velnor-actions-orchestrator/src/needs_channel.rs:10-18`).
 
 ## What it cannot do
 
 - Redirect the helper asset: consumer acquisition re-binds the record URL
   to the official release path and rejects attacker manifests
-  (`crates/velnor-actions-orchestrator/src/pins.rs:139-153`, test
+  (`crates/services/velnor-actions-orchestrator/src/pins.rs:139-153`, test
   `consumer_gate_rejects_attacker_manifests`).
 - Forge the asset digest: a wrong `VELNOR_ASSET_SHA256` fails
   `sha256sum -c` in the Acquire step (`pins.rs:192-198`) — red, not green.

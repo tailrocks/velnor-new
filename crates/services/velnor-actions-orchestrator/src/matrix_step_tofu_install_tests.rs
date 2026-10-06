@@ -174,7 +174,10 @@ fn every_workspace_member_is_classified_for_tofu() {
         }
         let packages = std::fs::read_dir(&group).expect("group dir lists");
         for package in packages {
-            let manifest = package.expect("package entry reads").path().join("Cargo.toml");
+            let manifest = package
+                .expect("package entry reads")
+                .path()
+                .join("Cargo.toml");
             if !manifest.is_file() {
                 continue;
             }

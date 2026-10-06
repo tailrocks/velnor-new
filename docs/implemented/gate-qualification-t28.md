@@ -49,7 +49,7 @@ Fix 1 — rustdoc private-link error (failing gates: doc build #8,
 verify-local #9). `cargo doc` failed with `error: public
 documentation for 'parser_json' links to private item
 'crate::parser::Walk'` at
-`crates/velnor-actions-tofu/src/parser_json.rs:3`, plus 3
+`crates/adapters/velnor-actions-tofu/src/parser_json.rs:3`, plus 3
 `redundant explicit link target` warnings (`argv.rs:3`, `family.rs:4`,
 `parser_json.rs:3`). Latent since T10: no root gate builds docs and
 no branch CI exists to run the per-crate doc job. Fix: delink three

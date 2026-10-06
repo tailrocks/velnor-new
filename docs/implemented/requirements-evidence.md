@@ -10,7 +10,7 @@ re-verification at HEAD passed identically.
 
 Legend — crates: CT contract RS rust MI mise AL actionlint RD renderer OR
 orchestrator CLI cli. Paths abbreviated: `OR/src/x.rs` =
-`crates/velnor-actions-orchestrator/src/x.rs`; tests `OR/tests/f.rs:name`.
+`crates/services/velnor-actions-orchestrator/src/x.rs`; tests `OR/tests/f.rs:name`.
 Evidence: T = full `cargo test --workspace --locked` green 2026-09-29 (1048
 pass/0 fail: 978 integ + 70 unit, 21 binaries); F = also individually
 filter-verified ≥1 `... ok`; C = clippy all 7 pkgs clean; Fmt = fmt clean;

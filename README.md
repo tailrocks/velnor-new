@@ -4,7 +4,7 @@ Velnor Actions is proposed as a stack-generic GitHub Actions workflow generator.
 
 See the [documentation index](docs/README.md) for the proposed V1 specification, deferred runner roadmap, and implemented status.
 
-The CLI is implemented (`crates/velnor-actions-cli`):
+The CLI is implemented (`crates/apps/velnor-actions-cli`):
 
 ```text
 velnor-actions init

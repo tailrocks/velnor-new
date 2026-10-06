@@ -113,7 +113,7 @@ Historical at `75f150a` (1048 tests, off-pin nextest): nextest
 ## 4. Leaf-crate one-file change — 0.87 s (compile, cli only)
 
 Pinned, warm test profile, comment appended to
-`crates/velnor-actions-cli/src/main.rs` (cli is depended on by
+`crates/apps/velnor-actions-cli/src/main.rs` (cli is depended on by
 nothing — rebuild-set probe):
 
 ```sh
@@ -149,7 +149,7 @@ Bounds from code: the default crate-job path in
 `.github/workflows/ci.yml` carries no matrix strategy block (7
 concrete jobs, no `strategy:` key at all); the `max-parallel: 2`
 bound lives in config (`workflow.max_parallel_jobs`, default 2 in
-`crates/velnor-actions-orchestrator/src/config.rs`) and gates
+`crates/services/velnor-actions-orchestrator/src/config.rs`) and gates
 sharded fan-out only (renderer `matrix.rs` emits `fail-fast:
 false` plus a capped `max-parallel` when sharding);
 `.config/nextest.toml` `test-threads = "num-cpus"`; CI profile
