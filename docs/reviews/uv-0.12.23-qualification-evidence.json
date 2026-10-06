@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "status": "QUALIFIED",
+  "qualified_at_utc": "2026-10-04T00:52:47.320453+00:00",
+  "qualification_scope": "Local macOS ARM64 qualification of official uv 0.12.23 for exact REUSE 6.2.0 recipe against the pinned consumer commit; no hosted or performance claim.",
+  "uv": {
+    "version": "0.12.23",
+    "release_url": "https://github.com/astral-sh/uv/releases/tag/0.12.23",
+    "release_commit": "46b84fd0bfec23b72f29e8e2185ba68a65052f48",
+    "commit_tree": "d40edd9dc8f4046599bc894bf3ee587a14d84681",
+    "commit_api_response_sha256": "7989bed17e8bc12c930da65eb96cf3aea58b10cacc69d4ea2e615bdca59d1cdf",
+    "latest_release_source": "https://api.github.com/repos/astral-sh/uv/releases/latest",
+    "latest_release_checked_at_utc": "2026-10-04T05:31:47+00:00",
+    "latest_release_response_sha256": "cce783f70a398a4673fbda8ffe5e442b67efa1226780990943ff6e3fb8cfcbba",
+    "published_at": "2026-10-03T17:34:11Z",
+    "asset_url": "https://github.com/astral-sh/uv/releases/download/0.12.23/uv-aarch64-apple-darwin.tar.gz",
+    "official_checksum_url": "https://github.com/astral-sh/uv/releases/download/0.12.23/sha256.sum",
+    "official_checksum_file_sha256": "a90a0ae6f883f3a5cdba7bee96a2ecc51d98f9f41db3e6654053117c6c5f1852",
+    "official_archive_sha256": "50487ae565ccd96e499056b4674d438f4c53170202617b4c759defe0c6a1b544",
+    "archive_path_safety": "all members normalized within root; links contained; no device/fifo/special entries",
+    "installed_binary_sha256": "2f7be1879e3337eef20875c0f80ef033337305d0405efc5d72642d6292f66b3b",
+    "version_output": "uv 0.12.23 (46b84fd0b 2026-10-03 aarch64-apple-darwin)",
+    "installation_tree_manifest_sha256": "f2ff4501ad6454ba04a06e556d9908a5a700189c32318f57f73db40acedafb53"
+  },
+  "mise": {
+    "version": "2026.9.18 macos-arm64 (2026-09-30)",
+    "binary_sha256": "484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f",
+    "flags": [
+      "--no-config",
+      "--no-env",
+      "--no-hooks"
+    ]
+  },
+  "python": {
+    "version": "3.14.8",
+    "archive_sha256": "69e48cd7f54261df5b6abbd374f69fe6e496fa781d271592aeef49cd5ffbea6c",
+    "installed_binary_sha256": "02f23beea109ccb3ad0f4b211bbea0810b912a94840de34374ad4a8c04f32222",
+    "installation_tree_manifest_sha256": "2e69f9b22237e78a8740f9ef7152204912917a10706886a3c5e79fa0e4bf5161"
+  },
+  "reuse_workload": {
+    "version": "6.2.0",
+    "install_argv": [
+      "uv",
+      "tool",
+      "install",
+      "reuse[charset-normalizer]==6.2.0",
+      "--python",
+      "3.14.8",
+      "--no-python-downloads"
+    ],
+    "consumer_repository": "https://github.com/jackin-project/jackin-role-action",
+    "consumer_commit": "534b68a4a44de13117160e6d24bfa0ce7af8ca8e",
+    "consumer_commit_tree": "8e7d948208aa85101762f7659061014b572a9cd3",
+    "consumer_tree_manifest_sha256": "9b75f39b5daffadafd2b1b7680caa822d694e0850522376545668d0a1da85de9",
+    "official_git_tree_entry_count": 28,
+    "all_paths_modes_blobs_and_symlink_targets_verified": true,
+    "positive_lint_exit_code": 0,
+    "positive_lint_reports_23_of_23": true,
+    "negative_lint_exit_code": 1,
+    "negative_missing_license_probe_detected": true,
+    "python_runtime": "3.14.8 (main, Oct  1 2026, 20:50:07) [Clang 22.1.3 ]"
+  },
+  "isolation": {
+    "environment_inherited": false,
+    "private_home_xdg_mise_uv_dirs": true,
+    "no_credentials_used": true,
+    "runtime_overrides_unset": true
+  },
+  "execution_evidence": {
+    "retained_manifest": "qualification-manifest.json",
+    "sha256": "fdf26d53f55a5d8f1eeecabb809e0669ac0626a05f955683070ce240ed5a33ad",
+    "command_count": 15,
+    "all_checks_pass": true,
+    "raw_stdout_stderr_and_exact_argv_retained_with_private_evidence": true
+  },
+  "limits": [
+    "Local macOS ARM64 workload qualification only.",
+    "No Linux runtime qualification.",
+    "No hosted runner or performance qualification."
+  ]
+}
