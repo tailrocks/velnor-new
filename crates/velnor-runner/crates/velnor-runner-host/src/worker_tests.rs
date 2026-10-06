@@ -23,17 +23,22 @@ fn runner_create_opens_stdin_and_is_not_privileged() -> Result<(), HostError> {
     assert!(!spec.privileged);
     assert_eq!(spec.platform, "linux/amd64");
     assert_eq!(spec.image, "velnor-runner:ubuntu-26.04-2.337.0");
-    assert_eq!(spec.mounts.len(), 3);
+    assert_eq!(spec.mounts.len(), 4);
     assert_eq!(spec.mounts[0].source, "volume:worker_a");
     assert_eq!(spec.mounts[0].target, "/run");
     assert_eq!(spec.mounts[2].source, "volume:velnor-seed");
     assert_eq!(spec.mounts[2].target, "/opt/velnor/seed");
+    assert_eq!(spec.mounts[3].source, "volume:velnor-action-archive");
+    assert_eq!(spec.mounts[3].target, "/opt/action-archive-cache");
     assert!(
         spec.mounts
             .iter()
             .all(|mount| mount.target != "/var/lib/docker")
     );
-    assert_eq!(spec.env, Vec::<String>::new());
+    assert_eq!(
+        spec.env,
+        ["ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/opt/action-archive-cache".to_owned()]
+    );
     assert!(spec.network_mode.is_none());
     Ok(())
 }
@@ -79,6 +84,11 @@ fn dind_is_privileged_and_shares_the_runner_volumes() -> Result<(), HostError> {
             .last()
             .map(|mount| (mount.source.as_str(), mount.target.as_str())),
         Some(("volume:worker_a-docker", "/var/lib/docker"))
+    );
+    assert!(
+        spec.mounts
+            .iter()
+            .all(|mount| mount.source != "volume:velnor-action-archive")
     );
     assert!(spec.network_mode.is_none());
     Ok(())
@@ -140,11 +150,19 @@ fn bollard_config_from_a_clean_plan_omits_canary() -> Result<(), HostError> {
         .ok_or(HostError::Docker)?;
     assert_eq!(host.privileged, Some(false));
     let mounts = host.mounts.as_ref().ok_or(HostError::Docker)?;
-    assert_eq!(mounts.len(), 3);
+    assert_eq!(mounts.len(), 4);
     assert_eq!(mounts[2].source.as_deref(), Some("velnor-seed"));
     assert_eq!(mounts[2].target.as_deref(), Some("/opt/velnor/seed"));
     assert_eq!(mounts[2].read_only, Some(true));
+    assert_eq!(mounts[3].source.as_deref(), Some("velnor-action-archive"));
+    assert_eq!(
+        mounts[3].target.as_deref(),
+        Some("/opt/action-archive-cache")
+    );
+    assert_eq!(mounts[3].typ, Some(MountType::VOLUME));
+    assert_eq!(mounts[3].read_only, Some(true));
     assert_eq!(mounts[0].read_only, None);
+    assert_eq!(mounts[1].read_only, None);
     let text = format!("{created:?}");
     assert!(!text.contains("canary-jit"));
     assert!(!text.to_ascii_lowercase().contains("jitconfig"));
@@ -173,9 +191,37 @@ fn bollard_config_from_a_clean_plan_omits_canary() -> Result<(), HostError> {
             .iter()
             .all(|mount| mount.source.as_deref() != Some("velnor-seed"))
     );
+    assert!(
+        mounts
+            .iter()
+            .all(|mount| mount.source.as_deref() != Some("velnor-action-archive"))
+    );
     let text = format!("{dind:?}");
     assert!(!text.contains("canary-jit"));
     assert!(!text.contains("/var/run/docker.sock"));
+    Ok(())
+}
+
+#[test]
+fn archive_mount_projects_read_only() -> Result<(), HostError> {
+    let created = bollard("worker_a")?;
+    let host = created
+        .config
+        .host_config
+        .as_ref()
+        .ok_or(HostError::Docker)?;
+    let mounts = host.mounts.as_ref().ok_or(HostError::Docker)?;
+    let read_only = mounts
+        .iter()
+        .filter(|mount| mount.read_only == Some(true))
+        .collect::<Vec<_>>();
+    assert_eq!(read_only.len(), 2);
+    let archive = read_only
+        .iter()
+        .find(|mount| mount.source.as_deref() == Some("velnor-action-archive"))
+        .ok_or(HostError::Docker)?;
+    assert_eq!(archive.target.as_deref(), Some("/opt/action-archive-cache"));
+    assert_eq!(archive.typ, Some(MountType::VOLUME));
     Ok(())
 }
 

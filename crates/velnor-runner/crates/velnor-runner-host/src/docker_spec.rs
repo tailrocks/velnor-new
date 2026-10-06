@@ -46,8 +46,8 @@ pub enum DeleteDecision {
     NotDeleted,
 }
 
-const RUNNER_PLATFORM: &str = "linux/amd64";
-const RUNNER_IMAGE: &str = "velnor-runner:ubuntu-26.04-2.337.0";
+pub(crate) const RUNNER_PLATFORM: &str = "linux/amd64";
+pub(crate) const RUNNER_IMAGE: &str = "velnor-runner:ubuntu-26.04-2.337.0";
 const ENTRYPOINT: &str = "/usr/local/bin/velnor-runner-entrypoint";
 const SOCKET_TARGET: &str = "/run";
 
@@ -64,7 +64,9 @@ const HOST_NEEDLES: &[&str] = &[
 
 /// Build the runner plan. `private_volume` is this worker's socket volume.
 ///
-/// The work tree uses `{private_volume}-work`. JIT is not accepted.
+/// The work tree uses `{private_volume}-work`. The archive cache env points
+/// at the shared read-only volume appended by [`runner_mounts`]. JIT is not
+/// accepted.
 ///
 /// # Errors
 ///
@@ -79,7 +81,9 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
         privileged: false,
         platform: RUNNER_PLATFORM.to_owned(),
         image: RUNNER_IMAGE.to_owned(),
-        env: Vec::new(),
+        env: vec![format!(
+            "ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE={ACTION_ARCHIVE_TARGET}"
+        )],
         cmd: vec![ENTRYPOINT.to_owned()],
         labels: vec![
             "velnor.role=runner".to_owned(),
@@ -103,12 +107,17 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
 pub(crate) const SEED_VOLUME: &str = "volume:velnor-seed";
 /// Container path the workflow scripts read. Not a job input.
 pub(crate) const SEED_TARGET: &str = "/opt/velnor/seed";
+/// Shared action archive volume. Not created or deleted with one worker.
+pub(crate) const ACTION_ARCHIVE_VOLUME: &str = "volume:velnor-action-archive";
+/// Container path the runner reads for cached action archives.
+pub(crate) const ACTION_ARCHIVE_TARGET: &str = "/opt/action-archive-cache";
 
-/// Private mounts plus the shared seed. The seed is not a worker volume.
+/// Private mounts plus the shared seed and action archive. Neither shared
+/// mount is a worker volume.
 ///
 /// # Errors
 ///
-/// Returns [`HostError::ForbiddenMount`] when the seed mount is rejected.
+/// Returns [`HostError::ForbiddenMount`] when a shared mount is rejected.
 pub(crate) fn runner_mounts(mounts: &[Mount]) -> Result<Vec<Mount>, HostError> {
     let mut out = mounts.to_vec();
     let seed = Mount {
@@ -117,6 +126,12 @@ pub(crate) fn runner_mounts(mounts: &[Mount]) -> Result<Vec<Mount>, HostError> {
     };
     reject_mount(&seed)?;
     out.push(seed);
+    let archive = Mount {
+        source: ACTION_ARCHIVE_VOLUME.to_owned(),
+        target: ACTION_ARCHIVE_TARGET.to_owned(),
+    };
+    reject_mount(&archive)?;
+    out.push(archive);
     Ok(out)
 }
 
@@ -181,6 +196,12 @@ fn socket_source_ok(source: &str) -> bool {
     source
         .strip_prefix("volume:")
         .is_some_and(private_volume_name)
+}
+
+/// True when `name` is one private Docker volume name.
+#[must_use]
+pub(crate) fn accepts_volume_name(name: &str) -> bool {
+    private_volume_name(name)
 }
 
 fn private_volume_name(name: &str) -> bool {
