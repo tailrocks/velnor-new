@@ -55,6 +55,27 @@ async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
 }
 
 #[tokio::test]
+async fn unlabeled_matching_volume_is_not_removed() -> Result<(), String> {
+    let unlabeled = serde_json::json!({
+        "Name": "wtransport",
+        "Driver": "local",
+        "Mountpoint": "/var/lib/docker/volumes/wtransport/_data",
+        "Labels": {},
+        "Options": {},
+        "Scope": "local"
+    })
+    .to_string();
+    let stub = DockerStub::open(vec![http(200, &unlabeled)])?;
+    let result = remove_worker_volumes(&stub.docker, WORKER).await;
+    let requests = stub.finish().await?;
+
+    assert_eq!(result, Ok(false));
+    assert_eq!(requests.len(), 1);
+    assert!(requests[0].starts_with("GET "));
+    Ok(())
+}
+
+#[tokio::test]
 async fn created_volumes_have_exact_worker_and_role_labels() -> Result<(), String> {
     let expected = volume_names();
     let responses = expected

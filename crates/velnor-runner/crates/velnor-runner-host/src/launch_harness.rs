@@ -55,6 +55,7 @@ pub(crate) enum Mode {
     AcquireServerError,
     AckFail,
     JitFail,
+    JitForbidden,
     JitConflict,
     JitMalformed,
 }
@@ -70,6 +71,12 @@ impl Transport for Script {
             if matches!(self.mode, Mode::JitConflict) {
                 return Ok(Exchange {
                     status: 409,
+                    body: Vec::new(),
+                });
+            }
+            if matches!(self.mode, Mode::JitForbidden) {
+                return Ok(Exchange {
+                    status: 403,
                     body: Vec::new(),
                 });
             }
@@ -188,6 +195,10 @@ fn progress_job(kind: InnerKind) -> InnerJob {
 }
 
 pub(crate) fn assigned_wait(message_id: i64, assigned: i64) -> Poll {
+    kind_wait(message_id, assigned, InnerKind::Assigned)
+}
+
+fn kind_wait(message_id: i64, assigned: i64, kind: InnerKind) -> Poll {
     Poll::Batch(ParsedBatch {
         message_id,
         raw_body: String::new(),
@@ -201,7 +212,7 @@ pub(crate) fn assigned_wait(message_id: i64, assigned: i64) -> Poll {
             total_idle_runners: 0,
         }),
         jobs: vec![InnerJob {
-            kind: InnerKind::Assigned,
+            kind,
             request_id: Some(0),
             job_id: None,
             labels: Vec::new(),
@@ -241,6 +252,56 @@ pub(crate) async fn open(label: &str) -> Result<(Scratch, Journal), String> {
         .await
         .map_err(|err| err.to_string())?;
     Ok((scratch, journal))
+}
+
+pub(crate) struct JitProbe {
+    inner: Script,
+    pub(crate) names: Vec<String>,
+    conflict: bool,
+}
+
+impl JitProbe {
+    pub(crate) fn conflict() -> Self {
+        Self {
+            inner: Script {
+                calls: Vec::new(),
+                mode: Mode::Ok,
+            },
+            names: Vec::new(),
+            conflict: true,
+        }
+    }
+
+    pub(crate) fn calls(&self) -> &[&'static str] {
+        &self.inner.calls
+    }
+}
+
+impl Transport for JitProbe {
+    fn exchange(&mut self, request: &SessionRequest) -> Result<Exchange, TransportFail> {
+        if request.path.contains("generatejitconfig") {
+            if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&request.body)
+                && let Some(name) = value.get("name").and_then(|item| item.as_str())
+            {
+                self.names.push(name.to_owned());
+            }
+            if self.conflict {
+                self.inner.calls.push("jit");
+                return Err(TransportFail::Http(409));
+            }
+        }
+        self.inner.exchange(request)
+    }
+}
+
+impl Lane for JitProbe {
+    fn on_admin(&mut self) -> Result<(), EnsureError> {
+        self.inner.on_admin()
+    }
+
+    fn on_queue(&mut self) -> Result<(), EnsureError> {
+        self.inner.on_queue()
+    }
 }
 
 pub(crate) fn absent(path: &Path) -> Result<(), String> {

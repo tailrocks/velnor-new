@@ -116,6 +116,36 @@ fn qualification_and_monitoring_declare_shell_only_for_typed_scale_set() {
 }
 
 #[test]
+fn empty_cache_key_templates_bind_run_attempt_in_rendered_workflow() {
+    let workflow = render_schema2_workflows(&request())
+        .expect("schema2 renders")
+        .into_iter()
+        .find(|file| file.path == super::QUALIFICATION_WORKFLOW)
+        .expect("qualification workflow is emitted");
+    let rendered = workflow.bytes.as_str();
+    let empty = "g4-empty-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}";
+    let space = "g4-space-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}";
+    assert_eq!(rendered.matches(&format!("key: {empty}")).count(), 2);
+    assert_eq!(rendered.matches(&format!("key: {space}")).count(), 4);
+
+    for job in ["empty-cache-hosted", "empty-cache-scale-set"] {
+        for template in [empty, space] {
+            let key_for_attempt = |attempt: &str| {
+                template
+                    .replace("${{ github.run_id }}", "37200000000")
+                    .replace("${{ github.run_attempt }}", attempt)
+                    .replace("${{ github.job }}", job)
+            };
+            assert_ne!(
+                key_for_attempt("1"),
+                key_for_attempt("2"),
+                "{job} must not reuse {template} across attempts"
+            );
+        }
+    }
+}
+
+#[test]
 fn public_hosted_label_rejects_scale_set_tokens_and_unknown_labels() {
     let mut scale_token = request();
     scale_token.hosted_label = scale_token.scale_set.token();

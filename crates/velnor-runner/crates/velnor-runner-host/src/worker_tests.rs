@@ -86,6 +86,9 @@ fn dind_is_privileged_and_shares_the_runner_volumes() -> Result<(), HostError> {
 fn runner_joins_only_its_dind_netns() -> Result<(), HostError> {
     let spec = projection("worker_a")?;
     let not_hex = "g".repeat(64);
+    let twelve = "a".repeat(12);
+    let sixty_three = "b".repeat(63);
+    let sixty_five = "c".repeat(65);
     for bad in [
         "",
         "host",
@@ -93,6 +96,9 @@ fn runner_joins_only_its_dind_netns() -> Result<(), HostError> {
         "../id",
         "short",
         not_hex.as_str(),
+        twelve.as_str(),
+        sixty_three.as_str(),
+        sixty_five.as_str(),
     ] {
         assert_eq!(
             crate::worker::join_dind_net(spec.clone(), bad).err(),

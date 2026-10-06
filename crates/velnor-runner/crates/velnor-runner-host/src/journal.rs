@@ -52,7 +52,7 @@ impl IntentState {
         }
     }
 
-    fn parse(text: &str) -> Result<Self, HostError> {
+    pub(crate) fn parse(text: &str) -> Result<Self, HostError> {
         match text {
             "pending" => Ok(Self::Pending),
             "done" => Ok(Self::Done),
@@ -96,7 +96,7 @@ impl Journal {
 
     /// Insert a pending intent and commit before returning.
     ///
-    /// The same `kind` and `subject` reuse the live row. A failed row starts a new id.
+    /// The same `kind` and `subject` reuse the live row. A failed or cleaned row starts a new id.
     ///
     /// # Errors
     ///

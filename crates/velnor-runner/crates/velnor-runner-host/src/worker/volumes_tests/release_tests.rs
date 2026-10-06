@@ -59,7 +59,7 @@ fn pair_cleanup_responses() -> Vec<Response> {
             &container_json("runner-id", Some(WORKER), Some("runner")),
         ),
         http(200, &container_json("dind-id", Some(WORKER), Some("dind"))),
-        http(200, r#"{"State":{"Running":false}}"#),
+        http(200, r#"{"State":{"Status":"exited","Running":false}}"#),
         http(
             200,
             &container_json("runner-id", Some(WORKER), Some("runner")),

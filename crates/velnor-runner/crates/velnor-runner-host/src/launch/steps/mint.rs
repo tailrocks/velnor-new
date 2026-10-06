@@ -108,14 +108,11 @@ async fn fail_jit(
     error: SessionError,
 ) -> Result<Option<Started>, EnsureError> {
     let mapped = map_listen(error);
-    if matches!(mapped, EnsureError::Conflict) {
-        journal
-            .finish(id, origin.conflict_outcome())
-            .await
-            .map_err(map_journal)?;
-        return Err(mapped);
-    }
-    hold(journal, id, mapped).await
+    journal
+        .finish(id, origin.error_outcome(error.certainty()))
+        .await
+        .map_err(map_journal)?;
+    Err(mapped)
 }
 
 fn fetch_jit<T>(lane: &mut T, ctx: &Drive, name: &str) -> Result<EncodedJit, SessionError>

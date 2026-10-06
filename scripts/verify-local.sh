@@ -11,8 +11,8 @@
 #                     upstream evidence, deny policy; the live advisory scan
 #                     runs in CI, not here)
 #   generated-tree    build the CLI, `generate --output-dir` to a temp dir,
-#                     and `diff -r` schema-1 files. Schema-2 workflow files are
-#                     left out of that diff and locked by the orchestrator test.
+#                     and `diff -r` the committed `.github` tree, including
+#                     schema-2 workflows, against `generate --output-dir`.
 #   clippy-<crate>    per-crate pinned `cargo clippy --all-targets -- -D warnings`
 #   test-<crate>      per-crate pinned `cargo test` (unit plus integration plus doc)
 #   doctest-<crate>   per-crate pinned `cargo test --doc` for crates with library
@@ -163,6 +163,7 @@ if [ -f "$RUNNER_MANIFEST" ]; then
     stage runner-test "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace
   fi
   stage runner-doctest "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace --doc
+  # Invoke the pinned binary. A cargo shim can reject the deny subcommand.
   stage runner-deny mise exec "cargo-deny@0.20.2" -- cargo-deny --locked --manifest-path "$RUNNER_MANIFEST" --config "crates/velnor-runner/deny.toml" check
 fi
 

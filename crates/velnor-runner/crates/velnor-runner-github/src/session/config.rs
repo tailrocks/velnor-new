@@ -12,8 +12,9 @@ use super::request::{Method, SessionRequest, Transport};
 use super::retry::{API_QUERY, bearer, execute, fresh_gate, json_content, user_agent};
 
 /// JSON body for [`jit`]. `workFolder` is `_work`, relative to the runner root.
-/// The work volume is mounted at `/home/runner/_work`, which also holds the
-/// runner's temporary JIT payload before the listener starts.
+/// This matches the official Actions runner's work directory and the container
+/// path mounted from this worker's named work volume. The JIT payload stays in
+/// a private `/tmp` file and is not persisted in that volume.
 ///
 /// # Errors
 ///

@@ -53,8 +53,7 @@ RUN mkdir -p /etc/docker /usr/local/libexec/velnor /usr/share/doc/velnor-dind \
 # is 673bb7adc8b463b56e9e929672ea74b40951f655a023d0b9801f46c9da4bc509.
 # Its Apache-2.0 license is retained in the image.
 COPY cgroup-v2-delegation.sh /usr/local/libexec/velnor/cgroup-v2-delegation.sh
-COPY start-dockerd.sh /usr/local/bin/velnor-dind-entrypoint
+COPY entrypoint.sh /usr/local/bin/velnor-dind-entrypoint
 COPY LICENSE-moby /usr/share/doc/velnor-dind/LICENSE-moby
 RUN chmod 0755 /usr/local/bin/velnor-dind-entrypoint
-
 ENTRYPOINT ["/usr/local/bin/velnor-dind-entrypoint"]

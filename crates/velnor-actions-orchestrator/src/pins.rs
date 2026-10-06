@@ -261,8 +261,10 @@ const GENERATOR_SEED_ROOT: &str = "/opt/velnor/seed";
 
 /// Fixed acquisition argv. A matching seed file is copied. Otherwise curl.
 ///
-/// Curl stays HTTPS-only (`--proto '=https'`) over TLS 1.2+. Paths are
-/// double-quoted, and a seed with the wrong digest is never copied.
+/// Curl stays HTTPS-only (`--proto '=https'`) over TLS 1.2+. The staged
+/// path stays double-quoted. A hash mismatch does not copy the seed. Curl
+/// retries all failures up to five times, including a TLS EOF; certificate
+/// verification stays enabled.
 ///
 /// # Errors
 ///
@@ -296,7 +298,7 @@ pub fn acquire_script_argv(
     }
     let seed = format!("{seed_root}/generator/{name}");
     let script = format!(
-        "mkdir -p \"{dir}\" && s=\"{seed}\" d=\"{staged}\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | {digest}; then cp \"$s\" \"$d\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | {digest}; fi && chmod +x \"$d\""
+        "mkdir -p \"{dir}\" && s=\"{seed}\" d=\"{staged}\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | {digest}; then cp \"$s\" \"$d\"; else curl -fsSL --retry 5 --retry-all-errors --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | {digest}; fi && chmod +x \"$d\""
     );
     Ok(vec!["sh".to_owned(), "-c".to_owned(), script])
 }
