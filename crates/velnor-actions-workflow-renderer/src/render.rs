@@ -93,8 +93,8 @@ pub struct RenderContext {
     /// review). Accepts fixed pre-seed staging for internal steps and
     /// requires the build-once artifact closure; never set for consumers.
     pub preseed: bool,
-    /// Sorted isolated verification jobs with per-runner Mise pins.
-    pub verification_tasks: Vec<crate::VerificationTaskPolicy>,
+    /// One sorted, variant-dispatched graph of explicitly declared workflow tasks.
+    pub workflow_tasks: Vec<crate::verification_jobs::WorkflowTaskPolicy>,
     /// Pull-request cache writes; scoped writes require explicit same-repository opt-in.
     pub pull_request_cache_policy: PullRequestCachePolicy,
     /// Caller-validated env for plan-job helper consumers: the freshness
@@ -261,11 +261,7 @@ pub fn finalize_jobs(
     mise.validate()?;
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
     for (id, job) in &mut jobs {
-        if ctx
-            .verification_tasks
-            .iter()
-            .any(|task| task.owns_job_id(id))
-        {
+        if ctx.workflow_tasks.iter().any(|task| task.owns_job_id(id)) {
             closure::check_internal_staged(id, job, ctx.preseed)?;
             continue;
         }
@@ -326,7 +322,7 @@ fn merged_jobs(
     ir.validate().map_err(RenderError::Contract)?;
     workflow_policy::check_triggers(&ir.triggers)?;
     workflow_policy::check_concurrency(&ir.concurrency)?;
-    workflow_policy::check_single_label(ir, &ctx.runs_on, &ctx.verification_tasks)?;
+    workflow_policy::check_single_label(ir, &ctx.runs_on, &ctx.workflow_tasks)?;
     let mut jobs = ir.jobs.clone();
     match policy {
         WorkflowPolicy::ConsumerV1 => support::reject_consumer_support(&jobs, support)?,
@@ -334,12 +330,16 @@ fn merged_jobs(
             support::merge_support_jobs(&mut jobs, support, ctx)?;
         }
     }
-    let verification_ids = crate::verification_jobs::validate_verification_jobs(
-        &jobs,
-        &ctx.verification_tasks,
-        &ctx.checkout_uses,
+    let workflow_task_ids =
+        crate::verification_jobs::workflow_task_jobs::validate_workflow_task_jobs(
+            &jobs,
+            &ctx.workflow_tasks,
+            &ctx.checkout_uses,
+        )?;
+    crate::verification_jobs::workflow_task_jobs::extend_required_needs(
+        &mut jobs,
+        &workflow_task_ids,
     )?;
-    crate::verification_jobs::extend_required_needs(&mut jobs, &verification_ids)?;
     msrv::check_no_msrv(&jobs)?;
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;

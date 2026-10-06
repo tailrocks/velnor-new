@@ -2,7 +2,7 @@
 
 use super::*;
 use velnor_actions_contract::config::{CheckPlatform, CheckRunner, MiseCheck, QualifiedTool};
-use velnor_actions_contract::{JobConclusion, RequiredJobResult, StepKind};
+use velnor_actions_contract::{JobConclusion, RequiredJobResult, StepKind, VelnorConfig};
 use velnor_actions_mise::PinnedTool;
 
 fn check(id: &str, runner: CheckRunner) -> MiseCheck {
@@ -32,16 +32,22 @@ fn fixture(checks: &[MiseCheck]) -> (tempfile::TempDir, Discovery) {
     fixture_with_tools(checks, &[gh_qualification()])
 }
 
+fn named_workflow(
+    root: &std::path::Path,
+    config: &VelnorConfig,
+    discovery: &Discovery,
+) -> crate::workflow::WorkflowPlan {
+    crate::workflow::build_workflow(root, config, "main", "ubuntu-26.04", discovery, &[])
+        .expect("named checks workflow")
+}
+
 fn fixture_with_tools(
     checks: &[MiseCheck],
     tools: &[QualifiedTool],
 ) -> (tempfile::TempDir, Discovery) {
     let root = tempfile::tempdir().expect("temporary repository");
-    std::fs::write(
-        root.path().join("mise.toml"),
-        "[tasks.\"check:all\"]\nrun = 'true'\n",
-    )
-    .expect("native task source");
+    let source = "[tasks.\"check:all\"]\nrun = 'true'\n";
+    std::fs::write(root.path().join("mise.toml"), source).expect("native task source");
     let checks = velnor_actions_mise::discover_checks(root.path(), checks, tools)
         .expect("discover explicit checks");
     let discovery = Discovery {
@@ -123,9 +129,7 @@ fn no_cargo_checks_gate_required_without_becoming_rust_jobs() {
     )
     .expect("config");
     let config = crate::config::load_config(root.path()).expect("defaulted config");
-    let workflow =
-        crate::workflow::build_workflow(&config, "main", "ubuntu-26.04", &discovery, &[])
-            .expect("named checks workflow");
+    let workflow = named_workflow(root.path(), &config, &discovery);
     assert_eq!(workflow.ir.jobs["check-ffi"].display_name, "Check / ffi");
     assert!(
         workflow.ir.jobs["required"]
@@ -374,9 +378,7 @@ fn ignored_rust_candidate_keeps_plan_inventory_toolchain() {
     )
     .expect("config");
     let config = crate::config::load_config(root.path()).expect("defaulted config");
-    let workflow =
-        crate::workflow::build_workflow(&config, "main", "ubuntu-26.04", &discovery, &[])
-            .expect("ignored Rust workflow");
+    let workflow = named_workflow(root.path(), &config, &discovery);
     let plan = &workflow.ir.jobs["plan"];
     let pinned_tools = plan
         .steps

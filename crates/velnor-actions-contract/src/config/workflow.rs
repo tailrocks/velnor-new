@@ -1,5 +1,5 @@
 //! Workflow section of `.velnor/config.toml`: naming, policy, runner labels.
-use crate::config::{TofuApplyConfig, VerificationTask};
+use crate::config::{TofuApplyConfig, WorkflowTask};
 use crate::errors::ContractError;
 use crate::workflow::ValidatorKind;
 use serde::{Deserialize, Serialize};
@@ -42,9 +42,9 @@ pub struct WorkflowConfig {
     /// Pinned older runner-label override; omit for latest.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runner_label: Option<String>,
-    /// Sorted, explicit isolated validation jobs.
+    /// Sorted, unique typed task graph shared by verification and build variants.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub tasks: Vec<VerificationTask>,
+    pub tasks: Vec<WorkflowTask>,
     /// Optional protected post-merge `OpenTofu` apply workflow.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tofu_apply: Option<TofuApplyConfig>,
@@ -168,17 +168,40 @@ impl WorkflowConfig {
     /// # Errors
     fn validate_tasks(&self, file: &str) -> Result<(), ContractError> {
         let mut previous = None;
+        let mut build_tasks = 0;
+        let mut native_image_tasks = 0;
         for task in &self.tasks {
             task.validate(file)?;
-            if previous.is_some_and(|id: &str| id >= task.id.as_str()) {
-                let problem = if previous == Some(task.id.as_str()) {
-                    format!("duplicate_verification_task:{}", task.id)
+            if matches!(task, WorkflowTask::Build(_)) {
+                build_tasks += 1;
+                if build_tasks > 1 {
+                    return Err(ContractError::config(
+                        file,
+                        "workflow.tasks",
+                        "more_than_one_native_build_task",
+                    ));
+                }
+            }
+            if matches!(task, WorkflowTask::NativeImage(_)) {
+                native_image_tasks += 1;
+                if native_image_tasks > 1 {
+                    return Err(ContractError::config(
+                        file,
+                        "workflow.tasks",
+                        "more_than_one_native_image_task",
+                    ));
+                }
+            }
+            let id = task.id();
+            if previous.is_some_and(|previous_id: &str| previous_id >= id) {
+                let problem = if previous == Some(id) {
+                    format!("duplicate_workflow_task_id:{id}")
                 } else {
                     "tasks_must_be_sorted_by_id".to_owned()
                 };
                 return Err(ContractError::config(file, "workflow.tasks", problem));
             }
-            previous = Some(task.id.as_str());
+            previous = Some(id);
         }
         Ok(())
     }
@@ -187,7 +210,10 @@ impl WorkflowConfig {
 #[cfg(test)]
 mod tests {
     use super::{GeneratorValidation, PullRequestCachePolicy, WorkflowConfig, WorkflowPolicy};
-    use crate::config::{VerificationRunner, VerificationTask, VerificationTaskKind};
+    use crate::config::{
+        BuildTask, BuildTaskRunner, NativeImageCachePolicy, NativeImagePlatform, NativeImageTask,
+        VerificationRunner, VerificationTask, WorkflowTask,
+    };
 
     /// Workflow config carrying `name`, all else default.
     fn named(name: &str) -> WorkflowConfig {
@@ -287,12 +313,13 @@ mod tests {
 
     #[test]
     fn workflow_tasks_require_sorted_unique_safe_ids() {
-        let make = |id: &str| VerificationTask {
-            id: id.to_owned(),
-            kind: VerificationTaskKind::Verification,
-            mise_task: format!("check-{id}"),
-            runner: VerificationRunner::LinuxX64,
-            timeout_minutes: 10,
+        let make = |id: &str| {
+            WorkflowTask::Verification(VerificationTask {
+                id: id.to_owned(),
+                mise_task: format!("check-{id}"),
+                runner: VerificationRunner::LinuxX64,
+                timeout_minutes: 10,
+            })
         };
         let mut valid = named("CI");
         valid.tasks = vec![make("native-format"), make("native-lint")];
@@ -304,13 +331,61 @@ mod tests {
 
         valid.tasks = vec![make("native-lint"), make("native-lint")];
         let error = valid.validate("config.toml").expect_err("duplicate fails");
-        assert!(error.to_string().contains("duplicate_verification_task"));
+        assert!(error.to_string().contains("duplicate_workflow_task_id"));
 
         valid.tasks = vec![make("required")];
         let error = valid
             .validate("config.toml")
             .expect_err("reserved ID fails");
-        assert!(error.to_string().contains("bad_verification_task_id"));
+        assert!(error.to_string().contains("bad_workflow_task_id"));
+    }
+
+    #[test]
+    fn workflow_task_variants_share_sorted_unique_ids_and_build_bound() {
+        let make_build = |id: &str| {
+            WorkflowTask::Build(BuildTask {
+                id: id.to_owned(),
+                mise_task: "desktop-ci".to_owned(),
+                tools: vec!["mr-boxington".to_owned(), "rust".to_owned()],
+                runner: BuildTaskRunner::Macos26Arm64,
+                timeout_minutes: 120,
+                cargo_build_jobs: 2,
+                nextest_test_threads: 2,
+            })
+        };
+        let mut valid = named("CI");
+        valid.tasks = vec![make_build("native-desktop")];
+        assert!(valid.validate("config.toml").is_ok());
+
+        valid.tasks = vec![make_build("native-desktop"), make_build("native-ios")];
+        let error = valid
+            .validate("config.toml")
+            .expect_err("multiple native build tasks fail");
+        assert!(
+            error
+                .to_string()
+                .contains("more_than_one_native_build_task")
+        );
+
+        valid.tasks = vec![make_build("required")];
+        let error = valid
+            .validate("config.toml")
+            .expect_err("reserved build task ID fails");
+        assert!(error.to_string().contains("bad_workflow_task_id"));
+
+        valid.tasks = vec![
+            make_build("native-desktop"),
+            WorkflowTask::Verification(VerificationTask {
+                id: "native-desktop".to_owned(),
+                mise_task: "desktop-format-check".to_owned(),
+                runner: VerificationRunner::MacosArm64,
+                timeout_minutes: 10,
+            }),
+        ];
+        let error = valid
+            .validate("config.toml")
+            .expect_err("duplicate IDs across variants fail");
+        assert!(error.to_string().contains("duplicate_workflow_task_id"));
     }
 
     #[test]
@@ -335,5 +410,37 @@ mod tests {
         let mut config = named("CI");
         config.default_branch = Some("release/1.2".to_owned());
         assert_eq!(config.validate("config.toml"), Ok(()));
+    }
+
+    #[test]
+    fn native_image_tasks_share_ids_and_have_one_hosted_capability_slot() {
+        let image = |id: &str| {
+            WorkflowTask::NativeImage(NativeImageTask {
+                id: id.to_owned(),
+                platform: NativeImagePlatform::LinuxArm64,
+                script: "maintained-image-build/arm64-image-validation.sh".to_owned(),
+                timeout_minutes: 60,
+                cache: NativeImageCachePolicy::TaskOwnedBuilder,
+            })
+        };
+        let mut valid = named("CI");
+        valid.tasks = vec![image("architect-arm64-image")];
+        assert!(valid.validate("config.toml").is_ok());
+
+        valid.tasks = vec![image("architect-arm64-image"), image("other-image")];
+        let error = valid
+            .validate("config.toml")
+            .expect_err("multiple image tasks exceed the one-host resource envelope");
+        assert!(
+            error
+                .to_string()
+                .contains("more_than_one_native_image_task")
+        );
+
+        valid.tasks = vec![image("required")];
+        let error = valid
+            .validate("config.toml")
+            .expect_err("image tasks use the workflow-wide ID namespace");
+        assert!(error.to_string().contains("bad_workflow_task_id"));
     }
 }

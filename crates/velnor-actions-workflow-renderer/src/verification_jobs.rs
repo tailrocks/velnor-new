@@ -4,10 +4,33 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
     HOSTED_SUFFIX, Job, JobTimeout, PermissionLevel, Permissions, RunsOn, SCALE_SUFFIX, Step,
-    VERIFICATION_TASK_JOB_PREFIX, VerificationRunner, VerificationTask,
+    VerificationRunner, VerificationTask, WORKFLOW_TASK_JOB_PREFIX,
 };
 
-use crate::{MiseSetup, RenderError, mise_setup_step, shell_step, steps};
+use crate::{MiseSetup, RenderError};
+
+// Workflow-task job builders live beside the verification job builder
+// (`#[path]`, no `lib.rs` edit).
+#[path = "build_task_jobs.rs"]
+pub(crate) mod build_task_jobs;
+#[path = "build_task_mise.rs"]
+pub(crate) mod build_task_mise;
+#[path = "build_task_mise_tools.rs"]
+pub(crate) mod build_task_mise_tools;
+#[path = "native_image_jobs.rs"]
+pub(crate) mod native_image_jobs;
+#[path = "task_script.rs"]
+pub(crate) mod task_script;
+#[path = "verification_task_mise.rs"]
+pub(crate) mod verification_task_mise;
+#[path = "workflow_task_jobs.rs"]
+pub(crate) mod workflow_task_jobs;
+
+pub use build_task_jobs::{
+    BuildTaskArtifact, BuildTaskPolicy, BuildTaskTool, build_build_task_job,
+};
+pub use native_image_jobs::{NativeImageTaskPolicy, build_native_image_job};
+pub use workflow_task_jobs::WorkflowTaskPolicy;
 
 #[cfg(test)]
 #[path = "verification_jobs_tests.rs"]
@@ -24,10 +47,18 @@ pub struct VerificationTaskPolicy {
     pub scale_set_token: Option<String>,
     /// Mise setup action with the binary digest for this runner target.
     pub mise_setup: MiseSetup,
+    /// Per-task explicitly declared tools, resolved to locked prebuilt rows.
+    pub selected_tools: Vec<build_task_jobs::BuildTaskTool>,
+    /// SHA-256 of the source task config, if present.
+    pub mise_config_sha256: Option<String>,
+    /// SHA-256 of the source Mise lock, if present.
+    pub mise_lock_sha256: Option<String>,
+    /// SHA-256 of the source Rust toolchain file, if present.
+    pub rust_toolchain_sha256: Option<String>,
 }
 
-/// Step installing the repo's locked task tool closure.
-pub const INSTALL_VERIFICATION_TOOLS_NAME: &str = "Install locked task tools";
+/// Step installing only the declared task's locked prebuilt tool closure.
+pub const INSTALL_VERIFICATION_TOOLS_NAME: &str = "Install declared prebuilt task tools";
 /// Step running the declared, credential-scrubbed Mise task.
 pub const RUN_VERIFICATION_TASK_NAME: &str = "Run declared Mise task";
 
@@ -35,7 +66,7 @@ impl VerificationTaskPolicy {
     /// Generated GitHub job key for this declaration.
     #[must_use]
     pub fn job_id(&self) -> String {
-        format!("{VERIFICATION_TASK_JOB_PREFIX}{}", self.task.id)
+        format!("{WORKFLOW_TASK_JOB_PREFIX}{}", self.task.id)
     }
 
     /// Whether `job_id` is this declaration's base or schema-2 lane copy.
@@ -134,14 +165,6 @@ pub(crate) fn validate_verification_jobs(
         }
         last_id = Some(policy.task.id.as_str());
     }
-    if jobs.keys().any(|id| {
-        id.starts_with(VERIFICATION_TASK_JOB_PREFIX)
-            && !job_ids.iter().any(|expected| expected == id)
-    }) {
-        return Err(RenderError::InvalidWorkflow(
-            "undeclared_verification_job".to_owned(),
-        ));
-    }
     Ok(job_ids)
 }
 
@@ -216,53 +239,12 @@ fn runner_mismatch(policy: &VerificationTaskPolicy) -> RenderError {
     RenderError::InvalidWorkflow(format!("verification_runner_mismatch:{}", policy.task.id))
 }
 
-/// Add every verification job to the required-check fan-in.
-/// # Errors
-pub(crate) fn extend_required_needs(
-    jobs: &mut BTreeMap<String, Job>,
-    verification_ids: &[String],
-) -> Result<(), RenderError> {
-    if verification_ids.is_empty() {
-        return Ok(());
-    }
-    let required = jobs.get_mut(crate::render::FINAL_JOB_ID).ok_or_else(|| {
-        RenderError::InvalidWorkflow("verification_tasks_require_required_job".to_owned())
-    })?;
-    for id in verification_ids {
-        if !required.needs.contains(id) {
-            required.needs.push(id.clone());
-        }
-    }
-    Ok(())
-}
-
 /// Build the exact step sequence, with credentials absent before Mise reads config.
 fn verification_steps(
     policy: &VerificationTaskPolicy,
     checkout_uses: &str,
 ) -> Result<Vec<Step>, RenderError> {
-    Ok(vec![
-        steps::checkout_step(checkout_uses)?,
-        mise_setup_step(&policy.mise_setup)?,
-        shell_step(
-            INSTALL_VERIFICATION_TOOLS_NAME,
-            vec![
-                "mise".to_owned(),
-                "install".to_owned(),
-                "--locked".to_owned(),
-            ],
-            BTreeMap::new(),
-        )?,
-        shell_step(
-            RUN_VERIFICATION_TASK_NAME,
-            vec![
-                "mise".to_owned(),
-                "run".to_owned(),
-                policy.task.mise_task.clone(),
-            ],
-            BTreeMap::new(),
-        )?,
-    ])
+    crate::verification_jobs::verification_task_mise::steps(policy, checkout_uses)
 }
 
 /// Validate the task schema and runner-to-platform binding.
@@ -277,7 +259,8 @@ fn validate_policy(policy: &VerificationTaskPolicy) -> Result<(), RenderError> {
             policy.task.id
         )));
     }
-    policy.mise_setup.validate()
+    policy.mise_setup.validate()?;
+    crate::verification_jobs::verification_task_mise::validate_policy(policy)
 }
 
 /// Exact least-privilege token scopes for isolated task jobs.

@@ -47,7 +47,7 @@ pub(crate) fn workflow_to_yaml(
     }
     let needs_env = needs_channel_envs(jobs)?;
     let lane_steps = lane_steps(shared);
-    let workflow_env = crate::document_env::workflow_env(!ctx.verification_tasks.is_empty());
+    let workflow_env = crate::document_env::workflow_env(!ctx.workflow_tasks.is_empty());
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
         let call = shared.calls.get(id).map(String::as_str);
@@ -270,11 +270,7 @@ fn job_to_yaml(
         StepKind::Shell { env, .. } | StepKind::Action { env, .. } => !env.is_empty(),
         StepKind::Internal { .. } => false,
     });
-    let mut job_env = if step_has_env
-        && ctx
-            .verification_tasks
-            .iter()
-            .any(|task| task.owns_job_id(id))
+    let mut job_env = if step_has_env && ctx.workflow_tasks.iter().any(|task| task.owns_job_id(id))
     {
         // Verification jobs intentionally execute repository-declared
         // Mise tasks, so they need Mise config while retaining the same

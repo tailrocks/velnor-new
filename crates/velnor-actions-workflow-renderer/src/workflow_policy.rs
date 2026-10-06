@@ -3,7 +3,8 @@
 use velnor_actions_contract::{Concurrency, Trigger, WorkflowIr};
 
 use crate::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, RenderError, VerificationTaskPolicy,
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, RenderError,
+    verification_jobs::WorkflowTaskPolicy,
 };
 
 /// Require the exact trigger shape: 4 PR types, one push branch, merge group.
@@ -42,7 +43,7 @@ pub(crate) fn check_concurrency(concurrency: &Concurrency) -> Result<(), RenderE
 pub(crate) fn check_single_label(
     ir: &WorkflowIr,
     label: &str,
-    verification_tasks: &[VerificationTaskPolicy],
+    workflow_tasks: &[WorkflowTaskPolicy],
 ) -> Result<(), RenderError> {
     for (id, job) in &ir.jobs {
         if let Some(runner) = &job.check_runner {
@@ -64,10 +65,10 @@ pub(crate) fn check_single_label(
                 )));
             }
         } else {
-            let task_label = verification_tasks
+            let task_label = workflow_tasks
                 .iter()
                 .find(|task| task.owns_job_id(id))
-                .map(|task| task.runner_label.as_str());
+                .map(WorkflowTaskPolicy::runner_label);
             if job.runs_on != label
                 && task_label != Some(job.runs_on.as_str())
                 && !velnor_actions_contract::RunsOn::parse(&job.runs_on)

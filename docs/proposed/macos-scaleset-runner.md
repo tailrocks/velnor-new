@@ -192,9 +192,12 @@ control jobs and single-writer publish, deploy, release, and baseline promotion
 stay single and hosted. A hosted catalog label cannot appear on a scale-set
 selector.
 
-Typed `[[workflow.tasks]]` jobs follow the same eligibility rule. Linux x64
-tasks emit both hosted and Scale Set jobs in `both`, and `Required` waits for
-both. In `hosted` or `scale-set`, each Linux task emits only its selected lane.
+Only `verification` entries in the shared `[[workflow.tasks]]` list follow
+the paired-lane eligibility rule. Linux x64 verification tasks emit both
+hosted and Scale Set jobs in `both`, and `Required` waits for both. In
+`hosted` or `scale-set`, each Linux verification task emits only its selected
+lane. Build and NativeImage variants remain hosted-only in every mode; a
+Scale Set profile override for either variant is rejected.
 macOS ARM64 tasks remain hosted in all modes because the Scale Set contract is
 Linux/amd64; they stay in `Required` but do not provide paired qualification.
 

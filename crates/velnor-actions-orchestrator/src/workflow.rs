@@ -88,6 +88,7 @@ fn build_plan_job(
 ///
 /// Returns contract, render-context, or tool-request errors.
 pub(crate) fn build_workflow(
+    root: &std::path::Path,
     config: &VelnorConfig,
     branch: &str,
     label: &str,
@@ -98,7 +99,7 @@ pub(crate) fn build_workflow(
     let catalog = ToolCatalog::pinned();
     let version = env!("CARGO_PKG_VERSION").to_owned();
     let policy = config.workflow.policy;
-    let verification_tasks = crate::verification_tasks::policies(config)?;
+    let workflow_tasks = crate::workflow_task_jobs::policies(root, config, discovery)?;
     let support = support_workflow(policy, config.workflow.generator_validation, discovery);
     let mut jobs = BTreeMap::new();
     let acquire = match policy {
@@ -148,7 +149,7 @@ pub(crate) fn build_workflow(
         required_ids.push(id.clone());
         jobs.insert(id, job);
     }
-    crate::verification_tasks::insert_jobs(&mut jobs, &verification_tasks)?;
+    crate::workflow_task_jobs::insert_jobs(&mut jobs, &workflow_tasks)?;
     insert_gate_jobs(&mut jobs, label, branch, &required_ids, acquire, &catalog)?;
     wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
     let ir = workflow_ir(config, branch, jobs, policy);
@@ -159,7 +160,7 @@ pub(crate) fn build_workflow(
         &catalog,
         discovery,
         rust.has_compiler(),
-        verification_tasks,
+        workflow_tasks,
     )?;
     let actionlint = actionlint_input(config, &version, label);
     Ok(WorkflowPlan {

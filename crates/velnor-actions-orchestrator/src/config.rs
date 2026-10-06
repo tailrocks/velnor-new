@@ -8,6 +8,7 @@ use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig, MiseChec
 use velnor_actions_contract::{
     DiscoveryConfig, GeneratorValidation, PullRequestCachePolicy, ResourcesConfig,
     TestShardingConfig, VelnorConfig, VerificationTask, WorkflowConfig, WorkflowPolicy,
+    WorkflowTask,
 };
 
 use crate::OrchestratorError;
@@ -141,9 +142,9 @@ struct PartialWorkflow {
     pull_request_cache_policy: PullRequestCachePolicy,
     /// Pinned runner-label override.
     runner_label: Option<String>,
-    /// Explicit isolated verification tasks.
+    /// One tagged task inventory for all explicit workflow work.
     #[serde(default)]
-    tasks: Vec<VerificationTask>,
+    tasks: Vec<WorkflowTask>,
     /// Optional protected post-merge `OpenTofu` apply declaration.
     tofu_apply: Option<velnor_actions_contract::TofuApplyConfig>,
 }

@@ -3,10 +3,12 @@
 //! Unknown fields are rejected; validation reports file, key path, problem.
 
 mod actions;
+mod build_task;
 mod check_receipt_budget;
 mod discovery;
 mod execution;
 mod host_container;
+mod image_task;
 mod mise;
 mod qualified_tools;
 mod release;
@@ -17,8 +19,10 @@ mod tofu;
 mod tofu_apply;
 mod verification;
 mod workflow;
+mod workflow_task;
 
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
+pub use build_task::{BuildTask, BuildTaskRunner, is_valid_build_tool_key};
 pub use check_receipt_budget::{
     MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES, MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
     MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES, MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,
@@ -37,6 +41,7 @@ pub use host_container::{
     ContainerPlatform, DaemonIdentityPolicy, HostContainerProfile, HostDockerCli, HostDockerDaemon,
     HostOrbStackSdk,
 };
+pub use image_task::{NativeImageCachePolicy, NativeImagePlatform, NativeImageTask};
 pub use mise::{
     CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
     MiseCheck, is_valid_mise_task_name,
@@ -60,14 +65,12 @@ pub use stacks::{
 };
 pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
 pub use tofu_apply::{GitHubTokenSecret, S3BackendConfig, TofuApplyConfig};
-pub use verification::{
-    VERIFICATION_TASK_JOB_PREFIX, VerificationRunner, VerificationTask, VerificationTaskKind,
-    is_valid_verification_task_id,
-};
+pub use verification::{VerificationRunner, VerificationTask};
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, PullRequestCachePolicy, RUNNER_LABEL_CATALOG,
     RunnerSelection, VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,
 };
+pub use workflow_task::{WORKFLOW_TASK_JOB_PREFIX, WorkflowTask, is_valid_workflow_task_id};
 
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};

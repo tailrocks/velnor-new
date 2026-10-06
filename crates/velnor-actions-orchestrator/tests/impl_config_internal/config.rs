@@ -148,6 +148,12 @@ fn uncommented_init_sample_parses_with_overrides() -> TestResult {
         "sample must document overrides"
     );
     fs::write(root.join(".velnor/config.toml"), &live)?;
+    // The uncommented sample declares a verification task; resolution binds
+    // it to a checked-in Mise task body.
+    fs::write(
+        root.join("mise.toml"),
+        "[tasks.desktop-format-check]\nrun = \"echo desktop-format-check\"\n",
+    )?;
     let prep = prepare(root)?;
     assert!(prep.config.checks.is_empty());
     // Retired `Swatinem/rust-cache` is not an overridable sample pin.
