@@ -15,7 +15,7 @@ fn read_catalog(fixture: &harness::Fixture) -> Result<String, Box<dyn Error>> {
 #[test]
 fn comments_strings_macros_and_nested_modules_are_decoys() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-pinparser-decoys")?;
-    let decoys = r#####"
+    let decoys = r####"
 // pub const MISE_VERSION: &str = "0.0.0";
 /* Outer /* pub const MISE_VERSION: &str = "0.0.0"; */ decoy. */
 const NOTE: &str = "pub const MISE_VERSION: &str = \"0.0.0\";";
@@ -37,7 +37,7 @@ macro_rules! fake_bracket [ ($($tokens:tt)*) => {} ];
 fake_brace! { pub const MISE_VERSION: &str = "0.0.0"; }
 fake_paren! (pub const MISE_VERSION: &str = "0.0.0";);
 fake_bracket! [pub const MISE_VERSION: &str = "0.0.0";];
-"#####;
+"####;
     let mut source = decoys.to_owned();
     source.push_str(&read_catalog(&fixture)?);
     harness::write(&fixture.dir, CATALOG, &source)?;
@@ -179,7 +179,7 @@ fn source_byte_cap_is_inclusive_and_enforced_before_decoding() -> Result<(), Box
     let source = read_catalog(&oversized)?;
     let needed = (SOURCE_CAP - source.len()) / "é".len() + 1;
     let oversized_source = format!("{source}{}", "é".repeat(needed));
-    assert!(oversized_source.as_bytes().len() > SOURCE_CAP);
+    assert!(oversized_source.len() > SOURCE_CAP);
     assert!(oversized_source.chars().count() < SOURCE_CAP);
     harness::write(&oversized.dir, CATALOG, &oversized_source)?;
     let run = harness::run_script(&oversized.dir, &[])?;

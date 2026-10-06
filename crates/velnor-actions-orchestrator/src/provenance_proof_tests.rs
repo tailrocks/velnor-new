@@ -53,7 +53,6 @@ fn task_entry(digest: &str, proof_run_id: u64) -> BaselineTaskEntry {
         proof_run_id,
         carried_from: None,
         observed_run_id: 7,
-        carried_from: None,
         external_data: None,
         proof: None,
     }

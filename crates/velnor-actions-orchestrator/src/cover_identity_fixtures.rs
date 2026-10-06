@@ -94,7 +94,6 @@ pub(super) fn manifest_with(entries: &[(&str, &str)]) -> BaselineManifest {
                 proof_run_id: 7,
                 carried_from: None,
                 observed_run_id: 7,
-                carried_from: None,
                 external_data: None,
                 proof: None,
             })

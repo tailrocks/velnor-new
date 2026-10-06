@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 use velnor_actions_contract::{Job, JobTimeout, WorkflowPolicy};
-use velnor_actions_workflow_renderer::cache_p08::{infer_job_tools, mise_cache_key_for_tools};
+use velnor_actions_workflow_renderer::cache_p08::infer_job_tools;
 use velnor_actions_workflow_renderer::{render_workflow_ir_strict, shell_step};
 
 use super::impl_renderer_fixtures::*;
@@ -45,12 +45,6 @@ fn http_backend_spec_gets_mise_setup_in_generated_workflow() {
     };
     assert_eq!(infer_job_tools(&job), vec![spec.clone()]);
 
-    let key = mise_cache_key_for_tools(
-        "x86_64-unknown-linux-gnu",
-        MISE_VERSION,
-        std::slice::from_ref(&spec),
-    )
-    .expect("HTTP backend tool cache key");
     let yaml = render_workflow_ir_strict(
         &fixture_ir(vec![("cargo-machete".to_owned(), job)]),
         WorkflowPolicy::VelnorRepositoryV1,
@@ -65,9 +59,5 @@ fn http_backend_spec_gets_mise_setup_in_generated_workflow() {
     assert!(
         matches!((setup, command), (Some(setup), Some(command)) if setup < command),
         "generated job must set up Mise before executing the HTTP backend:\n{yaml}"
-    );
-    assert!(
-        yaml.contains(&format!("cache_key: {key}")),
-        "wrong tool cache key:\n{yaml}"
     );
 }

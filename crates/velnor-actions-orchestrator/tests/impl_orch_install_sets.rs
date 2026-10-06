@@ -184,7 +184,7 @@ fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
         assert!(lint.contains("shellcheck@0.11.0"), "{lint}");
         let machete = runs.get("cargo-machete").ok_or("machete must prepare")?;
         assert!(
-            machete.contains("ubi:bnjbvr/cargo-machete@0.9.2"),
+            machete.contains("http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2"),
             "{machete}"
         );
         let zizmor = runs.get("zizmor").ok_or("zizmor must prepare")?;

@@ -35,6 +35,7 @@ enum SuiteName {
     WorkflowRenderer,
     Actionlint,
     ArchiveGuard,
+    Freshness,
 }
 
 impl SuiteName {
@@ -50,6 +51,7 @@ impl SuiteName {
             Self::WorkflowRenderer => "velnor-actions-workflow-renderer",
             Self::Actionlint => "velnor-actions-actionlint",
             Self::ArchiveGuard => "velnor-archive-guard",
+            Self::Freshness => "velnor-actions-freshness",
         }
     }
 }
@@ -85,7 +87,7 @@ const GENERATE_VALIDATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators];
 const OPENTOFU_TOOLS: &[SuiteTool] = &[SuiteTool::OpenTofuExecution];
 
 /// Single source of truth for typed suite identities and owned tool needs.
-const SUITE_TOOL_OWNERS: [CrateSuite; 9] = [
+const SUITE_TOOL_OWNERS: [CrateSuite; 10] = [
     CrateSuite {
         name: SuiteName::Orchestrator,
         tools: GENERATE_VALIDATOR_TOOLS,
@@ -120,6 +122,10 @@ const SUITE_TOOL_OWNERS: [CrateSuite; 9] = [
     },
     CrateSuite {
         name: SuiteName::ArchiveGuard,
+        tools: NO_SUITE_TOOLS,
+    },
+    CrateSuite {
+        name: SuiteName::Freshness,
         tools: NO_SUITE_TOOLS,
     },
 ];

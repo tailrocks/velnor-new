@@ -254,7 +254,6 @@ fn task_entry(digest: &str) -> crate::merge::required_evidence::BaselineTaskEntr
         proof_run_id: 7,
         carried_from: None,
         observed_run_id: 7,
-        carried_from: None,
         external_data: None,
         proof: None,
     }

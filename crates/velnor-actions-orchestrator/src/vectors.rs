@@ -32,10 +32,10 @@ pub(crate) fn validator_install_pin(
         "cargo-deny" if version == CARGO_DENY_VERSION => {
             Some(("cargo-deny", CARGO_DENY_VERSION, "cargo-deny"))
         }
-        "ubi:bnjbvr/cargo-machete" if version == CARGO_MACHETE_VERSION => Some((
+        CARGO_MACHETE_TOOL_SPEC if version == CARGO_MACHETE_VERSION => Some((
             "cargo-machete",
             CARGO_MACHETE_VERSION,
-            "ubi:bnjbvr/cargo-machete",
+            CARGO_MACHETE_TOOL_SPEC,
         )),
         "zizmor" if version == velnor_actions_mise::catalog::ZIZMOR_VERSION => Some((
             "zizmor",
@@ -289,7 +289,7 @@ pub(crate) fn machete_argv() -> Result<Vec<String>, OrchestratorError> {
 /// Explicit pinned backend install for cold-cache cargo-machete execution.
 pub(crate) fn machete_install_argv() -> Result<Vec<String>, OrchestratorError> {
     let install = IsolatedCommand::mise_install(&[format!(
-        "ubi:bnjbvr/cargo-machete@{CARGO_MACHETE_VERSION}"
+        "{CARGO_MACHETE_TOOL_SPEC}@{CARGO_MACHETE_VERSION}"
     )])
     .map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),

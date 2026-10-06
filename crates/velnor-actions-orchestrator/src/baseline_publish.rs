@@ -291,7 +291,6 @@ fn publish_manifest(
                     proof_run_id: run_id,
                     carried_from: None,
                     observed_run_id: run_id,
-                    carried_from: None,
                     external_data: None,
                     proof: None,
                 });
@@ -388,7 +387,3 @@ pub(crate) use baseline_publish_lineage::carry_candidate_fits;
 #[cfg(test)]
 #[path = "baseline_publish_branch_tests.rs"]
 mod baseline_publish_branch_tests;
-
-#[path = "baseline_publish_lineage.rs"]
-mod baseline_publish_lineage;
-pub(crate) use baseline_publish_lineage::carry_candidate_fits;

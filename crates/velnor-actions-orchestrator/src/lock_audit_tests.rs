@@ -158,7 +158,7 @@ fn machete_cold_install_is_audited_by_exact_backend_key() {
             "--no-env".to_owned(),
             "--no-hooks".to_owned(),
             "install".to_owned(),
-            "ubi:bnjbvr/cargo-machete@0.9.2".to_owned(),
+            "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2".to_owned(),
         ],
         argv: vec![
             "mise".to_owned(),
@@ -166,7 +166,7 @@ fn machete_cold_install_is_audited_by_exact_backend_key() {
             "--no-env".to_owned(),
             "--no-hooks".to_owned(),
             "exec".to_owned(),
-            "ubi:bnjbvr/cargo-machete@0.9.2".to_owned(),
+            "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2".to_owned(),
             "--".to_owned(),
             "cargo".to_owned(),
             "machete".to_owned(),
@@ -180,9 +180,12 @@ fn machete_cold_install_is_audited_by_exact_backend_key() {
     assert!(outcome.blocking.is_empty(), "{:?}", outcome.blocking);
     let summary = outcome.recommendation.expect("machete advisory");
     assert!(summary.contains("cargo-machete@0.9.2"), "{summary}");
-    let subject = super::validator_subject("ubi:bnjbvr/cargo-machete@0.9.2")
+    let subject = super::validator_subject("http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2")
         .expect("qualified machete subject");
-    assert_eq!(subject.lock_key, "ubi:bnjbvr/cargo-machete");
+    assert_eq!(
+        subject.lock_key,
+        "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]"
+    );
 }
 
 /// Deny command drift fails closed: a foreign spec and a drifted

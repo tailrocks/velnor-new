@@ -120,19 +120,22 @@ fn conditional_and_duplicate_pin_authorities_fail_closed() {
 }
 
 #[test]
-fn escaped_and_raw_string_pins_are_not_plain_literals() {
+fn escaped_and_raw_string_pins_decode_to_compiled_values() {
     for source in [
         b"pub const PIN: &str = \"1\\x2e2.3\";".as_slice(),
         b"pub const PIN: &str = r#\"1.2.3\"#;",
     ] {
         let (pin, failures) = check_source(source);
-        assert!(pin.is_none());
-        assert!(
-            failures
-                .iter()
-                .any(|failure| failure.contains("plain string literal"))
-        );
+        assert!(failures.is_empty(), "{failures:?}");
+        assert_eq!(pin, Some("1.2.3".to_owned()));
     }
+    let (pin, failures) = check_source(b"pub const PIN: &str = concat!(\"1\", \".2.3\");");
+    assert!(pin.is_none());
+    assert!(
+        failures
+            .iter()
+            .any(|failure| failure.contains("must use one string literal"))
+    );
 }
 
 #[test]

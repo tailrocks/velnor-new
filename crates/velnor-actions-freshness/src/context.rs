@@ -196,18 +196,14 @@ fn is_str_reference(ty: &Type) -> bool {
 }
 
 fn plain_string_literal(item: &syn::ItemConst, name: &str) -> Result<String, String> {
-    let invalid = || format!("const {name} must use a plain string literal");
+    let invalid = || format!("const {name} must use one string literal");
     let syn::Expr::Lit(expression) = item.expr.as_ref() else {
         return Err(invalid());
     };
     let Lit::Str(value) = &expression.lit else {
         return Err(invalid());
     };
-    let decoded = value.value();
-    if value.token().to_string() != format!("\"{decoded}\"") {
-        return Err(invalid());
-    }
-    Ok(decoded)
+    Ok(value.value())
 }
 
 fn is_conditional_attribute(attribute: &syn::Attribute) -> bool {
