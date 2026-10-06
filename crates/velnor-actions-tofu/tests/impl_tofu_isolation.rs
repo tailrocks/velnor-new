@@ -149,3 +149,30 @@ fn cli_config_rejects_injection_and_oversize() {
     let err = tofu_cli_config("/tmp/${var}").expect_err("interpolation must fail");
     assert!(err.to_string().contains("interpolation"), "got {err}");
 }
+
+#[test]
+fn bounded_storage_supports_real_803_byte_source_root() {
+    let temporary = crate::support::TempDir::create("long-root-storage").expect("temporary");
+    let root = std::iter::repeat_n("r".repeat(200), 4)
+        .collect::<Vec<_>>()
+        .join("/");
+    assert_eq!(root.len(), 803);
+    std::fs::create_dir_all(temporary.path().join(&root)).expect("OS-valid source root");
+    std::fs::write(
+        temporary.path().join(&root).join("main.tf"),
+        "variable \"x\" {}\n",
+    )
+    .expect("source file");
+    let base = temporary.path().join("data");
+    let path =
+        tofu_data_dir_under(base.to_str().expect("UTF8 base"), &root).expect("bounded data path");
+    std::fs::create_dir_all(&path).expect("OS-valid data path");
+    let key = velnor_actions_tofu::key_for_root(&root);
+    std::fs::write(std::path::Path::new(&path).join(".velnor-root-key"), &key)
+        .expect("exact owner proof");
+    assert_eq!(
+        std::fs::read_to_string(std::path::Path::new(&path).join(".velnor-root-key"))
+            .expect("proof"),
+        key
+    );
+}
