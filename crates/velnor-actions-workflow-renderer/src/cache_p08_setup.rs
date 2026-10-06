@@ -35,7 +35,7 @@ pub(crate) fn ensure_tools_cache_v2(
     }
     let expected_setup = cache_p08::setup_step(setup)?;
     let setup_index = if let Some(index) = setup_indices.first().copied() {
-        if job.steps[index] != expected_setup {
+        if !cache_p08::same_step_semantics(&job.steps[index], &expected_setup) {
             return Err(RenderError::InvalidWorkflow(format!(
                 "setup_mise_malformed:{job_id}"
             )));

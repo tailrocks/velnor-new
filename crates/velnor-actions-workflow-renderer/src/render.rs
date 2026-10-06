@@ -238,10 +238,8 @@ pub fn finalize_jobs(
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
-    // Writer election needs every setup inserted: one saver per key.
-    cache_p08::elect_tools_cache_writers(&mut jobs)?;
-    // Provider election needs every restore inserted: one saver per key.
-    cache_p08::elect_tofu_provider_savers(&mut jobs)?;
+    // Validate both cache families before either receives a save step.
+    cache_p08::elect_cache_writers(&mut jobs)?;
     closure::check_plan_anchor(&jobs)?;
     preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
     closure::insert_plan_closure(&mut jobs, ctx)?;
