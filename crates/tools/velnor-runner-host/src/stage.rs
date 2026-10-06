@@ -40,27 +40,49 @@ pub struct PartialPair {
     pub runner_id: Option<String>,
 }
 
-pub(crate) trait PairEngine {
+/// Docker operations behind one worker pair. Async so fakes and the
+/// engine share call sites; public for the launch crate.
+#[expect(
+    async_fn_in_trait,
+    reason = "workspace style is async traits; RPITIT migration is a separate decision"
+)]
+pub trait PairEngine {
+    /// Create the named volumes for `volume`.
     async fn prepare_volumes(&self, volume: &str) -> Result<(), HostError>;
+    /// Create one container from `spec`. Returns its id.
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError>;
+    /// Start container `id`.
     async fn start(&self, id: &str) -> Result<(), HostError>;
+    /// Write `jit` into container `id`.
     async fn write_jit(&self, id: &str, jit: &[u8]) -> Result<(), HostError>;
+    /// Remove container `id`.
     async fn remove(&self, id: &str) -> Result<(), HostError>;
+    /// Id of the container named `name`, when present.
     async fn id_for_name(&self, name: &str) -> Result<Option<String>, HostError>;
+    /// Id of the owned `role` container named `name`, when present.
     async fn worker_id_for_name(
         &self,
         name: &str,
         volume: &str,
         role: &str,
     ) -> Result<Option<String>, HostError>;
+    /// Remove owned volumes for `volume`. Reports whether any existed.
     async fn remove_worker_volumes(&self, volume: &str) -> Result<bool, HostError>;
+    /// Whether container `id` is running.
     async fn running(&self, id: &str) -> Result<bool, HostError>;
 }
 
 /// Records container ids before the next external start.
-pub(crate) trait PairSink {
+#[expect(
+    async_fn_in_trait,
+    reason = "workspace style is async traits; RPITIT migration is a separate decision"
+)]
+pub trait PairSink {
+    /// Record the worker volume before any container exists.
     async fn volume(&self, volume: &str) -> Result<(), HostError>;
+    /// Record the dind container id.
     async fn dind(&self, id: &str) -> Result<(), HostError>;
+    /// Record the runner container id.
     async fn runner(&self, id: &str) -> Result<(), HostError>;
 }
 
@@ -147,7 +169,7 @@ impl PairEngine for Docker {
 
     async fn running(&self, id: &str) -> Result<bool, HostError> {
         let response = Box::pin(docker_deadline(self.inspect_container(id, None))).await?;
-        match crate::launch::classify_inspect(response) {
+        match crate::docker_client::classify_inspect(response) {
             Ok(running) => Ok(running),
             Err(_) => Err(HostError::Docker),
         }
@@ -170,7 +192,13 @@ pub async fn start_pair_until(
     Box::pin(drive(docker, private_volume, jit, stop, &Forget)).await
 }
 
-pub(crate) async fn drive<E: PairEngine, S: PairSink>(
+/// Stage one worker pair through `stop`, recording ids in `sink`.
+///
+/// # Errors
+///
+/// Returns [`HostError::EmptyJit`] when `jit` is empty, or the first
+/// engine or sink failure. Partial pairs are dropped before returning.
+pub async fn drive<E: PairEngine, S: PairSink>(
     engine: &E,
     private_volume: &str,
     jit: &[u8],

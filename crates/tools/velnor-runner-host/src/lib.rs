@@ -3,27 +3,25 @@
 //! Callers persist intent before an external effect and never hold a
 //! transaction across that effect.
 
-mod assign;
+pub mod assign;
 mod config;
 mod connect;
 mod daemon_lock;
-mod docker_client;
-mod docker_spec;
+pub mod docker_client;
+pub mod docker_spec;
 mod error;
-mod guest;
+pub mod guest;
 mod https;
 mod ipc;
-mod journal;
+pub mod journal;
 mod keychain;
-mod launch;
-mod launch_blocking;
-mod listen;
+pub mod listen;
 mod plist;
 mod readiness;
-mod reconcile;
-mod scale_set;
-mod stage;
-mod worker;
+pub mod reconcile;
+pub mod scale_set;
+pub mod stage;
+pub mod worker;
 
 pub use assign::{Offer, offer};
 pub use config::{DockerConfig, GithubSection, HostConfig, HostLimits};
@@ -39,8 +37,6 @@ pub use https::HttpsTransport;
 pub use ipc::{MAX_FRAME, SOCKET_DIR_MODE, decode_frame, encode_frame};
 pub use journal::{IntentState, Journal, Outcome};
 pub use keychain::{import_secret, load_secret, read_secret};
-pub use launch::{LaunchReport, launch_once};
-pub use launch_blocking::{ListenFault, launch_blocking};
 pub use listen::{SessionCensus, SessionProbe, probe_once, queue_path, session_census};
 pub use plist::{keychain_import_argv, launch_agent_plist};
 pub use readiness::{Readiness, doctor_json, readiness_for_empty, status_json};

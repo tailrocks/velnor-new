@@ -1,0 +1,21 @@
+[package]
+name = "velnor-runner-launch"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+velnor-runner-github = { version = "=0.1.1", path = "../velnor-runner-github" }
+velnor-runner-host = { version = "=0.1.1", path = "../velnor-runner-host" }
+bollard = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+zeroize = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+turso = { workspace = true }

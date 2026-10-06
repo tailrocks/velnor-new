@@ -38,6 +38,4 @@ pub(super) fn container_json(id: &str, worker: Option<&str>, role: Option<&str>)
 }
 
 #[cfg(all(test, unix))]
-mod release_tests;
-#[cfg(all(test, unix))]
 mod volumes_tests;

@@ -5,7 +5,8 @@ use std::process::ExitCode;
 use std::thread;
 use std::time::Duration;
 
-use velnor_runner_host::{DaemonLock, HostConfig, LaunchReport, launch_blocking, load_secret};
+use velnor_runner_host::{DaemonLock, HostConfig, load_secret};
+use velnor_runner_launch::{LaunchReport, launch_blocking};
 
 use crate::dispatch::{KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE};
 

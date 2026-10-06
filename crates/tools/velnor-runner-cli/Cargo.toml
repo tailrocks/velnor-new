@@ -13,6 +13,7 @@ clap = { workspace = true }
 serde_json = { workspace = true }
 velnor-runner-core = { version = "=0.1.1", path = "../velnor-runner-core" }
 velnor-runner-host = { version = "=0.1.1", path = "../velnor-runner-host" }
+velnor-runner-launch = { version = "=0.1.1", path = "../velnor-runner-launch" }
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 security-framework = { workspace = true }

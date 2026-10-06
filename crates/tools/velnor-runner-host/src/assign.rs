@@ -39,7 +39,7 @@ fn acquire_offer(batch: &ParsedBatch) -> Offer {
 
 /// True when every job is a start or completion notice. An empty batch is not progress.
 #[must_use]
-pub(crate) fn progress_only(batch: &ParsedBatch) -> bool {
+pub fn progress_only(batch: &ParsedBatch) -> bool {
     !batch.jobs.is_empty()
         && batch
             .jobs

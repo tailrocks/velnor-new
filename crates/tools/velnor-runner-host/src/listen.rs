@@ -16,7 +16,7 @@ use crate::scale_set::EnsureError;
 use crate::scale_set::ensure_product_scale_set;
 
 /// Session owner sent to the scale-set service.
-pub(crate) const OWNER_NAME: &str = "velnor-host";
+pub const OWNER_NAME: &str = "velnor-host";
 const GITHUB_API: &str = "https://api.github.com";
 
 /// Counts from session create. No token and no queue URL.
@@ -142,18 +142,18 @@ pub fn queue_path<'a>(base: &str, queue_url: &'a str) -> Option<&'a str> {
 }
 
 /// Admin bearer copy. Zeroized on drop.
-pub(crate) struct Secret(String);
+pub struct Secret(String);
 
 impl Secret {
     /// Copy `text`. The copy is zeroized on drop.
     #[must_use]
-    pub(crate) fn new(text: &str) -> Self {
+    pub fn new(text: &str) -> Self {
         Self(text.to_owned())
     }
 
     /// Borrow the bearer for one header. Not for logs.
     #[must_use]
-    pub(crate) fn expose(&self) -> &str {
+    pub fn expose(&self) -> &str {
         &self.0
     }
 }
@@ -164,28 +164,42 @@ impl Drop for Secret {
     }
 }
 
+impl std::fmt::Debug for Secret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Secret([redacted])")
+    }
+}
+
 /// Admin client. The base moves between the service and the message host.
-pub(crate) struct Link {
+pub struct Link {
     transport: HttpsTransport,
     admin: AdminConnection,
     base: String,
 }
 
+impl std::fmt::Debug for Link {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Link")
+            .field("base", &self.base)
+            .finish_non_exhaustive()
+    }
+}
+
 impl Link {
     /// Admin bearer. Not for logs.
     #[must_use]
-    pub(crate) fn token(&self) -> &str {
+    pub fn token(&self) -> &str {
         self.admin.expose_token()
     }
 
     /// Current service origin.
     #[must_use]
-    pub(crate) fn base(&self) -> &str {
+    pub fn base(&self) -> &str {
         &self.base
     }
 
     /// Session transport. Do not hold a journal connection across this.
-    pub(crate) fn transport(&mut self) -> &mut HttpsTransport {
+    pub fn transport(&mut self) -> &mut HttpsTransport {
         &mut self.transport
     }
 
@@ -194,7 +208,7 @@ impl Link {
     /// # Errors
     ///
     /// Returns [`EnsureError::Endpoint`] when `base` is not `https`.
-    pub(crate) fn set_base(&mut self, base: &str) -> Result<(), EnsureError> {
+    pub fn set_base(&mut self, base: &str) -> Result<(), EnsureError> {
         self.transport.set_base(base).map_err(map_host)?;
         base.clone_into(&mut self.base);
         Ok(())
@@ -206,7 +220,7 @@ impl Link {
 /// # Errors
 ///
 /// Returns [`EnsureError`] when the token or the admin connection is refused.
-pub(crate) fn admin_link(pat: &str, owner: &str, repo: &str) -> Result<Link, EnsureError> {
+pub fn admin_link(pat: &str, owner: &str, repo: &str) -> Result<Link, EnsureError> {
     let mut transport = HttpsTransport::new(GITHUB_API).map_err(map_host)?;
     let registration = registration_token(
         &mut transport,
@@ -236,7 +250,9 @@ pub(crate) fn admin_link(pat: &str, owner: &str, repo: &str) -> Result<Link, Ens
 
 fn poll_available(link: &mut Link, session: &QueueSession) -> Result<bool, EnsureError> {
     let (saved, path) = point_at_queue(link, &session.message_queue_url)?;
-    let polled = poll_path(link, session, &path, crate::launch::job_capacity());
+    // Probe path never installs the launch capacity override: parse the env directly.
+    let capacity = parse_job_capacity(std::env::var("VELNOR_MAX_JOBS").ok().as_deref());
+    let polled = poll_path(link, session, &path, capacity);
     restore_base(link, saved)?;
     let polled = polled?;
     Ok(matches!(offer(&polled), Offer::Acquire { .. }))
@@ -247,10 +263,7 @@ fn poll_available(link: &mut Link, session: &QueueSession) -> Result<bool, Ensur
 /// # Errors
 ///
 /// Returns [`EnsureError`] when the URL is not a usable `https` queue.
-pub(crate) fn point_at_queue(
-    link: &mut Link,
-    url: &str,
-) -> Result<(Option<String>, String), EnsureError> {
+pub fn point_at_queue(link: &mut Link, url: &str) -> Result<(Option<String>, String), EnsureError> {
     if let Some(path) = queue_path(&link.base, url) {
         return Ok((None, path.to_owned()));
     }
@@ -273,7 +286,7 @@ pub(crate) fn point_at_queue(
 /// # Errors
 ///
 /// Returns [`EnsureError`] when the poll is refused.
-pub(crate) fn poll_path(
+pub fn poll_path(
     link: &mut Link,
     session: &QueueSession,
     path: &str,
@@ -298,7 +311,7 @@ pub(crate) fn poll_path(
 /// # Errors
 ///
 /// Returns [`EnsureError::Endpoint`] when the saved origin is not `https`.
-pub(crate) fn restore_base(link: &mut Link, saved: Option<String>) -> Result<(), EnsureError> {
+pub fn restore_base(link: &mut Link, saved: Option<String>) -> Result<(), EnsureError> {
     let Some(base) = saved else {
         return Ok(());
     };
@@ -307,12 +320,18 @@ pub(crate) fn restore_base(link: &mut Link, saved: Option<String>) -> Result<(),
     Ok(())
 }
 
-pub(crate) struct Absolute {
-    pub(crate) origin: String,
-    pub(crate) path: String,
+/// Split `https` URL: origin plus path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Absolute {
+    /// `https://host` without path.
+    pub origin: String,
+    /// Path without leading slash.
+    pub path: String,
 }
 
-pub(crate) fn absolute_https(url: &str) -> Option<Absolute> {
+/// Split an `https` URL into origin and path. Rejects anything else.
+#[must_use]
+pub fn absolute_https(url: &str) -> Option<Absolute> {
     let rest = url.strip_prefix("https://")?;
     let (host, path) = rest.split_once('/')?;
     if host.is_empty() || path.is_empty() || host.contains('@') {
@@ -325,7 +344,8 @@ pub(crate) fn absolute_https(url: &str) -> Option<Absolute> {
 }
 
 /// Map a local endpoint failure. Other host errors stay off the body.
-pub(crate) fn map_host(error: HostError) -> EnsureError {
+#[must_use]
+pub fn map_host(error: HostError) -> EnsureError {
     match error {
         HostError::Endpoint => EnsureError::Endpoint,
         _ => EnsureError::Unexpected {
@@ -337,7 +357,7 @@ pub(crate) fn map_host(error: HostError) -> EnsureError {
 
 /// Attach `step` when the body was malformed. Other failures stay as [`map_listen`].
 #[must_use]
-pub(crate) fn annotate(error: SessionError, step: &'static str) -> EnsureError {
+pub fn annotate(error: SessionError, step: &'static str) -> EnsureError {
     match error {
         SessionError::Wire(WireError::Malformed) => EnsureError::Unexpected { status: 0, step },
         other => map_listen(other),
@@ -346,7 +366,7 @@ pub(crate) fn annotate(error: SessionError, step: &'static str) -> EnsureError {
 
 /// Map a session failure without copying a response body.
 #[must_use]
-pub(crate) fn map_listen(error: SessionError) -> EnsureError {
+pub fn map_listen(error: SessionError) -> EnsureError {
     match error {
         SessionError::Uncertain => EnsureError::Uncertain,
         SessionError::Conflict => EnsureError::Conflict,
@@ -362,3 +382,15 @@ pub(crate) fn map_listen(error: SessionError) -> EnsureError {
 
 #[cfg(test)]
 mod tests;
+
+/// Parse `VELNOR_MAX_JOBS` (moved from launch; single parser for both crates).
+#[must_use]
+pub fn parse_job_capacity(text: Option<&str>) -> u32 {
+    let Some(text) = text.map(str::trim).filter(|value| !value.is_empty()) else {
+        return 1;
+    };
+    match text.parse::<u32>() {
+        Ok(0) | Err(_) => 1,
+        Ok(parsed) => parsed,
+    }
+}

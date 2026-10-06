@@ -34,14 +34,17 @@ pub fn guest_slots(ncpu: u32, mem_bytes: u64, disk_free: Option<u64>, ceiling: u
 ///
 /// Returns [`HostError::Docker`] when the bounded info request fails or lacks
 /// valid CPU and memory totals. Callers must stop admission on this error.
-pub(crate) async fn discover_guest_capacity(
-    docker: &Docker,
-    ceiling: u32,
-) -> Result<u32, HostError> {
+pub async fn discover_guest_capacity(docker: &Docker, ceiling: u32) -> Result<u32, HostError> {
     discover_guest_capacity_with_timeout(docker, ceiling, DOCKER_OPERATION_TIMEOUT).await
 }
 
-pub(crate) async fn discover_guest_capacity_with_timeout(
+/// Discover guest capacity with an explicit info-request timeout.
+///
+/// # Errors
+///
+/// Returns [`HostError::Docker`] when the bounded info request fails or lacks
+/// valid CPU and memory totals. Callers must stop admission on this error.
+pub async fn discover_guest_capacity_with_timeout(
     docker: &Docker,
     ceiling: u32,
     timeout: std::time::Duration,

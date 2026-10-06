@@ -16,6 +16,7 @@
     "velnor-runner-cli",
     "velnor-runner-core",
     "velnor-runner-github",
-    "velnor-runner-host"
+    "velnor-runner-host",
+    "velnor-runner-launch"
   ]
 }

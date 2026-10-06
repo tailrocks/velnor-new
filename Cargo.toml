@@ -16,6 +16,7 @@ members = [
     "crates/tools/velnor-runner-core",
     "crates/tools/velnor-runner-github",
     "crates/tools/velnor-runner-host",
+    "crates/tools/velnor-runner-launch",
 ]
 resolver = "3"
 

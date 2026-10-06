@@ -24,7 +24,11 @@ const DIND_IMAGE: &str = "velnor-dind:29.8.2";
 const IDENTITY_HEX: &[u8; 16] = b"0123456789abcdef";
 
 /// Generate a collision-resistant worker volume base for one journal row.
-pub(crate) fn new_worker_volume() -> Result<String, HostError> {
+///
+/// # Errors
+///
+/// Returns [`HostError::Identity`] when the random source is unavailable.
+pub fn new_worker_volume() -> Result<String, HostError> {
     let mut random = [0_u8; 16];
     getrandom::fill(&mut random).map_err(|_| HostError::Identity)?;
     let mut name = String::with_capacity(33);
@@ -124,7 +128,7 @@ pub fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, HostError
 /// # Errors
 ///
 /// Returns [`HostError::ForbiddenMount`] when `dind_id` is not a hex container id.
-pub(crate) fn join_dind_net(
+pub fn join_dind_net(
     mut spec: CreateProjection,
     dind_id: &str,
 ) -> Result<CreateProjection, HostError> {

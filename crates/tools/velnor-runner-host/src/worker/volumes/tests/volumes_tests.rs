@@ -6,10 +6,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 
 use super::{WORKER, container_json, volume_json, volume_names};
-use crate::launch::admission;
-use crate::launch::harness::{Scratch, assigned_wait};
 use crate::worker::{create_named_volumes, remove_worker_volumes, worker_id_for_name};
-use crate::{HostError, IntentState, Journal, Outcome, dind_create};
+use crate::{HostError, dind_create};
 
 #[tokio::test]
 async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
@@ -124,42 +122,6 @@ async fn container_identity_requires_id_and_exact_labels() -> Result<(), String>
         Ok(None)
     );
     assert_eq!(stub.finish().await?.len(), 5);
-    Ok(())
-}
-
-#[tokio::test]
-async fn uncertain_volume_holds_without_remote_settlement() -> Result<(), String> {
-    let scratch = Scratch::new("volume-post-delete").map_err(|error| error.to_string())?;
-    let journal = Journal::open(&scratch.file())
-        .await
-        .map_err(|error| error.to_string())?;
-    let (row, fresh) = journal
-        .begin_launch("offer-transport")
-        .await
-        .map_err(|error| error.to_string())?;
-    assert!(fresh);
-    journal
-        .bind_worker_volume(row, WORKER)
-        .await
-        .map_err(|error| error.to_string())?;
-    journal
-        .finish(row, Outcome::Uncertain)
-        .await
-        .map_err(|error| error.to_string())?;
-
-    let stub = DockerStub::open(Vec::new())?;
-    let decision = admission(&stub.docker, &journal, 1, 1, 0, &assigned_wait(1, 1)).await;
-    let requests = stub.finish().await?;
-
-    assert_eq!(decision, Ok(crate::launch::Admit::Hold));
-    assert!(requests.is_empty());
-    let rows = journal.rows().await.map_err(|error| error.to_string())?;
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].state, IntentState::Uncertain);
-    assert_eq!(rows[0].docker_id, None);
-    assert_eq!(rows[0].dind_id, None);
-    assert_eq!(rows[0].worker_volume.as_deref(), Some(WORKER));
-    assert!(!rows[0].cleanup_proven);
     Ok(())
 }
 

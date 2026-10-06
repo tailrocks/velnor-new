@@ -1,15 +1,22 @@
 //! Unix-socket Docker client. The configured path is the only endpoint.
 
 use std::future::Future;
+
+use bollard::errors::Error as DockerError;
 use std::time::Duration;
 
 use crate::error::HostError;
+use crate::scale_set::EnsureError;
 
 /// Deadline for one request to the selected Docker engine.
 pub(crate) const DOCKER_OPERATION_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Bound one Docker request while preserving its result for caller classification.
-pub(crate) async fn docker_deadline<F: Future>(future: F) -> Result<F::Output, HostError> {
+///
+/// # Errors
+///
+/// Returns [`HostError::Docker`] when the request exceeds the operation timeout.
+pub async fn docker_deadline<F: Future>(future: F) -> Result<F::Output, HostError> {
     docker_deadline_after(future, DOCKER_OPERATION_TIMEOUT).await
 }
 
@@ -57,3 +64,36 @@ fn scheme_is(socket: &str, scheme: &str) -> bool {
 
 #[cfg(test)]
 mod tests;
+
+/// Classify a container-inspect outcome fail-closed (moved from launch).
+///
+/// # Errors
+///
+/// Returns [`EnsureError::Unexpected`] with step `"docker inspect"` when the
+/// running state is missing or Docker reports a non-404 failure.
+pub fn classify_inspect(
+    response: Result<bollard::models::ContainerInspectResponse, DockerError>,
+) -> Result<bool, EnsureError> {
+    match response {
+        Ok(info) => match info.state.and_then(|state| state.running) {
+            Some(running) => Ok(running),
+            None => Err(inspect_error(200)),
+        },
+        Err(DockerError::DockerResponseServerError {
+            status_code: 404, ..
+        }) => Ok(false),
+        Err(DockerError::DockerResponseServerError { status_code, .. }) => {
+            Err(inspect_error(status_code))
+        }
+        Err(_) => Err(inspect_error(0)),
+    }
+}
+
+/// Fail-closed inspect error carrying the Docker status code.
+#[must_use]
+pub const fn inspect_error(status: u16) -> EnsureError {
+    EnsureError::Unexpected {
+        status,
+        step: "docker inspect",
+    }
+}
