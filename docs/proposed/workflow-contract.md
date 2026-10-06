@@ -175,7 +175,7 @@ For `workflow.policy = "consumer-v1"`, compose detections into `plan`, one `rust
 per selected crate, `actionlint`, and `required`. V1 registers only the Rust stack detector, so the selected
 stack set is empty or `{rust}`; future adapters add namespaced crate jobs without CLI selectors.
 
-Typed `[[workflow.tasks]]` verification jobs join `Required` under either workflow policy; schema-2 routing, fail-closed admission, and authoring limits are defined in the [tooling input contract](tooling-input-contract.md).
+Every `[[workflow.tasks]]` variant joins the same `Required` fan-in under either workflow policy. Verification tasks may use eligible hosted/local pairs; Build and NativeImage tasks remain hosted-only. See the [tooling input contract](tooling-input-contract.md) for schema-2 routing and authoring limits.
 
 The following labels are GitHub Actions job IDs only. They are not Cargo packages, executable
 names, generated command labels, or CLI subcommands. The sole Velnor executable is `velnor-actions`.

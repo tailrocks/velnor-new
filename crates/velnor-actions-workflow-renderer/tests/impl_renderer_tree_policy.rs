@@ -29,7 +29,7 @@ pub(crate) fn fixture_ctx() -> RenderContext {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
-        verification_tasks: Vec::new(),
+        workflow_tasks: Vec::new(),
         plan_consumer_env: std::collections::BTreeMap::new(),
     }
 }

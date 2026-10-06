@@ -71,7 +71,7 @@ mod tool_seed_admission;
 mod tool_seed_test_support;
 pub mod toolchain_env;
 pub mod tree;
-mod verification_jobs;
+pub mod verification_jobs;
 mod workflow_policy;
 mod workflow_size;
 pub mod yaml;
