@@ -14,7 +14,6 @@ use crate::OrchestratorError;
 use crate::internal::{MERGE_OP, PLAN_OP, SCHEMA, internal, internal_contract};
 use crate::request_event::{request_refs, workflow_event_for};
 
-#[path = "internal_request_outputs.rs"]
 mod outputs;
 pub use outputs::{
     PlanOutputs, merge_passed, plan_outputs, publish_final_report, publish_plan_files,

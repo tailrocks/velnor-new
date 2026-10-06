@@ -54,5 +54,4 @@ pub fn baseline_artifact_numeric_id(name: &str) -> u64 {
 }
 
 #[cfg(test)]
-#[path = "cover_compat_tests.rs"]
-mod cover_compat_tests;
+mod tests;

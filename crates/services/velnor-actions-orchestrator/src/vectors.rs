@@ -344,5 +344,4 @@ fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
 }
 
 #[cfg(test)]
-#[path = "vectors_tests.rs"]
-mod vectors_tests;
+mod tests;

@@ -302,5 +302,4 @@ fn is_plan_restore(step: &Step) -> bool {
 }
 
 #[cfg(test)]
-#[path = "attach_tests.rs"]
-mod attach_tests;
+mod tests;

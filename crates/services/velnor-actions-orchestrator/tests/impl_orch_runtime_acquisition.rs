@@ -67,10 +67,13 @@ fn acquisition_requires_bound_plan_and_verified_archive() -> TestResult {
             "let outcome = run_check(root, temp, &item, &plan, deadline);",
         ],
     )?;
-    let preparation = std::fs::read_to_string(super::orch_src().join("check_prepare.rs"))?;
-    assert!(preparation.contains("#[path = \"check_tool_acquire.rs\"]\nmod acquisition;"));
+    let preparation =
+        std::fs::read_to_string(super::orch_src().join("check_runtime/preparation.rs"))?;
+    assert!(preparation.contains("mod acquisition;"));
     assert!(preparation.contains("acquisition::acquire(&qualified, check, home, deadline)?;"));
-    let acquisition = std::fs::read_to_string(super::orch_src().join("check_tool_acquire.rs"))?;
+    let acquisition = std::fs::read_to_string(
+        super::orch_src().join("check_runtime/preparation/acquisition.rs"),
+    )?;
     assert!(acquisition.contains("pub(super) fn acquire("));
     assert!(!acquisition.contains("std::process::Command"));
     assert_order(

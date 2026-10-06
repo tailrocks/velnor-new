@@ -12,7 +12,6 @@ use velnor_actions_contract::{
     NamedCheckLaneVariant, ObligationDecision, Plan, canonical_json_bytes,
 };
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, ToolCatalog, discover_checks_until};
-#[path = "check_prepare.rs"]
 pub(crate) mod preparation;
 use preparation::prepare_check;
 
@@ -318,5 +317,4 @@ fn save_evidence(
 }
 
 #[cfg(test)]
-#[path = "check_runtime_tests.rs"]
 mod tests;

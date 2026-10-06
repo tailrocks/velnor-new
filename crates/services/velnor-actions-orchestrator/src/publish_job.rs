@@ -85,5 +85,4 @@ fn request_step(target: &str) -> Result<Step, OrchestratorError> {
 }
 
 #[cfg(test)]
-#[path = "publish_job_tests.rs"]
-mod publish_job_tests;
+mod tests;

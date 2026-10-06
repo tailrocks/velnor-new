@@ -30,7 +30,7 @@ workspace = true
 
 [[test]]
 name = "velnor_orchestrator"
-path = "tests/velnor_orchestrator.rs"
+path = "tests/main.rs"
 
 [[test]]
 name = "validation_failure"

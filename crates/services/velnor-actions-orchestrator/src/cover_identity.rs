@@ -3,24 +3,12 @@
 //! Coverage requires exact discovered identities and complete input closures.
 
 // Wired here so generator resolution compiles without touching `lib.rs`.
-#[path = "generator.rs"]
 pub(crate) mod generator;
 // Unit tests live here so `cover_identity.rs` keeps its size gate.
 #[cfg(test)]
-#[path = "cover_identity_tests.rs"]
-mod cover_identity_tests;
+mod tests;
 // Structured-proof tests live apart for the same reason.
-#[cfg(test)]
-#[path = "cover_proof_tests.rs"]
-mod cover_proof_tests;
 // Test fixtures live apart so the test module keeps its size gate.
-#[cfg(test)]
-#[path = "cover_identity_fixtures.rs"]
-mod cover_identity_fixtures;
-
-#[cfg(test)]
-#[path = "cover_named_checks_tests.rs"]
-mod cover_named_checks_tests;
 
 use std::collections::BTreeSet;
 use std::path::Path;

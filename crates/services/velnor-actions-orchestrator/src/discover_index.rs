@@ -103,5 +103,4 @@ fn ls_files(root: &Path, args: Vec<std::ffi::OsString>) -> Option<GitPathList> {
 }
 
 #[cfg(test)]
-#[path = "discover_index_cache_tests.rs"]
-mod cache_tests;
+mod tests;

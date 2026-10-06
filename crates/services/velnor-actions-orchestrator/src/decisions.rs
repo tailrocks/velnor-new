@@ -11,8 +11,7 @@
 
 // Unit tests live apart so `decisions.rs` keeps its size gate.
 #[cfg(test)]
-#[path = "decisions_tests.rs"]
-mod decisions_tests;
+mod tests;
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

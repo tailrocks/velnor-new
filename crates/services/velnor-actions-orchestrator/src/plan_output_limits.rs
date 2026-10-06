@@ -61,5 +61,4 @@ fn output_record_utf16_bytes(name: &str, value: &str) -> Option<usize> {
 }
 
 #[cfg(test)]
-#[path = "plan_output_limits_tests.rs"]
 mod tests;

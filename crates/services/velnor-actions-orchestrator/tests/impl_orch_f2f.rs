@@ -254,33 +254,40 @@ fn strip_line_comment(line: &str) -> &str {
 fn orchestrator_src_passes_forbidden_table() -> TestResult {
     let src = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut checked = 0;
-    for entry in std::fs::read_dir(&src)? {
-        let path = entry?.path();
-        if path.extension().is_some_and(|ext| ext != "rs") {
-            continue;
+    let mut stack = vec![src];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if path.extension().is_some_and(|ext| ext != "rs") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path)?;
+            let code: String = text
+                .lines()
+                .map(strip_line_comment)
+                .collect::<Vec<_>>()
+                .join("\n");
+            let hits = flagged(&code);
+            let shell = hits.contains(&"sh -c");
+            let spawn = hits.iter().any(|hit| *hit != "sh -c");
+            assert!(!spawn, "spawn token in {}: {hits:?}", path.display());
+            if shell {
+                let name = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                assert_eq!(
+                    name, "workflow_jobs.rs",
+                    "sh -c confined to the fixed template"
+                );
+                assert!(code.contains("TASK_RUN_ENV"), "env-only template");
+            }
+            checked += 1;
         }
-        let text = std::fs::read_to_string(&path)?;
-        let code: String = text
-            .lines()
-            .map(strip_line_comment)
-            .collect::<Vec<_>>()
-            .join("\n");
-        let hits = flagged(&code);
-        let shell = hits.contains(&"sh -c");
-        let spawn = hits.iter().any(|hit| *hit != "sh -c");
-        assert!(!spawn, "spawn token in {}: {hits:?}", path.display());
-        if shell {
-            let name = path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            assert_eq!(
-                name, "workflow_jobs.rs",
-                "sh -c confined to the fixed template"
-            );
-            assert!(code.contains("TASK_RUN_ENV"), "env-only template");
-        }
-        checked += 1;
     }
     assert!(checked > 0, "sources scanned");
     Ok(())

@@ -22,8 +22,7 @@ use crate::discover::Discovery;
 use crate::select_edges::{added_files, base_manifests, deleted_files};
 
 #[cfg(test)]
-#[path = "select_tofu_tests.rs"]
-mod select_tofu_tests;
+mod tests;
 
 /// One tofu unit's selection record: head files plus qualified edges.
 #[derive(Debug, Clone)]

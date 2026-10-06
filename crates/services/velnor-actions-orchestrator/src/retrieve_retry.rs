@@ -31,5 +31,4 @@ pub(crate) fn download_with_retry(mut attempt: impl FnMut() -> bool) -> (bool, u
 }
 
 #[cfg(test)]
-#[path = "retrieve_retry_tests.rs"]
-mod retrieve_retry_tests;
+mod tests;

@@ -13,7 +13,6 @@
 //! run ID) fails outright.
 
 // Wired here so the shared reader compiles without touching `lib.rs`.
-#[path = "staged_reads.rs"]
 pub(crate) mod staged_reads;
 pub(crate) use self::staged_reads::{path_is_symlink, read_staged_bytes, read_staged_text};
 
@@ -385,8 +384,4 @@ fn expected_artifact_ids(plan: &serde_json::Value) -> Vec<&str> {
 }
 
 #[cfg(test)]
-#[path = "retrieve_reports_enumeration_tests.rs"]
-mod retrieve_reports_enumeration_tests;
-#[cfg(test)]
-#[path = "retrieve_reports_tests.rs"]
-mod retrieve_reports_tests;
+mod tests;

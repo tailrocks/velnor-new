@@ -1,9 +1,7 @@
 //! Baseline evidence: resolution, validation, and coverage classification.
 
 // Wired here so provenance checks compile without touching `lib.rs`.
-#[path = "provenance_check.rs"]
 pub(crate) mod provenance_check;
-#[path = "provenance_resolve.rs"]
 pub(crate) mod provenance_resolve;
 
 use std::ffi::OsString;
@@ -308,8 +306,4 @@ pub(crate) fn baseline_entry_for(
 }
 
 #[cfg(test)]
-#[path = "cover_baseline_lookup_tests.rs"]
-mod cover_baseline_lookup_tests;
-#[cfg(test)]
-#[path = "cover_baseline_tests.rs"]
-mod cover_baseline_tests;
+mod tests;

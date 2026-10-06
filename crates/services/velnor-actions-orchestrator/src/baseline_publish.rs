@@ -358,5 +358,4 @@ fn self_check(
 }
 
 #[cfg(test)]
-#[path = "baseline_publish_tests.rs"]
-mod baseline_publish_tests;
+mod tests;

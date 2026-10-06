@@ -81,7 +81,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         binding.contains("named_checks::plan::derive_lanes_until("),
         "runtime shares planner identity"
     );
-    let planning = std::fs::read_to_string(orch_src().join("plan_obligation.rs"))?;
+    let planning = std::fs::read_to_string(orch_src().join("internal/plan_obligation.rs"))?;
     let group = planning
         .split("pub(crate) fn plan_group(")
         .nth(1)

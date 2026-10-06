@@ -1,5 +1,4 @@
 //! Strict scenario evidence bound to the source plan and named check.
-#[path = "check_gate.rs"]
 pub(crate) mod gate;
 
 use crate::OrchestratorError;

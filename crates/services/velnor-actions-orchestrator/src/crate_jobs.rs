@@ -29,7 +29,6 @@ use crate::internal::internal;
 use crate::matrix_step::step_name_for;
 use crate::obligation_order::obligation_order_key;
 
-#[path = "crate_jobs_stage.rs"]
 mod stage;
 
 #[cfg(test)]
@@ -364,21 +363,4 @@ fn restore_step_for_crate(
 }
 
 #[cfg(test)]
-#[path = "crate_jobs_tests.rs"]
-mod crate_jobs_tests;
-
-#[cfg(test)]
-#[path = "crate_jobs_display_tests.rs"]
-mod crate_jobs_display_tests;
-
-#[cfg(test)]
-#[path = "crate_jobs_tofu_cache_tests.rs"]
-mod crate_jobs_tofu_cache_tests;
-
-#[cfg(test)]
-#[path = "crate_jobs_tofu_tests.rs"]
-mod crate_jobs_tofu_tests;
-
-#[cfg(test)]
-#[path = "crate_jobs_upload_tests.rs"]
-mod crate_jobs_upload_tests;
+mod tests;

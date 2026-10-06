@@ -2,12 +2,9 @@
 
 // Wired here (not `lib.rs`, which Gate 4-7 does not own) so the sharding
 // module compiles without touching shared files.
-#[path = "shard.rs"]
 pub(crate) mod shard;
-#[path = "shard_baseline.rs"]
 pub(crate) mod shard_baseline;
 // Coverage revalidation lives apart so this file keeps its size gate.
-#[path = "cover_revalidate.rs"]
 pub(crate) mod revalidate;
 
 use std::collections::{BTreeMap, BTreeSet};

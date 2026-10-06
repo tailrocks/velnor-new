@@ -1,7 +1,6 @@
 //! Event-time `plan-v1` / `merge-v1` JSON entrypoints (schema 1).
 
 // Obligation identities live beside the planner so `lib.rs` stays untouched.
-#[path = "plan_obligation.rs"]
 pub(crate) mod plan_obligation;
 
 use std::collections::{BTreeMap, BTreeSet};

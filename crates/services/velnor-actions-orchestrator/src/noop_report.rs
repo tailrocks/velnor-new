@@ -173,5 +173,4 @@ pub(crate) fn write_skip_reports(
 }
 
 #[cfg(test)]
-#[path = "noop_report_tests.rs"]
-mod noop_report_tests;
+mod tests;

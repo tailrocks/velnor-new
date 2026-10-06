@@ -387,5 +387,4 @@ pub(crate) fn qualify_workspaces(
 }
 
 #[cfg(test)]
-#[path = "inventory_tests.rs"]
 mod tests;

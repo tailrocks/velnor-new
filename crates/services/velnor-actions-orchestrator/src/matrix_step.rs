@@ -12,10 +12,8 @@ use velnor_actions_workflow_renderer::steps::{INTERNAL_OP_ENV, STAGED_BINARY_PRE
 use crate::OrchestratorError;
 use crate::task_report::{EXIT_CODE_ENV, REPORT_OP, START_MS_ENV, TASK_ID_ENV};
 
-#[path = "matrix_tools.rs"]
 mod tools;
 
-#[path = "matrix_tofu_env.rs"]
 mod tofu_env;
 
 #[cfg(test)]
@@ -370,13 +368,4 @@ pub(crate) fn crate_upload_step(job_id: &str) -> Result<Step, OrchestratorError>
 }
 
 #[cfg(test)]
-#[path = "matrix_step_tests.rs"]
-mod matrix_step_tests;
-
-#[cfg(test)]
-#[path = "matrix_step_tofu_tests.rs"]
-mod matrix_step_tofu_tests;
-
-#[cfg(test)]
-#[path = "matrix_step_tofu_install_tests.rs"]
-mod matrix_step_tofu_install_tests;
+mod tests;

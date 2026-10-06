@@ -1,10 +1,8 @@
 //! Workflow-IR, render-context, and actionlint-input construction.
 
 //! W1 emission wiring lives in the child module below.
-#[path = "wire_w1.rs"]
 pub(crate) mod wire_w1;
 
-#[path = "check_jobs.rs"]
 pub(crate) mod check_jobs;
 
 use std::collections::BTreeMap;
@@ -30,7 +28,6 @@ use crate::pins::consumer_acquire_step;
 use crate::utf8::{strings_of, strings_of_env};
 use crate::workflow_jobs::{final_job, lint_job, plan_job};
 
-#[path = "workflow_context.rs"]
 mod workflow_context;
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;

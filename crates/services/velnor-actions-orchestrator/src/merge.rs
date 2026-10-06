@@ -1,11 +1,8 @@
 //! Event-time `merge-v1` JSON entrypoint (schema 1).
 
 // Inventory and plan checks live beside the merge so `lib.rs` stays untouched.
-#[path = "merge_checks.rs"]
 pub(crate) mod merge_checks;
-#[path = "merge_lenient.rs"]
 mod merge_lenient;
-#[path = "required_evidence.rs"]
 pub(crate) mod required_evidence;
 
 use std::collections::BTreeSet;

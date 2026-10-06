@@ -261,5 +261,4 @@ fn checkout_history_action() -> Result<Step, OrchestratorError> {
 }
 
 #[cfg(test)]
-#[path = "workflow_jobs_tests.rs"]
-mod workflow_jobs_tests;
+mod tests;

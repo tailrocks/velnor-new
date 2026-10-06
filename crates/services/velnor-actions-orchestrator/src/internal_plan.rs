@@ -1,28 +1,15 @@
 //! Plan-shape helpers for `plan-v1`: packages, metadata, and identity.
 
 // Wired here so the FLOW-half module compiles without touching `lib.rs`.
-#[path = "wire_w2.rs"]
 pub(crate) mod wire_w2;
 // P03 identity modules live here so no `lib.rs` edit can collide.
-#[path = "closure.rs"]
 pub(crate) mod closure;
-#[path = "closure_slots.rs"]
 pub(crate) mod closure_slots;
-#[cfg(test)]
-#[path = "closure_tests.rs"]
-mod closure_tests;
-#[path = "identities.rs"]
 pub(crate) mod identities;
-#[cfg(test)]
-#[path = "identities_tests.rs"]
-mod identities_tests;
-#[cfg(test)]
-#[path = "internal_plan_tests.rs"]
-mod internal_plan_tests;
-#[path = "snapshot.rs"]
 pub(crate) mod snapshot;
+#[cfg(test)]
+mod tests;
 
-#[path = "named_checks.rs"]
 pub(crate) mod named_checks;
 
 use std::collections::{BTreeMap, BTreeSet};

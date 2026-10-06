@@ -16,7 +16,6 @@ use velnor_actions_contract::{
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
-#[path = "task_report_timing.rs"]
 mod timing;
 #[cfg(test)]
 use timing::now_ms;
@@ -24,7 +23,6 @@ use timing::{elapsed_ms, parse_exit_code, parse_start_ms};
 
 pub(crate) use crate::task_report_aggregate::single_task_aggregate;
 
-#[path = "task_report_order.rs"]
 mod task_report_order;
 
 /// Report-production operation tag.
@@ -355,18 +353,4 @@ pub(crate) fn write_entry_reports(
 }
 
 #[cfg(test)]
-#[path = "task_report_cover_tests.rs"]
-mod task_report_cover_tests;
-#[cfg(test)]
-#[path = "task_report_merge_tests.rs"]
-mod task_report_merge_tests;
-#[cfg(test)]
-#[path = "task_report_order_tests.rs"]
-mod task_report_order_tests;
-#[cfg(test)]
-#[path = "task_report_tests.rs"]
-mod task_report_tests;
-
-#[cfg(test)]
-#[path = "check_gate_tests.rs"]
-mod check_gate_tests;
+mod tests;

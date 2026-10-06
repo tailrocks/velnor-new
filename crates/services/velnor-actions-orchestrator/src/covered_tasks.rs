@@ -94,5 +94,4 @@ pub(crate) fn skip_condition(task_id: &str) -> Result<String, OrchestratorError>
 }
 
 #[cfg(test)]
-#[path = "covered_tasks_tests.rs"]
-mod covered_tasks_tests;
+mod tests;

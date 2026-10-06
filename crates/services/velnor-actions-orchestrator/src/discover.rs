@@ -8,7 +8,6 @@ use velnor_actions_contract::{
     WorkflowPolicy, apply_stack_ignores, check_candidate_outcomes, check_duplicates,
     selected_projects,
 };
-#[path = "discovery_registry.rs"]
 mod registry;
 pub(crate) use registry::detector_entries;
 use registry::{DETECTORS, detected_projects};
@@ -23,7 +22,6 @@ use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 use crate::discover_index::build_file_index;
 use crate::inventory::{qualify_workspaces, run_inventories};
 use crate::recommendations::collect_recommendations;
-#[path = "consumer_manifest.rs"]
 mod consumer_manifest;
 use crate::toolcheck::{ToolInputCheck, check_tool_inputs};
 use crate::{discover_tofu::qualify_tofu_step, evidence::profile_for_workspace};
@@ -267,5 +265,4 @@ pub(crate) fn workspace_lock(workspace_root: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "discover_manifest_tests.rs"]
 mod tests;

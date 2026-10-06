@@ -349,5 +349,4 @@ fn test_manifest_json() -> String {
 }
 
 #[cfg(test)]
-#[path = "pins_tests.rs"]
 mod tests;

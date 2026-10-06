@@ -11,7 +11,6 @@ use velnor_actions_workflow_renderer::{
     MbxQualificationPins, RenderedFile, Schema2WorkflowRequest, render_schema2_workflows,
 };
 
-#[path = "generator_release_pins.rs"]
 mod generator_release_pins;
 
 use crate::OrchestratorError;

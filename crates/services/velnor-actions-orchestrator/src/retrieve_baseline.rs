@@ -155,5 +155,4 @@ fn stage_manifest(run_dir: &Path, manifest: &crate::merge::BaselineManifest) -> 
 }
 
 #[cfg(test)]
-#[path = "retrieve_baseline_tests.rs"]
-mod retrieve_baseline_tests;
+mod tests;

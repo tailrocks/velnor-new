@@ -20,7 +20,6 @@ use crate::select_affected::{affected_packages, has_unowned_file};
 use crate::select_edges::{base_edges, head_edges};
 use crate::validators::{validate_diff_rev, validate_select_diff_args};
 
-#[path = "select_checkout.rs"]
 mod checkout;
 pub(crate) use checkout::{verify_checkout, verify_checkout_until};
 
@@ -348,5 +347,4 @@ fn is_advisory_toolfile(path: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "group_selection_tests.rs"]
-mod group_selection_tests;
+mod tests;
