@@ -115,7 +115,7 @@ jobs:
         env:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
-        run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\""
+        run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.1'"
       - name: Check generated files
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -128,7 +128,7 @@ jobs:
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\""
+        run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.1'"
       - name: Publish plan
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -166,13 +166,13 @@ jobs:
         env:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/publish-baseline-v1-request.json
-        run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\""
+        run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.1'"
       - name: Publish baseline
         id: publish-baseline
         env:
           VELNOR_INTERNAL_OP: publish-baseline-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/publish-baseline-v1-request.json
-        run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\""
+        run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.1'"
       - name: Upload baseline
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -226,21 +226,21 @@ jobs:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
           VELNOR_INTERNAL_OP: fetch-reports-v1
-        run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\""
+        run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.1'"
       - name: Write request
         env:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
           VELNOR_NEEDS_EXPECTED: "[\"actionlint\",\"plan\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
-        run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\""
+        run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.1'"
       - name: Merge reports
         env:
           VELNOR_INTERNAL_OP: merge-v1
           VELNOR_NEEDS_JSON: ${{ toJSON(needs) }}
           VELNOR_NEEDS_EXPECTED: "[\"actionlint\",\"plan\"]"
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
-        run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\""
+        run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.1'"
       - name: Save Mise tools
         if: success() && github.event_name == 'push'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9

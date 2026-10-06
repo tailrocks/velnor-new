@@ -1,21 +1,19 @@
 # macOS Scale Set evidence
 
-Resolved 2026-10-03 with `gh api` from this machine. Offline generator and
-runner tests cited below have run. A per-user LaunchAgent was installed,
-observed, and removed. Image builds were inspected. The product scale set was
-created with the shipped client. Six ordinary scale-set echo jobs have run on
-the official runner, including the four that stayed queued after an earlier
-ack-without-start. Later one-class runs covered JavaScript, services,
-artifacts, Buildx, an expected failure, and the classes in the second table
-below, plus Compose, bind mounts, Testcontainers, submodules/LFS,
-same-port workers, and cancel-with-service in the third table. The full G4
-gate stays `BLOCKED_EXTERNAL`. ChainArgos now pins the PR 16 generator
-commit; that rollout is not G7. The first `image-release.yml` and
-`macos-binary-release.yml` dispatches returned HTTP 404 and were not
-retried. Later registered runs published GitHub release assets from `19a43f5`
-(image run `37102027384`, macOS run `37102029367`). Those assets are not a
-GHCR push, not a new generator, and not the ChainArgos pin. G3 is `PASS`.
-G7 and G8 stay `NOT_RUN`.
+Resolved 2026-10-03 with `gh api` from this machine. Offline generator and runner
+tests cited below have run. A per-user LaunchAgent was installed, observed, and
+removed. Image builds were inspected. The product scale set was created with the
+shipped client. Six ordinary scale-set echo jobs have run on the official runner,
+including the four that stayed queued after an earlier ack- without-start. Later
+one-class runs covered JavaScript, services, artifacts, Buildx, an expected failure,
+and the classes in the second table below, plus Compose, bind mounts,
+Testcontainers, submodules/LFS, same-port workers, and cancel-with-service in the
+third table. The full G4 gate stays `BLOCKED_EXTERNAL`. ChainArgos now pins the PR
+16 generator commit; that rollout is not G7. The first `image-release.yml` and
+`macos-binary-release.yml` dispatches returned HTTP 404 and were not retried. Later
+registered runs published GitHub release assets from `19a43f5` (image run
+`37102027384`, macOS run `37102029367`). Those assets are not a GHCR push, not a new
+generator, and not the ChainArgos pin. G3 is `PASS`. G7 and G8 stay `NOT_RUN`.
 
 ## Identities
 

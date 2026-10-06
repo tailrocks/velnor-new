@@ -115,6 +115,8 @@ mod impl_renderer_toolchain_contract;
 mod impl_renderer_tree;
 #[path = "impl_renderer_tree_policy.rs"]
 mod impl_renderer_tree_policy;
+#[path = "impl_renderer_tree_policy_b.rs"]
+mod impl_renderer_tree_policy_b;
 #[path = "impl_renderer_tree_rejections.rs"]
 mod impl_renderer_tree_rejections;
 #[path = "impl_renderer_typed_ir.rs"]

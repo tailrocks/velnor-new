@@ -3,8 +3,7 @@
 //! Owns task graphs, identities, reports, and recommendations. Must not own
 //! Rust/Cargo, Mise, process, filesystem, YAML, CLI, or generic app models.
 //!
-//! All types here are effect-free data plus pure derivation/validation.
-//! Derivation formulas are normative; example strings in docs are illustrative.
+//! All types here are effect-free data plus pure derivation/validation; derivation formulas are normative.
 
 pub mod archive;
 mod branch;
