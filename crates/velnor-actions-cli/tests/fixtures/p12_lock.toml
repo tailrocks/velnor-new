@@ -1,0 +1,65 @@
+version = 4
+
+[[package]]
+name = "aaa"
+version = "0.1.0"
+dependencies = [
+ "bbb",
+ "blake3",
+ "globset",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+ "winnow 1.0.0",
+]
+
+[[package]]
+name = "bbb"
+version = "0.1.0"
+dependencies = [
+ "winnow 1.0.0",
+]
+
+[[package]]
+name = "blake3"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "globset"
+version = "0.4.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "serde"
+version = "1.0.200"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "serde_json"
+version = "1.0.100"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "winnow 0.7.0",
+]
+
+[[package]]
+name = "tempfile"
+version = "3.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "toml"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "winnow"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "winnow"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
