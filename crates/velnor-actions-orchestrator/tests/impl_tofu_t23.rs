@@ -8,8 +8,9 @@ use std::fs;
 use serde_json::json;
 use tempfile::TempDir;
 use velnor_actions_contract::{
-    CacheLayer, CacheOutcome, CacheResult, FinalStatus, ObligationDecision, Plan, TaskReport,
-    TaskStatus, Trust, WorkflowEvent, task_report_id_for_task,
+    CacheLayer, CacheOutcome, CacheResult, FinalStatus, ObligationDecision, Plan, PlatformBinding,
+    PlatformRunnerEnvironment, PlatformUnavailableReason, TaskReport, TaskStatus, Trust,
+    WorkflowEvent, task_report_id_for_task,
 };
 use velnor_actions_orchestrator::plan_internal;
 
@@ -144,8 +145,34 @@ fn validate_reports_executed_after_provider_cache_hit() -> TestResult {
         .iter()
         .find(|entry| entry.task_id == obligation.task_id)
         .ok_or("validate matrix entry")?;
+    let report = provider_hit_report(obligation, entry)?;
+    report.validate()?;
+    let value = serde_json::to_value(&report)?;
+    assert_eq!(value["status"], json!("executed"));
+    assert_eq!(value["cache"]["layer"], json!("tofu-providers"));
+    assert_eq!(value["cache"]["result"], json!("hit"));
+    assert!(value["cache"].get("miss_reason").is_none());
+    let reports = passing_reports(&plan)?;
+    assert!(
+        reports.iter().all(|report| report.executed == 1),
+        "every leg executes"
+    );
+    let request = merge_request(
+        &serde_json::to_value(&plan)?,
+        &serde_json::to_value(&plan.matrix)?,
+        &serde_json::to_value(&reports)?,
+        &success_jobs(),
+    );
+    assert_eq!(merge(&request)?.status, FinalStatus::Passed);
+    Ok(())
+}
+
+fn provider_hit_report(
+    obligation: &velnor_actions_contract::PlanObligation,
+    entry: &velnor_actions_contract::MatrixEntry,
+) -> Result<TaskReport, Box<dyn std::error::Error>> {
     let report = TaskReport {
-        schema: 1,
+        schema: TaskReport::SCHEMA,
         task_report_id: task_report_id_for_task(
             "local",
             &entry.matrix_key,
@@ -167,6 +194,11 @@ fn validate_reports_executed_after_provider_cache_hit() -> TestResult {
             result: CacheResult::Hit,
             miss_reason: None,
         },
+        platform_binding: PlatformBinding::unavailable(
+            &entry.planned_platform.platform_id,
+            PlatformRunnerEnvironment::Unknown,
+            PlatformUnavailableReason::ObservationNotRecorded,
+        )?,
         exit_code: 0,
         duration_ms: None,
         outputs: vec![],
@@ -176,23 +208,5 @@ fn validate_reports_executed_after_provider_cache_hit() -> TestResult {
         reason: None,
         timing: None,
     };
-    report.validate()?;
-    let value = serde_json::to_value(&report)?;
-    assert_eq!(value["status"], json!("executed"));
-    assert_eq!(value["cache"]["layer"], json!("tofu-providers"));
-    assert_eq!(value["cache"]["result"], json!("hit"));
-    assert!(value["cache"].get("miss_reason").is_none());
-    let reports = passing_reports(&plan)?;
-    assert!(
-        reports.iter().all(|report| report.executed == 1),
-        "every leg executes"
-    );
-    let request = merge_request(
-        &serde_json::to_value(&plan)?,
-        &serde_json::to_value(&plan.matrix)?,
-        &serde_json::to_value(&reports)?,
-        &success_jobs(),
-    );
-    assert_eq!(merge(&request)?.status, FinalStatus::Passed);
-    Ok(())
+    Ok(report)
 }

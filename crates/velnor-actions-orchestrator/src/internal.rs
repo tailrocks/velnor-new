@@ -309,7 +309,7 @@ fn build_plan(
         .map(|task| task.identity.unit_id.as_str())
         .collect();
     Ok(Plan {
-        schema: SCHEMA,
+        schema: Plan::SCHEMA,
         run_key: request.run_key.clone(),
         plan_id: plan_id_for_run(&request.run_key).map_err(internal_contract)?,
         base: request.base.clone(),

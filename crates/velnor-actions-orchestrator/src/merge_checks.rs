@@ -316,6 +316,7 @@ pub(crate) struct TaskPartition<'a> {
 /// `not_run` (never success); valid files outside the plan-derived
 /// expectation corrupt the set. Missing files surface per entry.
 pub(crate) fn partition_task_reports<'a>(
+    plan: &Plan,
     request: &'a MergeRequest,
     expected: &BTreeMap<String, (String, String)>,
     signals: &mut Signals,
@@ -331,7 +332,38 @@ pub(crate) fn partition_task_reports<'a>(
             miss_reasons.insert("trust_scope_mismatch".to_owned());
             continue;
         }
+        // Malformed files are `not_run` even when unexpected: shape
+        // triage precedes the plan-membership check.
         if report.validate().is_err() {
+            malformed += 1;
+            signals.not_run = true;
+            miss_reasons.insert("cache_corrupt".to_owned());
+            continue;
+        }
+        let Some((expected_task_id, expected_matrix_key)) = expected.get(&report.task_report_id)
+        else {
+            signals.planning_failed = true;
+            miss_reasons.insert("cache_corrupt".to_owned());
+            continue;
+        };
+        if report.task_id != *expected_task_id || report.matrix_key != *expected_matrix_key {
+            malformed += 1;
+            signals.not_run = true;
+            miss_reasons.insert("cache_corrupt".to_owned());
+            continue;
+        }
+        let Some(entry) = plan
+            .matrix
+            .include
+            .iter()
+            .find(|entry| entry.matrix_key == *expected_matrix_key)
+        else {
+            malformed += 1;
+            signals.not_run = true;
+            miss_reasons.insert("cache_corrupt".to_owned());
+            continue;
+        };
+        if report.validate_for_plan_entry(entry).is_err() {
             malformed += 1;
             signals.not_run = true;
             miss_reasons.insert("cache_corrupt".to_owned());
@@ -340,11 +372,6 @@ pub(crate) fn partition_task_reports<'a>(
         if valid.contains_key(report.task_report_id.as_str()) {
             duplicates += 1;
             signals.not_run = true;
-            miss_reasons.insert("cache_corrupt".to_owned());
-            continue;
-        }
-        if !expected.contains_key(&report.task_report_id) {
-            signals.planning_failed = true;
             miss_reasons.insert("cache_corrupt".to_owned());
             continue;
         }

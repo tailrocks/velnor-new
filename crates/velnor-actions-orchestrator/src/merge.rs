@@ -179,7 +179,7 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
     let obligations = plan_digests(plan);
     let partition = partition_reports(request, &entries, &mut signals, &mut miss_reasons);
     let expected = expected_task_reports(plan, &request.run_key);
-    let tasks = partition_task_reports(request, &expected, &mut signals, &mut miss_reasons);
+    let tasks = partition_task_reports(plan, request, &expected, &mut signals, &mut miss_reasons);
     let mut fold = Fold::default();
     let mut seen_task_reports = BTreeSet::new();
     let mut downloaded = Vec::new();
