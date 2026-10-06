@@ -107,7 +107,9 @@ pub(crate) fn manifest_for(plan: &Plan, base: &str, branch: &str) -> WireResult 
         "tasks": plan.obligations.iter().map(|ob| json!({"task_id": ob.task_id,
             "task_digest": ob.task_digest, "input_digest": ob.input_digest,
             "closure_digest": ob.closure_digest,
-            "proof_run_id": 7, "observed_run_id": 7})).collect::<Vec<_>>()}),
+            "proof_run_id": 7, "observed_run_id": 7,
+            "carried_from": Value::Null})).collect::<Vec<_>>(),
+        "parent": Value::Null}),
     )
 }
 

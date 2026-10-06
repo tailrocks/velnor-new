@@ -412,7 +412,7 @@ jobs:
         with:
           if-no-files-found: error
           name: ${{ steps.publish-baseline.outputs.artifact_name }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/baseline.json
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/published-baseline/baseline.json
           retention-days: "90"
   required:
     name: Required

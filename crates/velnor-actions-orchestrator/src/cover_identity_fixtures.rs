@@ -82,6 +82,7 @@ pub(super) fn manifest_with(entries: &[(&str, &str)]) -> BaselineManifest {
         compatibility_id: digest.clone(),
         artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
         artifact_name: name,
+        parent: None,
         expires_at_unix: None,
         tasks: entries
             .iter()
@@ -92,6 +93,7 @@ pub(super) fn manifest_with(entries: &[(&str, &str)]) -> BaselineManifest {
                 closure_digest: (*closure).to_owned(),
                 proof_run_id: 7,
                 observed_run_id: 7,
+                carried_from: None,
                 external_data: None,
                 proof: None,
             })

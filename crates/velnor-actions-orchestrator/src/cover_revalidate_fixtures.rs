@@ -51,9 +51,11 @@ pub(crate) fn manifest_for(commit: &str) -> BaselineManifest {
             closure_digest: closure,
             proof_run_id: 7,
             observed_run_id: 7,
+            carried_from: None,
             external_data: None,
             proof: None,
         }],
+        parent: None,
         expires_at_unix: None,
     }
 }
