@@ -35,9 +35,9 @@ fn runner_create_opens_stdin_and_is_not_privileged() -> Result<(), HostError> {
             .iter()
             .all(|mount| mount.target != "/var/lib/docker")
     );
-    assert_eq!(
-        spec.env,
-        ["ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/opt/action-archive-cache".to_owned()]
+    assert!(
+        spec.env.is_empty(),
+        "archive env comes from projection, not the plan"
     );
     assert!(spec.network_mode.is_none());
     Ok(())

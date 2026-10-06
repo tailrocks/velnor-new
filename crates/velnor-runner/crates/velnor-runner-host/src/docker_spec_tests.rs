@@ -47,9 +47,9 @@ fn runner_plan_is_not_privileged() -> Result<(), HostError> {
     assert_eq!(plan.mounts[0].target, "/run");
     assert_eq!(plan.mounts[1].source, "volume:worker_a-work");
     assert_eq!(plan.mounts[1].target, "/home/runner/_work");
-    assert_eq!(
-        plan.env,
-        ["ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/opt/action-archive-cache".to_owned()]
+    assert!(
+        plan.env.is_empty(),
+        "archive env comes from projection, not the plan"
     );
     assert!(audit_plan(&plan).is_ok());
     let mut privileged = plan;
@@ -62,9 +62,8 @@ fn runner_plan_is_not_privileged() -> Result<(), HostError> {
 fn action_archive_is_shared_and_rejects_a_home_path() -> Result<(), HostError> {
     let plan = runner_plan("worker_a")?;
     assert!(
-        plan.env.iter().any(|entry| {
-            entry == "ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/opt/action-archive-cache"
-        })
+        plan.env.is_empty(),
+        "archive env comes from projection, not the plan"
     );
     let mounts = runner_mounts(&plan.mounts)?;
     let archive = mounts
@@ -74,12 +73,8 @@ fn action_archive_is_shared_and_rejects_a_home_path() -> Result<(), HostError> {
     assert_eq!(archive.target, ACTION_ARCHIVE_TARGET);
     assert!(audit_plan(&plan).is_ok());
     let mut home = plan;
-    let entry = home
-        .env
-        .iter_mut()
-        .find(|entry| entry.starts_with("ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE="))
-        .ok_or(HostError::Docker)?;
-    *entry = "ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/home/runner/action-archive".to_owned();
+    home.env
+        .push("ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/home/runner/action-archive".to_owned());
     assert_eq!(audit_plan(&home), Err(HostError::ForbiddenMount));
     Ok(())
 }

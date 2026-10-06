@@ -16,6 +16,15 @@ use crate::worker::{
     verify_worker_volume,
 };
 
+mod cleanup;
+pub(crate) mod pair;
+mod reconcile;
+pub(crate) use cleanup::cleanup_worker;
+pub(crate) use pair::{
+    ContainerRecord, DindProbe, cleanup_prepared_dind, prepare_dind, start_runner,
+};
+pub(crate) use reconcile::reconcile_worker;
+
 /// Where `start_pair_until` returns. Later steps are not started.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PairStop {

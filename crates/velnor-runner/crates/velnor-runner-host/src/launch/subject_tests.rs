@@ -1,9 +1,30 @@
 //! Statistics mint uses one subject per session runner.
 
 use crate::launch_harness::{Mode, Script, absent, ctx, open};
-use crate::{IntentState, Started};
+use crate::{IntentState, Journal, Started};
 
 use super::steps::scale_unacked;
+
+async fn mint(
+    script: &mut Script,
+    journal: &Journal,
+    subject: &str,
+    dind: &str,
+    runner: &str,
+    starts: &std::cell::Cell<i32>,
+) -> Result<Option<Started>, String> {
+    scale_unacked(script, &ctx(), journal, subject, |_name, _jit, _bind| {
+        starts.set(starts.get() + 1);
+        async {
+            Ok(Started {
+                dind_id: dind.to_owned(),
+                runner_id: runner.to_owned(),
+            })
+        }
+    })
+    .await
+    .map_err(|err| err.to_string())
+}
 
 #[tokio::test]
 async fn a_second_statistics_name_mints_again() -> Result<(), String> {
@@ -13,23 +34,15 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
         calls: Vec::new(),
         mode: Mode::Ok,
     };
-    let started = scale_unacked(
+    let started = mint(
         &mut first,
-        &ctx(),
         &journal,
         "sone1",
-        |_name, _jit, _bind| {
-            first_starts.set(first_starts.get() + 1);
-            async {
-                Ok(Started {
-                    dind_id: "dind-1".to_owned(),
-                    runner_id: "runner-1".to_owned(),
-                })
-            }
-        },
+        "dind-1",
+        "runner-1",
+        &first_starts,
     )
-    .await
-    .map_err(|err| err.to_string())?;
+    .await?;
     assert_eq!(
         started.map(|item| item.runner_id).as_deref(),
         Some("runner-1")
@@ -41,23 +54,15 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
         calls: Vec::new(),
         mode: Mode::Ok,
     };
-    let again = scale_unacked(
+    let again = mint(
         &mut second,
-        &ctx(),
         &journal,
         "stwo2",
-        |_name, _jit, _bind| {
-            second_starts.set(second_starts.get() + 1);
-            async {
-                Ok(Started {
-                    dind_id: "dind-2".to_owned(),
-                    runner_id: "runner-2".to_owned(),
-                })
-            }
-        },
+        "dind-2",
+        "runner-2",
+        &second_starts,
     )
-    .await
-    .map_err(|err| err.to_string())?;
+    .await?;
     assert_eq!(
         again.map(|item| item.runner_id).as_deref(),
         Some("runner-2")
@@ -69,23 +74,15 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
         calls: Vec::new(),
         mode: Mode::Ok,
     };
-    let repeated = scale_unacked(
+    let repeated = mint(
         &mut replay,
-        &ctx(),
         &journal,
         "sone1",
-        |_name, _jit, _bind| {
-            replay_starts.set(replay_starts.get() + 1);
-            async {
-                Ok(Started {
-                    dind_id: "dind-3".to_owned(),
-                    runner_id: "runner-3".to_owned(),
-                })
-            }
-        },
+        "dind-3",
+        "runner-3",
+        &replay_starts,
     )
-    .await
-    .map_err(|err| err.to_string())?;
+    .await?;
     assert_eq!(repeated, None);
     assert!(replay.calls.is_empty());
     assert_eq!(replay_starts.get(), 0);

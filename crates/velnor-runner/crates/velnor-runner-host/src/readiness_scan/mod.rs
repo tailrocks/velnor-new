@@ -265,6 +265,14 @@ fn marker_row(row: &turso::Row) -> Result<IntentRow, HostError> {
         launch_phase: None,
         github_runner_id: None,
         cleanup_proven,
+        launch_id: None,
+        assignment_key: None,
+        seed_generation_id: None,
+        acquire_attempted: false,
+        acquire_resolved: false,
+        acquired: false,
+        jit_requested: false,
+        runner_completed: false,
     })
 }
 

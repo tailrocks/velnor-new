@@ -1,5 +1,22 @@
 //! Host failures. Text does not include tokens or JIT.
 
+/// Cause of a failed pre-JIT `DinD` preparation whose owned resources are confirmed absent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum PreparationCause {
+    /// The inner Docker API did not respond.
+    #[error("Docker API failure")]
+    Docker,
+    /// A bounded Docker API call timed out.
+    #[error("Docker API timeout")]
+    DockerTimeout,
+    /// The inner Docker API did not become ready.
+    #[error("DinD readiness deadline")]
+    DindReadiness,
+    /// `DinD` did not use its private `VFS` data root.
+    #[error("DinD storage mismatch")]
+    DindStorage,
+}
+
 /// Local controller failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum HostError {
@@ -27,6 +44,42 @@ pub enum HostError {
     /// Docker client could not open the configured socket.
     #[error("docker socket")]
     Docker,
+    /// A bounded Docker call did not return.
+    #[error("docker operation timed out")]
+    DockerTimeout,
+    /// `DinD` did not expose its Docker API before the readiness deadline.
+    #[error("DinD Docker API was not ready")]
+    DindReadiness,
+    /// `DinD` did not use the required private `VFS` data root.
+    #[error("DinD storage configuration mismatch")]
+    DindStorage,
+    /// Pre-JIT preparation failed, and all exact local resources were removed.
+    #[error("pre-JIT preparation failed with confirmed local cleanup: {0}")]
+    PreparationFailedClean(PreparationCause),
+    /// A Docker resource did not match its durable launch identity.
+    #[error("Docker resource ownership mismatch")]
+    Ownership,
+    /// Cleanup found an active runner.
+    #[error("runner is still active")]
+    RunnerActive,
+    /// Docker did not confirm resource cleanup.
+    #[error("Docker resource cleanup failed")]
+    Cleanup,
+    /// A container create may have completed without a response.
+    #[error("container create state is uncertain")]
+    ContainerCreateUncertain,
+    /// A container start may have completed without a response.
+    #[error("container start state is uncertain")]
+    ContainerStartUncertain,
+    /// JIT delivery may have completed in part or in full.
+    #[error("jit delivery state is uncertain")]
+    JitDeliveryUncertain,
+    /// The launch sequence exceeded its total deadline.
+    #[error("launch state is uncertain after the deadline")]
+    LaunchUncertain,
+    /// A private-volume create may have completed without a response.
+    #[error("private-volume create state is uncertain")]
+    VolumeCreateUncertain,
     /// A collision-resistant worker ownership token could not be generated.
     #[error("worker identity")]
     Identity,
