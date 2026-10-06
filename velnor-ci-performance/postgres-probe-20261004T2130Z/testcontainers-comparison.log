@@ -1,17 +1,17 @@
 warning: stripping debug info with `rust-objcopy` failed: signal: 6 (SIGABRT)
   |
   = note: dyld[44075]: Library not loaded: @rpath/libLLVM.dylib
-            Referenced from: <AC0D75A8-23BF-301F-B7CE-3E5CC0C1BC06> /Users/donbeave/.rustup/toolchains/1.98.1-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/rust-objcopy
-            Reason: tried: '/Users/donbeave/.rustup/toolchains/1.98.1-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/../lib/libLLVM.dylib' (no such file), '/Users/donbeave/.rustup/toolchains/1.98.1-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/../lib/libLLVM.dylib' (no such file)
+            Referenced from: <AC0D75A8-23BF-301F-B7CE-3E5CC0C1BC06> <LOCAL_PATH_REDACTED>
+            Reason: tried: '<LOCAL_PATH_REDACTED>' (no such file), '<LOCAL_PATH_REDACTED>' (no such file)
           
 
 warning: `legacy-grpc-server` (build script) generated 1 warning
-   Compiling legacy-grpc-server v0.1.0 (/Users/donbeave/Projects/ChainArgos/java-monorepo-velnor-ci/backend-rust/legacy-grpc-server)
+   Compiling legacy-grpc-server v0.1.0 (<LOCAL_PATH_REDACTED>)
 warning: stripping debug info with `rust-objcopy` failed: signal: 6 (SIGABRT)
   |
   = note: dyld[44222]: Library not loaded: @rpath/libLLVM.dylib
-            Referenced from: <AC0D75A8-23BF-301F-B7CE-3E5CC0C1BC06> /Users/donbeave/.rustup/toolchains/1.98.1-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/rust-objcopy
-            Reason: tried: '/Users/donbeave/.rustup/toolchains/1.98.1-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/../lib/libLLVM.dylib' (no such file), '/Users/donbeave/.rustup/toolchains/1.98.1-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/../lib/libLLVM.dylib' (no such file)
+            Referenced from: <AC0D75A8-23BF-301F-B7CE-3E5CC0C1BC06> <LOCAL_PATH_REDACTED>
+            Reason: tried: '<LOCAL_PATH_REDACTED>' (no such file), '<LOCAL_PATH_REDACTED>' (no such file)
           
 
 warning: `legacy-grpc-server` (bin "legacy-grpc-server") generated 1 warning
@@ -34,8 +34,8 @@ warning: constant `READY_MESSAGE` is never used
 warning: stripping debug info with `rust-objcopy` failed: signal: 6 (SIGABRT)
   |
   = note: dyld[58200]: Library not loaded: @rpath/libLLVM.dylib
-            Referenced from: <AC0D75A8-23BF-301F-B7CE-3E5CC0C1BC06> /Users/donbeave/.rustup/toolchains/1.98.1-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/rust-objcopy
-            Reason: tried: '/Users/donbeave/.rustup/toolchains/1.98.1-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/../lib/libLLVM.dylib' (no such file), '/Users/donbeave/.rustup/toolchains/1.98.1-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/../lib/libLLVM.dylib' (no such file)
+            Referenced from: <AC0D75A8-23BF-301F-B7CE-3E5CC0C1BC06> <LOCAL_PATH_REDACTED>
+            Reason: tried: '<LOCAL_PATH_REDACTED>' (no such file), '<LOCAL_PATH_REDACTED>' (no such file)
           
 
 warning: `legacy-grpc-server` (test "postgres_wait_probe") generated 3 warnings (run `cargo fix --test "postgres_wait_probe" -p legacy-grpc-server` to apply 1 suggestion)
