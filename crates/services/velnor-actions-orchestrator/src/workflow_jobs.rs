@@ -6,8 +6,8 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 
-use velnor_actions_contract::workflow::permissions::PermissionLevel;
-use velnor_actions_contract::{Job, JobTimeout, Permissions, Step, StepRole};
+use velnor_actions_contract_workflow::workflow::permissions::PermissionLevel;
+use velnor_actions_contract_workflow::{Job, JobTimeout, Permissions, Step, StepRole};
 use velnor_actions_mise::{
     PREPARE_PINNED_TOOLS_STEP, PinnedTool, PinnedToolExec, PreparePinnedTools, ToolCatalog,
     ToolHomes,

@@ -11,7 +11,9 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use velnor_actions_contract::{ContractError, FileIndex, StackCandidate, VelnorConfig};
+use velnor_actions_contract::ContractError;
+use velnor_actions_contract_config::VelnorConfig;
+use velnor_actions_contract_planning::{FileIndex, StackCandidate};
 use velnor_actions_tofu_core::{
     EvidenceLevel, TofuNote, classify_with_contents, effective_set, plan_note, qualify_roots,
 };
@@ -78,7 +80,7 @@ pub(crate) fn qualify_tofu_step(
 /// planning fails here with the manual remediation instead.
 fn qualify_configured(
     root: &Path,
-    tofu: &velnor_actions_contract::TofuStackConfig,
+    tofu: &velnor_actions_contract_config::TofuStackConfig,
     index: &FileIndex,
     ignored: bool,
     reads: &mut velnor_actions_tofu_core::FileCache,

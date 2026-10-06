@@ -1,6 +1,6 @@
 #![cfg(unix)]
 use std::path::PathBuf;
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     CheckPlatform, QualifiedTool, QualifiedToolArtifact, QualifiedToolBackend,
     QualifiedToolExecutable, QualifiedToolOptions, QualifiedToolPlatform, QualifiedToolProbe,
 };

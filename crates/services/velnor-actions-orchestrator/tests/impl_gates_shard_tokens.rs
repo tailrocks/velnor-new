@@ -1,6 +1,6 @@
 //! Never-bare diagnostics: limits/reference/shard failures carry miss tokens.
 
-use velnor_actions_contract::{FinalStatus, MatrixReport, Plan};
+use velnor_actions_contract_workflow::{FinalStatus, MatrixReport, Plan};
 
 use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
 use crate::impl_gates_shard::sharded_case;
@@ -11,7 +11,7 @@ pub(crate) fn merge_report_with(
     reports: &[MatrixReport],
     proofs: &[serde_json::Value],
     extra: &serde_json::Value,
-) -> Result<velnor_actions_contract::FinalReport, Box<dyn std::error::Error>> {
+) -> Result<velnor_actions_contract_workflow::FinalReport, Box<dyn std::error::Error>> {
     let plan_value = serde_json::to_value(plan).unwrap_or(serde_json::Value::Null);
     let reports_value = serde_json::to_value(reports).unwrap_or(serde_json::Value::Null);
     let task_files = crate::impl_merge::task_reports_for(&plan_value, &reports_value);

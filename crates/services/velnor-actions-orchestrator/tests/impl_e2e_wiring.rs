@@ -241,7 +241,7 @@ fn make_velnor_repo() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
 fn write_lock(repo: &tempfile::TempDir) -> Result<(), Box<dyn std::error::Error>> {
     let version = env!("CARGO_PKG_VERSION");
     let mut bins = String::new();
-    for target in velnor_actions_contract::SUPPORTED_TARGETS {
+    for target in velnor_actions_contract_release::SUPPORTED_TARGETS {
         use std::fmt::Write as _;
         write!(
             bins,

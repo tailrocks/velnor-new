@@ -8,10 +8,12 @@ use std::fs;
 
 use crate::matrix_step::OBLIGATION_TASK_DIGEST_ENV;
 use tempfile::TempDir;
-use velnor_actions_contract::{
+use velnor_actions_contract::plan_id_for_run;
+use velnor_actions_contract_config::RunnerSelection;
+use velnor_actions_contract_workflow::{
     ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, ObligationDecision,
-    Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, RunnerSelection,
-    TaskReport, TaskStatus, Trust, WorkflowEvent, matrix_json_bytes, plan_id_for_run,
+    Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, TaskReport,
+    TaskStatus, Trust, WorkflowEvent, matrix_json_bytes,
 };
 
 use super::*;

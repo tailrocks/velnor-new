@@ -4,7 +4,7 @@ use std::fs;
 use std::path::Path;
 
 use tempfile::TempDir;
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract_workflow::StepKind;
 use velnor_actions_orchestrator::decisions::{MetadataFailure, classify_metadata_failure};
 use velnor_actions_orchestrator::{
     GenerateOptions, OrchestratorError, generate, prepare, render_staged_tree,

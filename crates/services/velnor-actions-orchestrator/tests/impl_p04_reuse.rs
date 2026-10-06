@@ -3,7 +3,8 @@
 //! Unregistered: the parent wires this module into `velnor_orchestrator.rs`
 //! (P09 pattern). Cases run through the public plan API only.
 
-use velnor_actions_contract::{BaselineStatus, ObligationDecision, Plan, digest_b3};
+use velnor_actions_contract::digest_b3;
+use velnor_actions_contract_workflow::{BaselineStatus, ObligationDecision, Plan};
 
 use super::impl_common::{
     TestResult, config_with_branch, git, git_line, make_repo, plan_for_source_change,

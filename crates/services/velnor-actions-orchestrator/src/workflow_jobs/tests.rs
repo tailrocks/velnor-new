@@ -3,7 +3,7 @@
 //! Declared via `#[path]` from `workflow_jobs.rs` under `cfg(test)`.
 
 use super::*;
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract_workflow::StepKind;
 
 /// Internal operation of one step, if any.
 fn operation_of(step: &Step) -> Option<&str> {

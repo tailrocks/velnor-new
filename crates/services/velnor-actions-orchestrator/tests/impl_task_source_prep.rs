@@ -6,7 +6,7 @@
 
 use std::fs;
 
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract_workflow::StepKind;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_rust::TaskKind;
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;

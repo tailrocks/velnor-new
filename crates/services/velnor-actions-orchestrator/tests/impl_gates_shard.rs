@@ -1,6 +1,7 @@
 //! Gate 7 cases: shard proofs, empty partitions, limits, reference sets.
 
-use velnor_actions_contract::{FinalStatus, MatrixReport, MatrixStatus, Plan, TaskStatus};
+use velnor_actions_contract_workflow::ExecuteTaskRef;
+use velnor_actions_contract_workflow::{FinalStatus, MatrixReport, MatrixStatus, Plan, TaskStatus};
 
 use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
 
@@ -72,7 +73,7 @@ fn shard_first_entry(
     let entry = plan.matrix.include.first_mut().ok_or("missing entry")?;
     entry.execute_task_ids.tasks = std::collections::BTreeMap::from([(
         "nextest".to_owned(),
-        velnor_actions_contract::ExecuteTaskRef::Shards(vec![first.clone(), second.clone()]),
+        ExecuteTaskRef::Shards(vec![first.clone(), second.clone()]),
     )]);
     plan.validate()?;
     Ok((base.task_id, first, second))
@@ -119,7 +120,7 @@ fn sharded_reports(
             &ob.task_digest,
         )?;
         report_ids.push(id.clone());
-        tasks.push(velnor_actions_contract::MatrixTaskEntry {
+        tasks.push(velnor_actions_contract_workflow::MatrixTaskEntry {
             task_report_id: id,
             task_id: task_id.clone(),
             status: *status,
@@ -335,7 +336,7 @@ fn proven_no_target_shard_passes_without_tests() -> TestResult {
     let entry = plan.matrix.include.first_mut().ok_or("missing entry")?;
     entry.execute_task_ids.tasks = std::collections::BTreeMap::from([(
         "nextest".to_owned(),
-        velnor_actions_contract::ExecuteTaskRef::Shards(vec![single.clone()]),
+        ExecuteTaskRef::Shards(vec![single.clone()]),
     )]);
     plan.validate()?;
     let input = plan

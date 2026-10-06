@@ -6,9 +6,12 @@ use velnor_actions_contract::cachekey::{
     restore_prefix, toolchain_id, workspace_id,
 };
 use velnor_actions_contract::{
-    CacheLayer, CacheOutcome, CacheResult, ContractError, EntryCacheIds, TaskReport, TaskStatus,
-    Trust, WorkflowEvent, canonical_json_str, digest_b3, input_digest, is_secret_env_name,
+    ContractError, canonical_json_str, digest_b3, input_digest, is_secret_env_name,
     parse_strict_json, run_key_for_ci, task_report_id_for_task,
+};
+use velnor_actions_contract_workflow::{
+    CacheLayer, CacheOutcome, CacheResult, EntryCacheIds, TaskReport, TaskStatus, Trust,
+    WorkflowEvent,
 };
 
 #[test]

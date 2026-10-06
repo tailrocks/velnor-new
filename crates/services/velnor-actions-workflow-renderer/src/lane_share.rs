@@ -6,8 +6,8 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
-use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+use velnor_actions_contract_workflow::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
+use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 
 use crate::RenderError;
 use crate::render::RenderContext;
@@ -143,12 +143,14 @@ fn validate_serialized_scopes(shared: &LaneShare) -> Result<(), RenderError> {
     // prelude and the shared composite, so validating only the serialized
     // workflow steps and composite body independently would lose that order.
     for (id, steps) in &shared.env_steps {
-        velnor_actions_contract::workflow::step_identity::validate_step_sequence(steps, id)
-            .map_err(RenderError::Contract)?;
+        velnor_actions_contract_workflow::workflow::step_identity::validate_step_sequence(
+            steps, id,
+        )
+        .map_err(RenderError::Contract)?;
     }
     for (id, job) in &shared.jobs {
         let Some(checkout) = shared.checkouts.get(id) else {
-            velnor_actions_contract::workflow::step_identity::validate_step_sequence(
+            velnor_actions_contract_workflow::workflow::step_identity::validate_step_sequence(
                 &job.steps, id,
             )
             .map_err(RenderError::Contract)?;
@@ -164,8 +166,10 @@ fn validate_serialized_scopes(shared: &LaneShare) -> Result<(), RenderError> {
         if let Some(postlude) = shared.postludes.get(id) {
             steps.extend(postlude.iter().cloned());
         }
-        velnor_actions_contract::workflow::step_identity::validate_step_identity_scope(&steps, id)
-            .map_err(RenderError::Contract)?;
+        velnor_actions_contract_workflow::workflow::step_identity::validate_step_identity_scope(
+            &steps, id,
+        )
+        .map_err(RenderError::Contract)?;
     }
     Ok(())
 }

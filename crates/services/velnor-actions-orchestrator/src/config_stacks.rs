@@ -5,8 +5,8 @@
 //! stack-focused load tests.
 
 use serde::Deserialize;
-use velnor_actions_contract::config::RustReleaseConfig;
-use velnor_actions_contract::{
+use velnor_actions_contract_config::config::RustReleaseConfig;
+use velnor_actions_contract_config::{
     DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
     TofuStackConfig, Utf8RepoRelDir,
 };

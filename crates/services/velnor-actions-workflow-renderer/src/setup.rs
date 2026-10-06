@@ -6,7 +6,7 @@
 //! the pin type, its validation, and the legacy `cache:false` template
 //! for fixtures and upgrade inputs.
 
-use velnor_actions_contract::{Step, StepRole};
+use velnor_actions_contract_workflow::{Step, StepRole};
 
 use crate::{RenderError, steps};
 

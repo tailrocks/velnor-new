@@ -3,7 +3,8 @@
 //! Declared via `#[path]` from `matrix_step.rs` (no `lib.rs` edit);
 //! `matrix_step` re-exports the constructors so call sites stay put.
 
-use velnor_actions_contract::{Step, StepRole, WorkflowPolicy};
+use velnor_actions_contract_config::WorkflowPolicy;
+use velnor_actions_contract_workflow::{Step, StepRole};
 use velnor_actions_mise::{
     PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools, ToolCatalog, ToolHomes,
 };

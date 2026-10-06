@@ -9,7 +9,7 @@
 
 use std::ffi::{OsStr, OsString};
 
-use velnor_actions_contract::Finding;
+use velnor_actions_contract_release::Finding;
 
 use crate::nextest::NextestDriver;
 use velnor_actions_mise_catalog::catalog::ToolCatalog;

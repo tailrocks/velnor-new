@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
 use std::path::Path;
 use velnor_actions_contract::canonical::{digest_b3, is_valid_digest};
-use velnor_actions_contract::config::MAX_CHECK_CONTAINER_PATH_BYTES;
-use velnor_actions_contract::config::{CheckPlatform, CheckSystemTool, CheckSystemToolKind};
+use velnor_actions_contract_config::config::MAX_CHECK_CONTAINER_PATH_BYTES;
+use velnor_actions_contract_config::config::{CheckPlatform, CheckSystemTool, CheckSystemToolKind};
 
 /// Native tool observation bound to its exact declared pin.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -294,7 +294,7 @@ fn valid_proof_target(platform: CheckPlatform, target: Option<&str>, swift: bool
 }
 
 fn valid_version(value: &str) -> bool {
-    value.len() <= velnor_actions_contract::MAX_CHECK_SYSTEM_VERSION_BYTES
+    value.len() <= velnor_actions_contract_config::MAX_CHECK_SYSTEM_VERSION_BYTES
         && value.split('.').count() >= 2
         && value.split('.').all(|part| {
             !part.is_empty()

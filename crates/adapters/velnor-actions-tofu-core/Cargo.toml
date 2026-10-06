@@ -11,6 +11,9 @@ workspace = true
 
 [dependencies]
 velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
+velnor-actions-contract-planning = { version = "=0.1.1", path = "../../core/velnor-actions-contract-planning" }
+velnor-actions-contract-release = { version = "=0.1.1", path = "../../core/velnor-actions-contract-release" }
 hcl = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

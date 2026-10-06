@@ -7,7 +7,7 @@
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_contract::StackCandidate;
+use velnor_actions_contract_planning::StackCandidate;
 
 use super::{consumer_manifest::read_manifest_file, detected_projects};
 use crate::safe_read::MAX_REPO_FILE_BYTES;

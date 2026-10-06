@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{
-    Concurrency, Job, JobTimeout, Permissions, SCALE_SET_NAME, ScaleSetSelector, Step, StepKind,
-    StepRole, Trigger, VELNOR_LABEL, WorkflowIr,
+use velnor_actions_contract_config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
+use velnor_actions_contract_workflow::{
+    Concurrency, Job, JobTimeout, Permissions, Step, StepKind, StepRole, Trigger, WorkflowIr,
 };
 
 use super::{HOSTED_SUFFIX, SCALE_SUFFIX, share_lanes};

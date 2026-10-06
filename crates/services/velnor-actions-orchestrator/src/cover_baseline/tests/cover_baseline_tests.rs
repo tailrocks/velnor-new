@@ -93,10 +93,11 @@ fn baseline_entry_needs_single_strict_payload() {
 }
 
 /// Plan with one execute obligation and a marker generator SHA.
-fn marker_plan(marker: &str) -> velnor_actions_contract::Plan {
-    use velnor_actions_contract::{
+fn marker_plan(marker: &str) -> velnor_actions_contract_workflow::Plan {
+    use velnor_actions_contract_config::RunnerSelection;
+    use velnor_actions_contract_workflow::{
         ObligationDecision, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation,
-        PlanRunner, RunnerSelection, Trust,
+        PlanRunner, Trust,
     };
     let digest = digest_b3(b"d");
     Plan {
@@ -230,7 +231,7 @@ fn forwarded_manifest(slug: &str, base: &str) -> BaselineManifest {
 /// keeps every obligation executing.
 #[test]
 fn forwarded_proof_marks_baseline_unavailable() {
-    use velnor_actions_contract::ObligationDecision;
+    use velnor_actions_contract_workflow::ObligationDecision;
     use velnor_actions_mise::ToolCatalog;
     let slug = anchor_slug();
     let checkout = anchored_checkout(&slug);

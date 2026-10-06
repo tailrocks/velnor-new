@@ -2,7 +2,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{Job, RunsOn};
+use velnor_actions_contract_config::RunsOn;
+use velnor_actions_contract_workflow::Job;
 
 /// Return typed runner jobs whose steps use the native MBX action.
 ///

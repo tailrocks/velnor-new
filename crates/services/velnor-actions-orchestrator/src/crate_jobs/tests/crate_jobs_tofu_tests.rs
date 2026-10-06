@@ -74,7 +74,7 @@ fn tofu_tasks_bind_no_rust_tools_but_select_opentofu() {
 
 #[test]
 fn pure_tofu_group_renders_without_rust_setup() {
-    use velnor_actions_contract::StepKind;
+    use velnor_actions_contract_workflow::StepKind;
     use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, PREPARE_RUST_COMPONENTS_STEP};
     use velnor_actions_tofu_core::TofuTaskKind;
 
@@ -180,7 +180,7 @@ fn mixed_group_keeps_the_rust_union() {
         .iter()
         .find(|step| step.name == PREPARE_PINNED_TOOLS_STEP)
         .expect("prepare step");
-    let velnor_actions_contract::StepKind::Shell { run, env } = &prepare.kind else {
+    let velnor_actions_contract_workflow::StepKind::Shell { run, env } = &prepare.kind else {
         panic!("prepare must be a shell step");
     };
     assert!(
@@ -212,7 +212,7 @@ fn tofu_triples(roots: &[&str]) -> Vec<ProposedTask> {
 
 /// Shell env of one named step.
 fn step_env<'a>(
-    job: &'a velnor_actions_contract::Job,
+    job: &'a velnor_actions_contract_workflow::Job,
     name: &str,
 ) -> &'a std::collections::BTreeMap<String, String> {
     let step = job
@@ -220,7 +220,7 @@ fn step_env<'a>(
         .iter()
         .find(|step| step.name == name)
         .expect("named step");
-    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Shell { env, .. } = &step.kind else {
         panic!("{name} must be a shell step");
     };
     env
@@ -291,7 +291,7 @@ fn rust_jobs_never_stage() {
             "{id} needs plan only"
         );
         for step in &job.steps {
-            if let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind {
+            if let velnor_actions_contract_workflow::StepKind::Shell { env, .. } = &step.kind {
                 for key in [
                     velnor_actions_workflow_renderer::MATRIX_NEEDS_JOB_ENV,
                     velnor_actions_workflow_renderer::MATRIX_OUTPUT_ENV,

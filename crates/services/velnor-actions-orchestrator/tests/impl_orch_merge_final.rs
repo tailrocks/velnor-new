@@ -1,6 +1,6 @@
 //! Orchestrator core rows: final-report shape (adapter metadata, counts, aggregates).
 
-use velnor_actions_contract::FinalStatus;
+use velnor_actions_contract_workflow::FinalStatus;
 
 use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
 use crate::impl_orch_core::{merge, merge_request, success_jobs};

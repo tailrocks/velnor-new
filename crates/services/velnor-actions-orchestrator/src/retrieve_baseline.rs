@@ -16,7 +16,8 @@
 use std::ffi::OsString;
 use std::path::Path;
 
-use velnor_actions_contract::{Plan, canonical_json_bytes};
+use velnor_actions_contract::canonical_json_bytes;
+use velnor_actions_contract_workflow::Plan;
 use velnor_actions_mise::ToolCatalog;
 
 use crate::cover::shard::{BaselineLookup, resolve_manifests};

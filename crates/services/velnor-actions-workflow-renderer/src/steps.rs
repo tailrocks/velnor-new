@@ -4,7 +4,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Step, StepKind, StepRole};
+use velnor_actions_contract_workflow::{Step, StepKind, StepRole};
 
 use crate::{RenderError, commands, marker};
 
@@ -314,7 +314,7 @@ pub const RUN_DIR_SHELL: &str = "$RUNNER_TEMP/velnor/r$GITHUB_RUN_ID-a$GITHUB_RU
 /// is scraped in shell and re-checked by the merge (see above).
 #[must_use]
 pub fn candidate_attestation_script() -> String {
-    let attestation = velnor_actions_contract::CANDIDATE_ATTESTATION_FILENAME;
+    let attestation = velnor_actions_contract_workflow::CANDIDATE_ATTESTATION_FILENAME;
     format!(
         "line=; rest=; p=\"{RUN_DIR_SHELL}/plan.json\" && test -f \"$p\" && read line rest < \"$p\" || [ -n \"$line\" ] && h=${{line#*\\\"head\\\":\\\"}} && h=${{h%%\\\"*}} && [ -n \"$h\" ] && [ \"${{#h}}\" -le 64 ] && printf '{{\"schema\":1,\"commit\":\"%s\"}}' \"$h\" > {CANDIDATE_OUTPUT_DIR}/{attestation}"
     )

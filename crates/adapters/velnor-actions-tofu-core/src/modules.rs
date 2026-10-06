@@ -29,7 +29,7 @@ pub(crate) use grammar::{source_from_json, source_from_native};
 /// Project module edges to neutral pairs (rust `local_edge_pairs` precedent).
 ///
 /// Single owner of the [`ModuleEdge`] projection into
-/// [`reverse_closure`](velnor_actions_contract::reverse_closure);
+/// [`reverse_closure`](velnor_actions_contract_planning::reverse_closure);
 /// source spellings never affect selection.
 #[must_use]
 pub fn module_edge_pairs(edges: &[ModuleEdge]) -> Vec<(String, String)> {

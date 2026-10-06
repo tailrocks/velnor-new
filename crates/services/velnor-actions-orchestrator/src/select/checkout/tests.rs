@@ -1,6 +1,6 @@
 use super::verify_checkout_until;
 use std::time::Duration;
-use velnor_actions_contract::WorkflowEvent;
+use velnor_actions_contract_workflow::WorkflowEvent;
 use velnor_actions_mise::CheckDeadline;
 
 #[test]

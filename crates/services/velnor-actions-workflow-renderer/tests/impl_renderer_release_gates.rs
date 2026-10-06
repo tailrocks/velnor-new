@@ -1,6 +1,6 @@
 //! Release step-content gate cases (authority separation, argv safety).
 use std::collections::BTreeMap;
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract_workflow::{Step, StepKind};
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::action_step;
 use velnor_actions_workflow_renderer::release_gates::{ReleaseConfigBinding, check_release_jobs};
@@ -114,7 +114,7 @@ pub(crate) fn job(
         role,
         display_name: format!("Release {}", role.as_str()),
         runs_on: LABEL.to_owned(),
-        timeout_minutes: velnor_actions_contract::JobTimeout::RELEASE,
+        timeout_minutes: velnor_actions_contract_workflow::JobTimeout::RELEASE,
         needs: Vec::new(),
         condition: condition.map(str::to_owned),
         environment: env.map(str::to_owned),

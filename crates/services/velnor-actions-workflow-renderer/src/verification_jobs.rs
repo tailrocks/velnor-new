@@ -2,9 +2,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{
-    HOSTED_SUFFIX, Job, JobTimeout, PermissionLevel, Permissions, RunsOn, SCALE_SUFFIX, Step,
-    VERIFICATION_TASK_JOB_PREFIX, VerificationRunner, VerificationTask,
+use velnor_actions_contract_config::{
+    RunsOn, VERIFICATION_TASK_JOB_PREFIX, VerificationRunner, VerificationTask,
+};
+use velnor_actions_contract_workflow::{
+    HOSTED_SUFFIX, Job, JobTimeout, PermissionLevel, Permissions, SCALE_SUFFIX, Step,
 };
 
 use crate::{MiseSetup, RenderError, mise_setup_step, shell_step, steps};

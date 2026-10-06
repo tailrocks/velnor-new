@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::Path;
 
-use velnor_actions_contract::{Job, StepKind, StepRole};
+use velnor_actions_contract_workflow::{Job, StepKind, StepRole};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::closure::download_plan_step;
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, WORKFLOW_PATH};

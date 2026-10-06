@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_contract::{Step, StepKind, StepRole};
+use velnor_actions_contract_workflow::{Step, StepKind, StepRole};
 use velnor_actions_mise::{cache_sources, cache_trust};
 use velnor_actions_orchestrator::{GenerationPreparation, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;

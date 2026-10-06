@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, JobTimeout, Step, StepKind, StepRole};
+use velnor_actions_contract_workflow::{Job, JobTimeout, Step, StepKind, StepRole};
 
 use super::super::{HOSTED_SUFFIX, SCALE_SUFFIX, share_lanes};
 use crate::RenderError;

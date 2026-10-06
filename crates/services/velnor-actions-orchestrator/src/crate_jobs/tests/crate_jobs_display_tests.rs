@@ -23,7 +23,8 @@ fn tofu_group(root: &str, kind: velnor_actions_tofu_core::TofuTaskKind) -> Propo
 
 #[test]
 fn id_and_display_prefixes_agree_per_partition() {
-    use velnor_actions_contract::{TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX};
+    use velnor_actions_contract::TOFU_JOB_ID_PREFIX;
+    use velnor_actions_contract_workflow::TOFU_DISPLAY_PREFIX;
     use velnor_actions_tofu_core::TofuTaskKind;
     let mut rust = group("demo", TaskKind::Clippy, &[]);
     let mixed_tofu = tofu_group("stacks/b", TofuTaskKind::Validate);

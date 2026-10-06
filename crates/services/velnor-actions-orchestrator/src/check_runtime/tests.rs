@@ -1,6 +1,6 @@
 //! Named scenario proof rejects empty, skipped, stale, and foreign reports.
 use crate::check_evidence::{Scenario, ScenarioEvidence, ScenarioStatus, validate_evidence};
-use velnor_actions_contract::config::{CheckEvidence, CheckPlatform};
+use velnor_actions_contract_config::config::{CheckEvidence, CheckPlatform};
 
 fn declaration() -> CheckEvidence {
     CheckEvidence {

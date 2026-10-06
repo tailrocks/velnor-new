@@ -20,4 +20,7 @@ name = "velnor_contract"
 path = "tests/main.rs"
 
 [dev-dependencies]
+velnor-actions-contract-config = { version = "=0.1.1", path = "../velnor-actions-contract-config" }
+velnor-actions-contract-release = { version = "=0.1.1", path = "../velnor-actions-contract-release" }
+velnor-actions-contract-workflow = { version = "=0.1.1", path = "../velnor-actions-contract-workflow" }
 serde_json = { workspace = true }

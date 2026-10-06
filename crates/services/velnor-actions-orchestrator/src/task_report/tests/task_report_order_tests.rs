@@ -3,7 +3,7 @@
 use super::*;
 
 use tempfile::TempDir;
-use velnor_actions_contract::{ExecuteTaskRef, Plan, TaskReport, TaskStatus};
+use velnor_actions_contract_workflow::{ExecuteTaskRef, Plan, TaskReport, TaskStatus};
 
 const JOB: &str = "crate_demo";
 const DOCTEST: &str = "stack/rust/demo/doctest/default";
@@ -53,8 +53,8 @@ fn task_report(plan: &Plan, temp: &TempDir, task_id: &str) -> TaskReport {
                 .tasks
                 .values()
                 .any(|task_ref| match task_ref {
-                    velnor_actions_contract::ExecuteTaskRef::Single(id) => id == task_id,
-                    velnor_actions_contract::ExecuteTaskRef::Shards(ids) => {
+                    velnor_actions_contract_workflow::ExecuteTaskRef::Single(id) => id == task_id,
+                    velnor_actions_contract_workflow::ExecuteTaskRef::Shards(ids) => {
                         ids.iter().any(|id| id == task_id)
                     }
                 })
@@ -150,7 +150,7 @@ fn empty_downstream_follows_execution_order_not_matrix_order() {
         assert_eq!(task.status, TaskStatus::NotSelected, "{task_id}");
         assert_eq!(
             task.not_selected_reason,
-            Some(velnor_actions_contract::NotSelectedReason::UpstreamFailed),
+            Some(velnor_actions_contract_workflow::NotSelectedReason::UpstreamFailed),
             "{task_id}"
         );
     }

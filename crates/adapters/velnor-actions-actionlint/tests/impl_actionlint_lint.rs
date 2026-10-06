@@ -23,7 +23,7 @@ const FORBIDDEN_MANIFEST_TOKENS: &[&str] = &[
 ];
 
 #[test]
-fn manifest_declares_contract_only() {
+fn manifest_declares_contract_family_only() {
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     assert!(
         !root.join("build.rs").exists(),
@@ -49,12 +49,13 @@ fn manifest_declares_contract_only() {
             deps.push(trimmed.to_owned());
         }
     }
-    assert_eq!(deps.len(), 1, "exactly one dependency expected");
-    assert!(
-        deps[0].starts_with("velnor-actions-contract"),
-        "sole dependency must be the contract: {}",
-        deps[0]
-    );
+    assert_eq!(deps.len(), 3, "exactly the contract family expected");
+    for dep in &deps {
+        assert!(
+            dep.starts_with("velnor-actions-contract"),
+            "family-only dependency: {dep}"
+        );
+    }
 }
 
 #[test]

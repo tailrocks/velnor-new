@@ -123,7 +123,7 @@ pub(crate) struct RawDependency {
 /// Project local edges to `(from, to)` key pairs for the neutral closure.
 ///
 /// Single owner of the [`LocalEdge`] projection into
-/// [`reverse_closure`](velnor_actions_contract::reverse_closure); kind,
+/// [`reverse_closure`](velnor_actions_contract_planning::reverse_closure); kind,
 /// optionality, and target filters never affect selection.
 #[must_use]
 pub fn local_edge_pairs(edges: &[LocalEdge]) -> Vec<(String, String)> {

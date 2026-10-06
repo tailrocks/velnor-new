@@ -1,8 +1,10 @@
 //! Named-check workflow topology and failure inventory regressions.
 
 use super::*;
-use velnor_actions_contract::config::{CheckPlatform, CheckRunner, MiseCheck, QualifiedTool};
-use velnor_actions_contract::{JobConclusion, RequiredJobResult, StepKind};
+use velnor_actions_contract_config::config::{
+    CheckPlatform, CheckRunner, MiseCheck, QualifiedTool,
+};
+use velnor_actions_contract_workflow::{JobConclusion, RequiredJobResult, StepKind};
 use velnor_actions_mise::PinnedTool;
 
 fn check(id: &str, runner: CheckRunner) -> MiseCheck {
@@ -64,8 +66,8 @@ fn fixture_with_tools(
     (root, discovery)
 }
 
-fn gh_qualification() -> velnor_actions_contract::config::QualifiedTool {
-    use velnor_actions_contract::config::{
+fn gh_qualification() -> velnor_actions_contract_config::config::QualifiedTool {
+    use velnor_actions_contract_config::config::{
         QualifiedTool, QualifiedToolArtifact, QualifiedToolBackend, QualifiedToolExecutable,
         QualifiedToolOptions, QualifiedToolPlatform, QualifiedToolProbe,
     };

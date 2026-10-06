@@ -6,7 +6,7 @@
 
 use super::*;
 
-use velnor_actions_contract::{BaselineProof, ObligationDecision};
+use velnor_actions_contract_workflow::{BaselineProof, ObligationDecision};
 
 /// Fixture plan with `TEST` covered and pruned from the matrix.
 fn covered_fixture() -> Plan {

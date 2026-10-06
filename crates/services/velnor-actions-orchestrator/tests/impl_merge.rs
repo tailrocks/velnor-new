@@ -1,6 +1,6 @@
 //! Merge gate cases: round-trip, precedence, no-work (tamper: `impl_merge_tamper`).
 
-use velnor_actions_contract::{
+use velnor_actions_contract_workflow::{
     FinalReport, FinalStatus, MatrixReport, MatrixStatus, Plan, TaskStatus,
 };
 use velnor_actions_orchestrator::merge_internal;
@@ -175,7 +175,7 @@ fn foreign_report() -> Result<MatrixReport, Box<dyn std::error::Error>> {
         status: MatrixStatus::Passed,
         expected_task_ids: vec![task_id.clone()],
         task_report_ids: vec![task_report_id.clone()],
-        tasks: vec![velnor_actions_contract::MatrixTaskEntry {
+        tasks: vec![velnor_actions_contract_workflow::MatrixTaskEntry {
             task_report_id,
             task_id,
             status: TaskStatus::Executed,

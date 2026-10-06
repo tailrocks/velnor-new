@@ -4,8 +4,10 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::Deserialize;
-use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig, MiseCheck, QualifiedTool};
-use velnor_actions_contract::{
+use velnor_actions_contract_config::config::{
+    ActionPinOverride, ActionsConfig, MiseCheck, QualifiedTool,
+};
+use velnor_actions_contract_config::{
     DiscoveryConfig, GeneratorValidation, ResourcesConfig, TestShardingConfig, VelnorConfig,
     VerificationTask, WorkflowConfig, WorkflowPolicy,
 };
@@ -113,7 +115,7 @@ struct PartialConfig {
     actions: PartialActions,
     /// Schema 2 routing section.
     #[serde(default)]
-    execution: Option<velnor_actions_contract::ExecutionConfig>,
+    execution: Option<velnor_actions_contract_config::ExecutionConfig>,
     /// Explicit repository-owned Mise checks.
     #[serde(default)]
     checks: Vec<MiseCheck>,

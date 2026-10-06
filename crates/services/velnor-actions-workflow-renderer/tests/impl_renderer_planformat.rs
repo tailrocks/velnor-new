@@ -1,7 +1,7 @@
 //! Plan `Format` step: insertion between staging and freshness.
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{StepKind, StepRole};
+use velnor_actions_contract_workflow::{StepKind, StepRole};
 use velnor_actions_workflow_renderer::plan_format::{FORMAT_STEP_NAME, ensure_plan_format};
 use velnor_actions_workflow_renderer::{
     CHECK_GENERATED_NAME, RenderError, checkout_step, plan_step,

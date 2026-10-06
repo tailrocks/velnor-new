@@ -45,8 +45,8 @@ fn live_proof(
     platform: &str,
     profile: &str,
     mbx: &str,
-) -> velnor_actions_contract::ManifestTaskProof {
-    velnor_actions_contract::ManifestTaskProof::new(
+) -> velnor_actions_contract_workflow::ManifestTaskProof {
+    velnor_actions_contract_workflow::ManifestTaskProof::new(
         task_id, digest, digest, graph, toolchain, mbx, platform, profile, 7,
     )
     .expect("proof")
@@ -109,7 +109,7 @@ fn live_fixture() -> (LiveFixture, ToolCatalog) {
 fn cover_with(
     fixture: &LiveFixture,
     catalog: &ToolCatalog,
-    proof: velnor_actions_contract::ManifestTaskProof,
+    proof: velnor_actions_contract_workflow::ManifestTaskProof,
 ) -> (u32, Vec<String>) {
     let rust = "stack/rust/root/clippy/default";
     let mut manifest = manifest_with(&[(rust, &fixture.live)]);
@@ -156,7 +156,10 @@ fn drifted_proofs(
     rust: &str,
     digest: &str,
     fixture: &LiveFixture,
-) -> Vec<(&'static str, velnor_actions_contract::ManifestTaskProof)> {
+) -> Vec<(
+    &'static str,
+    velnor_actions_contract_workflow::ManifestTaskProof,
+)> {
     let LiveFixture {
         graph,
         toolchain,

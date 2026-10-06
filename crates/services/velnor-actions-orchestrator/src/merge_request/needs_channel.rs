@@ -17,13 +17,13 @@
 //! The merge cannot distinguish legit regeneration from tampering;
 //! review is the trust root for the committed `needs` set.
 
-use velnor_actions_contract::JobConclusion;
+use velnor_actions_contract_workflow::JobConclusion;
 use velnor_actions_workflow_renderer::render::TASK_JOB_ID;
 
 /// Environment channel carrying the final gate's `needs` conclusions.
 pub(crate) const NEEDS_ENV: &str = "VELNOR_NEEDS_JSON";
 // The expected-inventory channel (`VELNOR_NEEDS_EXPECTED`) is the
-// contract single source [`velnor_actions_contract::NEEDS_EXPECTED_ENV`],
+// contract single source [`velnor_actions_contract_workflow::NEEDS_EXPECTED_ENV`],
 // imported by consumers directly; no local copy lives here.
 
 /// Required inventory plus observed results from the needs channel.

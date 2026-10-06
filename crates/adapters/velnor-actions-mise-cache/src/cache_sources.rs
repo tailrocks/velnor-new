@@ -12,7 +12,7 @@
 //! snapshot; crate jobs restore read-only and never save the same key.
 //! Seven jobs racing to save one immutable key is rejected by construction.
 
-use velnor_actions_contract::StepRole;
+use velnor_actions_contract_workflow::StepRole;
 use velnor_actions_mise_core::error::MiseError;
 
 /// Sufficient Cargo-home subset (relative to the owned home).

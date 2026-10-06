@@ -8,7 +8,7 @@ use super::*;
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_contract::{FinalStatus, Plan};
+use velnor_actions_contract_workflow::{FinalStatus, Plan};
 
 use crate::merge::merge_internal;
 use crate::merge_request::assemble_with_needs;
@@ -63,7 +63,7 @@ fn merge_flips_not_run_to_executed_end_to_end() {
         Some(PR_PAYLOAD),
     )
     .expect("assemble bare");
-    let verdict: velnor_actions_contract::FinalReport =
+    let verdict: velnor_actions_contract_workflow::FinalReport =
         serde_json::from_str(&merge_internal(&bare).expect("merge bare")).expect("final json");
     eprintln!(
         "e2e before: status={:?} executed={} not_run={} downloaded={:?} miss={:?}",
@@ -95,7 +95,7 @@ fn merge_flips_not_run_to_executed_end_to_end() {
         !full.contains("missing_report"),
         "all artifacts staged: {full}"
     );
-    let verdict: velnor_actions_contract::FinalReport =
+    let verdict: velnor_actions_contract_workflow::FinalReport =
         serde_json::from_str(&merge_internal(&full).expect("merge full")).expect("final json");
     eprintln!(
         "e2e after: status={:?} executed={} not_run={} downloaded={:?}",
@@ -138,7 +138,7 @@ fn merge_fails_failing_obligation_and_blocks_downstream() {
         !full.contains("missing_report"),
         "all artifacts staged: {full}"
     );
-    let verdict: velnor_actions_contract::FinalReport =
+    let verdict: velnor_actions_contract_workflow::FinalReport =
         serde_json::from_str(&merge_internal(&full).expect("merge full")).expect("final json");
     eprintln!(
         "e2e failure: status={:?} failed={} blocked={} not_run={}",
@@ -158,7 +158,7 @@ fn merge_blocks_all_skipped_noop_end_to_end() {
     let run = temp.path().join("velnor").join("local");
     for (task, obligation) in [(CLIPPY, &plan.obligations[0]), (TEST, &plan.obligations[1])] {
         let request = NoOpRequest {
-            reason: velnor_actions_contract::NotSelectedReason::NotInPlan,
+            reason: velnor_actions_contract_workflow::NotSelectedReason::NotInPlan,
             task_digest: obligation.task_digest.clone(),
         };
         write_noop_report_to("local", task, 0, &request, temp.path()).expect("noop report");
@@ -178,7 +178,7 @@ fn merge_blocks_all_skipped_noop_end_to_end() {
         !full.contains("missing_report"),
         "all artifacts staged: {full}"
     );
-    let verdict: velnor_actions_contract::FinalReport =
+    let verdict: velnor_actions_contract_workflow::FinalReport =
         serde_json::from_str(&merge_internal(&full).expect("merge full")).expect("final json");
     eprintln!(
         "e2e noop: status={:?} blocked={} not_run={}",
@@ -217,7 +217,7 @@ fn merge_lists_shared_job_artifact_once() {
         !full.contains("missing_report"),
         "sibling entries share one artifact: {full}"
     );
-    let verdict: velnor_actions_contract::FinalReport =
+    let verdict: velnor_actions_contract_workflow::FinalReport =
         serde_json::from_str(&merge_internal(&full).expect("merge")).expect("final json");
     assert_eq!(verdict.status, FinalStatus::Passed);
     assert_eq!(verdict.counts.executed, 2);
@@ -230,7 +230,8 @@ fn merge_lists_shared_job_artifact_once() {
 #[test]
 fn provider_hit_validate_execution_aggregates_executed() {
     use std::collections::BTreeMap;
-    use velnor_actions_contract::{ExecuteTaskIds, MatrixStatus, Trust, WorkflowEvent, digest_b3};
+    use velnor_actions_contract::digest_b3;
+    use velnor_actions_contract_workflow::{ExecuteTaskIds, MatrixStatus, Trust, WorkflowEvent};
     let plan = fixture_plan();
     let task_id = "stack/tofu/stacks/a/validate/default";
     let task_digest = digest_b3(b"tofu-validate-task");

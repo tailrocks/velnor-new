@@ -9,7 +9,8 @@
 use std::process::Command as StdCommand;
 
 use tempfile::TempDir;
-use velnor_actions_contract::{FinalStatus, digest_b3};
+use velnor_actions_contract::digest_b3;
+use velnor_actions_contract_workflow::FinalStatus;
 use velnor_actions_orchestrator::assemble_merge_request;
 
 use crate::impl_common::{TestResult, plan_for_source_change};
@@ -84,7 +85,13 @@ fn stage_run(
 /// Assembly plus merge verdict for one staged run directory.
 fn verdict_for(
     run: &TempDir,
-) -> Result<(serde_json::Value, velnor_actions_contract::FinalReport), Box<dyn std::error::Error>> {
+) -> Result<
+    (
+        serde_json::Value,
+        velnor_actions_contract_workflow::FinalReport,
+    ),
+    Box<dyn std::error::Error>,
+> {
     let request: serde_json::Value =
         serde_json::from_str(&assemble_merge_request("local", run.path())?)?;
     let report = merge(&request)?;

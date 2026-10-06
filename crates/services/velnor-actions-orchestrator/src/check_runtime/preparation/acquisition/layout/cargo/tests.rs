@@ -2,7 +2,7 @@
 use super::*;
 use std::fs;
 use std::time::Duration;
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     QualifiedToolArtifact, QualifiedToolExecutable, QualifiedToolProbe,
 };
 

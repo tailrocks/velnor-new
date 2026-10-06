@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_contract::{ExecuteTaskRef, MatrixStatus, TaskStatus, WorkflowEvent};
+use velnor_actions_contract_workflow::{ExecuteTaskRef, MatrixStatus, TaskStatus, WorkflowEvent};
 
 #[test]
 fn exit_codes_accept_the_eight_bit_range() {
@@ -165,7 +165,7 @@ fn failure_reports_downstream_skips_and_success_reports_none() {
     assert_eq!(task.status, TaskStatus::NotSelected);
     assert_eq!(
         task.not_selected_reason,
-        Some(velnor_actions_contract::NotSelectedReason::UpstreamFailed)
+        Some(velnor_actions_contract_workflow::NotSelectedReason::UpstreamFailed)
     );
     assert_eq!(matrix.not_selected, 1);
 

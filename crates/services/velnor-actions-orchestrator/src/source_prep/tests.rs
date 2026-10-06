@@ -1,5 +1,5 @@
 use super::*;
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract_workflow::StepKind;
 
 fn shell_parts(kind: &StepKind) -> Option<(&Vec<String>, &BTreeMap<String, String>)> {
     match kind {

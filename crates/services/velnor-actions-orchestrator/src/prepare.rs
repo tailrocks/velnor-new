@@ -3,7 +3,8 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::{RunnerImageEvidence, RunnerSelection, VelnorConfig, WorkflowPolicy};
+use velnor_actions_contract_config::{RunnerSelection, VelnorConfig, WorkflowPolicy};
+use velnor_actions_contract_release::RunnerImageEvidence;
 use velnor_actions_mise::GitRequest;
 
 use crate::OrchestratorError;

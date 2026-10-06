@@ -10,7 +10,7 @@ impl MiseToolsCacheKey {
         mise_version: &str,
         specs: &[String],
     ) -> Result<Self, RenderError> {
-        if !velnor_actions_contract::is_supported_target(target) {
+        if !velnor_actions_contract_release::is_supported_target(target) {
             return Err(RenderError::BadCommand(format!(
                 "bad_cache_target:{target}"
             )));

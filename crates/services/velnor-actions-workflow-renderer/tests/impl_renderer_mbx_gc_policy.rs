@@ -1,8 +1,8 @@
 //! Automatic MBX collection must cover setup, build, and test steps.
 
-use velnor_actions_contract::WorkflowPolicy;
-use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
-use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
+use velnor_actions_contract_config::WorkflowPolicy;
+use velnor_actions_contract_config::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
+use velnor_actions_contract_workflow::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
 use velnor_actions_workflow_renderer::steps::{MBX_CACHE_MODE_ENV, checkout_step};
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 

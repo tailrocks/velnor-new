@@ -2,16 +2,20 @@ use super::*;
 use crate::workflow::{CHECKOUT_USES, REQUEST_DIR};
 use crate::workflow_jobs::{final_job, plan_job};
 use std::collections::BTreeMap;
-use velnor_actions_contract::{Concurrency, Permissions, Trigger};
+use velnor_actions_contract_workflow::{Concurrency, Permissions, Trigger};
 use velnor_actions_workflow_renderer::render::{RenderContext, WORKFLOW_PATH};
 
 /// Assert one plan step runs under the owned fetch homes.
-fn assert_owned_homes(steps: &[Step], role: velnor_actions_contract::StepRole, name: &str) {
+fn assert_owned_homes(
+    steps: &[Step],
+    role: velnor_actions_contract_workflow::StepRole,
+    name: &str,
+) {
     let step = steps
         .iter()
         .find(|step| step.role == Some(role))
         .unwrap_or_else(|| panic!("missing {role:?} ({name})"));
-    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Shell { env, .. } = &step.kind else {
         panic!("{name} must be a shell step");
     };
     for key in ["MISE_CARGO_HOME", "MISE_RUSTUP_HOME", "RUSTUP_TOOLCHAIN"] {
@@ -61,7 +65,7 @@ fn preseed_fixture(use_mbx: bool, fetch_roots: &[String]) -> WorkflowPlan {
 }
 
 /// Bare IR shell shared by the attach fixtures.
-fn bare_ir(jobs: BTreeMap<String, velnor_actions_contract::Job>) -> WorkflowIr {
+fn bare_ir(jobs: BTreeMap<String, velnor_actions_contract_workflow::Job>) -> WorkflowIr {
     WorkflowIr {
         name: "CI".to_owned(),
         triggers: Trigger {

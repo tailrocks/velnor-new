@@ -5,7 +5,7 @@
 //! adds the validated release family. Rendering the workflow bytes stays in
 //! [`crate::render`]; this module assembles and validates the generated tree.
 
-use velnor_actions_contract::{AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET};
+use velnor_actions_contract_release::{AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET};
 
 use crate::agents_md;
 use crate::render::{ACTIONLINT_PATH, WORKFLOW_PATH};

@@ -5,9 +5,9 @@
 
 use super::*;
 
-use velnor_actions_contract::{
-    ObligationDecision, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner,
-    RunnerSelection, Trust,
+use velnor_actions_contract_config::RunnerSelection;
+use velnor_actions_contract_workflow::{
+    ObligationDecision, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, Trust,
 };
 
 /// Plan with `base`, one obligation, and a verifiable generator.

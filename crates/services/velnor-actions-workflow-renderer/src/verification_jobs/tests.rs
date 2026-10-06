@@ -1,4 +1,4 @@
-use velnor_actions_contract::{VerificationRunner, VerificationTask, VerificationTaskKind};
+use velnor_actions_contract_config::{VerificationRunner, VerificationTask, VerificationTaskKind};
 
 use super::VerificationTaskPolicy;
 use crate::MiseSetup;

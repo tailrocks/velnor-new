@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::{
+use velnor_actions_contract_planning::{
     FileIndex, build_index, build_index_from_list, is_reserved_cache_path_bytes,
 };
 use velnor_actions_mise::GitRequest;

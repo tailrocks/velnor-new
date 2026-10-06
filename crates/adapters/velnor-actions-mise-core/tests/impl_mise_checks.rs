@@ -1,5 +1,7 @@
 use std::path::PathBuf;
-use velnor_actions_contract::config::{CheckExecutor, CheckPlatform, CheckRunner, MiseCheck};
+use velnor_actions_contract_config::config::{
+    CheckExecutor, CheckPlatform, CheckRunner, MiseCheck,
+};
 use velnor_actions_mise_catalog::discovery::discover_checks;
 use velnor_actions_mise_core as mise;
 use velnor_actions_mise_core::checks::DiscoveredCheck;
@@ -132,7 +134,7 @@ fn repository_inputs_reject_escape_and_symlink_escape() -> TestResult {
 #[test]
 fn oversized_named_check_source_is_rejected_before_parsing() -> TestResult {
     let root = Fixture::new("[tasks.probe]\nrun='true'\n")?;
-    let oversized = vec![b'x'; velnor_actions_contract::MAX_CHECK_SOURCE_BYTES + 1];
+    let oversized = vec![b'x'; velnor_actions_contract_config::MAX_CHECK_SOURCE_BYTES + 1];
     std::fs::write(root.0.join("mise.toml"), oversized)?;
     assert!(root.discover("probe").is_err());
     Ok(())

@@ -3,7 +3,7 @@ use super::invalid;
 use crate::{CheckDeadline, IsolatedCommand, MiseError};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     CheckRunner, HostContainerProfile, MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES,
     MAX_CHECK_CONTAINER_PATH_BYTES, MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
 };

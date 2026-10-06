@@ -1,5 +1,5 @@
 use velnor_actions_contract::canonical::digest_b3;
-use velnor_actions_contract::config::{CheckPlatform, CheckSystemTool, CheckSystemToolKind};
+use velnor_actions_contract_config::config::{CheckPlatform, CheckSystemTool, CheckSystemToolKind};
 use velnor_actions_mise_core::checks::{
     SystemToolProof, parse_system_tool_version, validate_system_tool_proofs,
     verify_check_system_tools,

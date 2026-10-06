@@ -1,5 +1,6 @@
 use velnor_actions_contract::cachekey::mbx_cache_generation;
-use velnor_actions_contract::{Step, StepKind, WorkflowPolicy};
+use velnor_actions_contract_config::WorkflowPolicy;
+use velnor_actions_contract_workflow::{Step, StepKind};
 use velnor_actions_workflow_renderer::steps::{
     CompileDriver, MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, mbx_steps_for_driver,
 };

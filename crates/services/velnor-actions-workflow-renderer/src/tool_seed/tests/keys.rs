@@ -1,7 +1,7 @@
 use super::super::*;
 use super::{CHECKOUT, SETUP_USES, TARGET, cache_key};
 use std::collections::BTreeMap;
-use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 
 #[test]
 fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
@@ -127,7 +127,7 @@ fn job(steps: Vec<Step>) -> Job {
     Job {
         display_name: "Seed fixture".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
-        timeout_minutes: velnor_actions_contract::JobTimeout::PLAN,
+        timeout_minutes: velnor_actions_contract_workflow::JobTimeout::PLAN,
         needs: Vec::new(),
         condition: None,
         permissions: None,

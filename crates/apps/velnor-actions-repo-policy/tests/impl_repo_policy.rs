@@ -30,11 +30,15 @@ mod p12_policy_b;
 mod p12_upstream;
 
 /// Expected member directories (package name is the leaf).
-pub(crate) const MEMBERS: [&str; 16] = [
+pub(crate) const MEMBERS: [&str; 20] = [
     "crates/adapters/velnor-actions-actionlint",
     "crates/apps/velnor-actions-cli",
     "crates/apps/velnor-actions-repo-policy",
     "crates/core/velnor-actions-contract",
+    "crates/core/velnor-actions-contract-config",
+    "crates/core/velnor-actions-contract-planning",
+    "crates/core/velnor-actions-contract-release",
+    "crates/core/velnor-actions-contract-workflow",
     "crates/adapters/velnor-actions-mise",
     "crates/adapters/velnor-actions-mise-cache",
     "crates/adapters/velnor-actions-mise-catalog",
@@ -245,12 +249,9 @@ fn velnor_name_never_published() -> Result<(), Box<dyn Error>> {
 #[test]
 fn toolchain_edition_and_resolver() -> Result<(), Box<dyn Error>> {
     for workspace in WORKSPACE_ROOTS {
-        let path = if workspace.is_empty() {
-            "Cargo.toml".to_owned()
-        } else {
-            format!("{workspace}/Cargo.toml")
-        };
-        let root = read(&path)?;
+        let path = format!("{workspace}/Cargo.toml");
+        let path = path.trim_start_matches('/');
+        let root = read(path)?;
         assert!(root.contains("edition = \"2024\""), "{path}");
         assert!(root.contains("resolver = \"3\""), "{path}");
         assert!(root.contains("rust-version = \"1.98\""), "{path}");
@@ -269,12 +270,9 @@ fn rust_version_tracks_toolchain() -> Result<(), Box<dyn Error>> {
     let catalog = quoted_value(&catalog_src, "RUST_VERSION")?;
     let mise = quoted_value(&read("mise.toml")?, "rust = ")?;
     for workspace_root in WORKSPACE_ROOTS {
-        let path = if workspace_root.is_empty() {
-            "Cargo.toml".to_owned()
-        } else {
-            format!("{workspace_root}/Cargo.toml")
-        };
-        let workspace = quoted_value(&read(&path)?, "rust-version")?;
+        let path = format!("{workspace_root}/Cargo.toml");
+        let path = path.trim_start_matches('/');
+        let workspace = quoted_value(&read(path)?, "rust-version")?;
         assert_eq!(minor(&workspace), minor(&catalog), "{path} catalog drift");
         assert_eq!(minor(&workspace), minor(&mise), "{path} mise drift");
     }

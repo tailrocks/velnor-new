@@ -1,6 +1,6 @@
 //! Runner-observed event resolution shared by plan and merge.
 
-use velnor_actions_contract::WorkflowEvent;
+use velnor_actions_contract_workflow::WorkflowEvent;
 
 use crate::OrchestratorError;
 use crate::internal::internal;

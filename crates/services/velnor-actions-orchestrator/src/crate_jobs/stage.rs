@@ -13,7 +13,9 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, ProposedTask, Stack};
+use velnor_actions_contract::Stack;
+use velnor_actions_contract_planning::ProposedTask;
+use velnor_actions_contract_workflow::Job;
 use velnor_actions_rust::tool_needs;
 
 /// Tool needs backing one task's driver/runner selection.

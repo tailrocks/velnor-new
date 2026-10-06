@@ -161,7 +161,7 @@ fn strictness_identifiers_are_newtypes() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn strictness_proofs_need_validating_constructors() -> Result<(), Box<dyn Error>> {
-    let baseline = read("crates/core/velnor-actions-contract/src/workflow/baseline.rs")?;
+    let baseline = read("crates/core/velnor-actions-contract-workflow/src/workflow/baseline.rs")?;
     for marker in [
         "pub fn new(",
         "pub fn used(",
@@ -188,7 +188,7 @@ fn strictness_proofs_need_validating_constructors() -> Result<(), Box<dyn Error>
     ] {
         assert!(!baseline.contains(field), "forgable field {field}");
     }
-    let cache_ids = read("crates/core/velnor-actions-contract/src/workflow/cache_ids.rs")?;
+    let cache_ids = read("crates/core/velnor-actions-contract-workflow/src/workflow/cache_ids.rs")?;
     assert!(
         cache_ids.contains("pub fn new("),
         "cache ids lack a constructor"
@@ -199,11 +199,17 @@ fn strictness_proofs_need_validating_constructors() -> Result<(), Box<dyn Error>
 
 #[test]
 fn strictness_no_proof_literals_anywhere() -> Result<(), Box<dyn Error>> {
-    let mut files = tree_files("crates/core/velnor-actions-contract/src", "rs")?;
-    files.extend(tree_files(
-        "crates/core/velnor-actions-contract/tests",
-        "rs",
-    )?);
+    let mut files = Vec::new();
+    for dir in [
+        "crates/core/velnor-actions-contract",
+        "crates/core/velnor-actions-contract-config",
+        "crates/core/velnor-actions-contract-planning",
+        "crates/core/velnor-actions-contract-release",
+        "crates/core/velnor-actions-contract-workflow",
+    ] {
+        files.extend(tree_files(&format!("{dir}/src"), "rs")?);
+        files.extend(tree_files(&format!("{dir}/tests"), "rs")?);
+    }
     files.extend(tree_files(
         "crates/services/velnor-actions-orchestrator/src",
         "rs",
@@ -247,7 +253,7 @@ fn strictness_no_proof_literals_anywhere() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn strictness_resource_bounds_reject_zero() -> Result<(), Box<dyn Error>> {
-    let graph = read("crates/core/velnor-actions-contract/src/graph.rs")?;
+    let graph = read("crates/core/velnor-actions-contract-planning/src/graph.rs")?;
     for name in ["CpuMilli", "MemoryMb"] {
         assert!(
             graph.contains(&format!("pub struct {name}(u32);")),
@@ -279,7 +285,7 @@ fn strictness_documents_have_size_bound() -> Result<(), Box<dyn Error>> {
     }
     let errors = read("crates/core/velnor-actions-contract/src/errors.rs")?;
     assert!(errors.contains("DocumentTooLarge"), "no oversize variant");
-    let manifest = read("crates/core/velnor-actions-contract/src/manifest.rs")?;
+    let manifest = read("crates/core/velnor-actions-contract-release/src/manifest.rs")?;
     assert!(
         manifest.contains("fn parse_json_with_limit"),
         "no manifest override"
@@ -289,7 +295,7 @@ fn strictness_documents_have_size_bound() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn strictness_matrix_agreement_uses_strict_boundary() -> Result<(), Box<dyn Error>> {
-    let artifacts = read("crates/core/velnor-actions-contract/src/workflow/artifacts.rs")?;
+    let artifacts = read("crates/core/velnor-actions-contract-workflow/src/workflow/artifacts.rs")?;
     assert!(
         artifacts.contains("parse_strict_json_bytes"),
         "lenient matrix parse"
@@ -348,11 +354,11 @@ fn strictness_negative_coverage_pinned() -> Result<(), Box<dyn Error>> {
             "nesting_budget_counts_objects_and_mixed_shapes",
         ),
         (
-            "crates/core/velnor-actions-contract/src/workflow/artifacts/tests.rs",
+            "crates/core/velnor-actions-contract-workflow/src/workflow/artifacts/tests.rs",
             "agreement_rejects_duplicate_keys",
         ),
         (
-            "crates/core/velnor-actions-contract/src/workflow/cache_ids/tests.rs",
+            "crates/core/velnor-actions-contract-workflow/src/workflow/cache_ids/tests.rs",
             "cache_ids_need_five_valid_digests",
         ),
         (

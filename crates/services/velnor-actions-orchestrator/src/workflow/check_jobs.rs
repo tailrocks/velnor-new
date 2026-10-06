@@ -2,10 +2,10 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::config::{CheckExecutor, EPHEMERAL_CHECK_ADMISSION_CONDITION};
-use velnor_actions_contract::{
+use velnor_actions_contract_config::WorkflowPolicy;
+use velnor_actions_contract_config::config::{CheckExecutor, EPHEMERAL_CHECK_ADMISSION_CONDITION};
+use velnor_actions_contract_workflow::{
     Job, JobTimeout, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, Permissions, Step,
-    WorkflowPolicy,
 };
 use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;

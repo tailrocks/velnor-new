@@ -1,6 +1,6 @@
 //! Pre-seed strict closure gates: staged acceptance, gap rejection.
 
-use velnor_actions_contract::WorkflowPolicy;
+use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_workflow_renderer::{
     PRESEED_STAGE_NAME, PRESEED_VERIFY_MANIFEST_NAME, RenderError, render_workflow_ir_strict,
 };

@@ -1,6 +1,6 @@
 //! Exact top-level workflow policy checks shared by render entrypoints.
 
-use velnor_actions_contract::{Concurrency, Trigger, WorkflowIr};
+use velnor_actions_contract_workflow::{Concurrency, Trigger, WorkflowIr};
 
 use crate::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, RenderError, VerificationTaskPolicy,
@@ -45,14 +45,14 @@ pub(crate) fn check_single_label(
 ) -> Result<(), RenderError> {
     for (id, job) in &ir.jobs {
         if let Some(runner) = &job.check_runner {
-            let scale_set = velnor_actions_contract::RunsOn::parse(&job.runs_on)
+            let scale_set = velnor_actions_contract_config::RunsOn::parse(&job.runs_on)
                 .is_ok_and(|selector| selector.is_scale_set());
             let valid_placement = if scale_set {
-                runner.platform == velnor_actions_contract::CheckPlatform::LinuxX64
-                    && runner.executor == velnor_actions_contract::CheckExecutor::Hosted
+                runner.platform == velnor_actions_contract_config::CheckPlatform::LinuxX64
+                    && runner.executor == velnor_actions_contract_config::CheckExecutor::Hosted
                     && job.condition.as_deref()
                         == Some(
-                            velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION,
+                            velnor_actions_contract_config::config::EPHEMERAL_CHECK_ADMISSION_CONDITION,
                         )
             } else {
                 runner.label == job.runs_on
@@ -69,7 +69,7 @@ pub(crate) fn check_single_label(
                 .map(|task| task.runner_label.as_str());
             if job.runs_on != label
                 && task_label != Some(job.runs_on.as_str())
-                && !velnor_actions_contract::RunsOn::parse(&job.runs_on)
+                && !velnor_actions_contract_config::RunsOn::parse(&job.runs_on)
                     .is_ok_and(|selector| selector.is_scale_set())
             {
                 return Err(RenderError::InvalidWorkflow(format!("label_mismatch:{id}")));

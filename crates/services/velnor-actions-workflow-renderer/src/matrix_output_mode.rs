@@ -1,7 +1,7 @@
 //! Typed marker for plans whose matrix becomes a GitHub job output.
 
 use crate::{RenderError, matrix::matrix_invalid, yaml::Yaml};
-use velnor_actions_contract::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
+use velnor_actions_contract_workflow::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
 
 /// Mark the plan step when its matrix is promoted to a job output.
 pub(crate) fn mark_dynamic_matrix_output_mode(

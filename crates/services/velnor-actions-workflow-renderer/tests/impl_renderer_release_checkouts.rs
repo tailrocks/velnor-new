@@ -3,7 +3,7 @@ use crate::impl_renderer_release_gates::{
     FORGE_ENV, SHA, binding, checkout, gated_spec, invalid, policy_checkout, publish_argv, shell,
     source_checkout, with_steps,
 };
-use velnor_actions_contract::Step;
+use velnor_actions_contract_workflow::Step;
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::release_gates::check_release_jobs;
 use velnor_actions_workflow_renderer::release_tree::RELEASE_CONFIG_PATH;

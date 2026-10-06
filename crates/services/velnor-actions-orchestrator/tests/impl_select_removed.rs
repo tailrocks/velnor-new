@@ -66,7 +66,7 @@ fn write_nested_manifest(root: &Path, members: &[&str]) -> TestResult {
 /// Root tasks carry the workspace directory (`stack/rust/rust/...`)
 /// instead of the package name, with one fewer path segment than
 /// member tasks.
-fn reasons_for_root(plan: &velnor_actions_contract::Plan) -> Vec<&str> {
+fn reasons_for_root(plan: &velnor_actions_contract_workflow::Plan) -> Vec<&str> {
     let reasons: Vec<&str> = plan
         .obligations
         .iter()

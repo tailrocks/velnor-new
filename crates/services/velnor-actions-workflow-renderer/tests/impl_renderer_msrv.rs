@@ -1,6 +1,6 @@
 //! Per-crate MSRV: rust-version tool, --locked, PR exclusion.
 use std::collections::BTreeMap;
-use velnor_actions_contract::StepRole;
+use velnor_actions_contract_workflow::StepRole;
 use velnor_actions_workflow_renderer::msrv::{MsrvSpec, msrv_job, msrv_step};
 use velnor_actions_workflow_renderer::{RenderError, checkout_step, plan_step, shell_step};
 

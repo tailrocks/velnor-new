@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use super::super::share_lanes;
 use super::{ctx, echo_step, paired, render_jobs, workflow_ir};
 use crate::tofu_cache::{TOFU_PROVIDER_ADMISSION_USES, tofu_providers_save_step};
-use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
+use velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION;
+use velnor_actions_contract_workflow::{Step, StepId, StepKind, StepRole};
 
 const CAP: usize = 500_000;
 const LOGICAL_JOBS: usize = 21;
@@ -117,7 +118,7 @@ fn paired_tofu_restore_output_owner_stays_in_outer_job_scope() {
     };
     let mut jobs = paired(&[echo_step(0, "shared-prelude"), restore, consumer]);
     let mut save = tofu_providers_save_step().expect("provider save step");
-    save.condition = Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
+    save.condition = Some(CACHE_SAVE_CONDITION.to_owned());
     jobs.get_mut("rust-0__hosted")
         .expect("hosted owner")
         .steps

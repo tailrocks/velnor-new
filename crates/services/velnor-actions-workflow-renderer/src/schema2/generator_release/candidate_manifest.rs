@@ -5,7 +5,7 @@ use crate::yaml::Yaml;
 use super::super::features::{base, finish};
 use super::GeneratorReleasePins;
 use super::{assets, manifest, workflow_steps};
-use velnor_actions_contract::ReleaseTarget;
+use velnor_actions_contract_release::ReleaseTarget;
 
 /// Build and upload the canonical manifest consumed by qualification and attestation.
 pub(super) fn job(

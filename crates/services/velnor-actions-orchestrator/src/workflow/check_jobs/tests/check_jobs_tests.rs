@@ -121,7 +121,7 @@ fn generic_registry_id_generates_without_catalog_fallback_and_keeps_plan_identit
             artifact.url = artifact.url.replace(&old_version, &declared.version);
         }
         platform.executables[0].probe =
-            velnor_actions_contract::config::QualifiedToolProbe::Version {
+            velnor_actions_contract_config::config::QualifiedToolProbe::Version {
                 expected: "gh version 2.101.0".into(),
             };
     }
@@ -235,7 +235,7 @@ fn native_check_without_catalog_tools_adds_no_rust_install() {
 
 #[test]
 fn ignored_rust_candidate_keeps_plan_inventory_toolchain() {
-    use velnor_actions_contract::{DetectedProject, DetectionStatus};
+    use velnor_actions_contract_planning::{DetectedProject, DetectionStatus};
     let (root, mut discovery) = fixture(&[]);
     discovery.statuses.push(DetectionStatus::Ignored {
         project: DetectedProject {

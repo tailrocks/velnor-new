@@ -8,12 +8,12 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{
+use velnor_actions_contract_config::{ValidatorKind, VelnorSupportWorkflow, WorkflowPolicy};
+use velnor_actions_contract_workflow::{
     CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
-    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ValidatorKind, VelnorSupportWorkflow, WorkflowIr,
-    WorkflowPolicy,
+    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, WorkflowIr,
 };
 
 use crate::{
@@ -33,7 +33,7 @@ pub use crate::setup::MiseSetup;
 /// Generated workflow path inside the repository.
 ///
 /// Alias of the contract's [`CI_WORKFLOW_PATH`]: the migration plan
-/// ([`velnor_actions_contract::RequiredCheckMigration`]) and the
+/// ([`velnor_actions_contract_workflow::RequiredCheckMigration`]) and the
 /// emitted tree share one source of truth, never retyped mirrors.
 pub const WORKFLOW_PATH: &str = CI_WORKFLOW_PATH;
 /// Generated actionlint config path inside the repository.
@@ -127,7 +127,7 @@ pub struct CandidateSpec {
 
 pub use crate::lane_share::RenderedWorkflow;
 pub use crate::tree::{RenderedFile, RenderedSymlink, RenderedTree};
-pub use velnor_actions_contract::{AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET};
+pub use velnor_actions_contract_release::{AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET};
 
 impl RenderContext {
     /// Validate every context scalar before rendering.

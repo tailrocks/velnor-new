@@ -224,7 +224,7 @@ fn bridge_label(input: &ActionlintConfigInput) -> Result<Option<String>, Actionl
             label: String::new(),
         });
     };
-    if !velnor_actions_contract::config::RUNNER_LABEL_CATALOG.contains(&label.as_str()) {
+    if !velnor_actions_contract_release::targets::RUNNER_LABEL_CATALOG.contains(&label.as_str()) {
         return Err(ActionlintError::InvalidRunnerLabel { label });
     }
     Ok(Some(label))

@@ -10,7 +10,8 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::{ContractError, Finding, digest_b3};
+use velnor_actions_contract::{ContractError, digest_b3};
+use velnor_actions_contract_release::Finding;
 
 use crate::family::LOCKFILE_NAME;
 use crate::file_cache::FileCache;

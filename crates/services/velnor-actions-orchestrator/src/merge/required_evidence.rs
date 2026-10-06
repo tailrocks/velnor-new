@@ -16,7 +16,7 @@
 use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
-use velnor_actions_contract::{
+use velnor_actions_contract_workflow::{
     FinalReport, JobConclusion, ObligationDecision, Plan, RequiredJobResult,
 };
 
@@ -47,7 +47,7 @@ pub(crate) struct BaselineTaskEntry {
     pub(crate) external_data: Option<crate::external_data::ExternalDataFreshness>,
     /// Structured task proof, when the publisher recorded one (PAR-5.3).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) proof: Option<velnor_actions_contract::ManifestTaskProof>,
+    pub(crate) proof: Option<velnor_actions_contract_workflow::ManifestTaskProof>,
 }
 
 /// Trusted `baseline.json`: minimum shape plus artifact binding.

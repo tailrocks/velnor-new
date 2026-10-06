@@ -2,7 +2,8 @@
 use super::*;
 
 use std::fs;
-use velnor_actions_contract::{FinalStatus, Plan, canonical_json_bytes};
+use velnor_actions_contract::canonical_json_bytes;
+use velnor_actions_contract_workflow::{FinalStatus, Plan};
 
 fn staged(with_proof: bool) -> (tempfile::TempDir, Plan) {
     staged_with_envelope(with_proof, &[], &[], None, None)

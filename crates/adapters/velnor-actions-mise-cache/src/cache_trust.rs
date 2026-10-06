@@ -139,7 +139,7 @@ pub fn authorize_trusted_save_for(pr_save_supported: bool) -> Result<&'static st
     {
         return Err(contract("save_policy_drift:allowlist"));
     }
-    let gate = velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
+    let gate = velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION;
     if !gate.contains("success()") {
         return Err(contract("save_gate_missing_success"));
     }

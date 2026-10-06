@@ -165,7 +165,7 @@ mod prepare;
 
 #[test]
 fn v1_registers_three_stacks_and_detects_rust_and_tofu() {
-    use velnor_actions_contract::VelnorConfig;
+    use velnor_actions_contract_config::VelnorConfig;
     use velnor_actions_orchestrator::decisions::{DetectorInfo, detector_registry};
     assert_eq!(VelnorConfig::REGISTERED_STACKS, &["mise", "rust", "tofu"]);
     assert_eq!(
@@ -235,7 +235,7 @@ fn suggestions_are_never_executed() -> TestResult {
 /// `TaskStatus` variants in declaration order.
 fn task_status_variants() -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../core/velnor-actions-contract/src/workflow/report.rs");
+        .join("../../core/velnor-actions-contract-workflow/src/workflow/report.rs");
     let text = std::fs::read_to_string(&path)?;
     let mut variants = Vec::new();
     let mut in_enum = false;
@@ -305,7 +305,7 @@ fn nonzero_retries_rejected_while_retry_state_absent() -> TestResult {
     let extra = serde_json::json!({"limits": {"compiler_budget": 2, "test_budget": 2, "max_parallel": 2, "capacity": 8, "shards": 1, "retries": 1}});
     assert_eq!(
         merge_status(&plan, &reports, &[], &extra)?,
-        velnor_actions_contract::FinalStatus::PlanningFailed
+        velnor_actions_contract_workflow::FinalStatus::PlanningFailed
     );
     Ok(())
 }

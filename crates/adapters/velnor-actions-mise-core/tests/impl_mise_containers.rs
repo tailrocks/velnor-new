@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     CheckExecutor, CheckPlatform, CheckRunner, ContainerPlatform, DaemonIdentityPolicy,
     HostContainerProfile, HostDockerCli, HostDockerDaemon,
 };

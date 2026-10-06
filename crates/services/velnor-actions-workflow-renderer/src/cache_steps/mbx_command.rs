@@ -1,6 +1,6 @@
 //! Narrow recognition of actual MBX command positions in rendered steps.
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract_workflow::{Step, StepKind};
 
 const MISE_PREFIX: [&str; 5] = ["mise", "--no-config", "--no-env", "--no-hooks", "exec"];
 const REPORT_WRAPPER_PREFIX: &str = "s=$(date +%s%3N); ";

@@ -15,9 +15,12 @@ pub(crate) mod named_checks;
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    ContractError, EntryCacheIds, ExecuteTaskIds, ExecuteTaskRef, PlanGenerator, PlanPackage,
-    ProposedTask, Stack, StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity, TaskInput,
-    VcsInputs, component_id_for_unit, digest_b3, input_digest,
+    ContractError, Stack, StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity,
+    TaskInput, VcsInputs, digest_b3, input_digest,
+};
+use velnor_actions_contract_planning::{ProposedTask, component_id_for_unit};
+use velnor_actions_contract_workflow::{
+    EntryCacheIds, ExecuteTaskIds, ExecuteTaskRef, PlanGenerator, PlanPackage,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_rust::entry_metadata_for_task;

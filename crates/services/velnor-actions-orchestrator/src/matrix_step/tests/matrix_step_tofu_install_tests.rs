@@ -8,7 +8,9 @@ use super::*;
 
 use crate::clippy_groups::ClippyMemoryPlan;
 use crate::discover::Discovery;
-use velnor_actions_contract::{Job, ProposedTask, WorkflowPolicy};
+use velnor_actions_contract_config::WorkflowPolicy;
+use velnor_actions_contract_planning::ProposedTask;
+use velnor_actions_contract_workflow::Job;
 use velnor_actions_rust::{TaskGroup, TaskKind};
 use velnor_actions_rust_core::{CompileDriver, NextestProfile, TestRunner};
 
@@ -73,7 +75,7 @@ fn prepare_run(job: &Job) -> Vec<String> {
         .iter()
         .find(|step| step.name == PREPARE_PINNED_TOOLS_STEP)
         .expect("prepare step");
-    let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Shell { run, .. } = &step.kind else {
         panic!("prepare must be a shell step");
     };
     run.clone()

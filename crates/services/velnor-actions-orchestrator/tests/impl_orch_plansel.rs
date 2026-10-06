@@ -8,7 +8,7 @@ use serde_json::Value as Json;
 use std::fs;
 use std::path::Path;
 use tempfile::TempDir;
-use velnor_actions_contract::{FinalStatus, MatrixReport, Plan};
+use velnor_actions_contract_workflow::{FinalStatus, MatrixReport, Plan};
 use velnor_actions_orchestrator::{baseline_artifact_numeric_id, merge_internal, plan_internal};
 
 /// Git repo with workspace `members` plus path `deps` as (from, to, table).
@@ -198,7 +198,7 @@ pub(crate) fn shard_plan() -> Result<(Plan, String, String, String), Box<dyn std
     let entry = plan.matrix.include.first_mut().ok_or("missing entry")?;
     entry.execute_task_ids.tasks = std::collections::BTreeMap::from([(
         "nextest".to_owned(),
-        velnor_actions_contract::ExecuteTaskRef::Shards(ids.clone()),
+        velnor_actions_contract_workflow::ExecuteTaskRef::Shards(ids.clone()),
     )]);
     plan.validate()?;
     let input = plan
@@ -264,7 +264,7 @@ pub(crate) fn merge_status(
         request[key] = value.clone();
     }
     Ok(
-        serde_json::from_str::<velnor_actions_contract::FinalReport>(&merge_internal(
+        serde_json::from_str::<velnor_actions_contract_workflow::FinalReport>(&merge_internal(
             &request.to_string(),
         )?)?
         .status,

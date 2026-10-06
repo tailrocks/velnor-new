@@ -5,7 +5,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::Path;
-use velnor_actions_contract::config::QualifiedToolPlatform;
+use velnor_actions_contract_config::config::QualifiedToolPlatform;
 use velnor_actions_mise::CheckDeadline;
 
 #[derive(Deserialize)]

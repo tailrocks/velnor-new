@@ -8,7 +8,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::Job;
+use velnor_actions_contract_workflow::Job;
 
 use crate::RenderError;
 

@@ -72,7 +72,7 @@ fn lock_text() -> Result<String, Box<dyn std::error::Error>> {
     use std::fmt::Write as _;
     let version = env!("CARGO_PKG_VERSION");
     let mut bins = String::new();
-    for target in velnor_actions_contract::SUPPORTED_TARGETS {
+    for target in velnor_actions_contract_release::SUPPORTED_TARGETS {
         write!(
             bins,
             "[[generator.binaries]]\ntarget = \"{target}\"\nartifact = \"https://example.invalid/r/{target}\"\nsha256 = \"{}\"\n",

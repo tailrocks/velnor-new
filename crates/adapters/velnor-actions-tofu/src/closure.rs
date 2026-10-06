@@ -9,9 +9,10 @@
 use std::path::Path;
 
 use velnor_actions_contract::{
-    ClosureBuilder, ContractError, ProposedTask, Provenance, TaskInputClosure,
-    canonical_json_bytes, digest_b3, normalize_posix_path,
+    ClosureBuilder, ContractError, Provenance, TaskInputClosure, canonical_json_bytes, digest_b3,
+    normalize_posix_path,
 };
+use velnor_actions_contract_planning::ProposedTask;
 
 use crate::closure_inputs::{modules_provenance, varfiles_provenance};
 use velnor_actions_tofu_core::effective::effective_set;

@@ -2,8 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::WorkflowPolicy;
-use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
+use velnor_actions_contract_config::WorkflowPolicy;
+use velnor_actions_contract_config::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
 use velnor_actions_workflow_renderer::shell_step;
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 

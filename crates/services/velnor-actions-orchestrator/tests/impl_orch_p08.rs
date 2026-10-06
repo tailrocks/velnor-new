@@ -6,7 +6,7 @@
 
 use std::fs;
 
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract_workflow::StepKind;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
@@ -243,7 +243,7 @@ fn c10_only_plan_saves_producer_successful_deltas() -> TestResult {
 
 #[test]
 fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
-    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
+    use velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION;
     // IR: exactly one save step (plan writer), carrying the push-only gate;
     // every other plan step (restores, fetch, obligations) stays ungated.
     let repo = make_repo(config_with_branch())?;

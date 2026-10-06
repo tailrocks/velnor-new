@@ -12,7 +12,7 @@ pub(crate) mod tofu_perf_fixtures_t24;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::{Job, StepKind};
+use velnor_actions_contract_workflow::{Job, StepKind};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{
     GenerateOptions, finalized_jobs, generate, plan_internal, prepare,

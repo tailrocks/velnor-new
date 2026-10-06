@@ -16,7 +16,7 @@
 //! well-formed requests never reach this fallback.
 
 use serde::Deserialize;
-use velnor_actions_contract::{RequiredJobResult, WorkflowEvent};
+use velnor_actions_contract_workflow::{RequiredJobResult, WorkflowEvent};
 
 use super::MergeRequest;
 use crate::cover::shard::{ResourceLimits, ShardProof};

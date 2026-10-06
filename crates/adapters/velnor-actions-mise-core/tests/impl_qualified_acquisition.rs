@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use velnor_actions_contract::config::*;
+use velnor_actions_contract_config::config::*;
 use velnor_actions_mise_catalog::discovery::discover_checks;
 use velnor_actions_mise_core::{self as mise, checks::CheckCapabilityProof};
 type TestResult = Result<(), Box<dyn std::error::Error>>;

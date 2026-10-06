@@ -1,9 +1,10 @@
 //! Regression test E: candidate never plans; lock matches catalog per target.
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{
-    Concurrency, Job, JobTimeout, Permissions, SUPPORTED_TARGETS, Step, Trigger, WorkflowIr,
-    WorkflowPolicy,
+use velnor_actions_contract_config::WorkflowPolicy;
+use velnor_actions_contract_release::SUPPORTED_TARGETS;
+use velnor_actions_contract_workflow::{
+    Concurrency, Job, JobTimeout, Permissions, Step, Trigger, WorkflowIr,
 };
 use velnor_actions_mise::catalog::lock::{
     parse_generator_lock, parse_release_manifest, verify_lock_against_manifest,
@@ -36,7 +37,7 @@ fn lock_text(sha: &str) -> String {
 }
 
 fn manifest_text(sha: &str) -> String {
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
+    let targets = velnor_actions_contract_release::SUPPORTED_TARGETS
         .iter()
         .map(|t| format!("{{\"target\":\"{t}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{GENERATOR_VERSION}/velnor-actions-{GENERATOR_VERSION}-{t}\",\"sha256\":\"{sha}\"}}"))
         .collect::<Vec<_>>()

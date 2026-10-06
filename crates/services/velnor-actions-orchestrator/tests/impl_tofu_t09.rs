@@ -51,8 +51,8 @@ fn configured_roots_convert_to_selected_projects() -> TestResult {
         .statuses
         .iter()
         .filter_map(|status| match status {
-            velnor_actions_contract::DetectionStatus::Selected(project) => Some(project),
-            velnor_actions_contract::DetectionStatus::Ignored { .. } => None,
+            velnor_actions_contract_planning::DetectionStatus::Selected(project) => Some(project),
+            velnor_actions_contract_planning::DetectionStatus::Ignored { .. } => None,
         })
         .collect();
     assert_eq!(selected.len(), 1, "one tofu project selected");
@@ -306,7 +306,7 @@ fn multiroot_converts_with_sorted_plan_line() -> TestResult {
         .filter(|status| {
             matches!(
                 status,
-                velnor_actions_contract::DetectionStatus::Selected(_)
+                velnor_actions_contract_planning::DetectionStatus::Selected(_)
             )
         })
         .count();

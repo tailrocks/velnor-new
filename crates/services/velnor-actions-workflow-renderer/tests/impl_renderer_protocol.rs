@@ -1,7 +1,8 @@
 //! Event-time protocol rendering: write-request/plan/merge env wiring.
 use std::collections::BTreeMap;
-use velnor_actions_contract::{
-    Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr, WorkflowPolicy,
+use velnor_actions_contract_config::WorkflowPolicy;
+use velnor_actions_contract_workflow::{
+    Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr,
 };
 use velnor_actions_workflow_renderer::steps::{
     WRITE_REQUEST_OPERATION, download_artifact_step, write_request_step,
@@ -35,7 +36,7 @@ fn fixture_ctx() -> RenderContext {
     }
 }
 
-fn fixture_ir(steps: Vec<velnor_actions_contract::Step>) -> WorkflowIr {
+fn fixture_ir(steps: Vec<velnor_actions_contract_workflow::Step>) -> WorkflowIr {
     let mut jobs = BTreeMap::new();
     jobs.insert(
         "plan".to_owned(),

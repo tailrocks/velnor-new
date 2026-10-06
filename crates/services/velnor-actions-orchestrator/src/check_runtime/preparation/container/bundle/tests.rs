@@ -6,7 +6,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use tempfile::TempDir;
-use velnor_actions_contract::config::HostOrbStackSdk;
+use velnor_actions_contract_config::config::HostOrbStackSdk;
 
 fn fixture() -> (TempDir, PathBuf, HostOrbStackSdk, PathBuf) {
     let temp = tempfile::tempdir().expect("temp");

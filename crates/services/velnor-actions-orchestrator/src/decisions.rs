@@ -17,10 +17,11 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use velnor_actions_contract::{
-    CacheLayer, CacheOutcome, CacheResult, ContractError, NotSelectedReason, ObligationDecision,
-    RunnerImageEvidence, Stack, TaskReport, TaskStatus, Trust, WorkflowEvent, join_runner_temp,
-    task_report_id_for_task, validate_run_key,
+use velnor_actions_contract::{ContractError, Stack, task_report_id_for_task, validate_run_key};
+use velnor_actions_contract_release::RunnerImageEvidence;
+use velnor_actions_contract_workflow::{
+    CacheLayer, CacheOutcome, CacheResult, NotSelectedReason, ObligationDecision, TaskReport,
+    TaskStatus, Trust, WorkflowEvent, join_runner_temp,
 };
 use velnor_actions_rust_core::SelectionBroadening;
 

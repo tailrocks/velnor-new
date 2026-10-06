@@ -1,7 +1,7 @@
 //! Staged-report verdict tests: assembly tokens reach the merge verdict.
 
 use serde_json::json;
-use velnor_actions_contract::FinalStatus;
+use velnor_actions_contract_workflow::FinalStatus;
 use velnor_actions_orchestrator::{assemble_merge_request, merge_internal};
 
 use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
@@ -9,7 +9,7 @@ use crate::impl_merge::task_reports_for;
 
 /// Staged run directory with `plan.json` plus `matrix.json` written.
 fn stage_run(
-    plan: &velnor_actions_contract::Plan,
+    plan: &velnor_actions_contract_workflow::Plan,
 ) -> Result<(tempfile::TempDir, std::path::PathBuf), Box<dyn std::error::Error>> {
     let dir = tempfile::TempDir::new()?;
     let run = dir.path().join("run");
@@ -25,8 +25,8 @@ fn stage_run(
 /// Created leg directory for one matrix report.
 fn leg_for(
     run: &std::path::Path,
-    plan: &velnor_actions_contract::Plan,
-    report: &velnor_actions_contract::MatrixReport,
+    plan: &velnor_actions_contract_workflow::Plan,
+    report: &velnor_actions_contract_workflow::MatrixReport,
 ) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
     let entry = plan
         .matrix
@@ -46,7 +46,7 @@ fn leg_for(
 fn merge_staged(
     value: &mut serde_json::Value,
     errors: Vec<serde_json::Value>,
-) -> Result<velnor_actions_contract::FinalReport, Box<dyn std::error::Error>> {
+) -> Result<velnor_actions_contract_workflow::FinalReport, Box<dyn std::error::Error>> {
     value["required_job_ids"] = json!(["plan"]);
     value["required_jobs"] = json!([{"job_id": "plan", "conclusion": "success"}]);
     value["assembly_errors"] = serde_json::Value::Array(
@@ -60,7 +60,7 @@ fn merge_staged(
 }
 
 /// Assert one `planning_failed` verdict carrying the corruption token.
-fn assert_corrupt(report: &velnor_actions_contract::FinalReport) -> TestResult {
+fn assert_corrupt(report: &velnor_actions_contract_workflow::FinalReport) -> TestResult {
     report.validate()?;
     assert_eq!(report.status, FinalStatus::PlanningFailed);
     assert!(
@@ -221,7 +221,7 @@ fn shape_malformed_attestation_diagnoses_planning_failed() -> TestResult {
 /// missing its typed ID so assembly passes it through silently.
 fn stage_task_files(
     run: &std::path::Path,
-    plan: &velnor_actions_contract::Plan,
+    plan: &velnor_actions_contract_workflow::Plan,
     tasks: &[serde_json::Value],
 ) -> TestResult {
     for (index, task) in tasks.iter().enumerate() {

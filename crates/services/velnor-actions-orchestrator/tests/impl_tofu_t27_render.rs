@@ -13,7 +13,7 @@ use std::path::Path;
 
 use serde_json::json;
 use tempfile::TempDir;
-use velnor_actions_contract::{FinalStatus, Plan};
+use velnor_actions_contract_workflow::{FinalStatus, Plan};
 use velnor_actions_orchestrator::{finalized_jobs, plan_internal, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 

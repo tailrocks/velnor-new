@@ -1,7 +1,7 @@
 //! A matching baseline never authorizes skipping an opaque check.
 use super::*;
 
-use velnor_actions_contract::{CheckExecutor, CheckPlatform, CheckRunner, MiseCheck};
+use velnor_actions_contract_config::{CheckExecutor, CheckPlatform, CheckRunner, MiseCheck};
 #[test]
 fn exact_baseline_match_still_executes_named_check() {
     let temp = tempfile::tempdir().expect("repository");

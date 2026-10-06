@@ -13,7 +13,7 @@ use std::path::Path;
 #[cfg(unix)]
 use std::process::Command as StdCommand;
 
-use velnor_actions_contract::Plan;
+use velnor_actions_contract_workflow::Plan;
 use velnor_actions_orchestrator::{plan_internal, resolve_root};
 
 use crate::impl_common::{TestResult, git};

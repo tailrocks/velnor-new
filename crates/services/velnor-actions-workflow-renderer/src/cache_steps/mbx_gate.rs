@@ -6,7 +6,7 @@ use super::mbx_command::{has_external_mbx_selector, uses_mbx_command};
 use super::mbx_preflight::mbx_version_check_step;
 use super::{CompileDriver, MBX_ACTION_NAME};
 use crate::RenderError;
-use velnor_actions_contract::{Job, Step, StepRole};
+use velnor_actions_contract_workflow::{Job, Step, StepRole};
 
 /// Gate native MBX action and executable selection against each job's driver.
 ///
@@ -128,7 +128,7 @@ fn check_mbx_version_order(
             "mbx_action_missing:{id}"
         )));
     };
-    let velnor_actions_contract::StepKind::Action { with, env, .. } = &action.kind else {
+    let velnor_actions_contract_workflow::StepKind::Action { with, env, .. } = &action.kind else {
         return Err(RenderError::InvalidWorkflow(format!(
             "mbx_action_invalid:{id}"
         )));
@@ -163,5 +163,5 @@ fn check_mbx_version_order(
 
 /// True for the pinned native MBX action.
 pub(crate) fn is_mbx_action(step: &Step) -> bool {
-    matches!(&step.kind, velnor_actions_contract::StepKind::Action { uses, .. } if uses.starts_with(&format!("{MBX_ACTION_NAME}@")))
+    matches!(&step.kind, velnor_actions_contract_workflow::StepKind::Action { uses, .. } if uses.starts_with(&format!("{MBX_ACTION_NAME}@")))
 }

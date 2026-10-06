@@ -1,5 +1,5 @@
 use super::*;
-use velnor_actions_contract::FRESHNESS_CRON_WEEKLY;
+use velnor_actions_contract_workflow::FRESHNESS_CRON_WEEKLY;
 
 const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 
@@ -110,7 +110,7 @@ fn rejects_internal_steps_fail_closed() {
         id: None,
         role: None,
         condition: None,
-        kind: velnor_actions_contract::StepKind::Internal {
+        kind: velnor_actions_contract_workflow::StepKind::Internal {
             operation: "plan-v1".to_owned(),
             env: std::collections::BTreeMap::new(),
         },

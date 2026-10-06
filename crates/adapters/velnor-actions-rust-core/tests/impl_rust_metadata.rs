@@ -5,7 +5,7 @@ use std::path::Path;
 use serde_json::json;
 
 use crate::support::{Outcome, TempDir};
-use velnor_actions_contract::reverse_closure;
+use velnor_actions_contract_planning::reverse_closure;
 use velnor_actions_rust_core::{
     DepKind, LocalEdge, MetadataError, dedupe_workspaces, local_edge_pairs, parse_metadata_json,
 };

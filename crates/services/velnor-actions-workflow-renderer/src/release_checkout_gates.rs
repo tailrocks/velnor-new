@@ -6,7 +6,7 @@
 //! (preparation's policy checkout, publishers' source checkouts) persist
 //! credentials.
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract_workflow::{Step, StepKind};
 
 use crate::{RenderError, release_jobs::ReleaseRole, release_tree::RELEASE_SOURCE_DIR};
 

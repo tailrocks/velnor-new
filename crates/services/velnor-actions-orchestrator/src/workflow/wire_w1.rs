@@ -13,7 +13,8 @@ use velnor_actions_actionlint::{
     actions::{CACHE_ACTION_SHA, CACHE_ACTION_VERSION},
     checkout_inputs_schema, validate_action_inputs,
 };
-use velnor_actions_contract::{Job, ProposedTask, Step, StepKind, StepRole};
+use velnor_actions_contract_planning::ProposedTask;
+use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 use velnor_actions_mise::{Gate6Fixture, TaskCacheMode, ToolCatalog, ToolHomes};
 use velnor_actions_rust::is_workspace_fmt_task;
 use velnor_actions_workflow_renderer::plan_format;

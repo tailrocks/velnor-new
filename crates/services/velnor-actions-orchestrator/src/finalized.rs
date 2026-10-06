@@ -8,7 +8,8 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, WorkflowPolicy, expand_workflow};
+use velnor_actions_contract_config::WorkflowPolicy;
+use velnor_actions_contract_workflow::{Job, expand_workflow};
 use velnor_actions_workflow_renderer::finalize_jobs as finalize_render_jobs;
 
 use crate::OrchestratorError;

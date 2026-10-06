@@ -2,10 +2,10 @@ use super::super::runtime;
 use super::profile;
 use serde_json::{Value, json};
 use std::path::PathBuf;
-use velnor_actions_contract::config::{
+use velnor_actions_contract::digest_b3;
+use velnor_actions_contract_config::config::{
     CheckExecutor, CheckPlatform, ContainerPlatform, HostContainerProfile,
 };
-use velnor_actions_contract::digest_b3;
 use velnor_actions_mise::checks::{
     ContainerObservation, ContainerProbeOutput, DockerDaemonObservation,
 };
@@ -41,8 +41,8 @@ pub(super) fn orb_profile() -> HostContainerProfile {
 
 pub(super) fn runner(
     container: Option<HostContainerProfile>,
-) -> velnor_actions_contract::CheckRunner {
-    velnor_actions_contract::CheckRunner {
+) -> velnor_actions_contract_config::CheckRunner {
+    velnor_actions_contract_config::CheckRunner {
         label: "native-scale".into(),
         platform: CheckPlatform::LinuxX64,
         executor: CheckExecutor::EphemeralSelfHosted,

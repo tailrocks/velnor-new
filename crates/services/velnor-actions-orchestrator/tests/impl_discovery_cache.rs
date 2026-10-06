@@ -27,10 +27,10 @@ fn selected_roots(root: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>
         .statuses
         .iter()
         .filter_map(|status| match status {
-            velnor_actions_contract::DetectionStatus::Selected(project) => {
+            velnor_actions_contract_planning::DetectionStatus::Selected(project) => {
                 Some(project.project_root.clone())
             }
-            velnor_actions_contract::DetectionStatus::Ignored { .. } => None,
+            velnor_actions_contract_planning::DetectionStatus::Ignored { .. } => None,
         })
         .collect())
 }

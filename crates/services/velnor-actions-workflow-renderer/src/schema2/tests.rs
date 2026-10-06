@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::{RoutingWorkflow, SCALE_SET_NAME, VELNOR_LABEL};
+use velnor_actions_contract_config::{RoutingWorkflow, SCALE_SET_NAME, VELNOR_LABEL};
 
 use super::{
     MbxQualificationPins, Schema2WorkflowRequest, monitoring, qualification,

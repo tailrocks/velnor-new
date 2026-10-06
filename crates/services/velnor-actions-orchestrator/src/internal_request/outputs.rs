@@ -1,9 +1,10 @@
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
-use velnor_actions_contract::{
-    FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME,
-    canonical_json_bytes, canonical_json_str, matrix_json_bytes, plan_json_bytes,
+use velnor_actions_contract::{canonical_json_bytes, canonical_json_str};
+use velnor_actions_contract_workflow::{
+    FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, matrix_json_bytes,
+    plan_json_bytes,
 };
 
 use crate::OrchestratorError;
@@ -130,7 +131,7 @@ pub fn publish_final_report(
     response_json: &str,
     velnor_dir: &Path,
 ) -> Result<PathBuf, OrchestratorError> {
-    let report: velnor_actions_contract::FinalReport =
+    let report: velnor_actions_contract_workflow::FinalReport =
         serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
     check_schema(report.schema)?;
     let dir = plan_artifact_dir(velnor_dir, &report.run_key)?;

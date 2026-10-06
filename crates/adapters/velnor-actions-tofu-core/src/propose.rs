@@ -13,8 +13,9 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 
-use velnor_actions_contract::{
-    CachePolicy, ContractError, IdentityInputs, ProposedTask, ResourceClass, ResourceDemand,
+use velnor_actions_contract::ContractError;
+use velnor_actions_contract_planning::{
+    CachePolicy, IdentityInputs, ProposedTask, ResourceClass, ResourceDemand,
     component_id_for_unit, project_root_for_unit_path,
 };
 

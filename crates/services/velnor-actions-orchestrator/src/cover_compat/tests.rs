@@ -1,9 +1,11 @@
 //! Compatibility derivation tests: shape binding, not content binding.
 
 use super::*;
-use velnor_actions_contract::{
-    ObligationDecision, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner,
-    RunnerSelection, Trust, WorkflowEvent, artifact_id_for_baseline, validate_digest,
+use velnor_actions_contract::{artifact_id_for_baseline, validate_digest};
+use velnor_actions_contract_config::RunnerSelection;
+use velnor_actions_contract_workflow::{
+    ObligationDecision, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, Trust,
+    WorkflowEvent,
 };
 
 /// Obligation with explicit digests.

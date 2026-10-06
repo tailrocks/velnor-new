@@ -4,7 +4,8 @@
 
 use super::*;
 
-use velnor_actions_contract::{ProposedTask, Provenance, TaskInputClosure, digest_b3};
+use velnor_actions_contract::{Provenance, TaskInputClosure, digest_b3};
+use velnor_actions_contract_planning::ProposedTask;
 use velnor_actions_rust::{TaskGroup, TaskKind};
 use velnor_actions_rust_core::{CompileDriver, NextestProfile, TestRunner};
 
@@ -276,7 +277,9 @@ fn digest_slots_preserve_absence_distinctly() {
 fn tofu_task(kind: &str, unit: &str) -> ProposedTask {
     use std::collections::BTreeMap;
     use std::ffi::OsString;
-    use velnor_actions_contract::{CachePolicy, IdentityInputs, ResourceClass, ResourceDemand};
+    use velnor_actions_contract_planning::{
+        CachePolicy, IdentityInputs, ResourceClass, ResourceDemand,
+    };
     ProposedTask {
         task_id: format!("stack/tofu/root/{kind}/default"),
         stack_id: "tofu".to_owned(),

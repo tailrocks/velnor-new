@@ -6,7 +6,8 @@
 //! evidence without a table only advises). Configured roots map to
 //! candidates through [`crate::qualify_roots`], which sees the table.
 
-use velnor_actions_contract::{DetectedProject, FileIndex, StackCandidate, VelnorConfig};
+use velnor_actions_contract_config::VelnorConfig;
+use velnor_actions_contract_planning::{DetectedProject, FileIndex, StackCandidate};
 
 /// Discover stack candidates: the tofu detector entry.
 ///

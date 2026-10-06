@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{
-    Concurrency, Job, JobTimeout, Permissions, SCALE_SET_NAME, ScaleSetSelector, Step, StepKind,
-    Trigger, VELNOR_LABEL, WorkflowIr,
+use velnor_actions_contract_config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
+use velnor_actions_contract_workflow::{
+    Concurrency, Job, JobTimeout, Permissions, Step, StepKind, Trigger, WorkflowIr,
 };
 
 use super::super::workflow_to_yaml;

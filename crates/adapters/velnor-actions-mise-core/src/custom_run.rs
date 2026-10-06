@@ -11,7 +11,7 @@
 //! argument instead (probed). Leading-dash names are rejected by the
 //! task-name rule, so no separator is needed.
 
-use velnor_actions_contract::is_valid_mise_task_name;
+use velnor_actions_contract_config::is_valid_mise_task_name;
 
 use crate::command::is_allowed_mise_subcommand;
 use crate::error::MiseError;

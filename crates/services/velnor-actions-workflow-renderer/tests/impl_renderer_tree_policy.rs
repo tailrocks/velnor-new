@@ -1,8 +1,8 @@
 //! Workflow/tree invariant cases (triggers, concurrency, candidate, gates).
 use std::collections::BTreeMap;
-use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, JobTimeout, Permissions, Step, StepKind, Trigger,
-    ValidatorKind, WorkflowIr, WorkflowPolicy,
+use velnor_actions_contract_config::{GeneratorValidation, ValidatorKind, WorkflowPolicy};
+use velnor_actions_contract_workflow::{
+    Concurrency, Job, JobTimeout, PermissionLevel, Permissions, Step, StepKind, Trigger, WorkflowIr,
 };
 use velnor_actions_workflow_renderer::{
     CANDIDATE_JOB_ID, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, CandidateSpec, RenderContext,
@@ -311,11 +311,10 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
             needs: vec!["plan".to_owned()],
             condition: Some("always()".to_owned()),
             permissions: Some(Permissions {
-                contents: velnor_actions_contract::workflow::permissions::PermissionLevel::Read,
-                actions: velnor_actions_contract::workflow::permissions::PermissionLevel::Read,
-                pull_requests:
-                    velnor_actions_contract::workflow::permissions::PermissionLevel::None,
-                id_token: velnor_actions_contract::workflow::permissions::PermissionLevel::None,
+                contents: PermissionLevel::Read,
+                actions: PermissionLevel::Read,
+                pull_requests: PermissionLevel::None,
+                id_token: PermissionLevel::None,
             }),
             environment: None,
             steps: vec![checkout_step(&checkout_pin())?, merge_step()],

@@ -7,7 +7,7 @@ use std::process::Command as StdCommand;
 use std::time::SystemTime;
 
 use tempfile::TempDir;
-use velnor_actions_contract::{MatrixReport, Plan};
+use velnor_actions_contract_workflow::{MatrixReport, Plan};
 use velnor_actions_orchestrator::{
     GenerationPreparation, OrchestratorError, finalized_jobs, plan_internal, plan_text,
 };
@@ -318,13 +318,13 @@ pub(crate) fn passing_reports(
             run_key: "local".to_owned(),
             matrix_id: entry.id.clone(),
             matrix_key: entry.matrix_key.clone(),
-            status: velnor_actions_contract::MatrixStatus::Passed,
+            status: velnor_actions_contract_workflow::MatrixStatus::Passed,
             expected_task_ids: vec![entry.task_id.clone()],
             task_report_ids: vec![task_report_id.clone()],
-            tasks: vec![velnor_actions_contract::MatrixTaskEntry {
+            tasks: vec![velnor_actions_contract_workflow::MatrixTaskEntry {
                 task_report_id,
                 task_id: entry.task_id.clone(),
-                status: velnor_actions_contract::TaskStatus::Executed,
+                status: velnor_actions_contract_workflow::TaskStatus::Executed,
                 exit_code: 0,
             }],
             selected: 1,

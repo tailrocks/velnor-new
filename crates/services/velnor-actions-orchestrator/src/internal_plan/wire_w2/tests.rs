@@ -4,7 +4,7 @@
 
 use super::reuse_stages::{ExpectedReuseIdentity, ObservedRestoreMeta};
 use super::*;
-use velnor_actions_contract::ProposedTask;
+use velnor_actions_contract_planning::ProposedTask;
 use velnor_actions_mise::CachedTaskDescriptor;
 use velnor_actions_rust::{TaskGroup, TaskKind};
 use velnor_actions_rust_core::{CompileDriver, NextestProfile, TestRunner};

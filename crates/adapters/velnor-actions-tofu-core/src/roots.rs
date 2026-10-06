@@ -11,7 +11,9 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::{ContractError, FileIndex, StackCandidate, TofuStackConfig};
+use velnor_actions_contract::ContractError;
+use velnor_actions_contract_config::TofuStackConfig;
+use velnor_actions_contract_planning::{FileIndex, StackCandidate};
 
 use crate::effective::dir_has_effective_config;
 

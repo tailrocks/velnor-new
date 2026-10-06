@@ -4,7 +4,7 @@ use std::ffi::OsString;
 use std::path::Path;
 
 use crate::{CheckDeadline, MiseError};
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     HostOrbStackSdk, MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES,
     MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES, MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,
     MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,

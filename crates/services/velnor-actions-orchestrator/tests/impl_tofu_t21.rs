@@ -7,7 +7,7 @@ use std::fs;
 
 use serde_json::json;
 use tempfile::TempDir;
-use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan, StepKind};
+use velnor_actions_contract_workflow::{FinalStatus, ObligationDecision, Plan, StepKind};
 use velnor_actions_orchestrator::{finalized_jobs, plan_internal, prepare};
 
 use super::impl_common::{
@@ -136,7 +136,7 @@ fn tofu_reuse_claims_fail_closed_at_merge() -> TestResult {
 /// the push-only gate; the plan job saves nothing.
 #[test]
 fn finalized_tofu_jobs_save_exactly_their_restored_key() -> TestResult {
-    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
+    use velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION;
     let dir = make_pure_tofu_repo(&two_root_config(), &two_root_files())?;
     let jobs = finalized_jobs(&prepare(dir.path())?)?;
     let plan = jobs.get("plan").ok_or("plan job")?;
@@ -175,12 +175,12 @@ fn finalized_tofu_jobs_save_exactly_their_restored_key() -> TestResult {
         };
         assert_eq!(
             inputs.get("key").map(String::as_str),
-            Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
+            Some(velnor_actions_contract_workflow::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
             "{id} saves the output key from its own restore"
         );
         assert_eq!(
             inputs.get("path").map(String::as_str),
-            Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_PATH_OUTPUT_EXPR),
+            Some(velnor_actions_contract_workflow::workflow::step_identity::TOFU_PROVIDERS_PATH_OUTPUT_EXPR),
             "{id} saves the output path from its own restore"
         );
         keys.push(key);

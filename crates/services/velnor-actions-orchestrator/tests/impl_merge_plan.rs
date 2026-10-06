@@ -1,7 +1,7 @@
 //! Merge plan-shape cases: missing/hollow plans, agreement tokens,
 //! uncovered legs, and coverage revalidation.
 
-use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan};
+use velnor_actions_contract_workflow::{FinalStatus, ObligationDecision, Plan};
 use velnor_actions_orchestrator::merge_internal;
 
 use crate::impl_common::{
@@ -252,7 +252,8 @@ fn task_file_gaps_fail_closed() -> TestResult {
         "task_id": "stack/rust/foreign/build/default", "task_digest": digest, "status": "executed",
         "cache": {"layer": "task", "key": "", "result": "not_attempted"}, "exit_code": 0,
         "duration_ms": 0, "outputs": []});
-    let parsed: velnor_actions_contract::TaskReport = serde_json::from_value(foreign.clone())?;
+    let parsed: velnor_actions_contract_workflow::TaskReport =
+        serde_json::from_value(foreign.clone())?;
     parsed.validate()?;
     unexpected["task_reports"]
         .as_array_mut()

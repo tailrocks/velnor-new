@@ -48,6 +48,7 @@ mod impl_orch_f2c;
 mod impl_orch_f2d;
 mod impl_orch_f2e;
 mod impl_orch_f2f;
+mod impl_orch_f2f_edges;
 mod impl_orch_f2g;
 mod impl_orch_features;
 mod impl_orch_gate;

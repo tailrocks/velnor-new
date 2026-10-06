@@ -5,7 +5,7 @@ use crate::internal::internal;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use velnor_actions_contract::config::HostOrbStackSdk;
+use velnor_actions_contract_config::config::HostOrbStackSdk;
 use velnor_actions_mise::CheckDeadline;
 
 mod tree;

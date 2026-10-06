@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use tempfile::TempDir;
-use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan};
+use velnor_actions_contract_workflow::{FinalStatus, ObligationDecision, Plan};
 use velnor_actions_orchestrator::{baseline_artifact_numeric_id, merge_internal, plan_internal};
 
 use crate::impl_common::{
@@ -254,7 +254,7 @@ fn release_lock_never_resolves_generator_identity() -> TestResult {
     let sha = "e".repeat(64);
     let version = env!("CARGO_PKG_VERSION");
     let mut bins = String::new();
-    for target in velnor_actions_contract::SUPPORTED_TARGETS {
+    for target in velnor_actions_contract_release::SUPPORTED_TARGETS {
         use std::fmt::Write as _;
         write!(bins, "[[generator.binaries]]\ntarget = \"{target}\"\nartifact = \"https://example.invalid/r/{version}/{target}\"\nsha256 = \"{sha}\"\n").expect("write to String");
     }
@@ -296,13 +296,14 @@ fn merge_flags_wrong_manifest_digest() -> TestResult {
     let first = 0;
     plan.obligations[first].decision = ObligationDecision::CoveredByTrustedBaseline;
     plan.obligations[first].reason = "covered_by_trusted_baseline".to_owned();
-    plan.obligations[first].baseline_proof = Some(velnor_actions_contract::BaselineProof::new(
-        &base,
-        7,
-        9,
-        "velnor-plan-local",
-        &velnor_actions_contract::digest_b3(b"forged-manifest"),
-    )?);
+    plan.obligations[first].baseline_proof =
+        Some(velnor_actions_contract_workflow::BaselineProof::new(
+            &base,
+            7,
+            9,
+            "velnor-plan-local",
+            &velnor_actions_contract::digest_b3(b"forged-manifest"),
+        )?);
     plan.validate()?;
     let reports = passing_reports(&plan)?;
     let request = serde_json::json!({
@@ -312,7 +313,7 @@ fn merge_flags_wrong_manifest_digest() -> TestResult {
         "required_job_ids": ["plan"],
         "required_jobs": [{"job_id": "plan", "conclusion": "success"}],
     });
-    let final_report: velnor_actions_contract::FinalReport =
+    let final_report: velnor_actions_contract_workflow::FinalReport =
         serde_json::from_str(&merge_internal(&request.to_string())?)?;
     assert_eq!(final_report.status, FinalStatus::PlanningFailed);
     Ok(())

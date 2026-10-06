@@ -5,8 +5,9 @@ use std::fs;
 use std::path::Path;
 
 use tempfile::TempDir;
-use velnor_actions_contract::{
-    Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr, WorkflowPolicy,
+use velnor_actions_contract_config::WorkflowPolicy;
+use velnor_actions_contract_workflow::{
+    Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr,
 };
 use velnor_actions_orchestrator::write_request_parts;
 use velnor_actions_workflow_renderer::{

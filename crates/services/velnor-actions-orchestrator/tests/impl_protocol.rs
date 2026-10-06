@@ -291,11 +291,11 @@ fn merge_assembled_request_roundtrips_to_passed() -> TestResult {
     value["required_jobs"] = serde_json::json!([{"job_id": "plan", "conclusion": "success"}]);
     value["assembly_errors"] = serde_json::json!([]);
     value["actual_event"] = value["plan"]["event"].clone();
-    let final_report: velnor_actions_contract::FinalReport =
+    let final_report: velnor_actions_contract_workflow::FinalReport =
         serde_json::from_str(&merge_internal(&value.to_string())?)?;
     assert_eq!(
         final_report.status,
-        velnor_actions_contract::FinalStatus::Passed
+        velnor_actions_contract_workflow::FinalStatus::Passed
     );
     Ok(())
 }
@@ -312,12 +312,12 @@ fn merge_assembly_nulls_missing_plan_to_planning_failed() -> TestResult {
             .is_some_and(|e| e.len() >= 3),
         "gaps recorded: {request}"
     );
-    let final_report: velnor_actions_contract::FinalReport =
+    let final_report: velnor_actions_contract_workflow::FinalReport =
         serde_json::from_str(&merge_internal(&request)?)?;
     final_report.validate()?;
     assert_eq!(
         final_report.status,
-        velnor_actions_contract::FinalStatus::PlanningFailed
+        velnor_actions_contract_workflow::FinalStatus::PlanningFailed
     );
     for token in ["source_missing", "no_entry"] {
         assert!(

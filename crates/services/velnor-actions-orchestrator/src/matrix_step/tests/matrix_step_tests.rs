@@ -61,7 +61,7 @@ fn identity_env_contract_enforces_in_every_build() {
 fn obligation_step_carries_the_report_lookup_key() {
     let obligation = obligation();
     let step = obligation_step(&obligation, &ToolCatalog::pinned(), &[], None).expect("step");
-    let velnor_actions_contract::StepKind::Shell { run, env } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Shell { run, env } = &step.kind else {
         panic!("obligation must be a shell step");
     };
     assert_eq!(
@@ -155,7 +155,7 @@ fn doc_obligation_step_carries_typed_rustdocflags() {
     doc.kind = TaskKind::Doc.as_str().to_owned();
     doc.step_name = DOCUMENTATION_NAME.to_owned();
     let step = obligation_step(&doc, &ToolCatalog::pinned(), &[], None).expect("step");
-    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Shell { env, .. } = &step.kind else {
         panic!("obligation must be a shell step");
     };
     let typed: Vec<(String, String)> = cargo_payload_env(TaskKind::Doc)
@@ -192,7 +192,7 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
     tofu.kind = "validate".to_owned();
     tofu.step_name = "Validate".to_owned();
     let step = obligation_step(&tofu, &ToolCatalog::pinned(), &[], None).expect("step");
-    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Shell { env, .. } = &step.kind else {
         panic!("obligation must be a shell step");
     };
     for key in [
@@ -225,7 +225,7 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
         "temp CLI config stays local-only until a materialization step lands"
     );
     let step = obligation_step(&obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
-    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Shell { env, .. } = &step.kind else {
         panic!("obligation must be a shell step");
     };
     assert!(
@@ -248,7 +248,7 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
 fn non_doc_obligation_steps_carry_no_rustdocflags() {
     use velnor_actions_rust::RUSTDOCFLAGS_ENV;
     let step = obligation_step(&obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
-    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Shell { env, .. } = &step.kind else {
         panic!("obligation must be a shell step");
     };
     assert!(
@@ -259,7 +259,7 @@ fn non_doc_obligation_steps_carry_no_rustdocflags() {
 
 #[test]
 fn validator_installs_follow_executed_suite_per_policy() {
-    use velnor_actions_contract::WorkflowPolicy;
+    use velnor_actions_contract_config::WorkflowPolicy;
     for package in [
         "velnor-actions-orchestrator",
         "velnor-actions-cli",

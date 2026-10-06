@@ -1,9 +1,10 @@
 //! Covered-task encoding and skip-gate tests.
 
 use super::*;
-use velnor_actions_contract::{
-    PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, RunnerSelection, Trust,
-    WorkflowEvent, digest_b3,
+use velnor_actions_contract::digest_b3;
+use velnor_actions_contract_config::RunnerSelection;
+use velnor_actions_contract_workflow::{
+    PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, Trust, WorkflowEvent,
 };
 
 /// Obligation with one decision.

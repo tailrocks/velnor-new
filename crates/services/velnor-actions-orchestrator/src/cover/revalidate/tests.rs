@@ -3,10 +3,11 @@ use super::{MergeAnchorExpectations, revalidate_coverage_with_anchors};
 use crate::cover::Signals;
 use crate::merge::BaselineManifest;
 use std::collections::BTreeSet;
-use velnor_actions_contract::{
+use velnor_actions_contract::{canonical_json_bytes, digest_b3};
+use velnor_actions_contract_config::RunnerSelection;
+use velnor_actions_contract_workflow::{
     BaselineProof, ObligationDecision, Plan, PlanBaseline, PlanGenerator, PlanMatrix,
-    PlanObligation, PlanRunner, RunnerSelection, Trust, WorkflowEvent, canonical_json_bytes,
-    digest_b3,
+    PlanObligation, PlanRunner, Trust, WorkflowEvent,
 };
 
 /// Revalidation verdict for one plan/manifest pair without anchors.

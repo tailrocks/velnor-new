@@ -7,7 +7,7 @@ use std::process::{Command, Output};
 
 use serde_json::json;
 use tempfile::TempDir;
-use velnor_actions_contract::{ObligationDecision, Plan, Step, StepKind, StepRole};
+use velnor_actions_contract_workflow::{ObligationDecision, Plan, Step, StepKind, StepRole};
 use velnor_actions_mise::cache_sources as mise_sources;
 use velnor_actions_orchestrator::{
     GenerateOptions, finalized_jobs, generate, plan_internal, prepare,
@@ -43,7 +43,7 @@ fn has_line(prep: &velnor_actions_orchestrator::GenerationPreparation, needle: &
 }
 
 /// True when a tofu job restores and saves its provider cache.
-fn has_provider_roundtrip(job: &velnor_actions_contract::Job) -> bool {
+fn has_provider_roundtrip(job: &velnor_actions_contract_workflow::Job) -> bool {
     job.steps
         .iter()
         .any(|step| step.name == "Restore Tofu providers")
@@ -79,7 +79,7 @@ fn never_archive_mirrors_stay_equal_across_crates() {
 
 #[test]
 fn finalized_tofu_jobs_order_restore_before_work_before_save() -> TestResult {
-    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
+    use velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION;
     let repo = make_repo(&tofu_config("stacks/a"))?;
     let root = repo.path();
     fs::create_dir_all(root.join("stacks/a"))?;
@@ -371,7 +371,7 @@ fn version_excluding_toolchain_diagnoses_while_provider_transport_renders() -> T
 #[test]
 fn fork_event_plans_pr_trust_and_generates_restore_only_roundtrip() -> TestResult {
     use super::impl_orch_core::plan_value;
-    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
+    use velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION;
     let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.tofu]\nroots = [\"stacks/a\"]\n";
     let dir = make_pure_tofu_repo(config, &[("stacks/a/main.tf", "variable \"x\" {}\n")])?;
     let root = dir.path();

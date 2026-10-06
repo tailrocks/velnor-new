@@ -1,5 +1,7 @@
 use super::*;
-use velnor_actions_contract::{CachePolicy, IdentityInputs, ResourceClass, ResourceDemand};
+use velnor_actions_contract_planning::{
+    CachePolicy, IdentityInputs, ResourceClass, ResourceDemand,
+};
 
 /// Minimal proposal with `kind`, `configuration`, and `task_id`.
 fn task(kind: &str, configuration: &str, task_id: &str) -> ProposedTask {

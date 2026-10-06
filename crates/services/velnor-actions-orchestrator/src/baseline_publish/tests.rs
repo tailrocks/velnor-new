@@ -6,10 +6,11 @@ use std::collections::BTreeMap;
 use std::fs;
 
 use super::*;
-use velnor_actions_contract::{
+use velnor_actions_contract::{artifact_id_for_baseline, plan_id_for_run};
+use velnor_actions_contract_config::RunnerSelection;
+use velnor_actions_contract_workflow::{
     ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, ObligationDecision, Plan, PlanBaseline,
-    PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, RunnerSelection, Trust,
-    artifact_id_for_baseline, plan_id_for_run,
+    PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, Trust,
 };
 
 /// Push payload over `head` on the default branch.

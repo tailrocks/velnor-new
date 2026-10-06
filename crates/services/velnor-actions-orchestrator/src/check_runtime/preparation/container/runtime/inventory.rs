@@ -2,7 +2,7 @@ use crate::OrchestratorError;
 use crate::internal::internal;
 use std::fs::{self, Metadata};
 use std::path::{Component, Path};
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     MAX_CHECK_CONTAINER_RUNTIME_ENTRIES, MAX_CHECK_CONTAINER_RUNTIME_ENTRY_PATH_BYTES,
 };
 use velnor_actions_mise::CheckDeadline;

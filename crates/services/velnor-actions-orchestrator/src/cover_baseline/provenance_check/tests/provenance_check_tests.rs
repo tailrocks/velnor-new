@@ -260,8 +260,8 @@ fn task_entry(digest: &str) -> crate::merge::required_evidence::BaselineTaskEntr
 fn task_proof(
     entry: &crate::merge::required_evidence::BaselineTaskEntry,
     input_digest: &str,
-) -> velnor_actions_contract::ManifestTaskProof {
-    velnor_actions_contract::ManifestTaskProof::new(
+) -> velnor_actions_contract_workflow::ManifestTaskProof {
+    velnor_actions_contract_workflow::ManifestTaskProof::new(
         &entry.task_id,
         &entry.task_digest,
         input_digest,

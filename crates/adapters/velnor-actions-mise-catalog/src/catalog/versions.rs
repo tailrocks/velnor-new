@@ -3,7 +3,7 @@
 //! Hosted here because the crate root is frozen: `mise::catalog` re-exports
 //! the two public validators, keeping every existing path stable.
 
-use velnor_actions_contract::{FreshnessRequirement, validate_freshness_class};
+use velnor_actions_contract_release::{FreshnessRequirement, validate_freshness_class};
 
 use super::PinnedTool;
 use velnor_actions_mise_core::error::MiseError;

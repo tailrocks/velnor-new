@@ -1,6 +1,6 @@
 use super::{SystemToolProof, validate_system_tool_proofs};
 use std::path::Path;
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind, MiseCheck,
 };
 
@@ -55,10 +55,10 @@ fn maximum_valid_swift_observation_fits_the_declared_receipt_bound() {
         timeout_minutes: 10,
     };
     let proof_bytes = serde_json::to_vec(&proof).expect("proof JSON").len();
-    let bound = velnor_actions_contract::check_execution_receipt_upper_bound(&check, &[])
+    let bound = velnor_actions_contract_config::check_execution_receipt_upper_bound(&check, &[])
         .expect("receipt budget");
     assert!(bound >= 32 * 1024 + proof_bytes);
-    assert!(bound <= velnor_actions_contract::MAX_CHECK_EXECUTION_RECEIPT_BYTES);
+    assert!(bound <= velnor_actions_contract_config::MAX_CHECK_EXECUTION_RECEIPT_BYTES);
     assert!(Path::new(&proof.developer_dir).is_absolute());
 }
 

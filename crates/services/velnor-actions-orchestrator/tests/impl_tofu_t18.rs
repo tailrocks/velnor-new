@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_contract::{Job, StepKind};
+use velnor_actions_contract_workflow::{Job, StepKind};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::{
     FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID, WORKFLOW_PATH,

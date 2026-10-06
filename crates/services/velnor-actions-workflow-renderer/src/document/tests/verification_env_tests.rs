@@ -2,8 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::permissions::PermissionLevel;
-use velnor_actions_contract::{VerificationRunner, VerificationTask, VerificationTaskKind};
+use velnor_actions_contract_config::{VerificationRunner, VerificationTask, VerificationTaskKind};
+use velnor_actions_contract_workflow::workflow::permissions::PermissionLevel;
 
 use crate::{MiseSetup, RenderContext, VerificationTaskPolicy, build_verification_task_job};
 

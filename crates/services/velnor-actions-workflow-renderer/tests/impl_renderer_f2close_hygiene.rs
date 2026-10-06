@@ -1,6 +1,6 @@
 //! F2 closure: cache layers and forbidden content.
 use std::collections::BTreeMap;
-use velnor_actions_contract::{GeneratorValidation, WorkflowPolicy};
+use velnor_actions_contract_config::{GeneratorValidation, WorkflowPolicy};
 use velnor_actions_workflow_renderer::steps::{
     TOOLS_RESTORE_USES, cache_action_step, tools_cache_key,
 };
@@ -71,7 +71,7 @@ fn cache_layers_restore_independently() -> Result<(), RenderError> {
         "plan",
     )?)?;
     for step in [&sources, &task, &tools] {
-        let velnor_actions_contract::StepKind::Action { uses, .. } = &step.kind else {
+        let velnor_actions_contract_workflow::StepKind::Action { uses, .. } = &step.kind else {
             panic!("restore must be an action step");
         };
         assert!(uses.starts_with("actions/cache/restore@"), "{uses}");

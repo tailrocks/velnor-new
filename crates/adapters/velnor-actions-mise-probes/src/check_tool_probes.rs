@@ -2,11 +2,11 @@
 use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use velnor_actions_contract::config::{
+use velnor_actions_contract::{digest_b3, is_valid_digest};
+use velnor_actions_contract_config::config::{
     CheckPlatform, MAX_CHECK_CONTAINER_PATH_BYTES, MAX_CHECK_QUALIFIED_PROBE_CAPTURE_BYTES,
     QualifiedTool, QualifiedToolExecutable, QualifiedToolProbe,
 };
-use velnor_actions_contract::{digest_b3, is_valid_digest};
 use velnor_actions_mise_core::{CheckDeadline, IsolatedCommand, MiseError};
 
 /// Actual executable identity computed from installed bytes by the runtime.

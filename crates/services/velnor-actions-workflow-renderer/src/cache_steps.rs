@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract_workflow::{Step, StepKind};
 
 mod mbx_command;
 mod mbx_gate;

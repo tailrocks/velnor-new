@@ -203,7 +203,7 @@ fn acquire_stages_before_report_wrappers() {
         id: None,
         role: None,
         condition: None,
-        kind: velnor_actions_contract::StepKind::Shell {
+        kind: velnor_actions_contract_workflow::StepKind::Shell {
             run: vec![String::from("true")],
             env: BTreeMap::new(),
         },
@@ -234,7 +234,7 @@ fn prepare_run(job: &Job) -> Vec<String> {
         .iter()
         .find(|step| step.name == PREPARE_PINNED_TOOLS_STEP)
         .expect("prepare step");
-    let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Shell { run, .. } = &step.kind else {
         panic!("prepare must be a shell step");
     };
     run.clone()

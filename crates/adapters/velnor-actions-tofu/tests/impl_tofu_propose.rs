@@ -1,5 +1,5 @@
 //! Tofu proposal + task-kind cases (T12).
-use velnor_actions_contract::ResourceClass;
+use velnor_actions_contract_planning::ResourceClass;
 use velnor_actions_tofu_core::argv::tofu_payload_argv;
 use velnor_actions_tofu_core::kinds::TofuTaskKind;
 use velnor_actions_tofu_core::propose::{

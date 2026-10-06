@@ -1,7 +1,7 @@
 use super::*;
 use std::collections::BTreeMap;
-use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig};
-use velnor_actions_contract::{
+use velnor_actions_contract_config::config::{ActionPinOverride, ActionsConfig};
+use velnor_actions_contract_config::{
     DiscoveryConfig, GeneratorValidation, ResourcesConfig, StacksConfig, TestShardingConfig,
     VerificationRunner, WorkflowConfig, WorkflowPolicy,
 };

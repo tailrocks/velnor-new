@@ -2,7 +2,7 @@ use super::super::{
     DIR, FILE, candidate_path, manifest_attestation_bundle_script, manifest_script,
 };
 use super::MANIFEST_PRODUCER;
-use velnor_actions_contract::RELEASE_MANIFEST_FILENAME;
+use velnor_actions_contract_release::RELEASE_MANIFEST_FILENAME;
 
 #[test]
 fn manifest_bundle_uses_the_created_and_attested_file() {

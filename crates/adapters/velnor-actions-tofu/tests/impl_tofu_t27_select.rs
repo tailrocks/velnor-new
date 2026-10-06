@@ -6,7 +6,8 @@
 //! tool/config reselect. Conservative behavior is pinned as-is.
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{TofuStackConfig, Utf8RepoRelDir, build_index};
+use velnor_actions_contract_config::{TofuStackConfig, Utf8RepoRelDir};
+use velnor_actions_contract_planning::build_index;
 use velnor_actions_tofu::select::{RootSelection, SelectAllReason, select_roots};
 use velnor_actions_tofu_core::modules::{ModuleEdges, SourceClass};
 use velnor_actions_tofu_core::{

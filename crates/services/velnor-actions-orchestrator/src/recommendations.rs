@@ -7,7 +7,8 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use velnor_actions_contract::{FileIndex, VelnorConfig};
+use velnor_actions_contract_config::VelnorConfig;
+use velnor_actions_contract_planning::FileIndex;
 
 use crate::discover::PlannedWorkspace;
 use crate::toolcheck::ToolInputCheck;

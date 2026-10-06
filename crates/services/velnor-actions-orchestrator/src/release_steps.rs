@@ -14,8 +14,8 @@ use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 
-use velnor_actions_contract::config::{ReleaseAuthentication, RustReleaseConfig};
-use velnor_actions_contract::{JobTimeout, Step};
+use velnor_actions_contract_config::config::{ReleaseAuthentication, RustReleaseConfig};
+use velnor_actions_contract_workflow::{JobTimeout, Step};
 use velnor_actions_mise::catalog::release_plz::{ReleasePrRequest, ReleaseRequest as PlzRelease};
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 use velnor_actions_workflow_renderer::release_jobs::{ReleaseJobSpec, ReleaseRole};

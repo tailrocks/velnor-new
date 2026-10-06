@@ -3,7 +3,8 @@
 //! Detectors observe the post-exclusion index; stack ignores apply after
 //! detection completes and never suppress malformed-manifest errors.
 
-use velnor_actions_contract::{DetectedProject, FileIndex, StackCandidate, VelnorConfig};
+use velnor_actions_contract_config::VelnorConfig;
+use velnor_actions_contract_planning::{DetectedProject, FileIndex, StackCandidate};
 
 /// One discovered `Cargo.toml` manifest (post-exclusion).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

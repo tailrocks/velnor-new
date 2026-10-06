@@ -23,7 +23,7 @@ fn checkout_template_pins_action_without_credentials() -> Result<(), RenderError
     assert_eq!(step.name, "Checkout");
     assert!(matches!(
         &step.kind,
-        velnor_actions_contract::StepKind::Action { uses, with, .. }
+        velnor_actions_contract_workflow::StepKind::Action { uses, with, .. }
             if uses == &pin("actions/checkout")
                 && with.get("persist-credentials").is_some_and(|v| v == "false")
     ));

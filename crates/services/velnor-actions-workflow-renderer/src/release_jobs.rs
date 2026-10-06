@@ -6,7 +6,8 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{JobTimeout, Step, StepKind, validate_job_id};
+use velnor_actions_contract::validate_job_id;
+use velnor_actions_contract_workflow::{JobTimeout, Step, StepKind};
 
 use crate::{
     RenderError,

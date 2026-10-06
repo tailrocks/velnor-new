@@ -6,7 +6,7 @@ use std::path::Path;
 use std::process::Command;
 
 use tempfile::TempDir;
-use velnor_actions_contract::WorkflowPolicy;
+use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_mise::cache::validate_sources_path;
 use velnor_actions_orchestrator::prepare;
 use velnor_actions_workflow_renderer::steps::{
@@ -28,7 +28,7 @@ fn git(args: &[&str], cwd: &Path) -> TestResult {
 /// Release-manifest fixture so consumer `prepare` succeeds.
 fn fixture_manifest_json() -> String {
     let version = env!("CARGO_PKG_VERSION");
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
+    let targets = velnor_actions_contract_release::SUPPORTED_TARGETS
     .iter()
     .map(|target| {
         format!(

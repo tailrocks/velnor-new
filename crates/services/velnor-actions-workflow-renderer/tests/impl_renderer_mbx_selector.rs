@@ -1,7 +1,7 @@
 //! External Mise selection cannot install or execute MBX outside its action.
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract_workflow::StepKind;
 use velnor_actions_workflow_renderer::{
     CompileDriver, RenderError, check_mbx_gating, mise_setup_step, shell_step,
 };

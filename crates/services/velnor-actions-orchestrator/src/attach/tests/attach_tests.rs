@@ -8,7 +8,7 @@ use crate::publish_job::baseline_publish_job;
 use crate::workflow::{CHECKOUT_USES, REQUEST_DIR};
 use crate::workflow_jobs::{final_job, plan_job};
 use std::collections::BTreeMap;
-use velnor_actions_contract::{Job, JobTimeout};
+use velnor_actions_contract_workflow::{Job, JobTimeout};
 use velnor_actions_workflow_renderer::render::{RenderContext, WORKFLOW_PATH};
 
 /// Minimal crate job covering the crate attach branch.
@@ -28,7 +28,7 @@ fn legacy_task_job() -> Job {
 
 #[test]
 fn lock_acquire_inserts_digest_verified_stage() {
-    use velnor_actions_contract::{GeneratorBinary, LockedGenerator, MiseBootstrap};
+    use velnor_actions_contract_release::{GeneratorBinary, LockedGenerator, MiseBootstrap};
     let lock = GeneratorLock {
         schema: 1,
         generator: LockedGenerator {
@@ -110,7 +110,8 @@ fn lock_acquire_inserts_digest_verified_stage() {
 
 #[test]
 fn lock_acquire_records_source_commit() {
-    use velnor_actions_contract::{GeneratorBinary, LockedGenerator, MiseBootstrap, StepKind};
+    use velnor_actions_contract_release::{GeneratorBinary, LockedGenerator, MiseBootstrap};
+    use velnor_actions_contract_workflow::StepKind;
     use velnor_actions_workflow_renderer::steps::RELEASE_COMMIT_ENV;
     let lock = GeneratorLock {
         schema: 1,

@@ -3,7 +3,7 @@
 //! Qualified pins (rechecked 2026-09-30); project `mise.toml` selectors
 //! never alter these pins.
 
-use velnor_actions_contract::ToolIdentity;
+use velnor_actions_contract_release::ToolIdentity;
 
 use velnor_actions_mise_core::error::MiseError;
 
@@ -82,7 +82,7 @@ pub const RELEASE_PLZ_VERSION: &str = "0.3.169";
 const NEXTEST_TOOL_SPEC_PREFIX: &str = "aqua:nextest-rs/nextest/cargo-nextest";
 
 /// Pinned Rust target triple: the single Linux target the runner fleet
-/// maps to (`velnor_actions_contract::targets` stays the source of
+/// maps to (`velnor_actions_contract_release::targets` stays the source of
 /// truth; both runner labels resolve here).
 pub const RUST_TARGET_TRIPLE: &str = "x86_64-unknown-linux-gnu";
 

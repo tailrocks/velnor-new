@@ -5,8 +5,10 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::config::LATEST_RUNNER_LABEL;
-use velnor_actions_contract::{ExecutionConfig, ExecutionMode, RoutingWorkflow, VelnorConfig};
+use velnor_actions_contract_config::{
+    ExecutionConfig, ExecutionMode, RoutingWorkflow, VelnorConfig,
+};
+use velnor_actions_contract_release::targets::LATEST_RUNNER_LABEL;
 use velnor_actions_workflow_renderer::{
     MbxQualificationPins, RenderedFile, Schema2WorkflowRequest, render_schema2_workflows,
 };

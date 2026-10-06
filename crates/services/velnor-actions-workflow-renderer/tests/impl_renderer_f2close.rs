@@ -1,5 +1,5 @@
 //! F2 closure: candidate artifacts, verify-before-run, release.
-use velnor_actions_contract::{GeneratorValidation, WorkflowPolicy};
+use velnor_actions_contract_config::{GeneratorValidation, WorkflowPolicy};
 use velnor_actions_workflow_renderer::steps::{
     candidate_attestation_script, download_artifact_step, matrix_report_upload_step,
     upload_artifact_step,
@@ -269,10 +269,10 @@ fn artifact_roundtrip_uses_derived_candidate_name() -> Result<(), RenderError> {
     let name = candidate_artifact_name("x86_64-unknown-linux-gnu")?;
     let up = upload_artifact_step(&name, "${{ runner.temp }}/velnor/out")?;
     let down = download_artifact_step(&name, "${{ runner.temp }}/velnor/in")?;
-    let velnor_actions_contract::StepKind::Action { with: up_with, .. } = &up.kind else {
+    let velnor_actions_contract_workflow::StepKind::Action { with: up_with, .. } = &up.kind else {
         panic!("upload must be an action step");
     };
-    let velnor_actions_contract::StepKind::Action {
+    let velnor_actions_contract_workflow::StepKind::Action {
         with: down_with, ..
     } = &down.kind
     else {
@@ -281,7 +281,7 @@ fn artifact_roundtrip_uses_derived_candidate_name() -> Result<(), RenderError> {
     assert_eq!(up_with["name"], down_with["name"]);
     assert!(up_with["name"].starts_with("velnor-candidate-"));
     let template = matrix_report_upload_step()?;
-    let velnor_actions_contract::StepKind::Action { with, .. } = &template.kind else {
+    let velnor_actions_contract_workflow::StepKind::Action { with, .. } = &template.kind else {
         panic!("matrix upload must be an action step");
     };
     assert!(with["name"].starts_with("velnor-matrix-"));

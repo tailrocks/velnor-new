@@ -8,7 +8,7 @@
 //! outside merge consumption: the merge never publishes, and this job
 //! never judges evidence.
 
-use velnor_actions_contract::{Job, JobTimeout, Step};
+use velnor_actions_contract_workflow::{Job, JobTimeout, Step};
 use velnor_actions_workflow_renderer::render::FINAL_JOB_ID;
 use velnor_actions_workflow_renderer::steps::{
     PUBLISH_OPERATION, publish_step, write_request_step,

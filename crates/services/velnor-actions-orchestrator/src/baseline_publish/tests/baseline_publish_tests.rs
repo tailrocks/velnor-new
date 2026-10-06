@@ -36,7 +36,7 @@ fn publish_skips_covered_without_carry_forward() {
     let mut plan = fixture_plan(&head, "r7-a1");
     let compat = digest(8);
     let name = format!("velnor-baseline-{head}-{compat}");
-    let proof = velnor_actions_contract::BaselineProof::new(
+    let proof = velnor_actions_contract_workflow::BaselineProof::new(
         &head,
         7,
         crate::cover_compat::baseline_artifact_numeric_id(&name),

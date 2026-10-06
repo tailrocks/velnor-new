@@ -2,7 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{GeneratorValidation, Step, StepKind, WorkflowPolicy};
+use velnor_actions_contract_config::{GeneratorValidation, WorkflowPolicy};
+use velnor_actions_contract_workflow::{Step, StepKind};
 use velnor_actions_workflow_renderer::{ALINT_USES, RenderError, render_tree, render_workflow_ir};
 
 use crate::impl_renderer_tree_policy::{

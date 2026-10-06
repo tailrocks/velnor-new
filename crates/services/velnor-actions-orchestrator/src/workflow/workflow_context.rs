@@ -1,6 +1,8 @@
 //! Renderer context construction from discovered repository evidence.
 
-use velnor_actions_contract::{GeneratorValidation, ValidatorKind, VelnorConfig, WorkflowPolicy};
+use velnor_actions_contract_config::{
+    GeneratorValidation, ValidatorKind, VelnorConfig, WorkflowPolicy,
+};
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::VerificationTaskPolicy;
 use velnor_actions_workflow_renderer::render::{RenderContext, ValidatorCommand};

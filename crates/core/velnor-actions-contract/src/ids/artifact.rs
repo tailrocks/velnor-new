@@ -36,7 +36,7 @@ pub fn artifact_id_for_final(run_key: &str) -> Result<String, ContractError> {
 /// # Errors
 pub fn artifact_id_for_crate_job(run_key: &str, job_id: &str) -> Result<String, ContractError> {
     validate_run_key(run_key)?;
-    crate::workflow::jobs::validate_job_id(job_id)
+    super::job_ids::validate_job_id(job_id)
         .map_err(|_| ContractError::identity("artifact_id", "bad_job_artifact"))?;
     let id = format!("velnor-crate-{run_key}-{job_id}");
     Ok(super::ArtifactId::parse(&id)?.into_inner())
@@ -140,7 +140,7 @@ fn validate_job_artifact(rest: &str) -> Result<(), ContractError> {
     for (index, _) in rest.match_indices('-') {
         let head = &rest[..index];
         let tail = &rest[index + 1..];
-        if validate_run_key(head).is_ok() && crate::workflow::jobs::validate_job_id(tail).is_ok() {
+        if validate_run_key(head).is_ok() && super::job_ids::validate_job_id(tail).is_ok() {
             return Ok(());
         }
     }

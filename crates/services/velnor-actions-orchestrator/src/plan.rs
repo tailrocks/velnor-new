@@ -3,10 +3,10 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::ACTIONLINT_VERSION;
-use velnor_actions_contract::{
-    CRATE_JOB_ID_PREFIX, FRESHNESS_WORKFLOW_PATH, Job, ProposedTask, RequiredCheckMigration,
-    RunnerSelection, WorkflowPolicy, is_crate_job_id,
-};
+use velnor_actions_contract::{CRATE_JOB_ID_PREFIX, is_crate_job_id};
+use velnor_actions_contract_config::{RunnerSelection, WorkflowPolicy};
+use velnor_actions_contract_planning::ProposedTask;
+use velnor_actions_contract_workflow::{FRESHNESS_WORKFLOW_PATH, Job, RequiredCheckMigration};
 use velnor_actions_rust::KIND_DISPLAY_WORDS;
 use velnor_actions_workflow_renderer::action_pins;
 use velnor_actions_workflow_renderer::release_tree::RELEASE_TREE_PATHS;

@@ -32,7 +32,7 @@ fn run_of(job: &Job, name: &str) -> Vec<String> {
         .find(|step| step.name == name)
         .unwrap_or_else(|| panic!("missing step {name}"));
     match &step.kind {
-        velnor_actions_contract::StepKind::Shell { run, .. } => run.clone(),
+        velnor_actions_contract_workflow::StepKind::Shell { run, .. } => run.clone(),
         other => panic!("{name} must be a shell step: {other:?}"),
     }
 }
@@ -45,7 +45,7 @@ fn env_of(job: &Job, name: &str) -> BTreeMap<String, String> {
         .find(|step| step.name == name)
         .unwrap_or_else(|| panic!("missing step {name}"));
     match &step.kind {
-        velnor_actions_contract::StepKind::Shell { env, .. } => env.clone(),
+        velnor_actions_contract_workflow::StepKind::Shell { env, .. } => env.clone(),
         other => panic!("{name} must be a shell step: {other:?}"),
     }
 }
@@ -119,7 +119,7 @@ fn obligations_upload_one_artifact_per_job() {
         .collect();
     assert_eq!(uploads.len(), 1, "one upload for two obligations");
     let step = uploads[0];
-    let velnor_actions_contract::StepKind::Action { uses, with, .. } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Action { uses, with, .. } = &step.kind else {
         panic!("crate upload must be an action step");
     };
     assert!(uses.starts_with("actions/upload-artifact@"), "{uses}");

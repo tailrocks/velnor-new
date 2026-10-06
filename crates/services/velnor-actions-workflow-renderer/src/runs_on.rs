@@ -1,6 +1,7 @@
 //! Render a typed [`RunsOn`] value. Hosted stays a scalar string.
 
-use velnor_actions_contract::{ReleaseTarget, RunsOn, SCALE_SET_NAME};
+use velnor_actions_contract_config::{RunsOn, SCALE_SET_NAME};
+use velnor_actions_contract_release::ReleaseTarget;
 
 use crate::{RenderError, yaml::Yaml};
 

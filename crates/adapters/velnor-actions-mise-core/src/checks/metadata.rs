@@ -12,19 +12,19 @@ pub struct CheckEntryMetadata<'a> {
     /// Repository-relative working directory.
     pub directory: &'a str,
     /// Explicit typed placement and complete host container profile.
-    pub runner: &'a velnor_actions_contract::config::CheckRunner,
+    pub runner: &'a velnor_actions_contract_config::config::CheckRunner,
     /// Explicit qualified tool IDs.
     pub tools: &'a [String],
     /// Full explicit qualified installation closure; adapter-owned transport.
-    pub qualified_tools: &'a [velnor_actions_contract::config::QualifiedTool],
+    pub qualified_tools: &'a [velnor_actions_contract_config::config::QualifiedTool],
     /// Canonical declarations, options, dependencies and source qualification digest.
     pub qualification_digest: &'a str,
     /// Exact selected backend selectors participating in the fingerprint.
     pub tool_specs: &'a [String],
     /// Exact observed native system-tool versions and builds.
-    pub system_tools: &'a [velnor_actions_contract::config::CheckSystemTool],
+    pub system_tools: &'a [velnor_actions_contract_config::config::CheckSystemTool],
     /// Required machine-readable evidence contract.
-    pub evidence: &'a Option<velnor_actions_contract::config::CheckEvidence>,
+    pub evidence: &'a Option<velnor_actions_contract_config::config::CheckEvidence>,
     /// Process deadline in minutes.
     pub timeout_minutes: u32,
     #[serde(flatten)]

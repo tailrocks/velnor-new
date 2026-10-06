@@ -3,7 +3,7 @@
 //! Split from `impl_gates_cover` (size gate): hermetic coverage under
 //! an explicit runner-owned repository slug.
 
-use velnor_actions_contract::ObligationDecision;
+use velnor_actions_contract_workflow::ObligationDecision;
 
 use crate::impl_common::TestResult;
 use crate::impl_gates_cover::{
@@ -31,7 +31,7 @@ fn explicit_matching_repository_covers() -> TestResult {
     }
     assert_eq!(
         plan.baseline.status(),
-        velnor_actions_contract::BaselineStatus::Used
+        velnor_actions_contract_workflow::BaselineStatus::Used
     );
     Ok(())
 }

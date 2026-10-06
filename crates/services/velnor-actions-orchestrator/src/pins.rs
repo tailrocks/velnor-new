@@ -9,10 +9,12 @@ use velnor_actions_actionlint::actions::{MISE_ACTION_SHA, MISE_ACTION_VERSION};
 use velnor_actions_actionlint::overrides::{
     ActionPinOverride as ApprovedOverride, ApprovedPinCatalog,
 };
-use velnor_actions_contract::{
-    GeneratorLock, RELEASE_MANIFEST_FILENAME, ReleaseManifest, ReleaseTarget, Step, VelnorConfig,
-    VerificationRunner, check_release_artifact,
+use velnor_actions_contract_config::{VelnorConfig, VerificationRunner};
+use velnor_actions_contract_release::{
+    GeneratorLock, RELEASE_MANIFEST_FILENAME, ReleaseManifest, ReleaseTarget,
+    check_release_artifact,
 };
+use velnor_actions_contract_workflow::Step;
 use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_workflow_renderer::{
     HelperProvenance, MiseSetup, STAGED_BINARY_PREFIX, provision_acquire_step,
@@ -142,7 +144,7 @@ fn consumer_acquire_from(
 /// # Errors
 /// Rejects invalid runner profiles or missing artifact provenance.
 pub(crate) fn consumer_acquire_for_runner(
-    runner: &velnor_actions_contract::config::CheckRunner,
+    runner: &velnor_actions_contract_config::config::CheckRunner,
     version: &str,
     json: Option<&str>,
 ) -> Result<Step, OrchestratorError> {
@@ -210,7 +212,7 @@ pub(crate) fn lock_acquire_step(
 
 pub(crate) fn lock_acquire_for_runner(
     lock: &GeneratorLock,
-    runner: &velnor_actions_contract::config::CheckRunner,
+    runner: &velnor_actions_contract_config::config::CheckRunner,
     staged: &str,
 ) -> Result<Step, OrchestratorError> {
     runner.validate("workflow", "check.runner")?;
@@ -332,7 +334,7 @@ fn file_token(value: &str) -> bool {
 #[cfg(test)]
 fn test_manifest_json() -> String {
     let version = env!("CARGO_PKG_VERSION");
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
+    let targets = velnor_actions_contract_release::SUPPORTED_TARGETS
         .iter()
         .map(|target| {
             format!(

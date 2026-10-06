@@ -1,6 +1,6 @@
 use super::super::{ResolvedTools, resolve};
 use super::{check, node};
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     CheckPlatform, CheckSystemTool, CheckSystemToolKind, ContainerPlatform, DaemonIdentityPolicy,
     HostContainerProfile, HostDockerCli, HostDockerDaemon, HostOrbStackSdk, MiseCheck,
     QualifiedTool, QualifiedToolProbe,

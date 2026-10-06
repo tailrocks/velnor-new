@@ -8,9 +8,12 @@ pub(crate) mod check_jobs;
 use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax};
-use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, Permissions, Stack, Step, StepKind, StepRole, Trigger,
-    ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+use velnor_actions_contract::Stack;
+use velnor_actions_contract_config::{
+    GeneratorValidation, ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowPolicy,
+};
+use velnor_actions_contract_workflow::{
+    Concurrency, Job, Permissions, Step, StepKind, StepRole, Trigger, WorkflowIr,
 };
 use velnor_actions_mise::{
     PREPARE_RUST_COMPONENTS_STEP, PrepareRustComponents, ToolCatalog, ToolHomes,
@@ -315,8 +318,10 @@ fn plan_uses_rust(discovery: &Discovery) -> bool {
     !discovery.workspaces.is_empty()
         || discovery.statuses.iter().any(|status| {
             let project = match status {
-                velnor_actions_contract::DetectionStatus::Selected(project)
-                | velnor_actions_contract::DetectionStatus::Ignored { project, .. } => project,
+                velnor_actions_contract_planning::DetectionStatus::Selected(project)
+                | velnor_actions_contract_planning::DetectionStatus::Ignored { project, .. } => {
+                    project
+                }
             };
             Stack::from_id(&project.stack_id) == Some(Stack::Rust)
         })

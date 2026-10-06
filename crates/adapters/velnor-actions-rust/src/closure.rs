@@ -7,8 +7,9 @@
 use std::path::Path;
 
 use velnor_actions_contract::{
-    ClosureBuilder, ContractError, ProposedTask, Provenance, TaskInputClosure, digest_b3,
+    ClosureBuilder, ContractError, Provenance, TaskInputClosure, digest_b3,
 };
+use velnor_actions_contract_planning::ProposedTask;
 
 use super::closure_probes::{
     probe_cargo_config, probe_declared, probe_file, probe_lockfile, probe_nextest_config,

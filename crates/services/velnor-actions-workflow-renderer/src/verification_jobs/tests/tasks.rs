@@ -4,7 +4,8 @@ use super::super::{
 };
 use super::{CHECKOUT, policy};
 use std::collections::BTreeMap;
-use velnor_actions_contract::{Job, JobTimeout, PermissionLevel, VerificationRunner};
+use velnor_actions_contract_config::VerificationRunner;
+use velnor_actions_contract_workflow::{Job, JobTimeout, PermissionLevel};
 
 #[test]
 fn task_job_is_unconditional_cache_off_and_credential_scrubbed() {
@@ -20,7 +21,9 @@ fn task_job_is_unconditional_cache_off_and_credential_scrubbed() {
     assert_eq!(permissions.pull_requests, PermissionLevel::None);
     assert_eq!(permissions.id_token, PermissionLevel::None);
     assert_eq!(job.steps.len(), 4);
-    if let velnor_actions_contract::StepKind::Action { uses, with, env } = &job.steps[0].kind {
+    if let velnor_actions_contract_workflow::StepKind::Action { uses, with, env } =
+        &job.steps[0].kind
+    {
         assert_eq!(uses.as_str(), CHECKOUT);
         assert_eq!(
             with.get("persist-credentials").map(String::as_str),
@@ -31,7 +34,7 @@ fn task_job_is_unconditional_cache_off_and_credential_scrubbed() {
         panic!("checkout must be a pinned action");
     }
     let mise = &job.steps[1];
-    if let velnor_actions_contract::StepKind::Action { with, env, .. } = &mise.kind {
+    if let velnor_actions_contract_workflow::StepKind::Action { with, env, .. } = &mise.kind {
         assert!(env.is_empty());
         assert_eq!(with.get("install").map(String::as_str), Some("false"));
         assert_eq!(with.get("env").map(String::as_str), Some("false"));
@@ -41,7 +44,7 @@ fn task_job_is_unconditional_cache_off_and_credential_scrubbed() {
         panic!("Mise setup must be an action");
     }
     for step in &job.steps[2..] {
-        if let velnor_actions_contract::StepKind::Shell { run, env } = &step.kind {
+        if let velnor_actions_contract_workflow::StepKind::Shell { run, env } = &step.kind {
             let unset = crate::toolchain_env::with_env_unset_argv(&[]);
             assert!(run.starts_with(&unset));
             for variable in crate::toolchain_env::STEP_CREDENTIAL_DENYLIST {
@@ -54,14 +57,14 @@ fn task_job_is_unconditional_cache_off_and_credential_scrubbed() {
             panic!("Mise task commands must be shell steps");
         }
     }
-    if let velnor_actions_contract::StepKind::Shell { run, .. } = &job.steps[2].kind {
+    if let velnor_actions_contract_workflow::StepKind::Shell { run, .. } = &job.steps[2].kind {
         assert!(run.ends_with(&[
             "mise".to_owned(),
             "install".to_owned(),
             "--locked".to_owned(),
         ]));
     }
-    if let velnor_actions_contract::StepKind::Shell { run, .. } = &job.steps[3].kind {
+    if let velnor_actions_contract_workflow::StepKind::Shell { run, .. } = &job.steps[3].kind {
         assert!(run.ends_with(&[
             "mise".to_owned(),
             "run".to_owned(),

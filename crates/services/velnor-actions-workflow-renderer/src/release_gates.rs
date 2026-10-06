@@ -7,7 +7,7 @@
 //! everywhere release-plz reads git, explicit config binding, and no
 //! verification bypasses or dispatch-input interpolation.
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract_workflow::{Step, StepKind};
 
 use crate::{
     RenderError, commands,

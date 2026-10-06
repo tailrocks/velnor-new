@@ -2,7 +2,7 @@
 //! remote ref must be `owner/repo` at a 40-hex commit.
 
 use crate::RenderError;
-use velnor_actions_contract::workflow::step_identity::TOOL_SEED_USES;
+use velnor_actions_contract_workflow::workflow::step_identity::TOOL_SEED_USES;
 
 /// Prefix for renderer-generated shared `ToFu` setup composites.
 pub(crate) const TOFU_PROVIDER_PRELUDE_ACTION_PREFIX: &str =

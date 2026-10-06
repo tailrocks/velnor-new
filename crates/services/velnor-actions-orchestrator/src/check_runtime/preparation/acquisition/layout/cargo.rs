@@ -4,7 +4,7 @@ use crate::internal::internal;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     CheckPlatform, QualifiedCargoInstallation, QualifiedTool, QualifiedToolBackend,
     QualifiedToolOptions, QualifiedToolPlatform,
 };

@@ -1,7 +1,7 @@
 //! Pre-seed mode: build-once templates plus strict closure gates.
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::Job;
+use velnor_actions_contract_workflow::Job;
 use velnor_actions_workflow_renderer::{
     INTERNAL_OP_ENV, PRESEED_BUILD_OUTPUT, PRESEED_MANIFEST_BINARY_ENV, PRESEED_MANIFEST_OUT_ENV,
     PRESEED_MANIFEST_TARGET_ENV, PRESEED_MANIFEST_TOOLCHAIN_ENV, PreseedStageSource, RenderError,
@@ -80,7 +80,7 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
     )?;
     // S1: the helper build compiles PR source, so it unsets runner
     // credentials before exec and scrubs the step env.
-    let velnor_actions_contract::StepKind::Shell { run, env } = &build_step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Shell { run, env } = &build_step.kind else {
         panic!("pre-seed build must be shell: {:?}", build_step.kind);
     };
     assert_eq!(run.first().map(String::as_str), Some("env"));
@@ -127,7 +127,7 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
 #[test]
 fn preseed_manifest_step_runs_fresh_binary_with_op() -> Result<(), RenderError> {
     let step = preseed_manifest_step(&build_argv(), TARGET)?;
-    let velnor_actions_contract::StepKind::Shell { run, env } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Shell { run, env } = &step.kind else {
         panic!("manifest must be a shell step");
     };
     // Fresh binary, no sh -c wrapper: just the constructor's `env -u`
@@ -183,7 +183,7 @@ fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
         MBX_VERSION,
         &BTreeMap::from([("MISE_CARGO_HOME".to_owned(), "owned".to_owned())]),
     )?;
-    let velnor_actions_contract::StepKind::Shell { run, env } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Shell { run, env } = &step.kind else {
         panic!("verify must be a shell step");
     };
     let home = env.get("MISE_CARGO_HOME").map(String::as_str);

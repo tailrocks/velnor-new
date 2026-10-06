@@ -9,9 +9,8 @@ use std::path::{Path, PathBuf};
 
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::{
-    Plan, PlanBaseline, WorkflowEvent, canonical_json_bytes, digest_b3, validate_digest,
-};
+use velnor_actions_contract::{canonical_json_bytes, digest_b3, validate_digest};
+use velnor_actions_contract_workflow::{Plan, PlanBaseline, WorkflowEvent};
 use velnor_actions_mise::BaselineLookup as MiseBaselineLookup;
 
 use self::provenance_check::{

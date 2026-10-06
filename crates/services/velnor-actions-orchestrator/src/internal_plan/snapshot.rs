@@ -11,9 +11,8 @@
 
 use serde::Serialize;
 use velnor_actions_contract::cachekey::{PlatformInputs, platform_id};
-use velnor_actions_contract::{
-    ContractError, UNOBSERVED_IMAGE_VALUE, canonical_json_bytes, digest_b3, parse_strict_json,
-};
+use velnor_actions_contract::{ContractError, canonical_json_bytes, digest_b3, parse_strict_json};
+use velnor_actions_contract_release::UNOBSERVED_IMAGE_VALUE;
 
 /// Explicit unknown marker for unverifiable archive sources.
 ///

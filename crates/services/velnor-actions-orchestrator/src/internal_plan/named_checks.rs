@@ -5,9 +5,10 @@ use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoBytes, read_repo_bytes};
 use std::path::Path;
 use velnor_actions_contract::cachekey::ToolchainInputs;
 use velnor_actions_contract::{
-    ClosureBuilder, ContractError, NamedCheckIdentityExtension, ProposedTask, Provenance, Stack,
-    StackExtension, TaskInputClosure, digest_b3,
+    ClosureBuilder, ContractError, Provenance, Stack, StackExtension, TaskInputClosure, digest_b3,
 };
+use velnor_actions_contract_config::NamedCheckIdentityExtension;
+use velnor_actions_contract_planning::ProposedTask;
 use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};
 
 /// Require the discovered definition corresponding to the exact proposal.

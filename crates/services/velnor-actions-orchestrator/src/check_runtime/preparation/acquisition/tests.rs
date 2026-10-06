@@ -1,6 +1,6 @@
 //! Compiler home follows the current tool's declared dependency, never a future sibling.
 use super::*;
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     CheckPlatform, QualifiedToolExecutable, QualifiedToolPlatform, QualifiedToolProbe,
 };
 

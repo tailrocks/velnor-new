@@ -6,7 +6,8 @@
 //! so consumer trees omit the file instead of emitting a workflow
 //! that references a missing script.
 
-use velnor_actions_contract::{FRESHNESS_CRON_WEEKLY, ScheduleTrigger, WorkflowPolicy};
+use velnor_actions_contract_config::WorkflowPolicy;
+use velnor_actions_contract_workflow::{FRESHNESS_CRON_WEEKLY, ScheduleTrigger};
 use velnor_actions_workflow_renderer::freshness::{FreshnessSpec, render_freshness_workflow};
 use velnor_actions_workflow_renderer::render::RenderedFile;
 

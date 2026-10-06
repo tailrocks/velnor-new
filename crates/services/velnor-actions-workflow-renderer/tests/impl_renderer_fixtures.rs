@@ -1,8 +1,9 @@
 //! Shared fixtures for the strict-emission test family.
 use std::collections::BTreeMap;
-use velnor_actions_contract::{
-    Concurrency, Job, JobTimeout, Permissions, Step, Trigger, ValidatorKind, WorkflowIr,
-    WorkflowPolicy, workflow::permissions::PermissionLevel,
+use velnor_actions_contract_config::{ValidatorKind, WorkflowPolicy};
+use velnor_actions_contract_workflow::workflow::permissions::PermissionLevel;
+use velnor_actions_contract_workflow::{
+    Concurrency, Job, JobTimeout, Permissions, Step, Trigger, WorkflowIr,
 };
 use velnor_actions_workflow_renderer::steps::{CompileDriver, mbx_steps_for_driver};
 use velnor_actions_workflow_renderer::{
@@ -226,7 +227,8 @@ pub(crate) fn candidate_ctx() -> RenderContext {
 }
 
 /// Task job wired for matrix fan-out plus the matrix report upload.
-pub(crate) fn matrix_task_job() -> Result<(String, velnor_actions_contract::Job), RenderError> {
+pub(crate) fn matrix_task_job()
+-> Result<(String, velnor_actions_contract_workflow::Job), RenderError> {
     let env = BTreeMap::from([
         (
             "VELNOR_TASK_ID".to_owned(),

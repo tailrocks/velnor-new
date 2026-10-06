@@ -4,9 +4,8 @@
 
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::{
-    ObligationDecision, Plan, canonical_json_bytes, digest_b3, validate_digest,
-};
+use velnor_actions_contract::{canonical_json_bytes, digest_b3, validate_digest};
+use velnor_actions_contract_workflow::{ObligationDecision, Plan};
 
 use crate::cover::Signals;
 use crate::cover_baseline::provenance_check::{

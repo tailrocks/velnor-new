@@ -10,9 +10,9 @@ use std::fs;
 use serde_json::json;
 use tempfile::TempDir;
 use velnor_actions_contract::{
-    FinalStatus, MatrixReport, MatrixStatus, Plan, TaskStatus, matrix_id_for_task_group,
-    matrix_key_for_id, report_id_for_matrix, task_report_id_for_task,
+    matrix_id_for_task_group, matrix_key_for_id, report_id_for_matrix, task_report_id_for_task,
 };
+use velnor_actions_contract_workflow::{FinalStatus, MatrixReport, MatrixStatus, Plan, TaskStatus};
 use velnor_actions_orchestrator::plan_internal;
 
 use super::impl_common::{
@@ -88,7 +88,7 @@ fn merge_reports(
     plan: &Plan,
     reports: &serde_json::Value,
     jobs: &serde_json::Value,
-) -> Result<velnor_actions_contract::FinalReport, Box<dyn std::error::Error>> {
+) -> Result<velnor_actions_contract_workflow::FinalReport, Box<dyn std::error::Error>> {
     let plan_value = serde_json::to_value(plan)?;
     let matrix = serde_json::to_value(&plan.matrix)?;
     merge(&merge_request(&plan_value, &matrix, reports, jobs))
@@ -129,7 +129,7 @@ fn tofu_unknown_report_fails_required_planning_failed() -> TestResult {
         status: MatrixStatus::Passed,
         expected_task_ids: vec![ghost_task.to_owned()],
         task_report_ids: vec![task_report_id.clone()],
-        tasks: vec![velnor_actions_contract::MatrixTaskEntry {
+        tasks: vec![velnor_actions_contract_workflow::MatrixTaskEntry {
             task_report_id,
             task_id: ghost_task.to_owned(),
             status: TaskStatus::Executed,

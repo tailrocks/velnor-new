@@ -92,7 +92,7 @@ fn tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env() {
     use velnor_actions_rust::RUSTDOCFLAGS_ENV;
     let step =
         obligation_step(&tofu_obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
-    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Shell { env, .. } = &step.kind else {
         panic!("obligation must be a shell step");
     };
     assert_eq!(
@@ -109,7 +109,7 @@ fn tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env() {
 fn tofu_obligation_step_carries_isolated_cache_dir() {
     let step =
         obligation_step(&tofu_obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
-    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Shell { env, .. } = &step.kind else {
         panic!("obligation must be a shell step");
     };
     let data = env

@@ -1,6 +1,7 @@
 //! Configured-roots qualification cases.
 use crate::support::{Outcome, TempDir};
-use velnor_actions_contract::{TofuStackConfig, Utf8RepoRelDir, build_index};
+use velnor_actions_contract_config::{TofuStackConfig, Utf8RepoRelDir};
+use velnor_actions_contract_planning::build_index;
 use velnor_actions_tofu_core::{STACK_ID, qualify_roots};
 
 /// Tofu config from raw root spellings.
@@ -151,7 +152,7 @@ fn alias_without_indexed_files_fails_naming_the_root() -> Outcome {
 #[test]
 #[cfg(unix)]
 fn escaping_symlink_root_fails_closed() -> Outcome {
-    use velnor_actions_contract::build_index_from_list;
+    use velnor_actions_contract_planning::build_index_from_list;
     let dir = TempDir::create("tofu-roots-escape")?;
     let outside = TempDir::create("tofu-roots-outside")?;
     outside.write("main.tf", "")?;

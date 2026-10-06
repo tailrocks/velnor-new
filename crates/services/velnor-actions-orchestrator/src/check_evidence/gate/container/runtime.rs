@@ -5,7 +5,7 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 use std::path::{Component, Path};
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     HostContainerProfile, MAX_CHECK_CONTAINER_PATH_BYTES, MAX_CHECK_CONTAINER_RUNTIME_ENTRIES,
     MAX_CHECK_CONTAINER_RUNTIME_ENTRY_PATH_BYTES,
 };

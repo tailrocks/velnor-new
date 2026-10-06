@@ -6,7 +6,7 @@
 
 use std::fs;
 
-use velnor_actions_contract::{FinalReport, FinalStatus, JobConclusion, Plan};
+use velnor_actions_contract_workflow::{FinalReport, FinalStatus, JobConclusion, Plan};
 use velnor_actions_orchestrator::{
     GenerationPreparation, merge_passed, plan_internal, prepare, render_staged_tree,
 };

@@ -2,8 +2,9 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 
-use velnor_actions_contract::{
-    CachePolicy, IdentityInputs, ProposedTask, Provenance, ResourceClass, ResourceDemand,
+use velnor_actions_contract::Provenance;
+use velnor_actions_contract_planning::{
+    CachePolicy, IdentityInputs, ProposedTask, ResourceClass, ResourceDemand,
 };
 use velnor_actions_tofu::closure::resolve_closure_at_root;
 use velnor_actions_tofu_core::argv::tofu_payload_argv;

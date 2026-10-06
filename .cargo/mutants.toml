@@ -20,19 +20,19 @@
 examine_globs = [
     # Parsers: config validation, strict JSON, manifests, toolfiles,
     # metadata JSON, lock/policy TOML subset, workflow plans.
-    "crates/core/velnor-actions-contract/src/config/**/*.rs",
+    "crates/core/velnor-actions-contract-config/src/config/**/*.rs",
     "crates/core/velnor-actions-contract/src/strict_json.rs",
-    "crates/core/velnor-actions-contract/src/manifest.rs",
-    "crates/core/velnor-actions-contract/src/candidate_manifest.rs",
-    "crates/core/velnor-actions-contract/src/tooling.rs",
-    "crates/core/velnor-actions-contract/src/workflow/plan.rs",
+    "crates/core/velnor-actions-contract-release/src/manifest.rs",
+    "crates/core/velnor-actions-contract-release/src/candidate_manifest.rs",
+    "crates/core/velnor-actions-contract-release/src/tooling.rs",
+    "crates/core/velnor-actions-contract-workflow/src/workflow/plan.rs",
     "crates/adapters/velnor-actions-rust/src/metadata.rs",
     "crates/adapters/velnor-actions-mise-catalog/src/catalog/lock.rs",
     "crates/adapters/velnor-actions-mise-catalog/src/toolfiles.rs",
     # Identities: validated ids, cache keys/ids, rust identity, cover id.
     "crates/core/velnor-actions-contract/src/ids/**/*.rs",
     "crates/core/velnor-actions-contract/src/cachekey.rs",
-    "crates/core/velnor-actions-contract/src/workflow/cache_ids.rs",
+    "crates/core/velnor-actions-contract-workflow/src/workflow/cache_ids.rs",
     "crates/adapters/velnor-actions-rust/src/identity.rs",
     "crates/services/velnor-actions-orchestrator/src/cover_identity.rs",
     # Selection: affected-package computation and edge closure.

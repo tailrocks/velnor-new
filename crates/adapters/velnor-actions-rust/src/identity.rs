@@ -10,7 +10,8 @@ mod identity_closure;
 
 pub use self::identity_closure::{UnresolvedInput, normalize_identity_path, unresolved_inputs};
 
-use velnor_actions_contract::{ContractError, ProposedTask, component_id_for_unit};
+use velnor_actions_contract::ContractError;
+use velnor_actions_contract_planning::{ProposedTask, component_id_for_unit};
 
 use crate::argv::{entry_metadata, require_nextest_for_shards, shards_allowed};
 use crate::task_identity::{DigestSlot, ExtensionInputs, RustTaskIdentityExtension};

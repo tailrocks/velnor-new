@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 
-use velnor_actions_contract::Job;
+use velnor_actions_contract_workflow::Job;
 use velnor_actions_orchestrator::{
     GenerationPreparation, finalized_jobs, prepare, render_staged_tree,
 };

@@ -1,15 +1,14 @@
 //! Final fan-in: fetch placement, publish, tolerant downloads, no wildcards.
-use velnor_actions_contract::{
-    GeneratorValidation, NeedsConclusions, Permissions, WorkflowPolicy,
-    workflow::permissions::PermissionLevel,
-};
+use velnor_actions_contract_config::{GeneratorValidation, WorkflowPolicy};
+use velnor_actions_contract_workflow::workflow::permissions::PermissionLevel;
+use velnor_actions_contract_workflow::{NeedsConclusions, Permissions};
 use velnor_actions_workflow_renderer::{
     RenderError, checkout_step, merge_step, plan_step, render_workflow_ir, write_request_step,
 };
 
 use super::impl_renderer_fixtures::*;
 
-fn final_job() -> Result<(String, velnor_actions_contract::Job), RenderError> {
+fn final_job() -> Result<(String, velnor_actions_contract_workflow::Job), RenderError> {
     let (id, mut job) = job(
         "required",
         "Required",
@@ -261,7 +260,7 @@ fn candidate_mode_downloads_attestation_before_merge() -> Result<(), RenderError
 
 #[test]
 fn expected_inventory_excludes_post_gate_jobs() -> Result<(), RenderError> {
-    use velnor_actions_contract::NEEDS_EXPECTED_ENV;
+    use velnor_actions_contract_workflow::NEEDS_EXPECTED_ENV;
     use velnor_actions_workflow_renderer::render::{
         FINAL_CONDITION, FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID,
     };

@@ -1,6 +1,6 @@
 //! Lock-against-manifest verification (split from `lock`: size gate).
 
-use velnor_actions_contract::{GeneratorLock, ReleaseManifest, ReleaseTarget};
+use velnor_actions_contract_release::{GeneratorLock, ReleaseManifest, ReleaseTarget};
 
 use super::{
     MISE_VERSION,

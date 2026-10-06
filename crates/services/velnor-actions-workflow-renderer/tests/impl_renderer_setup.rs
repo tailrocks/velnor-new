@@ -1,6 +1,6 @@
 //! Pinned Mise setup emission: template shape plus strict insertion.
 use std::collections::BTreeMap;
-use velnor_actions_contract::Step;
+use velnor_actions_contract_workflow::Step;
 use velnor_actions_workflow_renderer::{
     MiseSetup, RenderError, SETUP_MISE_NAME, checkout_step, mise_setup_step, plan_step,
 };
@@ -11,7 +11,7 @@ use super::impl_renderer_fixtures::*;
 fn setup_step_shape_exact() -> Result<(), RenderError> {
     let step = mise_setup_step(&mise())?;
     assert_eq!(step.name, SETUP_MISE_NAME);
-    let velnor_actions_contract::StepKind::Action { uses, with, .. } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Action { uses, with, .. } = &step.kind else {
         panic!("setup must be an action step");
     };
     assert_eq!(uses, MISE_USES);
@@ -189,12 +189,12 @@ fn strict_rejects_setup_misuse() -> Result<(), RenderError> {
         render(misordered).is_err_and(|err| format!("{err:?}").contains("setup_mise_misordered")),
         "misordered setup must fail"
     );
-    let malformed = velnor_actions_contract::Step {
+    let malformed = velnor_actions_contract_workflow::Step {
         name: SETUP_MISE_NAME.to_owned(),
         id: None,
         role: None,
         condition: None,
-        kind: velnor_actions_contract::StepKind::Action {
+        kind: velnor_actions_contract_workflow::StepKind::Action {
             uses: MISE_USES.to_owned(),
             with: BTreeMap::from([
                 ("version".to_owned(), MISE_VERSION.to_owned()),
@@ -215,7 +215,7 @@ fn strict_rejects_setup_misuse() -> Result<(), RenderError> {
 #[test]
 fn strict_mixed_platform_checks_use_native_setup_and_keep_global_runner() -> Result<(), RenderError>
 {
-    use velnor_actions_contract::config::{CheckExecutor, CheckPlatform, CheckRunner};
+    use velnor_actions_contract_config::config::{CheckExecutor, CheckPlatform, CheckRunner};
     use velnor_actions_workflow_renderer::setup::MISE_BINARY_SHA256_MACOS_ARM64;
     let mut check = job(
         "check-native",
@@ -251,7 +251,7 @@ fn strict_mixed_platform_checks_use_native_setup_and_keep_global_runner() -> Res
 
 #[test]
 fn qualified_linux_setup_cannot_bypass_macos_artifact_selection() -> Result<(), RenderError> {
-    use velnor_actions_contract::config::{CheckExecutor, CheckPlatform, CheckRunner};
+    use velnor_actions_contract_config::config::{CheckExecutor, CheckPlatform, CheckRunner};
     use velnor_actions_workflow_renderer::cache_p08::{
         mise_cache_key_for_tools, mise_setup_step_p08,
     };
@@ -287,7 +287,7 @@ fn qualified_linux_setup_cannot_bypass_macos_artifact_selection() -> Result<(), 
 
 #[test]
 fn public_ephemeral_ir_rejects_fork_admission_bypass() -> Result<(), RenderError> {
-    use velnor_actions_contract::config::{
+    use velnor_actions_contract_config::config::{
         CheckExecutor, CheckPlatform, CheckRunner, EPHEMERAL_CHECK_ADMISSION_CONDITION,
     };
     let mut check = job(
@@ -334,7 +334,7 @@ fn public_ephemeral_ir_rejects_fork_admission_bypass() -> Result<(), RenderError
 
 #[test]
 fn native_check_without_catalog_tools_still_bootstraps_mise() -> Result<(), RenderError> {
-    use velnor_actions_contract::config::{CheckExecutor, CheckPlatform, CheckRunner};
+    use velnor_actions_contract_config::config::{CheckExecutor, CheckPlatform, CheckRunner};
     use velnor_actions_workflow_renderer::setup::MISE_BINARY_SHA256_MACOS_ARM64;
     let plain_step = || scrubbed_shell_step("Native helper", vec!["true".to_owned()]);
     let mut check = job(

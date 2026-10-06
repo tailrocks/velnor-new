@@ -1,7 +1,8 @@
 //! Run-string quoting and join cases (split from step templates).
 use std::collections::BTreeMap;
-use velnor_actions_contract::{
-    Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr, WorkflowPolicy,
+use velnor_actions_contract_config::WorkflowPolicy;
+use velnor_actions_contract_workflow::{
+    Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr,
 };
 use velnor_actions_workflow_renderer::steps::{
     has_bare_env_expansion, quote_env_path_for_run, quote_run_line_env_paths,
@@ -42,7 +43,7 @@ fn shell_step_joins_fixed_argv_with_quoting() -> Result<(), RenderError> {
     // the payload still lands intact behind it.
     assert!(matches!(
         &step.kind,
-        velnor_actions_contract::StepKind::Shell { run, .. }
+        velnor_actions_contract_workflow::StepKind::Shell { run, .. }
         if run.first().is_some_and(|head| head == "env")
             && run.ends_with(&["cargo".to_owned(), "test".to_owned()])
     ));

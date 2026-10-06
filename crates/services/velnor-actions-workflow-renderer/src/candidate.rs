@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, JobTimeout, Step};
+use velnor_actions_contract_workflow::{Job, JobTimeout, Step};
 
 use crate::{
     RenderError,
@@ -26,7 +26,8 @@ pub const VERIFY_MANIFEST_NAME: &str = "Verify candidate manifest";
 /// malformed versions fail closed with `non_release_build`.
 /// # Errors
 pub fn check_release_build(version: &str, file: &str) -> Result<(), RenderError> {
-    velnor_actions_contract::require_release_version(version, file).map_err(RenderError::Contract)
+    velnor_actions_contract_release::require_release_version(version, file)
+        .map_err(RenderError::Contract)
 }
 
 /// Derived candidate artifact name for one target triple.
@@ -66,7 +67,7 @@ pub fn candidate_manifest_verify_script(target: &str) -> String {
 /// fixed `test`/`sha256sum` only, no auth needed.
 /// # Errors
 pub fn candidate_manifest_verify_step(target: &str) -> Result<Step, RenderError> {
-    if !velnor_actions_contract::is_supported_target(target) {
+    if !velnor_actions_contract_release::is_supported_target(target) {
         return Err(RenderError::BadCommand(format!(
             "candidate_unsupported_target:{target}"
         )));
@@ -99,7 +100,7 @@ pub fn candidate_manifest_verify_step(target: &str) -> Result<Step, RenderError>
 /// registry would need an explicit scoped binding here, never ambient.
 /// # Errors
 pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result<Job, RenderError> {
-    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(&ctx.runs_on)
+    let target = velnor_actions_contract_release::ReleaseTarget::for_runner_label(&ctx.runs_on)
         .ok_or_else(|| {
             RenderError::InvalidWorkflow(format!("unsupported_target_for_runner:{}", ctx.runs_on))
         })?;
@@ -171,7 +172,7 @@ fn qualify_scrubbed_argv(argv: &[String]) -> Result<Vec<String>, RenderError> {
 /// separate reviewed change (bootstrap contract §4 step 6), never here.
 /// # Errors
 pub(crate) fn release_job(ctx: &RenderContext) -> Result<Job, RenderError> {
-    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(&ctx.runs_on)
+    let target = velnor_actions_contract_release::ReleaseTarget::for_runner_label(&ctx.runs_on)
         .ok_or_else(|| {
             RenderError::InvalidWorkflow(format!("unsupported_target_for_runner:{}", ctx.runs_on))
         })?;

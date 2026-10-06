@@ -3,8 +3,10 @@
 
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::config::is_hosted_catalog;
-use velnor_actions_contract::{RoutingWorkflow, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
+use velnor_actions_contract_config::config::is_hosted_catalog;
+use velnor_actions_contract_config::{
+    RoutingWorkflow, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL,
+};
 
 use crate::RenderError;
 use crate::marker::with_marker;

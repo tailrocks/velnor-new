@@ -1,5 +1,5 @@
 use super::*;
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract_workflow::StepKind;
 
 #[test]
 fn provider_restore_composite_binds_exact_key_and_owned_path() {

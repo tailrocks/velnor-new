@@ -4,7 +4,7 @@ use crate::impl_renderer_release_gates::{
     policy_checkout, publish_argv, shell, source_checkout, spec, with_steps,
 };
 use std::collections::BTreeMap;
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract_workflow::{Step, StepKind};
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::release_gates::check_release_jobs;
 use velnor_actions_workflow_renderer::release_jobs::{ReleaseJobSpec, ReleaseRole};

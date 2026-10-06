@@ -7,8 +7,9 @@ use super::*;
 use velnor_actions_contract::cachekey::{
     FormatInputs, cache_format_id, mbx_cache_generation, toolchain_id,
 };
-use velnor_actions_contract::component_id_for_unit;
-use velnor_actions_contract::{ProposedTask, digest_b3, validate_digest};
+use velnor_actions_contract::{digest_b3, validate_digest};
+use velnor_actions_contract_planning::ProposedTask;
+use velnor_actions_contract_planning::component_id_for_unit;
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_rust::TaskKind;
 use velnor_actions_rust_core::{CompileDriver, LocalEdge, TestRunner, WorkspaceRecord};
@@ -172,7 +173,9 @@ fn cache_format_identity_tracks_emitted_mbx_generation() {
 fn tofu_task(kind: &str) -> ProposedTask {
     use std::collections::BTreeMap;
     use std::ffi::OsString;
-    use velnor_actions_contract::{CachePolicy, IdentityInputs, ResourceClass, ResourceDemand};
+    use velnor_actions_contract_planning::{
+        CachePolicy, IdentityInputs, ResourceClass, ResourceDemand,
+    };
     ProposedTask {
         task_id: format!("stack/tofu/root/{kind}/default"),
         stack_id: "tofu".to_owned(),

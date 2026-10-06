@@ -3,8 +3,8 @@ use crate::internal::{internal, internal_contract};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Component, Path};
-use velnor_actions_contract::config::{CheckRunner, HostContainerProfile};
 use velnor_actions_contract::{canonical_json_bytes, digest_b3};
+use velnor_actions_contract_config::config::{CheckRunner, HostContainerProfile};
 use velnor_actions_mise::checks::{
     CheckCapabilityProof, ContainerObservation, validate_check_capability_proof,
 };

@@ -2,7 +2,7 @@
 
 use crate::RenderError;
 use crate::yaml::Yaml;
-use velnor_actions_contract::RELEASE_MANIFEST_FILENAME;
+use velnor_actions_contract_release::RELEASE_MANIFEST_FILENAME;
 
 use super::super::features::{base, finish};
 use super::GeneratorReleasePins;
@@ -37,7 +37,7 @@ pub(super) fn job(
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<(String, Yaml), RenderError> {
     let mut steps = vec![workflow_steps::mise_step(
-        pins.setup_for(velnor_actions_contract::ReleaseTarget::LinuxX86_64),
+        pins.setup_for(velnor_actions_contract_release::ReleaseTarget::LinuxX86_64),
     )?];
     steps.push(workflow_steps::install_gh_step(&pins.install_gh_argv)?);
     steps.extend(product_download_steps(pins));

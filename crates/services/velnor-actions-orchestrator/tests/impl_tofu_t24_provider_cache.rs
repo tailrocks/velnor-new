@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, StepKind};
+use velnor_actions_contract_workflow::{Job, StepKind};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{finalized_jobs, prepare};
 
@@ -45,8 +45,8 @@ fn action_with<'a>(
 /// At most one init per root and one elected save over that restore's outputs.
 #[test]
 fn gate4_init_once_fmt_once_no_duplicate_uploads() -> TestResult {
-    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
-    use velnor_actions_contract::workflow::step_identity::{
+    use velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION;
+    use velnor_actions_contract_workflow::workflow::step_identity::{
         TOFU_PROVIDERS_KEY_OUTPUT_EXPR, TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
     };
 

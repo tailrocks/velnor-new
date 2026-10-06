@@ -186,8 +186,8 @@ impl TaskTiming {
 
 /// Contract rendering of one scheduler timing breakdown (PAR-9.2).
 #[must_use]
-pub fn contract_timing(timing: &TaskTiming) -> velnor_actions_contract::TaskTiming {
-    velnor_actions_contract::TaskTiming {
+pub fn contract_timing(timing: &TaskTiming) -> velnor_actions_contract_workflow::TaskTiming {
+    velnor_actions_contract_workflow::TaskTiming {
         queue_ms: timing.queue_ms,
         runner_ms: timing.runner_ms,
         task_ms: timing.task_ms,
@@ -209,7 +209,9 @@ pub fn contract_timing(timing: &TaskTiming) -> velnor_actions_contract::TaskTimi
 /// fabricated. Renders through [`contract_timing`] so scheduler and
 /// contract math agree by construction.
 #[must_use]
-pub fn measured_timing(duration_ms: Option<u64>) -> Option<velnor_actions_contract::TaskTiming> {
+pub fn measured_timing(
+    duration_ms: Option<u64>,
+) -> Option<velnor_actions_contract_workflow::TaskTiming> {
     duration_ms.map(|elapsed| {
         contract_timing(&TaskTiming {
             task_ms: elapsed,

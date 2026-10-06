@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, JobTimeout, Step, StepKind, StepRole};
+use velnor_actions_contract_workflow::{Job, JobTimeout, Step, StepKind, StepRole};
 use velnor_actions_workflow_renderer::cache_p08::check_mbx_before_fetch;
 
 use super::impl_renderer_fixtures::LABEL;

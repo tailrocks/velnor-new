@@ -1,8 +1,8 @@
 //! P08 writer-election cases: one Mise-cache saver per cache key.
 
 use std::collections::BTreeMap;
-use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
-use velnor_actions_contract::{Job, JobTimeout, Step, StepKind, StepRole};
+use velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION;
+use velnor_actions_contract_workflow::{Job, JobTimeout, Step, StepKind, StepRole};
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::cache_p08::{elect_mise_cache_writers, mise_setup_step_p08};
 use velnor_actions_workflow_renderer::steps::{TOOLS_CACHE_PATH, TOOLS_SAVE_USES};

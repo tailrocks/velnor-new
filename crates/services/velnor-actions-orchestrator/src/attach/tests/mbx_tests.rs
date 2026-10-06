@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn preseed_restores_mbx_builds_after_sources_with_homes() {
-    use velnor_actions_contract::StepRole;
+    use velnor_actions_contract_workflow::StepRole;
     use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
     let roots = [String::new()];
     let mut plan = preseed_fixture(true, &roots);
@@ -41,7 +41,8 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
         .iter()
         .find(|step| step.role == Some(StepRole::MbxCache))
         .expect("MBX action");
-    let velnor_actions_contract::StepKind::Action { env, with, .. } = &mbx_action.kind else {
+    let velnor_actions_contract_workflow::StepKind::Action { env, with, .. } = &mbx_action.kind
+    else {
         panic!("MBX restore must be an action");
     };
     assert_eq!(with.get("toolchain").map(String::as_str), Some("1.98.1"));

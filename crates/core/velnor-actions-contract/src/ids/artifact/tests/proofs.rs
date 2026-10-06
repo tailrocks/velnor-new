@@ -1,5 +1,7 @@
 use super::{proof_commit, proof_digest};
-use crate::workflow::baseline::{BaselineProof, BaselineStatus, ManifestTaskProof, PlanBaseline};
+use velnor_actions_contract_workflow::workflow::baseline::{
+    BaselineProof, BaselineStatus, ManifestTaskProof, PlanBaseline,
+};
 
 #[test]
 fn proof_constructor_validates_every_input() {

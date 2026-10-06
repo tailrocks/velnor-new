@@ -8,7 +8,7 @@ use std::fs;
 
 use serde_json::json;
 use tempfile::TempDir;
-use velnor_actions_contract::{FinalStatus, JobConclusion, Plan};
+use velnor_actions_contract_workflow::{FinalStatus, JobConclusion, Plan};
 use velnor_actions_orchestrator::{
     assemble_merge_request, finalized_jobs, merge_internal, plan_internal, prepare,
 };
@@ -290,7 +290,7 @@ fn missing_tofu_report_fails_required_closed() -> TestResult {
             .collect(),
     );
     value["actual_event"] = value["plan"]["event"].clone();
-    let report: velnor_actions_contract::FinalReport =
+    let report: velnor_actions_contract_workflow::FinalReport =
         serde_json::from_str(&merge_internal(&value.to_string())?)?;
     assert_eq!(report.status, FinalStatus::PlanningFailed);
     assert!(

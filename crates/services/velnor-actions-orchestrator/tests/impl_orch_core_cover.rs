@@ -3,7 +3,8 @@
 //! Split from `impl_orch_core` so the core helper file keeps the 400-line
 //! gate; merge-shape tests build covered plans through this module.
 
-use velnor_actions_contract::{Plan, canonical_json_bytes, digest_b3};
+use velnor_actions_contract::{canonical_json_bytes, digest_b3};
+use velnor_actions_contract_workflow::Plan;
 use velnor_actions_orchestrator::baseline_artifact_numeric_id;
 
 /// Plan JSON with every obligation covered plus its matching manifest.

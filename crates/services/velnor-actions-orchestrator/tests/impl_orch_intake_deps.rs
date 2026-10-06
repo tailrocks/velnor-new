@@ -25,10 +25,12 @@ fn intake_adapter_dependency_direction() -> TestResult {
             for name in deps.keys() {
                 // SIZE-split foundations ride as `{adapter}-*` family children.
                 let family_child = name.starts_with(&format!("velnor-actions-{adapter}-"));
+                // The contract family is shared vocabulary below every
+                // adapter; depending on it preserves leaf-ness.
+                let contract_family = name == "velnor-actions-contract"
+                    || name.starts_with("velnor-actions-contract-");
                 assert!(
-                    !name.starts_with("velnor-actions-")
-                        || name == "velnor-actions-contract"
-                        || family_child,
+                    !name.starts_with("velnor-actions-") || contract_family || family_child,
                     "{adapter} must not depend on {name}"
                 );
             }

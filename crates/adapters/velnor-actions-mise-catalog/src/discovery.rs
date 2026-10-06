@@ -10,9 +10,9 @@ mod task_validation;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::Path;
-use velnor_actions_contract::config::{MiseCheck, QualifiedTool};
-use velnor_actions_contract::graph::{CachePolicy, ResourceClass, ResourceDemand};
-use velnor_actions_contract::propose::{IdentityInputs, ProposedTask};
+use velnor_actions_contract_config::config::{MiseCheck, QualifiedTool};
+use velnor_actions_contract_planning::graph::{CachePolicy, ResourceClass, ResourceDemand};
+use velnor_actions_contract_planning::propose::{IdentityInputs, ProposedTask};
 
 /// Inspect named task definitions without invoking Mise or consumer code.
 /// Unsupported includes/file tasks/templated discovery fail explicitly.
@@ -50,7 +50,7 @@ fn discover(
     qualified_tools: &[QualifiedTool],
     deadline: Option<velnor_actions_mise_core::CheckDeadline>,
 ) -> Result<DiscoveredCheck, MiseError> {
-    if !velnor_actions_contract::config::is_valid_mise_task_name(&check.task) {
+    if !velnor_actions_contract_config::config::is_valid_mise_task_name(&check.task) {
         return Err(invalid("task", "invalid_named_task"));
     }
     let (source, bytes) = read_source(root, check, deadline)?;
@@ -109,7 +109,7 @@ fn read_source(
     let path = repository_path(root, &source)?;
     let bytes = velnor_actions_mise_core::checks::read_text(
         &path,
-        velnor_actions_contract::MAX_CHECK_SOURCE_BYTES,
+        velnor_actions_contract_config::MAX_CHECK_SOURCE_BYTES,
         deadline,
         "mise_config",
     )?;

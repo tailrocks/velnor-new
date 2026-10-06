@@ -2,7 +2,7 @@
 use crate::OrchestratorError;
 use crate::internal::internal;
 use std::path::{Path, PathBuf};
-use velnor_actions_contract::config::{CheckPlatform, QualifiedTool, QualifiedToolBackend};
+use velnor_actions_contract_config::config::{CheckPlatform, QualifiedTool, QualifiedToolBackend};
 use velnor_actions_mise::CheckDeadline;
 
 mod cargo;
@@ -76,7 +76,7 @@ pub(super) fn normalize_payload(
 
 fn matches_executables(
     root: &Path,
-    qualified: &velnor_actions_contract::config::QualifiedToolPlatform,
+    qualified: &velnor_actions_contract_config::config::QualifiedToolPlatform,
     deadline: CheckDeadline,
 ) -> Result<bool, OrchestratorError> {
     let metadata =

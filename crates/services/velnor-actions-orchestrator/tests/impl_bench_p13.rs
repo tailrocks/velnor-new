@@ -30,7 +30,7 @@ fn report(
     plan_ms: u128,
     metadata_ms: u128,
     rss_kb: u64,
-    plan: &velnor_actions_contract::Plan,
+    plan: &velnor_actions_contract_workflow::Plan,
     note: &str,
 ) {
     bench_line(&BenchSample {
@@ -202,7 +202,8 @@ fn bench_public_api_edit_reverse_deps() -> TestResult {
 fn lane_plan(request: &str) -> Result<(String, u128), Box<dyn std::error::Error>> {
     let (response, wall_ms) = timed(|| velnor_actions_orchestrator::plan_internal(request));
     let value: serde_json::Value = serde_json::from_str(&response?)?;
-    let plan: velnor_actions_contract::Plan = serde_json::from_value(value["plan"].clone())?;
+    let plan: velnor_actions_contract_workflow::Plan =
+        serde_json::from_value(value["plan"].clone())?;
     Ok((obligation_digest(&plan), wall_ms))
 }
 
@@ -266,7 +267,8 @@ fn run_lane_count(lanes: usize) -> TestResult {
     for (index, (response, wall_ms)) in lane_walls.into_iter().enumerate() {
         lane_ms.push(wall_ms);
         let value: serde_json::Value = serde_json::from_str(&response?)?;
-        let plan: velnor_actions_contract::Plan = serde_json::from_value(value["plan"].clone())?;
+        let plan: velnor_actions_contract_workflow::Plan =
+            serde_json::from_value(value["plan"].clone())?;
         assert_eq!(
             obligation_digest(&plan),
             digests[index],

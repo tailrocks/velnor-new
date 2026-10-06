@@ -1,7 +1,7 @@
 //! F2 closure cases: identity attachment, rerun producer, shards, archives.
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::reverse_closure;
+use velnor_actions_contract_planning::reverse_closure;
 use velnor_actions_rust::tasks::{
     DigestSlot, ExtensionInputs, RustTaskIdentityExtension, parse_rerun_changed,
 };

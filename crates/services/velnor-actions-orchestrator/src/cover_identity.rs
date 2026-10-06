@@ -13,9 +13,11 @@ mod tests;
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use velnor_actions_contract::{
-    BaselineProof, ManifestTaskProof, ObligationDecision, Plan, PlanObligation, ProposedTask,
-    Stack, digest_b3, validate_rust_extension, validate_tofu_extension,
+use velnor_actions_contract::{Stack, digest_b3};
+use velnor_actions_contract_planning::ProposedTask;
+use velnor_actions_contract_release::{validate_rust_extension, validate_tofu_extension};
+use velnor_actions_contract_workflow::{
+    BaselineProof, ManifestTaskProof, ObligationDecision, Plan, PlanObligation,
 };
 use velnor_actions_rust::{extension_for_proposal, tool_needs};
 

@@ -4,7 +4,7 @@
 
 use super::*;
 
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract_workflow::StepKind;
 use velnor_actions_rust::TaskKind;
 
 /// Tofu proposal via the T12 adapter constructor.

@@ -7,7 +7,7 @@
 
 use std::fs;
 
-use velnor_actions_contract::{FinalStatus, MatrixReport, MatrixStatus, TaskStatus};
+use velnor_actions_contract_workflow::{FinalStatus, MatrixReport, MatrixStatus, TaskStatus};
 use velnor_actions_orchestrator::{
     GenerateOptions, OrchestratorError, generate, merge_internal, merge_passed, plan_internal,
     prepare, publish_final_report,
@@ -132,7 +132,8 @@ fn negative_reports_missing_leg_fails_required() -> TestResult {
         &success_jobs(),
     );
     let response = merge_internal(&request.to_string())?;
-    let final_report: velnor_actions_contract::FinalReport = serde_json::from_str(&response)?;
+    let final_report: velnor_actions_contract_workflow::FinalReport =
+        serde_json::from_str(&response)?;
     final_report.validate()?;
     assert_eq!(final_report.status, FinalStatus::NotRun);
     assert!(!merge_passed(&response)?, "missing leg never passes");

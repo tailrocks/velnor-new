@@ -12,7 +12,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use velnor_actions_contract::{Step, StepRole};
+use velnor_actions_contract_workflow::{Step, StepRole};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
 use crate::OrchestratorError;

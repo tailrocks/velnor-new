@@ -8,7 +8,8 @@
 //! never contain commas, and the empty set encodes as the empty
 //! string, which matches nothing and executes everything.
 
-use velnor_actions_contract::{ObligationDecision, Plan, validate_task_id};
+use velnor_actions_contract::validate_task_id;
+use velnor_actions_contract_workflow::{ObligationDecision, Plan};
 // Re-exported: the CLI emits this exact output name (single-sourced).
 pub use velnor_actions_workflow_renderer::COVERED_TASKS_OUTPUT;
 

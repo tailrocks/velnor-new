@@ -1,10 +1,10 @@
 use super::*;
 use serde_json::json;
 use std::path::PathBuf;
-use velnor_actions_contract::config::{
+use velnor_actions_contract::{digest_b3, is_valid_digest};
+use velnor_actions_contract_config::config::{
     ContainerPlatform, DaemonIdentityPolicy, HostContainerProfile, HostDockerCli, HostDockerDaemon,
 };
-use velnor_actions_contract::{digest_b3, is_valid_digest};
 use velnor_actions_mise::checks::CheckCapabilityProof;
 
 mod container_tests;

@@ -9,7 +9,8 @@ use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::path::Path;
 
-use velnor_actions_contract::{ProposedTask, WorkflowEvent};
+use velnor_actions_contract_planning::ProposedTask;
+use velnor_actions_contract_workflow::WorkflowEvent;
 use velnor_actions_mise::GitRequest;
 use velnor_actions_rust_core::SelectionBroadening;
 

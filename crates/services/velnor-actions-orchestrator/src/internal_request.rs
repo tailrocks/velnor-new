@@ -5,10 +5,8 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use velnor_actions_contract::{
-    NAMED_CHECK_LANES_ENV, NamedCheckLane, WorkflowEvent, canonical_json_bytes, run_key_for_ci,
-    validate_run_key,
-};
+use velnor_actions_contract::{canonical_json_bytes, run_key_for_ci, validate_run_key};
+use velnor_actions_contract_workflow::{NAMED_CHECK_LANES_ENV, NamedCheckLane, WorkflowEvent};
 
 use crate::OrchestratorError;
 use crate::internal::{MERGE_OP, PLAN_OP, SCHEMA, internal, internal_contract};

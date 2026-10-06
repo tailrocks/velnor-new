@@ -26,7 +26,7 @@ fn release_manifest_json() -> String {
 fn manifest_with_version(version: &str) -> String {
     // Distinctive digest proving the Acquire step copies the committed file.
     let sha = "c".repeat(64);
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
+    let targets = velnor_actions_contract_release::SUPPORTED_TARGETS
     .iter()
     .map(|target| {
         format!(
@@ -149,7 +149,7 @@ fn absent_manifest_fails_prepare_in_all_build_modes() -> TestResult {
 
 #[test]
 fn golden_manifest_fixture_uses_the_canonical_release_schema() -> TestResult {
-    let manifest = velnor_actions_contract::ReleaseManifest::parse_json(
+    let manifest = velnor_actions_contract_release::ReleaseManifest::parse_json(
         include_str!("../../../../fixtures/consumer-release-manifest.json"),
         "fixtures/consumer-release-manifest.json",
     )?;
@@ -157,7 +157,7 @@ fn golden_manifest_fixture_uses_the_canonical_release_schema() -> TestResult {
     assert_eq!(manifest.version, env!("CARGO_PKG_VERSION"));
     assert_eq!(
         manifest.targets.len(),
-        velnor_actions_contract::ReleaseTarget::ALL.len()
+        velnor_actions_contract_release::ReleaseTarget::ALL.len()
     );
     Ok(())
 }

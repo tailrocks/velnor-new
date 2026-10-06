@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use super::*;
-use velnor_actions_contract::{DetectedProject, DetectionStatus};
+use velnor_actions_contract_planning::{DetectedProject, DetectionStatus};
 
 /// Selected tofu status for `root`.
 fn selected(root: &str) -> DetectionStatus {

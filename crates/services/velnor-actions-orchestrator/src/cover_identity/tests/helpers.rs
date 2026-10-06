@@ -3,9 +3,10 @@ use crate::cover_baseline::provenance_check::{
     ProvenanceExpectations, ValidatedProvenance, validate_provenance,
 };
 use crate::merge::required_evidence::BaselineTaskEntry;
-use velnor_actions_contract::{
-    PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, RunnerSelection, Trust,
-    WorkflowEvent, canonical_json_bytes, digest_b3,
+use velnor_actions_contract::{canonical_json_bytes, digest_b3};
+use velnor_actions_contract_config::RunnerSelection;
+use velnor_actions_contract_workflow::{
+    PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, Trust, WorkflowEvent,
 };
 use velnor_actions_mise::ToolCatalog;
 

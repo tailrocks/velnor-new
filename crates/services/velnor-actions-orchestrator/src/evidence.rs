@@ -2,10 +2,9 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::FileIndex;
-use velnor_actions_contract::{
-    DeclaredCompileDriver, DeclaredTestRunner, RustStackConfig, is_generated_marker_line,
-};
+use velnor_actions_contract::is_generated_marker_line;
+use velnor_actions_contract_config::{DeclaredCompileDriver, DeclaredTestRunner, RustStackConfig};
+use velnor_actions_contract_planning::FileIndex;
 use velnor_actions_mise::{parse_cargo_wrapper, parse_nextest_config};
 use velnor_actions_rust_core::{
     CompileDriver, EvidenceFile, MiseWrapperInput, NextestConfigInput, ProfileInputs, TestRunner,
@@ -355,7 +354,7 @@ pub(crate) fn workspace_drift_warnings(
             ));
         }
         if let Some(committed_label) = committed_runs_on(bytes)
-            && velnor_actions_contract::runner_family_changed(&committed_label, label)
+            && velnor_actions_contract_release::runner_family_changed(&committed_label, label)
         {
             warnings.push(format!(
                 "runner_family_changed:{committed_label}:{label}:requalify_toolchain"

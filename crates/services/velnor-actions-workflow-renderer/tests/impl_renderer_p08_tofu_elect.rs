@@ -2,8 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
-use velnor_actions_contract::{Job, JobTimeout, Step, StepId, StepKind, StepRole};
+use velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION;
+use velnor_actions_contract_workflow::{Job, JobTimeout, Step, StepId, StepKind, StepRole};
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::cache_p08::elect_tofu_provider_savers;
 use velnor_actions_workflow_renderer::tofu_cache::{
@@ -104,13 +104,13 @@ fn provider_writer_election_elects_lowest_id_per_key() -> Result<(), RenderError
     elect_tofu_provider_savers(&mut jobs)?;
     assert_eq!(
         provider_saved_key(&jobs["tofu-a"]),
-        Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
+        Some(velnor_actions_contract_workflow::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
         "lowest id wins with the key bound to its composite output"
     );
     assert!(provider_saves(&jobs["tofu-b"]).is_empty());
     assert_eq!(
         provider_saved_key(&jobs["tofu-c"]),
-        Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
+        Some(velnor_actions_contract_workflow::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
         "sole owner keeps its writer bound to its composite output"
     );
     assert!(
@@ -137,11 +137,11 @@ fn provider_writer_election_saves_push_gated_exact_entry() -> Result<(), RenderE
     assert_eq!(uses, TOFU_PROVIDERS_SAVE_USES);
     assert_eq!(
         with.get("key").map(String::as_str),
-        Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR)
+        Some(velnor_actions_contract_workflow::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR)
     );
     assert_eq!(
         with.get("path").map(String::as_str),
-        Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_PATH_OUTPUT_EXPR)
+        Some(velnor_actions_contract_workflow::workflow::step_identity::TOFU_PROVIDERS_PATH_OUTPUT_EXPR)
     );
     assert!(
         !with.contains_key("restore-keys"),

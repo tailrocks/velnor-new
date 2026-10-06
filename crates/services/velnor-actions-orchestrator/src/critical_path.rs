@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::ProposedTask;
+use velnor_actions_contract_planning::ProposedTask;
 
 /// Longest chain through the obligation DAG.
 #[derive(Debug, Clone, PartialEq, Eq)]

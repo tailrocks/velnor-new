@@ -6,10 +6,10 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::step_identity::{
+use velnor_actions_contract_workflow::workflow::step_identity::{
     TOOL_SEED_USES, is_configured_checkout, is_tool_seed_step,
 };
-use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 
 use crate::yaml::Yaml;
 use crate::{RenderError, cache_p08::MiseToolsCacheKey};

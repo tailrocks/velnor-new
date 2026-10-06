@@ -5,7 +5,9 @@ use crate::exclusive_write;
 use crate::internal::internal;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use velnor_actions_contract::config::{HostContainerProfile, MAX_CHECK_CONTAINER_PATH_BYTES};
+use velnor_actions_contract_config::config::{
+    HostContainerProfile, MAX_CHECK_CONTAINER_PATH_BYTES,
+};
 use velnor_actions_mise::CheckDeadline;
 
 mod context;

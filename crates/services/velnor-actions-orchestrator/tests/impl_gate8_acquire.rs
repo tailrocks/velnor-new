@@ -14,7 +14,7 @@ fn binary_record(target: &str) -> String {
 }
 
 fn lock_text() -> String {
-    let bins = velnor_actions_contract::SUPPORTED_TARGETS
+    let bins = velnor_actions_contract_release::SUPPORTED_TARGETS
         .iter()
         .map(|target| binary_record(target))
         .collect::<String>();

@@ -185,7 +185,7 @@ fn reuse_qualification_rejects_nondeterminism() {
 
 #[test]
 fn lookup_failures_are_distinct_from_current() {
-    use velnor_actions_contract::FreshnessStatus;
+    use velnor_actions_contract_release::FreshnessStatus;
     let failed = serde_json::to_value(FreshnessStatus::LookupFailed).expect("json");
     let current = serde_json::to_value(FreshnessStatus::Current).expect("json");
     assert_eq!(
@@ -197,7 +197,8 @@ fn lookup_failures_are_distinct_from_current() {
 }
 
 /// Minimal task proposal for identity-extension cases.
-fn clippy_task() -> Result<velnor_actions_contract::ProposedTask, Box<dyn std::error::Error>> {
+fn clippy_task()
+-> Result<velnor_actions_contract_planning::ProposedTask, Box<dyn std::error::Error>> {
     let group = velnor_actions_rust::TaskGroup {
         task_id: "stack/rust/root/clippy/default".to_owned(),
         package_id: "demo".to_owned(),

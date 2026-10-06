@@ -3,7 +3,7 @@
 //! Split from [`crate::workflow_jobs`] (size gate): this module owns how the
 //! plan job primes and publishes the Cargo-source cache before/after fetch.
 
-use velnor_actions_contract::Step;
+use velnor_actions_contract_workflow::Step;
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
 use crate::OrchestratorError;
@@ -36,8 +36,8 @@ pub(crate) fn cache_steps_for_plan(
             save: Vec::new(),
         });
     }
-    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
-        .map(velnor_actions_contract::ReleaseTarget::triple)
+    let target = velnor_actions_contract_release::ReleaseTarget::for_runner_label(label)
+        .map(velnor_actions_contract_release::ReleaseTarget::triple)
         .ok_or_else(|| OrchestratorError::Contract {
             problem: format!("bad_label:{label}"),
         })?;

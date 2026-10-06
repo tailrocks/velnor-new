@@ -1,5 +1,5 @@
 //! Emission sweeps: step names, policy order, candidate check, tree shape.
-use velnor_actions_contract::{GeneratorValidation, WorkflowPolicy};
+use velnor_actions_contract_config::{GeneratorValidation, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
     CHECK_GENERATED_NAME, RenderError, checkout_step, merge_step, plan_step, render_tree,
     render_workflow_ir, render_workflow_ir_strict, with_marker,

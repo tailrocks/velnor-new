@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract_workflow::StepKind;
 
 use super::impl_renderer_fixtures::{TEST_MBX_VERSION, TEST_RUST_TOOLCHAIN, mbx_tool_steps};
 
@@ -115,9 +115,9 @@ fn assert_version_scratch_removed(root: &Path) -> std::io::Result<()> {
 }
 
 fn assert_preflight_step_shapes(
-    preflight: &velnor_actions_contract::Step,
-    action: &velnor_actions_contract::Step,
-    version_check: &velnor_actions_contract::Step,
+    preflight: &velnor_actions_contract_workflow::Step,
+    action: &velnor_actions_contract_workflow::Step,
+    version_check: &velnor_actions_contract_workflow::Step,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let StepKind::Shell { run, .. } = &preflight.kind else {
         return Err("preflight is not shell".into());

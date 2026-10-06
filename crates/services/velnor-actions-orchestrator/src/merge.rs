@@ -8,10 +8,10 @@ pub(crate) mod required_evidence;
 use std::collections::BTreeSet;
 
 use serde::Deserialize;
-use velnor_actions_contract::{
+use velnor_actions_contract::{parse_strict_json, validate_run_key};
+use velnor_actions_contract_workflow::{
     FinalCounts, FinalReport, FinalStatus, MatrixReport, ObligationDecision, Plan, PlanMatrix,
-    RequiredJobResult, TaskReport, WorkflowEvent, final_report_id_for_run, parse_strict_json,
-    validate_run_key,
+    RequiredJobResult, TaskReport, WorkflowEvent, final_report_id_for_run,
 };
 
 use self::merge_checks::{

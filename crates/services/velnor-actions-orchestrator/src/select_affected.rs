@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::reverse_closure;
+use velnor_actions_contract_planning::reverse_closure;
 
 use crate::discover::Discovery;
 

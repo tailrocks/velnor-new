@@ -3,7 +3,7 @@
 //! the union in the plan while tofu groups stay pure.
 use std::fs;
 
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract_workflow::StepKind;
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::{
@@ -57,7 +57,7 @@ fn write_root(root: &std::path::Path) -> TestResult {
 }
 
 /// Step names of one finalized job.
-fn names(job: &velnor_actions_contract::Job) -> Vec<&str> {
+fn names(job: &velnor_actions_contract_workflow::Job) -> Vec<&str> {
     job.steps.iter().map(|step| step.name.as_str()).collect()
 }
 
@@ -69,7 +69,7 @@ type Shell<'a> = (
 
 /// Shell argv+env of one named step.
 fn shell_of<'a>(
-    job: &'a velnor_actions_contract::Job,
+    job: &'a velnor_actions_contract_workflow::Job,
     name: &str,
 ) -> Result<Shell<'a>, Box<dyn std::error::Error>> {
     let step = job
@@ -116,7 +116,7 @@ fn pure_tofu_repo_drops_all_rust_setup() -> TestResult {
     for key in ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME", "RUSTUP_TOOLCHAIN"] {
         assert!(!env.contains_key(key), "plan prepare carries no {key}");
     }
-    let tofu_jobs: Vec<(&String, &velnor_actions_contract::Job)> =
+    let tofu_jobs: Vec<(&String, &velnor_actions_contract_workflow::Job)> =
         jobs.iter().filter(|(id, _)| is_crate_job(id)).collect();
     assert_eq!(tofu_jobs.len(), 1, "one job for the tofu root");
     let job = tofu_jobs[0].1;

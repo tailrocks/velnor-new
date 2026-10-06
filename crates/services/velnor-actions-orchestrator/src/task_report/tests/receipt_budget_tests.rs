@@ -2,7 +2,7 @@ use super::*;
 
 use crate::check_evidence::gate::tools::{QualifiedToolReceipt, receipt};
 use std::path::PathBuf;
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     CheckExecutor, CheckRunner, HostContainerProfile, MAX_CHECK_CONTAINER_PATH_BYTES,
     MAX_CHECK_EXECUTION_RECEIPT_BYTES, MAX_CHECK_QUALIFIED_PROBE_EXPECTED_BYTES, MiseCheck,
     QualifiedToolArtifact, QualifiedToolBackend, QualifiedToolExecutable, QualifiedToolOptions,
@@ -134,9 +134,11 @@ fn admitted_declarations(profile: Option<&HostContainerProfile>) -> Vec<Qualifie
             || selected_check(&declarations),
             |profile| selected_container_check(&declarations, profile.clone()),
         );
-        let bound =
-            velnor_actions_contract::check_execution_receipt_upper_bound(&check, &declarations)
-                .expect("receipt estimate");
+        let bound = velnor_actions_contract_config::check_execution_receipt_upper_bound(
+            &check,
+            &declarations,
+        )
+        .expect("receipt estimate");
         if bound > MAX_CHECK_EXECUTION_RECEIPT_BYTES {
             break;
         }
@@ -150,8 +152,9 @@ fn maximum_admitted_receipt_survives_the_staged_gate_reader() {
     let declarations = admitted_declarations(None);
     assert!(declarations.len() > 1, "bounded closures remain usable");
     let check = selected_check(&declarations);
-    let bound = velnor_actions_contract::check_execution_receipt_upper_bound(&check, &declarations)
-        .expect("receipt estimate");
+    let bound =
+        velnor_actions_contract_config::check_execution_receipt_upper_bound(&check, &declarations)
+            .expect("receipt estimate");
     assert!(bound <= MAX_CHECK_EXECUTION_RECEIPT_BYTES);
     let qualified_tools = declarations.iter().map(proof).collect::<Vec<_>>();
     let (temp, plan) = staged_with_tools(true, &declarations, &qualified_tools);
@@ -170,8 +173,9 @@ fn maximum_container_admitted_receipt_survives_the_staged_gate_reader() {
     let declarations = admitted_declarations(Some(&profile));
     assert!(!declarations.is_empty(), "container-qualified probes fit");
     let check = selected_container_check(&declarations, profile.clone());
-    let bound = velnor_actions_contract::check_execution_receipt_upper_bound(&check, &declarations)
-        .expect("container receipt estimate");
+    let bound =
+        velnor_actions_contract_config::check_execution_receipt_upper_bound(&check, &declarations)
+            .expect("container receipt estimate");
     assert!(bound <= MAX_CHECK_EXECUTION_RECEIPT_BYTES);
     let qualified_tools = declarations.iter().map(proof).collect::<Vec<_>>();
     let container = crate::check_evidence::gate::container::budget_test_receipt();

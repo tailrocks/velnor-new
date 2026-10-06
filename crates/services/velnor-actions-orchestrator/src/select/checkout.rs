@@ -3,7 +3,7 @@
 use std::ffi::OsString;
 use std::path::Path;
 
-use velnor_actions_contract::WorkflowEvent;
+use velnor_actions_contract_workflow::WorkflowEvent;
 use velnor_actions_mise::{CheckDeadline, GitRequest};
 
 use crate::OrchestratorError;

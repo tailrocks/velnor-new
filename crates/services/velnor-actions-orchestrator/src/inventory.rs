@@ -5,7 +5,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::{CandidateOutcome, Stack, StackCandidate};
+use velnor_actions_contract::Stack;
+use velnor_actions_contract_planning::{CandidateOutcome, StackCandidate};
 use velnor_actions_mise::{MetadataDiscovery, MetadataQualification, ToolCatalog};
 use velnor_actions_rust_core::{WorkspaceRecord, parse_metadata_json};
 

@@ -5,7 +5,7 @@ use velnor_actions_workflow_renderer::{RenderError, checkout_step};
 
 use super::impl_renderer_fixtures::*;
 
-fn shell(name: &str) -> Result<velnor_actions_contract::Step, RenderError> {
+fn shell(name: &str) -> Result<velnor_actions_contract_workflow::Step, RenderError> {
     scrubbed_shell_step(
         name,
         vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
@@ -16,7 +16,7 @@ fn branch(
     id: &str,
     display: &str,
     step: &str,
-) -> Result<(String, velnor_actions_contract::Job), RenderError> {
+) -> Result<(String, velnor_actions_contract_workflow::Job), RenderError> {
     Ok(job(
         id,
         display,

@@ -6,10 +6,11 @@ use std::env;
 use std::ffi::OsString;
 use std::path::Path;
 use std::time::{Duration, Instant};
-use velnor_actions_contract::config::MAX_CHECK_EXECUTION_RECEIPT_BYTES;
-use velnor_actions_contract::{
+use velnor_actions_contract::canonical_json_bytes;
+use velnor_actions_contract_config::config::MAX_CHECK_EXECUTION_RECEIPT_BYTES;
+use velnor_actions_contract_workflow::{
     MatrixEntry, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, NamedCheckLane,
-    NamedCheckLaneVariant, ObligationDecision, Plan, canonical_json_bytes,
+    NamedCheckLaneVariant, ObligationDecision, Plan,
 };
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, ToolCatalog, discover_checks_until};
 pub(crate) mod preparation;

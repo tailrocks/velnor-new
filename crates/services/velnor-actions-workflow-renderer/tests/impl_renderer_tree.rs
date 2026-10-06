@@ -1,8 +1,10 @@
 //! Workflow/tree rendering and policy gating cases.
 use std::collections::BTreeMap;
-use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, JobTimeout, Permissions, Trigger, ValidatorKind,
-    VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+use velnor_actions_contract_config::{
+    GeneratorValidation, ValidatorKind, VelnorSupportWorkflow, WorkflowPolicy,
+};
+use velnor_actions_contract_workflow::{
+    Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr,
 };
 use velnor_actions_workflow_renderer::{
     ACTIONLINT_PATH, AGENTS_MD_PATH, ALINT_USES, CANDIDATE_JOB_ID, CLAUDE_MD_PATH,

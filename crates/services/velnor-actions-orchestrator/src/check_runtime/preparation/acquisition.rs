@@ -4,7 +4,7 @@ use crate::check_evidence::gate::tools::{QualifiedToolReceipt, receipt};
 use crate::internal::internal;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     QualifiedCargoInstallation, QualifiedTool, QualifiedToolBackend, QualifiedToolOptions,
 };
 use velnor_actions_mise::check_tool_probes::{
@@ -118,7 +118,7 @@ fn fetch_extract(
     handle: &QualifiedCheck,
     tool: &QualifiedTool,
     dependency: bool,
-    artifacts: &[velnor_actions_contract::config::QualifiedToolArtifact],
+    artifacts: &[velnor_actions_contract_config::config::QualifiedToolArtifact],
     tool_home: &Path,
     deadline: CheckDeadline,
     expanded: &mut archive::ArchiveBudget,

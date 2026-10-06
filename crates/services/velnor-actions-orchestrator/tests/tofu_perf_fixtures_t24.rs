@@ -9,7 +9,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use tempfile::TempDir;
-use velnor_actions_contract::Plan;
+use velnor_actions_contract_workflow::Plan;
 use velnor_actions_orchestrator::plan_internal;
 
 use crate::impl_common::{TestResult, fixture_manifest_json, git, git_line};

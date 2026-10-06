@@ -1,7 +1,7 @@
 //! Pure resolution of explicitly qualified installation closures.
 use super::invalid;
 use std::collections::{BTreeMap, BTreeSet};
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     CheckPlatform, CheckSystemToolKind, HostContainerProfile, MiseCheck, QualifiedTool,
     validate_qualified_tools,
 };

@@ -4,7 +4,8 @@
 //! per-job `environment`/`permissions` overrides and optional
 //! `workflow_dispatch`/`schedule` triggers render verbatim; `none`
 //! scopes stay absent.
-use velnor_actions_contract::{Permissions, workflow::permissions::PermissionLevel};
+use velnor_actions_contract_workflow::Permissions;
+use velnor_actions_contract_workflow::workflow::permissions::PermissionLevel;
 use velnor_actions_workflow_renderer::{RenderError, checkout_step, plan_step};
 
 use super::impl_renderer_fixtures::*;
@@ -48,14 +49,18 @@ fn dispatch_and_schedule_triggers_render() -> Result<(), RenderError> {
         ],
     );
     let mut ir = fixture_ir(vec![plan]);
-    ir.triggers.workflow_dispatch = Some(velnor_actions_contract::workflow::ir::WorkflowDispatch {
-        inputs: vec![velnor_actions_contract::workflow::ir::DispatchInput {
-            name: "plan".to_owned(),
-            required: true,
-            default: Some("plan-r1-a1".to_owned()),
-        }],
-    });
-    ir.triggers.schedule = Some(velnor_actions_contract::ScheduleTrigger {
+    ir.triggers.workflow_dispatch = Some(
+        velnor_actions_contract_workflow::workflow::ir::WorkflowDispatch {
+            inputs: vec![
+                velnor_actions_contract_workflow::workflow::ir::DispatchInput {
+                    name: "plan".to_owned(),
+                    required: true,
+                    default: Some("plan-r1-a1".to_owned()),
+                },
+            ],
+        },
+    );
+    ir.triggers.schedule = Some(velnor_actions_contract_workflow::ScheduleTrigger {
         cron: vec!["0 6 * * 1".to_owned()],
     });
     let text = strict(&ir, &fixture_ctx())?;

@@ -3,7 +3,7 @@ use crate::{OrchestratorError, internal::internal};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     CheckPlatform, QualifiedTool, QualifiedToolBackend, QualifiedToolOptions,
 };
 use velnor_actions_mise::CheckDeadline;

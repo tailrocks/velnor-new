@@ -2,10 +2,10 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::step_identity::{
+use velnor_actions_contract_workflow::workflow::step_identity::{
     StepRole, TOFU_PROVIDER_ADMISSION_USES, TOOL_SEED_USES,
 };
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract_workflow::{Step, StepKind};
 
 use crate::{
     RenderError, commands,

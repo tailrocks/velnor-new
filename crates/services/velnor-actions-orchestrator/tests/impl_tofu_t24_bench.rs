@@ -9,7 +9,7 @@
 
 use std::fs;
 
-use velnor_actions_contract::Plan;
+use velnor_actions_contract_workflow::Plan;
 
 use crate::impl_common::{TestResult, git, git_line};
 use crate::impl_perf_p13::perf_harness_p13::{

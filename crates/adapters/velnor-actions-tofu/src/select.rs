@@ -12,7 +12,7 @@
 use std::collections::BTreeSet;
 use std::fmt;
 
-use velnor_actions_contract::reverse_closure;
+use velnor_actions_contract_planning::reverse_closure;
 
 use velnor_actions_tofu_core::modules::{
     ModuleEdges, ModuleError, SourceClass, check_acyclic, module_edge_pairs,

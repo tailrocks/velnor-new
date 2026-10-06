@@ -58,7 +58,7 @@ fn job(
         role,
         display_name: format!("Release {}", role.as_str()),
         runs_on: LABEL.to_owned(),
-        timeout_minutes: velnor_actions_contract::JobTimeout::RELEASE,
+        timeout_minutes: velnor_actions_contract_workflow::JobTimeout::RELEASE,
         needs: needs.iter().map(ToString::to_string).collect(),
         condition: condition.map(str::to_owned),
         environment: env.map(str::to_owned),

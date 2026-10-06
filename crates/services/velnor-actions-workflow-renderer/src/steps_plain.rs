@@ -4,7 +4,7 @@
 //! internal planner steps: only pinned actions and fixed-argv shell
 //! survive; anything else is rejected fail-closed.
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract_workflow::{Step, StepKind};
 
 use crate::{RenderError, commands, yaml::Yaml};
 

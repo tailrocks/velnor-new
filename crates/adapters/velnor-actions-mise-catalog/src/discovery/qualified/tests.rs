@@ -1,6 +1,6 @@
 //! Synthetic qualification bytes test pure admission and identity, never runtime provenance.
 use super::*;
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     CheckExecutor, CheckPlatform, CheckRunner, MiseCheck, QualifiedCargoInstallation,
     QualifiedTool, QualifiedToolArtifact, QualifiedToolBackend, QualifiedToolExecutable,
     QualifiedToolOptions, QualifiedToolPlatform, QualifiedToolProbe,

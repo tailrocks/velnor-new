@@ -79,8 +79,10 @@ pub(crate) fn baseline_artifact_name(commit: &str, compat: &str) -> Result<Strin
 }
 
 /// True only for protected pushes; PR/fork/merge-group runs never publish.
-pub(crate) fn publish_event_eligible(event: velnor_actions_contract::WorkflowEvent) -> bool {
-    event == velnor_actions_contract::WorkflowEvent::Push
+pub(crate) fn publish_event_eligible(
+    event: velnor_actions_contract_workflow::WorkflowEvent,
+) -> bool {
+    event == velnor_actions_contract_workflow::WorkflowEvent::Push
 }
 
 /// Reject a failed evidence check with its reason.
@@ -93,7 +95,7 @@ fn reject(ok: bool, reason: &str) -> Result<(), String> {
 /// Compared field by field over validated getters: a carried proof that
 /// no longer matches its entry's identity is a mismatch, never a pass.
 fn proof_matches_task(
-    proof: &velnor_actions_contract::ManifestTaskProof,
+    proof: &velnor_actions_contract_workflow::ManifestTaskProof,
     task: &crate::merge::required_evidence::BaselineTaskEntry,
 ) -> bool {
     proof.task_id() == task.task_id

@@ -1,6 +1,6 @@
 //! Helper provisioning: staged-helper gate plus provenance typing.
 use std::collections::BTreeMap;
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract_workflow::StepKind;
 use velnor_actions_workflow_renderer::{
     ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, HelperProvenance, RELEASE_COMMIT_ENV, RenderError,
     STAGED_BINARY_PREFIX, acquire_velnor_step, checkout_step, merge_step, plan_step,

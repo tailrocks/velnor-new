@@ -35,7 +35,7 @@ pub(super) fn validated_tasks(
             if path.len() != 2 {
                 return Err(invalid("mise_tasks", "nested_task_tables_unsupported"));
             }
-            if !velnor_actions_contract::config::is_valid_mise_task_name(&path[1]) {
+            if !velnor_actions_contract_config::config::is_valid_mise_task_name(&path[1]) {
                 return Err(invalid("mise_task_name", &path[1]));
             }
             names.insert(path[1].clone());
@@ -98,7 +98,7 @@ fn validate_assignment(
     }
     let refs = strings(&assignment.value)?;
     for name in &refs {
-        if !velnor_actions_contract::config::is_valid_mise_task_name(name) {
+        if !velnor_actions_contract_config::config::is_valid_mise_task_name(name) {
             return Err(invalid("mise_task_reference", name));
         }
     }

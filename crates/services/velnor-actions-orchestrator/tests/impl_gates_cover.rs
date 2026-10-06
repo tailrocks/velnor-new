@@ -1,6 +1,6 @@
 //! Gate 5 cases: baseline misses schedule work; claims revalidate at merge.
 
-use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan};
+use velnor_actions_contract_workflow::{FinalStatus, ObligationDecision, Plan};
 use velnor_actions_orchestrator::{baseline_artifact_numeric_id, merge_internal, plan_internal};
 
 use crate::impl_common::{
@@ -142,7 +142,7 @@ fn wrong_base_manifest_schedules_everything() -> TestResult {
     );
     assert_eq!(
         plan.baseline.status(),
-        velnor_actions_contract::BaselineStatus::Unavailable
+        velnor_actions_contract_workflow::BaselineStatus::Unavailable
     );
     Ok(())
 }
@@ -212,7 +212,7 @@ fn tampered_task_entry_executes_with_miss_warning() -> TestResult {
     );
     assert_eq!(
         plan.baseline.status(),
-        velnor_actions_contract::BaselineStatus::Used
+        velnor_actions_contract_workflow::BaselineStatus::Used
     );
     Ok(())
 }
@@ -254,7 +254,7 @@ fn valid_manifest_covers_exact_obligations() -> TestResult {
     plan.validate()?;
     assert_eq!(
         plan.baseline.status(),
-        velnor_actions_contract::BaselineStatus::Used
+        velnor_actions_contract_workflow::BaselineStatus::Used
     );
     Ok(())
 }
@@ -282,13 +282,14 @@ fn merge_rejects_covered_claims_without_manifest() -> TestResult {
     plan.obligations[first].decision = ObligationDecision::CoveredByTrustedBaseline;
     plan.obligations[first].reason = "covered_by_trusted_baseline".to_owned();
     let proof_base = plan.base.clone().expect("base");
-    plan.obligations[first].baseline_proof = Some(velnor_actions_contract::BaselineProof::new(
-        &proof_base,
-        7,
-        9,
-        "velnor-plan-local",
-        &velnor_actions_contract::digest_b3(b"manifest"),
-    )?);
+    plan.obligations[first].baseline_proof =
+        Some(velnor_actions_contract_workflow::BaselineProof::new(
+            &proof_base,
+            7,
+            9,
+            "velnor-plan-local",
+            &velnor_actions_contract::digest_b3(b"manifest"),
+        )?);
     plan.validate()?;
     let reports = passing_reports(&plan)?;
     let request = serde_json::json!({
@@ -301,7 +302,7 @@ fn merge_rejects_covered_claims_without_manifest() -> TestResult {
         "required_job_ids": ["plan"],
         "required_jobs": [{"job_id": "plan", "conclusion": "success"}],
     });
-    let final_report: velnor_actions_contract::FinalReport =
+    let final_report: velnor_actions_contract_workflow::FinalReport =
         serde_json::from_str(&merge_internal(&request.to_string())?)?;
     assert_eq!(final_report.status, FinalStatus::PlanningFailed);
     Ok(())
@@ -338,13 +339,13 @@ fn merge_group_classifies_like_pull_request() -> TestResult {
         !group.task_ids.is_empty(),
         "merge group selects affected work"
     );
-    assert_eq!(pr.trust, velnor_actions_contract::Trust::Pr);
+    assert_eq!(pr.trust, velnor_actions_contract_workflow::Trust::Pr);
     assert_eq!(
         group.trust,
-        velnor_actions_contract::Trust::Pr,
+        velnor_actions_contract_workflow::Trust::Pr,
         "speculative merge content stays PR-scoped"
     );
     let push = plan_for("push")?;
-    assert_eq!(push.trust, velnor_actions_contract::Trust::Trusted);
+    assert_eq!(push.trust, velnor_actions_contract_workflow::Trust::Trusted);
     Ok(())
 }

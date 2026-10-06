@@ -7,7 +7,7 @@
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract_workflow::StepKind;
 use velnor_actions_orchestrator::{
     GenerateOptions, GenerateReport, GenerationPreparation, OrchestratorError, ToolSnapshot,
     generate, prepare, render_staged_tree,

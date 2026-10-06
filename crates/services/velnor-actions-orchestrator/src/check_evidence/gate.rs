@@ -6,11 +6,10 @@ pub(crate) mod tools;
 
 use std::collections::BTreeSet;
 use std::path::Path;
-use velnor_actions_contract::config::MAX_CHECK_EXECUTION_RECEIPT_BYTES;
-use velnor_actions_contract::config::{CheckEvidence, CheckPlatform, CheckRunner};
-use velnor_actions_contract::{
-    MatrixEntry, Plan, TaskReport, TaskStatus, digest_b3, parse_strict_json,
-};
+use velnor_actions_contract::{digest_b3, parse_strict_json};
+use velnor_actions_contract_config::config::MAX_CHECK_EXECUTION_RECEIPT_BYTES;
+use velnor_actions_contract_config::config::{CheckEvidence, CheckPlatform, CheckRunner};
+use velnor_actions_contract_workflow::{MatrixEntry, Plan, TaskReport, TaskStatus};
 
 /// Helper-produced execution receipt inside the existing matrix artifact.
 #[derive(Debug, Deserialize, Serialize)]
@@ -163,7 +162,7 @@ pub(crate) fn validate_proofs(
 ) -> bool {
     if plan.obligations.iter().any(|ob| {
         ob.task_id.starts_with("stack/mise/")
-            && ob.decision != velnor_actions_contract::ObligationDecision::Execute
+            && ob.decision != velnor_actions_contract_workflow::ObligationDecision::Execute
     }) {
         return false;
     }
@@ -293,13 +292,15 @@ fn valid_native_proofs(
     platform: CheckPlatform,
     proofs: &[velnor_actions_mise::checks::SystemToolProof],
 ) -> bool {
-    let Ok(pins) = serde_json::from_value::<Vec<velnor_actions_contract::config::CheckSystemTool>>(
-        entry
-            .adapter_metadata
-            .get("system_tools")
-            .cloned()
-            .unwrap_or_default(),
-    ) else {
+    let Ok(pins) =
+        serde_json::from_value::<Vec<velnor_actions_contract_config::config::CheckSystemTool>>(
+            entry
+                .adapter_metadata
+                .get("system_tools")
+                .cloned()
+                .unwrap_or_default(),
+        )
+    else {
         return false;
     };
     velnor_actions_mise::checks::validate_system_tool_proofs(platform, &pins, proofs).is_ok()
@@ -310,13 +311,15 @@ fn valid_qualified_proofs(
     platform: CheckPlatform,
     receipts: &[tools::QualifiedToolReceipt],
 ) -> bool {
-    let Ok(declared) = serde_json::from_value::<Vec<velnor_actions_contract::config::QualifiedTool>>(
-        entry
-            .adapter_metadata
-            .get("qualified_tools")
-            .cloned()
-            .unwrap_or_default(),
-    ) else {
+    let Ok(declared) =
+        serde_json::from_value::<Vec<velnor_actions_contract_config::config::QualifiedTool>>(
+            entry
+                .adapter_metadata
+                .get("qualified_tools")
+                .cloned()
+                .unwrap_or_default(),
+        )
+    else {
         return false;
     };
     let Ok(specs) = serde_json::from_value::<Vec<String>>(

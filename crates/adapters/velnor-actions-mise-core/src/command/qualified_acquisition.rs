@@ -4,7 +4,7 @@ use crate::MiseError;
 use crate::checks::{QualifiedCheck, invalid};
 use std::ffi::OsString;
 use std::path::PathBuf;
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     QualifiedCargoInstallation, QualifiedTool, QualifiedToolBackend, QualifiedToolOptions,
 };
 

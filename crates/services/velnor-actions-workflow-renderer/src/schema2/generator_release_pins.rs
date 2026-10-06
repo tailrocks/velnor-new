@@ -1,4 +1,4 @@
-use velnor_actions_contract::ReleaseTarget;
+use velnor_actions_contract_release::ReleaseTarget;
 
 use crate::setup::MiseSetup;
 

@@ -3,7 +3,7 @@
 //! Operation travels via env, never argv; the staged binary dispatches
 //! on it at event time.
 
-use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
+use velnor_actions_contract_workflow::{Step, StepId, StepKind, StepRole};
 
 use crate::{
     RenderError,

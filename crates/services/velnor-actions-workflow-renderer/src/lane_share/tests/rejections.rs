@@ -4,7 +4,7 @@ use super::{
 };
 use crate::RenderError;
 use std::collections::BTreeMap;
-use velnor_actions_contract::{Job, StepKind};
+use velnor_actions_contract_workflow::{Job, StepKind};
 
 #[test]
 fn differing_lane_bodies_fail_closed() {

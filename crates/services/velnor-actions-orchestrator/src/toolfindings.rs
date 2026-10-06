@@ -4,7 +4,7 @@
 //! findings for conflicting or unsupported values. Findings identify
 //! the supplying file, suggest a manual action, and never write.
 
-use velnor_actions_contract::Finding;
+use velnor_actions_contract_release::Finding;
 use velnor_actions_rust_core::MISSING_RECOMMENDED_INPUT;
 
 use crate::toolcheck::{ToolInputCheck, ToolParse};

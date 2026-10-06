@@ -1,8 +1,10 @@
 //! Detector registry cases.
 use crate::support::{Outcome, TempDir};
-use velnor_actions_contract::{
-    CandidateOutcome, DetectError, DetectedProject, DetectionStatus, IGNORED_REASON, Stack,
-    VelnorConfig, apply_stack_ignores, build_index, check_candidate_outcomes, check_duplicates,
+use velnor_actions_contract::Stack;
+use velnor_actions_contract_config::VelnorConfig;
+use velnor_actions_contract_planning::{
+    CandidateOutcome, DetectError, DetectedProject, DetectionStatus, IGNORED_REASON,
+    apply_stack_ignores, build_index, check_candidate_outcomes, check_duplicates,
     selected_projects,
 };
 use velnor_actions_rust::{

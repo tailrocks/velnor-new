@@ -127,7 +127,7 @@ fn config_features_intersect_per_crate() -> TestResult {
 fn testless_crate_omits_test_runners() -> TestResult {
     let repo = feature_repo(FULL_CONFIG)?;
     let prep = prepare(repo.path())?;
-    let fuzz_tests: Vec<&velnor_actions_contract::ProposedTask> = prep
+    let fuzz_tests: Vec<&velnor_actions_contract_planning::ProposedTask> = prep
         .discovery
         .proposals
         .iter()
@@ -141,7 +141,7 @@ fn testless_crate_omits_test_runners() -> TestResult {
         fuzz_tests.iter().all(|task| task.no_targets),
         "every fuzz test task ineligible"
     );
-    let app_nextest: Vec<&velnor_actions_contract::ProposedTask> = prep
+    let app_nextest: Vec<&velnor_actions_contract_planning::ProposedTask> = prep
         .discovery
         .proposals
         .iter()

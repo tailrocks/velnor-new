@@ -1,6 +1,6 @@
 //! `Verify toolchain` step cases (TASK-2.2).
 use std::ffi::OsString;
-use velnor_actions_contract::Finding;
+use velnor_actions_contract_release::Finding;
 use velnor_actions_mise_catalog::{RouteDriver, ToolCatalog, ToolHomes};
 use velnor_actions_mise_core::MiseError;
 use velnor_actions_mise_nextest::{TestRunner, VERIFY_TOOLCHAIN_STEP, VerifySpec, VerifyToolchain};

@@ -113,7 +113,7 @@ pub(crate) fn write_preseed_manifest_to(
     commit: &str,
     runner_temp: &Path,
 ) -> Result<(), OrchestratorError> {
-    if !velnor_actions_contract::is_supported_target(target) {
+    if !velnor_actions_contract_release::is_supported_target(target) {
         return Err(internal(&format!("preseed_unsupported_target:{target}")));
     }
     if !velnor_actions_contract::ids::is_lower_hex_len(commit, 40) {

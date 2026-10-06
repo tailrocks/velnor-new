@@ -1,5 +1,5 @@
 //! Bootstrap lock parse and lock-vs-manifest verify cases.
-use velnor_actions_contract::SUPPORTED_TARGETS;
+use velnor_actions_contract_release::SUPPORTED_TARGETS;
 use velnor_actions_mise_catalog::catalog::lock::{
     LockError, parse_generator_lock, parse_release_manifest, verify_lock_against_manifest,
 };

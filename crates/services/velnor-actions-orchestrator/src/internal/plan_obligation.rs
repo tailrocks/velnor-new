@@ -10,10 +10,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde::Serialize;
-use velnor_actions_contract::{
-    MatrixEntry, NamedCheckLane, PlanObligation, ProposedTask, Stack, StackExtension,
-    canonical_json_bytes, digest_b3,
-};
+use velnor_actions_contract::{Stack, StackExtension, canonical_json_bytes, digest_b3};
+use velnor_actions_contract_planning::ProposedTask;
+use velnor_actions_contract_workflow::{MatrixEntry, NamedCheckLane, PlanObligation};
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::restore::probe_tool_availability;
 use velnor_actions_rust::extension_for_proposal;

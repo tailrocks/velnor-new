@@ -10,7 +10,7 @@ use std::fs;
 
 use serde_json::json;
 use tempfile::TempDir;
-use velnor_actions_contract::{FinalStatus, MatrixStatus, Plan, TaskStatus};
+use velnor_actions_contract_workflow::{FinalStatus, MatrixStatus, Plan, TaskStatus};
 use velnor_actions_orchestrator::{
     OrchestratorError, merge_internal, merge_passed, prepare, publish_final_report,
 };
@@ -151,7 +151,7 @@ fn t32_failed_plan_reds_required_with_recorded_cause() -> TestResult {
             .required_job_results
             .iter()
             .any(|job| job.job_id == "plan"
-                && job.conclusion == velnor_actions_contract::JobConclusion::Failure),
+                && job.conclusion == velnor_actions_contract_workflow::JobConclusion::Failure),
         "plan failure recorded: {:?}",
         report.required_job_results
     );
@@ -197,7 +197,8 @@ fn t32_unformatted_tf_failed_fmt_leg_reds_required() -> TestResult {
     );
     let response = merge_internal(&request.to_string())?;
     assert!(!merge_passed(&response)?, "failed fmt never passes");
-    let final_report: velnor_actions_contract::FinalReport = serde_json::from_str(&response)?;
+    let final_report: velnor_actions_contract_workflow::FinalReport =
+        serde_json::from_str(&response)?;
     assert_eq!(final_report.status, FinalStatus::Failed);
     assert_eq!(final_report.counts.failed, 1, "one failed task counted");
     assert_eq!(reports[index].tasks[0].exit_code, 3, "cause keeps exit 3");

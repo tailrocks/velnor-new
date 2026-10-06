@@ -13,9 +13,9 @@
 
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::{
-    ContractError, FileIndex, RustConfiguration, Stack, VelnorConfig, task_id_for_stack,
-};
+use velnor_actions_contract::{ContractError, Stack, task_id_for_stack};
+use velnor_actions_contract_config::{RustConfiguration, VelnorConfig};
+use velnor_actions_contract_planning::FileIndex;
 use velnor_actions_mise::{ArchivePlan, NextestArchive, NextestDriver, SortedInventory};
 use velnor_actions_rust::{
     DeriveInputs, TaskGroup, TaskKind, derive_task_groups, derive_workspace_fmt_if_explicit,

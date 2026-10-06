@@ -4,7 +4,7 @@ use crate::setup::MiseSetup;
 use crate::yaml::Yaml;
 use std::collections::BTreeSet;
 use std::error::Error;
-use velnor_actions_contract::ReleaseTarget;
+use velnor_actions_contract_release::ReleaseTarget;
 
 #[test]
 fn each_archive_consumer_has_target_pinned_mise_before_extraction() -> Result<(), Box<dyn Error>> {

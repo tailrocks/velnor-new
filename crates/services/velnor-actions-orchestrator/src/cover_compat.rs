@@ -13,7 +13,8 @@
 //! the service assigns at upload time. The API listing still proves the
 //! exact artifact exists unexpired in the exact run before any download.
 
-use velnor_actions_contract::{Plan, canonical_json_bytes, digest_b3};
+use velnor_actions_contract::{canonical_json_bytes, digest_b3};
+use velnor_actions_contract_workflow::Plan;
 
 /// Manifest compatibility for one plan's obligation set.
 ///

@@ -1,8 +1,8 @@
 //! Adapter-wire cases: extension slots, payload argv/env, gates, fmt scope,
 //! derive signals, consumption, and index modes (F1R/F2 rust halves).
-use velnor_actions_contract::{
-    ContractError, IndexMode, build_index_from_tracked, digest_b3, validate_rust_extension,
-};
+use velnor_actions_contract::{ContractError, digest_b3};
+use velnor_actions_contract_planning::{IndexMode, build_index_from_tracked};
+use velnor_actions_contract_release::validate_rust_extension;
 use velnor_actions_rust::tasks::{
     DigestSlot, ExtensionInputs, RustTaskIdentityExtension, TaskGroup, TaskKind, cargo_payload_argv,
 };

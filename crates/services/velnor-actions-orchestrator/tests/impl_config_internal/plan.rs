@@ -27,7 +27,7 @@ fn internal_merge_aggregates_reports() -> TestResult {
     final_report.validate()?;
     assert_eq!(
         final_report.status,
-        velnor_actions_contract::FinalStatus::NotRun
+        velnor_actions_contract_workflow::FinalStatus::NotRun
     );
 
     let reports = passing_reports(&plan)?;
@@ -48,7 +48,7 @@ fn internal_merge_aggregates_reports() -> TestResult {
     let final_report: FinalReport = serde_json::from_str(&merged)?;
     assert_eq!(
         final_report.status,
-        velnor_actions_contract::FinalStatus::Passed
+        velnor_actions_contract_workflow::FinalStatus::Passed
     );
     Ok(())
 }

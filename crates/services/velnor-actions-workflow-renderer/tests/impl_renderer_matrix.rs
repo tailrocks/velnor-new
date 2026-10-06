@@ -1,7 +1,8 @@
 //! Matrix strategy emission: shape, caps, stripping, fail-closed.
 use std::collections::BTreeMap;
-use velnor_actions_contract::{
-    Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr, WorkflowPolicy,
+use velnor_actions_contract_config::WorkflowPolicy;
+use velnor_actions_contract_workflow::{
+    Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr,
 };
 use velnor_actions_workflow_renderer::render::{
     MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,

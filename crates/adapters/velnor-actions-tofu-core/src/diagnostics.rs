@@ -9,7 +9,8 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::{ContractError, Finding};
+use velnor_actions_contract::ContractError;
+use velnor_actions_contract_release::Finding;
 
 use crate::effective::effective_set;
 use crate::family::{Family, family_of};

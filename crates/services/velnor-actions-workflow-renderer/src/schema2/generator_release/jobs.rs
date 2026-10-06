@@ -5,7 +5,7 @@ use crate::composite::{
     composite_yaml, composite_yaml_with_inputs, shared_call_named, shared_call_named_with_inputs,
 };
 use crate::yaml::Yaml;
-use velnor_actions_contract::ReleaseTarget;
+use velnor_actions_contract_release::ReleaseTarget;
 
 use super::super::features::{base, finish};
 use super::{GeneratorReleasePins, assets, manifest, workflow_steps};

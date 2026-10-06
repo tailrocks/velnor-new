@@ -3,8 +3,8 @@ use crate::{IsolatedCommand, MiseError};
 use std::ffi::OsString;
 use std::fmt::Write;
 use std::path::PathBuf;
-use velnor_actions_contract::config::{MiseCheck, QualifiedTool};
-use velnor_actions_contract::propose::ProposedTask;
+use velnor_actions_contract_config::config::{MiseCheck, QualifiedTool};
+use velnor_actions_contract_planning::propose::ProposedTask;
 
 /// A static check obligation and its source-bound task projection.
 #[derive(Debug, Clone, PartialEq)]
@@ -88,11 +88,13 @@ impl QualifiedCheck {
                 home.join("docker").into_os_string(),
             ));
             let context = match container.profile {
-                velnor_actions_contract::config::HostContainerProfile::Docker {
-                    context, ..
+                velnor_actions_contract_config::config::HostContainerProfile::Docker {
+                    context,
+                    ..
                 }
-                | velnor_actions_contract::config::HostContainerProfile::OrbStack {
-                    context, ..
+                | velnor_actions_contract_config::config::HostContainerProfile::OrbStack {
+                    context,
+                    ..
                 } => context,
             };
             capability_env.push((OsString::from("DOCKER_CONTEXT"), OsString::from(context)));
@@ -236,7 +238,7 @@ impl QualifiedCheck {
     }
 
     fn compiler_prefix(&self) -> Result<Option<PathBuf>, MiseError> {
-        use velnor_actions_contract::config::QualifiedToolBackend;
+        use velnor_actions_contract_config::config::QualifiedToolBackend;
         let mut compilers = self.check.qualified_tools.iter().filter(
             |tool| matches!(&tool.backend, QualifiedToolBackend::Core { tool } if tool == "rust"),
         );

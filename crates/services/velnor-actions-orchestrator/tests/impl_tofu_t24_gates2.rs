@@ -3,7 +3,8 @@
 //! Size split from `impl_tofu_t24_gates` (gates 1–4); shares its
 //! scan/job helpers plus the fixture helper through `crate::`.
 
-use velnor_actions_contract::{JobTimeout, digest_b3};
+use velnor_actions_contract::digest_b3;
+use velnor_actions_contract_workflow::JobTimeout;
 use velnor_actions_mise::command::{OUTPUT_CAPTURE_LIMIT_BYTES, RUN_TIMEOUT_SECS};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_tofu_core::kinds::TofuTaskKind;

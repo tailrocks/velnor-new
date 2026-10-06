@@ -12,7 +12,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::Step;
+use velnor_actions_contract_workflow::Step;
 use velnor_actions_workflow_renderer::action_step;
 use velnor_actions_workflow_renderer::release_gates::{GIT_TOKEN_ENV, GIT_TOKEN_REF};
 use velnor_actions_workflow_renderer::release_tree::RELEASE_SOURCE_DIR;

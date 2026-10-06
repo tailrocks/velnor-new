@@ -59,7 +59,8 @@ fn full_44_crate_matrix_fits_artifact_and_job_output_budgets() -> TestResult {
     });
     let response = plan_internal(&request.to_string())?;
     let value: serde_json::Value = serde_json::from_str(&response)?;
-    let plan: velnor_actions_contract::Plan = serde_json::from_value(value["plan"].clone())?;
+    let plan: velnor_actions_contract_workflow::Plan =
+        serde_json::from_value(value["plan"].clone())?;
     assert_eq!(plan.packages.len(), 44, "root package plus 43 members");
     assert!(!plan.matrix.include.is_empty(), "dynamic matrix has work");
     assert!(

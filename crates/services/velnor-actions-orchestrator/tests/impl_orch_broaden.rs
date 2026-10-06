@@ -6,7 +6,7 @@ use crate::impl_orch_plansel::{
     plan_at, plan_change, proof, put, reasons_are, shard_plan, sharded_reports, test_value,
 };
 use serde_json::Value as Json;
-use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan};
+use velnor_actions_contract_workflow::{FinalStatus, ObligationDecision, Plan};
 use velnor_actions_orchestrator::plan_internal;
 
 #[test]
@@ -137,7 +137,7 @@ fn exact_baseline_covers_unchanged() -> TestResult {
     assert_eq!(plan.task_ids, bare.task_ids, "plan retains all");
     assert_eq!(
         plan.baseline.status(),
-        velnor_actions_contract::BaselineStatus::Used
+        velnor_actions_contract_workflow::BaselineStatus::Used
     );
     assert!(
         plan.obligations
@@ -236,7 +236,7 @@ fn cache_miss_never_fails_task() -> TestResult {
         &entry.matrix_key,
         &ob.task_digest,
     )?;
-    let report: velnor_actions_contract::TaskReport = serde_json::from_value(
+    let report: velnor_actions_contract_workflow::TaskReport = serde_json::from_value(
         serde_json::json!({"schema": 1, "task_report_id": id, "run_key": "local", "event": "pull_request", "trust": "pr", "matrix_id": entry.id, "matrix_key": entry.matrix_key, "task_id": ob.task_id, "task_digest": ob.task_digest, "status": "executed", "cache": {"layer": "task", "key": "k", "result": "miss", "miss_reason": "no_entry"}, "exit_code": 0, "duration_ms": 1, "outputs": []}),
     )?;
     report.validate()?;

@@ -12,8 +12,9 @@ use crate::{
     steps,
     yaml::Yaml,
 };
-use velnor_actions_contract::{
-    Job, Permissions, RunsOn, StepKind, StepRole, Trigger, WorkflowIr,
+use velnor_actions_contract_config::config::RunsOn;
+use velnor_actions_contract_workflow::{
+    Job, Permissions, StepKind, StepRole, Trigger, WorkflowIr,
     workflow::{ir::DispatchInput, permissions::PermissionLevel},
 };
 
@@ -197,7 +198,7 @@ fn needs_channel_envs(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Strin
         return Ok(Vec::new());
     }
     let conclusions =
-        velnor_actions_contract::NeedsConclusions::from_finalized_jobs(FINAL_JOB_ID, jobs)
+        velnor_actions_contract_workflow::NeedsConclusions::from_finalized_jobs(FINAL_JOB_ID, jobs)
             .map_err(RenderError::Contract)?;
     if !conclusions.gate_matches(jobs) {
         return Err(RenderError::InvalidWorkflow(

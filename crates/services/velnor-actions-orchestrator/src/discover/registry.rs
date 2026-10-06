@@ -1,7 +1,8 @@
 //! Closed detector dispatch; explicit checks bypass detector inventories.
 use crate::OrchestratorError;
-use velnor_actions_contract::{
-    DETECTION_SCHEMA, DetectedProject, DetectorEntry, Stack, StackCandidate,
+use velnor_actions_contract::Stack;
+use velnor_actions_contract_planning::{
+    DETECTION_SCHEMA, DetectedProject, DetectorEntry, StackCandidate,
 };
 
 /// Detector registry (stack id, record schema, implementation), ascending.

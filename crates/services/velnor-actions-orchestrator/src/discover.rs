@@ -3,10 +3,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use velnor_actions_contract::{
-    DETECTION_SCHEMA, DetectionStatus, FileIndex, ProposedTask, RustStackConfig, VelnorConfig,
-    WorkflowPolicy, apply_stack_ignores, check_candidate_outcomes, check_duplicates,
-    selected_projects,
+use velnor_actions_contract_config::{RustStackConfig, VelnorConfig, WorkflowPolicy};
+use velnor_actions_contract_planning::{
+    DETECTION_SCHEMA, DetectionStatus, FileIndex, ProposedTask, apply_stack_ignores,
+    check_candidate_outcomes, check_duplicates, selected_projects,
 };
 mod registry;
 pub(crate) use registry::detector_entries;

@@ -3,7 +3,8 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 
-use velnor_actions_contract::{CrateObligation, Stack, Step, StepRole, sanitize_error_detail};
+use velnor_actions_contract::{Stack, sanitize_error_detail};
+use velnor_actions_contract_workflow::{CrateObligation, Step, StepRole};
 use velnor_actions_mise::{ISOLATION_ENV, NO_AUTO_INSTALL_ENV, ToolCatalog, ToolHomes};
 use velnor_actions_rust::{payload_env_for_kind, step_base_name};
 use velnor_actions_workflow_renderer::plan_format::FORMAT_STEP_NAME;

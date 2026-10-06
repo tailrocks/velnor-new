@@ -16,7 +16,7 @@ const TARGET: &str = "x86_64-unknown-linux-gnu";
 fn preseed_manifest_verify_pins_target_and_digest() -> Result<(), RenderError> {
     let step = preseed_manifest_verify_step(TARGET)?;
     assert_eq!(step.name, PRESEED_VERIFY_MANIFEST_NAME);
-    let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Shell { run, .. } = &step.kind else {
         panic!("verify must be a shell step");
     };
     assert_eq!((run[0].as_str(), run[1].as_str()), ("sh", "-c"));
@@ -133,7 +133,7 @@ fn preseed_verify_fails_when_mise_emits_version_then_exits_nonzero()
         "1.21.1",
         &BTreeMap::new(),
     )?;
-    let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Shell { run, .. } = &step.kind else {
         return Err(std::io::Error::other("preseed verify must be a shell step").into());
     };
     let script = run

@@ -8,7 +8,8 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::{ContractError, ProposedTask, component_id_for_unit};
+use velnor_actions_contract::ContractError;
+use velnor_actions_contract_planning::{ProposedTask, component_id_for_unit};
 
 use velnor_actions_tofu_core::file_cache::FileCache;
 use velnor_actions_tofu_core::kinds::TofuTaskKind;

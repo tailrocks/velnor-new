@@ -3,7 +3,7 @@
 //! Root cause (P05): logical obligations were equated with execution
 //! jobs, so every task fanned out into matrix legs behind one shared
 //! template. The structural fix groups runnable obligations by
-//! `(package, configuration)` into one ordered [`CrateJob`](velnor_actions_contract::CrateJob)
+//! `(package, configuration)` into one ordered [`CrateJob`](velnor_actions_contract_workflow::CrateJob)
 //! each, validates the grouping through the contract model (stable
 //! unbranded IDs, gates referencing strictly earlier obligations),
 //! then renders each group to a fixed IR job: checkout, pinned tools,
@@ -13,10 +13,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{
-    CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Stack, Step, VelnorConfig,
-    WorkflowPolicy, crate_display_name, matrix_id_for_task_group, matrix_key_for_id,
-    tofu_display_name,
+use velnor_actions_contract::{Stack, matrix_id_for_task_group, matrix_key_for_id};
+use velnor_actions_contract_config::{VelnorConfig, WorkflowPolicy};
+use velnor_actions_contract_planning::ProposedTask;
+use velnor_actions_contract_workflow::{
+    CrateJob, CrateObligation, Job, JobTimeout, Step, crate_display_name, tofu_display_name,
 };
 use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
@@ -344,8 +345,8 @@ fn restore_step_for_crate(
     if !use_rust || fetch_roots.is_empty() {
         return Ok(None);
     }
-    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
-        .map(velnor_actions_contract::ReleaseTarget::triple)
+    let target = velnor_actions_contract_release::ReleaseTarget::for_runner_label(label)
+        .map(velnor_actions_contract_release::ReleaseTarget::triple)
         .ok_or_else(|| OrchestratorError::Contract {
             problem: format!("bad_label:{label}"),
         })?;

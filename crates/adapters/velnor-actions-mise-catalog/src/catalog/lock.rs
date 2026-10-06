@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::path::Path;
 
-use velnor_actions_contract::{
+use velnor_actions_contract_release::{
     ActionPin, GeneratorBinary, GeneratorLock, GithubRunnerImages, LockedGenerator, MiseBootstrap,
     ReleaseManifest, RunnerInventory, VersionPolicy,
 };

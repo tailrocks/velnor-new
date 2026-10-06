@@ -7,7 +7,7 @@
 
 use super::*;
 
-use velnor_actions_contract::ManifestTaskProof;
+use velnor_actions_contract_workflow::ManifestTaskProof;
 
 /// Merge rejects an entry whose structured proof binds other inputs.
 ///

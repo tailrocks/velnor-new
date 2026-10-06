@@ -1,7 +1,7 @@
 //! P08 renderer cases: built-in Mise cache, sources paths, rust-cache gates.
 
 use std::collections::BTreeMap;
-use velnor_actions_contract::{Job, JobTimeout, StepKind};
+use velnor_actions_contract_workflow::{Job, JobTimeout, StepKind};
 use velnor_actions_workflow_renderer::cache_p08::{
     check_no_rust_cache_with_mbx, infer_job_tools, mise_cache_key_for_tools, mise_setup_step_p08,
     tools_digest,
@@ -205,7 +205,7 @@ fn rust_cache_never_stacks_over_mbx() {
         "1.98.1",
     )
     .expect("mbx steps");
-    let rust_cache = velnor_actions_contract::Step {
+    let rust_cache = velnor_actions_contract_workflow::Step {
         name: "Restore Cargo registry".to_owned(),
         id: None,
         role: None,
@@ -248,7 +248,7 @@ fn rust_cache_never_stacks_over_mbx() {
 #[test]
 fn step_conditions_serialize_as_if_with_upload_default()
 -> Result<(), velnor_actions_workflow_renderer::RenderError> {
-    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
+    use velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION;
     use velnor_actions_workflow_renderer::{action_step, matrix_report_upload_step};
     let mut save = action_step(
         "Save Cargo sources",

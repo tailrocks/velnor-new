@@ -3,7 +3,7 @@
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_contract::{FinalStatus, Plan};
+use velnor_actions_contract_workflow::{FinalStatus, Plan};
 use velnor_actions_orchestrator::{
     GenerateOptions, generate, merge_internal, merge_passed, plan_internal, prepare,
 };

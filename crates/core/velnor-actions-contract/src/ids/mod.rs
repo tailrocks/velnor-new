@@ -7,6 +7,7 @@
 //! paths, or `run_key`.
 
 pub mod artifact;
+pub mod job_ids;
 pub mod shard;
 mod task_ids;
 
@@ -319,7 +320,8 @@ fn is_id_byte(byte: u8) -> bool {
 }
 
 /// Check whether a byte is allowed in a single path/name component.
-pub(crate) fn is_component_byte(byte: u8) -> bool {
+#[must_use]
+pub fn is_component_byte(byte: u8) -> bool {
     byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'-' | b'_')
 }
 

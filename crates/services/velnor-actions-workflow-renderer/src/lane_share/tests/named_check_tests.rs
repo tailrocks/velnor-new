@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::lanes::{
+use velnor_actions_contract_workflow::workflow::lanes::{
     HOSTED_SUFFIX, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, SCALE_SUFFIX,
 };
-use velnor_actions_contract::{Job, JobTimeout, Step, StepKind, StepRole};
+use velnor_actions_contract_workflow::{Job, JobTimeout, Step, StepKind, StepRole};
 
 use super::super::share_lanes;
 use super::{ctx, echo_step, render_jobs, workflow_ir};

@@ -27,7 +27,8 @@ use crate::OrchestratorError;
 ///
 /// Matches the contract's untrusted-document bound: legitimate config,
 /// manifest, and event-payload documents are kilobytes.
-pub(crate) const MAX_REPO_FILE_BYTES: u64 = velnor_actions_contract::MAX_CHECK_SOURCE_BYTES as u64;
+pub(crate) const MAX_REPO_FILE_BYTES: u64 =
+    velnor_actions_contract_config::MAX_CHECK_SOURCE_BYTES as u64;
 
 /// Outcome of a root-constrained repo file read.
 #[derive(Debug)]

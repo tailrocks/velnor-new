@@ -11,6 +11,8 @@ workspace = true
 
 [dependencies]
 velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
+velnor-actions-contract-planning = { version = "=0.1.1", path = "../../core/velnor-actions-contract-planning" }
 velnor-actions-rust-core = { version = "=0.1.1", path = "../velnor-actions-rust-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -18,3 +20,6 @@ serde_json = { workspace = true }
 [[test]]
 name = "velnor_rust"
 path = "tests/main.rs"
+
+[dev-dependencies]
+velnor-actions-contract-release = { version = "=0.1.1", path = "../../core/velnor-actions-contract-release" }

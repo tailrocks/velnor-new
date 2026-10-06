@@ -3,13 +3,15 @@ use crate::check_evidence::{gate::execution_receipt, verify_evidence};
 use std::collections::BTreeMap;
 use std::fs;
 use tempfile::TempDir;
-use velnor_actions_contract::config::{
+use velnor_actions_contract::{canonical_json_bytes, plan_id_for_run};
+use velnor_actions_contract_config::RunnerSelection;
+use velnor_actions_contract_config::config::{
     CheckEvidence, CheckPlatform, HostContainerProfile, QualifiedTool,
 };
-use velnor_actions_contract::{
+use velnor_actions_contract_workflow::{
     ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, MatrixReport, ObligationDecision, Plan,
-    PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, RunnerSelection,
-    TaskReport, Trust, WorkflowEvent, canonical_json_bytes, matrix_json_bytes, plan_id_for_run,
+    PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, TaskReport, Trust,
+    WorkflowEvent, matrix_json_bytes,
 };
 
 /// Clippy fixture task ID.
@@ -222,7 +224,7 @@ pub(super) fn plan_with_tools(qualified_tools: &[QualifiedTool]) -> Plan {
     let mut tool_specs: Vec<_> = qualified_tools
         .iter()
         .filter_map(|tool| match &tool.backend {
-            velnor_actions_contract::config::QualifiedToolBackend::Aqua { package } => {
+            velnor_actions_contract_config::config::QualifiedToolBackend::Aqua { package } => {
                 Some(format!("aqua:{package}@{}", tool.version))
             }
             _ => None,

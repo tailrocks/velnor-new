@@ -10,7 +10,8 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::{NotSelectedReason, Plan, validate_run_key};
+use velnor_actions_contract::validate_run_key;
+use velnor_actions_contract_workflow::{NotSelectedReason, Plan};
 
 use crate::task_report::{entry_and_digest, single_task_aggregate, write_entry_reports};
 

@@ -1,5 +1,5 @@
 use super::{codebook, node, resolve_on, rust};
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     CheckPlatform, QualifiedCargoInstallation, QualifiedTool, QualifiedToolOptions,
 };
 use velnor_actions_mise_core::checks::{config_for, fingerprint};

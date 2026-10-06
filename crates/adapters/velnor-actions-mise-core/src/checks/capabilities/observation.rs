@@ -3,15 +3,15 @@ use crate::MiseError;
 use crate::checks::invalid;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use velnor_actions_contract::config::{
+use velnor_actions_contract::{digest_b3, is_valid_digest};
+use velnor_actions_contract_config::config::{
     CheckRunner, ContainerPlatform, HostContainerProfile, MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES,
     MAX_CHECK_CONTAINER_PATH_BYTES, MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
 };
-use velnor_actions_contract::{digest_b3, is_valid_digest};
 mod app;
 pub use app::OrbStackAppObservation;
 #[cfg(test)]
-use velnor_actions_contract::config::MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES;
+use velnor_actions_contract_config::config::MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES;
 
 pub(super) const DAEMON_FORMAT: &str = r#"{"ID":{{json .ID}},"ServerVersion":{{json .ServerVersion}},"OSType":{{json .OSType}},"Architecture":{{json .Architecture}},"OperatingSystem":{{json .OperatingSystem}}}"#;
 

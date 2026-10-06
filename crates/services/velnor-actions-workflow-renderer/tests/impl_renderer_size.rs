@@ -1,7 +1,8 @@
 //! Generated-tree limits apply to the base and extra workflow families.
 
 use std::collections::BTreeSet;
-use velnor_actions_contract::{RoutingWorkflow, ScheduleTrigger, WorkflowPolicy};
+use velnor_actions_contract_config::{RoutingWorkflow, WorkflowPolicy};
+use velnor_actions_contract_workflow::ScheduleTrigger;
 use velnor_actions_workflow_renderer::freshness::{FreshnessSpec, render_freshness_workflow};
 use velnor_actions_workflow_renderer::release_tree::render_release_workflow;
 use velnor_actions_workflow_renderer::schema2::MbxQualificationPins;

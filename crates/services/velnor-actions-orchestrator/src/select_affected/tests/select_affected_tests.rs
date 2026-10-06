@@ -140,7 +140,7 @@ fn declared_inputs_select_their_package() {
 
 #[test]
 fn skipped_index_names_broaden_with_explicit_tag() {
-    use velnor_actions_contract::WorkflowEvent;
+    use velnor_actions_contract_workflow::WorkflowEvent;
     let mut discovery = two_package_discovery();
     discovery.skipped_non_utf8 = true;
     let mut warnings = Vec::new();

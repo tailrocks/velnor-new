@@ -2,8 +2,8 @@
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use serde::{Deserialize, Serialize};
-use velnor_actions_contract::config::{CheckPlatform, QualifiedTool, QualifiedToolArtifact};
 use velnor_actions_contract::{canonical_json_bytes, digest_b3};
+use velnor_actions_contract_config::config::{CheckPlatform, QualifiedTool, QualifiedToolArtifact};
 use velnor_actions_mise::check_tool_probes::QualifiedExecutableProof;
 
 /// Actual installation identity carried inside the ordinary check execution receipt.

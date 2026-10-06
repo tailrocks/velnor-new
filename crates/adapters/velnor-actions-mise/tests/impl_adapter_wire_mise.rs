@@ -1,7 +1,8 @@
 //! Adapter-wire cases: event modes, save decisions, identities, freshness,
 //! policy headers, archive identity, transfers, inventories, and Mise
 //! tool-file routing plus inspection (F2 mise/rust halves).
-use velnor_actions_contract::{FreshnessRequirement, digest_b3};
+use velnor_actions_contract::digest_b3;
+use velnor_actions_contract_release::FreshnessRequirement;
 use velnor_actions_mise::cache::mode_for_event;
 use velnor_actions_mise::catalog::lock::{parse_version_policy, verify_policy_header};
 use velnor_actions_mise::{

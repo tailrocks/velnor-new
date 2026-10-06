@@ -37,6 +37,8 @@ fn manifest_depends_only_on_contract_and_core() {
         workspace,
         BTreeSet::from([
             "velnor-actions-contract".to_owned(),
+            "velnor-actions-contract-config".to_owned(),
+            "velnor-actions-contract-planning".to_owned(),
             "velnor-actions-rust-core".to_owned()
         ])
     );

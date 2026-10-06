@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn cargo_only_preseed_replaces_registry_cache_and_uses_native_helper_owner() {
-    use velnor_actions_contract::StepRole;
+    use velnor_actions_contract_workflow::StepRole;
     use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
     let roots = [String::new()];
     let mut plan = preseed_fixture(false, &roots);

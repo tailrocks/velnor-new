@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use serde_json::Value as Json;
-use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan};
+use velnor_actions_contract_workflow::{FinalStatus, ObligationDecision, Plan};
 use velnor_actions_orchestrator::{merge_internal, plan_internal};
 
 use crate::impl_common::{
@@ -92,7 +92,7 @@ fn plan_digests_combine_deterministically() -> TestResult {
 
 #[test]
 fn cache_miss_cannot_fail_merge() -> TestResult {
-    use velnor_actions_contract::{CacheLayer, CacheResult, TaskReport};
+    use velnor_actions_contract_workflow::{CacheLayer, CacheResult, TaskReport};
     let (_repo, plan) = plan_for_source_change()?;
     let reports = passing_reports(&plan)?;
     // Strict contract: `MatrixReport` carries no `cache` field, so the
@@ -110,19 +110,19 @@ fn cache_miss_cannot_fail_merge() -> TestResult {
         .ok_or("ob")?;
     let inputs = velnor_actions_orchestrator::decisions::NotSelectedInputs {
         run_key: "local",
-        event: velnor_actions_contract::WorkflowEvent::PullRequest,
-        trust: velnor_actions_contract::Trust::Pr,
+        event: velnor_actions_contract_workflow::WorkflowEvent::PullRequest,
+        trust: velnor_actions_contract_workflow::Trust::Pr,
         matrix_id: &entry.id,
         matrix_key: &entry.matrix_key,
         task_id: &entry.task_id,
         task_digest: &obligation.task_digest,
-        reason: velnor_actions_contract::NotSelectedReason::UpstreamFailed,
+        reason: velnor_actions_contract_workflow::NotSelectedReason::UpstreamFailed,
     };
     let mut report: TaskReport =
         velnor_actions_orchestrator::decisions::not_selected_report(&inputs)?;
-    report.status = velnor_actions_contract::TaskStatus::Executed;
+    report.status = velnor_actions_contract_workflow::TaskStatus::Executed;
     report.not_selected_reason = None;
-    report.cache = velnor_actions_contract::CacheOutcome {
+    report.cache = velnor_actions_contract_workflow::CacheOutcome {
         layer: CacheLayer::Task,
         key: "k".to_owned(),
         result: CacheResult::Miss,
@@ -137,7 +137,7 @@ fn merge_without_reports_is_not_run() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     assert!(!plan.matrix.include.is_empty());
     let request = serde_json::json!({"schema": 1, "run_key": "local", "actual_event": "pull_request", "plan": plan, "matrix": plan.matrix, "matrix_reports": [], "required_job_ids": ["plan"], "required_jobs": [{"job_id": "plan", "conclusion": "success"}]});
-    let final_report: velnor_actions_contract::FinalReport =
+    let final_report: velnor_actions_contract_workflow::FinalReport =
         serde_json::from_str(&merge_internal(&request.to_string())?)?;
     assert_eq!(final_report.status, FinalStatus::NotRun);
     assert_eq!(
@@ -169,7 +169,8 @@ fn undetected_stacks_plan_no_work() -> TestResult {
     let jobs = serde_json::json!([{"job_id": "plan", "conclusion": "success"}, {"job_id": "actionlint", "conclusion": "success"}]);
     let merge = serde_json::json!({"schema": 1, "run_key": "local", "actual_event": "push", "plan": plan, "matrix": plan.matrix, "matrix_reports": [], "required_job_ids": ["plan", "actionlint"], "required_jobs": jobs});
     let merged = merge_internal(&merge.to_string())?;
-    let final_report: velnor_actions_contract::FinalReport = serde_json::from_str(&merged)?;
+    let final_report: velnor_actions_contract_workflow::FinalReport =
+        serde_json::from_str(&merged)?;
     assert_eq!(final_report.status, FinalStatus::NoWork);
     assert!(
         velnor_actions_orchestrator::merge_passed(&merged)?,

@@ -13,9 +13,8 @@ pub(crate) use tokens::check_token_hygiene;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{
-    Job, JobTimeout, Step, StepKind, StepRole, ValidatorKind, VelnorSupportWorkflow,
-};
+use velnor_actions_contract_config::{ValidatorKind, VelnorSupportWorkflow};
+use velnor_actions_contract_workflow::{Job, JobTimeout, Step, StepKind, StepRole};
 
 use crate::{
     RenderError,

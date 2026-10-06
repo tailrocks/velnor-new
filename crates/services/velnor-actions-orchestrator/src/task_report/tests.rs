@@ -1,11 +1,11 @@
 use super::*;
 use super::{single_task_aggregate, write_task_report_to};
 use std::fs;
-use velnor_actions_contract::FinalReport;
-use velnor_actions_contract::MatrixEntry;
-use velnor_actions_contract::config::{CheckPlatform, HostContainerProfile, QualifiedTool};
-use velnor_actions_contract::{ExecuteTaskRef, TaskReport, TaskStatus};
-use velnor_actions_contract::{FinalStatus, Plan};
+use velnor_actions_contract_config::config::{CheckPlatform, HostContainerProfile, QualifiedTool};
+use velnor_actions_contract_workflow::FinalReport;
+use velnor_actions_contract_workflow::MatrixEntry;
+use velnor_actions_contract_workflow::{ExecuteTaskRef, TaskReport, TaskStatus};
+use velnor_actions_contract_workflow::{FinalStatus, Plan};
 fn artifact(temp: &tempfile::TempDir, plan: &Plan, name: &str) -> std::path::PathBuf {
     let entry = &plan.matrix.include[0];
     temp.path()

@@ -8,6 +8,9 @@ autotests = false
 
 [dependencies]
 velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
+velnor-actions-contract-release = { version = "=0.1.1", path = "../../core/velnor-actions-contract-release" }
+velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
 
 [lints]
 workspace = true

@@ -1,6 +1,6 @@
 //! Generated `.github/AGENTS.md` rendering.
 
-use velnor_actions_contract::AGENTS_MD_PATH;
+use velnor_actions_contract_release::AGENTS_MD_PATH;
 
 use crate::RenderError;
 use crate::marker::with_marker;

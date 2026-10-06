@@ -97,7 +97,7 @@ fn consumer_acquire_uses_native_checksum_utility_for_each_target() {
 
 #[test]
 fn lock_acquire_uses_native_checksum_utility_for_each_target() {
-    use velnor_actions_contract::{GeneratorBinary, LockedGenerator, MiseBootstrap};
+    use velnor_actions_contract_release::{GeneratorBinary, LockedGenerator, MiseBootstrap};
 
     let lock = GeneratorLock {
         schema: 1,
@@ -137,8 +137,11 @@ fn lock_acquire_uses_native_checksum_utility_for_each_target() {
     }
 }
 
-fn assert_native_checksum_utility(step: velnor_actions_contract::Step, target: ReleaseTarget) {
-    let velnor_actions_contract::StepKind::Shell { run, .. } = step.kind else {
+fn assert_native_checksum_utility(
+    step: velnor_actions_contract_workflow::Step,
+    target: ReleaseTarget,
+) {
+    let velnor_actions_contract_workflow::StepKind::Shell { run, .. } = step.kind else {
         panic!("Acquire must be a shell step");
     };
     let script = run.join(" ");
@@ -215,7 +218,7 @@ fn mise_setup_rejects_non_linux_runners() {
 
 #[test]
 fn macos_helper_asset_and_native_digest_match_runner() {
-    use velnor_actions_contract::config::{CheckExecutor, CheckPlatform, CheckRunner};
+    use velnor_actions_contract_config::config::{CheckExecutor, CheckPlatform, CheckRunner};
     for (label, platform) in [
         ("macos-15", CheckPlatform::MacosArm64),
         ("macos-15-intel", CheckPlatform::MacosX64),
@@ -232,7 +235,7 @@ fn macos_helper_asset_and_native_digest_match_runner() {
             Some(&test_manifest_json()),
         )
         .expect("qualified helper");
-        let velnor_actions_contract::StepKind::Shell { run, env } = step.kind else {
+        let velnor_actions_contract_workflow::StepKind::Shell { run, env } = step.kind else {
             panic!("acquisition must be shell");
         };
         assert!(run.iter().any(|arg| arg.contains("shasum -a 256 -c -")));
@@ -243,7 +246,7 @@ fn macos_helper_asset_and_native_digest_match_runner() {
 
 #[test]
 fn acquisition_rejects_tampered_platform() {
-    use velnor_actions_contract::config::{CheckExecutor, CheckPlatform, CheckRunner};
+    use velnor_actions_contract_config::config::{CheckExecutor, CheckPlatform, CheckRunner};
     let runner = CheckRunner {
         label: "macos-15".to_owned(),
         platform: CheckPlatform::LinuxX64,

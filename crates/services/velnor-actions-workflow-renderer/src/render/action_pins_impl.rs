@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{Job, StepKind};
+use velnor_actions_contract_workflow::{Job, StepKind};
 
 /// Sorted unique pinned remote `uses:` refs across every action step.
 #[must_use]

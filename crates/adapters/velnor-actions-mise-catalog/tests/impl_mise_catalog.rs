@@ -170,9 +170,7 @@ fn catalog_new_validates_every_slot() {
 #[test]
 fn rust_toolchain_name_pins_version_and_target() {
     assert_eq!(RUST_TARGET_TRIPLE, "x86_64-unknown-linux-gnu");
-    assert!(velnor_actions_contract::targets::is_supported_target(
-        RUST_TARGET_TRIPLE
-    ));
+    assert!(velnor_actions_contract_release::targets::is_supported_target(RUST_TARGET_TRIPLE));
     assert_eq!(
         ToolCatalog::pinned().rust_toolchain_name(),
         "1.98.1-x86_64-unknown-linux-gnu"

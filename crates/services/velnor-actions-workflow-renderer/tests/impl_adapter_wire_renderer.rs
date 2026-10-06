@@ -2,7 +2,7 @@
 //! dirs, cache order, and release gates (F2 halves).
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::WorkflowPolicy;
+use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_workflow_renderer::lane_target::lane_cargo_target_env;
 use velnor_actions_workflow_renderer::steps::{
     TOOLS_CACHE_PATH, TOOLS_RESTORE_USES, TOOLS_SAVE_USES, cache_action_step,

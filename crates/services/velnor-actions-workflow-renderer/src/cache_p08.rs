@@ -14,8 +14,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::workflow::step_identity::is_configured_checkout;
-use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+use velnor_actions_contract_workflow::workflow::step_identity::is_configured_checkout;
+use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 
 use crate::{MiseSetup, RenderError, cache_p08_detect::detector_words, setup::MISE_ACTION_NAME};
 

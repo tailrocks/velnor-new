@@ -1,6 +1,6 @@
 //! P08 Mise cache policy: paths, transport, sources, trust (C1,C3-C6,C9-C12).
 
-use velnor_actions_contract::StepRole;
+use velnor_actions_contract_workflow::StepRole;
 use velnor_actions_mise_cache::cache_sources as sources;
 use velnor_actions_mise_cache::cache_transport as transport;
 use velnor_actions_mise_cache::cache_trust as trust;
@@ -161,7 +161,7 @@ fn c9_pr_save_needs_action_support_and_forks_stay_read_only() {
         );
     }
     assert_eq!(
-        velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION,
+        velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION,
         "success() && github.event_name == 'push'"
     );
 }
@@ -209,7 +209,7 @@ fn c10b_trusted_save_authorizes_only_the_push_only_gate() {
     let gate = trust::authorize_trusted_save().expect("authorized");
     assert_eq!(
         gate,
-        velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION
+        velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION
     );
     // Step-level `if:` replaces the default `success()`; without it the
     // save would run after a failed producer and poison the trusted

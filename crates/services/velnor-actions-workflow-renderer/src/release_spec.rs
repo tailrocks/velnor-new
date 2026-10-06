@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::ScheduleTrigger;
+use velnor_actions_contract_workflow::ScheduleTrigger;
 
 use crate::{RenderError, steps::scan_for_private_subcommands};
 

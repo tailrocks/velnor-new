@@ -6,7 +6,7 @@ use super::{CompileDriver, MBX_ACTION_NAME};
 use crate::RenderError;
 use crate::steps::{action_step_with_env, shell_step, validate_uses};
 use velnor_actions_contract::cachekey::mbx_cache_generation;
-use velnor_actions_contract::{Step, StepRole};
+use velnor_actions_contract_workflow::{Step, StepRole};
 
 /// Display name for the strict Rust check before the action installs MBX.
 pub const MBX_PREFLIGHT_NAME: &str = "Verify Rust before MBX action";

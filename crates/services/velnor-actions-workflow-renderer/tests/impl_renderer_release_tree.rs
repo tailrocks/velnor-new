@@ -1,6 +1,6 @@
 //! Release workflow rendering, file assembly, and determinism cases.
 use std::collections::BTreeMap;
-use velnor_actions_contract::ScheduleTrigger;
+use velnor_actions_contract_workflow::ScheduleTrigger;
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::release_config::{
     BootstrapReleasePlzConfig, ReleasePlzConfig, ReleasePlzPackage,
@@ -58,7 +58,7 @@ fn config() -> ReleasePlzConfig {
     }
 }
 
-fn policy_checkout() -> Result<velnor_actions_contract::Step, RenderError> {
+fn policy_checkout() -> Result<velnor_actions_contract_workflow::Step, RenderError> {
     action_step(
         "Checkout",
         &checkout_uses(),
@@ -69,7 +69,7 @@ fn policy_checkout() -> Result<velnor_actions_contract::Step, RenderError> {
     )
 }
 
-fn source_checkout(persist: &str) -> Result<velnor_actions_contract::Step, RenderError> {
+fn source_checkout(persist: &str) -> Result<velnor_actions_contract_workflow::Step, RenderError> {
     action_step(
         "Checkout exact source",
         &checkout_uses(),
@@ -86,13 +86,13 @@ fn plain_job(
     role: ReleaseRole,
     needs: &[&str],
     condition: Option<&str>,
-    steps: Vec<velnor_actions_contract::Step>,
+    steps: Vec<velnor_actions_contract_workflow::Step>,
 ) -> ReleaseJobSpec {
     ReleaseJobSpec {
         role,
         display_name: format!("Release {}", role.as_str()),
         runs_on: LABEL.to_owned(),
-        timeout_minutes: velnor_actions_contract::JobTimeout::RELEASE,
+        timeout_minutes: velnor_actions_contract_workflow::JobTimeout::RELEASE,
         needs: needs.iter().map(ToString::to_string).collect(),
         condition: condition.map(str::to_owned),
         environment: None,
@@ -124,7 +124,7 @@ fn publish_job(
         role,
         display_name: format!("Release {}", role.as_str()),
         runs_on: LABEL.to_owned(),
-        timeout_minutes: velnor_actions_contract::JobTimeout::RELEASE,
+        timeout_minutes: velnor_actions_contract_workflow::JobTimeout::RELEASE,
         needs: needs.iter().map(ToString::to_string).collect(),
         condition: Some(gate),
         environment: Some(ENV.to_owned()),

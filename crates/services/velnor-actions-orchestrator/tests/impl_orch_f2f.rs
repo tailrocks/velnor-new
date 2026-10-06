@@ -12,47 +12,7 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
 }
 
-/// Allowed intra-workspace edges per member package.
-fn expected_internal(dir: &str) -> Vec<&str> {
-    match dir {
-        "crates/core/velnor-actions-contract" | "crates/apps/velnor-actions-repo-policy" => vec![],
-        "crates/services/velnor-actions-orchestrator" => vec![
-            "velnor-actions-actionlint",
-            "velnor-actions-contract",
-            "velnor-actions-mise",
-            "velnor-actions-rust",
-            "velnor-actions-rust-core",
-            "velnor-actions-tofu",
-            "velnor-actions-tofu-core",
-            "velnor-actions-workflow-renderer",
-        ],
-        "crates/adapters/velnor-actions-tofu" => {
-            vec!["velnor-actions-contract", "velnor-actions-tofu-core"]
-        }
-        "crates/adapters/velnor-actions-rust" => {
-            vec!["velnor-actions-contract", "velnor-actions-rust-core"]
-        }
-        "crates/adapters/velnor-actions-mise" => vec![
-            "velnor-actions-mise-cache",
-            "velnor-actions-mise-catalog",
-            "velnor-actions-mise-core",
-            "velnor-actions-mise-nextest",
-            "velnor-actions-mise-probes",
-        ],
-        "crates/adapters/velnor-actions-mise-catalog"
-        | "crates/adapters/velnor-actions-mise-cache"
-        | "crates/adapters/velnor-actions-mise-probes" => {
-            vec!["velnor-actions-contract", "velnor-actions-mise-core"]
-        }
-        "crates/adapters/velnor-actions-mise-nextest" => vec![
-            "velnor-actions-contract",
-            "velnor-actions-mise-catalog",
-            "velnor-actions-mise-core",
-        ],
-        "crates/apps/velnor-actions-cli" => vec!["velnor-actions-orchestrator"],
-        _ => vec!["velnor-actions-contract"],
-    }
-}
+use crate::impl_orch_f2f_edges::expected_internal;
 
 /// Member directories in dependency-table order.
 fn members() -> Vec<&'static str> {
@@ -61,6 +21,10 @@ fn members() -> Vec<&'static str> {
         "crates/apps/velnor-actions-cli",
         "crates/apps/velnor-actions-repo-policy",
         "crates/core/velnor-actions-contract",
+        "crates/core/velnor-actions-contract-config",
+        "crates/core/velnor-actions-contract-planning",
+        "crates/core/velnor-actions-contract-release",
+        "crates/core/velnor-actions-contract-workflow",
         "crates/adapters/velnor-actions-mise",
         "crates/adapters/velnor-actions-mise-cache",
         "crates/adapters/velnor-actions-mise-catalog",

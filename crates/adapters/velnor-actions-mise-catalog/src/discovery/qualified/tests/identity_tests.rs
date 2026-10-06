@@ -1,8 +1,8 @@
 use super::{resolve_on, rust};
-use velnor_actions_contract::config::CheckPlatform;
+use velnor_actions_contract_config::config::CheckPlatform;
 
 fn discovered_qualification() -> velnor_actions_mise_core::checks::DiscoveredCheck {
-    use velnor_actions_contract::config::{CheckExecutor, CheckRunner, MiseCheck};
+    use velnor_actions_contract_config::config::{CheckExecutor, CheckRunner, MiseCheck};
     let resolved = resolve_on(&[rust()], &["rust".to_owned()], CheckPlatform::LinuxX64)
         .expect("qualified Rust");
     let check = MiseCheck {
@@ -62,7 +62,7 @@ fn altered_qualification_cannot_retain_the_discovered_proposal_binding() {
 }
 #[test]
 fn every_host_container_field_changes_the_runner_identity() {
-    use velnor_actions_contract::config::{
+    use velnor_actions_contract_config::config::{
         ContainerPlatform, DaemonIdentityPolicy, HostContainerProfile, HostDockerCli,
         HostDockerDaemon,
     };

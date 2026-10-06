@@ -6,7 +6,8 @@
 use std::path::Path;
 #[cfg(test)]
 pub(crate) use velnor_actions_contract::ClosureBuilder;
-use velnor_actions_contract::{ContractError, ProposedTask, Stack, TaskInputClosure};
+use velnor_actions_contract::{ContractError, Stack, TaskInputClosure};
+use velnor_actions_contract_planning::ProposedTask;
 
 /// Resolve one proposed task's closure against the checkout at `root`.
 ///

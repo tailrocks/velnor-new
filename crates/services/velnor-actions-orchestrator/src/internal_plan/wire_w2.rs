@@ -5,9 +5,9 @@
 // Wired here so reuse stages compile without touching `lib.rs`.
 pub(crate) mod reuse_stages;
 
-use velnor_actions_contract::{
-    ObligationDecision, PlanGenerator, ProposedTask, WorkflowEvent, digest_b3, validate_digest,
-};
+use velnor_actions_contract::{digest_b3, validate_digest};
+use velnor_actions_contract_planning::ProposedTask;
+use velnor_actions_contract_workflow::{ObligationDecision, PlanGenerator, WorkflowEvent};
 use velnor_actions_mise::{
     ArchiveIdentityInputs, NextestArchive, NextestDriver, PinnedTool, ReuseQualification,
     ReuseSignal, ToolAvailability, ToolCatalog, archive_identity,

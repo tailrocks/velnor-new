@@ -31,7 +31,8 @@ mod needs_channel;
 
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::{NEEDS_EXPECTED_ENV, canonical_json_str, parse_strict_json};
+use velnor_actions_contract::{canonical_json_str, parse_strict_json};
+use velnor_actions_contract_workflow::NEEDS_EXPECTED_ENV;
 
 use self::needs_channel::{NEEDS_ENV, parse_needs};
 use crate::OrchestratorError;
@@ -145,7 +146,9 @@ fn read_attestation(
     inventory: &[String],
     errors: &mut Vec<String>,
 ) -> serde_json::Value {
-    use velnor_actions_contract::{CANDIDATE_ATTESTATION_FILENAME, CANDIDATE_EVIDENCE_SUBDIR};
+    use velnor_actions_contract_workflow::{
+        CANDIDATE_ATTESTATION_FILENAME, CANDIDATE_EVIDENCE_SUBDIR,
+    };
     use velnor_actions_workflow_renderer::render::CANDIDATE_JOB_ID;
     if !inventory.iter().any(|id| id == CANDIDATE_JOB_ID) {
         return serde_json::Value::Null;
@@ -169,7 +172,7 @@ fn resolve_actual_event(
     event_name: Option<&str>,
     event_payload: Option<&str>,
     errors: &mut Vec<String>,
-) -> Option<velnor_actions_contract::WorkflowEvent> {
+) -> Option<velnor_actions_contract_workflow::WorkflowEvent> {
     let Some(name) = event_name.filter(|name| !name.trim().is_empty()) else {
         errors.push("missing_actual_event".to_owned());
         return None;

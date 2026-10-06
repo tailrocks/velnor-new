@@ -1,9 +1,8 @@
 //! Opaque checks bind source, configuration and their own target identity.
 use super::*;
 use tempfile::TempDir;
-use velnor_actions_contract::{
-    CheckExecutor, CheckPlatform, CheckRunner, MiseCheck, PlanGenerator,
-};
+use velnor_actions_contract_config::{CheckExecutor, CheckPlatform, CheckRunner, MiseCheck};
+use velnor_actions_contract_workflow::PlanGenerator;
 fn fixture() -> (TempDir, MiseCheck) {
     let dir = TempDir::new().expect("temporary repository");
     std::fs::write(

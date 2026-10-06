@@ -1,6 +1,7 @@
 //! Opaque execution eligibility remains separate from source-change classification.
 use super::*;
-use velnor_actions_contract::{MiseCheck, ObligationDecision, PlanGenerator};
+use velnor_actions_contract_config::MiseCheck;
+use velnor_actions_contract_workflow::{ObligationDecision, PlanGenerator};
 use velnor_actions_mise::ToolCatalog;
 #[test]
 fn unchanged_named_check_executes_without_fabricating_a_source_change() {

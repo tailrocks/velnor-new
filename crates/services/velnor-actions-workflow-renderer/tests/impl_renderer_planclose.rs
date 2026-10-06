@@ -1,5 +1,5 @@
 //! Plan closure: freshness gate, publish upload, anchor, legacy path.
-use velnor_actions_contract::WorkflowPolicy;
+use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_workflow_renderer::{
     ACQUIRE_NAME, CHECK_GENERATED_NAME, CRATE_REPORT_UPLOAD_NAME, DOWNLOAD_PLAN_NAME,
     FRESHNESS_OUTDIR, MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION, PUBLISH_PLAN_NAME, RUN_KEY_EXPR,
@@ -87,7 +87,7 @@ fn legacy_preserves_unstaged_render_and_closes_plan() -> Result<(), RenderError>
 fn freshness_step_shape_exact() -> Result<(), RenderError> {
     let step = freshness_step(STAGED, FRESHNESS_OUTDIR, &std::collections::BTreeMap::new())?;
     assert_eq!(step.name, CHECK_GENERATED_NAME);
-    let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Shell { run, .. } = &step.kind else {
         panic!("freshness must be a shell step");
     };
     assert_eq!(run[0], "sh");
@@ -118,7 +118,7 @@ fn freshness_step_shape_exact() -> Result<(), RenderError> {
 fn publish_plan_upload_shape_exact() -> Result<(), RenderError> {
     let step = publish_plan_step()?;
     assert_eq!(step.name, PUBLISH_PLAN_NAME);
-    let velnor_actions_contract::StepKind::Action { uses, with, .. } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Action { uses, with, .. } = &step.kind else {
         panic!("publish must be an action step");
     };
     assert!(uses.starts_with("actions/upload-artifact@"));
@@ -133,7 +133,7 @@ fn publish_plan_upload_shape_exact() -> Result<(), RenderError> {
 fn matrix_report_upload_names_derive_from_run_and_leg() -> Result<(), RenderError> {
     let step = matrix_report_upload_step()?;
     assert_eq!(step.name, MATRIX_REPORT_UPLOAD_NAME);
-    let velnor_actions_contract::StepKind::Action { uses, with, .. } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Action { uses, with, .. } = &step.kind else {
         panic!("matrix upload must be an action step");
     };
     assert!(uses.starts_with("actions/upload-artifact@"));
@@ -150,7 +150,7 @@ fn matrix_report_upload_names_derive_from_run_and_leg() -> Result<(), RenderErro
 fn crate_upload_names_derive_from_run_and_job() -> Result<(), RenderError> {
     let step = crate_job_report_upload_step("crate_foo")?;
     assert_eq!(step.name, CRATE_REPORT_UPLOAD_NAME);
-    let velnor_actions_contract::StepKind::Action { uses, with, .. } = &step.kind else {
+    let velnor_actions_contract_workflow::StepKind::Action { uses, with, .. } = &step.kind else {
         panic!("crate upload must be an action step");
     };
     assert!(uses.starts_with("actions/upload-artifact@"));
@@ -172,12 +172,13 @@ fn crate_upload_names_derive_from_run_and_job() -> Result<(), RenderError> {
 fn download_plan_shape_mirrors_publish() -> Result<(), RenderError> {
     let download = download_plan_step()?;
     assert_eq!(download.name, DOWNLOAD_PLAN_NAME);
-    let velnor_actions_contract::StepKind::Action { uses, with, .. } = &download.kind else {
+    let velnor_actions_contract_workflow::StepKind::Action { uses, with, .. } = &download.kind
+    else {
         panic!("download must be an action step");
     };
     assert!(uses.starts_with("actions/download-artifact@"));
     let publish = publish_plan_step()?;
-    let velnor_actions_contract::StepKind::Action {
+    let velnor_actions_contract_workflow::StepKind::Action {
         with: published, ..
     } = &publish.kind
     else {

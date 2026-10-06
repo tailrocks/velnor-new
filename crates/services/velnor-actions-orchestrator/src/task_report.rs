@@ -8,9 +8,12 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{
+    canonical_json_bytes, parse_strict_json, task_report_id_for_task, validate_run_key,
+    validate_task_id,
+};
+use velnor_actions_contract_workflow::{
     CacheLayer, CacheOutcome, CacheResult, ExecuteTaskRef, MatrixEntry, MatrixReport, Plan,
-    TaskReport, TaskStatus, canonical_json_bytes, parse_strict_json, task_report_id_for_task,
-    validate_run_key, validate_task_id,
+    TaskReport, TaskStatus,
 };
 
 use crate::OrchestratorError;

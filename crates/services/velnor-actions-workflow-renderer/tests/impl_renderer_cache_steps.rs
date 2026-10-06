@@ -1,6 +1,6 @@
 //! Gate 4 renderer cases: MBX objects, cache actions, lane target dirs.
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract_workflow::{Step, StepKind};
 use velnor_actions_workflow_renderer::lane_target::target_dir_for_lane;
 use velnor_actions_workflow_renderer::steps::{
     CompileDriver, MBX_CACHE_MODE_ENV, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME,
@@ -223,7 +223,7 @@ fn strict_restores_builtin_and_saves_on_elected_writer()
     );
     let rendered = velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared(
         &fixture_ir(vec![lint]),
-        velnor_actions_contract::WorkflowPolicy::ConsumerV1,
+        velnor_actions_contract_config::WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),
         &mise(),

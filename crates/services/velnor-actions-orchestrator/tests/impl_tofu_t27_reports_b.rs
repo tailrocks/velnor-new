@@ -11,7 +11,7 @@ use std::path::Path;
 
 use serde_json::json;
 use tempfile::TempDir;
-use velnor_actions_contract::{FinalStatus, Plan, Trust, WorkflowEvent};
+use velnor_actions_contract_workflow::{FinalStatus, Plan, Trust, WorkflowEvent};
 use velnor_actions_orchestrator::plan_internal;
 
 use super::impl_common::{

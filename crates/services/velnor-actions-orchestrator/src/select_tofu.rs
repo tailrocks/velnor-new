@@ -11,7 +11,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use velnor_actions_contract::{DetectionStatus, ProposedTask};
+use velnor_actions_contract_planning::{DetectionStatus, ProposedTask};
 use velnor_actions_tofu::select_roots;
 use velnor_actions_tofu_core::{
     Family, ModuleEdges, chdir_finding_for_root, family_of, key_for_root, root_for_key,

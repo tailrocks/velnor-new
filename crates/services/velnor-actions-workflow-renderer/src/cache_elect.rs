@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 
 use crate::{RenderError, setup::MISE_ACTION_NAME};
 
@@ -65,8 +65,10 @@ pub fn elect_tofu_provider_savers(jobs: &mut BTreeMap<String, Job>) -> Result<()
     let mut by_key: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut path_for: BTreeMap<String, String> = BTreeMap::new();
     for (id, job) in jobs.iter() {
-        velnor_actions_contract::workflow::step_identity::validate_step_sequence(&job.steps, id)
-            .map_err(RenderError::Contract)?;
+        velnor_actions_contract_workflow::workflow::step_identity::validate_step_sequence(
+            &job.steps, id,
+        )
+        .map_err(RenderError::Contract)?;
         if let Some((key, path)) = provider_restore_entry(job) {
             if let Some(existing) = path_for.get(&key)
                 && existing != &path
@@ -169,16 +171,16 @@ fn append_provider_save(job: &mut Job, key: &str, path: &str) -> Result<(), Rend
             || !env.is_empty()
             || with.len() != 2
             || with.get("key").map(String::as_str)
-                != Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR)
+                != Some(velnor_actions_contract_workflow::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR)
             || with.get("path").map(String::as_str)
-                != Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_PATH_OUTPUT_EXPR)
+                != Some(velnor_actions_contract_workflow::workflow::step_identity::TOFU_PROVIDERS_PATH_OUTPUT_EXPR)
         {
             return Err(RenderError::InvalidWorkflow(
                 "tofu_provider_save_restore_mismatch".to_owned(),
             ));
         }
         if save.condition.as_deref()
-            != Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION)
+            != Some(velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION)
         {
             return Err(RenderError::InvalidWorkflow(
                 "tofu_provider_save_gate_mismatch".to_owned(),
@@ -187,7 +189,8 @@ fn append_provider_save(job: &mut Job, key: &str, path: &str) -> Result<(), Rend
         return Ok(());
     }
     let mut save = crate::tofu_cache::tofu_providers_save_step()?;
-    save.condition = Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
+    save.condition =
+        Some(velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
     job.steps.push(save);
     Ok(())
 }
@@ -231,7 +234,8 @@ fn append_tools_save(job: &mut Job, key: &str) -> Result<(), RenderError> {
         return Ok(());
     }
     let mut save = crate::cache_steps::tools_save_step(key)?;
-    save.condition = Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
+    save.condition =
+        Some(velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
     job.steps.push(save);
     Ok(())
 }

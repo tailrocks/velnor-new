@@ -1,7 +1,7 @@
 //! Tofu identity-extension cases (T12).
-use velnor_actions_contract::{
-    cachekey::TOFU_EXTENSION_SCHEMA, digest_b3, validate_tofu_extension,
-};
+use velnor_actions_contract::cachekey::TOFU_EXTENSION_SCHEMA;
+use velnor_actions_contract::digest_b3;
+use velnor_actions_contract_release::validate_tofu_extension;
 use velnor_actions_tofu::identity::{
     TofuGroupExtensionInputs, entry_metadata_for_task, extension_for_proposal, lock_slot_at_root,
 };

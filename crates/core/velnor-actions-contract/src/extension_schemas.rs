@@ -9,8 +9,6 @@ pub const RUST_EXTENSION_SCHEMA: &str = "rust-task-identity-v1";
 pub const TOFU_EXTENSION_SCHEMA: &str = "tofu-task-identity-v1";
 /// Known stack-extension schemas; unknown schemas disable reuse/coverage.
 pub const NAMED_CHECK_EXTENSION_SCHEMA: &str = "mise-named-check-identity-v1";
-/// Typed named-check extension.
-pub mod named_check;
 /// Known adapter identity schemas.
 pub const KNOWN_STACK_EXTENSION_SCHEMAS: &[&str] = &[
     RUST_EXTENSION_SCHEMA,

@@ -5,7 +5,7 @@
 //! `ReleaseJobSpec`, pinning pre-split behavior through public paths.
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract_workflow::{Step, StepKind};
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::release_jobs::{
     ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec,
@@ -111,7 +111,7 @@ fn release_job_shape_roundtrip() -> Result<(), RenderError> {
         role: ReleaseRole::Preflight,
         display_name: "Preflight".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
-        timeout_minutes: velnor_actions_contract::JobTimeout::RELEASE,
+        timeout_minutes: velnor_actions_contract_workflow::JobTimeout::RELEASE,
         needs: vec!["preparation".to_owned()],
         condition: None,
         environment: None,

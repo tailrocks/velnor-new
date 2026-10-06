@@ -13,7 +13,7 @@ use velnor_actions_actionlint::actions::{
 use velnor_actions_actionlint::config::{
     ZizmorConfigInput, ZizmorWorkflowText, render_zizmor_yaml,
 };
-use velnor_actions_contract::FRESHNESS_WORKFLOW_PATH;
+use velnor_actions_contract_workflow::FRESHNESS_WORKFLOW_PATH;
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog};
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
@@ -31,7 +31,7 @@ fn git(args: &[&str], cwd: &Path) -> TestResult {
 /// Release-manifest fixture for `prepare`.
 fn manifest_json() -> String {
     let version = env!("CARGO_PKG_VERSION");
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
+    let targets = velnor_actions_contract_release::SUPPORTED_TARGETS
     .iter()
     .map(|target| {
         format!(
@@ -58,7 +58,7 @@ fn binary_record(target: &str) -> String {
 /// Generator-lock fixture for Velnor-policy `prepare`.
 fn lock_text() -> String {
     let version = env!("CARGO_PKG_VERSION");
-    let bins = velnor_actions_contract::SUPPORTED_TARGETS
+    let bins = velnor_actions_contract_release::SUPPORTED_TARGETS
         .iter()
         .map(|target| binary_record(target))
         .collect::<String>();

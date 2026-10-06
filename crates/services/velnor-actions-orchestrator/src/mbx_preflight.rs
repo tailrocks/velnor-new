@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::PinnedActionRef;
 use velnor_actions_actionlint::actions::{MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION};
-use velnor_actions_contract::Step;
+use velnor_actions_contract_workflow::Step;
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::steps::{CompileDriver, mbx_steps_for_driver};
 

@@ -6,9 +6,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{
+use velnor_actions_contract::{canonical_json_bytes, task_report_id_for_task};
+use velnor_actions_contract_workflow::{
     ExecuteTaskRef, MatrixEntry, ObligationDecision, Plan, PlanMatrix, TaskReport,
-    canonical_json_bytes, task_report_id_for_task,
 };
 
 use super::MergeRequest;
@@ -31,7 +31,9 @@ pub(crate) fn check_agreement(
         return Ok(());
     };
     let matrix_bytes = canonical_json_bytes(matrix).map_err(internal_contract)?;
-    if velnor_actions_contract::check_matrix_agreement(&plan.matrix, &matrix_bytes).is_err() {
+    if velnor_actions_contract_workflow::check_matrix_agreement(&plan.matrix, &matrix_bytes)
+        .is_err()
+    {
         signals.planning_failed = true;
         miss_reasons.insert("cache_corrupt".to_owned());
     }
@@ -67,7 +69,8 @@ pub(crate) fn check_trust_coherence(
 ) {
     let coherent = match request.actual_event {
         Some(actual) => {
-            plan.event == actual && plan.trust == velnor_actions_contract::trust_for_event(actual)
+            plan.event == actual
+                && plan.trust == velnor_actions_contract_workflow::trust_for_event(actual)
         }
         None => false,
     };
@@ -248,8 +251,10 @@ fn sharded_bases(entry: &MatrixEntry) -> BTreeSet<String> {
     let mut bases = BTreeSet::new();
     for task_ref in entry.execute_task_ids.tasks.values() {
         let ids = match task_ref {
-            velnor_actions_contract::ExecuteTaskRef::Single(id) => std::slice::from_ref(id),
-            velnor_actions_contract::ExecuteTaskRef::Shards(ids) => ids.as_slice(),
+            velnor_actions_contract_workflow::ExecuteTaskRef::Single(id) => {
+                std::slice::from_ref(id)
+            }
+            velnor_actions_contract_workflow::ExecuteTaskRef::Shards(ids) => ids.as_slice(),
         };
         for id in ids {
             if let Some((base, _, _)) = velnor_actions_contract::split_shard_suffix(id) {

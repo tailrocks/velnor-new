@@ -6,11 +6,11 @@
 //! Both archive exactly one job-private plugin-cache dir, never the
 //! data dir beside it.
 
-pub use velnor_actions_contract::workflow::step_identity::{
+pub use velnor_actions_contract_workflow::workflow::step_identity::{
     TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDER_CACHE_BASE_EXPR, TOFU_PROVIDERS_KEY_OUTPUT_EXPR,
     TOFU_PROVIDERS_KEY_PREFIX, TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
 };
-use velnor_actions_contract::{Step, StepRole};
+use velnor_actions_contract_workflow::{Step, StepRole};
 
 use crate::{RenderError, marker, steps, yaml};
 

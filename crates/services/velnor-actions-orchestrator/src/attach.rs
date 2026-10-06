@@ -7,9 +7,9 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{
-    GeneratorLock, ReleaseTarget, Step, StepRole, WorkflowIr, is_crate_job_id,
-};
+use velnor_actions_contract::is_crate_job_id;
+use velnor_actions_contract_release::{GeneratorLock, ReleaseTarget};
+use velnor_actions_contract_workflow::{Step, StepRole, WorkflowIr};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID};
 use velnor_actions_workflow_renderer::steps::STAGED_BINARY_PREFIX;

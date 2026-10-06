@@ -2,9 +2,9 @@
 
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::{
+use velnor_actions_contract::{digest_b3, matrix_id_for_task_group, matrix_key_for_id};
+use velnor_actions_contract_workflow::{
     FinalStatus, NotSelectedReason, ObligationDecision, TaskStatus, Trust, WorkflowEvent,
-    digest_b3, matrix_id_for_task_group, matrix_key_for_id,
 };
 use velnor_actions_orchestrator::decisions::{
     CacheHit, MetadataFailure, NotSelectedInputs, ObligationInputs, baseline_expired,
@@ -284,7 +284,7 @@ fn not_selected_tasks_fold_to_blocked() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     let mut reports = passing_reports(&plan)?;
     let first = reports.first_mut().ok_or("report")?;
-    first.tasks[0].status = velnor_actions_contract::TaskStatus::NotSelected;
+    first.tasks[0].status = velnor_actions_contract_workflow::TaskStatus::NotSelected;
     first.executed = 0;
     first.not_selected = 1;
     first.validate()?;

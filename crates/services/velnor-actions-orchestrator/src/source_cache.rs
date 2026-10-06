@@ -12,7 +12,7 @@ use velnor_actions_actionlint::{
     actions::{CACHE_ACTION_SHA, CACHE_ACTION_VERSION},
     rust_cache_inputs_schema, validate_action_inputs,
 };
-use velnor_actions_contract::{Step, StepKind, StepRole};
+use velnor_actions_contract_workflow::{Step, StepKind, StepRole};
 
 use crate::OrchestratorError;
 
@@ -34,7 +34,7 @@ pub(crate) fn sources_cache_key(
     roots: &[String],
 ) -> Result<String, OrchestratorError> {
     use velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
-    if !velnor_actions_contract::is_supported_target(target) {
+    if !velnor_actions_contract_release::is_supported_target(target) {
         return Err(bad_key(format!("bad_target:{target}")));
     }
     velnor_actions_mise::validate_exact_version("rust", rust_version).map_err(|err| {

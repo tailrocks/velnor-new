@@ -4,8 +4,8 @@ use std::fs;
 use std::path::Path;
 
 use tempfile::TempDir;
-use velnor_actions_contract::DetectionStatus;
-use velnor_actions_contract::WorkflowPolicy;
+use velnor_actions_contract_config::WorkflowPolicy;
+use velnor_actions_contract_planning::DetectionStatus;
 use velnor_actions_mise::{GitRequest, is_allowed_git_verb};
 use velnor_actions_orchestrator::{
     GenerateOptions, OrchestratorError, generate, init_config, prepare, resolve_root,

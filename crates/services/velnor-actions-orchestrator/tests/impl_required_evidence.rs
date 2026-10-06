@@ -1,7 +1,7 @@
 //! P01/P02 regression tests: closed required evidence, obligation universe.
 
 use serde_json::json;
-use velnor_actions_contract::{FinalStatus, JobConclusion, ObligationDecision};
+use velnor_actions_contract_workflow::{FinalStatus, JobConclusion, ObligationDecision};
 use velnor_actions_orchestrator::{assemble_merge_request, merge_internal};
 
 use crate::impl_common::{TestResult, make_repo, passing_reports, plan_for_source_change};
@@ -13,7 +13,7 @@ use crate::impl_orch_plansel::{
 /// Merge status for one hand-built request value.
 fn status_of(request: &serde_json::Value) -> Result<FinalStatus, Box<dyn std::error::Error>> {
     Ok(
-        serde_json::from_str::<velnor_actions_contract::FinalReport>(&merge_internal(
+        serde_json::from_str::<velnor_actions_contract_workflow::FinalReport>(&merge_internal(
             &request.to_string(),
         )?)?
         .status,
@@ -258,7 +258,7 @@ fn missing_report_file_fails_closed() -> TestResult {
             .collect(),
     );
     value["actual_event"] = value["plan"]["event"].clone();
-    let report: velnor_actions_contract::FinalReport =
+    let report: velnor_actions_contract_workflow::FinalReport =
         serde_json::from_str(&merge_internal(&value.to_string())?)?;
     assert_eq!(report.status, FinalStatus::PlanningFailed);
     assert!(

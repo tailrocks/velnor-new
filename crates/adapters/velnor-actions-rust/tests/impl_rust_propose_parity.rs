@@ -1,11 +1,11 @@
 //! Proposal-boundary equality: metadata, extension, closure (H8-H11).
 //!
-//! The neutral [`ProposedTask`](velnor_actions_contract::ProposedTask)
+//! The neutral [`ProposedTask`](velnor_actions_contract_planning::ProposedTask)
 //! path must equal the group path byte-for-byte: entry metadata,
 //! identity extension, and closure inputs. Refactor-only: any drift
 //! here is a behavior change.
 use crate::support::{Outcome, TempDir};
-use velnor_actions_contract::ProposedTask;
+use velnor_actions_contract_planning::ProposedTask;
 use velnor_actions_rust::tasks::{DigestSlot, RustTaskIdentityExtension, TaskGroup, TaskKind};
 use velnor_actions_rust::{
     GroupExtensionInputs, adapter_entry_metadata, entry_metadata_for_task, extension_for_proposal,

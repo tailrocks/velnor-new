@@ -19,7 +19,8 @@
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
-use velnor_actions_contract::{WorkflowEvent, canonical_json_bytes, digest_b3, parse_strict_json};
+use velnor_actions_contract::{canonical_json_bytes, digest_b3, parse_strict_json};
+use velnor_actions_contract_workflow::WorkflowEvent;
 
 use crate::OrchestratorError;
 use crate::cover_baseline::provenance_check::{
@@ -242,7 +243,7 @@ fn publish_gate(request: &PublishRequest) -> Result<(), OrchestratorError> {
 /// artifact, never this push.
 fn bind_plan(
     request: &PublishRequest,
-    plan: &velnor_actions_contract::Plan,
+    plan: &velnor_actions_contract_workflow::Plan,
 ) -> Result<(), OrchestratorError> {
     if plan.head != request.head {
         return Err(internal("publish_refused:head_mismatch"));
@@ -260,7 +261,7 @@ fn bind_plan(
 /// carried), and any reuse disposition refuses outright.
 fn publish_manifest(
     request: &PublishRequest,
-    plan: &velnor_actions_contract::Plan,
+    plan: &velnor_actions_contract_workflow::Plan,
     run_id: u64,
     run_attempt: u64,
 ) -> Result<BaselineManifest, OrchestratorError> {
@@ -270,7 +271,7 @@ fn publish_manifest(
     let mut tasks = Vec::new();
     for obligation in &plan.obligations {
         match obligation.decision {
-            velnor_actions_contract::ObligationDecision::Execute => {
+            velnor_actions_contract_workflow::ObligationDecision::Execute => {
                 tasks.push(crate::merge::required_evidence::BaselineTaskEntry {
                     task_id: obligation.task_id.clone(),
                     task_digest: obligation.task_digest.clone(),
@@ -282,8 +283,8 @@ fn publish_manifest(
                     proof: None,
                 });
             }
-            velnor_actions_contract::ObligationDecision::CoveredByTrustedBaseline => {}
-            velnor_actions_contract::ObligationDecision::ReusedFromTaskCache => {
+            velnor_actions_contract_workflow::ObligationDecision::CoveredByTrustedBaseline => {}
+            velnor_actions_contract_workflow::ObligationDecision::ReusedFromTaskCache => {
                 return Err(internal("publish_refused:unproven_reuse"));
             }
         }

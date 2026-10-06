@@ -3,7 +3,7 @@
 //! Declared via `#[path]` from `cache_steps.rs` (no `lib.rs` edit;
 //! split under the 400-line size gate, bodies byte-identical).
 
-use velnor_actions_contract::{Step, StepRole};
+use velnor_actions_contract_workflow::{Step, StepRole};
 
 use crate::RenderError;
 
@@ -36,7 +36,7 @@ pub fn tools_cache_key(
     generator_version: &str,
     job_id: &str,
 ) -> Result<String, RenderError> {
-    if !velnor_actions_contract::is_supported_target(target) {
+    if !velnor_actions_contract_release::is_supported_target(target) {
         return Err(RenderError::BadCommand(format!(
             "bad_cache_target:{target}"
         )));

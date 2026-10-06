@@ -2,7 +2,8 @@
 
 use std::ffi::{OsStr, OsString};
 
-use velnor_actions_contract::{ProposedTask, Stack};
+use velnor_actions_contract::Stack;
+use velnor_actions_contract_planning::ProposedTask;
 use velnor_actions_mise::{
     CandidateBuild, IsolatedCommand, PinnedTool, PinnedToolExec, RouteDriver, ToolCatalog,
     custom_run::custom_task_run_argv, validate_exact_version,

@@ -1,5 +1,6 @@
 //! Gate-8 renderer cases: artifacts, manifest script, rehead, release.
-use velnor_actions_contract::{GeneratorValidation, StepKind, WorkflowPolicy};
+use velnor_actions_contract_config::{GeneratorValidation, WorkflowPolicy};
+use velnor_actions_contract_workflow::StepKind;
 use velnor_actions_workflow_renderer::steps::{
     ARTIFACT_RETENTION_DAYS, candidate_manifest_script, download_artifact_step,
     rehead_actionlint_marker, upload_artifact_step,

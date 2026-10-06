@@ -5,7 +5,7 @@
 //! qualification fixtures. Both gates live here so callers cannot reach
 //! the invocation shapes or the renderer without passing them.
 
-use velnor_actions_contract::is_valid_mise_task_name;
+use velnor_actions_contract_config::is_valid_mise_task_name;
 
 use crate::cache::{
     QualifiedTaskDef, TaskCacheMode, qualify_reuse, render_task_toml, task_run_argv,

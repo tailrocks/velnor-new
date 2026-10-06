@@ -10,7 +10,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepRole};
+use velnor_actions_contract_workflow::{Job, Step, StepRole};
 
 use crate::{
     RenderError,
@@ -122,7 +122,7 @@ pub(crate) const ATTESTATION_DOWNLOAD_NAME: &str = "Download candidate attestati
 /// makes the artifact name derivable from the context runs-on.
 /// # Errors
 fn download_attestation_step(ctx: &RenderContext) -> Result<Step, RenderError> {
-    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(&ctx.runs_on)
+    let target = velnor_actions_contract_release::ReleaseTarget::for_runner_label(&ctx.runs_on)
         .ok_or_else(|| {
             RenderError::InvalidWorkflow(format!("unsupported_target_for_runner:{}", ctx.runs_on))
         })?;
@@ -130,7 +130,7 @@ fn download_attestation_step(ctx: &RenderContext) -> Result<Step, RenderError> {
     let path = format!(
         "{}/{}",
         crate::closure::PLAN_ARTIFACT_PATH,
-        velnor_actions_contract::CANDIDATE_EVIDENCE_SUBDIR
+        velnor_actions_contract_workflow::CANDIDATE_EVIDENCE_SUBDIR
     );
     let mut step = steps::download_artifact_step(&artifact, &path)?;
     ATTESTATION_DOWNLOAD_NAME.clone_into(&mut step.name);
@@ -140,7 +140,7 @@ fn download_attestation_step(ctx: &RenderContext) -> Result<Step, RenderError> {
 
 /// Insert after `Download plan`, else before write-request/merge, else end.
 fn fetch_insert_at(job: &Job) -> usize {
-    use velnor_actions_contract::StepKind;
+    use velnor_actions_contract_workflow::StepKind;
     if let Some(at) = job
         .steps
         .iter()

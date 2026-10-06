@@ -138,8 +138,8 @@ fn materialize(
     .map_err(|e| internal(&e.to_string()))?;
     for proof in &system_tools {
         let name = match proof.declared.kind {
-            velnor_actions_contract::config::CheckSystemToolKind::Swift => "swift",
-            velnor_actions_contract::config::CheckSystemToolKind::Xcode => "xcodebuild",
+            velnor_actions_contract_config::config::CheckSystemToolKind::Swift => "swift",
+            velnor_actions_contract_config::config::CheckSystemToolKind::Xcode => "xcodebuild",
         };
         link_program(OsStr::new(&proof.executable), &home.join("bin").join(name))?;
     }

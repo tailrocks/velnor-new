@@ -280,7 +280,7 @@ pub fn provider_toolchain_entries(
 /// Returns [`ContractError`] for kind spellings outside the known
 /// tokens.
 pub fn toolchain_inputs_for_task(
-    task: &velnor_actions_contract::ProposedTask,
+    task: &velnor_actions_contract_planning::ProposedTask,
     specs: Vec<String>,
 ) -> Result<velnor_actions_contract::cachekey::ToolchainInputs, ContractError> {
     use velnor_actions_contract::cachekey::ToolchainInputs;

@@ -26,7 +26,7 @@ impl IsolatedCommand {
     ) -> Result<Self, MiseError> {
         let found = crate::checks::file_read::read_text(
             &owned.config,
-            velnor_actions_contract::MAX_CHECK_SOURCE_BYTES,
+            velnor_actions_contract_config::MAX_CHECK_SOURCE_BYTES,
             Some(deadline),
             "check_config",
         )?;

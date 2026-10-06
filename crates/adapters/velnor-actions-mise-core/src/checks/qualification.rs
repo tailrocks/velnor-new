@@ -2,10 +2,10 @@
 use super::invalid;
 use crate::{DiscoveredCheck, MiseError};
 use std::fmt::Write;
-use velnor_actions_contract::config::{
+use velnor_actions_contract::{canonical_json_bytes, digest_b3};
+use velnor_actions_contract_config::config::{
     QualifiedTool, QualifiedToolBackend, QualifiedToolOptions, validate_qualified_tools,
 };
-use velnor_actions_contract::{canonical_json_bytes, digest_b3};
 
 impl DiscoveredCheck {
     /// Shared canonical fingerprint over full declarations and exact selected specs.

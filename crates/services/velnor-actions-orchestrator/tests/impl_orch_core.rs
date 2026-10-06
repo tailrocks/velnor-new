@@ -5,9 +5,9 @@ use std::fs;
 
 use serde_json::{Value, json};
 use tempfile::TempDir;
-use velnor_actions_contract::{
+use velnor_actions_contract::{canonical_json_str, validate_digest};
+use velnor_actions_contract_workflow::{
     FinalReport, MatrixReport, MatrixStatus, ObligationDecision, Plan, TaskStatus,
-    canonical_json_str, validate_digest,
 };
 use velnor_actions_orchestrator::{
     PlanOutputMode, baseline_artifact_numeric_id, merge_internal, plan_internal, plan_outputs,

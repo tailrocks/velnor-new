@@ -10,13 +10,13 @@
 //! because it mandates PR/push/merge-group triggers plus plan, task,
 //! and final closures.
 //!
-//! [`ScheduleTrigger`]: velnor_actions_contract::ScheduleTrigger
-//! [`FRESHNESS_CRON_WEEKLY`]: velnor_actions_contract::FRESHNESS_CRON_WEEKLY
-//! [`FRESHNESS_WORKFLOW_PATH`]: velnor_actions_contract::FRESHNESS_WORKFLOW_PATH
+//! [`ScheduleTrigger`]: velnor_actions_contract_workflow::ScheduleTrigger
+//! [`FRESHNESS_CRON_WEEKLY`]: velnor_actions_contract_workflow::FRESHNESS_CRON_WEEKLY
+//! [`FRESHNESS_WORKFLOW_PATH`]: velnor_actions_contract_workflow::FRESHNESS_WORKFLOW_PATH
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{FRESHNESS_WORKFLOW_PATH, ScheduleTrigger, Step, StepRole};
+use velnor_actions_contract_workflow::{FRESHNESS_WORKFLOW_PATH, ScheduleTrigger, Step, StepRole};
 
 use crate::{
     RenderError, guard, marker,
@@ -116,7 +116,7 @@ fn freshness_document(
     checkout: &Step,
     probe: &Step,
 ) -> Result<Yaml, RenderError> {
-    velnor_actions_contract::workflow::step_identity::validate_step_sequence(
+    velnor_actions_contract_workflow::workflow::step_identity::validate_step_sequence(
         &[checkout.clone(), probe.clone()],
         FRESHNESS_JOB_ID,
     )

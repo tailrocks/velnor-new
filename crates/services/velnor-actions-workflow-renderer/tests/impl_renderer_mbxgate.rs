@@ -1,6 +1,6 @@
 //! MBX action gating: emitted only for MBX-selected drivers.
 use std::collections::BTreeMap;
-use velnor_actions_contract::StepRole;
+use velnor_actions_contract_workflow::StepRole;
 use velnor_actions_workflow_renderer::{
     CompileDriver, RenderError, check_mbx_gating, checkout_step, mbx_steps_for_driver, shell_step,
 };
@@ -15,7 +15,7 @@ fn mbx_argv() -> Vec<String> {
     vec!["mbx".to_owned(), "--version".to_owned()]
 }
 
-fn report_wrapped_mbx_task() -> Result<velnor_actions_contract::Step, RenderError> {
+fn report_wrapped_mbx_task() -> Result<velnor_actions_contract_workflow::Step, RenderError> {
     let script = concat!(
         "s=$(date +%s%3N); ",
         "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx test; ",

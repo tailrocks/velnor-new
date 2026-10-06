@@ -3,7 +3,9 @@
 use std::{collections::BTreeSet, fs};
 
 use tempfile::TempDir;
-use velnor_actions_contract::{ExecuteTaskRef, FinalStatus, MatrixStatus, Plan, TaskStatus};
+use velnor_actions_contract_workflow::{
+    ExecuteTaskRef, FinalStatus, MatrixStatus, Plan, TaskStatus,
+};
 use velnor_actions_orchestrator::{assemble_merge_request, plan_internal};
 
 use crate::impl_common::{
@@ -180,7 +182,7 @@ fn orch_core_plan_retains_all_package_tasks() -> TestResult {
 #[test]
 fn obligation_universe_matches_independent_oracle() -> TestResult {
     use crate::impl_orch_plansel::{BUMP, commit, make_ws, plan_at, put};
-    use velnor_actions_contract::ObligationDecision::Execute;
+    use velnor_actions_contract_workflow::ObligationDecision::Execute;
     let repo = make_ws(&["alpha", "beta"], &[])?;
     let root = repo.path();
     let base = commit(root, "one")?;
@@ -233,7 +235,10 @@ fn blocked_tasks_resolve_below_cancelled() -> TestResult {
     for report in &mut reports {
         set_task(report, TaskStatus::NotSelected, MatrixStatus::NotRun)?;
     }
-    let run = |reports: &[velnor_actions_contract::MatrixReport]| -> Result<velnor_actions_contract::FinalReport, Box<dyn std::error::Error>> {
+    let run = |reports: &[velnor_actions_contract_workflow::MatrixReport]| -> Result<
+        velnor_actions_contract_workflow::FinalReport,
+        Box<dyn std::error::Error>,
+    > {
         let request = merge_request(
             &serde_json::to_value(&plan)?,
             &serde_json::to_value(&plan.matrix)?,

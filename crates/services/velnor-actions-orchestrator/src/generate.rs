@@ -5,7 +5,8 @@
 use std::path::{Path, PathBuf};
 
 use velnor_actions_actionlint::render_actionlint_yaml;
-use velnor_actions_contract::{ExecutionMode, expand_workflow};
+use velnor_actions_contract_config::ExecutionMode;
+use velnor_actions_contract_workflow::expand_workflow;
 use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
 use velnor_actions_workflow_renderer::render::RenderedTree;
 use velnor_actions_workflow_renderer::steps::rehead_actionlint_marker;

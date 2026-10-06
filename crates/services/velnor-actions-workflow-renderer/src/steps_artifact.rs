@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Step, StepId, StepRole};
+use velnor_actions_contract_workflow::{Step, StepId, StepRole};
 
 use super::steps::{
     ARTIFACT_RETENTION_DAYS, CRATE_REPORT_UPLOAD_NAME, DOWNLOAD_ARTIFACT_USES,

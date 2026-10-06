@@ -6,7 +6,7 @@
 
 use std::ffi::OsString;
 
-use velnor_actions_contract::is_valid_feature_name;
+use velnor_actions_contract_config::is_valid_feature_name;
 
 use crate::nextest::{
     ARCHIVE_FILE, CARGO_PROFILE, NEXTEST_EXTRACT_BASE, NEXTEST_PROFILE, NextestDriver,

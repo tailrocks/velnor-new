@@ -7,9 +7,10 @@ use std::fs;
 
 use serde_json::json;
 use tempfile::TempDir;
-use velnor_actions_contract::{
+use velnor_actions_contract::task_report_id_for_task;
+use velnor_actions_contract_workflow::{
     CacheLayer, CacheOutcome, CacheResult, FinalStatus, ObligationDecision, Plan, TaskReport,
-    TaskStatus, Trust, WorkflowEvent, task_report_id_for_task,
+    TaskStatus, Trust, WorkflowEvent,
 };
 use velnor_actions_orchestrator::plan_internal;
 

@@ -27,7 +27,7 @@ fn tofu_tasks_derive_the_tofu_envelope() {
         !eligible,
         "T23: validate reuse is OFF despite a known lockfile"
     );
-    assert!(velnor_actions_contract::validate_tofu_extension(&envelope).is_ok());
+    assert!(velnor_actions_contract_release::validate_tofu_extension(&envelope).is_ok());
 }
 
 #[test]

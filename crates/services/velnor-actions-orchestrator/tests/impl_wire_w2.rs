@@ -5,6 +5,8 @@ use std::path::Path;
 
 use serde_json::json;
 use velnor_actions_contract as C;
+use velnor_actions_contract_planning as CD;
+use velnor_actions_contract_workflow as CW;
 use velnor_actions_orchestrator::{
     PlanOutputMode, decisions::plan_json_path, plan_outputs, prepare, publish_plan_files,
 };
@@ -29,10 +31,10 @@ fn shard_config() -> String {
 fn v1_push_plan_wiring() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     assert_eq!(plan.runner.label, "ubuntu-26.04");
-    C::validate_plan_edges(&plan.edges, &plan.task_ids)?;
-    assert!(plan.edges.iter().any(|e| e.kind == C::EdgeKind::Gate));
+    CD::validate_plan_edges(&plan.edges, &plan.task_ids)?;
+    assert!(plan.edges.iter().any(|e| e.kind == CD::EdgeKind::Gate));
     for ob in &plan.obligations {
-        assert_eq!(ob.decision, C::ObligationDecision::Execute);
+        assert_eq!(ob.decision, CW::ObligationDecision::Execute);
         assert_eq!(ob.reason, "affected_by_change");
         C::validate_digest(&ob.input_digest)?;
         C::validate_digest(&ob.task_digest)?;
@@ -59,7 +61,7 @@ fn input_digest_is_deterministic() -> TestResult {
     let base = git_line(&["rev-parse", "HEAD~1"], root)?;
     let head = git_line(&["rev-parse", "HEAD"], root)?;
     let value = plan_value(root, "pull_request", Some(&base), &head, None)?;
-    let second: C::Plan = serde_json::from_value(value["plan"].clone())?;
+    let second: CW::Plan = serde_json::from_value(value["plan"].clone())?;
     assert_eq!(first.obligations.len(), second.obligations.len());
     for (a, b) in first.obligations.iter().zip(&second.obligations) {
         assert_eq!((&a.task_id, &a.input_digest), (&b.task_id, &b.input_digest));
@@ -77,7 +79,7 @@ fn build_script_package_rejects_reuse_and_coverage() -> TestResult {
     let head = git_line(&["rev-parse", "HEAD"], root)?;
     let base = head.clone();
     let value = plan_value(root, "pull_request", Some(&base), &head, None)?;
-    let plan: C::Plan = serde_json::from_value(value["plan"].clone())?;
+    let plan: CW::Plan = serde_json::from_value(value["plan"].clone())?;
     assert!(!plan.obligations.is_empty());
     for ob in &plan.obligations {
         assert_eq!(ob.reason, "task_not_eligible", "{}", ob.task_id);
@@ -97,10 +99,10 @@ fn reused_reports_fail_without_restore_proof() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     let mut reports = passing_reports(&plan)?;
     let first = reports.first_mut().expect("report");
-    first.tasks[0].status = C::TaskStatus::Reused;
+    first.tasks[0].status = CW::TaskStatus::Reused;
     (first.reused, first.executed) = (1, 0);
     let final_report = merge(&merge_request_for(&plan, &reports)?)?;
-    assert_eq!(final_report.status, C::FinalStatus::PlanningFailed);
+    assert_eq!(final_report.status, CW::FinalStatus::PlanningFailed);
     assert!(
         final_report
             .miss_reasons
@@ -120,7 +122,7 @@ fn nextest_shards_expand_plan_and_verify() -> TestResult {
     git(&["commit", "-m", "one"], root)?;
     let head = git_line(&["rev-parse", "HEAD"], root)?;
     let value = plan_value(root, "push", None, &head, None)?;
-    let plan: C::Plan = serde_json::from_value(value["plan"].clone())?;
+    let plan: CW::Plan = serde_json::from_value(value["plan"].clone())?;
     let shards = plan.task_ids.iter().any(|id| id.contains("/shard-"));
     assert!(shards, "{:?}", plan.task_ids);
     let reports = passing_reports(&plan)?;
@@ -134,7 +136,7 @@ fn nextest_shards_expand_plan_and_verify() -> TestResult {
         "shard_index": 1, "shard_count": 1, "tests": tests, "inventory_digest": inventory, "no_test_targets": false});
     let mut request = merge_request_for(&plan, &reports)?;
     request["shard_proofs"] = json!([proof]);
-    assert_eq!(merge(&request)?.status, C::FinalStatus::Passed);
+    assert_eq!(merge(&request)?.status, CW::FinalStatus::Passed);
     Ok(())
 }
 
@@ -149,9 +151,9 @@ fn resource_groups_validate_at_merge() -> TestResult {
         Ok(request)
     };
     let bad = merge(&request_with(vec!["db", "cache"])?)?.status;
-    assert_eq!(bad, C::FinalStatus::PlanningFailed);
+    assert_eq!(bad, CW::FinalStatus::PlanningFailed);
     let good = merge(&request_with(vec!["cache", "db"])?)?.status;
-    assert_eq!(good, C::FinalStatus::Passed);
+    assert_eq!(good, CW::FinalStatus::Passed);
     Ok(())
 }
 
@@ -329,8 +331,11 @@ fn plan_files_match_contract_renderers() -> TestResult {
     let dir = tempfile::tempdir()?;
     let out = publish_plan_files(&response.to_string(), &dir.path().join("velnor"))?;
     assert_eq!(out, dir.path().join("velnor").join("local"));
-    assert_eq!(fs::read(out.join("plan.json"))?, C::plan_json_bytes(&plan)?);
-    let matrix_bytes = C::matrix_json_bytes(&plan.matrix)?;
+    assert_eq!(
+        fs::read(out.join("plan.json"))?,
+        CW::plan_json_bytes(&plan)?
+    );
+    let matrix_bytes = CW::matrix_json_bytes(&plan.matrix)?;
     assert_eq!(fs::read(out.join("matrix.json"))?, matrix_bytes);
     let outputs = plan_outputs(&response.to_string(), PlanOutputMode::Static)?;
     assert_eq!(outputs.plan_id.as_str(), plan.plan_id.as_str());
@@ -352,10 +357,10 @@ fn empty_matrix_folds_conclusions() -> TestResult {
     let mut matrix = serde_json::to_value(&plan.matrix)?;
     matrix["include"] = json!([]);
     let request = merge_request(&plan_value, &matrix, &json!([]), &success_jobs());
-    assert_eq!(merge(&request)?.status, C::FinalStatus::NoWork);
+    assert_eq!(merge(&request)?.status, CW::FinalStatus::NoWork);
     let failed = json!([{"job_id": "plan", "conclusion": "failure"}]);
     let request = merge_request(&plan_value, &matrix, &json!([]), &failed);
-    assert_eq!(merge(&request)?.status, C::FinalStatus::Failed);
+    assert_eq!(merge(&request)?.status, CW::FinalStatus::Failed);
     Ok(())
 }
 

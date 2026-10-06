@@ -9,9 +9,9 @@ pub(crate) mod revalidate;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{
+use velnor_actions_contract::task_report_id_for_task;
+use velnor_actions_contract_workflow::{
     ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, TaskReport, TaskStatus,
-    task_report_id_for_task,
 };
 
 use crate::OrchestratorError;

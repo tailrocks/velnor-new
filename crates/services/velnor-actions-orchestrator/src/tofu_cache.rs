@@ -5,7 +5,7 @@
 //! validate execution. Keys mirror the sources transport (static
 //! segments plus a `hashFiles` snapshot), scoped per validation root.
 
-use velnor_actions_contract::{CrateObligation, Step, StepId, StepRole};
+use velnor_actions_contract_workflow::{CrateObligation, Step, StepId, StepRole};
 use velnor_actions_mise::PinnedTool;
 
 use crate::OrchestratorError;
@@ -36,7 +36,7 @@ pub(crate) fn tofu_providers_cache_key(
     root: &str,
 ) -> Result<String, OrchestratorError> {
     use velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
-    if !velnor_actions_contract::is_supported_target(target) {
+    if !velnor_actions_contract_release::is_supported_target(target) {
         return Err(bad_key(format!("bad_target:{target}")));
     }
     velnor_actions_mise::validate_exact_version("opentofu", tofu_version).map_err(|err| {
@@ -148,8 +148,8 @@ pub(crate) fn provider_cache_step_for_tofu_root(
     catalog: &velnor_actions_mise::ToolCatalog,
     root: &str,
 ) -> Result<[Step; 1], OrchestratorError> {
-    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
-        .map(velnor_actions_contract::ReleaseTarget::triple)
+    let target = velnor_actions_contract_release::ReleaseTarget::for_runner_label(label)
+        .map(velnor_actions_contract_release::ReleaseTarget::triple)
         .ok_or_else(|| OrchestratorError::Contract {
             problem: format!("bad_label:{label}"),
         })?;

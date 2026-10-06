@@ -15,7 +15,7 @@ fn named_check_without_cargo_has_one_executing_obligation() {
     .expect("plan check");
     assert_eq!(
         obligation.decision,
-        velnor_actions_contract::ObligationDecision::Execute
+        velnor_actions_contract_workflow::ObligationDecision::Execute
     );
     assert_eq!(obligation.reason, "opaque_check_requires_execution");
     assert_eq!(entry.job_id, "check-verify");
@@ -72,14 +72,14 @@ fn binary_declared_input_changes_digest_and_stays_executable() {
     let (first, _) = derive();
     assert_eq!(
         first.decision,
-        velnor_actions_contract::ObligationDecision::Execute
+        velnor_actions_contract_workflow::ObligationDecision::Execute
     );
     std::fs::write(dir.path().join("image.png"), [0x89, b'P', b'N', b'G', 0xfe])
         .expect("mutate binary input");
     let (second, _) = derive();
     assert_eq!(
         second.decision,
-        velnor_actions_contract::ObligationDecision::Execute
+        velnor_actions_contract_workflow::ObligationDecision::Execute
     );
     assert_ne!(first.input_digest, second.input_digest);
     assert_ne!(first.closure_digest, second.closure_digest);

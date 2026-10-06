@@ -5,7 +5,7 @@ use crate::internal_plan::identities::{platform_id_for_group, toolchain_digest_f
 use crate::internal_plan::snapshot::canonical_digest;
 use crate::internal_plan::{IdentityInputs, execute_ids, task_identity_digest};
 use std::path::Path;
-use velnor_actions_contract::{
+use velnor_actions_contract_workflow::{
     MatrixEntry, NamedCheckLane, ObligationDecision, PlanGenerator, PlanObligation,
 };
 use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};

@@ -1,6 +1,6 @@
 //! Merge trust coherence: forged plan/report trust fails closed.
 
-use velnor_actions_contract::FinalStatus;
+use velnor_actions_contract_workflow::FinalStatus;
 
 use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
 use crate::impl_merge::{merge, merge_request, success_jobs};
@@ -12,7 +12,7 @@ fn trust_mismatch_fails_closed_with_scope_token() -> TestResult {
     let matrix = serde_json::to_value(&plan.matrix)?;
     let reports_value = serde_json::to_value(&reports)?;
     let mut forged_plan = plan.clone();
-    forged_plan.trust = velnor_actions_contract::Trust::Trusted;
+    forged_plan.trust = velnor_actions_contract_workflow::Trust::Trusted;
     let request = merge_request(&forged_plan, &matrix, &reports_value, &success_jobs());
     let final_report = merge(&request)?;
     assert_eq!(final_report.status, FinalStatus::PlanningFailed);
@@ -47,8 +47,8 @@ fn plan_event_must_match_merge_time_actual_event() -> TestResult {
     // Self-consistent forgery: push event plus trusted scope passes the
     // old plan-only check but must fail against the PR actual event.
     let mut forged = plan.clone();
-    forged.event = velnor_actions_contract::WorkflowEvent::Push;
-    forged.trust = velnor_actions_contract::Trust::Trusted;
+    forged.event = velnor_actions_contract_workflow::WorkflowEvent::Push;
+    forged.trust = velnor_actions_contract_workflow::Trust::Trusted;
     forged.validate()?;
     let mut request = merge_request(&forged, &matrix, &reports_value, &success_jobs());
     request["actual_event"] = serde_json::json!("pull_request");

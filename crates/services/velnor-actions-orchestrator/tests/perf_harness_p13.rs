@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 use std::time::Instant;
 
-use velnor_actions_contract::Plan;
+use velnor_actions_contract_workflow::Plan;
 use velnor_actions_orchestrator::plan_internal;
 
 use crate::impl_common::{git, git_line};

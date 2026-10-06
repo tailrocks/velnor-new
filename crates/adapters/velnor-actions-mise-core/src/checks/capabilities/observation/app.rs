@@ -1,7 +1,7 @@
 //! Signed `OrbStack` app and nested CLI identity validation.
 
 use serde::{Deserialize, Serialize};
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     HostOrbStackSdk, MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES,
     MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES, MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,
 };

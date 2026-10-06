@@ -8,7 +8,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-use velnor_actions_contract::Plan;
+use velnor_actions_contract_workflow::Plan;
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{
     GenerateOptions, GenerationPreparation, generate, plan_internal, prepare,

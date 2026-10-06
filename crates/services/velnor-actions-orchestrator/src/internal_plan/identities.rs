@@ -6,9 +6,8 @@ use velnor_actions_contract::cachekey::{
     FormatInputs, LaneInputs, ToolchainInputs, cache_format_id, lane_id, mbx_cache_generation,
     toolchain_id,
 };
-use velnor_actions_contract::{
-    ContractError, ProposedTask, Stack, component_id_for_unit, digest_b3,
-};
+use velnor_actions_contract::{ContractError, Stack, digest_b3};
+use velnor_actions_contract_planning::{ProposedTask, component_id_for_unit};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_rust::tool_needs;
 use velnor_actions_rust_core::{CompileDriver, DepKind, WorkspaceRecord};
@@ -217,8 +216,8 @@ pub(crate) fn platform_id_for_group(
     let stack = Stack::require_known(&task.stack_id)?;
     if stack == Stack::Mise {
         let label = task.runner_profile.as_str();
-        if let Some(host) = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
-            .map(velnor_actions_contract::ReleaseTarget::triple)
+        if let Some(host) = velnor_actions_contract_release::ReleaseTarget::for_runner_label(label)
+            .map(velnor_actions_contract_release::ReleaseTarget::triple)
             && host != task.identity.target
         {
             return Err(ContractError::identity(
@@ -228,9 +227,9 @@ pub(crate) fn platform_id_for_group(
         }
         return platform_id_for(label, &task.identity.target);
     }
-    let host = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
-        .filter(|target| *target == velnor_actions_contract::ReleaseTarget::LinuxX86_64)
-        .map(velnor_actions_contract::ReleaseTarget::triple)
+    let host = velnor_actions_contract_release::ReleaseTarget::for_runner_label(label)
+        .filter(|target| *target == velnor_actions_contract_release::ReleaseTarget::LinuxX86_64)
+        .map(velnor_actions_contract_release::ReleaseTarget::triple)
         .ok_or_else(|| {
             ContractError::identity(
                 "runner_label",

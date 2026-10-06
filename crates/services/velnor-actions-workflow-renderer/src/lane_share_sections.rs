@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::config::{
+use velnor_actions_contract_config::config::{
     CheckExecutor, CheckPlatform, EPHEMERAL_CHECK_ADMISSION_CONDITION,
 };
-use velnor_actions_contract::workflow::lanes::{
+use velnor_actions_contract_workflow::workflow::lanes::{
     NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV,
 };
-use velnor_actions_contract::{Job, StepKind};
-use velnor_actions_contract::{Step, StepRole};
+use velnor_actions_contract_workflow::{Job, StepKind};
+use velnor_actions_contract_workflow::{Step, StepRole};
 
 use crate::composite::composite_yaml;
 use crate::document_steps::step_to_yaml;
@@ -196,7 +196,7 @@ pub(crate) fn composite_file(
     steps: &[Step],
     ctx: &RenderContext,
 ) -> Result<RenderedFile, RenderError> {
-    velnor_actions_contract::workflow::step_identity::validate_step_identity_scope(
+    velnor_actions_contract_workflow::workflow::step_identity::validate_step_identity_scope(
         steps,
         &format!("composite:{logical}"),
     )

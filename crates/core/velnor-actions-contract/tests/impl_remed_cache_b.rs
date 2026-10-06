@@ -2,11 +2,16 @@
 use crate::impl_contract_ids::{TASK, sample_entry, sample_identity};
 use velnor_actions_contract::cachekey::{MISS_REASONS, cache_key, validate_miss_reason};
 use velnor_actions_contract::{
-    CacheLayer, CacheOutcome, CacheResult, ContractError, RUST_EXTENSION_REQUIRED_SLOTS,
-    StackExtension, TOFU_EXTENSION_REQUIRED_SLOTS, TaskReport, TaskStatus, Trust, WorkflowEvent,
-    digest_b3, final_report_id_for_run, final_report_relpath, input_digest, join_runner_temp,
-    matrix_report_relpath, run_key_for_ci, task_report_id_for_task, task_report_relpath,
-    validate_rust_extension, validate_tofu_extension,
+    ContractError, StackExtension, digest_b3, input_digest, run_key_for_ci, task_report_id_for_task,
+};
+use velnor_actions_contract_release::{
+    RUST_EXTENSION_REQUIRED_SLOTS, TOFU_EXTENSION_REQUIRED_SLOTS, validate_rust_extension,
+    validate_tofu_extension,
+};
+use velnor_actions_contract_workflow::{
+    CacheLayer, CacheOutcome, CacheResult, TaskReport, TaskStatus, Trust, WorkflowEvent,
+    final_report_id_for_run, final_report_relpath, join_runner_temp, matrix_report_relpath,
+    task_report_relpath,
 };
 
 #[test]

@@ -1,6 +1,6 @@
 //! Release candidate builds, target assets, and qualification.
 
-use velnor_actions_contract::ReleaseTarget;
+use velnor_actions_contract_release::ReleaseTarget;
 
 use crate::yaml::Yaml;
 

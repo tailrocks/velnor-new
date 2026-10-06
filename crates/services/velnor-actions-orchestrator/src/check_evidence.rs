@@ -6,8 +6,8 @@ use crate::internal::internal;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::path::{Component, Path};
-use velnor_actions_contract::config::{CheckEvidence, CheckPlatform};
 use velnor_actions_contract::{digest_b3, parse_strict_json};
+use velnor_actions_contract_config::config::{CheckEvidence, CheckPlatform};
 
 /// Producer payload; unknown fields and duplicate JSON keys fail closed.
 #[derive(Debug, Deserialize, Serialize)]

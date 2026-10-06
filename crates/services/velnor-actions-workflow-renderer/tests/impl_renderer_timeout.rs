@@ -1,6 +1,7 @@
 //! G4: every rendered job carries its per-kind `timeout-minutes`.
 use std::collections::BTreeMap;
-use velnor_actions_contract::{GeneratorValidation, JobTimeout, WorkflowPolicy};
+use velnor_actions_contract_config::{GeneratorValidation, WorkflowPolicy};
+use velnor_actions_contract_workflow::JobTimeout;
 use velnor_actions_workflow_renderer::{
     RenderError, checkout_step, merge_step, msrv::msrv_job, plan_step, render_workflow_ir,
     shell_step, write_request_step,
@@ -24,7 +25,7 @@ fn job_timeouts(text: &str) -> BTreeMap<String, String> {
     timeouts
 }
 
-fn consumer_ir() -> Result<velnor_actions_contract::WorkflowIr, RenderError> {
+fn consumer_ir() -> Result<velnor_actions_contract_workflow::WorkflowIr, RenderError> {
     let (plan_id, mut plan) = job(
         "plan",
         "Plan",

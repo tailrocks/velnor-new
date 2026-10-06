@@ -318,7 +318,7 @@ pub fn task_run_argv(
     file: &str,
 ) -> Result<Vec<String>, MiseError> {
     validate_task_def_path(file)?;
-    if !velnor_actions_contract::is_valid_mise_task_name(task) {
+    if !velnor_actions_contract_config::is_valid_mise_task_name(task) {
         return Err(ineligible(task, "bad_task_name"));
     }
     Ok([

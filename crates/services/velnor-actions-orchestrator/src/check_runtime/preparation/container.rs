@@ -3,7 +3,7 @@ use crate::OrchestratorError;
 use crate::internal::internal;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use velnor_actions_contract::config::{CheckRunner, HostContainerProfile};
+use velnor_actions_contract_config::config::{CheckRunner, HostContainerProfile};
 use velnor_actions_mise::CheckDeadline;
 use velnor_actions_mise::checks::{CheckCapabilityProof, PreparedContainer};
 pub(crate) mod bundle;

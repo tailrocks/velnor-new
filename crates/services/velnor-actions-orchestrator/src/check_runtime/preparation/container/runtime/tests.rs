@@ -5,7 +5,7 @@ use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixListener;
 use std::path::Path;
-use velnor_actions_contract::config::HostContainerProfile;
+use velnor_actions_contract_config::config::HostContainerProfile;
 
 #[cfg(unix)]
 mod inventory;

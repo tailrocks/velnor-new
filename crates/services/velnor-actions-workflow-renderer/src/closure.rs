@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 
 use crate::{
     RenderError,

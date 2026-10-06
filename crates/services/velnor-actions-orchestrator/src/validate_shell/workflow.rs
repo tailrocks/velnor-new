@@ -324,7 +324,7 @@ fn collect_runs(
 
 fn hosted_runner_default(runs_on: Option<&str>) -> Option<ShellDialect> {
     let label = runs_on?;
-    let is_known_linux = velnor_actions_contract::config::is_hosted_catalog(label);
+    let is_known_linux = velnor_actions_contract_config::config::is_hosted_catalog(label);
     let is_known_macos = label == "macos-15";
     if (is_known_linux && label.starts_with("ubuntu-")) || is_known_macos {
         // GitHub-hosted Ubuntu and macOS runners default `run` steps to Bash.

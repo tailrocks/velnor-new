@@ -1,6 +1,6 @@
 //! Release scalar, trigger, concurrency, and bootstrap-plan cases.
 use std::collections::BTreeMap;
-use velnor_actions_contract::ScheduleTrigger;
+use velnor_actions_contract_workflow::ScheduleTrigger;
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::release_spec::{
     BootstrapPlan, DispatchInput, ReleaseConcurrency, ReleaseTriggers, check_lock_anchor,

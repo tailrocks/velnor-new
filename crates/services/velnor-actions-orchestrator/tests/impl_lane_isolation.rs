@@ -31,7 +31,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 
-use velnor_actions_contract::Job;
+use velnor_actions_contract_workflow::Job;
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::{
     FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID, WORKFLOW_PATH,
@@ -87,7 +87,7 @@ fn tofu_root_lanes_serialize_per_lane() -> TestResult {
                     step.name == "Validate"
                         && matches!(
                             &step.kind,
-                            velnor_actions_contract::StepKind::Shell { env, .. }
+                            velnor_actions_contract_workflow::StepKind::Shell { env, .. }
                             if env
                                 .get("VELNOR_TASK_ID")
                                 .is_some_and(|task| task.starts_with("stack/tofu/"))

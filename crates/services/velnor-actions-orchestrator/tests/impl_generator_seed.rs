@@ -7,7 +7,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::{Command, Output};
 
-use velnor_actions_contract::ReleaseTarget;
+use velnor_actions_contract_release::ReleaseTarget;
 use velnor_actions_orchestrator::acquire_script_argv;
 
 #[test]

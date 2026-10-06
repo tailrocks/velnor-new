@@ -53,5 +53,7 @@ pub use super::validators::{
     validate_select_diff_args, validate_select_show_args, validate_show_args, validate_show_path,
 };
 pub use super::workflow::{CHECKOUT_USES, DEFAULT_RUNNER_LABEL, WorkflowPlan};
-pub use velnor_actions_contract::ExecutionMode;
-pub use velnor_actions_contract::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
+pub use velnor_actions_contract_config::ExecutionMode;
+pub use velnor_actions_contract_workflow::{
+    DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV,
+};

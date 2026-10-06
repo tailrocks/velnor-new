@@ -1,4 +1,4 @@
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract_workflow::{Step, StepKind};
 
 use super::MiseToolsCacheKey;
 use crate::{MiseSetup, steps::validate_uses};

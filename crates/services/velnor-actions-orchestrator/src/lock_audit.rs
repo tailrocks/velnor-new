@@ -25,7 +25,8 @@
 use std::io::Read;
 use std::path::Path;
 
-use velnor_actions_contract::{ReleaseTarget, Step, StepKind, StepRole, WorkflowIr};
+use velnor_actions_contract_release::ReleaseTarget;
+use velnor_actions_contract_workflow::{Step, StepKind, StepRole, WorkflowIr};
 use velnor_actions_mise::toolfiles::lockfile::{
     InstallCoverage, InstallSubject, audit_install_coverage, mise_platform_for_target,
     parse_mise_lockfile, subject_for_install_spec,

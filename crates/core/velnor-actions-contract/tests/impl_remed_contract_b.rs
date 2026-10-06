@@ -1,11 +1,13 @@
 //! Remediation cases: WF/TASK audit rows (runner, matrix, artifacts).
 use crate::impl_contract_ids::{GROUP, sample_entry};
-use crate::impl_remed_contract::{sample_plan, valid_config};
+use crate::impl_shared_fixtures::{sample_plan, valid_config};
 use std::collections::BTreeMap;
-use velnor_actions_contract::{
-    ContractError, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, PlanRunner, RunnerSelection,
-    check_matrix_agreement, digest_b3, matrix_json_bytes, plan_json_bytes, require_release_version,
-    run_key_for_ci,
+use velnor_actions_contract::{ContractError, digest_b3, run_key_for_ci};
+use velnor_actions_contract_config::RunnerSelection;
+use velnor_actions_contract_release::require_release_version;
+use velnor_actions_contract_workflow::{
+    MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, PlanRunner, check_matrix_agreement,
+    matrix_json_bytes, plan_json_bytes,
 };
 
 #[test]
@@ -51,10 +53,10 @@ fn wf_contract_surface_has_no_utility_fields() {
     let root = include_str!("../src/lib.rs");
     assert!(
         root.contains("Must not own")
-            && root.contains("Rust/Cargo")
-            && root.contains("Mise")
-            && root.contains("YAML")
-            && root.contains("CLI"),
+            && root.contains("configuration")
+            && root.contains("release manifests")
+            && root.contains("detection")
+            && root.contains("workflow IR"),
         "crate ownership forbids must stay documented"
     );
     assert_contract_modules(root);
@@ -73,29 +75,16 @@ fn assert_contract_modules(root: &str) {
         [
             "archive",
             "cachekey",
-            "candidate_manifest",
             "canonical",
             "closure",
-            "config",
-            "discover",
             "errors",
             "extension_schemas",
-            "extensions",
-            "finding",
-            "formats",
-            "freshness",
-            "graph",
             "ids",
-            "manifest",
             "marker",
-            "policy",
-            "propose",
             "secrets",
+            "stack",
             "strict_json",
-            "targets",
-            "tooling",
             "vcs",
-            "workflow",
         ]
     );
 }
@@ -134,7 +123,7 @@ fn wf_plan_runner_records_label_and_provenance() -> Result<(), ContractError> {
 
 #[test]
 fn wf_matrix_entry_requires_registered_stack() -> Result<(), ContractError> {
-    use velnor_actions_contract::{ExecuteTaskIds, MatrixEntry};
+    use velnor_actions_contract_workflow::{ExecuteTaskIds, MatrixEntry};
     let run_key = run_key_for_ci(6, 1);
     sample_entry(&run_key)?.validate(&run_key)?;
     let bogus = MatrixEntry::derive(

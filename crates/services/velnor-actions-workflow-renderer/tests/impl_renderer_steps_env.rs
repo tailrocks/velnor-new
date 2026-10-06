@@ -13,7 +13,7 @@ fn action_step_with_env_validates_env_keys_and_values() {
         .expect("valid env");
     assert!(matches!(
         &step.kind,
-        velnor_actions_contract::StepKind::Action { env, .. }
+        velnor_actions_contract_workflow::StepKind::Action { env, .. }
             if env.get("MODE").is_some_and(|v| v == "read")
     ));
     for bad in [
