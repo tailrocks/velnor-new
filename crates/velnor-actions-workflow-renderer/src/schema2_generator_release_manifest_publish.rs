@@ -39,6 +39,7 @@ pub(super) fn publish_script(pins: &GeneratorReleasePins) -> String {
         format!("gh release upload \"$tag\" --repo \"$GITHUB_REPOSITORY\" \\\n{upload}"),
         draft_check,
         ci_check,
+        "assert_release_tag_source".to_owned(),
         "gh api \"repos/$GITHUB_REPOSITORY/releases/$release_id\" --method PATCH -F draft=false > /dev/null".to_owned(),
         published_check,
         acceptance_receipt_script(),
@@ -70,7 +71,10 @@ fn release_tag_source_script() -> String {
     kind="$(jq -er '.type' <<<"$object")"
     digest="$(jq -er '.sha | select(type == "string" and test("^[0-9a-f]{40}$"))' <<<"$object")"
     case "$kind" in
-      commit) [[ "$digest" == "$GITHUB_SHA" ]] ;;
+      commit)
+        [[ "$digest" == "$GITHUB_SHA" ]] || return 1
+        return 0
+        ;;
       tag)
         for previous in "${seen[@]}"; do [[ "$previous" != "$digest" ]] || return 1; done
         seen+=("$digest")
@@ -79,7 +83,6 @@ fn release_tag_source_script() -> String {
         ;;
       *) return 1 ;;
     esac
-    [[ "$kind" != commit ]] || return 0
   done
   return 1
 }"#
