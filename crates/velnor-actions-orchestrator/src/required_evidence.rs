@@ -24,6 +24,9 @@ use super::MergeRequest;
 use crate::cover::Signals;
 use crate::internal::internal_contract;
 
+/// Maximum accepted `baseline.json` bytes: evidence stays bounded.
+pub(crate) const MAX_BASELINE_MANIFEST_BYTES: usize = 1_048_576;
+
 /// One trusted-baseline task proof: identities plus provenance run IDs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct BaselineTaskEntry {
@@ -42,6 +45,9 @@ pub(crate) struct BaselineTaskEntry {
     pub(crate) proof_run_id: u64,
     /// Carrying run that revalidated the proof.
     pub(crate) observed_run_id: u64,
+    /// Immediate authenticated ancestor binding; null for direct execution.
+    #[serde(deserialize_with = "deserialize_required_option")]
+    pub(crate) carried_from: Option<velnor_actions_contract::BaselineProof>,
     /// External-data freshness (required for advisory kinds).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) external_data: Option<crate::external_data::ExternalDataFreshness>,
@@ -84,6 +90,9 @@ pub(crate) struct BaselineManifest {
     pub(crate) artifact_name: String,
     /// Per-task proofs.
     pub(crate) tasks: Vec<BaselineTaskEntry>,
+    /// Prior protected successful baseline, bound by every carried entry.
+    #[serde(deserialize_with = "deserialize_required_option")]
+    pub(crate) parent: Option<Box<BaselineManifest>>,
     /// Unix expiry; absent means the baseline never expires.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) expires_at_unix: Option<u64>,
@@ -233,4 +242,13 @@ fn assembly_tokens(errors: &[String]) -> BTreeSet<String> {
             .to_owned()
         })
         .collect()
+}
+
+/// Require explicit null for absent lineage: old manifests fail closed.
+fn deserialize_required_option<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer)
 }

@@ -96,6 +96,7 @@ pub(crate) fn manifest_for(
         "artifact_id": baseline_artifact_numeric_id(&name),
         "artifact_name": name,
         "tasks": tasks,
+        "parent": serde_json::Value::Null,
     })
 }
 
@@ -112,6 +113,7 @@ pub(crate) fn entries_for(plan: &Plan) -> serde_json::Value {
                 "closure_digest": ob.closure_digest,
                 "proof_run_id": 7,
                 "observed_run_id": 7,
+                "carried_from": serde_json::Value::Null,
             })
         })
         .collect();

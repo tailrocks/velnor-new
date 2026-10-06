@@ -25,6 +25,7 @@ pub(crate) fn covered_plan(
                 "closure_digest": ob.closure_digest,
                 "proof_run_id": 7,
                 "observed_run_id": 7,
+                "carried_from": serde_json::Value::Null,
             })
         })
         .collect();
@@ -45,6 +46,7 @@ pub(crate) fn covered_plan(
         "artifact_id": baseline_artifact_numeric_id(&artifact_name),
         "artifact_name": artifact_name,
         "tasks": tasks,
+        "parent": serde_json::Value::Null,
     });
     let manifest_digest = digest_b3(&canonical_json_bytes(&manifest)?);
     let mut plan_json = serde_json::to_value(plan)?;

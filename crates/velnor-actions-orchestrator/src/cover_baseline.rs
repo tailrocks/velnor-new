@@ -17,8 +17,8 @@ use velnor_actions_contract::{
 use velnor_actions_mise::BaselineLookup as MiseBaselineLookup;
 
 use self::provenance_check::{
-    ProvenanceExpectations, publish_event_eligible, repository_slug_from_origin,
-    validate_provenance,
+    ProvenanceExpectations, baseline_can_carry, publish_event_eligible,
+    repository_slug_from_origin, validate_provenance,
 };
 use self::provenance_resolve::{repository_anchor_for_slug, resolve_expected_repository};
 use crate::OrchestratorError;
@@ -28,9 +28,7 @@ use crate::decisions::baseline_expired;
 use crate::discover::Discovery;
 use crate::internal::internal_contract;
 use crate::merge::BaselineManifest;
-
-/// Maximum accepted `baseline.json` bytes: evidence stays bounded.
-const MAX_BASELINE_MANIFEST_BYTES: usize = 1_048_576;
+use crate::merge::required_evidence::MAX_BASELINE_MANIFEST_BYTES;
 
 /// Current Unix time; clock failure fails closed (all dated baselines expire).
 pub(crate) fn unix_now() -> u64 {
@@ -77,7 +75,7 @@ pub(crate) fn apply_baseline(
     manifest: Option<BaselineManifest>,
     discovery: &Discovery,
     changed: Option<&BTreeSet<String>>,
-) -> Result<(), OrchestratorError> {
+) -> Result<Option<BaselineManifest>, OrchestratorError> {
     // No lock fill: the plan generator always names the running binary,
     // so a source build can never emit a release-pinned identity.
     let manifest = manifest.or_else(|| lookup_manifest(plan, inputs));
@@ -88,44 +86,13 @@ pub(crate) fn apply_baseline(
         if plan.baseline.reason().is_none() {
             mark_unavailable(plan, "baseline_not_found");
         }
-        return Ok(());
+        return Ok(None);
     };
-    if !publish_event_eligible(event) {
-        plan.warnings.push(format!(
-            "baseline_publish:forbidden:{event:?}:no_publish_attempted"
-        ));
-    }
-    let Some(base) = plan.base.clone() else {
-        mark_unavailable(plan, "baseline_no_base");
-        plan.warnings.push("baseline_miss:missing_base".to_owned());
-        return Ok(());
+    let Some((provenance, repository_slug)) =
+        validate_plan_baseline(plan, event, inputs, &manifest)?
+    else {
+        return Ok(None);
     };
-    let digest = digest_b3(&canonical_json_bytes(&manifest).map_err(internal_contract)?);
-    let origin = repository_slug_from_origin(inputs.root);
-    let repo = resolve_expected_repository(origin.as_deref(), inputs.repository);
-    let expected = ProvenanceExpectations {
-        base: base.clone(),
-        branch: inputs.branch.to_owned(),
-        workflow_path: inputs.workflow.to_owned(),
-        generator_version: plan.generator.version.clone(),
-        generator_sha256: plan.generator.sha256.clone(),
-        repository_id: repo.slug.as_deref().map(repository_anchor_for_slug),
-        repository_slug: repo.slug,
-        repository_conflict: repo.conflict,
-    };
-    let provenance = match validate_provenance(&manifest, &digest, &expected) {
-        Ok(provenance) => provenance,
-        Err(reason) => {
-            mark_unavailable(plan, &format!("baseline_invalid:{reason}"));
-            plan.warnings.push(format!("baseline_miss:{reason}"));
-            return Ok(());
-        }
-    };
-    if baseline_expired(manifest.expires_at_unix, unix_now()) {
-        mark_unavailable(plan, "baseline_expired");
-        plan.warnings.push("baseline_miss:cache_expired".to_owned());
-        return Ok(());
-    }
     let saved = (
         plan.obligations.clone(),
         plan.matrix.clone(),
@@ -148,8 +115,75 @@ pub(crate) fn apply_baseline(
             &provenance.manifest_digest,
         )
         .map_err(internal_contract)?;
+        if event == WorkflowEvent::Push
+            && !crate::baseline_publish::carry_candidate_fits(
+                plan,
+                &manifest,
+                inputs.branch,
+                repository_slug.as_deref(),
+            )
+        {
+            (plan.obligations, plan.matrix, plan.packages) = saved;
+            mark_unavailable(plan, "baseline_carry_unavailable");
+            plan.warnings
+                .push("baseline_miss:carry_unavailable:execute_all".to_owned());
+            return Ok(None);
+        }
+        return Ok(Some(manifest));
     }
-    Ok(())
+    Ok(None)
+}
+
+/// Validate one resolved manifest against this plan and event.
+fn validate_plan_baseline(
+    plan: &mut Plan,
+    event: WorkflowEvent,
+    inputs: BaselineInputs<'_>,
+    manifest: &BaselineManifest,
+) -> Result<Option<(provenance_check::ValidatedProvenance, Option<String>)>, OrchestratorError> {
+    if !publish_event_eligible(event) {
+        plan.warnings.push(format!(
+            "baseline_publish:forbidden:{event:?}:no_publish_attempted"
+        ));
+    }
+    let Some(base) = plan.base.clone() else {
+        mark_unavailable(plan, "baseline_no_base");
+        plan.warnings.push("baseline_miss:missing_base".to_owned());
+        return Ok(None);
+    };
+    let digest = digest_b3(&canonical_json_bytes(manifest).map_err(internal_contract)?);
+    let origin = repository_slug_from_origin(inputs.root);
+    let repo = resolve_expected_repository(origin.as_deref(), inputs.repository);
+    let expected = ProvenanceExpectations {
+        base: base.clone(),
+        branch: inputs.branch.to_owned(),
+        workflow_path: inputs.workflow.to_owned(),
+        generator_version: plan.generator.version.clone(),
+        generator_sha256: plan.generator.sha256.clone(),
+        repository_id: repo.slug.as_deref().map(repository_anchor_for_slug),
+        repository_slug: repo.slug,
+        repository_conflict: repo.conflict,
+    };
+    let provenance = match validate_provenance(manifest, &digest, &expected) {
+        Ok(provenance) => provenance,
+        Err(reason) => {
+            mark_unavailable(plan, &format!("baseline_invalid:{reason}"));
+            plan.warnings.push(format!("baseline_miss:{reason}"));
+            return Ok(None);
+        }
+    };
+    if baseline_expired(manifest.expires_at_unix, unix_now()) {
+        mark_unavailable(plan, "baseline_expired");
+        plan.warnings.push("baseline_miss:cache_expired".to_owned());
+        return Ok(None);
+    }
+    if !baseline_can_carry(manifest) {
+        mark_unavailable(plan, "baseline_lineage_limit");
+        plan.warnings
+            .push("baseline_miss:baseline_lineage_limit".to_owned());
+        return Ok(None);
+    }
+    Ok(Some((provenance, expected.repository_slug)))
 }
 
 /// Exact baseline artifact name for one plan over its base.

@@ -55,6 +55,7 @@ fn manifest_json(base: &str, name: &str) -> serde_json::Value {
         "artifact_id": numeric,
         "artifact_name": name,
         "tasks": [],
+        "parent": serde_json::Value::Null,
     })
 }
 
@@ -218,9 +219,11 @@ fn forwarded_manifest(slug: &str, base: &str) -> BaselineManifest {
             closure_digest: digest,
             proof_run_id: 5,
             observed_run_id: 7,
+            carried_from: None,
             external_data: None,
             proof: None,
         }],
+        parent: None,
         expires_at_unix: None,
     }
 }
