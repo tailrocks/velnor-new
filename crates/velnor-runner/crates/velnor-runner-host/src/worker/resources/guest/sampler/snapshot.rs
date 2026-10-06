@@ -62,24 +62,3 @@ pub(crate) enum GuestSampleStatus {
     /// The cached sample exceeded the caller's freshness limit.
     Stale,
 }
-
-impl GuestSampleSnapshot {
-    /// Build a typed result and record when collection began.
-    pub(super) fn completed(
-        result: Result<GuestResourceSample, GuestSampleFailure>,
-        sampled_at: Instant,
-    ) -> Self {
-        let (sample, status) = match result {
-            Ok(sample) => (sample, GuestSampleStatus::Available),
-            Err(reason) => (
-                GuestResourceSample::default(),
-                GuestSampleStatus::Unavailable(reason),
-            ),
-        };
-        Self {
-            sample,
-            status,
-            sampled_at: Some(sampled_at),
-        }
-    }
-}
