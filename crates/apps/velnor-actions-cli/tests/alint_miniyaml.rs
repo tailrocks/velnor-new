@@ -312,10 +312,10 @@ pub(crate) fn rule<'a>(config: &'a AlintConfig, id: &str) -> Option<&'a AlintRul
     config.rules.iter().find(|rule| rule.id == id)
 }
 
-/// Read a per-rule fixture (`tests/alint_<rule>_<verdict>.yml`).
+/// Read a per-rule fixture (`tests/fixtures/alint_<rule>_<verdict>.yml`).
 pub(crate) fn fixture(rule: &str, verdict: &str) -> Result<String, Box<dyn Error>> {
     Ok(std::fs::read_to_string(format!(
-        "{}/tests/alint_{rule}_{verdict}.yml",
+        "{}/tests/fixtures/alint_{rule}_{verdict}.yml",
         env!("CARGO_MANIFEST_DIR")
     ))?)
 }
