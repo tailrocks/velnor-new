@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::error::HostError;
 
 const JOURNAL_VERSION: i64 = 1;
-const CURRENT_COLUMNS: [ColumnShape; 16] = [
+const CURRENT_COLUMNS: [ColumnShape; 18] = [
     ColumnShape::new("id", "INTEGER", false, None),
     ColumnShape::new("kind", "TEXT", true, None),
     ColumnShape::new("subject", "TEXT", true, None),
@@ -22,6 +22,8 @@ const CURRENT_COLUMNS: [ColumnShape; 16] = [
     ColumnShape::new("acquire_resolved", "INTEGER", true, Some("0")),
     ColumnShape::new("acquired", "INTEGER", true, Some("0")),
     ColumnShape::new("jit_requested", "INTEGER", true, Some("0")),
+    ColumnShape::new("docker_engine_id", "TEXT", false, None),
+    ColumnShape::new("launch_phase", "TEXT", false, None),
 ];
 
 #[derive(Clone, Copy)]
@@ -140,6 +142,8 @@ async fn ensure_completion_objects(conn: &turso::Connection) -> Result<(), HostE
         ("acquire_resolved", "INTEGER NOT NULL DEFAULT 0"),
         ("acquired", "INTEGER NOT NULL DEFAULT 0"),
         ("jit_requested", "INTEGER NOT NULL DEFAULT 0"),
+        ("docker_engine_id", "TEXT"),
+        ("launch_phase", "TEXT"),
     ] {
         if !columns.contains_key(column) {
             conn.execute(

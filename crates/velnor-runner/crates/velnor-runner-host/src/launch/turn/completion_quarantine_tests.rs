@@ -57,6 +57,7 @@ async fn malformed_event_is_quarantined_then_later_offer_admits() -> Result<(), 
         queue_path: "messages".to_owned(),
         queue_token: "queue-token".to_owned(),
         admin_token: "admin-token".to_owned(),
+        docker_engine_id: None,
     };
     let ack_batch = ParsedBatch {
         message_id: event.message_id,
@@ -113,6 +114,7 @@ async fn inbox_conflict_prevents_quarantine_ack() -> Result<(), String> {
         queue_path: "messages".to_owned(),
         queue_token: "queue-token".to_owned(),
         admin_token: "admin-token".to_owned(),
+        docker_engine_id: None,
     };
     let batch = ParsedBatch {
         message_id: 59,
@@ -163,6 +165,7 @@ async fn overflow_body_survives_restart_and_mixed_offer_starts_once() -> Result<
         queue_path: "messages".to_owned(),
         queue_token: "queue-token".to_owned(),
         admin_token: "admin-token".to_owned(),
+        docker_engine_id: None,
     };
     let starts = start_overflow_offer(&journal, &event, &context).await?;
     drop(journal);

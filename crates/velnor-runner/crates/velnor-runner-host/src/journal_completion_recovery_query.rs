@@ -19,7 +19,7 @@ pub(super) async fn due_recovery_ids(
     }
     let mut rows = connection
         .query(
-            "SELECT i.id, i.kind, i.subject, i.state, i.docker_id, i.github_runner_id, i.cleanup_proven, i.dind_id, i.worker_volume, i.scale_set_id, i.runner_request_id, i.runner_name, i.acquire_attempted, i.acquire_resolved, i.acquired, i.jit_requested FROM intents AS i LEFT JOIN launch_recovery AS r ON r.intent_id = i.id WHERE i.kind = 'launch' AND i.cleanup_proven = 0 AND i.scale_set_id = ?1 AND i.runner_name IS NOT NULL AND i.worker_volume IS NOT NULL AND COALESCE(r.retry_after, 0) <= ?2 AND COALESCE(r.lease_until, 0) <= ?2 AND NOT EXISTS (SELECT 1 FROM completion_cleanup AS c WHERE c.intent_id = i.id) ORDER BY COALESCE(r.retry_after, 0), i.id",
+            "SELECT i.id, i.kind, i.subject, i.state, i.docker_id, i.github_runner_id, i.cleanup_proven, i.dind_id, i.worker_volume, i.scale_set_id, i.runner_request_id, i.runner_name, i.docker_engine_id, i.launch_phase, i.acquire_attempted, i.acquire_resolved, i.acquired, i.jit_requested FROM intents AS i LEFT JOIN launch_recovery AS r ON r.intent_id = i.id WHERE i.kind = 'launch' AND i.cleanup_proven = 0 AND i.scale_set_id = ?1 AND i.runner_name IS NOT NULL AND i.worker_volume IS NOT NULL AND COALESCE(r.retry_after, 0) <= ?2 AND COALESCE(r.lease_until, 0) <= ?2 AND NOT EXISTS (SELECT 1 FROM completion_cleanup AS c WHERE c.intent_id = i.id) ORDER BY COALESCE(r.retry_after, 0), i.id",
             (scale_set_id, now),
         )
         .await
@@ -99,7 +99,7 @@ pub(super) async fn load_recovery_lease(
 ) -> Result<Option<RecoveryLease>, HostError> {
     let mut rows = connection
         .query(
-            "SELECT i.id, i.kind, i.subject, i.state, i.docker_id, i.github_runner_id, i.cleanup_proven, i.dind_id, i.worker_volume, i.scale_set_id, i.runner_request_id, i.runner_name, i.acquire_attempted, i.acquire_resolved, i.acquired, i.jit_requested, r.generation, r.attempts, r.lease_until FROM intents AS i JOIN launch_recovery AS r ON r.intent_id = i.id WHERE i.id = ?1 AND i.kind = 'launch' AND i.cleanup_proven = 0 AND NOT EXISTS (SELECT 1 FROM completion_cleanup WHERE intent_id = i.id)",
+            "SELECT i.id, i.kind, i.subject, i.state, i.docker_id, i.github_runner_id, i.cleanup_proven, i.dind_id, i.worker_volume, i.scale_set_id, i.runner_request_id, i.runner_name, i.docker_engine_id, i.launch_phase, i.acquire_attempted, i.acquire_resolved, i.acquired, i.jit_requested, r.generation, r.attempts, r.lease_until FROM intents AS i JOIN launch_recovery AS r ON r.intent_id = i.id WHERE i.id = ?1 AND i.kind = 'launch' AND i.cleanup_proven = 0 AND NOT EXISTS (SELECT 1 FROM completion_cleanup WHERE intent_id = i.id)",
             [id],
         )
         .await
@@ -110,10 +110,10 @@ pub(super) async fn load_recovery_lease(
     Ok(Some(RecoveryLease {
         intent: intent_row(&row)?,
         identity: recovery_identity(&row)?,
-        generation: row.get(16).map_err(|_| HostError::Journal)?,
-        attempts: u32::try_from(row.get::<i64>(17).map_err(|_| HostError::Journal)?)
+        generation: row.get(18).map_err(|_| HostError::Journal)?,
+        attempts: u32::try_from(row.get::<i64>(19).map_err(|_| HostError::Journal)?)
             .map_err(|_| HostError::Journal)?,
-        lease_until: row.get(18).map_err(|_| HostError::Journal)?,
+        lease_until: row.get(20).map_err(|_| HostError::Journal)?,
     }))
 }
 
@@ -133,10 +133,10 @@ fn recovery_identity(row: &turso::Row) -> Result<RecoveryIdentity, HostError> {
         scale_set_id: row.get(9).map_err(|_| HostError::Journal)?,
         runner_request_id: row.get(10).map_err(|_| HostError::Journal)?,
         runner_name: row.get(11).map_err(|_| HostError::Journal)?,
-        acquire_attempted: row.get(12).map_err(|_| HostError::Journal)?,
-        acquire_resolved: row.get(13).map_err(|_| HostError::Journal)?,
-        acquired: row.get(14).map_err(|_| HostError::Journal)?,
-        jit_requested: row.get(15).map_err(|_| HostError::Journal)?,
+        acquire_attempted: row.get(14).map_err(|_| HostError::Journal)?,
+        acquire_resolved: row.get(15).map_err(|_| HostError::Journal)?,
+        acquired: row.get(16).map_err(|_| HostError::Journal)?,
+        jit_requested: row.get(17).map_err(|_| HostError::Journal)?,
     })
 }
 

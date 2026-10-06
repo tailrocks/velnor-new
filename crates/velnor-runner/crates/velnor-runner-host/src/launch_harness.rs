@@ -158,6 +158,7 @@ pub(crate) fn ctx() -> Drive {
         queue_path: "queues/messages".to_owned(),
         queue_token: "queue-token".to_owned(),
         admin_token: "admin-token".to_owned(),
+        docker_engine_id: None,
     }
 }
 

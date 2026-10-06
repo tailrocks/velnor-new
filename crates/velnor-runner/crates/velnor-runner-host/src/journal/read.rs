@@ -14,7 +14,7 @@ impl Journal {
         let conn = self.connection().await?;
         let mut query = conn
             .query(
-                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id, worker_volume FROM intents ORDER BY id",
+                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id, worker_volume, scale_set_id, runner_request_id, runner_name, docker_engine_id, launch_phase FROM intents ORDER BY id",
                 (),
             )
             .await

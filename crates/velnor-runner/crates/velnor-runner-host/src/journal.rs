@@ -13,6 +13,8 @@ mod completion;
 mod file_identity;
 mod guest_probe_owner;
 mod launch;
+mod launch_identity;
+mod launch_phase;
 mod read;
 mod schema;
 mod transaction;
@@ -25,6 +27,7 @@ pub(crate) use completion::{
     MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN, RecoveryLease,
 };
 pub(crate) use guest_probe_owner::GuestProbeLease;
+pub(crate) use launch_identity::LaunchIdentity;
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -339,6 +342,16 @@ fn intent_row(row: &turso::Row) -> Result<IntentRow, HostError> {
         docker_id: row.get(4).map_err(|_| HostError::Journal)?,
         dind_id: row.get(7).map_err(|_| HostError::Journal)?,
         worker_volume: row.get(8).map_err(|_| HostError::Journal)?,
+        scale_set_id: row.get(9).map_err(|_| HostError::Journal)?,
+        request_id: row.get(10).map_err(|_| HostError::Journal)?,
+        runner_name: row.get(11).map_err(|_| HostError::Journal)?,
+        docker_engine_id: row.get(12).map_err(|_| HostError::Journal)?,
+        launch_phase: row
+            .get::<Option<String>>(13)
+            .map_err(|_| HostError::Journal)?
+            .as_deref()
+            .map(crate::reconcile::LaunchPhase::parse)
+            .transpose()?,
         github_runner_id: row.get(5).map_err(|_| HostError::Journal)?,
         cleanup_proven: row.get(6).map_err(|_| HostError::Journal)?,
     })

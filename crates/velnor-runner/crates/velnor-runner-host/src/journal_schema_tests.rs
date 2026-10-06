@@ -136,7 +136,7 @@ async fn replace_with_duplicate_ids(path: &Path) -> Result<(), String> {
         .map_err(|error| error.to_string())?;
     connection
         .execute(
-            "CREATE TABLE intents (id INTEGER, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT, worker_volume TEXT)",
+            "CREATE TABLE intents (id INTEGER, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT, worker_volume TEXT, scale_set_id INTEGER, runner_request_id INTEGER, runner_name TEXT, acquire_attempted INTEGER NOT NULL DEFAULT 0, acquire_resolved INTEGER NOT NULL DEFAULT 0, acquired INTEGER NOT NULL DEFAULT 0, jit_requested INTEGER NOT NULL DEFAULT 0, docker_engine_id TEXT, launch_phase TEXT)",
             (),
         )
         .await
@@ -160,7 +160,7 @@ async fn current_schema_rejects_duplicate_ids_without_mutating_rows() -> Result<
     seed(
         &path,
         1,
-        "CREATE TABLE intents (id INTEGER, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT, worker_volume TEXT)",
+        "CREATE TABLE intents (id INTEGER, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT, worker_volume TEXT, scale_set_id INTEGER, runner_request_id INTEGER, runner_name TEXT, acquire_attempted INTEGER NOT NULL DEFAULT 0, acquire_resolved INTEGER NOT NULL DEFAULT 0, acquired INTEGER NOT NULL DEFAULT 0, jit_requested INTEGER NOT NULL DEFAULT 0, docker_engine_id TEXT, launch_phase TEXT)",
         "INSERT INTO intents (id, kind, subject, state, cleanup_proven) VALUES (7, 'launch', 'first', 'uncertain', 0), (7, 'launch', 'second', 'uncertain', 0)",
     )
     .await?;
@@ -168,7 +168,7 @@ async fn current_schema_rejects_duplicate_ids_without_mutating_rows() -> Result<
     assert!(Journal::open(&path).await.is_err());
     let state = snapshot(&path).await?;
     assert_eq!(state.version, 1);
-    assert_eq!(state.columns.len(), 9);
+    assert_eq!(state.columns.len(), 18);
     assert_eq!(state.rows.len(), 2);
     assert!(
         state
