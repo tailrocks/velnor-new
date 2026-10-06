@@ -187,3 +187,7 @@ mod claim_tests;
 #[cfg(test)]
 #[path = "journal_completion_inbox_tests.rs"]
 mod inbox_tests;
+
+#[cfg(test)]
+#[path = "journal_identity_completion_tests.rs"]
+mod identity_completion_tests;
