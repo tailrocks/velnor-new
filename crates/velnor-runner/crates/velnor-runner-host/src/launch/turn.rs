@@ -15,7 +15,11 @@ use super::trace;
 use super::{Ready, Rest, ack_ready, drive_ready, scale_session};
 
 mod completion_intake;
+mod pump;
 use completion_intake::{completion_error, intake_and_ack_if_only};
+use pump::until_idle;
+#[cfg(all(test, unix))]
+use pump::{PollHost, pump};
 
 /// Poll until admission stops and no owned launch container is running.
 ///
@@ -81,67 +85,6 @@ pub(super) async fn poll_and_drive(
         (Err(error), _) => Err(error),
         (Ok(()), Err(_)) => Err(completion_error()),
         (Ok(()), Ok(())) => Ok(workers),
-    }
-}
-
-/// One session's poll and running-count source.
-trait PollHost {
-    /// `Ok(false)` keeps the session. `Ok(true)` is an admission stop.
-    async fn poll(&mut self, workers: &mut Vec<Started>) -> Result<bool, EnsureError>;
-
-    /// Owned containers still running.
-    async fn running(&mut self) -> Result<u32, EnsureError>;
-}
-
-impl PollHost for Turn<'_> {
-    async fn poll(&mut self, workers: &mut Vec<Started>) -> Result<bool, EnsureError> {
-        self.drive_poll(workers).await
-    }
-
-    async fn running(&mut self) -> Result<u32, EnsureError> {
-        slot::running_count(self.journal, self.docker).await
-    }
-}
-
-/// Keep polling while an owned container runs. An empty session stays open past `bound`.
-async fn until_idle(
-    turn: &mut Turn<'_>,
-    workers: &mut Vec<Started>,
-    bound: usize,
-) -> Result<(), EnsureError> {
-    pump(turn, workers, bound).await
-}
-
-async fn pump<H: PollHost>(
-    host: &mut H,
-    workers: &mut Vec<Started>,
-    bound: usize,
-) -> Result<(), EnsureError> {
-    let mut polls = 0usize;
-    let mut missed = 0u8;
-    loop {
-        if polls >= bound && !workers.is_empty() && missed >= 2 && host.running().await? == 0 {
-            return Ok(());
-        }
-        let stop = host.poll(workers).await?;
-        polls = polls.saturating_add(1);
-        if !stop {
-            // The broker can assign a job only while this session still exists.
-            if workers.is_empty() {
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            }
-            continue;
-        }
-        if host.running().await? > 0 {
-            missed = 0;
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-            continue;
-        }
-        missed = missed.saturating_add(1);
-        if workers.is_empty() || missed >= 2 {
-            return Ok(());
-        }
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     }
 }
 
@@ -414,53 +357,6 @@ where
     };
     workers.push(worker);
     Ok(stop)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{PollHost, pump};
-    use crate::scale_set::EnsureError;
-    use crate::worker::Started;
-
-    struct Fake {
-        polls: usize,
-    }
-
-    #[expect(
-        clippy::unused_async_trait_impl,
-        reason = "test poll host implements the async interface without I/O"
-    )]
-    impl PollHost for Fake {
-        async fn poll(&mut self, workers: &mut Vec<Started>) -> Result<bool, EnsureError> {
-            let _ = workers;
-            self.polls = self.polls.saturating_add(1);
-            Ok(self.polls >= 10)
-        }
-
-        async fn running(&mut self) -> Result<u32, EnsureError> {
-            Ok(0)
-        }
-    }
-
-    #[tokio::test]
-    async fn empty_polls_keep_the_same_session() -> Result<(), String> {
-        let mut host = Fake { polls: 0 };
-        let mut workers = Vec::new();
-        pump(&mut host, &mut workers, 8)
-            .await
-            .map_err(|err| err.to_string())?;
-        // Bound 8 used to return before this poll. `launch_once` deletes only after return.
-        assert!(host.polls >= 9, "{}", host.polls);
-        Ok(())
-    }
-
-    #[test]
-    fn cleared_name_keeps_the_session() {
-        assert!(super::queue_stays(Some(&EnsureError::NameCleared)));
-        assert!(super::queue_stays(Some(&EnsureError::NameSteady)));
-        assert!(!super::queue_stays(Some(&EnsureError::Conflict)));
-        assert!(!super::queue_stays(None));
-    }
 }
 
 #[cfg(all(test, unix))]
