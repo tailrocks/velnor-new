@@ -53,11 +53,7 @@ impl Journal {
             )
             .await
             .map_err(|_| HostError::Journal)?;
-        Ok(rows
-            .next()
-            .await
-            .map_err(|_| HostError::Journal)?
-            .is_some())
+        Ok(rows.next().await.map_err(|_| HostError::Journal)?.is_some())
     }
 }
 

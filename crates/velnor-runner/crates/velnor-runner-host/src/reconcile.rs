@@ -104,6 +104,22 @@ pub struct IntentRow {
     pub github_runner_id: Option<String>,
     /// Cleanup of the recorded ids was proven.
     pub cleanup_proven: bool,
+    /// Stable unique launch id. Older rows have no id.
+    pub launch_id: Option<String>,
+    /// Scale-set id and runner request id for acquired assignments.
+    pub assignment_key: Option<String>,
+    /// Immutable action archive generation pinned for this launch.
+    pub seed_generation_id: Option<String>,
+    /// An AcquireJobs call may have started for this assignment.
+    pub acquire_attempted: bool,
+    /// The AcquireJobs response was received and recorded.
+    pub acquire_resolved: bool,
+    /// The response confirmed this request was acquired.
+    pub acquired: bool,
+    /// A JIT registration call may have created the official runner.
+    pub jit_requested: bool,
+    /// A matching `JobCompleted` event was committed before queue acknowledgement.
+    pub runner_completed: bool,
 }
 
 /// Whether the host may advertise free capacity.

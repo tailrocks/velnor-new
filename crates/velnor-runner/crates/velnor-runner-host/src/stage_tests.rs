@@ -1,14 +1,30 @@
 //! Stage stops and recorded deletes drive `start_pair_until` and `remove_recorded`.
 
+mod cleanup;
+mod fake;
+mod preparation;
+mod reconcile;
+mod runner;
+
 use std::collections::HashMap;
 use std::sync::Mutex;
 
 use super::HostError;
+use super::launch_identity::LaunchIdentity;
 use super::stage::{Forget, PairEngine, PairStop, decide, drive};
 use super::worker::{
     CreateProjection, VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole,
     WorkerVolumeVerification,
 };
+
+fn identity() -> Result<LaunchIdentity, HostError> {
+    LaunchIdentity::new(
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        7,
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "engine-test",
+    )
+}
 
 // join_dind_net accepts only a 64-hex container id.
 const FIRST_CONTAINER_ID: &str = "0000000000000000000000000000000000000000000000000000000000000001";
