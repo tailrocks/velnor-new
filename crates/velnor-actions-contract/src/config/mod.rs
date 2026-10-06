@@ -3,10 +3,12 @@
 //! Unknown fields are rejected; validation reports file, key path, problem.
 
 mod actions;
+mod build_task;
 mod check_receipt_budget;
 mod discovery;
 mod execution;
 mod host_container;
+mod image_task;
 mod mise;
 mod qualified_tools;
 mod release;
@@ -14,10 +16,13 @@ mod resources;
 mod runs_on;
 mod stacks;
 mod tofu;
+mod tofu_apply;
 mod verification;
 mod workflow;
+mod workflow_task;
 
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
+pub use build_task::{BuildTask, BuildTaskRunner, is_valid_build_tool_key};
 pub use check_receipt_budget::{
     MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES, MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
     MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES, MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,
@@ -36,6 +41,7 @@ pub use host_container::{
     ContainerPlatform, DaemonIdentityPolicy, HostContainerProfile, HostDockerCli, HostDockerDaemon,
     HostOrbStackSdk,
 };
+pub use image_task::{NativeImageCachePolicy, NativeImagePlatform, NativeImageTask};
 pub use mise::{
     CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
     MiseCheck, is_valid_mise_task_name,
@@ -58,14 +64,13 @@ pub use stacks::{
     is_valid_feature_name, is_valid_rust_target,
 };
 pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
-pub use verification::{
-    VERIFICATION_TASK_JOB_PREFIX, VerificationRunner, VerificationTask, VerificationTaskKind,
-    is_valid_verification_task_id,
-};
+pub use tofu_apply::{GitHubTokenSecret, S3BackendConfig, TofuApplyConfig};
+pub use verification::{VerificationRunner, VerificationTask};
 pub use workflow::{
-    GeneratorValidation, LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG, RunnerSelection,
-    VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,
+    GeneratorValidation, LATEST_RUNNER_LABEL, PullRequestCachePolicy, RUNNER_LABEL_CATALOG,
+    RunnerSelection, VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,
 };
+pub use workflow_task::{WORKFLOW_TASK_JOB_PREFIX, WorkflowTask, is_valid_workflow_task_id};
 
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
@@ -120,6 +125,22 @@ impl VelnorConfig {
         self.resources.validate(file)?;
         self.test_sharding.validate(file)?;
         self.stacks.validate(file)?;
+        if let Some(apply) = &self.workflow.tofu_apply {
+            let roots = self.stacks.tofu.as_ref().ok_or_else(|| {
+                ContractError::config(
+                    file,
+                    "workflow.tofu_apply.root",
+                    "requires_stacks_tofu_roots",
+                )
+            })?;
+            if !roots.roots.contains(&apply.root) {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.tofu_apply.root",
+                    "must_match_declared_tofu_root",
+                ));
+            }
+        }
         self.discovery.validate(file)?;
         self.actions.validate(file)?;
         validate_qualified_tools(&self.qualified_tools, file)?;

@@ -1,0 +1,901 @@
+{
+  "authored_registered_test_count": 5,
+  "authored_registered_tests": [
+    {
+      "path": "crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_cancel_probe.rs",
+      "working_blob": "54ccbf575e4317a1c6669f6982e1e2c8f43bc7ae",
+      "test_names": [
+        "qualification_workflow",
+        "job_block<'a>",
+        "assert_cancel_gate",
+        "assert_minimal_permission",
+        "both_cancellation_phases_render_all_six_trusted_mode_jobs",
+        "cancellation_receipts_keep_run_identity_and_observers_use_r13_cache_reader"
+      ]
+    },
+    {
+      "path": "crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_parallel_composition.rs",
+      "working_blob": "7be03f0d5631aa506675cc1286b2b0253f823aa5",
+      "test_names": [
+        "qualification_workflow",
+        "job_block<'a>",
+        "assert_one_need",
+        "assert_reader_import",
+        "readers_and_independent_writer_run_concurrently_from_the_seed",
+        "parallel_observers_join_only_after_all_four_producer_roles"
+      ]
+    },
+    {
+      "path": "crates/velnor-actions-orchestrator/tests/impl_schema2_mbx_cancel_probe.rs",
+      "working_blob": "2942e9d87460b4a1dffc8a56f8cbd46b3e859ee0",
+      "test_names": [
+        "prepared_qualification_workflow_contains_all_trusted_cancellation_roles"
+      ]
+    }
+  ],
+  "auxiliary_reviewed_helper": {
+    "classification": "DISCOVEREDAUX; independently reviewed with stock Sol correctness GO; included in final coupled review",
+    "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_qualification_helpers.rs",
+    "sha256": "250d1334ce3558acfed81b9ad8fe2186d48d2752f461abf277f980a7eade48c6",
+    "source_blob": "689d936e2ca3ada48d0ed8aaaaa4b60c09050d43",
+    "source_commit": "97be1f14f9facc542b3744f8a0c990b2f6c550e3",
+    "working_blob": "689d936e2ca3ada48d0ed8aaaaa4b60c09050d43"
+  },
+  "base": {
+    "commit": "eddff710928e0ded30409f4cd36317610f1b27a5",
+    "tree": "f019065b5820ee084d0979cbdbb4dfca869c71c3"
+  },
+  "composed_registration": {
+    "added_modules": [
+      "impl_renderer_mbx_cancel_probe",
+      "impl_renderer_mbx_parallel_composition",
+      "impl_renderer_mbx_resource_corruption",
+      "impl_renderer_mbx_terminal_stock_restore"
+    ],
+    "path": "crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs",
+    "preserved_base_modules": [
+      "impl_renderer_mbx_action",
+      "impl_renderer_mbx_preflight"
+    ],
+    "working_blob": "8642369ec2b2f5dbd67c8d73790bcee8ef98e763"
+  },
+  "composition_notes": [
+    "schema2_mbx_qualification.rs retains the EDDFF base Rust plus MBX installation; source caller 763 had a Rust-only form",
+    "renderer test aggregator keeps existing action and preflight modules while registering cancellation, parallel, resource-corruption, and terminal tests",
+    "terminal renderer and registered test use the final 2ae follow-up blobs",
+    "mbx_bundle.rs retains EDDFF central pinned-preflight hunks; mbx_bundle_qualification_tests.rs retains the ENOSPC export-failure assertion",
+    "six parallel source-family blobs differ from their pinned blobs only by cargo fmt; API and observer test source files also contain documented private helper extraction splits",
+    "cancellation source differences are limited to documented helper/test fixture splits; other pinned source blobs remain exact",
+    "resource renderer differences are limited to moving its existing unit-test module into a path-owned child file"
+  ],
+  "preservation_checks": [
+    "EDDFF mbx_bundle_qualification_tests ENOSPC export failure assertion remains registered and present",
+    "central pinned MBX/Rust preflight remains immediately before the private root",
+    "writer save condition still requires successful export readiness",
+    "main document_steps API merge remains for coordinator's later a917 merge"
+  ],
+  "registration_targets": {
+    "orchestrator": "velnor_orchestrator.rs registers impl_schema2_mbx_cancel_probe; MBX-related aggregator modules total 3, with 1 P3 module added",
+    "renderer": "velnor_workflow_renderer.rs registers cancellation, parallel, resource-corruption, and final terminal tests; MBX-related aggregator modules total 11, with 4 P3 modules added",
+    "resource_runtime": "renderer Cargo.toml registers mbx_resource_safety_runtime; 1 new runtime integration target",
+    "schema2_modules": "schema2.rs contains 14 modules total, 9 P3 modules added",
+    "p3_registered_integration_test_cases": {
+      "renderer": 7,
+      "orchestrator": 1,
+      "total": 8
+    },
+    "authored_registered_test_cases": 5
+  },
+  "schema": 1,
+  "source_families": [
+    {
+      "commit": "7810343be2ebe820f044da58d4caa0c581498759",
+      "name": "r13_observer_helpers",
+      "path_count": 9,
+      "paths": [
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/src/mbx_bundle.rs",
+          "source_blob": "4c49ad8a464aaadfc097f8b481de80b0db99ab69",
+          "working_blob": "aa30395f5372d41e99c6889b690cf41bfef18fbf",
+          "working_lines": 400
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/mbx_bundle_identity.rs",
+          "source_blob": "f88a26d7a6d28fa953abb2251f9b4c5f507a9ec7",
+          "working_blob": "f88a26d7a6d28fa953abb2251f9b4c5f507a9ec7",
+          "working_lines": 337
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/mbx_bundle_observer.rs",
+          "source_blob": "6b401732940ca612e37123b04a723906de88c4aa",
+          "working_blob": "6b401732940ca612e37123b04a723906de88c4aa",
+          "working_lines": 63
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/mbx_bundle_observer_import_tests.rs",
+          "source_blob": "a4e5e45e771a46b8510548e785895fd05426aa4d",
+          "working_blob": "a4e5e45e771a46b8510548e785895fd05426aa4d",
+          "working_lines": 162
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/mbx_bundle_observer_tests.rs",
+          "source_blob": "c39fd200d5809c42e29f51d42e7824432e8ae883",
+          "working_blob": "c39fd200d5809c42e29f51d42e7824432e8ae883",
+          "working_lines": 379
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/mbx_bundle_pr_cache.rs",
+          "source_blob": "bd2b97051a8092f6ab29c94c04079d7e8cadac67",
+          "working_blob": "bd2b97051a8092f6ab29c94c04079d7e8cadac67",
+          "working_lines": 243
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/mbx_bundle_qualification.rs",
+          "source_blob": "717e58b069c1b8f25d8d265253c1330535f634ce",
+          "working_blob": "717e58b069c1b8f25d8d265253c1330535f634ce",
+          "working_lines": 42
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/mbx_bundle_qualification_snapshot_tests.rs",
+          "source_blob": "f42bf0cdba072ac03e3ea7ebc1c522c766f06893",
+          "working_blob": "f42bf0cdba072ac03e3ea7ebc1c522c766f06893",
+          "working_lines": 97
+        },
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/src/mbx_bundle_qualification_tests.rs",
+          "source_blob": "341696a898ffe05b893ea83774392c5a5cba328e",
+          "working_blob": "1cd46107e767500664cd0cfbc9dd579959354684",
+          "working_lines": 362
+        }
+      ],
+      "tree": "ecbdf95c945a063330b4ec7ebe2daddc4fa417fc"
+    },
+    {
+      "commit": "028a7c213ab68e82863084ec4ba12ea3a8aefed7",
+      "name": "stock_classifier",
+      "path_count": 2,
+      "paths": [
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_stock_restore.rs",
+          "source_blob": "49c263a581d90b94eb606ef0c9742c0402007a97",
+          "working_blob": "49c263a581d90b94eb606ef0c9742c0402007a97",
+          "working_lines": 4
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_stock_restore.sh",
+          "source_blob": "18770cb8bbb6b14b9601fc738c0dedb7af30f113",
+          "working_blob": "18770cb8bbb6b14b9601fc738c0dedb7af30f113",
+          "working_lines": 365
+        }
+      ],
+      "tree": "5617af752a6f4f1bee12bc7890731dbd41e67333"
+    },
+    {
+      "commit": "763e38fbc3f92965eb6689e375c3d2550d971ddf",
+      "name": "qualification_callers",
+      "path_count": 9,
+      "paths": [
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs",
+          "source_blob": "e4b1f7386852d10d714f2679d37cdbcefcbf634f",
+          "working_blob": "e4b1f7386852d10d714f2679d37cdbcefcbf634f",
+          "working_lines": 117
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/expressions.rs",
+          "source_blob": "b265f7b4d2ad6b4918efdf761c44f3166cce2e18",
+          "working_blob": "b265f7b4d2ad6b4918efdf761c44f3166cce2e18",
+          "working_lines": 175
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2.rs",
+          "source_blob": "ad7c807e03649de24792a175dcb63784895f43a2",
+          "working_blob": "ad7c807e03649de24792a175dcb63784895f43a2",
+          "working_lines": 327
+        },
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_qualification.rs",
+          "source_blob": "ed2896761aae365a5c44b683c6dd86c90fc7482f",
+          "working_blob": "da87be1fc7d53ef20428881f550cb17650b05863",
+          "working_lines": 351
+        },
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_roundtrip_terminal.rs",
+          "source_blob": "e57ef86f60701b847f4252b5e22b3566a46e1dd9",
+          "working_blob": "357534e485bb485995958c58f3bc7ec57974321a",
+          "working_lines": 201
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_roundtrip_terminal.sh",
+          "source_blob": "ff6469b7b5f4a5b3ce3af1551c381fbfbfe47500",
+          "working_blob": "ff6469b7b5f4a5b3ce3af1551c381fbfbfe47500",
+          "working_lines": 60
+        },
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_terminal_stock_restore.rs",
+          "source_blob": "c6a0f73e30c691882b5745f13a91a72b0922bbd8",
+          "working_blob": "134bdd4c3a993646fcaadf32593ffa55640cc6da",
+          "working_lines": 130
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/tests/impl_renderer_token_hygiene_env.rs",
+          "source_blob": "a00925a61975f727ce2cbed8fc8f5ffcd98ce2da",
+          "working_blob": "a00925a61975f727ce2cbed8fc8f5ffcd98ce2da",
+          "working_lines": 220
+        },
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs",
+          "source_blob": "263976028d092f4600380f5d5afd14a606a234cf",
+          "working_blob": "8642369ec2b2f5dbd67c8d73790bcee8ef98e763",
+          "working_lines": 127
+        }
+      ],
+      "tree": "5d2c862a5ad76f91a5c93080de5b6c8681a879cf"
+    },
+    {
+      "commit": "2ae9c4a4e54521a2b28df57c2c2b4a75b7116f4c",
+      "name": "terminal_followup",
+      "path_count": 2,
+      "paths": [
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_roundtrip_terminal.rs",
+          "source_blob": "357534e485bb485995958c58f3bc7ec57974321a",
+          "working_blob": "357534e485bb485995958c58f3bc7ec57974321a",
+          "working_lines": 201
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_terminal_stock_restore.rs",
+          "source_blob": "134bdd4c3a993646fcaadf32593ffa55640cc6da",
+          "working_blob": "134bdd4c3a993646fcaadf32593ffa55640cc6da",
+          "working_lines": 130
+        }
+      ],
+      "tree": "422284fb4731dd1117197ae832be4442f3102874"
+    },
+    {
+      "commit": "97be1f14f9facc542b3744f8a0c990b2f6c550e3",
+      "name": "resource_corruption",
+      "path_count": 14,
+      "paths": [
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_corrupt_bundle.sh",
+          "source_blob": "7603b051dc17e735daacadb959a5f0a9106ed8db",
+          "working_blob": "7603b051dc17e735daacadb959a5f0a9106ed8db",
+          "working_lines": 358
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_corrupt_probe.rs",
+          "source_blob": "56e19eda9865818adc43857868f1c428ff693e45",
+          "working_blob": "56e19eda9865818adc43857868f1c428ff693e45",
+          "working_lines": 126
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_qualification_helpers.rs",
+          "source_blob": "689d936e2ca3ada48d0ed8aaaaa4b60c09050d43",
+          "working_blob": "689d936e2ca3ada48d0ed8aaaaa4b60c09050d43",
+          "working_lines": 163
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_resource_path.sh",
+          "source_blob": "d9a93b4b530d129a668cd76e2f59368c47e70bc6",
+          "working_blob": "d9a93b4b530d129a668cd76e2f59368c47e70bc6",
+          "working_lines": 400
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_resource_phase.sh",
+          "source_blob": "d7937100976fc97962f090680202bc6b332d3049",
+          "working_blob": "d7937100976fc97962f090680202bc6b332d3049",
+          "working_lines": 4
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_resource_probe.rs",
+          "source_blob": "a8cb053e58c4c9519038e10fdc3b9b5db1bb1359",
+          "working_blob": "a8cb053e58c4c9519038e10fdc3b9b5db1bb1359",
+          "working_lines": 39
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_resource_probe_env.rs",
+          "source_blob": "67d77fd318a8fafd3557f3f91eed3851e7038553",
+          "working_blob": "67d77fd318a8fafd3557f3f91eed3851e7038553",
+          "working_lines": 265
+        },
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_resource_probe_render.rs",
+          "source_blob": "1c5be616f1be347ea9ce4ea24dab4ee09bca9cb2",
+          "working_blob": "7b429c1530fae3ce5932a3c34fcd2fefcb6197f7",
+          "working_lines": 356
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_resource_receipt.sh",
+          "source_blob": "7b67e8e3a5c1cc662b1958c1cbb95770618fbaa7",
+          "working_blob": "7b67e8e3a5c1cc662b1958c1cbb95770618fbaa7",
+          "working_lines": 43
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_resource_sampler.sh",
+          "source_blob": "41f55a7394e9145549a05e0c7a26b469025d3074",
+          "working_blob": "41f55a7394e9145549a05e0c7a26b469025d3074",
+          "working_lines": 400
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_resource_snapshot.sh",
+          "source_blob": "e2b1051d7d3dfb235d65f7e2567ff6a9fbb845c1",
+          "working_blob": "e2b1051d7d3dfb235d65f7e2567ff6a9fbb845c1",
+          "working_lines": 17
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_resource_start.sh",
+          "source_blob": "dac556db5ac1019f11e50ffd4382db1843527984",
+          "working_blob": "dac556db5ac1019f11e50ffd4382db1843527984",
+          "working_lines": 100
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_resource_stop.sh",
+          "source_blob": "d375fac6c28696b4e6dbfb034fc262ff29ce29b0",
+          "working_blob": "d375fac6c28696b4e6dbfb034fc262ff29ce29b0",
+          "working_lines": 337
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_resource_corruption.rs",
+          "source_blob": "ae513e53a1d79d7143432c72dfbe291ab90d6e79",
+          "working_blob": "ae513e53a1d79d7143432c72dfbe291ab90d6e79",
+          "working_lines": 183
+        }
+      ],
+      "tree": "8068ef7e760b3c42c626327028bed155277e439f"
+    },
+    {
+      "commit": "13e0bf003a4aff63783e013a399677f5485ca28d",
+      "name": "resource_runtime_fixtures",
+      "path_count": 5,
+      "paths": [
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/Cargo.toml",
+          "source_blob": "6ff3269ca8356f06f7956110df4ed1085bf6da8d",
+          "working_blob": "6ff3269ca8356f06f7956110df4ed1085bf6da8d",
+          "working_lines": 21
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/tests/mbx_resource_safety_role_fixture.sh",
+          "source_blob": "6be65c007789174d63e0ed771bc9979d0c95aac3",
+          "working_blob": "6be65c007789174d63e0ed771bc9979d0c95aac3",
+          "working_lines": 158
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/tests/mbx_resource_safety_runtime.rs",
+          "source_blob": "884b666ff569675e85fbb9ba021351a2b488e8db",
+          "working_blob": "884b666ff569675e85fbb9ba021351a2b488e8db",
+          "working_lines": 304
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/tests/mbx_resource_safety_runtime_fixture.sh",
+          "source_blob": "1b0b7ee49e57f985ce9069a71ee09dd4bbda929e",
+          "working_blob": "1b0b7ee49e57f985ce9069a71ee09dd4bbda929e",
+          "working_lines": 382
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/tests/mbx_resource_safety_session_fixture.sh",
+          "source_blob": "7102f491bbfd8cbe78fdf60d5697a8724a7c995b",
+          "working_blob": "7102f491bbfd8cbe78fdf60d5697a8724a7c995b",
+          "working_lines": 390
+        }
+      ],
+      "tree": "04a2094fcdb4b11e43a606979dc8272104f44e81"
+    },
+    {
+      "commit": "dc199f051a2f70dca0ed2da538c13a22b9de2a4a",
+      "name": "parallel_probe",
+      "path_count": 11,
+      "paths": [
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe.rs",
+          "source_blob": "d864d321695dc51a39e79f8a0aacc8cd4f883c4c",
+          "working_blob": "7f96bb36703c714a7788ef1603d97d263943b677",
+          "working_lines": 383
+        },
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api.rs",
+          "source_blob": "58bd6a575e8056827caa921c78ccc58a0d02cd64",
+          "working_blob": "8d974e7196492c1bdac75008f0bc967de650dfa3",
+          "working_lines": 393
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api_dirs.rs",
+          "source_blob": "3788a3b7d7b8e374ae46059230cede7e593b7503",
+          "working_blob": "3788a3b7d7b8e374ae46059230cede7e593b7503",
+          "working_lines": 41
+        },
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api_fixture.rs",
+          "source_blob": "7caedbf187b4670537b0111bc3efc48eadcebd2a",
+          "working_blob": "36b63395758b39243bb758a9e2b4a54568cbe44b",
+          "working_lines": 278
+        },
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api_key_tests.rs",
+          "source_blob": "f63fe65b45325931b8efd99b66bae1a1ba77a630",
+          "working_blob": "c052e00f65db93e592a29265959d97debd422479",
+          "working_lines": 104
+        },
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api_single_document_tests.rs",
+          "source_blob": "945d1ed9bd5ffd8899f783336a08bc0f1c13fdfc",
+          "working_blob": "b31fafc551ffe2d882983dbb34bf099cf199d3a3",
+          "working_lines": 55
+        },
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api_stock_fixture.rs",
+          "source_blob": "7c24e1b8c4ab9e7326b425f08e8d4f20690df1c8",
+          "working_blob": "f6fe1b41d7770023465e5ed04d356ce12705de48",
+          "working_lines": 253
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api_stock_miss_tests.rs",
+          "source_blob": "b3c3c0da89ce7a3c560c24ee34e6635612f17b4a",
+          "working_blob": "b3c3c0da89ce7a3c560c24ee34e6635612f17b4a",
+          "working_lines": 101
+        },
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api_tests.rs",
+          "source_blob": "7be707d5feb39d98dd73ac970da74410f1a93e05",
+          "working_blob": "3f401ed4c90a726f9155d8115e92a3a859190a02",
+          "working_lines": 258
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_helpers.rs",
+          "source_blob": "b50cb47384a96235d470fa86e40a206b425bfd4a",
+          "working_blob": "b50cb47384a96235d470fa86e40a206b425bfd4a",
+          "working_lines": 113
+        },
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_tests.rs",
+          "source_blob": "28c61b9f47ebc9361fab10e86af2f99fd0e51a44",
+          "working_blob": "d98f49ab80eb3ee5e11405fb060d7cdafc277399",
+          "working_lines": 254
+        }
+      ],
+      "tree": "0ed1ed28c5e45568e17c9b83ed495c5af8a2e285"
+    },
+    {
+      "commit": "6329b0c2b68200401b1a4eab532dbf8f8581a0f0",
+      "name": "cancellation_probe",
+      "path_count": 28,
+      "paths": [
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe.rs",
+          "source_blob": "6b90a620c65aaf87da19b9a79e355719f82e90af",
+          "working_blob": "6b90a620c65aaf87da19b9a79e355719f82e90af",
+          "working_lines": 395
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_cache_snapshot_tests.rs",
+          "source_blob": "ad0287420119f752a144f603b1dc5cee33feef5f",
+          "working_blob": "ad0287420119f752a144f603b1dc5cee33feef5f",
+          "working_lines": 126
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_classification_tests.rs",
+          "source_blob": "0ef43fecbc1a6df1b21edbcd186bf256e99066a5",
+          "working_blob": "0ef43fecbc1a6df1b21edbcd186bf256e99066a5",
+          "working_lines": 212
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_controller_dispatch.rs",
+          "source_blob": "3c194c3612d2c3d69806319baf0b9257ba4cee63",
+          "working_blob": "3c194c3612d2c3d69806319baf0b9257ba4cee63",
+          "working_lines": 84
+        },
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_controller_fixture_tests.rs",
+          "source_blob": "99636b0d0025cda8d45edb18a568db679fb5f2ab",
+          "working_blob": "3eb91a5aab1ca870863287aa33f1ff6313adf6bf",
+          "working_lines": 299
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_controller_live.rs",
+          "source_blob": "8f3940af30d7fe22a2064bf6239252e38641334d",
+          "working_blob": "8f3940af30d7fe22a2064bf6239252e38641334d",
+          "working_lines": 332
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_controller_receipt.rs",
+          "source_blob": "cc477e962c5c8036d717ca797b232fed21694e25",
+          "working_blob": "cc477e962c5c8036d717ca797b232fed21694e25",
+          "working_lines": 173
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_controller_receipt_fixtures.rs",
+          "source_blob": "1cf9207abef7f82f3ca117be2a1ba8d51badf4fa",
+          "working_blob": "1cf9207abef7f82f3ca117be2a1ba8d51badf4fa",
+          "working_lines": 31
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_controller_transport_cases.rs",
+          "source_blob": "4ef12e6ca86b043bec57b073eb71b8879f6257b2",
+          "working_blob": "4ef12e6ca86b043bec57b073eb71b8879f6257b2",
+          "working_lines": 92
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_date_fixture.rs",
+          "source_blob": "14ba7eed2a3fadec2e65c049fca5938a0e8a2627",
+          "working_blob": "14ba7eed2a3fadec2e65c049fca5938a0e8a2627",
+          "working_lines": 30
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_key_fixture_tests.rs",
+          "source_blob": "cdb07c32cbf03a859f7d3bb79dbc1d103cca8d73",
+          "working_blob": "cdb07c32cbf03a859f7d3bb79dbc1d103cca8d73",
+          "working_lines": 102
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_native_render_tests.rs",
+          "source_blob": "634708075a4fac80b640ce40b3a0c176de6f9165",
+          "working_blob": "634708075a4fac80b640ce40b3a0c176de6f9165",
+          "working_lines": 272
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_observer.rs",
+          "source_blob": "ac0f3e8c1320aea558c38986a215c226c30bfcd1",
+          "working_blob": "ac0f3e8c1320aea558c38986a215c226c30bfcd1",
+          "working_lines": 328
+        },
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_observer_fixture_tests.rs",
+          "source_blob": "e853f74d596372ece9b2eefc36eeb034fc6dc5eb",
+          "working_blob": "ab048252c0d454df44a66f37a57fba500f8773cc",
+          "working_lines": 354
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_observer_restore_log.rs",
+          "source_blob": "6ab170ba46d2f517e972462fea0acc080fca89cc",
+          "working_blob": "6ab170ba46d2f517e972462fea0acc080fca89cc",
+          "working_lines": 115
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_observer_steps.rs",
+          "source_blob": "074298d481aa5e3e70df6ef5bbe2f6b50864f925",
+          "working_blob": "074298d481aa5e3e70df6ef5bbe2f6b50864f925",
+          "working_lines": 138
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_policy.rs",
+          "source_blob": "ba568b62d9179c1a7c839d49b8f9b2688bc799d5",
+          "working_blob": "ba568b62d9179c1a7c839d49b8f9b2688bc799d5",
+          "working_lines": 94
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_pre_save_fixture_tests.rs",
+          "source_blob": "7ff98225c1dd4a5cec464d74e722fb2aa1421ce2",
+          "working_blob": "7ff98225c1dd4a5cec464d74e722fb2aa1421ce2",
+          "working_lines": 32
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_private_io.rs",
+          "source_blob": "f8e84bf89da524adb9e69e622668b55bb4bd47b0",
+          "working_blob": "f8e84bf89da524adb9e69e622668b55bb4bd47b0",
+          "working_lines": 290
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_private_io_tests.rs",
+          "source_blob": "6080b316c7af26ad1e9a86bb8e36e4ef2a8aa5b9",
+          "working_blob": "6080b316c7af26ad1e9a86bb8e36e4ef2a8aa5b9",
+          "working_lines": 251
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_receipt_fixture_tests.rs",
+          "source_blob": "f743daf5ba09a19b545197ed3e6a66a24859b90c",
+          "working_blob": "f743daf5ba09a19b545197ed3e6a66a24859b90c",
+          "working_lines": 115
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_render.rs",
+          "source_blob": "564f6a6bc6e94f123fcc654da0502bd5a4d83739",
+          "working_blob": "564f6a6bc6e94f123fcc654da0502bd5a4d83739",
+          "working_lines": 264
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_scripts.rs",
+          "source_blob": "5980eae2bb83a5f3139576eab4e9dcf743afe3b0",
+          "working_blob": "5980eae2bb83a5f3139576eab4e9dcf743afe3b0",
+          "working_lines": 55
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_steps.rs",
+          "source_blob": "ef4460a0e7751bd62ece4de58178eccba57377a8",
+          "working_blob": "ef4460a0e7751bd62ece4de58178eccba57377a8",
+          "working_lines": 377
+        },
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_tests.rs",
+          "source_blob": "8e183760efd40b4b385c1c62233d80a13c2cb758",
+          "working_blob": "5ae2c61fd2af98feaef8feb4cf6d3925d327d291",
+          "working_lines": 307
+        },
+        {
+          "bytes_match_source": false,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_transport_fixture_tests.rs",
+          "source_blob": "7ef43e5bf9efcdeeef3771165791133819455e55",
+          "working_blob": "e2de811569580a8a1d1746fd9638b8657a8af7ff",
+          "working_lines": 6
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_util.rs",
+          "source_blob": "e7ce5ff4ff5f3b91e67ae7a5004c04c923561cea",
+          "working_blob": "e7ce5ff4ff5f3b91e67ae7a5004c04c923561cea",
+          "working_lines": 193
+        },
+        {
+          "bytes_match_source": true,
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_victim.rs",
+          "source_blob": "078d9bce760eaddf970a99afd7ab995d2cef5f0c",
+          "working_blob": "078d9bce760eaddf970a99afd7ab995d2cef5f0c",
+          "working_lines": 83
+        }
+      ],
+      "tree": "1a497e98967826d7c71c0060639d60917651e18e"
+    }
+  ],
+  "schema2_modules": 14,
+  "hard_cap_audit": {
+    "method": "cargo fmt parser accepted all Rust files; brace-aware Rust token scan ignored comments, string/raw-string/char literals and checked function spans",
+    "p3_scope": {
+      "rust_files_scanned": 64,
+      "files_over_400_lines": [],
+      "lib_or_main_over_150_lines": [],
+      "functions_over_80_lines": [],
+      "oversized_imports_split": [
+        {
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_tests.rs",
+          "source_lines": 517,
+          "current_lines": 307,
+          "support_path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_test_support.rs",
+          "support_lines": 215,
+          "preservation": "moved only fake command constants; registered test functions stay in the original owner module"
+        },
+        {
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_controller_fixture_tests.rs",
+          "source_lines": 441,
+          "current_lines": 299,
+          "support_path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_controller_behavior_tests.rs",
+          "support_lines": 151,
+          "preservation": "moved complete existing test functions without changing names or assertions"
+        },
+        {
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_observer_fixture_tests.rs",
+          "source_lines": 412,
+          "current_lines": 354,
+          "support_path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_observer_skipped_receipt_tests.rs",
+          "support_lines": 70,
+          "preservation": "moved the complete skipped-receipt test, retaining test name and assertion body"
+        },
+        {
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_transport_fixture_tests.rs",
+          "source_lines": 406,
+          "current_lines": 6,
+          "support_paths": [
+            "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_transport_fixture_preamble.sh",
+            "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_transport_fixture_cache_artifacts.sh"
+          ],
+          "preservation": "the concatenated include_str payload bytes equal the source FAKE_CURL raw string"
+        },
+        {
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_resource_probe_render.rs",
+          "source_lines": 403,
+          "current_lines": 356,
+          "support_path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_resource_probe_render_tests.rs",
+          "support_lines": 47,
+          "preservation": "moved existing test module unchanged by name and assertion intent"
+        }
+      ],
+      "additional_module_splits": [
+        {
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api_tests.rs",
+          "support_path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api_script_helpers.rs",
+          "preservation": "moved API fixture helper functions to private child module; existing tests access parent imports"
+        },
+        {
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_tests.rs",
+          "support_path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_tests_observer_assertions.rs",
+          "preservation": "moved observer assertions intact to private helper module; test names remain in original module"
+        }
+      ],
+      "mechanical_support_paths": [
+        {
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_test_support.rs",
+          "origin_path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_tests.rs",
+          "working_blob": "bc6926e8a538227f094e66e1135d1226b265b44c",
+          "working_lines": 215
+        },
+        {
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_controller_behavior_tests.rs",
+          "origin_path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_controller_fixture_tests.rs",
+          "working_blob": "747ea69eda3c7b7cdb1e87866fcd2460972f7651",
+          "working_lines": 151
+        },
+        {
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_observer_skipped_receipt_tests.rs",
+          "origin_path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_observer_fixture_tests.rs",
+          "working_blob": "f62200186bdcef4350f292dd6fea711cf63b9e4b",
+          "working_lines": 70
+        },
+        {
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_resource_probe_render_tests.rs",
+          "origin_path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_resource_probe_render.rs",
+          "working_blob": "a7741cfeb3237c1b2004fb2e32c8ec451a92a4a8",
+          "working_lines": 47
+        },
+        {
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api_script_helpers.rs",
+          "origin_path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_api_tests.rs",
+          "working_blob": "4e6280f1e7b2718cae07ee39705f623b2fa2801c",
+          "working_lines": 164
+        },
+        {
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_tests_observer_assertions.rs",
+          "origin_path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_tests.rs",
+          "working_blob": "010ff4ef43919ff60ed038f46b3eee7f85d257d2",
+          "working_lines": 159
+        },
+        {
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_transport_fixture_preamble.sh",
+          "origin_path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_transport_fixture_tests.rs",
+          "working_blob": "f86408ee57d7e1b1c2038f11d06596051e246965",
+          "working_lines": 204
+        },
+        {
+          "path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_transport_fixture_cache_artifacts.sh",
+          "origin_path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_transport_fixture_tests.rs",
+          "working_blob": "c8d9b821a0d7a344163cd2ea91dad2286fb2e77b",
+          "working_lines": 199
+        }
+      ]
+    },
+    "two_crate_scope": {
+      "rust_files_scanned": 503,
+      "files_over_400_lines": [],
+      "lib_or_main_over_150_lines": [],
+      "function_spans_over_80_lines_outside_p3_scope": [
+        {
+          "path": "crates/velnor-actions-orchestrator/src/cover_revalidate.rs",
+          "line": 139,
+          "span": 90
+        },
+        {
+          "path": "crates/velnor-actions-orchestrator/src/crate_jobs.rs",
+          "line": 235,
+          "span": 86
+        },
+        {
+          "path": "crates/velnor-actions-orchestrator/src/internal.rs",
+          "line": 269,
+          "span": 83
+        },
+        {
+          "path": "crates/velnor-actions-orchestrator/src/merge.rs",
+          "line": 171,
+          "span": 81
+        },
+        {
+          "path": "crates/velnor-actions-orchestrator/src/plan_obligation.rs",
+          "line": 185,
+          "span": 88
+        },
+        {
+          "path": "crates/velnor-actions-orchestrator/src/workflow.rs",
+          "line": 104,
+          "span": 84
+        },
+        {
+          "path": "crates/velnor-actions-orchestrator/tests/impl_merge.rs",
+          "line": 265,
+          "span": 92
+        },
+        {
+          "path": "crates/velnor-actions-orchestrator/tests/impl_tofu_t23.rs",
+          "line": 115,
+          "span": 82
+        },
+        {
+          "path": "crates/velnor-actions-orchestrator/tests/impl_wire_w1.rs",
+          "line": 250,
+          "span": 84
+        },
+        {
+          "path": "crates/velnor-actions-orchestrator/tests/schema2_generator_release_snapshots.rs",
+          "line": 227,
+          "span": 82
+        },
+        {
+          "path": "crates/velnor-actions-workflow-renderer/src/mbx_bundle_pr_cache_tests.rs",
+          "line": 66,
+          "span": 83
+        },
+        {
+          "path": "crates/velnor-actions-workflow-renderer/tests/impl_renderer_release_publish.rs",
+          "line": 152,
+          "span": 82
+        }
+      ],
+      "disposition": "reported to root for bounded assignment; not declared compliant or grandfathered"
+    }
+  },
+  "schema2_added_modules": 9
+}

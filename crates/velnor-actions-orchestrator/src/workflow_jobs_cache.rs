@@ -10,9 +10,8 @@ use crate::OrchestratorError;
 
 /// Plan-job cache steps: restore before fetch, save after (writer only).
 ///
-/// Lockless emits nothing. MBX repos restore/save the shared `actions/cache`
-/// snapshot; Cargo-only repos emit one `rust-cache` writer step (its post
-/// action saves; no separate save step).
+/// Lockless emits nothing. Every Rust repo uses the same exact-path
+/// `actions/cache` snapshot, independent of compiler driver.
 pub(crate) struct PlanCache {
     /// Restore steps (before fetch).
     pub(crate) restore: Vec<Step>,
@@ -27,7 +26,6 @@ pub(crate) struct PlanCache {
 pub(crate) fn cache_steps_for_plan(
     label: &str,
     catalog: &ToolCatalog,
-    use_mbx: bool,
     fetch_roots: &[String],
 ) -> Result<PlanCache, OrchestratorError> {
     if fetch_roots.is_empty() {
@@ -42,23 +40,12 @@ pub(crate) fn cache_steps_for_plan(
             problem: format!("bad_label:{label}"),
         })?;
     let rust = catalog.version(PinnedTool::Rust);
-    if use_mbx {
-        let key = crate::source_cache::sources_cache_key(target, rust, fetch_roots)?;
-        let prefix = crate::source_cache::sources_restore_prefix(&key);
-        let restore = crate::source_cache::sources_restore_step(&key, &[prefix])?;
-        let save = crate::source_cache::sources_save_step(&key)?;
-        return Ok(PlanCache {
-            restore: vec![restore],
-            save: vec![save],
-        });
-    }
-    let shared = format!(
-        "{}-{target}-{rust}",
-        crate::source_cache::RUST_CACHE_SHARED_PREFIX
-    );
-    let writer = crate::source_cache::rust_cache_step(&shared, true)?;
+    let key = crate::source_cache::sources_cache_key(target, rust, fetch_roots)?;
+    let prefix = crate::source_cache::sources_restore_prefix(&key);
+    let restore = crate::source_cache::sources_restore_step(&key, &[prefix])?;
+    let save = crate::source_cache::sources_save_step(&key)?;
     Ok(PlanCache {
-        restore: vec![writer],
-        save: Vec::new(),
+        restore: vec![restore],
+        save: vec![save],
     })
 }

@@ -2,7 +2,8 @@
 
 use crate::launch::{
     Admit, Idle, Seat, admit, install_job_capacity, job_capacity, needs_running,
-    parse_admit_target, parse_job_capacity, poll_limit, statistics_blocked, wide_poll_limit,
+    parse_admit_target, parse_job_capacity, poll_limit, should_ack, statistics_blocked,
+    wide_poll_limit,
 };
 
 fn decide(capacity: u32, started: u32, running: u32, idle: Idle) -> Admit {
@@ -359,4 +360,43 @@ fn three_waves_refill_after_exit_and_a_mid_wave_failure() {
         started = started.saturating_add(1);
         assert_eq!(seat(4, 4, started, 0, 0, 12, Idle::Empty), Admit::Stop);
     }
+}
+
+#[test]
+fn full_slot_progress_notice_is_acknowledged() {
+    assert_eq!(
+        admit(Seat {
+            capacity: 4,
+            target: 4,
+            started: 0,
+            occupied: 4,
+            running: 4,
+            assigned: 5,
+            idle: Idle::Scale,
+            progress: true,
+        }),
+        Admit::Ack { stop: false }
+    );
+    assert_eq!(
+        admit(Seat {
+            capacity: 4,
+            target: 4,
+            started: 3,
+            occupied: 3,
+            running: 3,
+            assigned: 5,
+            idle: Idle::Scale,
+            progress: true,
+        }),
+        Admit::Start { stop: true }
+    );
+}
+
+#[test]
+fn name_taken_acks_a_scale_name_collision() {
+    assert!(should_ack(Idle::Scale));
+    assert!(!should_ack(Idle::Launch));
+    assert!(!should_ack(Idle::Ack));
+    assert!(!should_ack(Idle::Empty));
+    assert!(!should_ack(Idle::Blocked));
 }

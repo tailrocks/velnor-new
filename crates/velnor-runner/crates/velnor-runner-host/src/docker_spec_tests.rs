@@ -1,6 +1,6 @@
 //! Runner plan, mount audit, and id-only delete.
 
-use crate::docker_spec::Mount;
+use crate::docker_spec::{ACTION_ARCHIVE_TARGET, ACTION_ARCHIVE_VOLUME, Mount, runner_mounts};
 use crate::{
     ContainerPlan, DeleteDecision, HostError, audit_plan, delete_decision, plan_contains,
     runner_plan,
@@ -47,11 +47,35 @@ fn runner_plan_is_not_privileged() -> Result<(), HostError> {
     assert_eq!(plan.mounts[0].target, "/run");
     assert_eq!(plan.mounts[1].source, "volume:worker_a-work");
     assert_eq!(plan.mounts[1].target, "/home/runner/_work");
-    assert_eq!(plan.env.len(), 0);
+    assert!(
+        plan.env.is_empty(),
+        "archive env comes from projection, not the plan"
+    );
     assert!(audit_plan(&plan).is_ok());
     let mut privileged = plan;
     privileged.privileged = true;
     assert_eq!(audit_plan(&privileged), Err(HostError::PrivilegedRunner));
+    Ok(())
+}
+
+#[test]
+fn action_archive_is_shared_and_rejects_a_home_path() -> Result<(), HostError> {
+    let plan = runner_plan("worker_a")?;
+    assert!(
+        plan.env.is_empty(),
+        "archive env comes from projection, not the plan"
+    );
+    let mounts = runner_mounts(&plan.mounts)?;
+    let archive = mounts
+        .iter()
+        .find(|mount| mount.source == ACTION_ARCHIVE_VOLUME)
+        .ok_or(HostError::Docker)?;
+    assert_eq!(archive.target, ACTION_ARCHIVE_TARGET);
+    assert!(audit_plan(&plan).is_ok());
+    let mut home = plan;
+    home.env
+        .push("ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/home/runner/action-archive".to_owned());
+    assert_eq!(audit_plan(&home), Err(HostError::ForbiddenMount));
     Ok(())
 }
 

@@ -26,12 +26,13 @@ fn plan_with(label: &str, obligations: Vec<PlanObligation>) -> Plan {
         .map(|obligation| obligation.task_id.clone())
         .collect();
     Plan {
-        schema: 1,
+        schema: Plan::SCHEMA,
         run_key: "local".to_owned(),
         plan_id: "plan-local".to_owned(),
         base: None,
         head: "head".to_owned(),
         event: WorkflowEvent::Push,
+        qualification: None,
         runner: PlanRunner {
             label: label.to_owned(),
             selection: RunnerSelection::LatestDefault,

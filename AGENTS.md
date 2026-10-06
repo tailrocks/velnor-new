@@ -37,6 +37,8 @@
 - Stop only at a proven tool/model/project limit. When uncertain, inspect, test, and measure first.
 - Before fixing a bug, find why the architecture permitted it and whether relatives hide nearby. Prefer structural fixes that remove the enabling condition; a symptom patch must name the deferred root cause.
 - Delegate first: use subagents for parallel research, implementation, review, and verification. Resolve ambiguity autonomously from evidence and docs.
+- Velnor execution, research, implementation, and testing agents use `gpt-6-luna` with `max`; independent reviews use `gpt-6.1-sol` with `medium`. Never use `gpt-6-astra`.
+- Every spawn sets `model` and `reasoning_effort`, and passes `fork_turns: "none"`. Verify the actual latest `turn_context` bound to the exact spawn/handle; never resume actors launched under another model.
 
 ## Commits and review integrity
 

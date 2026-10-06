@@ -5,9 +5,10 @@
 //! pre-existing file, `plan-v1`/`merge-v1`/`publish-baseline-v1` need a
 //! pre-existing request file, `fetch-reports-v1`/`write-task-report-v1`
 //! need runner temp plus the numeric run ID instead, and
-//! `write-preseed-manifest-v1` needs runner temp only. Anything else falls
-//! through to Clap, so public behavior is byte-identical with or without
-//! the environment set.
+//! `write-preseed-manifest-v1` needs runner temp only, and
+//! `resolve-qualification-v1` requires a dispatch event, request file, and
+//! read-only GitHub token. Anything else falls through to Clap, so public
+//! behavior is byte-identical with or without the environment set.
 
 use std::env;
 use std::fs;
@@ -16,17 +17,18 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use velnor_actions_orchestrator::{
-    DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, GenerateOptions, MERGE_OP,
-    OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP,
-    PlanOutputMode, REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, execute_check,
-    generate_dispatched, init_config, merge_internal, merge_passed, parse_dispatch_mode,
-    plan_internal, plan_outputs, plan_text_checked, prepare, publish_final_report,
+    DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, MERGE_OP, OrchestratorError,
+    PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PlanOutputMode,
+    REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, execute_check, init_config, merge_internal,
+    merge_passed, plan_internal, plan_outputs, plan_text_checked, prepare, publish_final_report,
     publish_plan_files, resolve_root, response_path_for, retrieve_reports, write_preseed_manifest,
     write_request, write_task_report,
 };
 
 use crate::args::{Cli, Command};
 use crate::dispatch_publish::run_publish_internal;
+#[path = "dispatch_owned_tool_publication.rs"]
+mod owned_publication;
 
 /// Environment variable selecting the private operation. Never printed.
 const OP_ENV: &str = "VELNOR_INTERNAL_OP";
@@ -44,6 +46,7 @@ const GITHUB_EVENT_PATH_ENV: &str = "GITHUB_EVENT_PATH";
 enum InternalOp {
     /// Materialize the request file from the GitHub environment.
     WriteRequest,
+    /// Execute one named hosted platform check.
     ExecuteCheck,
     /// Plan operation.
     Plan,
@@ -57,6 +60,10 @@ enum InternalOp {
     PreseedManifest,
     /// Baseline-publish operation.
     Publish,
+    /// Repository-maintenance operation behind its separate private gate.
+    RepoPolicy,
+    /// Read-only predecessor resolution for hosted qualification.
+    ResolveQualification,
 }
 
 /// Validated private request: operation plus exact request-file path.
@@ -72,11 +79,28 @@ struct InternalRequest {
 ///
 /// Clap owns `--help`, `--version`, and usage errors (exit 2).
 pub(crate) fn run_public() -> ExitCode {
-    match Cli::parse().command {
+    let command = Cli::parse().command;
+    if command.is_owned_preview() {
+        return owned_publication::run_owned_command(command);
+    }
+    match command {
         Command::Init => run_init(),
         Command::Plan => run_plan(),
-        Command::Generate { output_dir, mode } => run_generate(output_dir, mode),
+        Command::Generate {
+            output_dir, mode, ..
+        } => crate::dispatch_generate::run_generate(output_dir, mode),
         Command::Config { command } => crate::dispatch_config::run_config(&command),
+        Command::VerifyReleaseManifest {
+            manifest,
+            expected_source_commit,
+            linux_x64_binary,
+            macos_arm64_binary,
+        } => crate::dispatch_local_release::run_verify_release_manifest(
+            &manifest,
+            &expected_source_commit,
+            &linux_x64_binary,
+            &macos_arm64_binary,
+        ),
     }
 }
 
@@ -93,7 +117,7 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
 /// Check the private gate: known op plus request-file presence by op.
 ///
 /// Fetch and report take no request file: they need the runner-temp
-/// velnor directory plus the numeric run ID instead. The manifest op
+/// velnor directory plus the numeric run ID instead. The preseed-manifest op
 /// takes no request file either: runner temp scopes its output.
 fn gate_request() -> Option<InternalRequest> {
     let op = match env::var(OP_ENV).as_deref() {
@@ -105,6 +129,10 @@ fn gate_request() -> Option<InternalRequest> {
         Ok(tag) if tag == REPORT_OP => InternalOp::Report,
         Ok(tag) if tag == PRESEED_MANIFEST_OP => InternalOp::PreseedManifest,
         Ok(tag) if tag == PUBLISH_OP => InternalOp::Publish,
+        Ok("repo-policy-v1") => InternalOp::RepoPolicy,
+        Ok(tag) if crate::dispatch_qualification::is_resolver_op(tag) => {
+            InternalOp::ResolveQualification
+        }
         _ => return None,
     };
     if op == InternalOp::Fetch || op == InternalOp::Report || op == InternalOp::ExecuteCheck {
@@ -115,6 +143,10 @@ fn gate_request() -> Option<InternalRequest> {
     }
     if op == InternalOp::PreseedManifest {
         return runner_velnor_dir().map(|path| InternalRequest { op, path });
+    }
+    if op == InternalOp::RepoPolicy {
+        let root = crate::dispatch_repo_policy::gate_root()?;
+        return Some(InternalRequest { op, path: root });
     }
     let path = env::var_os(REQUEST_FILE_ENV)
         .filter(|value| !value.is_empty())
@@ -136,9 +168,15 @@ fn gate_request() -> Option<InternalRequest> {
                 return None;
             }
         }
+        InternalOp::ResolveQualification => {
+            if !crate::dispatch_qualification::request_is_eligible(&path) {
+                return None;
+            }
+        }
         InternalOp::Fetch
         | InternalOp::Report
         | InternalOp::PreseedManifest
+        | InternalOp::RepoPolicy
         | InternalOp::ExecuteCheck => {}
     }
     Some(InternalRequest { op, path })
@@ -181,6 +219,8 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             Err(error) => fail_internal(&error.to_string()),
         },
         InternalOp::Publish => run_publish_internal(&request.path),
+        InternalOp::RepoPolicy => crate::dispatch_repo_policy::run(&request.path),
+        InternalOp::ResolveQualification => crate::dispatch_qualification::run(&request.path),
     }
 }
 
@@ -270,7 +310,7 @@ fn run_merge_internal(path: &Path) -> ExitCode {
 }
 
 /// Report a private failure without printing the private operation.
-fn fail_internal(problem: &str) -> ExitCode {
+pub(crate) fn fail_internal(problem: &str) -> ExitCode {
     eprintln!("velnor-actions: internal request failed: {problem}");
     ExitCode::from(1)
 }
@@ -315,55 +355,6 @@ fn run_plan() -> ExitCode {
         println!();
     }
     ExitCode::SUCCESS
-}
-
-/// Dispatch `generate`: files written and recommendations go to stderr.
-fn run_generate(output_dir: Option<PathBuf>, mode: Option<String>) -> ExitCode {
-    let Some(cwd) = working_dir() else {
-        return ExitCode::from(1);
-    };
-    let options = GenerateOptions { output_dir };
-    let root = match resolve_root(&cwd) {
-        Ok(root) => root,
-        Err(error) => return fail_public(&error),
-    };
-    let preparation = match prepare(&root) {
-        Ok(preparation) => preparation,
-        Err(error) => return fail_public(&error),
-    };
-    let dispatch = match mode {
-        Some(text) => match parse_dispatch_mode(&text) {
-            Ok(mode) => Some(mode),
-            Err(error) => return fail_public(&error),
-        },
-        None => None,
-    };
-    match generate_dispatched(&preparation, &options, dispatch) {
-        Ok(report) => {
-            if let Some(dir) = &options.output_dir {
-                eprintln!("Preview: {}", absolute_preview(&cwd, dir).display());
-                eprintln!("Repository: {}", root.display());
-            }
-            for path in &report.files_written {
-                eprintln!("{path}");
-            }
-            for recommendation in &report.recommendations {
-                eprintln!("{recommendation}");
-            }
-            ExitCode::SUCCESS
-        }
-        Err(error) => fail_public(&error),
-    }
-}
-
-/// Absolute preview path for the stderr report; canonical when possible.
-fn absolute_preview(cwd: &Path, dir: &Path) -> PathBuf {
-    let joined = if dir.is_absolute() {
-        dir.to_path_buf()
-    } else {
-        cwd.join(dir)
-    };
-    joined.canonicalize().unwrap_or(joined)
 }
 
 /// Read the working directory, reporting failures as exit 1.

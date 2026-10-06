@@ -5,34 +5,10 @@
 use super::*;
 
 #[test]
-fn baseline_publish_and_download_rules() {
+fn baseline_publish_requires_protected_push() {
     assert!(publish_event_eligible(WorkflowEvent::Push));
     assert!(!publish_event_eligible(WorkflowEvent::PullRequest));
     assert!(!publish_event_eligible(WorkflowEvent::MergeGroup));
-    let base = "a".repeat(40);
-    let dir = Path::new("/tmp/x");
-    let name = format!("velnor-baseline-{base}-{}", digest_b3(b"c"));
-    let named: Vec<String> = baseline_download_args(
-        &base,
-        ".github/workflows/ci.yml",
-        "testmain",
-        Some(&name),
-        7,
-        dir,
-        "o/r",
-    )
-    .iter()
-    .map(|arg| arg.to_string_lossy().into_owned())
-    .collect();
-    assert_eq!(&named[0..4], &["run", "download", "7", "--name"]);
-    assert_eq!(named[4], name);
-    assert_eq!(&named[named.len() - 2..], &["--repo", "o/r"]);
-    assert!(baseline_download_args(&base, "w", "b", None, 7, dir, "o/r").is_empty());
-    assert!(baseline_download_args(&base, "w", "b", Some(""), 7, dir, "o/r").is_empty());
-    assert!(
-        baseline_download_args(&base, "w", "b", Some(&name), 7, dir, "not-a-slug").is_empty(),
-        "a malformed repo yields no unscoped command"
-    );
 }
 
 /// Minimal valid manifest JSON for `base`/`name`, run 7 attempt 1.
@@ -55,6 +31,7 @@ fn manifest_json(base: &str, name: &str) -> serde_json::Value {
         "artifact_id": numeric,
         "artifact_name": name,
         "tasks": [],
+        "parent": serde_json::Value::Null,
     })
 }
 
@@ -100,12 +77,13 @@ fn marker_plan(marker: &str) -> velnor_actions_contract::Plan {
     };
     let digest = digest_b3(b"d");
     Plan {
-        schema: 1,
+        schema: Plan::SCHEMA,
         run_key: "local".to_owned(),
         plan_id: "plan-local".to_owned(),
         base: Some("a".repeat(40)),
         head: "head".to_owned(),
         event: WorkflowEvent::PullRequest,
+        qualification: None,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,
@@ -151,6 +129,7 @@ fn empty_discovery() -> crate::discover::Discovery {
         },
         recommendations: Vec::new(),
         consumer_manifest_json: None,
+        consumer_manifest_stand_in: false,
         skipped_non_utf8: false,
         tofu_note: None,
         tofu_units: Vec::new(),
@@ -192,7 +171,7 @@ fn anchored_checkout(slug: &str) -> tempfile::TempDir {
     tmp
 }
 
-/// Valid manifest over `slug`/`base` except one forwarded proof run.
+/// Valid manifest over `slug`/`base` except an unbound forwarded proof.
 fn forwarded_manifest(slug: &str, base: &str) -> BaselineManifest {
     let digest = digest_b3(b"d");
     let name = super::provenance_check::baseline_artifact_name(base, &digest).expect("name");
@@ -217,15 +196,17 @@ fn forwarded_manifest(slug: &str, base: &str) -> BaselineManifest {
             input_digest: digest.clone(),
             closure_digest: digest,
             proof_run_id: 5,
+            carried_from: None,
             observed_run_id: 7,
             external_data: None,
             proof: None,
         }],
+        parent: None,
         expires_at_unix: None,
     }
 }
 
-/// Forwarded proofs fail closed at the caller: the plan marks the
+/// Forwarded proofs without lineage fail closed at the caller: the plan marks the
 /// baseline unavailable with the exact miss token, warns once, and
 /// keeps every obligation executing.
 #[test]
@@ -246,7 +227,7 @@ fn forwarded_proof_marks_baseline_unavailable() {
         catalog: &catalog,
         repository: None,
     };
-    apply_baseline(
+    let used = apply_baseline(
         &mut plan,
         WorkflowEvent::PullRequest,
         inputs,
@@ -255,6 +236,7 @@ fn forwarded_proof_marks_baseline_unavailable() {
         None,
     )
     .expect("classify");
+    assert!(used.is_none(), "rejected manifest must not be used");
     assert_eq!(
         plan.baseline.reason(),
         Some("baseline_invalid:originating_run_unverified")
@@ -301,7 +283,7 @@ fn source_build_keeps_marker_without_lock_fill() {
         catalog: &catalog,
         repository: None,
     };
-    apply_baseline(
+    let used = apply_baseline(
         &mut plan,
         WorkflowEvent::PullRequest,
         inputs,
@@ -310,6 +292,7 @@ fn source_build_keeps_marker_without_lock_fill() {
         None,
     )
     .expect("classify");
+    assert!(used.is_none(), "source build must not use a manifest");
     assert_eq!(plan.generator.sha256, marker, "no lock fill");
     assert_eq!(
         plan.baseline.reason(),

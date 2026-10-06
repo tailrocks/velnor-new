@@ -6,7 +6,11 @@
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_contract::{FinalStatus, Plan};
+use velnor_actions_contract::cachekey::{PlatformInputs, observed_platform_id};
+use velnor_actions_contract::{
+    FinalStatus, Plan, PlannedPlatform, PlatformBinding, PlatformRunnerEnvironment,
+    PlatformUnavailableReason, TaskReport, canonical_json_bytes,
+};
 
 use super::task_report_tests::{CLIPPY, TEST, fixture_plan, staged_run};
 use super::*;
@@ -152,6 +156,83 @@ fn merge_fails_failing_obligation_and_blocks_downstream() {
 }
 
 #[test]
+fn merge_rejects_hosted_observation_for_custom_plan_entry() {
+    let mut plan = fixture_plan();
+    let custom = PlannedPlatform::new(
+        "scale-set:velnor+ubuntu-26.04-scale-set",
+        "x86_64-unknown-linux-gnu",
+    )
+    .expect("custom platform");
+    plan.matrix.include[0].planned_platform = custom.clone();
+    plan.validate().expect("plan carries custom lane placement");
+
+    let temp = staged_run(&plan, "local");
+    let run = temp.path().join("velnor").join("local");
+    write_task_report_to("local", CLIPPY, 0, None, &[TEST.to_owned()], temp.path())
+        .expect("clippy");
+    write_task_report_to("local", TEST, 0, None, &[], temp.path()).expect("test");
+
+    let entry = &plan.matrix.include[0];
+    let obligation = plan
+        .obligations
+        .iter()
+        .find(|obligation| obligation.task_id == CLIPPY)
+        .expect("clippy obligation");
+    let report_id = velnor_actions_contract::task_report_id_for_task(
+        "local",
+        &entry.matrix_key,
+        &obligation.task_digest,
+    )
+    .expect("report ID");
+    let report_path = run
+        .join(&entry.matrix_key)
+        .join("tasks")
+        .join(format!("{report_id}.json"));
+    let mut report: TaskReport =
+        serde_json::from_slice(&fs::read(&report_path).expect("task report"))
+            .expect("typed task report");
+    let facts = PlatformInputs {
+        os: "linux".to_owned(),
+        arch: "x86_64".to_owned(),
+        runs_on: custom.runs_on.clone(),
+        image_os: "ubuntu26".to_owned(),
+        image_version: "20261005.1.0".to_owned(),
+        target: custom.target.clone(),
+    };
+    report.platform_binding = PlatformBinding::Observed {
+        planned_platform_id: custom.platform_id,
+        runner_environment: PlatformRunnerEnvironment::GithubHosted,
+        observed_platform_id: observed_platform_id(&facts).expect("observed identity"),
+        inputs: facts,
+    };
+    fs::write(
+        &report_path,
+        canonical_json_bytes(&report).expect("canonical report"),
+    )
+    .expect("tamper report");
+    stage_downloads(&plan, &temp);
+
+    let request = assemble_with_needs(
+        "local",
+        &run,
+        Some(r#"{"plan":"success"}"#),
+        Some(r#"["plan"]"#),
+        Some("pull_request"),
+        Some(PR_PAYLOAD),
+    )
+    .expect("assemble merge request");
+    let verdict: velnor_actions_contract::FinalReport =
+        serde_json::from_str(&merge_internal(&request).expect("merge")).expect("final report");
+    assert_ne!(verdict.status, FinalStatus::Passed);
+    assert!(
+        verdict
+            .miss_reasons
+            .iter()
+            .any(|reason| reason == "cache_corrupt")
+    );
+}
+
+#[test]
 fn merge_blocks_all_skipped_noop_end_to_end() {
     let plan = fixture_plan();
     let temp = staged_run(&plan, "local");
@@ -232,8 +313,9 @@ fn provider_hit_validate_execution_aggregates_executed() {
     use std::collections::BTreeMap;
     use velnor_actions_contract::{ExecuteTaskIds, MatrixStatus, Trust, WorkflowEvent, digest_b3};
     let plan = fixture_plan();
-    let task_id = "stack/tofu/stacks/a/validate/default";
+    let task_id = "stack/tofu/dir-737461636b732f61/validate/default";
     let task_digest = digest_b3(b"tofu-validate-task");
+    let locator = velnor_actions_tofu::tofu_root_locator("stacks/a").expect("valid exact root");
     let entry = MatrixEntry::derive(
         "tofu",
         task_id,
@@ -249,10 +331,11 @@ fn provider_hit_validate_execution_aggregates_executed() {
         &digest_b3(b"tofu-validate-inputs"),
         "local",
         "tofu-stacks-a",
+        PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("planned platform"),
     )
     .expect("tofu entry derives");
     let task = TaskReport {
-        schema: 1,
+        schema: TaskReport::SCHEMA,
         task_report_id: task_report_id_for_task("local", &entry.matrix_key, &task_digest)
             .expect("report id"),
         run_key: "local".to_owned(),
@@ -266,11 +349,16 @@ fn provider_hit_validate_execution_aggregates_executed() {
         not_selected_reason: None,
         cache: CacheOutcome {
             layer: CacheLayer::TofuProviders,
-            key: "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-stacks-a-0123456789ab"
-                .to_owned(),
+            key: format!("velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-{locator}"),
             result: CacheResult::Hit,
             miss_reason: None,
         },
+        platform_binding: PlatformBinding::unavailable(
+            &entry.planned_platform.platform_id,
+            PlatformRunnerEnvironment::Unknown,
+            PlatformUnavailableReason::ObservationNotRecorded,
+        )
+        .expect("missing observation is explicit"),
         exit_code: 0,
         duration_ms: None,
         outputs: vec![],

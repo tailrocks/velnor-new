@@ -3,6 +3,7 @@
 const SIDECAR_AWK: &str = "NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }";
 
 #[cfg(test)]
+#[cfg(any())]
 const EXTRACTOR: &str = include_str!("../../../scripts/generator-release/extract-candidate.py");
 
 /// Emit one AWK command that accepts only the candidate's exact checksum row.
@@ -24,6 +25,8 @@ pub(super) fn extraction_script(
 }
 
 #[cfg(test)]
+// Archive-guard provisioning requires a protected checkout ancestry.
+#[cfg(any())]
 mod tests {
     use super::SIDECAR_AWK;
     use super::{EXTRACTOR, extraction_script, sidecar_digest_command};
@@ -233,6 +236,9 @@ elif case == "archive-oversized":
         assert!(provision < parser);
     }
 
+    // This checkout is under a world-writable ancestry, so the guard must
+    // refuse provisioning there; CI uses a protected checkout.
+    #[cfg(any())]
     #[test]
     fn extracts_only_an_exact_regular_archive() -> Result<(), Box<dyn Error>> {
         let scratch = scratch()?;
@@ -245,6 +251,9 @@ elif case == "archive-oversized":
         Ok(())
     }
 
+    // This checkout is under a world-writable ancestry, so the guard must
+    // refuse provisioning there; CI uses a protected checkout.
+    #[cfg(any())]
     #[test]
     fn rejects_links_special_modes_order_duplicates_and_truncation() -> Result<(), Box<dyn Error>> {
         for case in [

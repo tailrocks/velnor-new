@@ -11,8 +11,8 @@
 #                     upstream evidence, deny policy; the live advisory scan
 #                     runs in CI, not here)
 #   generated-tree    build the CLI, `generate --output-dir` to a temp dir,
-#                     and `diff -r` schema-1 files. Schema-2 workflow files are
-#                     left out of that diff and locked by the orchestrator test.
+#                     and `diff -r` the committed `.github` tree, including
+#                     schema-2 workflows, against `generate --output-dir`.
 #   clippy-<crate>    per-crate pinned `cargo clippy --all-targets -- -D warnings`
 #   test-<crate>      per-crate pinned `cargo test` (unit plus integration plus doc)
 #   doctest-<crate>   per-crate pinned `cargo test --doc` for crates with library
@@ -68,36 +68,38 @@ if ! command -v mise >/dev/null 2>&1; then
   exit 1
 fi
 
+toml_tool_pin() {
+  local file="$1" key="$2"
+  awk -v key="$key" -f "$ROOT/scripts/toml-tool-pin.awk" "$file"
+}
+
 # --- pinned toolchain ----------------------------------------------------------
 # Specs come from mise.toml [tools]; each must equal the CI mirror
 # (.velnor/version-policy.toml [tools], itself checked against the compiled
 # catalog by dogfood generate), so local runs use CI's exact pins.
 echo "--- verify-local: toolchain"
 SPECS=""
-SPECS="$(python3 -c '
-import sys, tomllib
-mise = tomllib.load(open("mise.toml", "rb")).get("tools", {})
-policy = tomllib.load(open(".velnor/version-policy.toml", "rb")).get("tools", {})
-pairs = [
-    ("rust", "rust", "rust"),
-    ("mr-boxington", "mr-boxington", "mr-boxington"),
-    ("aqua:nextest-rs/nextest/cargo-nextest", "nextest", "nextest"),
-]
-specs = []
-for tool, mkey, pkey in pairs:
-    mv = mise.get(tool)
-    pv = policy.get(pkey)
-    if not mv or not pv or mv != pv:
-        print(f"pin drift: mise.toml[{mkey}]={mv!r} vs version-policy[{pkey}]={pv!r}", file=sys.stderr)
-        sys.exit(1)
-    specs.append(f"{tool}@{mv}")
-print(" ".join(specs))
-' 2>"/tmp/verify-local-toolchain.log")"
-if [ -z "$SPECS" ]; then
+RUST_MISE="$(toml_tool_pin mise.toml rust 2>"/tmp/verify-local-toolchain.log")"
+RUST_POLICY="$(toml_tool_pin .velnor/version-policy.toml rust 2>>"/tmp/verify-local-toolchain.log")"
+MBX_MISE="$(toml_tool_pin mise.toml mr-boxington 2>>"/tmp/verify-local-toolchain.log")"
+MBX_POLICY="$(toml_tool_pin .velnor/version-policy.toml mr-boxington 2>>"/tmp/verify-local-toolchain.log")"
+NEXTEST_MISE="$(toml_tool_pin mise.toml aqua:nextest-rs/nextest/cargo-nextest 2>>"/tmp/verify-local-toolchain.log")"
+NEXTEST_POLICY="$(toml_tool_pin .velnor/version-policy.toml nextest 2>>"/tmp/verify-local-toolchain.log")"
+if [ -z "$RUST_MISE" ] || [ -z "$RUST_POLICY" ] ||
+   [ -z "$MBX_MISE" ] || [ -z "$MBX_POLICY" ] ||
+   [ -z "$NEXTEST_MISE" ] || [ -z "$NEXTEST_POLICY" ]; then
   cat "/tmp/verify-local-toolchain.log" >&2 || true
   echo "verify-local: FAIL: toolchain (pin drift; log: /tmp/verify-local-toolchain.log)"
   exit 1
 fi
+if [ "$RUST_MISE" != "$RUST_POLICY" ] || [ "$MBX_MISE" != "$MBX_POLICY" ] ||
+   [ "$NEXTEST_MISE" != "$NEXTEST_POLICY" ]; then
+  echo "pin drift: mise.toml rust=$RUST_MISE mr-boxington=$MBX_MISE nextest=$NEXTEST_MISE" >&2
+  echo "           version-policy rust=$RUST_POLICY mr-boxington=$MBX_POLICY nextest=$NEXTEST_POLICY" >&2
+  echo "verify-local: FAIL: toolchain (pin drift; log: /tmp/verify-local-toolchain.log)"
+  exit 1
+fi
+SPECS="rust@$RUST_MISE mr-boxington@$MBX_MISE aqua:nextest-rs/nextest/cargo-nextest@$NEXTEST_MISE"
 echo "pinned specs: $SPECS"
 # Order is fixed by the pairs list above: rust, mr-boxington, nextest.
 # shellcheck disable=SC2206
@@ -105,7 +107,7 @@ _PIN_PARTS=($SPECS)
 RUST_PIN="${_PIN_PARTS[0]#*@}"
 MBX_PIN="${_PIN_PARTS[1]#*@}"
 NEXTEST_PIN="${_PIN_PARTS[2]#*@}"
-POLICY_MISE="$(python3 -c 'import tomllib; print(tomllib.load(open(".velnor/version-policy.toml", "rb"))["tools"]["mise"])')"
+POLICY_MISE="$(toml_tool_pin .velnor/version-policy.toml mise 2>"/tmp/verify-local-mise-policy.log")"
 LOCAL_MISE="$(mise --version 2>/dev/null | awk "{print \$1}")"
 echo "mise: local $LOCAL_MISE, policy $POLICY_MISE"
 if [ "$LOCAL_MISE" != "$POLICY_MISE" ]; then
@@ -119,6 +121,22 @@ if ! mise install "${SPEC_ARR[@]}" >>"/tmp/verify-local-toolchain.log" 2>&1; the
   exit 1
 fi
 MISE_EXEC=(mise exec "${SPEC_ARR[@]}" --)
+repo_policy() {
+  local action="$1"
+  env \
+    VELNOR_INTERNAL_OP=repo-policy-v1 \
+    VELNOR_REPO_POLICY_ACTION="$action" \
+    VELNOR_REPO_POLICY_ROOT="$ROOT" \
+    "${MISE_EXEC[@]}" cargo run --quiet --locked -p velnor-actions-cli \
+      --bin velnor-actions
+}
+POLICY_SPECS="$(repo_policy toolchain-specs 2>"/tmp/verify-local-toolchain-policy.log")"
+if [ "$POLICY_SPECS" != "$SPECS" ]; then
+  fail "toolchain (Rust policy specs '$POLICY_SPECS' != bootstrap pins '$SPECS'; log: /tmp/verify-local-toolchain-policy.log)"
+  echo "verify-local: FAIL:$FAILURES"
+  exit 1
+fi
+POLICY_MISE="$(repo_policy mise-version 2>"/tmp/verify-local-mise-policy.log")"
 # The effective binaries must BE the pins: a symlink-rust or an ambient
 # cargo-nextest next to cargo can otherwise shadow the pinned tools.
 CARGO_VER="$("${MISE_EXEC[@]}" cargo --version 2>>"/tmp/verify-local-toolchain.log" | awk "{print \$2}")"
@@ -163,11 +181,12 @@ if [ -f "$RUNNER_MANIFEST" ]; then
     stage runner-test "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace
   fi
   stage runner-doctest "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace --doc
-  stage runner-deny mise exec "cargo-deny@0.20.2" -- cargo deny --locked --manifest-path "$RUNNER_MANIFEST" --config "crates/velnor-runner/deny.toml" check
+  # Invoke the pinned binary. A cargo shim can reject the deny subcommand.
+  stage runner-deny mise exec "cargo-deny@0.20.2" -- cargo-deny --locked --manifest-path "$RUNNER_MANIFEST" --config "crates/velnor-runner/deny.toml" check
 fi
 
 # --- repo policy -----------------------------------------------------------
-stage repo-policy scripts/check-freshness.sh
+stage repo-policy "${MISE_EXEC[@]}" bash scripts/check-freshness.sh
 
 # --- generated-tree freshness ----------------------------------------------
 GEN_DIR=""
@@ -182,38 +201,24 @@ else
     if [ -z "$BIN" ] && [ -n "${CARGO_TARGET_DIR:-}" ]; then
       BIN="$(find "$CARGO_TARGET_DIR/debug" "$CARGO_TARGET_DIR/release" -maxdepth 1 -name velnor-actions -type f 2>/dev/null | head -n 1)"
     fi
-    # Schema 1 does not emit these. They are schema-2 generator bytes.
-    STRIP="$(mktemp -d 2>/dev/null || true)"
-    if [ -z "$STRIP" ]; then
-      fail "generated-tree (mktemp failed)"
+    # Schema 2 emits the full product workflow set; compare it directly.
+    if [ -n "$BIN" ] && "$BIN" generate --output-dir "$GEN_DIR/tree" \
+      >"/tmp/verify-local-generated-run.log" 2>&1 &&
+      diff -r --brief .github "$GEN_DIR/tree/.github" \
+        >"/tmp/verify-local-generated-diff.log" 2>&1; then
+      pass "generated-tree"
     else
-      cp -R .github "$STRIP/github"
-      rm -f \
-        "$STRIP/github/workflows/qualification.yml" \
-        "$STRIP/github/workflows/image-release.yml" \
-        "$STRIP/github/workflows/macos-binary-release.yml" \
-        "$STRIP/github/workflows/generator-release.yml"
-      if [ -n "$BIN" ] && "$BIN" generate --output-dir "$GEN_DIR/tree" \
-        >"/tmp/verify-local-generated-run.log" 2>&1 &&
-        diff -r --brief "$STRIP/github" "$GEN_DIR/tree/.github" \
-          >"/tmp/verify-local-generated-diff.log" 2>&1; then
-        pass "generated-tree"
-      else
-        fail "generated-tree (see /tmp/verify-local-generated-*.log)"
-      fi
+      fail "generated-tree (see /tmp/verify-local-generated-*.log)"
     fi
   else
     fail "generated-tree (build failed: /tmp/verify-local-generated-build.log)"
   fi
   rm -rf "$GEN_DIR"
-  if [ -n "${STRIP:-}" ]; then
-    rm -rf "$STRIP"
-  fi
 fi
 
 # --- per-crate clippy, tests, doctests, docs ---------------------------------
 MEMBERS=""
-MEMBERS="$("${MISE_EXEC[@]}" python3 -c 'import json,subprocess; print(" ".join(sorted(p["name"] for p in json.loads(subprocess.run(["cargo","metadata","--locked","--no-deps","--format-version","1","--offline"],capture_output=True,text=True,check=True).stdout)["packages"])))' 2>/tmp/verify-local-crate-list.log)"
+MEMBERS="$(repo_policy workspace-members 2>/tmp/verify-local-crate-list.log)"
 if [ -z "$MEMBERS" ]; then
   fail "crate-list (log: /tmp/verify-local-crate-list.log)"
 else
@@ -226,7 +231,7 @@ else
     stage "test-$safe" "${MISE_EXEC[@]}" cargo test --locked -p "$member"
   done
   LIB_MEMBERS=""
-  LIB_MEMBERS="$("${MISE_EXEC[@]}" python3 -c 'import json,subprocess; print(" ".join(sorted(p["name"] for p in json.loads(subprocess.run(["cargo","metadata","--locked","--no-deps","--format-version","1","--offline"],capture_output=True,text=True,check=True).stdout)["packages"] if any("lib" in t.get("kind", []) for t in p["targets"]))))' 2>/tmp/verify-local-doctest-list.log)"
+  LIB_MEMBERS="$(repo_policy library-members 2>/tmp/verify-local-doctest-list.log)"
   if [ -z "$LIB_MEMBERS" ]; then
     fail "doctest-list (log: /tmp/verify-local-doctest-list.log)"
   else

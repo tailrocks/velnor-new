@@ -1,5 +1,4 @@
-//! A launch row occupies one slot until cleanup is proven.
-//! Busy means occupancy or the running count has reached capacity.
+//! Durable launch rows own capacity until their cleanup proof commits.
 
 use crate::IntentState;
 use crate::journal::Journal;
@@ -7,24 +6,56 @@ use crate::reconcile::IntentRow;
 use crate::scale_set::EnsureError;
 use crate::stage::PairEngine;
 
-pub(super) async fn busy<E: PairEngine + ?Sized>(
+pub(super) async fn busy_except<E: PairEngine + ?Sized>(
     journal: &Journal,
     engine: &E,
     capacity: u32,
+    except: Option<&str>,
 ) -> Result<bool, EnsureError> {
-    if occupied(journal).await? >= capacity {
+    if occupied_except(journal, except).await? >= capacity {
         return Ok(true);
     }
     Ok(running_count(journal, engine).await? >= capacity)
 }
 
 pub(super) async fn occupied(journal: &Journal) -> Result<u32, EnsureError> {
+    occupied_except(journal, None).await
+}
+
+/// Occupied permits, excluding one idless uncertain subject.
+///
+/// That subject is the redelivered `m{message_id}r{request_id}`. Its empty row
+/// must not block its own mint at admission. A docker id, a dind id, or a
+/// worker volume still holds the permit.
+pub(super) async fn occupied_except(
+    journal: &Journal,
+    except: Option<&str>,
+) -> Result<u32, EnsureError> {
     let rows = journal.rows().await.map_err(map_journal)?;
-    let count = rows.iter().filter(|row| holds(row)).count();
+    let count = rows
+        .iter()
+        .filter(|row| holds(row) && !idless_self(row, except))
+        .count();
     u32::try_from(count).map_err(|_| EnsureError::Unexpected {
         status: 0,
         step: "capacity",
     })
+}
+
+fn idless_self(row: &IntentRow, except: Option<&str>) -> bool {
+    let Some(subject) = except else {
+        return false;
+    };
+    // An attempted acquire or JIT may have applied its effect. That row keeps
+    // its reservation even without worker ids; only a never-attempted empty
+    // row is safe to except for its own redelivered mint.
+    row.subject == subject
+        && row.state == IntentState::Uncertain
+        && !row.acquire_attempted
+        && !row.jit_requested
+        && row.docker_id.as_deref().is_none_or(str::is_empty)
+        && row.dind_id.as_deref().is_none_or(str::is_empty)
+        && row.worker_volume.as_deref().is_none_or(str::is_empty)
 }
 
 pub(super) async fn running_count<E: PairEngine + ?Sized>(
@@ -34,10 +65,7 @@ pub(super) async fn running_count<E: PairEngine + ?Sized>(
     let rows = journal.rows().await.map_err(map_journal)?;
     let mut count = 0u32;
     for row in &rows {
-        if !holds(row) {
-            continue;
-        }
-        let Some(id) = row.docker_id.as_deref() else {
+        let Some(id) = row.docker_id.as_deref().filter(|_| holds(row)) else {
             continue;
         };
         if engine.running(id).await.map_err(map_docker)? {
@@ -193,8 +221,18 @@ async fn delete_owned<E: PairEngine + ?Sized>(
     }
 }
 
+/// Keep exited workers occupied until a durable completion path proves cleanup.
+///
+/// Local container exit does not prove the official runner is absent. The
+/// completion reconciler owns container and volume removal after that proof.
 pub(super) fn holds(row: &IntentRow) -> bool {
-    row.kind == "launch" && !row.cleanup_proven && row.state != IntentState::Failed
+    row.kind == "launch"
+        && !row.cleanup_proven
+        && (row.state != IntentState::Failed
+            || row.docker_id.is_some()
+            || row.dind_id.is_some()
+            || row.worker_volume.is_some()
+            || row.github_runner_id.is_some())
 }
 
 fn map_journal(error: crate::error::HostError) -> EnsureError {

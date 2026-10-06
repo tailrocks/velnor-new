@@ -3,10 +3,11 @@ use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::internal_plan::identities::{platform_id_for_group, toolchain_digest_for};
 use crate::internal_plan::snapshot::canonical_digest;
+use crate::internal_plan::snapshot::platform_target_for_group;
 use crate::internal_plan::{IdentityInputs, execute_ids, task_identity_digest};
 use std::path::Path;
 use velnor_actions_contract::{
-    MatrixEntry, NamedCheckLane, ObligationDecision, PlanGenerator, PlanObligation,
+    MatrixEntry, NamedCheckLane, ObligationDecision, PlanGenerator, PlanObligation, PlannedPlatform,
 };
 use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};
 
@@ -64,6 +65,7 @@ pub(crate) fn derive_lanes_until(
     let toolchain = toolchain_digest_for(task, catalog).map_err(internal_contract)?;
     let platform =
         platform_id_for_group(&item.check.runner.label, task).map_err(internal_contract)?;
+    let planned_platform = planned_platform_for_check(&item.check.runner.label, task)?;
     let graph =
         canonical_digest(&(&item.check.id, &item.check.directory)).map_err(internal_contract)?;
     let mut closure =
@@ -120,6 +122,7 @@ pub(crate) fn derive_lanes_until(
             run_key,
             &lane.job_id,
             lane.variant,
+            planned_platform.clone(),
         )
         .map_err(internal_contract)?;
         entry.declared_outputs = item
@@ -131,4 +134,21 @@ pub(crate) fn derive_lanes_until(
         entries.push(entry);
     }
     Ok((obligation, entries))
+}
+
+/// Bind one named check's plan identity to its effective runner label.
+///
+/// Mise planning ignores the global label: the check's own
+/// `runner_profile` selects the runner, so the planned platform must
+/// commit to that same label to stay coherent with the group digest.
+fn planned_platform_for_check(
+    label: &str,
+    task: &velnor_actions_contract::ProposedTask,
+) -> Result<PlannedPlatform, OrchestratorError> {
+    let target = platform_target_for_group(label, task).map_err(internal_contract)?;
+    let planned = PlannedPlatform::new(&task.runner_profile, &target).map_err(internal_contract)?;
+    if planned.platform_id != platform_id_for_group(label, task).map_err(internal_contract)? {
+        return Err(internal("planned_platform_identity_mismatch"));
+    }
+    Ok(planned)
 }

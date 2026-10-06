@@ -2,7 +2,7 @@
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
+use velnor_actions_orchestrator::{GenerateOptions, generate, prepare, render_staged_tree};
 
 use crate::impl_common::{TestResult, git, make_repo, without_ambient_identity};
 
@@ -89,6 +89,43 @@ fn velnor_candidate_render_path_includes_release() -> TestResult {
         }
         Ok(())
     })
+}
+
+#[test]
+fn velnor_manifest_skip_keeps_generator_lock_validation() -> TestResult {
+    without_ambient_identity(
+        "velnor_manifest_skip_keeps_generator_lock_validation",
+        || {
+            let repo = make_repo(
+                "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n",
+            )?;
+            git(
+                &[
+                    "remote",
+                    "add",
+                    "origin",
+                    "https://github.com/tailrocks/velnor-new.git",
+                ],
+                repo.path(),
+            )?;
+            fs::write(
+                repo.path().join(".velnor/release-manifest.json"),
+                "not json",
+            )?;
+            fs::write(repo.path().join(".velnor/generator.lock"), "{nope")?;
+
+            let prep = prepare(repo.path())?;
+            assert_eq!(prep.discovery.consumer_manifest_json, None);
+            let err = render_staged_tree(&prep)
+                .err()
+                .ok_or("malformed generator lock was accepted")?;
+            assert!(
+                err.to_string().contains("malformed_lock_toml"),
+                "unexpected producer lock error: {err}"
+            );
+            Ok(())
+        },
+    )
 }
 
 #[test]

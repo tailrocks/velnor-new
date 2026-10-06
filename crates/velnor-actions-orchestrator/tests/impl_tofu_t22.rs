@@ -79,7 +79,6 @@ fn never_archive_mirrors_stay_equal_across_crates() {
 
 #[test]
 fn finalized_tofu_jobs_order_restore_before_work_before_save() -> TestResult {
-    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
     let repo = make_repo(&tofu_config("stacks/a"))?;
     let root = repo.path();
     fs::create_dir_all(root.join("stacks/a"))?;
@@ -98,8 +97,8 @@ fn finalized_tofu_jobs_order_restore_before_work_before_save() -> TestResult {
         );
         assert_eq!(
             job.steps[save].condition.as_deref(),
-            Some(CACHE_SAVE_CONDITION),
-            "{id} saves under the push-only gate"
+            Some("success() && github.event_name == 'push'"),
+            "{id} saves only for push, outside unvalidated dispatch"
         );
         renderer_steps::check_cache_step_order(&job.steps).map_err(|err| format!("{id}: {err}"))?;
     }
@@ -366,12 +365,11 @@ fn version_excluding_toolchain_diagnoses_while_provider_transport_renders() -> T
 }
 
 /// Fork composition: a fork event plans at PR trust and generates
-/// restore-everywhere plus push-gated saves, so fork runs are
-/// restore-only at runtime.
+/// restore-everywhere plus push-gated saves with dispatch denial, so fork
+/// runs are restore-only at runtime.
 #[test]
 fn fork_event_plans_pr_trust_and_generates_restore_only_roundtrip() -> TestResult {
     use super::impl_orch_core::plan_value;
-    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
     let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.tofu]\nroots = [\"stacks/a\"]\n";
     let dir = make_pure_tofu_repo(config, &[("stacks/a/main.tf", "variable \"x\" {}\n")])?;
     let root = dir.path();
@@ -391,8 +389,8 @@ fn fork_event_plans_pr_trust_and_generates_restore_only_roundtrip() -> TestResul
         let save = at("Save Tofu providers").ok_or(format!("{id} saves"))?;
         assert_eq!(
             job.steps[save].condition.as_deref(),
-            Some(CACHE_SAVE_CONDITION),
-            "{id} saves push-gated only: fork runs restore without saving"
+            Some("success() && github.event_name == 'push'"),
+            "{id} saves only on push: fork runs restore without saving"
         );
     }
     assert_eq!(seen, 1, "one tofu job for one root");

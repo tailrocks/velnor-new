@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
+    CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID, PullRequestCachePolicy,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
     REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ValidatorKind, VelnorSupportWorkflow, WorkflowIr,
@@ -24,6 +24,9 @@ use crate::{
 #[path = "render_action_pins.rs"]
 mod action_pins_impl;
 pub use action_pins_impl::action_pins;
+
+#[path = "validator_tools.rs"]
+mod validator_tools;
 
 pub use crate::matrix::{
     COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
@@ -93,8 +96,10 @@ pub struct RenderContext {
     /// review). Accepts fixed pre-seed staging for internal steps and
     /// requires the build-once artifact closure; never set for consumers.
     pub preseed: bool,
-    /// Sorted isolated verification jobs with per-runner Mise pins.
-    pub verification_tasks: Vec<crate::VerificationTaskPolicy>,
+    /// One sorted, variant-dispatched graph of explicitly declared workflow tasks.
+    pub workflow_tasks: Vec<crate::verification_jobs::WorkflowTaskPolicy>,
+    /// Pull-request cache writes; scoped writes require explicit same-repository opt-in.
+    pub pull_request_cache_policy: PullRequestCachePolicy,
     /// Caller-validated env for plan-job helper consumers: the freshness
     /// step and the `plan-v1` internal step run the helper, whose
     /// locked/offline qualification reads the Cargo home the Fetch step
@@ -115,6 +120,8 @@ pub struct ValidatorCommand {
     pub name: String,
     /// Fixed argument vector.
     pub argv: Vec<String>,
+    /// Explicit pinned-tool installation argv executed before `argv`.
+    pub prepare_argv: Vec<String>,
 }
 
 /// Fixed candidate-job vectors (Velnor policy only).
@@ -148,6 +155,10 @@ impl RenderContext {
             }
             if command.name.trim().is_empty() {
                 return Err(RenderError::BadCommand("empty_validator_name".to_owned()));
+            }
+            validator_tools::validate_validator_tool_closure(command)?;
+            if !command.prepare_argv.is_empty() {
+                commands::validate_command_argv(&command.prepare_argv)?;
             }
             commands::validate_command_argv(&command.argv)?;
         }
@@ -254,12 +265,7 @@ pub fn finalize_jobs(
     mise.validate()?;
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
     for (id, job) in &mut jobs {
-        if ctx
-            .verification_tasks
-            .iter()
-            .any(|task| task.owns_job_id(id))
-        {
-            crate::tool_seed::reject_orphan_seed(id, job)?;
+        if ctx.workflow_tasks.iter().any(|task| task.owns_job_id(id)) {
             closure::check_internal_staged(id, job, ctx.preseed)?;
             continue;
         }
@@ -277,15 +283,13 @@ pub fn finalize_jobs(
         } else {
             mise.clone()
         };
-        cache_p08::ensure_setup_p08(id, job, &setup, always, target, &ctx.checkout_uses)?;
-        cache_p08::check_no_rust_cache_with_mbx(id, job)?;
+        cache_p08::ensure_tools_cache_v2(id, job, &setup, always, target, &ctx.checkout_uses)?;
+        cache_p08::check_no_legacy_rust_cache(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
-    // Writer election needs every setup inserted: one saver per key.
-    cache_p08::elect_mise_cache_writers(&mut jobs)?;
-    // Provider election needs every restore inserted: one saver per key.
-    cache_p08::elect_tofu_provider_savers(&mut jobs)?;
+    // Both cache families are validated globally before either gets a save.
+    cache_p08::elect_cache_writers(&mut jobs)?;
     closure::check_plan_anchor(&jobs)?;
     preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
     closure::insert_plan_closure(&mut jobs, ctx)?;
@@ -293,11 +297,12 @@ pub fn finalize_jobs(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
+    crate::dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
     validate_final_jobs(ir, &jobs)?;
     Ok(jobs)
 }
 
-/// Revalidate each complete job after policy merge and all internal expansion.
+/// Validate every finalized job after policy merging and internal expansion.
 fn validate_final_jobs(ir: &WorkflowIr, jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
     let mut finalized = ir.clone();
     finalized.jobs.clone_from(jobs);
@@ -321,7 +326,7 @@ fn merged_jobs(
     ir.validate().map_err(RenderError::Contract)?;
     workflow_policy::check_triggers(&ir.triggers)?;
     workflow_policy::check_concurrency(&ir.concurrency)?;
-    workflow_policy::check_single_label(ir, &ctx.runs_on, &ctx.verification_tasks)?;
+    workflow_policy::check_single_label(ir, &ctx.runs_on, &ctx.workflow_tasks)?;
     let mut jobs = ir.jobs.clone();
     match policy {
         WorkflowPolicy::ConsumerV1 => support::reject_consumer_support(&jobs, support)?,
@@ -329,12 +334,16 @@ fn merged_jobs(
             support::merge_support_jobs(&mut jobs, support, ctx)?;
         }
     }
-    let verification_ids = crate::verification_jobs::validate_verification_jobs(
-        &jobs,
-        &ctx.verification_tasks,
-        &ctx.checkout_uses,
+    let workflow_task_ids =
+        crate::verification_jobs::workflow_task_jobs::validate_workflow_task_jobs(
+            &jobs,
+            &ctx.workflow_tasks,
+            &ctx.checkout_uses,
+        )?;
+    crate::verification_jobs::workflow_task_jobs::extend_required_needs(
+        &mut jobs,
+        &workflow_task_ids,
     )?;
-    crate::verification_jobs::extend_required_needs(&mut jobs, &verification_ids)?;
     msrv::check_no_msrv(&jobs)?;
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
@@ -364,16 +373,21 @@ fn render_merged(
         matrix::attach_plan_outputs(&mut document)?;
     }
     matrix::attach_crate_job_caps(&mut document, &caps)?;
-    let document = crate::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
     crate::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;
     steps::scan_for_private_subcommands(&text)?;
-    let mut files = shared.files;
-    if crate::tool_seed::any_job_has_seed(&jobs) {
-        files.push(crate::tool_seed::action_file(&ctx.generator_version)?);
+    let shared_files = crate::render_cache_files::with_runtime_identity_files(
+        shared.files,
+        &jobs,
+        &ctx.generator_version,
+    )?;
+    if crate::tool_seed::any_job_has_seed(&jobs)? {
+        return Err(RenderError::InvalidWorkflow(
+            "tool_seed_requires_tools_prelude".to_owned(),
+        ));
     }
     Ok(RenderedWorkflow {
         yaml: text,
-        shared: files,
+        shared: shared_files,
     })
 }

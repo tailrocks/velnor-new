@@ -62,24 +62,29 @@ consult the committed `mise.lock` — a lone lock is not enforced by mise
 (tampering is ignored), and config-visible verification would re-arm
 the code-execution paths those lanes avoid. The lock audit remains
 advisory hygiene for local development. Explicit verification-task jobs
-load repository Mise configuration only after credential variables are
-removed. They run `mise install --locked` before the declared task, so
-the project lock defines their tool closure and must be maintained with
-each task's change coverage. These jobs remain unconditional and
-uncached; they do not change the Rust lane's install path.
+inspect the repository Mise configuration only after credential variables are
+removed. They resolve only the selected task's declared tool closure, then
+install from a private configuration containing those exact source-bound lock
+rows; they do not install the project-wide tool inventory. The repository
+lock still needs maintenance whenever a selected task's tools change. These
+jobs remain unconditional and uncached; they do not change the Rust lane's
+install path.
 
 Repository-owned Mise execution uses explicit top-level `[[checks]]` declarations,
 independent of Rust task generation. Each declaration binds a task name,
 directory, input files, runner platform, tool pins, and optional named scenario
 evidence. Tools installation remains isolated; a separately qualified task
 projection grants only the declared task closure access to repository inputs.
-The removed Rust custom-task option is rejected as an unknown field. See the
+The removed Rust custom-task option is rejected as an unknown field. Explicit
+verification and native jobs use the same sorted `[[workflow.tasks]]` list with
+a strict `kind` discriminator. See the
 [implemented named-check contract](../implemented/named-mise-checks.md) for the
 execution boundary, trust admission, and Required evidence rules.
 
 ## 1.2. Isolated verification tasks
 
-Each `workflow.tasks` entry declares `id`, `kind = "verification"`, an exact
+Each verification entry in `workflow.tasks` declares `id`,
+`kind = "verification"`, an exact
 `mise_task`, `runner`, and bounded `timeout_minutes`. IDs must be sorted,
 unique, and safe as job keys; the generated base ID is `task-{id}`. The only
 V1 runners are `linux-x64` (`ubuntu-26.04`) and `macos-arm64` (`macos-15`),
@@ -95,14 +100,102 @@ required check.
 Task jobs grant only `contents: read`; other workflow permission scopes are
 explicitly `none`. Checkout disables persisted credentials. The pinned Mise
 setup action does not install project tools, activate repository env, or use
-cache inputs. The job unsets the credential denylist before both
-`mise install --locked` and `mise run <mise_task>`. It creates no task cache,
-artifact, or downstream output. The verification kind is for platform and
-other non-Rust checks only. Keeping task scripts free of Rust compilation is
-an authoring and review invariant; V1 does not inspect or enforce task bodies.
-Rust compilation remains in the existing MBX-backed lane pending a separate
-reviewed capability.
+cache inputs. The job resolves only the selected task's `tools` maps from root
+`mise.toml`, including tasks reached through declared dependencies and simple
+nested `mise run` calls. Every task in that closure must have a nonempty inline
+`run` body. File-task-only dependencies and metadata-only TOML tasks fail
+closed: pinned Mise can merge command-less TOML metadata onto a same-named
+task-file script while retaining the script body, which is not represented in
+the checked task closure. Unsupported custom task directories and task-file
+includes also fail closed. If the selected closure is nonempty, every
+selected tool must have an exact version and a source-bound current-platform
+lock row with an accepted prebuilt backend, HTTPS release URL, and SHA-256.
+Cargo registry and Git source
+backends, unlocked tools, unsupported selector or lock options, and
+unsupported task shapes fail closed. The only modeled options are the exact
+BoltFFI asset regex and Rust components/targets copied from the idiomatic
+toolchain file. Present settings must set `lockfile = true`; the only accepted
+idiomatic-version selector is `rust`, and Cargo binstall settings cannot turn
+either modeled flag off. Declared Cargo wrappers bind exactly to `mbx` with
+`MBX_CARGO_SHIM_MODE=1`. Other root tools are excluded from the private
+install config, so an unrelated `cargo:` tool cannot be installed by a
+verification job. An empty
+closure does not emit an install step. When tools are installed, the task runs
+with `mise run --skip-tools`; all runs disable auto-install, env loading, and
+hooks. The checked-out task config, lock, and Rust toolchain inputs are
+hash-bound to planning and checked again before the task runs. It creates no
+task cache, artifact, or downstream output. The verification kind is for
+platform and other non-Rust checks only. Keeping task scripts free of Rust
+compilation is an authoring and review invariant; V1 does not inspect or
+enforce task bodies. Rust compilation remains in the existing MBX-backed lane
+or the typed `build` variant below.
 Protected release/signing is separate and is not provided by this kind.
+
+## 1.3. Isolated native build variant
+
+At most one `workflow.tasks` entry with `kind = "build"` declares a task that
+may compile repository code. It carries a stable `id`, exact `mise_task`,
+`runner = "macos-26-arm64"`, a `timeout_minutes` from 1 through 180,
+`cargo_build_jobs` from 1 through 2, and `nextest_test_threads` from 1 through
+2. The task uses the same workflow-wide ID namespace and sorted list as every
+other task kind. The generated job key is `task-{id}`. This native job remains
+a single hosted macOS 26 ARM64 job in every schema-2 execution mode; it checks out the same run source and
+does not accept a repository or ref override.
+
+The job checks for Xcode 26.6 build 17F113 and macOS SDK 26.5 under
+`/Applications/Xcode_26.6.app/Contents/Developer`. Checkout disables
+persisted credentials. The pinned Mise action sets up only Mise itself. The
+job verifies the checked-out `mise.toml`, `mise.lock`, and
+`rust-toolchain.toml` against the source-bound digests, then creates a private
+task-owned Mise home containing only the declared tool closure and its exact
+locked rows, including the locked ARM64 checksum artifacts where required.
+It installs that isolated closure once with
+`MISE_CARGO_BINSTALL_ONLY=1`; any selected tool without an accepted locked
+prebuilt backend or artifact fails closed. The project Cargo selector is not
+installed as a tool: the checked-out `mise.toml` must route Cargo through the
+verified `mbx` wrapper, and the task's Rust compilation runs through that
+wrapper. All Mise inspection, install, exec, and task commands set
+`--no-env`; the task also inherits `MISE_NO_ENV=1`, so repository env files
+and `env._.source` directives cannot run or alter the selected tools. The
+checked config-file chain is compared before install and before task
+execution. The declared task runs from the checked-out root with
+`CARGO_BUILD_JOBS` and `NEXTEST_TEST_THREADS` from the validated limits,
+Mise task and exec auto-install disabled, and the same Xcode developer
+directory. Every shell step clears credential variables; the job grants only
+`contents: read` and creates no cache, artifact, or downstream output. The consumer's own
+task must bound SwiftPM invocation in its explicit task argv; Velnor does not
+invent a SwiftPM environment alias.
+
+Each declared native job is reconstructed and compared exactly during strict
+rendering. Undeclared `task-*` jobs, alternate runner labels, checkout
+source overrides, extra permissions, caches, artifacts, or altered task steps
+fail closed. Every native job ID is added to `Required.needs`, so failure,
+skip, or cancellation prevents the required check from succeeding. The
+compile-free `verification` variant remains separate in behavior and cannot
+acquire the native build capability by adding fields.
+
+## 1.4. Native platform image validation
+
+One `workflow.tasks` entry with `kind = "native-image"` declares an
+unconditional native-host image validation job in the same sorted ID
+namespace and generated `task-{id}` job namespace. Its closed fields are
+`id`, `platform = "linux-arm64"`, a repository-owned `script` below
+`maintained-image-build/`, `timeout_minutes` from 1 through 60, and
+`cache = "task-owned-builder"`. The script must be a tracked regular file
+whose path components are not symlinks. The runner is fixed to
+`ubuntu-26.04-arm`. The job verifies the checked-out script bytes against the
+planning-time digest, verifies the runner and Docker daemon are native Linux
+ARM64, then runs the script with the task ID and the `linux/arm64` OCI
+platform as its positional arguments. The build runs on native ARM64 hardware
+without QEMU emulation.
+
+The declared cache policy reserves task-owned BuildKit builder lifecycle to a
+later take: no builder is created and no cleanup step is emitted yet, so the
+repository script owns any image-layer caching it performs. Native-image jobs
+are hosted-only in every schema-2 execution mode, grant only `contents: read`,
+and join `Required`. Strict rendering reconstructs the exact runner, checkout,
+source guard, host guard, and task command; undeclared `task-*` jobs or
+altered steps fail closed.
 
 Checksums are TOFU (trust on first use): the first download that
 records a checksum trusts the bytes it received. Accepted residual,
@@ -114,7 +207,7 @@ bytes under the same exact pin. Out of scope for V1 (independent
 shasum channel, artifact transparency).
 
 Determinism follows per class: fixed Rust-lane steps from exact catalog
-pins, and verification jobs from the sorted committed task declarations.
+pins, and all typed-task jobs from the sorted committed task declarations.
 See
 [task-execution §2](task-execution-contract.md) for the fixed vectors
 and [workflow §3](workflow-contract.md) for the prepare step.

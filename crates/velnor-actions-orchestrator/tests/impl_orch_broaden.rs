@@ -237,7 +237,7 @@ fn cache_miss_never_fails_task() -> TestResult {
         &ob.task_digest,
     )?;
     let report: velnor_actions_contract::TaskReport = serde_json::from_value(
-        serde_json::json!({"schema": 1, "task_report_id": id, "run_key": "local", "event": "pull_request", "trust": "pr", "matrix_id": entry.id, "matrix_key": entry.matrix_key, "task_id": ob.task_id, "task_digest": ob.task_digest, "status": "executed", "cache": {"layer": "task", "key": "k", "result": "miss", "miss_reason": "no_entry"}, "exit_code": 0, "duration_ms": 1, "outputs": []}),
+        serde_json::json!({"schema": velnor_actions_contract::TaskReport::SCHEMA, "task_report_id": id, "run_key": "local", "event": "pull_request", "trust": "pr", "matrix_id": entry.id, "matrix_key": entry.matrix_key, "task_id": ob.task_id, "task_digest": ob.task_digest, "status": "executed", "cache": {"layer": "task", "key": "k", "result": "miss", "miss_reason": "no_entry"}, "platform_binding": {"state": "unavailable", "planned_platform_id": entry.planned_platform.platform_id, "runner_environment": "unknown", "reason": "observation_not_recorded"}, "exit_code": 0, "duration_ms": 1, "outputs": []}),
     )?;
     report.validate()?;
     let reports = passing_reports(&plan)?;

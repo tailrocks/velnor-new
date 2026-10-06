@@ -72,6 +72,18 @@ delete the set.
 States include `waiting_for_engine`, `waiting_for_credentials`, `reconciling`,
 `ready`, `draining`, and `degraded`.
 
+The read-only `status` and `doctor` observer must not report `ready` from an
+empty journal alone. It can report prerequisite failures or `reconciling`;
+`ready` requires a bounded controller-owned snapshot proving Docker ownership,
+journal state, and GitHub session/runner state agree. The CLI runs its current
+partial observer in a private child process and kills and reaps that child at
+the shared deadline; the child receives no secret argv, environment, or output.
+Config reads require a regular file and size cap. Journal inspection has a
+bounded file size, row count, and query deadline; exhausting any bound is
+degraded. A confirmed missing configuration or absent credential may report
+`waiting_for_credentials`; malformed, nonregular, oversized, and unreadable
+configuration reports `degraded`.
+
 Per-user LaunchAgent runs `velnor-host daemon run` in the foreground. No
 double-fork. State under `~/Library/Application Support/Velnor/`. Logs under
 `~/Library/Logs/Velnor/`. Private Unix socket. Not a root LaunchDaemon.
@@ -80,6 +92,10 @@ Default `max_jobs` is 1. Qualification must prove `N>1`. One host-wide capacity
 authority. A permit covers the top-level job lifecycle until cleanup is proven.
 Reserved, acquiring, uncertain, provisioning, idle, running, finishing,
 cleaning, and quarantined states all occupy a slot.
+A Docker 404 or explicit `exited`/`dead` status is required before a recorded
+container can be treated as absent or stopped. A missing or empty `Status` is
+uncertain even when `Running` is false; the permit stays occupied until pair
+cleanup is proven.
 
 ## 4. Protocol
 
@@ -141,6 +157,23 @@ worker's private DinD engine. The runner container is not privileged. The job
 does not receive the outer Docker socket, host home, Keychain, SSH agent,
 controller config, or management tokens.
 
+Every host configuration must set four per-job budgets under
+`[host.resources]`: `runner_cpu_millicores`, `runner_memory_bytes`,
+`dind_cpu_millicores`, and `dind_memory_bytes`. CPU is millicores; memory is
+bytes. There are no resource defaults. The controller validates each Docker
+limit, checked pair totals, and the selected daemon's CPU count before it opens
+a job session. It applies the runner limits to the unprivileged runner
+container and the DinD limits to the private privileged DinD container. Swap is
+limited to each container's memory limit.
+
+The configured pair CPU and memory totals are the per-job admission costs.
+Admission must also account for already occupied jobs and measured guest CPU,
+available memory, and Docker-root free space. Those measurements describe
+current headroom; they are not durable quotas. In particular, Docker named
+volumes have no per-job storage-size limit here. Free-space checks cannot stop
+a job from consuming the remaining Docker-root storage, so enforced storage
+isolation remains unproven.
+
 `/var/run/docker.sock` inside the runner and inside the private daemon resolves
 to that worker's socket, never the outer engine socket. Named volumes back
 work, temp, actions, tools, and the socket. JIT is delivered on a short-lived
@@ -154,9 +187,9 @@ Mount the same per-worker named work volume there in both containers. The
 runner and DinD images create that path as uid/gid `1000:1000`, mode `0755`,
 before the first empty-volume mount; DinD starts first and Docker initializes
 the volume from its image path. The entrypoint stages JIT only in its
-container-local `/tmp` and removes the file before starting the listener; it
-must not persist JIT under the named work volume. Checkout, tools, and job
-workspace use the shared writable volume for the runner user.
+container-local `/tmp` with mode `0600` and removes the file before starting
+the listener; it must not persist JIT under the named work volume. Checkout,
+tools, and job workspace use the shared writable volume for the runner user.
 
 Delete only objects whose immutable id matches the journal. Names are not
 delete authority. Foreign objects survive. A missing delete response is not
@@ -176,9 +209,12 @@ control jobs and single-writer publish, deploy, release, and baseline promotion
 stay single and hosted. A hosted catalog label cannot appear on a scale-set
 selector.
 
-Typed `[[workflow.tasks]]` jobs follow the same eligibility rule. Linux x64
-tasks emit both hosted and Scale Set jobs in `both`, and `Required` waits for
-both. In `hosted` or `scale-set`, each Linux task emits only its selected lane.
+Only `verification` entries in the shared `[[workflow.tasks]]` list follow
+the paired-lane eligibility rule. Linux x64 verification tasks emit both
+hosted and Scale Set jobs in `both`, and `Required` waits for both. In
+`hosted` or `scale-set`, each Linux verification task emits only its selected
+lane. Build and NativeImage variants remain hosted-only in every mode; a
+Scale Set profile override for either variant is rejected.
 macOS ARM64 tasks remain hosted in all modes because the Scale Set contract is
 Linux/amd64; they stay in `Required` but do not provide paired qualification.
 

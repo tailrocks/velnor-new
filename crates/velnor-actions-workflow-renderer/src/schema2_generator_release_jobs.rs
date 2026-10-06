@@ -8,7 +8,7 @@ use crate::yaml::Yaml;
 use velnor_actions_contract::ReleaseTarget;
 
 use super::super::features::{base, finish};
-use super::{GeneratorReleasePins, assets, manifest, workflow_steps};
+use super::{ProductReleasePins, assets, manifest, workflow_steps};
 
 pub(super) fn build_job(
     id: &str,
@@ -61,7 +61,7 @@ pub(super) fn attest_job(
     action: &str,
     runs_on: Yaml,
     product: assets::ProductAsset,
-    pins: &GeneratorReleasePins,
+    pins: &ProductReleasePins,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<(String, Yaml), RenderError> {
     let files = [product.binary, product.sidecar, product.provenance];
@@ -123,7 +123,7 @@ pub(super) fn attest_job(
 
 pub(super) fn publish_job(
     hosted: Yaml,
-    pins: &GeneratorReleasePins,
+    pins: &ProductReleasePins,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<(String, Yaml), RenderError> {
     let steps = publish_steps(pins)?;
@@ -203,7 +203,7 @@ fn publish_action_inputs() -> Vec<(&'static str, &'static str, &'static str)> {
     ]
 }
 
-fn publish_steps(pins: &GeneratorReleasePins) -> Result<Vec<Yaml>, RenderError> {
+fn publish_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, RenderError> {
     let mut steps = vec![workflow_steps::mise_step(
         pins.setup_for(ReleaseTarget::LinuxX86_64),
     )?];
@@ -250,7 +250,7 @@ fn publish_steps(pins: &GeneratorReleasePins) -> Result<Vec<Yaml>, RenderError> 
         &pins.gh_argv,
     )?);
     steps.push(workflow_steps::publish_step(
-        &manifest::publish_script(pins),
+        &manifest::publish_script(pins)?,
         &pins.gh_argv,
     )?);
     Ok(steps)

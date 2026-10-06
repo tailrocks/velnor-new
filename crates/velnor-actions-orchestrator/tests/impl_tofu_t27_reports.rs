@@ -115,7 +115,7 @@ fn tofu_duplicate_report_fails_required_not_run() -> TestResult {
 fn tofu_unknown_report_fails_required_planning_failed() -> TestResult {
     let (_repo, plan) = plan_for_tofu_change("stacks/a/main.tf")?;
     let mut reports = passing_reports(&plan)?;
-    let ghost_task = "stack/tofu/stacks/a/fmt/zz";
+    let ghost_task = "stack/tofu/dir-737461636b732f61/fmt/zz";
     let matrix_id = matrix_id_for_task_group("tofu", ghost_task)?;
     let matrix_key = matrix_key_for_id(&matrix_id)?;
     let digest = velnor_actions_contract::digest_b3(b"t27-ghost");

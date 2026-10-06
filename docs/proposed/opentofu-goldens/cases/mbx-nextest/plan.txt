@@ -17,11 +17,11 @@ Workflow to generate
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - actionlint (5 steps)
+    - actionlint (7 steps)
     - plan (11 steps)
     - publish-baseline (5 steps)
-    - required (9 steps)
-    - rust-app (16 steps)
+    - required (8 steps)
+    - rust-app (18 steps)
     - 1 Rust crate job
       Each: Clippy -> build -> run tests -> doctests -> doc build
       Entries:

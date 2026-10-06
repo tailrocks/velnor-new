@@ -224,10 +224,11 @@ pub(super) fn run_step(name: &str, run: &str) -> Yaml {
     ])
 }
 
-/// `gh` reads `GH_TOKEN`. The job token is not a dispatch input.
-pub(super) fn publish_step(run: &str) -> Yaml {
-    Yaml::Map(vec![
+/// Release-family publisher carrying a stable role ID through composition.
+pub(super) fn identified_publish_step(id: &str, run: &str) -> Yaml {
+    let fields = vec![
         ("name".to_owned(), Yaml::str("Publish GitHub release")),
+        ("id".to_owned(), Yaml::str(id)),
         (
             "env".to_owned(),
             Yaml::Map(vec![(
@@ -236,7 +237,8 @@ pub(super) fn publish_step(run: &str) -> Yaml {
             )]),
         ),
         ("run".to_owned(), Yaml::str(run)),
-    ])
+    ];
+    Yaml::Map(fields)
 }
 
 /// Local `./` action. actionlint 1.7.12 rejects `$/`, so the

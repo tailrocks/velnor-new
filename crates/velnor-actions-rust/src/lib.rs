@@ -50,8 +50,8 @@ pub use identity::{
 };
 pub use manifest_edges::manifest_edges;
 pub use metadata::{
-    METADATA_FORMAT_VERSION, MetadataError, PackageRecord, TargetRecord, WorkspaceRecord,
-    parse_metadata_json,
+    METADATA_FORMAT_VERSION, MetadataError, PackageRecord, TargetRecord, VelnorV1TaskOwner,
+    WorkspaceRecord, parse_metadata_json,
 };
 pub use metadata_edges::{DepKind, LocalEdge, SkippedPathEdge, local_edge_pairs};
 pub use profile::{

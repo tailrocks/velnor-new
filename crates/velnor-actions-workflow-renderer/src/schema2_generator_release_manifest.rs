@@ -5,7 +5,7 @@ use crate::yaml::Yaml;
 use velnor_actions_contract::RELEASE_MANIFEST_FILENAME;
 
 use super::super::features::{base, finish};
-use super::GeneratorReleasePins;
+use super::ProductReleasePins;
 use super::assets::{self, ASSETS, REPOSITORY, VERSION};
 use super::jobs;
 use super::workflow_steps::{self, with_needs, with_permissions};
@@ -33,7 +33,7 @@ fn manifest_script(rust_version: &str, mr_boxington_version: &str) -> String {
 /// Revalidate and attest the exact same-run candidate manifest.
 pub(super) fn job(
     hosted: Yaml,
-    pins: &GeneratorReleasePins,
+    pins: &ProductReleasePins,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<(String, Yaml), RenderError> {
     let mut steps = vec![workflow_steps::mise_step(
@@ -79,7 +79,7 @@ pub(super) fn job(
     ))
 }
 
-fn product_download_steps(pins: &GeneratorReleasePins) -> Vec<Yaml> {
+fn product_download_steps(pins: &ProductReleasePins) -> Vec<Yaml> {
     let mut steps = Vec::new();
     for asset in ASSETS {
         let artifact_id = format!(
@@ -99,7 +99,7 @@ fn product_download_steps(pins: &GeneratorReleasePins) -> Vec<Yaml> {
     steps
 }
 
-fn candidate_manifest_steps(pins: &GeneratorReleasePins) -> Result<Vec<Yaml>, RenderError> {
+fn candidate_manifest_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, RenderError> {
     let mut steps = Vec::new();
     steps.push(workflow_steps::download_step_by_id(
         "Download exact canonical candidate manifest",
@@ -166,12 +166,17 @@ fn manifest_action_inputs() -> Vec<(&'static str, &'static str, &'static str)> {
 }
 
 /// Rebuild the expected manifest from verified downloaded binaries and records.
-pub(super) fn publication_verify_script(pins: &GeneratorReleasePins) -> String {
+pub(super) fn publication_verify_script(pins: &ProductReleasePins) -> String {
     let candidate_path = candidate_path();
     format!(
         "{}\ncmp {FILE} {candidate_path}",
         manifest_script(&pins.rust_version, &pins.mr_boxington_version)
     )
+}
+
+/// Revalidate the canonical published manifest using the same source bytes.
+pub(super) fn verify_published_manifest_script(pins: &ProductReleasePins) -> String {
+    publication_verify_script(pins)
 }
 
 /// Verify exact canonical manifest bytes downloaded from the candidate job.
@@ -183,7 +188,7 @@ pub(super) fn manifest_digest_check_script() -> String {
 }
 
 /// Assemble release verification and creation in one parent shell.
-pub(super) fn publish_script(pins: &GeneratorReleasePins) -> String {
+pub(super) fn publish_script(pins: &ProductReleasePins) -> Result<String, RenderError> {
     publish::publish_script(pins)
 }
 
@@ -193,6 +198,10 @@ pub(super) fn acceptance_artifact_name() -> String {
 
 pub(super) fn acceptance_artifact_paths() -> [&'static str; 2] {
     publish::acceptance_artifact_paths()
+}
+
+pub(super) fn release_asset_path_list() -> Vec<String> {
+    publish::release_asset_path_list()
 }
 
 #[cfg(test)]
@@ -260,7 +269,7 @@ pub(super) fn manifest_attestation_bundle_path() -> String {
 
 fn attestation_fetch_script(subject: &str, name: &str) -> String {
     format!(
-        "test \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\nsubject='{subject}'\ndigest=\"$({})\"\ntest \"${{#digest}}\" -eq 64\ncase \"$digest\" in *[!0123456789abcdef]*|'') exit 1 ;; esac\nbundle=\"sha256:${{digest}}.jsonl\"\ntest ! -e \"$bundle\"\ndownloaded=false\nfor attempt in 1 2 3 4 5; do\n  if gh attestation download \"$subject\" --repo \"$GITHUB_REPOSITORY\" --predicate-type https://slsa.dev/provenance/v1 --limit 10 && test -s \"$bundle\"; then downloaded=true; break; fi\n  if test \"$attempt\" -lt 5; then sleep 3; fi\ndone\ntest \"$downloaded\" = true\ngh attestation verify \"$subject\" --repo \"$GITHUB_REPOSITORY\" --bundle \"$bundle\" --source-digest \"$GITHUB_SHA\" --source-ref refs/heads/main --signer-workflow \"${{GITHUB_REPOSITORY}}/.github/workflows/generator-release.yml\" --signer-digest \"$GITHUB_SHA\" > /dev/null\nmv \"$bundle\" \"{ATTESTATION_DIR}/{name}.intoto.jsonl\"",
+        "test \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\nsubject='{subject}'\ndigest=\"$({})\"\ntest \"${{#digest}}\" -eq 64\ncase \"$digest\" in *[!0123456789abcdef]*|'') exit 1 ;; esac\nbundle=\"sha256:${{digest}}.jsonl\"\ntest ! -e \"$bundle\"\ndownloaded=false\nfor attempt in 1 2 3 4 5; do\n  if gh attestation download \"$subject\" --repo \"$GITHUB_REPOSITORY\" --predicate-type https://slsa.dev/provenance/v1 --limit 10 && test -s \"$bundle\"; then downloaded=true; break; fi\n  if test \"$attempt\" -lt 5; then sleep 3; fi\ndone\ntest \"$downloaded\" = true\ngh attestation verify \"$subject\" --repo \"$GITHUB_REPOSITORY\" --bundle \"$bundle\" --source-digest \"$GITHUB_SHA\" --source-ref refs/heads/main --signer-workflow \"${{GITHUB_REPOSITORY}}/.github/workflows/product-release-generator.yml\" --signer-digest \"$GITHUB_SHA\" > /dev/null\nmv \"$bundle\" \"{ATTESTATION_DIR}/{name}.intoto.jsonl\"",
         portable_sha256_command("$subject")
     )
 }
@@ -274,7 +283,7 @@ fn portable_sha256_command(path: &str) -> String {
 fn attestation_verify_script(subject: &str, name: &str) -> String {
     let bundle = format!("{ATTESTATION_DIR}/{name}.intoto.jsonl");
     format!(
-        "test -f '{bundle}'\ntest ! -L '{bundle}'\ntest -s '{bundle}'\ngh attestation verify '{subject}' --repo \"$GITHUB_REPOSITORY\" --bundle '{bundle}' --source-digest \"$GITHUB_SHA\" --source-ref refs/heads/main --signer-workflow \"${{GITHUB_REPOSITORY}}/.github/workflows/generator-release.yml\" --signer-digest \"$GITHUB_SHA\" > /dev/null"
+        "test -f '{bundle}'\ntest ! -L '{bundle}'\ntest -s '{bundle}'\ngh attestation verify '{subject}' --repo \"$GITHUB_REPOSITORY\" --bundle '{bundle}' --source-digest \"$GITHUB_SHA\" --source-ref refs/heads/main --signer-workflow \"${{GITHUB_REPOSITORY}}/.github/workflows/product-release-generator.yml\" --signer-digest \"$GITHUB_SHA\" > /dev/null"
     )
 }
 

@@ -1,6 +1,5 @@
 //! Exact-base baseline lookup cases (PAR-5.10).
 use std::ffi::OsString;
-use std::path::PathBuf;
 use velnor_actions_mise::{BaselineLookup, MiseError, ToolCatalog};
 
 const BASE: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -48,24 +47,6 @@ fn baseline_list_args_are_fixed_and_exact() -> Result<(), String> {
 }
 
 #[test]
-fn baseline_download_args_name_exact_artifact() -> Result<(), String> {
-    let dir = PathBuf::from("/tmp/velnor-baseline-abc");
-    assert_eq!(
-        lookup()?.download_args(12345, &dir),
-        strings(&[
-            "run",
-            "download",
-            "12345",
-            "--name",
-            "coverage-manifests",
-            "--dir",
-            "/tmp/velnor-baseline-abc",
-        ])
-    );
-    Ok(())
-}
-
-#[test]
 fn baseline_argv_runs_pinned_gh() -> Result<(), String> {
     let catalog = pinned();
     let lookup = lookup()?;
@@ -91,24 +72,6 @@ fn baseline_argv_runs_pinned_gh() -> Result<(), String> {
             "--limit",
             "50",
         ])
-    );
-    let dir = PathBuf::from("/tmp/velnor-baseline-abc");
-    let argv = lookup
-        .download_argv(&catalog, 12345, &dir)
-        .map_err(|err| err.to_string())?;
-    assert_eq!(argv[0], OsString::from("mise"));
-    assert!(argv.iter().any(|arg| arg == "gh@2.102.0"));
-    let name = argv
-        .iter()
-        .position(|arg| arg == "--name")
-        .expect("exact artifact download names the artifact");
-    assert_eq!(argv[name + 1], OsString::from("coverage-manifests"));
-    assert!(
-        !argv.iter().any(|arg| {
-            let text = arg.to_string_lossy();
-            text.contains('*') || text.contains("://")
-        }),
-        "no wildcard or URL may reach the vector: {argv:?}"
     );
     let command = lookup
         .command(&catalog, lookup.list_args())
@@ -155,6 +118,9 @@ fn baseline_lookup_rejects_malformed_inputs() {
         (BASE, "velnor*.yml", "main", "coverage-manifests"),
         (BASE, "ci.yml", "main;evil", "coverage-manifests"),
         (BASE, "ci.yml", "$BRANCH", "coverage-manifests"),
+        (BASE, "ci.yml", "-main", "coverage-manifests"),
+        (BASE, "ci.yml", "main:evil", "coverage-manifests"),
+        (BASE, "ci.yml", "main\non: [push]", "coverage-manifests"),
         (BASE, "ci.yml", "main", ""),
         (BASE, "ci.yml", "main", "coverage/*"),
         (BASE, "ci.yml", "main", "two names"),

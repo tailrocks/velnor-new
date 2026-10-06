@@ -86,23 +86,26 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
         format!("sha256: {MISE_SHA256}"),
         "install: \"false\"".to_owned(),
         "env: \"false\"".to_owned(),
-        "cache: \"true\"".to_owned(),
+        "cache: \"false\"".to_owned(),
         "cache_save: \"false\"".to_owned(),
-        "cache_key: mise-v1-".to_owned(),
     ] {
         assert!(text.contains(&line), "missing {line}:\n{text}");
     }
     assert!(
-        !text.contains("Restore Mise tools"),
-        "P08: restores stay built-in:\n{text}"
+        text.contains("- name: Restore Mise tools"),
+        "V2 tools cache restores explicitly:\n{text}"
     );
     for line in [
         "- name: Save Mise tools".to_owned(),
-        "key: mise-v1-".to_owned(),
+        "key: mise-tools-v2-".to_owned(),
         "if: success() && github.event_name == 'push'".to_owned(),
     ] {
         assert!(text.contains(&line), "sole owner saves {line}:\n{text}");
     }
+    assert!(
+        text.contains("uses: ./.github/actions/velnor-tools-prelude-u26"),
+        "registered V2 prelude is explicit:\n{text}"
+    );
     Ok(())
 }
 
@@ -156,6 +159,28 @@ fn strict_keeps_single_wellformed_setup() -> Result<(), RenderError> {
     );
     let text = strict(&fixture_ir(vec![lint]), &fixture_ctx())?;
     assert_eq!(text.matches(SETUP_MISE_NAME).count(), 1, "{text}");
+    Ok(())
+}
+
+#[test]
+fn strict_setup_role_ignores_presentation_name() -> Result<(), RenderError> {
+    let mut setup = mise_setup_step(&mise())?;
+    setup.name = "Mise installation".to_owned();
+    let lint = job(
+        "actionlint",
+        "Actionlint",
+        Vec::new(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            setup,
+            scrubbed_shell_step(
+                "Run actionlint",
+                mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
+            )?,
+        ],
+    );
+    let text = strict(&fixture_ir(vec![lint]), &fixture_ctx())?;
+    assert!(text.contains("name: Mise installation"), "{text}");
     Ok(())
 }
 
@@ -216,7 +241,9 @@ fn strict_rejects_setup_misuse() -> Result<(), RenderError> {
 fn strict_mixed_platform_checks_use_native_setup_and_keep_global_runner() -> Result<(), RenderError>
 {
     use velnor_actions_contract::config::{CheckExecutor, CheckPlatform, CheckRunner};
-    use velnor_actions_workflow_renderer::setup::MISE_BINARY_SHA256_MACOS_ARM64;
+    use velnor_actions_workflow_renderer::setup::{
+        MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64,
+    };
     let mut check = job(
         "check-native",
         "Native",
@@ -225,7 +252,7 @@ fn strict_mixed_platform_checks_use_native_setup_and_keep_global_runner() -> Res
             checkout_step(&checkout_pin())?,
             scrubbed_shell_step(
                 "Native task",
-                mise_argv("node@22.0.0", "node", &["--version"]),
+                mise_argv("rust@1.98.1", "rustc", &["--version"]),
             )?,
         ],
     );
@@ -240,7 +267,10 @@ fn strict_mixed_platform_checks_use_native_setup_and_keep_global_runner() -> Res
     let text = strict(&ir, &fixture_ctx())?;
     assert!(text.contains("runs-on: macos-15"));
     assert!(text.contains(MISE_BINARY_SHA256_MACOS_ARM64));
-    assert!(text.contains("mise-v1-aarch64-apple-darwin-"));
+    assert!(!text.contains("mise-tools-v2-"));
+    assert!(!text.contains("V2 identity"));
+    assert!(!text.contains(MISE_BINARY_SHA256_LINUX_X64));
+    assert!(!text.contains("mise-v1-"));
     check.0 = "actionlint".to_owned();
     assert!(strict(&fixture_ir(vec![check.clone()]), &fixture_ctx()).is_err());
     check.0 = "check-native".to_owned();
@@ -250,23 +280,16 @@ fn strict_mixed_platform_checks_use_native_setup_and_keep_global_runner() -> Res
 }
 
 #[test]
-fn qualified_linux_setup_cannot_bypass_macos_artifact_selection() -> Result<(), RenderError> {
+fn linux_mise_artifact_cannot_bypass_macos_artifact_selection() -> Result<(), RenderError> {
     use velnor_actions_contract::config::{CheckExecutor, CheckPlatform, CheckRunner};
-    use velnor_actions_workflow_renderer::cache_p08::{
-        mise_cache_key_for_tools, mise_setup_step_p08,
-    };
-    let key = mise_cache_key_for_tools(
-        "x86_64-unknown-linux-gnu",
-        MISE_VERSION,
-        &["node@22.0.0".to_owned()],
-    )?;
+    let linux = mise().for_target("x86_64-unknown-linux-gnu")?;
     let mut check = job(
         "check-native",
         "Native",
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
-            mise_setup_step_p08(&mise(), &key)?,
+            mise_setup_step(&linux)?,
             scrubbed_shell_step(
                 "Native task",
                 mise_argv("node@22.0.0", "node", &["--version"]),
@@ -281,7 +304,7 @@ fn qualified_linux_setup_cannot_bypass_macos_artifact_selection() -> Result<(), 
         container: None,
     });
     let error = strict(&fixture_ir(vec![check]), &fixture_ctx()).expect_err("wrong target pins");
-    assert!(error.to_string().contains("setup_mise_pin_mismatch"));
+    assert!(error.to_string().contains("setup_mise_malformed"));
     Ok(())
 }
 
@@ -360,7 +383,8 @@ fn native_check_without_catalog_tools_still_bootstraps_mise() -> Result<(), Rend
     let names = step_names(&text, "check-native");
     assert!(names.iter().any(|name| name == SETUP_MISE_NAME));
     assert!(text.contains(MISE_BINARY_SHA256_MACOS_ARM64));
-    assert!(text.contains("mise-v1-aarch64-apple-darwin-"));
+    assert!(!text.contains("mise-v1-"));
+    assert!(!text.contains("Swatinem/rust-cache"));
     assert!(!text.contains("rust@"));
     assert!(!text.contains("Prepare Rust components"));
     assert!(

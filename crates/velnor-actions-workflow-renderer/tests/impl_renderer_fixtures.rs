@@ -80,7 +80,8 @@ pub(crate) fn fixture_ctx() -> RenderContext {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
-        verification_tasks: Vec::new(),
+        workflow_tasks: Vec::new(),
+        pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         plan_consumer_env: std::collections::BTreeMap::new(),
     }
 }
@@ -210,6 +211,7 @@ pub(crate) fn validator_commands() -> Vec<ValidatorCommand> {
         validator: *validator,
         name: (*name).to_owned(),
         argv: vec!["true".to_owned()],
+        prepare_argv: Vec::new(),
     })
     .collect()
 }

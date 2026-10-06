@@ -57,7 +57,19 @@ fn generator_seed_hit_skips_curl_and_a_bad_hash_does_not_copy()
     let miss = run_acquire(&argv[2], &bin, &"a".repeat(64))?;
     assert!(!miss.status.success(), "bad hash must not succeed");
     assert!(!staged.exists(), "bad seed is not staged");
-    assert!(read_log(&bin).contains("https://example.invalid/generator"));
+    let curl_args = read_log(&bin);
+    assert!(curl_args.contains("https://example.invalid/generator"));
+    for option in [
+        "--retry 5",
+        "--retry-all-errors",
+        "--proto =https",
+        "--tlsv1.2",
+    ] {
+        assert!(
+            curl_args.contains(option),
+            "curl option missing: {option}: {curl_args}"
+        );
+    }
     assert_eq!(std::fs::read(&seed_file)?, b"generator-bytes");
     std::fs::remove_dir_all(&root).ok();
     Ok(())

@@ -37,6 +37,8 @@ version: 1
 # product code, so it is excluded from the walked index (ARCH-1.12).
 ignore:
   - "fixtures/**"
+  # Recovery snapshots and scratch prototypes are retained only for
+  # provenance; they are not active first-party source or instruction files.
 
 extends:
   - alint://bundled/oss-baseline@v1

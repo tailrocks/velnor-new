@@ -17,12 +17,12 @@ Workflow to generate
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - actionlint (5 steps)
+    - actionlint (7 steps)
     - plan (14 steps)
     - publish-baseline (5 steps)
-    - required (9 steps)
-    - rust-parity-app (19 steps)
-    - rust-parity-tool (18 steps)
+    - required (8 steps)
+    - rust-parity-app (21 steps)
+    - rust-parity-tool (19 steps)
     - 2 Rust crate jobs
       Each: Clippy -> build -> run tests -> doctests -> doc build
       Entries:

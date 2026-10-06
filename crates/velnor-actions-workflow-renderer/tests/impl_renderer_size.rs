@@ -108,6 +108,12 @@ fn direct_freshness_renderer_rejects_an_oversized_workflow() {
         },
         runs_on: "ubuntu-26.04".to_owned(),
         checkout_uses: "actions/checkout@0123456789abcdef0123456789abcdef01234567".to_owned(),
+        mise_setup: MiseSetup {
+            uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
+            version: "2026.9.18".to_owned(),
+            sha256: "a".repeat(64),
+        },
+        rust_version: "1.98.1".to_owned(),
         generator_version: VERSION.to_owned(),
     };
     let error =
@@ -138,7 +144,7 @@ fn direct_schema2_renderer_rejects_an_oversized_workflow() -> Result<(), RenderE
             mbx_version: large_mbx_version,
             rust_version: "1.98.0".to_owned(),
         }),
-        generator_release: None,
+        product_release: None,
     };
     let error =
         render_schema2_workflows(&request).expect_err("direct routing render must enforce the cap");

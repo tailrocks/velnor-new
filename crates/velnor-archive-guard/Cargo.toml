@@ -6,6 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 autotests = false
 
+[package.metadata.velnor]
+v1-task-owner = "repository-maintenance"
+
 [lib]
 path = "src/lib.rs"
 

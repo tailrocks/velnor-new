@@ -67,6 +67,33 @@ review, treat this record as the binding contract for implementation.
 - Affects: cache key/paths design, workflow renderer step order,
   cache docs and qualification fixtures.
 
+### V2 tools-cache implementation resolution (2026-10-05)
+
+The generator implements this requirement with an explicit V2
+`actions/cache` tools archive rather than `jdx/mise-action`'s built-in
+cache. The typed key binds the exact tool selectors and pins, Rustup
+components, runner lane, target, and archived paths; a runtime step
+qualifies hosted image and absolute roots before restore or save. Unknown
+identities and Scale Set lanes continue cold. The archive owns Mise
+installs, Rustup state, Cargo-installed binaries, and their receipts; the
+Cargo source layer owns only registry index/cache and Git database paths.
+This gives the generator a fail-closed runtime boundary and removes the
+Cargo `bin` overlap that the built-in Mise archive could not express.
+
+`Setup Mise` therefore has both built-in cache inputs disabled. The
+renderer inserts V2 restore/save actions and elects one protected
+default-branch writer per exact runtime-qualified key. Source tests and
+generated-workflow tests prove identity binding, path ownership, ordering,
+and single-writer shape. They do not prove a hosted cold writer followed
+by warm restore or a performance improvement; those acceptance claims
+remain separate and pending.
+
+All Rust modes use the same source archive, keyed by lockfiles and limited
+to Cargo's registry index/cache and Git database paths. The Cargo-only
+`rust-cache` fallback is removed from generation and the action policy:
+its upstream defaults also archive Cargo binaries, receipts, and broader
+registry/Git trees, which overlap the V2 tools owner and violate this boundary.
+
 ## 6. Complete evidence vs permissive defaults — adopt pr-1
 
 - Old: mechanisms specified but no measurement or size-budget gate;

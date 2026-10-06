@@ -58,7 +58,11 @@ fn generate_preview_matches_in_place_and_preserves_repo() -> TestResult {
         ".github/AGENTS.md",
         ".github/CLAUDE.md",
         ".github/actionlint.yaml",
+        ".github/actions/u26/action.yml",
         ".github/actions/velnor-tool-seed/action.yml",
+        ".github/actions/velnor-tools-cache-restore/action.yml",
+        ".github/actions/velnor-tools-prelude-u26/action.yml",
+        ".github/scripts/velnor-tools-cache-identity.sh",
         ".github/workflows/ci.yml",
     ];
     assert_eq!(preview_report.files_written, expected_files);
@@ -236,11 +240,10 @@ fn plan_job_fetches_lockful_sources_before_generate_consumers() -> TestResult {
         .ok_or_else(|| std::io::Error::other("missing plan job"))?;
     let names: Vec<&str> = plan.steps.iter().map(|step| step.name.as_str()).collect();
     let at = |name: &str| names.iter().position(|seen| *seen == name);
-    // Cargo-only fixture: the writer is one `rust-cache` step (its post
-    // action saves; no separate save step). MBX repos use restore/save.
+    // Cargo-only fixture uses the explicit shared sources restore/save pair.
     let (Some(prepare_at), Some(cache_at), Some(fetch_at), Some(write_at)) = (
         at("Prepare pinned tools"),
-        at("Restore Cargo registry"),
+        at("Restore Cargo sources"),
         at("Fetch Cargo sources"),
         at("Write request"),
     ) else {
@@ -348,21 +351,6 @@ fn cold_registry_stderr_classifies_incomplete() {
         classify_metadata_failure("error: failed to download anstyle-wincon v3.0.11"),
         MetadataFailure::Incomplete
     );
-}
-
-#[test]
-fn ignored_rust_plans_no_work() -> TestResult {
-    let repo = make_repo(
-        "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks]\nignore = [\"rust\"]\n",
-    )?;
-    let prep = prepare(repo.path())?;
-    assert!(prep.discovery.proposals.is_empty(), "no tasks when ignored");
-    let text = plan_for(&prep)?;
-    assert!(text.contains("Rust: ignored"), "ignored:\n{text}");
-    assert!(text.contains("no-work workflow"), "no-work:\n{text}");
-    let report = generate(&prep, &GenerateOptions { output_dir: None })?;
-    assert_eq!(report.files_written.len(), 5);
-    Ok(())
 }
 
 #[test]

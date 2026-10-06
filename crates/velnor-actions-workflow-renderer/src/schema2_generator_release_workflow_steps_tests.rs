@@ -1,4 +1,4 @@
-use super::gh_function;
+use super::{gh_function, gh_function_with_timeout};
 use std::error::Error;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -42,8 +42,16 @@ fn typed_gh_function_shadows_incompatible_cli_and_exports_to_script() -> Result<
     write_executable(
         &mock_bin.join("mise"),
         &format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nprintf 'pinned-gh:%s\\n' \"$*\"\n",
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\ncase \"$*\" in *'gh api fail-status'*) exit 37 ;; esac\nprintf 'pinned-gh:%s\\n' \"$*\"\n",
             mise_log.display()
+        ),
+    )?;
+    let timeout_log = scratch.0.join("timeout-argv");
+    write_executable(
+        &mock_bin.join("timeout"),
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nwhile [ \"$#\" -gt 0 ]; do case \"$1\" in --signal=*|--kill-after=*) shift ;; *) break ;; esac; done\nshift\nexec \"$@\"\n",
+            timeout_log.display()
         ),
     )?;
     let function = gh_function(&pinned_gh_argv())?;
@@ -68,6 +76,47 @@ fn typed_gh_function_shadows_incompatible_cli_and_exports_to_script() -> Result<
     assert!(invocation.contains("--no-config --no-env --no-hooks exec gh@2.102.0 -- gh api test"));
     assert!(
         invocation.contains("--no-config --no-env --no-hooks exec gh@2.102.0 -- gh api nested")
+    );
+    let timeout_invocations = fs::read_to_string(timeout_log)?;
+    assert!(timeout_invocations.contains("--signal=TERM --kill-after=5s 60s mise"));
+    let failure = Command::new("bash")
+        .args(["-e", "-c", &format!("{function}\ngh api fail-status")])
+        .env("PATH", path_with(&mock_bin)?)
+        .output()?;
+    assert_eq!(failure.status.code(), Some(37));
+    Ok(())
+}
+
+#[test]
+fn bounded_gh_function_terminates_a_hung_request() -> Result<(), Box<dyn Error>> {
+    let version = Command::new("timeout").arg("--version").output();
+    let Ok(version) = version else {
+        eprintln!("GNU timeout is unavailable; hanging-request check runs on Linux CI");
+        return Ok(());
+    };
+    if !String::from_utf8_lossy(&version.stdout).contains("GNU coreutils") {
+        eprintln!("GNU timeout is unavailable; hanging-request check runs on Linux CI");
+        return Ok(());
+    }
+
+    let scratch = Scratch::new()?;
+    let mock_bin = scratch.0.join("mock-bin");
+    fs::create_dir(&mock_bin)?;
+    write_executable(&mock_bin.join("mise"), "#!/bin/sh\nsleep 30\n")?;
+    let function = gh_function_with_timeout(&pinned_gh_argv(), 1)?;
+    let started = std::time::Instant::now();
+    let output = Command::new("bash")
+        .args(["-e", "-c", &format!("{function}\ngh api hang")])
+        .env("PATH", path_with(&mock_bin)?)
+        .output()?;
+
+    assert!(
+        !output.status.success(),
+        "hung request unexpectedly succeeded"
+    );
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(8),
+        "hung request exceeded its timeout plus kill grace"
     );
     Ok(())
 }

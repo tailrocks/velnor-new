@@ -1,0 +1,304 @@
+## Phase D — remove unnecessary Python and Foundation feature closure
+
+The target is deletion of unnecessary jobs, not a Rust translation of the whole
+pipeline and not a repository-wide ban on Python.
+
+After Phase 0 and exact caller/import closure, delete these principal scripts unless
+new evidence proves a retained requirement:
+  scripts/analyze-ci-performance.py
+  scripts/collect-ci-performance.py
+  scripts/bootstrap-owned-tool-builder.py
+  scripts/build-owned-tool.py
+  scripts/download-owned-tool-candidate.py
+  scripts/immutable_publication.py
+  scripts/owned_tool_behavior.py
+  scripts/owned_tool_qualification_evidence.py
+  scripts/owned_tool_source.py
+  scripts/publish-owned-tool-artifacts.py
+  scripts/publish_owned_source.py
+  scripts/qualify-owned-tool.py
+  scripts/source_proof_capsule.py
+  scripts/source_publication.py
+  scripts/source_publication_records.py
+  scripts/source_qualification_execution.py
+  scripts/source_release_policy.py
+  scripts/source_semver_capsule.py
+  scripts/stage-owned-tool-source.py
+
+Delete owned_mise_qualification.py after its selected retained tests have moved and
+passed. Audit and remove exclusive fixtures/tests listed in Appendix B. For any
+newly retained necessary script, port its required behavior to the existing owning
+Rust module BEFORE deletion. KEEP-PYTHON requires a concrete technical environment
+where Rust cannot run, or genuinely unavoidable short-lived external-tool glue with
+a named deletion event. Convenience and sunk implementation cost are not defenses.
+
+Preserve unrelated freshness, OCI, release, Git/process, runner, and workload support.
+In particular, do not remove Python needed by existing check-freshness.sh or the
+independent tar-absolute/ChainArgos runner-image requirement as collateral cleanup.
+
+Default Foundation outcome: remove it if the audit establishes no retained runtime
+requirement. Trace and remove its whole dedicated feature closure, including current
+equivalents of:
+  .github/workflows/foundation-qualification.yml
+  crates/velnor-actions-orchestrator/src/foundation_qualification.rs
+  crates/velnor-actions-orchestrator/src/foundation_qualification_source.rs
+  crates/velnor-actions-workflow-renderer/src/foundation_qualification.rs
+  its template, dedicated CLI/registration/configuration, tests, and source tuple
+
+The reviewed source graph could invoke real native/Python processes. Do not call it
+prose-only, replace its subaction with ordinary actions/cache, or delete just the YAML
+while the Rust generator can recreate it. Preserve shared primitives used elsewhere.
+
+If a real Foundation requirement survives, implement only that requirement in the
+appropriate existing Velnor Rust crate, with real tests and a caller migration. Do
+not retain an actions/cache fork to host Velnor-specific behavior. A standalone repo
+requires a demonstrated architectural boundary, not merely a place to move a fork.
+
+Remove exclusive Cargo dependencies/features, candidate routes, dead manifests,
+SDK admission surfaces, obsolete release tasks, and documentation instructions with
+the feature. Confirm usage before deleting anything shared. Never use broad globs
+such as rm scripts/*.py or delete unrelated generated workflows.
+
+Preserve useful historical outputs as clearly passive evidence with source identity
+and limitations. Historical JSON does not justify retaining an executable publisher.
+Do not alter immutable release assets or mislabel source-only publication as tested
+binary provenance. Add focused absence/parity tests against reintroducing these
+retired dependencies; do not prohibit unrelated legitimate future native features.
+
+## Phase E — upstream only newly proven necessities
+
+For an indispensable requirement not met by official tools or a proven Velnor seam,
+inspect the upstream's current CONTRIBUTING, tests, platforms/MSRV, changelog rules,
+comparable accepted PRs, and relevant scope rejections. Propose and implement only
+the smallest generic core, using upstream conventions and real regression tests.
+Split independent concerns into independently mergeable PRs. Keep Velnor identity,
+policy, wrappers, source receipts, and publication mechanics out of the generic fix.
+
+Open an upstream PR only for that demonstrated missing behavior; do not duplicate
+accepted work or claim future acceptance as fact. A temporary contribution branch
+is staging with an upstream release/adoption expiry event, never a permanent private
+fork. If upstream will not accept the core, use a justified Velnor-owned solution or
+remove the optional behavior; do not retain an unmaintainable fork by default.
+
+## Phase F — integrate, release, regenerate, and verify consumers
+
+Make narrow reviewable slices: Phase 0 tests; official mise adoption; stock-cache
+correction coordinated with PR #26; Foundation detachment; pipeline/dependency
+retirement; consumer rollout; final ref retirement. Use logical commits on the
+integration branch and only the separate PRs needed for independent ownership or
+mergeability. Do not block safe source retirement on an unrelated large redesign.
+
+Read current repository commands and run the pinned toolchain/harness equivalents
+of formatting, Clippy, targeted and full Rust/Nextest tests, dependency/security
+checks, freshness, and generator parity. Do not invent a test invocation or treat
+an unregistered integration-test file as executed coverage. Preserve substantive
+checks and policy semantics while removing obsolete feature-specific checks.
+
+Generate repository-policy and consumer-policy outputs from the same candidate
+twice; require byte-identical second output and no second-run diff. Modify generator
+source/typed configuration, never hand-maintain generated YAML. Ensure retired
+Foundation output is actually removed by the generator's managed-file lifecycle.
+
+Publish a new immutable generator artifact through existing approved machinery;
+record exact source SHA and artifact digest. Never overwrite a used release/tag or
+change only version comments. Verify packaged behavior, not just source tests.
+
+Audit all scoped consumers and migrate every affected consumer from that exact
+artifact. Begin with jackin-project/jackin using its required separate agent team;
+then the remaining jackin-project cohort, tailrocks, and ChainArgos last. Include
+deep verification of:
+  jackin-project/jackin
+  tailrocks/velnor
+  tailrocks/parallax
+  tailrocks/github-terraform
+  tailrocks/velnor-actions-fixture
+  ChainArgos/java-monorepo
+
+Use current scope.json plus the historical scope in Appendix C; do not silently
+omit a renamed or inaccessible repository. A genuinely unaffected repository needs
+an evidence-backed NO-CHANGE result, not a fabricated PR or a needless commit.
+
+For each consumer record canonical repository, reviewed SHA, effective policy,
+generator digest, before/after pins, deterministic regeneration result, changed-file
+scope, applicable checks, and exact PR and post-merge main CI run/attempt/SHAs.
+Preserve existing Rust, Java, Tofu, desktop, runner-selection, release, and security
+behavior. No consumer-specific hacks in the generic generator.
+
+Fix failures caused by this work. Investigate apparently unrelated failures enough
+to establish causality; do not silently claim a red or unverified main is green.
+Follow applicable merge policy. Any explicitly required waiver is a separate status,
+never a successful CI observation. Recheck the actual merged result.
+
+## Phase G — archive and retire snapshot branches safely
+
+Retirement scope is these exact historical branches under tailrocks/velnor-new:
+  owned-source/mise/dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96
+  owned-source/mbx/ac6ceed10df0c6cb0af1bc6d1a69d0de4d392f81
+  owned-source/mbx-action/c3cbe8e56ccb4727624df45022357f49d2953075
+  owned-source/mbx-action/62ec0713473dffeab46884b7c03906042794e696
+  owned-source/semver-checker/583dddce84706786fc54c41a2c768c28a09c65fd
+  owned-source/cache-action/8758d976a1b25eb387f48aa04ea86f57739b84cf
+
+For EACH branch, before deletion:
+  1. Re-fetch its actual tip and verify no newly added work or consumer was missed.
+  2. Finish caller migration/removal and record the actual resolving merged SHA.
+  3. Prove no retained active code/workflow/release-build path requires its ref or
+     snapshot-only behavior. Identify historical reproducibility dependencies too.
+  4. Preserve exact Git history in a verified bundle, account for required submodule/
+     external source objects, restore independently, and verify expected commits/trees.
+  5. Store the archive durably through existing owner-controlled storage, record its
+     digest/retrieval instructions, and preserve existing immutable source releases.
+  6. Obtain independent deletion review and record owner, evidence, and rollback.
+
+A scratch-only bundle is not durable archival. A tarball is not Git-history proof.
+Do not infer foreign commit reachability from release target_commitish; peel tags.
+Branch deletion is not instant object deletion, but undocumented object retention
+is not a recovery strategy. If historic SHA-based action resolution still depends
+on the repository retaining those objects, provide a durable retention plan before
+removing the last retaining ref.
+
+Once all gates pass, delete the named obsolete branch and record the result. Never
+delete main or unrelated refs. Normal removal of this goal's merged working branch
+is permitted only after confirming it contains no unintegrated work.
+
+A blocked retirement gets a concrete TEMPORARY-HOLD: exact dependency, owner, next
+probe, resolving event/ref, and a decision checkpoint no later than seven calendar
+days from execution start. The date requires reassessment, not automatic deletion.
+Do not leave unowned indefinite staging or fabricate completion to meet a deadline.
+
+## Completion and final evidence
+
+Keep the decision ledger and evidence artifacts small and passive; reuse the
+existing documentation/test-result conventions rather than creating a new framework.
+
+The independent verifier must check the final tree/artifact, not an earlier reviewed
+head, and confirm:
+  - every custom change and Python file has a justified final disposition;
+  - retained mise regression coverage actually executes with real binaries;
+  - official fixed mise is deployed, or its adoption is explicitly incomplete;
+  - the retained stock-cache contract passes real writer/reader and affected-workload
+    qualification, including trust, path/version, failure, and disk-safety cases;
+  - no required coverage or unrelated correctness fix was lost in deletion;
+  - generation is deterministic for both relevant policies;
+  - active runtime/generated/publication paths no longer reference retired snapshots;
+  - all scoped consumers are migrated or proven unaffected, with exact-head results;
+  - each snapshot is retired recoverably or has an explicit unresolved hold;
+  - no private fork or unnecessary owned-source runtime remains as the end state.
+
+Report separately: SOURCE-CLEANUP, OFFICIAL-TOOL-ADOPTION, CACHE-QUALIFICATION,
+CONSUMER-ROLLOUT, and SNAPSHOT-RETIREMENT, each COMPLETE or PARTIAL.
+
+Overall COMPLETE requires all mandatory gates, applicable green PR/post-merge CI,
+actual release adoption, and resolved snapshot end states. Missing access, a pending
+release/upstream merge, an unrun mandatory test/platform, an unverified consumer,
+or an unresolved retention dependency means the relevant item and overall result
+remain PARTIAL. Continue all independent work before stopping.
+
+Final report: implemented/removed features; per-change/Python decisions; commit and
+PR links; final source/artifact identities; exact test/run evidence; consumer matrix;
+branch archive/retirement ledger; rollback procedures. For every remaining blocker,
+state what is unknown, evidence that settles it, owner, and cheapest next action.
+
+Do not claim a command, model setting, subagent review, test, release, deployment,
+upstream acceptance, or deletion occurred without evidence. The objective is a
+smaller working system, not a green-looking report or a renamed version of the
+same unnecessary infrastructure.
+
+## Appendix A — historical custom-commit inventory to disposition
+
+Re-derive ancestry and full deltas; these are starting identities, not verdicts.
+
+MISE:
+  dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96  no-config core plus owned wrapper/shim/banner
+MBX:
+  1ca12eb48391061a75e97d32e5b06fedf8a6253d  usefulness/comparison/retention
+  2f324e89af509a1c61d802cf23741a04d7510b57  merge of official upstream update
+  ee250ac37654a4cfbb55b6cd470f2a257204bbe9  Cargo root-pair restore
+  e07c07cfec773897e5c439043901e661ad3f7b45  native ownership/compiler events
+  29865b5a18e3414084ff5db27d1da455772b4c34  vendored behavioral-test closure
+  ac6ceed10df0c6cb0af1bc6d1a69d0de4d392f81  lineage/durable state/report v2
+MBX action:
+  f053f215866af0ddb6d2f32ecc19d45a5d25edc2  executable selection/comparison
+  198f0d1a538d34a91d7692f8f302259643c0f737  merge of official upstream update
+  06f353d41002af758d27490164f53c82e2165637  caller-bound binary digest
+  c3cbe8e56ccb4727624df45022357f49d2953075  protected-default cache-save policy
+  62ec0713473dffeab46884b7c03906042794e696  late baseline/export-group binding
+Semver:
+  d73a5d2469f3cf2a8e77cb3259ae4da15a7c9d0a  supplied-document metadata/lint feature
+  583dddce84706786fc54c41a2c768c28a09c65fd  fork CI push restriction
+Cache:
+  8758d976a1b25eb387f48aa04ea86f57739b84cf  archive/SDK changes plus Foundation
+
+Expected direction: adopt the accepted mise core from upstream; keep necessary
+policy/process/cache fixes in Velnor; remove unused foreign additions. No custom
+commit is a mandate to cherry-pick its entire diff.
+
+## Appendix B — support fixtures/tests to audit with their owning feature
+
+  scripts/owned_tool_execution_test_fixtures.py
+  scripts/owned_tool_publication_test_fixtures.py
+  scripts/test_ci_performance_analysis.py
+  scripts/test_download_owned_tool_candidate.py
+  scripts/test_git_optional_locks.py
+  scripts/test_owned_tool_build.py
+  scripts/test_owned_tool_execution_evidence.py
+  scripts/test_owned_tool_qualification_evidence.py
+  scripts/test_publish_owned_tool_artifacts.py
+  scripts/test_qualify_owned_tool.py
+  scripts/test_source_proof_capsule.py
+  scripts/test_source_publication.py
+  scripts/test_source_publication_records.py
+  scripts/test_source_qualification_execution.py
+  scripts/test_source_release_transaction.py
+  scripts/test_source_semver_capsule.py
+
+Deletion remains conditional on preserving any generic surviving regression.
+
+## Appendix C — historical 46-consumer scope, to reconcile with current scope.json
+
+  jackin-project/jackin
+  jackin-project/jackin-agent-smith
+  jackin-project/homebrew-tap
+  jackin-project/jackin-role-action
+  jackin-project/jackin-sentinel
+  jackin-project/jackin-dev
+  jackin-project/jackin-github-terraform
+  jackin-project/jackin-the-architect
+  tailrocks/github-terraform
+  tailrocks/termpane
+  tailrocks/tui-snap
+  tailrocks/velnor
+  tailrocks/termrock
+  tailrocks/parallax
+  tailrocks/terminal-components-claude
+  tailrocks/tailrocks-repository-skills
+  tailrocks/tailrocks-skills
+  tailrocks/tailrocks-pull-request-skills
+  tailrocks/homebrew-velnor
+  tailrocks/velnor-apt
+  tailrocks/parallax-telemetry-playground
+  tailrocks/velnor-actions-fixture
+  tailrocks/holla
+  tailrocks/tracing-request-level
+  tailrocks/pg-bigdecimal
+  tailrocks/ruxel
+  tailrocks/schemalane
+  tailrocks/holla-apt
+  tailrocks/homebrew-parallax
+  tailrocks/homebrew-ruxel
+  tailrocks/homebrew-tablerock
+  tailrocks/homebrew-holla
+  tailrocks/tablerock
+  tailrocks/cloudflare-tofu
+  tailrocks/tailrocks-typescript-skills
+  tailrocks/tailrocks-skill-authoring-skills
+  tailrocks/tailrocks-rust-skills
+  tailrocks/tailrocks-roadmap-skills
+  tailrocks/tailrocks-open-source-skills
+  tailrocks/tailrocks-macos-skills
+  tailrocks/tailrocks-code-quality-skills
+  ChainArgos/blockchain-nodes
+  ChainArgos/java-monorepo
+  ChainArgos/jackin-agent-brown
+  ChainArgos/cloudflare-tofu
+  ChainArgos/github-terraform

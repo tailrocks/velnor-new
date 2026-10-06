@@ -3,14 +3,14 @@
 use crate::yaml::Yaml;
 
 use super::super::features::{base, finish};
-use super::GeneratorReleasePins;
+use super::ProductReleasePins;
 use super::{assets, manifest, workflow_steps};
 use velnor_actions_contract::ReleaseTarget;
 
 /// Build and upload the canonical manifest consumed by qualification and attestation.
 pub(super) fn job(
     hosted: Yaml,
-    pins: &GeneratorReleasePins,
+    pins: &ProductReleasePins,
 ) -> Result<(String, Yaml), crate::RenderError> {
     let candidate_path = manifest::candidate_path();
     let mut steps = Vec::new();

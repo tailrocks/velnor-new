@@ -93,12 +93,15 @@ claim to verify those earlier hashes.
 | action actions/cache/save | v6.1.0 | matches pin |
 | action jdx/mr-boxington-action | v1.7.1 | held at v1.6.0 under #29 |
 | action asamarts/alint | v0.17.0 | held at v0.16.1 under #6 |
-| action Swatinem/rust-cache | v2.9.2 | matches pin |
+| action Swatinem/rust-cache | v2.9.2 | observed; active support retired by PR38 |
 
-The 13 current rows still match their pins, and all six existing held rows
-remain held with the same pin, qualified version/SHA, exception owner, issue,
-and expiry. The captured latest values match the PR75 inventory; no version,
-qualification, or hold was promoted by this follow-up. Inventory checked_at
-values for these 19 tool/action rows and the top-level inventory are set to the
-end of Capture B, 2026-10-05T12:26:50Z. The hosted-runner row retains its
-separate observation time.
+The Swatinem/rust-cache row records the release observed during Capture B;
+PR38 has since retired that action and its active version-policy pin as part of
+the Cargo-source migration. It is retained here as historical evidence and is
+absent from the active freshness inventory. The 12 current rows still match
+their pins, and all six held rows remain held with the same pin, qualified
+version/SHA, exception owner, issue, and expiry. No version, qualification, or
+hold was promoted by this follow-up. Inventory checked_at values for these 18
+active tool/action rows and the top-level inventory are set to the end of
+Capture B, 2026-10-05T12:26:50Z. The hosted-runner row retains its separate
+observation time.

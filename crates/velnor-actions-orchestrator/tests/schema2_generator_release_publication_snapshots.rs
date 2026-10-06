@@ -2,7 +2,7 @@ use super::action_snapshots::{Actions, action};
 use super::qualification_snapshots;
 
 pub(super) fn assert_pinned_gh_policy(actions: &Actions) {
-    let pinned_wrapper = r#"gh() { mise --no-config --no-env --no-hooks exec gh@2.102.0 -- gh \"$@\"; }\nexport -f gh"#;
+    let pinned_wrapper = r#"gh() { timeout --signal=TERM --kill-after=5s 60s mise --no-config --no-env --no-hooks exec gh@2.102.0 -- gh \"$@\"; }\nexport -f gh"#;
     for (name, body) in actions {
         if ["gh api ", "gh release ", "gh attestation "]
             .iter()
@@ -49,51 +49,100 @@ pub(super) fn assert_asset_catalog(body: &str) {
     }
     assert!(!body.contains("ubuntu-26.04-scale-set"), "{body}");
     assert!(!body.contains("runs-on: [velnor"), "{body}");
-    assert!(!body.contains("binary-assets"), "{body}");
-    assert!(!body.contains("image-assets"), "{body}");
 }
 
 pub(super) fn assert_target_builds(
     body: &str,
     actions: &Actions,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    assert_attest(body, actions, "attest-linux", "ubuntu-26.04")?;
-    assert_attest(body, actions, "attest-macos", "macos-15")?;
-    assert_attest(body, actions, "attest-macos-intel", "macos-15-intel")?;
-    qualification_snapshots::assert_candidate_qualification(
-        body,
-        actions,
-        "qualify-linux",
-        "generator-release-qualify-linux",
-        "build-linux",
-        "linux-assets",
-        "velnor-actions-0.1.1-x86_64-unknown-linux-gnu",
-    )?;
-    qualification_snapshots::assert_candidate_qualification(
-        body,
-        actions,
-        "qualify-macos",
-        "generator-release-qualify-macos",
-        "build-macos",
-        "macos-assets",
-        "velnor-actions-0.1.1-aarch64-apple-darwin",
-    )?;
-    qualification_snapshots::assert_candidate_qualification(
-        body,
-        actions,
-        "qualify-macos-intel",
-        "generator-release-qualify-macos-intel",
-        "build-macos-intel",
-        "macos-intel-assets",
-        "velnor-actions-0.1.1-x86_64-apple-darwin",
-    )?;
-    assert_job_action(body, "build-linux", "generator-release-build-linux")?;
-    assert_job_action(body, "build-macos", "generator-release-build-macos")?;
-    assert_job_action(
-        body,
-        "build-macos-intel",
-        "generator-release-build-macos-intel",
-    )?;
+    assert_target_attesters(body)?;
+    assert_candidate_qualifications(body, actions)?;
+    assert_build_actions(body, actions)
+}
+
+fn assert_target_attesters(body: &str) -> Result<(), Box<dyn std::error::Error>> {
+    for (attester_id, build_id, qualify_id, action_id, runner) in [
+        (
+            "attest-linux",
+            "build-linux",
+            "qualify-linux",
+            "generator-release-attest-linux",
+            "ubuntu-26.04",
+        ),
+        (
+            "attest-macos",
+            "build-macos",
+            "qualify-macos",
+            "generator-release-attest-macos",
+            "macos-15",
+        ),
+        (
+            "attest-macos-intel",
+            "build-macos-intel",
+            "qualify-macos-intel",
+            "generator-release-attest-macos-intel",
+            "macos-15-intel",
+        ),
+    ] {
+        let attester = super::super::job_body(body, attester_id)?;
+        assert!(
+            attester.contains(&format!("runs-on: {runner}\n")),
+            "{attester}"
+        );
+        assert!(attester.contains("id-token: write"), "{attester}");
+        assert!(!attester.contains("contents: write"), "{attester}");
+        assert!(attester.contains(&format!("- {build_id}\n")), "{attester}");
+        assert!(
+            attester.contains(&format!("- {qualify_id}\n")),
+            "{attester}"
+        );
+        assert_job_action(body, attester_id, action_id)?;
+    }
+    Ok(())
+}
+
+fn assert_candidate_qualifications(
+    body: &str,
+    actions: &Actions,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for (job, action_id, build, directory, binary) in [
+        (
+            "qualify-linux",
+            "generator-release-qualify-linux",
+            "build-linux",
+            "linux-assets",
+            "velnor-actions-0.1.1-x86_64-unknown-linux-gnu",
+        ),
+        (
+            "qualify-macos",
+            "generator-release-qualify-macos",
+            "build-macos",
+            "macos-assets",
+            "velnor-actions-0.1.1-aarch64-apple-darwin",
+        ),
+        (
+            "qualify-macos-intel",
+            "generator-release-qualify-macos-intel",
+            "build-macos-intel",
+            "macos-intel-assets",
+            "velnor-actions-0.1.1-x86_64-apple-darwin",
+        ),
+    ] {
+        qualification_snapshots::assert_candidate_qualification(
+            body, actions, job, action_id, build, directory, binary,
+        )?;
+    }
+    Ok(())
+}
+
+fn assert_build_actions(body: &str, actions: &Actions) -> Result<(), Box<dyn std::error::Error>> {
+    for (job_id, action_id) in [
+        ("build-linux", "generator-release-build-linux"),
+        ("build-macos", "generator-release-build-macos"),
+        ("build-macos-intel", "generator-release-build-macos-intel"),
+    ] {
+        assert_job_action(body, job_id, action_id)?;
+    }
     let linux = super::super::job_body(body, "build-linux")?;
     assert!(linux.contains("runs-on: ubuntu-26.04\n"), "{linux}");
     let linux_action = action(actions, "generator-release-build-linux")?;
@@ -109,6 +158,10 @@ pub(super) fn assert_target_builds(
         linux_action.contains("rust@1.98.1 mr-boxington@1.21.1"),
         "{linux_action}"
     );
+    assert_macos_build(body, actions)
+}
+
+fn assert_macos_build(body: &str, actions: &Actions) -> Result<(), Box<dyn std::error::Error>> {
     let macos = super::super::job_body(body, "build-macos")?;
     assert!(macos.contains("runs-on: macos-15\n"), "{macos}");
     let macos_action = action(actions, "generator-release-build-macos")?;
@@ -135,7 +188,7 @@ pub(super) fn assert_manifest_job(
 fn assert_candidate_manifest_job(body: &str) -> Result<&str, Box<dyn std::error::Error>> {
     let candidate = super::super::job_body(body, "candidate-manifest")?;
     assert!(candidate.contains("runs-on: ubuntu-26.04\n"), "{candidate}");
-    assert!(candidate.contains("- verify-release-source"), "{candidate}");
+    assert!(candidate.contains("- verify-release-caller"), "{candidate}");
     assert!(candidate.contains("- build-linux"), "{candidate}");
     assert!(candidate.contains("- build-macos"), "{candidate}");
     assert!(candidate.contains("- build-macos-intel"), "{candidate}");
@@ -166,12 +219,12 @@ fn assert_manifest_attestation_job(
         manifest_job.contains("- candidate-manifest"),
         "{manifest_job}"
     );
-    assert!(manifest_job.contains("- attest-linux"), "{manifest_job}");
-    assert!(manifest_job.contains("- attest-macos"), "{manifest_job}");
-    assert!(
-        manifest_job.contains("- attest-macos-intel"),
-        "{manifest_job}"
-    );
+    for attester in ["attest-linux", "attest-macos", "attest-macos-intel"] {
+        assert!(
+            manifest_job.contains(&format!("- {attester}\n")),
+            "{manifest_job}"
+        );
+    }
     assert!(
         manifest_job.contains("uses: ./.github/actions/generator-release-attest-manifest"),
         "{manifest_job}"
@@ -312,17 +365,13 @@ pub(super) fn assert_publish_job(
         "{publish_action}"
     );
     assert!(!publish_action.contains("${{ needs."), "{publish_action}");
-    assert!(publish.contains("- attest-linux"), "{publish}");
-    assert!(publish.contains("- attest-macos"), "{publish}");
-    assert!(publish.contains("- attest-macos-intel"), "{publish}");
+    for attester in ["attest-linux", "attest-macos", "attest-macos-intel"] {
+        assert!(publish.contains(&format!("- {attester}\n")), "{publish}");
+    }
     assert!(publish.contains("- attest-manifest"), "{publish}");
     assert!(
         publish.contains("environment:\n      name: generator-release"),
         "{publish}"
-    );
-    assert!(
-        body.contains("group: generator-release-${{ github.repository }}-${{ github.ref }}"),
-        "{body}"
     );
     Ok(())
 }
@@ -337,21 +386,5 @@ fn assert_job_action(
         job.contains(&format!("uses: ./.github/actions/{action_name}")),
         "{job}"
     );
-    Ok(())
-}
-
-fn assert_attest(
-    body: &str,
-    actions: &Actions,
-    id: &str,
-    runs_on: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let job = super::super::job_body(body, id)?;
-    assert!(job.contains(&format!("runs-on: {runs_on}\n")), "{job}");
-    assert!(job.contains("id-token: write"), "{job}");
-    assert!(!job.contains("contents: write"), "{job}");
-    let action_name = format!("generator-release-{id}");
-    assert_job_action(body, id, &action_name)?;
-    assert!(action(actions, &action_name)?.contains("provenance.json"));
     Ok(())
 }

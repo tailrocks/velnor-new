@@ -94,8 +94,10 @@ pub(crate) fn manifest_for(
         "generator_sha256": plan.generator.sha256,
         "compatibility_id": compat,
         "artifact_id": baseline_artifact_numeric_id(&name),
+        "parent": null,
         "artifact_name": name,
         "tasks": tasks,
+        "parent": serde_json::Value::Null,
     })
 }
 
@@ -111,7 +113,9 @@ pub(crate) fn entries_for(plan: &Plan) -> serde_json::Value {
                 "input_digest": ob.input_digest,
                 "closure_digest": ob.closure_digest,
                 "proof_run_id": 7,
+                "carried_from": null,
                 "observed_run_id": 7,
+                "carried_from": serde_json::Value::Null,
             })
         })
         .collect();

@@ -11,8 +11,8 @@ fn config_validation_reports_key_paths() {
     use velnor_actions_contract::config::ActionsConfig;
     use velnor_actions_contract::config::RustReleaseConfig;
     use velnor_actions_contract::{
-        DiscoveryConfig, ResourcesConfig, RustConfiguration, RustStackConfig, StacksConfig,
-        TestShardingConfig, VelnorConfig, WorkflowConfig,
+        DiscoveryConfig, PullRequestCachePolicy, ResourcesConfig, RustConfiguration,
+        RustStackConfig, StacksConfig, TestShardingConfig, VelnorConfig, WorkflowConfig,
     };
     let valid = VelnorConfig {
         checks: Vec::new(),
@@ -24,8 +24,10 @@ fn config_validation_reports_key_paths() {
             default_branch: None,
             generator_validation: GeneratorValidation::Bootstrap,
             max_parallel_jobs: 2,
+            pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
             tasks: Vec::new(),
+            tofu_apply: None,
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -85,8 +87,8 @@ fn runner_label_uses_exact_catalog_match() {
     use velnor_actions_contract::config::ActionsConfig;
     use velnor_actions_contract::config::{LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG};
     use velnor_actions_contract::{
-        ContractError, DiscoveryConfig, ResourcesConfig, StacksConfig, TestShardingConfig,
-        VelnorConfig,
+        ContractError, DiscoveryConfig, PullRequestCachePolicy, ResourcesConfig, StacksConfig,
+        TestShardingConfig, VelnorConfig,
     };
     let base = || VelnorConfig {
         checks: Vec::new(),
@@ -98,8 +100,10 @@ fn runner_label_uses_exact_catalog_match() {
             default_branch: None,
             generator_validation: velnor_actions_contract::GeneratorValidation::Bootstrap,
             max_parallel_jobs: 2,
+            pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
             tasks: Vec::new(),
+            tofu_apply: None,
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -150,9 +154,9 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
     use velnor_actions_contract::config::ActionsConfig;
     use velnor_actions_contract::config::RustReleaseConfig;
     use velnor_actions_contract::{
-        ContractError, DiscoveryConfig, GeneratorValidation, ResourcesConfig, RustConfiguration,
-        RustStackConfig, StacksConfig, TestShardingConfig, VelnorConfig, WorkflowConfig,
-        WorkflowPolicy,
+        ContractError, DiscoveryConfig, GeneratorValidation, PullRequestCachePolicy,
+        ResourcesConfig, RustConfiguration, RustStackConfig, StacksConfig, TestShardingConfig,
+        VelnorConfig, WorkflowConfig, WorkflowPolicy,
     };
     let mut config = VelnorConfig {
         checks: Vec::new(),
@@ -164,8 +168,10 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
             default_branch: None,
             generator_validation: GeneratorValidation::Bootstrap,
             max_parallel_jobs: 2,
+            pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
             tasks: Vec::new(),
+            tofu_apply: None,
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,

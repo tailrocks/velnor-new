@@ -8,8 +8,7 @@ use velnor_actions_tofu::propose::{
     root_for_key, step_base_name, task_id_for_root, task_kind_rank,
 };
 
-/// Contract-exact variant keeps the `init` wire spelling (spec §6.1
-/// `stack/tofu/root/init/default` is normative for the ID segment).
+/// Contract-exact variant keeps the `init` wire spelling.
 #[test]
 fn init_for_validate_keeps_init_spelling() {
     assert_eq!(TofuTaskKind::InitForValidate.as_str(), "init");
@@ -32,15 +31,60 @@ fn unknown_kind_spellings_fail_closed() {
     }
 }
 
-/// Root/key/display mappings round-trip; `root` is reserved for `""`.
+/// Exact UTF-8 roots remain distinct through the identity namespace.
 #[test]
 fn key_mapping_round_trips_roots() {
-    assert_eq!(key_for_root(""), "root");
-    assert_eq!(key_for_root("stacks/a"), "stacks/a");
-    assert_eq!(root_for_key("root"), "");
-    assert_eq!(root_for_key("stacks/a"), "stacks/a");
+    let roots = [
+        "",
+        "root",
+        "dir-",
+        "a-b",
+        "a_b",
+        "a/b",
+        "infra/日本語",
+        "é",
+        "e\u{301}",
+    ];
+    let keys: std::collections::BTreeSet<String> =
+        roots.iter().map(|root| key_for_root(root)).collect();
+    assert_eq!(keys.len(), roots.len());
+    for root in roots {
+        assert_eq!(root_for_key(&key_for_root(root)).expect("decode"), root);
+        for kind in [
+            TofuTaskKind::Fmt,
+            TofuTaskKind::InitForValidate,
+            TofuTaskKind::Validate,
+        ] {
+            let task = propose_task(&group(root, kind)).expect("proposal");
+            task.validate().expect("valid task");
+            assert_eq!(task.identity.project_root, display_for_root(root));
+        }
+    }
     assert_eq!(display_for_root(""), ".");
-    assert_eq!(display_for_root("stacks/a"), "stacks/a");
+}
+
+#[test]
+fn malformed_root_keys_and_noncanonical_paths_fail_closed() {
+    for key in [
+        "root",
+        "stacks/a",
+        "dir-0",
+        "dir-AA",
+        "dir-ff",
+        "dir-2e",
+        "dir-2f61",
+        "dir-612f2f62",
+        "dir-612f2e2e",
+        "dir-00",
+    ] {
+        assert!(root_for_key(key).is_err(), "{key}");
+    }
+    for root in [".", "..", "/a", "a//b", "a/../b", "a\\b", "a\n"] {
+        assert!(
+            task_id_for_root(root, TofuTaskKind::Fmt, "default").is_err(),
+            "{root:?}"
+        );
+    }
 }
 
 /// Task IDs flow through the existing stack grammar per root/kind.
@@ -48,15 +92,15 @@ fn key_mapping_round_trips_roots() {
 fn task_ids_flow_through_stack_grammar() {
     assert_eq!(
         task_id_for_root("", TofuTaskKind::Fmt, "default").expect("root fmt"),
-        "stack/tofu/root/fmt/default"
+        "stack/tofu/dir-/fmt/default"
     );
     assert_eq!(
         task_id_for_root("", TofuTaskKind::InitForValidate, "default").expect("root init"),
-        "stack/tofu/root/init/default"
+        "stack/tofu/dir-/init/default"
     );
     assert_eq!(
         task_id_for_root("stacks/a", TofuTaskKind::Validate, "default").expect("nested validate"),
-        "stack/tofu/stacks/a/validate/default"
+        "stack/tofu/dir-737461636b732f61/validate/default"
     );
     assert!(task_id_for_root("", TofuTaskKind::Fmt, "/abs").is_err());
 }
@@ -77,13 +121,62 @@ fn validate_depends_on_same_root_init() {
     let validate = propose_task(&group("stacks/a", TofuTaskKind::Validate)).expect("proposes");
     assert_eq!(
         validate.depends_on,
-        vec!["stack/tofu/stacks/a/init/default".to_owned()]
+        vec!["stack/tofu/dir-737461636b732f61/init/default".to_owned()]
     );
     assert!(validate.gated_by.is_empty());
     for kind in [TofuTaskKind::Fmt, TofuTaskKind::InitForValidate] {
         let task = propose_task(&group("stacks/a", kind)).expect("proposes");
         assert!(task.depends_on.is_empty(), "{} independent", kind.as_str());
         assert!(task.gated_by.is_empty());
+    }
+}
+
+/// Independent mutation of a root authority or root edge fails admission.
+#[test]
+fn proposal_root_authorities_must_all_agree() {
+    for root in ["", "root", "infra/日本語"] {
+        for kind in [
+            TofuTaskKind::Fmt,
+            TofuTaskKind::InitForValidate,
+            TofuTaskKind::Validate,
+        ] {
+            let task = propose_task(&group(root, kind)).expect("proposal");
+            assert_eq!(
+                velnor_actions_tofu::normalized_root_for_proposal(&task).expect("admit"),
+                root
+            );
+            let mut mutations = Vec::new();
+            let mut changed = task.clone();
+            changed.identity.project_root = "different".to_owned();
+            mutations.push(changed);
+            let mut changed = task.clone();
+            changed.identity.unit_key = key_for_root("different");
+            mutations.push(changed);
+            let mut changed = task.clone();
+            changed.identity.unit_id = key_for_root("different");
+            mutations.push(changed);
+            let mut changed = task.clone();
+            changed.identity.unit_path = "different".to_owned();
+            mutations.push(changed);
+            let mut changed = task.clone();
+            changed.component_id = "different".to_owned();
+            mutations.push(changed);
+            let mut changed = task.clone();
+            changed.task_id = task_id_for_root("different", kind, "default").expect("ID");
+            mutations.push(changed);
+            let mut changed = task.clone();
+            changed.payload = tofu_payload_argv(kind, "different").expect("argv");
+            mutations.push(changed);
+            let mut changed = task.clone();
+            changed.depends_on = vec!["stack/tofu/dir-646966666572656e74/init/default".to_owned()];
+            mutations.push(changed);
+            let mut changed = task.clone();
+            changed.reads = vec!["different".to_owned()];
+            mutations.push(changed);
+            for changed in mutations {
+                assert!(velnor_actions_tofu::normalized_root_for_proposal(&changed).is_err());
+            }
+        }
     }
 }
 
