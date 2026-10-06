@@ -9,7 +9,7 @@ use crate::worker::{PreparedDind, Started};
 async fn ready_pair(engine: &Fake) -> Result<(PreparedDind, Started), HostError> {
     let identity = identity()?;
     let prepared = prepare_dind(engine, &identity).await?;
-    let started = start_runner(engine, &prepared, b"jit", None).await?;
+    let started = start_runner(engine, &prepared, b"jit").await?;
     Ok((prepared, started))
 }
 
@@ -23,7 +23,6 @@ async fn runner_start_uses_only_a_verified_prepared_dind() -> Result<(), HostErr
         &identity()?,
         Some(&started.runner_id),
         Some(&started.dind_id),
-        None,
     )
     .await?;
     assert_eq!(observed.runner_id(), Some(started.runner_id.as_str()));
@@ -47,7 +46,7 @@ async fn journal_recovery_rechecks_the_full_dind_identity() -> Result<(), HostEr
     let engine = Fake::new();
     let prepared = prepare_dind(&engine, &identity).await?;
     let recovered = PreparedDind::from_journal(&identity, prepared.dind_id())?;
-    start_runner(&engine, &recovered, b"jit", None).await?;
+    start_runner(&engine, &recovered, b"jit").await?;
     assert!(engine.events()?.contains(&"verify-dind"));
     Ok(())
 }
@@ -65,7 +64,7 @@ async fn recovered_handle_cannot_relabel_a_foreign_dind() -> Result<(), HostErro
     let prepared = prepare_dind(&engine, &identity).await?;
     let forged = PreparedDind::from_journal(&foreign, prepared.dind_id())?;
     assert_eq!(
-        start_runner(&engine, &forged, b"jit", None).await,
+        start_runner(&engine, &forged, b"jit").await,
         Err(HostError::Ownership)
     );
     assert_eq!(engine.containers()?, 1);
@@ -80,7 +79,7 @@ async fn runner_start_failure_keeps_pair_for_reconciliation() -> Result<(), Host
     let prepared = prepare_dind(&engine, &identity).await?;
     *engine.fail_start_at.lock().map_err(|_| HostError::Docker)? = Some(2);
     assert_eq!(
-        start_runner(&engine, &prepared, b"jit", None).await,
+        start_runner(&engine, &prepared, b"jit").await,
         Err(HostError::ContainerStartUncertain)
     );
     assert_eq!(engine.containers()?, 2);
@@ -95,7 +94,7 @@ async fn jit_delivery_failure_keeps_pair_for_reconciliation() -> Result<(), Host
     let prepared = prepare_dind(&engine, &identity).await?;
     *engine.fail_jit.lock().map_err(|_| HostError::Docker)? = true;
     assert_eq!(
-        start_runner(&engine, &prepared, b"jit", None).await,
+        start_runner(&engine, &prepared, b"jit").await,
         Err(HostError::JitDeliveryUncertain)
     );
     assert_eq!(engine.containers()?, 2);
@@ -113,7 +112,7 @@ async fn lost_runner_create_response_keeps_pair_for_reconciliation() -> Result<(
         .lock()
         .map_err(|_| HostError::Docker)? = Some(2);
     assert_eq!(
-        start_runner(&engine, &prepared, b"jit", None).await,
+        start_runner(&engine, &prepared, b"jit").await,
         Err(HostError::ContainerCreateUncertain)
     );
     assert_eq!(engine.containers()?, 2);

@@ -4,7 +4,6 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::HostError;
 use crate::launch_identity::LaunchIdentity;
 use crate::stage::pair::PairEngine;
@@ -175,7 +174,6 @@ impl PairEngine for Fake {
         role: &str,
         id: &str,
         dind_id: Option<&str>,
-        archive_lease: Option<&ActionArchiveLease>,
         require_running: bool,
     ) -> Result<ContainerRecord, HostError> {
         self.push(if role == "dind" {
@@ -183,11 +181,6 @@ impl PairEngine for Fake {
         } else {
             "verify-runner"
         })?;
-        if role == "runner"
-            && archive_lease.is_some_and(|lease| lease.launch_id() != identity.launch_id())
-        {
-            return Err(HostError::Ownership);
-        }
         let record = self
             .ids
             .lock()
@@ -222,7 +215,7 @@ impl PairEngine for Fake {
             {
                 return Err(HostError::Ownership);
             }
-        } else if role != "dind" || dind_id.is_some() || archive_lease.is_some() {
+        } else if role != "dind" || dind_id.is_some() {
             return Err(HostError::Ownership);
         }
         Ok(record)

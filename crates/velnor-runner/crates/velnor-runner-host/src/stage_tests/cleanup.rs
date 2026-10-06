@@ -27,7 +27,7 @@ async fn prepared_cleanup_refuses_a_present_runner() -> Result<(), HostError> {
     let identity = identity()?;
     let engine = Fake::new();
     let prepared = prepare_dind(&engine, &identity).await?;
-    start_runner(&engine, &prepared, b"jit", None).await?;
+    start_runner(&engine, &prepared, b"jit").await?;
     assert_eq!(
         cleanup_prepared_dind(&engine, &prepared).await,
         Err(HostError::Ownership)
@@ -42,14 +42,13 @@ async fn active_runner_cleanup_preserves_pair_and_volumes() -> Result<(), HostEr
     let identity = identity()?;
     let engine = Fake::new();
     let prepared = prepare_dind(&engine, &identity).await?;
-    let started = start_runner(&engine, &prepared, b"jit", None).await?;
+    let started = start_runner(&engine, &prepared, b"jit").await?;
     assert_eq!(
         cleanup_worker(
             &engine,
             &identity,
             Some(&started.runner_id),
             Some(&started.dind_id),
-            None,
         )
         .await,
         Err(HostError::RunnerActive)
@@ -64,7 +63,7 @@ async fn cleanup_error_keeps_remaining_pair_and_volumes() -> Result<(), HostErro
     let identity = identity()?;
     let engine = Fake::new();
     let prepared = prepare_dind(&engine, &identity).await?;
-    let started = start_runner(&engine, &prepared, b"jit", None).await?;
+    let started = start_runner(&engine, &prepared, b"jit").await?;
     engine.stop(&started.runner_id)?;
     *engine.fail_remove.lock().map_err(|_| HostError::Docker)? = true;
     assert_eq!(
@@ -73,7 +72,6 @@ async fn cleanup_error_keeps_remaining_pair_and_volumes() -> Result<(), HostErro
             &identity,
             Some(&started.runner_id),
             Some(&started.dind_id),
-            None,
         )
         .await,
         Err(HostError::Docker)
@@ -88,14 +86,13 @@ async fn successful_cleanup_removes_containers_before_volumes() -> Result<(), Ho
     let identity = identity()?;
     let engine = Fake::new();
     let prepared = prepare_dind(&engine, &identity).await?;
-    let started = start_runner(&engine, &prepared, b"jit", None).await?;
+    let started = start_runner(&engine, &prepared, b"jit").await?;
     engine.stop(&started.runner_id)?;
     cleanup_worker(
         &engine,
         &identity,
         Some(&started.runner_id),
         Some(&started.dind_id),
-        None,
     )
     .await?;
     assert_eq!(engine.containers()?, 0);
@@ -108,9 +105,9 @@ async fn cleanup_discovers_owned_pair_when_journal_ids_are_missing() -> Result<(
     let identity = identity()?;
     let engine = Fake::new();
     let prepared = prepare_dind(&engine, &identity).await?;
-    let started = start_runner(&engine, &prepared, b"jit", None).await?;
+    let started = start_runner(&engine, &prepared, b"jit").await?;
     engine.stop(&started.runner_id)?;
-    cleanup_worker(&engine, &identity, None, None, None).await?;
+    cleanup_worker(&engine, &identity, None, None).await?;
     assert_eq!(engine.containers()?, 0);
     assert_eq!(engine.events()?.last(), Some(&"remove-volumes"));
     Ok(())

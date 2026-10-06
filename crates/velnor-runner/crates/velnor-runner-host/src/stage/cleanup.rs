@@ -2,7 +2,6 @@
 
 use super::pair::PairEngine;
 use super::{reconcile_worker, reconcile_worker_with_budget};
-use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::HostError;
 use crate::launch_identity::LaunchIdentity;
 use crate::worker::ResourceBudget;
@@ -16,9 +15,8 @@ pub(crate) async fn cleanup_worker<E: PairEngine>(
     identity: &LaunchIdentity,
     runner_id: Option<&str>,
     dind_id: Option<&str>,
-    archive_lease: Option<&ActionArchiveLease>,
 ) -> Result<(), HostError> {
-    cleanup_pair(engine, identity, runner_id, dind_id, archive_lease).await
+    cleanup_pair(engine, identity, runner_id, dind_id).await
 }
 
 pub(super) async fn cleanup_unstarted_dind<E: PairEngine>(
@@ -46,10 +44,9 @@ async fn cleanup_unstarted_dind_inner<E: PairEngine>(
 ) -> Result<(), HostError> {
     let observed = match resource_budget {
         Some(budget) => {
-            reconcile_worker_with_budget(engine, identity, None, Some(dind_id), None, budget)
-                .await?
+            reconcile_worker_with_budget(engine, identity, None, Some(dind_id), budget).await?
         }
-        None => reconcile_worker(engine, identity, None, Some(dind_id), None).await?,
+        None => reconcile_worker(engine, identity, None, Some(dind_id)).await?,
     };
     if observed.runner_id().is_some() {
         return Err(HostError::Ownership);
@@ -57,7 +54,7 @@ async fn cleanup_unstarted_dind_inner<E: PairEngine>(
     if let Some(id) = observed.dind_id() {
         engine.remove(id).await?;
     }
-    let after = reconcile_worker(engine, identity, None, None, None).await?;
+    let after = reconcile_worker(engine, identity, None, None).await?;
     if after.dind_id().is_some() || after.runner_id().is_some() {
         return Err(HostError::Cleanup);
     }
@@ -69,9 +66,8 @@ pub(super) async fn cleanup_pair<E: PairEngine>(
     identity: &LaunchIdentity,
     runner_id: Option<&str>,
     dind_id: Option<&str>,
-    archive_lease: Option<&ActionArchiveLease>,
 ) -> Result<(), HostError> {
-    let observed = reconcile_worker(engine, identity, runner_id, dind_id, archive_lease).await?;
+    let observed = reconcile_worker(engine, identity, runner_id, dind_id).await?;
     if let Some(id) = observed.runner_id() {
         let runner = engine
             .inspect_container(id)
@@ -86,14 +82,14 @@ pub(super) async fn cleanup_pair<E: PairEngine>(
         }
         engine.remove(id).await?;
     }
-    let after_runner = reconcile_worker(engine, identity, None, dind_id, None).await?;
+    let after_runner = reconcile_worker(engine, identity, None, dind_id).await?;
     if after_runner.runner_id().is_some() {
         return Err(HostError::Cleanup);
     }
     if let Some(id) = after_runner.dind_id() {
         engine.remove(id).await?;
     }
-    let after_pair = reconcile_worker(engine, identity, None, None, None).await?;
+    let after_pair = reconcile_worker(engine, identity, None, None).await?;
     if after_pair.runner_id().is_some() || after_pair.dind_id().is_some() {
         return Err(HostError::Cleanup);
     }

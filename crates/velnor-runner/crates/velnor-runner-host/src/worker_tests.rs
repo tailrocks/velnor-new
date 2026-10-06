@@ -319,7 +319,7 @@ async fn pair_start_runner_empty_jit_does_not_create() -> Result<(), HostError> 
     let dind_id = "a".repeat(64);
     let prepared = crate::worker::PreparedDind::from_journal(&identity, &dind_id)?;
     assert_eq!(
-        crate::stage::pair::start_runner(&idle.docker, &prepared, b"", None).await,
+        crate::stage::pair::start_runner(&idle.docker, &prepared, b"").await,
         Err(HostError::EmptyJit)
     );
     Ok(())

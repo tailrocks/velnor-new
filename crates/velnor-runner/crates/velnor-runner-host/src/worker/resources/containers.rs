@@ -14,7 +14,6 @@ use super::super::{
     identity_labels_match, join_dind_net, launch_identity_labels_match, runner_create_for_identity,
 };
 use super::confirmed_not_found;
-use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::HostError;
 use crate::launch_identity::LaunchIdentity;
 use crate::stage::ContainerRecord;
@@ -150,7 +149,6 @@ pub(super) async fn verify_container(
     role: &str,
     id: &str,
     dind_id: Option<&str>,
-    archive_lease: Option<&ActionArchiveLease>,
     resource_budget: Option<ResourceBudget>,
     require_running: bool,
 ) -> Result<ContainerRecord, HostError> {
@@ -158,19 +156,13 @@ pub(super) async fn verify_container(
         return Err(HostError::Ownership);
     }
     let expected = match role {
-        "dind" if dind_id.is_none() && archive_lease.is_none() => {
+        "dind" if dind_id.is_none() => {
             let mut expected = dind_create_for_identity(identity)?;
             expected.resource_budget = resource_budget;
             expected
         }
         "runner" => {
-            if archive_lease.is_some_and(|lease| lease.launch_id() != identity.launch_id()) {
-                return Err(HostError::Ownership);
-            }
-            let mut runner = runner_create_for_identity(
-                identity,
-                archive_lease.map(ActionArchiveLease::cache_path),
-            )?;
+            let mut runner = runner_create_for_identity(identity, None)?;
             runner.resource_budget = resource_budget;
             join_dind_net(runner, dind_id.ok_or(HostError::Ownership)?)?
         }

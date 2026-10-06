@@ -7,7 +7,6 @@ use bollard::Docker;
 use bollard::query_parameters::RemoveContainerOptionsBuilder;
 use tokio::time::{sleep, timeout};
 
-use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::{HostError, PreparationCause};
 use crate::launch_identity::LaunchIdentity;
 use crate::worker::resources::refuse_existing;
@@ -57,7 +56,6 @@ pub(crate) trait PairEngine {
         role: &str,
         id: &str,
         dind_id: Option<&str>,
-        archive_lease: Option<&ActionArchiveLease>,
         require_running: bool,
     ) -> Result<ContainerRecord, HostError>;
     /// Verify one container and check its Docker limits against `resource_budget`.
@@ -69,11 +67,10 @@ pub(crate) trait PairEngine {
         role: &str,
         id: &str,
         dind_id: Option<&str>,
-        archive_lease: Option<&ActionArchiveLease>,
         _resource_budget: ResourceBudget,
         require_running: bool,
     ) -> Result<ContainerRecord, HostError> {
-        self.verify_container(identity, role, id, dind_id, archive_lease, require_running)
+        self.verify_container(identity, role, id, dind_id, require_running)
             .await
     }
     async fn write_jit(&self, id: &str, jit: &[u8]) -> Result<(), HostError>;
@@ -117,20 +114,9 @@ impl PairEngine for Docker {
         role: &str,
         id: &str,
         dind_id: Option<&str>,
-        archive_lease: Option<&ActionArchiveLease>,
         require_running: bool,
     ) -> Result<ContainerRecord, HostError> {
-        verify_container(
-            self,
-            identity,
-            role,
-            id,
-            dind_id,
-            archive_lease,
-            None,
-            require_running,
-        )
-        .await
+        verify_container(self, identity, role, id, dind_id, None, require_running).await
     }
 
     async fn verify_container_with_budget(
@@ -139,7 +125,6 @@ impl PairEngine for Docker {
         role: &str,
         id: &str,
         dind_id: Option<&str>,
-        archive_lease: Option<&ActionArchiveLease>,
         resource_budget: ResourceBudget,
         require_running: bool,
     ) -> Result<ContainerRecord, HostError> {
@@ -149,7 +134,6 @@ impl PairEngine for Docker {
             role,
             id,
             dind_id,
-            archive_lease,
             Some(resource_budget),
             require_running,
         )
@@ -236,13 +220,13 @@ pub(crate) async fn prepare_dind<E: PairEngine>(
     engine: &E,
     identity: &LaunchIdentity,
 ) -> Result<PreparedDind, HostError> {
-    let observed = reconcile_worker(engine, identity, None, None, None).await?;
+    let observed = reconcile_worker(engine, identity, None, None).await?;
     if observed.runner_id().is_some() {
         return Err(HostError::Ownership);
     }
     if let Some(dind_id) = observed.dind_id() {
         let record = engine
-            .verify_container(identity, "dind", dind_id, None, None, false)
+            .verify_container(identity, "dind", dind_id, None, false)
             .await?;
         match record.running {
             Some(true) => {}
@@ -291,24 +275,19 @@ pub(crate) async fn start_runner<E: PairEngine>(
     engine: &E,
     prepared: &PreparedDind,
     jit: &[u8],
-    archive_lease: Option<&ActionArchiveLease>,
 ) -> Result<Started, HostError> {
     if jit.is_empty() {
         return Err(HostError::EmptyJit);
     }
     let identity = prepared.identity();
-    if archive_lease.is_some_and(|lease| lease.launch_id() != identity.launch_id()) {
-        return Err(HostError::Ownership);
-    }
-    let observed = reconcile_worker(engine, identity, None, Some(prepared.dind_id()), None).await?;
+    let observed = reconcile_worker(engine, identity, None, Some(prepared.dind_id())).await?;
     if observed.dind_id() != Some(prepared.dind_id()) || observed.runner_id().is_some() {
         return Err(HostError::Ownership);
     }
     engine
-        .verify_container(identity, "dind", prepared.dind_id(), None, None, true)
+        .verify_container(identity, "dind", prepared.dind_id(), None, true)
         .await?;
-    let cache_path = archive_lease.map(ActionArchiveLease::cache_path);
-    let runner = runner_create_for_identity(identity, cache_path)?;
+    let runner = runner_create_for_identity(identity, None)?;
     let spec = join_dind_net(runner, prepared.dind_id())?;
     let runner_id = engine.create(&spec).await?;
     engine.start(&runner_id).await?;

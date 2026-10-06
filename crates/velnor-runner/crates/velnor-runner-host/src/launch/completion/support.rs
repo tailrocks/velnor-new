@@ -1,8 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::action_archive_seed::ActionArchiveStore;
 use crate::error::HostError;
-use crate::journal::Journal;
 use crate::reconcile::IntentRow;
 use crate::scale_set::EnsureError;
 
@@ -55,17 +53,6 @@ pub(super) fn retry_at(attempt: u32) -> Result<i64, EnsureError> {
     unix_seconds()?
         .checked_add(i64::try_from(delay).map_err(|_| completion_error())?)
         .ok_or_else(completion_error)
-}
-
-pub(super) fn open_archive_store(journal: &Journal) -> Result<ActionArchiveStore, EnsureError> {
-    // The scheduler archive root is the `action-archives` sibling of the canonical journal.
-    // The publisher must use the same root. Recovery must not create a missing store.
-    let root = journal
-        .path()
-        .parent()
-        .ok_or_else(completion_error)?
-        .join("action-archives");
-    ActionArchiveStore::open_existing(root).map_err(|_| completion_error())
 }
 
 pub(super) fn log_cleanup_error(row: &IntentRow, stage: &str, detail: &str) {

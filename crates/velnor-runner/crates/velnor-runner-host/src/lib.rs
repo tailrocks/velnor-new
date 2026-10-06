@@ -3,7 +3,6 @@
 //! Callers persist intent before an external effect and never hold a
 //! transaction across that effect.
 
-pub(crate) mod action_archive_seed;
 mod assign;
 mod config;
 mod connect;

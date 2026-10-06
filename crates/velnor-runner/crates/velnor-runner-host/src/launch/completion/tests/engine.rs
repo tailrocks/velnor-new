@@ -6,7 +6,6 @@ use std::sync::{
 };
 use std::time::Duration;
 
-use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::HostError;
 use crate::launch_identity::LaunchIdentity;
 use crate::stage::{ContainerRecord, DindProbe, PairEngine};
@@ -129,7 +128,6 @@ impl PairEngine for CompletionEngine {
         role: &str,
         id: &str,
         dind_id: Option<&str>,
-        archive_lease: Option<&ActionArchiveLease>,
         require_running: bool,
     ) -> Result<ContainerRecord, HostError> {
         if self
@@ -137,7 +135,6 @@ impl PairEngine for CompletionEngine {
             .as_ref()
             .is_some_and(|expected| expected != identity)
             || (role == "runner" && dind_id.is_none())
-            || archive_lease.is_some_and(|lease| lease.launch_id() != identity.launch_id())
         {
             return Err(HostError::Ownership);
         }

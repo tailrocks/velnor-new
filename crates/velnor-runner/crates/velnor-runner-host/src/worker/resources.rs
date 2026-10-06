@@ -11,7 +11,6 @@ use bollard::models::VolumeCreateRequest;
 use bollard::query_parameters::RemoveVolumeOptionsBuilder;
 use tokio::time::{Instant, sleep, timeout};
 
-use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::HostError;
 use crate::launch_identity::LaunchIdentity;
 use crate::stage::{ContainerRecord, DindProbe};
@@ -187,7 +186,6 @@ pub(crate) async fn verify_container(
     role: &str,
     id: &str,
     dind_id: Option<&str>,
-    archive_lease: Option<&ActionArchiveLease>,
     resource_budget: Option<ResourceBudget>,
     require_running: bool,
 ) -> Result<ContainerRecord, HostError> {
@@ -199,7 +197,6 @@ pub(crate) async fn verify_container(
         role,
         id,
         dind_id,
-        archive_lease,
         resource_budget,
         require_running,
     )

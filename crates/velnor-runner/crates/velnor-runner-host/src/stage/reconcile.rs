@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 
-use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::HostError;
 use crate::launch_identity::LaunchIdentity;
 use crate::worker::{ResourceBudget, container_labels, container_name, identity_labels_match};
@@ -46,17 +45,8 @@ pub(crate) async fn reconcile_worker<E: PairEngine>(
     identity: &LaunchIdentity,
     recorded_runner_id: Option<&str>,
     recorded_dind_id: Option<&str>,
-    archive_lease: Option<&ActionArchiveLease>,
 ) -> Result<ObservedWorker, HostError> {
-    reconcile_worker_inner(
-        engine,
-        identity,
-        recorded_runner_id,
-        recorded_dind_id,
-        archive_lease,
-        None,
-    )
-    .await
+    reconcile_worker_inner(engine, identity, recorded_runner_id, recorded_dind_id, None).await
 }
 
 pub(crate) async fn reconcile_worker_with_budget<E: PairEngine>(
@@ -64,7 +54,6 @@ pub(crate) async fn reconcile_worker_with_budget<E: PairEngine>(
     identity: &LaunchIdentity,
     recorded_runner_id: Option<&str>,
     recorded_dind_id: Option<&str>,
-    archive_lease: Option<&ActionArchiveLease>,
     resource_budget: ResourceBudget,
 ) -> Result<ObservedWorker, HostError> {
     reconcile_worker_inner(
@@ -72,7 +61,6 @@ pub(crate) async fn reconcile_worker_with_budget<E: PairEngine>(
         identity,
         recorded_runner_id,
         recorded_dind_id,
-        archive_lease,
         Some(resource_budget),
     )
     .await
@@ -83,7 +71,6 @@ async fn reconcile_worker_inner<E: PairEngine>(
     identity: &LaunchIdentity,
     recorded_runner_id: Option<&str>,
     recorded_dind_id: Option<&str>,
-    archive_lease: Option<&ActionArchiveLease>,
     resource_budget: Option<ResourceBudget>,
 ) -> Result<ObservedWorker, HostError> {
     engine.verify_engine(identity).await?;
@@ -110,16 +97,7 @@ async fn reconcile_worker_inner<E: PairEngine>(
     verify_named_identity(engine, identity, "dind", observed.dind_id.as_deref()).await?;
     verify_named_identity(engine, identity, "runner", observed.runner_id.as_deref()).await?;
     if let Some(dind_id) = observed.dind_id.as_deref() {
-        verify_container(
-            engine,
-            identity,
-            "dind",
-            dind_id,
-            None,
-            None,
-            resource_budget,
-        )
-        .await?;
+        verify_container(engine, identity, "dind", dind_id, None, resource_budget).await?;
     }
     if let Some(runner_id) = observed.runner_id.as_deref() {
         let dind_id = observed.dind_id.as_deref().ok_or(HostError::Ownership)?;
@@ -129,7 +107,6 @@ async fn reconcile_worker_inner<E: PairEngine>(
             "runner",
             runner_id,
             Some(dind_id),
-            archive_lease,
             resource_budget,
         )
         .await?;
@@ -144,26 +121,17 @@ async fn verify_container<E: PairEngine>(
     role: &str,
     id: &str,
     dind_id: Option<&str>,
-    archive_lease: Option<&ActionArchiveLease>,
     resource_budget: Option<ResourceBudget>,
 ) -> Result<super::ContainerRecord, HostError> {
     match resource_budget {
         Some(budget) => {
             engine
-                .verify_container_with_budget(
-                    identity,
-                    role,
-                    id,
-                    dind_id,
-                    archive_lease,
-                    budget,
-                    false,
-                )
+                .verify_container_with_budget(identity, role, id, dind_id, budget, false)
                 .await
         }
         None => {
             engine
-                .verify_container(identity, role, id, dind_id, archive_lease, false)
+                .verify_container(identity, role, id, dind_id, false)
                 .await
         }
     }
