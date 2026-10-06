@@ -69,6 +69,7 @@ fn rendered_condition(step: &Step) -> String {
         candidate: None,
         preseed: false,
         verification_tasks: Vec::new(),
+        pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         plan_consumer_env: BTreeMap::new(),
     };
     let job_env = BTreeMap::new();

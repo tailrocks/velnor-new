@@ -258,7 +258,7 @@ fn failed_report_marks_entry_failed() {
 }
 
 /// Tofu task ID for the timing-carrying execution case.
-const TOFU_VALIDATE: &str = "stack/tofu/stacks/a/validate/default";
+const TOFU_VALIDATE: &str = "stack/tofu/dir-737461636b732f61/validate/default";
 
 #[test]
 fn tofu_executed_report_carries_measured_timing() {

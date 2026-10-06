@@ -109,7 +109,7 @@ pub(crate) fn tofu_providers_restore_step(
 /// The restore action may extract a prefix match before exposing its
 /// outputs. On a miss or mismatched key, clear only the validated
 /// job-private plugin-cache leaf so init can run cold. The generated
-/// key binds target, `OpenTofu` pin, root slug, and lockfile hash; GitHub's
+/// key binds target, `OpenTofu` pin, root locator, and lockfile hash; GitHub's
 /// cache branch scope remains the trust boundary. `TF_DATA_DIR` is not
 /// part of this path.
 /// # Errors

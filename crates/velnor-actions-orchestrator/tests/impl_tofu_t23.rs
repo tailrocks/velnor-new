@@ -172,6 +172,7 @@ fn provider_hit_report(
     entry: &velnor_actions_contract::MatrixEntry,
     locator: &str,
 ) -> Result<TaskReport, Box<dyn std::error::Error>> {
+    let locator = velnor_actions_tofu::tofu_root_locator("stacks/a")?;
     let report = TaskReport {
         schema: TaskReport::SCHEMA,
         task_report_id: task_report_id_for_task(

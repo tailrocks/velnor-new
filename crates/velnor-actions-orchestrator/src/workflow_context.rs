@@ -88,6 +88,7 @@ pub(super) fn render_context(
         candidate,
         preseed: false,
         verification_tasks,
+        pull_request_cache_policy: config.workflow.pull_request_cache_policy,
         plan_consumer_env: crate::matrix_step::task_step_env(
             catalog,
             &std::collections::BTreeMap::new(),
