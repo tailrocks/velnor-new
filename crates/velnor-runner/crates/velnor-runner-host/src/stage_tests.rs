@@ -5,7 +5,10 @@ use std::sync::Mutex;
 
 use super::HostError;
 use super::stage::{Forget, PairEngine, PairStop, decide, drive};
-use super::worker::CreateProjection;
+use super::worker::{
+    CreateProjection, VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole,
+    WorkerVolumeVerification,
+};
 
 struct Fake {
     events: Mutex<Vec<&'static str>>,
@@ -120,6 +123,21 @@ impl PairEngine for Fake {
     ) -> Result<Option<String>, HostError> {
         let names = self.names.lock().map_err(|_| HostError::Docker)?;
         Ok(names.get(name).cloned())
+    }
+
+    async fn verify_volume(
+        &self,
+        _worker: &str,
+        _role: WorkerVolumeRole,
+    ) -> Result<WorkerVolumeVerification, HostError> {
+        Ok(WorkerVolumeVerification::Absent)
+    }
+
+    async fn remove_verified_volume(
+        &self,
+        _volume: &VerifiedWorkerVolume,
+    ) -> Result<WorkerVolumeRemoval, HostError> {
+        Err(HostError::Docker)
     }
 
     async fn remove_worker_volumes(&self, _volume: &str) -> Result<bool, HostError> {

@@ -43,6 +43,7 @@ pub(crate) enum Idle {
 pub(crate) fn idle(polled: &Poll) -> Idle {
     match polled {
         Poll::Empty => Idle::Empty,
+        Poll::Quarantined(_) => Idle::Blocked,
         Poll::Batch(batch) => match offer(polled) {
             Offer::Acquire { ids, .. } if ids.len() == 1 => Idle::Launch,
             Offer::Wait if may_ack(batch, true) => {
@@ -114,17 +115,30 @@ where
 {
     lane.on_admin()?;
     let subject = format!("m{}r{request_id}", batch.message_id);
-    let (id, fresh) = journal.begin_launch(&subject).await.map_err(map_journal)?;
+    let name = format!("v{request_id}");
+    let (id, fresh) = journal
+        .begin_assigned_launch(&subject, ctx.set_id, request_id, &name)
+        .await
+        .map_err(map_journal)?;
     if docker_of(journal, id).await?.is_some() {
         return ack_bound(lane, ctx, batch, journal, id).await;
     }
     if !fresh {
         return hold(journal, id, EnsureError::Uncertain).await;
     }
+    if !journal
+        .claim_assigned_acquire(id)
+        .await
+        .map_err(map_journal)?
+    {
+        return hold(journal, id, EnsureError::Uncertain).await;
+    }
     match taken(lane, ctx, request_id) {
-        Ok(AcquireOutcome::Acquired(ids)) if ids.is_empty() => reject_empty(journal, id).await,
-        Ok(_) => {
-            let name = format!("v{request_id}");
+        Ok(AcquireOutcome::Acquired(ids)) if ids.as_slice() == [request_id] => {
+            journal
+                .record_assigned_acquire(id, true)
+                .await
+                .map_err(map_journal)?;
             mint::run(
                 lane,
                 mint::Request {
@@ -138,6 +152,20 @@ where
                 start,
             )
             .await
+        }
+        Ok(AcquireOutcome::Noop) => {
+            journal
+                .record_assigned_acquire(id, true)
+                .await
+                .map_err(map_journal)?;
+            hold(journal, id, EnsureError::Uncertain).await
+        }
+        Ok(AcquireOutcome::Acquired(_)) => {
+            journal
+                .record_assigned_acquire(id, false)
+                .await
+                .map_err(map_journal)?;
+            reject_empty(journal, id).await
         }
         Err(error) => fail_acquire(journal, id, error).await,
     }
@@ -201,11 +229,17 @@ async fn fail_acquire(
     id: i64,
     error: SessionError,
 ) -> Result<Option<Started>, EnsureError> {
-    let outcome = match error.certainty() {
-        Certainty::Uncertain => Outcome::Uncertain,
-        Certainty::Definite => Outcome::DefiniteFailure,
-    };
-    journal.finish(id, outcome).await.map_err(map_journal)?;
+    if error.certainty() == Certainty::Uncertain {
+        journal
+            .finish(id, Outcome::Uncertain)
+            .await
+            .map_err(map_journal)?;
+    } else {
+        journal
+            .record_assigned_acquire(id, false)
+            .await
+            .map_err(map_journal)?;
+    }
     Err(map_listen(error))
 }
 
@@ -242,6 +276,10 @@ where
     if !fresh {
         return hold(journal, id, EnsureError::Uncertain).await;
     }
+    journal
+        .bind_launch_identity(id, ctx.set_id, None, name)
+        .await
+        .map_err(map_journal)?;
     mint::run(
         lane,
         mint::Request {

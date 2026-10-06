@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 use crate::error::HostError;
 use crate::reconcile::IntentRow;
 
+#[path = "journal_completion.rs"]
+mod completion;
 mod launch;
 mod schema;
 mod transaction;
@@ -14,6 +16,10 @@ mod worker_volume;
 
 #[cfg(test)]
 mod schema_metadata_tests;
+pub(crate) use completion::{
+    CleanupClaim, CompletedLaunch, CompletionIdentity, CompletionInboxEntry,
+    MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN,
+};
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -233,6 +239,9 @@ impl Journal {
 
     /// Record that cleanup of this row's ids is proven.
     ///
+    /// Completion rows require a live completion claim and verified runner absence.
+    /// Use the completion-specific proof method for those rows.
+    ///
     /// # Errors
     ///
     /// Returns [`HostError::Journal`] when the row is missing.
@@ -240,7 +249,10 @@ impl Journal {
         let conn = self.connection().await?;
         transaction::with_unique_id(&conn, id, async move |conn| {
             let changed = conn
-                .execute("UPDATE intents SET cleanup_proven = 1 WHERE id = ?1", [id])
+                .execute(
+                    "UPDATE intents SET cleanup_proven = 1 WHERE id = ?1 AND NOT EXISTS (SELECT 1 FROM completion_cleanup WHERE intent_id = ?1)",
+                    [id],
+                )
                 .await
                 .map_err(|_| HostError::Journal)?;
             one_row(changed)

@@ -1,14 +1,10 @@
 //! Create projection. No live Docker daemon.
 
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use bollard::models::MountType;
 
 use crate::{
-    BollardCreate, CreateProjection, HostError, bollard_create, connect_unix, dind_create,
-    runner_create, runner_plan, start_pair,
+    BollardCreate, CreateProjection, HostError, bollard_create, dind_create, runner_create,
+    runner_plan,
 };
 
 fn projection(volume: &str) -> Result<CreateProjection, HostError> {
@@ -164,58 +160,11 @@ fn bollard_config_from_a_clean_plan_omits_canary() -> Result<(), HostError> {
     Ok(())
 }
 
-struct IdleDocker {
-    path: PathBuf,
-    docker: bollard::Docker,
-}
-
-impl IdleDocker {
-    fn open() -> Result<Self, HostError> {
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        let n = NEXT.fetch_add(1, Ordering::Relaxed);
-        let tick = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| HostError::Docker)?
-            .as_nanos();
-        let path = PathBuf::from(format!(
-            "/tmp/velnor-w-{}-{n}-{tick}.sock",
-            std::process::id()
-        ));
-        let listener =
-            std::os::unix::net::UnixListener::bind(&path).map_err(|_| HostError::Docker)?;
-        let text = path.to_str().ok_or(HostError::Path)?;
-        let docker = connect_unix(text)?;
-        drop(listener);
-        Ok(Self { path, docker })
-    }
-}
-
-impl Drop for IdleDocker {
-    fn drop(&mut self) {
-        let removed = std::fs::remove_file(&self.path);
-        let _kept = removed.err().map(|err| err.kind());
-    }
-}
-
 #[test]
 fn bollard_create_rejects_a_host_bind() -> Result<(), HostError> {
     let mut spec = dind_create("worker_a")?;
     spec.mounts[0].source = "/var/run/docker.sock".to_owned();
     assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
-    Ok(())
-}
-
-#[tokio::test]
-async fn empty_jit_does_not_create() -> Result<(), HostError> {
-    let idle = IdleDocker::open()?;
-    assert_eq!(
-        start_pair(&idle.docker, "a/b", b"").await,
-        Err(HostError::EmptyJit)
-    );
-    assert_eq!(
-        start_pair(&idle.docker, "worker_a", b"").await,
-        Err(HostError::EmptyJit)
-    );
     Ok(())
 }
 
@@ -226,3 +175,5 @@ fn malformed_ownership_label_is_rejected() -> Result<(), HostError> {
     assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
     Ok(())
 }
+#[cfg(unix)]
+mod volumes;

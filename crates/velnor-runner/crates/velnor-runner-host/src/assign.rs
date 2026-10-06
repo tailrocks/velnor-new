@@ -20,7 +20,7 @@ pub enum Offer {
 #[must_use]
 pub fn offer(poll: &Poll) -> Offer {
     match poll {
-        Poll::Empty => Offer::Wait,
+        Poll::Empty | Poll::Quarantined(_) => Offer::Wait,
         Poll::Batch(batch) => acquire_offer(batch),
     }
 }

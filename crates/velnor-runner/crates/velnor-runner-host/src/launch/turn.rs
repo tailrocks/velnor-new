@@ -8,10 +8,14 @@ use crate::scale_set::EnsureError;
 use crate::worker::Started;
 
 use super::capacity::{self, Admit};
+use super::completion::CompletionWorker;
 use super::slot;
 use super::steps;
 use super::trace;
 use super::{Ready, ack_ready, drive_ready, scale_session};
+
+mod completion_intake;
+use completion_intake::{completion_error, intake_and_ack_if_only};
 
 /// Poll until admission stops and no owned launch container is running.
 ///
@@ -29,7 +33,6 @@ pub(super) async fn poll_and_drive(
     trace::session(session);
     let mut workers = Vec::new();
     let capacity = capacity::job_capacity();
-    slot::release_exited(journal, docker).await?;
     let population = session
         .statistics()
         .map_or(0, velnor_runner_github::Statistics::assigned_population);
@@ -41,6 +44,13 @@ pub(super) async fn poll_and_drive(
     {
         workers.push(started);
     }
+    let completion = CompletionWorker::start(
+        journal.clone(),
+        docker.clone(),
+        link.base().to_owned(),
+        admin_token.to_owned(),
+    )
+    .map_err(|_| completion_error())?;
     let target = capacity::admit_target(capacity);
     let mut turn = Turn {
         link,
@@ -49,6 +59,7 @@ pub(super) async fn poll_and_drive(
         admin_token,
         journal,
         docker,
+        completion: &completion,
         capacity,
         target,
     };
@@ -57,8 +68,13 @@ pub(super) async fn poll_and_drive(
     } else {
         capacity::poll_bound(capacity)
     };
-    until_idle(&mut turn, &mut workers, bound).await?;
-    Ok(workers)
+    let driven = until_idle(&mut turn, &mut workers, bound).await;
+    let stopped = completion.shutdown().await;
+    match (driven, stopped) {
+        (Err(error), _) => Err(error),
+        (Ok(()), Err(_)) => Err(completion_error()),
+        (Ok(()), Ok(())) => Ok(workers),
+    }
 }
 
 /// One session's poll and running-count source.
@@ -175,6 +191,7 @@ struct Turn<'a> {
     admin_token: &'a str,
     journal: &'a Journal,
     docker: &'a bollard::Docker,
+    completion: &'a CompletionWorker,
     capacity: u32,
     target: u32,
 }
@@ -187,6 +204,23 @@ impl Turn<'_> {
         restore_base(self.link, saved)?;
         let polled = polled?;
         trace::batch(&polled);
+        let link = &mut *self.link;
+        let session = self.session;
+        let set_id = self.set_id;
+        let journal = self.journal;
+        let ack_path = path.clone();
+        let ack_queue = queue.clone();
+        let ack_polled = &polled;
+        let intake = intake_and_ack_if_only(journal, set_id, &polled, || async move {
+            ack_ready(link, session, ack_path, ack_queue, ack_polled)
+        })
+        .await?;
+        if intake.wake_cleanup {
+            self.completion.notify();
+        }
+        if intake.completion_only {
+            return Ok(false);
+        }
         let started = u32::try_from(workers.len()).unwrap_or(u32::MAX);
         let decision = admission(
             self.docker,
@@ -337,3 +371,11 @@ mod tests {
 mod progress_tests;
 #[cfg(all(test, unix))]
 mod start_tests;
+
+#[cfg(test)]
+#[path = "turn/completion_intake_tests.rs"]
+mod completion_intake_tests;
+
+#[cfg(test)]
+#[path = "turn/completion_quarantine_tests.rs"]
+mod completion_quarantine_tests;

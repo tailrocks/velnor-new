@@ -24,6 +24,7 @@ mod bind;
 #[cfg(all(test, unix))]
 mod busy_slot_tests;
 mod capacity;
+mod completion;
 #[cfg(all(test, unix))]
 mod effect_tests;
 mod gate;
@@ -307,8 +308,15 @@ fn ack_ready(
     queue: Option<String>,
     polled: &Poll,
 ) -> Result<(), EnsureError> {
-    let Poll::Batch(batch) = polled else {
-        return Ok(());
+    let batch = match polled {
+        Poll::Batch(batch) => batch.clone(),
+        Poll::Quarantined(batch) => velnor_runner_github::ParsedBatch {
+            message_id: batch.message_id,
+            raw_body: batch.raw_body.clone(),
+            statistics: None,
+            jobs: Vec::new(),
+        },
+        Poll::Empty => return Ok(()),
     };
     let ctx = Drive {
         set_id: 0,
@@ -318,7 +326,7 @@ fn ack_ready(
     };
     let admin = link.base().to_owned();
     let mut lane = HostLane { link, admin, queue };
-    steps::acknowledge(&mut lane, &ctx, batch)
+    steps::acknowledge(&mut lane, &ctx, &batch)
 }
 
 struct HostLane<'a> {

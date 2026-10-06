@@ -1,5 +1,4 @@
-//! A launch row occupies one slot until cleanup is proven.
-//! Busy means occupancy or the running count has reached capacity.
+//! Durable launch rows own capacity until their cleanup proof commits.
 
 use crate::IntentState;
 use crate::journal::Journal;
@@ -34,10 +33,7 @@ pub(super) async fn running_count<E: PairEngine + ?Sized>(
     let rows = journal.rows().await.map_err(map_journal)?;
     let mut count = 0u32;
     for row in &rows {
-        if !holds(row) {
-            continue;
-        }
-        let Some(id) = row.docker_id.as_deref() else {
+        let Some(id) = row.docker_id.as_deref().filter(|_| holds(row)) else {
             continue;
         };
         if engine.running(id).await.map_err(map_docker)? {
@@ -193,8 +189,18 @@ async fn delete_owned<E: PairEngine + ?Sized>(
     }
 }
 
+/// Keep exited workers occupied until a durable completion path proves cleanup.
+///
+/// Local container exit does not prove the official runner is absent. The
+/// completion reconciler owns container and volume removal after that proof.
 pub(super) fn holds(row: &IntentRow) -> bool {
-    row.kind == "launch" && !row.cleanup_proven && row.state != IntentState::Failed
+    row.kind == "launch"
+        && !row.cleanup_proven
+        && (row.state != IntentState::Failed
+            || row.docker_id.is_some()
+            || row.dind_id.is_some()
+            || row.worker_volume.is_some()
+            || row.github_runner_id.is_some())
 }
 
 fn map_journal(error: crate::error::HostError) -> EnsureError {

@@ -17,7 +17,11 @@ use crate::error::HostError;
 use crate::stage::PairStop;
 
 mod volumes;
-pub(crate) use volumes::{create_named_volumes, remove_worker_volumes};
+pub(crate) use volumes::{
+    VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole, WorkerVolumeVerification,
+    create_named_volumes, remove_verified_worker_volume, remove_worker_volumes,
+    verify_worker_volume,
+};
 #[cfg(all(test, unix))]
 mod volumes_tests;
 

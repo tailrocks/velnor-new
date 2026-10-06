@@ -12,6 +12,9 @@ use crate::launch::admission;
 use crate::worker::{create_named_volumes, remove_worker_volumes, worker_id_for_name};
 use crate::{HostError, IntentState, Outcome, dind_create};
 
+#[path = "volumes_effect_tests.rs"]
+mod effect_tests;
+
 const TIMEOUT: Duration = Duration::from_secs(2);
 const WORKER: &str = "wtransport";
 
@@ -175,6 +178,24 @@ async fn uncertain_volume_holds_without_remote_settlement() -> Result<(), String
     assert_eq!(rows[0].dind_id, None);
     assert_eq!(rows[0].worker_volume.as_deref(), Some(WORKER));
     assert!(!rows[0].cleanup_proven);
+    Ok(())
+}
+
+#[tokio::test]
+async fn post_delete_non_not_found_returns_docker_error() -> Result<(), String> {
+    let stub = DockerStub::open(vec![
+        http(200, &volume_json("wtransport", WORKER, "socket")),
+        http(204, ""),
+        http(500, r#"{"message":"not absent"}"#),
+    ])?;
+    let removed = remove_worker_volumes(&stub.docker, WORKER).await;
+    let requests = stub.finish().await?;
+
+    assert_eq!(removed, Err(HostError::Docker));
+    assert_eq!(requests.len(), 3);
+    assert!(requests[0].starts_with("GET "));
+    assert!(requests[1].starts_with("DELETE "));
+    assert!(requests[2].starts_with("GET "));
     Ok(())
 }
 

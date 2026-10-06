@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::error::HostError;
 
 const JOURNAL_VERSION: i64 = 1;
-const CURRENT_COLUMNS: [ColumnShape; 9] = [
+const CURRENT_COLUMNS: [ColumnShape; 16] = [
     ColumnShape::new("id", "INTEGER", false, None),
     ColumnShape::new("kind", "TEXT", true, None),
     ColumnShape::new("subject", "TEXT", true, None),
@@ -15,6 +15,13 @@ const CURRENT_COLUMNS: [ColumnShape; 9] = [
     ColumnShape::new("cleanup_proven", "INTEGER", true, Some("0")),
     ColumnShape::new("dind_id", "TEXT", false, None),
     ColumnShape::new("worker_volume", "TEXT", false, None),
+    ColumnShape::new("scale_set_id", "INTEGER", false, None),
+    ColumnShape::new("runner_request_id", "INTEGER", false, None),
+    ColumnShape::new("runner_name", "TEXT", false, None),
+    ColumnShape::new("acquire_attempted", "INTEGER", true, Some("0")),
+    ColumnShape::new("acquire_resolved", "INTEGER", true, Some("0")),
+    ColumnShape::new("acquired", "INTEGER", true, Some("0")),
+    ColumnShape::new("jit_requested", "INTEGER", true, Some("0")),
 ];
 
 #[derive(Clone, Copy)]
@@ -65,7 +72,10 @@ pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError>
 async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError> {
     match journal_version(conn).await? {
         0 => migrate_version_zero(conn).await,
-        JOURNAL_VERSION => validate_current_schema(conn).await,
+        JOURNAL_VERSION => {
+            ensure_completion_objects(conn).await?;
+            validate_current_schema(conn).await
+        }
         _ => Err(HostError::Journal),
     }
 }
@@ -91,6 +101,7 @@ async fn migrate_version_zero(conn: &turso::Connection) -> Result<(), HostError>
     .await
     .map_err(|_| HostError::Journal)?;
     ensure_legacy_columns(conn).await?;
+    ensure_completion_objects(conn).await?;
     validate_current_schema(conn).await?;
     conn.execute(
         "UPDATE intents SET state = CASE WHEN state = 'failed' THEN 'uncertain' ELSE state END, cleanup_proven = 0 WHERE kind = 'launch' AND state IN ('failed', 'pending', 'uncertain')",
@@ -116,6 +127,76 @@ async fn ensure_legacy_columns(conn: &turso::Connection) -> Result<(), HostError
             .map_err(|_| HostError::Journal)?;
         }
     }
+    Ok(())
+}
+
+async fn ensure_completion_objects(conn: &turso::Connection) -> Result<(), HostError> {
+    let columns = read_columns(conn).await?;
+    for (column, definition) in [
+        ("scale_set_id", "INTEGER"),
+        ("runner_request_id", "INTEGER"),
+        ("runner_name", "TEXT"),
+        ("acquire_attempted", "INTEGER NOT NULL DEFAULT 0"),
+        ("acquire_resolved", "INTEGER NOT NULL DEFAULT 0"),
+        ("acquired", "INTEGER NOT NULL DEFAULT 0"),
+        ("jit_requested", "INTEGER NOT NULL DEFAULT 0"),
+    ] {
+        if !columns.contains_key(column) {
+            conn.execute(
+                &format!("ALTER TABLE intents ADD COLUMN {column} {definition}"),
+                (),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        }
+    }
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS completion_cleanup (intent_id INTEGER PRIMARY KEY REFERENCES intents(id), scale_set_id INTEGER NOT NULL, runner_request_id INTEGER NOT NULL, runner_id INTEGER NOT NULL, runner_name TEXT NOT NULL, runner_absent INTEGER NOT NULL DEFAULT 0 CHECK (runner_absent IN (0, 1)), attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0), claim_generation INTEGER NOT NULL DEFAULT 0 CHECK (claim_generation >= 0), retry_after INTEGER NOT NULL DEFAULT 0 CHECK (retry_after >= 0), lease_until INTEGER NOT NULL DEFAULT 0 CHECK (lease_until >= 0), UNIQUE (scale_set_id, runner_request_id), UNIQUE (scale_set_id, runner_id), UNIQUE (scale_set_id, runner_name))",
+        (),
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS completion_inbox (scale_set_id INTEGER NOT NULL CHECK (scale_set_id > 0), message_id INTEGER NOT NULL CHECK (message_id >= 0), raw_body TEXT NOT NULL CHECK (length(CAST(raw_body AS BLOB)) BETWEEN 1 AND 262144), attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0), retry_after INTEGER NOT NULL DEFAULT 0 CHECK (retry_after >= 0), PRIMARY KEY (scale_set_id, message_id))",
+        (),
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS completion_inbox_due ON completion_inbox(retry_after, scale_set_id, message_id)",
+        (),
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
+    let mut has_runner_absent = false;
+    let mut rows = conn
+        .query("PRAGMA table_info(completion_cleanup)", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
+        let name: String = row.get(1).map_err(|_| HostError::Journal)?;
+        has_runner_absent |= name == "runner_absent";
+    }
+    if !has_runner_absent {
+        conn.execute(
+            "ALTER TABLE completion_cleanup ADD COLUMN runner_absent INTEGER NOT NULL DEFAULT 0 CHECK (runner_absent IN (0, 1))",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    }
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS intents_completion_request ON intents(kind, scale_set_id, runner_request_id) WHERE kind = 'launch' AND scale_set_id IS NOT NULL AND runner_request_id IS NOT NULL AND cleanup_proven = 0",
+        (),
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS intents_completion_name ON intents(kind, scale_set_id, runner_name) WHERE kind = 'launch' AND scale_set_id IS NOT NULL AND runner_name IS NOT NULL AND cleanup_proven = 0",
+        (),
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
     Ok(())
 }
 

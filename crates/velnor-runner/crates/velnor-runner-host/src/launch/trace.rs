@@ -22,9 +22,20 @@ pub(super) fn batch(polled: &Poll) {
     if std::env::var_os("VELNOR_HTTPS_TRACE").is_none() {
         return;
     }
-    let Poll::Batch(batch) = polled else {
-        eprintln!("batch empty");
-        return;
+    let batch = match polled {
+        Poll::Batch(batch) => batch,
+        Poll::Quarantined(batch) => {
+            eprintln!(
+                "batch quarantined id={} bytes={}",
+                batch.message_id,
+                batch.raw_body.len()
+            );
+            return;
+        }
+        Poll::Empty => {
+            eprintln!("batch empty");
+            return;
+        }
     };
     let available = batch
         .statistics

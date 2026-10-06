@@ -15,6 +15,7 @@ use crate::{EnsureError, HostError, IntentState, Started};
 fn statistics_advance_and_offers_stay() {
     let stats = Poll::Batch(ParsedBatch {
         message_id: 2,
+        raw_body: String::new(),
         statistics: None,
         jobs: Vec::new(),
     });
@@ -80,6 +81,7 @@ fn statistics_advance_and_offers_stay() {
     );
     let synthetic = ParsedBatch {
         message_id: -1,
+        raw_body: String::new(),
         statistics: None,
         jobs: Vec::new(),
     };
@@ -93,6 +95,7 @@ fn no_stats(jobs: Vec<InnerJob>) -> Poll {
 fn batch(statistics: Option<Statistics>, jobs: Vec<InnerJob>) -> Poll {
     Poll::Batch(ParsedBatch {
         message_id: 77,
+        raw_body: String::new(),
         statistics,
         jobs,
     })
@@ -156,6 +159,13 @@ async fn launch_acks_only_after_start_and_hides_jit() -> Result<(), String> {
     assert_eq!(rows[0].state, IntentState::Done);
     assert_eq!(rows[0].docker_id.as_deref(), Some("runner-1"));
     assert_eq!(rows[0].dind_id.as_deref(), Some("dind-1"));
+    assert_eq!(
+        journal
+            .record_runner_completed(1, 3, 901, "v3")
+            .await
+            .map_err(|error| error.to_string())?,
+        Some(rows[0].id)
+    );
     absent(&scratch.file())
 }
 
@@ -344,6 +354,46 @@ async fn start_failure_after_acquire_is_not_acked() -> Result<(), String> {
     assert_eq!(rows[0].state, IntentState::Uncertain);
     assert_eq!(rows[0].docker_id, None);
     absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn jit_uncertainty_does_not_repeat_acquire_or_jit() -> Result<(), String> {
+    let (_scratch, journal) = open("jit-once").await?;
+    let mut first = Script {
+        calls: Vec::new(),
+        mode: Mode::JitFail,
+    };
+    let first_result = drive_offer(
+        &mut first,
+        &ctx(),
+        &available(&[3]),
+        &journal,
+        |_volume, _jit, _bind| async { Err(HostError::Docker) },
+    )
+    .await;
+    assert_eq!(first_result, Err(EnsureError::Uncertain));
+    assert_eq!(first.calls, ["acquire", "jit"]);
+
+    let mut replay = Script {
+        calls: Vec::new(),
+        mode: Mode::Ok,
+    };
+    assert_eq!(
+        drive_offer(
+            &mut replay,
+            &ctx(),
+            &available(&[3]),
+            &journal,
+            |_volume, _jit, _bind| async { Err(HostError::Docker) },
+        )
+        .await,
+        Err(EnsureError::Uncertain)
+    );
+    assert!(replay.calls.is_empty());
+    let rows = journal.rows().await.map_err(|error| error.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].state, IntentState::Uncertain);
+    Ok(())
 }
 
 #[tokio::test]
