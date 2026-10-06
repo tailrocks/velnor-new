@@ -1,11 +1,5 @@
 //! Tofu closure + task-kind cases.
-use std::collections::BTreeMap;
-use std::ffi::OsString;
-
-use velnor_actions_contract::{
-    CachePolicy, IdentityInputs, ProposedTask, Provenance, ResourceClass, ResourceDemand,
-};
-use velnor_actions_tofu::argv::tofu_payload_argv;
+use velnor_actions_contract::{ProposedTask, Provenance};
 use velnor_actions_tofu::closure::resolve_closure_at_root;
 use velnor_actions_tofu::file_cache::FileCache;
 use velnor_actions_tofu::kinds::TofuTaskKind;
@@ -13,55 +7,19 @@ use velnor_actions_tofu::kinds::TofuTaskKind;
 use crate::support::{Outcome, TempDir};
 
 /// Minimal tofu proposal for `kind` in `unit`.
-pub(crate) fn proposal(kind: &str, unit: &str) -> ProposedTask {
-    ProposedTask {
-        task_id: format!("stack/tofu/root/{kind}/default"),
-        stack_id: "tofu".to_owned(),
-        component_id: format!("tofu:{unit}"),
-        task_kind: kind.to_owned(),
+pub(crate) fn proposal(kind: &str, unit: &str) -> Result<ProposedTask, Box<dyn std::error::Error>> {
+    let parsed = TofuTaskKind::parse(kind).unwrap_or(TofuTaskKind::Validate);
+    let group = velnor_actions_tofu::TofuTaskGroup {
+        root: unit.to_owned(),
+        kind: parsed,
         configuration: "default".to_owned(),
-        depends_on: Vec::new(),
-        gated_by: Vec::new(),
-        reads: Vec::new(),
-        writes: Vec::new(),
-        outputs: Vec::new(),
-        resource: ResourceDemand {
-            class: ResourceClass::Compiler,
-            cpu_milli: None,
-            memory_mb: None,
-            needs_network: false,
-            service: None,
-        },
-        cache_policy: CachePolicy {
-            allow_compilation_reuse: false,
-            allow_task_reuse: false,
-        },
-        identity: IdentityInputs {
-            unit_id: String::new(),
-            unit_key: "root".to_owned(),
-            unit_path: unit.to_owned(),
-            project_root: ".".to_owned(),
-            target: "host".to_owned(),
-            features: Vec::new(),
-            flags: Vec::new(),
-            compile_driver: "tofu".to_owned(),
-            test_runner: "tofu".to_owned(),
-            environment: BTreeMap::new(),
-            declared_inputs: Vec::new(),
-            undeclared_reads: false,
-        },
-        payload: match TofuTaskKind::parse(kind) {
-            Ok(parsed) => {
-                tofu_payload_argv(parsed, unit).unwrap_or_else(|_| vec![OsString::from("tofu")])
-            }
-            Err(_) => vec![OsString::from("tofu")],
-        },
-        display_name: String::new(),
-        uses_clock: false,
-        uses_random: false,
         no_targets: false,
-        runner_profile: "default".to_owned(),
+    };
+    let mut task = velnor_actions_tofu::propose_task(&group)?;
+    if parsed.as_str() != kind {
+        kind.clone_into(&mut task.task_kind);
     }
+    Ok(task)
 }
 
 /// Seed a unit root with config, vars, and an optional lockfile.
@@ -118,7 +76,7 @@ fn unknown_kind_fails_closed() -> Outcome {
     let root = TempDir::create("tofu-closure-kind")?;
     let err = resolve_closure_at_root(
         root.path(),
-        &proposal("plan", ""),
+        &proposal("plan", "")?,
         "g",
         "t",
         "p",
@@ -135,7 +93,7 @@ fn validate_closure_binds_effective_set_and_lock() -> Outcome {
     seed(&root, "", true)?;
     let closure = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -159,7 +117,7 @@ fn source_edit_flips_the_closure_digest() -> Outcome {
     seed(&root, "", false)?;
     let before = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -168,7 +126,7 @@ fn source_edit_flips_the_closure_digest() -> Outcome {
     root.write("main.tf", "variable \"x\" {}\nvariable \"y\" {}\n")?;
     let after = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -187,7 +145,7 @@ fn tfvars_edits_move_fmt_but_not_validate() -> Outcome {
     seed(&root, "", false)?;
     let fmt_before = resolve_closure_at_root(
         root.path(),
-        &proposal("fmt", ""),
+        &proposal("fmt", "")?,
         "g",
         "t",
         "p",
@@ -195,7 +153,7 @@ fn tfvars_edits_move_fmt_but_not_validate() -> Outcome {
     )?;
     let val_before = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -204,7 +162,7 @@ fn tfvars_edits_move_fmt_but_not_validate() -> Outcome {
     root.write("extra.tfvars", "x = 2\n")?;
     let fmt_after = resolve_closure_at_root(
         root.path(),
-        &proposal("fmt", ""),
+        &proposal("fmt", "")?,
         "g",
         "t",
         "p",
@@ -212,7 +170,7 @@ fn tfvars_edits_move_fmt_but_not_validate() -> Outcome {
     )?;
     let val_after = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -235,7 +193,7 @@ fn fmt_ignores_the_lockfile() -> Outcome {
     seed(&root, "", true)?;
     let closure = resolve_closure_at_root(
         root.path(),
-        &proposal("fmt", ""),
+        &proposal("fmt", "")?,
         "g",
         "t",
         "p",
@@ -254,7 +212,7 @@ fn missing_lockfile_is_proven_absent_for_validate() -> Outcome {
     seed(&root, "", false)?;
     let closure = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -274,7 +232,7 @@ fn json_only_root_has_no_fmt_inputs() -> Outcome {
     root.write("main.tf.json", "{\"variable\": {\"x\": {}}}")?;
     let closure = resolve_closure_at_root(
         root.path(),
-        &proposal("fmt", ""),
+        &proposal("fmt", "")?,
         "g",
         "t",
         "p",
@@ -294,7 +252,7 @@ fn subdir_unit_scopes_to_itself() -> Outcome {
     root.write("main.tf", "variable \"other\" {}\n")?;
     let closure = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", "infra"),
+        &proposal("validate", "infra")?,
         "g",
         "t",
         "p",
@@ -304,7 +262,7 @@ fn subdir_unit_scopes_to_itself() -> Outcome {
     root.write("main.tf", "variable \"changed\" {}\n")?;
     let again = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", "infra"),
+        &proposal("validate", "infra")?,
         "g",
         "t",
         "p",
@@ -322,7 +280,7 @@ fn symlink_in_unit_is_unknown() -> Outcome {
     std::os::unix::fs::symlink(root.path().join("main.tf"), root.path().join("linked.tf"))?;
     let closure = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -339,7 +297,7 @@ fn hidden_dirs_never_enter_the_tree() -> Outcome {
     root.write(".terraform/modules/x/main.tf", "variable \"cached\" {}\n")?;
     let before = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",
@@ -348,7 +306,7 @@ fn hidden_dirs_never_enter_the_tree() -> Outcome {
     root.write(".terraform/modules/x/main.tf", "variable \"changed\" {}\n")?;
     let after = resolve_closure_at_root(
         root.path(),
-        &proposal("validate", ""),
+        &proposal("validate", "")?,
         "g",
         "t",
         "p",

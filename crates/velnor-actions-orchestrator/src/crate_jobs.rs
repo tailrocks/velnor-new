@@ -255,13 +255,14 @@ fn render_job(
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(acquire.cloned());
     steps.push(crate::matrix_step::download_plan_step()?);
-    let needs_validators =
-        crate::matrix_step::crate_needs_generate_validators(policy, &model.package_name);
+    let suite: Option<crate::matrix_step::CrateSuite> =
+        crate::matrix_step::suite_for_package(&model.package_name);
+    let needs_validators = crate::matrix_step::crate_needs_generate_validators(policy, suite);
     steps.push(crate::matrix_step::prepare_crate_tools_step(
         catalog,
         use_rust,
         use_nextest,
-        crate::matrix_step::prepare_install_opentofu(policy, &model.package_name, use_opentofu),
+        crate::matrix_step::prepare_install_opentofu(policy, suite, use_opentofu),
         needs_validators,
     )?);
     if use_rust {

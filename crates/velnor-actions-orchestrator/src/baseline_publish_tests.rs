@@ -251,6 +251,9 @@ fn publish_refuses_every_unsafe_case() {
     );
 }
 
+#[path = "baseline_publish_lineage_tests.rs"]
+mod lineage_tests;
+
 #[test]
 fn publish_rejects_unknown_request_fields() {
     let head = "a".repeat(40);

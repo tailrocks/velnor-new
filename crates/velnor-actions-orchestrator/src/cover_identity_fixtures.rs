@@ -92,6 +92,7 @@ pub(super) fn manifest_with(entries: &[(&str, &str)]) -> BaselineManifest {
                 input_digest: digest.clone(),
                 closure_digest: (*closure).to_owned(),
                 proof_run_id: 7,
+                carried_from: None,
                 observed_run_id: 7,
                 carried_from: None,
                 external_data: None,

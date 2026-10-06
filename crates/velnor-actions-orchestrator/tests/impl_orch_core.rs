@@ -103,7 +103,7 @@ pub(crate) fn manifest_for(plan: &Plan, base: &str, branch: &str) -> WireResult 
         "run_id": 7, "run_attempt": 1, "final_status": "passed",
         "generator_version": plan.generator.version, "generator_sha256": plan.generator.sha256,
         "compatibility_id": digest, "artifact_id": numeric,
-        "artifact_name": name,
+        "parent": null, "artifact_name": name,
         "tasks": plan.obligations.iter().map(|ob| json!({"task_id": ob.task_id,
             "task_digest": ob.task_digest, "input_digest": ob.input_digest,
             "closure_digest": ob.closure_digest,

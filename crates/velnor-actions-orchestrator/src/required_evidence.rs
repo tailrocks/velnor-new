@@ -29,6 +29,7 @@ pub(crate) const MAX_BASELINE_MANIFEST_BYTES: usize = 1_048_576;
 
 /// One trusted-baseline task proof: identities plus provenance run IDs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct BaselineTaskEntry {
     /// Covered task ID.
     pub(crate) task_id: String,
@@ -58,6 +59,7 @@ pub(crate) struct BaselineTaskEntry {
 
 /// Trusted `baseline.json`: minimum shape plus artifact binding.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct BaselineManifest {
     /// Manifest schema; must be 2 (closure-bound entries).
     pub(crate) schema: u32,

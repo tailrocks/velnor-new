@@ -170,9 +170,21 @@ impl CacheAdmission {
                 continue;
             }
             if metadata.file_type().is_symlink() {
-                resolved = current.canonicalize().map_err(|error| {
-                    IndexError::SymlinkLoop(format!("{}: {error}", current.display()))
-                })?;
+                // A dangling link has no target to alias into the cache, so it
+                // is not reserved (mirrors the missing-component rule above);
+                // true loops still fail closed via `FilesystemLoop`.
+                match current.canonicalize() {
+                    Ok(target) => resolved = target,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        return Ok(false);
+                    }
+                    Err(error) => {
+                        return Err(IndexError::SymlinkLoop(format!(
+                            "{}: {error}",
+                            current.display()
+                        )));
+                    }
+                }
             } else {
                 resolved.push(component.as_os_str());
             }
@@ -211,9 +223,17 @@ impl CachedDirectory {
             return Ok(false);
         }
         if identity.is_symlink {
-            let canonical = path
-                .canonicalize()
-                .map_err(|error| IndexError::SymlinkLoop(format!("{}: {error}", path.display())))?;
+            let canonical = match path.canonicalize() {
+                Ok(target) => target,
+                // Dangling link: the cached resolution cannot hold; recompute.
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+                Err(error) => {
+                    return Err(IndexError::SymlinkLoop(format!(
+                        "{}: {error}",
+                        path.display()
+                    )));
+                }
+            };
             return Ok(canonical == self.resolved);
         }
         Ok(resolved_parent.join(component) == self.resolved)

@@ -2,7 +2,7 @@
 
 use crate::impl_common::TestResult;
 
-pub(super) fn scrub_bound_acquisition(name: &str, code: &str) -> String {
+pub(crate) fn scrub_bound_acquisition(name: &str, code: &str) -> String {
     if name != "check_tool_acquire.rs" {
         return code.to_owned();
     }

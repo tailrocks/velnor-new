@@ -193,7 +193,7 @@ fn anchored_checkout(slug: &str) -> tempfile::TempDir {
     tmp
 }
 
-/// Valid manifest over `slug`/`base` except one forwarded proof run.
+/// Valid manifest over `slug`/`base` except an unbound forwarded proof.
 fn forwarded_manifest(slug: &str, base: &str) -> BaselineManifest {
     let digest = digest_b3(b"d");
     let name = super::provenance_check::baseline_artifact_name(base, &digest).expect("name");
@@ -218,6 +218,7 @@ fn forwarded_manifest(slug: &str, base: &str) -> BaselineManifest {
             input_digest: digest.clone(),
             closure_digest: digest,
             proof_run_id: 5,
+            carried_from: None,
             observed_run_id: 7,
             carried_from: None,
             external_data: None,
@@ -228,7 +229,7 @@ fn forwarded_manifest(slug: &str, base: &str) -> BaselineManifest {
     }
 }
 
-/// Forwarded proofs fail closed at the caller: the plan marks the
+/// Forwarded proofs without lineage fail closed at the caller: the plan marks the
 /// baseline unavailable with the exact miss token, warns once, and
 /// keeps every obligation executing.
 #[test]
@@ -249,7 +250,7 @@ fn forwarded_proof_marks_baseline_unavailable() {
         catalog: &catalog,
         repository: None,
     };
-    apply_baseline(
+    let used = apply_baseline(
         &mut plan,
         WorkflowEvent::PullRequest,
         inputs,
@@ -258,6 +259,7 @@ fn forwarded_proof_marks_baseline_unavailable() {
         None,
     )
     .expect("classify");
+    assert!(used.is_none(), "rejected manifest must not be used");
     assert_eq!(
         plan.baseline.reason(),
         Some("baseline_invalid:originating_run_unverified")
@@ -304,7 +306,7 @@ fn source_build_keeps_marker_without_lock_fill() {
         catalog: &catalog,
         repository: None,
     };
-    apply_baseline(
+    let used = apply_baseline(
         &mut plan,
         WorkflowEvent::PullRequest,
         inputs,
@@ -313,6 +315,7 @@ fn source_build_keeps_marker_without_lock_fill() {
         None,
     )
     .expect("classify");
+    assert!(used.is_none(), "source build must not use a manifest");
     assert_eq!(plan.generator.sha256, marker, "no lock fill");
     assert_eq!(
         plan.baseline.reason(),

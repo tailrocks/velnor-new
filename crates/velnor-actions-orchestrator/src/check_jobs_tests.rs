@@ -138,8 +138,10 @@ fn no_cargo_checks_gate_required_without_becoming_rust_jobs() {
         Some("check-ffi".to_owned())
     );
     assert_eq!(workflow.ir.jobs["plan"].runs_on, "ubuntu-26.04");
+    // Velnor plan always prepares Rust: it builds the candidate-source
+    // helper there (`plan_uses_rust` is true for VelnorRepositoryV1).
     assert!(
-        !workflow.ir.jobs["plan"]
+        workflow.ir.jobs["plan"]
             .steps
             .iter()
             .any(|step| step.name == "Prepare Rust components")

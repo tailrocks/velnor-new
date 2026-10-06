@@ -252,6 +252,7 @@ fn task_entry(digest: &str) -> crate::merge::required_evidence::BaselineTaskEntr
         input_digest: digest.to_owned(),
         closure_digest: digest.to_owned(),
         proof_run_id: 7,
+        carried_from: None,
         observed_run_id: 7,
         carried_from: None,
         external_data: None,

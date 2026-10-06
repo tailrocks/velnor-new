@@ -101,7 +101,7 @@ fn plan_internal_inner(
         &prep.discovery.workspaces,
         &prep.runner_label,
     ));
-    let universe = select_universe(&prep.discovery, &mut warnings);
+    let universe = select_universe(&prep.discovery, &mut warnings)?;
     let changed = classify_changed(
         &prep.root,
         request.event,

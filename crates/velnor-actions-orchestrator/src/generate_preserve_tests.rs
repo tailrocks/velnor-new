@@ -193,7 +193,15 @@ fn copy_preserves_modes_and_literal_symlinks() -> TestResult {
         fs::Permissions::from_mode(0o751),
     )?;
     fs::set_permissions(github.join("scripts"), fs::Permissions::from_mode(0o750))?;
-    symlink("../missing", github.join("dangling"))?;
+    let dangling = github.join("dangling");
+    symlink("../missing", &dangling)?;
+    #[cfg(target_os = "macos")]
+    rustix::fs::chmodat(
+        rustix::fs::CWD,
+        &dangling,
+        rustix::fs::Mode::from_raw_mode(0o750),
+        rustix::fs::AtFlags::SYMLINK_NOFOLLOW,
+    )?;
     replace(root.path())?;
     assert_eq!(
         fs::metadata(github.join("scripts/check"))?

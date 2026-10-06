@@ -289,6 +289,7 @@ fn publish_manifest(
                     input_digest: obligation.input_digest.clone(),
                     closure_digest: obligation.closure_digest.clone(),
                     proof_run_id: run_id,
+                    carried_from: None,
                     observed_run_id: run_id,
                     carried_from: None,
                     external_data: None,
@@ -379,6 +380,10 @@ fn self_check(
 #[cfg(test)]
 #[path = "baseline_publish_tests.rs"]
 mod baseline_publish_tests;
+
+#[path = "baseline_publish_lineage.rs"]
+mod baseline_publish_lineage;
+pub(crate) use baseline_publish_lineage::carry_candidate_fits;
 
 #[cfg(test)]
 #[path = "baseline_publish_branch_tests.rs"]

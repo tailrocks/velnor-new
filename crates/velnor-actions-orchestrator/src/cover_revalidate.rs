@@ -233,12 +233,10 @@ pub(crate) fn revalidate_coverage_with_anchors(
 /// compares against the plan value or the trusted invariant. Mirrors the
 /// plan-time [`validate_provenance`](crate::cover_baseline::provenance_check::validate_provenance)
 /// manifest checks (identified run, verifiable generator, derived
-/// artifact name, per-task entry validation, freshness) so a manifest
-/// the plan rejects can never pass at merge. Per-task entry validation
-/// is the shared [`validate_task_entry`](crate::cover_baseline::provenance_check::validate_task_entry):
-/// identity shapes, run binding, structured-proof match, and
-/// external-data validity are identical on both sides by
-/// construction, not by parallel reimplementation. Advisory
+/// artifact name and bounded proof lineage) so a manifest the plan
+/// rejects can never pass at merge. Lineage validation includes shared
+/// task identity shapes, carrying-run binding, structured-proof match,
+/// and external-data validity. Advisory
 /// presence/freshness mirrors separately per obligation below (the
 /// planner gates it at coverage time, not validation time).
 ///

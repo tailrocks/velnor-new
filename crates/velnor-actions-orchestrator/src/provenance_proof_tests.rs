@@ -51,6 +51,7 @@ fn task_entry(digest: &str, proof_run_id: u64) -> BaselineTaskEntry {
         input_digest: digest.to_owned(),
         closure_digest: digest.to_owned(),
         proof_run_id,
+        carried_from: None,
         observed_run_id: 7,
         carried_from: None,
         external_data: None,
