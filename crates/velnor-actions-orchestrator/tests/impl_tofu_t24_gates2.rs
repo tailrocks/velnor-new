@@ -25,7 +25,7 @@ fn gate_inputs<'a>(
     config: &'a str,
 ) -> ExtensionInputs<'a> {
     ExtensionInputs {
-        unit_id: "root",
+        unit_id: "dir-737461636b732f61",
         workspace_id: workspace,
         profile: "default",
         manifest: "stacks/a",
@@ -156,8 +156,9 @@ fn gate7_docs_only_runs_zero_tofu_operations() -> TestResult {
             .collect::<Vec<_>>()
     );
     for name in ["stacks/r000", "stacks/r001"] {
+        let key = velnor_actions_tofu::key_for_root(name);
         assert!(
-            plan.packages.iter().any(|row| row.package_id == name),
+            plan.packages.iter().any(|row| row.package_id == key),
             "{name} row present"
         );
     }

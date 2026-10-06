@@ -30,6 +30,7 @@ pub mod modules;
 pub mod parser;
 pub mod parser_json;
 pub mod propose;
+pub mod root_identity;
 pub mod roots;
 pub mod select;
 pub mod task_identity;
@@ -48,10 +49,9 @@ pub use diagnostics::{
 };
 pub use effective::{Dialect, config_shape, dir_has_effective_config, effective_set};
 pub use env::{
-    DIR_DIGEST_HEX_CHARS, MAX_CLI_CONFIG_PATH_BYTES, MAX_DIR_SLUG_CHARS, TF_CLI_CONFIG_FILE_ENV,
-    TF_DATA_DIR_ENV, TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF,
-    TF_PLUGIN_CACHE_DIR_ENV, tofu_cache_dir_under, tofu_cli_config, tofu_data_dir_under,
-    tofu_isolation_env, tofu_payload_env, tofu_root_slug,
+    MAX_CLI_CONFIG_PATH_BYTES, TF_CLI_CONFIG_FILE_ENV, TF_DATA_DIR_ENV, TF_IN_AUTOMATION_ENV,
+    TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF, TF_PLUGIN_CACHE_DIR_ENV, tofu_cache_dir_under,
+    tofu_cli_config, tofu_data_dir_under, tofu_isolation_env, tofu_payload_env, tofu_root_locator,
 };
 pub use evidence::{
     Advisory, Evidence, EvidenceLevel, MISE_OPENTOFU_TOOL, MISE_TERRAFORM_TOOL, TofuNote, classify,
@@ -83,7 +83,9 @@ pub use propose::{
     KIND_DISPLAY_WORDS, TOFU_DRIVER, TOFU_PROFILE, TOFU_RUNNER, TofuTaskGroup, display_for_root,
     is_init_kind, is_validate_kind, key_for_root, payload_env_for_kind, propose_task,
     resource_class_for_kind, root_for_key, step_base_name, task_id_for_root, task_kind_rank,
+    validate_normalized_root,
 };
+pub use root_identity::{RootLocatorRegistry, normalized_root_for_proposal};
 pub use roots::qualify_roots;
 pub use select::{RootSelection, SelectAllReason, select_roots};
 pub use task_identity::{

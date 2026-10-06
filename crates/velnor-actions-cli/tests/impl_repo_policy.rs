@@ -16,12 +16,16 @@ mod p11_metadata;
 pub(crate) mod p11_toml;
 #[path = "fixtures/p12_harness.rs"]
 mod p12_harness;
+#[path = "fixtures/p12_http.rs"]
+mod p12_http;
 #[path = "fixtures/p12_live.rs"]
 mod p12_live;
 #[path = "fixtures/p12_manifest.rs"]
 mod p12_manifest;
 #[path = "fixtures/p12_mutants.rs"]
 mod p12_mutants;
+#[path = "fixtures/p12_pinparser.rs"]
+mod p12_pinparser;
 #[path = "fixtures/p12_policy.rs"]
 mod p12_policy;
 #[path = "fixtures/p12_policy_b.rs"]

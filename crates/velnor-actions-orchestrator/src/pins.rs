@@ -182,6 +182,7 @@ fn consumer_acquire_for_target(
     check_release_artifact(
         &record.artifact,
         &manifest.version,
+        &manifest.commit,
         target.triple(),
         RELEASE_MANIFEST_FILENAME,
         "targets.artifact",
@@ -353,3 +354,6 @@ fn test_manifest_json() -> String {
 #[cfg(test)]
 #[path = "pins_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "pins_tests_b.rs"]
+mod tests_b;

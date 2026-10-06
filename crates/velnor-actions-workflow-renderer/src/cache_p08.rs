@@ -160,9 +160,13 @@ fn is_tool_spec(value: &str) -> bool {
         && !version.is_empty()
         && !value.contains(' ')
         && !value.contains('\n')
-        && tool
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b':' | b'/' | b'-' | b'_' | b'.'))
+        && tool.bytes().all(|b| {
+            b.is_ascii_alphanumeric()
+                || matches!(
+                    b,
+                    b':' | b'/' | b'-' | b'_' | b'.' | b'[' | b']' | b'=' | b','
+                )
+        })
         && version
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_' | b'+'))
@@ -345,7 +349,7 @@ pub fn check_no_rust_cache_with_mbx(job_id: &str, job: &Job) -> Result<(), Rende
     Ok(())
 }
 
-/// Require MBX objects restore before every fetch step (P08-4).
+/// Require the MBX action setup before every fetch step (P08-4).
 ///
 /// # Errors
 ///

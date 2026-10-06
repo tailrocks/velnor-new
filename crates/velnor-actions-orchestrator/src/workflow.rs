@@ -3,6 +3,8 @@
 //! W1 emission wiring lives in the child module below.
 #[path = "wire_w1.rs"]
 pub(crate) mod wire_w1;
+#[path = "workflow_context.rs"]
+mod workflow_context;
 
 #[path = "check_jobs.rs"]
 pub(crate) mod check_jobs;
@@ -29,9 +31,6 @@ use crate::discover::Discovery;
 use crate::pins::consumer_acquire_step;
 use crate::utf8::{strings_of, strings_of_env};
 use crate::workflow_jobs::{final_job, lint_job, plan_job};
-
-#[path = "workflow_context.rs"]
-mod workflow_context;
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
 
@@ -127,7 +126,7 @@ pub(crate) fn build_workflow(
     };
     let use_nextest = plan_uses_nextest(discovery);
     let use_opentofu = plan_uses_opentofu(discovery);
-    let use_rust = plan_uses_rust(discovery);
+    let use_rust = plan_uses_rust(discovery, policy);
     let mut plan = build_plan_job(
         label,
         acquire.clone(),
@@ -311,11 +310,14 @@ pub(crate) fn plan_uses_opentofu(discovery: &Discovery) -> bool {
         .any(|task| Stack::from_id(&task.stack_id) == Some(Stack::Tofu))
 }
 
-/// Rust inventory runs Cargo metadata for every detected Rust candidate,
-/// including ignored projects. Named checks with no Cargo candidates
-/// require only their declared tools.
-fn plan_uses_rust(discovery: &Discovery) -> bool {
-    !discovery.workspaces.is_empty()
+/// True when the plan job needs the Rust toolchain.
+///
+/// Consumers require Rust for selected Rust evidence (selected or ignored
+/// Rust projects, or Rust task proposals without inventory records).
+/// Velnor also builds its candidate-source helper in Plan.
+pub(crate) fn plan_uses_rust(discovery: &Discovery, policy: WorkflowPolicy) -> bool {
+    policy == WorkflowPolicy::VelnorRepositoryV1
+        || !discovery.workspaces.is_empty()
         || discovery.statuses.iter().any(|status| {
             let project = match status {
                 velnor_actions_contract::DetectionStatus::Selected(project)
@@ -323,6 +325,10 @@ fn plan_uses_rust(discovery: &Discovery) -> bool {
             };
             Stack::from_id(&project.stack_id) == Some(Stack::Rust)
         })
+        || discovery
+            .proposals
+            .iter()
+            .any(|task| Stack::from_id(&task.stack_id) == Some(Stack::Rust))
 }
 
 /// Typed `Prepare Rust components` step, shared by plan and task jobs.
