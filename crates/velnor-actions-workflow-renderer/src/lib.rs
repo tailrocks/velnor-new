@@ -14,6 +14,7 @@ mod candidate;
 pub mod closure;
 mod closure_paths;
 mod commands;
+mod commands_scan;
 mod composite;
 mod document;
 mod document_lanes;
@@ -83,8 +84,7 @@ pub use closure::{
     download_plan_step, freshness_step, provision_acquire_step, publish_plan_step,
 };
 pub use commands::{
-    check_no_bare_cargo, has_bare_env_expansion, join_argv_for_run, quote_env_path_for_run,
-    quote_run_arg, quote_run_line_env_paths, validate_command_argv, validate_env,
+    check_no_bare_cargo, join_argv_for_run, quote_run_arg, validate_command_argv, validate_env,
 };
 pub use guard::{SafeTreePath, check_no_symlink, join_within_root, validate_tree_path};
 pub use marker::{

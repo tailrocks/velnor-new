@@ -196,6 +196,8 @@ pub(crate) fn deny_argv(workspace_roots: &[String]) -> Result<Vec<String>, Orche
         })?;
     let install_argv =
         strings_of(install.argv()).map_err(|problem| OrchestratorError::Contract { problem })?;
+    let inner_command = join_quoted_argv(&inner)?;
+    let install_command = join_quoted_argv(&install_argv)?;
     let payload = roots
         .iter()
         .map(|workspace| {
@@ -206,14 +208,14 @@ pub(crate) fn deny_argv(workspace_roots: &[String]) -> Result<Vec<String>, Orche
             };
             format!(
                 "{} {} --config \"$GITHUB_WORKSPACE/{config}\" check",
-                join_quoted_argv(&inner),
+                inner_command,
                 crate::source_prep::isolated_manifest_flag(workspace)
             )
         })
         .collect::<Vec<_>>()
         .join(" && ");
     Ok(crate::source_prep::privilege_drop_argv(
-        &join_quoted_argv(&install_argv),
+        &install_command,
         &payload,
     ))
 }
@@ -223,11 +225,12 @@ pub(crate) fn deny_argv(workspace_roots: &[String]) -> Result<Vec<String>, Orche
 /// Every current element is a plain token (identity join); quoting
 /// through the one authority keeps future drift exact instead of
 /// silently mis-spliced.
-fn join_quoted_argv(argv: &[String]) -> String {
+fn join_quoted_argv(argv: &[String]) -> Result<String, OrchestratorError> {
     argv.iter()
         .map(|element| velnor_actions_workflow_renderer::quote_run_arg(element))
-        .collect::<Vec<_>>()
-        .join(" ")
+        .collect::<Result<Vec<_>, _>>()
+        .map(|words| words.join(" "))
+        .map_err(OrchestratorError::from)
 }
 
 /// Policy zizmor scan target: generated workflows only.

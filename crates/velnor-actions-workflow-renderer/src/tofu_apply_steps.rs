@@ -123,7 +123,7 @@ pub(super) fn tofu_init_step(spec: &TofuApplySpec) -> Result<Yaml, RenderError> 
 pub(super) fn tofu_backend_validation_step(spec: &TofuApplySpec) -> Result<Yaml, RenderError> {
     let script = format!(
         "set -euo pipefail; jq -e {} .terraform/terraform.tfstate >/dev/null 2>&1",
-        commands::quote_run_arg(&jq_contract(BACKEND_REVIEW_JQ))
+        commands::quote_run_arg(&jq_contract(BACKEND_REVIEW_JQ))?
     );
     let env = BTreeMap::from([
         (
@@ -187,7 +187,7 @@ pub(super) fn tofu_plan_review_step(spec: &TofuApplySpec) -> Result<Yaml, Render
     let script = format!(
         "set -euo pipefail; {} 2>/dev/null | jq -e {} >/dev/null 2>&1",
         commands::join_argv_for_run(&command)?,
-        commands::quote_run_arg(&jq_contract(PLAN_REVIEW_JQ))
+        commands::quote_run_arg(&jq_contract(PLAN_REVIEW_JQ))?
     );
     tofu_shell_step(
         "Fail closed on saved plan actions",

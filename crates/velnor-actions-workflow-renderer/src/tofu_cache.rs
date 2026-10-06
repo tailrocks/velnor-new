@@ -80,8 +80,7 @@ pub(crate) fn provider_admission_file(
             ]),
         ),
     ]);
-    let quoted = yaml::quote_run_values_in_yaml(body);
-    let bytes = marker::with_marker(version, &yaml::render_yaml(&quoted))?;
+    let bytes = marker::with_marker(version, &yaml::render_yaml(&body))?;
     steps::scan_for_private_subcommands(&bytes)?;
     Ok(crate::tree::RenderedFile {
         path: ".github/actions/tofu-provider-admission/action.yml".to_owned(),

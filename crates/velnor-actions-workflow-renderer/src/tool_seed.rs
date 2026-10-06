@@ -180,8 +180,7 @@ pub(crate) fn action_file(version: &str) -> Result<crate::tree::RenderedFile, Re
         return Err(RenderError::InvalidWorkflow("tool_seed_step".to_owned()));
     };
     let body = action_yaml(&step.name, env, &crate::commands::join_argv_for_run(run)?);
-    let quoted = crate::yaml::quote_run_values_in_yaml(body);
-    let bytes = crate::marker::with_marker(version, &crate::yaml::render_yaml(&quoted))?;
+    let bytes = crate::marker::with_marker(version, &crate::yaml::render_yaml(&body))?;
     crate::steps::scan_for_private_subcommands(&bytes)?;
     Ok(crate::tree::RenderedFile {
         path: TOOL_SEED_ACTION_PATH.to_owned(),

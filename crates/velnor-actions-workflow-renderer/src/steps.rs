@@ -99,10 +99,6 @@ pub const DENY_STEP_NAME: &str = "Run cargo-deny";
 /// Contract-fixed display name of the policy cargo-machete step.
 pub const MACHETE_STEP_NAME: &str = "Run cargo-machete";
 
-pub use crate::commands::{
-    has_bare_env_expansion, quote_env_path_for_run, quote_run_line_env_paths,
-};
-
 /// Reject text containing a private-subcommand or parallel token.
 /// # Errors
 pub fn scan_for_private_subcommands(text: &str) -> Result<(), RenderError> {

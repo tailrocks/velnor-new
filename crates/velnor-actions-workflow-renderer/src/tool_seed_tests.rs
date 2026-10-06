@@ -13,7 +13,8 @@ const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b
 const SETUP_USES: &str = "jdx/mise-action@0123456789abcdef0123456789abcdef01234567";
 
 fn scratch(name: &str) -> PathBuf {
-    let path = std::env::temp_dir().join(format!("velnor-tool-seed-{name}-{}", std::process::id()));
+    let temp_root = fs::canonicalize(std::env::temp_dir()).expect("canonical temp root");
+    let path = temp_root.join(format!("velnor-tool-seed-{name}-{}", std::process::id()));
     fs::remove_dir_all(&path).ok();
     fs::create_dir_all(&path).expect("scratch");
     // macOS temp lives under the /var symlink. Admission rejects that ancestor.
