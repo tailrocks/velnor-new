@@ -346,3 +346,121 @@ group move is done, so Step 4's remaining scope is `actions/*` (8)
 + `guard/velnor-archive-guard`. Step 3 (test normalization) must
 now also cover the 4 runner crates (223 TEST-001 + 34
 `tests-no-test-files-in-src` + host `tests/` creation).
+
+## Slice 3: grouped moves to the S4 contract (2026-10-06)
+
+- Moved all 13 packages to `crates/<group>/<package>` using ONLY
+  the 7 S4 contract groups (this supersedes the Step 4
+  `actions/*` + `runner/*` + `guard/*` proposal, which predates
+  the contract group list):
+  `apps/velnor-actions-cli`; `core/velnor-actions-contract`;
+  `services/velnor-actions-orchestrator`,
+  `services/velnor-actions-workflow-renderer`;
+  `adapters/velnor-actions-rust`, `adapters/velnor-actions-mise`,
+  `adapters/velnor-actions-actionlint`,
+  `adapters/velnor-actions-tofu`; `tools/velnor-archive-guard`
+  plus the 4 `tools/velnor-runner-*` crates. `ui/` and
+  `testing/` stay empty: no UI or test-support crates exist yet.
+- Runner placement justification: the runner family is execution
+  tooling (host workers, JIT/registration clients, scale-set
+  launchers) — not a user-facing app, not domain core, not a CI
+  service — so all 4 crates move as one family into `tools/`,
+  preserving their `0.1.0` versions and intra-family path deps.
+  The interim `crates/runner/*` depth-2 stopgap is gone.
+- One group per commit (tools, core, adapters, services, apps),
+  then a repo-wide refs commit. Per-group discipline: forward =
+  `git mv` + workspace members + every affected path dep + that
+  group's depth/`..`/string refs in the same commit; rollback =
+  reverse `git mv` pre-push (each commit is self-contained) or
+  revert stack post-push; verify per commit (`cargo metadata
+  --locked` 13 packages + `cargo check --locked --workspace
+  --all-targets` green). Expand and contract collapse into the
+  move commit: the layout gate forbids old/new dual-path
+  coexistence, so partial failure is observable only via the
+  per-commit verify, which passed for all 5 groups.
+- Depth-assuming readers fixed (not just string refs):
+  archive-guard `build.rs` + CLI test root computation (2→3
+  parents; the build script broke the check until fixed);
+  `mise_surface` ancestors `nth(2)`→`nth(3)`; all
+  `CARGO_MANIFEST_DIR` `../..`/`{}/../../`/`../../../`
+  joins and `include_str!` paths gain one level; sibling
+  `../velnor-actions-*` refs remapped per group (same-group
+  pairs unchanged); orchestrator intake-deps test is now
+  group-aware; the two member-classification walks take 3
+  parents and descend group→package (their 9-name allowlists
+  still exclude the runner crates — classification needs the
+  audit the tests demand, generator slice owns).
+- Left untouched deliberately: pinned old-config alint fixtures
+  (`alint_*.yml`, `p11_alint_*.yml`, miniyaml wildcard
+  expectations, `impl_repo_shape` glob asserts — self-consistent
+  pre-adapter pins, reconciliation owns); synthetic TempDir
+  layouts (`p12_harness`/`p12_live`/`p12_manifest`
+  `crates/runner/*`, `impl_orch_install_sets` manifest —
+  never touch the real tree); stale pre-slice-2
+  `crates/velnor-runner*` refs in code, workflows, scripts, and
+  docs (generator slice owns); pinned-blob GitHub URLs in
+  `pr29-pr30` (rewriting them would break the links).
+- Registries: `policy/*.json` are name-keyed and needed no
+  content change — verified `cargo metadata` names equal
+  `owned-packages.json` (13/13), `package-groups.json` covers
+  all 13 with unchanged `tool`/`library` roles, and all 13
+  `rust-<pkg>` jobs remain in `ci-recipes.json` (GAP-CI-* and
+  GAP-INV-* stay 0). `.velnor/` verified no-op (no crate-path
+  refs — only crates.io URLs and the root `manifest_path`).
+  `Cargo.lock` unchanged (locks carry no member paths).
+  `.alint.yml` untouched.
+- Also normalized: root members are now a sorted explicit list;
+  `cargo fmt --all --check` clean (includes one pre-existing
+  slice-2 reflow in `runner_image_contract_tests.rs`).
+- Verify: `cargo metadata --locked` 13 packages; `cargo check
+  --locked --workspace --all-targets` green; `cargo nextest
+  list --locked --workspace` 3368 tests, byte-identical to the
+  pre-move enumeration. Targeted runs: `exclusion`,
+  `intake_adapter_dependency_direction`,
+  `mise_lock_neither_present_nor_tracked`, and the guard
+  fingerprint suite pass; the matrix classification tests fail
+  exactly as designed (`velnor-runner-cli is unclassified` —
+  the group walk works); guard's 2 stdin/environment failures
+  reproduce on the untouched slice-2 base (pre-existing).
+  Toolchain: alint 0.17.0, `rust-repository-policy` 0.1.0,
+  cargo 1.98.1.
+
+### Before/after counts (slice 3)
+
+Native rules:
+
+| Rule ID | Before | After | Δ |
+|---|---|---|---|
+| `layout-no-flat-crate-manifest` | 9 | 0 | −9 (gate met) |
+| `layout-no-deep-crate-manifest` | 0 | 0 | 0 |
+| `tests-dir-present` | 20 | 1 | −19 (all spurious cleared; only the real `runner-host` finding remains) |
+| `tests-no-test-files-in-src` | 34 | 163 | +129 armed (orch 81, renderer 25, contract 12, mise 9, guard 2; runner 34 unchanged) |
+| `tests-only-rust` | 0 | 17 | +17 armed (cli 15 `.yml` fixtures + orch 2 `.txt` snapshots, all direct `tests/` children) |
+| `cargo-workspace-inherit-edition/license/lints` | pass | pass | 0 findings on all 13, now evaluating for real |
+| `ci-build-runs-on` | 6 | 6 | 0 |
+| `layout-requires-rust-toolchain` + parity pair | 3 | 3 | 0 |
+| `size-lib-main-150` | 1 | 1 | 0 |
+| `policy-gaps` | 1429 | 1429 | 0 |
+| Total (28 passing · 9 failing both sides) | 1502 | 1620 | +118 (arming only) |
+
+Helper gaps (sorted finding sets identical modulo the path
+prefix, except noted line shifts from this slice's own edits):
+
+| Gap ID | Before | After | Δ |
+|---|---|---|---|
+| `GAP-TEST-001` | 1039 | 1039 | 0 |
+| `GAP-TEST-002` | 122 | 122 | 0 |
+| `GAP-TEST-003` | 250 | 250 | 0 |
+| `GAP-SIZE-001` | 8 | 8 | 0 findings; reported lines cli 10917→10929, contract 18362→18363, orch 69203→69239, renderer 29453→29456, host 10865→10864 |
+| `GAP-SIZE-002` | 6 | 6 | 0 |
+| `GAP-INHERIT-001` | 4 | 4 | 0 |
+| Total | 1429 | 1429 | 0 |
+
+Step 4 is done. The arming increases (+129
+`tests-no-test-files-in-src`, +17 `tests-only-rust`) are the
+pre-declared move-day effect, owned by Step 3 (test
+normalization), which is now overdue: it was sequenced before
+the moves but the moves landed first. Generator-slice-owned
+layout pins still asserting stale shapes: `MEMBERS` 8-tuple +
+`WORKSPACE_ROOTS`, `p11_metadata` nested-runner constants,
+`p11_alint*` lock fixtures, matrix suite allowlists.
