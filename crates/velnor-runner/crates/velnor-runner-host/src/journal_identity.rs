@@ -86,14 +86,6 @@ impl Journal {
         self.sync_lineage().await?;
         result
     }
-
-    #[cfg(test)]
-    pub(crate) fn shares_process_state(&self, other: &Self) -> bool {
-        match (process_state(self.path()), process_state(other.path())) {
-            (Ok(first), Ok(second)) => Arc::ptr_eq(&first, &second),
-            _ => false,
-        }
-    }
 }
 
 impl Journal {

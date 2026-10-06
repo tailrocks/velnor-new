@@ -5,10 +5,7 @@ use crate::launch_harness::{
     absent, assigned_wait, available, open, started_progress, started_wait,
 };
 use crate::stage::PairEngine;
-use crate::worker::{
-    CreateProjection, VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole,
-    WorkerVolumeVerification,
-};
+use crate::worker::{CreateProjection, WorkerVolumeRole, WorkerVolumeVerification};
 use crate::{HostError, Journal, Outcome};
 
 struct Idle;
@@ -57,13 +54,6 @@ impl PairEngine for Idle {
         _role: WorkerVolumeRole,
     ) -> Result<WorkerVolumeVerification, HostError> {
         Ok(WorkerVolumeVerification::Absent)
-    }
-
-    async fn remove_verified_volume(
-        &self,
-        _volume: &VerifiedWorkerVolume,
-    ) -> Result<WorkerVolumeRemoval, HostError> {
-        Err(HostError::Docker)
     }
 
     async fn remove_worker_volumes(&self, _volume: &str) -> Result<bool, HostError> {

@@ -11,10 +11,7 @@ use file_identity::JournalFile;
 #[path = "journal_completion.rs"]
 mod completion;
 mod file_identity;
-mod guest_probe_owner;
 mod launch;
-mod launch_identity;
-mod launch_phase;
 mod read;
 mod schema;
 mod sql;
@@ -23,13 +20,10 @@ mod worker_volume;
 
 #[cfg(test)]
 mod schema_metadata_tests;
-pub(crate) use crate::journal_assignment::LaunchReservation;
 pub(crate) use completion::{
     CleanupClaim, CompletedLaunch, CompletionIdentity, CompletionInboxEntry,
-    MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN, RecoveryLease,
+    MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN,
 };
-pub(crate) use guest_probe_owner::GuestProbeLease;
-pub(crate) use launch_identity::LaunchIdentity;
 use sql::{one_row, token_rejected};
 
 /// Durable intent row.

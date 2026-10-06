@@ -3,7 +3,7 @@
 use crate::launch::steps::launch_id;
 use crate::launch_harness::{Scratch, assigned_wait, ctx};
 use crate::launch_test_support::script;
-use crate::{HostError, Journal, Started};
+use crate::{Journal, Started};
 
 #[tokio::test]
 async fn resolved_acquire_without_jit_resumes_one_jit_without_acquire() -> Result<(), String> {

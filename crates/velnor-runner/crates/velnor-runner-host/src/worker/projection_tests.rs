@@ -6,7 +6,6 @@ use bollard::models::{HostConfigCgroupnsModeEnum, MountType};
 
 use crate::error::HostError;
 use crate::launch_identity::LaunchIdentity;
-use crate::stage::DindProbe;
 
 use super::{bollard_create, dind_create_for_identity, runner_create_for_identity};
 
@@ -184,40 +183,4 @@ fn absent_or_relative_archive_path_does_not_create_a_bind() -> Result<(), HostEr
         Some(HostError::Path)
     );
     Ok(())
-}
-
-#[test]
-fn dind_probe_result_classifies_running_and_exit_codes() {
-    assert_eq!(super::resources::probe_result(Some(true), None), Ok(None));
-    assert_eq!(
-        super::resources::probe_result(Some(true), Some(76)),
-        Ok(None)
-    );
-    assert_eq!(
-        super::resources::probe_result(Some(false), Some(0)),
-        Ok(Some(DindProbe::Ready))
-    );
-    assert_eq!(
-        super::resources::probe_result(Some(false), Some(75)),
-        Ok(Some(DindProbe::Starting))
-    );
-    assert_eq!(
-        super::resources::probe_result(Some(false), Some(76)),
-        Err(HostError::DindStorage)
-    );
-    for unknown in [1, 77, -1] {
-        assert_eq!(
-            super::resources::probe_result(Some(false), Some(unknown)),
-            Err(HostError::DindReadiness),
-            "exit code {unknown}"
-        );
-    }
-    assert_eq!(
-        super::resources::probe_result(None, Some(0)),
-        Err(HostError::DindReadiness)
-    );
-    assert_eq!(
-        super::resources::probe_result(Some(false), None),
-        Err(HostError::DindReadiness)
-    );
 }

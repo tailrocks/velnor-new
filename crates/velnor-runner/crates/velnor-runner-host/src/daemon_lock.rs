@@ -203,14 +203,6 @@ impl EngineLineageGuard {
     }
 }
 
-#[cfg(test)]
-pub(crate) fn test_engine_lineage_guard(
-    engine_id: &str,
-    root: &Path,
-) -> Result<EngineLineageGuard, HostError> {
-    EngineLineageGuard::acquire_at(engine_id, root)
-}
-
 fn process_guards() -> &'static Mutex<HashMap<String, EngineLineageGuard>> {
     static GUARDS: OnceLock<Mutex<HashMap<String, EngineLineageGuard>>> = OnceLock::new();
     GUARDS.get_or_init(|| Mutex::new(HashMap::new()))

@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::journal::{CompletedLaunch, CompletionIdentity, LaunchReservation};
+use crate::journal::{CompletedLaunch, CompletionIdentity};
 use crate::{HostError, Journal, Outcome};
 
 struct Scratch(PathBuf);
@@ -372,54 +372,5 @@ async fn cleaned_failed_history_does_not_hide_the_current_request_generation()
         .await?;
     assert_eq!(reused, current);
     assert!(!fresh);
-    Ok(())
-}
-
-#[tokio::test]
-async fn proven_completion_replays_as_completed_after_reopen() -> Result<(), HostError> {
-    let scratch = Scratch::new("completed-replay")?;
-    let journal = Journal::open(&scratch.file()).await?;
-    let legacy = journal.begin("launch", "m181r81").await?;
-    assert_eq!(
-        journal.reserve_assignment(1, 81, 181, 1).await?,
-        LaunchReservation::Existing(legacy)
-    );
-    assert_eq!(
-        journal.record_runner_completed(1, 81, 91, "v81").await?,
-        Some(legacy)
-    );
-    assert_eq!(journal.occupied_launches().await?, 1);
-    let claim = journal
-        .claim_completion_cleanup_at(legacy, 100, 10)
-        .await?
-        .ok_or(HostError::Journal)?;
-    assert!(
-        journal
-            .bind_completion_containers_at(
-                legacy,
-                claim.generation,
-                Some("ctr-runner"),
-                Some("ctr-dind"),
-                101
-            )
-            .await?
-    );
-    assert!(
-        journal
-            .record_completion_runner_absent_at(legacy, claim.generation, 109)
-            .await?
-    );
-    assert!(
-        journal
-            .record_completion_cleanup_at(legacy, claim.generation, 109)
-            .await?
-    );
-    assert_eq!(journal.occupied_launches().await?, 0);
-    let reopened = Journal::open(&scratch.file()).await?;
-    assert_eq!(
-        reopened.reserve_assignment(1, 81, 999, 1).await?,
-        LaunchReservation::Completed(legacy)
-    );
-    assert_eq!(reopened.rows().await?.len(), 1);
     Ok(())
 }

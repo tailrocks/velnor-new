@@ -10,20 +10,10 @@ use crate::docker_client::docker_deadline;
 use crate::docker_spec::{DeleteDecision, delete_decision, runner_plan};
 use crate::error::HostError;
 use crate::worker::{
-    CreateProjection, VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole,
-    WorkerVolumeVerification, create_named_volumes, create_only, deliver_jit, dind_create,
-    join_dind_net, remove_verified_worker_volume, remove_worker_volumes, runner_create, start_id,
-    verify_worker_volume,
+    CreateProjection, WorkerVolumeRole, WorkerVolumeVerification, create_named_volumes,
+    create_only, deliver_jit, dind_create, join_dind_net, remove_worker_volumes, runner_create,
+    start_id, verify_worker_volume,
 };
-
-mod cleanup;
-pub(crate) mod pair;
-mod reconcile;
-pub(crate) use cleanup::cleanup_worker;
-pub(crate) use pair::{
-    ContainerRecord, DindProbe, cleanup_prepared_dind, prepare_dind, start_runner,
-};
-pub(crate) use reconcile::{reconcile_worker, reconcile_worker_with_budget};
 
 /// Where `start_pair_until` returns. Later steps are not started.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,10 +59,6 @@ pub(crate) trait PairEngine {
         worker: &str,
         role: WorkerVolumeRole,
     ) -> Result<WorkerVolumeVerification, HostError>;
-    async fn remove_verified_volume(
-        &self,
-        volume: &VerifiedWorkerVolume,
-    ) -> Result<WorkerVolumeRemoval, HostError>;
     async fn remove_worker_volumes(&self, volume: &str) -> Result<bool, HostError>;
     async fn running(&self, id: &str) -> Result<bool, HostError>;
 }
@@ -168,13 +154,6 @@ impl PairEngine for Docker {
         role: WorkerVolumeRole,
     ) -> Result<WorkerVolumeVerification, HostError> {
         verify_worker_volume(self, worker, role).await
-    }
-
-    async fn remove_verified_volume(
-        &self,
-        volume: &VerifiedWorkerVolume,
-    ) -> Result<WorkerVolumeRemoval, HostError> {
-        remove_verified_worker_volume(self, volume).await
     }
 
     async fn remove_worker_volumes(&self, volume: &str) -> Result<bool, HostError> {

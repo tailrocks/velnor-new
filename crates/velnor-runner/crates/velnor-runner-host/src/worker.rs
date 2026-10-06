@@ -16,10 +16,11 @@ use crate::stage::PairStop;
 
 pub(crate) mod resources;
 mod volumes;
+#[cfg(test)]
+pub(crate) use volumes::remove_verified_worker_volume;
 pub(crate) use volumes::{
     VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole, WorkerVolumeVerification,
-    create_named_volumes, remove_verified_worker_volume, remove_worker_volumes,
-    verify_worker_volume,
+    create_named_volumes, remove_worker_volumes, verify_worker_volume,
 };
 mod mounts;
 mod prepared;
@@ -27,18 +28,12 @@ mod projection;
 mod resource_budget;
 #[cfg(all(test, unix))]
 mod volumes_tests;
-pub(crate) use prepared::PreparedDind;
-pub(crate) use projection::{
-    container_labels, container_name, dind_create_for_identity, identity_labels_match,
-    launch_identity_labels_match, runner_create_for_identity,
-};
+#[cfg(test)]
+pub(crate) use projection::{dind_create_for_identity, runner_create_for_identity};
+pub(crate) use projection::{identity_labels_match, launch_identity_labels_match};
 #[cfg(test)]
 pub(crate) use resource_budget::test_resource_budget;
 pub(crate) use resource_budget::{ResourceBudget, ResourceBudgetConfig, bounded_host_limits};
-pub(super) use resources::{
-    confirmed_not_found, create_owned_volumes, list_launch, probe_dind, remove_owned_volumes,
-    verify_container, verify_engine,
-};
 #[cfg(test)]
 mod projection_tests;
 

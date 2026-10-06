@@ -3,10 +3,7 @@ use std::sync::Mutex;
 
 use crate::launch_harness::{Mode, Script};
 use crate::stage::PairEngine;
-use crate::worker::{
-    CreateProjection, VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole,
-    WorkerVolumeVerification,
-};
+use crate::worker::{CreateProjection, WorkerVolumeRole, WorkerVolumeVerification};
 use crate::{HostError, Journal, Outcome};
 
 pub(crate) fn hex(n: u64) -> String {
@@ -250,13 +247,6 @@ impl PairEngine for Engine {
         _role: WorkerVolumeRole,
     ) -> Result<WorkerVolumeVerification, HostError> {
         Ok(WorkerVolumeVerification::Absent)
-    }
-
-    async fn remove_verified_volume(
-        &self,
-        _volume: &VerifiedWorkerVolume,
-    ) -> Result<WorkerVolumeRemoval, HostError> {
-        Err(HostError::Docker)
     }
 
     async fn remove_worker_volumes(&self, worker: &str) -> Result<bool, HostError> {

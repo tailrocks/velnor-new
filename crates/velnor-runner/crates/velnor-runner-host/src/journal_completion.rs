@@ -14,8 +14,6 @@ mod claim_bind;
 mod inbox;
 #[path = "journal_completion_record.rs"]
 mod record;
-#[path = "journal_completion_recovery.rs"]
-mod recovery;
 
 pub(crate) use inbox::{
     CompletionInboxEntry, MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN,

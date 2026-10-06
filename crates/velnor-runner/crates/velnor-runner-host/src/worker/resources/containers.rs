@@ -4,19 +4,17 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use bollard::Docker;
-use bollard::models::{ContainerSummaryStateEnum as ContainerState, HostConfigCgroupnsModeEnum};
+use bollard::models::HostConfigCgroupnsModeEnum;
 use bollard::query_parameters::ListContainersOptionsBuilder;
 use tokio::time::timeout;
 
 use super::super::mounts::{label_map, mount_source};
 use super::super::{
-    CreateProjection, DIND_ENTRYPOINT, DIND_IMAGE, ResourceBudget, dind_create_for_identity,
-    identity_labels_match, join_dind_net, launch_identity_labels_match, runner_create_for_identity,
+    CreateProjection, DIND_ENTRYPOINT, DIND_IMAGE, identity_labels_match,
+    launch_identity_labels_match,
 };
 use super::confirmed_not_found;
 use crate::error::HostError;
-use crate::launch_identity::LaunchIdentity;
-use crate::stage::ContainerRecord;
 
 mod environment;
 use environment::environment_matches;
@@ -108,92 +106,6 @@ async fn verify_dind(
         return Err(HostError::Ownership);
     }
     Ok(())
-}
-
-pub(super) async fn list_launch(
-    docker: &Docker,
-    identity: &LaunchIdentity,
-) -> Result<Vec<ContainerRecord>, HostError> {
-    let mut filters = HashMap::new();
-    filters.insert(
-        "label".to_owned(),
-        vec![
-            "velnor.product=velnor".to_owned(),
-            format!("velnor.instance={}", identity.instance_id()),
-            format!("velnor.launch={}", identity.launch_id()),
-            format!("velnor.engine={}", identity.engine_id()),
-        ],
-    );
-    let options = ListContainersOptionsBuilder::default()
-        .all(true)
-        .filters(&filters)
-        .build();
-    let rows = timeout(DOCKER_CALL_TIMEOUT, docker.list_containers(Some(options)))
-        .await
-        .map_err(|_| HostError::DockerTimeout)?
-        .map_err(|_| HostError::Docker)?;
-    rows.into_iter()
-        .map(|row| {
-            Ok(ContainerRecord {
-                id: row.id.ok_or(HostError::Ownership)?,
-                labels: row.labels.ok_or(HostError::Ownership)?,
-                running: row.state.map(|state| state == ContainerState::RUNNING),
-            })
-        })
-        .collect()
-}
-
-pub(super) async fn verify_container(
-    docker: &Docker,
-    identity: &LaunchIdentity,
-    role: &str,
-    id: &str,
-    dind_id: Option<&str>,
-    resource_budget: Option<ResourceBudget>,
-    require_running: bool,
-) -> Result<ContainerRecord, HostError> {
-    if !container_id(id) {
-        return Err(HostError::Ownership);
-    }
-    let expected = match role {
-        "dind" if dind_id.is_none() => {
-            let mut expected = dind_create_for_identity(identity)?;
-            expected.resource_budget = resource_budget;
-            expected
-        }
-        "runner" => {
-            let mut runner = runner_create_for_identity(identity, None)?;
-            runner.resource_budget = resource_budget;
-            join_dind_net(runner, dind_id.ok_or(HostError::Ownership)?)?
-        }
-        _ => return Err(HostError::Ownership),
-    };
-    let name = expected.name.as_str();
-    let found = inspect_container(docker, id)
-        .await?
-        .ok_or(HostError::Ownership)?;
-    let named = inspect_container(docker, name)
-        .await?
-        .ok_or(HostError::Ownership)?;
-    let labels = found
-        .config
-        .as_ref()
-        .and_then(|config| config.labels.clone())
-        .ok_or(HostError::Ownership)?;
-    let found_id = found.id.as_deref().ok_or(HostError::Ownership)?;
-    let running = found.state.as_ref().and_then(|state| state.running);
-    if found_id != id
-        || named.id.as_deref() != Some(id)
-        || !topology_matches(&expected, &found)?
-        || (require_running && running != Some(true))
-    {
-        return Err(HostError::Ownership);
-    }
-    Ok(ContainerRecord {
-        id: id.to_owned(),
-        labels,
-        running,
-    })
 }
 
 async fn verify_existing(
@@ -350,10 +262,6 @@ fn network_matches(expected: Option<&str>, actual: Option<&str>) -> bool {
         Some(mode) => actual == Some(mode),
         None => actual.is_none_or(|mode| mode.is_empty() || mode == "default"),
     }
-}
-
-fn container_id(id: &str) -> bool {
-    (12..=64).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn expected_mounts(

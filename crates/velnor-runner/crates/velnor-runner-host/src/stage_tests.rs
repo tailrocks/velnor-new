@@ -1,30 +1,11 @@
 //! Stage stops and recorded deletes drive `start_pair_until` and `remove_recorded`.
 
-mod cleanup;
-mod fake;
-mod preparation;
-mod reconcile;
-mod runner;
-
 use std::collections::HashMap;
 use std::sync::Mutex;
 
 use super::HostError;
-use super::launch_identity::LaunchIdentity;
 use super::stage::{Forget, PairEngine, PairStop, decide, drive};
-use super::worker::{
-    CreateProjection, VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole,
-    WorkerVolumeVerification,
-};
-
-fn identity() -> Result<LaunchIdentity, HostError> {
-    LaunchIdentity::new(
-        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        7,
-        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        "engine-test",
-    )
-}
+use super::worker::{CreateProjection, WorkerVolumeRole, WorkerVolumeVerification};
 
 // join_dind_net accepts only a 64-hex container id.
 const FIRST_CONTAINER_ID: &str = "0000000000000000000000000000000000000000000000000000000000000001";
@@ -150,13 +131,6 @@ impl PairEngine for Fake {
         _role: WorkerVolumeRole,
     ) -> Result<WorkerVolumeVerification, HostError> {
         Ok(WorkerVolumeVerification::Absent)
-    }
-
-    async fn remove_verified_volume(
-        &self,
-        _volume: &VerifiedWorkerVolume,
-    ) -> Result<WorkerVolumeRemoval, HostError> {
-        Err(HostError::Docker)
     }
 
     async fn remove_worker_volumes(&self, _volume: &str) -> Result<bool, HostError> {
