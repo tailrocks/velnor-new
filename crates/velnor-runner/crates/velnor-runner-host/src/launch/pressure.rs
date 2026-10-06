@@ -3,6 +3,9 @@
 //! Each call grows or shrinks by one. A missing sample holds the previous count.
 //! The first advertisement starts at one so a high ceiling cannot stampede.
 
+// Live sampling is macOS-only; the parse helpers below exist on other
+// platforms solely for unit tests, so the import follows the same gate.
+#[cfg(any(test, target_os = "macos"))]
 use std::process::Command;
 
 const GROW_LOAD_PER_CPU_MILLIS: u32 = 750;
@@ -106,11 +109,13 @@ const fn load_per_cpu(sample: Sample) -> u32 {
 }
 
 /// `{ 33.41 42.75 40.01 }` -> `33410`. Later averages are ignored.
+#[cfg(any(test, target_os = "macos"))]
 #[must_use]
 pub(crate) fn parse_loadavg(text: &str) -> Option<u32> {
     text.split_whitespace().find_map(load_token_millis)
 }
 
+#[cfg(any(test, target_os = "macos"))]
 fn load_token_millis(token: &str) -> Option<u32> {
     let token = token.trim_matches(|c: char| c == '{' || c == '}' || c == ',');
     let (whole, frac) = token.split_once('.').unwrap_or((token, ""));
@@ -132,6 +137,7 @@ fn load_token_millis(token: &str) -> Option<u32> {
 }
 
 /// Reads `System-wide memory free percentage: N%`.
+#[cfg(any(test, target_os = "macos"))]
 #[must_use]
 pub(crate) fn parse_memory_pressure_percent(text: &str) -> Option<u8> {
     let rest = text.split("System-wide memory free percentage:").nth(1)?;
@@ -145,6 +151,7 @@ pub(crate) fn parse_memory_pressure_percent(text: &str) -> Option<u8> {
 }
 
 /// `memsize * percent / 100`, saturating at `u64::MAX`.
+#[cfg(any(test, target_os = "macos"))]
 #[must_use]
 pub(crate) fn available_bytes(memsize: u64, percent: u8) -> u64 {
     let product = u128::from(memsize) * u128::from(percent) / 100;
@@ -152,6 +159,7 @@ pub(crate) fn available_bytes(memsize: u64, percent: u8) -> u64 {
 }
 
 /// Online CPU count. Zero and garbage are `None`.
+#[cfg(any(test, target_os = "macos"))]
 #[must_use]
 pub(crate) fn parse_ncpu(text: &str) -> Option<u32> {
     let count = text.trim().parse::<u32>().ok()?;
@@ -159,6 +167,7 @@ pub(crate) fn parse_ncpu(text: &str) -> Option<u32> {
 }
 
 /// Available column of one `df -kP` line, converted from KiB to bytes.
+#[cfg(any(test, target_os = "macos"))]
 #[must_use]
 pub(crate) fn parse_df_avail_kib(line: &str) -> Option<u64> {
     let mut fields = line.split_whitespace();
