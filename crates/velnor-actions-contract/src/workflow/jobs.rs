@@ -26,7 +26,7 @@ pub const WORKFLOW_DISPLAY_NAME: &str = "CI";
 /// Scheduled upstream-freshness workflow path (emitted under velnor-repository-v1).
 pub const FRESHNESS_WORKFLOW_PATH: &str = ".github/workflows/freshness.yml";
 
-/// Protected post-merge OpenTofu apply workflow path.
+/// Protected post-merge `OpenTofu` apply workflow path.
 pub const TOFU_APPLY_WORKFLOW_PATH: &str = ".github/workflows/tofu-apply.yml";
 
 /// Canonical orchestration job ID for the planner.

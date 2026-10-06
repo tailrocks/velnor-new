@@ -1,20 +1,14 @@
-//! Protected post-merge OpenTofu apply workflow.
+//! Protected post-merge `OpenTofu` apply workflow.
 //!
 //! This is a separate generated workflow: pull-request CI never receives
 //! backend credentials, provider tokens, or OIDC permission. Its closed
 //! inputs render only one protected default-branch apply path.
 
-use std::collections::BTreeMap;
-
-use velnor_actions_contract::{Step, StepKind, TOFU_APPLY_WORKFLOW_PATH, TofuApplyConfig};
+use velnor_actions_contract::{TOFU_APPLY_WORKFLOW_PATH, TofuApplyConfig};
 
 use crate::{
-    MiseSetup, RenderError, commands, guard, marker,
-    render::RenderedFile,
-    setup::mise_setup_step,
-    steps,
-    steps_plain::plain_step_to_yaml,
-    yaml::{Yaml, render_yaml},
+    MiseSetup, RenderError, guard, marker, render::RenderedFile, steps,
+    tofu_apply_document::tofu_apply_document, yaml::render_yaml,
 };
 
 /// Generated workflow display name.
@@ -25,7 +19,7 @@ pub const TOFU_APPLY_CONCURRENCY_GROUP: &str = "velnor-tofu-apply-${{ github.rep
 pub const TOFU_APPLY_JOB_ID: &str = "tofu-apply";
 /// Workflow timeout bounds provider and backend operations.
 pub const TOFU_APPLY_TIMEOUT_MINUTES: i64 = 60;
-/// Stable step ID consumed by the OpenTofu credential env maps.
+/// Stable step ID consumed by the `OpenTofu` credential env maps.
 pub const AWS_CREDENTIALS_STEP_ID: &str = "aws-credentials";
 /// Locally mirrored immutable AWS credentials action pin; actionlint owns its inventory.
 pub const AWS_CREDENTIALS_USES: &str =
@@ -46,7 +40,7 @@ pub struct TofuApplySpec {
     pub checkout_uses: String,
     /// Pinned Mise action and executable digest.
     pub mise_setup: MiseSetup,
-    /// Exact OpenTofu version from the compiled tool catalog.
+    /// Exact `OpenTofu` version from the compiled tool catalog.
     pub opentofu_version: String,
     /// Exact generator marker version.
     pub generator_version: String,
@@ -87,7 +81,7 @@ impl TofuApplySpec {
     }
 }
 
-/// Render a distinct protected-main-push OpenTofu apply workflow.
+/// Render a distinct protected-main-push `OpenTofu` apply workflow.
 ///
 /// # Errors
 ///
@@ -104,133 +98,8 @@ pub fn render_tofu_apply_workflow(spec: &TofuApplySpec) -> Result<RenderedFile, 
     })
 }
 
-/// Build the single job with credentials scoped only to the steps that need them.
-fn tofu_apply_document(spec: &TofuApplySpec) -> Result<Yaml, RenderError> {
-    let config = &spec.config;
-    let checkout = checkout_yaml(&spec.checkout_uses)?;
-    let reject_stale =
-        branch_head_guard_step("Reject stale default-branch revision", &spec.default_branch)?;
-    let mise = plain_step_to_yaml(&mise_setup_step(&spec.mise_setup)?)?;
-    let check_tokens = required_tokens_step(config)?;
-    let aws = aws_credentials_step(config)?;
-    let install = install_opentofu_step(&spec.opentofu_version)?;
-    let init = tofu_init_step(spec)?;
-    let backend = tofu_backend_validation_step(spec)?;
-    let before_plan = branch_head_guard_step(
-        "Recheck default-branch head before planning",
-        &spec.default_branch,
-    )?;
-    let plan = tofu_plan_step(spec)?;
-    let review = tofu_plan_review_step(spec)?;
-    let before_apply = branch_head_guard_step(
-        "Recheck default-branch head before apply",
-        &spec.default_branch,
-    )?;
-    let apply = tofu_apply_step(spec)?;
-    let verify = tofu_live_verify_step(spec)?;
-    let cleanup = tofu_cleanup_step()?;
-
-    let steps = vec![
-        checkout,
-        reject_stale,
-        mise,
-        check_tokens,
-        aws,
-        install,
-        init,
-        backend,
-        before_plan,
-        plan,
-        review,
-        before_apply,
-        apply,
-        verify,
-        cleanup,
-    ];
-    let job = Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str(TOFU_APPLY_WORKFLOW_NAME)),
-        (
-            "if".to_owned(),
-            Yaml::str("${{ github.ref_protected == true }}"),
-        ),
-        ("runs-on".to_owned(), Yaml::str(spec.runs_on.clone())),
-        (
-            "environment".to_owned(),
-            Yaml::str(config.environment.clone()),
-        ),
-        (
-            "timeout-minutes".to_owned(),
-            Yaml::Int(TOFU_APPLY_TIMEOUT_MINUTES),
-        ),
-        (
-            "env".to_owned(),
-            Yaml::Map(
-                crate::toolchain_env::job_level_env()
-                    .into_iter()
-                    .map(|(key, value)| (key, Yaml::str(value)))
-                    .collect(),
-            ),
-        ),
-        (
-            "permissions".to_owned(),
-            Yaml::Map(vec![
-                ("contents".to_owned(), Yaml::str("read")),
-                ("id-token".to_owned(), Yaml::str("write")),
-            ]),
-        ),
-        (
-            "defaults".to_owned(),
-            Yaml::Map(vec![(
-                "run".to_owned(),
-                Yaml::Map(vec![
-                    (
-                        "shell".to_owned(),
-                        Yaml::str("bash --noprofile --norc -euo pipefail {0}"),
-                    ),
-                    (
-                        "working-directory".to_owned(),
-                        Yaml::str(config.root.as_str().to_owned()),
-                    ),
-                ]),
-            )]),
-        ),
-        ("steps".to_owned(), Yaml::Seq(steps)),
-    ]);
-    Ok(Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str(TOFU_APPLY_WORKFLOW_NAME)),
-        (
-            "on".to_owned(),
-            Yaml::Map(vec![(
-                "push".to_owned(),
-                Yaml::Map(vec![(
-                    "branches".to_owned(),
-                    Yaml::Seq(vec![Yaml::str(spec.default_branch.clone())]),
-                )]),
-            )]),
-        ),
-        (
-            "permissions".to_owned(),
-            Yaml::Map(vec![("contents".to_owned(), Yaml::str("none"))]),
-        ),
-        (
-            "concurrency".to_owned(),
-            Yaml::Map(vec![
-                ("group".to_owned(), Yaml::str(TOFU_APPLY_CONCURRENCY_GROUP)),
-                ("cancel-in-progress".to_owned(), Yaml::Bool(false)),
-            ]),
-        ),
-        (
-            "jobs".to_owned(),
-            Yaml::Map(vec![(TOFU_APPLY_JOB_ID.to_owned(), job)]),
-        ),
-    ]))
-}
-
-use crate::tofu_apply_steps::{
-    aws_credentials_step, branch_head_guard_step, checkout_yaml, install_opentofu_step,
-    required_tokens_step, tofu_apply_step, tofu_backend_validation_step, tofu_cleanup_step,
-    tofu_init_step, tofu_live_verify_step, tofu_plan_review_step, tofu_plan_step,
-};
+#[cfg(test)]
+pub(super) use crate::tofu_apply_policy::PLAN_REVIEW_JQ;
 
 fn is_exact_version(value: &str) -> bool {
     let mut components = value.split('.');

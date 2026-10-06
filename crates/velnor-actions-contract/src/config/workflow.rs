@@ -42,7 +42,7 @@ pub struct WorkflowConfig {
     /// Sorted, explicit isolated validation jobs.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tasks: Vec<VerificationTask>,
-    /// Optional protected post-merge OpenTofu apply workflow.
+    /// Optional protected post-merge `OpenTofu` apply workflow.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tofu_apply: Option<TofuApplyConfig>,
 }

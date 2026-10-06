@@ -4,15 +4,19 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepKind, TofuApplyConfig};
 
-use crate::{RenderError, commands, steps_plain::plain_step_to_yaml, yaml::Yaml};
 use crate::tofu_apply::TofuApplySpec;
+use crate::{RenderError, commands, steps_plain::plain_step_to_yaml, yaml::Yaml};
 
-/// Build a fixed OpenTofu command with output redirected away from logs.
-fn tofu_logged_step(
+/// Build a fixed `OpenTofu` command with output redirected away from logs.
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "call sites build and yield an owned fixed argv"
+)]
+pub(super) fn tofu_logged_step(
     name: &str,
     command: Vec<String>,
     mut env: BTreeMap<String, String>,
-    result_check: String,
+    result_check: &str,
 ) -> Result<Yaml, RenderError> {
     let script = format!(
         "set -euo pipefail; umask 077; if {} > \"$VELNOR_TOFU_LOG_FILE\" 2>&1; then tofu_status=0; else tofu_status=$?; fi; {}",
@@ -20,11 +24,14 @@ fn tofu_logged_step(
         result_check
     );
     env.extend(plan_paths_env());
-    tofu_shell_step(name, vec!["bash".to_owned(), "-c".to_owned(), script], env)
+    tofu_shell_step(name, vec!["bash".to_owned(), "-c".to_owned(), script], &env)
 }
 
 /// AWS credential outputs are opt-in per step; provider tokens are separate.
-fn aws_env(config: &TofuApplyConfig, include_github_tokens: bool) -> BTreeMap<String, String> {
+pub(super) fn aws_env(
+    config: &TofuApplyConfig,
+    include_github_tokens: bool,
+) -> BTreeMap<String, String> {
     let mut env = BTreeMap::from([
         (
             "AWS_ACCESS_KEY_ID".to_owned(),
@@ -65,7 +72,7 @@ fn aws_env(config: &TofuApplyConfig, include_github_tokens: bool) -> BTreeMap<St
     env
 }
 
-fn plan_paths_env() -> BTreeMap<String, String> {
+pub(super) fn plan_paths_env() -> BTreeMap<String, String> {
     BTreeMap::from([
         (
             "VELNOR_TOFU_LOG_FILE".to_owned(),
@@ -79,15 +86,15 @@ fn plan_paths_env() -> BTreeMap<String, String> {
 }
 
 /// Create a validated fixed shell step while admitting only workflow-owned env keys.
-fn tofu_shell_step(
+pub(super) fn tofu_shell_step(
     name: &str,
     argv: Vec<String>,
-    env: BTreeMap<String, String>,
+    env: &BTreeMap<String, String>,
 ) -> Result<Yaml, RenderError> {
-    validate_tofu_env(&env)?;
+    validate_tofu_env(env)?;
     commands::validate_command_argv(&argv)?;
-    commands::validate_env(&env)?;
-    let step_env = crate::toolchain_env::with_credential_scrub(&env);
+    commands::validate_env(env)?;
+    let step_env = crate::toolchain_env::with_credential_scrub(env);
     let run = if crate::commands::is_inline_shell(&argv) {
         let mut scripted = argv;
         scripted[2] = crate::toolchain_env::with_credential_unset_script(&scripted[2]);
@@ -135,7 +142,7 @@ fn validate_tofu_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> 
     Ok(())
 }
 
-fn tofu_exec(spec: &TofuApplySpec) -> Vec<String> {
+pub(super) fn tofu_exec(spec: &TofuApplySpec) -> Vec<String> {
     vec![
         "mise".to_owned(),
         "--no-config".to_owned(),
@@ -147,4 +154,3 @@ fn tofu_exec(spec: &TofuApplySpec) -> Vec<String> {
         "tofu".to_owned(),
     ]
 }
-

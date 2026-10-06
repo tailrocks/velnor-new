@@ -1,4 +1,4 @@
-//! Closed declaration for a protected post-merge OpenTofu apply workflow.
+//! Closed declaration for a protected post-merge `OpenTofu` apply workflow.
 
 use super::tofu::Utf8RepoRelDir;
 use crate::errors::ContractError;
