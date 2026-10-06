@@ -268,5 +268,4 @@ fn parse_octal(field: &[u8], label: &str) -> Result<u64, String> {
 }
 
 #[cfg(test)]
-#[path = "tests.rs"]
 mod tests;

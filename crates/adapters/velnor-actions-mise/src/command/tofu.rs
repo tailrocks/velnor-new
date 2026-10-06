@@ -1,6 +1,6 @@
 //! Tofu spawn constructor: pinned `mise exec` plus baked isolation env.
 //!
-//! Declared from `command.rs` (`#[path]`, no `lib.rs` edit). The
+//! Declared from `command` (no `lib.rs` edit). The
 //! constructor bakes the reserved `TF_*` isolation pairs directly,
 //! since `with_env` (reserved-key fail-loud) can never carry them.
 

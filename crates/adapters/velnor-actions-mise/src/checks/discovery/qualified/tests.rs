@@ -1,11 +1,12 @@
 //! Synthetic qualification bytes test pure admission and identity, never runtime provenance.
 use super::*;
+use crate::MiseError;
 use velnor_actions_contract::config::{
-    QualifiedCargoInstallation, QualifiedToolArtifact, QualifiedToolExecutable,
-    QualifiedToolOptions, QualifiedToolPlatform, QualifiedToolProbe,
+    CheckExecutor, CheckRunner, CheckSystemTool, CheckSystemToolKind, ContainerPlatform,
+    DaemonIdentityPolicy, HostContainerProfile, HostDockerCli, HostDockerDaemon, HostOrbStackSdk,
+    MiseCheck, QualifiedCargoInstallation, QualifiedTool, QualifiedToolArtifact,
+    QualifiedToolExecutable, QualifiedToolOptions, QualifiedToolPlatform, QualifiedToolProbe,
 };
-#[path = "check_qualified_tool_names_tests.rs"]
-mod names;
 fn platform(name: &str, version: &str, url: String) -> QualifiedToolPlatform {
     QualifiedToolPlatform {
         platform: CheckPlatform::LinuxX64,
@@ -91,7 +92,7 @@ fn codebook() -> QualifiedTool {
 }
 #[test]
 fn explicit_named_rust_retains_the_qualified_repository_version() {
-    let resolved = names::resolve_on(&[rust()], &["rust".to_owned()], CheckPlatform::LinuxX64)
+    let resolved = resolve_on(&[rust()], &["rust".to_owned()], CheckPlatform::LinuxX64)
         .expect("qualified override");
     assert_eq!(resolved.specs, ["rust@1.97.1"]);
     assert_eq!(resolved.declarations[0].version, "1.97.1");
@@ -100,14 +101,14 @@ fn explicit_named_rust_retains_the_qualified_repository_version() {
 #[test]
 fn undeclared_tools_never_resolve_from_the_compiled_catalog() {
     for id in ["rust", "cargo-nextest", "node", "unknown"] {
-        assert!(names::resolve_on(&[], &[id.to_owned()], CheckPlatform::LinuxX64).is_err());
+        assert!(resolve_on(&[], &[id.to_owned()], CheckPlatform::LinuxX64).is_err());
     }
     assert!(fingerprint(&[], &["rust@1.98.1".to_owned()]).is_err());
     assert!(fingerprint(&[rust()], &[]).is_err());
 }
 #[test]
 fn installation_dependencies_are_ordered_without_task_graph_edges() {
-    let resolved = names::resolve_on(
+    let resolved = resolve_on(
         &[codebook(), rust()],
         &["codebook".to_owned()],
         CheckPlatform::LinuxX64,
@@ -130,7 +131,7 @@ fn installation_dependencies_are_ordered_without_task_graph_edges() {
 fn every_qualification_and_option_dimension_changes_the_identity() {
     let registry = vec![codebook(), rust()];
     let digest = |records: &[QualifiedTool]| {
-        names::resolve_on(records, &["codebook".to_owned()], CheckPlatform::LinuxX64)
+        resolve_on(records, &["codebook".to_owned()], CheckPlatform::LinuxX64)
             .expect("qualified closure")
             .fingerprint
     };
@@ -158,7 +159,7 @@ fn every_qualification_and_option_dimension_changes_the_identity() {
 fn qualified_scope_is_platform_specific_and_backend_conflicts_fail() {
     let row = node("node", "24.18.0");
     assert!(
-        names::resolve_on(
+        resolve_on(
             std::slice::from_ref(&row),
             &["node".to_owned()],
             CheckPlatform::MacosArm64,
@@ -167,7 +168,7 @@ fn qualified_scope_is_platform_specific_and_backend_conflicts_fail() {
     );
     let alternate = node("other-node", "24.17.0");
     assert!(
-        names::resolve_on(
+        resolve_on(
             &[row, alternate],
             &["node".to_owned(), "other-node".to_owned()],
             CheckPlatform::LinuxX64,
@@ -202,7 +203,7 @@ fn prebuilt_cargo_qualification_has_no_synthetic_installer_dependency() {
     tool.platforms[0].artifacts[0].url =
         "https://github.com/codebook/codebook/releases/download/v0.3.42/codebook-linux-x64.tar.gz"
             .to_owned();
-    let resolved = names::resolve_on(
+    let resolved = resolve_on(
         std::slice::from_ref(&tool),
         &["codebook".to_owned()],
         CheckPlatform::LinuxX64,
@@ -216,7 +217,7 @@ fn prebuilt_cargo_qualification_has_no_synthetic_installer_dependency() {
 
 #[test]
 fn canonical_fingerprint_ignores_dependency_transport_order() {
-    let resolved = names::resolve_on(
+    let resolved = resolve_on(
         &[codebook(), rust()],
         &["codebook".to_owned()],
         CheckPlatform::LinuxX64,
@@ -232,7 +233,7 @@ fn canonical_fingerprint_ignores_dependency_transport_order() {
 
 fn discovered_qualification() -> super::super::DiscoveredCheck {
     use velnor_actions_contract::config::{CheckExecutor, CheckRunner, MiseCheck};
-    let resolved = names::resolve_on(&[rust()], &["rust".to_owned()], CheckPlatform::LinuxX64)
+    let resolved = resolve_on(&[rust()], &["rust".to_owned()], CheckPlatform::LinuxX64)
         .expect("qualified Rust");
     let check = MiseCheck {
         id: "verify".to_owned(),
@@ -354,4 +355,163 @@ fn every_host_container_field_changes_the_runner_identity() {
         }
         assert_ne!(original, flags(&changed), "unbound container field {field}");
     }
+}
+
+fn check(platform: CheckPlatform) -> MiseCheck {
+    MiseCheck {
+        id: "check".to_owned(),
+        task: "check".to_owned(),
+        directory: ".".to_owned(),
+        runner: CheckRunner {
+            label: "test-runner".to_owned(),
+            platform,
+            executor: CheckExecutor::Hosted,
+            container: None,
+        },
+        inputs: Vec::new(),
+        tools: Vec::new(),
+        system_tools: Vec::new(),
+        evidence: None,
+        timeout_minutes: 10,
+    }
+}
+
+fn resolve_on(
+    registry: &[QualifiedTool],
+    roots: &[String],
+    platform: CheckPlatform,
+) -> Result<ResolvedTools, MiseError> {
+    resolve(registry, roots, &check(platform))
+}
+
+fn named_node(executable: &str, platform: CheckPlatform) -> QualifiedTool {
+    let mut tool = node("node", "24.18.0");
+    let qualified = &mut tool.platforms[0];
+    qualified.platform = platform;
+    let os = if platform == CheckPlatform::LinuxX64 {
+        "linux"
+    } else {
+        "darwin"
+    };
+    qualified.artifacts[0].url = format!(
+        "https://nodejs.org/dist/v24.18.0/node-v24.18.0-{os}-{}.tar.xz",
+        platform.arch()
+    );
+    let projected = &mut qualified.executables[0];
+    projected.name = executable.to_owned();
+    projected.path = format!("bin/{executable}");
+    projected.probe = QualifiedToolProbe::Version {
+        expected: format!("{executable} 24.18.0"),
+    };
+    tool
+}
+
+fn resolve_named_for_check(
+    executable: &str,
+    check: &MiseCheck,
+) -> Result<ResolvedTools, MiseError> {
+    resolve(
+        &[named_node(executable, check.runner.platform)],
+        &["node".to_owned()],
+        check,
+    )
+}
+
+fn system_tool(kind: CheckSystemToolKind) -> CheckSystemTool {
+    CheckSystemTool {
+        kind,
+        version: "6.2.1".to_owned(),
+        build: "swiftlang-6.2.1.1.1".to_owned(),
+    }
+}
+
+fn docker_profile() -> HostContainerProfile {
+    HostContainerProfile::Docker {
+        context: "local".to_owned(),
+        socket_path: "/run/docker.sock".to_owned(),
+        socket_uid: 1000,
+        cli: HostDockerCli {
+            path: "/usr/bin/docker".to_owned(),
+            sha256: "a".repeat(64),
+            version: "28.0.0".to_owned(),
+            build: "1".to_owned(),
+        },
+        daemon: HostDockerDaemon {
+            version: "28.0.0".to_owned(),
+            platform: ContainerPlatform::LinuxX64,
+            operating_system: "linux".to_owned(),
+            identity_policy: DaemonIdentityPolicy::ExecutionScoped,
+        },
+    }
+}
+
+fn orbstack_profile() -> HostContainerProfile {
+    HostContainerProfile::OrbStack {
+        context: "local".to_owned(),
+        socket_path: "/run/docker.sock".to_owned(),
+        cli: HostDockerCli {
+            path: "/usr/bin/docker".to_owned(),
+            sha256: "a".repeat(64),
+            version: "28.0.0".to_owned(),
+            build: "1".to_owned(),
+        },
+        daemon: HostDockerDaemon {
+            version: "28.0.0".to_owned(),
+            platform: ContainerPlatform::LinuxX64,
+            operating_system: "linux".to_owned(),
+            identity_policy: DaemonIdentityPolicy::ExecutionScoped,
+        },
+        sdk: Box::new(HostOrbStackSdk {
+            app_bundle_path: "/Applications/OrbStack.app".to_owned(),
+            bundle_id: "com.orbstack.Orbstack".to_owned(),
+            team_id: "ABCD123456".to_owned(),
+            version: "2.0.0".to_owned(),
+            build: "1".to_owned(),
+            info_plist_sha256: "b".repeat(64),
+            main_executable_path: "Contents/MacOS/OrbStack".to_owned(),
+            main_executable_sha256: "c".repeat(64),
+            cli_bundle_path: "/Applications/OrbStack.app/Contents/cli.app".to_owned(),
+            source_tree_sha256: "d".repeat(64),
+            owned_tree_sha256: "e".repeat(64),
+            cli_relative_path: "Contents/MacOS/orbctl".to_owned(),
+            cli_sha256: "f".repeat(64),
+            cli_version: "2.0.0".to_owned(),
+            cli_build: "1".to_owned(),
+            cli_commit: "0".repeat(40),
+            runtime_dir: "/Users/test/.orbstack/run".to_owned(),
+            runtime_uid: 1000,
+        }),
+    }
+}
+
+#[test]
+fn projected_names_reserve_only_runtime_binaries_owned_by_the_check() {
+    let linux = check(CheckPlatform::LinuxX64);
+    assert!(resolve_named_for_check("mise", &linux).is_err());
+    assert!(resolve_named_for_check("docker", &linux).is_ok());
+    assert!(resolve_named_for_check("orbctl", &linux).is_ok());
+
+    let mut docker = check(CheckPlatform::LinuxX64);
+    docker.runner.container = Some(docker_profile());
+    assert!(resolve_named_for_check("docker", &docker).is_err());
+    assert!(resolve_named_for_check("orbctl", &docker).is_ok());
+
+    let mut orbstack = check(CheckPlatform::MacosArm64);
+    orbstack.runner.container = Some(orbstack_profile());
+    assert!(resolve_named_for_check("docker", &orbstack).is_err());
+    assert!(resolve_named_for_check("orbctl", &orbstack).is_err());
+
+    let macos = check(CheckPlatform::MacosArm64);
+    assert!(resolve_named_for_check("swift", &macos).is_ok());
+    assert!(resolve_named_for_check("xcodebuild", &macos).is_ok());
+
+    let mut swift = check(CheckPlatform::MacosArm64);
+    swift.system_tools = vec![system_tool(CheckSystemToolKind::Swift)];
+    assert!(resolve_named_for_check("swift", &swift).is_err());
+    assert!(resolve_named_for_check("xcodebuild", &swift).is_ok());
+
+    let mut xcode = check(CheckPlatform::MacosArm64);
+    xcode.system_tools = vec![system_tool(CheckSystemToolKind::Xcode)];
+    assert!(resolve_named_for_check("xcodebuild", &xcode).is_err());
+    assert!(resolve_named_for_check("swift", &xcode).is_ok());
 }

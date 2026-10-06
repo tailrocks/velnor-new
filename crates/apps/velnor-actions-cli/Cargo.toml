@@ -19,7 +19,7 @@ workspace = true
 
 [[test]]
 name = "velnor_cli"
-path = "tests/velnor_cli.rs"
+path = "tests/main.rs"
 
 [dev-dependencies]
 proc-macro2 = { workspace = true }

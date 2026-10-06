@@ -464,3 +464,114 @@ the moves but the moves landed first. Generator-slice-owned
 layout pins still asserting stale shapes: `MEMBERS` 8-tuple +
 `WORKSPACE_ROOTS`, `p11_metadata` nested-runner constants,
 `p11_alint*` lock fixtures, matrix suite allowlists.
+
+## Slice 4a: test normalization, small crates (2026-10-06)
+
+Scope: `velnor-actions-rust`, `velnor-actions-mise`,
+`velnor-actions-actionlint`, `velnor-actions-tofu`,
+`velnor-archive-guard`, `velnor-actions-cli`. Untouched:
+orchestrator, workflow-renderer, contract, root manifest/lock,
+`.alint.yml`. One root-config pointer outside the owned paths was
+unavoidable: `.cargo/mutants.toml` line 30
+(`mise/src/lock.rs` → `mise/src/catalog/lock.rs`) — the file moved
+and the mutants-scope test fails on dangling globs.
+
+- Unit suites to the S6 canonical form: every production file
+  declares exactly `#[cfg(test)] mod tests;` (no `#[path]`), body in
+  the single sibling `tests.rs`, every test inline (no children, no
+  `src/tests/`). Inline `mod tests { .. }` bodies moved verbatim
+  (dedented); `#[path]`-wired suites moved to `tests.rs` and their
+  old files deleted; `tests::names` (mise) and `tests::edge_cases`
+  (guard) children inlined with `super::` path fixes. Unix-gated
+  suites (`git`, `capabilities/encoding`) keep unix-only
+  enumeration via `#![cfg(unix)]` at the top of `tests.rs`
+  (mechanism probed: a false inner cfg compiles to an empty module).
+- Production `#[path]` normalized by moving FILES to default
+  resolution (module paths byte-identical, so all `crate::` /
+  `super::` / public paths hold): 24 mise files into
+  `checks/` / `catalog/` / `command/` / `toolfiles/` subtrees,
+  rust `identity_closure.rs` into `identity/`. Same-name no-op
+  `#[path]`s that the helper already resolves (guard
+  `pax`/`profile`/`stream`) left alone.
+- Integration runners renamed to `tests/main.rs` in all 6 crates;
+  `[[test]]` names kept, so integration identities are unchanged.
+  `mise/tests/unit_check_file_read.rs` (a unit suite hiding in
+  `tests/`) moved into `checks/file_read/tests.rs`.
+- Layout-pin test DATA updated to the new shape (check logic
+  untouched): mise `forbidden_src` is now a recursive inventory
+  with `tests.rs` exempt from the token scan (fixture IO
+  legitimately writes); cli `size_limits_hold` skips `tests.rs`
+  (forced monoliths, see policy bug 2) and stays at exactly 400
+  lines itself; `.cargo/mutants.toml` glob follows `lock.rs`.
+- Evidence: `docs/content/development/slice-4a-small-tests/`
+  (per-crate + workspace `nextest list` before/after,
+  owned-crate TEST gap excerpts, `identity-mapping.txt` with the 6
+  explicit renames and sha256 pins).
+- Verify: `cargo check --locked --workspace --all-targets` green;
+  `cargo fmt --all --check` clean; owned `nextest list` 1256/1256
+  with only the 6 predicted renames; workspace list 3368 unchanged;
+  owned `nextest run --no-fail-fast` 1232 passed / 24 failed /
+  1 skipped with a byte-identical failure set to baseline (22
+  pre-existing cli + 2 pre-existing guard; no test deleted or
+  ignored). Toolchain: alint 0.17.0,
+  `rust-repository-policy` 0.1.0, cargo 1.98.1.
+
+### Before/after counts (slice 4a)
+
+Owned-crate helper gaps (all TEST findings cleared):
+
+| Crate | TEST-001 | TEST-002 | TEST-003 |
+|---|---|---|---|
+| rust | 16 → 0 | 0 → 0 | 1 → 0 |
+| mise | 26 → 0 | 5 → 0 | 29 → 0 |
+| actionlint / tofu / cli | 0 → 0 | 0 → 0 | 0 → 0 |
+| archive-guard | 4 → 0 | 2 → 0 | 1 → 0 |
+
+Workspace helper totals: TEST-001 1039 → 993 (−46),
+TEST-002 122 → 115 (−7), TEST-003 250 → 219 (−31);
+SIZE-001 8, SIZE-002 6, INHERIT-001 4 unchanged (finding counts;
+mise/rust SIZE metrics recomputed: mise 19890 → 19867 lines,
+113 → 115 files; rust 10930 → 10926 lines). Total gaps
+1429 → 1345 (−84, exactly the owned-crate TEST debt, zero new
+findings). Remaining TEST debt (orchestrator, renderer, contract,
+runner-host) belongs to the sibling slice.
+
+Native rules: `policy-gaps` tracks the helper (−84);
+`tests-no-test-files-in-src` 163 → 168 (+5: eleven mandated
+`tests.rs` files minus six deleted `*_tests.rs` — see policy bug
+1); `size-file-400` 0 → 2 and `size-lib-main-150` 1 → 2 (see
+policy bugs 2–3); all other native counts unchanged
+(`tests-only-rust` 17, `tests-dir-present` 1, toolchain 3,
+`ci-build-runs-on` 6). Total violations 1620 → 1544
+(27 passing · 10 failing; `size-file-400` newly failing).
+
+### Policy bugs needing upstream fixes (blockers for full green)
+
+(No issue links yet: the policy repo does not exist — see the
+policy-owner decision to create `tailrocks/rust-repository-policy`.
+File all three there once it exists; the workarounds below are NOT
+applied because each would violate the helper gate or the task.)
+
+1. `tests-no-test-files-in-src` (`*test*.rs` under `src/`) fires
+   on the helper-mandated canonical `tests.rs` files (probed on
+   alint 0.17.0). Satisfying GAP-TEST-001 LITERALLY requires
+   creating native violations. Fix: narrow the glob (e.g.
+   `*_tests.rs` / `*_test.rs`) or carve out `tests.rs`.
+2. `size-file-400` (`**/*.rs`, no exclusion) fires on forced
+   `tests.rs` monoliths: mise `qualified/tests.rs` (517 lines),
+   guard `tests.rs` (~450). The helper bans splitting suites
+   (TEST-002), so any suite over 400 lines is unsatisfiable. Fix:
+   exclude unit suites or allow canonical splits. Slice-4b will
+   hit this hard (orchestrator suites are far larger).
+3. `size-lib-main-150` (`**/main.rs`) fires on the mandated
+   integration runner: guard `tests/main.rs` (186 lines, was
+   `archive_guard_cli.rs`). The rule means `src/` entry points
+   but matches `tests/main.rs` too. Fix: scope to `**/src/` or
+   exclude `tests/`. (Tofu `tests/main.rs` sits at 141 lines —
+   near the tripwire.)
+
+Cross-slice hazard for slice-4b: cli
+`strictness_negative_coverage_pinned` pins contract's
+`strict_json_tests.rs` file path plus test names — moving that
+suite will need the same pin-data treatment as this slice's
+`forbidden_src` / `size_limits_hold` / mutants updates.

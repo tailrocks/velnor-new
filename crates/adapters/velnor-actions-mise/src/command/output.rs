@@ -1,6 +1,6 @@
 //! Typed child-process results, cancellation handles, and exit decoding.
 //!
-//! Declared from `command.rs` (`#[path]`, no `lib.rs` edit); `command.rs`
+//! Declared from `command` (no `lib.rs` edit); `command`
 //! re-exports the public surface so `command::X` paths keep working.
 
 use std::sync::atomic::{AtomicBool, Ordering};

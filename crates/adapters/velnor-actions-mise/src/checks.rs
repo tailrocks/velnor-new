@@ -1,9 +1,6 @@
 //! Static named-check discovery. Only Mise executes the native task graph.
-#[path = "check_capabilities.rs"]
 mod capabilities;
-#[path = "check_discovery.rs"]
 mod discovery;
-#[path = "check_execution.rs"]
 mod execution;
 
 pub use capabilities::{
@@ -11,9 +8,7 @@ pub use capabilities::{
     OrbStackAppObservation, OrbStackObservation, PreparedContainer,
     validate_check_capability_proof, verify_check_capabilities,
 };
-#[path = "check_file_read.rs"]
 pub(crate) mod file_read;
-#[path = "check_metadata.rs"]
 mod metadata;
 pub use discovery::discover_checks_until;
 pub use discovery::{DiscoveredCheck, discover_checks};
@@ -54,7 +49,6 @@ pub fn repository_path(
 /// Fixed owned Rust tool-home directory name.
 pub const RUSTUP_HOME_SUFFIX: &str = "rust-home";
 
-#[path = "check_system_tools.rs"]
 mod system_tools;
 pub use system_tools::{
     SystemToolProof, parse_system_tool_version, validate_system_tool_proofs,

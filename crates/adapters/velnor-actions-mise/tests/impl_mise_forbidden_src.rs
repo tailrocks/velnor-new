@@ -1,7 +1,9 @@
 //! Source policy: the mise crate must never grow file writes, toolchain
 //! managers, installer actions, project-config reads, or tool-file
-//! management subcommands. Scans `src/` code lines (`//` comments stripped
-//! so docs may discuss the forbidden surface).
+//! management subcommands. Scans `src/` code lines recursively (`//`
+//! comments stripped so docs may discuss the forbidden surface).
+//! Canonical unit suites (`tests.rs`) are inventoried but exempt from the
+//! token scan: fixtures necessarily perform IO (temp dirs, fixture writes).
 
 use std::path::{Path, PathBuf};
 
@@ -17,50 +19,52 @@ fn expected_modules() -> Vec<&'static str> {
         "cache_transport.rs",
         "cache_trust.rs",
         "catalog.rs",
-        "catalog_mbx.rs",
-        "catalog_versions.rs",
-        "check_capabilities.rs",
-        "check_capabilities_encoding_tests.rs",
-        "check_capabilities_probe.rs",
-        "check_command.rs",
-        "check_container_observation.rs",
-        "check_container_observation_tests.rs",
+        "catalog/lock.rs",
+        "catalog/lock_verify.rs",
+        "catalog/mbx.rs",
+        "catalog/release_plz.rs",
+        "catalog/versions.rs",
         "check_deadline.rs",
-        "check_discovery.rs",
-        "check_execution.rs",
-        "check_file_read.rs",
-        "check_metadata.rs",
-        "check_orbstack_app_observation.rs",
-        "check_qualified_tool_names_tests.rs",
-        "check_qualified_tools.rs",
-        "check_qualified_tools_tests.rs",
-        "check_system_tools.rs",
-        "check_system_tools_tests.rs",
-        "check_task_validation.rs",
+        "check_deadline/tests.rs",
         "check_tool_probes.rs",
-        "check_tool_projection.rs",
         "checks.rs",
+        "checks/capabilities.rs",
+        "checks/capabilities/observation.rs",
+        "checks/capabilities/observation/app.rs",
+        "checks/capabilities/observation/tests.rs",
+        "checks/capabilities/probe.rs",
+        "checks/capabilities/probe/tests.rs",
+        "checks/capabilities/tests.rs",
+        "checks/discovery.rs",
+        "checks/discovery/projection.rs",
+        "checks/discovery/qualified.rs",
+        "checks/discovery/qualified/tests.rs",
+        "checks/discovery/task_validation.rs",
+        "checks/execution.rs",
+        "checks/file_read.rs",
+        "checks/file_read/tests.rs",
+        "checks/metadata.rs",
+        "checks/system_tools.rs",
+        "checks/system_tools/tests.rs",
         "command.rs",
-        "command_cancellable.rs",
-        "command_env.rs",
-        "command_output.rs",
-        "command_tofu.rs",
+        "command/cancellable.rs",
+        "command/check.rs",
+        "command/env.rs",
+        "command/output.rs",
+        "command/qualified_acquisition.rs",
+        "command/tofu.rs",
         "custom_run.rs",
         "error.rs",
         "gate6.rs",
         "gh.rs",
         "git.rs",
+        "git/tests.rs",
         "lib.rs",
-        "lock.rs",
-        "lock_verify.rs",
-        "mise_lockfile.rs",
         "nextest.rs",
         "nextest_config.rs",
         "nextest_plan.rs",
         "nextest_shapes.rs",
         "preflight.rs",
-        "qualified_acquisition.rs",
-        "release_plz.rs",
         "requests.rs",
         "restore.rs",
         "restore_evidence.rs",
@@ -72,6 +76,7 @@ fn expected_modules() -> Vec<&'static str> {
         "toml_scan.rs",
         "toml_strings.rs",
         "toolfiles.rs",
+        "toolfiles/lockfile.rs",
         "verify.rs",
         "wrappers.rs",
     ]
@@ -114,16 +119,28 @@ fn mise_sources_stay_read_only_and_unmanaged() -> Result<(), String> {
     let dir = src_dir();
     let mut found: Vec<String> = Vec::new();
     let mut violations: Vec<String> = Vec::new();
-    let entries = std::fs::read_dir(&dir).map_err(|err| err.to_string())?;
-    for entry in entries {
-        let path = entry.map_err(|err| err.to_string())?.path();
-        if path.extension().is_some_and(|ext| ext == "rs") {
-            let name = path
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-                .ok_or_else(|| format!("nameless entry: {}", path.display()))?;
-            found.push(name);
-            check_file(&path, &mut violations)?;
+    let mut pending = vec![dir.clone()];
+    while let Some(current) = pending.pop() {
+        let entries = std::fs::read_dir(&current).map_err(|err| err.to_string())?;
+        for entry in entries {
+            let path = entry.map_err(|err| err.to_string())?.path();
+            if path.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            if !path.extension().is_some_and(|ext| ext == "rs") {
+                continue;
+            }
+            let relative = path
+                .strip_prefix(&dir)
+                .map_err(|err| err.to_string())?
+                .to_string_lossy()
+                .replace('\\', "/");
+            found.push(relative);
+            let is_suite = path.file_name().is_some_and(|name| name == "tests.rs");
+            if !is_suite {
+                check_file(&path, &mut violations)?;
+            }
         }
     }
     found.sort_unstable();

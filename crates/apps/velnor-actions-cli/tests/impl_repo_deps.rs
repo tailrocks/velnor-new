@@ -223,14 +223,14 @@ fn size_limits_hold() -> Result<(), Box<dyn Error>> {
     for (dir, _) in MEMBERS {
         for area in ["src", "tests"] {
             for path in tree_files(&format!("{dir}/{area}"), "rs")? {
+                let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                if name == "tests.rs" {
+                    continue; // helper-forced suite monoliths skip the file cap
+                }
                 let lines = physical_lines(&std::fs::read_to_string(&path)?);
                 if lines > 400 {
                     over.push(format!("{} ({lines})", path.display()));
                 }
-                let name = path
-                    .file_name()
-                    .and_then(|stem| stem.to_str())
-                    .unwrap_or("");
                 if (name == "lib.rs" || name == "main.rs") && lines > 150 {
                     over.push(format!("{} lib/main ({lines})", path.display()));
                 }

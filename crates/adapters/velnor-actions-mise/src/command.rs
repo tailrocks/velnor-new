@@ -1,16 +1,10 @@
 //! Fixed subprocess wrapper: the sole `std::process::Command` constructor.
-//! Policy (`command_env.rs`) and output (`command_output.rs`) declare here.
-#[path = "command_cancellable.rs"]
+//! Policy (`env`) and output (`output`) declare here.
 mod cancellable;
-#[path = "check_command.rs"]
 mod check;
-#[path = "command_env.rs"]
 mod env;
-#[path = "command_output.rs"]
 mod output;
-#[path = "qualified_acquisition.rs"]
 mod qualified_acquisition;
-#[path = "command_tofu.rs"]
 mod tofu;
 pub use check::resolve_program as resolve_check_program;
 

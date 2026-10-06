@@ -330,7 +330,6 @@ fn absolute_identity(value: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "check_system_tools_tests.rs"]
 mod tests;
 
 fn canonical_executable(value: &str) -> Result<String, MiseError> {

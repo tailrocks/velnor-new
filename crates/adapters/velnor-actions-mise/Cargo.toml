@@ -17,7 +17,7 @@ rustix = { workspace = true, features = ["process"] }
 
 [[test]]
 name = "velnor_mise"
-path = "tests/velnor_mise.rs"
+path = "tests/main.rs"
 
 [dev-dependencies]
 velnor-actions-tofu = { version = "=0.1.1", path = "../velnor-actions-tofu" }

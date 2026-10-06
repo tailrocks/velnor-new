@@ -14,4 +14,4 @@ velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-action
 
 [[test]]
 name = "velnor_actionlint"
-path = "tests/velnor_actionlint.rs"
+path = "tests/main.rs"

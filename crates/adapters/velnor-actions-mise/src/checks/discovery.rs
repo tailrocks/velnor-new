@@ -1,10 +1,7 @@
 use super::{invalid, repository_path};
 use crate::MiseError;
-#[path = "check_tool_projection.rs"]
 mod projection;
-#[path = "check_qualified_tools.rs"]
 mod qualified;
-#[path = "check_task_validation.rs"]
 mod task_validation;
 use std::collections::BTreeMap;
 use std::ffi::OsString;

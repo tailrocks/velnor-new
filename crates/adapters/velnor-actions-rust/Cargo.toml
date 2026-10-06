@@ -17,4 +17,4 @@ toml = { workspace = true }
 
 [[test]]
 name = "velnor_rust"
-path = "tests/velnor_rust.rs"
+path = "tests/main.rs"

@@ -1,3 +1,4 @@
+#![cfg(unix)]
 //! Pure diagnostic encoding proof; no filesystem or subprocess claim.
 use super::probe_failure;
 use crate::MiseError;

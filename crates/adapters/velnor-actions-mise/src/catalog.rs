@@ -11,23 +11,18 @@ use crate::error::MiseError;
 ///
 /// Hosted here because the crate root is frozen: `mise::catalog::lock` is
 /// the canonical path for lock parsing and catalog-equality checks.
-#[path = "lock.rs"]
 pub mod lock;
 
-#[path = "lock_verify.rs"]
 mod lock_verify;
 
 /// Pinned release-plz coordinator argv (root frozen: `mise::catalog::release_plz`).
-#[path = "release_plz.rs"]
 pub mod release_plz;
 
 /// MBX provisioning modes (root frozen: `mise::catalog::mbx`).
-#[path = "catalog_mbx.rs"]
 pub mod mbx;
 pub use mbx::MbxProvisioning;
 
 /// Exact-version validation plus qualification sources (split for size).
-#[path = "catalog_versions.rs"]
 mod versions;
 pub use versions::{check_freshness_requirements, validate_exact_version};
 use versions::{invalid_version, tool_source};

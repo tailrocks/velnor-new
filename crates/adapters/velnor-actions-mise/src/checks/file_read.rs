@@ -61,5 +61,4 @@ fn checkpoint(deadline: Option<crate::CheckDeadline>, field: &str) -> Result<(),
 }
 
 #[cfg(test)]
-#[path = "../tests/unit_check_file_read.rs"]
 mod tests;

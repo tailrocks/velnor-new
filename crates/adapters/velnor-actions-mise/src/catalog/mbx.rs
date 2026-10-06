@@ -1,6 +1,6 @@
 //! MBX provisioning modes (P07-10 contract).
 //!
-//! Declared from `catalog.rs` (`#[path]`); re-exported there so
+//! Declared from `catalog`; re-exported there so
 //! `catalog::MbxProvisioning` keeps working.
 
 use crate::error::MiseError;

@@ -8,7 +8,6 @@
 //!
 //! Install-verification audit lives in [`lockfile`] (declared here so
 //! `lib.rs` stays untouched).
-#[path = "mise_lockfile.rs"]
 pub mod lockfile;
 
 use std::collections::BTreeMap;

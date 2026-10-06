@@ -15,7 +15,7 @@ path = "src/bin/velnor_archive_guard.rs"
 
 [[test]]
 name = "archive_guard_cli"
-path = "tests/archive_guard_cli.rs"
+path = "tests/main.rs"
 
 [dependencies]
 flate2 = { workspace = true }

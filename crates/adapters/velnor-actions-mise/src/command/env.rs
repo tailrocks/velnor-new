@@ -1,7 +1,7 @@
 //! Environment policy for spawned children: reserved keys, isolation
 //! overlay, and the Velnor-owned toolchain environment.
 //!
-//! Declared from `command.rs` (`#[path]`, no `lib.rs` edit); `command.rs`
+//! Declared from `command` (no `lib.rs` edit); `command`
 //! re-exports the public surface so `command::X` paths keep working.
 
 use std::ffi::OsString;

@@ -17,4 +17,4 @@ serde_json = { workspace = true }
 
 [[test]]
 name = "velnor_tofu"
-path = "tests/velnor_tofu.rs"
+path = "tests/main.rs"

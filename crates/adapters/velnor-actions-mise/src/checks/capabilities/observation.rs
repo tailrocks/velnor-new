@@ -8,7 +8,6 @@ use velnor_actions_contract::config::{
     MAX_CHECK_CONTAINER_PATH_BYTES, MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
 };
 use velnor_actions_contract::{digest_b3, is_valid_digest};
-#[path = "check_orbstack_app_observation.rs"]
 mod app;
 pub use app::OrbStackAppObservation;
 #[cfg(test)]
@@ -265,5 +264,4 @@ fn orbstack_running(stdout: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "check_container_observation_tests.rs"]
 mod tests;

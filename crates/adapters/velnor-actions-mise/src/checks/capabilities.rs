@@ -7,13 +7,11 @@ use velnor_actions_contract::config::{
     CheckRunner, HostContainerProfile, MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES,
     MAX_CHECK_CONTAINER_PATH_BYTES, MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
 };
-#[path = "check_container_observation.rs"]
 mod observation;
 pub use observation::{
     ContainerObservation, ContainerProbeOutput, DockerDaemonObservation, OrbStackAppObservation,
     OrbStackObservation, validate_check_capability_proof,
 };
-#[path = "check_capabilities_probe.rs"]
 mod probe;
 use probe::{probe_failure, probe_orbstack};
 
@@ -248,6 +246,5 @@ fn probe(
     })
 }
 
-#[cfg(all(test, unix))]
-#[path = "check_capabilities_encoding_tests.rs"]
-mod encoding_tests;
+#[cfg(test)]
+mod tests;

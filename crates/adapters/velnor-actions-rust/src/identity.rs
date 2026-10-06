@@ -6,7 +6,6 @@
 //! no files, and builds no tool invocations.
 
 // P03 resolution states live here so no `lib.rs` edit can collide.
-#[path = "identity_closure.rs"]
 mod identity_closure;
 
 pub use self::identity_closure::{UnresolvedInput, normalize_identity_path, unresolved_inputs};

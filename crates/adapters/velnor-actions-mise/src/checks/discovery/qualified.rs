@@ -186,5 +186,4 @@ fn insert_selector(
 }
 
 #[cfg(test)]
-#[path = "check_qualified_tools_tests.rs"]
 mod tests;
