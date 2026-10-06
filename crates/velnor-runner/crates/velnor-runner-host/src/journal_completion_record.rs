@@ -65,6 +65,16 @@ async fn record_completion_row(
         assigned,
     )
     .await?;
+    let changed = connection
+        .execute(
+            "UPDATE intents SET github_runner_id = COALESCE(github_runner_id, ?1), runner_completed = 1 WHERE id = ?2 AND cleanup_proven = 0 AND (github_runner_id IS NULL OR github_runner_id = ?1)",
+            (runner_id.to_string(), id),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    if changed != 1 {
+        return Err(HostError::Journal);
+    }
     connection
         .execute(
             "INSERT INTO completion_cleanup (intent_id, scale_set_id, runner_request_id, runner_id, runner_name) VALUES (?1, ?2, ?3, ?4, ?5)",

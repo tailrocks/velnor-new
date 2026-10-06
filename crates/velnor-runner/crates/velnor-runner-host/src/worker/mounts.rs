@@ -18,8 +18,18 @@ use crate::error::HostError;
 pub(super) fn host_config(spec: &CreateProjection) -> Result<HostConfig, HostError> {
     let mut mounts = docker_mounts(&spec.mounts)?.unwrap_or_default();
     mounts.extend(bind_mounts(spec)?);
+    let limits = spec.resource_budget.map(|budget| {
+        if spec.privileged {
+            budget.dind()
+        } else {
+            budget.runner()
+        }
+    });
     Ok(HostConfig {
         cgroupns_mode: Some(HostConfigCgroupnsModeEnum::PRIVATE),
+        memory: limits.map(|limited| limited.memory_bytes),
+        memory_swap: limits.map(|limited| limited.memory_bytes),
+        nano_cpus: limits.map(|limited| limited.nano_cpus),
         privileged: Some(spec.privileged),
         mounts: if mounts.is_empty() {
             None

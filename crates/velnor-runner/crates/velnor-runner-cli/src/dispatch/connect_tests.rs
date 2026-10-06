@@ -4,7 +4,7 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use clap::CommandFactory;
+use clap::{CommandFactory, Parser};
 
 use super::{ConnectRequest, connect_with};
 
@@ -25,6 +25,16 @@ fn connect_help_reads_stdin_and_has_no_token_flag() -> Result<(), String> {
     let text = String::from_utf8(buffer).map_err(|err| err.to_string())?;
     if !text.contains("stdin") || !text.contains("not a flag") {
         return Err("help omits stdin".to_owned());
+    }
+    for flag in [
+        "--runner-cpu-millicores",
+        "--runner-memory-bytes",
+        "--dind-cpu-millicores",
+        "--dind-memory-bytes",
+    ] {
+        if !text.contains(flag) {
+            return Err(format!("missing required resource flag {flag}"));
+        }
     }
     if text.contains("--token") {
         return Err("token flag".to_owned());
@@ -147,4 +157,44 @@ impl Drop for KeychainItem {
             Ok(()) | Err(_) => {}
         }
     }
+}
+
+#[test]
+fn connect_requires_all_four_resource_limits() {
+    let complete = [
+        "velnor-host",
+        "connect",
+        "--repo",
+        "example/repo",
+        "--scale-set",
+        "ubuntu-26.04-scale-set",
+        "--platform",
+        "linux/amd64",
+        "--runner-cpu-millicores",
+        "1000",
+        "--runner-memory-bytes",
+        "2147483648",
+        "--dind-cpu-millicores",
+        "3000",
+        "--dind-memory-bytes",
+        "6442450944",
+    ];
+    assert!(crate::Cli::try_parse_from(complete).is_ok());
+    let missing_memory = [
+        "velnor-host",
+        "connect",
+        "--repo",
+        "example/repo",
+        "--scale-set",
+        "ubuntu-26.04-scale-set",
+        "--platform",
+        "linux/amd64",
+        "--runner-cpu-millicores",
+        "1000",
+        "--runner-memory-bytes",
+        "2147483648",
+        "--dind-cpu-millicores",
+        "3000",
+    ];
+    assert!(crate::Cli::try_parse_from(missing_memory).is_err());
 }

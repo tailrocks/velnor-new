@@ -24,6 +24,7 @@ pub(crate) use volumes::{
 mod mounts;
 mod prepared;
 mod projection;
+mod resource_budget;
 #[cfg(all(test, unix))]
 mod volumes_tests;
 pub(crate) use prepared::PreparedDind;
@@ -31,6 +32,9 @@ pub(crate) use projection::{
     container_labels, container_name, dind_create_for_identity, identity_labels_match,
     launch_identity_labels_match, runner_create_for_identity,
 };
+#[cfg(test)]
+pub(crate) use resource_budget::test_resource_budget;
+pub(crate) use resource_budget::{ResourceBudget, ResourceBudgetConfig, bounded_host_limits};
 pub(super) use resources::{
     confirmed_not_found, create_owned_volumes, list_launch, probe_dind, remove_owned_volumes,
     verify_container, verify_engine,
@@ -97,6 +101,8 @@ pub struct CreateProjection {
     pub open_stdin: bool,
     /// `container:<id>` joins that container's network namespace. Runner only.
     pub network_mode: Option<String>,
+    /// Validated CPU/memory budget. `None` keeps legacy unbounded behavior.
+    pub(crate) resource_budget: Option<ResourceBudget>,
 }
 
 /// One controller-owned host bind in a runner create projection.
@@ -156,6 +162,7 @@ pub fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, HostError
         privileged: false,
         open_stdin: true,
         network_mode: None,
+        resource_budget: None,
     })
 }
 
@@ -220,6 +227,7 @@ pub fn dind_create(private_volume: &str) -> Result<CreateProjection, HostError> 
         privileged: true,
         open_stdin: false,
         network_mode: None,
+        resource_budget: None,
     })
 }
 

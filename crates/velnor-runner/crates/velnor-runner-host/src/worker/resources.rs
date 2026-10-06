@@ -15,6 +15,7 @@ use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::HostError;
 use crate::launch_identity::LaunchIdentity;
 use crate::stage::{ContainerRecord, DindProbe};
+use crate::worker::ResourceBudget;
 
 mod containers;
 pub(crate) mod guest;
@@ -187,6 +188,7 @@ pub(crate) async fn verify_container(
     id: &str,
     dind_id: Option<&str>,
     archive_lease: Option<&ActionArchiveLease>,
+    resource_budget: Option<ResourceBudget>,
     require_running: bool,
 ) -> Result<ContainerRecord, HostError> {
     verify_engine(docker, identity).await?;
@@ -198,6 +200,7 @@ pub(crate) async fn verify_container(
         id,
         dind_id,
         archive_lease,
+        resource_budget,
         require_running,
     )
     .await
