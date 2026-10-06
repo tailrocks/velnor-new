@@ -1,0 +1,310 @@
+//! Nonblocking sample cache and independent background refresh loop.
+
+use std::sync::Arc;
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
+
+use tokio::sync::watch;
+use tokio::time::sleep;
+
+use super::adapter::BollardGuestDocker;
+use crate::journal::GuestProbeLease;
+#[path = "reaper.rs"]
+mod reaper;
+use super::{
+    GuestDockerClient, GuestProbeIdentity, GuestSampleFailure, GuestSampler, SamplerTiming,
+};
+use super::{GuestSampleSnapshot, GuestSampleStatus};
+use reaper::{SamplerThreadJoinGuard, ensure_sampler_join_reaper};
+
+/// Read-only access to the sampler's last completed result.
+#[derive(Debug, Clone)]
+pub(crate) struct GuestSampleCache {
+    samples: watch::Receiver<GuestSampleSnapshot>,
+    task_failure: watch::Receiver<Option<GuestSampleFailure>>,
+}
+
+impl GuestSampleCache {
+    /// Return a fresh snapshot without waiting for Docker.
+    #[must_use]
+    pub(crate) fn latest(&self, max_age: Duration) -> GuestSampleSnapshot {
+        if let Some(reason) = *self.task_failure.borrow() {
+            return GuestSampleSnapshot::completed(Err(reason), Instant::now());
+        }
+        (*self.samples.borrow()).with_freshness(max_age, Instant::now())
+    }
+}
+
+/// Owned task handle. Call [`shutdown`](Self::shutdown) before runtime shutdown.
+#[derive(Debug)]
+#[must_use = "retain the sampler task and await shutdown before stopping the host runtime"]
+pub(crate) struct GuestSamplerTask {
+    stop: watch::Sender<bool>,
+    task_failure: watch::Sender<Option<GuestSampleFailure>>,
+    thread: Option<JoinHandle<Result<(), GuestSampleFailure>>>,
+}
+
+impl GuestSamplerTask {
+    /// Stop refreshes, await bounded probe cleanup, and join the sampler thread.
+    pub(crate) async fn shutdown(mut self) -> Result<(), GuestSampleFailure> {
+        self.request_stop();
+        let Some(thread) = self.thread.take() else {
+            self.publish_failure(GuestSampleFailure::SamplerTask);
+            return Err(GuestSampleFailure::SamplerTask);
+        };
+        let join = SamplerThreadJoinGuard::new(thread, self.task_failure.clone());
+        let result = match tokio::runtime::Handle::try_current() {
+            Ok(runtime) => match runtime.spawn_blocking(move || join.join()).await {
+                Ok(result) => result,
+                Err(_) => Err(GuestSampleFailure::SamplerTask),
+            },
+            Err(_) => join.join(),
+        };
+        if let Err(reason) = result {
+            self.publish_failure(reason);
+        }
+        result
+    }
+
+    fn request_stop(&self) {
+        self.stop.send_replace(true);
+    }
+
+    fn publish_failure(&self, reason: GuestSampleFailure) {
+        let _ = self.task_failure.send_replace(Some(reason));
+    }
+}
+
+impl Drop for GuestSamplerTask {
+    fn drop(&mut self) {
+        self.request_stop();
+        if let Some(thread) = self.thread.take() {
+            let join = SamplerThreadJoinGuard::new(thread, self.task_failure.clone());
+            match tokio::runtime::Handle::try_current() {
+                // If shutdown drops this queued task, its guard uses the owned reaper.
+                Ok(runtime) => drop(runtime.spawn_blocking(move || join.join())),
+                Err(_) => {
+                    if let Err(reason) = join.join() {
+                        self.publish_failure(reason);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Start an independent sampler bound to one journal, set, and selected engine.
+///
+/// The caller owns the returned task and must await its shutdown before the
+/// host runtime ends. Cache reads never wait for probe I/O.
+pub(crate) fn spawn_guest_sampler(
+    docker: bollard::Docker,
+    owner: GuestProbeLease,
+    scale_set_id: i64,
+    info: bollard::models::SystemInfo,
+    interval: Duration,
+) -> Result<(GuestSampleCache, GuestSamplerTask), GuestSampleFailure> {
+    let identity = GuestProbeIdentity::from_owner(&owner, scale_set_id, &info)?;
+    let client = Arc::new(BollardGuestDocker::new(docker));
+    spawn_sampling_thread_with_owner(
+        client,
+        identity,
+        Some(owner),
+        interval,
+        SamplerTiming::default(),
+    )
+}
+
+pub(super) fn spawn_sampling_thread<C: GuestDockerClient + 'static>(
+    client: Arc<C>,
+    identity: GuestProbeIdentity,
+    interval: Duration,
+    timing: SamplerTiming,
+) -> Result<(GuestSampleCache, GuestSamplerTask), GuestSampleFailure> {
+    spawn_sampling_thread_with_owner(client, identity, None, interval, timing)
+}
+
+fn spawn_sampling_thread_with_owner<C: GuestDockerClient + 'static>(
+    client: Arc<C>,
+    identity: GuestProbeIdentity,
+    owner: Option<GuestProbeLease>,
+    interval: Duration,
+    timing: SamplerTiming,
+) -> Result<(GuestSampleCache, GuestSamplerTask), GuestSampleFailure> {
+    spawn_sampling_thread_with_builder_owner(client, identity, interval, timing, owner, || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|_| GuestSampleFailure::RuntimeUnavailable)
+    })
+}
+
+pub(super) fn spawn_sampling_thread_with_builder<C, B>(
+    client: Arc<C>,
+    identity: GuestProbeIdentity,
+    interval: Duration,
+    timing: SamplerTiming,
+    runtime_builder: B,
+) -> Result<(GuestSampleCache, GuestSamplerTask), GuestSampleFailure>
+where
+    C: GuestDockerClient + 'static,
+    B: FnOnce() -> Result<tokio::runtime::Runtime, GuestSampleFailure> + Send + 'static,
+{
+    spawn_sampling_thread_with_builder_owner(
+        client,
+        identity,
+        interval,
+        timing,
+        None,
+        runtime_builder,
+    )
+}
+
+fn spawn_sampling_thread_with_builder_owner<C, B>(
+    client: Arc<C>,
+    identity: GuestProbeIdentity,
+    interval: Duration,
+    timing: SamplerTiming,
+    owner: Option<GuestProbeLease>,
+    runtime_builder: B,
+) -> Result<(GuestSampleCache, GuestSamplerTask), GuestSampleFailure>
+where
+    C: GuestDockerClient + 'static,
+    B: FnOnce() -> Result<tokio::runtime::Runtime, GuestSampleFailure> + Send + 'static,
+{
+    if interval.is_zero() {
+        return Err(GuestSampleFailure::InvalidInterval);
+    }
+    ensure_sampler_join_reaper()?;
+    let (sample_sender, samples) = watch::channel(GuestSampleSnapshot::pending());
+    let (stop, stop_receiver) = watch::channel(false);
+    let (task_failure, task_failures) = watch::channel(None);
+    let thread_failure = task_failure.clone();
+    let thread = thread::Builder::new()
+        .name("velnor-guest-resource-sampler".to_owned())
+        .spawn(move || {
+            let _owner = owner;
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+                let runtime = runtime_builder()?;
+                runtime.block_on(sampling_loop(
+                    client,
+                    identity,
+                    interval,
+                    timing,
+                    sample_sender,
+                    stop_receiver,
+                ))
+            }));
+            let result = match outcome {
+                Ok(result) => result,
+                Err(_) => Err(GuestSampleFailure::SamplerTask),
+            };
+            if let Err(reason) = result {
+                let _ = thread_failure.send_replace(Some(reason));
+            }
+            result
+        })
+        .map_err(|_| GuestSampleFailure::RuntimeUnavailable)?;
+    Ok((
+        GuestSampleCache {
+            samples,
+            task_failure: task_failures,
+        },
+        GuestSamplerTask {
+            stop,
+            task_failure,
+            thread: Some(thread),
+        },
+    ))
+}
+
+/// Run refreshes until shutdown, completing the current bounded attempt first.
+pub(super) async fn sampling_loop<C: GuestDockerClient + 'static>(
+    client: Arc<C>,
+    identity: GuestProbeIdentity,
+    interval: Duration,
+    timing: SamplerTiming,
+    samples: watch::Sender<GuestSampleSnapshot>,
+    mut stop: watch::Receiver<bool>,
+) -> Result<(), GuestSampleFailure> {
+    loop {
+        if *stop.borrow() {
+            break;
+        }
+        let attempt = GuestSampler::new(Arc::clone(&client), &identity)
+            .with_timing(timing)
+            .sample_attempt()
+            .await;
+        let sample_receiver_closed = samples.send(attempt.snapshot).is_err();
+        if let Some(reason) = attempt.task_failure {
+            return Err(reason);
+        }
+        if sample_receiver_closed {
+            break;
+        }
+        tokio::select! {
+            () = sleep(interval) => {}
+            changed = stop.changed() => {
+                if changed.is_err() || *stop.borrow() {
+                    break;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+impl GuestSampleSnapshot {
+    fn pending() -> Self {
+        Self {
+            sample: super::super::GuestResourceSample::default(),
+            status: GuestSampleStatus::Pending,
+            sampled_at: None,
+        }
+    }
+
+    fn with_freshness(self, max_age: Duration, now: Instant) -> Self {
+        let Some(sampled_at) = self.sampled_at else {
+            return self;
+        };
+        if now.saturating_duration_since(sampled_at) <= max_age {
+            return self;
+        }
+        Self {
+            sample: super::super::GuestResourceSample::default(),
+            status: GuestSampleStatus::Stale,
+            sampled_at: Some(sampled_at),
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "cache_tests.rs"]
+mod cache_tests;
+
+#[cfg(test)]
+mod tests {
+    use std::time::{Duration, Instant};
+
+    use super::{GuestSampleSnapshot, GuestSampleStatus};
+    use crate::worker::resources::guest::GuestResourceSample;
+
+    #[test]
+    fn stale_samples_are_returned_as_unknown() {
+        let collected = Instant::now();
+        let sample = GuestSampleSnapshot {
+            sample: GuestResourceSample {
+                cpu_millicores: Some(4000),
+                ..GuestResourceSample::default()
+            },
+            status: GuestSampleStatus::Available,
+            sampled_at: Some(collected),
+        };
+
+        let result =
+            sample.with_freshness(Duration::from_millis(1), collected + Duration::from_secs(1));
+
+        assert_eq!(result.status, GuestSampleStatus::Stale);
+        assert_eq!(result.sample, GuestResourceSample::default());
+    }
+}

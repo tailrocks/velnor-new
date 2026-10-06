@@ -27,7 +27,7 @@ fn scratch_dir(test: &str) -> Result<PathBuf, String> {
 fn observed_provider_restore() -> RestoreObservation {
     let bytes = b"provider bytes".to_vec();
     RestoreObservation {
-        entry_path: "tofu-cache/root-0123456789ab/registry.opentofu.org".to_owned(),
+        entry_path: "tofu-cache/b3-0000000000000000000000000000000000000000000000000000000000000000/registry.opentofu.org".to_owned(),
         entry_bytes: bytes.clone(),
         expected_digest: digest_b3(&bytes),
         expected_compat: digest_b3(b"compat"),

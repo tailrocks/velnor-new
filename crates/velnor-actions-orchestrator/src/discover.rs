@@ -5,8 +5,7 @@ use std::path::Path;
 
 use velnor_actions_contract::{
     DETECTION_SCHEMA, DetectionStatus, FileIndex, ProposedTask, RustStackConfig, VelnorConfig,
-    WorkflowPolicy, apply_stack_ignores, check_candidate_outcomes, check_duplicates,
-    selected_projects,
+    apply_stack_ignores, check_candidate_outcomes, check_duplicates, selected_projects,
 };
 #[path = "discovery_registry.rs"]
 mod registry;
@@ -21,7 +20,8 @@ use velnor_actions_rust::{
 use crate::OrchestratorError;
 use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 use crate::discover_index::build_file_index;
-use crate::inventory::{qualify_workspaces, run_inventories};
+use crate::internal::phase_timing::PlanPhaseTimings;
+use crate::inventory::{qualify_workspaces, run_inventories, run_inventories_with_phase_timings};
 use crate::recommendations::collect_recommendations;
 #[path = "consumer_manifest.rs"]
 mod consumer_manifest;
@@ -60,11 +60,18 @@ pub struct Discovery {
     pub clippy_memory: ClippyMemoryPlan,
     /// Non-fatal generation recommendations.
     pub recommendations: Vec<String>,
-    /// Release-manifest text from the committed repo file.
+    /// Release-manifest text for consumer policy from the committed file.
     ///
-    /// Absent files remain `None` in every build mode so consumer
-    /// generation fails closed with `consumer_requires_release_install`.
+    /// Consumer debug builds fall back to a stand-in when the file is absent
+    /// (flagged by [`Discovery::consumer_manifest_stand_in`], warned at
+    /// generation); release builds keep `None` so generation fails
+    /// closed with `consumer_requires_release_install`.
     pub consumer_manifest_json: Option<String>,
+    /// Whether the manifest text above is the debug-only stand-in.
+    ///
+    /// False for Velnor policy and release builds. `generate` warns when
+    /// consumer policy uses the debug stand-in; `plan` stays silent.
+    pub consumer_manifest_stand_in: bool,
     /// Whether non-UTF-8 names require broad selection.
     pub skipped_non_utf8: bool,
     /// Tofu plan note: ignore marker or table-less evidence advisory.
@@ -83,6 +90,22 @@ pub struct Discovery {
 /// Returns discovery, detection, inventory, profile, preparation, or
 /// contract errors when any stage fails.
 pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, OrchestratorError> {
+    discover_inner(root, config, None)
+}
+
+pub(crate) fn discover_with_phase_timings(
+    root: &Path,
+    config: &VelnorConfig,
+    phases: &mut PlanPhaseTimings,
+) -> Result<Discovery, OrchestratorError> {
+    discover_inner(root, config, Some(phases))
+}
+
+fn discover_inner(
+    root: &Path,
+    config: &VelnorConfig,
+    mut phases: Option<&mut PlanPhaseTimings>,
+) -> Result<Discovery, OrchestratorError> {
     let (index, skipped_non_utf8) = build_file_index(root, &config.discovery.exclude)?;
     let mut candidates = Vec::new();
     let mut previous = "";
@@ -101,8 +124,17 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         problem: err.to_string(),
     })?;
     let initial = apply_stack_ignores(projects, &config.stacks.ignore);
-    let ((outcomes, inventories), tofu_units) =
-        run_inventories(root, &candidates, index.files(), &mut reads)?;
+    #[expect(
+        clippy::needless_option_as_deref,
+        reason = "the original Option must remain available after this branch"
+    )]
+    let inventory_result = match phases.as_deref_mut() {
+        Some(phases) => {
+            run_inventories_with_phase_timings(root, &candidates, index.files(), &mut reads, phases)
+        }
+        None => run_inventories(root, &candidates, index.files(), &mut reads),
+    };
+    let ((outcomes, inventories), tofu_units) = inventory_result?;
     let statuses = check_candidate_outcomes(initial, &outcomes).map_err(|err| {
         OrchestratorError::Detection {
             problem: err.to_string(),
@@ -121,13 +153,8 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     let clippy_memory = clippy_memory_groups(&proposals);
     let recommendations =
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
-    // Velnor's source policy bootstraps from source or its generator lock.
-    // Only consumer policy reads the installed-product manifest.
-    let consumer_manifest_json = if config.workflow.policy == WorkflowPolicy::ConsumerV1 {
-        consumer_manifest::consumer_manifest_text(root)?
-    } else {
-        None
-    };
+    let (consumer_manifest_json, consumer_manifest_stand_in) =
+        consumer_manifest::for_policy(root, config.workflow.policy)?;
     Ok(Discovery {
         mise_checks,
         statuses,
@@ -138,6 +165,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         clippy_memory,
         recommendations,
         consumer_manifest_json,
+        consumer_manifest_stand_in,
         skipped_non_utf8,
         tofu_note: tofu_step.note,
         tofu_units,
@@ -218,7 +246,7 @@ fn derive_all(
         .clone()
         .unwrap_or_else(RustStackConfig::default_config);
     let explicit_fmt = index.contains("rustfmt.toml") || index.contains(".rustfmt.toml");
-    let union = crate::derive_groups::declared_union(workspaces, index);
+    let union = crate::derive_groups::declared_union(workspaces, index, config.workflow.policy);
     let mut groups = Vec::new();
     let mut fallbacks = Vec::new();
     let mut archives = ArchivePlan::new();

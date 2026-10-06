@@ -80,7 +80,7 @@ fn provider_restore_precedes_init_obligation() {
     let with = step_inputs(job, "Restore Tofu providers");
     let key = with.get("cache-key").expect("restore key");
     assert!(
-        key.starts_with("velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-stacks-a-"),
+        key.starts_with("velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-b3-"),
         "{key}"
     );
     assert!(
@@ -168,7 +168,7 @@ fn mixed_job_restores_both_sources_and_providers() {
     assert_eq!(found.jobs.len(), 1, "shared group renders once");
     let names = crate_jobs_tests::names(&found.jobs[0].1);
     assert!(
-        names.contains(&"Restore Cargo sources") || names.contains(&"Restore Cargo registry"),
+        names.contains(&"Restore Cargo sources"),
         "mixed restores sources: {names:?}"
     );
     assert!(
@@ -270,4 +270,50 @@ fn provider_key_rejects_overlong_keys_from_deep_roots() {
             .is_ok(),
         "ordinary nesting builds"
     );
+}
+
+#[test]
+fn root_obligations_reject_missing_and_extra_obligations() {
+    let tasks = tofu_triples(&["stacks/a"]);
+    let refs: Vec<_> = tasks.iter().collect();
+    let obligations = obligations_for(&refs, &ToolCatalog::pinned()).expect("obligations");
+    assert_eq!(
+        crate::tofu_cache::tofu_root_for_obligations(&obligations).expect("one root"),
+        "stacks/a"
+    );
+
+    let empty = crate::tofu_cache::tofu_root_for_obligations(&[])
+        .expect_err("missing Tofu obligations fail closed");
+    assert!(
+        empty.to_string().contains("tofu_empty_obligations"),
+        "{empty}"
+    );
+
+    let partial: Vec<_> = tasks
+        .iter()
+        .filter(|task| task.task_kind != "init")
+        .collect();
+    let obligations = obligations_for(&partial, &ToolCatalog::pinned()).expect("partial");
+    assert_eq!(
+        crate::tofu_cache::tofu_root_for_obligations(&obligations)
+            .expect("omitted init keeps the exact root"),
+        "stacks/a",
+        "caller closure may omit non-runnable obligations"
+    );
+
+    let mut duplicate = obligations.clone();
+    duplicate.push(obligations[0].clone());
+    let err = crate::tofu_cache::tofu_root_for_obligations(&duplicate)
+        .expect_err("duplicate same-root obligations fail closed");
+    assert!(
+        err.to_string().contains("tofu_duplicate_obligation"),
+        "{err}"
+    );
+
+    let extra = tofu_triples(&["", "root"]);
+    let refs: Vec<_> = extra.iter().collect();
+    let obligations = obligations_for(&refs, &ToolCatalog::pinned()).expect("extra roots");
+    let err = crate::tofu_cache::tofu_root_for_obligations(&obligations)
+        .expect_err("different exact roots cannot share a provider cache");
+    assert!(err.to_string().contains("tofu_mixed_roots"), "{err}");
 }

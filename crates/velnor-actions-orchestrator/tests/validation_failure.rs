@@ -5,6 +5,10 @@
 //! keeps working. No process-env mutation, no new dependencies.
 
 #[cfg(unix)]
+#[path = "../../test_support/git_fixture.rs"]
+pub(crate) mod git_fixture;
+
+#[cfg(unix)]
 mod probe {
     use std::collections::BTreeMap;
     use std::fs;
@@ -65,7 +69,7 @@ exec \"$VELNOR_REAL_MISE\" \"$@\"
             vec!["config", "commit.gpgsign", "false"],
         ] {
             assert!(
-                Command::new("git")
+                super::git_fixture::command(root)?
                     .args(&args)
                     .current_dir(root)
                     .status()?

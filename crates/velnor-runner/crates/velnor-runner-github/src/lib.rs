@@ -18,7 +18,10 @@ pub use paths::{
     CAPACITY_HEADER, acquire_path, capacity_header_value, jit_path, last_message_query,
     scale_set_path,
 };
-pub use poll::{InnerJob, InnerKind, ParsedBatch, Poll, Statistics, may_ack, parse_poll};
+pub use poll::{
+    InnerJob, InnerKind, MAX_POLL_BODY_BYTES, MAX_POLL_MESSAGES, ParsedBatch, Poll,
+    QuarantinedBatch, Statistics, may_ack, parse_inner_messages, parse_poll,
+};
 pub use refresh::{RefreshGate, StatusClass, classify_status};
 pub use registration::{
     AdminConnection, AdminConnectionCall, CreateLabel, Label, RegistrationScope, RegistrationToken,
@@ -29,7 +32,7 @@ pub use registration::{
     organization_registration_token_path, product_create_labels, registration_token, remove_runner,
     repository_registration_token_path,
 };
-pub use runner::RunnerReference;
+pub use runner::{JitResult, RunnerReference};
 pub use secret::EncodedJit;
 pub use session::{
     Ack, AckScope, Exchange, Method, QueueSession, SessionError, SessionRequest, Transport, ack,

@@ -2,6 +2,7 @@
 
 use std::path::Path;
 
+use crate::daemon_lock::{EngineLineageGuard, canonical_journal_path};
 use crate::docker_client::connect_unix;
 use crate::error::HostError;
 use crate::journal::Journal;
@@ -52,6 +53,22 @@ async fn drive(
     journal_path: &Path,
 ) -> Result<LaunchReport, ListenFault> {
     let docker = connect_unix(endpoint)?;
-    let journal = Journal::open(journal_path).await?;
-    Ok(launch::launch_once(pat, owner, repo, &docker, &journal).await?)
+    let engine_id = docker
+        .info()
+        .await
+        .map_err(|_| HostError::Docker)?
+        .id
+        .ok_or(HostError::Docker)?;
+    let journal_path = canonical_journal_path(journal_path)?;
+    let lineage_guard = EngineLineageGuard::acquire(&engine_id)?;
+    let journal = Journal::open(&journal_path).await?;
+    journal.bind_engine(&engine_id).await?;
+    let instance_id = journal.instance_id().await?;
+    let revision = journal.revision().await?;
+    lineage_guard.verify_lineage(&journal_path, &instance_id, revision)?;
+    journal.attach_lineage_guard(lineage_guard.clone())?;
+    let launched = launch::launch_once(pat, owner, repo, &docker, &journal).await;
+    let revision = journal.revision().await?;
+    lineage_guard.advance_revision(revision)?;
+    Ok(launched?)
 }

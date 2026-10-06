@@ -21,10 +21,35 @@ fn finalized_generation_is_invariant_to_typed_step_display_names() -> TestResult
     install_explicit_plan_download(&mut original.workflow.ir.jobs)?;
     assert_finalized_roles(&finalized_jobs(&original)?);
     let original_tree = render_staged_tree(&original)?;
+    assert_checkoutless_required_has_no_local_action(&original_tree)?;
     let mut renamed = original.clone();
     rename_authority_steps(&mut renamed.workflow.ir.jobs);
     let renamed_tree = render_staged_tree(&renamed)?;
     assert_generation_equivalent(&original_tree, &renamed_tree)
+}
+
+fn assert_checkoutless_required_has_no_local_action(
+    tree: &velnor_actions_workflow_renderer::RenderedTree,
+) -> TestResult {
+    let workflow = tree
+        .get(WORKFLOW_PATH)
+        .ok_or("generated tree misses ci.yml")?;
+    let required = workflow
+        .split_once("  required:\n")
+        .map(|(_, tail)| tail)
+        .ok_or("generated workflow misses Required job")?
+        .split("\n  ")
+        .next()
+        .ok_or("generated workflow has malformed Required job")?;
+    let local_actions = required
+        .lines()
+        .filter(|line| line.trim_start().starts_with("uses: ./.github/actions/"))
+        .collect::<Vec<_>>();
+    assert!(
+        local_actions.is_empty(),
+        "checkoutless Required job cannot call repository-local actions: {local_actions:?}"
+    );
+    Ok(())
 }
 
 /// Build a schema-2 Rust, `ToFu`, and MBX fixture with both runner lanes.
@@ -112,11 +137,34 @@ fn assert_generation_equivalent(
         original_yaml, renamed_yaml,
         "renamed labels reach generated YAML"
     );
-    assert_eq!(
-        normalize_tree(original),
-        normalize_tree(renamed),
-        "workflow semantics and companion files are unchanged"
-    );
+    let original_normalized = normalize_tree(original);
+    let renamed_normalized = normalize_tree(renamed);
+    if original_normalized != renamed_normalized {
+        let differences = original_normalized
+            .iter()
+            .zip(&renamed_normalized)
+            .filter(|(left, right)| left != right)
+            .map(|(left, right)| {
+                let difference = left
+                    .1
+                    .lines()
+                    .zip(right.1.lines())
+                    .enumerate()
+                    .find(|(_, (left, right))| left != right)
+                    .map_or((0, "", ""), |(line, (left_line, right_line))| {
+                        (line + 1, left_line, right_line)
+                    });
+                format!(
+                    "{}:{} {:?} -> {:?}",
+                    left.0, difference.0, difference.1, difference.2
+                )
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            differences.is_empty(),
+            "workflow semantics and companion files are unchanged; first differences: {differences:?}"
+        );
+    }
     assert_eq!(original.symlinks, renamed.symlinks);
     assert!(
         original_yaml.contains("__hosted") && original_yaml.contains("__local"),
@@ -170,7 +218,6 @@ fn is_authority_role(role: StepRole) -> bool {
             | StepRole::CargoSourcesRestore
             | StepRole::CargoSourcesSave
             | StepRole::CargoSourcesFetch
-            | StepRole::CargoRegistryRestore
             | StepRole::ToolsCacheSave
             | StepRole::TofuProvidersRestore
             | StepRole::TofuProviderUse

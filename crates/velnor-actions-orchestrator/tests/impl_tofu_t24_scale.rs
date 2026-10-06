@@ -54,10 +54,13 @@ fn tofu_prepare_scales_to_100_roots() -> TestResult {
     Ok(())
 }
 
-/// Generate below the workflow-file limit and fail closed above it.
+/// Generate measured 40/60-root positives and fail closed above the byte cap.
+///
+/// The shared runtime identity helper is emitted once; each typed job retains
+/// its own lane identity, tool payload, and provider restore operations.
 #[test]
 fn tofu_generate_scales_with_root_count() -> TestResult {
-    for roots in [1_usize, 10, 60, 100] {
+    for roots in [1_usize, 10, 31, 32, 40, 60, 100] {
         let repo = tofu_repo(roots)?;
         let root = repo.path();
         let (prep, prep_ms) = timed(|| prepare(root));
@@ -68,11 +71,11 @@ fn tofu_generate_scales_with_root_count() -> TestResult {
             output_dir: Some(target.clone()),
         };
         let (result, gen_ms) = timed(|| generate(&prep, &opts));
-        if roots == 100 {
+        if roots >= 100 {
             let Err(error) = result else {
-                return Err(std::io::Error::other(
-                    "oversized workflow generation unexpectedly succeeded",
-                )
+                return Err(std::io::Error::other(format!(
+                    "{roots}-root workflow unexpectedly fit the contract"
+                ))
                 .into());
             };
             let diagnostic = error.to_string();

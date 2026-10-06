@@ -72,3 +72,49 @@ fn display_gate_partitions_by_id_namespace() {
         "expressions fail even with the right prefix"
     );
 }
+
+#[test]
+fn crate_job_rejects_self_gate() {
+    let mut job = job("tofu-stacks-a", "OpenToFu — stacks/a");
+    let task_id = job.obligations[0].task_id.clone();
+    job.obligations[0].gated_by.push(task_id.clone());
+    let error = job.validate().expect_err("self gate rejected");
+    assert!(
+        error
+            .to_string()
+            .contains(&format!("unordered_gate:{task_id}:{task_id}")),
+        "{error}"
+    );
+}
+
+#[test]
+fn crate_job_accepts_only_strictly_prior_gates() {
+    let mut job = job("tofu-stacks-a", "OpenToFu — stacks/a");
+    let mut later = obligation();
+    later.task_id =
+        task_id_for_stack("tofu", "stacks/a", "plan", "default", None).expect("task id");
+    later.gated_by.push(job.obligations[0].task_id.clone());
+    job.obligations.push(later);
+    assert!(job.validate().is_ok(), "prior gate accepted");
+    job.obligations.swap(0, 1);
+    let error = job.validate().expect_err("forward gate rejected");
+    assert!(error.to_string().contains("unordered_gate:"), "{error}");
+}
+
+#[test]
+fn crate_job_rejects_duplicate_before_checking_gates() {
+    let mut job = job("tofu-stacks-a", "OpenToFu — stacks/a");
+    let mut duplicate = job.obligations[0].clone();
+    duplicate
+        .gated_by
+        .push(task_id_for_stack("tofu", "stacks/a", "plan", "default", None).expect("task id"));
+    let task_id = duplicate.task_id.clone();
+    job.obligations.push(duplicate);
+    let error = job.validate().expect_err("duplicate rejected");
+    assert!(
+        error
+            .to_string()
+            .contains(&format!("duplicate_task:{task_id}")),
+        "{error}"
+    );
+}

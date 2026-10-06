@@ -7,7 +7,8 @@ use serde_json::json;
 use crate::support::{Outcome, TempDir};
 use velnor_actions_contract::reverse_closure;
 use velnor_actions_rust::{
-    DepKind, LocalEdge, MetadataError, dedupe_workspaces, local_edge_pairs, parse_metadata_json,
+    DepKind, LocalEdge, MetadataError, VelnorV1TaskOwner, dedupe_workspaces, local_edge_pairs,
+    parse_metadata_json,
 };
 
 /// Absolute manifest path text for `relative` under `root`.
@@ -142,6 +143,41 @@ fn records_targets_features_doctests_and_build_scripts() -> Outcome {
     };
     assert!(package_b.has_build_script);
     assert!(package_b.targets.iter().any(|t| t.kind == "custom-build"));
+    Ok(())
+}
+
+#[test]
+fn parses_typed_v1_task_owner_from_cargo_package_metadata() -> Outcome {
+    let dir = TempDir::create("meta-task-owner")?;
+    let root = dir.path().canonicalize()?;
+    let mut document = sample_metadata(&root);
+    document["packages"][0]["metadata"] = json!({
+        "velnor": {"v1-task-owner": "repository-maintenance"},
+        "unrelated-tool": {"opaque": [1, true, null]}
+    });
+    let record = parse_metadata_json(&document.to_string(), &root, "Cargo.toml", &BTreeSet::new())?;
+    assert_eq!(
+        record.packages[0].v1_task_owner,
+        VelnorV1TaskOwner::RepositoryMaintenance
+    );
+    assert_eq!(record.packages[1].v1_task_owner, VelnorV1TaskOwner::Project);
+    Ok(())
+}
+
+#[test]
+fn unknown_v1_task_owner_fails_metadata_conversion() -> Outcome {
+    let dir = TempDir::create("meta-task-owner-unknown")?;
+    let root = dir.path().canonicalize()?;
+    let mut document = sample_metadata(&root);
+    document["packages"][0]["metadata"] = json!({
+        "velnor": {"v1-task-owner": "unreviewed"}
+    });
+    let error = parse_metadata_json(&document.to_string(), &root, "Cargo.toml", &BTreeSet::new())
+        .expect_err("unknown package owner fails closed");
+    assert!(matches!(
+        error,
+        MetadataError::UnknownVelnorV1TaskOwner { owner, .. } if owner == "unreviewed"
+    ));
     Ok(())
 }
 

@@ -1,0 +1,279 @@
+use std::error::Error;
+use std::fs;
+use std::io::{self, Cursor};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Barrier};
+use std::thread;
+use std::time::Duration;
+
+use flate2::Compression;
+use flate2::write::GzEncoder;
+use sha2::{Digest, Sha256};
+use tar::{Builder, Header};
+
+use super::{
+    ActionArchiveFetcher, ActionArchiveIdentity, ActionArchiveManifest, ActionArchiveSeedError,
+    ActionArchiveStore,
+};
+
+static TEST_ID: AtomicU64 = AtomicU64::new(0);
+
+struct TestRoot(PathBuf);
+
+impl TestRoot {
+    fn new() -> Result<Self, Box<dyn Error>> {
+        let id = TEST_ID.fetch_add(1, Ordering::Relaxed);
+        let path =
+            std::env::temp_dir().join(format!("velnor-action-prepare-{}-{id}", std::process::id()));
+        fs::create_dir(&path)?;
+        Ok(Self(path))
+    }
+
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for TestRoot {
+    fn drop(&mut self) {
+        if let Err(error) = super::storage::cleanup_dir(&self.0) {
+            eprintln!("test directory cleanup failed: {error}");
+        }
+    }
+}
+
+#[derive(Clone)]
+struct BytesFetcher {
+    bytes: Vec<u8>,
+    calls: Arc<AtomicUsize>,
+    delay: bool,
+}
+
+impl ActionArchiveFetcher for BytesFetcher {
+    fn open_archive(
+        &mut self,
+        _identity: &ActionArchiveIdentity,
+        maximum_bytes: u64,
+    ) -> Result<Box<dyn io::Read + Send>, ActionArchiveSeedError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        if self.delay {
+            thread::sleep(Duration::from_millis(40));
+        }
+        if u64::try_from(self.bytes.len()).map_err(|_| ActionArchiveSeedError::SizeLimit)?
+            > maximum_bytes
+        {
+            return Err(ActionArchiveSeedError::SizeLimit);
+        }
+        Ok(Box::new(Cursor::new(self.bytes.clone())))
+    }
+}
+
+struct OversizedFetcher(Vec<u8>);
+
+impl ActionArchiveFetcher for OversizedFetcher {
+    fn open_archive(
+        &mut self,
+        _identity: &ActionArchiveIdentity,
+        _maximum_bytes: u64,
+    ) -> Result<Box<dyn io::Read + Send>, ActionArchiveSeedError> {
+        Ok(Box::new(Cursor::new(self.0.clone())))
+    }
+}
+
+fn archive_bytes() -> Result<Vec<u8>, Box<dyn Error>> {
+    let encoder = GzEncoder::new(Vec::new(), Compression::default());
+    let mut archive = Builder::new(encoder);
+    let body = b"name: pinned-action\n";
+    let mut header = Header::new_gnu();
+    header.set_path("package/action.yml")?;
+    header.set_size(u64::try_from(body.len())?);
+    header.set_mode(0o644);
+    header.set_cksum();
+    archive.append(&header, &body[..])?;
+    Ok(archive.into_inner()?.finish()?)
+}
+
+fn identity(name: &str, bytes: &[u8]) -> Result<ActionArchiveIdentity, Box<dyn Error>> {
+    Ok(ActionArchiveIdentity {
+        repository_id: 101,
+        name_with_owner: name.to_owned(),
+        commit_sha: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+        sha256: Sha256::digest(bytes).into(),
+        size: u64::try_from(bytes.len())?,
+    })
+}
+
+fn manifest(
+    archives: Vec<ActionArchiveIdentity>,
+) -> Result<ActionArchiveManifest, ActionArchiveSeedError> {
+    ActionArchiveManifest::new(202, archives)
+}
+
+fn fetcher(bytes: Vec<u8>, calls: Arc<AtomicUsize>) -> BytesFetcher {
+    BytesFetcher {
+        bytes,
+        calls,
+        delay: false,
+    }
+}
+
+#[test]
+fn manifest_rejects_mutable_duplicate_and_over_budget_identities() -> Result<(), Box<dyn Error>> {
+    let bytes = archive_bytes()?;
+    let mut mutable = identity("owner/action", &bytes)?;
+    mutable.commit_sha = "main".to_owned();
+    assert_eq!(
+        manifest(vec![mutable]).err(),
+        Some(ActionArchiveSeedError::InvalidIdentity)
+    );
+
+    let first = identity("Owner/action", &bytes)?;
+    let alias = identity("owner/action", &bytes)?;
+    assert_eq!(
+        manifest(vec![first, alias]).err(),
+        Some(ActionArchiveSeedError::InvalidIdentity)
+    );
+
+    let mut large = identity("owner/large-one", &bytes)?;
+    large.size = 512 * 1024 * 1024;
+    let mut second = large.clone();
+    second.name_with_owner = "owner/large-two".to_owned();
+    let mut third = large.clone();
+    third.name_with_owner = "owner/large-three".to_owned();
+    assert_eq!(
+        manifest(vec![large, second, third]).err(),
+        Some(ActionArchiveSeedError::SizeLimit)
+    );
+    Ok(())
+}
+
+#[test]
+fn preparation_fetches_missing_bytes_once_and_replays_warm_lease() -> Result<(), Box<dyn Error>> {
+    let root = TestRoot::new()?;
+    let store = ActionArchiveStore::open(root.path().join("store"))?;
+    let bytes = archive_bytes()?;
+    let action = identity("owner/action", &bytes)?;
+    let manifest = manifest(vec![action.clone()])?;
+    let calls = Arc::new(AtomicUsize::new(0));
+    let first = store.prepare_and_lease(
+        "launch-1",
+        &manifest,
+        None,
+        &mut fetcher(bytes.clone(), Arc::clone(&calls)),
+    )?;
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    let expected = first.generation_id().to_owned();
+    let replay = store.prepare_and_lease(
+        "launch-1",
+        &manifest,
+        Some(&expected),
+        &mut fetcher(Vec::new(), Arc::clone(&calls)),
+    )?;
+    assert_eq!(first, replay);
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        fs::read(
+            replay
+                .cache_path()
+                .join("owner_action")
+                .join(format!("{}.tar.gz", action.commit_sha))
+        )?,
+        bytes
+    );
+    Ok(())
+}
+
+#[test]
+fn preparation_rejects_corrupt_or_oversized_source_without_a_lease() -> Result<(), Box<dyn Error>> {
+    let root = TestRoot::new()?;
+    let store = ActionArchiveStore::open(root.path().join("store"))?;
+    let bytes = archive_bytes()?;
+    let action = identity("owner/action", &bytes)?;
+    let manifest = manifest(vec![action])?;
+    let bad_bytes = archive_bytes()?;
+    let bad_identity = manifest(vec![identity("owner/other", &bad_bytes)?])?;
+    let calls = Arc::new(AtomicUsize::new(0));
+    assert_eq!(
+        store
+            .prepare_and_lease(
+                "launch-corrupt",
+                &manifest,
+                None,
+                &mut fetcher(b"not the pinned archive".to_vec(), Arc::clone(&calls)),
+            )
+            .err(),
+        Some(ActionArchiveSeedError::DigestMismatch)
+    );
+    assert_eq!(
+        store
+            .prepare_and_lease(
+                "launch-other",
+                &bad_identity,
+                None,
+                &mut fetcher(Vec::new(), Arc::clone(&calls)),
+            )
+            .err(),
+        Some(ActionArchiveSeedError::DigestMismatch)
+    );
+    assert_eq!(fs::read_dir(root.path().join("store/leases"))?.count(), 0);
+
+    let oversized_root = TestRoot::new()?;
+    let oversized_store = ActionArchiveStore::open(oversized_root.path().join("store"))?;
+    let oversized_manifest = manifest(vec![identity("owner/oversized", &bytes)?])?;
+    let mut oversized = bytes;
+    oversized.push(b'x');
+    assert_eq!(
+        oversized_store
+            .prepare_and_lease(
+                "launch-oversized",
+                &oversized_manifest,
+                None,
+                &mut OversizedFetcher(oversized),
+            )
+            .err(),
+        Some(ActionArchiveSeedError::SizeLimit)
+    );
+    assert_eq!(
+        fs::read_dir(oversized_root.path().join("store/leases"))?.count(),
+        0
+    );
+    Ok(())
+}
+
+#[test]
+fn concurrent_launches_share_one_exact_archive_fetch() -> Result<(), Box<dyn Error>> {
+    let root = TestRoot::new()?;
+    let store = ActionArchiveStore::open(root.path().join("store"))?;
+    let bytes = archive_bytes()?;
+    let action = identity("owner/action", &bytes)?;
+    let manifest = manifest(vec![action])?;
+    let calls = Arc::new(AtomicUsize::new(0));
+    let barrier = Arc::new(Barrier::new(3));
+    let mut workers = Vec::new();
+    for index in 0..2 {
+        let store = store.clone();
+        let manifest = manifest.clone();
+        let calls = Arc::clone(&calls);
+        let barrier = Arc::clone(&barrier);
+        let bytes = bytes.clone();
+        workers.push(thread::spawn(move || {
+            barrier.wait();
+            let mut source = BytesFetcher {
+                bytes,
+                calls,
+                delay: true,
+            };
+            store.prepare_and_lease(&format!("launch-{index}"), &manifest, None, &mut source)
+        }));
+    }
+    barrier.wait();
+    for worker in workers {
+        worker
+            .join()
+            .map_err(|_| io::Error::other("preparation thread panicked"))??;
+    }
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(fs::read_dir(root.path().join("store/leases"))?.count(), 2);
+    Ok(())
+}

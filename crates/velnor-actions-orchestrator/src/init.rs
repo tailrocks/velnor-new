@@ -95,7 +95,7 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # [workflow]
 # name = "CI"                         # Workflow display name.
 # policy = "consumer-v1"              # Only consumer policy; Velnor's reserved policy works only in tailrocks/velnor-new.
-# default_branch = "<branch>"         # Push branch override; omit to use origin/HEAD. Required if origin/HEAD is unavailable.
+# default_branch = "main"             # Push branch override; omit to use origin/HEAD. Required if origin/HEAD is unavailable.
 # runner_label = "ubuntu-24.04" # Exact older pinned runner for compat; omit for the ubuntu-26.04 default.
 # generator_validation = "bootstrap"  # Generator validation mode.
 # max_parallel_jobs = 2                # Maximum generated matrix concurrency.
@@ -144,6 +144,5 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # "actions/upload-artifact" = { version = "v7.0.1", sha = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" }
 # "actions/download-artifact" = { version = "v8.0.1", sha = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" }
 # "jdx/mr-boxington-action" = { version = "v1.6.0", sha = "1687e54eb349cadf61fa38b5813a77875489e8e6" }
-# "Swatinem/rust-cache" = { version = "v2.9.2", sha = "6323deb102c322ba6fcbdcafc7e3dddab59af2b6" }
 # Values must be an allowlisted action's matching release version and full SHA.
 "#;

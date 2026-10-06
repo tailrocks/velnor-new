@@ -144,8 +144,8 @@ async fn docker_api_observations_preserve_only_known_running_states() -> Result<
     let before = journal.rows().await.map_err(|error| error.to_string())?;
     let stub = DockerStub::open(vec![
         http(404, r#"{"message":"missing"}"#),
-        http(200, r#"{"State":{"Running":true}}"#),
-        http(200, r#"{"State":{"Running":false}}"#),
+        http(200, r#"{"State":{"Status":"running","Running":true}}"#),
+        http(200, r#"{"State":{"Status":"exited","Running":false}}"#),
         http(200, "{}"),
         http(200, r#"{"State":{}}"#),
         http(200, "{}"),

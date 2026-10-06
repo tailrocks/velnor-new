@@ -2,9 +2,9 @@
 //!
 //! Sources live at the Cargo home actually used (`MISE_CARGO_HOME`,
 //! `${{ runner.temp }}/velnor/cargo`), never the ambient `~/.cargo`.
-//! Only the sufficient subset is archived (Cargo CI guidance):
-//! `.crates.toml`, `.crates2.json`, `bin/`, `registry/index/`,
-//! `registry/cache/`, `git/db/`. Extracted `registry/src/` is omitted
+//! Only source trees are archived: `registry/index/`, `registry/cache/`,
+//! and `git/db/`. Cargo-installed binaries and their `.crates*` manifests
+//! belong to the V2 tools layer. Extracted `registry/src/` is omitted
 //! (re-extracted from cache; avoids cache/src duplication). Credentials
 //! (`credentials*`, token-bearing configs) are never archived.
 //!
@@ -16,14 +16,7 @@ use crate::error::MiseError;
 use velnor_actions_contract::StepRole;
 
 /// Sufficient Cargo-home subset (relative to the owned home).
-pub const SOURCE_SUBSET: [&str; 6] = [
-    ".crates.toml",
-    ".crates2.json",
-    "bin",
-    "registry/index",
-    "registry/cache",
-    "git/db",
-];
+pub const SOURCE_SUBSET: [&str; 3] = ["registry/index", "registry/cache", "git/db"];
 
 /// Role allowed to save the shared sources snapshot.
 pub const TRUSTED_WRITER_ROLE: &str = "plan";
@@ -94,11 +87,9 @@ pub fn validate_sources_subset(paths: &[String], cargo_home: &str) -> Result<(),
         if suffix.starts_with("registry/src") {
             return Err(reject(path));
         }
-        let allowed = SOURCE_SUBSET.iter().any(|ok| {
-            suffix == *ok
-                || suffix.starts_with(&format!("{ok}/"))
-                || *ok == "bin" && suffix == "bin"
-        });
+        let allowed = SOURCE_SUBSET
+            .iter()
+            .any(|ok| suffix == *ok || suffix.starts_with(&format!("{ok}/")));
         if !allowed {
             return Err(reject(path));
         }
@@ -144,7 +135,7 @@ pub fn fetch_decision(
     Ok(FetchDecision::ExplicitFetch { miss_reason })
 }
 
-/// Require restore/config steps before every fetch/build/test step.
+/// Check that named steps precede every fetch step when both are present.
 ///
 /// `roles` is the job's typed semantic sequence. Every source fetch must
 /// follow a sources restore and, on MBX jobs, the MBX objects restore.
@@ -178,6 +169,36 @@ pub fn check_restore_before_fetch(
                 return Err(MiseError::CacheNotEligible {
                     task: "fetch".to_owned(),
                     reason: "fetch_before_mbx".to_owned(),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Check that named steps precede every fetch step when both are present.
+///
+/// `names` is the job's step-name sequence. `required` carries caller-owned
+/// setup and restore names; this generic checker does not know their meaning.
+///
+/// # Errors
+///
+/// Returns [`MiseError::CacheNotEligible`] when fetch precedes a required step.
+pub fn check_steps_before_fetch(names: &[String], required: &[&str]) -> Result<(), MiseError> {
+    let at = |want: &str| names.iter().position(|name| name == want);
+    let fetch = at("Fetch Cargo sources").or_else(|| {
+        names
+            .iter()
+            .position(|n| n.starts_with("Fetch Cargo sources"))
+    });
+    if let Some(fetch_at) = fetch {
+        for required_name in required {
+            if let Some(required_at) = names.iter().position(|name| name == required_name)
+                && fetch_at < required_at
+            {
+                return Err(MiseError::CacheNotEligible {
+                    task: "fetch".to_owned(),
+                    reason: "fetch_before_required_step".to_owned(),
                 });
             }
         }

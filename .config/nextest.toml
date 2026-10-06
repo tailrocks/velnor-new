@@ -10,3 +10,7 @@ final-status-level = "flaky"
 [[profile.ci.overrides]]
 filter = 'package(velnor-actions-orchestrator) and test(bench_concurrent_lanes_2_and_4)'
 success-output = "immediate"
+
+[[profile.ci.overrides]]
+filter = 'package(velnor-actions-orchestrator) and test(bench_empty_caches_cold_plan)'
+success-output = "immediate"

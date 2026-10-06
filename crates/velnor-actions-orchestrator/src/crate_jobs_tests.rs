@@ -5,7 +5,8 @@
 use super::*;
 use crate::clippy_groups::ClippyMemoryPlan;
 use crate::crate_job_ids::job_id_for_member;
-use crate::matrix_step::shard_suffix;
+use crate::matrix_step::{shard_suffix, step_name_for};
+use std::collections::BTreeSet;
 use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
 
 /// Runnable fixture proposal for one package/kind pair.
@@ -55,6 +56,7 @@ pub(super) fn discovery(groups: Vec<ProposedTask>) -> Discovery {
         },
         recommendations: Vec::new(),
         consumer_manifest_json: None,
+        consumer_manifest_stand_in: false,
         skipped_non_utf8: false,
         tofu_note: None,
         tofu_units: Vec::new(),

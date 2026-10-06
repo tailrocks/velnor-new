@@ -10,13 +10,19 @@ workspace = true
 
 [dependencies]
 bollard = { workspace = true }
+flate2 = { workspace = true }
+futures-util = { version = "=0.3.34" }
 getrandom = { workspace = true }
+libc = { version = "=0.2.190" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
+tar = { version = "=0.4.46" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
 turso = { workspace = true }
+uuid = { version = "=1.26.1", features = ["v4"] }
 zeroize = { workspace = true }
 velnor-runner-core = { version = "=0.1.0", path = "../velnor-runner-core" }
 velnor-runner-github = { version = "=0.1.0", path = "../velnor-runner-github" }

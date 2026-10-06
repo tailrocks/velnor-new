@@ -77,14 +77,8 @@ fn default_branch_prefers_config_then_origin_head() -> TestResult {
     git(&["commit", "-m", "seed"], origin.path())?;
     let parent = TempDir::new()?;
     let clone_path = parent.path().join("clone");
-    git(
-        &[
-            "clone",
-            &origin.path().display().to_string(),
-            &clone_path.display().to_string(),
-        ],
-        parent.path(),
-    )?;
+    let output = super::git_clone_fixture::clone_fixture(origin.path(), &clone_path)?.output()?;
+    assert!(output.status.success(), "{:?}", output.stderr);
     fs::create_dir_all(clone_path.join(".velnor"))?;
     fs::write(clone_path.join(".velnor/config.toml"), "schema = 1\n")?;
     fs::write(
@@ -156,11 +150,27 @@ fn uncommented_init_sample_parses_with_overrides() -> TestResult {
     fs::write(root.join(".velnor/config.toml"), &live)?;
     let prep = prepare(root)?;
     assert!(prep.config.checks.is_empty());
-    assert_eq!(prep.config.actions.overrides.len(), 8);
+    // Retired `Swatinem/rust-cache` is not an overridable sample pin.
+    let overrides = &prep.config.actions.overrides;
+    let keys: Vec<&str> = overrides.keys().map(String::as_str).collect();
     assert_eq!(
-        prep.config.actions.overrides["actions/checkout"].version,
-        "v7.0.1"
+        overrides.len(),
+        velnor_actions_contract::config::OVERRIDABLE_ACTIONS.len()
     );
+    assert!(!overrides.contains_key("Swatinem/rust-cache"));
+    assert_eq!(
+        keys,
+        [
+            "actions/cache/restore",
+            "actions/cache/save",
+            "actions/checkout",
+            "actions/download-artifact",
+            "actions/upload-artifact",
+            "jdx/mise-action",
+            "jdx/mr-boxington-action",
+        ]
+    );
+    assert_eq!(overrides["actions/checkout"].version, "v7.0.1");
     assert_eq!(prep.runner_label, "ubuntu-24.04");
     assert_eq!(prep.runner_selection, RunnerSelection::ConfigOverride);
     Ok(())

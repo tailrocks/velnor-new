@@ -13,8 +13,7 @@ use std::path::Path;
 
 use velnor_actions_contract::{DetectionStatus, ProposedTask};
 use velnor_actions_tofu::{
-    Family, ModuleEdges, chdir_finding_for_root, family_of, key_for_root, root_for_key,
-    select_roots,
+    Family, ModuleEdges, chdir_finding_for_root, family_of, key_for_root, select_roots,
 };
 
 use crate::OrchestratorError;
@@ -63,18 +62,22 @@ pub(crate) fn tofu_selected_roots(statuses: &[DetectionStatus]) -> Vec<String> {
 /// subdir root records its caveat finding; the repo root needs none
 /// (its identity carries `.`). Roots derive from the proposals and
 /// sort for a stable warning order.
-pub(crate) fn push_chdir_findings(discovery: &Discovery, warnings: &mut Vec<String>) {
+pub(crate) fn push_chdir_findings(
+    discovery: &Discovery,
+    warnings: &mut Vec<String>,
+) -> Result<(), OrchestratorError> {
     let mut findings: BTreeSet<String> = BTreeSet::new();
     for task in &discovery.proposals {
         if task.stack_id != velnor_actions_tofu::STACK_ID {
             continue;
         }
-        let root = root_for_key(&task.identity.unit_key);
-        if let Some(finding) = chdir_finding_for_root(&root) {
+        let root = velnor_actions_tofu::normalized_root_for_proposal(task)?;
+        if let Some(finding) = chdir_finding_for_root(root) {
             findings.insert(finding);
         }
     }
     warnings.extend(findings);
+    Ok(())
 }
 
 /// Split `changed` by tofu ownership and select affected tofu keys.
@@ -267,11 +270,13 @@ pub(crate) fn derive_tofu(
     statuses: &[DetectionStatus],
     files: &[String],
 ) -> Result<Vec<ProposedTask>, OrchestratorError> {
-    use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
+    use velnor_actions_tofu::{RootLocatorRegistry, TofuTaskGroup, TofuTaskKind};
     let selected = tofu_selected_roots(statuses);
     let covered = velnor_actions_tofu::covered_fmt_roots(&selected);
+    let mut locators = RootLocatorRegistry::default();
     let mut proposals = Vec::new();
     for root in &selected {
+        let _locator = locators.admit(root)?;
         for kind in [
             TofuTaskKind::Fmt,
             TofuTaskKind::InitForValidate,

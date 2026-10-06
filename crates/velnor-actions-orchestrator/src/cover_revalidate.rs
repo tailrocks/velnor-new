@@ -10,8 +10,8 @@ use velnor_actions_contract::{
 
 use crate::cover::Signals;
 use crate::cover_baseline::provenance_check::{
-    baseline_artifact_name, is_unverifiable_generator_sha, parse_workflow_ref, task_run_ids_bound,
-    validate_task_entry,
+    baseline_artifact_name, is_unverifiable_generator_sha, parse_workflow_ref,
+    validate_manifest_lineage_at,
 };
 use crate::cover_baseline::unix_now;
 use crate::decisions::baseline_expired;
@@ -84,25 +84,19 @@ fn merge_anchors_from_parts(
 /// branch name); push jobs fall back to `GITHUB_REF` when it already
 /// names a protected branch ref. Anything else yields no expectation.
 fn protected_ref_from(base_ref: Option<&str>, git_ref: Option<&str>) -> Option<String> {
-    if let Some(base) = base_ref.filter(|base| valid_branch_name(base)) {
+    if let Some(base) = base_ref.filter(|base| velnor_actions_contract::is_valid_branch_name(base))
+    {
         return Some(format!("refs/heads/{base}"));
     }
     git_ref
         .filter(|git_ref| {
             git_ref.starts_with("refs/heads/")
                 && git_ref.len() > "refs/heads/".len()
-                && !git_ref.chars().any(char::is_whitespace)
+                && git_ref
+                    .strip_prefix("refs/heads/")
+                    .is_some_and(velnor_actions_contract::is_valid_branch_name)
         })
         .map(str::to_owned)
-}
-
-/// True for plausible branch names: nonempty, no whitespace, no
-/// traversal, not HEAD.
-fn valid_branch_name(base: &str) -> bool {
-    !base.is_empty()
-        && !base.chars().any(char::is_whitespace)
-        && !base.contains("..")
-        && base != "HEAD"
 }
 
 /// Revalidate planner coverage claims against the trusted manifest.
@@ -239,12 +233,10 @@ pub(crate) fn revalidate_coverage_with_anchors(
 /// compares against the plan value or the trusted invariant. Mirrors the
 /// plan-time [`validate_provenance`](crate::cover_baseline::provenance_check::validate_provenance)
 /// manifest checks (identified run, verifiable generator, derived
-/// artifact name, per-task entry validation, freshness) so a manifest
-/// the plan rejects can never pass at merge. Per-task entry validation
-/// is the shared [`validate_task_entry`](crate::cover_baseline::provenance_check::validate_task_entry):
-/// identity shapes, run binding, structured-proof match, and
-/// external-data validity are identical on both sides by
-/// construction, not by parallel reimplementation. Advisory
+/// artifact name and bounded proof lineage) so a manifest the plan
+/// rejects can never pass at merge. Lineage validation includes shared
+/// task identity shapes, carrying-run binding, structured-proof match,
+/// and external-data validity. Advisory
 /// presence/freshness mirrors separately per obligation below (the
 /// planner gates it at coverage time, not validation time).
 ///
@@ -269,14 +261,7 @@ fn manifest_provenance_matches_plan(
         .is_ok_and(|expect| manifest.artifact_name == expect);
     let derived_id = manifest.artifact_id
         == crate::cover_compat::baseline_artifact_numeric_id(&manifest.artifact_name);
-    let run_bound = manifest
-        .tasks
-        .iter()
-        .all(|task| task_run_ids_bound(task, manifest.run_id));
-    let entries_ok = manifest
-        .tasks
-        .iter()
-        .all(|task| validate_task_entry(task, manifest.run_id).is_ok());
+    let lineage_ok = validate_manifest_lineage_at(manifest, now_unix).is_ok();
     manifest.source_commit == base
         && manifest.generator_version == plan.generator.version
         && manifest.generator_sha256 == plan.generator.sha256
@@ -286,18 +271,17 @@ fn manifest_provenance_matches_plan(
         && identified
         && derived_name
         && derived_id
-        && run_bound
-        && entries_ok
+        && lineage_ok
         && validate_digest(&manifest.repository_id).is_ok()
         && ref_shape_ok(&manifest.ref_)
         && workflow_ref_consistent(manifest)
 }
 
-/// Protected-branch ref shape: `refs/heads/<nonempty branch>`.
+/// Protected-branch ref shape: `refs/heads/<valid branch name>`.
 fn ref_shape_ok(git_ref: &str) -> bool {
-    git_ref.starts_with("refs/heads/")
-        && git_ref.len() > "refs/heads/".len()
-        && !git_ref.contains(' ')
+    git_ref
+        .strip_prefix("refs/heads/")
+        .is_some_and(velnor_actions_contract::is_valid_branch_name)
 }
 
 /// The workflow ref parses and agrees with the manifest's own ref.

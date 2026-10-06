@@ -72,6 +72,18 @@ delete the set.
 States include `waiting_for_engine`, `waiting_for_credentials`, `reconciling`,
 `ready`, `draining`, and `degraded`.
 
+The read-only `status` and `doctor` observer must not report `ready` from an
+empty journal alone. It can report prerequisite failures or `reconciling`;
+`ready` requires a bounded controller-owned snapshot proving Docker ownership,
+journal state, and GitHub session/runner state agree. The CLI runs its current
+partial observer in a private child process and kills and reaps that child at
+the shared deadline; the child receives no secret argv, environment, or output.
+Config reads require a regular file and size cap. Journal inspection has a
+bounded file size, row count, and query deadline; exhausting any bound is
+degraded. A confirmed missing configuration or absent credential may report
+`waiting_for_credentials`; malformed, nonregular, oversized, and unreadable
+configuration reports `degraded`.
+
 Per-user LaunchAgent runs `velnor-host daemon run` in the foreground. No
 double-fork. State under `~/Library/Application Support/Velnor/`. Logs under
 `~/Library/Logs/Velnor/`. Private Unix socket. Not a root LaunchDaemon.
@@ -80,6 +92,10 @@ Default `max_jobs` is 1. Qualification must prove `N>1`. One host-wide capacity
 authority. A permit covers the top-level job lifecycle until cleanup is proven.
 Reserved, acquiring, uncertain, provisioning, idle, running, finishing,
 cleaning, and quarantined states all occupy a slot.
+A Docker 404 or explicit `exited`/`dead` status is required before a recorded
+container can be treated as absent or stopped. A missing or empty `Status` is
+uncertain even when `Running` is false; the permit stays occupied until pair
+cleanup is proven.
 
 ## 4. Protocol
 
@@ -154,9 +170,9 @@ Mount the same per-worker named work volume there in both containers. The
 runner and DinD images create that path as uid/gid `1000:1000`, mode `0755`,
 before the first empty-volume mount; DinD starts first and Docker initializes
 the volume from its image path. The entrypoint stages JIT only in its
-container-local `/tmp` and removes the file before starting the listener; it
-must not persist JIT under the named work volume. Checkout, tools, and job
-workspace use the shared writable volume for the runner user.
+container-local `/tmp` with mode `0600` and removes the file before starting
+the listener; it must not persist JIT under the named work volume. Checkout,
+tools, and job workspace use the shared writable volume for the runner user.
 
 Delete only objects whose immutable id matches the journal. Names are not
 delete authority. Foreign objects survive. A missing delete response is not

@@ -189,6 +189,53 @@ fn mbx_evidence_keeps_plan_mise_free_and_uses_task_action() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn non_rust_consumer_plan_omits_rust_bootstrap_in_generated_yaml() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    std::fs::remove_file(repo.path().join("Cargo.toml"))?;
+    std::fs::remove_dir_all(repo.path().join("src"))?;
+    let yaml = workflow_yaml(repo.path())?;
+    let steps = plan_steps(&yaml);
+    let prepare_at = step_index(&steps, "Prepare pinned tools").ok_or("missing Prepare step")?;
+    let prepare = &steps[prepare_at].1;
+    let catalog = ToolCatalog::pinned();
+    let rust = catalog.tool_spec(PinnedTool::Rust);
+    assert!(
+        !prepare.contains(&rust),
+        "tools-only consumer must not install {rust}:\n{prepare}"
+    );
+    assert!(
+        !steps
+            .iter()
+            .any(|(name, _)| name == "Prepare Rust components"),
+        "tools-only consumer must omit Rust components: {steps:?}"
+    );
+    assert!(
+        !steps
+            .iter()
+            .any(|(name, _)| name.contains("Cargo") || name.contains("MBX")),
+        "tools-only consumer must omit Cargo and MBX setup: {steps:?}"
+    );
+    for key in ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME", "RUSTUP_TOOLCHAIN"] {
+        assert!(
+            !steps.iter().any(|(_, body)| body.contains(key)),
+            "tools-only plan must omit {key}: {steps:?}"
+        );
+    }
+    for tool in [
+        PinnedTool::Actionlint,
+        PinnedTool::Shellcheck,
+        PinnedTool::Zizmor,
+    ] {
+        let spec = catalog.tool_spec(tool);
+        assert!(
+            prepare.contains(&spec),
+            "tools-only consumer must keep validator {spec}:\n{prepare}"
+        );
+    }
+    Ok(())
+}
+
 /// Velnor-policy fixture: canonical origin, no lock (pre-seed shape).
 fn make_velnor_repo() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
     let repo = make_repo(
@@ -259,6 +306,15 @@ fn preseed_plan_installs_before_build_and_check_generated() -> TestResult {
             assert!(
                 prepare_at < build_at && build_at < check_at,
                 "install < build < generate: {steps:?}"
+            );
+            let rust = ToolCatalog::pinned().tool_spec(PinnedTool::Rust);
+            assert!(steps[prepare_at].1.contains(&rust), "missing {rust}");
+            // The pre-seed fixture proposes no Format task, so no plan
+            // step consumes clippy/rustfmt: components stay uninstalled
+            // (tied to consumers, see impl_cache_warm_components).
+            assert!(
+                step_index(&steps, "Prepare Rust components").is_none(),
+                "fmt-less plan must not install unused components: {steps:?}"
             );
             Ok(())
         },

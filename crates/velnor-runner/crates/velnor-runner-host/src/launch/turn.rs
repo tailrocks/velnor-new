@@ -8,10 +8,14 @@ use crate::scale_set::EnsureError;
 use crate::worker::Started;
 
 use super::capacity::{self, Admit};
+use super::completion::CompletionWorker;
 use super::slot;
 use super::steps;
 use super::trace;
-use super::{Ready, ack_ready, drive_ready, scale_session};
+use super::{Ready, Rest, ack_ready, drive_ready, scale_session};
+
+mod completion_intake;
+use completion_intake::{completion_error, intake_and_ack_if_only};
 
 /// Poll until admission stops and no owned launch container is running.
 ///
@@ -25,11 +29,12 @@ pub(super) async fn poll_and_drive(
     admin_token: &str,
     journal: &Journal,
     docker: &bollard::Docker,
+    rest: Rest<'_>,
 ) -> Result<Vec<Started>, EnsureError> {
     trace::session(session);
     let mut workers = Vec::new();
-    let capacity = capacity::job_capacity();
-    slot::release_exited(journal, docker).await?;
+    let ceiling = capacity::job_capacity();
+    let capacity = super::pressure::advertise(ceiling);
     let population = session
         .statistics()
         .map_or(0, velnor_runner_github::Statistics::assigned_population);
@@ -37,10 +42,17 @@ pub(super) async fn poll_and_drive(
     let running = slot::running_count(journal, docker).await?;
     if !capacity::statistics_blocked(occupied, running, capacity, population)
         && let Some(started) =
-            scale_session(link, set_id, session, admin_token, journal, docker).await?
+            scale_session(link, set_id, session, admin_token, journal, docker, rest).await?
     {
         workers.push(started);
     }
+    let completion = CompletionWorker::start(
+        journal.clone(),
+        docker.clone(),
+        link.base().to_owned(),
+        admin_token.to_owned(),
+    )
+    .map_err(|_| completion_error())?;
     let target = capacity::admit_target(capacity);
     let mut turn = Turn {
         link,
@@ -49,16 +61,27 @@ pub(super) async fn poll_and_drive(
         admin_token,
         journal,
         docker,
+        completion: &completion,
         capacity,
         target,
+        owner: rest.owner,
+        repo: rest.repo,
+        pat: rest.pat,
+        cursor: 0,
+        steady_retry: None,
     };
     let bound = if target > capacity {
         capacity::poll_bound_wide()
     } else {
         capacity::poll_bound(capacity)
     };
-    until_idle(&mut turn, &mut workers, bound).await?;
-    Ok(workers)
+    let driven = until_idle(&mut turn, &mut workers, bound).await;
+    let stopped = completion.shutdown().await;
+    match (driven, stopped) {
+        (Err(error), _) => Err(error),
+        (Ok(()), Err(_)) => Err(completion_error()),
+        (Ok(()), Ok(())) => Ok(workers),
+    }
 }
 
 /// One session's poll and running-count source.
@@ -122,6 +145,16 @@ async fn pump<H: PollHost>(
     }
 }
 
+/// A cleared job name and a steady scale name stay on the queue.
+///
+/// Neither error acknowledges the message or ends the session.
+fn queue_stays(error: Option<&EnsureError>) -> bool {
+    matches!(
+        error,
+        Some(EnsureError::NameSteady | EnsureError::NameCleared)
+    )
+}
+
 fn progress_batch(polled: &Poll) -> bool {
     let Poll::Batch(batch) = polled else {
         return false;
@@ -175,18 +208,44 @@ struct Turn<'a> {
     admin_token: &'a str,
     journal: &'a Journal,
     docker: &'a bollard::Docker,
+    completion: &'a CompletionWorker,
     capacity: u32,
     target: u32,
+    owner: &'a str,
+    repo: &'a str,
+    pat: &'a str,
+    cursor: i64,
+    steady_retry: Option<std::time::Instant>,
 }
 
 impl Turn<'_> {
     async fn drive_poll(&mut self, workers: &mut Vec<Started>) -> Result<bool, EnsureError> {
+        self.fit_pressure().await?;
         let (saved, path) = point_at_queue(self.link, &self.session.message_queue_url)?;
         let queue = saved.as_ref().map(|_| self.link.base().to_owned());
-        let polled = poll_path(self.link, self.session, &path, self.capacity);
+        let now = std::time::Instant::now();
+        self.cursor = super::steady::poll_cursor(self.cursor, self.steady_retry, now);
+        let polled = poll_path(self.link, self.session, &path, self.capacity, self.cursor);
         restore_base(self.link, saved)?;
         let polled = polled?;
         trace::batch(&polled);
+        let link = &mut *self.link;
+        let session = self.session;
+        let set_id = self.set_id;
+        let journal = self.journal;
+        let ack_path = path.clone();
+        let ack_queue = queue.clone();
+        let ack_polled = &polled;
+        let intake = intake_and_ack_if_only(journal, set_id, &polled, || async move {
+            ack_ready(link, session, ack_path, ack_queue, ack_polled)
+        })
+        .await?;
+        if intake.wake_cleanup {
+            self.completion.notify();
+        }
+        if intake.completion_only {
+            return Ok(false);
+        }
         let started = u32::try_from(workers.len()).unwrap_or(u32::MAX);
         let decision = admission(
             self.docker,
@@ -198,6 +257,17 @@ impl Turn<'_> {
         )
         .await?;
         self.apply(decision, workers, path, queue, &polled).await
+    }
+
+    async fn fit_pressure(&mut self) -> Result<(), EnsureError> {
+        let running_now = slot::running_count(self.journal, self.docker).await?;
+        let ceiling = capacity::job_capacity();
+        let next = super::pressure::adjust(self.capacity, running_now, ceiling);
+        if self.target == self.capacity {
+            self.target = next;
+        }
+        self.capacity = next;
+        Ok(())
     }
 
     async fn apply(
@@ -218,6 +288,8 @@ impl Turn<'_> {
                 step: "queue",
             }),
             Admit::Ack { stop } => {
+                // Fail only an unstarted `m{id}` row. A container row stays.
+                super::name_taken::fail_unstarted(self.journal, polled).await?;
                 ack_ready(self.link, self.session, path, queue, polled)?;
                 Ok(stop)
             }
@@ -239,25 +311,57 @@ impl Turn<'_> {
             admin,
             queue: queue.clone(),
         };
-        start_turn(
+        let rest = Rest {
+            owner: self.owner,
+            repo: self.repo,
+            pat: self.pat,
+        };
+        let launched = drive_ready(
             &mut lane,
-            workers,
             Ready {
                 set_id: self.set_id,
                 session: self.session,
                 admin_token: self.admin_token,
-                path,
+                path: path.clone(),
                 polled,
             },
             self.journal,
             self.docker,
             self.capacity,
-            stop,
+            rest,
         )
-        .await
+        .await;
+        if queue_stays(launched.as_ref().err()) {
+            // Skip this message id. Do not delete that runner again and do not ack.
+            let id = super::steady::message_id(polled);
+            if let Some(next) = super::steady::steady_cursor(self.cursor, id) {
+                self.cursor = next;
+                self.steady_retry = Some(std::time::Instant::now() + super::steady::RETRY);
+                return Ok(false);
+            }
+            tokio::time::sleep(super::steady::RETRY).await;
+            return Ok(false);
+        }
+        if let Err(EnsureError::Conflict) = &launched
+            && super::name_taken::should_ack(steps::idle(polled))
+        {
+            // A container row stays. The message is still acknowledged.
+            // A new mint of the same name cannot succeed.
+            super::name_taken::fail_unstarted(self.journal, polled).await?;
+            ack_ready(self.link, self.session, path, queue, polled)?;
+            return Ok(false);
+        }
+        let Some(worker) = launched? else {
+            return Ok(false);
+        };
+        workers.push(worker);
+        Ok(stop)
     }
 
     async fn stay(&self, workers: &[Started]) -> Result<bool, EnsureError> {
+        if super::steady::pause_empty(self.cursor) {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
         if self.target > self.capacity && workers.len() >= self.capacity as usize {
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         }
@@ -273,8 +377,11 @@ impl Turn<'_> {
     }
 }
 
-/// Start one admitted poll through an injectable lane. A conflict remains an
-/// error so the current message is redelivered; only a bound worker covers it.
+/// Test seam for one admitted poll through an injectable lane.
+///
+/// A conflict remains an error here; production handling for cleared and
+/// colliding names lives in [`Turn::start`]. Only a bound worker covers it.
+#[cfg(test)]
 async fn start_turn<T>(
     lane: &mut T,
     workers: &mut Vec<Started>,
@@ -282,12 +389,13 @@ async fn start_turn<T>(
     journal: &Journal,
     docker: &bollard::Docker,
     capacity: u32,
+    rest: Rest<'_>,
     stop: bool,
 ) -> Result<bool, EnsureError>
 where
     T: velnor_runner_github::Transport + super::Lane,
 {
-    let Some(worker) = drive_ready(lane, ready, journal, docker, capacity).await? else {
+    let Some(worker) = drive_ready(lane, ready, journal, docker, capacity, rest).await? else {
         return Ok(false);
     };
     workers.push(worker);
@@ -331,9 +439,29 @@ mod tests {
         assert!(host.polls >= 9, "{}", host.polls);
         Ok(())
     }
+
+    #[test]
+    fn cleared_name_keeps_the_session() {
+        assert!(super::queue_stays(Some(&EnsureError::NameCleared)));
+        assert!(super::queue_stays(Some(&EnsureError::NameSteady)));
+        assert!(!super::queue_stays(Some(&EnsureError::Conflict)));
+        assert!(!super::queue_stays(None));
+    }
 }
 
 #[cfg(all(test, unix))]
 mod progress_tests;
 #[cfg(all(test, unix))]
+mod start_idless_tests;
+#[cfg(all(test, unix))]
+mod start_jit_rejection_tests;
+#[cfg(all(test, unix))]
 mod start_tests;
+
+#[cfg(test)]
+#[path = "turn/completion_intake_tests.rs"]
+mod completion_intake_tests;
+
+#[cfg(test)]
+#[path = "turn/completion_quarantine_tests.rs"]
+mod completion_quarantine_tests;

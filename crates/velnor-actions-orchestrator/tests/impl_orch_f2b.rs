@@ -3,8 +3,8 @@
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::{
-    FinalStatus, NotSelectedReason, ObligationDecision, TaskStatus, Trust, WorkflowEvent,
-    digest_b3, matrix_id_for_task_group, matrix_key_for_id,
+    FinalStatus, NotSelectedReason, ObligationDecision, PlannedPlatform, TaskStatus, Trust,
+    WorkflowEvent, digest_b3, matrix_id_for_task_group, matrix_key_for_id,
 };
 use velnor_actions_orchestrator::decisions::{
     CacheHit, MetadataFailure, NotSelectedInputs, ObligationInputs, baseline_expired,
@@ -110,11 +110,13 @@ fn not_selected_reason_validates_iff_present() -> TestResult {
     let matrix_id = matrix_id_for_task_group("rust", task_id)?;
     let matrix_key = matrix_key_for_id(&matrix_id)?;
     let digest = digest_b3(b"task");
+    let planned_platform = PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")?;
     let inputs = NotSelectedInputs {
         run_key: "local",
         event: WorkflowEvent::PullRequest,
         trust: Trust::Pr,
         matrix_id: &matrix_id,
+        planned_platform: &planned_platform,
         matrix_key: &matrix_key,
         task_id,
         task_digest: &digest,
@@ -241,10 +243,12 @@ fn exact_base_run_filter_pins_provenance() {
         select_exact_base_run(&unattested.to_string(), &base, "t").is_err(),
         "runs without attempt evidence never select"
     );
-    let listed = serde_json::json!({"artifacts": [
+    let listed = serde_json::json!({"total_count": 3, "artifacts": [
         {"id": 8, "name": "other", "expired": false},
-        {"id": 9, "name": "velnor-baseline-x", "expired": true},
-        {"id": 10, "name": "velnor-baseline-x", "expired": false},
+        {"id": 9, "name": "velnor-baseline-x", "expired": true,
+         "size_in_bytes": 1, "digest": format!("sha256:{}", "b".repeat(64))},
+        {"id": 10, "name": "velnor-baseline-x", "expired": false,
+         "size_in_bytes": 1, "digest": format!("sha256:{}", "a".repeat(64))},
     ]});
     assert_eq!(
         select_baseline_artifact(&listed.to_string(), "velnor-baseline-x"),
@@ -252,8 +256,9 @@ fn exact_base_run_filter_pins_provenance() {
     );
     assert!(select_baseline_artifact(&listed.to_string(), "missing").is_err());
     assert!(select_baseline_artifact("not json", "velnor-baseline-x").is_err());
-    let array = serde_json::json!([{"databaseId": 11, "name": "n", "expired": false}]);
-    assert_eq!(select_baseline_artifact(&array.to_string(), "n"), Ok(11));
+    let array = serde_json::json!([{"id": 11, "name": "n", "expired": false,
+        "size_in_bytes": 1, "digest": format!("sha256:{}", "a".repeat(64))}]);
+    assert!(select_baseline_artifact(&array.to_string(), "n").is_err());
 }
 
 #[test]

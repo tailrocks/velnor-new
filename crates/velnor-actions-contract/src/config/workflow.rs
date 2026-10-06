@@ -1,5 +1,5 @@
 //! Workflow section of `.velnor/config.toml`: naming, policy, runner labels.
-use crate::config::VerificationTask;
+use crate::config::{TofuApplyConfig, VerificationTask};
 use crate::errors::ContractError;
 use crate::workflow::ValidatorKind;
 use serde::{Deserialize, Serialize};
@@ -36,12 +36,29 @@ pub struct WorkflowConfig {
     pub generator_validation: GeneratorValidation,
     /// Maximum parallel matrix jobs.
     pub max_parallel_jobs: u32,
+    /// Cache writes from pull requests; same-repository scope requires explicit opt-in.
+    #[serde(default)]
+    pub pull_request_cache_policy: PullRequestCachePolicy,
     /// Pinned older runner-label override; omit for latest.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runner_label: Option<String>,
     /// Sorted, explicit isolated validation jobs.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tasks: Vec<VerificationTask>,
+    /// Optional protected post-merge `OpenTofu` apply workflow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tofu_apply: Option<TofuApplyConfig>,
+}
+
+/// Cache-write policy for pull-request workflows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub enum PullRequestCachePolicy {
+    /// Pull requests restore caches and never save them.
+    #[default]
+    ReadOnly,
+    /// Same-repository pull requests may save only to pull-request-scoped caches.
+    SameRepositoryScoped,
 }
 
 /// Workflow policy selector.
@@ -116,7 +133,7 @@ impl WorkflowConfig {
             ));
         }
         if let Some(branch) = &self.default_branch
-            && (branch.trim().is_empty() || branch.contains(' ') || branch.contains(".."))
+            && !crate::is_valid_branch_name(branch)
         {
             return Err(ContractError::config(
                 file,
@@ -134,6 +151,16 @@ impl WorkflowConfig {
             ));
         }
         self.validate_tasks(file)?;
+        if let Some(tofu_apply) = &self.tofu_apply {
+            tofu_apply.validate(file)?;
+            if self.default_branch.is_none() {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.default_branch",
+                    "required_for_tofu_apply",
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -159,7 +186,7 @@ impl WorkflowConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{GeneratorValidation, WorkflowConfig, WorkflowPolicy};
+    use super::{GeneratorValidation, PullRequestCachePolicy, WorkflowConfig, WorkflowPolicy};
     use crate::config::{VerificationRunner, VerificationTask, VerificationTaskKind};
 
     /// Workflow config carrying `name`, all else default.
@@ -170,9 +197,63 @@ mod tests {
             default_branch: None,
             generator_validation: GeneratorValidation::Bootstrap,
             max_parallel_jobs: 2,
+            pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
             tasks: Vec::new(),
+            tofu_apply: None,
         }
+    }
+
+    #[test]
+    fn pull_request_cache_policy_is_strict_and_uses_kebab_case() {
+        for (policy, wire) in [
+            (PullRequestCachePolicy::ReadOnly, "\"read-only\""),
+            (
+                PullRequestCachePolicy::SameRepositoryScoped,
+                "\"same-repository-scoped\"",
+            ),
+        ] {
+            let serialized = serde_json::to_string(&policy).expect("serialize policy");
+            assert_eq!(serialized, wire);
+            assert_eq!(
+                serde_json::from_str::<PullRequestCachePolicy>(wire).expect("deserialize policy"),
+                policy
+            );
+        }
+        assert_eq!(
+            PullRequestCachePolicy::default(),
+            PullRequestCachePolicy::ReadOnly
+        );
+        assert!(serde_json::from_str::<PullRequestCachePolicy>("\"same-repo\"").is_err());
+    }
+
+    #[test]
+    fn workflow_cache_policy_defaults_when_missing_and_serializes_opt_in() {
+        let mut value = serde_json::json!({
+            "name": "CI",
+            "policy": "consumer-v1",
+            "generator_validation": "bootstrap",
+            "max_parallel_jobs": 2
+        });
+        let config: WorkflowConfig =
+            serde_json::from_value(value.clone()).expect("deserialize default workflow");
+        assert_eq!(
+            config.pull_request_cache_policy,
+            PullRequestCachePolicy::ReadOnly
+        );
+
+        value["pull_request_cache_policy"] =
+            serde_json::Value::String("same-repository-scoped".to_owned());
+        let config: WorkflowConfig =
+            serde_json::from_value(value).expect("deserialize opted-in workflow");
+        assert_eq!(
+            serde_json::to_value(config)
+                .expect("serialize workflow")
+                .get("pull_request_cache_policy"),
+            Some(&serde_json::Value::String(
+                "same-repository-scoped".to_owned()
+            ))
+        );
     }
 
     #[test]
@@ -230,5 +311,29 @@ mod tests {
             .validate("config.toml")
             .expect_err("reserved ID fails");
         assert!(error.to_string().contains("bad_verification_task_id"));
+    }
+
+    #[test]
+    fn default_branch_rejects_yaml_and_git_injection() {
+        for branch in [
+            "",
+            "feature/x y",
+            "main\non: [push]",
+            "main;git status",
+            "${{ github.ref }}",
+            "release/../main",
+            "main.lock",
+        ] {
+            let mut config = named("CI");
+            config.default_branch = Some(branch.to_owned());
+            let err = config
+                .validate("config.toml")
+                .expect_err("malformed default branch must fail");
+            assert!(err.to_string().contains("malformed_branch"), "{err}");
+        }
+
+        let mut config = named("CI");
+        config.default_branch = Some("release/1.2".to_owned());
+        assert_eq!(config.validate("config.toml"), Ok(()));
     }
 }

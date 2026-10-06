@@ -166,7 +166,7 @@ fn tofu_metadata_and_cache_ids_derive() {
     use velnor_actions_tofu::TofuTaskKind;
     let task = tofu_proposal(TofuTaskKind::Validate);
     let meta = adapter_metadata(&task, &[]).expect("metadata");
-    assert_eq!(meta["unit_id"], serde_json::json!("root"));
+    assert_eq!(meta["unit_id"], serde_json::json!("dir-"));
     assert_eq!(meta["compile_driver"], serde_json::json!("tofu"));
     assert_eq!(meta["test_runner"], serde_json::json!("none"));
     let catalog = velnor_actions_mise::ToolCatalog::pinned();

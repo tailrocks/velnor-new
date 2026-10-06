@@ -7,6 +7,7 @@
 //! paths, or `run_key`.
 
 pub mod artifact;
+mod branch;
 pub mod shard;
 mod task_ids;
 
@@ -14,6 +15,7 @@ pub use artifact::{
     artifact_id_for_baseline, artifact_id_for_crate_job, artifact_id_for_final,
     artifact_id_for_matrix, artifact_id_for_plan, target_key, validate_artifact_id,
 };
+pub use branch::is_valid_branch_name;
 pub use shard::split_shard_suffix;
 
 use crate::canonical::validate_digest;

@@ -56,14 +56,14 @@ fn gape2_seed_rules_documented() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn rq211_lock_staleness_probe() -> Result<(), Box<dyn Error>> {
-    let script = read("scripts/check-freshness.sh")?;
+    let identity = read("crates/velnor-actions-freshness/src/dependencies/lock/identity.rs")?;
     assert!(
-        script.contains("lock-staleness"),
-        "script must probe staleness"
+        identity.contains("lock-staleness"),
+        "Rust owner must report staleness"
     );
     assert!(
-        script.contains("exact `=x.y.z` (VER-2.26)"),
-        "direct deps must declare exact versions"
+        identity.contains("exact `=x.y.z` (VER-2.26)"),
+        "Rust owner must enforce exact direct dependency versions"
     );
     let procedure = read("docs/implemented/update-procedure.md")?;
     assert!(

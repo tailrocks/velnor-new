@@ -1,7 +1,8 @@
 #!/bin/bash
 # GNU tar 1.35 stats and extracts with openat2. qemu-user returns ENOSYS and
-# glibc does not fall back. BusyBox tar works. actions/cache and dpkg pass
-# GNU-only flags, so accept those and run BusyBox.
+# glibc does not fall back. BusyBox tar works. Flags that change archive
+# bytes and are not implemented fail closed. -v is non-semantic: it does
+# not change archive bytes.
 set -euo pipefail
 
 mode=""
@@ -11,7 +12,9 @@ files_from=""
 gzip=0
 zstd=0
 program=""
-strip=""
+absolute=0
+posix=0
+legacy_first_arg=0
 excludes=()
 positionals=()
 args=("$@")
@@ -21,6 +24,7 @@ i=0
 if [ "${#args[@]}" -gt 0 ]; then
   first="${args[0]}"
   if [[ "$first" != -* && "$first" =~ ^[A-Za-z]+$ ]]; then
+    legacy_first_arg=1
     args=("-${first}" "${args[@]:1}")
   fi
 fi
@@ -39,17 +43,31 @@ need() {
 
 while [ "$i" -lt "${#args[@]}" ]; do
   arg="${args[$i]}"
+  arg_legacy=0
+  if [ "$i" -eq 0 ] && [ "$legacy_first_arg" -eq 1 ]; then
+    arg_legacy=1
+    legacy_first_arg=0
+  fi
   case "$arg" in
-    --posix | -P | --delay-directory-restore | --force-local | --no-same-owner | --no-same-permissions | --numeric-owner | --overwrite | --zstd)
-      if [ "$arg" = "--zstd" ]; then
-        zstd=1
-      fi
+    --absolute-names | -P)
+      absolute=1
+      ;;
+    --zstd)
+      zstd=1
+      ;;
+    --posix)
+      # Create already goes through the pax writer. Extract stays fail-closed.
+      posix=1
+      ;;
+    --delay-directory-restore | --force-local | --no-same-owner | --no-same-permissions | --numeric-owner | --overwrite)
+      die "unsupported option $arg"
       ;;
     --version)
       printf 'velnor-tar busybox\n'
       exit 0
       ;;
     --warning | --warning=*)
+      die "unsupported option $arg"
       ;;
     --exclude)
       need
@@ -71,13 +89,6 @@ while [ "$i" -lt "${#args[@]}" ]; do
       ;;
     --use-compress-program=*)
       program="${arg#--use-compress-program=}"
-      ;;
-    --strip-components)
-      need
-      strip="${args[$i]}"
-      ;;
-    --strip-components=*)
-      strip="${arg#--strip-components=}"
       ;;
     -C)
       need
@@ -109,6 +120,7 @@ while [ "$i" -lt "${#args[@]}" ]; do
       ;;
     -[^-]*)
       cluster="${arg#-}"
+      cluster_legacy="$arg_legacy"
       k=0
       while [ "$k" -lt "${#cluster}" ]; do
         flag="${cluster:$k:1}"
@@ -117,10 +129,21 @@ while [ "$i" -lt "${#args[@]}" ]; do
           x) mode=x ;;
           t) mode=t ;;
           z) gzip=1 ;;
-          j | J | Z | v | h | m | o | k | O | a | P) ;;
+          P) absolute=1 ;;
+          # -v is non-semantic. Verbose text is not part of the archive.
+          v) ;;
+          j | J | Z | h | m | o | k | O | a)
+            die "unsupported flag -$flag"
+            ;;
           f | C)
+            # In dashless old-style clusters, later flag letters stay flags.
+            # In dashed GNU clusters, -f/-C consume the complete remainder.
             rest="${cluster:$((k + 1))}"
-            if [ -n "$rest" ]; then
+            attached=0
+            if [ -n "$rest" ] && [ "$cluster_legacy" -eq 0 ]; then
+              attached=1
+            fi
+            if [ "$attached" -eq 1 ]; then
               value="$rest"
             else
               need
@@ -131,7 +154,9 @@ while [ "$i" -lt "${#args[@]}" ]; do
             else
               chdir="$value"
             fi
-            break
+            if [ "$attached" -eq 1 ]; then
+              break
+            fi
             ;;
           *)
             die "unsupported flag -$flag"
@@ -202,19 +227,13 @@ fi
 if [ -n "$chdir" ]; then
   bb+=(-C "$chdir")
 fi
-if [ -n "$strip" ]; then
-  bb+=(--strip-components "$strip")
-fi
-if [ "${#filtered[@]}" -gt 0 ]; then
+# A --files-from list can exceed ARG_MAX. Do not put it on the BusyBox argv.
+# tar-absolute.sh reads that list from the file instead.
+if [ -z "$files_from" ] && [ "${#filtered[@]}" -gt 0 ]; then
   bb+=("${filtered[@]}")
 fi
 
-if [ -n "$program" ]; then
-  if [ "$mode" = c ]; then
-    "${bb[@]}" | bash -c "$program" >"$archive"
-  else
-    bash -c "$program" <"$archive" | "${bb[@]}"
-  fi
-else
-  exec "${bb[@]}"
-fi
+_velnor_tar_here="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+# shellcheck disable=SC1091
+. "$_velnor_tar_here/tar-absolute.sh"
+finish_tar

@@ -46,7 +46,7 @@ fn extension_carries_schema_and_validates() {
     let graph = digest_b3(b"graph");
     let config = digest_b3(b"config");
     let ext = TofuTaskIdentityExtension::for_task(&inputs(
-        "root",
+        &velnor_actions_tofu::key_for_root(""),
         "",
         DigestSlot::AbsentProven("not_found:.terraform.lock.hcl".to_owned()),
         TofuTaskKind::Validate,
@@ -54,7 +54,7 @@ fn extension_carries_schema_and_validates() {
         &graph,
         &config,
     ));
-    assert_eq!(ext.unit_id, "root");
+    assert_eq!(ext.unit_id, "dir-");
     assert_eq!(ext.kind, "validate");
     assert_eq!(ext.task_kind, TofuTaskKind::Validate);
     assert_eq!(ext.driver, "tofu+none");
@@ -76,7 +76,7 @@ fn lock_slot_gates_reuse() {
     let graph = digest_b3(b"graph");
     let config = digest_b3(b"config");
     let known = TofuTaskIdentityExtension::for_task(&inputs(
-        "stacks/a",
+        &velnor_actions_tofu::key_for_root("stacks/a"),
         "stacks/a",
         DigestSlot::Known(digest_b3(b"lock")),
         TofuTaskKind::InitForValidate,
@@ -89,7 +89,7 @@ fn lock_slot_gates_reuse() {
     assert!(err.to_string().contains("tofu_reuse_disabled"), "{err}");
     assert_eq!(validate_tofu_extension(&known.to_stack_extension()), Ok(()));
     let unknown = TofuTaskIdentityExtension::for_task(&inputs(
-        "stacks/a",
+        &velnor_actions_tofu::key_for_root("stacks/a"),
         "stacks/a",
         DigestSlot::Unknown("unreadable".to_owned()),
         TofuTaskKind::InitForValidate,
@@ -116,7 +116,13 @@ fn init_and_validate_reuse_off_across_resolving_slots() {
             DigestSlot::AbsentProven("not_found:.terraform.lock.hcl".to_owned()),
         ] {
             let ext = TofuTaskIdentityExtension::for_task(&inputs(
-                "stacks/a", "stacks/a", slot, kind, &workspace, &graph, &config,
+                &velnor_actions_tofu::key_for_root("stacks/a"),
+                "stacks/a",
+                slot,
+                kind,
+                &workspace,
+                &graph,
+                &config,
             ));
             let err = ext.reuse_eligible().expect_err("reuse is OFF");
             assert!(
@@ -139,7 +145,7 @@ fn fmt_keeps_shared_qualification() {
         DigestSlot::AbsentProven("not_found:.terraform.lock.hcl".to_owned()),
     ] {
         let ext = TofuTaskIdentityExtension::for_task(&inputs(
-            "stacks/a",
+            &velnor_actions_tofu::key_for_root("stacks/a"),
             "stacks/a",
             slot,
             TofuTaskKind::Fmt,
@@ -150,7 +156,7 @@ fn fmt_keeps_shared_qualification() {
         assert!(ext.reuse_eligible().is_ok(), "fmt stays eligible");
     }
     let unknown = TofuTaskIdentityExtension::for_task(&inputs(
-        "stacks/a",
+        &velnor_actions_tofu::key_for_root("stacks/a"),
         "stacks/a",
         DigestSlot::Unknown("unreadable".to_owned()),
         TofuTaskKind::Fmt,
@@ -174,7 +180,7 @@ fn coverage_path_untouched_by_reuse_off() {
     let config = digest_b3(b"config");
     for kind in [TofuTaskKind::InitForValidate, TofuTaskKind::Validate] {
         let resolved = TofuTaskIdentityExtension::for_task(&inputs(
-            "stacks/a",
+            &velnor_actions_tofu::key_for_root("stacks/a"),
             "stacks/a",
             DigestSlot::Known(digest_b3(b"lock")),
             kind,
@@ -191,7 +197,7 @@ fn coverage_path_untouched_by_reuse_off() {
             "{kind:?} needs no conservative execution"
         );
         let unknown = TofuTaskIdentityExtension::for_task(&inputs(
-            "stacks/a",
+            &velnor_actions_tofu::key_for_root("stacks/a"),
             "stacks/a",
             DigestSlot::Unknown("unreadable".to_owned()),
             kind,
@@ -213,8 +219,9 @@ fn undeclared_reads_block_reuse() {
     let workspace = digest_b3(b"workspace");
     let graph = digest_b3(b"graph");
     let config = digest_b3(b"config");
+    let root_key = velnor_actions_tofu::key_for_root("");
     let mut with_reads = inputs(
-        "root",
+        &root_key,
         "",
         DigestSlot::Known(digest_b3(b"lock")),
         TofuTaskKind::Fmt,
@@ -259,7 +266,7 @@ fn proposal_bridge_derives_and_rejects_drift() {
     let graph = digest_b3(b"graph");
     let config = digest_b3(b"config");
     let bridge = TofuGroupExtensionInputs {
-        unit_id: "root",
+        unit_id: &task.identity.unit_id,
         workspace_id: &workspace,
         profile: "default",
         manifest: ".",
@@ -269,9 +276,12 @@ fn proposal_bridge_derives_and_rejects_drift() {
         lock_digest: DigestSlot::AbsentProven("not_found:.terraform.lock.hcl".to_owned()),
     };
     let ext = extension_for_proposal(&task, &bridge).expect("bridge derives");
-    assert_eq!(ext.unit_id, "root");
+    assert_eq!(ext.unit_id, "dir-");
     assert_eq!(ext.task_kind, TofuTaskKind::Validate);
     assert_eq!(validate_tofu_extension(&ext.to_stack_extension()), Ok(()));
+    let mut wrong_root = bridge.clone();
+    wrong_root.root = "different";
+    assert!(extension_for_proposal(&task, &wrong_root).is_err());
     let mut drifted = task.clone();
     drifted.task_kind = "plan".to_owned();
     assert!(extension_for_proposal(&drifted, &bridge).is_err());
@@ -279,7 +289,7 @@ fn proposal_bridge_derives_and_rejects_drift() {
     drifted.identity.compile_driver = "cargo".to_owned();
     let err = extension_for_proposal(&drifted, &bridge).expect_err("driver drift");
     assert!(err.to_string().contains("unknown_driver:cargo"), "{err}");
-    let mut drifted = task;
+    let mut drifted = task.clone();
     drifted.identity.test_runner = "cargo_test".to_owned();
     let err = extension_for_proposal(&drifted, &bridge).expect_err("runner drift");
     assert!(
@@ -299,8 +309,11 @@ fn entry_metadata_pins_tofu_shape() {
     };
     let task = propose_task(&group).expect("proposes");
     let meta = entry_metadata_for_task(&task, &[]).expect("metadata");
-    assert_eq!(meta["unit_id"], serde_json::json!("stacks/a"));
-    assert_eq!(meta["manifest_key"], serde_json::json!("stacks/a"));
+    assert_eq!(meta["unit_id"], serde_json::json!("dir-737461636b732f61"));
+    assert_eq!(
+        meta["manifest_key"],
+        serde_json::json!("dir-737461636b732f61")
+    );
     assert_eq!(meta["kind"], serde_json::json!("init"));
     assert_eq!(meta["compile_driver"], serde_json::json!("tofu"));
     assert_eq!(meta["test_runner"], serde_json::json!("none"));

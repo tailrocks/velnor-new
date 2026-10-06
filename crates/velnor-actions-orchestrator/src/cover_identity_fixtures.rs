@@ -18,12 +18,13 @@ use velnor_actions_mise::ToolCatalog;
 pub(super) fn plan_with(task_ids: &[&str]) -> Plan {
     let digest = digest_b3(b"digest");
     Plan {
-        schema: 1,
+        schema: Plan::SCHEMA,
         run_key: "local".to_owned(),
         plan_id: "plan-local".to_owned(),
         base: None,
         head: "head".to_owned(),
         event: WorkflowEvent::PullRequest,
+        qualification: None,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,
@@ -82,6 +83,7 @@ pub(super) fn manifest_with(entries: &[(&str, &str)]) -> BaselineManifest {
         compatibility_id: digest.clone(),
         artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
         artifact_name: name,
+        parent: None,
         expires_at_unix: None,
         tasks: entries
             .iter()
@@ -91,6 +93,7 @@ pub(super) fn manifest_with(entries: &[(&str, &str)]) -> BaselineManifest {
                 input_digest: digest.clone(),
                 closure_digest: (*closure).to_owned(),
                 proof_run_id: 7,
+                carried_from: None,
                 observed_run_id: 7,
                 external_data: None,
                 proof: None,
@@ -146,6 +149,7 @@ pub(super) fn discovery_with(task_ids: &[&str]) -> Discovery {
         },
         recommendations: Vec::new(),
         consumer_manifest_json: None,
+        consumer_manifest_stand_in: false,
         skipped_non_utf8: false,
         tofu_note: None,
         tofu_units: Vec::new(),

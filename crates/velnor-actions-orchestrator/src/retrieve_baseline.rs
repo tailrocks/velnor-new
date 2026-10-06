@@ -19,7 +19,12 @@ use std::path::Path;
 use velnor_actions_contract::{Plan, canonical_json_bytes};
 use velnor_actions_mise::ToolCatalog;
 
-use crate::cover::shard::{BaselineLookup, resolve_manifests};
+use crate::cover::shard::BaselineLookup;
+
+#[path = "retrieve_planned_baseline.rs"]
+mod planned;
+pub(crate) use planned::authentic_attempt;
+pub(crate) use planned::retrieve_planned_baseline_to;
 
 /// Fetch the plan's exact baseline into `<run-dir>/baseline.json`.
 ///
@@ -33,41 +38,27 @@ pub(crate) fn retrieve_baseline_to(
     plan: &serde_json::Value,
     repo: &str,
 ) -> bool {
+    retrieve_baseline_using(run_dir, plan, |_| {
+        retrieve_planned_baseline_to(catalog, run_dir, plan, repo)
+    })
+}
+
+/// Preserve staged evidence before invoking the single plan-pinned acquisition.
+fn retrieve_baseline_using(
+    run_dir: &Path,
+    plan: &serde_json::Value,
+    acquire: impl FnOnce(&Plan) -> bool,
+) -> bool {
     let Ok(typed) = serde_json::from_value::<Plan>(plan.clone()) else {
         return false;
     };
-    let Some(base) = typed.base.as_deref() else {
-        return false;
-    };
-    if !plan_has_covered(&typed) {
+    if typed.base.is_none() || !plan_has_covered(&typed) {
         return false;
     }
     if staged_baseline_present(run_dir) {
         return false;
     }
-    let Ok(name) = crate::cover_baseline::lookup_artifact_name(&typed, base) else {
-        return false;
-    };
-    let Some(branch) = default_branch_for(catalog, run_dir, repo) else {
-        return false;
-    };
-    let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
-    let found = resolve_manifests(
-        catalog,
-        run_dir,
-        base,
-        workflow,
-        &branch,
-        Some(&name),
-        Some(repo),
-    );
-    let Ok(found) = found else {
-        return false;
-    };
-    let Some(first) = found.into_iter().next() else {
-        return false;
-    };
-    stage_manifest(run_dir, &first)
+    acquire(&typed)
 }
 
 /// True when any obligation claims trusted-baseline coverage.
@@ -127,15 +118,8 @@ fn parse_default_branch(text: &str) -> Option<String> {
         .strip_prefix('"')
         .and_then(|inner| inner.strip_suffix('"'))
         .unwrap_or(trimmed);
-    let branch = unquoted.trim();
-    if branch.is_empty()
-        || branch == "HEAD"
-        || branch.contains("..")
-        || branch.chars().any(char::is_whitespace)
-        || ["://", "*", "$", ";", " ", "\""]
-            .iter()
-            .any(|token| branch.contains(token))
-    {
+    let branch = unquoted;
+    if !velnor_actions_contract::is_valid_branch_name(branch) {
         return None;
     }
     Some(branch.to_owned())
@@ -154,6 +138,9 @@ fn stage_manifest(run_dir: &Path, manifest: &crate::merge::BaselineManifest) -> 
     crate::exclusive_write::write_exclusive(&target, &bytes, "baseline_stage").is_ok()
 }
 
+#[cfg(test)]
+#[path = "retrieve_baseline_race_tests.rs"]
+mod race_tests;
 #[cfg(test)]
 #[path = "retrieve_baseline_tests.rs"]
 mod retrieve_baseline_tests;

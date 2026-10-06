@@ -10,14 +10,21 @@ use velnor_actions_mise::ToolCatalog;
 #[test]
 fn lookup_args_are_fixed_and_validated() {
     let base = "a".repeat(40);
-    let lookup =
-        BaselineLookup::new(&base, ".github/workflows/ci.yml", "testmain", "o/r").expect("valid");
+    let lookup = BaselineLookup::new(&base, ".github/workflows/ci.yml", "release/1.2", "o/r")
+        .expect("valid");
     let list: Vec<String> = lookup
         .list_args()
         .iter()
         .map(|a| a.to_string_lossy().into_owned())
         .collect();
     assert_eq!(list[0..5], ["run", "list", "--repo", "o/r", "--workflow"]);
+    assert_eq!(list[7], "release/1.2");
+    for branch in ["-main", "main;--repo=evil", "main\non: [push]"] {
+        assert!(
+            BaselineLookup::new(&base, "w", branch, "o/r").is_err(),
+            "malformed branch must fail before gh argv construction: {branch:?}"
+        );
+    }
     assert!(BaselineLookup::new("short", "w", "b", "o/r").is_err());
     assert!(BaselineLookup::new(&base, "https://evil/x", "b", "o/r").is_err());
     assert!(BaselineLookup::new(&base, "w", "b", "not-a-slug").is_err());
@@ -38,12 +45,22 @@ fn lookup_args_are_fixed_and_validated() {
         })
     );
     assert!(select_exact_base_run(&runs.to_string(), &"c".repeat(40), "t").is_err());
-    let args: Vec<String> = lookup
-        .artifacts_args(7)
-        .iter()
-        .map(|a| a.to_string_lossy().into_owned())
-        .collect();
-    assert_eq!(args, ["api", "repos/o/r/actions/runs/7/artifacts"]);
+    let artifact = velnor_actions_contract::artifact_id_for_baseline(
+        &base,
+        &velnor_actions_contract::digest_b3(b"compat"),
+    )
+    .expect("artifact name");
+    let args: Vec<String> =
+        crate::baseline_artifact_listing::artifacts_page_args(&lookup.repo, 7, &artifact, 1)
+            .expect("page args")
+            .iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+    assert_eq!(args[0], "api");
+    assert_eq!(
+        args[1],
+        format!("repos/o/r/actions/runs/7/artifacts?name={artifact}&per_page=100&page=1")
+    );
 }
 
 #[test]

@@ -15,13 +15,17 @@ mod p11_metadata;
 #[path = "fixtures/p11_toml.rs"]
 pub(crate) mod p11_toml;
 #[path = "fixtures/p12_harness.rs"]
-mod p12_harness;
+pub(crate) mod p12_harness;
+#[path = "fixtures/p12_http.rs"]
+mod p12_http;
 #[path = "fixtures/p12_live.rs"]
 mod p12_live;
 #[path = "fixtures/p12_manifest.rs"]
 mod p12_manifest;
 #[path = "fixtures/p12_mutants.rs"]
 mod p12_mutants;
+#[path = "fixtures/p12_pinparser.rs"]
+mod p12_pinparser;
 #[path = "fixtures/p12_policy.rs"]
 mod p12_policy;
 #[path = "fixtures/p12_policy_b.rs"]
@@ -30,13 +34,17 @@ mod p12_policy_b;
 mod p12_upstream;
 
 /// Expected members as (directory, package name).
-pub(crate) const MEMBERS: [(&str, &str); 8] = [
+pub(crate) const MEMBERS: [(&str, &str); 9] = [
     (
         "crates/velnor-actions-actionlint",
         "velnor-actions-actionlint",
     ),
     ("crates/velnor-actions-cli", "velnor-actions-cli"),
     ("crates/velnor-actions-contract", "velnor-actions-contract"),
+    (
+        "crates/velnor-actions-freshness",
+        "velnor-actions-freshness",
+    ),
     ("crates/velnor-actions-mise", "velnor-actions-mise"),
     (
         "crates/velnor-actions-orchestrator",
@@ -134,21 +142,23 @@ pub(crate) fn dep_key(line: &str) -> &str {
     line.split('=').next().unwrap_or(line).trim()
 }
 
-/// Count `#[test]` markers across a member's test files.
+/// Count `#[test]` markers across a member's source and test files.
 pub(crate) fn test_markers(dir: &str) -> Result<usize, Box<dyn Error>> {
     let mut count = 0;
-    for path in tree_files(&format!("{dir}/tests"), "rs")? {
-        count += std::fs::read_to_string(&path)?.matches("#[test]").count();
+    for area in ["src", "tests"] {
+        for path in tree_files(&format!("{dir}/{area}"), "rs")? {
+            count += std::fs::read_to_string(&path)?.matches("#[test]").count();
+        }
     }
     Ok(count)
 }
 
-/// True when `dep` is referenced from `dir` sources or tests.
+/// True when `dep` is referenced from `dir` sources, tests, or examples.
 pub(crate) fn dep_referenced(dir: &str, dep: &str) -> Result<bool, Box<dyn Error>> {
     let crate_name = dep.replace('-', "_");
     let import = format!("use {crate_name}");
     let path = format!("{crate_name}::");
-    for area in ["src", "tests"] {
+    for area in ["src", "tests", "examples"] {
         for file in tree_files(&format!("{dir}/{area}"), "rs")? {
             let body = std::fs::read_to_string(&file)?;
             if body.contains(&import) || body.contains(&path) {
@@ -160,11 +170,15 @@ pub(crate) fn dep_referenced(dir: &str, dep: &str) -> Result<bool, Box<dyn Error
 }
 
 #[test]
-fn workspace_lists_eight_product_crates_and_archive_guard() -> Result<(), Box<dyn Error>> {
+fn workspace_lists_all_registered_members() -> Result<(), Box<dyn Error>> {
     let root = read("Cargo.toml")?;
     let start = root.find("members = [").ok_or("members block")?;
     let block = root[start..].split(']').next().ok_or("members end")?;
-    assert_eq!(block.matches("crates/").count(), 9, "{block}");
+    assert_eq!(
+        block.matches("crates/").count(),
+        MEMBERS.len() + 1,
+        "{block}"
+    );
     for (dir, _) in MEMBERS {
         assert!(block.contains(&format!("\"{dir}\"")), "{dir} not listed");
     }

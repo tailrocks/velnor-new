@@ -1,0 +1,183 @@
+use std::error::Error;
+use std::fs;
+use std::io::Cursor;
+
+use super::{TestRoot, archive_file, identity};
+use crate::action_archive_seed::{ActionArchiveSeedError, ActionArchiveStore};
+
+#[test]
+fn missing_root_stays_missing() -> Result<(), Box<dyn Error>> {
+    let root = TestRoot::new()?;
+    let store_path = root.path().join("action-archives");
+
+    assert_eq!(
+        ActionArchiveStore::open_existing(&store_path).err(),
+        Some(ActionArchiveSeedError::MissingArchive)
+    );
+    assert!(!store_path.exists());
+    Ok(())
+}
+
+#[test]
+fn missing_required_child_stays_missing() -> Result<(), Box<dyn Error>> {
+    for child_name in ["objects", "leases"] {
+        let root = TestRoot::new()?;
+        let store_path = root.path().join("action-archives");
+        let store = ActionArchiveStore::open(&store_path)?;
+        let missing_child = store_path.join(child_name);
+        fs::remove_dir(&missing_child)?;
+
+        assert_eq!(
+            ActionArchiveStore::open_existing(&store_path).err(),
+            Some(ActionArchiveSeedError::StoreIntegrity)
+        );
+        assert!(!missing_child.exists());
+        drop(store);
+    }
+    Ok(())
+}
+
+#[test]
+fn rejects_a_root_outside_the_publisher_location() -> Result<(), Box<dyn Error>> {
+    let root = TestRoot::new()?;
+    let store_path = root.path().join("store");
+    ActionArchiveStore::open(&store_path)?;
+
+    assert_eq!(
+        ActionArchiveStore::open_existing(&store_path).err(),
+        Some(ActionArchiveSeedError::StoreIntegrity)
+    );
+    assert!(store_path.join("objects").is_dir());
+    Ok(())
+}
+
+#[test]
+fn rejects_wrong_root_type_without_mutation() -> Result<(), Box<dyn Error>> {
+    let root = TestRoot::new()?;
+    let store_path = root.path().join("action-archives");
+    fs::write(&store_path, b"keep")?;
+
+    assert_eq!(
+        ActionArchiveStore::open_existing(&store_path).err(),
+        Some(ActionArchiveSeedError::StoreIntegrity)
+    );
+    assert_eq!(fs::read(&store_path)?, b"keep");
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn rejects_symlinked_root_without_changing_target() -> Result<(), Box<dyn Error>> {
+    use std::os::unix::fs::symlink;
+
+    let root = TestRoot::new()?;
+    let store_path = root.path().join("action-archives");
+    let outside = root.path().join("outside-store");
+    let target_store = ActionArchiveStore::open(&outside)?;
+    let marker = outside.join("sentinel");
+    fs::write(&marker, b"preserve")?;
+    symlink(&outside, &store_path)?;
+
+    assert_eq!(
+        ActionArchiveStore::open_existing(&store_path).err(),
+        Some(ActionArchiveSeedError::StoreIntegrity)
+    );
+    assert_eq!(fs::read(&marker)?, b"preserve");
+    assert!(outside.join("objects").is_dir());
+    drop(target_store);
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn rejects_symlinked_child_without_changing_target() -> Result<(), Box<dyn Error>> {
+    use std::os::unix::fs::symlink;
+
+    let root = TestRoot::new()?;
+    let store_path = root.path().join("action-archives");
+    let store = ActionArchiveStore::open(&store_path)?;
+    let outside = root.path().join("outside-objects");
+    fs::create_dir(&outside)?;
+    let marker = outside.join("sentinel");
+    fs::write(&marker, b"preserve")?;
+    let objects = store_path.join("objects");
+    fs::remove_dir(&objects)?;
+    symlink(&outside, &objects)?;
+
+    assert_eq!(
+        ActionArchiveStore::open_existing(&store_path).err(),
+        Some(ActionArchiveSeedError::StoreIntegrity)
+    );
+    assert_eq!(fs::read(&marker)?, b"preserve");
+    assert!(objects.is_symlink());
+    drop(store);
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn rejects_a_foreign_owner_without_changing_the_store() -> Result<(), Box<dyn Error>> {
+    use std::os::unix::fs::MetadataExt;
+
+    let root = TestRoot::new()?;
+    let store_path = root.path().join("action-archives");
+    let store = ActionArchiveStore::open(&store_path)?;
+    let actual_owner = fs::metadata(root.path())?.uid();
+    let foreign_owner = actual_owner.wrapping_add(1);
+
+    assert_eq!(
+        ActionArchiveStore::open_existing_with_owner_for_test(&store_path, foreign_owner).err(),
+        Some(ActionArchiveSeedError::StoreIntegrity)
+    );
+    assert!(store_path.join("objects").is_dir());
+    assert!(store_path.join("leases").is_dir());
+    drop(store);
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn rejects_permissions_that_differ_from_the_publisher_contract() -> Result<(), Box<dyn Error>> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = TestRoot::new()?;
+    let store_path = root.path().join("action-archives");
+    let store = ActionArchiveStore::open(&store_path)?;
+    fs::set_permissions(&store_path, fs::Permissions::from_mode(0o750))?;
+
+    assert_eq!(
+        ActionArchiveStore::open_existing(&store_path).err(),
+        Some(ActionArchiveSeedError::StoreIntegrity)
+    );
+    assert_eq!(
+        fs::metadata(&store_path)?.permissions().mode() & 0o777,
+        0o750
+    );
+    drop(store);
+    Ok(())
+}
+
+#[test]
+fn publisher_store_and_lease_reopen_with_same_projection() -> Result<(), Box<dyn Error>> {
+    let root = TestRoot::new()?;
+    let store_path = root.path().join("action-archives");
+    let store = ActionArchiveStore::open(&store_path)?;
+    let bytes = archive_file("package/action.yml", b"name: action\n")?;
+    let action = identity(901, "ChainArgos/demo-action", &bytes);
+    store.publish(&action, Cursor::new(&bytes))?;
+    let lease = store.lease("restart-launch-1", 902, std::slice::from_ref(&action), None)?;
+    let generation_id = lease.generation_id().to_owned();
+    let original_cache_path = lease.cache_path().to_path_buf();
+    drop(lease);
+    drop(store);
+
+    let reopened = ActionArchiveStore::open_existing(&store_path)?;
+    let recovered = reopened.open_existing_lease("restart-launch-1", &generation_id)?;
+    assert_eq!(recovered.cache_path(), original_cache_path);
+    let archive = recovered
+        .cache_path()
+        .join("ChainArgos_demo-action")
+        .join(format!("{}.tar.gz", action.commit_sha));
+    assert_eq!(fs::read(archive)?, bytes);
+    Ok(())
+}
