@@ -7,7 +7,7 @@ use serde::Deserialize;
 use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig, MiseCheck, QualifiedTool};
 use velnor_actions_contract::{
     DiscoveryConfig, GeneratorValidation, PullRequestCachePolicy, ResourcesConfig,
-    TestShardingConfig, VelnorConfig, VerificationTask, WorkflowConfig, WorkflowPolicy,
+    TestShardingConfig, VelnorConfig, WorkflowConfig, WorkflowPolicy,
     WorkflowTask,
 };
 
