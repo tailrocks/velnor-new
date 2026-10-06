@@ -311,10 +311,13 @@ pub(crate) fn plan_uses_opentofu(discovery: &Discovery) -> bool {
         .any(|task| Stack::from_id(&task.stack_id) == Some(Stack::Tofu))
 }
 
+/// True when the plan job needs the Rust toolchain.
+///
 /// Rust inventory runs Cargo metadata for every detected Rust candidate,
-/// including ignored projects. Named checks with no Cargo candidates
-/// require only their declared tools.
-fn plan_uses_rust(discovery: &Discovery) -> bool {
+/// including ignored projects. Selected Rust evidence also qualifies:
+/// task proposals with the Rust stack. Named checks with no Cargo
+/// candidates require only their declared tools.
+pub(crate) fn plan_uses_rust(discovery: &Discovery) -> bool {
     !discovery.workspaces.is_empty()
         || discovery.statuses.iter().any(|status| {
             let project = match status {
@@ -323,6 +326,10 @@ fn plan_uses_rust(discovery: &Discovery) -> bool {
             };
             Stack::from_id(&project.stack_id) == Some(Stack::Rust)
         })
+        || discovery
+            .proposals
+            .iter()
+            .any(|task| Stack::from_id(&task.stack_id) == Some(Stack::Rust))
 }
 
 /// Typed `Prepare Rust components` step, shared by plan and task jobs.
