@@ -57,4 +57,18 @@ git commit \
 
 Inspect the resulting message with `git show -s --format=%B HEAD`. Review-only agents must not edit or commit. Never rewrite a commit already pushed to a shared branch to correct its trailers; make a new follow-up commit and describe any historical metadata correction truthfully.
 
-Before any local commit or API-submitted squash message, run `python3 scripts/validate-commit-trailers.py MESSAGE_FILE`. For local commits, pass `--check-local-identities` as well. The validator reads the exact trailer block above; after an API merge, independently verify the actual remote commit message and author metadata.
+Before any local commit or API-submitted squash message, validate the message file from the repository root. The command requires an absolute path to an existing file:
+
+```sh
+MESSAGE_FILE="$(realpath path/to/message.txt)"
+env \
+  VELNOR_INTERNAL_OP=repo-policy-v1 \
+  VELNOR_REPO_POLICY_ACTION=trailer-policy \
+  VELNOR_REPO_POLICY_ROOT="$PWD" \
+  VELNOR_REPO_POLICY_MESSAGE_PATH="$MESSAGE_FILE" \
+  cargo run --quiet --locked -p velnor-actions-cli --bin velnor-actions
+```
+
+For every local commit, add `VELNOR_REPO_POLICY_CHECK_LOCAL_IDENTITIES=1` to the `env` assignments. This required check also verifies that the effective Git author and committer identities match the repository-local identity above. API-submitted message validation may omit this setting. After an API merge, independently verify the actual remote commit message and author metadata.
+
+For manual checks, `cargo run --locked -p velnor-actions-cli --example validate_commit_trailers -- MESSAGE_FILE` (add `--check-local-identities` after the message path for local commits) runs the same trailer rules without the internal-op envelope.

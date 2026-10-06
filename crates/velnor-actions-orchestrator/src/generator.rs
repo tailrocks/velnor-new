@@ -6,6 +6,9 @@
 //! prove nothing and never validate evidence; no lock fill ever upgrades
 //! them, so a source build can never emit a release-pinned identity.
 
+use std::time::Instant;
+
+use crate::internal::phase_timing::PlanPhaseTimings;
 use crate::internal_plan::snapshot::UNRESOLVED_GENERATOR_SHA;
 
 /// Lookup-skipped reason for an unverifiable source-build generator.
@@ -26,10 +29,30 @@ pub(crate) fn is_source_build(sha: &str) -> bool {
 /// digest can never equal a 64-hex release pin. Recording the real
 /// SHA-256 makes executable-against-release comparison structural;
 /// provenance matches this value against the manifest pin exactly.
+#[cfg(test)]
 pub(crate) fn current_exe_sha256() -> Option<String> {
-    let exe = std::env::current_exe().ok()?;
-    let bytes = std::fs::read(exe).ok()?;
-    Some(sha256_hex(&bytes))
+    current_exe_sha256_with_phase_timings(None)
+}
+
+pub(crate) fn current_exe_sha256_with_phase_timings(
+    mut phases: Option<&mut PlanPhaseTimings>,
+) -> Option<String> {
+    if let Some(phases) = phases.as_deref_mut() {
+        phases.generator_sha_calls += 1;
+    }
+    let started = phases.as_ref().map(|_| Instant::now());
+    let digest = std::env::current_exe()
+        .ok()
+        .and_then(|exe| std::fs::read(exe).ok())
+        .map(|bytes| sha256_hex(&bytes));
+    #[expect(
+        clippy::needless_option_as_deref,
+        reason = "the original Option must remain available after this branch"
+    )]
+    if let (Some(phases), Some(started)) = (phases.as_deref_mut(), started) {
+        phases.generator_sha_us += started.elapsed().as_micros();
+    }
+    digest
 }
 
 /// SHA-256 hex over bytes via the pinned `sha2` crate.

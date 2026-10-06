@@ -53,6 +53,7 @@ async fn assert_assignment_is_held(journal: &Journal, message_id: i64) -> Result
         journal,
         &docker.docker,
         1,
+        super::rest(),
         false,
     )
     .await;

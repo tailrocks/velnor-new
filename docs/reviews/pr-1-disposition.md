@@ -11,11 +11,11 @@ Classes: **D** = accepted design change · **B** = confirmed bug · **V** = pend
 | R03 | No umbrella Policy/Workflow-Lint groupings (D) | renderer | pending | /tmp/pr1-p05p06-probe.md (merge_support_jobs) |
 | R04 | Alint bundles + edition-2024 enforcement (B) | alint | partial | P00 done in 1748495; P11-policy f63e04f: 5 bundles deduped (53 rules, check exit 0, 4 info-only), same-id gha-pin demote pinned in tests; literal edition rule REJECTED per adoption §4 (would fail edition.workspace=true); inheritance-aware enforcement pending |
 | R05 | Per-job cache restore; MBX setup before any Cargo cmd (B) | cache | pending | verification pending (hosted run) |
-| R06 | Single Mise cache identity; drop role duplicates (B) | cache | pending | verification pending (hosted run) |
+| R06 | Single Mise cache identity; drop role duplicates (B) | cache | pending | V2 payload/runtime-key tests; same-selector rendered keys; hosted cold/warm acceptance pending |
 | R07 | Measured Rust cache design choice (V) | cache | pending | verification pending (hosted run) |
-| R08 | No two caches archive the same paths (V) | cache | pending | verification pending (hosted run) |
-| R09 | Shared-cache single-writer policy (V) | cache | pending | verification pending (hosted run) |
-| R10 | Cache paths = real Cargo home; offline on restore (B) | cache | pending | /tmp/pr1-p07p10-probe.md (toolchain homes) |
+| R08 | No two caches archive the same paths (V) | cache | pending | source/tool path-ownership tests; hosted cache evidence pending |
+| R09 | Shared-cache single-writer policy (V) | cache | pending | V2 writer-election and emitted-YAML tests; controlled hosted writer run pending |
+| R10 | Cache paths = real Cargo home; offline on restore (B) | cache | pending | `/tmp/pr1-p07p10-probe.md`; owned-home and offline miss/fetch tests |
 | R11 | Measured sizes/hits/durations/eviction, quota headroom (V) | cache | pending | verification pending (hosted run) |
 | R12 | Warm run reuses registry/artifacts; only deltas rebuild (V) | cache | pending | verification pending (hosted run) |
 | R13 | PR-scoped cache save; fork PRs read-only (V) | cache | pending | verification pending (hosted run) |

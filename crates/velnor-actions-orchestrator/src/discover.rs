@@ -21,7 +21,8 @@ use velnor_actions_rust::{
 use crate::OrchestratorError;
 use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 use crate::discover_index::build_file_index;
-use crate::inventory::{qualify_workspaces, run_inventories};
+use crate::internal::phase_timing::PlanPhaseTimings;
+use crate::inventory::{qualify_workspaces, run_inventories, run_inventories_with_phase_timings};
 use crate::recommendations::collect_recommendations;
 #[path = "consumer_manifest.rs"]
 mod consumer_manifest;
@@ -62,8 +63,8 @@ pub struct Discovery {
     pub recommendations: Vec<String>,
     /// Release-manifest text from the committed repo file.
     ///
-    /// Absent files remain `None` in every build mode so consumer
-    /// generation fails closed with `consumer_requires_release_install`.
+    /// Only `ConsumerV1` reads it; absent files remain `None` so consumer
+    /// acquisition fails closed with `consumer_requires_release_install`.
     pub consumer_manifest_json: Option<String>,
     /// Whether non-UTF-8 names require broad selection.
     pub skipped_non_utf8: bool,
@@ -83,6 +84,22 @@ pub struct Discovery {
 /// Returns discovery, detection, inventory, profile, preparation, or
 /// contract errors when any stage fails.
 pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, OrchestratorError> {
+    discover_inner(root, config, None)
+}
+
+pub(crate) fn discover_with_phase_timings(
+    root: &Path,
+    config: &VelnorConfig,
+    phases: &mut PlanPhaseTimings,
+) -> Result<Discovery, OrchestratorError> {
+    discover_inner(root, config, Some(phases))
+}
+
+fn discover_inner(
+    root: &Path,
+    config: &VelnorConfig,
+    mut phases: Option<&mut PlanPhaseTimings>,
+) -> Result<Discovery, OrchestratorError> {
     let (index, skipped_non_utf8) = build_file_index(root, &config.discovery.exclude)?;
     let mut candidates = Vec::new();
     let mut previous = "";
@@ -101,8 +118,17 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         problem: err.to_string(),
     })?;
     let initial = apply_stack_ignores(projects, &config.stacks.ignore);
-    let ((outcomes, inventories), tofu_units) =
-        run_inventories(root, &candidates, index.files(), &mut reads)?;
+    #[expect(
+        clippy::needless_option_as_deref,
+        reason = "the original Option must remain available after this branch"
+    )]
+    let inventory_result = match phases.as_deref_mut() {
+        Some(phases) => {
+            run_inventories_with_phase_timings(root, &candidates, index.files(), &mut reads, phases)
+        }
+        None => run_inventories(root, &candidates, index.files(), &mut reads),
+    };
+    let ((outcomes, inventories), tofu_units) = inventory_result?;
     let statuses = check_candidate_outcomes(initial, &outcomes).map_err(|err| {
         OrchestratorError::Detection {
             problem: err.to_string(),
@@ -218,7 +244,7 @@ fn derive_all(
         .clone()
         .unwrap_or_else(RustStackConfig::default_config);
     let explicit_fmt = index.contains("rustfmt.toml") || index.contains(".rustfmt.toml");
-    let union = crate::derive_groups::declared_union(workspaces, index);
+    let union = crate::derive_groups::declared_union(workspaces, index, config.workflow.policy);
     let mut groups = Vec::new();
     let mut fallbacks = Vec::new();
     let mut archives = ArchivePlan::new();

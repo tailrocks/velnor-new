@@ -43,6 +43,20 @@ MUST use explicit stack names such as `velnor-actions-node`; each adapter
 contains only its named stack. Alint is the sole repository-structure linter
 and runs as a separate GitHub Actions job.
 
+The workspace also contains `velnor-actions-freshness` and
+`velnor-archive-guard` as repository-only maintenance members. Both are
+outside the eight-product V1 graph and do not enter V1 Rust task derivation.
+The orchestrator does not link either helper as a library. Only the CLI's
+private maintenance gate consumes
+freshness at runtime; repository scripts provision the archive guard. Under
+`VelnorRepositoryV1`, the existing named-Mise-check contract emits one
+independent `maintenance-helpers` Required check for both packages' Rust test
+suites. That repository-quality check stays outside the product crate matrix;
+ordinary ConsumerV1 configurations do not declare this repository-owned
+check. Both manifests declare
+the typed `repository-maintenance` task owner; package names and paths alone
+never grant the task-derivation exclusion.
+
 | Crate | Owns | Must not own |
 |---|---|---|
 | `velnor-actions-contract` | Stack-neutral generator contracts: stack/component IDs, task graph, workflow IR, cache identities, generated-file records, reports, recommendations | Rust/Cargo, Mise, process, filesystem, YAML implementation, CLI, or generic application models |
@@ -72,12 +86,15 @@ remains reserved for a separate future product.
 Adapters exchange typed requests and stack-neutral results through the contract
 crate. The Rust adapter requests Cargo metadata; the orchestrator asks Mise to
 execute it with exact pins, then passes the JSON back to Rust for validation.
-The Rust adapter never launches processes or constructs Mise commands. Mise
-owns the fixed subprocess wrapper for Git, Cargo/MBX, Nextest, GitHub CLI, and
-policy tools. The orchestrator supplies requests and schedules calls; it never
-builds shell commands. Rust alone inspects `rust-toolchain.toml`; Mise alone
-inspects `mise.toml` and `mise.lock`. The renderer receives validated command
-references and generic workflow IR; it never emits Mise syntax.
+The Rust adapter never launches processes or constructs Mise commands. Within
+V1 planning, Mise owns the fixed subprocess wrapper for Git, Cargo/MBX, Nextest,
+GitHub CLI, and policy tools; Rust alone inspects `rust-toolchain.toml`, while
+Mise inspects `mise.toml` and `mise.lock`. Repository-only freshness operations
+may inspect Velnor-owned Cargo/Mise sources and launch bounded maintenance
+probes behind the private gate; their results MUST NOT enter V1 planning. The
+orchestrator supplies product requests and schedules calls; it never builds
+shell commands. The renderer receives validated command references and generic
+workflow IR; it never emits Mise syntax.
 
 All Velnor product Rust package roots MUST live under `crates/`. The root
 manifest MUST be a virtual workspace with explicit members.
@@ -107,6 +124,7 @@ crates/velnor-actions-actionlint/
 crates/velnor-actions-workflow-renderer/
 crates/velnor-actions-orchestrator/
 crates/velnor-actions-cli/
+crates/velnor-actions-freshness/  # repository-only support, outside V1 product graph
 fixtures/rust-workspaces/
 .github/actionlint.yaml
 .github/workflows/ci.yml

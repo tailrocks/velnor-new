@@ -9,6 +9,9 @@ use super::{HOSTED_SUFFIX, SCALE_SUFFIX, share_lanes};
 use crate::RenderError;
 use crate::render::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext};
 
+#[path = "lane_share_cache_tests.rs"]
+mod cache_tests;
+
 const HOSTED_RUNS: &str = "ubuntu-26.04";
 const LOGICAL_JOBS: usize = 21;
 
@@ -106,8 +109,7 @@ pub(super) fn render_jobs(
 ) -> Result<String, crate::RenderError> {
     let document =
         crate::document::workflow_to_yaml(ir, shared, ctx, &std::collections::BTreeSet::new())?;
-    let quoted = crate::yaml::quote_run_values_in_yaml(document);
-    crate::marker::with_marker(&ctx.generator_version, &crate::yaml::render_yaml(&quoted))
+    crate::marker::with_marker(&ctx.generator_version, &crate::yaml::render_yaml(&document))
 }
 
 pub(super) fn paired(steps: &[Step]) -> BTreeMap<String, Job> {
@@ -267,7 +269,12 @@ fn elected_save_stays_on_the_winner_job() {
         .first()
         .expect("checkout")
         .clone();
-    let save = crate::cache_steps::tools_save_step("mise-v1").expect("save");
+    let save = crate::cache_steps::tools_cache_step(
+        false,
+        crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION,
+        Some(crate::cache_p08::tools_cache_save_condition()),
+    )
+    .expect("save");
     jobs.get_mut("rust-0__hosted")
         .expect("hosted")
         .steps

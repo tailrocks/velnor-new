@@ -163,9 +163,25 @@ module dirs never auto-promoted to roots; cycles/missing-target = error;
 unknown/dynamic/external → select ALL roots with recorded reason.
 
 Task kinds `Fmt`/`InitForValidate`/`Validate`; IDs
-`stack/tofu/root/<kind>/<config>`; argv with `-chdir` FIRST; Fmt independent,
-Validate depends on same-root Init (shared private `TF_DATA_DIR`, one init
-per root per attempt); one fmt invocation per non-overlapping scope.
+`stack/tofu/dir-<hex>/<kind>/<config>`, where `<hex>` is lowercase hex of the
+exact normalized root's UTF-8 bytes. The empty repository root is `dir-`;
+`root` is the distinct key `dir-726f6f74`. The decoder accepts only canonical
+keys and normalized UTF-8 paths. `unit_key`/`unit_id` use this single-segment
+key; `project_root`, `unit_path`, and display keep `.` for the repository root
+or the raw normalized subdirectory. No legacy `root` alias is accepted.
+
+Root-bearing proposals are admitted only when task ID, key/ID, displayed path,
+component ID, payload, reads, and same-root dependency agree; extra gates are
+rejected. Before a provider cache is attached to one crate job, every Tofu
+obligation must decode to the same exact root and configuration, task kinds
+must be unique, and Validate must gate on Init when Init is present. An empty
+Tofu obligation set, malformed key, mixed root/configuration, duplicate kind,
+or mismatched gate fails closed. Partial Tofu caller closures are valid; Rust
+obligations remain part of their own jobs and never supply the Tofu cache root.
+
+Argv has `-chdir` FIRST; Fmt is independent, Validate depends on same-root Init
+(shared private `TF_DATA_DIR`, one init per root per attempt); one fmt
+invocation per non-overlapping scope.
 
 ### 4.2 Security MUSTs H1–H6 + M1–M6 (WS6)
 
@@ -201,8 +217,11 @@ per root per attempt); one fmt invocation per non-overlapping scope.
   providers (tested); record module source/content identity (no reuse yet).
 - **M3:** fail-closed merge for every report defect incl. missing plan +
   empty matrix on tofu-affecting PRs; keep `if-no-files-found:error`.
-- **M4:** typed-constructor CLI config: `plugin_cache_dir` + `disable_checkpoint`
-  only; no credentials/helpers/overrides/mirrors; controlled `HOME`.
+- **M4:** typed-constructor CLI config includes `plugin_cache_dir`,
+  `disable_checkpoint`, and explicit `provider_installation { direct {} }`;
+  direct disables implied filesystem mirrors. No credentials/helpers/overrides
+  or mirror blocks; controlled `HOME`. The cache path is non-empty, HCL-safe,
+  and at most 1024 bytes.
 - **M5:** tofu job steps contain no `secrets.*`/`github.token`, no `gh` tool
   (generator asserts; YAML grep test).
 - **M6:** CI mise invocations use `--no-config --no-env --no-hooks` +
@@ -237,17 +256,28 @@ Per-role tools: pure-tofu plan = opentofu + actionlint/shellcheck/zizmor
 (no Rust/MBX/Nextest/components/Cargo fetch); `tofu-<root>` jobs = opentofu
 only + provider-cache restore; actionlint/required/validators unchanged;
 mixed = union; removal is a distinct behavior-change commit.
+Per-root filesystem paths use the fixed locator `b3-` plus 64 lowercase
+hexadecimal digits (67 bytes). It is the BLAKE3 digest of the domain-separated
+canonical root key `tofu-private-root-v1\n<dir-key>`. A generation-local
+registry rejects any locator mapped to distinct exact root bytes. The raw root
+never appears in these path segments; `TF_DATA_DIR` and the plugin cache use
+the same locator under separate bases.
+
 Provider cache: closed layer `tofu-providers`, key
-`velnor-v1-tofu-providers-<target>-<tofu>-<root-slug>-${{hashFiles(...)}}`
-(≤512 B), no trust-namespace segment in static keys: event trust is
+`velnor-v1-tofu-providers-<target>-<tofu>-<root-locator>-${{hashFiles('<root>/.terraform.lock.hcl')}}`
+(≤512 bytes), with the exact root-specific `.terraform.lock.hcl` hashed
+(`.terraform.lock.hcl` at the repository root; `<root>/.terraform.lock.hcl`
+for a configured subdirectory); no
+trust-namespace segment in static keys: event trust is
 unknowable at generation (like the rust sources key), so isolation
 holds via exact-key restore, push-gated saves, and runner branch
 scoping, and every tofu hit still faces lock-verified readonly init
 plus mandatory validate; transport = plugin-cache dir
-only (job-private `$RUNNER_TEMP/velnor/tofu-cache/<slug>`), restore before
+only (job-private `$RUNNER_TEMP/velnor/tofu-cache/<root-locator>`), restore before
 init; per-root job saves only its own root-scoped key (plan never inits so
 never saves); push-gated trusted save; restore still faces readonly init;
-hit MUST still run init+validate (T23). Compiler reuse stays under
+hit MUST still run init+validate (T23). State, plans, and credentials remain
+outside the provider cache. Compiler reuse stays under
 `rust-quality-contract.md` §3 (MBX profiles); this layer caches provider
 artifacts only. Because `actions/cache/restore` may extract a prefix match
 even when `restore-keys` is omitted, the generated provider composite MUST
@@ -286,7 +316,7 @@ shellcheck→zizmor→shellcheck-`run:`-bodies; tofu steps as single-line
 scalars; no `setup-opentofu` (Mise only). Read-only `plan`/`generate`
 proven by before/after snapshots (no `.terraform`/lock/tool/source mutation,
 no init/network during discovery). Verification detail is owned by
-`rust-quality-contract.md` §9; per-root jobs and tofu step order are the
+`rust-verification-contract.md`; per-root jobs and tofu step order are the
 adoption delta.
 
 ### 4.6 E2E qualification (WS7 Q0–Q7)

@@ -13,8 +13,8 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 use velnor_actions_contract::{
     FinalCounts, FinalReport, FinalStatus, MatrixReport, ObligationDecision, Plan, PlanMatrix,
-    RequiredJobResult, TaskReport, WorkflowEvent, final_report_id_for_run, parse_strict_json,
-    validate_run_key,
+    QualificationDispatch, RequiredJobResult, TaskReport, WorkflowEvent, final_report_id_for_run,
+    parse_strict_json, validate_run_key,
 };
 
 use self::merge_checks::{
@@ -44,6 +44,9 @@ pub(crate) struct MergeRequest {
     /// stronger event fails closed instead of inheriting its stamp).
     #[serde(default)]
     actual_event: Option<WorkflowEvent>,
+    /// Qualification provenance recaptured from the actual merge runner.
+    #[serde(default)]
+    actual_qualification: Option<QualificationDispatch>,
     /// Head-bound candidate attestation; required in candidate mode.
     #[serde(default)]
     candidate_attestation: Option<CandidateAttestation>,
@@ -179,7 +182,7 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
     let obligations = plan_digests(plan);
     let partition = partition_reports(request, &entries, &mut signals, &mut miss_reasons);
     let expected = expected_task_reports(plan, &request.run_key);
-    let tasks = partition_task_reports(request, &expected, &mut signals, &mut miss_reasons);
+    let tasks = partition_task_reports(plan, request, &expected, &mut signals, &mut miss_reasons);
     let mut fold = Fold::default();
     let mut seen_task_reports = BTreeSet::new();
     let mut downloaded = Vec::new();

@@ -19,6 +19,10 @@ use crate::{
     yaml::Yaml,
 };
 
+#[path = "matrix_qualification.rs"]
+mod qualification;
+use qualification::QUALIFICATION_OUTPUTS;
+
 /// Matrix marker: producer job backing `needs.<job>.outputs.<output>`.
 pub const MATRIX_NEEDS_JOB_ENV: &str = "VELNOR_MATRIX_NEEDS_JOB";
 /// Matrix marker: producer output name consumed via `fromJSON`.
@@ -209,7 +213,10 @@ pub(crate) fn attach_task_matrix(
         output.clone(),
         Yaml::str(format!("${{{{ steps.{PLAN_STEP_ID}.outputs.{output} }}}}")),
     )];
-    for name in [PLAN_ID_OUTPUT, RUN_KEY_OUTPUT, COVERED_TASKS_OUTPUT] {
+    for name in [PLAN_ID_OUTPUT, RUN_KEY_OUTPUT, COVERED_TASKS_OUTPUT]
+        .into_iter()
+        .chain(QUALIFICATION_OUTPUTS)
+    {
         if name != output {
             outputs.push((
                 name.to_owned(),
@@ -273,17 +280,16 @@ pub(crate) fn attach_plan_outputs(document: &mut Yaml) -> Result<(), RenderError
     if !has_step_id(jobs, PLAN_JOB_ID, PLAN_STEP_ID) {
         return Ok(());
     }
-    insert_job_key(
-        jobs,
-        PLAN_JOB_ID,
-        "outputs",
-        Yaml::Map(vec![(
-            COVERED_TASKS_OUTPUT.to_owned(),
-            Yaml::str(format!(
-                "${{{{ steps.{PLAN_STEP_ID}.outputs.{COVERED_TASKS_OUTPUT} }}}}"
-            )),
-        )]),
-    )
+    let outputs = std::iter::once(COVERED_TASKS_OUTPUT)
+        .chain(QUALIFICATION_OUTPUTS)
+        .map(|name| {
+            (
+                name.to_owned(),
+                Yaml::str(format!("${{{{ steps.{PLAN_STEP_ID}.outputs.{name} }}}}")),
+            )
+        })
+        .collect();
+    insert_job_key(jobs, PLAN_JOB_ID, "outputs", Yaml::Map(outputs))
 }
 
 /// Insert a job key directly before its `steps` entry.

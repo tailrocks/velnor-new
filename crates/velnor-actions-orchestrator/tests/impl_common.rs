@@ -1,5 +1,8 @@
 //! Shared fixtures and helpers for orchestrator integration tests.
 
+#[path = "../../test_support/git_fixture.rs"]
+pub(crate) mod git_fixture;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -135,10 +138,7 @@ pub(crate) fn make_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Err
     git(&["config", "commit.gpgsign", "false"], root)?;
     fs::create_dir_all(root.join(".velnor"))?;
     fs::write(root.join(".velnor/config.toml"), config)?;
-    fs::write(
-        root.join(".velnor/release-manifest.json"),
-        fixture_manifest_json(),
-    )?;
+    install_fixture_release_manifest(root)?;
     fs::write(
         root.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
@@ -169,7 +169,7 @@ pub(crate) fn write_nextest_task(root: &Path) -> TestResult {
 
 /// Run git with inherited failure context.
 pub(crate) fn git(args: &[&str], cwd: &Path) -> TestResult {
-    let status = StdCommand::new("git")
+    let status = git_fixture::command(cwd)?
         .args(args)
         .current_dir(cwd)
         .status()?;
@@ -192,7 +192,7 @@ pub(crate) fn anchor_id() -> String {
 
 /// Single git stdout line.
 pub(crate) fn git_line(args: &[&str], cwd: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    let output = StdCommand::new("git")
+    let output = git_fixture::command(cwd)?
         .args(args)
         .current_dir(cwd)
         .output()?;

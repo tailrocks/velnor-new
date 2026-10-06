@@ -20,6 +20,7 @@ mod launch_blocking;
 mod listen;
 mod plist;
 mod readiness;
+mod readiness_scan;
 mod reconcile;
 mod scale_set;
 mod stage;
@@ -44,8 +45,9 @@ pub use launch_blocking::{ListenFault, launch_blocking};
 pub use listen::{SessionCensus, SessionProbe, probe_once, queue_path, session_census};
 pub use plist::{keychain_import_argv, launch_agent_plist};
 pub use readiness::{Readiness, doctor_json, readiness_for_empty, status_json};
+pub use readiness_scan::{READINESS_BUDGET, controller_readiness};
 pub use reconcile::{
-    IntentRow, Reconcile, ReleaseFact, before_advertise, occupies, release_permitted,
+    IntentRow, LaunchPhase, Reconcile, ReleaseFact, before_advertise, occupies, release_permitted,
 };
 pub use scale_set::{EnsureError, EnsuredSet, ensure_product_scale_set, product_runner_groups};
 pub use stage::{PairStop, PartialPair, remove_recorded, start_pair_until};
@@ -67,6 +69,10 @@ mod https_tests;
 #[cfg(test)]
 mod ipc_tests;
 #[cfg(test)]
+mod journal_launch_phase_tests;
+#[cfg(test)]
+mod journal_schema_tests;
+#[cfg(test)]
 mod journal_tests;
 #[cfg(test)]
 mod journal_worker_volume_tests;
@@ -80,6 +86,10 @@ mod launch_capacity_tests;
 mod launch_harness;
 #[cfg(test)]
 mod launch_idless_tests;
+#[cfg(test)]
+mod launch_scale_conflict_tests;
+#[cfg(test)]
+mod launch_scale_redelivery_tests;
 #[cfg(test)]
 mod launch_scale_tests;
 #[cfg(test)]

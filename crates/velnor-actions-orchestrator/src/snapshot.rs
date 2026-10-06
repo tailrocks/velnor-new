@@ -3,16 +3,16 @@
 //! Declared via `#[path]` from `internal_plan.rs` (no `lib.rs` edit).
 //! Centralizes canonical serialization, strict parsing, checkout-path
 //! normalization, Cargo ID normalization, generator markers, the single
-//! immutable [`ExecutionSnapshot`] per analysis, platform inputs with
-//! runner-image evidence, SHA-256 executable verification, and the
+//! immutable [`ExecutionSnapshot`] per analysis, platform identity and
+//! planned-platform target resolution, SHA-256 executable verification, and the
 //! canonical-schema migration gate. Group identities live in
 //! [`super::identities`], per-task closures in [`super::closure`];
 //! unknown inputs are explicit states, never silent `None`s.
 
 use serde::Serialize;
-use velnor_actions_contract::cachekey::{PlatformInputs, platform_id};
 use velnor_actions_contract::{
-    ContractError, UNOBSERVED_IMAGE_VALUE, canonical_json_bytes, digest_b3, parse_strict_json,
+    ContractError, PlannedPlatform, ProposedTask, Stack, canonical_json_bytes, digest_b3,
+    parse_strict_json,
 };
 
 /// Explicit unknown marker for unverifiable archive sources.
@@ -78,45 +78,6 @@ pub(crate) fn check_canonical_version(found: u32) -> Result<(), ContractError> {
     }
 }
 
-/// Platform inputs for one runner label plus execution target.
-///
-/// The label is recorded verbatim in `runs_on` (a genuine request
-/// input); image evidence is explicitly unobserved. The generator
-/// never sees the provisioned runner, so label text is never split
-/// into `ImageOS`/`ImageVersion` facts: real values arrive only as
-/// observed provisioner evidence, and until then the digest commits
-/// to the label plus the target triple, nothing more (P03-4).
-/// OS/arch come from the release target mapping.
-///
-/// # Errors
-///
-/// Returns [`ContractError`] for targets outside the supported set;
-/// unknown targets never silently take the build host's arch/OS.
-pub(crate) fn platform_inputs_for(
-    label: &str,
-    target: &str,
-) -> Result<PlatformInputs, ContractError> {
-    let (arch, os_name) = match target {
-        "x86_64-unknown-linux-gnu" => ("x86_64", "linux"),
-        "aarch64-apple-darwin" => ("aarch64", "macos"),
-        "x86_64-apple-darwin" => ("x86_64", "macos"),
-        _ => {
-            return Err(ContractError::identity(
-                "target",
-                format!("unsupported_target:{target}"),
-            ));
-        }
-    };
-    Ok(PlatformInputs {
-        os: os_name.to_owned(),
-        arch: arch.to_owned(),
-        runs_on: label.to_owned(),
-        image_os: UNOBSERVED_IMAGE_VALUE.to_owned(),
-        image_version: UNOBSERVED_IMAGE_VALUE.to_owned(),
-        target: target.to_owned(),
-    })
-}
-
 /// Platform identity digest over runner image evidence (P03-4).
 ///
 /// # Errors
@@ -124,8 +85,60 @@ pub(crate) fn platform_inputs_for(
 /// Returns [`ContractError`] for unsupported targets and invalid
 /// platform inputs; no fallback digest is ever substituted.
 pub(crate) fn platform_id_for(label: &str, target: &str) -> Result<String, ContractError> {
-    let inputs = platform_inputs_for(label, target)?;
-    platform_id(&inputs)
+    Ok(PlannedPlatform::new(label, target)?.platform_id)
+}
+
+/// Resolve a task's concrete target without inferring facts from host state.
+///
+/// Mise checks use their own `runner_profile` label; every other stack pins
+/// the Linux x64 host. Mirrors [`super::identities::platform_id_for_group`]
+/// target selection so planned platforms commit to the executed target.
+/// # Errors
+pub(crate) fn platform_target_for_group(
+    label: &str,
+    task: &ProposedTask,
+) -> Result<String, ContractError> {
+    let stack = Stack::require_known(&task.stack_id)?;
+    if stack == Stack::Mise {
+        let label = task.runner_profile.as_str();
+        if let Some(host) = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
+            .map(velnor_actions_contract::ReleaseTarget::triple)
+            && host != task.identity.target
+        {
+            return Err(ContractError::identity(
+                "runner_label",
+                "runner_target_mismatch",
+            ));
+        }
+        return Ok(task.identity.target.clone());
+    }
+    let host = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
+        .filter(|target| *target == velnor_actions_contract::ReleaseTarget::LinuxX86_64)
+        .map(velnor_actions_contract::ReleaseTarget::triple)
+        .ok_or_else(|| {
+            ContractError::identity(
+                "runner_label",
+                format!("unsupported_target_for_runner:{label}"),
+            )
+        })?;
+    let target = if task.identity.target == "host" {
+        host.to_owned()
+    } else {
+        task.identity.target.clone()
+    };
+    if target != host {
+        // Unknown triples report `unsupported_target` before drift: the
+        // identity computation historically failed first, and callers pin
+        // that precedence.
+        if !velnor_actions_contract::is_supported_target(&target) {
+            return Err(ContractError::identity(
+                "target",
+                format!("unsupported_target:{target}"),
+            ));
+        }
+        return Err(ContractError::identity("target", "runner_target_mismatch"));
+    }
+    Ok(target)
 }
 
 /// One immutable execution snapshot per analysis (P03-1).
@@ -238,13 +251,28 @@ mod tests {
 
     #[test]
     fn platform_image_evidence_is_unobserved_not_label_split() {
-        for label in ["ubuntu-26.04", "ubuntu-24.04", "self-hosted"] {
-            let inputs = platform_inputs_for(label, "x86_64-unknown-linux-gnu").expect("platform");
+        for label in [
+            "ubuntu-26.04",
+            "ubuntu-24.04",
+            "scale-set:velnor+ubuntu-26.04-scale-set",
+        ] {
+            let inputs = PlannedPlatform::new(label, "x86_64-unknown-linux-gnu")
+                .expect("platform")
+                .inputs()
+                .expect("inputs");
             assert_eq!(inputs.runs_on, label);
-            assert_eq!(inputs.image_os, UNOBSERVED_IMAGE_VALUE, "{label}");
-            assert_eq!(inputs.image_version, UNOBSERVED_IMAGE_VALUE, "{label}");
+            assert_eq!(
+                inputs.image_os,
+                velnor_actions_contract::UNOBSERVED_IMAGE_VALUE,
+                "{label}"
+            );
+            assert_eq!(
+                inputs.image_version,
+                velnor_actions_contract::UNOBSERVED_IMAGE_VALUE,
+                "{label}"
+            );
         }
-        let fabricated = PlatformInputs {
+        let fabricated = velnor_actions_contract::cachekey::PlatformInputs {
             os: "linux".to_owned(),
             arch: "x86_64".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
@@ -253,7 +281,7 @@ mod tests {
             target: "x86_64-unknown-linux-gnu".to_owned(),
         };
         let honest = platform_id_for("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("id");
-        let fake = platform_id(&fabricated).expect("id");
+        let fake = velnor_actions_contract::cachekey::platform_id(&fabricated).expect("id");
         assert_ne!(honest, fake);
     }
 

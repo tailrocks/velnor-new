@@ -1,7 +1,7 @@
 //! Merge gate cases: round-trip, precedence, no-work (tamper: `impl_merge_tamper`).
 
 use velnor_actions_contract::{
-    FinalReport, FinalStatus, MatrixReport, MatrixStatus, Plan, TaskStatus,
+    FinalReport, FinalStatus, MatrixReport, MatrixStatus, Plan, TaskReport, TaskStatus,
 };
 use velnor_actions_orchestrator::merge_internal;
 
@@ -85,10 +85,14 @@ pub(crate) fn task_reports_for(
             let Some(digest) = digests.get(id) else {
                 continue;
             };
+            let platform_binding = unavailable_platform_binding(
+                plan,
+                report.get("matrix_key").and_then(serde_json::Value::as_str),
+            );
             let blocked =
                 task.get("status").and_then(serde_json::Value::as_str) == Some("not_selected");
             out.push(serde_json::json!({
-                "schema": 1,
+                "schema": TaskReport::SCHEMA,
                 "task_report_id": report_id,
                 "run_key": plan.get("run_key").and_then(serde_json::Value::as_str).unwrap_or("local"),
                 "event": plan.get("event"),
@@ -104,6 +108,7 @@ pub(crate) fn task_reports_for(
                     serde_json::Value::Null
                 },
                 "cache": {"layer": "task", "key": "", "result": "not_attempted"},
+                "platform_binding": platform_binding,
                 "exit_code": task.get("exit_code"),
                 "duration_ms": null,
                 "outputs": [],
@@ -120,6 +125,25 @@ pub(crate) fn task_reports_for(
         l.cmp(&r)
     });
     serde_json::Value::Array(out)
+}
+
+fn unavailable_platform_binding(
+    plan: &serde_json::Value,
+    matrix_key: Option<&str>,
+) -> serde_json::Value {
+    let planned_platform_id = plan
+        .pointer("/matrix/include")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .find(|entry| entry.get("matrix_key").and_then(serde_json::Value::as_str) == matrix_key)
+        .and_then(|entry| entry.pointer("/planned_platform/platform_id"));
+    serde_json::json!({
+        "state": "unavailable",
+        "planned_platform_id": planned_platform_id,
+        "runner_environment": "unknown",
+        "reason": "observation_not_recorded"
+    })
 }
 
 /// One successful required job.

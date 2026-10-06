@@ -112,9 +112,15 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         StepId::PublishBaseline => {
             matches!(kind, StepKind::Internal { operation, .. } if operation == "publish-baseline-v1")
         }
+        StepId::ToolsCacheIdentity => super::step_identity::valid_tools_cache_identity(kind),
         StepId::TofuProviders => {
             matches!(kind, StepKind::Action { uses, .. } if uses == TOFU_PROVIDER_ADMISSION_USES)
         }
+        StepId::ToolsCacheIdentity => matches!(
+            kind,
+            StepKind::Action { uses, .. }
+                if matches!(uses.as_str(), "./.github/actions/u22" | "./.github/actions/u24" | "./.github/actions/u26")
+        ),
     };
     if valid {
         Ok(())

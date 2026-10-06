@@ -6,8 +6,9 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use velnor_runner_host::{
-    ConnectPlan, DisconnectEffect, HostConfig, HostError, Readiness, SetOwnership, connect_plan,
-    disconnect_effects, doctor_json, import_secret, read_secret, readiness_for_empty, status_json,
+    ConnectPlan, DisconnectEffect, HostConfig, HostError, READINESS_BUDGET, Readiness,
+    SetOwnership, connect_plan, disconnect_effects, doctor_json, import_secret, read_secret,
+    status_json,
 };
 
 use crate::args::{Cli, Command, DaemonAction};
@@ -15,6 +16,9 @@ use crate::args::{Cli, Command, DaemonAction};
 /// Parse argv and run one command.
 #[must_use]
 pub fn run() -> ExitCode {
+    if let Some(code) = crate::readiness_probe::run_internal() {
+        return code;
+    }
     match Cli::try_parse() {
         Ok(cli) => dispatch(&cli),
         Err(error) => {
@@ -84,8 +88,16 @@ fn print_doctor(state: &Path, probe: bool) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn observe(_state: &Path) -> Readiness {
-    readiness_for_empty()
+fn observe(state: &Path) -> Readiness {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .enable_io()
+        .build();
+    let Ok(runtime) = runtime else {
+        return Readiness::Degraded;
+    };
+    let deadline = tokio::time::Instant::now() + READINESS_BUDGET;
+    runtime.block_on(crate::readiness_probe::check(state.to_path_buf(), deadline))
 }
 
 fn logs(follow: bool) -> ExitCode {

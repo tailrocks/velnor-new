@@ -32,13 +32,18 @@ mod needs_channel;
 
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::{NEEDS_EXPECTED_ENV, canonical_json_str, parse_strict_json};
+use velnor_actions_contract::{
+    NEEDS_EXPECTED_ENV, QualificationDispatch, canonical_json_str, parse_strict_json,
+};
 
 use self::needs_channel::{NEEDS_ENV, parse_needs};
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
-use crate::request_event::workflow_event_for;
+use crate::merge::required_evidence::MAX_BASELINE_MANIFEST_BYTES;
+use crate::request_event::{
+    QualificationRunnerContext, qualification_dispatch_for_parts, workflow_event_for,
+};
 
 /// Assemble one canonical merge request from a run directory.
 ///
@@ -100,6 +105,7 @@ pub(crate) fn assemble_with_needs(
 ) -> Result<String, OrchestratorError> {
     let mut errors = Vec::new();
     let actual_event = resolve_actual_event(event_name, event_payload, &mut errors);
+    let actual_qualification = resolve_actual_qualification(event_name, event_payload, &mut errors);
     let plan = read_json(run_dir, "plan.json", "plan", true, &mut errors);
     let matrix = read_json(run_dir, "matrix.json", "matrix", true, &mut errors);
     let (reports, task_reports) = crate::retrieve_reports::read_staged_reports(
@@ -114,13 +120,21 @@ pub(crate) fn assemble_with_needs(
         &task_reports,
         &mut errors,
     );
-    let baseline = read_json(run_dir, "baseline.json", "baseline", false, &mut errors);
+    let baseline = read_json_with_limit(
+        run_dir,
+        "baseline.json",
+        "baseline",
+        false,
+        u64::try_from(MAX_BASELINE_MANIFEST_BYTES).unwrap_or(u64::MAX),
+        &mut errors,
+    );
     let (inventory, jobs) = parse_needs(needs, expected, &mut errors);
     let attestation = read_attestation(run_dir, &inventory, &mut errors);
     let request = serde_json::json!({
         "schema": 1,
         "run_key": run_key,
         "actual_event": actual_event,
+        "actual_qualification": actual_qualification,
         "candidate_attestation": attestation,
         "plan": plan,
         "matrix": matrix,
@@ -184,7 +198,7 @@ fn resolve_actual_event(
                 return None;
             }
         }
-        None if name == "pull_request" => {
+        None if matches!(name, "pull_request" | "workflow_dispatch") => {
             errors.push("missing_actual_payload".to_owned());
             return None;
         }
@@ -198,6 +212,52 @@ fn resolve_actual_event(
         }
         Err(_) => {
             errors.push("actual_event_error".to_owned());
+            None
+        }
+    }
+}
+
+/// Reacquire qualification provenance from this merge runner's actual
+/// dispatch payload and immutable GitHub environment.
+fn resolve_actual_qualification(
+    event_name: Option<&str>,
+    event_payload: Option<&str>,
+    errors: &mut Vec<String>,
+) -> Option<QualificationDispatch> {
+    let name = event_name?;
+    if name != "workflow_dispatch" {
+        return None;
+    }
+    let Some(text) = event_payload else {
+        errors.push("missing_actual_payload".to_owned());
+        return None;
+    };
+    let Ok(payload) = parse_strict_json(text) else {
+        errors.push("malformed_actual_payload".to_owned());
+        return None;
+    };
+    let read = |name: &str| std::env::var(name).ok();
+    match qualification_dispatch_for_parts(
+        name,
+        &payload,
+        QualificationRunnerContext {
+            repository: read("GITHUB_REPOSITORY").as_deref(),
+            git_ref: read("GITHUB_REF").as_deref(),
+            ref_protected: read("GITHUB_REF_PROTECTED").as_deref(),
+            workflow_ref: read("GITHUB_WORKFLOW_REF").as_deref(),
+            workflow_sha: read("GITHUB_WORKFLOW_SHA").as_deref(),
+            source_sha: read("GITHUB_SHA").as_deref(),
+            run_id: read("GITHUB_RUN_ID").as_deref(),
+            run_attempt: read("GITHUB_RUN_ATTEMPT").as_deref(),
+        },
+    ) {
+        Ok(context) => context,
+        Err(OrchestratorError::Internal { problem }) => {
+            errors.push(problem);
+            None
+        }
+        Err(_) => {
+            errors.push("actual_qualification_error".to_owned());
             None
         }
     }
@@ -269,7 +329,26 @@ fn read_json(
     required: bool,
     errors: &mut Vec<String>,
 ) -> serde_json::Value {
-    match crate::retrieve_reports::read_staged_text(&run_dir.join(name), MAX_ASSEMBLY_JSON_BYTES) {
+    read_json_with_limit(
+        run_dir,
+        name,
+        kind,
+        required,
+        MAX_ASSEMBLY_JSON_BYTES,
+        errors,
+    )
+}
+
+/// Read one JSON artifact with its own byte contract.
+fn read_json_with_limit(
+    run_dir: &Path,
+    name: &str,
+    kind: &str,
+    required: bool,
+    max_bytes: u64,
+    errors: &mut Vec<String>,
+) -> serde_json::Value {
+    match crate::retrieve_reports::read_staged_text(&run_dir.join(name), max_bytes) {
         Ok(text) => {
             if let Ok(value) = parse_strict_json(&text) {
                 value
@@ -307,21 +386,5 @@ mod merge_event_tests;
 mod merge_request_tests;
 
 #[cfg(test)]
-mod actual_event_strict_tests {
-    use super::*;
-
-    #[test]
-    fn duplicate_payload_keys_fail_closed() {
-        let mut errors = Vec::new();
-        let dup = r#"{"pull_request":{"head":{"repo":{"fork":false}}},"pull_request":{}}"#;
-        assert!(resolve_actual_event(Some("pull_request"), Some(dup), &mut errors).is_none());
-        assert!(
-            errors.iter().any(|err| err == "malformed_actual_payload"),
-            "{errors:?}"
-        );
-        let mut errors = Vec::new();
-        let valid = r#"{"pull_request":{"head":{"repo":{"fork":true}}}}"#;
-        assert!(resolve_actual_event(Some("pull_request"), Some(valid), &mut errors).is_some());
-        assert!(errors.is_empty(), "{errors:?}");
-    }
-}
+#[path = "actual_event_strict_tests.rs"]
+mod actual_event_strict_tests;

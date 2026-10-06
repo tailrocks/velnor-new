@@ -150,7 +150,21 @@ impl ReleaseManifest {
         self.targets.iter().find(|record| record.target == target)
     }
 
-    /// Validate schema, version, repository, and every target record.
+    /// Validate the separate published asset URL against this manifest.
+    ///
+    /// # Errors
+    pub fn validate_published_asset_url(&self, url: &str, file: &str) -> Result<(), ContractError> {
+        crate::targets::check_release_manifest_artifact(
+            url,
+            &self.version,
+            &self.commit,
+            file,
+            "manifest_asset",
+        )
+    }
+
+    /// Validate schema, version, repository, and exactly one record per
+    /// supported target.
     ///
     /// The repository is pinned to the canonical identity and every
     /// artifact URL is bound to this exact version and target (X1); a
@@ -181,14 +195,6 @@ impl ReleaseManifest {
                     format!("unsupported_target:{}", record.target),
                 ));
             }
-            crate::targets::check_release_artifact(
-                &record.artifact,
-                &self.version,
-                &record.target,
-                file,
-                "targets.artifact",
-            )?;
-            check_sha256(&record.sha256, file, "targets.sha256")?;
             if !seen.insert(record.target.as_str()) {
                 return Err(ContractError::config(
                     file,
@@ -196,6 +202,15 @@ impl ReleaseManifest {
                     format!("duplicate_target:{}", record.target),
                 ));
             }
+            crate::targets::check_release_artifact(
+                &record.artifact,
+                &self.version,
+                &self.commit,
+                &record.target,
+                file,
+                "targets.artifact",
+            )?;
+            check_sha256(&record.sha256, file, "targets.sha256")?;
         }
         for target in crate::targets::ReleaseTarget::ALL {
             if !seen.contains(target.triple()) {

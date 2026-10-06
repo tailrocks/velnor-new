@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 clap = { workspace = true }
+tokio = { workspace = true }
 serde_json = { workspace = true }
 velnor-runner-core = { version = "=0.1.0", path = "../velnor-runner-core" }
 velnor-runner-host = { version = "=0.1.0", path = "../velnor-runner-host" }

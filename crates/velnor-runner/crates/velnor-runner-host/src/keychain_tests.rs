@@ -1,6 +1,10 @@
 //! Keychain import. Tests use only `com.tailrocks.velnor.host.test`.
 
 use std::io::Cursor;
+#[cfg(target_os = "macos")]
+use std::process::{Command, Stdio};
+#[cfg(target_os = "macos")]
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::{HostError, read_secret};
 #[cfg(target_os = "macos")]
@@ -55,8 +59,62 @@ impl Drop for TestItem {
 }
 
 #[cfg(target_os = "macos")]
+struct CliDelete {
+    service: &'static str,
+    account: &'static str,
+}
+
+#[cfg(target_os = "macos")]
+impl Drop for CliDelete {
+    fn drop(&mut self) {
+        let removed = Command::new("/usr/bin/security")
+            .args([
+                "delete-generic-password",
+                "-a",
+                self.account,
+                "-s",
+                self.service,
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+        match removed {
+            Ok(_) | Err(_) => {}
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
 #[test]
-fn import_secret_round_trips_the_test_service() -> Result<(), HostError> {
+fn round_trip_missing_and_denied_keep_prompts_enabled() -> Result<(), HostError> {
+    prompts_enabled()?;
+    round_trip()?;
+    prompts_enabled()?;
+    missing_item()?;
+    prompts_enabled()?;
+    denied_acl()?;
+    prompts_enabled()?;
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn interaction_allowed() -> Result<bool, HostError> {
+    security_framework::os::macos::keychain::SecKeychain::user_interaction_allowed()
+        .map_err(|_| HostError::Keychain)
+}
+
+#[cfg(target_os = "macos")]
+fn prompts_enabled() -> Result<(), HostError> {
+    if interaction_allowed()? {
+        Ok(())
+    } else {
+        Err(HostError::Keychain)
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn round_trip() -> Result<(), HostError> {
     let service = "com.tailrocks.velnor.host.test";
     let account = "velnor-host-test";
     let _guard = TestItem { service, account };
@@ -71,6 +129,59 @@ fn import_secret_round_trips_the_test_service() -> Result<(), HostError> {
     )
     .map_err(|_| HostError::Keychain)?;
     if stored.as_slice() != canary {
+        return Err(HostError::Keychain);
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn missing_item() -> Result<(), HostError> {
+    if load_secret("com.tailrocks.velnor.host.test.missing", "absent").is_ok() {
+        return Err(HostError::Keychain);
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn denied_acl() -> Result<(), HostError> {
+    let service = "com.tailrocks.velnor.host.test.denied";
+    let account = "velnor-host-denied";
+    let _guard = TestItem { service, account };
+    let _cli = CliDelete { service, account };
+    let status = Command::new("/usr/bin/security")
+        .args([
+            "add-generic-password",
+            "-U",
+            "-a",
+            account,
+            "-s",
+            service,
+            "-w",
+            "canary-token",
+            "-T",
+            "/usr/bin/false",
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_err(|_| HostError::Keychain)?;
+    if !status.success() {
+        return Err(HostError::Keychain);
+    }
+    let saw_disabled = AtomicBool::new(false);
+    let copied = crate::keychain::copy_without_prompt(service, account, || {
+        if interaction_allowed()? {
+            return Err(HostError::Keychain);
+        }
+        saw_disabled.store(true, Ordering::Relaxed);
+        Ok(())
+    });
+    // A missing guard fails here, before the production fetch can open SecurityAgent.
+    if !saw_disabled.load(Ordering::Relaxed) || copied.is_ok() {
+        return Err(HostError::Keychain);
+    }
+    if load_secret(service, account).is_ok() {
         return Err(HostError::Keychain);
     }
     Ok(())

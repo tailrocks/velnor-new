@@ -13,12 +13,13 @@ use velnor_actions_contract::{
 fn lookup_plan(base: Option<&str>) -> Plan {
     let digest = digest_b3(b"digest");
     Plan {
-        schema: 1,
+        schema: Plan::SCHEMA,
         run_key: "local".to_owned(),
         plan_id: "plan-local".to_owned(),
         base: base.map(str::to_owned),
         head: "head".to_owned(),
         event: WorkflowEvent::PullRequest,
+        qualification: None,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,

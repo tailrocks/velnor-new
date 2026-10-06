@@ -78,15 +78,15 @@ fn yaml_job_ids(yaml: &str) -> BTreeSet<String> {
     ids
 }
 
-/// Distinct `uses:` refs embedded in the staged workflow.
+/// Distinct remote action pins embedded in the staged workflow.
 fn yaml_uses(yaml: &str) -> BTreeSet<String> {
     yaml.lines()
         .filter_map(|line| line.trim().strip_prefix("uses:"))
         .map(|value| {
-            let value = value.trim();
             value
-                .split_once(" # zizmor:")
-                .map_or(value, |(pin, _)| pin)
+                .split_once(" #")
+                .map_or(value, |(uses, _)| uses)
+                .trim()
                 .to_owned()
         })
         .filter(|uses| !uses.starts_with("./.github/actions/"))

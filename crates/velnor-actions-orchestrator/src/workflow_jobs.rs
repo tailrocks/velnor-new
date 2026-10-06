@@ -14,12 +14,41 @@ use velnor_actions_mise::{
 };
 use velnor_actions_workflow_renderer::render::{FINAL_CONDITION, FINAL_DISPLAY_NAME, PLAN_JOB_ID};
 use velnor_actions_workflow_renderer::steps::{
-    MERGE_OPERATION, PLAN_OPERATION, merge_step, plan_step, write_request_step,
+    MERGE_OPERATION, PLAN_OPERATION, RESOLVE_QUALIFICATION_OPERATION, merge_step, plan_step,
+    write_request_step,
 };
 
 use crate::OrchestratorError;
 use crate::source_prep::fetch_steps_for_plan;
 use crate::utf8::{strings_of, strings_of_env};
+
+/// Rust needs of the planner job, including the optional format components.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum PlanRustNeed {
+    #[default]
+    None,
+    Compiler,
+    CompilerAndComponents,
+}
+
+impl PlanRustNeed {
+    pub(crate) fn has_compiler(self) -> bool {
+        self != Self::None
+    }
+
+    fn has_components(self) -> bool {
+        self == Self::CompilerAndComponents
+    }
+}
+
+/// Named planner tool needs; named fields prevent resolver/tool roles swapping.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct PlanJobToolNeeds {
+    pub(crate) rust: PlanRustNeed,
+    pub(crate) nextest: bool,
+    pub(crate) opentofu: bool,
+    pub(crate) gh: bool,
+}
 
 /// Always-on workflow-lint job ID, emitted for both policies.
 pub(crate) const LINT_JOB_ID: &str = "actionlint";
@@ -29,11 +58,11 @@ pub(crate) const LINT_DISPLAY_NAME: &str = "Actionlint";
 
 /// Planner job: checkout, pinned-tool install, optional Acquire, request, plan.
 ///
-/// `Prepare pinned tools` installs the exact catalog tools the later steps consume
-/// through fail-closed `mise exec`, per role: Rust plus the detected MBX driver
-/// for the format/build steps, Nextest when any leg selects it, Opentofu when any
-/// tofu work exists, and the validators the public `generate` runs inside `Check
-/// generated files`. Without it the freshness step fails with `mise ...
+/// `Prepare pinned tools` installs the exact catalog tools the plan steps consume
+/// through fail-closed `mise exec`, per role: Rust for Rust plan operations,
+/// Nextest when any leg selects it, Opentofu when any tofu work exists, `gh` for
+/// qualification receipt lookup, and the validators the public `generate` runs
+/// inside `Check generated files`. Without it the freshness step fails with `mise ...
 /// couldn't exec process` because implicit installation is disabled there.
 /// Pure-tofu plans install opentofu plus the validators with no Rust setup
 /// (no components, fetch, or owned-homes triple); mixed plans the union.
@@ -49,38 +78,36 @@ pub(crate) const LINT_DISPLAY_NAME: &str = "Actionlint";
 /// # Errors
 ///
 /// Returns a contract error when a typed step request is rejected.
-#[expect(
-    clippy::too_many_arguments,
-    clippy::fn_params_excessive_bools,
-    reason = "one call site threads job scope plus role selection"
-)]
 pub(crate) fn plan_job(
     label: &str,
     acquire: Option<Step>,
     catalog: &ToolCatalog,
-    use_rust: bool,
-    use_mbx: bool,
-    use_nextest: bool,
-    use_opentofu: bool,
+    needs: PlanJobToolNeeds,
     fetch_roots: &[String],
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![checkout_history_action()?];
-    let prepare = prepare_pinned_tools_step(
-        catalog,
-        plan_tools(use_rust, use_nextest, use_opentofu),
-        use_rust,
-    )?;
+    let prepare = prepare_pinned_tools_step(catalog, plan_tools(needs), needs.rust.has_compiler())?;
     steps.push(prepare);
-    if use_rust {
+    if needs.rust.has_components() {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
-    let cached =
-        crate::workflow_jobs_cache::cache_steps_for_plan(label, catalog, use_mbx, fetch_roots)?;
+    let cached = crate::workflow_jobs_cache::cache_steps_for_plan(label, catalog, fetch_roots)?;
     steps.extend(cached.restore);
     steps.extend(fetch_steps_for_plan(catalog, fetch_roots)?);
     steps.extend(cached.save);
     steps.extend(acquire);
     steps.push(request_step(PLAN_OPERATION)?);
+    if needs.gh {
+        let mut resolve = velnor_actions_workflow_renderer::steps::internal_step(
+            "Resolve qualification predecessor",
+            RESOLVE_QUALIFICATION_OPERATION,
+        )
+        .map_err(|err| OrchestratorError::Contract {
+            problem: err.to_string(),
+        })?;
+        resolve.condition = Some("github.event_name == 'workflow_dispatch'".to_owned());
+        steps.push(resolve);
+    }
     steps.push(plan_step());
     Ok(Job {
         display_name: "Plan".to_owned(),
@@ -95,7 +122,7 @@ pub(crate) fn plan_job(
     })
 }
 
-/// Always-on lint job: checkout plus pinned actionlint over the tree.
+/// Always-on lint job: checkout, pinned installation, then actionlint.
 pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, OrchestratorError> {
     let program = OsString::from("actionlint");
     let exec = PinnedToolExec::new(
@@ -108,14 +135,16 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
     })?;
     let argv = strings_of(exec.argv(catalog))
         .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let mut lint = velnor_actions_workflow_renderer::ambient_shell_step(
-        "Run actionlint",
-        argv,
-        BTreeMap::new(),
-    )
-    .map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })?;
+    let prepare = prepare_pinned_tools_step(
+        catalog,
+        vec![PinnedTool::Actionlint, PinnedTool::Shellcheck],
+        false,
+    )?;
+    let mut lint =
+        velnor_actions_workflow_renderer::shell_step("Run actionlint", argv, BTreeMap::new())
+            .map_err(|err| OrchestratorError::Contract {
+                problem: err.to_string(),
+            })?;
     lint.role = Some(StepRole::Actionlint);
     Ok(Job {
         display_name: LINT_DISPLAY_NAME.to_owned(),
@@ -126,7 +155,7 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![checkout_action()?, lint],
+        steps: vec![checkout_action()?, prepare, lint],
     })
 }
 
@@ -187,23 +216,26 @@ pub(crate) fn read_actions_permissions() -> Permissions {
     }
 }
 
-/// Plan-job install set per role: drivers, the `generate` validators, Nextest when used.
+/// Plan-job install set per role: Rust, validators, Nextest, and `OpenTofu`.
 ///
 /// Validators join the driver set because `Check generated files` runs the public
 /// `generate`, whose staged validation fail-closed-execs pinned actionlint, shellcheck,
 /// and zizmor; installing only the driver toolchain leaves that step red. Order
 /// follows `PinnedTool::ALL`. Pure-tofu plans carry opentofu plus the validators
-/// with no Rust; mixed plans carry the union.
-fn plan_tools(use_rust: bool, use_nextest: bool, use_opentofu: bool) -> Vec<PinnedTool> {
+/// with no Rust; mixed plans carry the union. The native MBX action owns MBX
+/// installation for both ordinary and pre-seed plans; its preceding
+/// preflight checks only that the exact Rust toolchain is ready.
+fn plan_tools(needs: PlanJobToolNeeds) -> Vec<PinnedTool> {
     let mut tools = Vec::new();
-    tools.extend(use_rust.then_some(PinnedTool::Rust));
+    tools.extend(needs.rust.has_compiler().then_some(PinnedTool::Rust));
     tools.extend([
         PinnedTool::Actionlint,
         PinnedTool::Shellcheck,
         PinnedTool::Zizmor,
     ]);
-    tools.extend(use_nextest.then_some(PinnedTool::Nextest));
-    tools.extend(use_opentofu.then_some(PinnedTool::Opentofu));
+    tools.extend(needs.nextest.then_some(PinnedTool::Nextest));
+    tools.extend(needs.opentofu.then_some(PinnedTool::Opentofu));
+    tools.extend(needs.gh.then_some(PinnedTool::Gh));
     tools
 }
 
@@ -211,7 +243,7 @@ fn plan_tools(use_rust: bool, use_nextest: bool, use_opentofu: bool) -> Vec<Pinn
 ///
 /// Homes use the runner-temp expression form: shell `$VAR` never expands
 /// in the `env:` position that carries these paths. Pure-tofu roles
-/// (`use_rust` false) carry no owned-homes triple; every other role
+/// (`rust_homes` false) carry no owned-homes triple; every other role
 /// keeps it.
 /// # Errors
 ///
@@ -219,7 +251,7 @@ fn plan_tools(use_rust: bool, use_nextest: bool, use_opentofu: bool) -> Vec<Pinn
 fn prepare_pinned_tools_step(
     catalog: &ToolCatalog,
     tools: Vec<PinnedTool>,
-    use_rust: bool,
+    rust_homes: bool,
 ) -> Result<Step, OrchestratorError> {
     let homes = ToolHomes::runner_temp();
     let prepare =
@@ -228,7 +260,7 @@ fn prepare_pinned_tools_step(
         })?;
     let run = strings_of(prepare.argv(catalog))
         .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let env = if use_rust {
+    let env = if rust_homes {
         strings_of_env(&prepare.env(catalog))
     } else {
         strings_of_env(&prepare.env_without_homes())
@@ -263,3 +295,6 @@ fn checkout_history_action() -> Result<Step, OrchestratorError> {
 #[cfg(test)]
 #[path = "workflow_jobs_tests.rs"]
 mod workflow_jobs_tests;
+#[cfg(test)]
+#[path = "workflow_jobs_tests_b.rs"]
+mod workflow_jobs_tests_b;

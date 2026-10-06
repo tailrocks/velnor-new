@@ -8,15 +8,17 @@
 //! different resolved key); the hosted seed/warm pair in
 //! `docs/implemented/performance.md` shows both sides of that branch.
 
-use std::collections::BTreeMap;
 use std::fs;
 
 use velnor_actions_contract::StepKind;
-use velnor_actions_mise::{PREPARE_RUST_COMPONENTS_STEP, cache_sources};
-use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
-use velnor_actions_workflow_renderer::{SETUP_MISE_NAME, render::WORKFLOW_PATH};
+use velnor_actions_mise::cache_sources;
+use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{TestResult, config_with_branch, fixture_manifest_json, git};
+
+#[path = "impl_cache_warm_components.rs"]
+mod components_tests;
 
 /// Two-crate workspace repo; `lock` selects the lockfile body.
 fn make_workspace(lock: &str, mbx: bool) -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
@@ -186,119 +188,10 @@ fn probe_outcome_maps_to_skip_or_explicit_fetch() {
     assert!(cache_sources::fetch_decision(false, "bogus").is_err());
 }
 
-/// Step names per job id in YAML emission order.
-///
-/// Two-space headers open a job window; `- name:` lines are steps.
-/// Display `name:` and artifact `name:` lines carry no `- ` marker,
-/// so they never join the sequence. Pseudo-jobs (`push:`) collect
-/// no steps and are ignored by id lookup.
-fn yaml_steps(yaml: &str) -> BTreeMap<String, Vec<String>> {
-    let mut jobs: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    let mut current: Option<String> = None;
-    for line in yaml.lines() {
-        let header = line
-            .strip_prefix("  ")
-            .filter(|rest| !rest.starts_with(' ') && rest.ends_with(':') && !rest.contains(' '));
-        if let Some(id) = header {
-            current = Some(id.trim_end_matches(':').to_owned());
-        } else if let (Some(id), Some(name)) = (&current, line.trim().strip_prefix("- name: ")) {
-            jobs.entry(id.clone()).or_default().push(name.to_owned());
-        }
-    }
-    jobs
-}
-
-/// R22: every Rust job reinstalls clippy/rustfmt after cache restore.
-///
-/// Cold-install-always policy: the fixed `rustup component add` step
-/// is unconditional (no `if:`), so it runs on cold AND warm runs alike;
-/// ordered after `Setup Mise`, a component-less restored toolchain
-/// (upstream jdx/mise-action#215) is repaired before any obligation.
-/// Pinned at IR level (unconditionality) and YAML level (final order).
-#[test]
-fn rust_components_install_unconditionally_after_restore() -> TestResult {
-    for mbx in [false, true] {
-        let repo = make_workspace(&lock_for(&["a", "b"]), mbx)?;
-        let prep = prepare(repo.path())?;
-        let jobs = finalized_jobs(&prep)?;
-        let mut rust_jobs = 0;
-        for (id, job) in &jobs {
-            if id != "plan" && !id.starts_with("rust-") {
-                continue;
-            }
-            rust_jobs += usize::from(id.starts_with("rust-"));
-            let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
-            let missing =
-                |what: &str| std::io::Error::other(format!("{id} misses {what} (mbx={mbx})"));
-            let setup = names
-                .iter()
-                .position(|name| *name == SETUP_MISE_NAME)
-                .ok_or_else(|| missing("setup"))?;
-            let components = names
-                .iter()
-                .position(|name| *name == PREPARE_RUST_COMPONENTS_STEP)
-                .ok_or_else(|| missing("components"))?;
-            assert!(
-                setup < components,
-                "{id}: components install after restore (mbx={mbx})"
-            );
-            let step = &job.steps[components];
-            assert!(
-                step.condition.is_none(),
-                "{id}: unconditional install runs cold AND warm (mbx={mbx})"
-            );
-            let StepKind::Shell { run, .. } = &step.kind else {
-                return Err(missing("shell components payload").into());
-            };
-            for token in [
-                "rustup",
-                "component",
-                "add",
-                "--toolchain",
-                "clippy",
-                "rustfmt",
-            ] {
-                assert!(
-                    run.join(" ").contains(token),
-                    "{id} payload misses {token} (mbx={mbx})"
-                );
-            }
-        }
-        assert_eq!(rust_jobs, 2, "both fixture crates watched (mbx={mbx})");
-        let tree = render_staged_tree(&prep)?;
-        let yaml = tree
-            .get(WORKFLOW_PATH)
-            .ok_or_else(|| std::io::Error::other("missing workflow"))?;
-        let emitted = yaml_steps(yaml);
-        for id in ["plan", "rust-a", "rust-b"] {
-            let names = emitted
-                .get(id)
-                .ok_or_else(|| std::io::Error::other(format!("missing {id}")))?;
-            let at = |want: &str| {
-                names
-                    .iter()
-                    .position(|name| name == want)
-                    .ok_or_else(|| std::io::Error::other(format!("{id} misses {want}")))
-            };
-            assert!(
-                at(SETUP_MISE_NAME)? < at(PREPARE_RUST_COMPONENTS_STEP)?,
-                "{id}: emitted components follow restore (mbx={mbx})"
-            );
-            if id.starts_with("rust-") {
-                assert!(
-                    at(PREPARE_RUST_COMPONENTS_STEP)? < at("Clippy")?,
-                    "{id}: components precede obligations (mbx={mbx})"
-                );
-            }
-        }
-    }
-    Ok(())
-}
-
 #[test]
 fn lockfile_delta_changes_cache_identity() -> TestResult {
     let lock = lock_for(&["a", "b"]);
-    // Driver delta: MBX and Cargo-only repos use disjoint cache shapes.
+    // Compiler driver does not change the exact Cargo sources archive.
     let mbx_keys = cache_keys(&yaml_for(&lock, true)?);
     let cargo_keys = cache_keys(&yaml_for(&lock, false)?);
     assert!(
@@ -310,12 +203,17 @@ fn lockfile_delta_changes_cache_identity() -> TestResult {
     assert!(
         cargo_keys
             .iter()
-            .any(|key| key.starts_with("velnor-cargo-")),
-        "cargo shared key: {cargo_keys:?}"
+            .any(|key| key.contains("velnor-v1-sources-")),
+        "cargo sources key: {cargo_keys:?}"
     );
-    assert!(
-        !mbx_keys.iter().any(|key| key.starts_with("velnor-cargo-")),
-        "mbx never stacks rust-cache: {mbx_keys:?}"
+    assert_eq!(
+        mbx_keys
+            .iter()
+            .find(|key| key.contains("velnor-v1-sources-")),
+        cargo_keys
+            .iter()
+            .find(|key| key.contains("velnor-v1-sources-")),
+        "same source identity in both driver modes"
     );
     // Lock CONTENT deltas re-key at runtime through `hashFiles`: the
     // template is stable across renders, the resolved key is not.

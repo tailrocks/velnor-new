@@ -1,5 +1,10 @@
 //! Init/config plus internal plan/merge integration cases.
 
+#[path = "impl_git_clone_isolation.rs"]
+mod clone_tests;
+#[path = "../../test_support/git_clone_fixture.rs"]
+mod git_clone_fixture;
+
 use std::fs;
 
 use tempfile::TempDir;
@@ -10,8 +15,8 @@ use velnor_actions_orchestrator::{
 };
 
 use crate::impl_common::{
-    TestResult, config_with_branch, err_of, fixture_manifest_json, git, make_repo, passing_reports,
-    plan_for_source_change, without_ambient_identity,
+    TestResult, config_with_branch, err_of, fixture_manifest_json, git, git_fixture, make_repo,
+    passing_reports, plan_for_source_change, without_ambient_identity,
 };
 use crate::impl_merge::task_reports_for;
 

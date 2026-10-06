@@ -1,10 +1,12 @@
-//! Qualification, image-release, macOS-binary-release, generator-release,
-//! and monitoring workflows. Emitted only when schema 2 requests them.
+//! Qualification, composed product-release, and monitoring workflows.
+//! Emitted only when schema 2 requests them.
 
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::config::is_hosted_catalog;
-use velnor_actions_contract::{RoutingWorkflow, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
+use velnor_actions_contract::{
+    ReleaseTarget, RoutingWorkflow, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL,
+};
 
 use crate::RenderError;
 use crate::marker::with_marker;
@@ -59,12 +61,8 @@ impl RunnerSpec {
 
 /// Qualification workflow path.
 pub const QUALIFICATION_WORKFLOW: &str = ".github/workflows/qualification.yml";
-/// Image-release workflow path.
-pub const IMAGE_RELEASE_WORKFLOW: &str = ".github/workflows/image-release.yml";
-/// macOS binary-release workflow path.
-pub const MACOS_BINARY_RELEASE_WORKFLOW: &str = ".github/workflows/macos-binary-release.yml";
-/// Generator-release workflow path.
-pub const GENERATOR_RELEASE_WORKFLOW: &str = ".github/workflows/generator-release.yml";
+/// Shared product-release workflow path.
+pub const PRODUCT_RELEASE_WORKFLOW: &str = product_release::WORKFLOW_PATH;
 /// Queue-monitoring workflow path.
 pub const MONITORING_WORKFLOW: &str = ".github/workflows/monitoring.yml";
 
@@ -74,13 +72,14 @@ mod classes;
 mod features;
 #[path = "schema2_generator_release.rs"]
 mod generator_release;
-#[path = "schema2_generator_release_pins.rs"]
-mod generator_release_pins;
 #[path = "schema2_mbx_qualification.rs"]
 mod mbx_qualification;
+#[path = "schema2_product_release.rs"]
+mod product_release;
+#[path = "schema2_product_release_family.rs"]
+mod product_release_family;
 #[path = "schema2_release.rs"]
 mod release;
-pub use generator_release_pins::GeneratorReleasePins;
 /// Exact-source gates for composed product-release workflows.
 #[path = "schema2_release_eligibility.rs"]
 pub mod release_eligibility;
@@ -88,6 +87,10 @@ pub mod release_eligibility;
 #[cfg(test)]
 #[path = "schema2_runner_shell_tests.rs"]
 mod runner_shell_tests;
+
+#[cfg(test)]
+#[path = "schema2_product_release_test_pins.rs"]
+pub(super) mod product_release_test_pins;
 
 /// Which schema 2 workflows to emit, plus the selectors they use.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,8 +105,56 @@ pub struct Schema2WorkflowRequest {
     pub workflows: BTreeSet<RoutingWorkflow>,
     /// Pinned tool inputs, required only when qualification is emitted.
     pub mbx_qualification: Option<MbxQualificationPins>,
-    /// Orchestrator-resolved Mise setup and command vectors for generator release.
-    pub generator_release: Option<GeneratorReleasePins>,
+    /// Orchestrator-resolved Mise setup and command vectors for product releases.
+    pub product_release: Option<ProductReleasePins>,
+}
+
+/// Pinned tools and runner-specific Mise setup for composed product releases.
+///
+/// The orchestrator builds every command vector through the Mise adapter.
+/// The renderer only joins validated argv into workflow steps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProductReleasePins {
+    /// Setup pins for each supported release runner target.
+    pub linux_x86_64_setup: MiseSetup,
+    /// Setup pins for each supported release runner target.
+    pub macos_arm64_setup: MiseSetup,
+    /// Setup pins for each supported release runner target.
+    pub macos_x86_64_setup: MiseSetup,
+    /// Exact `mise install` argv for source-policy tools.
+    pub install_gate_tools_argv: Vec<String>,
+    /// Exact `mise install` argv for native candidate build tools.
+    pub install_build_tools_argv: Vec<String>,
+    /// Exact `mise install` argv for the macOS host binary build.
+    pub install_runner_build_tools_argv: Vec<String>,
+    /// Exact `mise install` argv for GitHub CLI.
+    pub install_gh_argv: Vec<String>,
+    /// Exact pinned `mbx build` argv.
+    pub build_argv: Vec<String>,
+    /// Exact pinned macOS host binary build argv.
+    pub runner_build_argv: Vec<String>,
+    /// Exact pinned actionlint argv.
+    pub actionlint_argv: Vec<String>,
+    /// Exact pinned zizmor argv.
+    pub zizmor_argv: Vec<String>,
+    /// Exact pinned GitHub CLI invocation prefix.
+    pub gh_argv: Vec<String>,
+    /// Exact Rust toolchain release selected by the Mise catalog.
+    pub rust_version: String,
+    /// Exact MBX release selected by the Mise catalog.
+    pub mr_boxington_version: String,
+}
+
+impl ProductReleasePins {
+    /// Setup action pins associated with a release target.
+    #[must_use]
+    pub fn setup_for(&self, target: ReleaseTarget) -> &MiseSetup {
+        match target {
+            ReleaseTarget::LinuxX86_64 => &self.linux_x86_64_setup,
+            ReleaseTarget::MacosArm64 => &self.macos_arm64_setup,
+            ReleaseTarget::MacosX86_64 => &self.macos_x86_64_setup,
+        }
+    }
 }
 
 /// Exact tools used by the hosted MBX cache qualification.
@@ -152,33 +203,15 @@ pub fn render_schema2_workflows(
             &qualification(request)?,
         )?);
     }
-    if request.workflows.contains(&RoutingWorkflow::ImageRelease) {
+    if let Some(generated) = product_release::render(request)? {
         files.push(file(
-            IMAGE_RELEASE_WORKFLOW,
-            &request.version,
-            &release::image_release(request)?,
-        )?);
-    }
-    if request
-        .workflows
-        .contains(&RoutingWorkflow::MacosBinaryRelease)
-    {
-        files.push(file(
-            MACOS_BINARY_RELEASE_WORKFLOW,
-            &request.version,
-            &release::macos_binary_release(request)?,
-        )?);
-    }
-    if request
-        .workflows
-        .contains(&RoutingWorkflow::GeneratorRelease)
-    {
-        let generated = generator_release::generator_release(request)?;
-        files.push(file(
-            GENERATOR_RELEASE_WORKFLOW,
+            PRODUCT_RELEASE_WORKFLOW,
             &request.version,
             &generated.workflow,
         )?);
+        for (path, workflow) in generated.family_workflows {
+            files.push(file(&path, &request.version, &workflow)?);
+        }
         for (path, action) in generated.actions {
             files.push(file(&path, &request.version, &action)?);
         }

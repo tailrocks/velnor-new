@@ -274,52 +274,19 @@ fn digest_slots_preserve_absence_distinctly() {
 
 /// Minimal tofu proposal for `kind` in `unit`.
 fn tofu_task(kind: &str, unit: &str) -> ProposedTask {
-    use std::collections::BTreeMap;
-    use std::ffi::OsString;
-    use velnor_actions_contract::{CachePolicy, IdentityInputs, ResourceClass, ResourceDemand};
-    ProposedTask {
-        task_id: format!("stack/tofu/root/{kind}/default"),
-        stack_id: "tofu".to_owned(),
-        component_id: format!("tofu:{unit}"),
-        task_kind: kind.to_owned(),
+    let parsed = velnor_actions_tofu::TofuTaskKind::parse(kind)
+        .unwrap_or(velnor_actions_tofu::TofuTaskKind::Validate);
+    let group = velnor_actions_tofu::TofuTaskGroup {
+        root: unit.to_owned(),
+        kind: parsed,
         configuration: "default".to_owned(),
-        depends_on: Vec::new(),
-        gated_by: Vec::new(),
-        reads: Vec::new(),
-        writes: Vec::new(),
-        outputs: Vec::new(),
-        resource: ResourceDemand {
-            class: ResourceClass::Compiler,
-            cpu_milli: None,
-            memory_mb: None,
-            needs_network: false,
-            service: None,
-        },
-        cache_policy: CachePolicy {
-            allow_compilation_reuse: false,
-            allow_task_reuse: false,
-        },
-        identity: IdentityInputs {
-            unit_id: String::new(),
-            unit_key: "root".to_owned(),
-            unit_path: unit.to_owned(),
-            project_root: ".".to_owned(),
-            target: "host".to_owned(),
-            features: Vec::new(),
-            flags: Vec::new(),
-            compile_driver: "tofu".to_owned(),
-            test_runner: "tofu".to_owned(),
-            environment: BTreeMap::new(),
-            declared_inputs: Vec::new(),
-            undeclared_reads: false,
-        },
-        payload: vec![OsString::from("tofu")],
-        display_name: String::new(),
-        uses_clock: false,
-        uses_random: false,
         no_targets: false,
-        runner_profile: "default".to_owned(),
+    };
+    let mut task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    if parsed.as_str() != kind {
+        task.task_kind = kind.to_owned();
     }
+    task
 }
 
 #[test]

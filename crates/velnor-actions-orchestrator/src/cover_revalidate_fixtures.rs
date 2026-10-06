@@ -50,10 +50,12 @@ pub(crate) fn manifest_for(commit: &str) -> BaselineManifest {
             input_digest: inputs,
             closure_digest: closure,
             proof_run_id: 7,
+            carried_from: None,
             observed_run_id: 7,
             external_data: None,
             proof: None,
         }],
+        parent: None,
         expires_at_unix: None,
     }
 }
@@ -73,12 +75,13 @@ pub(crate) fn plan_for(manifest: &BaselineManifest, base: Option<&str>) -> Plan 
     )
     .expect("proof");
     Plan {
-        schema: 1,
+        schema: Plan::SCHEMA,
         run_key: "local".to_owned(),
         plan_id: "plan-local".to_owned(),
         base: base.map(str::to_owned),
         head: "head".to_owned(),
         event: WorkflowEvent::PullRequest,
+        qualification: None,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,

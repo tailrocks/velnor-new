@@ -1,26 +1,20 @@
 //! Install lockfile audit glue (G2): lock-file hygiene for local installs.
 //!
-//! The audit verifies the committed `mise.lock` is complete and
-//! well-formed for local `mise install`: every emitted install spec
-//! resolves to a lock entry, and a CI-platform hole or a corrupt
-//! checksum blocks `generate` with a precise remediation. `plan`
-//! prints both channels and never fails; only `generate` gates on
-//! blocking.
+//! The audit verifies that each local `mise install` spec resolves to
+//! a well-formed lock entry; CI-platform holes and corrupt entries
+//! block `generate`, while `plan` reports findings without failing.
 //!
 //! Both install-class emissions are audited: `Prepare pinned tools`
 //! steps from the IR (catalog specs) and validator install commands
 //! from the typed render context (validator pins). Validator steps
 //! materialize at render time, so scraping the IR alone would leave
-//! the deny ambient install invisible; the typed commands close that
+//! validator ambient installs invisible; the typed commands close that
 //! gap without string-matching rendered YAML.
 //!
-//! Hygiene only, not runtime verification: CI installs run
-//! `--no-config` isolated, so they never load repository config and
-//! trust upstream TLS plus exact pinned versions. Lock checksums are
-//! TOFU (trust on first use): the audit checks that the lock covers
-//! the install set with well-formed entries — it cannot recompute
-//! upstream bytes, and a self-consistent malicious lock (attacker
-//! URL plus matching checksum) is a malicious commit, out of scope.
+//! Hygiene only, not runtime verification: isolated CI installs trust
+//! upstream TLS and exact pins. Checksums are TOFU; the audit verifies
+//! lock coverage and shape but cannot recompute bytes or detect a
+//! malicious self-consistent lock.
 
 use std::io::Read;
 use std::path::Path;
@@ -179,21 +173,25 @@ fn audit_validator_command(
     subjects: &mut Vec<InstallSubject>,
     blocking: &mut Vec<String>,
 ) {
-    match validator_command_specs(command) {
-        CommandInstalls::NotInstall => {}
-        CommandInstalls::Unclassifiable(detail) => {
-            let diagnostic = format!("unauditable_validator_argv:{}:{detail}", command.name);
-            blocking.push(diagnostic);
-        }
-        CommandInstalls::Specs(specs) => {
-            if specs.is_empty() {
-                blocking.push(bare_install(&command.name));
-                return;
+    for argv in [&command.prepare_argv, &command.argv] {
+        match validator_argv_specs(argv) {
+            CommandInstalls::NotInstall => {}
+            CommandInstalls::Unclassifiable(detail) => {
+                blocking.push(format!(
+                    "unauditable_validator_argv:{}:{detail}",
+                    command.name
+                ));
             }
-            for spec in specs {
-                match validator_subject(&spec) {
-                    Some(subject) => subjects.push(subject),
-                    None => blocking.push(format!("unauditable_install_spec:{spec}")),
+            CommandInstalls::Specs(specs) => {
+                if specs.is_empty() {
+                    blocking.push(bare_install(&command.name));
+                    continue;
+                }
+                for spec in specs {
+                    match validator_subject(&spec) {
+                        Some(subject) => subjects.push(subject),
+                        None => blocking.push(format!("unauditable_install_spec:{spec}")),
+                    }
                 }
             }
         }
@@ -205,9 +203,9 @@ fn audit_validator_command(
 /// Scans the typed argv (plain vectors and `sh -c` scripts alike) and
 /// classifies each `mise` vector: `install` extracts, isolated `exec`
 /// contributes nothing, anything else blocks as unclassifiable.
-fn validator_command_specs(command: &ValidatorCommand) -> CommandInstalls {
+fn validator_argv_specs(argv: &[String]) -> CommandInstalls {
     let mut tokens = Vec::new();
-    for arg in &command.argv {
+    for arg in argv {
         if looks_like_script(arg) {
             tokens.extend(arg.split_whitespace());
         } else {
@@ -273,11 +271,11 @@ fn specs_until_metachar(tail: &[&str]) -> Vec<String> {
 
 /// Resolve one emitted validator spec through the validator pin.
 fn validator_subject(spec: &str) -> Option<InstallSubject> {
-    let (name, version) = validator_install_pin(spec)?;
+    let (name, version, lock_key) = validator_install_pin(spec)?;
     Some(InstallSubject {
         display: format!("{name}@{version}"),
         expected_version: version.to_owned(),
-        lock_key: name.to_owned(),
+        lock_key: lock_key.to_owned(),
     })
 }
 

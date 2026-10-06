@@ -12,12 +12,17 @@ use bollard::query_parameters::{
 use tokio::io::AsyncWriteExt;
 
 use crate::docker_client::docker_deadline;
-use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_plan};
+use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_mounts, runner_plan};
 use crate::error::HostError;
 use crate::stage::PairStop;
 
+pub(crate) mod resources;
 mod volumes;
-pub(crate) use volumes::{create_named_volumes, remove_worker_volumes};
+pub(crate) use volumes::{
+    VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole, WorkerVolumeVerification,
+    create_named_volumes, remove_verified_worker_volume, remove_worker_volumes,
+    verify_worker_volume,
+};
 #[cfg(all(test, unix))]
 mod volumes_tests;
 
@@ -111,7 +116,7 @@ pub fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, HostError
         env: plan.env.clone(),
         cmd: plan.cmd.clone(),
         labels: plan.labels.clone(),
-        mounts: plan.mounts.clone(),
+        mounts: runner_mounts(&plan.mounts)?,
         privileged: false,
         open_stdin: true,
         network_mode: None,
@@ -125,7 +130,7 @@ pub fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, HostError
 ///
 /// # Errors
 ///
-/// Returns [`HostError::ForbiddenMount`] when `dind_id` is not a hex container id.
+/// Returns [`HostError::ForbiddenMount`] when `dind_id` is not 64 hex digits.
 pub(crate) fn join_dind_net(
     mut spec: CreateProjection,
     dind_id: &str,
@@ -138,7 +143,7 @@ pub(crate) fn join_dind_net(
 }
 
 fn dind_container_id(id: &str) -> bool {
-    (12..=64).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_hexdigit())
+    id.len() == 64 && id.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 /// Private `DinD` create. Privilege is not a flag on the runner plan.
@@ -275,8 +280,13 @@ fn docker_mount(mount: &Mount) -> Result<DockerMount, HostError> {
         target: Some(mount.target.clone()),
         source: Some(source),
         typ: Some(typ),
+        read_only: seed_read_only(&mount.source),
         ..Default::default()
     })
+}
+
+fn seed_read_only(source: &str) -> Option<bool> {
+    (source == crate::docker_spec::SEED_VOLUME).then_some(true)
 }
 
 fn mount_source(source: &str) -> Result<(MountType, String), HostError> {

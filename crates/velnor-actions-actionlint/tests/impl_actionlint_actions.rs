@@ -23,7 +23,8 @@ fn allowlist_has_nine_entries() {
     assert_eq!(ALLOWED_ACTIONS.len(), 9);
     assert!(ALLOWED_ACTIONS.contains(&"actions/cache/restore"));
     assert!(ALLOWED_ACTIONS.contains(&"asamarts/alint"));
-    assert!(ALLOWED_ACTIONS.contains(&"Swatinem/rust-cache"));
+    assert!(!ALLOWED_ACTIONS.contains(&"Swatinem/rust-cache"));
+    assert!(ALLOWED_ACTIONS.contains(&"aws-actions/configure-aws-credentials"));
 }
 
 #[test]
@@ -227,56 +228,8 @@ fn inputs_multiline_value_rejected() {
 }
 
 #[test]
-fn rust_cache_full_sha_pin_accepted() {
-    use velnor_actions_actionlint::{RUST_CACHE_ACTION_SHA, RUST_CACHE_ACTION_VERSION};
-    let uses = format!("Swatinem/rust-cache@{RUST_CACHE_ACTION_SHA}");
-    let parsed = PinnedActionRef::parse_uses(&uses, RUST_CACHE_ACTION_VERSION);
-    assert!(parsed.is_ok(), "qualified pin must parse: {uses}");
-    assert_eq!(RUST_CACHE_ACTION_SHA.len(), 40);
-}
-
-#[test]
-fn rust_cache_moving_refs_rejected() {
-    for (uses, comment) in [
-        ("Swatinem/rust-cache@v2.9.2", "v2.9.2"),
-        ("Swatinem/rust-cache@main", "v2.9.2"),
-        ("Swatinem/rust-cache@6323deb", "v2.9.2"),
-    ] {
-        assert!(
-            PinnedActionRef::parse_uses(uses, comment).is_err(),
-            "must reject {uses}"
-        );
-    }
-}
-
-#[test]
-fn rust_cache_inputs_schema_enforced() {
-    use velnor_actions_actionlint::rust_cache_inputs_schema;
-    let schema = rust_cache_inputs_schema();
-    let good = BTreeMap::from([
-        ("shared-key".to_owned(), "velnor-cargo-x".to_owned()),
-        ("save-if".to_owned(), "false".to_owned()),
-        ("cache-targets".to_owned(), "false".to_owned()),
-        ("cache-on-failure".to_owned(), "false".to_owned()),
-    ]);
-    assert_eq!(validate_action_inputs(&schema, &good), Ok(()));
-    let missing = BTreeMap::from([("shared-key".to_owned(), "x".to_owned())]);
-    assert!(validate_action_inputs(&schema, &missing).is_err());
-    let injected = BTreeMap::from([
-        ("shared-key".to_owned(), "x".to_owned()),
-        ("save-if".to_owned(), "false".to_owned()),
-        ("cache-targets".to_owned(), "false".to_owned()),
-        ("cache-on-failure".to_owned(), "false".to_owned()),
-        ("workspaces".to_owned(), ".".to_owned()),
-    ]);
-    assert!(validate_action_inputs(&schema, &injected).is_err());
-    let empty = BTreeMap::from([
-        ("shared-key".to_owned(), String::new()),
-        ("save-if".to_owned(), "false".to_owned()),
-        ("cache-targets".to_owned(), "false".to_owned()),
-        ("cache-on-failure".to_owned(), "false".to_owned()),
-    ]);
-    assert!(validate_action_inputs(&schema, &empty).is_err());
+fn retired_rust_cache_action_is_not_allowlisted() {
+    assert!(PinnedActionRef::new("Swatinem/rust-cache", None, &"a".repeat(40), "v2.9.2").is_err());
 }
 
 #[test]

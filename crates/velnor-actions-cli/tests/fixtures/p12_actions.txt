@@ -12,5 +12,5 @@ pub const CACHE_ACTION_VERSION: &str = "v6.1.0";
 pub const CACHE_ACTION_SHA: &str = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 pub const MR_BOXINGTON_ACTION_VERSION: &str = "v1.5.0";
 pub const MR_BOXINGTON_ACTION_SHA: &str = "9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3";
-pub const RUST_CACHE_ACTION_VERSION: &str = "v2.9.2";
-pub const RUST_CACHE_ACTION_SHA: &str = "6323deb102c322ba6fcbdcafc7e3dddab59af2b6";
+pub const AWS_CREDENTIALS_ACTION_VERSION: &str = "v6.3.0";
+pub const AWS_CREDENTIALS_ACTION_SHA: &str = "e1253824e5c10ff9df46874f81ed3ec929e19cfd";

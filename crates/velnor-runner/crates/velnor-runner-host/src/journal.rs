@@ -2,14 +2,32 @@
 //! before the caller runs an external effect.
 
 use std::ops::AsyncFnOnce;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::error::HostError;
 use crate::reconcile::IntentRow;
+use file_identity::JournalFile;
 
+#[path = "journal_completion.rs"]
+mod completion;
+mod file_identity;
+mod guest_probe_owner;
 mod launch;
+mod launch_identity;
+mod launch_phase;
+mod read;
 mod schema;
+mod transaction;
 mod worker_volume;
+
+#[cfg(test)]
+mod schema_metadata_tests;
+pub(crate) use completion::{
+    CleanupClaim, CompletedLaunch, CompletionIdentity, CompletionInboxEntry,
+    MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN, RecoveryLease,
+};
+pub(crate) use guest_probe_owner::GuestProbeLease;
+pub(crate) use launch_identity::LaunchIdentity;
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,7 +52,7 @@ impl IntentState {
         }
     }
 
-    fn parse(text: &str) -> Result<Self, HostError> {
+    pub(crate) fn parse(text: &str) -> Result<Self, HostError> {
         match text {
             "pending" => Ok(Self::Pending),
             "done" => Ok(Self::Done),
@@ -59,7 +77,7 @@ pub enum Outcome {
 /// File-backed journal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Journal {
-    path: PathBuf,
+    file: JournalFile,
 }
 
 impl Journal {
@@ -70,7 +88,7 @@ impl Journal {
     /// Returns [`HostError::Journal`] when turso cannot open the path.
     pub async fn open(path: &Path) -> Result<Self, HostError> {
         let journal = Self {
-            path: path.to_path_buf(),
+            file: JournalFile::open(path).await?,
         };
         journal.bootstrap().await?;
         Ok(journal)
@@ -78,7 +96,7 @@ impl Journal {
 
     /// Insert a pending intent and commit before returning.
     ///
-    /// The same `kind` and `subject` reuse the live row. A failed row starts a new id.
+    /// The same `kind` and `subject` reuse the live row. A failed or cleaned row starts a new id.
     ///
     /// # Errors
     ///
@@ -103,14 +121,17 @@ impl Journal {
             Outcome::DefiniteFailure => IntentState::Failed,
         };
         let conn = self.connection().await?;
-        let changed = conn
-            .execute(
-                "UPDATE intents SET state = ?1 WHERE id = ?2",
-                (state.as_str().to_owned(), id),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        one_row(changed)
+        transaction::with_unique_id(&conn, id, async move |conn| {
+            let changed = conn
+                .execute(
+                    "UPDATE intents SET state = ?1 WHERE id = ?2",
+                    (state.as_str().to_owned(), id),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            one_row(changed)
+        })
+        .await
     }
 
     /// Read a row back, including after a new [`Journal::open`].
@@ -173,18 +194,19 @@ impl Journal {
             return Err(HostError::Journal);
         }
         let conn = self.connection().await?;
-        let changed = conn
-            .execute(
-                "UPDATE intents SET docker_id = COALESCE(?1, docker_id), github_runner_id = COALESCE(?2, github_runner_id) WHERE id = ?3",
-                (
-                    docker_id.map(str::to_owned),
-                    github_runner_id.map(str::to_owned),
-                    id,
-                ),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        one_row(changed)
+        let docker_id = docker_id.map(str::to_owned);
+        let github_runner_id = github_runner_id.map(str::to_owned);
+        transaction::with_unique_id(&conn, id, async move |conn| {
+            let changed = conn
+                .execute(
+                    "UPDATE intents SET docker_id = COALESCE(?1, docker_id), github_runner_id = COALESCE(?2, github_runner_id) WHERE id = ?3",
+                    (docker_id, github_runner_id, id),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            one_row(changed)
+        })
+        .await
     }
 
     /// Store the runner id and the private `DinD` id. `None` keeps the column.
@@ -204,57 +226,46 @@ impl Journal {
             return Err(HostError::Journal);
         }
         let conn = self.connection().await?;
-        let changed = conn
-            .execute(
-                "UPDATE intents SET docker_id = COALESCE(docker_id, ?1), dind_id = COALESCE(dind_id, ?2) WHERE id = ?3 AND (?1 IS NULL OR docker_id IS NULL OR docker_id = ?1) AND (?2 IS NULL OR dind_id IS NULL OR dind_id = ?2)",
-                (
-                    runner_id.map(str::to_owned),
-                    dind_id.map(str::to_owned),
-                    id,
-                ),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        match changed {
-            1 => Ok(()),
-            0 => same_ids(&conn, id, runner_id, dind_id).await,
-            _ => Err(HostError::Journal),
-        }
+        let runner_id = runner_id.map(str::to_owned);
+        let dind_id = dind_id.map(str::to_owned);
+        transaction::with_unique_id(&conn, id, async move |conn| {
+            let changed = conn
+                .execute(
+                    "UPDATE intents SET docker_id = COALESCE(docker_id, ?1), dind_id = COALESCE(dind_id, ?2) WHERE id = ?3 AND (?1 IS NULL OR docker_id IS NULL OR docker_id = ?1) AND (?2 IS NULL OR dind_id IS NULL OR dind_id = ?2)",
+                    (runner_id.clone(), dind_id.clone(), id),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            match changed {
+                1 => Ok(()),
+                0 => same_ids(conn, id, runner_id.as_deref(), dind_id.as_deref()).await,
+                _ => Err(HostError::Journal),
+            }
+        })
+        .await
     }
 
     /// Record that cleanup of this row's ids is proven.
+    ///
+    /// Completion rows require a live completion claim and verified runner absence.
+    /// Use the completion-specific proof method for those rows.
     ///
     /// # Errors
     ///
     /// Returns [`HostError::Journal`] when the row is missing.
     pub async fn record_cleanup(&self, id: i64) -> Result<(), HostError> {
         let conn = self.connection().await?;
-        let changed = conn
-            .execute("UPDATE intents SET cleanup_proven = 1 WHERE id = ?1", [id])
-            .await
-            .map_err(|_| HostError::Journal)?;
-        one_row(changed)
-    }
-
-    /// Load every row. The connection closes before this returns.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] on I/O or a corrupt state.
-    pub async fn rows(&self) -> Result<Vec<IntentRow>, HostError> {
-        let conn = self.connection().await?;
-        let mut query = conn
-            .query(
-                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id, worker_volume FROM intents ORDER BY id",
-                (),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        let mut out = Vec::new();
-        while let Some(row) = query.next().await.map_err(|_| HostError::Journal)? {
-            out.push(intent_row(&row)?);
-        }
-        Ok(out)
+        transaction::with_unique_id(&conn, id, async move |conn| {
+            let changed = conn
+                .execute(
+                    "UPDATE intents SET cleanup_proven = 1 WHERE id = ?1 AND NOT EXISTS (SELECT 1 FROM completion_cleanup WHERE intent_id = ?1)",
+                    [id],
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            one_row(changed)
+        })
+        .await
     }
 
     async fn bootstrap(&self) -> Result<(), HostError> {
@@ -263,12 +274,7 @@ impl Journal {
     }
 
     async fn connection(&self) -> Result<turso::Connection, HostError> {
-        let text = self.path.to_str().ok_or(HostError::Path)?;
-        let db = turso::Builder::new_local(text)
-            .build()
-            .await
-            .map_err(|_| HostError::Journal)?;
-        db.connect().map_err(|_| HostError::Journal)
+        self.file.connection().await
     }
 }
 
@@ -336,6 +342,16 @@ fn intent_row(row: &turso::Row) -> Result<IntentRow, HostError> {
         docker_id: row.get(4).map_err(|_| HostError::Journal)?,
         dind_id: row.get(7).map_err(|_| HostError::Journal)?,
         worker_volume: row.get(8).map_err(|_| HostError::Journal)?,
+        scale_set_id: row.get(9).map_err(|_| HostError::Journal)?,
+        request_id: row.get(10).map_err(|_| HostError::Journal)?,
+        runner_name: row.get(11).map_err(|_| HostError::Journal)?,
+        docker_engine_id: row.get(12).map_err(|_| HostError::Journal)?,
+        launch_phase: row
+            .get::<Option<String>>(13)
+            .map_err(|_| HostError::Journal)?
+            .as_deref()
+            .map(crate::reconcile::LaunchPhase::parse)
+            .transpose()?,
         github_runner_id: row.get(5).map_err(|_| HostError::Journal)?,
         cleanup_proven: row.get(6).map_err(|_| HostError::Journal)?,
     })

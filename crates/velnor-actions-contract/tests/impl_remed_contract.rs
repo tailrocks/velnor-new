@@ -24,6 +24,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             max_parallel_jobs: 2,
             runner_label: None,
             tasks: Vec::new(),
+            tofu_apply: None,
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -48,12 +49,13 @@ pub(crate) fn valid_config() -> VelnorConfig {
 pub(crate) fn sample_plan(run_key: &str) -> Result<Plan, ContractError> {
     let entry = sample_entry(run_key)?;
     Ok(Plan {
-        schema: 1,
+        schema: Plan::SCHEMA,
         run_key: run_key.to_owned(),
         plan_id: plan_id_for_run(run_key)?,
         base: None,
         head: "ab".repeat(20),
         event: WorkflowEvent::PullRequest,
+        qualification: None,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,

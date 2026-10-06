@@ -1,17 +1,15 @@
 //! Exact-base baseline lookup through pinned `gh` (par §5).
 //!
-//! Fixed `run list` filter args plus exact run-and-artifact download
-//! args. Inputs reject short SHAs, URLs, wildcards, and shell text;
-//! the artifact name is exact, never a pattern, and the numeric run id
-//! is typed `u64` so no id, URL, or shell fragment reaches the vector.
+//! Fixed `run list` filter args. Inputs reject short SHAs, URLs,
+//! wildcards, and shell text; the artifact name is exact, never a pattern.
 
-use std::ffi::{OsStr, OsString};
-use std::path::Path;
+use velnor_actions_contract::is_valid_branch_name;
 
 use crate::catalog::{PinnedTool, ToolCatalog};
 use crate::command::IsolatedCommand;
 use crate::error::MiseError;
 use crate::requests::PinnedToolExec;
+use std::ffi::{OsStr, OsString};
 
 /// Full commit SHA length required for the exact base.
 const FULL_SHA_LEN: usize = 40;
@@ -56,7 +54,9 @@ impl BaselineLookup {
             return Err(invalid_input("base_sha", base));
         }
         check_lookup_text("workflow", workflow)?;
-        check_lookup_text("branch", branch)?;
+        if !is_valid_branch_name(branch) {
+            return Err(invalid_input("branch", branch));
+        }
         check_artifact(artifact)?;
         Ok(Self {
             base_sha: base.to_owned(),
@@ -110,22 +110,6 @@ impl BaselineLookup {
         .collect()
     }
 
-    /// Fixed `gh run download` args for one exact run and artifact.
-    #[must_use]
-    pub fn download_args(&self, run_id: u64, dir: &Path) -> Vec<OsString> {
-        [
-            OsString::from("run"),
-            OsString::from("download"),
-            OsString::from(run_id.to_string()),
-            OsString::from("--name"),
-            OsString::from(&self.artifact),
-            OsString::from("--dir"),
-            dir.as_os_str().to_owned(),
-        ]
-        .into_iter()
-        .collect()
-    }
-
     /// Full mise argv running the list under pinned `gh`.
     ///
     /// # Errors
@@ -134,21 +118,6 @@ impl BaselineLookup {
     /// were forbidden, which construction rules out.
     pub fn list_argv(&self, catalog: &ToolCatalog) -> Result<Vec<OsString>, MiseError> {
         Ok(Self::exec_for(self.list_args())?.argv(catalog))
-    }
-
-    /// Full mise argv downloading one exact run plus artifact.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::ForbiddenPayload`] only if the fixed payload
-    /// were forbidden, which construction rules out.
-    pub fn download_argv(
-        &self,
-        catalog: &ToolCatalog,
-        run_id: u64,
-        dir: &Path,
-    ) -> Result<Vec<OsString>, MiseError> {
-        Ok(Self::exec_for(self.download_args(run_id, dir))?.argv(catalog))
     }
 
     /// Isolated command running fixed `gh` args under the pinned catalog.

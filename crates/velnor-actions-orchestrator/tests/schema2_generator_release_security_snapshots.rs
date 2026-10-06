@@ -204,7 +204,11 @@ fn assert_attester_boundary(
 ) -> Result<(), Box<dyn Error>> {
     let attester = super::super::job_body(workflow, target.attest)?;
     assert!(
-        attester.contains(&format!("- {}\n      - {}\n", target.build, target.qualify)),
+        attester.contains(&format!("- {}\n", target.build)),
+        "{attester}"
+    );
+    assert!(
+        attester.contains(&format!("- {}\n", target.qualify)),
         "{attester}"
     );
     assert!(

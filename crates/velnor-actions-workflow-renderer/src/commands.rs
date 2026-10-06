@@ -3,9 +3,14 @@
 //! Argv arrives as validated vectors; quoting preserves `$` expansion spans
 //! for runner variables while quoting every other character.
 
-use std::collections::BTreeMap;
+use crate::{
+    RenderError,
+    commands_scan::{expansion_end, is_expansion_at, quote_expansion},
+    steps::scan_for_private_subcommands,
+};
 
-use crate::{RenderError, steps::scan_for_private_subcommands};
+pub(crate) use crate::commands_env::validate_composite_env;
+pub use crate::commands_env::validate_env;
 
 /// Validate a fixed argument vector: nonempty, no shell fragments.
 ///
@@ -53,35 +58,6 @@ pub fn validate_command_argv(argv: &[String]) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Validate a fixed env map: `A-Z0-9_` keys, single-line clean values.
-///
-/// Expressions stay allowlisted, never blanket-banned: only fixed
-/// runner-provided spans pass (see the private `expressions` module).
-///
-/// # Errors
-///
-/// Returns [`RenderError::BadCommand`] or [`RenderError::PrivateSubcommand`].
-pub fn validate_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
-    for (key, value) in env {
-        if key.is_empty()
-            || !key
-                .bytes()
-                .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
-        {
-            return Err(RenderError::BadCommand(format!("bad_env_key:{key}")));
-        }
-        if value
-            .chars()
-            .any(|ch| ch == '\0' || ch == '\n' || ch == '\r')
-        {
-            return Err(RenderError::BadCommand(format!("bad_env_value:{key}")));
-        }
-        crate::expressions::check_env_value(key, value)?;
-        scan_for_private_subcommands(key)?;
-        scan_for_private_subcommands(value)?;
-    }
-    Ok(())
-}
 /// Join validated argv into one `run:` line with POSIX quoting.
 ///
 /// `$NAME`/`${...}` spans pass through for runner expansion; every other
@@ -89,34 +65,44 @@ pub fn validate_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
 /// `sh -c`/`bash -c` is single-quoted whole instead: inner-shell
 /// variables (assigned or inherited) must survive the outer shell, and
 /// the script's own quotes must stay syntactic, not literal. The
-/// credential-unset prefix (shared `env -u` length predicate) is
-/// transparent to the shape check: a wrapped `sh -c` still quotes
-/// its script, at its shifted index.
+/// `env -u` prefixes are transparent to the shape check: a wrapped
+/// `sh -c` still quotes its script, at its shifted index.
 ///
 /// # Errors
 ///
 /// Returns [`RenderError::BadCommand`] when argv validation fails.
 pub fn join_argv_for_run(argv: &[String]) -> Result<String, RenderError> {
     validate_command_argv(argv)?;
-    let prefix = crate::toolchain_env::unset_prefix_len(argv);
-    let script_at = is_inline_shell(&argv[prefix..]).then_some(prefix + 2);
-    Ok(argv
-        .iter()
-        .enumerate()
-        .map(|(index, arg)| {
-            if script_at == Some(index) {
-                quote_script_arg(arg)
-            } else {
-                quote_run_arg(arg)
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" "))
+    let script_at = inline_shell_script_at(argv);
+    let mut words = Vec::with_capacity(argv.len());
+    for (index, arg) in argv.iter().enumerate() {
+        words.push(if script_at == Some(index) {
+            quote_script_arg(arg)
+        } else {
+            quote_run_arg(arg)?
+        });
+    }
+    Ok(words.join(" "))
 }
 
 /// True for `sh -c <script>`/`bash -c <script>` vectors.
 pub(crate) fn is_inline_shell(argv: &[String]) -> bool {
     argv.len() > 2 && matches!(argv[0].as_str(), "sh" | "bash") && argv[1].as_str() == "-c"
+}
+
+fn inline_shell_script_at(argv: &[String]) -> Option<usize> {
+    if is_inline_shell(argv) {
+        return Some(2);
+    }
+    if argv.first().is_none_or(|arg| arg != "env") {
+        return None;
+    }
+    let mut command_at = 1;
+    while argv.get(command_at).is_some_and(|arg| arg == "-u") && argv.get(command_at + 1).is_some()
+    {
+        command_at += 2;
+    }
+    is_inline_shell(argv.get(command_at..)?).then_some(command_at + 2)
 }
 
 /// Single-quote one inline script; only `'` needs escaping.
@@ -128,28 +114,51 @@ fn quote_script_arg(script: &str) -> String {
     format!("'{}'", script.replace('\'', "'\\''"))
 }
 
-/// POSIX-quote one argv element, preserving `$` expansion spans.
-#[must_use]
-pub fn quote_run_arg(arg: &str) -> String {
-    if is_plain_run_token(arg) {
-        return arg.to_owned();
+/// POSIX-quote one argv element, preserving and protecting `$` expansions.
+///
+/// # Errors
+///
+/// Returns [`RenderError::BadCommand`] when an expansion is malformed or its
+/// fallback syntax cannot be preserved safely.
+pub fn quote_run_arg(arg: &str) -> Result<String, RenderError> {
+    if is_plain_run_token(arg) && !arg.contains('$') {
+        return Ok(arg.to_owned());
     }
     let mut out = String::new();
     let mut literal = String::new();
-    let mut chars = arg.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '$' && is_expansion_start(chars.peek()) {
+    let bytes = arg.as_bytes();
+    let mut offset = 0;
+    while offset < bytes.len() {
+        if is_github_expression_at(bytes, offset) {
             flush_run_literal(&mut literal, &mut out);
-            push_expansion(&mut chars, &mut out);
-        } else if ch == '\'' {
+            let end = github_expression_end(bytes, offset)
+                .ok_or_else(|| RenderError::BadCommand("unclosed_github_expression".to_owned()))?;
+            out.push_str(&arg[offset..end]);
+            offset = end;
+            continue;
+        }
+        if bytes[offset] == b'$' && is_expansion_at(bytes, offset) {
+            flush_run_literal(&mut literal, &mut out);
+            let end = expansion_end(bytes, offset)
+                .ok_or_else(|| RenderError::BadCommand("unclosed_shell_expansion".to_owned()))?;
+            out.push_str(&quote_expansion(&arg[offset..end])?);
+            offset = end;
+            continue;
+        }
+        let ch = arg[offset..]
+            .chars()
+            .next()
+            .ok_or_else(|| RenderError::BadCommand("invalid_utf8_boundary".to_owned()))?;
+        if ch == '\'' {
             flush_run_literal(&mut literal, &mut out);
             out.push_str("'\\''");
         } else {
             literal.push(ch);
         }
+        offset += ch.len_utf8();
     }
     flush_run_literal(&mut literal, &mut out);
-    out
+    Ok(out)
 }
 /// True for `/cargo` or paths ending in `/cargo`.
 fn is_absolute_cargo(arg: &str) -> bool {
@@ -196,39 +205,6 @@ fn is_plain_run_token(arg: &str) -> bool {
         })
 }
 
-/// True when `$` starts a `$NAME` or `${...}` expansion span.
-fn is_expansion_start(next: Option<&char>) -> bool {
-    next.is_some_and(|ch| *ch == '{' || ch.is_ascii_alphanumeric() || *ch == '_')
-}
-
-/// Copy one `$NAME`/`${...}` span verbatim (braces balanced).
-fn push_expansion(chars: &mut std::iter::Peekable<std::str::Chars<'_>>, out: &mut String) {
-    out.push('$');
-    if chars.peek() == Some(&'{') {
-        let mut depth = 0_u32;
-        for ch in chars.by_ref() {
-            out.push(ch);
-            if ch == '{' {
-                depth += 1;
-            } else if ch == '}' {
-                depth = depth.saturating_sub(1);
-                if depth == 0 {
-                    break;
-                }
-            }
-        }
-    } else {
-        while let Some(&ch) = chars.peek() {
-            if ch.is_ascii_alphanumeric() || ch == '_' {
-                out.push(ch);
-                chars.next();
-            } else {
-                break;
-            }
-        }
-    }
-}
-
 /// Flush a pending literal run as one single-quoted span.
 fn flush_run_literal(literal: &mut String, out: &mut String) {
     if !literal.is_empty() {
@@ -239,108 +215,16 @@ fn flush_run_literal(literal: &mut String, out: &mut String) {
     }
 }
 
-/// Double-quote an env-derived shell path for `run:` lines.
-#[must_use]
-pub fn quote_env_path_for_run(path: &str) -> String {
-    let quoted = path.len() >= 2 && path.starts_with('"') && path.ends_with('"');
-    if quoted || !has_shell_expansion(path) {
-        return path.to_owned();
-    }
-    format!("\"{}\"", path.replace('\\', "\\\\").replace('"', "\\\""))
+fn is_github_expression_at(bytes: &[u8], index: usize) -> bool {
+    bytes.get(index..index + 3) == Some(b"${{")
 }
 
-/// True when a `run:` line carries a bare `$VAR/` word-splitting pattern.
-#[must_use]
-pub fn has_bare_env_expansion(line: &str) -> bool {
-    scan_run_words(line).iter().any(|(_, bare)| *bare)
-}
-
-/// Quote bare env words in a joined `run:` line (idempotent).
-///
-/// Words that already carry quoting are never rewritten: converting
-/// single-quoted `'...'$VAR'...'` concatenation to double quotes would
-/// expand inner-shell variables (e.g. `read`-assigned `$sha`) in the
-/// outer shell instead. Only fully bare words gain double quotes.
-#[must_use]
-pub fn quote_run_line_env_paths(run_line: &str) -> String {
-    scan_run_words(run_line)
-        .into_iter()
-        .map(|(word, bare)| {
-            if bare && !word.contains('\'') && !word.contains('"') {
-                quote_env_path_for_run(&decode_run_word(&word))
-            } else {
-                word
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-/// Split a `run:` line into words plus bare-expansion flags.
-fn scan_run_words(run_line: &str) -> Vec<(String, bool)> {
-    let bytes = run_line.as_bytes();
-    let mut words = Vec::new();
-    let mut cur = String::new();
-    let mut bare = false;
-    let mut quote = 0u8;
-    let mut chars = run_line.char_indices();
-    while let Some((index, ch)) = chars.next() {
-        if quote == 1 {
-            cur.push(ch);
-            if ch == '\'' {
-                quote = 0;
-            }
-        } else if quote == 2 {
-            cur.push(ch);
-            if ch == '\\' {
-                cur.extend(chars.next().map(|(_, next)| next));
-            } else if ch == '"' {
-                quote = 0;
-            }
-        } else if ch == '\'' {
-            quote = 1;
-            cur.push(ch);
-        } else if ch == '"' {
-            quote = 2;
-            cur.push(ch);
-        } else if ch.is_whitespace() {
-            if !cur.is_empty() {
-                words.push((std::mem::take(&mut cur), std::mem::take(&mut bare)));
-            }
-        } else {
-            bare = bare || ch == '$' && is_shell_expansion_at(bytes, index);
-            cur.push(ch);
-        }
-    }
-    if !cur.is_empty() {
-        words.push((cur, bare));
-    }
-    words
-}
-
-/// Decode single-quote spans (`'\''` → `'`).
-fn decode_run_word(word: &str) -> String {
-    word.replace("'\\''", "\0")
-        .replace('\'', "")
-        .replace('\0', "'")
-}
-
-/// True when text holds a `$NAME`/`${NAME}` shell expansion span.
-fn has_shell_expansion(text: &str) -> bool {
-    let bytes = text.as_bytes();
+fn github_expression_end(bytes: &[u8], index: usize) -> Option<usize> {
     bytes
-        .iter()
-        .enumerate()
-        .any(|(index, byte)| *byte == b'$' && is_shell_expansion_at(bytes, index))
-}
-
-/// True when `bytes[index] == b'$'` starts a shell span (`${{` excluded).
-fn is_shell_expansion_at(bytes: &[u8], index: usize) -> bool {
-    match bytes.get(index + 1) {
-        Some(b'{') => bytes.get(index + 2) != Some(&b'{'),
-        Some(next) => next.is_ascii_alphabetic() || *next == b'_',
-        None => false,
-    }
+        .get(index + 3..)?
+        .windows(2)
+        .position(|window| window == b"}}")
+        .map(|offset| index + 3 + offset + 2)
 }
 
 /// Reject Rust invocations outside pinned `mise exec` (RQ-9.3).

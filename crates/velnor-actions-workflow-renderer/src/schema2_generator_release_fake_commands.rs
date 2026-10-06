@@ -10,11 +10,17 @@ if [ "$1" = attestation ] && [ "$2" = verify ]; then exit 0; fi
 if [ "$1" = api ]; then
   shift
   if [ "$1" = --paginate ] && [ "$2" = --slurp ]; then
-    case "$3" in
+    query="$3"
+    if [ "$query" = -X ]; then query="$5"; fi
+    case "$query" in
       *actions/workflows/ci.yml/runs*)
         printf '[{"workflow_runs":[{"id":91,"run_number":9,"run_attempt":1,"path":".github/workflows/ci.yml","head_sha":"%s","head_branch":"main","head_repository":{"full_name":"tailrocks/velnor-new"},"event":"push","status":"completed","conclusion":"success"}]}]\n' "$GITHUB_SHA" ;;
       *actions/runs/91/attempts/1/jobs*)
-        printf '[{"jobs":[{"name":"Required","head_sha":"%s","head_branch":"main","status":"completed","conclusion":"success"}]}]\n' "$GITHUB_SHA" ;;
+        if [ "${GH_CASE:-}" = DuplicateRequired ]; then
+          printf '[{"jobs":[{"name":"Required","run_id":91,"run_attempt":1,"head_sha":"%s","head_branch":"main","status":"completed","conclusion":"success"},{"name":"Required","run_id":91,"run_attempt":1,"head_sha":"%s","head_branch":"main","status":"completed","conclusion":"cancelled"}]}]\n' "$GITHUB_SHA" "$GITHUB_SHA"
+        else
+          printf '[{"jobs":[{"name":"Required","run_id":91,"run_attempt":1,"head_sha":"%s","head_branch":"main","status":"completed","conclusion":"success"}]}]\n' "$GITHUB_SHA"
+        fi ;;
       *) exit 43 ;;
     esac
     exit 0
@@ -29,12 +35,21 @@ if [ "$1" = api ]; then
   fi
   case "$1" in
     repos/tailrocks/velnor-new/commits/main)
-      if [ "$2" = --jq ] && [ "$3" = .sha ]; then printf '%s\n' "$GITHUB_SHA"; else printf '{"sha":"%s"}\n' "$GITHUB_SHA"; fi ;;
+      if [ "${2:-}" = --jq ] && [ "${3:-}" = .sha ]; then printf '%s\n' "$GITHUB_SHA"; else printf '{"sha":"%s"}\n' "$GITHUB_SHA"; fi ;;
     repos/tailrocks/velnor-new/git/refs)
       test "$2 $3" = '--method POST'
+      printf '%s\n' "$GITHUB_SHA" > "$GH_TAG_SOURCE"
       printf '{"ref":"refs/tags/v0.1.1","object":{"type":"commit","sha":"%s"}}\n' "$GITHUB_SHA" ;;
     repos/tailrocks/velnor-new/git/ref/tags/v0.1.1)
-      printf '{"object":{"type":"commit","sha":"%s"}}\n' "$GITHUB_SHA" ;;
+      if [ "$GH_CASE" = TagMovedBeforePublish ]; then
+        count=0
+        if [ -f "$GH_TAG_READS" ]; then count="$(cat "$GH_TAG_READS")"; fi
+        count=$((count + 1))
+        printf '%s\n' "$count" > "$GH_TAG_READS"
+        if [ "$count" -eq 2 ]; then printf '%s\n' "$GH_MOVED_SHA" > "$GH_TAG_SOURCE"; fi
+      fi
+      tag_source="$(cat "$GH_TAG_SOURCE")"
+      printf '{"object":{"type":"commit","sha":"%s"}}\n' "$tag_source" ;;
     repos/tailrocks/velnor-new/releases/123)
       if [ "${2:-} ${3:-}" = '--method PATCH' ]; then
         test "$4 $5" = '-F draft=false'
@@ -86,6 +101,14 @@ exit 46
 pub(super) fn install_mock_gh(root: &Path) -> Result<(), Box<dyn Error>> {
     let bin = root.join("mock-bin");
     fs::create_dir_all(&bin)?;
+    let timeout = bin.join("timeout");
+    fs::write(
+        &timeout,
+        "#!/bin/sh\nset -eu\ntest \"$1\" = --signal=TERM\nshift\ntest \"$1\" = --kill-after=5s\nshift\ntest \"$1\" = 60s\nshift\nexec \"$@\"\n",
+    )?;
+    let mut permissions = fs::metadata(&timeout)?.permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(timeout, permissions)?;
     let mock = bin.join("gh");
     fs::write(&mock, MOCK_GH)?;
     let mut permissions = fs::metadata(&mock)?.permissions();

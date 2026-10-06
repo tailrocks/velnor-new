@@ -2,7 +2,7 @@
 //!
 //! Restore steps arrive from the orchestrator (per-root keys need the
 //! catalog tofu pin); saves append post-hoc through writer election
-//! ([`elect_tofu_provider_savers`](crate::cache_p08::elect_tofu_provider_savers)).
+//! ([`elect_cache_writers`](crate::cache_p08::elect_cache_writers)).
 //! Both archive exactly one job-private plugin-cache dir, never the
 //! data dir beside it.
 
@@ -80,8 +80,7 @@ pub(crate) fn provider_admission_file(
             ]),
         ),
     ]);
-    let quoted = yaml::quote_run_values_in_yaml(body);
-    let bytes = marker::with_marker(version, &yaml::render_yaml(&quoted))?;
+    let bytes = marker::with_marker(version, &yaml::render_yaml(&body))?;
     steps::scan_for_private_subcommands(&bytes)?;
     Ok(crate::tree::RenderedFile {
         path: ".github/actions/tofu-provider-admission/action.yml".to_owned(),

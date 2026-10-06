@@ -1,18 +1,11 @@
-//! P08 shared cache constructors: sources snapshot and Cargo-only fallback.
+//! P08 shared cache constructors for the exact Cargo sources subset.
 //!
 //! The plan job saves the shared sources snapshot once (single writer);
-//! crate jobs restore it read-only. Cargo-only repos (no MBX anywhere)
-//! use pinned `rust-cache` (registry-only, shared key) instead; MBX and
-//! mixed repos never do.
+//! crate jobs restore it read-only. Cargo-only, MBX, and mixed repos use
+//! this same archive so no action can overlap V2 tools-owned Cargo paths.
 
-use std::collections::BTreeMap;
-
-use velnor_actions_actionlint::{
-    RUST_CACHE_ACTION_SHA, RUST_CACHE_ACTION_VERSION,
-    actions::{CACHE_ACTION_SHA, CACHE_ACTION_VERSION},
-    rust_cache_inputs_schema, validate_action_inputs,
-};
-use velnor_actions_contract::{Step, StepKind, StepRole};
+use velnor_actions_actionlint::actions::{CACHE_ACTION_SHA, CACHE_ACTION_VERSION};
+use velnor_actions_contract::{Step, StepRole};
 
 use crate::OrchestratorError;
 
@@ -20,9 +13,6 @@ use crate::OrchestratorError;
 pub(crate) const SHARED_CARGO_HOME: &str = "${{ runner.temp }}/velnor/cargo";
 /// Sources key prefix (shared: target + Rust + lock hash, never job id).
 pub(crate) const SOURCES_KEY_PREFIX: &str = "velnor-v1-sources";
-/// Cargo-only shared registry key prefix for `rust-cache`.
-pub(crate) const RUST_CACHE_SHARED_PREFIX: &str = "velnor-cargo";
-
 /// Shared sources key: target + Rust + lock hash (no job id, no trust).
 /// # Errors
 ///
@@ -126,66 +116,16 @@ fn sources_step(
     } else {
         "Save Cargo sources".to_owned()
     };
+    if !restore {
+        let gate = velnor_actions_mise::cache_trust::authorize_trusted_save().map_err(wrap)?;
+        step.condition = Some(gate.to_owned());
+    }
     step.role = Some(if restore {
         StepRole::CargoSourcesRestore
     } else {
         StepRole::CargoSourcesSave
     });
-    if !restore {
-        let gate = velnor_actions_mise::cache_trust::authorize_trusted_save().map_err(wrap)?;
-        step.condition = Some(gate.to_owned());
-    }
     Ok(step)
-}
-
-/// Cargo-only registry step via pinned `rust-cache` (never with MBX).
-///
-/// Registry-only (`cache-targets: false`), shared key (no job id), explicit
-/// `save-if` (writers true, readers false), never caches on failure.
-/// # Errors
-///
-/// Returns contract or actionlint errors for bad keys, flags, or pins.
-pub(crate) fn rust_cache_step(shared_key: &str, save_if: bool) -> Result<Step, OrchestratorError> {
-    use velnor_actions_actionlint::PinnedActionRef;
-    use velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
-    if !shared_key.starts_with(&format!("{RUST_CACHE_SHARED_PREFIX}-"))
-        || shared_key.contains(' ')
-        || shared_key.contains('\n')
-        || shared_key.len() > MAX_CACHE_KEY_BYTES
-    {
-        return Err(bad_key(format!("bad_shared_key:{shared_key}")));
-    }
-    let uses = PinnedActionRef::new(
-        "Swatinem/rust-cache",
-        None,
-        RUST_CACHE_ACTION_SHA,
-        RUST_CACHE_ACTION_VERSION,
-    )
-    .map_err(OrchestratorError::from)?
-    .uses_value();
-    let with = BTreeMap::from([
-        ("shared-key".to_owned(), shared_key.to_owned()),
-        (
-            "save-if".to_owned(),
-            if save_if { "true" } else { "false" }.to_owned(),
-        ),
-        ("cache-targets".to_owned(), "false".to_owned()),
-        ("cache-on-failure".to_owned(), "false".to_owned()),
-        ("prefix-key".to_owned(), "velnor-v1-cargo".to_owned()),
-        ("add-job-id-key".to_owned(), "false".to_owned()),
-    ]);
-    validate_action_inputs(&rust_cache_inputs_schema(), &with).map_err(OrchestratorError::from)?;
-    Ok(Step {
-        name: "Restore Cargo registry".to_owned(),
-        id: None,
-        role: Some(StepRole::CargoRegistryRestore),
-        condition: None,
-        kind: StepKind::Action {
-            uses,
-            with,
-            env: BTreeMap::new(),
-        },
-    })
 }
 
 /// Shared-cache key rejection.

@@ -35,11 +35,17 @@ coordinates typed process requests. The Mise adapter owns process creation,
 argument validation, environment construction, and result capture for those
 requests; the orchestrator MUST NOT launch processes or construct shell text.
 
-Internal workflow steps MUST NOT be exposed as subcommands. The sole
-non-CLI internal entrypoint is a bare invocation (no CLI arguments)
+Internal workflow steps MUST NOT be exposed as subcommands. Product workflow
+operations use a bare invocation (no CLI arguments)
 with `VELNOR_INTERNAL_OP` naming a versioned typed operation
 (`write-request-v1`, `plan-v1`, `merge-v1`, `fetch-reports-v1`, or
-`write-task-report-v1`) plus its gate inputs. `plan-v1` and `merge-v1`
+`write-task-report-v1`, or `resolve-qualification-v1`) plus its gate inputs.
+`resolve-qualification-v1` is restricted to a Velnor `workflow_dispatch`
+plan with a runner-temp request file and a read-only GitHub token; it resolves
+and verifies predecessor receipt lineage before `plan-v1` emits typed cache
+directives. The complete protocol is in
+[`hosted-cache-qualification-contract.md`](hosted-cache-qualification-contract.md).
+`plan-v1` and `merge-v1`
 read schema-1 JSON from the existing request file at
 `VELNOR_REQUEST_FILE` and write the schema-1 JSON result to the sibling
 `<op>-response.json` derived from the `<op>-request.json` file name;
@@ -70,6 +76,19 @@ likewise falls through to Clap and fails with the usage diagnostic
 (exit 2). A satisfied gate that fails operationally exits 1 with empty
 stdout and a one-line stderr diagnostic. Helper staging and version
 rules are in §6 and [workflow §3](workflow-contract.md).
+
+Repository-maintenance checks use the separate private operation
+`VELNOR_INTERNAL_OP=repo-policy-v1` and the allowlisted
+`VELNOR_REPO_POLICY_ACTION` values `freshness`, `toolchain-specs`,
+`mise-version`, `workspace-members`, `library-members`, and `trailer-policy`.
+The `VELNOR_REPO_POLICY_ROOT` variable must name an existing directory.
+Optional upstream, advisory, and trailer-identity flags accept only absent,
+`0`, or `1`; trailer validation also requires an absolute existing message
+file. Unknown actions and malformed flags fail closed. The gate transports
+read-only operations to the repository-only `velnor-actions-freshness`
+support crate; the orchestrator, public command tree, V1 product task graph,
+and generated workflows MUST NOT depend on it. This adds no public command or
+executable.
 
 ## 2. Repository root
 
@@ -208,7 +227,6 @@ schema = 1
 # "actions/upload-artifact" = { version = "v7.0.1", sha = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" }
 # "actions/download-artifact" = { version = "v8.0.1", sha = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" }
 # "jdx/mr-boxington-action" = { version = "v1.6.0", sha = "1687e54eb349cadf61fa38b5813a77875489e8e6" }
-# "Swatinem/rust-cache" = { version = "v2.9.2", sha = "6323deb102c322ba6fcbdcafc7e3dddab59af2b6" }
 # Values must be an allowlisted action's matching release version and full SHA.
 ```
 

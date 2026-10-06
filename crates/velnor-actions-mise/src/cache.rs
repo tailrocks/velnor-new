@@ -241,7 +241,7 @@ pub fn mode_for_event(event: &str) -> Result<TaskCacheMode, MiseError> {
         "local" => Ok(TaskCacheMode::LocalOnly),
         "pull_request" | "merge_group" | "fork" => Ok(TaskCacheMode::ReadOnly),
         "push" => Ok(TaskCacheMode::ReadWrite),
-        "release" => Ok(TaskCacheMode::Off),
+        "release" | "qualification" => Ok(TaskCacheMode::Off),
         _ => Err(MiseError::UnknownCacheMode {
             mode: event.to_owned(),
         }),

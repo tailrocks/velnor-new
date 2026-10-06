@@ -39,6 +39,7 @@ pub fn resolve_closure_at_root(
     platform_id: &str,
     reads: &mut FileCache,
 ) -> Result<TaskInputClosure, ContractError> {
+    crate::normalized_root_for_proposal(task)?;
     let kind = TofuTaskKind::parse(&task.task_kind)?;
     let unit = task.identity.unit_path.as_str();
     if !unit.is_empty() {

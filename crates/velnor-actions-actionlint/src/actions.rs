@@ -15,7 +15,7 @@ pub const ALLOWED_ACTIONS: [&str; 9] = [
     "actions/cache/save",
     "jdx/mr-boxington-action",
     "asamarts/alint",
-    "Swatinem/rust-cache",
+    "aws-actions/configure-aws-credentials",
 ];
 
 /// Action key for the repository-policy Alint job's pinned ref.
@@ -23,6 +23,13 @@ pub const ALINT_ACTION: &str = "asamarts/alint";
 
 /// Action key for the no-credentials checkout every job embeds.
 pub const CHECKOUT_ACTION: &str = "actions/checkout";
+
+/// Policy-owned action used to obtain short-lived AWS credentials through OIDC.
+pub const AWS_CREDENTIALS_ACTION: &str = "aws-actions/configure-aws-credentials";
+/// Latest reviewed immutable AWS credentials action release.
+pub const AWS_CREDENTIALS_ACTION_VERSION: &str = "v6.3.0";
+/// Full commit SHA for [`AWS_CREDENTIALS_ACTION_VERSION`].
+pub const AWS_CREDENTIALS_ACTION_SHA: &str = "e1253824e5c10ff9df46874f81ed3ec929e19cfd";
 
 /// Qualified `asamarts/alint` release.
 /// Source: `https://api.github.com/repos/asamarts/alint/releases/latest`; checked 2026-09-28.
@@ -74,14 +81,6 @@ pub const MR_BOXINGTON_ACTION_CANDIDATE_VERSION: &str = "v1.7.1";
 /// Full commit SHA of [`MR_BOXINGTON_ACTION_CANDIDATE_VERSION`], kept as an unqualified experiment target.
 pub const MR_BOXINGTON_ACTION_CANDIDATE_SHA: &str = "d0825fbaf3cc36ca2609aa38e71046265a1f1e37";
 
-/// Action key for the Cargo-only Rust cache (P08-7, never with MBX).
-pub const RUST_CACHE_ACTION: &str = "Swatinem/rust-cache";
-/// Qualified `Swatinem/rust-cache` release.
-/// Source: `https://api.github.com/repos/Swatinem/rust-cache/tags`; checked 2026-09-30.
-pub const RUST_CACHE_ACTION_VERSION: &str = "v2.9.2";
-/// Full commit SHA for [`RUST_CACHE_ACTION_VERSION`].
-pub const RUST_CACHE_ACTION_SHA: &str = "6323deb102c322ba6fcbdcafc7e3dddab59af2b6";
-
 /// One pinned action reference: `repo[/path]@sha` plus version comment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PinnedActionRef {
@@ -96,6 +95,17 @@ pub struct PinnedActionRef {
 }
 
 impl PinnedActionRef {
+    /// Canonical OIDC credentials action pin.
+    #[must_use]
+    pub fn aws_credentials() -> Self {
+        Self {
+            repo: AWS_CREDENTIALS_ACTION.to_owned(),
+            path: None,
+            sha: AWS_CREDENTIALS_ACTION_SHA.to_owned(),
+            version_comment: AWS_CREDENTIALS_ACTION_VERSION.to_owned(),
+        }
+    }
+
     /// Build and validate an ordinary SHA-pinned ref.
     ///
     /// # Errors

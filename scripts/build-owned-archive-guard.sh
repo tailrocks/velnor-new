@@ -288,7 +288,14 @@ run_mise() {
 }
 
 validate_local_cargo_closure() {
-  local package package_path tree_pid
+  local package package_path tree_output tree_status
+  tree_output="$(run_mise exec rust@1.98.1 -- cargo tree --locked \
+    --manifest-path "$repository/Cargo.toml" -p velnor-archive-guard \
+    --edges normal,build --prefix none --format '{p}')"
+  tree_status=$?
+  if [[ "$tree_status" != 0 ]]; then
+    fail 'cannot determine locked local Cargo dependency closure'
+  fi
   while IFS= read -r package; do
     case "$package" in
       *" ("*")")
@@ -318,13 +325,7 @@ validate_local_cargo_closure() {
           || fail "unrecognized Cargo package identity: $package"
         ;;
     esac
-  done < <(run_mise exec rust@1.98.1 -- cargo tree --locked \
-    --manifest-path "$repository/Cargo.toml" -p velnor-archive-guard \
-    --edges normal,build --prefix none --format '{p}')
-  tree_pid=$!
-  if ! wait "$tree_pid"; then
-    fail 'cannot determine locked local Cargo dependency closure'
-  fi
+  done <<< "$tree_output"
 }
 
 cd -- "$repository"
