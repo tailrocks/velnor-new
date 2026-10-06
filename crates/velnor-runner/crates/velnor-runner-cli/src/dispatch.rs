@@ -46,8 +46,10 @@ fn dispatch(cli: &Cli) -> ExitCode {
             max_jobs,
             docker_context,
             endpoint,
-            // Resource budgets land with HostConfig resources support.
-            ..
+            runner_cpu_millicores,
+            runner_memory_bytes,
+            dind_cpu_millicores,
+            dind_memory_bytes,
         } => connect(&ConnectRequest {
             state: &state,
             repo,
@@ -56,6 +58,10 @@ fn dispatch(cli: &Cli) -> ExitCode {
             max_jobs: *max_jobs,
             docker_context: docker_context.as_deref(),
             endpoint: endpoint.as_deref(),
+            runner_cpu_millicores: *runner_cpu_millicores,
+            runner_memory_bytes: *runner_memory_bytes,
+            dind_cpu_millicores: *dind_cpu_millicores,
+            dind_memory_bytes: *dind_memory_bytes,
         }),
         Command::Service { action } => crate::service::service(*action),
         Command::Daemon { action } => daemon(&state, *action),
@@ -144,6 +150,10 @@ struct ConnectRequest<'a> {
     max_jobs: Option<u32>,
     docker_context: Option<&'a str>,
     endpoint: Option<&'a str>,
+    runner_cpu_millicores: u64,
+    runner_memory_bytes: u64,
+    dind_cpu_millicores: u64,
+    dind_memory_bytes: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -196,6 +206,10 @@ fn connect_with<R: Read>(
         request.max_jobs.unwrap_or(1),
         request.docker_context,
         request.endpoint,
+        request.runner_cpu_millicores,
+        request.runner_memory_bytes,
+        request.dind_cpu_millicores,
+        request.dind_memory_bytes,
     );
     let parsed = HostConfig::parse(&text).map_err(|_| ConnectError::Config)?;
     if binding_rejected(request.state, &parsed) {
@@ -236,11 +250,15 @@ fn sample_config(
     max_jobs: u32,
     docker_context: Option<&str>,
     endpoint: Option<&str>,
+    runner_cpu_millicores: u64,
+    runner_memory_bytes: u64,
+    dind_cpu_millicores: u64,
+    dind_memory_bytes: u64,
 ) -> String {
     let context = docker_context.unwrap_or("orbstack");
     let socket = endpoint.unwrap_or("unix:///var/run/docker.sock");
     format!(
-        "schema = 1\n[github]\nrepository = \"{repo}\"\nscale_set_name = \"{scale_set}\"\ncredential_ref = \"keychain:com.tailrocks.velnor.host/local\"\n[host]\nmax_jobs = {max_jobs}\n[docker]\ncontext = \"{context}\"\nplatform = \"{platform}\"\nendpoint = \"{socket}\"\n"
+        "schema = 1\n[github]\nrepository = \"{repo}\"\nscale_set_name = \"{scale_set}\"\ncredential_ref = \"keychain:com.tailrocks.velnor.host/local\"\n[host]\nmax_jobs = {max_jobs}\n[host.resources]\nrunner_cpu_millicores = {runner_cpu_millicores}\nrunner_memory_bytes = {runner_memory_bytes}\ndind_cpu_millicores = {dind_cpu_millicores}\ndind_memory_bytes = {dind_memory_bytes}\n[docker]\ncontext = \"{context}\"\nplatform = \"{platform}\"\nendpoint = \"{socket}\"\n"
     )
 }
 

@@ -37,7 +37,7 @@ struct Scratch {
 }
 
 fn sample() -> String {
-    "schema = 1\n[github]\nrepository = \"example/repo\"\nscale_set_name = \"ubuntu-26.04-scale-set\"\ncredential_ref = \"keychain:test/absent\"\n[host]\nmax_jobs = 1\n[docker]\ncontext = \"test\"\nplatform = \"linux/amd64\"\nendpoint = \"unix:///tmp/velnor-readiness-absent.sock\"\n".to_owned()
+    "schema = 1\n[github]\nrepository = \"example/repo\"\nscale_set_name = \"ubuntu-26.04-scale-set\"\ncredential_ref = \"keychain:test/absent\"\n[host]\nmax_jobs = 1\n[host.resources]\nrunner_cpu_millicores = 1000\nrunner_memory_bytes = 2147483648\ndind_cpu_millicores = 3000\ndind_memory_bytes = 6442450944\n[docker]\ncontext = \"test\"\nplatform = \"linux/amd64\"\nendpoint = \"unix:///tmp/velnor-readiness-absent.sock\"\n".to_owned()
 }
 
 #[test]

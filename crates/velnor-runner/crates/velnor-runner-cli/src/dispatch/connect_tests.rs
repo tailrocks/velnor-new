@@ -89,6 +89,16 @@ fn connect_writes_host_toml_without_the_token() -> Result<(), String> {
     if text.contains("canary-token") {
         return Err("toml contains token".to_owned());
     }
+    for field in [
+        "runner_cpu_millicores = 1000",
+        "runner_memory_bytes = 2147483648",
+        "dind_cpu_millicores = 3000",
+        "dind_memory_bytes = 6442450944",
+    ] {
+        if !text.contains(field) {
+            return Err(format!("missing {field}"));
+        }
+    }
     let stored = security_framework::passwords::generic_password(
         security_framework::passwords::PasswordOptions::new_generic_password(
             TEST_SERVICE,
@@ -111,6 +121,10 @@ fn request(state: &Path) -> ConnectRequest<'_> {
         max_jobs: Some(1),
         docker_context: Some("orbstack"),
         endpoint: Some("unix:///var/run/docker.sock"),
+        runner_cpu_millicores: 1_000,
+        runner_memory_bytes: 2_147_483_648,
+        dind_cpu_millicores: 3_000,
+        dind_memory_bytes: 6_442_450_944,
     }
 }
 
