@@ -1,6 +1,6 @@
 ---
 title: Strict Rust policy rollout
-description: Velnor violation inventory and sequenced migration plan for rust-repository-policy v0.1.0.
+description: Velnor violation inventory and sequenced migration plan for rust-repository-policy v0.1.1.
 ---
 
 # Strict Rust policy rollout (Velnor)
@@ -575,3 +575,65 @@ Cross-slice hazard for slice-4b: cli
 `strict_json_tests.rs` file path plus test names — moving that
 suite will need the same pin-data treatment as this slice's
 `forbidden_src` / `size_limits_hold` / mutants updates.
+
+## Slice 5: re-pin to policy v0.1.1 (2026-10-06)
+
+- Policy: `tailrocks/rust-repository-policy` v0.1.1
+  (`https://github.com/tailrocks/rust-repository-policy/releases/tag/v0.1.1`,
+  sha256 `3aeb63a9…b424d5`, verified against the `.sha256` sidecar).
+  v0.1.0→v0.1.1 module diff is exactly `tests.yml`
+  (`tests-no-test-files-in-src` gains the canonical-suite
+  exclusion) plus `size.yml` (`size-lib-main-150` rescoped to the
+  S7 150-set); profile and schemas byte-identical, so vendored
+  `renovate.schema.json` and `policy/*.json` are untouched. Only
+  the `.alint.yml` pin header changes (plus this record).
+- Install gate: tarball materialized to `.cache/rust-policy/`
+  (gitignored); helper `0.1.1` binary on PATH (macos-arm64 sha256
+  `ab562dc2…347ad8` — NOTE `--version` still reports `0.1.0`,
+  upstream version-string bug, identify the helper by artifact
+  sha); `alint validate-config` 37 rules loaded; `alint check`
+  exit 1 (27 passing · 10 failing); `check-gaps` exit 1.
+  Toolchain: alint 0.17.0, cargo 1.98.1.
+- Upstream fixes verified on this tree: the 13 canonical
+  `tests.rs` suites are exempt from `tests-no-test-files-in-src`
+  (0 exact-`tests.rs` findings remain); the intentional negative
+  fixture (`fixtures/alint-negative/lib-main-max-lines/lib.rs`)
+  no longer trips `size-lib-main-150` (new rule requires `src/`
+  in the path — 0 `fixtures/` findings anywhere). The GAP-TEST-002
+  case-split fix is unobservable on this tree (no splits exist
+  yet) but probed clean on a synthetic fixture: `mod alpha;` in
+  `src/tests.rs` → `src/tests/alpha.rs` yields 0 TEST findings
+  under the 0.1.1 helper vs 2× TEST-002 under 0.1.0; the `mod`
+  needs no `#[cfg(test)]`; undeclared case files fall through to
+  TEST-003; `#[path]` suites still fail TEST-002. Slice-4a policy
+  bugs 1–3 are all closed upstream; no workarounds were ever
+  applied.
+- Newly visible debt (owned by the test-normalization slices):
+  `size-lib-main-150` now covers unit-suite indexes, so 5
+  `tests.rs` files over 150 lines trip it: mise
+  `checks/discovery/qualified/tests.rs` (517), guard
+  `owned_archive_guard/tests.rs` (448), runner-host
+  `stage/tests.rs` (269), rust
+  `identity/identity_closure/tests.rs` (184), rust
+  `propose/tests.rs` (175). Relief path is the now-legal
+  canonical case split (`mod <case>;` + `tests/<case>.rs`,
+  index ≤150, cases under `size-file-400`).
+
+### Before/after counts (slice 5, v0.1.0 → v0.1.1)
+
+Native rules:
+
+| Rule ID | Before | After | Δ |
+|---|---|---|---|
+| `tests-no-test-files-in-src` | 168 | 155 | −13 (all canonical `tests.rs` exempt) |
+| `size-lib-main-150` | 2 | 6 | −1 negative fixture, guard `tests/main.rs` (186) stays, +5 unit-suite indexes |
+| `size-file-400` | 2 | 2 | 0 (mise qualified + guard `owned_archive_guard`, both >400) |
+| `tests-only-rust` | 17 | 17 | 0 |
+| `tests-dir-present` | 1 | 1 | 0 |
+| toolchain trio | 3 | 3 | 0 |
+| `ci-build-runs-on` | 6 | 6 | 0 |
+| `policy-gaps` | 1345 | 1345 | 0 |
+| Total (27 passing · 10 failing both sides) | 1544 | 1535 | −9 |
+
+Helper gaps: 993 / 115 / 219 / 8 / 6 / 4, total 1345 —
+unchanged to the finding (no case splits on this tree yet).
