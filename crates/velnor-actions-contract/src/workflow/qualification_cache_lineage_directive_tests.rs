@@ -90,7 +90,7 @@ pub(super) fn qualification_plan(
     let entry = qualification_entry(&package_id, &task_digest, &input_digest, &run_key)?;
     let context = qualification_context(phase, source_sha, run_id, predecessor);
     Ok(Plan {
-        schema: 1,
+        schema: Plan::SCHEMA,
         run_key: run_key.clone(),
         plan_id: plan_id_for_run(&run_key)?,
         base: None,
@@ -140,6 +140,7 @@ fn qualification_entry(
     input_digest: &str,
     run_key: &str,
 ) -> Result<MatrixEntry, crate::ContractError> {
+    let planned_platform = PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")?;
     let mut entry = MatrixEntry::derive(
         "rust",
         "stack/rust/demo/test/default",
@@ -154,12 +155,12 @@ fn qualification_entry(
         input_digest,
         run_key,
         "rust-demo",
-        PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")?,
+        planned_platform.clone(),
     )?;
     entry.cache_ids = Some(EntryCacheIds::new(
         &digest_b3(b"workspace"),
         &digest_b3(b"lane"),
-        &digest_b3(b"platform"),
+        planned_platform.platform_id.as_str(),
         &digest_b3(b"toolchain"),
         &digest_b3(b"cache format"),
     )?);
