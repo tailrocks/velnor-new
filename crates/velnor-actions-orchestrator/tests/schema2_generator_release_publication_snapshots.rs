@@ -2,7 +2,7 @@ use super::action_snapshots::{Actions, action};
 use super::qualification_snapshots;
 
 pub(super) fn assert_pinned_gh_policy(actions: &Actions) {
-    let pinned_wrapper = r#"gh() { mise --no-config --no-env --no-hooks exec gh@2.102.0 -- gh \"$@\"; }\nexport -f gh"#;
+    let pinned_wrapper = r#"gh() { timeout --signal=TERM --kill-after=5s 60s mise --no-config --no-env --no-hooks exec gh@2.102.0 -- gh \"$@\"; }\nexport -f gh"#;
     for (name, body) in actions {
         if ["gh api ", "gh release ", "gh attestation "]
             .iter()

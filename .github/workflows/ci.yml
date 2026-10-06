@@ -130,7 +130,7 @@ jobs:
   plan:
     name: Plan
     runs-on: ubuntu-26.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     env:
       ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
       ACTIONS_ID_TOKEN_REQUEST_URL: ""
