@@ -170,7 +170,7 @@ fn validate_reports_executed_after_provider_cache_hit() -> TestResult {
 fn provider_hit_report(
     obligation: &velnor_actions_contract::PlanObligation,
     entry: &velnor_actions_contract::MatrixEntry,
-    locator: &str,
+    _locator: &str,
 ) -> Result<TaskReport, Box<dyn std::error::Error>> {
     let locator = velnor_actions_tofu::tofu_root_locator("stacks/a")?;
     let report = TaskReport {

@@ -32,21 +32,6 @@ pub(crate) fn product_src_files() -> Result<Vec<PathBuf>, Box<dyn std::error::Er
     Ok(out)
 }
 
-/// Sorted `.rs` files directly under `src/`, companions included.
-///
-/// Kept for the `prepare` submodule scan, which filters companions itself.
-pub(crate) fn src_files() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
-    let mut out = Vec::new();
-    for entry in std::fs::read_dir(orch_src())? {
-        let path = entry?.path();
-        if path.extension().is_some_and(|ext| ext == "rs") {
-            out.push(path);
-        }
-    }
-    out.sort();
-    Ok(out)
-}
-
 /// Strip a trailing `//` comment, ignoring `//` inside string literals.
 fn strip_line_comment(line: &str) -> &str {
     let bytes = line.as_bytes();

@@ -2,7 +2,7 @@
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
     ActionPin, ContractError, GeneratorBinary, GeneratorLock, GeneratorValidation, LockedGenerator,
-    MiseBootstrap, PullRequestCachePolicy, ReleaseManifest, SUPPORTED_TARGETS, TargetRecord,
+    MiseBootstrap, ReleaseManifest, SUPPORTED_TARGETS, TargetRecord,
     WorkflowPolicy, asset_filename,
 };
 
