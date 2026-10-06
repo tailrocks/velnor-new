@@ -99,6 +99,9 @@ fn one_request<'a>(
         })
     }
 }
+#[cfg(test)]
+#[path = "steps/assigned_resume_tests.rs"]
+mod assigned_resume_tests;
 
 pub(super) async fn launch_id<T, S, F>(
     lane: &mut T,
@@ -124,9 +127,29 @@ where
         return ack_bound(lane, ctx, batch, journal, id).await;
     }
     if !fresh {
-        return hold(journal, id, EnsureError::Uncertain).await;
-    }
-    if !journal
+        if journal.claim_launch_jit(id).await.map_err(map_journal)? {
+            return mint::run_claimed(
+                lane,
+                mint::Request {
+                    ctx,
+                    batch: Some(batch),
+                    journal,
+                    id,
+                    name: &name,
+                    origin: MintOrigin::AcquiredJob,
+                },
+                start,
+            )
+            .await;
+        }
+        if !journal
+            .claim_assigned_acquire(id)
+            .await
+            .map_err(map_journal)?
+        {
+            return hold(journal, id, EnsureError::Uncertain).await;
+        }
+    } else if !journal
         .claim_assigned_acquire(id)
         .await
         .map_err(map_journal)?
@@ -152,6 +175,20 @@ where
                 start,
             )
             .await
+        }
+        Ok(AcquireOutcome::Noop) => {
+            journal
+                .record_assigned_acquire(id, true)
+                .await
+                .map_err(map_journal)?;
+            hold(journal, id, EnsureError::Uncertain).await
+        }
+        Ok(AcquireOutcome::Acquired(_)) => {
+            journal
+                .record_assigned_acquire(id, false)
+                .await
+                .map_err(map_journal)?;
+            reject_empty(journal, id).await
         }
         Ok(AcquireOutcome::Noop) => {
             journal
@@ -274,7 +311,22 @@ where
         return finish_live(lane, ctx, journal, id, batch).await;
     }
     if !fresh {
-        return hold(journal, id, EnsureError::Uncertain).await;
+        if !journal.claim_launch_jit(id).await.map_err(map_journal)? {
+            return hold(journal, id, EnsureError::Uncertain).await;
+        }
+        return mint::run_claimed(
+            lane,
+            mint::Request {
+                ctx,
+                batch,
+                journal,
+                id,
+                name,
+                origin: MintOrigin::AssignedPopulation,
+            },
+            start,
+        )
+        .await;
     }
     journal
         .bind_launch_identity(id, ctx.set_id, None, name)

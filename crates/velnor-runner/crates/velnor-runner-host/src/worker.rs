@@ -16,6 +16,7 @@ use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_plan};
 use crate::error::HostError;
 use crate::stage::PairStop;
 
+pub(crate) mod resources;
 mod volumes;
 pub(crate) use volumes::{
     VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole, WorkerVolumeVerification,

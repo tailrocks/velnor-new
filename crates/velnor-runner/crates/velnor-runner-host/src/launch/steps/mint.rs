@@ -40,6 +40,27 @@ where
     S: FnOnce(&str, &[u8], super::super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
+    if !request
+        .journal
+        .claim_launch_jit(request.id)
+        .await
+        .map_err(map_journal)?
+    {
+        return hold(request.journal, request.id, EnsureError::Uncertain).await;
+    }
+    run_claimed(lane, request, start).await
+}
+
+pub(super) async fn run_claimed<T, S, F>(
+    lane: &mut T,
+    request: Request<'_>,
+    start: S,
+) -> Result<Option<Started>, EnsureError>
+where
+    T: Transport + Lane,
+    S: FnOnce(&str, &[u8], super::super::bind::Bind) -> F,
+    F: Future<Output = Result<Started, HostError>>,
+{
     let Request {
         ctx,
         batch,

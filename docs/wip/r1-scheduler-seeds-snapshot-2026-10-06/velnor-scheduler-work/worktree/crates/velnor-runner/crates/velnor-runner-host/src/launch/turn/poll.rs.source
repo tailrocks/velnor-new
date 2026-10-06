@@ -1,0 +1,123 @@
+//! Apply one queue result through the listener's production admission path.
+
+use std::future::Future;
+use std::pin::Pin;
+
+use velnor_runner_github::Poll;
+
+use crate::journal::{Journal, LaunchReservation};
+use crate::scale_set::EnsureError;
+use crate::worker::Started;
+
+use super::{PollAdmission, admission, capacity, steps};
+use crate::launch::capacity::Admit;
+
+pub(in crate::launch) type DispatchFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<Option<Started>, EnsureError>> + 'a>>;
+
+/// The queue actions selected by one production poll.
+pub(in crate::launch) trait PollDispatcher {
+    /// Acknowledge a batch after admission allows it.
+    fn ack(
+        &mut self,
+        path: String,
+        queue: Option<String>,
+        polled: &Poll,
+    ) -> Result<(), EnsureError>;
+
+    /// Acquire, prepare, and start one reserved assignment.
+    fn start<'a>(
+        &'a mut self,
+        path: String,
+        queue: Option<String>,
+        polled: &'a Poll,
+        reservation: Option<LaunchReservation>,
+    ) -> DispatchFuture<'a>;
+}
+
+/// Apply the same admission and dispatch logic used by the listener.
+pub(in crate::launch) async fn apply<D: PollDispatcher>(
+    journal: &Journal,
+    set_id: i64,
+    capacity_limit: u32,
+    target: u32,
+    workers: &mut Vec<Started>,
+    running: u32,
+    polled: &Poll,
+    path: String,
+    queue: Option<String>,
+    dispatcher: &mut D,
+) -> Result<bool, EnsureError> {
+    let idle = steps::idle(polled);
+    let started = u32::try_from(workers.len()).unwrap_or(u32::MAX);
+    let decision = admission(
+        journal,
+        set_id,
+        capacity_limit,
+        target,
+        started,
+        running,
+        polled,
+    )
+    .await?;
+    dispatch(
+        decision,
+        target,
+        capacity_limit,
+        workers,
+        idle,
+        polled,
+        path,
+        queue,
+        dispatcher,
+    )
+    .await
+}
+
+async fn dispatch<D: PollDispatcher>(
+    admission: PollAdmission,
+    target: u32,
+    capacity_limit: u32,
+    workers: &mut Vec<Started>,
+    idle: steps::Idle,
+    polled: &Poll,
+    path: String,
+    queue: Option<String>,
+    dispatcher: &mut D,
+) -> Result<bool, EnsureError> {
+    match admission.decision {
+        Admit::Stay => {
+            if target > capacity_limit && workers.len() >= capacity_limit as usize {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+            Ok(false)
+        }
+        Admit::Hold => {
+            if target > capacity_limit {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                Ok(false)
+            } else {
+                Ok(true)
+            }
+        }
+        Admit::Stop => Ok(true),
+        Admit::Error => Err(EnsureError::Unexpected {
+            status: 0,
+            step: "queue",
+        }),
+        Admit::Ack { stop } => {
+            dispatcher.ack(path, queue, polled)?;
+            Ok(stop)
+        }
+        Admit::Start { stop } => {
+            let launched = dispatcher
+                .start(path, queue, polled, admission.reservation)
+                .await?;
+            let Some(worker) = launched else {
+                return Ok(false);
+            };
+            workers.push(worker);
+            Ok(stop)
+        }
+    }
+}

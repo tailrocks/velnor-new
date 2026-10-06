@@ -234,6 +234,15 @@ async fn assigned_launch_row(
         .await?;
         return Ok((active.id, false));
     }
+    if let Some(cleaned) = matches
+        .first()
+        .filter(|row| row.cleanup_proven && row.identity_match)
+    {
+        if completed.is_some_and(|id| id != cleaned.id) {
+            return Err(HostError::Journal);
+        }
+        return Ok((cleaned.id, false));
+    }
     if let Some(id) = completed {
         return Ok((id, false));
     }
@@ -252,6 +261,7 @@ struct AssignedLaunchRow {
     id: i64,
     cleanup_proven: bool,
     safe_retry: bool,
+    identity_match: bool,
 }
 
 async fn matching_assigned_rows(
@@ -289,11 +299,21 @@ fn assigned_row_match(
     let row_name: Option<String> = row.get(9).map_err(|_| HostError::Journal)?;
     let same_request_subject = assigned_request(&subject) == Some(request_id);
     let same_set_request = row_scale == Some(scale_set_id) && row_request == Some(request_id);
+    let same_set_name = row_scale == Some(scale_set_id) && row_name.as_deref() == Some(runner_name);
+    if same_set_name
+        && (row_request.is_some_and(|value| value != request_id)
+            || assigned_request(&subject).is_some_and(|value| value != request_id))
+    {
+        return Err(HostError::Journal);
+    }
     if row_scale.is_some_and(|value| value != scale_set_id) {
+        if same_request_subject || row_request == Some(request_id) {
+            return Err(HostError::Journal);
+        }
         return Ok(None);
     }
     let legacy_subject = same_request_subject;
-    if !same_set_request && !legacy_subject {
+    if !same_set_request && !legacy_subject && !same_set_name {
         return Ok(None);
     }
     if row_request.is_some_and(|value| value != request_id)
@@ -326,6 +346,7 @@ fn assigned_row_match(
         id,
         cleanup_proven,
         safe_retry,
+        identity_match: same_set_request || same_set_name,
     }))
 }
 
