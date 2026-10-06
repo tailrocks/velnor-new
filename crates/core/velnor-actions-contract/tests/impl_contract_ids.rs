@@ -14,11 +14,11 @@ use velnor_actions_contract::{
 };
 
 /// Sample Cargo manifest path shared by contract cases.
-pub(crate) const MANIFEST: &str = "crates/velnor-actions-contract/Cargo.toml";
+pub(crate) const MANIFEST: &str = "crates/core/velnor-actions-contract/Cargo.toml";
 /// Sample task ID shared by contract cases.
-pub(crate) const TASK: &str = "stack/rust/crates/velnor-actions-contract/clippy/default";
+pub(crate) const TASK: &str = "stack/rust/crates/core/velnor-actions-contract/clippy/default";
 /// Sample task-group ID shared by contract cases.
-pub(crate) const GROUP: &str = "stack/rust/crates/velnor-actions-contract/validation/default";
+pub(crate) const GROUP: &str = "stack/rust/crates/core/velnor-actions-contract/validation/default";
 
 /// Sample task identity shared by contract cases.
 pub(crate) fn sample_identity() -> TaskIdentity {
@@ -26,7 +26,7 @@ pub(crate) fn sample_identity() -> TaskIdentity {
         schema_version: 1,
         stack_id: "rust".to_owned(),
         project_root: ".".to_owned(),
-        component_id: "crates/velnor-actions-contract".to_owned(),
+        component_id: "crates/core/velnor-actions-contract".to_owned(),
         task_kind: "clippy".to_owned(),
         task_id: TASK.to_owned(),
         argv: vec![
@@ -34,7 +34,7 @@ pub(crate) fn sample_identity() -> TaskIdentity {
             "--package".to_owned(),
             "demo".to_owned(),
         ],
-        working_dir: "crates/velnor-actions-contract".to_owned(),
+        working_dir: "crates/core/velnor-actions-contract".to_owned(),
         configuration: TaskConfiguration {
             target: "host".to_owned(),
             profile: "test".to_owned(),
@@ -45,7 +45,7 @@ pub(crate) fn sample_identity() -> TaskIdentity {
             test_runner: "cargo_test".to_owned(),
         },
         inputs: vec![TaskInput {
-            path: "crates/velnor-actions-contract/src/lib.rs".to_owned(),
+            path: "crates/core/velnor-actions-contract/src/lib.rs".to_owned(),
             digest: digest_b3(b"fn main() {}"),
         }],
         dependencies: vec![],
@@ -187,7 +187,7 @@ fn task_id_grammar_accepts_valid_and_rejects_absolute() -> Result<(), ContractEr
     assert_eq!(manifest_key_for_cargo_manifest("Cargo.toml")?, "root");
     assert_eq!(
         manifest_key_for_cargo_manifest(MANIFEST)?,
-        "crates/velnor-actions-contract"
+        "crates/core/velnor-actions-contract"
     );
     assert!(manifest_key_for_cargo_manifest("/abs/Cargo.toml").is_err());
     assert!(manifest_key_for_cargo_manifest("Cargo.lock").is_err());

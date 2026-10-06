@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "crates/velnor-actions-contract",
+    "crates/core/velnor-actions-contract",
     "crates/tools/velnor-archive-guard",
     "crates/velnor-actions-rust",
     "crates/velnor-actions-mise",

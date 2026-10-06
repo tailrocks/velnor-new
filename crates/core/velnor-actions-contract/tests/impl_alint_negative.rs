@@ -19,11 +19,11 @@ const REQUIRED_FILES: [&str; 9] = [
 ];
 
 const REPO_FILE_LIST: &str =
-    include_str!("../../../fixtures/alint-negative/required-files/repo-file-list.txt");
-const STRAY_RS: &str = include_str!("../../../fixtures/alint-negative/crates-only/stray.rs");
+    include_str!("../../../../fixtures/alint-negative/required-files/repo-file-list.txt");
+const STRAY_RS: &str = include_str!("../../../../fixtures/alint-negative/crates-only/stray.rs");
 const OVERSIZED_RS: &str =
-    include_str!("../../../fixtures/alint-negative/rust-max-lines/oversized.rs");
-const BIG_LIB_RS: &str = include_str!("../../../fixtures/alint-negative/lib-main-max-lines/lib.rs");
+    include_str!("../../../../fixtures/alint-negative/rust-max-lines/oversized.rs");
+const BIG_LIB_RS: &str = include_str!("../../../../fixtures/alint-negative/lib-main-max-lines/lib.rs");
 
 /// Required entries absent from `present` (mirrors `file_exists`).
 fn missing_required(present: &[&str]) -> Vec<&'static str> {
@@ -84,7 +84,7 @@ fn crates_only_fixture_path_is_rejected() {
         "fixture path must be rejected: {repo_path}"
     );
     assert!(!violates_crates_only(
-        "crates/velnor-actions-contract/src/lib.rs"
+        "crates/core/velnor-actions-contract/src/lib.rs"
     ));
     assert!(!violates_crates_only("docs/notes.md"));
     assert!(violates_crates_only("crates-notes.rs"));

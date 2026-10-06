@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 /// Actions accepting per-project pin overrides (`[actions.overrides]` keys).
 ///
 /// Intentional subset of `ALLOWED_ACTIONS` in
-/// `crates/velnor-actions-actionlint/src/actions.rs`: the policy-owned
+/// `crates/adapters/velnor-actions-actionlint/src/actions.rs`: the policy-owned
 /// `asamarts/alint` pin is emittable but not consumer-overridable
 /// (version-policy §2, GitHub Action defaults). The shape rules below
 /// follow `overrides.rs` by convention (the contract cannot depend on

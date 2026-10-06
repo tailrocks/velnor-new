@@ -7,7 +7,7 @@ license.workspace = true
 autotests = false
 
 [dependencies]
-velnor-actions-contract = { version = "=0.1.1", path = "../velnor-actions-contract" }
+velnor-actions-contract = { version = "=0.1.1", path = "../core/velnor-actions-contract" }
 
 [lints]
 workspace = true
