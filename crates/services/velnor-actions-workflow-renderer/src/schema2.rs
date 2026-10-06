@@ -68,26 +68,18 @@ pub const GENERATOR_RELEASE_WORKFLOW: &str = ".github/workflows/generator-releas
 /// Queue-monitoring workflow path.
 pub const MONITORING_WORKFLOW: &str = ".github/workflows/monitoring.yml";
 
-#[path = "schema2_classes.rs"]
 mod classes;
-#[path = "schema2_features.rs"]
 mod features;
-#[path = "schema2_generator_release.rs"]
 mod generator_release;
-#[path = "schema2_generator_release_pins.rs"]
 mod generator_release_pins;
-#[path = "schema2_mbx_qualification.rs"]
 mod mbx_qualification;
-#[path = "schema2_release.rs"]
 mod release;
 pub use generator_release_pins::GeneratorReleasePins;
 /// Exact-source gates for composed product-release workflows.
-#[path = "schema2_release_eligibility.rs"]
 pub mod release_eligibility;
 
 #[cfg(test)]
-#[path = "schema2_runner_shell_tests.rs"]
-mod runner_shell_tests;
+mod tests;
 
 /// Which schema 2 workflows to emit, plus the selectors they use.
 #[derive(Debug, Clone, PartialEq, Eq)]

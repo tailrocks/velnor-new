@@ -7,11 +7,8 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepKind};
 
-#[path = "cache_steps_mbx_command.rs"]
 mod mbx_command;
-#[path = "cache_steps_mbx_gate.rs"]
 mod mbx_gate;
-#[path = "cache_steps_mbx_preflight.rs"]
 mod mbx_preflight;
 pub use mbx_gate::check_mbx_gating;
 pub(crate) use mbx_gate::is_mbx_action;
@@ -28,7 +25,6 @@ use crate::{
     steps::{action_step, validate_uses},
 };
 
-#[path = "cache_steps_tools.rs"]
 mod tools;
 
 pub use tools::{

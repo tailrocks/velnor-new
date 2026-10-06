@@ -14,4 +14,4 @@ workspace = true
 
 [[test]]
 name = "velnor_workflow_renderer"
-path = "tests/velnor_workflow_renderer.rs"
+path = "tests/main.rs"

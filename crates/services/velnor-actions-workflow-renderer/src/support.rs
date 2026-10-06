@@ -7,7 +7,6 @@
 //! it is never support IR.
 
 // Token-hygiene gate lives beside the policy gates (`#[path]`, no `lib.rs` edit).
-#[path = "support_tokens.rs"]
 mod tokens;
 
 pub(crate) use tokens::check_token_hygiene;

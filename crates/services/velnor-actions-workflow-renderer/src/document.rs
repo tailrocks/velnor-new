@@ -18,12 +18,7 @@ use velnor_actions_contract::{
 };
 
 #[cfg(test)]
-#[path = "document_runner_shell_tests.rs"]
-mod runner_shell_tests;
-
-#[cfg(test)]
-#[path = "document_verification_env_tests.rs"]
-mod verification_env_tests;
+mod tests;
 
 /// Build the workflow document: name, on, permissions, concurrency, jobs.
 pub(crate) fn workflow_to_yaml(

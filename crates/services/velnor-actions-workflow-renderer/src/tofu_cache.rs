@@ -242,5 +242,4 @@ pub fn tofu_providers_path_ok(path: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "tofu_cache_tests.rs"]
 mod tests;

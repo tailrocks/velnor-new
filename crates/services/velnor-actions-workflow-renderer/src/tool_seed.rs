@@ -231,5 +231,4 @@ fn action_yaml(step_name: &str, env: &BTreeMap<String, String>, run: &str) -> Ya
 }
 
 #[cfg(test)]
-#[path = "tool_seed_tests.rs"]
 mod tests;

@@ -19,11 +19,9 @@ use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::{MiseSetup, RenderError, cache_p08_detect::detector_words, setup::MISE_ACTION_NAME};
 
-#[path = "cache_p08_shape.rs"]
 mod shape;
 use shape::setup_shape_ok;
 
-#[path = "cache_p08_seed_key.rs"]
 mod seed_key;
 pub(crate) use seed_key::MiseToolsCacheKey;
 
@@ -365,5 +363,4 @@ pub fn check_mbx_before_fetch(job_id: &str, job: &Job) -> Result<(), RenderError
 }
 
 #[cfg(test)]
-#[path = "cache_p08_setup_tests.rs"]
-mod setup_tests;
+mod tests;

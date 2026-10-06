@@ -31,5 +31,4 @@ pub(crate) fn trusted_seed_guard(seed_root: &str) -> Result<String, RenderError>
 }
 
 #[cfg(test)]
-#[path = "tool_seed_admission_tests.rs"]
 mod tests;

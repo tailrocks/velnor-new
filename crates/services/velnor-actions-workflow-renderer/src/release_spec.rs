@@ -10,7 +10,6 @@ use velnor_actions_contract::ScheduleTrigger;
 
 use crate::{RenderError, steps::scan_for_private_subcommands};
 
-#[path = "release_validators.rs"]
 mod validators;
 
 pub(crate) use validators::is_clean_text;
@@ -21,7 +20,6 @@ pub use validators::{
 
 /// Publisher lock and release-event eligibility (`#[path]`, no `lib.rs` edit);
 /// re-exported below so `release_spec::X` paths keep working.
-#[path = "release_lock.rs"]
 pub mod lock;
 pub use lock::{ReleaseConcurrency, check_lock_anchor};
 

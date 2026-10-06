@@ -305,21 +305,4 @@ fn set_steps(jobs: &mut BTreeMap<String, Job>, id: &str, steps: Vec<Step>) {
 }
 
 #[cfg(test)]
-#[path = "lane_share_tests.rs"]
 mod tests;
-
-#[cfg(test)]
-#[path = "lane_share_render_tests.rs"]
-mod render_tests;
-
-#[cfg(test)]
-#[path = "lane_share_shell_tests.rs"]
-mod shell_tests;
-
-#[cfg(test)]
-#[path = "lane_share_unpinned_tests.rs"]
-mod unpinned_tests;
-
-#[cfg(test)]
-#[path = "lane_share_named_check_tests.rs"]
-mod named_check_tests;

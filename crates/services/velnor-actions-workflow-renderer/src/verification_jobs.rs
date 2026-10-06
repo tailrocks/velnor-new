@@ -10,7 +10,6 @@ use velnor_actions_contract::{
 use crate::{MiseSetup, RenderError, mise_setup_step, shell_step, steps};
 
 #[cfg(test)]
-#[path = "verification_jobs_tests.rs"]
 mod tests;
 
 /// Per-task, orchestrator-resolved runner and Mise binary pin.

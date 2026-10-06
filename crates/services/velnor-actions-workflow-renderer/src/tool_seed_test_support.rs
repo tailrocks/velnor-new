@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

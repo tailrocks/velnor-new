@@ -21,7 +21,6 @@ use crate::{
     preseed_closure, steps, support, workflow_policy, yaml::render_yaml,
 };
 
-#[path = "render_action_pins.rs"]
 mod action_pins_impl;
 pub use action_pins_impl::action_pins;
 
