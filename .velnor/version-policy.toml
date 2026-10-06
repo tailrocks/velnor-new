@@ -1,0 +1,89 @@
+# Velnor-repository-only version-policy file (version-policy §0–§2).
+# Header declares the policy schema, stable channel, release registry,
+# freshness cadence, and maximum exception age. The [tools] mirror MUST
+# equal the compiled catalog in velnor-actions-mise/src/catalog.rs (checked
+# by `verify_version_policy` during dogfood generate); the [[actions]]
+# mirror MUST equal the action pins in .velnor/freshness-inventory.json
+# (qualified 2026-10-03; checked by scripts/check-freshness.sh).
+# [validation-tools] pins repo-local verification tools activated for
+# manual risk-triggered runs (cargo-mutants; NOT wired into CI).
+# Consumer repositories do not need this file; the generator never
+# creates it.
+schema = 1
+channel = "stable"
+registry = "https://github.com/rust-lang/crates.io-index"
+check_interval_hours = 24
+max_exception_days = 14
+
+[tools]
+mise = "2026.9.18"
+rust = "1.98.1"
+mr-boxington = "1.21.1"
+gh = "2.102.0"
+actionlint = "1.7.12"
+shellcheck = "0.11.0"
+zizmor = "1.30.1"
+nextest = "0.9.146"
+opentofu = "1.13.1"
+release-plz = "0.3.169"
+
+[github_runner_images.linux_x64]
+default = "ubuntu-26.04"
+supported = ["ubuntu-26.04", "ubuntu-24.04", "ubuntu-22.04"]
+
+[[actions]]
+name = "jdx/mise-action"
+version = "v5.0.0"
+sha = "9149ea85001c7435d5a66bb127d6a1b6227cb0a5"
+reviewed = "2026-09-30"
+
+[[actions]]
+name = "actions/checkout"
+version = "v7.0.1"
+sha = "3d3c42e5aac5ba805825da76410c181273ba90b1"
+reviewed = "2026-09-28"
+
+[[actions]]
+name = "actions/download-artifact"
+version = "v8.0.1"
+sha = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+reviewed = "2026-09-28"
+
+[[actions]]
+name = "actions/upload-artifact"
+version = "v7.0.1"
+sha = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+reviewed = "2026-09-28"
+
+[[actions]]
+name = "actions/cache/restore"
+version = "v6.1.0"
+sha = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+reviewed = "2026-09-28"
+
+[[actions]]
+name = "actions/cache/save"
+version = "v6.1.0"
+sha = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+reviewed = "2026-09-28"
+
+[[actions]]
+name = "jdx/mr-boxington-action"
+version = "v1.6.0"
+sha = "1687e54eb349cadf61fa38b5813a77875489e8e6"
+reviewed = "2026-10-03"
+
+[[actions]]
+name = "asamarts/alint"
+version = "v0.16.1"
+sha = "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb"
+reviewed = "2026-09-28"
+
+[[actions]]
+name = "Swatinem/rust-cache"
+version = "v2.9.2"
+sha = "6323deb102c322ba6fcbdcafc7e3dddab59af2b6"
+reviewed = "2026-10-01"
+
+[validation-tools]
+cargo-mutants = "27.1.0"
