@@ -91,7 +91,8 @@ async fn slow_request_keeps_its_lease_after_the_original_claim_expires() -> Resu
 fn effect_window_and_budget_cover_the_complete_cleanup_chain() {
     let docker_seconds = crate::docker_client::DOCKER_OPERATION_TIMEOUT.as_secs();
     let https_source = include_str!("../../https.rs");
-    assert!(https_source.contains("max-time = 60"));
+    assert!(https_source.contains("max_time_seconds: 60"));
+    assert!(https_source.contains("format!(\"max-time = {max_time_seconds}\")"));
     assert_eq!(CLAIM_LEASE_SECONDS, EFFECT_WINDOW_SECONDS);
     assert_eq!(
         u64::try_from(EFFECT_WINDOW_SECONDS).ok(),
