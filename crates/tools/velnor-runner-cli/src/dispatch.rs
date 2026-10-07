@@ -55,7 +55,7 @@ fn dispatch(cli: &Cli) -> ExitCode {
             docker_context: request.docker_context.as_deref(),
             endpoint: request.endpoint.as_deref(),
         }),
-        Command::Service { action } => crate::service::service(*action),
+        Command::Service { action } => crate::service::service(*action, &config, &state),
         Command::Daemon { action } => daemon(&state, &config, *action),
         Command::Compare { evidence, .. } => compare_command(evidence.as_deref()),
         Command::Disconnect { drain, .. } => disconnect(*drain),
