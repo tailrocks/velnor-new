@@ -4,8 +4,8 @@
 
 use std::process::ExitCode;
 
-use velnor_actions_orchestrator::migrate_config;
 use velnor_actions_orchestrator_core::resolve_root;
+use velnor_actions_orchestrator_generation::routing::migrate_config;
 
 use crate::args::ConfigCommand;
 use crate::dispatch::{fail_public, working_dir};
