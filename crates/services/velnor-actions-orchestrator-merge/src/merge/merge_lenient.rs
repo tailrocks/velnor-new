@@ -19,7 +19,7 @@ use serde::Deserialize;
 use velnor_actions_contract_workflow::{RequiredJobResult, WorkflowEvent};
 
 use super::MergeRequest;
-use crate::cover::shard::{ResourceLimits, ShardProof};
+use velnor_actions_orchestrator_merge_ports::{ResourceLimits, ShardProof};
 
 /// `merge-v1` request with staged evidence as untyped values.
 #[derive(Debug, Deserialize)]
@@ -75,7 +75,7 @@ struct LenientRequest {
 /// Each shape-malformed staged value is dropped with a synthesized
 /// assembly error; the caller maps those to closed verdict tokens.
 /// `None` means the envelope itself is malformed (hard error).
-pub(crate) fn lenient_request(envelope: &serde_json::Value) -> Option<MergeRequest> {
+pub fn lenient_request(envelope: &serde_json::Value) -> Option<MergeRequest> {
     let raw: LenientRequest = serde_json::from_value(envelope.clone()).ok()?;
     let mut assembly_errors = raw.assembly_errors;
     let candidate_attestation = untyped_option(

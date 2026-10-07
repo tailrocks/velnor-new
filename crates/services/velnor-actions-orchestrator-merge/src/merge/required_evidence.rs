@@ -20,16 +20,16 @@ use velnor_actions_contract_workflow::{
 };
 
 use super::MergeRequest;
-use crate::cover::Signals;
 use velnor_actions_orchestrator_core::internal_contract;
+use velnor_actions_orchestrator_merge_ports::Signals;
 
-pub(crate) use velnor_actions_orchestrator_merge_ports::{BaselineManifest, BaselineTaskEntry};
+pub use velnor_actions_orchestrator_merge_ports::{BaselineManifest, BaselineTaskEntry};
 
 /// Enforce the closed inventory: jobs and obligation proofs.
 ///
 /// Assembly failures recorded in the request fail here too, so a
 /// diagnostic verdict always explains the failed evidence class.
-pub(crate) fn check_required_evidence(
+pub fn check_required_evidence(
     plan: &Plan,
     request: &MergeRequest,
     signals: &mut Signals,
@@ -104,7 +104,7 @@ fn check_obligation_proofs(
 }
 
 /// Fold required job conclusions; skipped is never success.
-pub(crate) fn fold_jobs(jobs: &[RequiredJobResult], signals: &mut Signals) {
+pub fn fold_jobs(jobs: &[RequiredJobResult], signals: &mut Signals) {
     for job in jobs {
         match job.conclusion {
             JobConclusion::Success => {}
@@ -119,7 +119,7 @@ pub(crate) fn fold_jobs(jobs: &[RequiredJobResult], signals: &mut Signals) {
 ///
 /// The final report mirrors the declared inventory exactly so consumers
 /// see which validators never reported, not just the failures.
-pub(crate) fn reported_job_results(request: &MergeRequest) -> Vec<RequiredJobResult> {
+pub fn reported_job_results(request: &MergeRequest) -> Vec<RequiredJobResult> {
     let mut reported = request.required_jobs.clone();
     for id in &request.required_job_ids {
         if !reported.iter().any(|job| &job.job_id == id) {
@@ -137,7 +137,7 @@ pub(crate) fn reported_job_results(request: &MergeRequest) -> Vec<RequiredJobRes
 ///
 /// Missing, unparsable, and mismatched plans all land here with the
 /// mapped failure tokens instead of dying without a report.
-pub(crate) fn diagnostic_without_plan(
+pub fn diagnostic_without_plan(
     request: &MergeRequest,
     tokens: BTreeSet<String>,
 ) -> Result<FinalReport, velnor_actions_orchestrator_core::OrchestratorError> {

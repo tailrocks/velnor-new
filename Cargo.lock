@@ -3635,6 +3635,7 @@ dependencies = [
  "velnor-actions-orchestrator-external-data",
  "velnor-actions-orchestrator-generation",
  "velnor-actions-orchestrator-graph",
+ "velnor-actions-orchestrator-merge",
  "velnor-actions-orchestrator-merge-ports",
  "velnor-actions-orchestrator-noop-report",
  "velnor-actions-orchestrator-pins",
@@ -3849,6 +3850,20 @@ dependencies = [
  "velnor-actions-tofu-core",
  "velnor-actions-workflow-document",
  "velnor-actions-workflow-steps",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-merge"
+version = "0.1.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "velnor-actions-contract",
+ "velnor-actions-contract-workflow",
+ "velnor-actions-orchestrator-check-evidence",
+ "velnor-actions-orchestrator-core",
+ "velnor-actions-orchestrator-merge-ports",
+ "velnor-actions-workflow-jobs",
 ]
 
 [[package]]

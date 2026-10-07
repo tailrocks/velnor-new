@@ -61,6 +61,7 @@
     "velnor-actions-orchestrator-retrieve-retry": "library",
     "velnor-actions-orchestrator-preseed-manifest": "library",
     "velnor-actions-orchestrator-run-select": "library",
-    "velnor-actions-orchestrator-merge-ports": "library"
+    "velnor-actions-orchestrator-merge-ports": "library",
+    "velnor-actions-orchestrator-merge": "library"
   }
 }

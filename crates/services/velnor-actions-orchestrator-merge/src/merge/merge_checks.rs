@@ -12,15 +12,12 @@ use velnor_actions_contract_workflow::{
 };
 
 use super::MergeRequest;
-use crate::cover::Signals;
-use crate::cover::revalidate_coverage;
-use crate::cover::shard::{check_entry_shards, validate_budgets};
-use crate::internal::SCHEMA;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::internal_contract;
+use velnor_actions_orchestrator_merge_ports::{CoverPort, SCHEMA, Signals};
 
 /// Check 1: `matrix.json` agrees with the plan matrix (WF-4.16).
-pub(crate) fn check_agreement(
+pub fn check_agreement(
     matrix: Option<&PlanMatrix>,
     plan: &Plan,
     signals: &mut Signals,
@@ -42,11 +39,7 @@ pub(crate) fn check_agreement(
 }
 
 /// The no-work decision needs obligations and task IDs to agree.
-pub(crate) fn check_plan_shape(
-    plan: &Plan,
-    signals: &mut Signals,
-    miss_reasons: &mut BTreeSet<String>,
-) {
+pub fn check_plan_shape(plan: &Plan, signals: &mut Signals, miss_reasons: &mut BTreeSet<String>) {
     if plan.obligations.is_empty() != plan.task_ids.is_empty() {
         signals.planning_failed = true;
         miss_reasons.insert("cache_corrupt".to_owned());
@@ -62,7 +55,7 @@ pub(crate) fn check_plan_shape(
 /// plan's trust must equal the canonical scope for that actual event;
 /// every task file's event/trust pair must still equal the plan's.
 /// Anything else fails closed with a scope token, never silently.
-pub(crate) fn check_trust_coherence(
+pub fn check_trust_coherence(
     plan: &Plan,
     request: &MergeRequest,
     signals: &mut Signals,
@@ -94,7 +87,7 @@ pub(crate) fn check_trust_coherence(
 /// inventory (the final gate needs it exactly when the workflow was
 /// generated with candidate validation). Outside candidate mode there
 /// is no attestation to check.
-pub(crate) fn check_candidate_binding(
+pub fn check_candidate_binding(
     plan: &Plan,
     request: &MergeRequest,
     signals: &mut Signals,
@@ -129,7 +122,7 @@ pub(crate) fn check_candidate_binding(
 /// cache-reused dispositions need no leg. The match stays exhaustive so
 /// a future decision variant fails to compile here instead of slipping
 /// through unchecked.
-pub(crate) fn check_execute_inventory(
+pub fn check_execute_inventory(
     plan: &Plan,
     signals: &mut Signals,
     miss_reasons: &mut BTreeSet<String>,
@@ -165,7 +158,7 @@ pub(crate) fn check_execute_inventory(
 }
 
 /// Expected entries keyed by report ID, sorted.
-pub(crate) fn plan_entries(plan: &Plan) -> BTreeMap<&str, &MatrixEntry> {
+pub fn plan_entries(plan: &Plan) -> BTreeMap<&str, &MatrixEntry> {
     plan.matrix
         .include
         .iter()
@@ -183,13 +176,14 @@ fn reference_matches(reference: &[String], planned: &[String]) -> bool {
 }
 
 /// Revalidate planner coverage, limits, and reference obligations.
-pub(crate) fn check_plan_evidence(
+pub fn check_plan_evidence(
+    cover: &dyn CoverPort,
     plan: &Plan,
     request: &MergeRequest,
     signals: &mut Signals,
     miss_reasons: &mut BTreeSet<String>,
 ) {
-    revalidate_coverage(
+    cover.revalidate_coverage(
         plan,
         request.baseline_manifest.as_ref(),
         signals,
@@ -198,7 +192,7 @@ pub(crate) fn check_plan_evidence(
     if request
         .limits
         .as_ref()
-        .is_some_and(|limits| validate_budgets(limits).is_err())
+        .is_some_and(|limits| cover.validate_budgets(limits).is_err())
     {
         signals.planning_failed = true;
         miss_reasons.insert("cache_corrupt".to_owned());
@@ -214,7 +208,8 @@ pub(crate) fn check_plan_evidence(
 }
 
 /// True when an entry's shard proofs fail validation.
-pub(crate) fn shards_failed(
+pub fn shards_failed(
+    cover: &dyn CoverPort,
     entry: &MatrixEntry,
     empty: u32,
     plan: &Plan,
@@ -228,7 +223,9 @@ pub(crate) fn shards_failed(
     for ob in &plan.obligations {
         inputs.insert(ob.task_id.clone(), ob.input_digest.clone());
     }
-    check_entry_shards(&bases, empty, &request.shard_proofs, &inputs).is_err()
+    cover
+        .check_entry_shards(&bases, empty, &request.shard_proofs, &inputs)
+        .is_err()
 }
 
 /// Base task IDs carrying shard suffixes in one entry.
@@ -251,7 +248,7 @@ fn sharded_bases(entry: &MatrixEntry) -> BTreeSet<String> {
 }
 
 /// Obligation task digests keyed by task ID.
-pub(crate) fn plan_digests(plan: &Plan) -> BTreeMap<&str, &str> {
+pub fn plan_digests(plan: &Plan) -> BTreeMap<&str, &str> {
     plan.obligations
         .iter()
         .map(|obligation| (obligation.task_id.as_str(), obligation.task_digest.as_str()))
@@ -265,10 +262,7 @@ pub(crate) fn plan_digests(plan: &Plan) -> BTreeMap<&str, &str> {
 /// `matrix-report.json` cannot shrink or redirect the file set. Legs
 /// naming tasks without an obligation digest stay underivable here;
 /// per-entry coverage fails them closed.
-pub(crate) fn expected_task_reports(
-    plan: &Plan,
-    run_key: &str,
-) -> BTreeMap<String, (String, String)> {
+pub fn expected_task_reports(plan: &Plan, run_key: &str) -> BTreeMap<String, (String, String)> {
     let digests = plan_digests(plan);
     let mut expected = BTreeMap::new();
     for entry in &plan.matrix.include {
@@ -291,13 +285,14 @@ pub(crate) fn expected_task_reports(
 }
 
 /// Check-2 partition of embedded per-task reports.
-pub(crate) struct TaskPartition<'a> {
+#[derive(Debug)]
+pub struct TaskPartition<'a> {
     /// First valid report per expected task-report ID.
-    pub(crate) valid: BTreeMap<&'a str, &'a TaskReport>,
+    pub valid: BTreeMap<&'a str, &'a TaskReport>,
     /// Reports failing validation or bound to another run.
-    pub(crate) malformed: u32,
+    pub malformed: u32,
     /// Extra reports beyond the first per task-report ID.
-    pub(crate) duplicates: u32,
+    pub duplicates: u32,
 }
 
 /// Check 2 for task files: first valid report per expected ID exactly.
@@ -305,7 +300,7 @@ pub(crate) struct TaskPartition<'a> {
 /// Mirrors the matrix partition: malformed and duplicate files are
 /// `not_run` (never success); valid files outside the plan-derived
 /// expectation corrupt the set. Missing files surface per entry.
-pub(crate) fn partition_task_reports<'a>(
+pub fn partition_task_reports<'a>(
     request: &'a MergeRequest,
     expected: &BTreeMap<String, (String, String)>,
     signals: &mut Signals,
