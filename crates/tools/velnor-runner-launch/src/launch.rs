@@ -23,6 +23,7 @@ use velnor_runner_launch_slot as slot;
 
 mod bind;
 mod capacity;
+pub mod control;
 mod docker_stub;
 mod fakes;
 mod gate;

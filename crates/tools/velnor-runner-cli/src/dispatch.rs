@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::time::{Duration, Instant};
 
 use clap::Parser;
 use velnor_runner_host::docker_client::{self, DockerVersion};
@@ -10,6 +11,7 @@ use velnor_runner_host::{
     disconnect_effects, doctor_json, load_configured_secret, read_host_config_file,
     readiness_for_empty,
 };
+use velnor_runner_launch::launch::control::DrainUnknown;
 
 use crate::args::{Cli, Command, DaemonAction};
 
@@ -37,8 +39,8 @@ fn dispatch(cli: &Cli) -> ExitCode {
         Command::Status { json } => print_status(&state, &config, *json),
         Command::Doctor { probe } => print_doctor(&state, &config, *probe),
         Command::Logs { follow } => crate::service::logs(*follow),
-        Command::Drain { .. } => flag(&state, "drain"),
-        Command::Resume => remove_flag(&state, "drain"),
+        Command::Drain { wait, timeout_secs } => drain(&state, &config, *wait, *timeout_secs),
+        Command::Resume => resume(&state, &config),
         Command::Connect(request) => connect::connect(&connect::ConnectRequest {
             config_path: &config,
             repo: &request.repo,
@@ -397,14 +399,6 @@ fn observe(_state: &Path) -> Readiness {
     readiness_for_empty()
 }
 
-fn flag(state: &Path, name: &str) -> ExitCode {
-    if !write_flag_marker(state, name) {
-        return ExitCode::from(1);
-    }
-    println!("draining");
-    ExitCode::SUCCESS
-}
-
 fn write_flag_marker(state: &Path, name: &str) -> bool {
     std::fs::create_dir_all(state).is_ok() && std::fs::write(state.join(name), b"1").is_ok()
 }
@@ -416,6 +410,255 @@ fn remove_flag(state: &Path, name: &str) -> ExitCode {
     }
     println!("ready_for_admission");
     ExitCode::SUCCESS
+}
+
+fn drain(state: &Path, config_path: &Path, wait: bool, timeout_secs: Option<u64>) -> ExitCode {
+    drain_for_os(state, config_path, wait, timeout_secs, std::env::consts::OS)
+}
+
+fn drain_for_os(
+    state: &Path,
+    config_path: &Path,
+    wait: bool,
+    timeout_secs: Option<u64>,
+    os: &str,
+) -> ExitCode {
+    match os {
+        "linux" => drain_linux(state, config_path, wait, timeout_secs),
+        "macos" => {
+            if !write_flag_marker(state, "drain") {
+                eprintln!("failed to record the legacy drain marker");
+                return ExitCode::from(1);
+            }
+            if wait {
+                eprintln!("legacy drain marker recorded; macOS drain wait is not proven");
+                ExitCode::from(1)
+            } else {
+                println!("draining");
+                ExitCode::SUCCESS
+            }
+        }
+        _ => {
+            eprintln!("drain is unavailable on this platform");
+            ExitCode::from(1)
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LinuxDrainSettings {
+    docker_endpoint: String,
+    configured_timeout_secs: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LinuxDrainStatus {
+    Requested,
+    RequestDeadline,
+    RequestUnknown,
+    RequestUnavailable,
+    Drained,
+    WaitDeadline,
+    WaitUnknown(velnor_runner_launch::launch::control::DrainUnknown),
+    InvalidDeadline,
+}
+
+fn linux_drain_settings(config_path: &Path) -> Result<LinuxDrainSettings, ()> {
+    let text = read_host_config_file(config_path, HostPlatform::Linux)
+        .map_err(|_| ())?
+        .ok_or(())?;
+    let config = HostConfig::parse(&text).map_err(|_| ())?;
+    config
+        .validate_for_host(HostPlatform::Linux)
+        .map_err(|_| ())?;
+    let configured_timeout_secs = config.drain_timeout_secs().map_err(|_| ())?;
+    Ok(LinuxDrainSettings {
+        docker_endpoint: config.docker.endpoint,
+        configured_timeout_secs,
+    })
+}
+
+fn drain_linux(
+    state: &Path,
+    config_path: &Path,
+    wait: bool,
+    timeout_secs: Option<u64>,
+) -> ExitCode {
+    let Ok(settings) = linux_drain_settings(config_path) else {
+        eprintln!("Linux drain requires a valid protected host configuration");
+        return ExitCode::from(1);
+    };
+    let status = linux_drain_with(
+        &state.join("launch.db"),
+        wait,
+        timeout_secs,
+        &settings,
+        velnor_runner_launch::launch::control::request_drain_blocking,
+        velnor_runner_launch::launch::control::wait_drained_blocking,
+    );
+    report_linux_drain(status)
+}
+
+fn linux_drain_with<R, W>(
+    journal_path: &Path,
+    wait: bool,
+    timeout_secs: Option<u64>,
+    settings: &LinuxDrainSettings,
+    request: R,
+    wait_drained: W,
+) -> LinuxDrainStatus
+where
+    R: FnOnce(
+        &Path,
+        Instant,
+    ) -> Result<
+        velnor_runner_launch::launch::control::DrainRequestOutcome,
+        velnor_runner_launch::launch::control::ControlOpenError,
+    >,
+    W: FnOnce(&Path, &str, Instant) -> velnor_runner_launch::launch::control::DrainOutcome,
+{
+    let seconds = timeout_secs.unwrap_or(settings.configured_timeout_secs);
+    let Some(deadline) = (seconds > 0)
+        .then(|| Instant::now().checked_add(Duration::from_secs(seconds)))
+        .flatten()
+    else {
+        return LinuxDrainStatus::InvalidDeadline;
+    };
+    let request_result = request(journal_path, deadline);
+    match request_result {
+        Err(_) => LinuxDrainStatus::RequestUnavailable,
+        Ok(velnor_runner_launch::launch::control::DrainRequestOutcome::DeadlineBeforeMutation) => {
+            LinuxDrainStatus::RequestDeadline
+        }
+        Ok(velnor_runner_launch::launch::control::DrainRequestOutcome::UnknownAfterMutation) => {
+            LinuxDrainStatus::RequestUnknown
+        }
+        Ok(velnor_runner_launch::launch::control::DrainRequestOutcome::Requested) if !wait => {
+            LinuxDrainStatus::Requested
+        }
+        Ok(velnor_runner_launch::launch::control::DrainRequestOutcome::Requested) => {
+            match wait_drained(journal_path, &settings.docker_endpoint, deadline) {
+                velnor_runner_launch::launch::control::DrainOutcome::Drained => {
+                    LinuxDrainStatus::Drained
+                }
+                velnor_runner_launch::launch::control::DrainOutcome::Deadline => {
+                    LinuxDrainStatus::WaitDeadline
+                }
+                velnor_runner_launch::launch::control::DrainOutcome::Unknown(reason) => {
+                    LinuxDrainStatus::WaitUnknown(reason)
+                }
+            }
+        }
+    }
+}
+
+fn report_linux_drain(status: LinuxDrainStatus) -> ExitCode {
+    match status {
+        LinuxDrainStatus::Requested => {
+            println!("drain_requested");
+            ExitCode::SUCCESS
+        }
+        LinuxDrainStatus::Drained => {
+            println!("drained");
+            ExitCode::SUCCESS
+        }
+        LinuxDrainStatus::RequestDeadline => {
+            eprintln!("drain_request_deadline_before_mutation");
+            ExitCode::from(1)
+        }
+        LinuxDrainStatus::RequestUnknown => {
+            eprintln!("drain_request_unknown_after_mutation; do not retry automatically");
+            ExitCode::from(1)
+        }
+        LinuxDrainStatus::RequestUnavailable => {
+            eprintln!("drain_request_unavailable_before_mutation");
+            ExitCode::from(1)
+        }
+        LinuxDrainStatus::WaitDeadline => {
+            eprintln!("drain_deadline; admission remains fenced");
+            ExitCode::from(1)
+        }
+        LinuxDrainStatus::WaitUnknown(reason) => {
+            eprintln!("{}", linux_drain_unknown_message(reason));
+            ExitCode::from(1)
+        }
+        LinuxDrainStatus::InvalidDeadline => {
+            eprintln!("drain timeout must be positive and finite");
+            ExitCode::from(2)
+        }
+    }
+}
+
+fn linux_drain_unknown_message(reason: DrainUnknown) -> String {
+    let reason = match reason {
+        DrainUnknown::JournalUnavailable => "journal_unavailable",
+        DrainUnknown::RuntimeUnavailable => "runtime_unavailable",
+        DrainUnknown::AdmissionNotFenced => "admission_not_fenced",
+        DrainUnknown::OwnershipInventoryUnavailable => "ownership_inventory_unavailable",
+    };
+    format!("drain_unknown:{reason}; admission fence state is not proven")
+}
+
+fn resume(state: &Path, config_path: &Path) -> ExitCode {
+    resume_for_os(state, config_path, std::env::consts::OS)
+}
+
+fn resume_for_os(state: &Path, config_path: &Path, os: &str) -> ExitCode {
+    match os {
+        "linux" => resume_linux(state, config_path),
+        "macos" => remove_flag(state, "drain"),
+        _ => {
+            eprintln!("resume is unavailable on this platform");
+            ExitCode::from(1)
+        }
+    }
+}
+
+fn resume_linux(state: &Path, config_path: &Path) -> ExitCode {
+    use velnor_runner_launch::launch::control::{
+        ControlOpenError, ResumeBlockReason, ResumeOutcome, resume_blocking,
+    };
+
+    let Ok(settings) = linux_drain_settings(config_path) else {
+        eprintln!("Linux resume requires a valid protected host configuration");
+        return ExitCode::from(1);
+    };
+    let Some(deadline) =
+        Instant::now().checked_add(Duration::from_secs(settings.configured_timeout_secs))
+    else {
+        eprintln!("configured drain deadline is invalid");
+        return ExitCode::from(1);
+    };
+    match resume_blocking(
+        &state.join("launch.db"),
+        &settings.docker_endpoint,
+        deadline,
+    ) {
+        Ok(ResumeOutcome::Resumed) => {
+            println!("admission_resumed");
+            ExitCode::SUCCESS
+        }
+        Ok(ResumeOutcome::DeadlineBeforeMutation) => {
+            eprintln!("resume_deadline_before_mutation; admission remains fenced");
+            ExitCode::from(1)
+        }
+        Ok(ResumeOutcome::UnknownAfterMutation) => {
+            eprintln!("resume_unknown_after_mutation; do not retry automatically");
+            ExitCode::from(1)
+        }
+        Ok(ResumeOutcome::Blocked(ResumeBlockReason::QuiescenceProofUnavailable)) => {
+            eprintln!("resume_blocked:quiescence_proof_unavailable; admission remains fenced");
+            ExitCode::from(1)
+        }
+        Err(ControlOpenError::JournalUnavailable) => {
+            eprintln!("resume_journal_unavailable_before_mutation");
+            ExitCode::from(1)
+        }
+        Err(ControlOpenError::RuntimeUnavailable) => {
+            eprintln!("resume_runtime_unavailable_before_mutation");
+            ExitCode::from(1)
+        }
+    }
 }
 
 fn daemon(state: &Path, config: &Path, action: DaemonAction) -> ExitCode {
