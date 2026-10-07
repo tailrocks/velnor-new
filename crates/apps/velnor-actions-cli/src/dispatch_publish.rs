@@ -10,7 +10,7 @@ use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
 
-use velnor_actions_orchestrator::baseline_publish;
+use velnor_actions_orchestrator_baseline_publish::baseline_publish::baseline_publish;
 
 /// Environment variable carrying the `$GITHUB_OUTPUT` path. Never printed.
 const GITHUB_OUTPUT_ENV: &str = "GITHUB_OUTPUT";

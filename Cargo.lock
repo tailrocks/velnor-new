@@ -3477,8 +3477,16 @@ dependencies = [
  "proc-macro2",
  "serde_json",
  "syn 3.0.6",
- "velnor-actions-orchestrator",
+ "velnor-actions-contract-workflow",
+ "velnor-actions-orchestrator-baseline-publish",
+ "velnor-actions-orchestrator-check-runtime",
  "velnor-actions-orchestrator-core",
+ "velnor-actions-orchestrator-generation",
+ "velnor-actions-orchestrator-internal",
+ "velnor-actions-orchestrator-plan",
+ "velnor-actions-orchestrator-preseed-manifest",
+ "velnor-actions-orchestrator-retrieve-reports",
+ "velnor-actions-orchestrator-task-report-write",
 ]
 
 [[package]]

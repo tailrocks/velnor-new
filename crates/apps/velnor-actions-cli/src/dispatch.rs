@@ -15,58 +15,31 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::Parser;
-use velnor_actions_orchestrator::{
-    DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, GenerateOptions, MERGE_OP,
-    PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PlanOutputMode,
-    REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, execute_check, generate_dispatched,
-    merge_internal, merge_passed, parse_dispatch_mode, plan_internal, plan_outputs,
-    plan_text_checked, prepare, publish_final_report, publish_plan_files, response_path_for,
-    retrieve_reports, write_preseed_manifest, write_request, write_task_report,
-};
+use velnor_actions_contract_workflow::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
+use velnor_actions_orchestrator_check_runtime::execute_check;
 use velnor_actions_orchestrator_core::{OrchestratorError, init_config, resolve_root};
+use velnor_actions_orchestrator_generation::generate::{GenerateOptions, generate_dispatched};
+use velnor_actions_orchestrator_generation::prepare::prepare;
+use velnor_actions_orchestrator_generation::routing::parse_dispatch_mode;
+use velnor_actions_orchestrator_internal::internal::{
+    merge_passed, plan_internal, plan_outputs, publish_final_report, publish_plan_files,
+    response_path_for, write_request,
+};
+use velnor_actions_orchestrator_internal::merge_entry::merge_internal;
+use velnor_actions_orchestrator_plan::plan::plan_text_checked;
+use velnor_actions_orchestrator_plan::plan_output_limits::PlanOutputMode;
+use velnor_actions_orchestrator_preseed_manifest::write_preseed_manifest;
+use velnor_actions_orchestrator_retrieve_reports::retrieve_reports;
+use velnor_actions_orchestrator_task_report_write::write_task_report;
 
 use crate::args::{Cli, Command};
+use crate::dispatch_gate::{InternalOp, InternalRequest, gate_request};
 use crate::dispatch_publish::run_publish_internal;
 
-/// Environment variable selecting the private operation. Never printed.
-const OP_ENV: &str = "VELNOR_INTERNAL_OP";
 /// Environment variable carrying the `$GITHUB_OUTPUT` path. Never printed.
 const GITHUB_OUTPUT_ENV: &str = "GITHUB_OUTPUT";
 /// Environment variable carrying the runner temp dir. Never printed.
-const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
-/// Environment variable carrying the triggering event name. Never printed.
-const GITHUB_EVENT_ENV: &str = "GITHUB_EVENT_NAME";
-/// Environment variable carrying the event payload path. Never printed.
-const GITHUB_EVENT_PATH_ENV: &str = "GITHUB_EVENT_PATH";
-
-/// Private operation selected by the gate.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum InternalOp {
-    /// Materialize the request file from the GitHub environment.
-    WriteRequest,
-    ExecuteCheck,
-    /// Plan operation.
-    Plan,
-    /// Merge operation.
-    Merge,
-    /// Matrix-report fetch operation.
-    Fetch,
-    /// Task-report production operation.
-    Report,
-    /// Pre-seed manifest-writing operation.
-    PreseedManifest,
-    /// Baseline-publish operation.
-    Publish,
-}
-
-/// Validated private request: operation plus exact request-file path.
-#[derive(Debug)]
-struct InternalRequest {
-    /// Operation to run.
-    op: InternalOp,
-    /// Exact request-file path from the environment.
-    path: PathBuf,
-}
+pub(crate) const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
 
 /// Parse Clap arguments and dispatch one public command.
 ///
@@ -88,71 +61,6 @@ pub(crate) fn run_public() -> ExitCode {
 pub(crate) fn try_internal() -> Option<ExitCode> {
     let request = gate_request()?;
     Some(run_internal(&request))
-}
-
-/// Check the private gate: known op plus request-file presence by op.
-///
-/// Fetch and report take no request file: they need the runner-temp
-/// velnor directory plus the numeric run ID instead. The manifest op
-/// takes no request file either: runner temp scopes its output.
-fn gate_request() -> Option<InternalRequest> {
-    let op = match env::var(OP_ENV).as_deref() {
-        Ok(tag) if tag == EXECUTE_CHECK_OP => InternalOp::ExecuteCheck,
-        Ok(tag) if tag == WRITE_REQUEST_OP => InternalOp::WriteRequest,
-        Ok(tag) if tag == PLAN_OP => InternalOp::Plan,
-        Ok(tag) if tag == MERGE_OP => InternalOp::Merge,
-        Ok(tag) if tag == FETCH_OP => InternalOp::Fetch,
-        Ok(tag) if tag == REPORT_OP => InternalOp::Report,
-        Ok(tag) if tag == PRESEED_MANIFEST_OP => InternalOp::PreseedManifest,
-        Ok(tag) if tag == PUBLISH_OP => InternalOp::Publish,
-        _ => return None,
-    };
-    if op == InternalOp::Fetch || op == InternalOp::Report || op == InternalOp::ExecuteCheck {
-        if env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
-            return runner_velnor_dir().map(|path| InternalRequest { op, path });
-        }
-        return None;
-    }
-    if op == InternalOp::PreseedManifest {
-        return runner_velnor_dir().map(|path| InternalRequest { op, path });
-    }
-    let path = env::var_os(REQUEST_FILE_ENV)
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)?;
-    match op {
-        InternalOp::WriteRequest => {
-            if path.exists() {
-                return None;
-            }
-            if !env::var(GITHUB_EVENT_ENV).is_ok_and(|name| !name.is_empty()) {
-                return None;
-            }
-            if env::var_os(GITHUB_EVENT_PATH_ENV).is_none_or(|value| value.is_empty()) {
-                return None;
-            }
-        }
-        InternalOp::Plan | InternalOp::Merge | InternalOp::Publish => {
-            if !path.is_file() {
-                return None;
-            }
-        }
-        InternalOp::Fetch
-        | InternalOp::Report
-        | InternalOp::PreseedManifest
-        | InternalOp::ExecuteCheck => {}
-    }
-    Some(InternalRequest { op, path })
-}
-
-/// Runner-temp velnor directory for file-less private operations.
-///
-/// `None` when `RUNNER_TEMP` is unset or empty; shared by the fetch,
-/// report, and preseed-manifest gate branches so the scoping rule has
-/// one definition.
-fn runner_velnor_dir() -> Option<PathBuf> {
-    env::var_os(RUNNER_TEMP_ENV)
-        .filter(|value| !value.is_empty())
-        .map(|temp| Path::new(&temp).join("velnor"))
 }
 
 /// Run one validated private operation.
