@@ -76,6 +76,12 @@ fn dind_is_privileged_and_shares_the_runner_volumes() -> Result<(), HostError> {
 #[test]
 fn runner_joins_only_its_dind_netns() -> Result<(), HostError> {
     let spec = projection("worker_a")?;
+    let mut host_network = spec.clone();
+    host_network.network_mode = Some("host".to_owned());
+    assert_eq!(
+        bollard_create(&host_network),
+        Err(HostError::ForbiddenMount)
+    );
     let not_hex = "g".repeat(64);
     for bad in [
         "",
@@ -164,8 +170,22 @@ fn official_profile_uses_private_unix_dind_and_shared_runner_paths() -> Result<(
     let profile = resolve_runner_profile("ubuntu-24.04-amd64", "ubuntu-24.04-scale-set")?;
     let runner_plan = runner_plan_for_profile("worker_a", &profile)?;
     let runner = runner_create(&runner_plan)?;
+    assert_official_runner_projection(&profile, &runner);
+
+    let dind = dind_create_for_profile("worker_a", &profile)?;
+    assert_official_dind_projection(&profile, &runner, &dind);
+    assert_runner_bollard_projection(&profile, &runner)?;
+    assert_dind_bollard_projection(&dind)?;
+    Ok(())
+}
+
+fn assert_official_runner_projection(
+    profile: &crate::docker_spec::RunnerImageProfile,
+    runner: &crate::worker::CreateProjection,
+) {
     assert_eq!(runner.image, profile.runner_image());
     assert!(!runner.privileged);
+    assert!(runner.readonly_rootfs);
     assert_eq!(
         runner.security_opts,
         vec!["apparmor=velnor-runner".to_owned()]
@@ -176,12 +196,21 @@ fn official_profile_uses_private_unix_dind_and_shared_runner_paths() -> Result<(
             .env
             .contains(&"DOCKER_HOST=unix:///run/docker/docker.sock".to_owned())
     );
-    assert_eq!(runner.mounts[0].target, "/run/docker");
-    assert!(runner.mounts.iter().any(|mount| {
-        mount.source == "volume:worker_a-externals" && mount.target == "/home/runner/externals"
-    }));
+    assert_eq!(runner.mounts.len(), 5);
+    assert_eq!(runner.mounts[0].target, "/home/runner");
+    assert_eq!(runner.mounts[1].target, "/home/runner/_work");
+    assert_eq!(runner.mounts[2].target, "/home/runner/externals");
+    assert!(runner.mounts[2].read_only);
+    assert_eq!(runner.mounts[3].target, "/run/docker");
+    assert_eq!(runner.mounts[4].target, "/tmp");
+    assert_eq!(runner.image_mounts.len(), 6);
+}
 
-    let dind = dind_create_for_profile("worker_a", &profile)?;
+fn assert_official_dind_projection(
+    profile: &crate::docker_spec::RunnerImageProfile,
+    runner: &crate::worker::CreateProjection,
+    dind: &crate::worker::CreateProjection,
+) {
     assert_eq!(dind.image, profile.dind_image());
     assert!(dind.privileged);
     assert_eq!(
@@ -194,24 +223,44 @@ fn official_profile_uses_private_unix_dind_and_shared_runner_paths() -> Result<(
     );
     assert_eq!(dind.group_add, Vec::<String>::new());
     assert!(dind.cmd.iter().all(|argument| !argument.contains("tcp://")));
-    assert_eq!(runner.mounts[0].source, dind.mounts[0].source);
-    assert_eq!(runner.mounts[0].target, "/run/docker");
+    assert_eq!(dind.mounts.len(), 4);
+    assert_eq!(runner.mounts[3].source, dind.mounts[0].source);
     assert_eq!(dind.mounts[0].target, "/var/run");
-    assert_eq!(&dind.mounts[1..3], &runner.mounts[1..3]);
+    assert_eq!(dind.mounts[1].source, runner.mounts[1].source);
+    assert_eq!(dind.mounts[2].source, runner.mounts[2].source);
+    assert!(dind.mounts[2].read_only);
+    assert_eq!(
+        dind.image_mounts,
+        Vec::<crate::docker_spec::ImageMount>::new()
+    );
+    assert!(
+        dind.mounts
+            .iter()
+            .all(|mount| { mount.target != "/home/runner" && mount.target != "/tmp" })
+    );
     assert_eq!(
         dind.mounts
             .last()
             .map(|mount| (mount.source.as_str(), mount.target.as_str())),
         Some(("volume:worker_a-docker", "/var/lib/docker"))
     );
+}
 
-    let runner_bollard = bollard_create(&crate::worker::join_dind_net(runner, &"a".repeat(64))?)?;
+fn assert_runner_bollard_projection(
+    profile: &crate::docker_spec::RunnerImageProfile,
+    runner: &crate::worker::CreateProjection,
+) -> Result<(), HostError> {
+    let runner_bollard = bollard_create(&crate::worker::join_dind_net(
+        runner.clone(),
+        &"a".repeat(64),
+    )?)?;
     let expected_network = format!("container:{}", "a".repeat(64));
     let host = runner_bollard
         .config
         .host_config
         .as_ref()
         .ok_or(HostError::Docker)?;
+    assert_eq!(host.readonly_rootfs, Some(true));
     assert_eq!(
         host.security_opt,
         Some(vec!["apparmor=velnor-runner".to_owned()])
@@ -221,8 +270,43 @@ fn official_profile_uses_private_unix_dind_and_shared_runner_paths() -> Result<(
         host.network_mode.as_deref(),
         Some(expected_network.as_str())
     );
+    let mounts = host.mounts.as_ref().ok_or(HostError::Docker)?;
+    assert_eq!(mounts.len(), 11);
+    assert_eq!(mounts[2].read_only, Some(true));
+    let image_mounts = mounts
+        .iter()
+        .filter(|mount| mount.typ == Some(MountType::IMAGE))
+        .collect::<Vec<_>>();
+    assert_eq!(image_mounts.len(), 6);
+    assert!(image_mounts.iter().all(|mount| {
+        mount.source.as_deref() == Some(profile.runner_image())
+            && mount.read_only == Some(true)
+            && mount.image_options.is_some()
+    }));
+    assert_eq!(
+        image_mounts
+            .iter()
+            .map(|mount| {
+                mount
+                    .image_options
+                    .as_ref()
+                    .and_then(|options| options.subpath.as_deref())
+            })
+            .collect::<Option<Vec<_>>>(),
+        Some(vec![
+            "home/runner/bin",
+            "home/runner/run.sh",
+            "home/runner/run-helper.sh.template",
+            "home/runner/safe_sleep.sh",
+            "home/runner/env.sh",
+            "home/runner/config.sh",
+        ])
+    );
+    Ok(())
+}
 
-    let dind_bollard = bollard_create(&dind)?;
+fn assert_dind_bollard_projection(dind: &crate::worker::CreateProjection) -> Result<(), HostError> {
+    let dind_bollard = bollard_create(dind)?;
     let dind_host = dind_bollard
         .config
         .host_config
@@ -232,6 +316,24 @@ fn official_profile_uses_private_unix_dind_and_shared_runner_paths() -> Result<(
     assert!(dind_host.group_add.is_none());
     assert!(dind_host.security_opt.is_none());
     assert!(dind_host.port_bindings.is_none());
+    let dind_mounts = dind_host.mounts.as_ref().ok_or(HostError::Docker)?;
+    assert_eq!(dind_mounts.len(), 4);
+    assert_eq!(dind_mounts[0].target.as_deref(), Some("/var/run"));
+    assert_eq!(dind_mounts[1].target.as_deref(), Some("/home/runner/_work"));
+    assert_eq!(
+        dind_mounts[2].target.as_deref(),
+        Some("/home/runner/externals")
+    );
+    assert_eq!(dind_mounts[2].read_only, Some(true));
+    assert_eq!(dind_mounts[3].target.as_deref(), Some("/var/lib/docker"));
+    assert!(dind_mounts.iter().all(|mount| {
+        mount.target.as_deref() != Some("/home/runner")
+            && mount.target.as_deref() != Some("/tmp")
+            && !mount
+                .source
+                .as_deref()
+                .is_some_and(|source| source.starts_with('/'))
+    }));
     Ok(())
 }
 
