@@ -4,7 +4,7 @@
 //! data both `merge` and `cover` pass across their seam (request,
 //! manifests, signals, sinks, shard proofs, schema version) and the
 //! [`CoverPort`] trait through which merge calls cover behavior. Neither
-//! side depends on the other; the hub implements the port.
+//! side depends on the other; the cover crate implements the port.
 
 mod changed_work;
 mod cover_baseline_port;
