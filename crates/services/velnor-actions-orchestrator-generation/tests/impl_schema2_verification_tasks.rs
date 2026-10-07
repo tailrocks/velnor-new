@@ -1,6 +1,7 @@
 //! Typed verification task routing through schema-2 execution modes.
 
-use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_orchestrator_generation::generate::render_staged_tree;
+use velnor_actions_orchestrator_generation::prepare::prepare;
 
 use crate::impl_common::{TestResult, make_repo};
 use crate::impl_schema2_routing::{job_body, required_file};

@@ -6,7 +6,9 @@ use crate::impl_common::{TestResult, git};
 use crate::impl_schema2_routing::{
     execution_head, job_body, profiles, release_repo, required_file,
 };
-use velnor_actions_orchestrator::{plan_internal, prepare, render_staged_tree};
+use velnor_actions_orchestrator_generation::generate::render_staged_tree;
+use velnor_actions_orchestrator_generation::prepare::prepare;
+use velnor_actions_orchestrator_internal::internal::plan_internal;
 
 fn check_config(id: &str, task: &str, label: &str, platform: &str) -> String {
     format!(

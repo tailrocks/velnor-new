@@ -37,6 +37,10 @@ velnor-actions-workflow-tree = { version = "=0.1.1", path = "../velnor-actions-w
 [lints]
 workspace = true
 
+[dev-dependencies]
+serde_json = { workspace = true }
+velnor-actions-orchestrator-internal = { version = "=0.1.1", path = "../velnor-actions-orchestrator-internal" }
+
 [[test]]
 name = "velnor_orchestrator_generation"
 path = "tests/main.rs"
