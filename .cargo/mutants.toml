@@ -54,6 +54,7 @@ examine_globs = [
     "crates/services/velnor-actions-orchestrator-retrieve/src/**/*.rs",
     "crates/services/velnor-actions-orchestrator-check-runtime/src/**/*.rs",
     "crates/services/velnor-actions-orchestrator-internal/src/**/*.rs",
+    "crates/services/velnor-actions-orchestrator-retrieve-reports/src/**/*.rs",
     # Production wiring under review: inventory assembly, pin records,
     # staged validation verdict, and orchestrator wiring passes.
     "crates/services/velnor-actions-orchestrator-discovery/src/inventory.rs",

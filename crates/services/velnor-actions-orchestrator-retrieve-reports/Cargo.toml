@@ -1,0 +1,22 @@
+[package]
+name = "velnor-actions-orchestrator-retrieve-reports"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[dependencies]
+velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
+velnor-actions-orchestrator-retrieve = { version = "=0.1.1", path = "../velnor-actions-orchestrator-retrieve" }
+velnor-actions-workflow-steps = { version = "=0.1.1", path = "../velnor-actions-workflow-steps" }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[[test]]
+name = "velnor_orchestrator_retrieve_reports"
+path = "tests/main.rs"

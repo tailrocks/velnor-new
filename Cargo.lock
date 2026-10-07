@@ -3647,6 +3647,7 @@ dependencies = [
  "velnor-actions-orchestrator-preseed-manifest",
  "velnor-actions-orchestrator-provisioning",
  "velnor-actions-orchestrator-retrieve",
+ "velnor-actions-orchestrator-retrieve-reports",
  "velnor-actions-orchestrator-retrieve-retry",
  "velnor-actions-orchestrator-run-select",
  "velnor-actions-orchestrator-runtime-evidence",
@@ -4161,6 +4162,16 @@ dependencies = [
  "velnor-actions-orchestrator-merge-request",
  "velnor-actions-orchestrator-retrieve-retry",
  "velnor-actions-workflow-renderer",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-retrieve-reports"
+version = "0.1.1"
+dependencies = [
+ "tempfile",
+ "velnor-actions-orchestrator-core",
+ "velnor-actions-orchestrator-retrieve",
+ "velnor-actions-workflow-steps",
 ]
 
 [[package]]

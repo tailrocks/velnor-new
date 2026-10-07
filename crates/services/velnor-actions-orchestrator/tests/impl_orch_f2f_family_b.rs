@@ -116,6 +116,14 @@ pub(crate) const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "crates/services/velnor-actions-orchestrator-retrieve-reports",
+        &[
+            "velnor-actions-orchestrator-core",
+            "velnor-actions-orchestrator-retrieve",
+            "velnor-actions-workflow-steps",
+        ],
+    ),
+    (
         "crates/services/velnor-actions-orchestrator-retrieve-retry",
         &[],
     ),

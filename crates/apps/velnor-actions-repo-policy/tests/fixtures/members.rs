@@ -1,7 +1,7 @@
 //! Expected workspace member directories (package name is the leaf).
 
 /// Expected member directories (package name is the leaf).
-pub(crate) const MEMBERS: [&str; 66] = [
+pub(crate) const MEMBERS: [&str; 67] = [
     "crates/adapters/velnor-actions-actionlint",
     "crates/apps/velnor-actions-cli",
     "crates/apps/velnor-actions-repo-policy",
@@ -44,6 +44,7 @@ pub(crate) const MEMBERS: [&str; 66] = [
     "crates/services/velnor-actions-orchestrator-provisioning",
     "crates/services/velnor-actions-orchestrator-request-event",
     "crates/services/velnor-actions-orchestrator-retrieve",
+    "crates/services/velnor-actions-orchestrator-retrieve-reports",
     "crates/services/velnor-actions-orchestrator-retrieve-retry",
     "crates/services/velnor-actions-orchestrator-run-select",
     "crates/services/velnor-actions-orchestrator-runtime-evidence",
