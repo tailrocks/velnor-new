@@ -1,4 +1,7 @@
-# T28 gate qualification record: full producer/qualification gate set
+---
+title: "T28 gate qualification record: full producer/qualification gate set"
+description: "T28 row contract (docs/reviews/opentofu-evidence.md:47): \"Final full gate set incl. Gates 0–8 re-runs at final Phase-B source. No waived"
+---
 
 T28 row contract (`docs/reviews/opentofu-evidence.md:47`): "Final full
 gate set incl. Gates 0–8 re-runs at final Phase-B source. No waived
@@ -7,8 +10,8 @@ failures."
 Source identity: `667b692aafb7a8f2b00d9bc3bf9544dbf8b4d324` (accepted
 T27 landing commit) plus the comment-only fixes in the T28 commit
 itself (3 rustdoc one-word delinks + 1 shellcheck directive line; zero
-product bytes — verify with `git diff 667b692 <t28> -- .
-':!docs/implemented/gate-qualification-t28.md'`, which must show
+product bytes — verify with `git diff 667b692 &lt;t28> -- .
+':!docs/content/docs/implemented/gate-qualification-t28.mdx'`, which must show
 comment lines only). Every run below executed in a worktree at that
 identity; the full nextest suite was re-run after this doc landed to
 prove the record itself changes nothing.
@@ -85,7 +88,7 @@ count stays 0); all existing pins green and behavior-identical (the
   1.99.0`, which is the held pin above. Plain gate #6 unaffected.
 - Gate-6 probe UNPASSED (`gate-6-task-result-reuse.md:10`, mise
   `--file` blocker) — standing documented state, T29+ scope.
-- Perf gaps ledger (`performance-p13.md`, `performance.md`,
+- Perf gaps ledger (`performance-p13.md`, `/docs/implemented/performance`,
   `cache-measurements.md` UNPASSED/UNMEASURED rows), NEEDS-HUMAN
   seed/release halves (`release-gates.md`, gate-8 follow-ups) —
   standing documented state, T29+ scope.
