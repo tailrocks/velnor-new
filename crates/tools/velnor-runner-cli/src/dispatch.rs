@@ -32,7 +32,7 @@ fn dispatch(cli: &Cli) -> ExitCode {
     match &cli.command {
         Command::Status { json } => print_status(&state, *json),
         Command::Doctor { probe } => print_doctor(&state, *probe),
-        Command::Logs { follow } => logs(*follow),
+        Command::Logs { follow } => crate::service::logs(*follow),
         Command::Drain { .. } => flag(&state, "drain"),
         Command::Resume => remove_flag(&state, "drain"),
         Command::Connect {
@@ -86,16 +86,6 @@ fn print_doctor(state: &Path, probe: bool) -> ExitCode {
 
 fn observe(_state: &Path) -> Readiness {
     readiness_for_empty()
-}
-
-fn logs(follow: bool) -> ExitCode {
-    let path = crate::service::log_dir().join("host.log");
-    if follow && !path.is_file() {
-        eprintln!("log missing");
-        return ExitCode::from(1);
-    }
-    println!("{}", path.display());
-    ExitCode::SUCCESS
 }
 
 fn flag(state: &Path, name: &str) -> ExitCode {

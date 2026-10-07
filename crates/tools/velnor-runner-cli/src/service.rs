@@ -18,6 +18,53 @@ pub(crate) fn service(action: ServiceAction) -> ExitCode {
     }
 }
 
+pub(crate) fn logs(follow: bool) -> ExitCode {
+    #[cfg(target_os = "linux")]
+    {
+        command_code("journalctl", &journalctl_args(follow))
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let path = log_dir().join("host.log");
+        if !path.is_file() {
+            eprintln!("log missing");
+            return ExitCode::from(1);
+        }
+        let mut command = Command::new("tail");
+        command.arg("-n").arg("200");
+        if follow {
+            command.arg("-F");
+        }
+        match command.arg(path).status() {
+            Ok(status) if status.success() => ExitCode::SUCCESS,
+            _ => ExitCode::from(1),
+        }
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        let _ = follow;
+        eprintln!("log backend unsupported on this host");
+        ExitCode::from(1)
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn journalctl_args(follow: bool) -> Vec<&'static str> {
+    let mut args = vec!["--unit=velnor-host.service", "--lines=200", "--no-pager"];
+    if follow {
+        args.push("--follow");
+    }
+    args
+}
+
+#[cfg(target_os = "linux")]
+fn command_code(program: &str, args: &[&str]) -> ExitCode {
+    match Command::new(program).args(args).status() {
+        Ok(status) if status.success() => ExitCode::SUCCESS,
+        _ => ExitCode::from(1),
+    }
+}
+
 fn start() -> ExitCode {
     let Some(uid) = read_uid() else {
         return ExitCode::from(1);
