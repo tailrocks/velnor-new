@@ -39,6 +39,7 @@ members = [
     "crates/services/velnor-actions-orchestrator-noop-report",
     "crates/services/velnor-actions-orchestrator-pins",
     "crates/services/velnor-actions-orchestrator-plan",
+    "crates/services/velnor-actions-orchestrator-plan-obligation",
     "crates/services/velnor-actions-orchestrator-preseed-manifest",
     "crates/services/velnor-actions-orchestrator-provisioning",
     "crates/services/velnor-actions-orchestrator-request-event",
