@@ -31,7 +31,7 @@ recorded PR29 source instead selects MBX `1.22.0` and candidate action commit
 `ec3ebbfbc1fdaffa59d476e87e4f386fdc60d533` in version policy/workflow
 generation ([policy at the PR head](https://github.com/tailrocks/velnor-new/blob/4ad1e34a1e20589386ddefdc25eaceb067341f0b/.velnor/version-policy.toml)).
 That is not the production authority on current `main`: the
-[cache contract](../content/../content/docs/proposed/cache-contract.mdxx) retains MBX `1.21.1` and action
+[cache contract](../content/docs/proposed/cache-contract.mdx) retains MBX `1.21.1` and action
 v1.6 pending source, lifecycle, disk, and input qualification. Resolve this
 source/body/authority mismatch and bind any qualification to the exact source
 and action bytes before describing the candidate as qualified.
@@ -45,7 +45,7 @@ files, and `MBX_CACHE_DIR` remained untouched. Commit [`422fcd4`](https://github
 its regression and changed hosted configuration to `MBX_SHARE_OUT_DIR=0`. The final PR30 head
 does not contain that cleanup behavior or test. Its separate
 [Cargo-source pruning script](https://github.com/tailrocks/velnor-new/blob/fe0064cbb82d861653439faaf4a088186571dec6/scripts/prune_hosted_cargo_sources.py) removes Cargo registry and Git source trees
-after task and cache-save work. The PR30 [cache contract at its exact head](https://github.com/tailrocks/velnor-new/blob/fe0064cbb82d861653439faaf4a088186571dec6/../content/docs/proposed/cache-contract.mdx#L141)
+after task and cache-save work. The PR30 [cache contract at its exact head](https://github.com/tailrocks/velnor-new/blob/fe0064cbb82d861653439faaf4a088186571dec6/docs/proposed/cache-contract.md#L141)
 sets hosted `MBX_GC_AUTO=0` and leaves hosted object lifecycle to the pinned
 action's post export. The `mbx gc` command before external-bundle export is
 Scale Set-only. Neither source change establishes a protected cache round trip
@@ -98,7 +98,7 @@ is not transactional if a later operation fails. The algorithm is Linux-only.
 A future owner must retain the descriptor-relative/no-follow/mount-aware
 properties and prove a safe implementation under the repository's `unsafe`
 ban; a path-based recursive delete is not an equivalent port. The old helper hard-codes `$RUNNER_TEMP/velnor/cargo`; the proposed
-[cache contract](../content/../content/docs/proposed/cache-contract.mdxx) defines `VELNOR_CACHE_ROOT=$RUNNER_TEMP/velnor/cache`
+[cache contract](../content/docs/proposed/cache-contract.mdx) defines `VELNOR_CACHE_ROOT=$RUNNER_TEMP/velnor/cache`
 and `CARGO_HOME=$VELNOR_CACHE_ROOT/cargo`, while current generated jobs still set
 `CARGO_HOME` to `$RUNNER_TEMP/velnor/cargo` ([Mise ToolHomes constructor and env](https://github.com/tailrocks/velnor-new/blob/ccd4642ec382c7f67ec0ea7247f42de840e4cf2e/crates/velnor-actions-mise/src/steps.rs#L34-L44),
 [orchestrator source-cache owner](https://github.com/tailrocks/velnor-new/blob/ccd4642ec382c7f67ec0ea7247f42de840e4cf2e/crates/velnor-actions-orchestrator/src/source_cache.rs)). A future owner must reconcile
@@ -111,12 +111,12 @@ retaining or porting the algorithm.
 
 The [V1 boundary in `AGENTS.md`](../../AGENTS.md) defines V1 as a workflow
 generator, not a runner, interpreter, or second task graph. The adopted
-[architecture](../content/../content/docs/proposed/architecture.mdxx) assigns the CLI to typed
+[architecture](../content/docs/proposed/architecture.mdx) assigns the CLI to typed
 `init`/`plan`/`generate` dispatch; the orchestrator coordinates planning and
 generation but must not own OS process details or process creation; the Mise
 adapter owns fixed, pinned tool subprocesses; and the workflow renderer emits
 generic workflow YAML from typed IR, not filesystem behavior. The [CLI
-contract](../content/../content/docs/proposed/cli-contract.mdxx) says `plan` is analysis-only and task
+contract](../content/docs/proposed/cli-contract.mdx) says `plan` is analysis-only and task
 execution occurs in generated workflows. Its private typed operations are
 `write-request-v1`, `plan-v1`, `merge-v1`, `fetch-reports-v1`, and
 `write-task-report-v1`; there is no cleanup operation. None of these contracts

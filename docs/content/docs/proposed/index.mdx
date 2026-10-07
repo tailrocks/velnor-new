@@ -57,14 +57,14 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 
 ## Normative specifications
 
-1. [Architecture](../content//docs/proposed/architecturex) defines workspace crates, configuration, discovery, data contracts, and generated-file ownership.
+1. [Architecture](/docs/proposed/architecture) defines workspace crates, configuration, discovery, data contracts, and generated-file ownership.
 2. [Bootstrap and release contract](/docs/proposed/bootstrap-and-release-contract) defines consumer bootstrap assets, the compiled version catalog, Velnor's bootstrap lock, and release promotion.
-3. [Generated-file contract](../content//docs/proposed/generated-file-contractx) defines task names, file ownership, safe rendering, and atomic output replacement.
-4. [CLI contract](../content//docs/proposed/cli-contractx) fixes the stack-generic `velnor-actions` Clap command tree (`init`, `plan`, and `generate`), automatic detection, TOML ignore settings, and V1 Rust behavior.
-5. [Workflow contract](../content//docs/proposed/workflow-contractx) defines triggers, jobs, and matrix data.
+3. [Generated-file contract](/docs/proposed/generated-file-contract) defines task names, file ownership, safe rendering, and atomic output replacement.
+4. [CLI contract](/docs/proposed/cli-contract) fixes the stack-generic `velnor-actions` Clap command tree (`init`, `plan`, and `generate`), automatic detection, TOML ignore settings, and V1 Rust behavior.
+5. [Workflow contract](/docs/proposed/workflow-contract) defines triggers, jobs, and matrix data.
 6. [Task execution contract](/docs/proposed/task-execution-contract) defines task steps, Mise invocation, execution, and reports.
-7. [Cache and report contract](../content//docs/proposed/cache-contractx) defines task identities, cache ownership/trust, reports, and final status aggregation.
-8. [Host-image seed admission contract](../content//docs/proposed/host-seed-contractx) defines trusted preinstalled seed inputs and fail-cold admission.
+7. [Cache and report contract](/docs/proposed/cache-contract) defines task identities, cache ownership/trust, reports, and final status aggregation.
+8. [Host-image seed admission contract](/docs/proposed/host-seed-contract) defines trusted preinstalled seed inputs and fail-cold admission.
 9. [Parallelism and affected-work contract](/docs/proposed/parallelism-and-selection-contract) defines dependency-aware selection, trusted baseline coverage, native background/wait steps, bounded concurrency, and complete test partitioning.
 10. [Rust quality contract](/docs/proposed/rust-quality-contract) defines tests, lints, file limits, dependencies, verification and policy protection.
 11. [Agent and performance contract](/docs/proposed/agent-and-performance-contract) defines agent instructions, performance measurements, acceptance budgets, and readiness evidence.

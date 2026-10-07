@@ -117,7 +117,7 @@ Determinism follows per class: fixed Rust-lane steps from exact catalog
 pins, and verification jobs from the sorted committed task declarations.
 See
 [task-execution §2](task-execution-contract.md) for the fixed vectors
-and [workflow §3](../content/../content/docs/proposed/workflow-contract.mdxx) for the prepare step.
+and [workflow §3](../content/docs/proposed/workflow-contract.mdx) for the prepare step.
 
 ## 2. Read-only command contract
 
