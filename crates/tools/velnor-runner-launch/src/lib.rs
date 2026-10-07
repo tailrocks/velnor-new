@@ -17,5 +17,9 @@ pub mod linux {
     };
 }
 
+pub use launch::control::{
+    ControlOpenError, DrainOutcome, DrainRequestOutcome, DrainUnknown, ResumeBlockReason,
+    ResumeOutcome, request_drain_blocking, resume_blocking, wait_drained_blocking,
+};
 pub use launch::{LaunchReport, launch_once};
 pub use launch_blocking::{ListenFault, launch_blocking};
