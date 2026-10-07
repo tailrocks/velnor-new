@@ -1,0 +1,51 @@
+# Velnor controller service. This process has host Docker API access.
+# Membership in the docker group is root-equivalent; restrict this host to trusted repositories.
+[Unit]
+Description=Velnor GitHub Actions Scale Set controller
+Documentation=https://github.com/tailrocks/velnor-new
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+PartOf=docker.service
+Requires=velnor-host-identity-check.service
+After=velnor-host-identity-check.service
+# These presence conditions do not authorize work; the daemon must enforce its
+# durable first-start drain/admission gate before any runner launch.
+ConditionPathExists=/var/lib/velnor-host-package/identity
+ConditionFileNotEmpty=/etc/velnor-host/host.toml
+ConditionFileNotEmpty=/etc/velnor-host/github-token
+
+[Service]
+Type=simple
+User=velnor
+Group=velnor
+SupplementaryGroups=docker
+WorkingDirectory=/var/lib/velnor-host
+UMask=0077
+LoadCredential=github-token:/etc/velnor-host/github-token
+ExecStartPre=/usr/bin/velnor-host --config /etc/velnor-host/host.toml --state /var/lib/velnor-host service preflight
+ExecStart=/usr/bin/velnor-host --config /etc/velnor-host/host.toml --state /var/lib/velnor-host daemon run
+ExecStop=/usr/bin/velnor-host --config /etc/velnor-host/host.toml --state /var/lib/velnor-host drain --wait
+Restart=on-failure
+RestartSec=5s
+KillMode=mixed
+# No TimeoutStopSec override is selected before the daemon drain path is measured.
+# ExecStartPre verifies the manager's effective timeout is finite and greater
+# than the positive configured drain_timeout_secs; package activation remains
+# unavailable until a measured stop bound and real drain/quiescence path pass.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+# The validated state directory is the sole writable host path for journal and drain state.
+ReadWritePaths=/var/lib/velnor-host
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

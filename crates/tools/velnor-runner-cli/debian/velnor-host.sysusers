@@ -1,0 +1,2 @@
+# systemd-sysusers creates a locked, non-login control-plane account.
+u velnor - "Velnor host controller" /var/lib/velnor-host /usr/sbin/nologin

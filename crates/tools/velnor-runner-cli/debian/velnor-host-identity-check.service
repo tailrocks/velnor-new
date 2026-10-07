@@ -1,0 +1,25 @@
+# This root-only dependency validates systemd's NSS identity before the
+# credential-bearing controller unit resolves User= or provisions credentials.
+# It is a oneshot without RemainAfterExit so every controller start verifies
+# the identity again.
+[Unit]
+Description=Verify Velnor controller service identity
+Documentation=https://github.com/tailrocks/velnor-new
+Before=velnor-host.service
+ConditionPathExists=/var/lib/velnor-host-package/identity
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/lib/velnor-host/account-check --verify
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
