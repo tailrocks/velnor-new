@@ -7,7 +7,8 @@ use clap::Parser;
 use velnor_runner_host::docker_client::{self, DockerVersion};
 use velnor_runner_host::{
     DisconnectEffect, HostConfig, HostError, HostPlatform, Readiness, SetOwnership,
-    disconnect_effects, doctor_json, read_host_config_file, readiness_for_empty, status_json,
+    disconnect_effects, doctor_json, load_configured_secret, read_host_config_file,
+    readiness_for_empty,
 };
 
 use crate::args::{Cli, Command, DaemonAction};
@@ -33,7 +34,7 @@ fn dispatch(cli: &Cli) -> ExitCode {
     let state = state_dir(cli.state.as_deref());
     let config = selected_config_path(cli, &state);
     match &cli.command {
-        Command::Status { json } => print_status(&state, *json),
+        Command::Status { json } => print_status(&state, &config, *json),
         Command::Doctor { probe } => print_doctor(&state, &config, *probe),
         Command::Logs { follow } => crate::service::logs(*follow),
         Command::Drain { .. } => flag(&state, "drain"),
@@ -117,14 +118,200 @@ fn selected_config_path(cli: &Cli, state: &Path) -> PathBuf {
     config_path(cli.config.as_deref(), state)
 }
 
-fn print_status(state: &Path, json: bool) -> ExitCode {
-    let readiness = observe(state);
-    if json {
-        println!("{}", status_json(readiness));
-    } else {
-        println!("{}", readiness.as_str());
+fn print_status(state: &Path, config_path: &Path, json: bool) -> ExitCode {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        let platform = host_platform();
+        let observation = status_observation_with(
+            read_host_config_file(config_path, platform),
+            platform,
+            journal_file_observation(state),
+            crate::service::controller_service_state(),
+            |reference| {
+                load_configured_secret(reference)
+                    .map(|secret| credential_is_available(secret.as_slice()))
+            },
+            docker_client::read_version_blocking,
+        );
+        if json {
+            println!("{}", observation.json());
+        } else {
+            println!("{}", observation.lines());
+        }
+        ExitCode::SUCCESS
     }
-    ExitCode::SUCCESS
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        let _ = (state, config_path);
+        let observation = StatusObservation {
+            config: ConfigObservation::Unavailable,
+            credential: DependencyObservation::NotChecked,
+            docker: DependencyObservation::NotChecked,
+            journal: JournalObservation::Unknown,
+            controller_service: crate::service::ControllerServiceState::Unknown,
+        };
+        if json {
+            println!("{}", observation.json());
+        } else {
+            println!("{}", observation.lines());
+        }
+        ExitCode::SUCCESS
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConfigObservation {
+    Valid,
+    Missing,
+    Invalid,
+    Unavailable,
+}
+
+impl ConfigObservation {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Valid => "valid",
+            Self::Missing => "missing",
+            Self::Invalid => "invalid",
+            Self::Unavailable => "unavailable",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DependencyObservation {
+    Available,
+    Unavailable,
+    NotChecked,
+}
+
+impl DependencyObservation {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Available => "available",
+            Self::Unavailable => "unavailable",
+            Self::NotChecked => "not_checked",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum JournalObservation {
+    PresentUnverified,
+    Missing,
+    Unsafe,
+    Unknown,
+}
+
+impl JournalObservation {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::PresentUnverified => "present_unverified",
+            Self::Missing => "missing",
+            Self::Unsafe => "unsafe",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct StatusObservation {
+    config: ConfigObservation,
+    credential: DependencyObservation,
+    docker: DependencyObservation,
+    journal: JournalObservation,
+    controller_service: crate::service::ControllerServiceState,
+}
+
+impl StatusObservation {
+    fn json(self) -> String {
+        serde_json::json!({
+            "command": "status",
+            "state": "not_proven",
+            "config": self.config.as_str(),
+            "credential": self.credential.as_str(),
+            "docker": self.docker.as_str(),
+            "journal": self.journal.as_str(),
+            "controller_service": controller_service_status(self.controller_service),
+            "global_readiness": "not_proven",
+        })
+        .to_string()
+    }
+
+    fn lines(self) -> String {
+        format!(
+            "state=not_proven\nconfig={}\ncredential={}\ndocker={}\njournal={}\ncontroller_service={}\nglobal_readiness=not_proven",
+            self.config.as_str(),
+            self.credential.as_str(),
+            self.docker.as_str(),
+            self.journal.as_str(),
+            controller_service_status(self.controller_service),
+        )
+    }
+}
+
+fn controller_service_status(state: crate::service::ControllerServiceState) -> &'static str {
+    match state {
+        crate::service::ControllerServiceState::InUse => "in_use",
+        crate::service::ControllerServiceState::Stopped => "stopped_or_absent",
+        crate::service::ControllerServiceState::Unknown => "unknown",
+    }
+}
+
+fn status_observation_with(
+    config_text: Result<Option<String>, HostError>,
+    platform: HostPlatform,
+    journal: JournalObservation,
+    controller_service: crate::service::ControllerServiceState,
+    credential_probe: impl FnOnce(&str) -> Result<bool, HostError>,
+    docker_probe: impl FnOnce(&str) -> Result<DockerVersion, HostError>,
+) -> StatusObservation {
+    let mut observation = StatusObservation {
+        config: ConfigObservation::Unavailable,
+        credential: DependencyObservation::NotChecked,
+        docker: DependencyObservation::NotChecked,
+        journal,
+        controller_service,
+    };
+    let text = match config_text {
+        Ok(Some(text)) => text,
+        Ok(None) => {
+            observation.config = ConfigObservation::Missing;
+            return observation;
+        }
+        Err(_) => return observation,
+    };
+    let Ok(config) = HostConfig::parse(&text) else {
+        observation.config = ConfigObservation::Invalid;
+        return observation;
+    };
+    if config.validate_for_host(platform).is_err() {
+        observation.config = ConfigObservation::Invalid;
+        return observation;
+    }
+    observation.config = ConfigObservation::Valid;
+    observation.credential = match credential_probe(&config.github.credential_ref) {
+        Ok(true) => DependencyObservation::Available,
+        Ok(false) | Err(_) => DependencyObservation::Unavailable,
+    };
+    observation.docker = match docker_probe(&config.docker.endpoint) {
+        Ok(_) => DependencyObservation::Available,
+        Err(_) => DependencyObservation::Unavailable,
+    };
+    observation
+}
+
+fn credential_is_available(secret: &[u8]) -> bool {
+    std::str::from_utf8(secret).is_ok_and(|value| !value.trim().is_empty())
+}
+
+fn journal_file_observation(state: &Path) -> JournalObservation {
+    match std::fs::symlink_metadata(state.join("launch.db")) {
+        Ok(metadata) if metadata.file_type().is_file() => JournalObservation::PresentUnverified,
+        Ok(_) => JournalObservation::Unsafe,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => JournalObservation::Missing,
+        Err(_) => JournalObservation::Unknown,
+    }
 }
 
 fn print_doctor(state: &Path, config_path: &Path, probe: bool) -> ExitCode {
