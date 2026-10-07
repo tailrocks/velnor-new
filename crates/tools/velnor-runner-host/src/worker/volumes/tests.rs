@@ -43,7 +43,12 @@ pub(super) fn container_json(id: &str, worker: Option<&str>, role: Option<&str>)
         }),
         _ => serde_json::json!({}),
     };
-    serde_json::json!({"Id": id, "Config": {"Labels": labels}}).to_string()
+    serde_json::json!({
+        "Id": id,
+        "Config": {"Labels": labels},
+        "HostConfig": {"CgroupnsMode": "private"}
+    })
+    .to_string()
 }
 
 #[cfg(all(test, unix))]

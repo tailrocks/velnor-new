@@ -1,6 +1,7 @@
 //! Docker operations used to create, start, and inspect worker containers.
 
 use ::bollard::Docker;
+use ::bollard::models::HostConfigCgroupnsModeEnum;
 use ::bollard::query_parameters::{AttachContainerOptionsBuilder, StartContainerOptions};
 use tokio::io::AsyncWriteExt;
 
@@ -24,6 +25,10 @@ pub(crate) async fn worker_id_for_name(
                 .id
                 .filter(|id| !id.is_empty())
                 .ok_or(HostError::Docker)?;
+            let host_config = body.host_config.ok_or(HostError::Docker)?;
+            if host_config.cgroupns_mode != Some(HostConfigCgroupnsModeEnum::PRIVATE) {
+                return Err(HostError::Docker);
+            }
             let labels = body
                 .config
                 .and_then(|config| config.labels)
