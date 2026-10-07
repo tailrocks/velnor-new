@@ -19,9 +19,6 @@ velnor-actions-rust-core = { version = "=0.1.1", path = "../../adapters/velnor-a
 velnor-actions-tofu = { version = "=0.1.1", path = "../../adapters/velnor-actions-tofu" }
 velnor-actions-tofu-core = { version = "=0.1.1", path = "../../adapters/velnor-actions-tofu-core" }
 velnor-actions-orchestrator-baseline-publish = { version = "=0.1.1", path = "../velnor-actions-orchestrator-baseline-publish" }
-velnor-actions-orchestrator-check-acquisition = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-acquisition" }
-velnor-actions-orchestrator-check-evidence = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-evidence" }
-velnor-actions-orchestrator-check-preparation = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-preparation" }
 velnor-actions-orchestrator-check-runtime = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-runtime" }
 velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
 velnor-actions-orchestrator-cover-compat = { version = "=0.1.1", path = "../velnor-actions-orchestrator-cover-compat" }
@@ -30,7 +27,6 @@ velnor-actions-orchestrator-discovery = { version = "=0.1.1", path = "../velnor-
 velnor-actions-orchestrator-external-data = { version = "=0.1.1", path = "../velnor-actions-orchestrator-external-data" }
 velnor-actions-orchestrator-generation = { version = "=0.1.1", path = "../velnor-actions-orchestrator-generation" }
 velnor-actions-orchestrator-internal = { version = "=0.1.1", path = "../velnor-actions-orchestrator-internal" }
-velnor-actions-orchestrator-merge-request = { version = "=0.1.1", path = "../velnor-actions-orchestrator-merge-request" }
 velnor-actions-orchestrator-noop-report = { version = "=0.1.1", path = "../velnor-actions-orchestrator-noop-report" }
 velnor-actions-orchestrator-pins = { version = "=0.1.1", path = "../velnor-actions-orchestrator-pins" }
 velnor-actions-orchestrator-plan = { version = "=0.1.1", path = "../velnor-actions-orchestrator-plan" }
@@ -43,7 +39,6 @@ velnor-actions-orchestrator-run-select = { version = "=0.1.1", path = "../velnor
 velnor-actions-orchestrator-runtime-evidence = { version = "=0.1.1", path = "../velnor-actions-orchestrator-runtime-evidence" }
 velnor-actions-orchestrator-runtime-plan = { version = "=0.1.1", path = "../velnor-actions-orchestrator-runtime-plan" }
 velnor-actions-orchestrator-staged-validation = { version = "=0.1.1", path = "../velnor-actions-orchestrator-staged-validation" }
-velnor-actions-orchestrator-task-report = { version = "=0.1.1", path = "../velnor-actions-orchestrator-task-report" }
 velnor-actions-orchestrator-task-report-write = { version = "=0.1.1", path = "../velnor-actions-orchestrator-task-report-write" }
 velnor-actions-orchestrator-workflow-ir = { version = "=0.1.1", path = "../velnor-actions-orchestrator-workflow-ir" }
 velnor-actions-workflow-cache = { version = "=0.1.1", path = "../velnor-actions-workflow-cache" }

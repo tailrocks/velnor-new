@@ -1,13 +1,13 @@
-//! Event-time typed task-report production over the extracted report-write crate.
+//! Event-time typed task-report production over the report-write core.
 //!
-//! The `write-task-report-v1` core lives in
-//! `velnor-actions-orchestrator-task-report-write` as a dependency-free
-//! leaf; this module resolves the run key and keeps the original
-//! `write_task_report` entrypoint byte-identical for the CLI and
-//! integration tests.
+//! The `write-task-report-v1` core lives in the `report_write` module as
+//! a dependency-free leaf; this module resolves the run key and keeps
+//! the original `write_task_report` entrypoint byte-identical for the CLI
+//! and integration tests.
 
 use velnor_actions_orchestrator_core::OrchestratorError;
-use velnor_actions_orchestrator_task_report_write::write_task_report_with_key;
+
+use super::report_write::write_task_report_with_key;
 
 /// Write the executed obligation's reports plus downstream skip reports.
 ///

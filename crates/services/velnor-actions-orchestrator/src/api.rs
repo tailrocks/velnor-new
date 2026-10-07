@@ -1,6 +1,5 @@
 //! Public orchestrator API re-exports.
 
-pub use super::task_report::write_task_report;
 pub use velnor_actions_contract_config::ExecutionMode;
 pub use velnor_actions_contract_workflow::{
     DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV,
@@ -58,6 +57,7 @@ pub use velnor_actions_orchestrator_preseed_manifest::{
     PRESEED_MANIFEST_OP, write_preseed_manifest,
 };
 pub use velnor_actions_orchestrator_retrieve_reports::{FETCH_OP, retrieve_reports};
+pub use velnor_actions_orchestrator_task_report_write::write_task_report;
 pub use velnor_actions_orchestrator_workflow_ir::workflow::{
     CHECKOUT_USES, DEFAULT_RUNNER_LABEL, WorkflowPlan,
 };
