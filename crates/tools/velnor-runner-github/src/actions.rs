@@ -256,13 +256,7 @@ fn validate_repository(
     repository: &str,
     actions_token: &str,
 ) -> Result<(), SessionError> {
-    if !path_segment(owner)
-        || !path_segment(repository)
-        || actions_token.is_empty()
-        || actions_token
-            .bytes()
-            .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
-    {
+    if !path_segment(owner) || !path_segment(repository) || !safe_actions_token(actions_token) {
         return Err(WireError::RegistrationRejected.into());
     }
     Ok(())
@@ -289,7 +283,7 @@ pub(crate) fn actions_request(
     path: String,
     actions_token: &str,
 ) -> Result<SessionRequest, SessionError> {
-    if actions_token.is_empty() {
+    if !safe_actions_token(actions_token) {
         return Err(WireError::RegistrationRejected.into());
     }
     Ok(SessionRequest {
@@ -307,6 +301,13 @@ pub(crate) fn actions_request(
         ],
         body: Vec::new(),
     })
+}
+
+fn safe_actions_token(token: &str) -> bool {
+    !token.is_empty()
+        && !token
+            .bytes()
+            .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
 }
 
 pub(crate) fn status_error(status: u16) -> SessionError {

@@ -10,6 +10,7 @@ mod poll;
 mod refresh;
 mod registration;
 mod runner;
+mod runner_group_policy;
 mod secret;
 
 pub mod session;
@@ -47,6 +48,12 @@ pub use registration::{
     repository_registration_token_path,
 };
 pub use runner::RunnerReference;
+pub use runner_group_policy::{
+    ActionsRunnerGroupPolicy, RunnerGroupAccess, RunnerGroupPolicySnapshot, RunnerGroupScope,
+    SelectedOrganization, SelectedRepository, find_enterprise_runner_group_policy,
+    find_organization_runner_group_policy, get_enterprise_runner_group_policy,
+    get_organization_runner_group_policy,
+};
 pub use secret::EncodedJit;
 pub use session::{
     Ack, AckScope, Exchange, Method, QueueSession, SessionError, SessionRequest, Transport, ack,
