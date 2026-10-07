@@ -2,7 +2,6 @@
 //!
 //! Durable intent lives in velnor-runner-journal and is re-exported here.
 
-mod apparmor;
 pub mod assign;
 mod config;
 mod connect;

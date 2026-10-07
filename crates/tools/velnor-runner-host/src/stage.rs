@@ -160,7 +160,7 @@ pub(super) async fn drive_inner<E: PairEngine, S: PairSink>(
         return Err(HostError::EmptyJit);
     }
     let admission = if profile.is_some() {
-        Some(crate::apparmor::verify_runner_profile()?)
+        Some(velnor_runner_apparmor::verify_runner_profile()?)
     } else {
         None
     };
@@ -183,7 +183,7 @@ async fn drive_inner_admitted<E: PairEngine, S: PairSink>(
     stop: PairStop,
     sink: &S,
     profile: Option<&RunnerImageProfile>,
-    admission: Option<&crate::apparmor::RunnerProfileAdmission>,
+    admission: Option<&velnor_runner_apparmor::RunnerProfileAdmission>,
 ) -> Result<PartialPair, HostError> {
     if profile.is_some() != admission.is_some() {
         return Err(HostError::Config);
@@ -256,7 +256,7 @@ pub(super) async fn drive_with_profile_for_test<E: PairEngine, S: PairSink>(
     sink: &S,
     profile: &RunnerImageProfile,
 ) -> Result<PartialPair, HostError> {
-    let admission = crate::apparmor::test_runner_profile_admission();
+    let admission = velnor_runner_apparmor::test_runner_profile_admission();
     drive_inner_admitted(
         engine,
         private_volume,

@@ -1,0 +1,15 @@
+[package]
+name = "velnor-runner-apparmor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+test-support = []
+
+[dependencies]
+velnor-runner-journal = { version = "=0.1.1", path = "../velnor-runner-journal" }

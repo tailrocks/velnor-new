@@ -30,6 +30,7 @@
     "velnor-actions-workflow-steps": "library",
     "velnor-actions-workflow-tree": "library",
     "velnor-archive-guard": "tool",
+    "velnor-runner-apparmor": "library",
     "velnor-runner-cli": "tool",
     "velnor-runner-core": "library",
     "velnor-runner-github": "library",

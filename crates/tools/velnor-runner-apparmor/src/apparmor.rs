@@ -7,7 +7,7 @@
 
 use std::{fs, path::Path};
 
-use crate::HostError;
+use velnor_runner_journal::HostError;
 
 const PROFILE_NAMES: [&str; 3] = ["velnor-runner", "velnor-worker", "velnor-job"];
 const PROFILE_LIST: &str = "/sys/kernel/security/apparmor/profiles";
@@ -24,7 +24,7 @@ const APPROVED_POLICY_SHA256: Option<&str> = None;
 /// Fields and constructors stay private. A caller cannot satisfy admission by
 /// passing a boolean or inventing a profile hash.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct RunnerProfileAdmission {
+pub struct RunnerProfileAdmission {
     _seal: (),
 }
 
@@ -54,7 +54,7 @@ struct ProfileRecord {
 /// `raw_sha256`. The kernel hash is for the exact compiled policy bytes, not a
 /// hash of a mutable source file. All three profiles must share that identity
 /// and be in enforce mode.
-pub(crate) fn verify_runner_profile() -> Result<RunnerProfileAdmission, HostError> {
+pub fn verify_runner_profile() -> Result<RunnerProfileAdmission, HostError> {
     let expected = approved_policy_sha256().map_err(|_| HostError::Config)?;
     let profiles = fs::read_to_string(PROFILE_LIST).map_err(|_| HostError::Config)?;
     let records =
@@ -219,8 +219,9 @@ fn parse_sha256(value: &str) -> Result<&str, AdmissionFailure> {
     Ok(value)
 }
 
-#[cfg(test)]
-pub(crate) fn test_runner_profile_admission() -> RunnerProfileAdmission {
+/// Forge an admission token for tests. Never available in production builds.
+#[cfg(any(test, feature = "test-support"))]
+pub fn test_runner_profile_admission() -> RunnerProfileAdmission {
     RunnerProfileAdmission { _seal: () }
 }
 

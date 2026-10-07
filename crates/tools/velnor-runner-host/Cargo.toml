@@ -17,6 +17,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 toml = { workspace = true }
 zeroize = { workspace = true }
+velnor-runner-apparmor = { version = "=0.1.1", path = "../velnor-runner-apparmor" }
 velnor-runner-core = { version = "=0.1.1", path = "../velnor-runner-core" }
 velnor-runner-github = { version = "=0.1.1", path = "../velnor-runner-github" }
 velnor-runner-journal = { version = "=0.1.1", path = "../velnor-runner-journal" }
@@ -25,4 +26,5 @@ velnor-runner-journal = { version = "=0.1.1", path = "../velnor-runner-journal" 
 security-framework = { workspace = true }
 
 [dev-dependencies]
+velnor-runner-apparmor = { version = "=0.1.1", path = "../velnor-runner-apparmor", features = ["test-support"] }
 velnor-runner-launch = { version = "=0.1.1", path = "../velnor-runner-launch" }
