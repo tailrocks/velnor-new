@@ -3,6 +3,7 @@
 //! Owns the launch state machine, admission, capacity, and the blocking
 //! listen loop; host effects (journal, Docker, IPC) stay in the parent.
 
+pub mod discovery_intents;
 pub mod launch;
 mod launch_blocking;
 

@@ -46,7 +46,7 @@ impl Journal {
         let state_text = state.as_str().to_owned();
         let changed = conn
             .execute(
-                "UPDATE intents SET state = ?1, effect_state = CASE WHEN replay_key_version = 1 AND ?1 IN ('done', 'uncertain') THEN 'may_have_effect' ELSE effect_state END WHERE id = ?2 AND (replay_key_version != 1 OR state = ?1 OR state = 'pending' OR (state = 'uncertain' AND ?1 = 'done')) AND (kind != 'discovery-credential' OR state = ?1 OR state = 'pending')",
+                "UPDATE intents SET state = ?1, effect_state = CASE WHEN replay_key_version = 1 AND ?1 IN ('done', 'uncertain') THEN 'may_have_effect' ELSE effect_state END WHERE id = ?2 AND (replay_key_version != 1 OR state = ?1 OR state = 'pending' OR (state = 'uncertain' AND ?1 = 'done')) AND kind != 'discovery-credential'",
                 (state_text, id),
             )
             .await

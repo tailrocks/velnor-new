@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use crate::error::HostError;
 
+mod auth_intent;
 mod capacity;
 mod controller;
 mod events;
@@ -13,6 +14,7 @@ mod launch;
 mod schema;
 mod worker_volume;
 
+pub use auth_intent::{DiscoveryCredentialOutcome, DiscoveryCredentialStep};
 pub use capacity::{CapacityClaim, LaunchEffectState, ReplayRoute, ScopedLaunchIdentity};
 
 /// Durable intent row.
