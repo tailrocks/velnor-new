@@ -1,6 +1,6 @@
 use clap::Parser;
 
-use super::{Cli, Command};
+use super::{Cli, Command, ServiceAction};
 
 #[test]
 fn global_config_is_accepted_before_a_subcommand() -> Result<(), String> {
@@ -57,6 +57,19 @@ fn disconnect_requires_drain_and_wait_before_it_can_mutate_state() {
         ])
         .is_ok()
     );
+}
+
+#[test]
+fn service_status_is_an_explicit_read_only_action() -> Result<(), String> {
+    let cli = Cli::try_parse_from(["velnor-host", "service", "status"])
+        .map_err(|error| error.to_string())?;
+    assert!(matches!(
+        cli.command,
+        Command::Service {
+            action: ServiceAction::Status
+        }
+    ));
+    Ok(())
 }
 
 mod connect_args_tests;
