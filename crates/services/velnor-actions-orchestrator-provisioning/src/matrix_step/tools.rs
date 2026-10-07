@@ -26,21 +26,28 @@ pub fn task_driver_tools(use_rust: bool, use_opentofu: bool) -> Vec<PinnedTool> 
 
 /// Velnor-repository suites that shell out to the `generate` validators.
 ///
-/// Only the orchestrator suite (validating `generate` plus zizmor
-/// staging) and the CLI suite (parity runs `generate`) execute the
-/// trio; every other suite only asserts argv, never spawns validators.
+/// The orchestrator suite (hub `generate` cases), the generation and
+/// plan suites (both call full `generate`, which always runs staged
+/// validation), and the CLI suite (parity and the harness spawn
+/// `generate`) execute the trio; every other suite only asserts argv,
+/// never spawns validators.
 ///
-/// Re-audit when a suite starts spawning validators: grep its tests
-/// for `generate()` executions and `PinnedToolExec` trio runs
-/// (actionlint, shellcheck, zizmor); a suite that executes any of
-/// them joins this list, anything else stays trimmed. Adding a
-/// workspace crate fails `every_workspace_member_is_classified`
-/// until it is classified here or in the trimmed set.
-const GENERATE_VALIDATOR_SUITES: [&str; 2] = ["velnor-actions-orchestrator", "velnor-actions-cli"];
+/// Membership is enforced behaviorally, not by audit: the
+/// classification test scans every workspace member's suite sources
+/// for trio-execution markers and requires the install decision to
+/// match. A suite that starts spawning validators fails the test
+/// until it joins this list; a listed suite that stops spawning fails
+/// until it leaves.
+const GENERATE_VALIDATOR_SUITES: [&str; 4] = [
+    "velnor-actions-orchestrator",
+    "velnor-actions-orchestrator-generation",
+    "velnor-actions-orchestrator-plan",
+    "velnor-actions-cli",
+];
 
 /// Whether one crate job installs the `generate` validators.
 ///
-/// Velnor-policy jobs trim by executed suite: only the two suites above
+/// Velnor-policy jobs trim by executed suite: only the suites above
 /// install the trio, the rest install drivers plus Nextest. Consumer
 /// suites are opaque to the generator, so consumer jobs keep the trio
 /// fail-safe: dropping an install a suite needs fails CI with
@@ -63,12 +70,11 @@ pub fn crate_needs_generate_validators(policy: WorkflowPolicy, package: &str) ->
 /// (zero `run_*` calls), and no other suite touches `tofu_exec` or
 /// `VELNOR_LIVE_TOFU` at all.
 ///
-/// Re-audit when a suite starts spawning tofu: grep its tests for
-/// `tofu_exec` plus `run_bounded`/`run_cancellable` executions;
-/// ctor-only and env-assertion uses do NOT join this list. Adding
-/// a workspace crate fails
-/// `every_workspace_member_is_classified_for_tofu` until it is
-/// classified here or in the trimmed set.
+/// Membership is enforced behaviorally, not by audit: the
+/// classification test scans every workspace member's suite sources
+/// for `tofu_exec` plus `run_bounded`/`run_cancellable` in the same
+/// file and requires the install decision to match. Ctor-only and
+/// env-assertion uses never trip the pair, so they stay trimmed.
 const TOFU_EXEC_SUITES: [&str; 1] = ["velnor-actions-mise"];
 
 /// Whether one crate job installs opentofu for its executed suite.

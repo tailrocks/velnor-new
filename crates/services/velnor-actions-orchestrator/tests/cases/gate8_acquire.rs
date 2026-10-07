@@ -50,7 +50,7 @@ fn velnor_candidate_render_path_includes_release() -> TestResult {
     without_ambient_identity("velnor_candidate_render_path_includes_release", || {
         // Render path only: full `generate` runs staged validation.
         let repo = make_repo(
-            "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ngenerator_validation = \"candidate\"\ndefault_branch = \"testmain\"\n",
+            "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ngenerator_validation = \"candidate\"\ndefault_branch = \"testmain\"\n[stacks.rust.policy]\nversion = \"0.1.3\"\nsha256 = \"104c0d8b3a827875776358f941aa88f1c5837c1009305076af9380f4e3fcda25\"\nprofile = \"rust-strict-v1\"\n",
         )?;
         git(
             &[
@@ -95,7 +95,7 @@ fn velnor_candidate_render_path_includes_release() -> TestResult {
 fn version_policy_drift_fails_velnor_generate() -> TestResult {
     without_ambient_identity("version_policy_drift_fails_velnor_generate", || {
         let repo = make_repo(
-            "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n",
+            "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n[stacks.rust.policy]\nversion = \"0.1.3\"\nsha256 = \"104c0d8b3a827875776358f941aa88f1c5837c1009305076af9380f4e3fcda25\"\nprofile = \"rust-strict-v1\"\n",
         )?;
         git(
             &[

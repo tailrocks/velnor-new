@@ -1,5 +1,6 @@
 //! Stack selection and per-stack options.
 use super::release::RustReleaseConfig;
+use super::rust_policy::RustPolicyConfig;
 use super::tofu::TofuStackConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -61,6 +62,10 @@ pub struct RustStackConfig {
     /// Rust release policy (`[stacks.rust.release]`); disabled by default.
     #[serde(default)]
     pub release: RustReleaseConfig,
+    /// Shared Rust policy identity (`[stacks.rust.policy]`); absent means
+    /// no policy lane.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy: Option<RustPolicyConfig>,
 }
 
 /// Documented default: one `default` configuration variant list.
@@ -127,6 +132,7 @@ impl RustStackConfig {
             test_runner: None,
             run_ignored: None,
             release: RustReleaseConfig::default(),
+            policy: None,
         }
     }
 }
@@ -235,6 +241,9 @@ impl RustStackConfig {
             ));
         }
         self.release.validate(file)?;
+        if let Some(policy) = &self.policy {
+            policy.validate(file)?;
+        }
         Ok(())
     }
 }

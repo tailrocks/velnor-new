@@ -5,6 +5,7 @@
 mod actions;
 mod check_receipt_budget;
 mod discovery;
+mod docs_lane;
 mod execution;
 mod host_container;
 mod mise;
@@ -12,6 +13,7 @@ mod qualified_tools;
 mod release;
 mod resources;
 mod runs_on;
+mod rust_policy;
 mod stacks;
 mod tofu;
 mod verification;
@@ -28,6 +30,7 @@ pub use check_receipt_budget::{
     MAX_CHECK_SYSTEM_VERSION_BYTES, check_execution_receipt_upper_bound,
 };
 pub use discovery::DiscoveryConfig;
+pub use docs_lane::DocsLaneConfig;
 pub use execution::{
     ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,
     ExecutionRole, HOSTED_PROFILE_ID, ProfileKind, RoutingWorkflow, SCALE_SET_PROFILE_ID,
@@ -53,6 +56,7 @@ pub use runs_on::{
     LINUX_AMD64, RunsOn, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL, is_hosted_catalog,
     is_legacy_hosted_label,
 };
+pub use rust_policy::{RustPolicyConfig, RustPolicyProfile};
 pub use stacks::{
     DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
     is_valid_feature_name, is_valid_rust_target,
@@ -103,6 +107,9 @@ pub struct VelnorConfig {
     /// Explicit check-scoped tool qualification registry.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub qualified_tools: Vec<QualifiedTool>,
+    /// Docs-lane inputs; absent means no docs lane.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub docs: Option<DocsLaneConfig>,
 }
 
 impl VelnorConfig {
@@ -123,6 +130,9 @@ impl VelnorConfig {
         self.discovery.validate(file)?;
         self.actions.validate(file)?;
         validate_qualified_tools(&self.qualified_tools, file)?;
+        if let Some(docs) = &self.docs {
+            docs.validate(file)?;
+        }
         let mut check_ids = std::collections::BTreeSet::new();
         for (index, check) in self.checks.iter().enumerate() {
             check.validate(file, &format!("checks[{index}]"))?;

@@ -7,8 +7,8 @@
 use serde::Deserialize;
 use velnor_actions_contract_config::config::RustReleaseConfig;
 use velnor_actions_contract_config::{
-    DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
-    TofuStackConfig, Utf8RepoRelDir,
+    DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustPolicyConfig,
+    RustStackConfig, StacksConfig, TofuStackConfig, Utf8RepoRelDir,
 };
 
 use crate::OrchestratorError;
@@ -41,6 +41,8 @@ pub(crate) struct PartialRustStack {
     run_ignored: Option<String>,
     /// Rust release policy; disabled by default.
     release: Option<RustReleaseConfig>,
+    /// Shared Rust policy identity; absent means no policy lane.
+    policy: Option<RustPolicyConfig>,
 }
 
 /// Tofu stack section: `roots` required when the table is present.
@@ -62,6 +64,7 @@ impl PartialStacks {
                 test_runner: stack.test_runner,
                 run_ignored: stack.run_ignored,
                 release: stack.release.unwrap_or_default(),
+                policy: stack.policy,
             }
         });
         let tofu = self

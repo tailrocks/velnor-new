@@ -168,3 +168,89 @@ expected_scenarios = ["ffi"]
     assert_eq!(config.checks[0].directory, ".");
     assert_eq!(config.checks[0].timeout_minutes, 30);
 }
+
+#[test]
+fn policy_loads_and_rejects_bad_pins() {
+    let load = load_config;
+    let sha = "a".repeat(64);
+    let root = rooted(&format!(
+        "schema = 1\n[stacks.rust.policy]\nversion = \"0.1.3\"\nsha256 = \"{sha}\"\nprofile = \"rust-strict-v1\"\n"
+    ));
+    let config = load(root.path()).expect("policy loads");
+    let policy = config
+        .stacks
+        .rust
+        .expect("rust stack")
+        .policy
+        .expect("policy");
+    assert_eq!(policy.version, "0.1.3");
+    for (body, want) in [
+        (
+            format!(
+                "schema = 1\n[stacks.rust.policy]\nversion = \"v1\"\nsha256 = \"{sha}\"\nprofile = \"rust-strict-v1\"\n"
+            ),
+            "bad_version",
+        ),
+        (
+            format!(
+                "schema = 1\n[stacks.rust.policy]\nversion = \"0.1.3\"\nsha256 = \"abc\"\nprofile = \"rust-strict-v1\"\n"
+            ),
+            "bad_sha256",
+        ),
+        (
+            format!(
+                "schema = 1\n[stacks.rust.policy]\nversion = \"0.1.3\"\nsha256 = \"{sha}\"\nprofile = \"lax-v9\"\n"
+            ),
+            "document",
+        ),
+        (
+            format!("schema = 1\n[stacks.rust.policy]\nversion = \"0.1.3\"\nsha256 = \"{sha}\"\n"),
+            "document",
+        ),
+    ] {
+        let root = rooted(&body);
+        let err = load(root.path()).expect_err("bad policy must fail");
+        assert!(err.to_string().contains(want), "got {err} want {want}");
+    }
+    let root = rooted("schema = 1\n[stacks.rust]\n");
+    let config = load(root.path()).expect("rust without policy");
+    assert!(config.stacks.rust.expect("rust stack").policy.is_none());
+}
+
+#[test]
+fn docs_lane_defaults_and_rejects_bad_routes() {
+    let load = load_config;
+    let root = rooted("schema = 1\n[docs]\n");
+    let config = load(root.path()).expect("bare docs table");
+    let docs = config.docs.expect("docs lane");
+    assert_eq!(docs.app_dir, "docs");
+    assert_eq!(docs.content_dir, "content/docs");
+    assert_eq!(docs.base_path, "/docs");
+    assert_eq!(docs.output_dir, ".output/public");
+    assert_eq!(docs.smoke_routes, vec!["/".to_owned(), "/docs".to_owned()]);
+    let root = rooted("schema = 1\n[docs]\nbase_path = \"/manual\"\n");
+    let config = load(root.path()).expect("custom base");
+    assert_eq!(
+        config.docs.expect("docs lane").smoke_routes,
+        vec!["/".to_owned(), "/manual".to_owned()]
+    );
+    for (body, want) in [
+        ("schema = 1\n[docs]\napp_dir = \"/abs\"\n", "malformed_dir"),
+        (
+            "schema = 1\n[docs]\nbase_path = \"/docs/\"\n",
+            "malformed_base_path",
+        ),
+        (
+            "schema = 1\n[docs]\nsmoke_routes = [\"/docs\", \"/\"]\n",
+            "must_be_sorted",
+        ),
+        ("schema = 1\n[docs]\nsmoke_routes = []\n", "empty_routes"),
+    ] {
+        let root = rooted(body);
+        let err = load(root.path()).expect_err("bad docs must fail");
+        assert!(err.to_string().contains(want), "got {err} want {want}");
+    }
+    let root = rooted("schema = 1\n");
+    let config = load(root.path()).expect("minimal config");
+    assert!(config.docs.is_none());
+}

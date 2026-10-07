@@ -340,7 +340,7 @@ fn release_bootstrap_mismatch_fails_closed() -> TestResult {
 #[test]
 fn release_velnor_policy_rejects_enabled() -> TestResult {
     without_ambient_identity("release_velnor_policy_rejects_enabled", || {
-        let config = "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\n";
+        let config = "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\n[stacks.rust.policy]\nversion = \"0.1.3\"\nsha256 = \"104c0d8b3a827875776358f941aa88f1c5837c1009305076af9380f4e3fcda25\"\nprofile = \"rust-strict-v1\"\n";
         let repo = make_repo(config)?;
         let git_config = repo.path().join(".git/config");
         let mut text = fs::read_to_string(&git_config)?;
