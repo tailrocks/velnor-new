@@ -1,12 +1,21 @@
 //! Per-user `LaunchAgent` install. The daemon stays in the foreground.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(target_os = "macos")]
+use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 
+#[cfg(target_os = "macos")]
 use velnor_runner_host::launch_agent_plist;
 
 use crate::args::ServiceAction;
 
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(test)]
+mod tests;
+
+#[cfg(any(target_os = "macos", test))]
 const LABEL: &str = "com.tailrocks.velnor.host";
 
 /// Read-only view of whether the platform may still own the controller.
@@ -21,7 +30,26 @@ pub(crate) enum ControllerServiceState {
     Unknown,
 }
 
-pub(crate) fn service(action: ServiceAction) -> ExitCode {
+pub(crate) fn service(action: ServiceAction, config_path: &Path, state_path: &Path) -> ExitCode {
+    #[cfg(target_os = "linux")]
+    {
+        linux::service(action, config_path, state_path)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = (config_path, state_path);
+        service_macos(action)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        let _ = (action, config_path, state_path);
+        eprintln!("service management unsupported on this host");
+        ExitCode::from(1)
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn service_macos(action: ServiceAction) -> ExitCode {
     match action {
         ServiceAction::Install => install(),
         ServiceAction::Start => start(),
@@ -196,6 +224,7 @@ fn command_code(program: &str, args: &[&str]) -> ExitCode {
     }
 }
 
+#[cfg(target_os = "macos")]
 fn start() -> ExitCode {
     let Some(uid) = read_uid() else {
         return ExitCode::from(1);
@@ -206,6 +235,7 @@ fn start() -> ExitCode {
     spawn(&bootstrap_argv(uid, &plist_path()))
 }
 
+#[cfg(target_os = "macos")]
 fn stop() -> ExitCode {
     let Some(uid) = read_uid() else {
         return ExitCode::from(1);
@@ -213,6 +243,7 @@ fn stop() -> ExitCode {
     spawn(&bootout_argv(uid))
 }
 
+#[cfg(target_os = "macos")]
 fn uninstall() -> ExitCode {
     let _stopped = stop();
     match std::fs::remove_file(plist_path()) {
@@ -222,6 +253,7 @@ fn uninstall() -> ExitCode {
     }
 }
 
+#[cfg(target_os = "macos")]
 fn install() -> ExitCode {
     let Ok(bin) = std::env::current_exe() else {
         return ExitCode::from(1);
@@ -244,6 +276,7 @@ fn install() -> ExitCode {
     ExitCode::SUCCESS
 }
 
+#[cfg(target_os = "macos")]
 fn spawn(argv: &[String]) -> ExitCode {
     let Some((bin, rest)) = argv.split_first() else {
         return ExitCode::from(1);
@@ -257,6 +290,7 @@ fn spawn(argv: &[String]) -> ExitCode {
     }
 }
 
+#[cfg(target_os = "macos")]
 fn read_uid() -> Option<u32> {
     let output = Command::new("id").arg("-u").output().ok()?;
     let text = String::from_utf8(output.stdout).ok()?;
@@ -264,20 +298,24 @@ fn read_uid() -> Option<u32> {
     if uid == 0 { None } else { Some(uid) }
 }
 
+#[cfg(target_os = "macos")]
 pub(crate) fn log_dir() -> PathBuf {
     home().join("Library/Logs/Velnor")
 }
 
+#[cfg(target_os = "macos")]
 fn plist_path() -> PathBuf {
     home()
         .join("Library/LaunchAgents")
         .join(format!("{LABEL}.plist"))
 }
 
+#[cfg(target_os = "macos")]
 fn home() -> PathBuf {
     std::env::var_os("HOME").map_or_else(|| PathBuf::from("."), PathBuf::from)
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn bootstrap_argv(uid: u32, plist: &Path) -> Vec<String> {
     vec![
         "launchctl".to_owned(),
@@ -287,6 +325,7 @@ fn bootstrap_argv(uid: u32, plist: &Path) -> Vec<String> {
     ]
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn bootout_argv(uid: u32) -> Vec<String> {
     vec![
         "launchctl".to_owned(),
@@ -295,6 +334,7 @@ fn bootout_argv(uid: u32) -> Vec<String> {
     ]
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn with_logs(plist: &str, log_dir: &Path) -> String {
     let out = log_dir.join("host.log");
     let err = log_dir.join("host.err.log");
@@ -305,6 +345,3 @@ fn with_logs(plist: &str, log_dir: &Path) -> String {
     );
     plist.replacen("</dict>", &keys, 1)
 }
-
-#[cfg(test)]
-mod tests;
