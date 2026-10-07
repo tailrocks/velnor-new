@@ -6,7 +6,7 @@ use velnor_actions_contract_workflow::{Job, StepKind};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{finalized_jobs, prepare};
 
-use crate::impl_tofu_t24_gates::tofu_perf_fixtures_t24::tofu_repo;
+use crate::cases::tofu_t24_gates::tofu_perf_fixtures_t24::tofu_repo;
 use crate::support::TestResult;
 
 type Shell<'a> = (&'a Vec<String>, &'a BTreeMap<String, String>);

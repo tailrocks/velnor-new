@@ -14,8 +14,8 @@ use tempfile::TempDir;
 use velnor_actions_contract_workflow::{FinalStatus, Plan, Trust, WorkflowEvent};
 use velnor_actions_orchestrator::plan_internal;
 
-use super::impl_select::{commit, plan_pr, plan_push, reasons_for};
 use crate::cases::orch_core::{merge, merge_request, success_jobs};
+use crate::impl_select::{commit, plan_pr, plan_push, reasons_for};
 use crate::support::{
     TestResult, git, git_line, install_fixture_release_manifest, passing_reports,
 };

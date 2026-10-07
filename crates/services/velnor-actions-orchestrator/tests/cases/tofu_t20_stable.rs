@@ -1,6 +1,6 @@
 //! T20 tofu determinism and read-only atomicity: fixed-point, cross-checkout, snapshots.
 //!
-//! Split from `impl_tofu_t20` under the 400-line gate; fixtures live
+//! Split from `cases::tofu_t20` under the 400-line gate; fixtures live
 //! there, determinism and read-only proofs live here.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -9,7 +9,7 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 
-use super::impl_tofu_t20::pure_tofu_repo;
+use crate::cases::tofu_t20::pure_tofu_repo;
 use crate::support::{TestResult, plan_for, snapshot};
 
 /// Stale lock bytes (T14-proven non-blocking through generate).

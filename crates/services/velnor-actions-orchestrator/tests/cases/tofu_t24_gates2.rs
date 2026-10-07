@@ -1,6 +1,6 @@
 //! T24 efficiency gates 5–7 (spec §9) as named invariant tests.
 //!
-//! Size split from `impl_tofu_t24_gates` (gates 1–4); shares its
+//! Size split from `cases::tofu_t24_gates` (gates 1–4); shares its
 //! scan/job helpers plus the fixture helper through `crate::`.
 
 use velnor_actions_contract::digest_b3;
@@ -14,10 +14,10 @@ use velnor_actions_tofu_core::task_identity::{
 use velnor_actions_workflow_jobs::context::{FINAL_JOB_ID, PLAN_JOB_ID};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
-use crate::impl_tofu_t24_gates::tofu_perf_fixtures_t24::{
+use crate::cases::tofu_t24_gates::tofu_perf_fixtures_t24::{
     commit_two_tofu, plan_at_event, tofu_repo,
 };
-use crate::impl_tofu_t24_gates::{crate_src, is_crate_job, token_hits};
+use crate::cases::tofu_t24_gates::{crate_src, is_crate_job, token_hits};
 use crate::support::TestResult;
 
 /// Extension inputs over fixed digests for one root/kind.

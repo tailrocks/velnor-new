@@ -14,8 +14,8 @@ use velnor_actions_contract_workflow::{FinalStatus, MatrixStatus, Plan, TaskStat
 use velnor_actions_orchestrator::{merge_internal, merge_passed, prepare, publish_final_report};
 use velnor_actions_orchestrator_core::OrchestratorError;
 
-use super::impl_select::{commit, plan_pr};
 use crate::cases::orch_core::{merge, merge_request, set_task, success_jobs};
+use crate::impl_select::{commit, plan_pr};
 use crate::support::{TestResult, git, install_fixture_release_manifest, passing_reports};
 
 /// Consumer-shaped config: single tofu root at `.`.
