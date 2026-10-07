@@ -4550,18 +4550,27 @@ dependencies = [
  "bollard",
  "getrandom 0.4.3",
  "security-framework",
- "serde",
  "serde_json",
  "thiserror",
  "tokio",
- "toml",
  "velnor-runner-apparmor",
  "velnor-runner-core",
  "velnor-runner-docker-spec",
  "velnor-runner-github",
+ "velnor-runner-host-config",
  "velnor-runner-journal",
  "velnor-runner-launch",
  "zeroize",
+]
+
+[[package]]
+name = "velnor-runner-host-config"
+version = "0.1.1"
+dependencies = [
+ "serde",
+ "toml",
+ "velnor-runner-docker-spec",
+ "velnor-runner-journal",
 ]
 
 [[package]]

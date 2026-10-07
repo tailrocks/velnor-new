@@ -4,12 +4,16 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use crate::HostError;
 use crate::config::HostPlatform;
+use velnor_runner_journal::HostError;
 
 mod atomic;
 
-pub(crate) use atomic::assign_owner;
+/// Assign path ownership without dereferencing symlinks.
+///
+/// Re-exported for the host keychain, which stores the Linux service
+/// credential under the same ownership rules as the config directory.
+pub use atomic::assign_owner;
 use atomic::{
     FileOwner, FilePolicy, publish_new_file, remove_file_with_policy, validate_owned_directory,
 };
@@ -241,7 +245,16 @@ fn remove_macos_config(_path: &Path, _expected_text: &str) -> Result<(), HostErr
     Err(HostError::Config)
 }
 
-pub(super) fn validate_linux_directory(path: &Path, group_id: u32) -> Result<(), HostError> {
+/// Check the Linux service directory is root-owned with the service group.
+///
+/// The host keychain reuses this gate before storing the Linux service
+/// credential next to the configuration file.
+///
+/// # Errors
+///
+/// Returns [`HostError::Config`] when the path is not a directory with
+/// owner `root`, group `group_id`, and mode `0750`.
+pub fn validate_linux_directory(path: &Path, group_id: u32) -> Result<(), HostError> {
     validate_owned_directory(
         path,
         FilePolicy {

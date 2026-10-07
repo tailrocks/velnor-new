@@ -3,8 +3,6 @@
 //! Durable intent lives in velnor-runner-journal and is re-exported here.
 
 pub mod assign;
-mod config;
-mod config_file;
 mod connect;
 mod daemon_lock;
 pub mod docker_client;
@@ -20,14 +18,6 @@ pub mod stage;
 pub mod worker;
 
 pub use assign::{Offer, offer};
-pub use config::{
-    DockerConfig, GithubSection, HostConfig, HostLimits, HostPlatform, JobTrustPolicy,
-    RegistrationScopeKind, RunnerConfig, ScaleSetBinding,
-};
-pub use config_file::{
-    LINUX_CONFIG_PATH, linux_service_group_id, persist_host_config_file, read_host_config_file,
-    remove_host_config_file, validate_host_config_target,
-};
 pub use connect::{ConnectPlan, DisconnectEffect, SetOwnership, connect_plan, disconnect_effects};
 pub use daemon_lock::DaemonLock;
 pub use docker_client::connect_unix;
@@ -52,6 +42,12 @@ pub use stage::{
 pub use velnor_runner_docker_spec::{
     ContainerPlan, DeleteDecision, RunnerImageProfile, audit_plan, delete_decision, plan_contains,
     resolve_runner_profile, runner_plan, runner_plan_for_profile,
+};
+pub use velnor_runner_host_config::{
+    DockerConfig, GithubSection, HostConfig, HostLimits, HostPlatform, JobTrustPolicy,
+    LINUX_CONFIG_PATH, RegistrationScopeKind, RunnerConfig, ScaleSetBinding,
+    linux_service_group_id, persist_host_config_file, read_host_config_file,
+    remove_host_config_file, validate_host_config_target,
 };
 pub use velnor_runner_journal::{
     HostError, IntentRow, IntentState, Journal, Outcome, Reconcile, ReleaseFact, before_advertise,

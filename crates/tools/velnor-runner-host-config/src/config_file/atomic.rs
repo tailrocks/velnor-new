@@ -7,7 +7,7 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crate::HostError;
+use velnor_runner_journal::HostError;
 
 #[derive(Clone, Copy)]
 pub(super) struct FileOwner {
@@ -130,7 +130,12 @@ fn path_has_owner_mode(path: &Path, owner: FileOwner, mode: u32) -> bool {
     })
 }
 
-pub(crate) fn assign_owner(path: &Path, uid: u32, gid: u32) -> Result<(), HostError> {
+/// Assign `path` to `uid`:`gid` without dereferencing symlinks.
+///
+/// # Errors
+///
+/// Returns [`HostError::Config`] when the ownership change fails.
+pub fn assign_owner(path: &Path, uid: u32, gid: u32) -> Result<(), HostError> {
     #[cfg(target_os = "linux")]
     {
         let owner = format!("{uid}:{gid}");
