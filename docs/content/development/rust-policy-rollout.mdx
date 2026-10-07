@@ -1,6 +1,6 @@
 ---
 title: Strict Rust policy rollout
-description: Velnor violation inventory and sequenced migration plan for rust-repository-policy v0.1.2.
+description: Velnor violation inventory and sequenced migration plan for rust-repository-policy v0.1.3.
 ---
 
 # Strict Rust policy rollout (Velnor)
@@ -864,3 +864,50 @@ Contract family ✓ (5 crates, 0 gaps), renderer family ✓
 `rust-policy-rollout`. Orchestrator split is itemized
 above and awaits its own run; `ci-build-runs-on` ×6
 stays generator-owned.
+
+## Slice 11: re-pin to policy v0.1.3 (2026-10-07)
+
+- Policy: `tailrocks/rust-repository-policy` v0.1.3
+  (`https://github.com/tailrocks/rust-repository-policy/releases/tag/v0.1.3`,
+  sha256 `104c0d8b…3fcda25`, verified against the `.sha256`
+  sidecar). v0.1.2→v0.1.3 is helper-only: modules, profile, and
+  schemas byte-identical (`diff -rq` clean); only the two
+  `bin/<asset>/rust-repository-policy` binaries differ
+  (production-scoped SIZE inventory). Vendored
+  `renovate.schema.json` and `policy/*.json` untouched.
+- Pin sites (all four): `support.rs`
+  (`RUST_POLICY_VERSION`/`RUST_POLICY_SHA256`, now in the
+  `velnor-actions-workflow-jobs` crate after the renderer
+  family split), renderer `impl_renderer_tree.rs` lane pins,
+  the generated `ci.yml` materialize step (targeted
+  pin-substring edit, not a full regen — same
+  `workflow_too_large` gate reason as slice 10), and the
+  `.alint.yml` pin header.
+- Install gate: tarball materialized to `.cache/rust-policy/`
+  (gitignored); helper binary on PATH (macos-arm64 sha256
+  `f6e0a30d…93be54` — NOTE `--version` still reports `0.1.0`,
+  upstream version-string bug persists, identify the helper by
+  artifact sha); `alint validate-config` 37 rules loaded;
+  `alint check` 33 passing · 4 failing; `check-gaps` exit 0
+  with 0 gaps. Toolchain: alint 0.17.0, cargo 1.98.1.
+- SIZE delta: the orchestrator hub's production code is only
+  `src/lib.rs` (15 lines) + `src/api.rs` (63 lines); the other
+  ~120 crate files are `tests/`. The v0.1.2 union-walk counted
+  23354 lines / 121 files (tests included); v0.1.3 counts
+  production only, so the orchestrator SIZE-001/002 pair
+  closes with no code move. The slice-9 Remainder split plan
+  is superseded for SIZE (hub already reduced by the O-series
+  moves); `ci-build-runs-on` ×6 stays generator-owned.
+
+### Before/after counts (slice 11, v0.1.2 → v0.1.3)
+
+| Rule ID | Before | After | Δ |
+|---|---|---|---|
+| `policy-gaps` | 2 | 0 | −2 (orchestrator pair closes) |
+| `ci-build-runs-on` | 6 | 6 | 0 (generator-owned, untouched) |
+| `size-lib-main-150` | 6 | 6 | 0 |
+| `size-file-400` | 3 | 3 | 0 |
+| `tests-dir-present` | 4 | 4 | 0 |
+| Total (32 passing · 5 failing → 33 passing · 4 failing) | 21 | 19 | −2 |
+
+Helper gaps: 2 → 0 (`check-gaps` exit 0, empty output).
