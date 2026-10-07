@@ -89,7 +89,7 @@ where
     }
 }
 
-fn fail_exchange(fail: TransportFail) -> Result<Exchange, SessionError> {
+pub(crate) fn fail_exchange(fail: TransportFail) -> Result<Exchange, SessionError> {
     if effect_is_uncertain(fail) {
         return Err(SessionError::Uncertain);
     }

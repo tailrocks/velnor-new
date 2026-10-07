@@ -116,18 +116,24 @@ pub fn get_runner_scale_set<T>(
 where
     T: Transport + ?Sized,
 {
-    let request = SessionRequest {
-        method: Method::Get,
-        path: scale_set_path().to_owned(),
-        query: Some(name_query(call.runner_group_id, call.name)),
-        headers: admin_headers(call.admin_token)?,
-        body: Vec::new(),
-    };
+    let request = scale_set_name_request(call)?;
     let exchange = execute(transport, &request)?;
     if exchange.status != 200 {
         return Err(other_status(exchange.status));
     }
     decode_page(&exchange.body, call.name)
+}
+
+pub(crate) fn scale_set_name_request(
+    call: &ScaleSetByName<'_>,
+) -> Result<SessionRequest, SessionError> {
+    Ok(SessionRequest {
+        method: Method::Get,
+        path: scale_set_path().to_owned(),
+        query: Some(name_query(call.runner_group_id, call.name)),
+        headers: admin_headers(call.admin_token)?,
+        body: Vec::new(),
+    })
 }
 
 /// `GET .../runnerscalesets/{id}?api-version=6.0-preview`, then adopt checks.
@@ -206,7 +212,7 @@ fn name_query(runner_group_id: i64, name: &str) -> String {
     )
 }
 
-fn decode_page(body: &[u8], expected_name: &str) -> Result<ScaleSetFound, SessionError> {
+pub(crate) fn decode_page(body: &[u8], expected_name: &str) -> Result<ScaleSetFound, SessionError> {
     let page: ScaleSetPage = serde_json::from_slice(body).map_err(|_| WireError::Malformed)?;
     let len = i64::try_from(page.value.len()).map_err(|_| WireError::Malformed)?;
     if page.count != len {

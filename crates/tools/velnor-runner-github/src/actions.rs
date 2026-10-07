@@ -101,14 +101,30 @@ pub fn get_actions_repository<T>(
 where
     T: Transport + ?Sized,
 {
-    validate_repository(owner, repository, rest_token)?;
-    let request = actions_request(format!("repos/{owner}/{repository}"), rest_token)?;
+    let request = repository_request(owner, repository, rest_token)?;
     let exchange = execute(transport, &request)?;
     if exchange.status != 200 {
         return Err(status_error(exchange.status));
     }
+    decode_repository(&exchange.body, owner, repository)
+}
+
+pub(crate) fn repository_request(
+    owner: &str,
+    repository: &str,
+    rest_token: &str,
+) -> Result<SessionRequest, SessionError> {
+    validate_repository(owner, repository, rest_token)?;
+    actions_request(format!("repos/{owner}/{repository}"), rest_token)
+}
+
+pub(crate) fn decode_repository(
+    body: &[u8],
+    owner: &str,
+    repository: &str,
+) -> Result<ActionsRepository, SessionError> {
     let parsed: ActionsRepositoryResponse =
-        serde_json::from_slice(&exchange.body).map_err(|_| WireError::Malformed)?;
+        serde_json::from_slice(body).map_err(|_| WireError::Malformed)?;
     let expected_full_name = format!("{owner}/{repository}");
     let private = parsed.private.ok_or(WireError::Malformed)?;
     if parsed.id <= 0 || !parsed.full_name.eq_ignore_ascii_case(&expected_full_name) {
@@ -269,7 +285,10 @@ fn numeric_id(value: &str) -> Option<i64> {
     value.parse::<i64>().ok().filter(|id| *id > 0)
 }
 
-fn actions_request(path: String, actions_token: &str) -> Result<SessionRequest, SessionError> {
+pub(crate) fn actions_request(
+    path: String,
+    actions_token: &str,
+) -> Result<SessionRequest, SessionError> {
     if actions_token.is_empty() {
         return Err(WireError::RegistrationRejected.into());
     }
@@ -290,7 +309,7 @@ fn actions_request(path: String, actions_token: &str) -> Result<SessionRequest, 
     })
 }
 
-fn status_error(status: u16) -> SessionError {
+pub(crate) fn status_error(status: u16) -> SessionError {
     if status == 401 || status == 403 {
         WireError::Forbidden.into()
     } else {

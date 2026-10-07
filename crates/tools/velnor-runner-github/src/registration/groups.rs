@@ -32,16 +32,7 @@ pub fn list_runner_groups<T>(
 where
     T: Transport + ?Sized,
 {
-    if admin_token.is_empty() {
-        return Err(SessionError::Wire(WireError::RegistrationRejected));
-    }
-    let request = SessionRequest {
-        method: Method::Get,
-        path: "_apis/runtime/runnergroups".to_owned(),
-        query: Some(API_QUERY.to_owned()),
-        headers: vec![json_content(), bearer(admin_token)?, user_agent()],
-        body: Vec::new(),
-    };
+    let request = groups_request(admin_token)?;
     let exchange = execute(transport, &request)?;
     if exchange.status != 200 {
         return Err(other_status(exchange.status));
@@ -49,7 +40,20 @@ where
     decode_groups(&exchange.body)
 }
 
-fn decode_groups(body: &[u8]) -> Result<Vec<RunnerGroup>, SessionError> {
+pub(crate) fn groups_request(admin_token: &str) -> Result<SessionRequest, SessionError> {
+    if admin_token.is_empty() {
+        return Err(SessionError::Wire(WireError::RegistrationRejected));
+    }
+    Ok(SessionRequest {
+        method: Method::Get,
+        path: "_apis/runtime/runnergroups".to_owned(),
+        query: Some(API_QUERY.to_owned()),
+        headers: vec![json_content(), bearer(admin_token)?, user_agent()],
+        body: Vec::new(),
+    })
+}
+
+pub(crate) fn decode_groups(body: &[u8]) -> Result<Vec<RunnerGroup>, SessionError> {
     let page: GroupPage = serde_json::from_slice(body).map_err(|_| WireError::Malformed)?;
     let len = i64::try_from(page.value.len()).map_err(|_| WireError::Malformed)?;
     if page.count != len {

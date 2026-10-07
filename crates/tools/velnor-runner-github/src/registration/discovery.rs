@@ -6,16 +6,17 @@
 //! Scale Set. The host must persist intent before each `POST` and use a
 //! bounded, fixed-origin transport that rejects redirects.
 
-use std::fmt;
 use std::num::NonZeroU64;
+
+mod types;
+
+pub use types::{RepositoryAdminEvidence, RepositoryDiscoveryToken};
 
 use super::discovery_admin::RepositoryDiscoveryAdmin;
 
-use zeroize::Zeroize;
-
 use crate::{
-    AdminConnectionCall, RegistrationScope, RegistrationToken, RegistrationTokenCall, SessionError,
-    Transport, WireError, admin_connection_once, get_actions_repository, registration_token,
+    AdminConnectionCall, RegistrationScope, RegistrationTokenCall, SessionError, Transport,
+    WireError, admin_connection_once, get_actions_repository, registration_token,
 };
 
 /// Transport required by repository discovery bootstrap.
@@ -121,70 +122,6 @@ pub trait DiscoveryIntentStore {
         id: DiscoveryIntentId,
         outcome: DiscoveryCredentialOutcome,
     ) -> Result<(), SessionError>;
-}
-
-/// Repository metadata proving the exact private repository and the current
-/// caller's repository administrator permission for discovery bootstrap.
-///
-/// This value is deliberately narrower than a pool or job trust permit. It is
-/// neither serializable nor clonable and can be consumed by one registration
-/// token request. The caller must still establish credential provenance and
-/// persist side-effect intent in the host before the request.
-#[must_use]
-pub struct RepositoryAdminEvidence {
-    id: i64,
-    owner: String,
-    repository: String,
-    full_name: String,
-}
-
-impl RepositoryAdminEvidence {
-    /// Positive immutable GitHub repository id from the metadata response.
-    #[must_use]
-    pub const fn repository_id(&self) -> i64 {
-        self.id
-    }
-
-    /// Canonical owner and repository returned by GitHub.
-    #[must_use]
-    pub fn full_name(&self) -> &str {
-        &self.full_name
-    }
-}
-
-impl fmt::Debug for RepositoryAdminEvidence {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("RepositoryAdminEvidence")
-            .field("repository_id", &self.id)
-            .field("full_name", &self.full_name)
-            .field("private", &true)
-            .field("admin", &true)
-            .finish_non_exhaustive()
-    }
-}
-
-/// A repository-scoped registration token paired with its canonical GitHub
-/// config URL. The token is redacted and zeroized when dropped.
-#[must_use]
-pub struct RepositoryDiscoveryToken {
-    repository_id: i64,
-    repository_full_name: String,
-    config_url: String,
-    registration_token: RegistrationToken,
-}
-
-impl fmt::Debug for RepositoryDiscoveryToken {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("RepositoryDiscoveryToken([redacted])")
-    }
-}
-
-impl Drop for RepositoryDiscoveryToken {
-    fn drop(&mut self) {
-        self.repository_full_name.zeroize();
-        self.config_url.zeroize();
-    }
 }
 
 /// Read exact repository identity, visibility, and caller-admin facts for a
@@ -340,11 +277,7 @@ fn record_discovery_outcome<T>(
             Ok(value)
         }
         Err(error) => {
-            let outcome = if error.certainty() == crate::Certainty::Definite {
-                DiscoveryCredentialOutcome::Rejected
-            } else {
-                DiscoveryCredentialOutcome::Uncertain
-            };
+            let outcome = discovery_outcome_for_error(error);
             if intent.record_outcome(id, outcome).is_err() {
                 return Err(SessionError::Uncertain);
             }
@@ -353,7 +286,15 @@ fn record_discovery_outcome<T>(
     }
 }
 
-fn uncertain_issued_credential(error: SessionError) -> SessionError {
+pub(super) fn discovery_outcome_for_error(error: SessionError) -> DiscoveryCredentialOutcome {
+    if error.certainty() == crate::Certainty::Definite {
+        DiscoveryCredentialOutcome::Rejected
+    } else {
+        DiscoveryCredentialOutcome::Uncertain
+    }
+}
+
+pub(super) fn uncertain_issued_credential(error: SessionError) -> SessionError {
     match error {
         SessionError::Wire(WireError::Malformed | WireError::RegistrationRejected) => {
             SessionError::Uncertain
@@ -362,7 +303,7 @@ fn uncertain_issued_credential(error: SessionError) -> SessionError {
     }
 }
 
-fn safe_header_credential(value: &str) -> bool {
+pub(super) fn safe_header_credential(value: &str) -> bool {
     !value.is_empty()
         && !value
             .bytes()

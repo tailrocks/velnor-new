@@ -30,18 +30,21 @@ pub use paths::{
 pub use poll::{InnerJob, InnerKind, ParsedBatch, Poll, Statistics, may_ack, parse_poll};
 pub use refresh::{RefreshGate, StatusClass, classify_status};
 pub use registration::{
-    AdminConnection, AdminConnectionCall, CreateLabel, DiscoveryCredentialOutcome,
-    DiscoveryCredentialStep, DiscoveryIntentId, DiscoveryIntentStore, DiscoveryTransport, Label,
+    AdminConnection, AdminConnectionCall, AsyncDiscoveryIntentStore, AsyncDiscoveryTransport,
+    CreateLabel, DiscoveryCredentialOutcome, DiscoveryCredentialStep, DiscoveryExchange,
+    DiscoveryIntentId, DiscoveryIntentStore, DiscoveryStoreFuture, DiscoveryTransport, Label,
     RegistrationScope, RegistrationToken, RegistrationTokenCall, RepositoryAdminEvidence,
     RepositoryDiscoveryAdmin, RepositoryDiscoveryToken, RunnerGroup, ScaleSetById, ScaleSetByName,
     ScaleSetCreate, ScaleSetFound, ScaleSetView, accept_scale_set, accept_scale_set_for,
     admin_connection, admin_connection_once, admin_token_is_fresh, create_body,
     create_runner_scale_set, enterprise_registration_token_path,
-    exchange_repository_discovery_admin_once, get_runner_by_name, get_runner_scale_set,
-    get_runner_scale_set_by_id, http_create_body, http_create_body_for,
-    issue_repository_discovery_token, list_runner_groups, organization_registration_token_path,
-    product_create_labels, product_create_labels_for, read_repository_admin_evidence,
-    registration_token, remove_runner, repository_registration_token_path,
+    exchange_repository_discovery_admin_once, exchange_repository_discovery_admin_once_async,
+    get_runner_by_name, get_runner_scale_set, get_runner_scale_set_by_id, http_create_body,
+    http_create_body_for, issue_repository_discovery_token, issue_repository_discovery_token_async,
+    list_runner_groups, organization_registration_token_path, product_create_labels,
+    product_create_labels_for, read_repository_admin_evidence,
+    read_repository_admin_evidence_async, registration_token, remove_runner,
+    repository_registration_token_path,
 };
 pub use runner::RunnerReference;
 pub use secret::EncodedJit;
