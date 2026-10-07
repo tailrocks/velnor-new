@@ -3968,7 +3968,9 @@ dependencies = [
  "velnor-actions-orchestrator-request-event",
  "velnor-actions-orchestrator-selection",
  "velnor-actions-tofu-core",
+ "velnor-actions-workflow-jobs",
  "velnor-actions-workflow-renderer",
+ "velnor-actions-workflow-steps",
 ]
 
 [[package]]

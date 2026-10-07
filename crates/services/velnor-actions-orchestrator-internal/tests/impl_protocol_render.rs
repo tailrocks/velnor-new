@@ -1,4 +1,4 @@
-//! Render-gate roundtrip: plan-job YAML env pairs accepted by the gate.
+//! Event-time protocol: render-gate roundtrip for the plan job.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -9,13 +9,13 @@ use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_contract_workflow::{
     Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr,
 };
-use velnor_actions_orchestrator::write_request_parts;
+use velnor_actions_orchestrator_internal::internal::write_request_parts;
 use velnor_actions_workflow_jobs::RenderContext;
 use velnor_actions_workflow_jobs::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP};
 use velnor_actions_workflow_renderer::render_workflow_ir;
 use velnor_actions_workflow_steps::{checkout_step, plan_step, steps::write_request_step};
 
-use crate::impl_common::TestResult;
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Consecutive `VELNOR_INTERNAL_OP`/`VELNOR_REQUEST_FILE` YAML pairs.
 fn internal_env_pairs(text: &str) -> Vec<(String, String)> {
