@@ -1,9 +1,9 @@
-use super::super::QUALIFICATION_SOURCE_PREPARE;
-use super::Scratch;
+use super::impl_generator_source_scratch::Scratch;
 use std::error::Error;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
+use velnor_actions_workflow_generator::generator_release::QUALIFICATION_SOURCE_PREPARE;
 
 #[test]
 fn fetch_uses_exact_public_commit_without_credentials_or_helpers() -> Result<(), Box<dyn Error>> {

@@ -338,9 +338,11 @@ fn append_job_options(
     job_env: &BTreeMap<String, String>,
 ) -> Result<(), RenderError> {
     if scale_set {
-        entries.push(crate::runs_on::run_shell_defaults_field(
-            crate::runs_on::SCALE_SET_RUN_SHELL,
-        ));
+        entries.push(
+            velnor_actions_workflow_tree::runs_on::run_shell_defaults_field(
+                velnor_actions_workflow_tree::runs_on::SCALE_SET_RUN_SHELL,
+            ),
+        );
     }
     if !job_env.is_empty() {
         entries.push(("env".to_owned(), string_map_yaml(job_env)));

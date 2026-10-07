@@ -1,18 +1,15 @@
 //! Qualification, image-release, macOS-binary-release, generator-release,
 //! and monitoring workflows. Emitted only when schema 2 requests them.
 
-use std::collections::BTreeSet;
-
+use velnor_actions_contract_config::RoutingWorkflow;
 use velnor_actions_contract_config::config::is_hosted_catalog;
-use velnor_actions_contract_config::{
-    RoutingWorkflow, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL,
-};
 
-use crate::runs_on::runs_on_yaml;
+use velnor_actions_workflow_generator::Schema2WorkflowRequest;
+use velnor_actions_workflow_generator::generator_release;
 use velnor_actions_workflow_steps::RenderError;
-use velnor_actions_workflow_steps::setup::MiseSetup;
 use velnor_actions_workflow_tree::marker::with_marker;
 use velnor_actions_workflow_tree::rendered::RenderedFile;
+use velnor_actions_workflow_tree::runs_on::runs_on_yaml;
 use velnor_actions_workflow_tree::yaml::{Yaml, render_yaml};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -48,13 +45,17 @@ impl RunnerSpec {
 
     pub(super) fn push_default_shell(&self, fields: &mut Vec<(String, Yaml)>, has_container: bool) {
         if has_container {
-            fields.push(crate::runs_on::run_shell_defaults_field(
-                crate::runs_on::CONTAINER_RUN_SHELL,
-            ));
+            fields.push(
+                velnor_actions_workflow_tree::runs_on::run_shell_defaults_field(
+                    velnor_actions_workflow_tree::runs_on::CONTAINER_RUN_SHELL,
+                ),
+            );
         } else if self.lane == RunnerLane::ScaleSet {
-            fields.push(crate::runs_on::run_shell_defaults_field(
-                crate::runs_on::SCALE_SET_RUN_SHELL,
-            ));
+            fields.push(
+                velnor_actions_workflow_tree::runs_on::run_shell_defaults_field(
+                    velnor_actions_workflow_tree::runs_on::SCALE_SET_RUN_SHELL,
+                ),
+            );
         }
     }
 }
@@ -72,62 +73,13 @@ pub const MONITORING_WORKFLOW: &str = ".github/workflows/monitoring.yml";
 
 mod classes;
 mod features;
-mod generator_release;
-mod generator_release_pins;
 mod mbx_qualification;
 mod release;
-pub use generator_release_pins::GeneratorReleasePins;
 /// Exact-source gates for composed product-release workflows.
 pub mod release_eligibility;
 
 #[cfg(test)]
 mod tests;
-
-/// Which schema 2 workflows to emit, plus the selectors they use.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Schema2WorkflowRequest {
-    /// Generator version for the marker.
-    pub version: String,
-    /// Hosted catalog label.
-    pub hosted_label: String,
-    /// Validated scale-set selector.
-    pub scale_set: ScaleSetSelector,
-    /// Workflows to emit. Empty emits nothing.
-    pub workflows: BTreeSet<RoutingWorkflow>,
-    /// Pinned tool inputs, required only when qualification is emitted.
-    pub mbx_qualification: Option<MbxQualificationPins>,
-    /// Orchestrator-resolved Mise setup and command vectors for generator release.
-    pub generator_release: Option<GeneratorReleasePins>,
-}
-
-/// Exact tools used by the hosted MBX cache qualification.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MbxQualificationPins {
-    /// Resolved Mise action and binary pins.
-    pub mise_setup: MiseSetup,
-    /// Full-SHA candidate MBX Action ref for this unqualified experiment.
-    /// It is separate from the production pin and generation never qualifies it.
-    pub candidate_action_uses: String,
-    /// Exact MBX tool version.
-    pub mbx_version: String,
-    /// Exact Rust toolchain version used by the qualification lane.
-    pub rust_version: String,
-}
-
-impl Schema2WorkflowRequest {
-    /// Canonical scale-set selector (`velnor`, then the scale-set name).
-    ///
-    /// # Errors
-    ///
-    /// Illegal labels fail.
-    pub fn canonical_scale_set() -> Result<ScaleSetSelector, RenderError> {
-        ScaleSetSelector::try_new(
-            SCALE_SET_NAME,
-            &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
-        )
-        .map_err(|err| RenderError::InvalidWorkflow(err.to_string()))
-    }
-}
 
 /// Render every requested workflow. Empty when nothing is requested.
 ///

@@ -2,10 +2,10 @@
 
 use velnor_actions_workflow_tree::yaml::Yaml;
 
-use super::super::features::{base, finish};
 use super::GeneratorReleasePins;
 use super::{assets, manifest, workflow_steps};
 use velnor_actions_contract_release::ReleaseTarget;
+use velnor_actions_workflow_tree::job_entries::{base, finish};
 
 /// Build and upload the canonical manifest consumed by qualification and attestation.
 pub(super) fn job(

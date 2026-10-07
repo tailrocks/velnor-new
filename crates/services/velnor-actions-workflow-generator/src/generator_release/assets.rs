@@ -4,9 +4,9 @@ use velnor_actions_contract_release::ReleaseTarget;
 
 use velnor_actions_workflow_tree::yaml::Yaml;
 
-use super::super::features::{base, finish};
 use super::archive;
 use super::workflow_steps::{self, checkout_step, with_permissions};
+use velnor_actions_workflow_tree::job_entries::{base, finish};
 
 pub(super) const VERSION: &str = "0.1.1";
 pub(super) const REPOSITORY: &str = "tailrocks/velnor-new";
@@ -84,7 +84,7 @@ pub(super) fn build_steps(
     product: ProductAsset,
     verify_name: &str,
     verify: &str,
-    pins: &crate::schema2::GeneratorReleasePins,
+    pins: &crate::generator_release_pins::GeneratorReleasePins,
 ) -> Result<Vec<Yaml>, velnor_actions_workflow_steps::RenderError> {
     let build = build_script(product.binary, &pins.build_argv)?;
     Ok(vec![
@@ -141,7 +141,7 @@ fn sum_script(command: &str, asset: &str, sidecar: &str) -> String {
 
 fn candidate_provenance_script(
     product: ProductAsset,
-    pins: &crate::schema2::GeneratorReleasePins,
+    pins: &crate::generator_release_pins::GeneratorReleasePins,
 ) -> String {
     let digest = archive::sidecar_digest_command(product.sidecar, product.binary);
     format!(
@@ -226,7 +226,7 @@ fn download_steps_with(asset: ProductAsset, download: Yaml) -> Vec<Yaml> {
 /// Verify source, target, digest, and exact toolchain recorded in the candidate archive.
 pub(super) fn verify_provenance_script(
     asset: ProductAsset,
-    pins: &crate::schema2::GeneratorReleasePins,
+    pins: &crate::generator_release_pins::GeneratorReleasePins,
 ) -> String {
     verify_provenance_in_directory(
         asset,
@@ -265,7 +265,7 @@ pub(super) fn qualification_script(binary: &str, directory: &str) -> String {
 /// Check the dispatched commit and required CI before building candidates.
 pub(super) fn source_gate_job(
     hosted: Yaml,
-    pins: &crate::schema2::GeneratorReleasePins,
+    pins: &crate::generator_release_pins::GeneratorReleasePins,
 ) -> Result<(String, Yaml), velnor_actions_workflow_steps::RenderError> {
     let steps = vec![
         checkout_step(),
@@ -298,7 +298,7 @@ pub(super) fn source_gate_job(
 }
 
 fn ci_check_step(
-    pins: &crate::schema2::GeneratorReleasePins,
+    pins: &crate::generator_release_pins::GeneratorReleasePins,
 ) -> Result<Yaml, velnor_actions_workflow_steps::RenderError> {
     workflow_steps::bash_step_with_token(
         "Require successful CI at exact main SHA",

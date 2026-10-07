@@ -3,24 +3,36 @@
 //! GitHub rejects a workflow file over 500 KB. Shared lane bodies live here
 //! so each lane job keeps only its id, `runs-on`, `needs`, and one call.
 
+use crate::yaml::Yaml;
 use velnor_actions_workflow_steps::{RenderError, steps};
-use velnor_actions_workflow_tree::yaml::Yaml;
 
 /// One local composite call. The path is renderer-owned, not a remote pin.
 /// Zizmor's self-repository advice uses `$/'`, which resolves at the workflow
 /// SHA rather than this already checked-out event tree. Keep the exception
 /// on this fixed workspace-relative reference only.
-pub(crate) fn shared_call(uses: &str) -> Result<Yaml, RenderError> {
+///
+/// # Errors
+///
+/// Non-canonical local action paths fail.
+pub fn shared_call(uses: &str) -> Result<Yaml, RenderError> {
     shared_call_named(uses, "Run shared steps")
 }
 
 /// One named local composite call after the canonical path check.
-pub(crate) fn shared_call_named(uses: &str, name: &str) -> Result<Yaml, RenderError> {
+///
+/// # Errors
+///
+/// Non-canonical local action paths fail.
+pub fn shared_call_named(uses: &str, name: &str) -> Result<Yaml, RenderError> {
     shared_call_named_with_inputs(uses, name, Vec::new())
 }
 
 /// One named local composite call with explicit inputs.
-pub(crate) fn shared_call_named_with_inputs(
+///
+/// # Errors
+///
+/// Non-canonical local action paths fail.
+pub fn shared_call_named_with_inputs(
     uses: &str,
     name: &str,
     inputs: Vec<(String, Yaml)>,
@@ -49,12 +61,20 @@ pub(crate) fn shared_call_named_with_inputs(
 }
 
 /// Composite action document. Steps are already rendered.
-pub(crate) fn composite_yaml(name: &str, steps: Vec<Yaml>) -> Result<Yaml, RenderError> {
+///
+/// # Errors
+///
+/// Private subcommands in the name fail.
+pub fn composite_yaml(name: &str, steps: Vec<Yaml>) -> Result<Yaml, RenderError> {
     composite_yaml_with_inputs(name, Vec::new(), steps)
 }
 
 /// Composite action document with declared inputs. Steps are already rendered.
-pub(crate) fn composite_yaml_with_inputs(
+///
+/// # Errors
+///
+/// Private subcommands in the name fail.
+pub fn composite_yaml_with_inputs(
     name: &str,
     inputs: Vec<(String, Yaml)>,
     steps: Vec<Yaml>,
@@ -81,7 +101,7 @@ pub(crate) fn composite_yaml_with_inputs(
 }
 
 /// Composite `run` steps require an explicit shell. Workflow jobs do not.
-pub(crate) fn push_composite_shell(entries: &mut Vec<(String, Yaml)>, composite: bool) {
+pub fn push_composite_shell(entries: &mut Vec<(String, Yaml)>, composite: bool) {
     if composite {
         entries.push(("shell".to_owned(), Yaml::str("bash".to_owned())));
     }

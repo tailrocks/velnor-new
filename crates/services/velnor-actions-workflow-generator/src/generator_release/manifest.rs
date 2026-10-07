@@ -4,11 +4,11 @@ use velnor_actions_contract_release::RELEASE_MANIFEST_FILENAME;
 use velnor_actions_workflow_steps::RenderError;
 use velnor_actions_workflow_tree::yaml::Yaml;
 
-use super::super::features::{base, finish};
 use super::GeneratorReleasePins;
 use super::assets::{self, ASSETS, REPOSITORY, VERSION};
 use super::jobs;
 use super::workflow_steps::{self, with_needs, with_permissions};
+use velnor_actions_workflow_tree::job_entries::{base, finish};
 
 /// Published versioned release manifest.
 pub(super) const FILE: &str = RELEASE_MANIFEST_FILENAME;

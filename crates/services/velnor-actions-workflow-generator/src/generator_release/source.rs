@@ -13,7 +13,7 @@ pub(super) fn qualification_step() -> Yaml {
 }
 
 /// Fetch this public repository at the exact run commit without an action post hook.
-pub(super) const QUALIFICATION_SOURCE_PREPARE: &str = r#"set -eu
+pub const QUALIFICATION_SOURCE_PREPARE: &str = r#"set -eu
 python3 - "$GITHUB_WORKSPACE" "$GITHUB_REPOSITORY" "$GITHUB_SHA" <<'PY'
 import os
 import re
@@ -75,6 +75,3 @@ head = subprocess.run(
 if head != commit:
     raise SystemExit("qualification source does not match the requested commit")
 PY"#;
-
-#[cfg(test)]
-mod tests;

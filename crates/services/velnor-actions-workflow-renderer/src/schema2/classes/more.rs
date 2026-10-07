@@ -1,11 +1,10 @@
 //! Qualification modes outside the first class set. Each dispatches on its
 //! own `inputs.mode` and is not selected by `features`.
 
-use super::super::features::{
-    CHECKOUT_USES, checkout_step, finish, gated, lane_base, redis_service, run_step,
-};
+use super::super::features::{checkout_step, gated, lane_base, redis_service, run_step};
 use super::steps::uses_with;
 use super::{Extras, RunnerSpec, both};
+use velnor_actions_workflow_tree::job_entries::{CHECKOUT_USES, finish};
 use velnor_actions_workflow_tree::yaml::Yaml;
 
 const COMPOSE_UP: &str = "docker compose -f qualification/compose/stack.yml up -d --wait";

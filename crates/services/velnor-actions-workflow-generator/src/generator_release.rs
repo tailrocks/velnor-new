@@ -3,9 +3,9 @@
 //! The next immutable release is `v0.1.1`. Attest jobs never receive
 //! `contents: write`. Only publish does.
 
-use super::{GeneratorReleasePins, Schema2WorkflowRequest};
-use crate::runs_on::runs_on_yaml;
+use crate::{generator_release_pins::GeneratorReleasePins, request::Schema2WorkflowRequest};
 use velnor_actions_workflow_steps::RenderError;
+use velnor_actions_workflow_tree::runs_on::runs_on_yaml;
 use velnor_actions_workflow_tree::yaml::Yaml;
 
 /// GitHub-hosted macOS label. The arm64 binary is not built on Ubuntu.
@@ -21,9 +21,14 @@ mod qualification;
 mod source;
 mod workflow_steps;
 
+pub use source::QUALIFICATION_SOURCE_PREPARE;
+
 /// The generator-release workflow and its checked-in local composite actions.
-pub(super) struct GeneratorRelease {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GeneratorRelease {
+    /// Rendered generator-release workflow body.
     pub workflow: Yaml,
+    /// Checked-in local composite actions as `(path, body)` pairs.
     pub actions: Vec<(String, Yaml)>,
 }
 
@@ -32,7 +37,7 @@ pub(super) struct GeneratorRelease {
 /// # Errors
 ///
 /// An illegal hosted or macOS label fails.
-pub(super) fn generator_release(
+pub fn generator_release(
     request: &Schema2WorkflowRequest,
 ) -> Result<GeneratorRelease, RenderError> {
     let pins = request

@@ -4,7 +4,7 @@ const SIDECAR_AWK: &str = "NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^
 
 #[cfg(test)]
 const EXTRACTOR: &str =
-    include_str!("../../../../../../scripts/generator-release/extract-candidate.py");
+    include_str!("../../../../../scripts/generator-release/extract-candidate.py");
 
 /// Emit one AWK command that accepts only the candidate's exact checksum row.
 pub(super) fn sidecar_digest_command(sidecar: &str, binary: &str) -> String {

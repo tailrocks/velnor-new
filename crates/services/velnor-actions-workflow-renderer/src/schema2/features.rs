@@ -6,6 +6,7 @@
 //! run. `features` still selects every class.
 
 use super::{RunnerSpec, with_if};
+use velnor_actions_workflow_tree::job_entries::{CHECKOUT_USES, base, finish};
 use velnor_actions_workflow_tree::yaml::Yaml;
 
 const JS: &str = "inputs.mode == 'features' || inputs.mode == 'js'";
@@ -15,7 +16,6 @@ const BUILDX: &str = "inputs.mode == 'features' || inputs.mode == 'buildx'";
 const NEGATIVE: &str = "inputs.mode == 'negative'";
 
 /// Pinned `actions/checkout` used by qualification jobs.
-pub(super) const CHECKOUT_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 const UPLOAD_USES: &str = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
 const REDIS_OPTIONS: &str =
     "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12";
@@ -166,34 +166,12 @@ pub(super) fn lane_base_with_container(
     timeout: i64,
     has_container: bool,
 ) -> Vec<(String, Yaml)> {
-    let mut fields = base_fields(name, runner.runs_on.clone(), timeout);
+    let mut fields = base(name, runner.runs_on.clone(), timeout);
     runner.push_default_shell(&mut fields, has_container);
     fields
 }
 
 /// Shared preamble for hosted product-release families.
-pub(super) fn base(name: &str, runs_on: Yaml, timeout: i64) -> Vec<(String, Yaml)> {
-    base_fields(name, runs_on, timeout)
-}
-
-fn base_fields(name: &str, runs_on: Yaml, timeout: i64) -> Vec<(String, Yaml)> {
-    vec![
-        ("name".to_owned(), Yaml::str(name)),
-        ("runs-on".to_owned(), runs_on),
-        ("timeout-minutes".to_owned(), Yaml::Int(timeout)),
-    ]
-}
-
-/// Append steps and return one job entry.
-pub(super) fn finish(
-    id: &str,
-    mut fields: Vec<(String, Yaml)>,
-    steps: Vec<Yaml>,
-) -> (String, Yaml) {
-    fields.push(("steps".to_owned(), Yaml::Seq(steps)));
-    (id.to_owned(), Yaml::Map(fields))
-}
-
 /// Redis 7 with the shared health options and published port 6379.
 pub(super) fn redis_service() -> Yaml {
     Yaml::Map(vec![(

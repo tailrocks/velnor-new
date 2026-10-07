@@ -2,10 +2,8 @@ use std::collections::BTreeSet;
 
 use velnor_actions_contract_config::{RoutingWorkflow, SCALE_SET_NAME, VELNOR_LABEL};
 
-use super::{
-    MbxQualificationPins, Schema2WorkflowRequest, monitoring, qualification,
-    render_schema2_workflows,
-};
+use super::{monitoring, qualification, render_schema2_workflows};
+use velnor_actions_workflow_generator::{MbxQualificationPins, Schema2WorkflowRequest};
 use velnor_actions_workflow_steps::setup::MiseSetup;
 use velnor_actions_workflow_tree::yaml::Yaml;
 
@@ -56,9 +54,9 @@ fn assert_lane_shells(document: &Yaml, minimum_per_lane: usize) {
             containers += 1;
         }
         let expected_shell = if has_container {
-            crate::runs_on::CONTAINER_RUN_SHELL
+            velnor_actions_workflow_tree::runs_on::CONTAINER_RUN_SHELL
         } else {
-            crate::runs_on::SCALE_SET_RUN_SHELL
+            velnor_actions_workflow_tree::runs_on::SCALE_SET_RUN_SHELL
         };
         match runs_on {
             Yaml::Flow(labels) => {
@@ -86,7 +84,9 @@ fn assert_lane_shells(document: &Yaml, minimum_per_lane: usize) {
                             "run".to_owned(),
                             Yaml::Map(vec![(
                                 "shell".to_owned(),
-                                Yaml::str(crate::runs_on::CONTAINER_RUN_SHELL),
+                                Yaml::str(
+                                    velnor_actions_workflow_tree::runs_on::CONTAINER_RUN_SHELL
+                                ),
                             )]),
                         )])),
                         "container job {id} must declare its POSIX shell"

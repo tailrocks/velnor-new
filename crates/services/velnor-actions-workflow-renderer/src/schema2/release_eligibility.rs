@@ -2,7 +2,8 @@
 
 use velnor_actions_workflow_tree::yaml::Yaml;
 
-use super::features::{CHECKOUT_USES, base, finish, run_step};
+use super::features::run_step;
+use velnor_actions_workflow_tree::job_entries::{CHECKOUT_USES, base, finish};
 
 const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
 const MISE_VERSION: &str = "2026.9.18";

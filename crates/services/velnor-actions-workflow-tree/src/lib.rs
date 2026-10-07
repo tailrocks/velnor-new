@@ -5,9 +5,12 @@
 //! workflow byte budget, and the rendered-file envelopes assemblers share.
 
 pub mod agents_md;
+pub mod composite;
 pub mod guard;
+pub mod job_entries;
 pub mod marker;
 pub mod rendered;
+pub mod runs_on;
 pub mod steps_plain;
 pub mod workflow_size;
 pub mod yaml;

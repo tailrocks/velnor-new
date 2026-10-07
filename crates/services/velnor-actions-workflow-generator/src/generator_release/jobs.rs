@@ -1,14 +1,14 @@
 //! Build, qualify, attest, and publish workflow jobs.
 
-use crate::composite::{
-    composite_yaml, composite_yaml_with_inputs, shared_call_named, shared_call_named_with_inputs,
-};
 use velnor_actions_contract_release::ReleaseTarget;
 use velnor_actions_workflow_steps::RenderError;
+use velnor_actions_workflow_tree::composite::{
+    composite_yaml, composite_yaml_with_inputs, shared_call_named, shared_call_named_with_inputs,
+};
 use velnor_actions_workflow_tree::yaml::Yaml;
 
-use super::super::features::{base, finish};
 use super::{GeneratorReleasePins, assets, manifest, workflow_steps};
+use velnor_actions_workflow_tree::job_entries::{base, finish};
 
 pub(super) fn build_job(
     id: &str,

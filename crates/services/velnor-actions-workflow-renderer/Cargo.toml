@@ -12,6 +12,7 @@ velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor
 velnor-actions-contract-release = { version = "=0.1.1", path = "../../core/velnor-actions-contract-release" }
 velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
 velnor-actions-workflow-cache = { version = "=0.1.1", path = "../velnor-actions-workflow-cache" }
+velnor-actions-workflow-generator = { version = "=0.1.1", path = "../velnor-actions-workflow-generator" }
 velnor-actions-workflow-steps = { version = "=0.1.1", path = "../velnor-actions-workflow-steps" }
 velnor-actions-workflow-tree = { version = "=0.1.1", path = "../velnor-actions-workflow-tree" }
 

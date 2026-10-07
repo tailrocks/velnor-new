@@ -6,13 +6,14 @@
 //! built. Dispatch has no inputs, so a caller cannot supply a shell fragment
 //! or a checksum.
 
-use crate::runs_on::runs_on_yaml;
 use velnor_actions_workflow_steps::RenderError;
 use velnor_actions_workflow_steps::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
+use velnor_actions_workflow_tree::runs_on::runs_on_yaml;
 use velnor_actions_workflow_tree::yaml::Yaml;
 
-use super::Schema2WorkflowRequest;
-use super::features::{CHECKOUT_USES, base, finish, publish_step, run_step};
+use super::features::{publish_step, run_step};
+use velnor_actions_workflow_generator::Schema2WorkflowRequest;
+use velnor_actions_workflow_tree::job_entries::{CHECKOUT_USES, base, finish};
 
 /// GitHub-hosted macOS label. The binary is native; it is not built on Ubuntu.
 const MACOS_RUNS_ON: &str = "macos-15";

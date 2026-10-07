@@ -1,33 +1,10 @@
-use super::QUALIFICATION_SOURCE_PREPARE;
+//! Invalid source identities never reach git.
+
+use super::impl_generator_source_scratch::Scratch;
 use std::error::Error;
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
-
-mod fetch;
-mod mise_setup;
-
-struct Scratch(PathBuf);
-
-impl Scratch {
-    fn new() -> Result<Self, Box<dyn Error>> {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_nanos();
-        let path = std::env::temp_dir().join(format!(
-            "velnor-qualification-source-{}-{nonce}",
-            std::process::id()
-        ));
-        fs::create_dir_all(&path)?;
-        Ok(Self(path))
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        drop(fs::remove_dir_all(&self.0));
-    }
-}
+use velnor_actions_workflow_generator::generator_release::QUALIFICATION_SOURCE_PREPARE;
 
 #[test]
 fn reject_invalid_source_identity_before_running_git() -> Result<(), Box<dyn Error>> {

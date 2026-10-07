@@ -9,10 +9,10 @@ use velnor_actions_contract_workflow::workflow::lanes::{
 use velnor_actions_contract_workflow::{Job, StepKind};
 use velnor_actions_contract_workflow::{Step, StepRole};
 
-use crate::composite::composite_yaml;
 use crate::document_steps::step_to_yaml;
 use crate::render::RenderContext;
 use velnor_actions_workflow_steps::{RenderError, steps};
+use velnor_actions_workflow_tree::composite::composite_yaml;
 use velnor_actions_workflow_tree::rendered::RenderedFile;
 use velnor_actions_workflow_tree::{marker, yaml::render_yaml};
 

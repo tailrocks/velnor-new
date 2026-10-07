@@ -13,10 +13,8 @@ use velnor_actions_workflow_steps::{
 };
 use velnor_actions_workflow_tree::yaml::{Yaml, string_map_yaml};
 
-use crate::{
-    composite::push_composite_shell,
-    render::{FINAL_JOB_ID, RenderContext},
-};
+use crate::render::{FINAL_JOB_ID, RenderContext};
+use velnor_actions_workflow_tree::composite::push_composite_shell;
 
 /// True for the final job's plan download (fetch is gated inline below).
 ///

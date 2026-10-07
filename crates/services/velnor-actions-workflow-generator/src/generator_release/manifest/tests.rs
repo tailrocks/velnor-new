@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MANIFEST_PRODUCER: &str =
-    include_str!("../../../../../../../scripts/generator-release/create-release-manifest.sh");
+    include_str!("../../../../../../scripts/generator-release/create-release-manifest.sh");
 
 mod bundle;
 mod macos;

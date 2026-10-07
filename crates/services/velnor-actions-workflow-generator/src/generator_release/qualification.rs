@@ -3,10 +3,10 @@
 use velnor_actions_workflow_steps::RenderError;
 use velnor_actions_workflow_tree::yaml::Yaml;
 
-use super::super::features::{base, finish};
 use super::assets::ProductAsset;
 use super::workflow_steps::{self, with_permissions};
 use super::{GeneratorReleasePins, assets, jobs, manifest};
+use velnor_actions_workflow_tree::job_entries::{base, finish};
 
 pub(super) struct QualificationJob<'a> {
     pub id: &'a str,

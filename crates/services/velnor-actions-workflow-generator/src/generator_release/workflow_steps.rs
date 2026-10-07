@@ -6,7 +6,7 @@ use velnor_actions_workflow_steps::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFA
 use velnor_actions_workflow_steps::{MiseSetup, RenderError};
 use velnor_actions_workflow_tree::yaml::Yaml;
 
-use super::super::features::CHECKOUT_USES;
+use velnor_actions_workflow_tree::job_entries::CHECKOUT_USES;
 
 const ATTEST_USES: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";

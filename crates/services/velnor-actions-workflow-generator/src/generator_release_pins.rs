@@ -1,3 +1,5 @@
+//! Pinned tools and runner-specific Mise setup for the generator release.
+
 use velnor_actions_contract_release::ReleaseTarget;
 
 use velnor_actions_workflow_steps::setup::MiseSetup;

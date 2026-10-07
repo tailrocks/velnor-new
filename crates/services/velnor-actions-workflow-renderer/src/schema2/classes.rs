@@ -5,9 +5,9 @@
 
 use super::RunnerSpec;
 use super::features::{
-    checkout_step, finish, gated, lane_base_with_container, local_action_step, redis_service,
-    run_step,
+    checkout_step, gated, lane_base_with_container, local_action_step, redis_service, run_step,
 };
+use velnor_actions_workflow_tree::job_entries::finish;
 use velnor_actions_workflow_tree::yaml::Yaml;
 
 mod more;

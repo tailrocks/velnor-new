@@ -5,7 +5,7 @@ use std::ffi::{OsStr, OsString};
 use velnor_actions_contract_config::VelnorConfig;
 use velnor_actions_contract_release::ReleaseTarget;
 use velnor_actions_mise::{MiseInstall, PinnedTool, PinnedToolExec, ToolCatalog};
-use velnor_actions_workflow_renderer::GeneratorReleasePins;
+use velnor_actions_workflow_generator::GeneratorReleasePins;
 
 use crate::OrchestratorError;
 use crate::pins::resolve_mise_setup_for_release_target;

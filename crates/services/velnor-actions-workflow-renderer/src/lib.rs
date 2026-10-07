@@ -6,7 +6,6 @@
 mod candidate;
 pub mod closure;
 mod closure_paths;
-mod composite;
 mod document;
 mod document_lanes;
 mod document_steps;
@@ -23,7 +22,6 @@ pub mod plan_format;
 pub mod preseed;
 mod preseed_closure;
 pub mod render;
-mod runs_on;
 pub mod schema2;
 mod support;
 pub mod tree;
@@ -56,9 +54,7 @@ pub use render::{
     RUN_KEY_OUTPUT, RenderContext, TASK_JOB_ID, ValidatorCommand, WORKFLOW_PATH, action_pins,
     finalize_jobs, render_workflow_ir, render_workflow_ir_strict,
 };
-pub use schema2::{
-    GeneratorReleasePins, MbxQualificationPins, Schema2WorkflowRequest, render_schema2_workflows,
-};
+pub use schema2::render_schema2_workflows;
 pub use tree::{render_tree, render_tree_with_extra};
 pub use verification_jobs::{
     INSTALL_VERIFICATION_TOOLS_NAME, RUN_VERIFICATION_TASK_NAME, VerificationTaskPolicy,

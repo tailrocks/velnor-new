@@ -255,7 +255,7 @@ pub fn finalize_jobs(
             .check_runner
             .as_ref()
             .map(|runner| runner.platform.target())
-            .or_else(|| crate::runs_on::target_for_runner(&job.runs_on))
+            .or_else(|| velnor_actions_workflow_tree::runs_on::target_for_runner(&job.runs_on))
             .ok_or_else(|| {
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
