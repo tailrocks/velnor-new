@@ -12,7 +12,7 @@ use velnor_runner_docker_spec::{
     ContainerPlan, ImageMount, Mount, audit_plan, resolve_runner_profile,
 };
 
-use super::{CreateProjection, PLATFORM};
+use super::{CreateProjection, PLATFORM, dind_container_id};
 
 /// Bollard create inputs. Platform is on `options` and on [`CreateProjection`].
 ///
@@ -174,9 +174,8 @@ fn audit_projection(spec: &CreateProjection) -> Result<(), HostError> {
 }
 
 fn valid_container_network_mode(mode: &str) -> bool {
-    mode.strip_prefix("container:").is_some_and(|id| {
-        (12..=64).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_hexdigit())
-    })
+    mode.strip_prefix("container:")
+        .is_some_and(dind_container_id)
 }
 
 fn mount_source(source: &str) -> Result<(MountType, String), HostError> {
