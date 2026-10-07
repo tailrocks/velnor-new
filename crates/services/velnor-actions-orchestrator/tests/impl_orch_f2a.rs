@@ -281,7 +281,9 @@ fn merge_consumes_no_publish_verbs() -> TestResult {
             token_hits(token)?
         );
     }
-    let baseline = std::fs::read_to_string(family_file("cover_baseline.rs")?)?;
+    let baseline = std::fs::read_to_string(
+        orch_src().join("../../velnor-actions-orchestrator-cover-baseline/src/cover_baseline.rs"),
+    )?;
     assert!(baseline.contains("no_publish_attempted"), "PR guard stays");
     Ok(())
 }

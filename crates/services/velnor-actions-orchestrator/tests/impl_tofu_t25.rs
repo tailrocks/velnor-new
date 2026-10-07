@@ -25,8 +25,13 @@ use crate::impl_tofu_t24_gates::{crate_src, is_crate_job, token_hits};
 fn file_cache_constructions_are_hoisted_per_phase() -> TestResult {
     let orch = crate_src("");
     let disc = crate_src("../velnor-actions-orchestrator-discovery");
+    let cover = crate_src("../velnor-actions-orchestrator-cover-baseline");
     let mut sites: Vec<String> = Vec::new();
-    for (dir, prefix) in [(&orch, ""), (&disc, "discovery/")] {
+    for (dir, prefix) in [
+        (&orch, ""),
+        (&disc, "discovery/"),
+        (&cover, "cover-baseline/"),
+    ] {
         sites.extend(
             token_hits(dir, "FileCache::new()")?
                 .into_iter()
