@@ -104,7 +104,7 @@ pub(super) fn install_mock_gh(root: &Path) -> Result<(), Box<dyn Error>> {
     let timeout = bin.join("timeout");
     fs::write(
         &timeout,
-        "#!/bin/sh\nset -eu\ntest \"$1\" = --signal=TERM\nshift\ntest \"$1\" = --kill-after=5s\nshift\ntest \"$1\" = 60s\nshift\nexec \"$@\"\n",
+        "#!/bin/sh\n# Poison: the gh wrapper is a portable watchdog and must never invoke timeout.\necho 'poison: timeout must never be invoked' >&2\nexit 99\n",
     )?;
     let mut permissions = fs::metadata(&timeout)?.permissions();
     permissions.set_mode(0o755);

@@ -123,6 +123,7 @@ fn assert_product(workflows: &[&str], actions: &Actions) -> Result<(), Box<dyn s
     security_snapshots::assert_isolated_candidate_execution(&all_workflows, actions)?;
     publication_snapshots::assert_asset_catalog(&action_text(actions));
     publication_snapshots::assert_pinned_gh_policy(actions);
+    cross_snapshots::assert_portable_gh_watchdog(actions);
     publication_snapshots::assert_target_builds(generator, actions)?;
     cross_snapshots::assert_qualify_install_tools(actions)?;
     publication_snapshots::assert_manifest_job(generator, actions)?;

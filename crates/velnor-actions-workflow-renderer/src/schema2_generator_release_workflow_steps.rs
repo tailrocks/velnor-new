@@ -11,6 +11,7 @@ use super::super::features::CHECKOUT_USES;
 const ATTEST_USES: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
 const GH_COMMAND_TIMEOUT_SECONDS: u16 = 60;
+const GH_COMMAND_KILL_AFTER_SECONDS: u16 = 5;
 
 pub(super) fn command_step(name: &str, argv: &[String]) -> Result<Yaml, RenderError> {
     Ok(bash_step(name, &join_argv_for_run(argv)?))
@@ -41,8 +42,12 @@ pub(super) fn gh_function(argv: &[String]) -> Result<String, RenderError> {
 
 fn gh_function_with_timeout(argv: &[String], timeout_seconds: u16) -> Result<String, RenderError> {
     let executable = join_argv_for_run(argv)?;
+    let kill_after_seconds = GH_COMMAND_KILL_AFTER_SECONDS;
+    // The watchdog lives inside a foreground subshell with stdin detached:
+    // background jobs of a `bash -s` script reader corrupt the shared
+    // seekable stdin, so the caller must never see a background job here.
     Ok(format!(
-        "gh() {{ timeout --signal=TERM --kill-after=5s {timeout_seconds}s {executable} \"$@\"; }}\nexport -f gh"
+        "gh() {{\n  (\n    {executable} \"$@\" & _velnor_gh_pid=$!\n    ( sleep {timeout_seconds}; kill -TERM \"$_velnor_gh_pid\" 2>/dev/null; sleep {kill_after_seconds}; kill -KILL \"$_velnor_gh_pid\" 2>/dev/null ) </dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!\n    _velnor_gh_status=0\n    wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?\n    kill -KILL \"$_velnor_gh_watch\" 2>/dev/null || true\n    wait \"$_velnor_gh_watch\" 2>/dev/null || true\n    exit \"$_velnor_gh_status\"\n  ) </dev/null\n}}\nexport -f gh"
     ))
 }
 
