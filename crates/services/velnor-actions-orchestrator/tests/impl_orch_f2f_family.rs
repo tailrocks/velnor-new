@@ -52,6 +52,13 @@ const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "crates/services/velnor-actions-orchestrator-cover-compat",
+        &[
+            "velnor-actions-contract",
+            "velnor-actions-contract-workflow",
+        ],
+    ),
+    (
         "crates/services/velnor-actions-orchestrator-covered-tasks",
         &[
             "velnor-actions-contract-workflow",

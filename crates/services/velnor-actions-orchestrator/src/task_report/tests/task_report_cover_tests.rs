@@ -14,7 +14,8 @@ fn covered_fixture() -> Plan {
     let commit = "a".repeat(40);
     let compat = digest_b3_for("compat");
     let name = format!("velnor-baseline-{commit}-{compat}");
-    let numeric = crate::cover_compat::baseline_artifact_numeric_id(&name);
+    let numeric =
+        velnor_actions_orchestrator_cover_compat::cover_compat::baseline_artifact_numeric_id(&name);
     let proof = BaselineProof::new(&commit, 7, numeric, &name, &digest_b3_for("manifest"))
         .expect("proof constructs");
     for obligation in &mut plan.obligations {

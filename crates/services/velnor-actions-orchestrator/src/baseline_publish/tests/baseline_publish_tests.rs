@@ -6,7 +6,9 @@ fn publish_stages_trusted_manifest_under_derived_name() {
     let plan = fixture_plan(&head, "r7-a1");
     let temp = staged_run(&plan, "r7-a1");
     let outputs = baseline_publish_to(&request_json(&head), "r7-a1", temp.path()).expect("publish");
-    let compat = crate::cover_compat::baseline_compat_for_plan(&plan).expect("compat");
+    let compat =
+        velnor_actions_orchestrator_cover_compat::cover_compat::baseline_compat_for_plan(&plan)
+            .expect("compat");
     let expected = artifact_id_for_baseline(&head, &compat).expect("name");
     assert_eq!(outputs.artifact_name, expected);
     let staged = staged_manifest(temp.path(), "r7-a1");
@@ -25,7 +27,9 @@ fn publish_stages_trusted_manifest_under_derived_name() {
     assert_eq!(staged["artifact_name"], expected);
     assert_eq!(
         staged["artifact_id"],
-        crate::cover_compat::baseline_artifact_numeric_id(&expected)
+        velnor_actions_orchestrator_cover_compat::cover_compat::baseline_artifact_numeric_id(
+            &expected
+        )
     );
     assert_eq!(staged["tasks"].as_array().expect("tasks").len(), 2);
 }
@@ -39,7 +43,7 @@ fn publish_skips_covered_without_carry_forward() {
     let proof = velnor_actions_contract_workflow::BaselineProof::new(
         &head,
         7,
-        crate::cover_compat::baseline_artifact_numeric_id(&name),
+        velnor_actions_orchestrator_cover_compat::cover_compat::baseline_artifact_numeric_id(&name),
         &name,
         &digest(9),
     )

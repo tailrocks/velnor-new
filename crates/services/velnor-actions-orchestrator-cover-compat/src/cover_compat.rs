@@ -23,7 +23,7 @@ use velnor_actions_contract_workflow::Plan;
 /// # Errors
 ///
 /// Returns the reason when canonical encoding fails.
-pub(crate) fn baseline_compat_for_plan(plan: &Plan) -> Result<String, String> {
+pub fn baseline_compat_for_plan(plan: &Plan) -> Result<String, String> {
     let mut pairs: Vec<(&str, &str)> = plan
         .obligations
         .iter()

@@ -45,7 +45,10 @@ pub(crate) fn manifest_for(commit: &str) -> BaselineManifest {
         generator_version: "0.1.0".to_owned(),
         generator_sha256: "1".repeat(64),
         compatibility_id: compat.clone(),
-        artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
+        artifact_id:
+            velnor_actions_orchestrator_cover_compat::cover_compat::baseline_artifact_numeric_id(
+                &name,
+            ),
         artifact_name: name,
         tasks: vec![crate::merge::required_evidence::BaselineTaskEntry {
             task_id: "stack/rust/root/clippy/default".to_owned(),

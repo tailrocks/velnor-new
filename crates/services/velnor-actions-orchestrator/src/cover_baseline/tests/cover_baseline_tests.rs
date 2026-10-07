@@ -4,6 +4,8 @@
 
 use super::*;
 
+use velnor_actions_orchestrator_cover_compat::cover_compat::baseline_artifact_numeric_id;
+
 #[test]
 fn baseline_publish_and_download_rules() {
     assert!(publish_event_eligible(WorkflowEvent::Push));
@@ -38,7 +40,7 @@ fn baseline_publish_and_download_rules() {
 /// Minimal valid manifest JSON for `base`/`name`, run 7 attempt 1.
 fn manifest_json(base: &str, name: &str) -> serde_json::Value {
     let digest = digest_b3(b"d");
-    let numeric = crate::cover_compat::baseline_artifact_numeric_id(name);
+    let numeric = baseline_artifact_numeric_id(name);
     serde_json::json!({
         "schema": 2,
         "repository_id": digest,
@@ -62,7 +64,7 @@ fn manifest_json(base: &str, name: &str) -> serde_json::Value {
 fn baseline_entry_needs_single_strict_payload() {
     let base = "a".repeat(40);
     let name = format!("velnor-baseline-{base}-{}", digest_b3(b"c"));
-    let numeric = crate::cover_compat::baseline_artifact_numeric_id(&name);
+    let numeric = baseline_artifact_numeric_id(&name);
     let tmp = tempfile::tempdir().expect("tempdir");
     let entry = tmp.path().join(&name);
     std::fs::create_dir(&entry).expect("entry");
@@ -210,7 +212,7 @@ fn forwarded_manifest(slug: &str, base: &str) -> BaselineManifest {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         generator_sha256: "1".repeat(64),
         compatibility_id: digest.clone(),
-        artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
+        artifact_id: baseline_artifact_numeric_id(&name),
         artifact_name: name,
         tasks: vec![crate::merge::required_evidence::BaselineTaskEntry {
             task_id: "stack/rust/root/clippy/default".to_owned(),
@@ -326,7 +328,7 @@ fn source_build_keeps_marker_without_lock_fill() {
 fn baseline_entry_pins_attempt_and_artifact() {
     let base = "a".repeat(40);
     let name = format!("velnor-baseline-{base}-{}", digest_b3(b"c"));
-    let numeric = crate::cover_compat::baseline_artifact_numeric_id(&name);
+    let numeric = baseline_artifact_numeric_id(&name);
     let tmp = tempfile::tempdir().expect("tempdir");
     let entry = tmp.path().join(&name);
     std::fs::create_dir(&entry).expect("entry");
@@ -350,7 +352,7 @@ fn baseline_entry_pins_attempt_and_artifact() {
 fn baseline_entry_rejects_links_and_oversize() {
     let base = "a".repeat(40);
     let name = format!("velnor-baseline-{base}-{}", digest_b3(b"c"));
-    let numeric = crate::cover_compat::baseline_artifact_numeric_id(&name);
+    let numeric = baseline_artifact_numeric_id(&name);
     #[cfg(unix)]
     {
         let manifest = manifest_json(&base, &name).to_string();

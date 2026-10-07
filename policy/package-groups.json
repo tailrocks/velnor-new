@@ -55,6 +55,7 @@
     "velnor-actions-orchestrator-runtime-evidence": "library",
     "velnor-actions-orchestrator-runtime-execute": "library",
     "velnor-actions-orchestrator-noop-report": "library",
-    "velnor-actions-orchestrator-request-event": "library"
+    "velnor-actions-orchestrator-request-event": "library",
+    "velnor-actions-orchestrator-cover-compat": "library"
   }
 }

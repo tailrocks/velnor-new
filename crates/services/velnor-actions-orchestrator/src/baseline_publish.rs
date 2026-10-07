@@ -296,7 +296,8 @@ fn publish_manifest(
     }
     tasks.sort_by(|left, right| left.task_id.cmp(&right.task_id));
     let compat =
-        crate::cover_compat::baseline_compat_for_plan(plan).map_err(|reason| internal(&reason))?;
+        velnor_actions_orchestrator_cover_compat::cover_compat::baseline_compat_for_plan(plan)
+            .map_err(|reason| internal(&reason))?;
     let name = velnor_actions_contract::artifact_id_for_baseline(&request.head, &compat)
         .map_err(|_| internal("publish_refused:bad_source_commit"))?;
     let slug = request
@@ -323,7 +324,10 @@ fn publish_manifest(
         generator_version: plan.generator.version.clone(),
         generator_sha256: plan.generator.sha256.clone(),
         compatibility_id: compat,
-        artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
+        artifact_id:
+            velnor_actions_orchestrator_cover_compat::cover_compat::baseline_artifact_numeric_id(
+                &name,
+            ),
         artifact_name: name,
         tasks,
         expires_at_unix: None,

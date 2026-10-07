@@ -149,7 +149,9 @@ pub(crate) fn validate_provenance(
     reject(manifest.artifact_name == expect, "artifact_mismatch")?;
     reject(
         manifest.artifact_id
-            == crate::cover_compat::baseline_artifact_numeric_id(&manifest.artifact_name),
+            == velnor_actions_orchestrator_cover_compat::cover_compat::baseline_artifact_numeric_id(
+                &manifest.artifact_name,
+            ),
         "artifact_mismatch",
     )?;
     for task in &manifest.tasks {

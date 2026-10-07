@@ -270,7 +270,9 @@ fn manifest_provenance_matches_plan(
     let derived_name = baseline_artifact_name(&manifest.source_commit, &manifest.compatibility_id)
         .is_ok_and(|expect| manifest.artifact_name == expect);
     let derived_id = manifest.artifact_id
-        == crate::cover_compat::baseline_artifact_numeric_id(&manifest.artifact_name);
+        == velnor_actions_orchestrator_cover_compat::cover_compat::baseline_artifact_numeric_id(
+            &manifest.artifact_name,
+        );
     let run_bound = manifest
         .tasks
         .iter()

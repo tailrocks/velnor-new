@@ -185,7 +185,10 @@ pub(super) fn manifest_with(entries: &[(&str, &str)]) -> BaselineManifest {
         generator_version: "0.1.0".to_owned(),
         generator_sha256: "1".repeat(64),
         compatibility_id: digest.clone(),
-        artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
+        artifact_id:
+            velnor_actions_orchestrator_cover_compat::cover_compat::baseline_artifact_numeric_id(
+                &name,
+            ),
         artifact_name: name,
         expires_at_unix: None,
         tasks: entries

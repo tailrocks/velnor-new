@@ -247,7 +247,10 @@ fn collect_manifests(
     attempt: u64,
     artifact: &str,
 ) -> Result<Vec<BaselineManifest>, String> {
-    let expected = crate::cover_compat::baseline_artifact_numeric_id(artifact);
+    let expected =
+        velnor_actions_orchestrator_cover_compat::cover_compat::baseline_artifact_numeric_id(
+            artifact,
+        );
     let mut out = Vec::new();
     let entries = std::fs::read_dir(dir).map_err(|_| "baseline_unavailable".to_owned())?;
     for entry in entries {

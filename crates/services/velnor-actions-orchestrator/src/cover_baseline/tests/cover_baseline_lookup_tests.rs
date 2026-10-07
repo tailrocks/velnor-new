@@ -68,7 +68,9 @@ fn lookup_inputs<'a>(
 fn lookup_names_exact_baseline_artifact() {
     let base = "a".repeat(40);
     let plan = lookup_plan(Some(&base));
-    let compat = crate::cover_compat::baseline_compat_for_plan(&plan).expect("compat");
+    let compat =
+        velnor_actions_orchestrator_cover_compat::cover_compat::baseline_compat_for_plan(&plan)
+            .expect("compat");
     let expected =
         velnor_actions_contract::artifact_id_for_baseline(&base, &compat).expect("artifact name");
     assert_eq!(lookup_artifact_name(&plan, &base).expect("name"), expected);

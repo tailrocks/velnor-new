@@ -10,7 +10,6 @@ mod baseline_publish;
 mod check_runtime;
 mod cover;
 mod cover_baseline;
-mod cover_compat;
 mod cover_identity;
 pub use velnor_actions_orchestrator_workflow_ir::crate_jobs;
 mod external_data;

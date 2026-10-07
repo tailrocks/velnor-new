@@ -156,7 +156,8 @@ pub(crate) fn apply_baseline(
 /// caller input. A malformed base or an underivable shape misses
 /// before spawning anything.
 pub(crate) fn lookup_artifact_name(plan: &Plan, base: &str) -> Result<String, String> {
-    let compat = crate::cover_compat::baseline_compat_for_plan(plan)?;
+    let compat =
+        velnor_actions_orchestrator_cover_compat::cover_compat::baseline_compat_for_plan(plan)?;
     velnor_actions_contract::artifact_id_for_baseline(base, &compat)
         .map_err(|_| "baseline_no_exact_artifact".to_owned())
 }

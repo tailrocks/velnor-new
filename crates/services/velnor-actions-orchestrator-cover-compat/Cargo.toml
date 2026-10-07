@@ -1,0 +1,22 @@
+[package]
+name = "velnor-actions-orchestrator-cover-compat"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[dependencies]
+velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "velnor_orchestrator_cover_compat"
+path = "tests/main.rs"

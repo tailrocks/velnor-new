@@ -25,7 +25,10 @@ fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectation
         generator_version: "0.1.0".to_owned(),
         generator_sha256: "1".repeat(64),
         compatibility_id: digest,
-        artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
+        artifact_id:
+            velnor_actions_orchestrator_cover_compat::cover_compat::baseline_artifact_numeric_id(
+                &name,
+            ),
         artifact_name: name,
         tasks: Vec::new(),
         expires_at_unix: None,
