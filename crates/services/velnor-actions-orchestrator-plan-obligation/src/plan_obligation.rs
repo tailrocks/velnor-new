@@ -33,44 +33,44 @@ use velnor_actions_orchestrator_graph::internal_plan::{
     IdentityInputs, adapter_metadata, cache_ids_for, evidence_for_group, execute_ids,
     nextest_config_for, record_task_cache, task_identity_digest, toolchain_id,
 };
-pub(crate) use velnor_actions_orchestrator_merge_ports::{changed_keys, member_changed};
 use velnor_actions_orchestrator_provisioning::vectors::task_argv;
 
 #[cfg(test)]
 mod tests;
 
 /// Inputs for planning one obligation.
-pub(crate) struct GroupInputs<'a> {
+#[derive(Debug)]
+pub struct GroupInputs<'a> {
     /// Validated discovery inventory.
-    pub(crate) discovery: &'a Discovery,
+    pub discovery: &'a Discovery,
     /// Universe member to plan.
-    pub(crate) task: &'a ProposedTask,
+    pub task: &'a ProposedTask,
     /// Run key.
-    pub(crate) run_key: &'a str,
+    pub run_key: &'a str,
     /// Runner label.
-    pub(crate) label: &'a str,
+    pub label: &'a str,
     /// Deprecated ordinal lane from the caller; ignored.
     ///
     /// Lane identity derives from responsibility and config (see
     /// `cache_ids_for`); this field stays only because the non-owned
     /// plan caller still supplies it. Removal awaits that migration.
-    pub(crate) lane: u32,
+    pub lane: u32,
     /// Pinned tool catalog.
-    pub(crate) catalog: &'a ToolCatalog,
+    pub catalog: &'a ToolCatalog,
     /// Reuse wiring inputs.
-    pub(crate) wire: GroupWire<'a>,
+    pub wire: GroupWire<'a>,
     /// Changed-work classification for the group.
-    pub(crate) changed: bool,
+    pub changed: bool,
     /// Once-built execution snapshot for graph lookups (P03-1).
-    pub(crate) snapshot: &'a ExecutionSnapshot,
+    pub snapshot: &'a ExecutionSnapshot,
     /// Repository checkout the closure resolves against.
-    pub(crate) root: &'a Path,
+    pub root: &'a Path,
     /// Emitted report identities for named checks.
-    pub(crate) named_check_lanes: &'a BTreeMap<String, Vec<NamedCheckLane>>,
+    pub named_check_lanes: &'a BTreeMap<String, Vec<NamedCheckLane>>,
 }
 
 /// Deterministic lane per universe task ID.
-pub(crate) fn lane_table(universe: &[&ProposedTask]) -> BTreeMap<String, u32> {
+pub fn lane_table(universe: &[&ProposedTask]) -> BTreeMap<String, u32> {
     let ids: Vec<String> = universe.iter().map(|task| task.task_id.clone()).collect();
     assign_lanes(&ids).into_iter().collect()
 }
@@ -169,7 +169,7 @@ fn planned_identity(
 /// Identities attach first; changed members execute unconditionally
 /// while unchanged members take the reuse outcome for later baseline
 /// classification.
-pub(crate) fn plan_group(
+pub fn plan_group(
     inputs: &GroupInputs<'_>,
     reads: &mut velnor_actions_tofu_core::FileCache,
 ) -> Result<(PlanObligation, Vec<MatrixEntry>), OrchestratorError> {

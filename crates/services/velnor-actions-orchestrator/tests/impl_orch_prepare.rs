@@ -80,9 +80,9 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         binding.contains("named_checks::plan::derive_lanes_until("),
         "runtime shares planner identity"
     );
-    let planning = std::fs::read_to_string(family_file("internal/plan_obligation.rs")?)?;
+    let planning = std::fs::read_to_string(family_file("plan_obligation.rs")?)?;
     let group = planning
-        .split("pub(crate) fn plan_group(")
+        .split("pub fn plan_group(")
         .nth(1)
         .expect("production planning boundary")
         .split("fn complete_group(")

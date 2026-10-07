@@ -71,6 +71,7 @@
     "velnor-actions-orchestrator-task-report-write",
     "velnor-actions-orchestrator-cover",
     "velnor-actions-orchestrator-retrieve",
-    "velnor-actions-orchestrator-baseline-publish"
+    "velnor-actions-orchestrator-baseline-publish",
+    "velnor-actions-orchestrator-plan-obligation"
   ]
 }

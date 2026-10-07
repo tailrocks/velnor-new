@@ -1,8 +1,5 @@
 //! Event-time `plan-v1` / `merge-v1` JSON entrypoints (schema 1).
 
-// Obligation identities live beside the planner so `lib.rs` stays untouched.
-pub(crate) mod plan_obligation;
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
@@ -17,7 +14,6 @@ use velnor_actions_mise::ToolCatalog;
 use velnor_actions_orchestrator_core::decisions::dedupe_sorted;
 use velnor_actions_orchestrator_core::{OrchestratorError, internal, internal_contract};
 
-use self::plan_obligation::{GroupInputs, changed_keys, lane_table, member_changed, plan_group};
 use crate::cover_baseline::{BaselineInputs, apply_baseline};
 use crate::merge::BaselineManifest;
 use velnor_actions_orchestrator_core::run_key::resolve_run_key;
@@ -27,6 +23,10 @@ use velnor_actions_orchestrator_generation::prepare::prepare;
 use velnor_actions_orchestrator_graph::internal_plan::snapshot::ExecutionSnapshot;
 use velnor_actions_orchestrator_graph::internal_plan::wire_w2::GroupWire;
 use velnor_actions_orchestrator_graph::internal_plan::{default_generator, plan_packages};
+use velnor_actions_orchestrator_merge_ports::{changed_keys, member_changed};
+use velnor_actions_orchestrator_plan_obligation::plan_obligation::{
+    GroupInputs, lane_table, plan_group,
+};
 use velnor_actions_orchestrator_selection::select::{
     classify_changed, select_universe, verify_checkout,
 };

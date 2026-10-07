@@ -3645,6 +3645,7 @@ dependencies = [
  "velnor-actions-orchestrator-noop-report",
  "velnor-actions-orchestrator-pins",
  "velnor-actions-orchestrator-plan",
+ "velnor-actions-orchestrator-plan-obligation",
  "velnor-actions-orchestrator-preseed-manifest",
  "velnor-actions-orchestrator-provisioning",
  "velnor-actions-orchestrator-request-event",
@@ -4029,6 +4030,28 @@ dependencies = [
  "velnor-actions-workflow-release",
  "velnor-actions-workflow-renderer",
  "velnor-actions-workflow-tree",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-plan-obligation"
+version = "0.1.1"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "velnor-actions-contract",
+ "velnor-actions-contract-planning",
+ "velnor-actions-contract-release",
+ "velnor-actions-contract-workflow",
+ "velnor-actions-mise",
+ "velnor-actions-orchestrator-core",
+ "velnor-actions-orchestrator-discovery",
+ "velnor-actions-orchestrator-graph",
+ "velnor-actions-orchestrator-provisioning",
+ "velnor-actions-orchestrator-workflow-ir",
+ "velnor-actions-rust",
+ "velnor-actions-rust-core",
+ "velnor-actions-tofu-core",
+ "velnor-actions-workflow-steps",
 ]
 
 [[package]]

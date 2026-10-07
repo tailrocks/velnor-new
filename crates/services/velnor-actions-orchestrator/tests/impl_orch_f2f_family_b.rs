@@ -49,6 +49,23 @@ pub(crate) const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "crates/services/velnor-actions-orchestrator-plan-obligation",
+        &[
+            "velnor-actions-contract",
+            "velnor-actions-contract-planning",
+            "velnor-actions-contract-workflow",
+            "velnor-actions-mise",
+            "velnor-actions-orchestrator-core",
+            "velnor-actions-orchestrator-discovery",
+            "velnor-actions-orchestrator-graph",
+            "velnor-actions-orchestrator-provisioning",
+            "velnor-actions-orchestrator-workflow-ir",
+            "velnor-actions-rust",
+            "velnor-actions-tofu-core",
+            "velnor-actions-workflow-steps",
+        ],
+    ),
+    (
         "crates/services/velnor-actions-orchestrator-preseed-manifest",
         &[
             "velnor-actions-contract",
