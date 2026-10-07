@@ -23,6 +23,7 @@ members = [
     "crates/services/velnor-actions-orchestrator-check-acquisition",
     "crates/services/velnor-actions-orchestrator-check-evidence",
     "crates/services/velnor-actions-orchestrator-check-preparation",
+    "crates/services/velnor-actions-orchestrator-check-runtime",
     "crates/services/velnor-actions-orchestrator-core",
     "crates/services/velnor-actions-orchestrator-cover",
     "crates/services/velnor-actions-orchestrator-cover-baseline",
