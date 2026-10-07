@@ -1,6 +1,7 @@
 //! Request-envelope strictness: `plan-v1`/`merge-v1` reject duplicate keys.
 
-use velnor_actions_orchestrator::{merge_internal, plan_internal};
+use velnor_actions_orchestrator_internal::internal::plan_internal;
+use velnor_actions_orchestrator_internal::merge_entry::merge_internal;
 
 use crate::impl_common::{TestResult, err_of};
 
