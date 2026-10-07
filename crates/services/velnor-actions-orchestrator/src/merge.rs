@@ -29,7 +29,12 @@ impl CoverPort for HubCover {
         signals: &mut Signals,
         miss_reasons: &mut BTreeSet<String>,
     ) -> Partition<'a> {
-        crate::cover::partition_reports(request, entries, signals, miss_reasons)
+        velnor_actions_orchestrator_cover::cover::partition_reports(
+            request,
+            entries,
+            signals,
+            miss_reasons,
+        )
     }
 
     fn cover_entry(
@@ -40,7 +45,13 @@ impl CoverPort for HubCover {
         obligations: &BTreeMap<&str, &str>,
         sinks: &mut CoverSinks<'_>,
     ) -> Result<bool, OrchestratorError> {
-        crate::cover::cover_entry(request, entry, report, obligations, sinks)
+        velnor_actions_orchestrator_cover::cover::cover_entry(
+            request,
+            entry,
+            report,
+            obligations,
+            sinks,
+        )
     }
 
     fn revalidate_coverage(
@@ -50,7 +61,12 @@ impl CoverPort for HubCover {
         signals: &mut Signals,
         miss_reasons: &mut BTreeSet<String>,
     ) {
-        crate::cover::revalidate_coverage(plan, manifest, signals, miss_reasons);
+        velnor_actions_orchestrator_cover::cover::revalidate_coverage(
+            plan,
+            manifest,
+            signals,
+            miss_reasons,
+        );
     }
 
     fn check_entry_shards(
@@ -60,11 +76,16 @@ impl CoverPort for HubCover {
         proofs: &[ShardProof],
         obligations: &BTreeMap<String, String>,
     ) -> Result<(), String> {
-        crate::cover::shard::check_entry_shards(bases, empty_count, proofs, obligations)
+        velnor_actions_orchestrator_cover::cover::shard::check_entry_shards(
+            bases,
+            empty_count,
+            proofs,
+            obligations,
+        )
     }
 
     fn validate_budgets(&self, limits: &ResourceLimits) -> Result<(), String> {
-        crate::cover::shard::validate_budgets(limits)
+        velnor_actions_orchestrator_cover::cover::shard::validate_budgets(limits)
     }
 }
 

@@ -9,32 +9,27 @@ use std::path::{Path, PathBuf};
 
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 
-use crate::merge::BaselineManifest;
-use crate::run_select::{select_baseline_artifact, select_exact_base_run};
+use velnor_actions_orchestrator_merge_ports::BaselineManifest;
+use velnor_actions_orchestrator_run_select::{select_baseline_artifact, select_exact_base_run};
 
 /// Exact-base baseline lookup through pinned `gh` (par §5).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct BaselineLookup {
+pub struct BaselineLookup {
     /// Full 40-hex base commit SHA.
-    pub(crate) base_sha: String,
+    pub base_sha: String,
     /// Generated workflow path.
-    pub(crate) workflow: String,
+    pub workflow: String,
     /// Protected default-branch name.
-    pub(crate) branch: String,
+    pub branch: String,
     /// Expected repository slug scoping every `gh` call.
-    pub(crate) repo: String,
+    pub repo: String,
 }
 
 impl BaselineLookup {
     /// Build a lookup; rejects short SHAs, URLs, wildcards, shell, and
     /// malformed repo slugs.
     /// # Errors
-    pub(crate) fn new(
-        base: &str,
-        workflow: &str,
-        branch: &str,
-        repo: &str,
-    ) -> Result<Self, String> {
+    pub fn new(base: &str, workflow: &str, branch: &str, repo: &str) -> Result<Self, String> {
         Self::validate_inputs(base, workflow, branch)?;
         let Some(repo) = velnor_actions_orchestrator_core::origin::validate_repository_slug(repo)
         else {
@@ -53,7 +48,7 @@ impl BaselineLookup {
     /// [`resolve_manifests`] runs this first so malformed inputs fail
     /// deterministically before any environment-dependent repo miss.
     /// # Errors
-    pub(crate) fn validate_inputs(base: &str, workflow: &str, branch: &str) -> Result<(), String> {
+    pub fn validate_inputs(base: &str, workflow: &str, branch: &str) -> Result<(), String> {
         if base.len() != 40 || !base.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err("base_must_be_full_sha".into());
         }
@@ -75,7 +70,7 @@ impl BaselineLookup {
     /// listing carries the successful attempt: selection binds the
     /// baseline claim to this attempt, never an unpinned run.
     #[must_use]
-    pub(crate) fn list_args(&self) -> Vec<OsString> {
+    pub fn list_args(&self) -> Vec<OsString> {
         let fields = "databaseId,headSha,event,conclusion,headBranch,attempt";
         let workflow = self.workflow.as_str();
         let branch = self.branch.as_str();
@@ -105,7 +100,7 @@ impl BaselineLookup {
     /// origin. The response proves the exact baseline artifact exists
     /// unexpired before any download is attempted.
     #[must_use]
-    pub(crate) fn artifacts_args(&self, run_id: u64) -> Vec<OsString> {
+    pub fn artifacts_args(&self, run_id: u64) -> Vec<OsString> {
         [
             "api",
             &format!("repos/{}/actions/runs/{run_id}/artifacts", self.repo),
@@ -116,11 +111,7 @@ impl BaselineLookup {
     }
 
     /// Run fixed `gh` args under the pinned catalog in `root`.
-    pub(crate) fn run(
-        catalog: &ToolCatalog,
-        root: &Path,
-        args: Vec<OsString>,
-    ) -> Result<String, String> {
+    pub fn run(catalog: &ToolCatalog, root: &Path, args: Vec<OsString>) -> Result<String, String> {
         let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args);
         let exec = exec.map_err(|err| err.to_string())?;
         let output = exec
@@ -169,7 +160,7 @@ fn gh_stdout_checked(output: &velnor_actions_mise::ProcessOutput) -> Result<Stri
 /// match the exact base commit, run, attempt, name fingerprint, and
 /// directory name; temp is always removed.
 /// # Errors
-pub(crate) fn resolve_manifests(
+pub fn resolve_manifests(
     catalog: &ToolCatalog,
     root: &Path,
     base: &str,

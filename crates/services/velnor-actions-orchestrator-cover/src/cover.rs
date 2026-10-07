@@ -2,10 +2,10 @@
 
 // Wired here (not `lib.rs`, which Gate 4-7 does not own) so the sharding
 // module compiles without touching shared files.
-pub(crate) mod shard;
-pub(crate) mod shard_baseline;
+pub mod shard;
+pub mod shard_baseline;
 // Coverage revalidation lives apart so this file keeps its size gate.
-pub(crate) mod revalidate;
+pub mod revalidate;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -14,17 +14,17 @@ use velnor_actions_contract_workflow::{
     ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, TaskStatus,
 };
 
-use crate::merge::MergeRequest;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::internal_contract;
 use velnor_actions_orchestrator_graph::internal_plan::wire_w2;
 
-pub(crate) use self::revalidate::revalidate_coverage;
-pub(crate) use crate::cover_baseline::{BaselineInputs, apply_baseline};
-pub(crate) use velnor_actions_orchestrator_merge_ports::{CoverSinks, Fold, Partition, Signals};
+pub use self::revalidate::revalidate_coverage;
+pub use velnor_actions_orchestrator_merge_ports::{
+    CoverSinks, Fold, MergeRequest, Partition, Signals,
+};
 
 /// Check 2: keep the first valid report per expected ID exactly.
-pub(crate) fn partition_reports<'a>(
+pub fn partition_reports<'a>(
     request: &'a MergeRequest,
     entries: &BTreeMap<&str, &MatrixEntry>,
     signals: &mut Signals,
@@ -67,7 +67,7 @@ pub(crate) fn partition_reports<'a>(
 }
 
 /// Check 3 for one entry: binding, task set, counts, digests; fold on cover.
-pub(crate) fn cover_entry(
+pub fn cover_entry(
     request: &MergeRequest,
     entry: &MatrixEntry,
     report: &MatrixReport,

@@ -87,7 +87,12 @@ pub(crate) fn retrieve_reports_to(run_id: u64, run_dir: &Path) -> usize {
             continue;
         };
         let (downloaded, _) = download_with_retry(|| {
-            crate::cover::shard::BaselineLookup::run(&catalog, run_dir, args.clone()).is_ok()
+            velnor_actions_orchestrator_cover::cover::shard::BaselineLookup::run(
+                &catalog,
+                run_dir,
+                args.clone(),
+            )
+            .is_ok()
         });
         if downloaded {
             retrieved += 1;

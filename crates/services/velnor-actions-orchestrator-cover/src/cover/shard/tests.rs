@@ -4,8 +4,8 @@
 //! lookup module keeps the file size gate.
 
 use super::*;
-use crate::run_select::select_exact_base_run;
 use velnor_actions_mise::ToolCatalog;
+use velnor_actions_orchestrator_run_select::select_exact_base_run;
 
 #[test]
 fn lookup_args_are_fixed_and_validated() {
@@ -32,7 +32,7 @@ fn lookup_args_are_fixed_and_validated() {
     ]);
     assert_eq!(
         select_exact_base_run(&runs.to_string(), &base, "t"),
-        Ok(crate::run_select::SelectedBaseRun {
+        Ok(velnor_actions_orchestrator_run_select::SelectedBaseRun {
             run_id: 2,
             attempt: 2
         })

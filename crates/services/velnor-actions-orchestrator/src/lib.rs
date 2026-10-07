@@ -8,7 +8,6 @@
 mod api;
 mod baseline_publish;
 mod check_runtime;
-mod cover;
 mod cover_baseline;
 pub use velnor_actions_orchestrator_workflow_ir::crate_jobs;
 mod internal;

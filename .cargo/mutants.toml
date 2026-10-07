@@ -41,7 +41,7 @@ examine_globs = [
     "crates/services/velnor-actions-orchestrator-selection/src/select_affected.rs",
     "crates/services/velnor-actions-orchestrator-discovery/src/select_edges.rs",
     # Aggregation: baseline coverage, final merge, merge requests.
-    "crates/services/velnor-actions-orchestrator/src/cover.rs",
+    "crates/services/velnor-actions-orchestrator-cover/src/**/*.rs",
     "crates/services/velnor-actions-orchestrator/src/cover_baseline.rs",
     "crates/services/velnor-actions-orchestrator/src/merge.rs",
     "crates/services/velnor-actions-orchestrator/src/merge_request.rs",

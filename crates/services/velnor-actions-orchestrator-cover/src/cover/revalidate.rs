@@ -7,14 +7,14 @@ use std::collections::BTreeSet;
 use velnor_actions_contract::{canonical_json_bytes, digest_b3, validate_digest};
 use velnor_actions_contract_workflow::{ObligationDecision, Plan};
 
-use crate::cover::Signals;
-use crate::merge::BaselineManifest;
+use super::Signals;
 use velnor_actions_orchestrator_core::decisions::baseline_expired;
 use velnor_actions_orchestrator_cover_baseline::cover_baseline::provenance_check::{
     baseline_artifact_name, is_unverifiable_generator_sha, parse_workflow_ref, task_run_ids_bound,
     validate_task_entry,
 };
 use velnor_actions_orchestrator_cover_baseline::cover_baseline::unix_now;
+use velnor_actions_orchestrator_merge_ports::BaselineManifest;
 
 /// Merge-time anchor expectations from runner-owned environment.
 ///
@@ -27,15 +27,15 @@ use velnor_actions_orchestrator_cover_baseline::cover_baseline::unix_now;
 /// missing anchor there fails closed instead of skipping. The
 /// plan-anchored invariants below still apply.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct MergeAnchorExpectations {
+pub struct MergeAnchorExpectations {
     /// Lowercase `owner/repo` slug from `GITHUB_REPOSITORY`.
-    pub(crate) repository_slug: Option<String>,
+    pub repository_slug: Option<String>,
     /// Protected ref from `GITHUB_BASE_REF` or `GITHUB_REF`.
-    pub(crate) protected_ref: Option<String>,
+    pub protected_ref: Option<String>,
     /// Generated workflow path from `GITHUB_WORKFLOW_REF`.
-    pub(crate) workflow_path: Option<String>,
+    pub workflow_path: Option<String>,
     /// Fail closed when any anchor is absent (CI only).
-    pub(crate) ci_strict_anchors: bool,
+    pub ci_strict_anchors: bool,
 }
 
 /// Anchor expectations from the runner-owned environment.
@@ -46,7 +46,7 @@ pub(crate) struct MergeAnchorExpectations {
 /// the workflow path. Malformed values yield `None`, never guesses.
 /// Under `GITHUB_ACTIONS` every anchor is mandatory: the runner always
 /// sets them, so absence means tampering, never a local run.
-pub(crate) fn merge_anchors_from_env() -> MergeAnchorExpectations {
+pub fn merge_anchors_from_env() -> MergeAnchorExpectations {
     let mut anchors = merge_anchors_from_parts(
         std::env::var("GITHUB_REPOSITORY").ok().as_deref(),
         std::env::var("GITHUB_BASE_REF").ok().as_deref(),
@@ -121,7 +121,7 @@ fn valid_branch_name(base: &str) -> bool {
 /// [`MergeAnchorExpectations`]), so a well-formed-but-foreign plan and
 /// manifest pair fails here instead of passing on internal consistency
 /// plus plan agreement alone.
-pub(crate) fn revalidate_coverage(
+pub fn revalidate_coverage(
     plan: &Plan,
     manifest: Option<&BaselineManifest>,
     signals: &mut Signals,
@@ -142,7 +142,7 @@ pub(crate) fn revalidate_coverage(
 /// Pure over `anchors` and `now_unix` so tests cover every field
 /// hermetically; [`revalidate_coverage`] is the production reader over
 /// this function.
-pub(crate) fn revalidate_coverage_with_anchors(
+pub fn revalidate_coverage_with_anchors(
     plan: &Plan,
     manifest: Option<&BaselineManifest>,
     signals: &mut Signals,

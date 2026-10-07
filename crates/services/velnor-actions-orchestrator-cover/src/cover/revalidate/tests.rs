@@ -1,7 +1,6 @@
+use super::super::Signals;
 use super::*;
 use super::{MergeAnchorExpectations, revalidate_coverage_with_anchors};
-use crate::cover::Signals;
-use crate::merge::BaselineManifest;
 use std::collections::BTreeSet;
 use velnor_actions_contract::{canonical_json_bytes, digest_b3};
 use velnor_actions_contract_config::RunnerSelection;
@@ -9,6 +8,7 @@ use velnor_actions_contract_workflow::{
     BaselineProof, ObligationDecision, Plan, PlanBaseline, PlanGenerator, PlanMatrix,
     PlanObligation, PlanRunner, Trust, WorkflowEvent,
 };
+use velnor_actions_orchestrator_merge_ports::BaselineManifest;
 
 /// Revalidation verdict for one plan/manifest pair without anchors.
 ///
@@ -50,7 +50,7 @@ pub(crate) fn manifest_for(commit: &str) -> BaselineManifest {
                 &name,
             ),
         artifact_name: name,
-        tasks: vec![crate::merge::required_evidence::BaselineTaskEntry {
+        tasks: vec![velnor_actions_orchestrator_merge_ports::BaselineTaskEntry {
             task_id: "stack/rust/root/clippy/default".to_owned(),
             task_digest: task,
             input_digest: inputs,

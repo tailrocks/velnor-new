@@ -20,7 +20,7 @@ use velnor_actions_contract::canonical_json_bytes;
 use velnor_actions_contract_workflow::Plan;
 use velnor_actions_mise::ToolCatalog;
 
-use crate::cover::shard::{BaselineLookup, resolve_manifests};
+use velnor_actions_orchestrator_cover::cover::shard::{BaselineLookup, resolve_manifests};
 
 /// Fetch the plan's exact baseline into `<run-dir>/baseline.json`.
 ///

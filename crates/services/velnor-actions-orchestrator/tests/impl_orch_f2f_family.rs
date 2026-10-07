@@ -1,6 +1,9 @@
 //! F2F orchestrator-family edges, split from the edge table (size gate).
 
 /// Orchestrator-family edges by member directory.
+#[path = "impl_orch_f2f_family_b.rs"]
+mod family_b;
+
 const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
     (
         "crates/services/velnor-actions-orchestrator-check-acquisition",
@@ -49,6 +52,22 @@ const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
             "velnor-actions-tofu-core",
             "velnor-actions-workflow-steps",
             "velnor-actions-workflow-tree",
+        ],
+    ),
+    (
+        "crates/services/velnor-actions-orchestrator-cover",
+        &[
+            "velnor-actions-contract",
+            "velnor-actions-contract-workflow",
+            "velnor-actions-mise",
+            "velnor-actions-orchestrator-core",
+            "velnor-actions-orchestrator-cover-baseline",
+            "velnor-actions-orchestrator-cover-compat",
+            "velnor-actions-orchestrator-external-data",
+            "velnor-actions-orchestrator-graph",
+            "velnor-actions-orchestrator-merge-ports",
+            "velnor-actions-orchestrator-run-select",
+            "velnor-actions-rust-core",
         ],
     ),
     (
@@ -193,202 +212,12 @@ const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
         "crates/services/velnor-actions-orchestrator-merge-request-ports",
         &["velnor-actions-orchestrator-core"],
     ),
-    (
-        "crates/services/velnor-actions-orchestrator-noop-report",
-        &[
-            "velnor-actions-contract",
-            "velnor-actions-contract-workflow",
-            "velnor-actions-orchestrator-core",
-            "velnor-actions-orchestrator-covered-tasks",
-            "velnor-actions-orchestrator-task-report",
-        ],
-    ),
-    (
-        "crates/services/velnor-actions-orchestrator-pins",
-        &[
-            "velnor-actions-actionlint",
-            "velnor-actions-contract-config",
-            "velnor-actions-contract-release",
-            "velnor-actions-contract-workflow",
-            "velnor-actions-mise",
-            "velnor-actions-orchestrator-core",
-            "velnor-actions-orchestrator-discovery",
-            "velnor-actions-workflow-jobs",
-            "velnor-actions-workflow-steps",
-        ],
-    ),
-    (
-        "crates/services/velnor-actions-orchestrator-plan",
-        &[
-            "velnor-actions-actionlint",
-            "velnor-actions-contract",
-            "velnor-actions-contract-config",
-            "velnor-actions-contract-planning",
-            "velnor-actions-contract-workflow",
-            "velnor-actions-orchestrator-core",
-            "velnor-actions-orchestrator-discovery",
-            "velnor-actions-orchestrator-generation",
-            "velnor-actions-orchestrator-provisioning",
-            "velnor-actions-orchestrator-workflow-ir",
-            "velnor-actions-rust",
-            "velnor-actions-rust-core",
-            "velnor-actions-tofu-core",
-            "velnor-actions-workflow-jobs",
-            "velnor-actions-workflow-release",
-            "velnor-actions-workflow-renderer",
-            "velnor-actions-workflow-tree",
-        ],
-    ),
-    (
-        "crates/services/velnor-actions-orchestrator-preseed-manifest",
-        &[
-            "velnor-actions-contract",
-            "velnor-actions-contract-release",
-            "velnor-actions-orchestrator-core",
-        ],
-    ),
-    (
-        "crates/services/velnor-actions-orchestrator-provisioning",
-        &[
-            "velnor-actions-actionlint",
-            "velnor-actions-contract",
-            "velnor-actions-contract-config",
-            "velnor-actions-contract-planning",
-            "velnor-actions-contract-release",
-            "velnor-actions-contract-workflow",
-            "velnor-actions-mise",
-            "velnor-actions-orchestrator-core",
-            "velnor-actions-orchestrator-discovery",
-            "velnor-actions-rust",
-            "velnor-actions-tofu-core",
-            "velnor-actions-workflow-cache",
-            "velnor-actions-workflow-jobs",
-            "velnor-actions-workflow-renderer",
-            "velnor-actions-workflow-steps",
-        ],
-    ),
-    (
-        "crates/services/velnor-actions-orchestrator-request-event",
-        &[
-            "velnor-actions-contract-workflow",
-            "velnor-actions-orchestrator-core",
-        ],
-    ),
-    (
-        "crates/services/velnor-actions-orchestrator-retrieve-retry",
-        &[],
-    ),
-    (
-        "crates/services/velnor-actions-orchestrator-run-select",
-        &[],
-    ),
-    (
-        "crates/services/velnor-actions-orchestrator-runtime-evidence",
-        &[
-            "velnor-actions-contract",
-            "velnor-actions-contract-config",
-            "velnor-actions-contract-workflow",
-            "velnor-actions-mise",
-            "velnor-actions-orchestrator-check-acquisition",
-            "velnor-actions-orchestrator-check-evidence",
-            "velnor-actions-orchestrator-check-preparation",
-            "velnor-actions-orchestrator-core",
-        ],
-    ),
-    (
-        "crates/services/velnor-actions-orchestrator-runtime-execute",
-        &[
-            "velnor-actions-contract-workflow",
-            "velnor-actions-mise",
-            "velnor-actions-orchestrator-check-evidence",
-            "velnor-actions-orchestrator-check-preparation",
-            "velnor-actions-orchestrator-core",
-            "velnor-actions-orchestrator-runtime-evidence",
-            "velnor-actions-orchestrator-runtime-plan",
-            "velnor-actions-orchestrator-selection",
-            "velnor-actions-orchestrator-task-report",
-        ],
-    ),
-    (
-        "crates/services/velnor-actions-orchestrator-runtime-plan",
-        &[
-            "velnor-actions-contract",
-            "velnor-actions-contract-workflow",
-            "velnor-actions-mise",
-            "velnor-actions-orchestrator-core",
-            "velnor-actions-orchestrator-graph",
-            "velnor-actions-orchestrator-provisioning",
-        ],
-    ),
-    (
-        "crates/services/velnor-actions-orchestrator-selection",
-        &[
-            "velnor-actions-contract-planning",
-            "velnor-actions-contract-workflow",
-            "velnor-actions-mise",
-            "velnor-actions-orchestrator-core",
-            "velnor-actions-orchestrator-discovery",
-            "velnor-actions-rust-core",
-        ],
-    ),
-    (
-        "crates/services/velnor-actions-orchestrator-staged-validation",
-        &[
-            "velnor-actions-actionlint",
-            "velnor-actions-contract-config",
-            "velnor-actions-contract-release",
-            "velnor-actions-mise",
-            "velnor-actions-orchestrator-core",
-            "velnor-actions-workflow-tree",
-        ],
-    ),
-    (
-        "crates/services/velnor-actions-orchestrator-task-report",
-        &[
-            "velnor-actions-contract",
-            "velnor-actions-contract-workflow",
-            "velnor-actions-orchestrator-core",
-        ],
-    ),
-    (
-        "crates/services/velnor-actions-orchestrator-task-report-write",
-        &[
-            "velnor-actions-contract",
-            "velnor-actions-orchestrator-core",
-            "velnor-actions-orchestrator-covered-tasks",
-            "velnor-actions-orchestrator-noop-report",
-            "velnor-actions-orchestrator-task-report",
-        ],
-    ),
-    (
-        "crates/services/velnor-actions-orchestrator-workflow-ir",
-        &[
-            "velnor-actions-actionlint",
-            "velnor-actions-contract",
-            "velnor-actions-contract-config",
-            "velnor-actions-contract-planning",
-            "velnor-actions-contract-release",
-            "velnor-actions-contract-workflow",
-            "velnor-actions-mise",
-            "velnor-actions-orchestrator-core",
-            "velnor-actions-orchestrator-discovery",
-            "velnor-actions-orchestrator-graph",
-            "velnor-actions-orchestrator-pins",
-            "velnor-actions-orchestrator-provisioning",
-            "velnor-actions-rust",
-            "velnor-actions-rust-core",
-            "velnor-actions-tofu-core",
-            "velnor-actions-workflow-cache",
-            "velnor-actions-workflow-jobs",
-            "velnor-actions-workflow-renderer",
-            "velnor-actions-workflow-steps",
-        ],
-    ),
 ];
 
 pub(crate) fn expected_orchestrator_family(dir: &str) -> Option<Vec<&str>> {
     ORCHESTRATOR_FAMILY
         .iter()
+        .chain(family_b::ORCHESTRATOR_FAMILY.iter())
         .find(|(name, _)| *name == dir)
         .map(|(_, edges)| edges.to_vec())
 }

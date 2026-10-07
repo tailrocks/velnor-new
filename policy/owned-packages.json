@@ -68,6 +68,7 @@
     "velnor-actions-orchestrator-merge-request-ports",
     "velnor-actions-orchestrator-merge-request",
     "velnor-actions-orchestrator-cover-baseline",
-    "velnor-actions-orchestrator-task-report-write"
+    "velnor-actions-orchestrator-task-report-write",
+    "velnor-actions-orchestrator-cover"
   ]
 }

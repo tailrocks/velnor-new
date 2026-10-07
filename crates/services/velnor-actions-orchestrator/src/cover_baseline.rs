@@ -32,7 +32,7 @@ impl CoverBaselinePort for HubBaseline {
         artifact: Option<&str>,
         repository: Option<&str>,
     ) -> Result<Vec<BaselineManifest>, String> {
-        crate::cover::shard::resolve_manifests(
+        velnor_actions_orchestrator_cover::cover::shard::resolve_manifests(
             catalog, root, base, workflow, branch, artifact, repository,
         )
     }

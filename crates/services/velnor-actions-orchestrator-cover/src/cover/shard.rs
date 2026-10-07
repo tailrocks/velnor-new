@@ -8,17 +8,17 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::validate_digest;
 
-pub(crate) use super::shard_baseline::{BaselineLookup, resolve_manifests};
-pub(crate) use velnor_actions_orchestrator_merge_ports::{
+pub use super::shard_baseline::{BaselineLookup, resolve_manifests};
+pub use velnor_actions_orchestrator_merge_ports::{
     ResourceLimits, ShardProof, TestIdentity, inventory_digest,
 };
 
 /// V1 retry budget: retries are always zero.
-pub(crate) const MAX_RETRIES: u32 = 0;
+pub const MAX_RETRIES: u32 = 0;
 
 /// Validate merge proofs for the sharded bases of one entry.
 /// # Errors
-pub(crate) fn check_entry_shards(
+pub fn check_entry_shards(
     bases: &BTreeSet<String>,
     empty_count: u32,
     proofs: &[ShardProof],
@@ -105,7 +105,7 @@ fn check_group(
 
 /// Reject zero budgets, over-budget shards, and above-capacity concurrency.
 /// # Errors
-pub(crate) fn validate_budgets(limits: &ResourceLimits) -> Result<(), String> {
+pub fn validate_budgets(limits: &ResourceLimits) -> Result<(), String> {
     let budgets = [
         limits.compiler_budget,
         limits.test_budget,

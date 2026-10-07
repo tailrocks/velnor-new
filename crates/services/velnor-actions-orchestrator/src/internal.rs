@@ -18,7 +18,7 @@ use velnor_actions_orchestrator_core::decisions::dedupe_sorted;
 use velnor_actions_orchestrator_core::{OrchestratorError, internal, internal_contract};
 
 use self::plan_obligation::{GroupInputs, changed_keys, lane_table, member_changed, plan_group};
-use crate::cover::{BaselineInputs, apply_baseline};
+use crate::cover_baseline::{BaselineInputs, apply_baseline};
 use crate::internal_request::resolve_run_key;
 use crate::merge::BaselineManifest;
 use velnor_actions_orchestrator_discovery::discover::Discovery;
