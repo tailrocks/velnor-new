@@ -751,3 +751,116 @@ Native rules: toolchain trio 3 → 0; everything else unchanged
 | Total (35 passing · 2 failing both sides) | 12 | 12 | 0 |
 
 Helper gaps: 6 → 6, identical to the finding.
+
+## Slice 8: contract family split (2026-10-07)
+
+- Commit `1b43a8646` splits `velnor-actions-contract`
+  (18355 code lines / 149 files) into 5 family crates along
+  behavior boundaries (no facades): the hub keeps shared core
+  types, and `contract-config`, `contract-planning`,
+  `contract-release`, `contract-workflow` take their behavior
+  with a DAG of dependencies between them.
+- Workspace members, root deps, reverse deps, and the
+  `MEMBERS`/`p11`/`f2f` edge pins move in the same commit;
+  `cargo check` + `clippy --all-targets` + `fmt` green,
+  per-split `nextest list` bijection holds (counts in the
+  commit message, no list files in the repo).
+- `check-gaps` 6 → 4: both contract SIZE findings close.
+
+### Before/after counts (slice 8)
+
+| Crate | Code lines | Files | Gap |
+|---|---|---|---|
+| `velnor-actions-contract` (hub) | 3686 | 35 | closed |
+| `velnor-actions-contract-config` | 5123 | 46 | — |
+| `velnor-actions-contract-planning` | 2295 | 22 | — |
+| `velnor-actions-contract-release` | 2363 | 16 | — |
+| `velnor-actions-contract-workflow` | 5289 | 44 | — |
+
+Helper gaps: 6 → 4 (orchestrator ×2 + renderer ×2 remain).
+
+## Slice 9: renderer family split (2026-10-07)
+
+- Commits `ac60d7a7f` (E1) through `fd408c418` (E8) split
+  `velnor-actions-workflow-renderer` (29443 code lines / 194
+  files) into 10 family crates along behavior boundaries:
+  E1 bottom leaves (`steps`, `tree`), E2 `cache`, E3
+  `release`, E4 `generator`, E5 `jobs`, E6 `document`, E7
+  `schema2`, E8 `render-strict` (strict pipeline plus the
+  shared merged-emission core; the hub keeps the legacy
+  entrypoint and generated-tree assembly). No facades;
+  cycles broken by moving items, never by edges.
+- Hub trajectory (working-tree lines): 29486 → 26831 →
+  22601 → 18585 → 14833 → 11889 → 9431 → 7435 → 5026.
+  Family `nextest list` 399 → 406 at E4 (+7 relocated
+  tree/generator pins) and 406 → 406 for every later split
+  (pure renames, 0 dropped, 0 added; evidence in `/tmp`,
+  counts in each commit message). Each split commits green
+  (`check` + `clippy` + `fmt`) and pushed.
+- `check-gaps` 4 → 3 at E6, 3 → 2 at E8: both renderer
+  SIZE findings close. Only the orchestrator pair remains.
+- `alint check` final: 8 errors = 6 generator-owned
+  `ci-build-runs-on` (untouched by design) + 2
+  `policy-gaps` attributing the orchestrator SIZE pair.
+  `tests-dir-present` is 0; no SIZE/TEST findings outside
+  the orchestrator.
+
+### Before/after counts (slice 9)
+
+| Crate | Code lines | Files | Gap |
+|---|---|---|---|
+| `velnor-actions-workflow-renderer` (hub) | 4621 | 28 | closed |
+| `velnor-actions-workflow-steps` | 1878 | 16 | — |
+| `velnor-actions-workflow-tree` | 997 | 16 | — |
+| `velnor-actions-workflow-cache` | 4323 | 37 | — |
+| `velnor-actions-workflow-release` | 4022 | 23 | — |
+| `velnor-actions-workflow-generator` | 3751 | 33 | — |
+| `velnor-actions-workflow-jobs` | 3119 | 28 | — |
+| `velnor-actions-workflow-document` | 2606 | 21 | — |
+| `velnor-actions-workflow-schema2` | 2575 | 15 | — |
+| `velnor-actions-workflow-render-strict` | 2486 | 16 | — |
+
+Helper gaps: 4 → 2 (orchestrator SIZE-001/002 remain).
+
+### Remainder: orchestrator split (not started)
+
+`velnor-actions-orchestrator` is 69616 code lines / 456
+files (81215 working-tree lines: `src/` roots 18105 over
+89 files, `src/` subdirs 31512, `tests/` 31609 over 147
+files). The split follows the graph / selection /
+evidence / rendering / tool-prep / runner seams below
+(sizes are working-tree lines, mod root + subdir):
+
+| Seam | Subsystem | Lines | Files |
+|---|---|---|---|
+| runner | `check_runtime` (needs its own sub-split) | 7896 | 47 |
+| graph | `internal_plan` | 3717 | 21 |
+| graph | `merge` + `merge_request` | 2082 | 11 |
+| evidence | `check_evidence` | 1662 | 9 |
+| evidence | `cover` | 1913 | 10 |
+| evidence | `cover_baseline` | 1858 | 10 |
+| evidence | `cover_identity` | 1400 | 9 |
+| evidence | `task_report` | 1952 | 12 |
+| selection | `matrix_step` | 1340 | 7 |
+| selection | `crate_jobs` | 1754 | 9 |
+| selection | `select` + `select_affected` + `select_tofu` + `run_select` | 704 | 8 |
+| rendering | `generate` | 863 | 5 |
+| rendering | `workflow` + `workflow_jobs` | 2036 | 11 |
+| rendering | `routing` + release roots | ~1200 | ~8 |
+| tool-prep | `pins` | 710 | 3 |
+| tool-prep | `lock_audit` | 706 | 4 |
+| tool-prep | `retrieve_reports` + `retrieve_baseline` + `retrieve_retry` | 1304 | 9 |
+| tool-prep | `validate_shell` + `validate` | 833 | 6 |
+| other | ~45 remaining small modules | 17687 | 110 |
+| tests | 143 integration files to colocate per subsystem | 31205 | 147 |
+
+Estimated ≥12 family crates. Each extraction follows the
+E1–E8 procedure (pins, bijection, gates, commit+push).
+
+### Verdict
+
+Contract family ✓ (5 crates, 0 gaps), renderer family ✓
+(10 crates, 0 gaps), all 10 split commits pushed to
+`rust-policy-rollout`. Orchestrator split is itemized
+above and awaits its own run; `ci-build-runs-on` ×6
+stays generator-owned.
