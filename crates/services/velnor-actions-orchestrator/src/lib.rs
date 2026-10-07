@@ -26,7 +26,6 @@ mod retrieve_reports;
 mod retrieve_retry;
 pub mod run_select;
 mod task_report;
-mod task_report_aggregate;
 
 pub use api::*;
 

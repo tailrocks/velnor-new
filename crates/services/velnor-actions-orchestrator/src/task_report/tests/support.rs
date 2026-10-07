@@ -1,4 +1,3 @@
-use super::super::*;
 use std::collections::BTreeMap;
 use std::fs;
 use tempfile::TempDir;
@@ -14,6 +13,9 @@ use velnor_actions_contract_workflow::{
 };
 use velnor_actions_orchestrator_check_evidence::gate::execution_receipt;
 use velnor_actions_orchestrator_check_evidence::scenario::verify_evidence;
+use velnor_actions_orchestrator_task_report::task_report::{
+    single_task_aggregate, terminal_task_report, write_entry_reports,
+};
 
 /// Clippy fixture task ID.
 pub(super) const CLIPPY: &str = "stack/rust/demo/clippy/default";

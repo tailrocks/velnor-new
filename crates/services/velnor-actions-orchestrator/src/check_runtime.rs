@@ -66,7 +66,11 @@ pub(crate) fn execute_check_to(
     lane: &str,
 ) -> Result<usize, OrchestratorError> {
     let started = Instant::now();
-    let plan = crate::task_report::load_plan(run_key, temp)?;
+    let plan = velnor_actions_orchestrator_task_report::task_report::load_plan(
+        run_key,
+        temp,
+        crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES,
+    )?;
     let config = velnor_actions_orchestrator_core::config::load_config(root)?;
     let definition = config
         .checks
@@ -92,7 +96,10 @@ pub(crate) fn execute_check_to(
     let item = discovered
         .pop()
         .ok_or_else(|| internal("check_not_discovered"))?;
-    let (entry, digest) = crate::task_report::entry_and_digest_for_job(&plan, task_id, job_id)?;
+    let (entry, digest) =
+        velnor_actions_orchestrator_task_report::task_report::entry_and_digest_for_job(
+            &plan, task_id, job_id,
+        )?;
     let lane_variant = parse_lane_variant(lane)?;
     if entry.lane_variant != lane_variant {
         return Err(internal("check_lane_variant_mismatch"));
@@ -106,9 +113,14 @@ pub(crate) fn execute_check_to(
     let duration = u64::try_from(started.elapsed().as_millis())
         .unwrap_or(u64::MAX)
         .max(1);
-    let mut task =
-        crate::task_report::terminal_task_report(&plan, entry, digest, code, Some(duration))
-            .map_err(internal_contract)?;
+    let mut task = velnor_actions_orchestrator_task_report::task_report::terminal_task_report(
+        &plan,
+        entry,
+        digest,
+        code,
+        Some(duration),
+    )
+    .map_err(internal_contract)?;
     if let Some(receipt) = receipt {
         save_evidence(temp, &plan, entry, receipt)?;
         task.outputs.push(receipt.path.clone());
@@ -118,9 +130,13 @@ pub(crate) fn execute_check_to(
     }
     task.validate_outputs_declared(&entry.declared_outputs)
         .map_err(internal_contract)?;
-    let matrix = crate::task_report::single_task_aggregate(&plan, entry, &task)
-        .map_err(internal_contract)?;
-    crate::task_report::write_entry_reports(temp, &plan, entry, &task, &matrix)?;
+    let matrix = velnor_actions_orchestrator_task_report::task_report::single_task_aggregate(
+        &plan, entry, &task,
+    )
+    .map_err(internal_contract)?;
+    velnor_actions_orchestrator_task_report::task_report::write_entry_reports(
+        temp, &plan, entry, &task, &matrix,
+    )?;
     outcome.map(|_| 1)
 }
 

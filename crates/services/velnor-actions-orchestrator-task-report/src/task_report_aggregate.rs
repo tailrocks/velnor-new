@@ -13,7 +13,7 @@ use velnor_actions_contract_workflow::{
 /// # Errors
 ///
 /// Returns [`ContractError`] for derivation or validation failures.
-pub(crate) fn single_task_aggregate(
+pub fn single_task_aggregate(
     plan: &Plan,
     entry: &MatrixEntry,
     task: &TaskReport,

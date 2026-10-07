@@ -168,7 +168,11 @@ pub(crate) fn baseline_publish_to(
     let request = publish_request(request_json)?;
     let (run_id, run_attempt) = ci_run_ids(run_key)?;
     publish_gate(&request)?;
-    let plan = crate::task_report::load_plan(run_key, runner_temp)?;
+    let plan = velnor_actions_orchestrator_task_report::task_report::load_plan(
+        run_key,
+        runner_temp,
+        crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES,
+    )?;
     bind_plan(&request, &plan)?;
     let manifest = publish_manifest(&request, &plan, run_id, run_attempt)?;
     self_check(&request, &manifest)?;

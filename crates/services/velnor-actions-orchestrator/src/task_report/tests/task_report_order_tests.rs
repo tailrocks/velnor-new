@@ -133,7 +133,7 @@ fn empty_downstream_follows_execution_order_not_matrix_order() {
         .position(|task_id| task_id == TEST)
         .expect("test in emitted order");
     assert_eq!(
-        super::super::task_report_order::derive_downstream(&plan, TEST, JOB),
+        derive_downstream(&plan, TEST, JOB),
         emitted[test_position + 1..],
         "test failure must report later emitted obligations"
     );
@@ -142,7 +142,7 @@ fn empty_downstream_follows_execution_order_not_matrix_order() {
         .position(|task_id| task_id == DOC)
         .expect("doc in emitted order");
     assert_eq!(
-        super::super::task_report_order::derive_downstream(&plan, DOC, JOB),
+        derive_downstream(&plan, DOC, JOB),
         emitted[doc_position + 1..],
         "the final emitted obligation has no downstream work"
     );

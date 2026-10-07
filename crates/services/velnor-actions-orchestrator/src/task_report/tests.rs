@@ -1,13 +1,18 @@
+use super::write_task_report_to;
 use super::*;
-use super::{single_task_aggregate, write_task_report_to};
 use std::fs;
+use velnor_actions_contract::task_report_id_for_task;
 use velnor_actions_contract_config::config::{CheckPlatform, HostContainerProfile, QualifiedTool};
 use velnor_actions_contract_workflow::FinalReport;
 use velnor_actions_contract_workflow::MatrixEntry;
+use velnor_actions_contract_workflow::{CacheLayer, CacheOutcome, CacheResult};
 use velnor_actions_contract_workflow::{ExecuteTaskRef, TaskReport, TaskStatus};
 use velnor_actions_contract_workflow::{FinalStatus, Plan};
 use velnor_actions_orchestrator_check_acquisition::tools::QualifiedToolReceipt;
 use velnor_actions_orchestrator_check_preparation::container_receipts::ContainerReceipt;
+use velnor_actions_orchestrator_task_report::task_report::{
+    derive_downstream, single_task_aggregate,
+};
 fn artifact(temp: &tempfile::TempDir, plan: &Plan, name: &str) -> std::path::PathBuf {
     let entry = &plan.matrix.include[0];
     temp.path()
@@ -57,7 +62,6 @@ fn staged_with_container(
 }
 
 mod check_gate_tests;
-mod load_plan_strict_tests;
 mod receipt_budget_tests;
 mod support;
 mod task_report_cover_tests;

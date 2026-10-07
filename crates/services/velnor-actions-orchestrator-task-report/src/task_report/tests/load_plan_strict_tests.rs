@@ -13,15 +13,13 @@ fn stage(text: &str) -> TempDir {
 #[test]
 fn plan_read_is_bounded_and_duplicate_rejecting() {
     let valid = serde_json::to_string(&fixture_plan()).expect("valid plan");
-    assert!(load_plan("local", stage(&valid).path()).is_ok());
-    let mut dup = valid;
+    assert!(load_plan("local", stage(&valid).path(), u64::MAX).is_ok());
+    let mut dup = valid.clone();
     dup.pop();
     dup.push_str(r#","schema":1}"#);
-    let err = load_plan("local", stage(&dup).path()).expect_err("dup keys reject");
+    let err = load_plan("local", stage(&dup).path(), u64::MAX).expect_err("dup keys reject");
     assert!(err.to_string().contains("unparsable_plan"), "{err}");
-    let bound = usize::try_from(crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES)
-        .expect("bound fits pointer width");
-    let err =
-        load_plan("local", stage(&" ".repeat(bound + 1)).path()).expect_err("oversize rejects");
+    let bound = u64::try_from(valid.len() - 1).expect("bound fits pointer width");
+    let err = load_plan("local", stage(&valid).path(), bound).expect_err("oversize rejects");
     assert!(err.to_string().contains("oversize"), "{err}");
 }

@@ -49,6 +49,7 @@
     "velnor-actions-orchestrator-workflow-ir": "library",
     "velnor-actions-orchestrator-generation": "library",
     "velnor-actions-orchestrator-plan": "library",
-    "velnor-actions-orchestrator-covered-tasks": "library"
+    "velnor-actions-orchestrator-covered-tasks": "library",
+    "velnor-actions-orchestrator-task-report": "library"
   }
 }

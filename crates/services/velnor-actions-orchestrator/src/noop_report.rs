@@ -13,7 +13,9 @@ use std::path::Path;
 use velnor_actions_contract::validate_run_key;
 use velnor_actions_contract_workflow::{NotSelectedReason, Plan};
 
-use crate::task_report::{entry_and_digest, single_task_aggregate, write_entry_reports};
+use velnor_actions_orchestrator_task_report::task_report::{
+    entry_and_digest, load_plan, single_task_aggregate, write_entry_reports,
+};
 
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::decisions::{NotSelectedInputs, not_selected_report};
@@ -105,7 +107,11 @@ pub(crate) fn write_noop_report_to(
     if exit_code != 0 {
         return Err(internal("reason_with_failure"));
     }
-    let plan = crate::task_report::load_plan(run_key, runner_temp)?;
+    let plan = load_plan(
+        run_key,
+        runner_temp,
+        crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES,
+    )?;
     if velnor_actions_orchestrator_covered_tasks::covered_tasks::covered_by_baseline(&plan, task_id)
     {
         return Ok(0);

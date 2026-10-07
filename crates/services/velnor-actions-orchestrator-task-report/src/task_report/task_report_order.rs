@@ -3,7 +3,7 @@
 use velnor_actions_contract_workflow::{ExecuteTaskRef, Plan};
 
 /// Downstream obligation IDs in the crate job's execution order.
-pub(super) fn derive_downstream(plan: &Plan, task_id: &str, job_id: &str) -> Vec<String> {
+pub fn derive_downstream(plan: &Plan, task_id: &str, job_id: &str) -> Vec<String> {
     let mut ordered = Vec::new();
     for entry in &plan.matrix.include {
         if entry.job_id != job_id {
