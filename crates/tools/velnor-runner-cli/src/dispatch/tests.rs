@@ -57,3 +57,148 @@ fn macos_default_config_stays_under_application_support() {
         Path::new("/Users/example/Library/Application Support/Velnor/host.toml")
     );
 }
+
+const LINUX_PROBE_CONFIG: &str = concat!(
+    "schema = 1\n",
+    "[github]\n",
+    "repository = \"ChainArgos/java-monorepo\"\n",
+    "scale_set_name = \"ubuntu-24.04-scale-set\"\n",
+    "credential_ref = \"systemd-credential:github-token\"\n",
+    "registration_scope = \"repository\"\n",
+    "runner_group_id = 1\n",
+    "runner_group_name = \"Default\"\n",
+    "[host]\n",
+    "platform = \"linux\"\n",
+    "max_jobs = 1\n",
+    "drain_timeout_secs = 900\n",
+    "[trust]\n",
+    "allowed_repositories = [\"ChainArgos/java-monorepo\"]\n",
+    "allowed_events = [\"push\"]\n",
+    "allowed_workflow_paths = [\".github/workflows/ci.yml\"]\n",
+    "allow_forks = false\n",
+    "[runner]\n",
+    "image_profile = \"ubuntu-24.04-amd64\"\n",
+    "[docker]\n",
+    "context = \"system\"\n",
+    "platform = \"linux/amd64\"\n",
+    "endpoint = \"unix:///var/run/docker.sock\"\n",
+);
+
+const LEGACY_MAC_PROBE_CONFIG: &str = concat!(
+    "schema = 1\n",
+    "[github]\n",
+    "repository = \"tailrocks/velnor-new\"\n",
+    "scale_set_name = \"ubuntu-26.04-scale-set\"\n",
+    "credential_ref = \"keychain:com.tailrocks.velnor.host/velnor-host\"\n",
+    "[host]\n",
+    "[docker]\n",
+    "context = \"orbstack\"\n",
+    "platform = \"linux/amd64\"\n",
+    "endpoint = \"unix:///var/run/docker.sock\"\n",
+);
+
+#[test]
+fn doctor_probe_uses_the_validated_configured_endpoint_and_never_claims_global_ready() {
+    use super::{doctor_probe_document, probe_config_text};
+    use velnor_runner_host::HostPlatform;
+    use velnor_runner_host::docker_client::DockerVersion;
+
+    let mut observed_endpoint = None;
+    let result = probe_config_text(LINUX_PROBE_CONFIG, HostPlatform::Linux, |endpoint| {
+        observed_endpoint = Some(endpoint.to_owned());
+        Ok(DockerVersion {
+            server_version: "29.8.2".to_owned(),
+            api_version: Some("1.53".to_owned()),
+            os: Some("linux".to_owned()),
+            architecture: Some("amd64".to_owned()),
+        })
+    });
+
+    assert_eq!(
+        observed_endpoint.as_deref(),
+        Some("unix:///var/run/docker.sock")
+    );
+    let document = doctor_probe_document(result);
+    assert_eq!(document["docker"]["status"], "available");
+    assert_eq!(document["docker"]["server_version"], "29.8.2");
+    assert_eq!(document["global_readiness"], "not_proven");
+}
+
+#[test]
+fn doctor_probe_rejects_invalid_config_before_contacting_docker() {
+    use super::{DoctorProbeFailure, doctor_probe_document, probe_config_text};
+    use velnor_runner_host::HostPlatform;
+    use velnor_runner_host::docker_client::DockerVersion;
+
+    let mut called = false;
+    let result = probe_config_text(
+        &LINUX_PROBE_CONFIG.replace("allow_forks = false", "allow_forks = true"),
+        HostPlatform::Linux,
+        |_| {
+            called = true;
+            Ok(DockerVersion {
+                server_version: "unexpected".to_owned(),
+                api_version: None,
+                os: None,
+                architecture: None,
+            })
+        },
+    );
+
+    assert_eq!(result, Err(DoctorProbeFailure::Config));
+    assert!(!called);
+    let document = doctor_probe_document(result);
+    assert_eq!(document["docker"]["status"], "unavailable");
+    assert_eq!(document["global_readiness"], "not_proven");
+}
+
+#[test]
+fn doctor_probe_reports_docker_errors_without_exposing_endpoint_or_credentials() {
+    use super::{DoctorProbeFailure, doctor_probe_document, probe_config_text};
+    use velnor_runner_host::{HostError, HostPlatform};
+
+    let result = probe_config_text(LINUX_PROBE_CONFIG, HostPlatform::Linux, |_| {
+        Err::<velnor_runner_host::docker_client::DockerVersion, _>(HostError::Docker)
+    });
+    assert_eq!(result, Err(DoctorProbeFailure::Docker));
+
+    let output = doctor_probe_document(result).to_string();
+    assert!(output.contains("docker_version_probe_failed"));
+    assert!(output.contains("not_proven"));
+    assert!(!output.contains("/var/run/docker.sock"));
+    assert!(!output.contains("github-token"));
+}
+
+#[test]
+fn doctor_probe_accepts_existing_legacy_macos_config_shape() {
+    use super::probe_config_text;
+    use velnor_runner_host::HostPlatform;
+    use velnor_runner_host::docker_client::DockerVersion;
+
+    let mut called = false;
+    let result = probe_config_text(LEGACY_MAC_PROBE_CONFIG, HostPlatform::Macos, |endpoint| {
+        called = true;
+        assert_eq!(endpoint, "unix:///var/run/docker.sock");
+        Ok(DockerVersion {
+            server_version: "27.0.0".to_owned(),
+            api_version: None,
+            os: Some("linux".to_owned()),
+            architecture: Some("amd64".to_owned()),
+        })
+    });
+
+    assert!(called);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn doctor_probe_help_describes_only_the_read_only_engine_version_check() -> Result<(), String> {
+    let Err(error) = Cli::try_parse_from(["velnor-host", "doctor", "--help"]) else {
+        return Err("doctor help unexpectedly parsed as a command".to_owned());
+    };
+    let help = error.to_string();
+    assert!(help.contains("GET /version"));
+    assert!(help.contains("does not prove controller readiness"));
+    assert!(!help.contains("Reconcile existing controller state"));
+    Ok(())
+}

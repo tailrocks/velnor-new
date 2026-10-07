@@ -11,6 +11,61 @@ use crate::scale_set::EnsureError;
 /// Deadline for one request to the selected Docker engine.
 pub(crate) const DOCKER_OPERATION_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Sanitized data returned by the Docker Engine's read-only `/version` endpoint.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DockerVersion {
+    /// Server version string.
+    pub server_version: String,
+    /// API version when supplied by the server.
+    pub api_version: Option<String>,
+    /// Server operating system when supplied by the server.
+    pub os: Option<String>,
+    /// Server architecture when supplied by the server.
+    pub architecture: Option<String>,
+}
+
+/// Probe the configured Docker endpoint with only a bounded GET `/version`.
+///
+/// The returned platform metadata is observational; it is not runner-profile,
+/// admission, or isolation evidence.
+///
+/// # Errors
+///
+/// Returns [`HostError::Docker`] when the endpoint, runtime, request, or
+/// response is unavailable or malformed.
+pub fn read_version_blocking(endpoint: &str) -> Result<DockerVersion, HostError> {
+    read_version_blocking_after(endpoint, DOCKER_OPERATION_TIMEOUT)
+}
+
+fn read_version_blocking_after(
+    endpoint: &str,
+    timeout: Duration,
+) -> Result<DockerVersion, HostError> {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        return Err(HostError::Docker);
+    }
+    let docker = connect_unix(endpoint)?;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|_| HostError::Docker)?;
+    let response = runtime.block_on(async {
+        docker_deadline_after(docker.version(), timeout)
+            .await?
+            .map_err(|_| HostError::Docker)
+    })?;
+    let server_version = response
+        .version
+        .filter(|value| !value.trim().is_empty())
+        .ok_or(HostError::Docker)?;
+    Ok(DockerVersion {
+        server_version,
+        api_version: response.api_version,
+        os: response.os,
+        architecture: response.arch,
+    })
+}
+
 /// Bound one Docker request while preserving its result for caller classification.
 ///
 /// # Errors
