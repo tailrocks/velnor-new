@@ -48,6 +48,7 @@ members = [
     "crates/services/velnor-actions-orchestrator-selection",
     "crates/services/velnor-actions-orchestrator-staged-validation",
     "crates/services/velnor-actions-orchestrator-task-report",
+    "crates/services/velnor-actions-orchestrator-task-report-write",
     "crates/services/velnor-actions-orchestrator-workflow-ir",
     "crates/services/velnor-actions-workflow-cache",
     "crates/services/velnor-actions-workflow-document",

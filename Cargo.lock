@@ -3654,6 +3654,7 @@ dependencies = [
  "velnor-actions-orchestrator-selection",
  "velnor-actions-orchestrator-staged-validation",
  "velnor-actions-orchestrator-task-report",
+ "velnor-actions-orchestrator-task-report-write",
  "velnor-actions-orchestrator-workflow-ir",
  "velnor-actions-rust",
  "velnor-actions-rust-core",
@@ -4136,6 +4137,18 @@ dependencies = [
  "velnor-actions-contract-config",
  "velnor-actions-contract-workflow",
  "velnor-actions-orchestrator-core",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-task-report-write"
+version = "0.1.1"
+dependencies = [
+ "tempfile",
+ "velnor-actions-contract",
+ "velnor-actions-orchestrator-core",
+ "velnor-actions-orchestrator-covered-tasks",
+ "velnor-actions-orchestrator-noop-report",
+ "velnor-actions-orchestrator-task-report",
 ]
 
 [[package]]

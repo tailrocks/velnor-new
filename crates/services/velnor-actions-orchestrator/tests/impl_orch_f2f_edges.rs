@@ -142,6 +142,7 @@ fn expected_service(dir: &str) -> Option<Vec<&str>> {
             "velnor-actions-orchestrator-selection",
             "velnor-actions-orchestrator-staged-validation",
             "velnor-actions-orchestrator-task-report",
+            "velnor-actions-orchestrator-task-report-write",
             "velnor-actions-orchestrator-workflow-ir",
             "velnor-actions-rust",
             "velnor-actions-rust-core",

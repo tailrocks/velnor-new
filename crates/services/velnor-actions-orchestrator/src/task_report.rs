@@ -1,29 +1,13 @@
-//! Event-time typed task-report production.
-//! Reports bind task and matrix identities through the staged plan. Named
-//! Mise success requires the qualified execution producer and final receipt proof.
+//! Event-time typed task-report production over the extracted report-write crate.
 //!
-//! Failed obligations also report downstream tasks as `upstream_failed`.
+//! The `write-task-report-v1` core lives in
+//! `velnor-actions-orchestrator-task-report-write` as a dependency-free
+//! leaf; this module resolves the run key and keeps the original
+//! `write_task_report` entrypoint byte-identical for the CLI and
+//! integration tests.
 
-use std::env;
-use std::path::Path;
-
-use velnor_actions_contract::validate_run_key;
-
-use crate::internal_request::resolve_run_key;
 use velnor_actions_orchestrator_core::OrchestratorError;
-use velnor_actions_orchestrator_core::{internal, internal_contract};
-use velnor_actions_orchestrator_task_report::task_report::{
-    derive_downstream, entry_and_digest, load_plan, single_task_aggregate, terminal_task_report,
-    write_entry_reports,
-};
-mod timing;
-#[cfg(test)]
-use timing::now_ms;
-use timing::{elapsed_ms, parse_exit_code, parse_start_ms};
-
-use velnor_actions_orchestrator_core::report_keys::{
-    DOWNSTREAM_IDS_ENV, EXIT_CODE_ENV, START_MS_ENV, TASK_ID_ENV,
-};
+use velnor_actions_orchestrator_task_report_write::write_task_report_with_key;
 
 /// Write the executed obligation's reports plus downstream skip reports.
 ///
@@ -37,122 +21,8 @@ use velnor_actions_orchestrator_core::report_keys::{
 /// invalid plans, run-key mismatches, unknown or multi-task entries, and
 /// unwritable report paths; [`OrchestratorError::Io`] for IO failures.
 pub fn write_task_report() -> Result<usize, OrchestratorError> {
-    let run_key = resolve_run_key(None)?;
-    let runner_temp = env::var_os("RUNNER_TEMP")
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| internal("missing_runner_temp"))?;
-    let task_id = env::var(TASK_ID_ENV)
-        .ok()
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| internal("missing_task_id"))?;
-    let exit_raw = env::var(EXIT_CODE_ENV)
-        .ok()
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| internal("missing_exit_code"))?;
-    let reason = velnor_actions_orchestrator_noop_report::noop_report::noop_reason_present();
-    let digest =
-        env::var(velnor_actions_orchestrator_noop_report::noop_report::TASK_DIGEST_ENV).ok();
-    let exit_code = parse_exit_code(&exit_raw)?;
-    if let Some(request) = velnor_actions_orchestrator_noop_report::noop_report::parse_noop_request(
-        reason.as_deref(),
-        digest.as_deref(),
-    )? {
-        return velnor_actions_orchestrator_noop_report::noop_report::write_noop_report_to(
-            &run_key,
-            &task_id,
-            exit_code,
-            &request,
-            Path::new(&runner_temp),
-            crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES,
-        );
-    }
-    let downstream_env = env::var(DOWNSTREAM_IDS_ENV).ok();
-    let downstream = parse_downstream(downstream_env.as_deref());
-    let start_ms = env::var(START_MS_ENV)
-        .ok()
-        .and_then(|raw| parse_start_ms(&raw));
-    write_task_report_to(
-        &run_key,
-        &task_id,
-        exit_code,
-        start_ms,
-        &downstream,
-        Path::new(&runner_temp),
-    )
-}
-
-/// Write reports for one outcome with explicit inputs (testable core).
-///
-/// The plan at `$RUNNER_TEMP/velnor/<run-key>/plan.json` binds every
-/// identity: task digest, matrix coordinates, event, and trust. A nonzero
-/// exit additionally reports each downstream ID as skipped; anything the
-/// plan cannot bind errors instead of emitting unbound bytes. A
-/// baseline-covered obligation proves nothing here: the merge
-/// revalidates it against the manifest, so this op succeeds silently
-/// with zero reports instead of failing `task_not_in_plan`.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for invalid plans, run-key
-/// mismatches, unknown or multi-task entries, and unwritable paths.
-pub(crate) fn write_task_report_to(
-    run_key: &str,
-    task_id: &str,
-    exit_code: i32,
-    start_ms: Option<u64>,
-    downstream: &[String],
-    runner_temp: &Path,
-) -> Result<usize, OrchestratorError> {
-    validate_run_key(run_key).map_err(internal_contract)?;
-    if !(0..=255).contains(&exit_code) {
-        return Err(internal("bad_exit_code"));
-    }
-    let plan = load_plan(
-        run_key,
-        runner_temp,
-        crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES,
-    )?;
-    if velnor_actions_orchestrator_covered_tasks::covered_tasks::covered_by_baseline(&plan, task_id)
-    {
-        return Ok(0);
-    }
-    let (entry, digest) = entry_and_digest(&plan, task_id)?;
-    if entry.stack_id == "mise" && exit_code == 0 {
-        return Err(internal("named_check_requires_qualified_execution"));
-    }
-    let duration_ms = elapsed_ms(start_ms);
-    let task = terminal_task_report(&plan, entry, digest, exit_code, duration_ms)
-        .map_err(internal_contract)?;
-    let matrix = single_task_aggregate(&plan, entry, &task).map_err(internal_contract)?;
-    write_entry_reports(runner_temp, &plan, entry, &task, &matrix)?;
-    let mut reported = 1usize;
-    if exit_code != 0 {
-        let downstream_tasks: Vec<String> = if downstream.is_empty() {
-            derive_downstream(&plan, task_id, &entry.job_id)
-        } else {
-            downstream.to_vec()
-        };
-        reported += velnor_actions_orchestrator_noop_report::noop_report::write_skip_reports(
-            &plan,
-            task_id,
-            &downstream_tasks,
-            runner_temp,
-        )?;
-    }
-    Ok(reported)
-}
-
-/// Split downstream IDs on commas, dropping blanks and duplicates.
-fn parse_downstream(raw: Option<&str>) -> Vec<String> {
-    let mut seen = std::collections::BTreeSet::new();
-    let mut ids = Vec::new();
-    for id in raw.unwrap_or_default().split(',') {
-        let id = id.trim();
-        if !id.is_empty() && seen.insert(id.to_owned()) {
-            ids.push(id.to_owned());
-        }
-    }
-    ids
+    let run_key = crate::internal_request::resolve_run_key(None)?;
+    write_task_report_with_key(&run_key)
 }
 
 #[cfg(test)]
