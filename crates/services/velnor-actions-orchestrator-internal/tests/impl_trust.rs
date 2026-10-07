@@ -4,7 +4,9 @@ use std::path::Path;
 
 use tempfile::TempDir;
 use velnor_actions_contract_workflow::{FinalStatus, ObligationDecision, Plan};
-use velnor_actions_orchestrator::{baseline_artifact_numeric_id, merge_internal, plan_internal};
+use velnor_actions_orchestrator_cover_compat::cover_compat::baseline_artifact_numeric_id;
+use velnor_actions_orchestrator_internal::internal::plan_internal;
+use velnor_actions_orchestrator_internal::merge_entry::merge_internal;
 
 use crate::impl_common::{
     TestResult, config_with_branch, fixture_manifest_json, git, git_line, make_repo,
