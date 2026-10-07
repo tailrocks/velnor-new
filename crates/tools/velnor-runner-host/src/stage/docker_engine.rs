@@ -6,11 +6,11 @@ use bollard::query_parameters::RemoveContainerOptionsBuilder;
 
 use crate::HostError;
 use crate::docker_client::docker_deadline;
-use crate::docker_spec::{RunnerImageProfile, runner_plan_for_profile};
 use crate::worker::{
     CreateProjection, create_named_volumes, create_only, deliver_jit, dind_create,
     dind_create_for_profile, remove_worker_volumes, start_id,
 };
+use velnor_runner_docker_spec::{RunnerImageProfile, runner_plan_for_profile};
 
 use super::PairEngine;
 

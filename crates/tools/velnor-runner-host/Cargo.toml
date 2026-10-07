@@ -19,6 +19,7 @@ toml = { workspace = true }
 zeroize = { workspace = true }
 velnor-runner-apparmor = { version = "=0.1.1", path = "../velnor-runner-apparmor" }
 velnor-runner-core = { version = "=0.1.1", path = "../velnor-runner-core" }
+velnor-runner-docker-spec = { version = "=0.1.1", path = "../velnor-runner-docker-spec" }
 velnor-runner-github = { version = "=0.1.1", path = "../velnor-runner-github" }
 velnor-runner-journal = { version = "=0.1.1", path = "../velnor-runner-journal" }
 

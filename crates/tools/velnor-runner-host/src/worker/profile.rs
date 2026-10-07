@@ -1,8 +1,8 @@
 //! Docker projections for the pinned Linux runner image profile.
 
 use crate::HostError;
-use crate::docker_spec::{RunnerImageProfile, runner_plan_for_profile};
 use crate::stage::PairStop;
+use velnor_runner_docker_spec::{RunnerImageProfile, runner_plan_for_profile};
 
 use super::{CreateProjection, Started, dind_mounts_for_profile, worker_labels};
 

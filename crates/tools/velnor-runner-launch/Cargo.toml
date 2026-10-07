@@ -21,3 +21,4 @@ zeroize = { workspace = true }
 [dev-dependencies]
 serde_json = { workspace = true }
 turso = { workspace = true }
+velnor-runner-docker-spec = { version = "=0.1.1", path = "../velnor-runner-docker-spec" }

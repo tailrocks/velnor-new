@@ -3,10 +3,10 @@
 //! JIT is not a field. `start_pair` writes it on stdin and does not store it.
 
 use crate::HostError;
-use crate::docker_spec::{ContainerPlan, ImageMount, Mount, audit_plan, runner_plan};
 use crate::stage::PairStop;
 use ::bollard::Docker;
 use velnor_runner_core::runner_work_path;
+use velnor_runner_docker_spec::{ContainerPlan, ImageMount, Mount, audit_plan, runner_plan};
 
 mod bollard;
 mod engine;

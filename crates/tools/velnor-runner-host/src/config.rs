@@ -221,7 +221,7 @@ impl HostConfig {
                 return Err(HostError::Config);
             }
             let runner = self.runner.as_ref().ok_or(HostError::Config)?;
-            crate::docker_spec::resolve_runner_profile(
+            velnor_runner_docker_spec::resolve_runner_profile(
                 &runner.image_profile,
                 &self.github.scale_set_name,
             )

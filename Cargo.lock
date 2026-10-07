@@ -4525,6 +4525,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "velnor-runner-docker-spec"
+version = "0.1.1"
+dependencies = [
+ "velnor-runner-core",
+ "velnor-runner-journal",
+]
+
+[[package]]
 name = "velnor-runner-github"
 version = "0.1.1"
 dependencies = [
@@ -4549,6 +4557,7 @@ dependencies = [
  "toml",
  "velnor-runner-apparmor",
  "velnor-runner-core",
+ "velnor-runner-docker-spec",
  "velnor-runner-github",
  "velnor-runner-journal",
  "velnor-runner-launch",
@@ -4575,6 +4584,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "turso",
+ "velnor-runner-docker-spec",
  "velnor-runner-github",
  "velnor-runner-host",
  "velnor-runner-journal",

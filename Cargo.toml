@@ -71,6 +71,7 @@ members = [
     "crates/tools/velnor-runner-apparmor",
     "crates/tools/velnor-runner-cli",
     "crates/tools/velnor-runner-core",
+    "crates/tools/velnor-runner-docker-spec",
     "crates/tools/velnor-runner-github",
     "crates/tools/velnor-runner-host",
     "crates/tools/velnor-runner-journal",

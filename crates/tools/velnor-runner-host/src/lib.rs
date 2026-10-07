@@ -8,7 +8,6 @@ mod config_file;
 mod connect;
 mod daemon_lock;
 pub mod docker_client;
-pub mod docker_spec;
 pub mod guest;
 mod https;
 mod ipc;
@@ -32,10 +31,6 @@ pub use config_file::{
 pub use connect::{ConnectPlan, DisconnectEffect, SetOwnership, connect_plan, disconnect_effects};
 pub use daemon_lock::DaemonLock;
 pub use docker_client::connect_unix;
-pub use docker_spec::{
-    ContainerPlan, DeleteDecision, RunnerImageProfile, audit_plan, delete_decision, plan_contains,
-    resolve_runner_profile, runner_plan, runner_plan_for_profile,
-};
 pub use guest::guest_slots;
 pub use https::HttpsTransport;
 pub use ipc::{MAX_FRAME, SOCKET_DIR_MODE, decode_frame, encode_frame};
@@ -53,6 +48,10 @@ pub use scale_set::{
 pub use stage::{
     PairStop, PartialPair, drive_with_profile, remove_recorded, start_pair_until,
     start_pair_until_with_profile,
+};
+pub use velnor_runner_docker_spec::{
+    ContainerPlan, DeleteDecision, RunnerImageProfile, audit_plan, delete_decision, plan_contains,
+    resolve_runner_profile, runner_plan, runner_plan_for_profile,
 };
 pub use velnor_runner_journal::{
     HostError, IntentRow, IntentState, Journal, Outcome, Reconcile, ReleaseFact, before_advertise,

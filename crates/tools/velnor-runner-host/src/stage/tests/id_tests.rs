@@ -10,7 +10,7 @@ use tokio::net::{UnixListener, UnixStream};
 
 use super::super::{PairEngine, remove_recorded};
 use crate::HostError;
-use crate::docker_spec::DeleteDecision;
+use velnor_runner_docker_spec::DeleteDecision;
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 
