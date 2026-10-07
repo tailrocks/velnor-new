@@ -117,7 +117,7 @@ The linked run has 47 jobs:
 - 42 task-matrix jobs: 7 build, 7 clippy, 7 nextest, 7 doc, 6 doctest, and 8 fmt (7 crates plus workspace fmt).
 - 5 support jobs: Alint, Plan, Policy, Workflow Lint, and Required. `Policy` currently groups Cargo Deny, Cargo Machete, and Zizmor; split those validators into separate jobs. Rename `Workflow Lint` to `Actionlint` when that is the tool it runs. Alint, Cargo Deny, Cargo Machete, Actionlint, and Zizmor must each be independently visible. Plan and Required are orchestration/status jobs, not validator or crate-check jobs.
 
-The linked job is the `fmt` task for `velnor-actions-mise`. The matrix expands from the plan output in [the generated workflow](../../../../.github/workflows/velnor.yml#L253). The configured Rust profile selects MBX and Cargo Nextest in [`.velnor/config.toml`](../../.velnor/config.toml#L31).
+The linked job is the `fmt` task for `velnor-actions-mise`. The matrix expands from the plan output in [the generated workflow](../../../../.github/workflows/velnor.yml#L253). The configured Rust profile selects MBX and Cargo Nextest in [`.velnor/config.toml`](../../../../.velnor/config.toml#L31).
 
 The Plan job also runs the first package's `fmt` task while that task is present in the matrix. As a result, `velnor-actions-actionlint` formatting runs twice. Formatting should have one owner.
 
@@ -194,7 +194,7 @@ Sources: [jdx/mise-action v4.3.0 README](https://github.com/jdx/mise-action/blob
 
 ### Rust build driver: Mr. Boxington (MBX)
 
-Detect Mr. Boxington from repository-local Mise configuration. This repository has this Cargo wrapper in [`mise.toml`](../../mise.toml#L1):
+Detect Mr. Boxington from repository-local Mise configuration. This repository has this Cargo wrapper in [`mise.toml`](../../../../mise.toml#L1):
 
 ```toml
 wrappers = { cargo = { command = "mbx", env = { MBX_CARGO_SHIM_MODE = "1" } } }
