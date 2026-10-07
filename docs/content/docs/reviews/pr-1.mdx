@@ -1,4 +1,7 @@
-# PR #1 review feedback proposal
+---
+title: "PR #1 review feedback proposal"
+description: "PR: [#1](https://github.com/tailrocks/velnor-new/pull/1) · Actions run: [36574247809](https://github.com/tailrocks/velnor-new/actions/runs/36574247809/job/109426247322?pr=1)"
+---
 
 PR: [#1](https://github.com/tailrocks/velnor-new/pull/1) · Actions run: [36574247809](https://github.com/tailrocks/velnor-new/actions/runs/36574247809/job/109426247322?pr=1)
 
@@ -77,7 +80,7 @@ For Rust crate jobs:
 - Global validator jobs should cache their own installed tools/dependencies where those tools support it. Do not attach Rust build caches to unrelated jobs.
 - On a compatible cache restore that contains all locked dependencies, skip online `cargo fetch` and run Cargo in offline mode. Treat a miss or missing locked source as a legitimate cold-cache path that can fetch and populate the cache; do not issue `cargo fetch` unconditionally before attempting the restore.
 
-The linked run demonstrates the gap: its task job runs `cargo fetch --locked` before the MBX cache action, puts Cargo home under `$RUNNER_TEMP`, and selects `github-cache-mode: objects` in [the generated workflow](../../.github/workflows/velnor.yml#L313). The pinned [MBX v1.5.0 action documentation](https://github.com/jdx/mr-boxington-action/blob/9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3/README.md) says object mode omits the Cargo registry. Its [pinned action inputs](https://github.com/jdx/mr-boxington-action/blob/9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3/action.yml) expose custom cache keys and default to the target payload. The [current MBX GitHub Action guide](https://mr-boxington.jdx.dev/github-action) recommends the target archive for a stable workspace layout and documents scoped same-repository PR cache saving; the currently pinned v1.5.0 action does not expose that PR-save input. Cargo's [CI caching guidance](https://doc.rust-lang.org/cargo/guide/cargo-home.html#caching-the-cargo-home-in-ci) describes the registry and Git directories needed to avoid redownloading sources; GitHub documents cache key matching and immutable cache entries in its [dependency caching guide](https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/caching-dependencies-to-speed-up-workflows).
+The linked run demonstrates the gap: its task job runs `cargo fetch --locked` before the MBX cache action, puts Cargo home under `$RUNNER_TEMP`, and selects `github-cache-mode: objects` in [the generated workflow](../../../../.github/workflows/velnor.yml#L313). The pinned [MBX v1.5.0 action documentation](https://github.com/jdx/mr-boxington-action/blob/9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3/README.md) says object mode omits the Cargo registry. Its [pinned action inputs](https://github.com/jdx/mr-boxington-action/blob/9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3/action.yml) expose custom cache keys and default to the target payload. The [current MBX GitHub Action guide](https://mr-boxington.jdx.dev/github-action) recommends the target archive for a stable workspace layout and documents scoped same-repository PR cache saving; the currently pinned v1.5.0 action does not expose that PR-save input. Cargo's [CI caching guidance](https://doc.rust-lang.org/cargo/guide/cargo-home.html#caching-the-cargo-home-in-ci) describes the registry and Git directories needed to avoid redownloading sources; GitHub documents cache key matching and immutable cache entries in its [dependency caching guide](https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/caching-dependencies-to-speed-up-workflows).
 
 ### Cache duplication and size budget
 
@@ -114,7 +117,7 @@ The linked run has 47 jobs:
 - 42 task-matrix jobs: 7 build, 7 clippy, 7 nextest, 7 doc, 6 doctest, and 8 fmt (7 crates plus workspace fmt).
 - 5 support jobs: Alint, Plan, Policy, Workflow Lint, and Required. `Policy` currently groups Cargo Deny, Cargo Machete, and Zizmor; split those validators into separate jobs. Rename `Workflow Lint` to `Actionlint` when that is the tool it runs. Alint, Cargo Deny, Cargo Machete, Actionlint, and Zizmor must each be independently visible. Plan and Required are orchestration/status jobs, not validator or crate-check jobs.
 
-The linked job is the `fmt` task for `velnor-actions-mise`. The matrix expands from the plan output in [the generated workflow](../../.github/workflows/velnor.yml#L253). The configured Rust profile selects MBX and Cargo Nextest in [`.velnor/config.toml`](../../.velnor/config.toml#L31).
+The linked job is the `fmt` task for `velnor-actions-mise`. The matrix expands from the plan output in [the generated workflow](../../../../.github/workflows/velnor.yml#L253). The configured Rust profile selects MBX and Cargo Nextest in [`.velnor/config.toml`](../../.velnor/config.toml#L31).
 
 The Plan job also runs the first package's `fmt` task while that task is present in the matrix. As a result, `velnor-actions-actionlint` formatting runs twice. Formatting should have one owner.
 
