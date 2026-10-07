@@ -76,10 +76,20 @@ pub(super) fn intent(state: IntentState, kind: &str) -> IntentRow {
         dind_id: None,
         worker_volume: None,
         github_runner_id: None,
+        message_id: None,
+        runner_request_id: None,
+        requested_workflow_run_id: None,
+        requested_job_id: None,
+        runner_name: None,
+        observed_job_id: None,
+        observed_workflow_run_id: None,
+        remote_terminal: false,
         cleanup_proven: false,
     }
 }
 
 mod durability_tests;
+mod lifecycle_tests;
 mod reconcile_tests;
 mod release_tests;
+mod runner_event_tests;

@@ -21,6 +21,22 @@ pub struct IntentRow {
     pub worker_volume: Option<String>,
     /// GitHub runner id. Not a token.
     pub github_runner_id: Option<String>,
+    /// Service message id. Distinct from the acquired request id.
+    pub message_id: Option<i64>,
+    /// Acquired request id. It does not bind the request to a JIT runner.
+    pub runner_request_id: Option<i64>,
+    /// Workflow run id from the Available request, when supplied.
+    pub requested_workflow_run_id: Option<i64>,
+    /// Opaque job id from the Available request, when supplied.
+    pub requested_job_id: Option<String>,
+    /// Exact JIT runner name submitted by this launch generation.
+    pub runner_name: Option<String>,
+    /// Opaque job id observed from the actual runner lifecycle event.
+    pub observed_job_id: Option<String>,
+    /// Workflow run id observed from the actual runner lifecycle event.
+    pub observed_workflow_run_id: Option<i64>,
+    /// A matching `JobCompleted` event was durably observed.
+    pub remote_terminal: bool,
     /// Cleanup of the recorded ids was proven.
     pub cleanup_proven: bool,
 }

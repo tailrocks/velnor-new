@@ -1,5 +1,6 @@
 //! Launch ordering. The scripted transport is the acquire, JIT, and ack path.
 
+mod admission_tests;
 mod backfill_tests;
 #[cfg(all(test, unix))]
 mod busy_slot_tests;
