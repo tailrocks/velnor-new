@@ -8,10 +8,10 @@ use velnor_actions_contract_workflow::{
 };
 
 use crate::internal::{PlanResponse, check_schema};
-use crate::plan_output_limits::{PlanOutputMode, check_plan_outputs};
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::decisions::plan_artifact_dir;
 use velnor_actions_orchestrator_core::{internal, internal_contract};
+use velnor_actions_orchestrator_plan::plan_output_limits::{PlanOutputMode, check_plan_outputs};
 
 /// Canonical `plan`/`matrix` outputs for `$GITHUB_OUTPUT`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -178,3 +178,6 @@ fn artifact_anchor(velnor_dir: &Path) -> Result<&Path, OrchestratorError> {
         .parent()
         .ok_or_else(|| internal("missing_dir_anchor"))
 }
+
+#[cfg(test)]
+mod tests;

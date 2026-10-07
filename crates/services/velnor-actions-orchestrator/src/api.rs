@@ -4,10 +4,6 @@ pub use super::baseline_publish::{PUBLISH_OP, PublishOutputs, baseline_publish};
 pub use super::check_runtime::{EXECUTE_CHECK_OP, execute_check};
 pub use super::cover_compat::baseline_artifact_numeric_id;
 pub use super::covered_tasks::COVERED_TASKS_OUTPUT;
-pub use super::critical_path::{
-    CriticalPath, critical_path, critical_path_for_groups, critical_path_line,
-    critical_path_structural, render_critical_path,
-};
 pub use super::external_data::{
     DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, EXTERNAL_DATA_CHECK_KIND, ExternalDataFreshness,
     external_data_kind, may_skip_external_data,
@@ -19,8 +15,6 @@ pub use super::internal::{
 };
 pub use super::merge::merge_internal;
 pub use super::merge_request::assemble_merge_request;
-pub use super::plan::{plan_text, plan_text_checked};
-pub use super::plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMode};
 pub use super::preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
 pub use super::retrieve_reports::{FETCH_OP, retrieve_reports};
 pub use super::task_report::write_task_report;
@@ -51,6 +45,14 @@ pub use velnor_actions_orchestrator_generation::provenance::{
 pub use velnor_actions_orchestrator_generation::routing::{migrate_config, parse_dispatch_mode};
 pub use velnor_actions_orchestrator_pins::pins::{
     acquire_script_argv, consumer_acquire_step_with_manifest,
+};
+pub use velnor_actions_orchestrator_plan::critical_path::{
+    CriticalPath, critical_path, critical_path_for_groups, critical_path_line,
+    critical_path_structural, render_critical_path,
+};
+pub use velnor_actions_orchestrator_plan::plan::{plan_text, plan_text_checked};
+pub use velnor_actions_orchestrator_plan::plan_output_limits::{
+    JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMode,
 };
 pub use velnor_actions_orchestrator_workflow_ir::workflow::{
     CHECKOUT_USES, DEFAULT_RUNNER_LABEL, WorkflowPlan,

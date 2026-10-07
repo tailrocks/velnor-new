@@ -2,7 +2,6 @@ use super::{
     JOB_OUTPUTS_BUDGET_UTF16_BYTES, MATRIX_JOB_LIMIT, PlanOutputMode, check_plan_outputs,
     output_record_utf16_bytes,
 };
-use crate::internal_request::PlanOutputs;
 
 #[test]
 fn utf16_budget_counts_ascii_and_surrogate_pairs() {
@@ -46,38 +45,6 @@ fn matrix_jobs_cap_uses_expanded_dynamic_entries_only() {
         .is_ok(),
         "static artifact rows do not expand into matrix jobs"
     );
-}
-
-#[test]
-fn step_outputs_remain_complete_while_static_job_promotion_is_narrow() {
-    let outputs = PlanOutputs {
-        matrix: "{\"include\":[]}".to_owned(),
-        plan_id: "plan-r1-a1".to_owned(),
-        run_key: "r1-a1".to_owned(),
-        covered_tasks: String::new(),
-        job_outputs_utf16_bytes: 0,
-    };
-    let step_names: Vec<&str> = outputs
-        .step_outputs()
-        .iter()
-        .map(|(name, _)| *name)
-        .collect();
-    assert_eq!(
-        step_names,
-        ["matrix", "plan_id", "run_key", "covered_tasks"]
-    );
-    let static_job_names: Vec<&str> = outputs
-        .promoted_job_outputs(PlanOutputMode::Static)
-        .iter()
-        .map(|(name, _)| *name)
-        .collect();
-    assert_eq!(static_job_names, ["covered_tasks"]);
-    let dynamic_job_names: Vec<&str> = outputs
-        .promoted_job_outputs(PlanOutputMode::DynamicMatrix)
-        .iter()
-        .map(|(name, _)| *name)
-        .collect();
-    assert_eq!(dynamic_job_names, step_names);
 }
 
 #[test]

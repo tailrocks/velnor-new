@@ -26,7 +26,7 @@ pub enum PlanOutputMode {
 ///
 /// Returns an internal planning error when the workflow would exceed a
 /// platform limit or the conservative output budget.
-pub(crate) fn check_plan_outputs(
+pub fn check_plan_outputs(
     mode: PlanOutputMode,
     matrix_entries: usize,
     outputs: &[(&str, &str)],

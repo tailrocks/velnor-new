@@ -4,6 +4,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::impl_common::TestResult;
+use crate::impl_orch_f2a::family_file;
 
 #[test]
 fn orch_gen_no_direct_process_spawn_in_source() -> TestResult {
@@ -32,7 +33,7 @@ fn orch_gen_no_direct_process_spawn_in_source() -> TestResult {
 
 #[test]
 fn orch_gen_plan_module_has_no_second_discovery() -> TestResult {
-    let text = fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/plan.rs"))?;
+    let text = fs::read_to_string(family_file("plan.rs")?)?;
     for banned in ["discover(", "build_workflow("] {
         assert!(!text.contains(banned), "plan.rs must not call {banned}");
     }

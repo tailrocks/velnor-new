@@ -220,6 +220,7 @@ fn strictness_no_proof_literals_anywhere() -> Result<(), Box<dyn Error>> {
         "crates/services/velnor-actions-orchestrator-generation",
         "crates/services/velnor-actions-orchestrator-graph",
         "crates/services/velnor-actions-orchestrator-pins",
+        "crates/services/velnor-actions-orchestrator-plan",
         "crates/services/velnor-actions-orchestrator-provisioning",
         "crates/services/velnor-actions-orchestrator-selection",
         "crates/services/velnor-actions-orchestrator-staged-validation",

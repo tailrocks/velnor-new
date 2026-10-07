@@ -129,6 +129,28 @@ const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "velnor-actions-orchestrator-plan",
+        &[
+            "velnor-actions-actionlint",
+            "velnor-actions-contract",
+            "velnor-actions-contract-config",
+            "velnor-actions-contract-planning",
+            "velnor-actions-contract-workflow",
+            "velnor-actions-orchestrator-core",
+            "velnor-actions-orchestrator-discovery",
+            "velnor-actions-orchestrator-generation",
+            "velnor-actions-orchestrator-provisioning",
+            "velnor-actions-orchestrator-workflow-ir",
+            "velnor-actions-rust",
+            "velnor-actions-rust-core",
+            "velnor-actions-tofu-core",
+            "velnor-actions-workflow-jobs",
+            "velnor-actions-workflow-release",
+            "velnor-actions-workflow-renderer",
+            "velnor-actions-workflow-tree",
+        ],
+    ),
+    (
         "velnor-actions-orchestrator-provisioning",
         &[
             "velnor-actions-actionlint",
