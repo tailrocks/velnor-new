@@ -46,7 +46,7 @@ pub(crate) fn declared_config_variables() -> Vec<String> {
 /// # Errors
 ///
 /// Returns a contract error when the fixed inputs fail schema validation.
-pub(crate) fn checkout_step() -> Result<Step, OrchestratorError> {
+pub fn checkout_step() -> Result<Step, OrchestratorError> {
     let with = BTreeMap::from([("persist-credentials".to_owned(), "false".to_owned())]);
     validate_action_inputs(&checkout_inputs_schema(), &with).map_err(|err| {
         OrchestratorError::Contract {

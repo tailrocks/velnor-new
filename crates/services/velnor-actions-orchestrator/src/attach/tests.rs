@@ -1,8 +1,8 @@
 use super::*;
-use crate::workflow::{CHECKOUT_USES, REQUEST_DIR};
-use crate::workflow_jobs::{final_job, plan_job};
 use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::{Concurrency, Permissions, Trigger};
+use velnor_actions_orchestrator_workflow_ir::workflow::{CHECKOUT_USES, REQUEST_DIR};
+use velnor_actions_orchestrator_workflow_ir::workflow_jobs::{final_job, plan_job};
 use velnor_actions_workflow_jobs::context::RenderContext;
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 

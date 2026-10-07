@@ -3637,6 +3637,7 @@ dependencies = [
  "velnor-actions-orchestrator-provisioning",
  "velnor-actions-orchestrator-selection",
  "velnor-actions-orchestrator-staged-validation",
+ "velnor-actions-orchestrator-workflow-ir",
  "velnor-actions-rust",
  "velnor-actions-rust-core",
  "velnor-actions-tofu",
@@ -3844,6 +3845,32 @@ dependencies = [
  "velnor-actions-mise",
  "velnor-actions-orchestrator-core",
  "velnor-actions-workflow-tree",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-workflow-ir"
+version = "0.1.1"
+dependencies = [
+ "tempfile",
+ "velnor-actions-actionlint",
+ "velnor-actions-contract",
+ "velnor-actions-contract-config",
+ "velnor-actions-contract-planning",
+ "velnor-actions-contract-release",
+ "velnor-actions-contract-workflow",
+ "velnor-actions-mise",
+ "velnor-actions-orchestrator-core",
+ "velnor-actions-orchestrator-discovery",
+ "velnor-actions-orchestrator-graph",
+ "velnor-actions-orchestrator-pins",
+ "velnor-actions-orchestrator-provisioning",
+ "velnor-actions-rust",
+ "velnor-actions-rust-core",
+ "velnor-actions-tofu-core",
+ "velnor-actions-workflow-cache",
+ "velnor-actions-workflow-jobs",
+ "velnor-actions-workflow-renderer",
+ "velnor-actions-workflow-steps",
 ]
 
 [[package]]

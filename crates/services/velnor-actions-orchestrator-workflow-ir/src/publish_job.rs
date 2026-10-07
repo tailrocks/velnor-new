@@ -29,7 +29,7 @@ pub(crate) const PUBLISH_DISPLAY_NAME: &str = "Publish baseline";
 /// # Errors
 ///
 /// Returns a contract error for malformed branches or rejected steps.
-pub(crate) fn baseline_publish_job(
+pub fn baseline_publish_job(
     label: &str,
     branch: &str,
     acquire: Option<Step>,

@@ -301,8 +301,11 @@ fn complete_group(
     );
     let run = velnor_actions_workflow_steps::join_argv_for_run(argv)
         .map_err(|err| internal(&err.to_string()))?;
-    let job_id = crate::crate_job_ids::job_id_for_member(&inputs.discovery.proposals, task)
-        .ok_or_else(|| internal("crate_job_id_missing"))?;
+    let job_id = velnor_actions_orchestrator_workflow_ir::crate_job_ids::job_id_for_member(
+        &inputs.discovery.proposals,
+        task,
+    )
+    .ok_or_else(|| internal("crate_job_id_missing"))?;
     let mut entry = MatrixEntry::derive(
         &task.stack_id,
         &task.task_id,

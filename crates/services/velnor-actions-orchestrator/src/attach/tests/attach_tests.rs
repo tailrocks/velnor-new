@@ -4,11 +4,11 @@
 
 use super::*;
 
-use crate::publish_job::baseline_publish_job;
-use crate::workflow::{CHECKOUT_USES, REQUEST_DIR};
-use crate::workflow_jobs::{final_job, plan_job};
 use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::{Job, JobTimeout};
+use velnor_actions_orchestrator_workflow_ir::publish_job::baseline_publish_job;
+use velnor_actions_orchestrator_workflow_ir::workflow::{CHECKOUT_USES, REQUEST_DIR};
+use velnor_actions_orchestrator_workflow_ir::workflow_jobs::{final_job, plan_job};
 use velnor_actions_workflow_jobs::context::RenderContext;
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
@@ -23,7 +23,10 @@ fn legacy_task_job() -> Job {
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![crate::workflow::wire_w1::checkout_step().expect("checkout")],
+        steps: vec![
+            velnor_actions_orchestrator_workflow_ir::workflow::wire_w1::checkout_step()
+                .expect("checkout"),
+        ],
     }
 }
 

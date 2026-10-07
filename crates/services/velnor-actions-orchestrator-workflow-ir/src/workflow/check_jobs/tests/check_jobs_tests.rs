@@ -168,7 +168,7 @@ fn generic_registry_id_generates_without_catalog_fallback_and_keeps_plan_identit
 }
 
 #[test]
-fn fork_admission_skips_external_runner_and_required_rejects_skip() {
+fn fork_admission_skips_external_runner() {
     let runner = CheckRunner {
         label: "native-check-scale-set".to_owned(),
         platform: CheckPlatform::MacosArm64,
@@ -189,30 +189,6 @@ fn fork_admission_skips_external_runner_and_required_rejects_skip() {
     assert!(
         EPHEMERAL_CHECK_ADMISSION_CONDITION.contains("head.repo.full_name == github.repository")
     );
-    let mut signals = crate::cover::Signals::default();
-    crate::merge::required_evidence::fold_jobs(
-        &[RequiredJobResult {
-            job_id: "check-native".to_owned(),
-            conclusion: JobConclusion::Skipped,
-        }],
-        &mut signals,
-    );
-    assert!(signals.not_run);
-}
-
-#[test]
-fn required_rejects_failed_or_missing_named_check() {
-    for conclusion in [JobConclusion::Missing, JobConclusion::Failure] {
-        let mut signals = crate::cover::Signals::default();
-        crate::merge::required_evidence::fold_jobs(
-            &[RequiredJobResult {
-                job_id: "check-ffi".to_owned(),
-                conclusion,
-            }],
-            &mut signals,
-        );
-        assert!(signals.failed, "{conclusion:?}");
-    }
 }
 
 #[test]

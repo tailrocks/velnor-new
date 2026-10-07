@@ -17,8 +17,8 @@ use velnor_actions_workflow_release::release_gates::{GIT_TOKEN_ENV, GIT_TOKEN_RE
 use velnor_actions_workflow_release::release_tree::RELEASE_SOURCE_DIR;
 use velnor_actions_workflow_steps::action_step;
 
-use crate::workflow::CHECKOUT_USES;
 use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_workflow_ir::workflow::CHECKOUT_USES;
 
 /// Display name of the exact-source checkout step.
 const SOURCE_CHECKOUT_NAME: &str = "Checkout exact source";

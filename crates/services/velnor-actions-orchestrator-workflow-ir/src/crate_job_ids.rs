@@ -21,7 +21,7 @@ use velnor_actions_workflow_jobs::context::PLAN_JOB_ID;
 /// assignment as the renderer, so the plan's job binding and the
 /// rendered jobs can never disagree. `None` only when the member
 /// is absent from the assignment inputs (never from the plan path).
-pub(crate) fn job_id_for_member(tasks: &[ProposedTask], member: &ProposedTask) -> Option<String> {
+pub fn job_id_for_member(tasks: &[ProposedTask], member: &ProposedTask) -> Option<String> {
     if Stack::from_id(&member.stack_id) == Some(Stack::Mise) {
         return Some(format!("check-{}", member.identity.unit_id));
     }

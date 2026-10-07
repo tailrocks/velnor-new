@@ -222,6 +222,7 @@ fn strictness_no_proof_literals_anywhere() -> Result<(), Box<dyn Error>> {
         "crates/services/velnor-actions-orchestrator-provisioning",
         "crates/services/velnor-actions-orchestrator-selection",
         "crates/services/velnor-actions-orchestrator-staged-validation",
+        "crates/services/velnor-actions-orchestrator-workflow-ir",
     ] {
         files.extend(tree_files(&format!("{dir}/src"), "rs")?);
         files.extend(tree_files(&format!("{dir}/tests"), "rs")?);

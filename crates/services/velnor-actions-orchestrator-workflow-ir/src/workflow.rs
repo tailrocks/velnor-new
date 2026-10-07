@@ -1,7 +1,7 @@
 //! Workflow-IR, render-context, and actionlint-input construction.
 
 //! W1 emission wiring lives in the child module below.
-pub(crate) mod wire_w1;
+pub mod wire_w1;
 
 pub(crate) mod check_jobs;
 
@@ -46,7 +46,7 @@ pub const DEFAULT_RUNNER_LABEL: &str = "ubuntu-26.04";
 ///
 /// GitHub-expression spelling: shell `$VAR` never expands in the `env:`
 /// position that carries this path.
-pub(crate) const REQUEST_DIR: &str = "${{ runner.temp }}/velnor/request";
+pub const REQUEST_DIR: &str = "${{ runner.temp }}/velnor/request";
 
 /// Complete renderer input derived from one discovery.
 #[derive(Debug, Clone)]
@@ -107,7 +107,7 @@ fn build_plan_job(
 /// # Errors
 ///
 /// Returns contract, render-context, or tool-request errors.
-pub(crate) fn build_workflow(
+pub fn build_workflow(
     config: &VelnorConfig,
     branch: &str,
     label: &str,

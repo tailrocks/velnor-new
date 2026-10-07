@@ -12,8 +12,8 @@ use velnor_actions_workflow_jobs::freshness::{FreshnessSpec, render_freshness_wo
 use velnor_actions_workflow_tree::rendered::RenderedFile;
 
 use crate::prepare::GenerationPreparation;
-use crate::workflow::CHECKOUT_USES;
 use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_workflow_ir::workflow::CHECKOUT_USES;
 
 /// True when the freshness workflow is emitted for this preparation.
 ///

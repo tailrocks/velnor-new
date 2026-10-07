@@ -18,10 +18,10 @@ use velnor_actions_workflow_jobs::{
 };
 use velnor_actions_workflow_steps::steps::STAGED_BINARY_PREFIX;
 
-use crate::workflow::WorkflowPlan;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_pins::pins::{lock_acquire_for_runner, lock_acquire_step};
 use velnor_actions_orchestrator_provisioning::vectors::{candidate_build_argv, mbx_probe_argv};
+use velnor_actions_orchestrator_workflow_ir::workflow::WorkflowPlan;
 
 /// Attach lock-backed Acquire steps to plan, final, publish, and crate jobs.
 ///
@@ -202,9 +202,10 @@ fn insert_plan_mbx_restore(
         .iter()
         .position(|step| step.role == Some(StepRole::CargoSourcesRestore))
         .map_or_else(|| after_rust_setup(steps), |index| index + 1);
-    for (offset, step) in crate::mbx_preflight::steps_for_catalog(catalog)?
-        .into_iter()
-        .enumerate()
+    for (offset, step) in
+        velnor_actions_orchestrator_workflow_ir::mbx_preflight::steps_for_catalog(catalog)?
+            .into_iter()
+            .enumerate()
     {
         steps.insert(restore_at + offset, step);
     }

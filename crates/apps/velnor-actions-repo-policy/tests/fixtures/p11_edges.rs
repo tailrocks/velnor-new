@@ -100,156 +100,10 @@ fn expected_mise_family(leaf: &str) -> Option<Vec<&str>> {
     }
 }
 
-/// Orchestrator-family edges by leaf dir name.
-const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
-    (
-        "velnor-actions-orchestrator-check-acquisition",
-        &[
-            "velnor-actions-contract",
-            "velnor-actions-contract-config",
-            "velnor-actions-mise",
-            "velnor-actions-orchestrator-core",
-        ],
-    ),
-    (
-        "velnor-actions-orchestrator-check-evidence",
-        &[
-            "velnor-actions-contract",
-            "velnor-actions-contract-config",
-            "velnor-actions-contract-workflow",
-            "velnor-actions-mise",
-            "velnor-actions-orchestrator-check-acquisition",
-            "velnor-actions-orchestrator-check-preparation",
-            "velnor-actions-orchestrator-core",
-        ],
-    ),
-    (
-        "velnor-actions-orchestrator-check-preparation",
-        &[
-            "velnor-actions-contract",
-            "velnor-actions-contract-config",
-            "velnor-actions-mise",
-            "velnor-actions-orchestrator-check-acquisition",
-            "velnor-actions-orchestrator-core",
-            "velnor-actions-workflow-steps",
-        ],
-    ),
-    (
-        "velnor-actions-orchestrator-core",
-        &[
-            "velnor-actions-actionlint",
-            "velnor-actions-contract",
-            "velnor-actions-contract-config",
-            "velnor-actions-contract-planning",
-            "velnor-actions-contract-release",
-            "velnor-actions-contract-workflow",
-            "velnor-actions-mise",
-            "velnor-actions-rust",
-            "velnor-actions-rust-core",
-            "velnor-actions-tofu-core",
-            "velnor-actions-workflow-steps",
-            "velnor-actions-workflow-tree",
-        ],
-    ),
-    (
-        "velnor-actions-orchestrator-discovery",
-        &[
-            "velnor-actions-contract",
-            "velnor-actions-contract-config",
-            "velnor-actions-contract-planning",
-            "velnor-actions-contract-release",
-            "velnor-actions-mise",
-            "velnor-actions-orchestrator-core",
-            "velnor-actions-rust",
-            "velnor-actions-rust-core",
-            "velnor-actions-tofu",
-            "velnor-actions-tofu-core",
-            "velnor-actions-workflow-renderer",
-        ],
-    ),
-    (
-        "velnor-actions-orchestrator-graph",
-        &[
-            "velnor-actions-contract",
-            "velnor-actions-contract-config",
-            "velnor-actions-contract-planning",
-            "velnor-actions-contract-release",
-            "velnor-actions-contract-workflow",
-            "velnor-actions-mise",
-            "velnor-actions-orchestrator-core",
-            "velnor-actions-orchestrator-discovery",
-            "velnor-actions-rust",
-            "velnor-actions-rust-core",
-            "velnor-actions-tofu",
-            "velnor-actions-tofu-core",
-            "velnor-actions-workflow-document",
-            "velnor-actions-workflow-steps",
-        ],
-    ),
-    (
-        "velnor-actions-orchestrator-pins",
-        &[
-            "velnor-actions-actionlint",
-            "velnor-actions-contract-config",
-            "velnor-actions-contract-release",
-            "velnor-actions-contract-workflow",
-            "velnor-actions-mise",
-            "velnor-actions-orchestrator-core",
-            "velnor-actions-orchestrator-discovery",
-            "velnor-actions-workflow-jobs",
-            "velnor-actions-workflow-steps",
-        ],
-    ),
-    (
-        "velnor-actions-orchestrator-provisioning",
-        &[
-            "velnor-actions-actionlint",
-            "velnor-actions-contract",
-            "velnor-actions-contract-config",
-            "velnor-actions-contract-planning",
-            "velnor-actions-contract-release",
-            "velnor-actions-contract-workflow",
-            "velnor-actions-mise",
-            "velnor-actions-orchestrator-core",
-            "velnor-actions-orchestrator-discovery",
-            "velnor-actions-rust",
-            "velnor-actions-tofu-core",
-            "velnor-actions-workflow-cache",
-            "velnor-actions-workflow-jobs",
-            "velnor-actions-workflow-renderer",
-            "velnor-actions-workflow-steps",
-        ],
-    ),
-    (
-        "velnor-actions-orchestrator-selection",
-        &[
-            "velnor-actions-contract-planning",
-            "velnor-actions-contract-workflow",
-            "velnor-actions-mise",
-            "velnor-actions-orchestrator-core",
-            "velnor-actions-orchestrator-discovery",
-            "velnor-actions-rust-core",
-        ],
-    ),
-    (
-        "velnor-actions-orchestrator-staged-validation",
-        &[
-            "velnor-actions-actionlint",
-            "velnor-actions-contract-config",
-            "velnor-actions-contract-release",
-            "velnor-actions-mise",
-            "velnor-actions-orchestrator-core",
-            "velnor-actions-workflow-tree",
-        ],
-    ),
-];
+#[path = "p11_orch_family.rs"]
+mod p11_orch_family;
 
-fn expected_orchestrator_family(leaf: &str) -> Option<Vec<&str>> {
-    ORCHESTRATOR_FAMILY
-        .iter()
-        .find(|(name, _)| *name == leaf)
-        .map(|(_, edges)| edges.to_vec())
-}
+use p11_orch_family::expected_orchestrator_family;
 
 /// Service/app edges by leaf dir name.
 fn expected_service(leaf: &str) -> Option<Vec<&str>> {
@@ -272,6 +126,7 @@ fn expected_service(leaf: &str) -> Option<Vec<&str>> {
             "velnor-actions-orchestrator-provisioning",
             "velnor-actions-orchestrator-selection",
             "velnor-actions-orchestrator-staged-validation",
+            "velnor-actions-orchestrator-workflow-ir",
             "velnor-actions-rust",
             "velnor-actions-rust-core",
             "velnor-actions-tofu",

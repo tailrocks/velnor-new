@@ -12,7 +12,7 @@ use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Build the strict preflight and restore pair from the compiled catalog pins.
 /// # Errors
-pub(crate) fn steps_for_catalog(catalog: &ToolCatalog) -> Result<[Step; 3], OrchestratorError> {
+pub fn steps_for_catalog(catalog: &ToolCatalog) -> Result<[Step; 3], OrchestratorError> {
     let uses = PinnedActionRef::new(
         "jdx/mr-boxington-action",
         None,

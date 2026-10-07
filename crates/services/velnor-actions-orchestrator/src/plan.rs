@@ -194,7 +194,7 @@ fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<S
         .discovery
         .proposals
         .iter()
-        .filter(|task| crate::crate_jobs::is_runnable(task))
+        .filter(|task| velnor_actions_orchestrator_workflow_ir::crate_jobs::is_runnable(task))
         .map(|task| task.task_id.as_str())
         .collect();
     obligations.sort_unstable();
@@ -224,10 +224,10 @@ fn present_kinds(tasks: &[ProposedTask]) -> Vec<&'static str> {
         .into_iter()
         .chain(velnor_actions_tofu_core::KIND_DISPLAY_WORDS);
     for (kind, word) in words {
-        if tasks
-            .iter()
-            .any(|task| task.task_kind == kind && crate::crate_jobs::is_runnable(task))
-            && !kinds.contains(&word)
+        if tasks.iter().any(|task| {
+            task.task_kind == kind
+                && velnor_actions_orchestrator_workflow_ir::crate_jobs::is_runnable(task)
+        }) && !kinds.contains(&word)
         {
             kinds.push(word);
         }

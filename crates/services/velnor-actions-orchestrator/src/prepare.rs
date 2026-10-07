@@ -7,12 +7,14 @@ use velnor_actions_contract_config::{RunnerSelection, VelnorConfig, WorkflowPoli
 use velnor_actions_contract_release::RunnerImageEvidence;
 use velnor_actions_mise::GitRequest;
 
-use crate::workflow::{DEFAULT_RUNNER_LABEL, WorkflowPlan, build_workflow};
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::config::load_config;
 use velnor_actions_orchestrator_core::decisions::runner_image_evidence;
 use velnor_actions_orchestrator_discovery::discover::{Discovery, discover};
 use velnor_actions_orchestrator_provisioning::source_prep::lockful_roots;
+use velnor_actions_orchestrator_workflow_ir::workflow::{
+    DEFAULT_RUNNER_LABEL, WorkflowPlan, build_workflow,
+};
 
 /// Canonical repository identity allowed the Velnor-repository policy.
 const VELNOR_IDENTITY: &str = "tailrocks/velnor-new";

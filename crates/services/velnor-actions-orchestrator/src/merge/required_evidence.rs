@@ -234,3 +234,6 @@ fn assembly_tokens(errors: &[String]) -> BTreeSet<String> {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests;

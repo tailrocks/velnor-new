@@ -32,7 +32,6 @@ pub use super::provenance::{EvidenceProvenance, ProfileProvenance};
 pub use super::retrieve_reports::{FETCH_OP, retrieve_reports};
 pub use super::routing::{migrate_config, parse_dispatch_mode};
 pub use super::task_report::write_task_report;
-pub use super::workflow::{CHECKOUT_USES, DEFAULT_RUNNER_LABEL, WorkflowPlan};
 pub use velnor_actions_contract_config::ExecutionMode;
 pub use velnor_actions_contract_workflow::{
     DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV,
@@ -50,4 +49,7 @@ pub use velnor_actions_orchestrator_discovery::toolfindings::{
 };
 pub use velnor_actions_orchestrator_pins::pins::{
     acquire_script_argv, consumer_acquire_step_with_manifest,
+};
+pub use velnor_actions_orchestrator_workflow_ir::workflow::{
+    CHECKOUT_USES, DEFAULT_RUNNER_LABEL, WorkflowPlan,
 };

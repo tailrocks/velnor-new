@@ -54,7 +54,7 @@ pub(crate) const LINT_DISPLAY_NAME: &str = "Actionlint";
     clippy::fn_params_excessive_bools,
     reason = "one call site threads job scope plus role selection"
 )]
-pub(crate) fn plan_job(
+pub fn plan_job(
     label: &str,
     acquire: Option<Step>,
     catalog: &ToolCatalog,
@@ -143,7 +143,7 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
 /// # Errors
 ///
 /// Returns a contract error when a typed step request is rejected.
-pub(crate) fn final_job(
+pub fn final_job(
     label: &str,
     crate_job_ids: &[String],
     acquire: Option<Step>,

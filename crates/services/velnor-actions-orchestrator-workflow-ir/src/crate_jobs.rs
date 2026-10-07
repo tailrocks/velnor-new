@@ -156,7 +156,7 @@ pub fn build_crate_jobs(
 /// Test-less tasks carry no command and package-less workspace tasks
 /// belong to the plan job, so neither is emitted as an obligation.
 /// Shared with `plan` so its obligation list matches emission exactly.
-pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
+pub fn is_runnable(task: &ProposedTask) -> bool {
     !task.no_targets
         && !task.identity.unit_id.is_empty()
         && Stack::from_id(&task.stack_id) != Some(Stack::Mise)
