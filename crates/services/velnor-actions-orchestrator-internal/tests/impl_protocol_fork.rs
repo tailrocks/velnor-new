@@ -3,9 +3,9 @@
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_orchestrator::write_request_parts;
+use velnor_actions_orchestrator_internal::internal::write_request_parts;
 
-use crate::impl_common::TestResult;
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn write_request_routes_fork_pull_requests_to_fork() -> TestResult {
