@@ -3879,6 +3879,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "velnor-actions-orchestrator-merge-request-ports"
+version = "0.1.1"
+dependencies = [
+ "serde_json",
+ "velnor-actions-orchestrator-core",
+]
+
+[[package]]
 name = "velnor-actions-orchestrator-noop-report"
 version = "0.1.1"
 dependencies = [

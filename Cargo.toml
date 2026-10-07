@@ -31,6 +31,7 @@ members = [
     "crates/services/velnor-actions-orchestrator-graph",
     "crates/services/velnor-actions-orchestrator-merge",
     "crates/services/velnor-actions-orchestrator-merge-ports",
+    "crates/services/velnor-actions-orchestrator-merge-request-ports",
     "crates/services/velnor-actions-orchestrator-noop-report",
     "crates/services/velnor-actions-orchestrator-pins",
     "crates/services/velnor-actions-orchestrator-plan",
