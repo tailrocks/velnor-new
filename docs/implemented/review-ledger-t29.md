@@ -99,7 +99,7 @@ that stay valid. Fail-before proven by stash.
 **A3 (c3, docs-only).** `architecture.md`: eight-crate MUST,
 orchestrator→tofu edge, tofu ownership row. Pointers:
 `requirements-evidence.md` (eight + live test name),
-`deviations.md` (8-crate), `gate-0-repository-contract.md`
+`deviations.md` (8-crate), `docs/content/docs/implemented/gate-0-repository-contract.mdx`
 (annotated as the `bdfffb9` historical record with the live test
 name; history not rewritten).
 
