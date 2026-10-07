@@ -33,6 +33,7 @@
     "velnor-runner-apparmor": "library",
     "velnor-runner-cli": "tool",
     "velnor-runner-core": "library",
+    "velnor-runner-docker-spec": "library",
     "velnor-runner-github": "library",
     "velnor-runner-host": "library",
     "velnor-runner-journal": "library",

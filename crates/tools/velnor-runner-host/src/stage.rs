@@ -5,8 +5,8 @@
 use bollard::Docker;
 
 use crate::HostError;
-use crate::docker_spec::{DeleteDecision, RunnerImageProfile, delete_decision, runner_plan};
 use crate::worker::{CreateProjection, dind_create, join_dind_net, runner_create};
+use velnor_runner_docker_spec::{DeleteDecision, RunnerImageProfile, delete_decision, runner_plan};
 
 mod docker_engine;
 mod profile;

@@ -2,20 +2,24 @@
 //!
 //! The resolver — not manifest substrings — is the source of truth here:
 //! effective edition and MSRV per package (inheritance resolved), the
-//! exact eight-member set, and the locked dependency graph (registry-only
+//! exact nine-member set, and the locked dependency graph (registry-only
 //! sources, exact requirements). Runs fully offline: any unlocked input
 //! fails the command instead of fetching.
 
 use std::error::Error;
 
 const WORKSPACE_MANIFESTS: [&str; 2] = ["Cargo.toml", "crates/velnor-runner/Cargo.toml"];
-pub(super) const RUNNER_MEMBERS: [(&str, &str); 8] = [
+pub(super) const RUNNER_MEMBERS: [(&str, &str); 9] = [
     (
         "crates/tools/velnor-runner-apparmor",
         "velnor-runner-apparmor",
     ),
     ("crates/tools/velnor-runner-cli", "velnor-runner-cli"),
     ("crates/tools/velnor-runner-core", "velnor-runner-core"),
+    (
+        "crates/tools/velnor-runner-docker-spec",
+        "velnor-runner-docker-spec",
+    ),
     ("crates/tools/velnor-runner-github", "velnor-runner-github"),
     ("crates/tools/velnor-runner-host", "velnor-runner-host"),
     (

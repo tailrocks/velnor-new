@@ -34,6 +34,7 @@
     "velnor-runner-apparmor",
     "velnor-runner-cli",
     "velnor-runner-core",
+    "velnor-runner-docker-spec",
     "velnor-runner-github",
     "velnor-runner-host",
     "velnor-runner-journal",

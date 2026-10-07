@@ -3,7 +3,7 @@
 use crate::launch::fakes::Engine;
 use crate::launch::harness::{absent, assigned_wait, open};
 use crate::launch::{Admit, admission};
-use velnor_runner_host::docker_spec::runner_plan;
+use velnor_runner_docker_spec::runner_plan;
 use velnor_runner_host::stage::PairEngine;
 use velnor_runner_host::worker::{dind_create, join_dind_net, runner_create};
 use velnor_runner_host::{IntentState, Journal, Outcome};

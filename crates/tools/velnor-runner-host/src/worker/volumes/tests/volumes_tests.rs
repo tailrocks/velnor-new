@@ -6,9 +6,9 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 
 use super::{WORKER, container_json, volume_json, volume_names};
-use crate::docker_spec::{resolve_runner_profile, runner_plan_for_profile};
 use crate::worker::{create_named_volumes, remove_worker_volumes, worker_id_for_name};
 use crate::{HostError, dind_create, dind_create_for_profile};
+use velnor_runner_docker_spec::{resolve_runner_profile, runner_plan_for_profile};
 
 fn profile_volume_names() -> [(&'static str, &'static str); 6] {
     let mut names = super::official_volume_names().to_vec();

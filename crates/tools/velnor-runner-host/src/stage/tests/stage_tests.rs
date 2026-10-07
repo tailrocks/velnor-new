@@ -8,8 +8,8 @@ use super::super::{
     drive_with_profile_for_test,
 };
 use crate::HostError;
-use crate::docker_spec::resolve_runner_profile;
 use crate::worker::CreateProjection;
+use velnor_runner_docker_spec::resolve_runner_profile;
 
 struct Fake {
     events: Mutex<Vec<&'static str>>,

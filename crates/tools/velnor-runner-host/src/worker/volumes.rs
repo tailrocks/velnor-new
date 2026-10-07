@@ -9,8 +9,8 @@ use ::bollard::query_parameters::RemoveVolumeOptions;
 
 use crate::HostError;
 use crate::docker_client::docker_deadline;
-use crate::docker_spec::Mount as PlannedMount;
 use velnor_runner_core::runner_work_path;
+use velnor_runner_docker_spec::Mount as PlannedMount;
 
 #[derive(Clone)]
 struct WorkerVolume {

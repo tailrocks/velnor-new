@@ -8,7 +8,9 @@ use ::bollard::models::{
 use ::bollard::query_parameters::CreateContainerOptions;
 
 use crate::HostError;
-use crate::docker_spec::{ContainerPlan, ImageMount, Mount, audit_plan, resolve_runner_profile};
+use velnor_runner_docker_spec::{
+    ContainerPlan, ImageMount, Mount, audit_plan, resolve_runner_profile,
+};
 
 use super::{CreateProjection, PLATFORM};
 

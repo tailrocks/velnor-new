@@ -1,10 +1,10 @@
 use bollard::models::MountType;
 
 use super::{bollard, projection};
-use crate::docker_spec::{resolve_runner_profile, runner_plan_for_profile};
 use crate::{
     HostError, bollard_create, dind_create, dind_create_for_profile, runner_create, runner_plan,
 };
+use velnor_runner_docker_spec::{resolve_runner_profile, runner_plan_for_profile};
 
 #[test]
 fn runner_create_opens_stdin_and_is_not_privileged() -> Result<(), HostError> {
@@ -180,7 +180,7 @@ fn official_profile_uses_private_unix_dind_and_shared_runner_paths() -> Result<(
 }
 
 fn assert_official_runner_projection(
-    profile: &crate::docker_spec::RunnerImageProfile,
+    profile: &velnor_runner_docker_spec::RunnerImageProfile,
     runner: &crate::worker::CreateProjection,
 ) {
     assert_eq!(runner.image, profile.runner_image());
@@ -207,7 +207,7 @@ fn assert_official_runner_projection(
 }
 
 fn assert_official_dind_projection(
-    profile: &crate::docker_spec::RunnerImageProfile,
+    profile: &velnor_runner_docker_spec::RunnerImageProfile,
     runner: &crate::worker::CreateProjection,
     dind: &crate::worker::CreateProjection,
 ) {
@@ -231,7 +231,7 @@ fn assert_official_dind_projection(
     assert!(dind.mounts[2].read_only);
     assert_eq!(
         dind.image_mounts,
-        Vec::<crate::docker_spec::ImageMount>::new()
+        Vec::<velnor_runner_docker_spec::ImageMount>::new()
     );
     assert!(
         dind.mounts
@@ -247,7 +247,7 @@ fn assert_official_dind_projection(
 }
 
 fn assert_runner_bollard_projection(
-    profile: &crate::docker_spec::RunnerImageProfile,
+    profile: &velnor_runner_docker_spec::RunnerImageProfile,
     runner: &crate::worker::CreateProjection,
 ) -> Result<(), HostError> {
     let runner_bollard = bollard_create(&crate::worker::join_dind_net(
