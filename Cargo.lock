@@ -3614,13 +3614,10 @@ dependencies = [
 name = "velnor-actions-orchestrator"
 version = "0.1.1"
 dependencies = [
- "flate2",
- "lzma-rust2",
  "rustix 1.1.5",
  "serde",
  "serde_json",
  "sha2",
- "tar",
  "tempfile",
  "toml",
  "velnor-actions-actionlint",
@@ -3630,6 +3627,7 @@ dependencies = [
  "velnor-actions-contract-release",
  "velnor-actions-contract-workflow",
  "velnor-actions-mise",
+ "velnor-actions-orchestrator-check-acquisition",
  "velnor-actions-orchestrator-core",
  "velnor-actions-orchestrator-discovery",
  "velnor-actions-orchestrator-graph",
@@ -3650,6 +3648,25 @@ dependencies = [
  "velnor-actions-workflow-schema2",
  "velnor-actions-workflow-steps",
  "velnor-actions-workflow-tree",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-check-acquisition"
+version = "0.1.1"
+dependencies = [
+ "flate2",
+ "lzma-rust2",
+ "rustix 1.1.5",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tar",
+ "tempfile",
+ "toml",
+ "velnor-actions-contract",
+ "velnor-actions-contract-config",
+ "velnor-actions-mise",
+ "velnor-actions-orchestrator-core",
  "zip",
 ]
 

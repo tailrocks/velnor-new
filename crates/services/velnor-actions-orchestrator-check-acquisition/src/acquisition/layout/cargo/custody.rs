@@ -122,18 +122,19 @@ fn file_hashes(
             if metadata.is_dir() {
                 pending.push(path);
             } else {
-                let content = crate::retrieve_reports::staged_reads::read_staged_bytes_until(
-                    &path,
-                    512 * 1024 * 1024,
-                    || deadline.remaining().map(|_| ()).map_err(|_| "deadline"),
-                )
-                .map_err(|problem| {
-                    if problem == "deadline" {
-                        internal("check_timeout:deadline_exhausted")
-                    } else {
-                        internal("qualified_cargo_source_file")
-                    }
-                })?;
+                let content =
+                    velnor_actions_orchestrator_core::staged_reads::read_staged_bytes_until(
+                        &path,
+                        512 * 1024 * 1024,
+                        || deadline.remaining().map(|_| ()).map_err(|_| "deadline"),
+                    )
+                    .map_err(|problem| {
+                        if problem == "deadline" {
+                            internal("check_timeout:deadline_exhausted")
+                        } else {
+                            internal("qualified_cargo_source_file")
+                        }
+                    })?;
                 files.insert(name.to_owned(), sha256_with_deadline(&content, deadline)?);
             }
         }

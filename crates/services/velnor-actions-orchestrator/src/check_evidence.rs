@@ -3,11 +3,12 @@ pub(crate) mod gate;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
-use std::path::{Component, Path};
+use std::path::Path;
 use velnor_actions_contract::{digest_b3, parse_strict_json};
 use velnor_actions_contract_config::config::{CheckEvidence, CheckPlatform};
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::internal;
+use velnor_actions_orchestrator_core::link_safety::reject_link_components;
 
 /// Producer payload; unknown fields and duplicate JSON keys fail closed.
 #[derive(Debug, Deserialize, Serialize)]
@@ -128,26 +129,6 @@ pub(crate) fn validate_evidence(
     }
     if actual != expected {
         return Err(internal("check_evidence_scenarios_missing"));
-    }
-    Ok(())
-}
-
-/// Refuse every symlink component, including in-repository parent links.
-pub(crate) fn reject_link_components(root: &Path, relative: &str) -> Result<(), OrchestratorError> {
-    let mut path = root.to_path_buf();
-    for component in Path::new(relative).components() {
-        let Component::Normal(component) = component else {
-            return Err(internal("check_path_escape"));
-        };
-        path.push(component);
-        match std::fs::symlink_metadata(&path) {
-            Ok(metadata) if metadata.file_type().is_symlink() => {
-                return Err(internal("check_path_symlink"));
-            }
-            Ok(_) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(_) => return Err(internal("check_path_unreadable")),
-        }
     }
     Ok(())
 }

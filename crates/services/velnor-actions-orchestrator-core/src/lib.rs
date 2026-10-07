@@ -21,6 +21,7 @@ pub mod exclusive_write;
 pub mod extension_schemas;
 pub mod git_paths;
 pub mod init;
+pub mod link_safety;
 pub mod obligation_order;
 pub mod origin;
 pub mod qualify;
@@ -29,6 +30,7 @@ pub mod root;
 pub mod safe_read;
 pub mod schedule;
 pub mod sha256;
+pub mod staged_reads;
 pub mod utf8;
 pub mod validators;
 

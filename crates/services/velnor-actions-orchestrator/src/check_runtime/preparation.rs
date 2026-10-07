@@ -1,15 +1,15 @@
 //! Runtime owns materialized isolated check homes; adapters only inspect/execute.
-use crate::check_evidence::reject_link_components;
 use std::ffi::OsStr;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use velnor_actions_mise::checks::SystemToolProof;
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, QualifiedCheck};
+use velnor_actions_orchestrator_check_acquisition::tools::QualifiedToolReceipt;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::internal;
+use velnor_actions_orchestrator_core::link_safety::reject_link_components;
 
-mod acquisition;
 mod binary;
 pub(crate) mod container;
 
@@ -22,13 +22,13 @@ pub(super) struct OwnedCheck {
     home: PathBuf,
     pub(super) container: Option<container::OwnedContainer>,
     pub(super) system_tools: Vec<SystemToolProof>,
-    pub(super) qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
+    pub(super) qualified_tools: Vec<QualifiedToolReceipt>,
 }
 struct PreparedParts {
     qualified: QualifiedCheck,
     container: Option<container::OwnedContainer>,
     system_tools: Vec<SystemToolProof>,
-    qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
+    qualified_tools: Vec<QualifiedToolReceipt>,
 }
 impl Deref for OwnedCheck {
     type Target = QualifiedCheck;
@@ -145,7 +145,10 @@ fn materialize(
             velnor_actions_contract_config::config::CheckSystemToolKind::Swift => "swift",
             velnor_actions_contract_config::config::CheckSystemToolKind::Xcode => "xcodebuild",
         };
-        link_program(OsStr::new(&proof.executable), &home.join("bin").join(name))?;
+        velnor_actions_orchestrator_check_acquisition::acquisition::link_program(
+            OsStr::new(&proof.executable),
+            &home.join("bin").join(name),
+        )?;
     }
     let qualified = QualifiedCheck::new(
         home.to_path_buf(),
@@ -164,7 +167,9 @@ fn materialize(
         "check_config",
         || checkpoint(deadline),
     )?;
-    let qualified_tools = acquisition::acquire(&qualified, check, home, deadline)?;
+    let qualified_tools = velnor_actions_orchestrator_check_acquisition::acquisition::acquire(
+        &qualified, check, home, deadline,
+    )?;
     Ok(PreparedParts {
         qualified,
         container,
@@ -178,19 +183,6 @@ fn checkpoint(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
         .remaining()
         .map(|_| ())
         .map_err(|error| internal(&error.to_string()))
-}
-
-fn link_program(program: &OsStr, destination: &Path) -> Result<(), OrchestratorError> {
-    #[cfg(unix)]
-    {
-        std::os::unix::fs::symlink(program, destination)
-            .map_err(|_| internal("check_binary_projection"))
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = (program, destination);
-        Err(internal("check_binary_projection_platform"))
-    }
 }
 
 #[cfg(test)]

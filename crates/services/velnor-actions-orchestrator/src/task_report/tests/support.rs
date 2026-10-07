@@ -146,7 +146,7 @@ pub(super) fn staged_run(plan: &Plan, run_key: &str) -> TempDir {
 pub(super) fn staged_with_envelope(
     with_proof: bool,
     declarations: &[QualifiedTool],
-    qualified_tools: &[crate::check_evidence::gate::tools::QualifiedToolReceipt],
+    qualified_tools: &[velnor_actions_orchestrator_check_acquisition::tools::QualifiedToolReceipt],
     container_profile: Option<&HostContainerProfile>,
     container: Option<&crate::check_evidence::gate::container::ContainerReceipt>,
 ) -> (tempfile::TempDir, Plan) {

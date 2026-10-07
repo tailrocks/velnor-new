@@ -31,9 +31,11 @@ struct LockedPackage {
 }
 
 fn read(path: &Path, deadline: CheckDeadline) -> Result<Vec<u8>, OrchestratorError> {
-    crate::retrieve_reports::staged_reads::read_staged_bytes_until(path, 4 * 1024 * 1024, || {
-        deadline.remaining().map(|_| ()).map_err(|_| "deadline")
-    })
+    velnor_actions_orchestrator_core::staged_reads::read_staged_bytes_until(
+        path,
+        4 * 1024 * 1024,
+        || deadline.remaining().map(|_| ()).map_err(|_| "deadline"),
+    )
     .map_err(|problem| {
         if problem == "deadline" {
             internal("check_timeout:deadline_exhausted")

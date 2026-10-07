@@ -41,6 +41,7 @@
     "velnor-actions-orchestrator-graph": "library",
     "velnor-actions-orchestrator-pins": "library",
     "velnor-actions-orchestrator-provisioning": "library",
-    "velnor-actions-orchestrator-selection": "library"
+    "velnor-actions-orchestrator-selection": "library",
+    "velnor-actions-orchestrator-check-acquisition": "library"
   }
 }

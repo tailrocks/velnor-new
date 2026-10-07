@@ -6,6 +6,7 @@ use velnor_actions_contract_workflow::FinalReport;
 use velnor_actions_contract_workflow::MatrixEntry;
 use velnor_actions_contract_workflow::{ExecuteTaskRef, TaskReport, TaskStatus};
 use velnor_actions_contract_workflow::{FinalStatus, Plan};
+use velnor_actions_orchestrator_check_acquisition::tools::QualifiedToolReceipt;
 fn artifact(temp: &tempfile::TempDir, plan: &Plan, name: &str) -> std::path::PathBuf {
     let entry = &plan.matrix.include[0];
     temp.path()
@@ -28,7 +29,7 @@ fn assembled(temp: &tempfile::TempDir) -> String {
 fn staged_with_tools(
     with_proof: bool,
     declarations: &[QualifiedTool],
-    qualified_tools: &[crate::check_evidence::gate::tools::QualifiedToolReceipt],
+    qualified_tools: &[QualifiedToolReceipt],
 ) -> (tempfile::TempDir, Plan) {
     staged_with_envelope(with_proof, declarations, qualified_tools, None, None)
 }
@@ -41,7 +42,7 @@ fn plan() -> Plan {
 fn staged_with_container(
     with_proof: bool,
     declarations: &[QualifiedTool],
-    qualified_tools: &[crate::check_evidence::gate::tools::QualifiedToolReceipt],
+    qualified_tools: &[QualifiedToolReceipt],
     profile: &HostContainerProfile,
     container: &crate::check_evidence::gate::container::ContainerReceipt,
 ) -> (tempfile::TempDir, Plan) {

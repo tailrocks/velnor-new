@@ -85,7 +85,7 @@ pub(super) fn read_limited(
     path: &Path,
     deadline: Option<CheckDeadline>,
 ) -> Result<Vec<u8>, OrchestratorError> {
-    crate::retrieve_reports::staged_reads::read_staged_bytes_until(path, 64 * 1024, || {
+    velnor_actions_orchestrator_core::staged_reads::read_staged_bytes_until(path, 64 * 1024, || {
         deadline_checkpoint(deadline)
     })
     .map_err(|_| internal("container_context_unreadable"))

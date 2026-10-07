@@ -131,6 +131,10 @@ fn parent_symlinks_refused_even_inside_repository() {
     std::fs::create_dir(root.path().join("actual")).expect("dir");
     std::os::unix::fs::symlink("actual", root.path().join("alias")).expect("link");
     assert!(
-        crate::check_evidence::reject_link_components(root.path(), "alias/proof.json").is_err()
+        velnor_actions_orchestrator_core::link_safety::reject_link_components(
+            root.path(),
+            "alias/proof.json",
+        )
+        .is_err()
     );
 }

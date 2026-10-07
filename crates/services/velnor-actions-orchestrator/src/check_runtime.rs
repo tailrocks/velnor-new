@@ -1,5 +1,5 @@
 //! Qualified execution of one named check, through the existing plan/report gate.
-use crate::check_evidence::{EvidenceReceipt, reject_link_components, verify_evidence};
+use crate::check_evidence::{EvidenceReceipt, verify_evidence};
 use std::env;
 use std::ffi::OsString;
 use std::path::Path;
@@ -11,7 +11,9 @@ use velnor_actions_contract_workflow::{
     NamedCheckLaneVariant, ObligationDecision, Plan,
 };
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, ToolCatalog, discover_checks_until};
+use velnor_actions_orchestrator_check_acquisition::tools::QualifiedToolReceipt;
 use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::link_safety::reject_link_components;
 use velnor_actions_orchestrator_core::{internal, internal_contract};
 pub(crate) mod preparation;
 use preparation::prepare_check;
@@ -192,7 +194,7 @@ struct CheckOutcome {
     evidence: Option<EvidenceReceipt>,
     container: Option<crate::check_evidence::gate::container::ContainerReceipt>,
     system_tools: Vec<velnor_actions_mise::checks::SystemToolProof>,
-    qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
+    qualified_tools: Vec<QualifiedToolReceipt>,
 }
 
 fn run_check(

@@ -1,6 +1,7 @@
 //! Qualified source bytes become retained, observed owned installation trees.
-use crate::check_evidence::gate::tools::{QualifiedToolReceipt, receipt};
+use crate::tools::{QualifiedToolReceipt, receipt};
 use sha2::{Digest, Sha256};
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use velnor_actions_contract_config::config::{
     QualifiedCargoInstallation, QualifiedTool, QualifiedToolBackend, QualifiedToolOptions,
@@ -16,7 +17,7 @@ mod archive;
 mod layout;
 mod tree;
 
-pub(super) fn acquire(
+pub fn acquire(
     handle: &QualifiedCheck,
     check: &DiscoveredCheck,
     home: &Path,
@@ -194,7 +195,10 @@ fn observe_executables(
     };
     let mut proofs = Vec::new();
     for executable in &qualified.executables {
-        crate::check_evidence::reject_link_components(prefix, &executable.path)?;
+        velnor_actions_orchestrator_core::link_safety::reject_link_components(
+            prefix,
+            &executable.path,
+        )?;
         let path = prefix.join(&executable.path);
         let bytes = read_with_deadline(&path, 256 * 1024 * 1024, deadline)
             .map_err(|error| staged_read_error(error, "qualified_tool_executable_unreadable"))?;
@@ -216,7 +220,7 @@ fn observe_executables(
             deadline,
         )
         .map_err(|e| internal(&e.to_string()))?;
-        super::link_program(path.as_os_str(), &home.join("bin").join(&executable.name))?;
+        link_program(path.as_os_str(), &home.join("bin").join(&executable.name))?;
         proofs.push(proof);
     }
     Ok(proofs)
@@ -241,7 +245,7 @@ fn read_with_deadline(
     limit: u64,
     deadline: CheckDeadline,
 ) -> Result<Vec<u8>, &'static str> {
-    crate::retrieve_reports::staged_reads::read_staged_bytes_until(path, limit, || {
+    velnor_actions_orchestrator_core::staged_reads::read_staged_bytes_until(path, limit, || {
         deadline.remaining().map(|_| ()).map_err(|_| "deadline")
     })
 }
@@ -277,6 +281,20 @@ fn staged_read_error(problem: &'static str, context: &str) -> OrchestratorError 
         internal("check_timeout:deadline_exhausted")
     } else {
         internal(context)
+    }
+}
+
+/// Link one observed program into the check home's `bin` directory.
+pub fn link_program(program: &OsStr, destination: &Path) -> Result<(), OrchestratorError> {
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(program, destination)
+            .map_err(|_| internal("check_binary_projection"))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (program, destination);
+        Err(internal("check_binary_projection_platform"))
     }
 }
 

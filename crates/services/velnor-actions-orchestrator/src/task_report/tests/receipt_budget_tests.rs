@@ -1,6 +1,5 @@
 use super::*;
 
-use crate::check_evidence::gate::tools::{QualifiedToolReceipt, receipt};
 use std::path::PathBuf;
 use velnor_actions_contract_config::config::{
     CheckExecutor, CheckRunner, HostContainerProfile, MAX_CHECK_CONTAINER_PATH_BYTES,
@@ -11,6 +10,7 @@ use velnor_actions_contract_config::config::{
 use velnor_actions_mise::check_tool_probes::{
     QualifiedExecutableObservation, QualifiedExecutableProof,
 };
+use velnor_actions_orchestrator_check_acquisition::tools::{QualifiedToolReceipt, receipt};
 
 fn declaration(id: String) -> QualifiedTool {
     let mut expected = "bun 1.3.14".to_owned();

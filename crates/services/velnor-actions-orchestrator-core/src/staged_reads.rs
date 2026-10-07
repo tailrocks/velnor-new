@@ -1,9 +1,7 @@
 //! Shared staged-file reads: `NOFOLLOW` open, handle validation, size bound.
 //!
-//! Declared via `#[path]` from `retrieve_reports.rs` (no `lib.rs`
-//! edit); `retrieve_reports` re-exports the gate so staged-report
-//! reads, merge-request assembly, and baseline entry reads share the
-//! one implementation.
+//! Staged-report reads, merge-request assembly, baseline entry reads,
+//! and check preparation share this one implementation.
 
 use std::fs;
 use std::io::Read as _;
@@ -14,7 +12,7 @@ use std::path::Path;
 /// `symlink_metadata` never follows the final component: a symlink
 /// rejects even at a live target. Missing paths are not links; the
 /// bounded read below reports them as missing instead.
-pub(crate) fn path_is_symlink(path: &Path) -> bool {
+pub fn path_is_symlink(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink())
 }
 
@@ -26,12 +24,12 @@ pub(crate) fn path_is_symlink(path: &Path) -> bool {
 /// fails the open instead of diverting the read. Missing files report
 /// `missing`, symlinks `symlink`, non-files `unreadable`, and
 /// over-bound reads `oversize`.
-pub(crate) fn read_staged_bytes(path: &Path, bound: u64) -> Result<Vec<u8>, &'static str> {
+pub fn read_staged_bytes(path: &Path, bound: u64) -> Result<Vec<u8>, &'static str> {
     read_staged_bytes_until(path, bound, || Ok(()))
 }
 
 /// Read staged bytes in bounded chunks, checking a caller's shared deadline.
-pub(crate) fn read_staged_bytes_until(
+pub fn read_staged_bytes_until(
     path: &Path,
     bound: u64,
     mut checkpoint: impl FnMut() -> Result<(), &'static str>,
@@ -89,7 +87,7 @@ pub(crate) fn read_staged_bytes_until(
 /// symlinks and non-files reject, missing files report, and oversize
 /// files error instead of exhausting memory. Bytes decode as UTF-8;
 /// undecodable files report `unreadable`.
-pub(crate) fn read_staged_text(path: &Path, bound: u64) -> Result<String, &'static str> {
+pub fn read_staged_text(path: &Path, bound: u64) -> Result<String, &'static str> {
     let bytes = read_staged_bytes(path, bound)?;
     String::from_utf8(bytes).map_err(|_| "unreadable")
 }

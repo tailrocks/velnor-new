@@ -265,7 +265,7 @@ pub(crate) fn baseline_entry_for(
     if validate_digest(rest).is_err() {
         return None;
     }
-    if crate::retrieve_reports::path_is_symlink(dir) {
+    if velnor_actions_orchestrator_core::staged_reads::path_is_symlink(dir) {
         return None;
     }
     let mut count = 0u32;
@@ -285,7 +285,8 @@ pub(crate) fn baseline_entry_for(
         return None;
     }
     let bound = u64::try_from(MAX_BASELINE_MANIFEST_BYTES).unwrap_or(u64::MAX);
-    let bytes = crate::retrieve_reports::read_staged_bytes(&payload, bound).ok()?;
+    let bytes =
+        velnor_actions_orchestrator_core::staged_reads::read_staged_bytes(&payload, bound).ok()?;
     let text = std::str::from_utf8(&bytes).ok()?;
     let value =
         velnor_actions_orchestrator_graph::internal_plan::snapshot::parse_canonical_json(text)

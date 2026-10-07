@@ -103,6 +103,15 @@ fn expected_mise_family(leaf: &str) -> Option<Vec<&str>> {
 /// Orchestrator-family edges by leaf dir name.
 const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
     (
+        "velnor-actions-orchestrator-check-acquisition",
+        &[
+            "velnor-actions-contract",
+            "velnor-actions-contract-config",
+            "velnor-actions-mise",
+            "velnor-actions-orchestrator-core",
+        ],
+    ),
+    (
         "velnor-actions-orchestrator-core",
         &[
             "velnor-actions-actionlint",
@@ -219,6 +228,7 @@ fn expected_service(leaf: &str) -> Option<Vec<&str>> {
             "velnor-actions-contract-release",
             "velnor-actions-contract-workflow",
             "velnor-actions-mise",
+            "velnor-actions-orchestrator-check-acquisition",
             "velnor-actions-orchestrator-core",
             "velnor-actions-orchestrator-discovery",
             "velnor-actions-orchestrator-graph",

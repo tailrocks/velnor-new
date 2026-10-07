@@ -279,7 +279,10 @@ fn read_json(
     required: bool,
     errors: &mut Vec<String>,
 ) -> serde_json::Value {
-    match crate::retrieve_reports::read_staged_text(&run_dir.join(name), MAX_ASSEMBLY_JSON_BYTES) {
+    match velnor_actions_orchestrator_core::staged_reads::read_staged_text(
+        &run_dir.join(name),
+        MAX_ASSEMBLY_JSON_BYTES,
+    ) {
         Ok(text) => {
             if let Ok(value) = parse_strict_json(&text) {
                 value

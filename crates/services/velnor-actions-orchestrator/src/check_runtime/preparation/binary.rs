@@ -59,11 +59,12 @@ fn project_binary_until(
     max_bytes: u64,
     deadline: Option<CheckDeadline>,
 ) -> Result<(), OrchestratorError> {
-    let bytes =
-        crate::retrieve_reports::staged_reads::read_staged_bytes_until(source, max_bytes, || {
-            read_deadline_checkpoint(deadline)
-        })
-        .map_err(|_| internal("mise_binary_unreadable"))?;
+    let bytes = velnor_actions_orchestrator_core::staged_reads::read_staged_bytes_until(
+        source,
+        max_bytes,
+        || read_deadline_checkpoint(deadline),
+    )
+    .map_err(|_| internal("mise_binary_unreadable"))?;
     verify_binary_bytes(&bytes, expected)?;
     velnor_actions_orchestrator_core::exclusive_write::write_exclusive_until(
         destination,

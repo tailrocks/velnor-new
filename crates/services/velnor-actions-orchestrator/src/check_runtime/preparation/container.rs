@@ -124,13 +124,16 @@ fn verify_owned_cli(
     deadline: Option<CheckDeadline>,
 ) -> Result<(), OrchestratorError> {
     checkpoint(deadline)?;
-    crate::check_evidence::reject_link_components(&prepared.home, "bin/docker")?;
+    velnor_actions_orchestrator_core::link_safety::reject_link_components(
+        &prepared.home,
+        "bin/docker",
+    )?;
     let metadata = std::fs::symlink_metadata(&prepared.docker_program)
         .map_err(|_| internal("container_owned_cli_unreadable"))?;
     if !metadata.is_file() || metadata.permissions().mode() & 0o7_777 != 0o500 {
         return Err(internal("container_owned_cli_mode"));
     }
-    let bytes = crate::retrieve_reports::staged_reads::read_staged_bytes_until(
+    let bytes = velnor_actions_orchestrator_core::staged_reads::read_staged_bytes_until(
         &prepared.docker_program,
         256 * 1024 * 1024,
         || read_deadline_checkpoint(deadline),
@@ -157,14 +160,14 @@ fn project_executable(
     {
         return Err(internal("container_cli_canonical_path"));
     }
-    crate::check_evidence::reject_link_components(
+    velnor_actions_orchestrator_core::link_safety::reject_link_components(
         Path::new("/"),
         source
             .to_str()
             .ok_or_else(|| internal("container_cli_path"))?
             .trim_start_matches('/'),
     )?;
-    let bytes = crate::retrieve_reports::staged_reads::read_staged_bytes_until(
+    let bytes = velnor_actions_orchestrator_core::staged_reads::read_staged_bytes_until(
         source,
         256 * 1024 * 1024,
         || read_deadline_checkpoint(Some(deadline)),

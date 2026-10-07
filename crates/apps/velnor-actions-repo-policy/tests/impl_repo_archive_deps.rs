@@ -1,11 +1,13 @@
 //! Closed dependency declarations for qualified archive decoding.
 
-use crate::impl_repo_policy::p11_toml;
+use crate::impl_repo_policy::{p11_toml, read};
 
 /// Reviewed qualified-archive decoders are exclusive to the IO owner.
 /// Complete declarations fix versions, disable defaults, and close features.
+/// Workspace-inherited declarations resolve to the workspace root table,
+/// so the effective pin is verified wherever it is spelled.
 pub(super) fn reviewed_archive_dependency(dir: &str, key: &str, line: &str) -> bool {
-    if dir != "crates/services/velnor-actions-orchestrator" {
+    if dir != "crates/services/velnor-actions-orchestrator-check-acquisition" {
         return false;
     }
     let (version, features) = match key {
@@ -16,6 +18,14 @@ pub(super) fn reviewed_archive_dependency(dir: &str, key: &str, line: &str) -> b
         _ => return false,
     };
     let Some((_, value)) = line.split_once('=') else {
+        return false;
+    };
+    let inherited = workspace_dep_value(key);
+    let Some(value) = (if value.contains("workspace") {
+        inherited.as_deref()
+    } else {
+        Some(value)
+    }) else {
         return false;
     };
     let fields = p11_toml::inline_pairs(value);
@@ -45,15 +55,29 @@ pub(super) fn reviewed_archive_dependency(dir: &str, key: &str, line: &str) -> b
     }
 }
 
+/// Effective `workspace.dependencies` value for `key` from the root manifest.
+fn workspace_dep_value(key: &str) -> Option<String> {
+    let root = read("Cargo.toml").ok()?;
+    let doc = p11_toml::parse(&root).ok()?;
+    let section = p11_toml::section(&doc, "workspace.dependencies")?;
+    p11_toml::value(section, key)
+}
+
 #[test]
 fn archive_dependency_policy_rejects_wrong_owner_pin_defaults_and_extra_features() {
     let line =
         "zip = { version = \"=8.6.0\", default-features = false, features = [\"deflate-flate2\"] }";
-    let owner = "crates/services/velnor-actions-orchestrator";
+    let owner = "crates/services/velnor-actions-orchestrator-check-acquisition";
     assert!(reviewed_archive_dependency(owner, "zip", line));
+    assert!(reviewed_archive_dependency(
+        owner,
+        "zip",
+        "zip = { workspace = true }"
+    ));
     for dir in [
         "crates/apps/velnor-actions-cli",
         "crates/adapters/velnor-actions-mise",
+        "crates/services/velnor-actions-orchestrator",
     ] {
         assert!(!reviewed_archive_dependency(dir, "zip", line));
     }

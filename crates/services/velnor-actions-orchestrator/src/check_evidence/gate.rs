@@ -1,8 +1,7 @@
 //! Mandatory named-check execution and scenario proof at the ordinary final fold.
-use super::{EvidenceReceipt, ScenarioEvidence, reject_link_components, validate_evidence};
+use super::{EvidenceReceipt, ScenarioEvidence, validate_evidence};
 use serde::{Deserialize, Serialize};
 pub(crate) mod container;
-pub(crate) mod tools;
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -10,6 +9,8 @@ use velnor_actions_contract::{digest_b3, parse_strict_json};
 use velnor_actions_contract_config::config::MAX_CHECK_EXECUTION_RECEIPT_BYTES;
 use velnor_actions_contract_config::config::{CheckEvidence, CheckPlatform, CheckRunner};
 use velnor_actions_contract_workflow::{MatrixEntry, Plan, TaskReport, TaskStatus};
+use velnor_actions_orchestrator_check_acquisition::tools;
+use velnor_actions_orchestrator_core::link_safety::reject_link_components;
 
 /// Helper-produced execution receipt inside the existing matrix artifact.
 #[derive(Debug, Deserialize, Serialize)]
@@ -116,7 +117,7 @@ fn read_proof(entry: &MatrixEntry, dir: &Path) -> Result<serde_json::Value, &'st
     );
     let read = |relative: &str| {
         reject_link_components(dir, relative).map_err(|_| "symlink_check_execution")?;
-        crate::retrieve_reports::read_staged_text(
+        velnor_actions_orchestrator_core::staged_reads::read_staged_text(
             &dir.join(relative),
             MAX_CHECK_EXECUTION_RECEIPT_BYTES as u64,
         )
@@ -133,10 +134,12 @@ fn read_proof(entry: &MatrixEntry, dir: &Path) -> Result<serde_json::Value, &'st
         let path = home.join("evidence").join(&declaration.path);
         let path = path.to_str().ok_or("bad_check_path")?;
         reject_link_components(dir, path).map_err(|_| "symlink_check_evidence")?;
-        Some(crate::retrieve_reports::read_staged_text(
-            &dir.join(path),
-            velnor_actions_orchestrator_core::safe_read::MAX_REPO_FILE_BYTES,
-        )?)
+        Some(
+            velnor_actions_orchestrator_core::staged_reads::read_staged_text(
+                &dir.join(path),
+                velnor_actions_orchestrator_core::safe_read::MAX_REPO_FILE_BYTES,
+            )?,
+        )
     } else {
         None
     };

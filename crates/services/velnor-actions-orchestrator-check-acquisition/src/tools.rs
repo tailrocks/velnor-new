@@ -9,7 +9,7 @@ use velnor_actions_orchestrator_core::{internal, internal_contract};
 /// Actual installation identity carried inside the ordinary check execution receipt.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct QualifiedToolReceipt {
+pub struct QualifiedToolReceipt {
     pub id: String,
     pub version: String,
     pub platform: CheckPlatform,
@@ -20,7 +20,7 @@ pub(crate) struct QualifiedToolReceipt {
     pub executables: Vec<QualifiedExecutableProof>,
 }
 
-pub(crate) fn receipt(
+pub fn receipt(
     tool: &QualifiedTool,
     platform: CheckPlatform,
     artifacts: Vec<QualifiedToolArtifact>,
@@ -45,7 +45,7 @@ pub(crate) fn receipt(
 }
 
 /// Required compares observations against the complete resolved dependency closure.
-pub(crate) fn validate_receipts(
+pub fn validate_receipts(
     platform: CheckPlatform,
     tools: &[QualifiedTool],
     receipts: &[QualifiedToolReceipt],

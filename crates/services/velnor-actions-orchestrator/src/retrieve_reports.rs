@@ -12,10 +12,6 @@
 //! verdict. Only unusable environment (no runner temp, no numeric
 //! run ID) fails outright.
 
-// Wired here so the shared reader compiles without touching `lib.rs`.
-pub(crate) mod staged_reads;
-pub(crate) use self::staged_reads::{path_is_symlink, read_staged_bytes, read_staged_text};
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::fs;
@@ -28,6 +24,7 @@ use velnor_actions_mise::ToolCatalog;
 
 use crate::retrieve_retry::download_with_retry;
 use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::staged_reads::{path_is_symlink, read_staged_text};
 use velnor_actions_orchestrator_core::{internal, internal_contract};
 
 /// Retrieve operation tag (single-sourced from the renderer protocol).

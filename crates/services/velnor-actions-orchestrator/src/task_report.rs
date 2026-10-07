@@ -159,7 +159,8 @@ fn parse_downstream(raw: Option<&str>) -> Vec<String> {
 pub(crate) fn load_plan(run_key: &str, runner_temp: &Path) -> Result<Plan, OrchestratorError> {
     let path = plan_path(runner_temp, run_key);
     let bound = crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES;
-    let text = match crate::retrieve_reports::read_staged_text(&path, bound) {
+    let text = match velnor_actions_orchestrator_core::staged_reads::read_staged_text(&path, bound)
+    {
         Ok(text) => text,
         Err("missing") => {
             return Err(OrchestratorError::io(
