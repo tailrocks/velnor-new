@@ -1,0 +1,5 @@
+schema = 1
+
+[workflow]
+policy = "velnor-repository-v1"
+default_branch = "main"
