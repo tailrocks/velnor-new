@@ -1,12 +1,6 @@
 //! Public orchestrator API re-exports.
 
-pub use super::internal::{
-    MERGE_OP, PLAN_OP, PlanOutputs, REQUEST_FILE_ENV, WRITE_REQUEST_OP, merge_passed,
-    plan_internal, plan_outputs, publish_final_report, publish_plan_files, response_path_for,
-    write_request, write_request_parts,
-};
 pub use super::merge::merge_internal;
-pub use super::merge_request::assemble_merge_request;
 pub use super::retrieve_reports::{FETCH_OP, retrieve_reports};
 pub use super::task_report::write_task_report;
 pub use velnor_actions_contract_config::ExecutionMode;
@@ -44,6 +38,12 @@ pub use velnor_actions_orchestrator_generation::provenance::{
     EvidenceProvenance, ProfileProvenance,
 };
 pub use velnor_actions_orchestrator_generation::routing::{migrate_config, parse_dispatch_mode};
+pub use velnor_actions_orchestrator_internal::internal::{
+    MERGE_OP, PLAN_OP, PlanOutputs, REQUEST_FILE_ENV, WRITE_REQUEST_OP, merge_passed,
+    plan_internal, plan_outputs, publish_final_report, publish_plan_files, response_path_for,
+    write_request, write_request_parts,
+};
+pub use velnor_actions_orchestrator_internal::merge_request::assemble_merge_request;
 pub use velnor_actions_orchestrator_pins::pins::{
     acquire_script_argv, consumer_acquire_step_with_manifest,
 };

@@ -15,7 +15,6 @@ use velnor_actions_orchestrator_core::decisions::dedupe_sorted;
 use velnor_actions_orchestrator_core::{OrchestratorError, internal, internal_contract};
 
 use crate::cover_baseline::{BaselineInputs, apply_baseline};
-use crate::merge::BaselineManifest;
 use velnor_actions_orchestrator_core::run_key::resolve_run_key;
 use velnor_actions_orchestrator_discovery::discover::Discovery;
 use velnor_actions_orchestrator_discovery::select_edges::plan_task_graph;
@@ -23,6 +22,7 @@ use velnor_actions_orchestrator_generation::prepare::prepare;
 use velnor_actions_orchestrator_graph::internal_plan::snapshot::ExecutionSnapshot;
 use velnor_actions_orchestrator_graph::internal_plan::wire_w2::GroupWire;
 use velnor_actions_orchestrator_graph::internal_plan::{default_generator, plan_packages};
+use velnor_actions_orchestrator_merge::BaselineManifest;
 use velnor_actions_orchestrator_merge_ports::{changed_keys, member_changed};
 use velnor_actions_orchestrator_plan_obligation::plan_obligation::{
     GroupInputs, lane_table, plan_group,

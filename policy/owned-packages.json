@@ -74,6 +74,7 @@
     "velnor-actions-orchestrator-retrieve",
     "velnor-actions-orchestrator-baseline-publish",
     "velnor-actions-orchestrator-plan-obligation",
-    "velnor-actions-orchestrator-check-runtime"
+    "velnor-actions-orchestrator-check-runtime",
+    "velnor-actions-orchestrator-internal"
   ]
 }
