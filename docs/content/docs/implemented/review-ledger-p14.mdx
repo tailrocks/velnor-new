@@ -1,4 +1,7 @@
-# P14 review-feedback verdict ledger
+---
+title: "P14 review-feedback verdict ledger"
+description: "Audited head: `34550e889b82d5586120fb40da5522cb5e4d0509` (`docs/velnor-actions-spec`). Requirements: `docs/reviews/pr-1.md` §5; adoption: `docs/reviews/pr-1-adoption.md`; prior skeleton: `docs/reviews/pr-1-disposition.md` (stale in places — see verdicts). Prior audit: same file at `48af774` (2026-09-30); this revision re-verifies every row at the new head and adds the F1–F7 + G1–G7 consumer rounds. Method: each verdict from implementation/test bodies opened at the audited head, fixing SHA via blame/log. No code changed for this ledger."
+---
 
 Audited head: `34550e889b82d5586120fb40da5522cb5e4d0509` (`docs/velnor-actions-spec`).
 Requirements: `docs/reviews/pr-1.md` §5; adoption: `docs/reviews/pr-1-adoption.md`;
@@ -120,7 +123,7 @@ counter-evidence after a tried-and-reverted implementation (see below).
   (`source_prep.rs:106`); `--offline` on cargo cmds in `ci.yml`.
 - R11: per-job cache fixture (`impl_cache_fixtures.rs`: shared sources
   keys/paths, qualified Mise identities, single plan writer,
-  restore<MBX<fetch order); sequential-run evidence in
+  restore&lt;MBX&lt;fetch order); sequential-run evidence in
   `cache-measurements.md` (seed `36754512444`, warm `36760724180`, green
   `36777030585` @`695752e`: 21 entries / 1263.95 MiB stored, 12.3% of the
   assumed 10 GiB quota, zero evictions, per-job transfer/durations);

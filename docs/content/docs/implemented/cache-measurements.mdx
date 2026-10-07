@@ -1,4 +1,7 @@
-# P08 cache measurements + warm-reuse proof (R11/R12)
+---
+title: "P08 cache measurements + warm-reuse proof (R11/R12)"
+description: "Commit measured: `347976d` (branch `docs/velnor-actions-spec`); green run below at `695752e`. Hosted runs: seed [`36754512444`](https://github.com/tailrocks/velnor-new/actions/runs/36754512444) (plan-only, 2026-09-30T17:52Z, conclusion `failure`: plan failed at `Check generated files` AFTER the save), warm [`36760724180`](https://github.com/tailrocks/velnor-new/actions/runs/36760724180) (2026-09-30T18:44Z, conclusion `failure`: orchestrator crate failed, so Required failed — cache evidence below is still valid, but no green-run verdict may cite it), and green [`36777030585`](https://github.com/tailrocks/velnor-new/actions/runs/36777030585) (2026-09-30T21:04Z, conclusion `success`, 41/41 reports, `status: passed`), all `ubuntu-26.04` (`Image: ubuntu-26.04` in the provisioner log), `x86_64-unknown-linux-gnu`, rust 1.98.1, nextest 0.9.146, P08 `ci.yml`. Pins moved mid-day: seed/warm ran mise 2026.9.16 + mbx 1.19.0, green runs mise 2026.9.18 + mbx 1.21.0 (install lines verified per run). Service listing pulled 2026-09-30 ~19:25Z and re-pulled 2026-10-01 ~05:55Z (read-only `gh cache list` + `cache/usage` API); the two pulls are byte-identical (§1). Local fixture runs on `arm64` macOS, rustup cargo 1.98.1 direct (generated steps use `mise exec rust@1.98.1`; the cargo-level probe/fetch behavior is identical — the `mise exec` launch delta is not isolated here). Every figure below is measured; the single assumption (quota limit) and every derived aggregate are labeled. Nothing is fabricated."
+---
 
 Commit measured: `347976d` (branch `docs/velnor-actions-spec`);
 green run below at `695752e`.
@@ -67,7 +70,7 @@ Seed = run 36754512444 (plan ran, crates skipped: plan failed at
 (plan + 7 crates + validators + Required; orchestrator FAILED —
 red run, cache branches only). Green = run 36777030585 (success,
 17 m 30 s created→updated, fully accounted in
-[performance](../content/docs/implemented/performance.mdx)).
+[performance](/docs/implemented/performance)).
 
 | Layer / step | Seed (cold) | Warm (N+1, red) | Green (N+2) |
 | --- | --- | --- | --- |
@@ -171,7 +174,7 @@ branch in every crate fetch step, `--offline` on every obligation,
 and disjoint MBX/Cargo cache shapes with lock-content re-keying via
 `hashFiles` at runtime; `impl_cache_fixtures.rs` asserts per-job
 keys/paths, one shared sources key, one tools identity per tool
-union, a single plan writer, and restore<MBX<fetch order. Hosted §2
+union, a single plan writer, and restore&lt;MBX&lt;fetch order. Hosted §2
 shows the seed/warm/green branches with zero fetch re-download on
 warm and green. Local §3 replays both branches verbatim.
 UNMEASURED / open: MBX objects seed (needs a default-branch P08 run
