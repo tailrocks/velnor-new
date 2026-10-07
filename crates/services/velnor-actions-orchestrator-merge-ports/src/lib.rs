@@ -6,12 +6,16 @@
 //! [`CoverPort`] trait through which merge calls cover behavior. Neither
 //! side depends on the other; the hub implements the port.
 
+mod changed_work;
+mod cover_baseline_port;
 mod cover_port;
 mod cover_types;
 mod merge_types;
 mod schema;
 mod shard_types;
 
+pub use changed_work::{changed_keys, member_changed};
+pub use cover_baseline_port::CoverBaselinePort;
 pub use cover_port::CoverPort;
 pub use cover_types::{CoverSinks, Fold, Partition, Signals};
 pub use merge_types::{BaselineManifest, BaselineTaskEntry, CandidateAttestation, MergeRequest};

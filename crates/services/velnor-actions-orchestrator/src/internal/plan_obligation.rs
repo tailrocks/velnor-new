@@ -6,7 +6,7 @@
 //! reuse outcome (execute until task-cache proof exists) and stay
 //! eligible for later baseline coverage.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use velnor_actions_contract::{Stack, StackExtension};
@@ -33,8 +33,8 @@ use velnor_actions_orchestrator_graph::internal_plan::{
     IdentityInputs, adapter_metadata, cache_ids_for, evidence_for_group, execute_ids,
     nextest_config_for, record_task_cache, task_identity_digest, toolchain_id,
 };
+pub(crate) use velnor_actions_orchestrator_merge_ports::{changed_keys, member_changed};
 use velnor_actions_orchestrator_provisioning::vectors::task_argv;
-use velnor_actions_orchestrator_selection::select::group_changed;
 
 #[cfg(test)]
 mod tests;
@@ -73,27 +73,6 @@ pub(crate) struct GroupInputs<'a> {
 pub(crate) fn lane_table(universe: &[&ProposedTask]) -> BTreeMap<String, u32> {
     let ids: Vec<String> = universe.iter().map(|task| task.task_id.clone()).collect();
     assign_lanes(&ids).into_iter().collect()
-}
-
-/// Changed unit keys for tasks with empty unit IDs.
-pub(crate) fn changed_keys(
-    universe: &[&ProposedTask],
-    changed: &BTreeSet<String>,
-) -> BTreeSet<String> {
-    universe
-        .iter()
-        .filter(|task| changed.contains(&task.identity.unit_id))
-        .map(|task| task.identity.unit_key.clone())
-        .collect()
-}
-
-/// True when one universe member counts as changed.
-pub(crate) fn member_changed(
-    task: &ProposedTask,
-    changed: Option<&BTreeSet<String>>,
-    keys: &BTreeSet<String>,
-) -> bool {
-    changed.is_none_or(|set| group_changed(task, set, keys))
 }
 
 /// Extension bundle plus closure-bound identity digests for one task.

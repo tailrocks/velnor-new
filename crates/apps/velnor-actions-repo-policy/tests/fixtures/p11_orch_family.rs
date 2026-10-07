@@ -150,9 +150,12 @@ const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
         "velnor-actions-orchestrator-merge-ports",
         &[
             "velnor-actions-contract",
+            "velnor-actions-contract-planning",
             "velnor-actions-contract-workflow",
+            "velnor-actions-mise",
             "velnor-actions-orchestrator-core",
             "velnor-actions-orchestrator-external-data",
+            "velnor-actions-orchestrator-selection",
         ],
     ),
     (

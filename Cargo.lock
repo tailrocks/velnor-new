@@ -3875,9 +3875,12 @@ dependencies = [
  "serde",
  "serde_json",
  "velnor-actions-contract",
+ "velnor-actions-contract-planning",
  "velnor-actions-contract-workflow",
+ "velnor-actions-mise",
  "velnor-actions-orchestrator-core",
  "velnor-actions-orchestrator-external-data",
+ "velnor-actions-orchestrator-selection",
 ]
 
 [[package]]
