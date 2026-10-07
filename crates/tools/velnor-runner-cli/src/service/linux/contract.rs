@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use velnor_runner_host::{HostConfig, HostPlatform};
+use velnor_runner_host::{HostConfig, HostError, HostPlatform, read_host_config_file};
 
 use super::systemd::{IdentityUnitSnapshot, StopTimeout, UnitSnapshot};
 use super::{BINARY, CONFIG, IDENTITY_BINARY, IDENTITY_UNIT, STATE, ServiceFault, UNIT};
@@ -78,7 +78,16 @@ pub(super) fn verify_identity_contract(
 }
 
 pub(super) fn configured_drain_timeout(config_path: &Path) -> Result<u64, ServiceFault> {
-    let text = std::fs::read_to_string(config_path).map_err(|_| ServiceFault::InvalidConfig)?;
+    configured_drain_timeout_with(config_path, read_host_config_file)
+}
+
+pub(super) fn configured_drain_timeout_with(
+    config_path: &Path,
+    read_config: impl FnOnce(&Path, HostPlatform) -> Result<Option<String>, HostError>,
+) -> Result<u64, ServiceFault> {
+    let text = read_config(config_path, HostPlatform::Linux)
+        .map_err(|_| ServiceFault::InvalidConfig)?
+        .ok_or(ServiceFault::InvalidConfig)?;
     let config = HostConfig::parse(&text).map_err(|_| ServiceFault::InvalidConfig)?;
     config
         .validate_for_host(HostPlatform::Linux)

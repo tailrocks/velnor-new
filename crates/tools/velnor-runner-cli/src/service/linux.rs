@@ -9,6 +9,7 @@ use conditions::read_identity_marker_condition;
 use systemd::{IdentityUnitSnapshot, UnitSnapshot, parse_identity_snapshot, parse_snapshot};
 #[cfg(test)]
 use systemd::{StopTimeout, parse_stop_timeout, parse_timespan_usec};
+use velnor_runner_host::read_host_config_file;
 
 mod conditions;
 mod contract;
@@ -137,6 +138,20 @@ pub(super) fn service(action: ServiceAction, config_path: &Path, state_path: &Pa
         eprintln!("{}", ServiceFault::InvalidConfig.message());
         return ExitCode::from(1);
     }
+    let mut manager = Systemctl;
+    if matches!(action, ServiceAction::Preflight) {
+        return match preflight::verify_loaded_unit_for_config(
+            &mut manager,
+            config_path,
+            read_host_config_file,
+        ) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(fault) => {
+                eprintln!("{}", fault.message());
+                ExitCode::from(1)
+            }
+        };
+    }
     let drain_timeout_secs = match configured_drain_timeout(config_path) {
         Ok(timeout) => timeout,
         Err(fault) => {
@@ -144,7 +159,6 @@ pub(super) fn service(action: ServiceAction, config_path: &Path, state_path: &Pa
             return ExitCode::from(1);
         }
     };
-    let mut manager = Systemctl;
     match perform(action, &mut manager, drain_timeout_secs) {
         Ok(()) => ExitCode::SUCCESS,
         Err(fault) => {

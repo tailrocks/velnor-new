@@ -1,11 +1,13 @@
 use std::collections::VecDeque;
 use std::io;
+use std::path::Path;
+use velnor_runner_host::{HostError, HostPlatform};
 
 use super::super::{
     EXPECTED_CREDENTIAL_PROPERTY, IDENTITY_UNIT, Manager, ManagerOutput, ServiceFault, UNIT,
     conditions::condition_output, perform,
 };
-use super::verify_loaded_unit;
+use super::{verify_loaded_unit, verify_loaded_unit_for_config};
 use crate::args::ServiceAction;
 
 #[derive(Default)]
@@ -217,4 +219,61 @@ fn service_preflight_dispatch_accepts_the_systemd_activation_phase() {
     assert_eq!(perform(ServiceAction::Preflight, &mut manager, 30), Ok(()));
     assert_eq!(manager.systemctl_calls.len(), 2);
     assert_eq!(manager.busctl_calls.len(), 3);
+}
+
+#[test]
+fn protected_config_reader_failures_do_not_contact_systemd() {
+    // Owner/mode, symlink, and regular-file checks belong to the protected
+    // host reader. Inject its rejection result here to prove the preflight
+    // command stops before any manager request for each rejected file class.
+    for failure in ["insecure mode", "symlink", "fifo"] {
+        let mut manager = FakeManager::default();
+        let result = verify_loaded_unit_for_config(
+            &mut manager,
+            Path::new("/etc/velnor-host/host.toml"),
+            move |path, platform| {
+                assert_eq!(path, Path::new("/etc/velnor-host/host.toml"));
+                assert_eq!(platform, HostPlatform::Linux);
+                match failure {
+                    "insecure mode" | "symlink" | "fifo" => Err(HostError::Config),
+                    _ => unreachable!("test case is fixed"),
+                }
+            },
+        );
+
+        assert_eq!(result, Err(ServiceFault::InvalidConfig), "{failure}");
+        assert_eq!(
+            manager.systemctl_calls,
+            Vec::<Vec<String>>::new(),
+            "{failure}"
+        );
+        assert_eq!(manager.busctl_calls, Vec::<Vec<String>>::new(), "{failure}");
+    }
+}
+
+#[test]
+fn protected_config_reader_requires_a_present_valid_linux_file_before_manager_queries() {
+    let mut manager = FakeManager::default();
+    let missing = verify_loaded_unit_for_config(
+        &mut manager,
+        Path::new("/etc/velnor-host/host.toml"),
+        |_, platform| {
+            assert_eq!(platform, HostPlatform::Linux);
+            Ok(None)
+        },
+    );
+    assert_eq!(missing, Err(ServiceFault::InvalidConfig));
+    assert_eq!(manager.systemctl_calls, Vec::<Vec<String>>::new());
+
+    let mut manager = FakeManager::default();
+    let invalid = verify_loaded_unit_for_config(
+        &mut manager,
+        Path::new("/etc/velnor-host/host.toml"),
+        |_, platform| {
+            assert_eq!(platform, HostPlatform::Linux);
+            Ok(Some("schema = 2\n".to_owned()))
+        },
+    );
+    assert_eq!(invalid, Err(ServiceFault::InvalidConfig));
+    assert_eq!(manager.systemctl_calls, Vec::<Vec<String>>::new());
 }
