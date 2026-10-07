@@ -38,7 +38,6 @@ fn empty_poll_waits() {
 fn available_ids_are_the_only_acquire() {
     let poll = batch(vec![
         job(InnerKind::Available, Some(9)),
-        job(InnerKind::Available, None),
         job(InnerKind::Completed, Some(3)),
         job(InnerKind::Assigned, Some(8)),
     ]);
@@ -48,6 +47,31 @@ fn available_ids_are_the_only_acquire() {
             message_id: 4,
             ids: vec![9],
         }
+    );
+}
+
+#[test]
+fn available_event_without_request_id_blocks_the_whole_batch() {
+    let poll = batch(vec![
+        job(InnerKind::Available, Some(9)),
+        job(InnerKind::Available, None),
+        job(InnerKind::Completed, Some(3)),
+    ]);
+    assert_eq!(offer(&poll), Offer::MalformedAvailable);
+}
+
+#[test]
+fn invalid_or_duplicate_request_ids_block_the_whole_batch() {
+    assert_eq!(
+        offer(&batch(vec![job(InnerKind::Available, Some(0))])),
+        Offer::MalformedAvailable
+    );
+    assert_eq!(
+        offer(&batch(vec![
+            job(InnerKind::Available, Some(9)),
+            job(InnerKind::Available, Some(9)),
+        ])),
+        Offer::MalformedAvailable
     );
 }
 

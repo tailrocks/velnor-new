@@ -14,6 +14,9 @@ pub enum Offer {
         /// `runnerRequestId` values from `JobAvailable` only.
         ids: Vec<i64>,
     },
+    /// A `JobAvailable` event has a missing, invalid, or duplicate request id.
+    /// Keep the whole message on the queue; do not act on a partial projection.
+    MalformedAvailable,
 }
 
 /// `JobAvailable` ids only. Other kinds do not free or acquire a slot.
@@ -26,7 +29,20 @@ pub fn offer(poll: &Poll) -> Offer {
 }
 
 fn acquire_offer(batch: &ParsedBatch) -> Offer {
-    let ids = available_ids(batch);
+    let mut ids = Vec::new();
+    for job in batch
+        .jobs
+        .iter()
+        .filter(|job| matches!(job.kind, InnerKind::Available))
+    {
+        let Some(request_id) = job.request_id.filter(|id| *id > 0) else {
+            return Offer::MalformedAvailable;
+        };
+        if ids.contains(&request_id) {
+            return Offer::MalformedAvailable;
+        }
+        ids.push(request_id);
+    }
     if ids.is_empty() {
         Offer::Wait
     } else {
@@ -45,15 +61,6 @@ pub fn progress_only(batch: &ParsedBatch) -> bool {
             .jobs
             .iter()
             .all(|job| matches!(job.kind, InnerKind::Started | InnerKind::Completed))
-}
-
-fn available_ids(batch: &ParsedBatch) -> Vec<i64> {
-    batch
-        .jobs
-        .iter()
-        .filter(|job| matches!(job.kind, InnerKind::Available))
-        .filter_map(|job| job.request_id)
-        .collect()
 }
 
 #[cfg(test)]

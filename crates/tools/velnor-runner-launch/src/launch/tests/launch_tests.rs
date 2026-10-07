@@ -8,7 +8,7 @@ use crate::launch::fakes::valid_worker_volume;
 use crate::launch::harness::{
     CANARY, Mode, Script, absent, assigned_wait, available, ctx, open, started_progress,
 };
-use crate::launch::{Idle, drive_offer, idle};
+use crate::launch::{Idle, drive_offer, drive_offer_tracked, idle};
 use velnor_runner_host::{EnsureError, HostError, IntentState, Started};
 
 #[test]
@@ -84,6 +84,69 @@ fn statistics_advance_and_offers_stay() {
         jobs: Vec::new(),
     };
     assert_eq!(idle(&Poll::Batch(synthetic)), Idle::Blocked);
+}
+
+#[tokio::test]
+async fn malformed_available_in_mixed_wire_batch_is_redelivered_without_effects()
+-> Result<(), String> {
+    let (scratch, journal) = open("malformed-available-redelivery").await?;
+    let body = serde_json::json!([
+        {"messageType": "JobAvailable", "runnerRequestId": 9, "jobId": "job-9"},
+        {"messageType": "JobAvailable", "jobId": "job-missing-request"},
+        {"messageType": "JobCompleted", "jobId": "job-8", "runnerId": 2, "runnerName": "runner-2"}
+    ])
+    .to_string();
+    let wire = serde_json::json!({
+        "messageId": 77,
+        "messageType": "RunnerScaleSetJobMessages",
+        "body": body,
+        "statistics": {
+            "totalAvailableJobs": 1,
+            "totalAcquiredJobs": 0,
+            "totalAssignedJobs": 1,
+            "totalRunningJobs": 0,
+            "totalRegisteredRunners": 1,
+            "totalBusyRunners": 0,
+            "totalIdleRunners": 1
+        }
+    })
+    .to_string();
+    let poll = velnor_runner_github::parse_poll(200, &wire)
+        .map_err(|_| "mixed Scale Set wire message did not parse".to_owned())?;
+    assert_eq!(idle(&poll), Idle::Blocked);
+
+    let mut script = Script {
+        calls: Vec::new(),
+        mode: Mode::Ok,
+    };
+    for _ in 0..2 {
+        let result = drive_offer_tracked(
+            &mut script,
+            &ctx(),
+            &poll,
+            &journal,
+            |_volume, _jit, _bind| async {
+                Ok(Started {
+                    dind_id: "dind-never-started".to_owned(),
+                    runner_id: "runner-never-started".to_owned(),
+                })
+            },
+        )
+        .await;
+        assert!(matches!(
+            result,
+            Err(EnsureError::Unexpected {
+                status: 0,
+                step: "queue message"
+            })
+        ));
+        assert_eq!(script.calls, Vec::<&'static str>::new());
+        assert_eq!(
+            journal.rows().await.map_err(|error| error.to_string())?,
+            Vec::<velnor_runner_host::reconcile::IntentRow>::new()
+        );
+    }
+    absent(&scratch.file())
 }
 
 fn no_stats(jobs: Vec<InnerJob>) -> Poll {

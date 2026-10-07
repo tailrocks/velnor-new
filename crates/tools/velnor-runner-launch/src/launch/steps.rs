@@ -56,7 +56,7 @@ pub(crate) fn idle(polled: &Poll) -> Idle {
                     }
                 }
             }
-            Offer::Acquire { .. } | Offer::Wait => Idle::Blocked,
+            Offer::Acquire { .. } | Offer::MalformedAvailable | Offer::Wait => Idle::Blocked,
         },
     }
 }
@@ -83,6 +83,10 @@ pub(super) fn assignment(
     match offer(polled) {
         Offer::Wait => Ok(None),
         Offer::Acquire { ids, .. } => one_request(batch, &ids),
+        Offer::MalformedAvailable => Err(EnsureError::Unexpected {
+            status: 0,
+            step: "queue message",
+        }),
     }
 }
 
