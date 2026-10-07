@@ -1,5 +1,5 @@
 use super::*;
-use crate::clippy_groups::ClippyMemoryPlan;
+use velnor_actions_orchestrator_core::clippy_groups::ClippyMemoryPlan;
 use velnor_actions_rust::{TaskGroup, TaskKind};
 use velnor_actions_rust_core::{CompileDriver, NextestProfile, TestRunner};
 /// Discovery shell carrying only task proposals.

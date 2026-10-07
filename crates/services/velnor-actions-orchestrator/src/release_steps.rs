@@ -25,9 +25,9 @@ use velnor_actions_workflow_release::release_tree::{
 };
 use velnor_actions_workflow_steps::{MiseSetup, ambient_shell_step, mise_setup_step};
 
-use crate::OrchestratorError;
 use crate::release_checkouts::{forge_env, policy_checkout, source_checkout, source_manifest};
-use crate::utf8::strings_of;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::utf8::strings_of;
 
 /// Bootstrap token: env key plus its only secret binding.
 const BOOTSTRAP_TOKEN_ENV: &str = "CARGO_REGISTRY_TOKEN";

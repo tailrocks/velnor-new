@@ -1,7 +1,7 @@
 //! F2 scheduling tests: lanes, partitions, timing, ownership, identity.
 
-use velnor_actions_orchestrator::decisions::preview_unique_dir;
-use velnor_actions_orchestrator::schedule::{
+use velnor_actions_orchestrator_core::decisions::preview_unique_dir;
+use velnor_actions_orchestrator_core::schedule::{
     TaskTiming, aggregate_timings, assign_lanes, cache_ownership_table, distribute_by_weight,
     effective_weight, fanout_worthwhile, overlap_ratio, partition_count, resource_exclusions,
     sequential_reference,

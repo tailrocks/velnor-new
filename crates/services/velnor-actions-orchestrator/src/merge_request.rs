@@ -35,10 +35,10 @@ use velnor_actions_contract::{canonical_json_str, parse_strict_json};
 use velnor_actions_contract_workflow::NEEDS_EXPECTED_ENV;
 
 use self::needs_channel::{NEEDS_ENV, parse_needs};
-use crate::OrchestratorError;
-use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
 use crate::request_event::workflow_event_for;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::{internal, internal_contract};
 
 /// Assemble one canonical merge request from a run directory.
 ///
@@ -78,7 +78,11 @@ pub fn assemble_merge_request(run_key: &str, run_dir: &Path) -> Result<String, O
 /// explicitly instead of failing the whole request; the plan side
 /// reads the same file through the same helper.
 fn event_payload_from(value: &std::ffi::OsStr) -> Option<String> {
-    crate::safe_read::read_event_file(Path::new(value), crate::safe_read::MAX_REPO_FILE_BYTES).ok()
+    velnor_actions_orchestrator_core::safe_read::read_event_file(
+        Path::new(value),
+        velnor_actions_orchestrator_core::safe_read::MAX_REPO_FILE_BYTES,
+    )
+    .ok()
 }
 
 /// Assemble one merge request with explicit needs and event channels.
@@ -245,9 +249,13 @@ pub(crate) fn write_merge_request_to(
     let path = request_path.to_path_buf();
     let request = assemble_merge_request(run_key, run_dir)?;
     if let Some(parent) = path.parent() {
-        crate::exclusive_write::create_dir_no_symlink(anchor, parent)?;
+        velnor_actions_orchestrator_core::exclusive_write::create_dir_no_symlink(anchor, parent)?;
     }
-    crate::exclusive_write::write_exclusive(&path, request.as_bytes(), "request")?;
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
+        &path,
+        request.as_bytes(),
+        "request",
+    )?;
     Ok(path)
 }
 

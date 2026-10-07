@@ -302,13 +302,13 @@ pub(crate) fn parse_workflow_ref(input: &str) -> Option<(String, String, String)
 /// Lowercase `owner/repo` slug from the git origin URL, when the origin
 /// is a `github.com` remote a workflow slug can name.
 ///
-/// Resolution runs through the shared [`crate::origin::origin_url_via_git`]
+/// Resolution runs through the shared [`velnor_actions_orchestrator_core::origin::origin_url_via_git`]
 /// helper, so linked worktrees, includes, and worktree configuration all
 /// follow Git semantics. Other hosts have no slug form comparable to
 /// `owner/repo`; those checkouts fail closed in [`validate_repository`],
 /// never warn-and-proceed.
 pub(crate) fn repository_slug_from_origin(root: &std::path::Path) -> Option<String> {
-    let url = crate::origin::origin_url_via_git(root)?;
+    let url = velnor_actions_orchestrator_core::origin::origin_url_via_git(root)?;
     normalize_origin_url(&url).and_then(|normalized| {
         normalized
             .strip_prefix("github.com/")

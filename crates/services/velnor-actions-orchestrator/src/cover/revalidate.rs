@@ -13,8 +13,8 @@ use crate::cover_baseline::provenance_check::{
     validate_task_entry,
 };
 use crate::cover_baseline::unix_now;
-use crate::decisions::baseline_expired;
 use crate::merge::BaselineManifest;
+use velnor_actions_orchestrator_core::decisions::baseline_expired;
 
 /// Merge-time anchor expectations from runner-owned environment.
 ///
@@ -68,7 +68,8 @@ fn merge_anchors_from_parts(
     workflow_ref: Option<&str>,
 ) -> MergeAnchorExpectations {
     MergeAnchorExpectations {
-        repository_slug: repository.and_then(crate::origin::validate_repository_slug),
+        repository_slug: repository
+            .and_then(velnor_actions_orchestrator_core::origin::validate_repository_slug),
         protected_ref: protected_ref_from(base_ref, git_ref),
         workflow_path: workflow_ref
             .and_then(parse_workflow_ref)

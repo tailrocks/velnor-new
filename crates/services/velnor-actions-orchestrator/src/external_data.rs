@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{ContractError, validate_digest};
 
-use crate::extension_schemas::task_kind_segment;
+use velnor_actions_orchestrator_core::extension_schemas::task_kind_segment;
 
 /// Task-kind segment marking an external-data-backed check.
 pub const EXTERNAL_DATA_CHECK_KIND: &str = "advisory";

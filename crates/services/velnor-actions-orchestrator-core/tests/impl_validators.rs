@@ -2,7 +2,7 @@
 
 use std::ffi::OsString;
 
-use velnor_actions_orchestrator::{
+use velnor_actions_orchestrator_core::{
     GitArgError, validate_diff_args, validate_diff_rev, validate_git_args, validate_rev,
     validate_select_diff_args, validate_select_show_args, validate_show_args, validate_show_path,
 };

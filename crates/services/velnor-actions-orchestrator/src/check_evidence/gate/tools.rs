@@ -1,10 +1,10 @@
 //! Artifact, installed-tree, and executable observations bind exact root tool pins.
-use crate::OrchestratorError;
-use crate::internal::{internal, internal_contract};
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{canonical_json_bytes, digest_b3};
 use velnor_actions_contract_config::config::{CheckPlatform, QualifiedTool, QualifiedToolArtifact};
 use velnor_actions_mise::check_tool_probes::QualifiedExecutableProof;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::{internal, internal_contract};
 
 /// Actual installation identity carried inside the ordinary check execution receipt.
 #[derive(Debug, Clone, Serialize, Deserialize)]

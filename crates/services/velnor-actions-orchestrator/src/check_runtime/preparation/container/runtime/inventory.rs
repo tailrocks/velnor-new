@@ -1,11 +1,11 @@
-use crate::OrchestratorError;
-use crate::internal::internal;
 use std::fs::{self, Metadata};
 use std::path::{Component, Path};
 use velnor_actions_contract_config::config::{
     MAX_CHECK_CONTAINER_RUNTIME_ENTRIES, MAX_CHECK_CONTAINER_RUNTIME_ENTRY_PATH_BYTES,
 };
 use velnor_actions_mise::CheckDeadline;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 use super::{RuntimeEntryEvidence, RuntimeEntryKind};
 
@@ -162,7 +162,7 @@ fn checkpoint(deadline: Option<CheckDeadline>) -> Result<(), OrchestratorError> 
     if let Some(deadline) = deadline {
         deadline
             .remaining()
-            .map_err(|error| crate::internal::internal(&error.to_string()))?;
+            .map_err(|error| velnor_actions_orchestrator_core::internal(&error.to_string()))?;
     }
     Ok(())
 }

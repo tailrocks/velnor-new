@@ -18,10 +18,10 @@ use velnor_actions_tofu_core::{
     EvidenceLevel, TofuNote, classify_with_contents, effective_set, plan_note, qualify_roots,
 };
 
-use crate::OrchestratorError;
-use crate::config::CONFIG_REL;
-use crate::safe_read::read_repo_file_cached;
 use crate::toolcheck::{TOOL_INPUT_PATHS, ToolInputCheck};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::config::CONFIG_REL;
+use velnor_actions_orchestrator_core::safe_read::read_repo_file_cached;
 
 /// Tofu step output: configured candidates plus an optional plan note.
 pub(crate) struct TofuStep {

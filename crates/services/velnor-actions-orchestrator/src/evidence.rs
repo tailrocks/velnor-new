@@ -11,8 +11,8 @@ use velnor_actions_rust_core::{
     WorkspaceRecord, detect_profile, is_generated_output,
 };
 
-use crate::OrchestratorError;
 use crate::discover::PlannedWorkspace;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Detect the execution profile from bytes read under `root`.
 ///

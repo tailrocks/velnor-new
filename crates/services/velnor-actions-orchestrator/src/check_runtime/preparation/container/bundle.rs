@@ -1,12 +1,12 @@
 //! Bounded, immutable projection of a declared `OrbStack` SDK bundle.
 
-use crate::OrchestratorError;
-use crate::internal::internal;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use velnor_actions_contract_config::config::HostOrbStackSdk;
 use velnor_actions_mise::CheckDeadline;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 mod tree;
 
@@ -335,7 +335,7 @@ fn checkpoint(deadline: Option<CheckDeadline>) -> Result<(), OrchestratorError> 
     if let Some(deadline) = deadline {
         deadline
             .remaining()
-            .map_err(|error| crate::internal::internal(&error.to_string()))?;
+            .map_err(|error| velnor_actions_orchestrator_core::internal(&error.to_string()))?;
     }
     Ok(())
 }

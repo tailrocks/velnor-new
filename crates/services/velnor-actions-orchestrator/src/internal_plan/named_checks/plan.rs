@@ -1,6 +1,4 @@
 //! Named checks complete through the existing obligation and matrix envelopes.
-use crate::OrchestratorError;
-use crate::internal::{internal, internal_contract};
 use crate::internal_plan::identities::{platform_id_for_group, toolchain_digest_for};
 use crate::internal_plan::snapshot::canonical_digest;
 use crate::internal_plan::{IdentityInputs, execute_ids, task_identity_digest};
@@ -9,6 +7,8 @@ use velnor_actions_contract_workflow::{
     MatrixEntry, NamedCheckLane, ObligationDecision, PlanGenerator, PlanObligation,
 };
 use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::{internal, internal_contract};
 
 /// Shared plan-time and runtime derivation; no detector or Cargo inventory required.
 #[cfg(test)]

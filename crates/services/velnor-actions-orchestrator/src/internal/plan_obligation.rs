@@ -17,9 +17,7 @@ use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::restore::probe_tool_availability;
 use velnor_actions_rust::extension_for_proposal;
 
-use crate::OrchestratorError;
 use crate::discover::Discovery;
-use crate::internal::{internal, internal_contract};
 use crate::internal_plan::closure::resolve_closure_at_root;
 use crate::internal_plan::identities::{
     ExtensionBundle, extension_bundle_with_snapshot, platform_id_for_group,
@@ -30,9 +28,11 @@ use crate::internal_plan::{
     IdentityInputs, adapter_metadata, cache_ids_for, evidence_for_group, execute_ids,
     nextest_config_for, record_task_cache, task_identity_digest, toolchain_id,
 };
-use crate::schedule::assign_lanes;
 use crate::select::group_changed;
 use crate::vectors::task_argv;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::schedule::assign_lanes;
+use velnor_actions_orchestrator_core::{internal, internal_contract};
 
 #[cfg(test)]
 mod tests;

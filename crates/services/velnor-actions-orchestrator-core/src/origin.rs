@@ -21,14 +21,14 @@ use velnor_actions_mise::GitRequest;
 ///
 /// The runner sets it immutably per job; workflow steps cannot change
 /// it, so it anchors repository expectations ahead of the git origin.
-pub(crate) const GITHUB_REPOSITORY_ENV: &str = "GITHUB_REPOSITORY";
+pub const GITHUB_REPOSITORY_ENV: &str = "GITHUB_REPOSITORY";
 
 /// Origin URL via `git config --get remote.origin.url` in `root`.
 ///
 /// Returns `None` when Git cannot run, exits nonzero (no such key),
 /// prints non-text, or prints a blank value; every miss fails closed
 /// at the caller. Nothing is fetched.
-pub(crate) fn origin_url_via_git(root: &Path) -> Option<String> {
+pub fn origin_url_via_git(root: &Path) -> Option<String> {
     let output = GitRequest::config(vec![
         OsString::from("--get"),
         OsString::from("remote.origin.url"),
@@ -51,7 +51,7 @@ pub(crate) fn origin_url_via_git(root: &Path) -> Option<String> {
 /// Exactly two nonempty segments around one `/`, no whitespace; hosting
 /// slugs compare case-insensitively, so the result lowercases. Anything
 /// else is not a slug: callers fall back or fail closed, never guess.
-pub(crate) fn validate_repository_slug(raw: &str) -> Option<String> {
+pub fn validate_repository_slug(raw: &str) -> Option<String> {
     if raw.chars().any(char::is_whitespace) {
         return None;
     }

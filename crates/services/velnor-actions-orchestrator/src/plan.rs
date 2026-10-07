@@ -13,11 +13,11 @@ use velnor_actions_workflow_release::release_tree::RELEASE_TREE_PATHS;
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 use velnor_actions_workflow_tree::rendered::ACTIONLINT_PATH;
 
-use crate::OrchestratorError;
 use crate::finalized::finalized_jobs;
 use crate::generate::render_staged_tree;
 use crate::plan_stacks::stacks_section;
 use crate::prepare::GenerationPreparation;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Render the concise deterministic `plan` report from a preparation,
 /// after rendering the full tree in memory and discarding the bytes.

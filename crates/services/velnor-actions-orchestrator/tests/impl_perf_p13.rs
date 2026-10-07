@@ -11,9 +11,9 @@ pub(crate) mod perf_fixtures_p13;
 pub(crate) mod perf_harness_p13;
 
 use velnor_actions_orchestrator::{
-    GenerateOptions, OrchestratorError, PlanOutputMode, generate, plan_internal, plan_outputs,
-    prepare,
+    GenerateOptions, PlanOutputMode, generate, plan_internal, plan_outputs, prepare,
 };
+use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_rust_core::parse_metadata_json;
 use velnor_actions_workflow_tree::MAX_WORKFLOW_BYTES;
 

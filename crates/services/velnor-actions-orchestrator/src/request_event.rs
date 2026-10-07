@@ -2,8 +2,8 @@
 
 use velnor_actions_contract_workflow::WorkflowEvent;
 
-use crate::OrchestratorError;
-use crate::internal::internal;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 /// Resolve one GitHub event name plus payload to a workflow event.
 ///

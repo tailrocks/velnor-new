@@ -1,7 +1,7 @@
 //! Parsing and deriving wrapper-captured task timing telemetry.
 
 use super::OrchestratorError;
-use crate::internal::internal;
+use velnor_actions_orchestrator_core::internal;
 
 /// Parse a captured `$?` value: an integer in the 8-bit exit range.
 pub(super) fn parse_exit_code(raw: &str) -> Result<i32, OrchestratorError> {

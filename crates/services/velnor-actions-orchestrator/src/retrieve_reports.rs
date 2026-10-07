@@ -26,9 +26,9 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::ToolCatalog;
 
-use crate::OrchestratorError;
-use crate::internal::{internal, internal_contract};
 use crate::retrieve_retry::download_with_retry;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::{internal, internal_contract};
 
 /// Retrieve operation tag (single-sourced from the renderer protocol).
 pub use velnor_actions_workflow_steps::steps::FETCH_OPERATION as FETCH_OP;
@@ -70,9 +70,9 @@ pub(crate) fn retrieve_reports_to(run_id: u64, run_dir: &Path) -> usize {
     let Some(plan) = plan else {
         return 0;
     };
-    let repo = std::env::var(crate::origin::GITHUB_REPOSITORY_ENV)
+    let repo = std::env::var(velnor_actions_orchestrator_core::origin::GITHUB_REPOSITORY_ENV)
         .ok()
-        .and_then(|raw| crate::origin::validate_repository_slug(&raw));
+        .and_then(|raw| velnor_actions_orchestrator_core::origin::validate_repository_slug(&raw));
     let Some(repo) = repo else {
         return 0;
     };
@@ -119,7 +119,8 @@ pub(crate) fn retrieve_args(
     repo: &str,
 ) -> Result<Vec<OsString>, OrchestratorError> {
     validate_artifact_id(artifact_id).map_err(internal_contract)?;
-    let Some(repo) = crate::origin::validate_repository_slug(repo) else {
+    let Some(repo) = velnor_actions_orchestrator_core::origin::validate_repository_slug(repo)
+    else {
         return Err(internal_contract(
             velnor_actions_contract::ContractError::identity("repository", "bad_lookup_repo"),
         ));

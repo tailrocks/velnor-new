@@ -12,11 +12,19 @@ pub(super) fn derive_downstream(plan: &Plan, task_id: &str, job_id: &str) -> Vec
         for (kind, task_ref) in &entry.execute_task_ids.tasks {
             match task_ref {
                 ExecuteTaskRef::Single(id) => ordered.push(
-                    crate::obligation_order::obligation_order_key(&entry.stack_id, kind, id),
+                    velnor_actions_orchestrator_core::obligation_order::obligation_order_key(
+                        &entry.stack_id,
+                        kind,
+                        id,
+                    ),
                 ),
                 ExecuteTaskRef::Shards(ids) => {
                     ordered.extend(ids.iter().map(|id| {
-                        crate::obligation_order::obligation_order_key(&entry.stack_id, kind, id)
+                        velnor_actions_orchestrator_core::obligation_order::obligation_order_key(
+                            &entry.stack_id,
+                            kind,
+                            id,
+                        )
                     }));
                 }
             }

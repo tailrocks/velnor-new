@@ -5,9 +5,10 @@ use std::path::PathBuf;
 
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{
-    GenerateOptions, GenerateReport, GenerationPreparation, OrchestratorError, ToolSnapshot,
-    finalized_jobs, generate, plan_text_checked, prepare, render_staged_tree,
+    GenerateOptions, GenerateReport, GenerationPreparation, ToolSnapshot, finalized_jobs, generate,
+    plan_text_checked, prepare, render_staged_tree,
 };
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 use crate::impl_common::{
     TestResult, config_with_branch, err_of, git, make_repo, plan_for, snapshot,

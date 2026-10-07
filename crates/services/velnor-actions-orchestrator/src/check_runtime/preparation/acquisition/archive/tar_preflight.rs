@@ -4,8 +4,8 @@ use std::io::Read;
 
 use tar::EntryType;
 
-use crate::OrchestratorError;
-use crate::internal::internal;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 use super::{MAX_ENTRIES, MAX_ENTRY_BYTES, MAX_TOTAL_BYTES, archive_error};
 

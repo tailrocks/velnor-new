@@ -1,12 +1,12 @@
 //! Cargo.lock identity and exhaustive crates.io archive admission.
-use crate::OrchestratorError;
-use crate::internal::internal;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::Path;
 use velnor_actions_contract_config::config::QualifiedToolPlatform;
 use velnor_actions_mise::CheckDeadline;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 #[derive(Deserialize)]
 struct Manifest {

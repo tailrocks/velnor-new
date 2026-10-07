@@ -6,10 +6,10 @@ use std::fs;
 use crate::impl_common::{TestResult, config_with_branch, err_of, make_repo, plan_for};
 use velnor_actions_orchestrator::{
     CONFLICTING_TOOL_VALUES, DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, ExternalDataFreshness, ToolParse,
-    UNSUPPORTED_TOOL_VALUE, check_tool_inputs, coverage_schema_known, critical_path_for_groups,
-    external_data_kind, may_skip_external_data, prepare, render_critical_path,
-    reuse_eligible_for_schema, tool_conflicts,
+    UNSUPPORTED_TOOL_VALUE, check_tool_inputs, critical_path_for_groups, external_data_kind,
+    may_skip_external_data, prepare, render_critical_path, tool_conflicts,
 };
+use velnor_actions_orchestrator_core::{coverage_schema_known, reuse_eligible_for_schema};
 
 /// Config with default plus all-features Rust configurations.
 const TWO_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n\

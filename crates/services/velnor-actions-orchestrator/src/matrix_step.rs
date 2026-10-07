@@ -10,8 +10,8 @@ use velnor_actions_rust::{payload_env_for_kind, step_base_name};
 use velnor_actions_workflow_jobs::plan_format::FORMAT_STEP_NAME;
 use velnor_actions_workflow_steps::steps::{INTERNAL_OP_ENV, STAGED_BINARY_PREFIX};
 
-use crate::OrchestratorError;
 use crate::task_report::{EXIT_CODE_ENV, REPORT_OP, START_MS_ENV, TASK_ID_ENV};
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 mod tools;
 
@@ -62,7 +62,8 @@ pub(crate) fn shard_suffix(task_id: &str) -> Option<(u32, u32)> {
 
 /// Known stack for one obligation task ID, if its segment parses.
 fn obligation_stack(task_id: &str) -> Option<Stack> {
-    crate::extension_schemas::task_stack_segment(task_id).and_then(Stack::from_id)
+    velnor_actions_orchestrator_core::extension_schemas::task_stack_segment(task_id)
+        .and_then(Stack::from_id)
 }
 
 /// Fixed payload env for one obligation, dispatched by stack.
@@ -213,7 +214,7 @@ pub(crate) fn obligation_step(
     let stack_id = obligation_stack(&obligation.task_id).map_or(Stack::Rust.id(), Stack::id);
     let matrix_id =
         velnor_actions_contract::matrix_id_for_task_group(stack_id, &obligation.task_id)
-            .map_err(crate::internal::internal_contract)?;
+            .map_err(velnor_actions_orchestrator_core::internal_contract)?;
     let mut identity = obligation_identity_env(
         &obligation.task_id,
         &obligation.task_digest,

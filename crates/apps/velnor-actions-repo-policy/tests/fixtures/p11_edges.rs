@@ -100,6 +100,27 @@ fn expected_mise_family(leaf: &str) -> Option<Vec<&str>> {
     }
 }
 
+/// Orchestrator-family edges by leaf dir name.
+fn expected_orchestrator_family(leaf: &str) -> Option<Vec<&str>> {
+    match leaf {
+        "velnor-actions-orchestrator-core" => Some(vec![
+            "velnor-actions-actionlint",
+            "velnor-actions-contract",
+            "velnor-actions-contract-config",
+            "velnor-actions-contract-planning",
+            "velnor-actions-contract-release",
+            "velnor-actions-contract-workflow",
+            "velnor-actions-mise",
+            "velnor-actions-rust",
+            "velnor-actions-rust-core",
+            "velnor-actions-tofu-core",
+            "velnor-actions-workflow-steps",
+            "velnor-actions-workflow-tree",
+        ]),
+        _ => None,
+    }
+}
+
 /// Service/app edges by leaf dir name.
 fn expected_service(leaf: &str) -> Option<Vec<&str>> {
     match leaf {
@@ -111,6 +132,7 @@ fn expected_service(leaf: &str) -> Option<Vec<&str>> {
             "velnor-actions-contract-release",
             "velnor-actions-contract-workflow",
             "velnor-actions-mise",
+            "velnor-actions-orchestrator-core",
             "velnor-actions-rust",
             "velnor-actions-rust-core",
             "velnor-actions-tofu",
@@ -138,7 +160,10 @@ fn expected_service(leaf: &str) -> Option<Vec<&str>> {
             "velnor-actions-workflow-steps",
             "velnor-actions-workflow-tree",
         ]),
-        "velnor-actions-cli" => Some(vec!["velnor-actions-orchestrator"]),
+        "velnor-actions-cli" => Some(vec![
+            "velnor-actions-orchestrator",
+            "velnor-actions-orchestrator-core",
+        ]),
         "velnor-actions-repo-policy" => Some(vec![]),
         _ => expected_workflow_family(leaf),
     }
@@ -221,6 +246,7 @@ pub(crate) fn expected_internal(dir: &str) -> Vec<&str> {
     expected_contract_family(leaf)
         .or_else(|| expected_adapter(leaf))
         .or_else(|| expected_mise_family(leaf))
+        .or_else(|| expected_orchestrator_family(leaf))
         .or_else(|| expected_service(leaf))
         .unwrap_or_else(|| vec!["velnor-actions-contract"])
 }

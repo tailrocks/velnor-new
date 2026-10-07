@@ -255,5 +255,25 @@ impl From<velnor_actions_actionlint::ActionlintError> for OrchestratorError {
         }
     }
 }
+
+/// Build an internal error.
+#[must_use]
+pub fn internal(problem: &str) -> OrchestratorError {
+    OrchestratorError::Internal {
+        problem: problem.to_owned(),
+    }
+}
+
+/// Map a contract error into an internal error.
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "used directly as a map_err fn"
+)]
+#[must_use]
+pub fn internal_contract(error: velnor_actions_contract::ContractError) -> OrchestratorError {
+    OrchestratorError::Internal {
+        problem: error.to_string(),
+    }
+}
 #[cfg(test)]
 mod tests;

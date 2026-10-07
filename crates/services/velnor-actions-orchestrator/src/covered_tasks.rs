@@ -13,8 +13,8 @@ use velnor_actions_contract_workflow::{ObligationDecision, Plan};
 // Re-exported: the CLI emits this exact output name (single-sourced).
 pub use velnor_actions_workflow_renderer::COVERED_TASKS_OUTPUT;
 
-use crate::OrchestratorError;
-use crate::internal::internal_contract;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal_contract;
 
 /// Sorted unique covered task IDs of one plan.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

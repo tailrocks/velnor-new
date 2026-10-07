@@ -9,8 +9,8 @@ use velnor_actions_mise::{
     PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools, ToolCatalog, ToolHomes,
 };
 
-use crate::OrchestratorError;
-use crate::utf8::{strings_of, strings_of_env};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::utf8::{strings_of, strings_of_env};
 
 /// Crate-job Mise tools per role: Rust only when the job carries
 /// rust obligations, plus Opentofu

@@ -8,8 +8,8 @@
 use velnor_actions_contract_workflow::{CrateObligation, Step, StepId, StepRole};
 use velnor_actions_mise::PinnedTool;
 
-use crate::OrchestratorError;
-use crate::internal::internal;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 /// Provider-cache key prefix (per-root: target + tofu + root slug).
 pub(crate) const TOFU_PROVIDERS_KEY_PREFIX: &str =
@@ -134,7 +134,7 @@ pub(crate) fn tofu_root_for_obligations(
     let first = obligations
         .first()
         .ok_or_else(|| internal("tofu_empty_obligations"))?;
-    let key = crate::extension_schemas::task_key_segment(&first.task_id)
+    let key = velnor_actions_orchestrator_core::extension_schemas::task_key_segment(&first.task_id)
         .ok_or_else(|| internal("tofu_unparsable_key"))?;
     Ok(velnor_actions_tofu_core::root_for_key(&key))
 }

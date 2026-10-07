@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::ffi::OsString;
 
 /// Convert fixed argv to UTF-8 strings.
-pub(crate) fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
+pub fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
     let mut out = Vec::with_capacity(argv.len());
     for arg in argv {
         match arg.into_string() {
@@ -16,9 +16,7 @@ pub(crate) fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
 }
 
 /// Convert fixed env pairs to UTF-8 strings.
-pub(crate) fn strings_of_env(
-    env: &[(OsString, OsString)],
-) -> Result<BTreeMap<String, String>, String> {
+pub fn strings_of_env(env: &[(OsString, OsString)]) -> Result<BTreeMap<String, String>, String> {
     let mut out = BTreeMap::new();
     for (key, value) in env {
         let (Some(key), Some(value)) = (key.to_str(), value.to_str()) else {

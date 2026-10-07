@@ -7,20 +7,18 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use velnor_actions_contract::{
-    ContractError, canonical_json_bytes, parse_strict_json, plan_id_for_run,
-};
+use velnor_actions_contract::{canonical_json_bytes, parse_strict_json, plan_id_for_run};
 use velnor_actions_contract_config::{ExecutionMode, RunnerSelection};
 use velnor_actions_contract_planning::ProposedTask;
 use velnor_actions_contract_workflow::{
     NamedCheckLane, Plan, PlanBaseline, PlanMatrix, PlanRunner, WorkflowEvent, named_check_lanes,
 };
 use velnor_actions_mise::ToolCatalog;
+use velnor_actions_orchestrator_core::decisions::dedupe_sorted;
+use velnor_actions_orchestrator_core::{OrchestratorError, internal, internal_contract};
 
 use self::plan_obligation::{GroupInputs, changed_keys, lane_table, member_changed, plan_group};
-use crate::OrchestratorError;
 use crate::cover::{BaselineInputs, apply_baseline};
-use crate::decisions::dedupe_sorted;
 use crate::discover::Discovery;
 use crate::internal_plan::snapshot::ExecutionSnapshot;
 use crate::internal_plan::wire_w2::GroupWire;
@@ -255,24 +253,6 @@ pub(crate) fn check_schema(schema: u32) -> Result<(), OrchestratorError> {
     }
 }
 
-/// Build an internal error.
-pub(crate) fn internal(problem: &str) -> OrchestratorError {
-    OrchestratorError::Internal {
-        problem: problem.to_owned(),
-    }
-}
-
-/// Map a contract error into an internal error.
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "used directly as a map_err fn"
-)]
-pub(crate) fn internal_contract(error: ContractError) -> OrchestratorError {
-    OrchestratorError::Internal {
-        problem: error.to_string(),
-    }
-}
-
 /// Repository root: explicit override or resolved from the current directory.
 fn plan_root(override_root: Option<&Path>) -> Result<PathBuf, OrchestratorError> {
     if let Some(root) = override_root {
@@ -283,7 +263,7 @@ fn plan_root(override_root: Option<&Path>) -> Result<PathBuf, OrchestratorError>
     let cwd = std::env::current_dir().map_err(|err| OrchestratorError::RootDiscovery {
         problem: err.to_string(),
     })?;
-    crate::root::resolve_root(&cwd)
+    velnor_actions_orchestrator_core::root::resolve_root(&cwd)
 }
 
 /// Build the validated plan from the obligation universe.

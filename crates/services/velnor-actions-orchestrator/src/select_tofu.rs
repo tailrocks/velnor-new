@@ -17,9 +17,9 @@ use velnor_actions_tofu_core::{
     Family, ModuleEdges, chdir_finding_for_root, family_of, key_for_root, root_for_key,
 };
 
-use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::select_edges::{added_files, base_manifests, deleted_files};
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 #[cfg(test)]
 mod tests;

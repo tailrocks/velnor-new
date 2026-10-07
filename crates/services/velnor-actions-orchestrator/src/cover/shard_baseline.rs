@@ -36,7 +36,8 @@ impl BaselineLookup {
         repo: &str,
     ) -> Result<Self, String> {
         Self::validate_inputs(base, workflow, branch)?;
-        let Some(repo) = crate::origin::validate_repository_slug(repo) else {
+        let Some(repo) = velnor_actions_orchestrator_core::origin::validate_repository_slug(repo)
+        else {
             return Err("bad_lookup_repo".into());
         };
         Ok(Self {

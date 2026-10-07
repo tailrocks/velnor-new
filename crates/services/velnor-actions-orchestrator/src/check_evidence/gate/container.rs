@@ -1,5 +1,3 @@
-use crate::OrchestratorError;
-use crate::internal::{internal, internal_contract};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Component, Path};
@@ -8,6 +6,8 @@ use velnor_actions_contract_config::config::{CheckRunner, HostContainerProfile};
 use velnor_actions_mise::checks::{
     CheckCapabilityProof, ContainerObservation, validate_check_capability_proof,
 };
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::{internal, internal_contract};
 pub(crate) mod runtime;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

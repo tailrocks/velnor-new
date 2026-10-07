@@ -290,7 +290,7 @@ fn cli_invokes_no_tools_directly() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn init_reads_no_tool_files() -> Result<(), Box<dyn Error>> {
-    let body = read("crates/services/velnor-actions-orchestrator/src/init.rs")?;
+    let body = read("crates/services/velnor-actions-orchestrator-core/src/init.rs")?;
     for token in [
         "read_to_string",
         "File::open",

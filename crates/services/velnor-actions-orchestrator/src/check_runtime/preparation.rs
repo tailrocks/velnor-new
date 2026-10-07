@@ -1,13 +1,13 @@
 //! Runtime owns materialized isolated check homes; adapters only inspect/execute.
-use crate::OrchestratorError;
 use crate::check_evidence::reject_link_components;
-use crate::internal::internal;
 use std::ffi::OsStr;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use velnor_actions_mise::checks::SystemToolProof;
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, QualifiedCheck};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 mod acquisition;
 mod binary;
@@ -90,13 +90,17 @@ fn verify_source(
     checkpoint(deadline)?;
     let path = &check.proposal.identity.unit_path;
     reject_link_components(root, path)?;
-    match crate::safe_read::read_repo_file_until(
+    match velnor_actions_orchestrator_core::safe_read::read_repo_file_until(
         root,
         path,
-        crate::safe_read::MAX_REPO_FILE_BYTES,
+        velnor_actions_orchestrator_core::safe_read::MAX_REPO_FILE_BYTES,
         deadline,
     )? {
-        crate::safe_read::RepoRead::Text(current) if current == check.config_source => Ok(()),
+        velnor_actions_orchestrator_core::safe_read::RepoRead::Text(current)
+            if current == check.config_source =>
+        {
+            Ok(())
+        }
         _ => Err(internal("check_source_changed_since_discovery")),
     }
 }
@@ -122,7 +126,7 @@ fn materialize(
         checkpoint(deadline)?;
     }
     binary::project_mise_binary(home, check.check.runner.platform, deadline)?;
-    crate::exclusive_write::write_exclusive_until(
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive_until(
         &home.join("empty.toml"),
         b"",
         "check_config",
@@ -154,7 +158,7 @@ fn materialize(
     let projection = qualified
         .bound_projection()
         .map_err(|e| internal(&e.to_string()))?;
-    crate::exclusive_write::write_exclusive_until(
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive_until(
         &home.join("tasks.toml"),
         projection.as_bytes(),
         "check_config",

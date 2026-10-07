@@ -1,13 +1,13 @@
 //! Deadline-aware creation of the admitted immutable SDK tree.
 
 use super::{Entry, Kind};
-use crate::OrchestratorError;
-use crate::internal::internal;
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use velnor_actions_mise::CheckDeadline;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 #[cfg(test)]
 pub(in crate::check_runtime::preparation::container::bundle) fn populate(
@@ -36,9 +36,12 @@ pub(in crate::check_runtime::preparation::container::bundle) fn populate_until(
         } = &entry.kind
         {
             let path = destination.join(&entry.path);
-            crate::exclusive_write::write_exclusive_until(&path, bytes, "sdk_file", || {
-                super::checkpoint(deadline)
-            })?;
+            velnor_actions_orchestrator_core::exclusive_write::write_exclusive_until(
+                &path,
+                bytes,
+                "sdk_file",
+                || super::checkpoint(deadline),
+            )?;
             set_mode(&path, readonly_mode(*executable), false)?;
         }
     }

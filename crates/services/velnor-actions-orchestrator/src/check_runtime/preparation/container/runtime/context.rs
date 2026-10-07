@@ -1,9 +1,9 @@
-use crate::OrchestratorError;
-use crate::internal::internal;
 use serde_json::json;
 use std::fs;
 use std::path::Path;
 use velnor_actions_mise::CheckDeadline;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 use super::inventory::owner;
 use super::{RuntimeProjection, check_ancestors, io};

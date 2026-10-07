@@ -5,14 +5,14 @@
 //! dropped. Non-UTF-8 fails under one tag so callers broaden explicitly.
 
 /// Explicit broaden tag for non-UTF-8 git paths.
-pub(crate) const NON_UTF8_PATH: &str = "non_utf8_path";
+pub const NON_UTF8_PATH: &str = "non_utf8_path";
 
 /// Split NUL-delimited git path bytes into exact path strings.
 ///
 /// Empty chunks drop; every other chunk keeps its exact bytes, including
 /// whitespace, newlines, and non-ASCII names. Non-UTF-8 fails with
 /// [`NON_UTF8_PATH`] so the caller broadens with an explicit tag.
-pub(crate) fn split_nul_paths<Paths>(stdout: &[u8]) -> Result<Paths, String>
+pub fn split_nul_paths<Paths>(stdout: &[u8]) -> Result<Paths, String>
 where
     Paths: FromIterator<String>,
 {
@@ -29,7 +29,7 @@ where
 /// Index enumeration uses this (a skipped entry cannot match an ASCII
 /// detector name); change-set callers keep fail-closed [`split_nul_paths`]
 /// because an undecodable changed path cannot be attributed.
-pub(crate) fn split_nul_paths_skipping(stdout: &[u8]) -> (Vec<String>, bool) {
+pub fn split_nul_paths_skipping(stdout: &[u8]) -> (Vec<String>, bool) {
     let mut paths = Vec::new();
     let mut skipped = false;
     for chunk in stdout

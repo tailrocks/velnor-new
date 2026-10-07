@@ -8,10 +8,10 @@ use velnor_actions_mise::catalog::lock::{load_text, parse_generator_lock, verify
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog};
 use velnor_actions_workflow_tree::rendered::RenderedTree;
 
-use crate::OrchestratorError;
 use crate::generate::write_tree;
 use crate::validate_shell::{run_shellcheck_bodies, run_shellcheck_probe};
 use crate::validate_zizmor::{run_zizmor, write_zizmor_config};
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Velnor-repository-only bootstrap lock (never read for consumers).
 const GENERATOR_LOCK_REL: &str = ".velnor/generator.lock";

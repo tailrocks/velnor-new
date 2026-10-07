@@ -12,11 +12,12 @@ use velnor_actions_contract_workflow::{
 };
 
 use super::MergeRequest;
-use crate::OrchestratorError;
 use crate::cover::Signals;
 use crate::cover::revalidate_coverage;
 use crate::cover::shard::{check_entry_shards, validate_budgets};
-use crate::internal::{SCHEMA, internal_contract};
+use crate::internal::SCHEMA;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal_contract;
 
 /// Check 1: `matrix.json` agrees with the plan matrix (WF-4.16).
 pub(crate) fn check_agreement(

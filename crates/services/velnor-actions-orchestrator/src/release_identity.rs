@@ -16,8 +16,8 @@ use velnor_actions_mise::GitRequest;
 use velnor_actions_rust_core::release_select::ReleaseSelection;
 use velnor_actions_workflow_release::release_spec::validate_source_sha;
 
-use crate::OrchestratorError;
-use crate::origin::origin_url_via_git;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::origin::origin_url_via_git;
 
 /// Derive `owner/repo` from the local `origin` URL.
 ///

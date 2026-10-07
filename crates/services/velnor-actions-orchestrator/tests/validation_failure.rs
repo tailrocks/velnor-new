@@ -13,7 +13,8 @@ mod probe {
     use std::process::Command;
 
     use tempfile::TempDir;
-    use velnor_actions_orchestrator::{GenerateOptions, OrchestratorError, generate, prepare};
+    use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
+    use velnor_actions_orchestrator_core::OrchestratorError;
 
     /// Marker selecting the scrubbed child scenario.
     const MARKER: &str = "VELNOR_VALIDATION_PROBE";

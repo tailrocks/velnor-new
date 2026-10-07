@@ -6,11 +6,11 @@
 
 use super::*;
 
-use crate::clippy_groups::ClippyMemoryPlan;
 use crate::discover::Discovery;
 use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_contract_planning::ProposedTask;
 use velnor_actions_contract_workflow::Job;
+use velnor_actions_orchestrator_core::clippy_groups::ClippyMemoryPlan;
 use velnor_actions_rust::{TaskGroup, TaskKind};
 use velnor_actions_rust_core::{CompileDriver, NextestProfile, TestRunner};
 

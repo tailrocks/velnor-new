@@ -22,7 +22,7 @@ use velnor_actions_contract_workflow::{
 
 use super::MergeRequest;
 use crate::cover::Signals;
-use crate::internal::internal_contract;
+use velnor_actions_orchestrator_core::internal_contract;
 
 /// One trusted-baseline task proof: identities plus provenance run IDs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -204,7 +204,7 @@ pub(crate) fn reported_job_results(request: &MergeRequest) -> Vec<RequiredJobRes
 pub(crate) fn diagnostic_without_plan(
     request: &MergeRequest,
     tokens: BTreeSet<String>,
-) -> Result<FinalReport, crate::OrchestratorError> {
+) -> Result<FinalReport, velnor_actions_orchestrator_core::OrchestratorError> {
     let mut report = FinalReport::without_plan(&request.run_key, reported_job_results(request))
         .map_err(internal_contract)?;
     let mut miss = assembly_tokens(&request.assembly_errors);

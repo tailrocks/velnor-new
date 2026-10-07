@@ -11,8 +11,8 @@ use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};
 use velnor_actions_workflow_jobs::context::PLAN_JOB_ID;
 use velnor_actions_workflow_steps::steps::INTERNAL_OP_ENV;
 
-use crate::OrchestratorError;
 use crate::discover::Discovery;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Build one job per configured check, independent of Rust grouping and coverage.
 pub(crate) fn build_check_jobs(

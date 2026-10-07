@@ -22,14 +22,15 @@ use serde::Deserialize;
 use velnor_actions_contract::{canonical_json_bytes, digest_b3, parse_strict_json};
 use velnor_actions_contract_workflow::WorkflowEvent;
 
-use crate::OrchestratorError;
 use crate::cover_baseline::provenance_check::{
     ProvenanceExpectations, is_unverifiable_generator_sha, validate_provenance,
 };
-use crate::internal::{SCHEMA, check_schema, internal, internal_contract};
+use crate::internal::{SCHEMA, check_schema};
 use crate::internal_request::resolve_run_key;
 use crate::merge::BaselineManifest;
 use crate::request_event::{request_refs, workflow_event_for};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::{internal, internal_contract};
 
 /// Publish operation tag.
 pub const PUBLISH_OP: &str = "publish-baseline-v1";
@@ -114,9 +115,9 @@ pub(crate) fn write_publish_request(
     });
     let bytes = canonical_json_bytes(&request).map_err(internal_contract)?;
     if let Some(parent) = path.parent() {
-        crate::exclusive_write::create_dir_no_symlink(anchor, parent)?;
+        velnor_actions_orchestrator_core::exclusive_write::create_dir_no_symlink(anchor, parent)?;
     }
-    crate::exclusive_write::write_exclusive(&path, &bytes, "request")?;
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive(&path, &bytes, "request")?;
     Ok(path)
 }
 
@@ -176,7 +177,7 @@ pub(crate) fn baseline_publish_to(
         .join("velnor")
         .join(run_key)
         .join(BASELINE_FILENAME);
-    crate::exclusive_write::write_exclusive(&path, &bytes, "baseline")?;
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive(&path, &bytes, "baseline")?;
     Ok(PublishOutputs {
         artifact_name: manifest.artifact_name,
     })
@@ -229,7 +230,7 @@ fn publish_gate(request: &PublishRequest) -> Result<(), OrchestratorError> {
     let anchored = request
         .repository
         .as_deref()
-        .and_then(crate::origin::validate_repository_slug);
+        .and_then(velnor_actions_orchestrator_core::origin::validate_repository_slug);
     if anchored.is_none() {
         return Err(internal("publish_refused:repository_unanchored"));
     }
@@ -297,7 +298,7 @@ fn publish_manifest(
     let slug = request
         .repository
         .as_deref()
-        .and_then(crate::origin::validate_repository_slug)
+        .and_then(velnor_actions_orchestrator_core::origin::validate_repository_slug)
         .ok_or_else(|| internal("publish_refused:repository_unanchored"))?;
     let git_ref = request
         .git_ref
@@ -336,7 +337,7 @@ fn self_check(
     let slug = request
         .repository
         .as_deref()
-        .and_then(crate::origin::validate_repository_slug)
+        .and_then(velnor_actions_orchestrator_core::origin::validate_repository_slug)
         .ok_or_else(|| internal("publish_refused:repository_unanchored"))?;
     let branch = request
         .default_branch

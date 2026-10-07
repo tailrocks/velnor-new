@@ -1,6 +1,4 @@
 //! Verified Cargo archives become one owned offline source/vendor closure.
-use crate::OrchestratorError;
-use crate::internal::internal;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -9,6 +7,8 @@ use velnor_actions_contract_config::config::{
     QualifiedToolOptions, QualifiedToolPlatform,
 };
 use velnor_actions_mise::CheckDeadline;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 mod custody;
 mod lock;
@@ -119,7 +119,7 @@ fn write_source_config(tool_home: &Path, vendor: &Path) -> Result<(), Orchestrat
         "[source.crates-io]\nreplace-with = \"velnor-vendor\"\n\n[source.velnor-vendor]\ndirectory = {}\n",
         toml::Value::String(directory.to_owned())
     );
-    crate::exclusive_write::write_exclusive(
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
         &tool_home.join("cargo-source.toml"),
         text.as_bytes(),
         "qualified_cargo_config",

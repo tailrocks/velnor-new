@@ -1,6 +1,4 @@
-use crate::OrchestratorError;
 use crate::cover_identity::generator::sha256_hex;
-use crate::internal::internal;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -10,6 +8,8 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Component, Path};
 use velnor_actions_contract::canonical_json_bytes;
 use velnor_actions_mise::CheckDeadline;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 const MAX_ENTRIES: usize = 1_000;
 const MAX_BYTES: u64 = 256 * 1024 * 1024;
@@ -231,7 +231,7 @@ pub(super) fn checkpoint(deadline: Option<CheckDeadline>) -> Result<(), Orchestr
     if let Some(deadline) = deadline {
         deadline
             .remaining()
-            .map_err(|error| crate::internal::internal(&error.to_string()))?;
+            .map_err(|error| velnor_actions_orchestrator_core::internal(&error.to_string()))?;
     }
     Ok(())
 }

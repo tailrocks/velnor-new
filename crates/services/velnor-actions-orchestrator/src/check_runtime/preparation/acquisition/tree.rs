@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 use velnor_actions_contract::canonical_json_bytes;
 use velnor_actions_mise::CheckDeadline;
 
-use crate::OrchestratorError;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 const MAX_TREE_ENTRIES: usize = 100_000;
 const MAX_FILE_BYTES: u64 = 256 * 1024 * 1024;
@@ -48,7 +48,9 @@ struct Walk {
 impl Walk {
     fn add(&mut self, entry: Entry) -> Result<(), OrchestratorError> {
         if self.entries.len() >= MAX_TREE_ENTRIES {
-            return Err(crate::internal::internal("tool_tree_entry_limit"));
+            return Err(velnor_actions_orchestrator_core::internal(
+                "tool_tree_entry_limit",
+            ));
         }
         self.entries.push(entry);
         Ok(())
@@ -172,7 +174,9 @@ fn read_file(
         }
         length = length.saturating_add(u64::try_from(count).unwrap_or(u64::MAX));
         if length > limit {
-            return Err(crate::internal::internal("tool_tree_size_limit"));
+            return Err(velnor_actions_orchestrator_core::internal(
+                "tool_tree_size_limit",
+            ));
         }
         hash.update(&buffer[..count]);
     }
@@ -266,7 +270,7 @@ fn tree_digest(entries: &[Entry], deadline: CheckDeadline) -> Result<String, Orc
             hash.update(b",");
         }
         let bytes = canonical_json_bytes(&value)
-            .map_err(|_| crate::internal::internal("tool_tree_manifest"))?;
+            .map_err(|_| velnor_actions_orchestrator_core::internal("tool_tree_manifest"))?;
         hash.update(&bytes);
     }
     super::check_deadline(deadline)?;

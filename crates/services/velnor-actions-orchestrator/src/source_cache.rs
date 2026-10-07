@@ -14,7 +14,7 @@ use velnor_actions_actionlint::{
 };
 use velnor_actions_contract_workflow::{Step, StepKind, StepRole};
 
-use crate::OrchestratorError;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Owned Cargo home expression shared by writers and readers.
 pub(crate) const SHARED_CARGO_HOME: &str = "${{ runner.temp }}/velnor/cargo";

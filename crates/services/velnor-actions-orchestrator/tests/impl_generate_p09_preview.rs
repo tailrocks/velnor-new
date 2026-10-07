@@ -9,9 +9,10 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_contract_workflow::StepKind;
 use velnor_actions_orchestrator::{
-    GenerateOptions, GenerateReport, GenerationPreparation, OrchestratorError, ToolSnapshot,
-    generate, prepare, render_staged_tree,
+    GenerateOptions, GenerateReport, GenerationPreparation, ToolSnapshot, generate, prepare,
+    render_staged_tree,
 };
+use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{TestResult, config_with_branch, err_of, make_repo, snapshot};

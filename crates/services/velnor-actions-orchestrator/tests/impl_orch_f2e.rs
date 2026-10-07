@@ -6,9 +6,10 @@ use std::path::{Path, PathBuf};
 use serde_json::Value as Json;
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{
-    GenerateOptions, GenerateReport, GenerationPreparation, OrchestratorError, PlanOutputMode,
-    generate, plan_internal, plan_outputs, prepare, publish_plan_files,
+    GenerateOptions, GenerateReport, GenerationPreparation, PlanOutputMode, generate,
+    plan_internal, plan_outputs, prepare, publish_plan_files,
 };
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 use crate::impl_common::{
     TestResult, config_with_branch, fixture_manifest_json, git, git_line, make_repo,
@@ -102,7 +103,7 @@ fn source_build_consumer_gate_registered() -> TestResult {
 
 #[test]
 fn qualify_argv_runs_artifact_only_registered() -> TestResult {
-    let argv = velnor_actions_orchestrator::qualify_argv_staged()?;
+    let argv = velnor_actions_orchestrator_core::qualify_argv_staged()?;
     assert_eq!(argv[0], "sh");
     let script = argv.join(" ");
     assert!(
@@ -127,7 +128,7 @@ fn plan_json_matches_github_outputs() -> TestResult {
     assert_eq!(dir, velnor_dir.path().join("local"));
     assert_eq!(
         dir.join("plan.json"),
-        velnor_actions_orchestrator::decisions::plan_json_path(velnor_dir.path(), "local")?
+        velnor_actions_orchestrator_core::decisions::plan_json_path(velnor_dir.path(), "local")?
     );
     let plan_json = fs::read_to_string(dir.join("plan.json"))?;
     let matrix_json = fs::read_to_string(dir.join("matrix.json"))?;

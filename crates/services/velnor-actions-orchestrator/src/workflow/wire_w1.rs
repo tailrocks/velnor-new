@@ -23,9 +23,9 @@ use velnor_actions_workflow_cache::cache_steps::{
 use velnor_actions_workflow_jobs::context::PLAN_JOB_ID;
 use velnor_actions_workflow_jobs::plan_format;
 
-use crate::OrchestratorError;
 use crate::discover::Discovery;
-use crate::utf8::strings_of_env;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::utf8::strings_of_env;
 
 /// Declared repository configuration variable names (GEN-2.14).
 ///
@@ -247,9 +247,9 @@ fn workspace_fmt_group(discovery: &Discovery) -> Option<&ProposedTask> {
 fn matrix_key_for(task: &ProposedTask) -> Result<String, OrchestratorError> {
     let matrix_id =
         velnor_actions_contract::matrix_id_for_task_group(&task.stack_id, &task.task_id)
-            .map_err(crate::internal::internal_contract)?;
+            .map_err(velnor_actions_orchestrator_core::internal_contract)?;
     velnor_actions_contract::matrix_key_for_id(&matrix_id)
-        .map_err(crate::internal::internal_contract)
+        .map_err(velnor_actions_orchestrator_core::internal_contract)
 }
 
 /// Full `exec` verification env routing Format at the prepared toolchain.

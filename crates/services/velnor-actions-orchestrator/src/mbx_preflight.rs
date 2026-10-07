@@ -8,7 +8,7 @@ use velnor_actions_contract_workflow::Step;
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_cache::cache_steps::{CompileDriver, mbx_steps_for_driver};
 
-use crate::OrchestratorError;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Build the strict preflight and restore pair from the compiled catalog pins.
 /// # Errors

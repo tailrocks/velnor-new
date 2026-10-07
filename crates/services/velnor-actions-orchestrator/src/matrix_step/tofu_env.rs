@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::Stack;
 
-use crate::OrchestratorError;
 use crate::task_report::TASK_ID_ENV;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Isolated per-root `TF_DATA_DIR` for tofu obligation extras, if any.
 ///
@@ -77,6 +77,6 @@ fn tofu_root_for_extra(extra: &BTreeMap<String, String>) -> Option<String> {
     if super::obligation_stack(task_id) != Some(Stack::Tofu) {
         return None;
     }
-    let key = crate::extension_schemas::task_key_segment(task_id)?;
+    let key = velnor_actions_orchestrator_core::extension_schemas::task_key_segment(task_id)?;
     Some(velnor_actions_tofu_core::root_for_key(&key))
 }

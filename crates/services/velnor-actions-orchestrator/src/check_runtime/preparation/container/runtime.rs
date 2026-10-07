@@ -1,14 +1,14 @@
 //! Own a declaration-bound local container socket and Docker context.
-use crate::OrchestratorError;
 use crate::cover_identity::generator::sha256_hex;
-use crate::exclusive_write;
-use crate::internal::internal;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use velnor_actions_contract_config::config::{
     HostContainerProfile, MAX_CHECK_CONTAINER_PATH_BYTES,
 };
 use velnor_actions_mise::CheckDeadline;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::exclusive_write;
+use velnor_actions_orchestrator_core::internal;
 
 mod context;
 mod inventory;
@@ -275,7 +275,7 @@ fn checkpoint(deadline: Option<CheckDeadline>) -> Result<(), OrchestratorError> 
     if let Some(deadline) = deadline {
         deadline
             .remaining()
-            .map_err(|error| crate::internal::internal(&error.to_string()))?;
+            .map_err(|error| velnor_actions_orchestrator_core::internal(&error.to_string()))?;
     }
     Ok(())
 }

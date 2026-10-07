@@ -15,8 +15,8 @@ use std::path::Path;
 use velnor_actions_contract_workflow::{Step, StepRole};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
-use crate::OrchestratorError;
 use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Display name of the root-workspace fetch step.
 pub(crate) const FETCH_SOURCES_STEP: &str = "Fetch Cargo sources";

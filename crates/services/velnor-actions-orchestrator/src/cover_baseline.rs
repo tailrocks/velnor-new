@@ -18,13 +18,13 @@ use self::provenance_check::{
     validate_provenance,
 };
 use self::provenance_resolve::{repository_anchor_for_slug, resolve_expected_repository};
-use crate::OrchestratorError;
 use crate::cover::shard;
 use crate::cover_identity::{SOURCE_BUILD_REASON, apply_coverage, is_source_build};
-use crate::decisions::baseline_expired;
 use crate::discover::Discovery;
-use crate::internal::internal_contract;
 use crate::merge::BaselineManifest;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::decisions::baseline_expired;
+use velnor_actions_orchestrator_core::internal_contract;
 
 /// Maximum accepted `baseline.json` bytes: evidence stays bounded.
 const MAX_BASELINE_MANIFEST_BYTES: usize = 1_048_576;
@@ -233,7 +233,7 @@ pub(crate) fn baseline_download_args(
 ) -> Vec<OsString> {
     if let Some(name) = artifact.filter(|name| !name.is_empty())
         && let Ok(lookup) = MiseBaselineLookup::new(base, workflow, branch, name)
-        && let Some(repo) = crate::origin::validate_repository_slug(repo)
+        && let Some(repo) = velnor_actions_orchestrator_core::origin::validate_repository_slug(repo)
     {
         let mut args = lookup.download_args(run_id, dir);
         args.push(OsString::from("--repo"));

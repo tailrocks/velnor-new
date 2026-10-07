@@ -18,11 +18,11 @@ use velnor_actions_rust_core::{
     Recommendation, RustExecutionProfile, WorkspaceRecord, dedupe_workspaces,
 };
 
-use crate::OrchestratorError;
-use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 use crate::discover_index::build_file_index;
 use crate::inventory::{qualify_workspaces, run_inventories};
 use crate::recommendations::collect_recommendations;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 mod consumer_manifest;
 use crate::toolcheck::{ToolInputCheck, check_tool_inputs};
 use crate::{discover_tofu::qualify_tofu_step, evidence::profile_for_workspace};
@@ -263,6 +263,24 @@ pub(crate) fn workspace_lock(workspace_root: &str) -> String {
     } else {
         format!("{workspace_root}/Cargo.lock")
     }
+}
+
+/// One registered detector: stack ID plus record schema (par §1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DetectorInfo {
+    /// Registered stack ID.
+    pub stack_id: &'static str,
+    /// Detection record schema.
+    pub schema: u32,
+}
+
+/// Detector registry in ascending stack-ID order; V1 holds `rust` and `tofu`.
+#[must_use]
+pub fn detector_registry() -> Vec<DetectorInfo> {
+    detector_entries()
+        .into_iter()
+        .map(|(stack_id, schema)| DetectorInfo { stack_id, schema })
+        .collect()
 }
 
 #[cfg(test)]

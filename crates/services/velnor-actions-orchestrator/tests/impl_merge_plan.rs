@@ -66,7 +66,7 @@ fn empty_diff_no_baseline_executes_all() -> TestResult {
     )?;
     assert!(matches!(
         err,
-        velnor_actions_orchestrator::OrchestratorError::Internal { .. }
+        velnor_actions_orchestrator_core::OrchestratorError::Internal { .. }
     ));
     Ok(())
 }

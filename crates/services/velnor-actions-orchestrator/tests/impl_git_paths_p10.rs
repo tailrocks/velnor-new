@@ -14,7 +14,8 @@ use std::path::Path;
 use std::process::Command as StdCommand;
 
 use velnor_actions_contract_workflow::Plan;
-use velnor_actions_orchestrator::{plan_internal, resolve_root};
+use velnor_actions_orchestrator::plan_internal;
+use velnor_actions_orchestrator_core::resolve_root;
 
 use crate::impl_common::{TestResult, git};
 use crate::impl_select::{commit, make_ws_repo, plan_pr, reasons_for};

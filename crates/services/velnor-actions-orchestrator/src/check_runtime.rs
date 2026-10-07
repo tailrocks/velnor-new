@@ -1,7 +1,5 @@
 //! Qualified execution of one named check, through the existing plan/report gate.
-use crate::OrchestratorError;
 use crate::check_evidence::{EvidenceReceipt, reject_link_components, verify_evidence};
-use crate::internal::{internal, internal_contract};
 use std::env;
 use std::ffi::OsString;
 use std::path::Path;
@@ -13,6 +11,8 @@ use velnor_actions_contract_workflow::{
     NamedCheckLaneVariant, ObligationDecision, Plan,
 };
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, ToolCatalog, discover_checks_until};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::{internal, internal_contract};
 pub(crate) mod preparation;
 use preparation::prepare_check;
 
@@ -64,7 +64,7 @@ pub(crate) fn execute_check_to(
 ) -> Result<usize, OrchestratorError> {
     let started = Instant::now();
     let plan = crate::task_report::load_plan(run_key, temp)?;
-    let config = crate::config::load_config(root)?;
+    let config = velnor_actions_orchestrator_core::config::load_config(root)?;
     let definition = config
         .checks
         .iter()
@@ -290,8 +290,8 @@ fn write_execution_receipt(
         .join("velnor")
         .join(&plan.run_key)
         .join(&entry.matrix_key);
-    crate::exclusive_write::create_dir_no_symlink(temp, &base)?;
-    crate::exclusive_write::write_exclusive(
+    velnor_actions_orchestrator_core::exclusive_write::create_dir_no_symlink(temp, &base)?;
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
         &base.join("check-execution.json"),
         &bytes,
         "check_execution",
@@ -312,8 +312,12 @@ fn save_evidence(
     let parent = artifact
         .parent()
         .ok_or_else(|| internal("check_evidence_path"))?;
-    crate::exclusive_write::create_dir_no_symlink(temp, parent)?;
-    crate::exclusive_write::write_exclusive(&artifact, &receipt.bytes, "check_evidence")?;
+    velnor_actions_orchestrator_core::exclusive_write::create_dir_no_symlink(temp, parent)?;
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
+        &artifact,
+        &receipt.bytes,
+        "check_evidence",
+    )?;
     Ok(())
 }
 

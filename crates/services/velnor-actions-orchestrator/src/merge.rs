@@ -23,10 +23,11 @@ pub(crate) use self::required_evidence::BaselineManifest;
 use self::required_evidence::{
     check_required_evidence, diagnostic_without_plan, fold_jobs, reported_job_results,
 };
-use crate::OrchestratorError;
 use crate::cover::shard::{ResourceLimits, ShardProof};
 use crate::cover::{CoverSinks, Fold, Signals, cover_entry, partition_reports};
-use crate::internal::{SCHEMA, check_schema, internal_contract};
+use crate::internal::{SCHEMA, check_schema};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal_contract;
 
 /// `merge-v1` request: plan, matrix bytes, reports, and jobs.
 #[derive(Debug, Deserialize)]

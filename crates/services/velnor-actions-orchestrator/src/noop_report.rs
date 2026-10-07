@@ -15,9 +15,9 @@ use velnor_actions_contract_workflow::{NotSelectedReason, Plan};
 
 use crate::task_report::{entry_and_digest, single_task_aggregate, write_entry_reports};
 
-use crate::OrchestratorError;
-use crate::decisions::{NotSelectedInputs, not_selected_report};
-use crate::internal::{internal, internal_contract};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::decisions::{NotSelectedInputs, not_selected_report};
+use velnor_actions_orchestrator_core::{internal, internal_contract};
 
 /// Env key carrying the no-op `not_selected` reason vocabulary word.
 pub(crate) const NOT_SELECTED_REASON_ENV: &str = "VELNOR_NOT_SELECTED_REASON";

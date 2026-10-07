@@ -41,7 +41,8 @@ pub(crate) fn resolve_expected_repository(
             conflict: false,
         };
     };
-    let Some(request) = crate::origin::validate_repository_slug(raw) else {
+    let Some(request) = velnor_actions_orchestrator_core::origin::validate_repository_slug(raw)
+    else {
         return ExpectedRepository {
             slug: None,
             conflict: true,

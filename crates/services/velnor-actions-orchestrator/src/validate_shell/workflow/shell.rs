@@ -1,4 +1,4 @@
-use crate::OrchestratorError;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 use super::super::{shellcheck_fail, unquote_run_scalar};
 use super::ShellDialect;

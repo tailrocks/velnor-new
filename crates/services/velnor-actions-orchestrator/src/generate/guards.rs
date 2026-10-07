@@ -9,7 +9,7 @@
 
 use std::path::{Component, Path, PathBuf};
 
-use crate::OrchestratorError;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Read-only tool files generation must never modify (TOOL-2.10).
 const TOOL_FILES: [&str; 6] = [

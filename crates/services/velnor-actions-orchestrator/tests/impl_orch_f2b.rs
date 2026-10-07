@@ -6,7 +6,7 @@ use velnor_actions_contract::{digest_b3, matrix_id_for_task_group, matrix_key_fo
 use velnor_actions_contract_workflow::{
     FinalStatus, NotSelectedReason, ObligationDecision, TaskStatus, Trust, WorkflowEvent,
 };
-use velnor_actions_orchestrator::decisions::{
+use velnor_actions_orchestrator_core::decisions::{
     CacheHit, MetadataFailure, NotSelectedInputs, ObligationInputs, baseline_expired,
     classify_obligation, dedupe_sorted, not_selected_report, omission_ledger, plan_artifact_dir,
     plan_json_path, selection_broadens_for_path,
@@ -30,7 +30,7 @@ fn open_inputs() -> ObligationInputs {
 
 #[test]
 fn offline_stderr_aborts_preparation() {
-    use velnor_actions_orchestrator::decisions::classify_metadata_failure;
+    use velnor_actions_orchestrator_core::decisions::classify_metadata_failure;
     for stderr in [
         "error: failed to download `serde v1.0.0`\nnetwork unreachable",
         "warning: spurious network error, retrying",
@@ -268,7 +268,7 @@ fn dedupe_stage_reports_conflicts() {
 
 #[test]
 fn sequential_reference_merges_clean() -> TestResult {
-    use velnor_actions_orchestrator::schedule::sequential_reference;
+    use velnor_actions_orchestrator_core::schedule::sequential_reference;
     let (_repo, plan) = plan_for_source_change()?;
     let reports = passing_reports(&plan)?;
     let extra = serde_json::json!({"reference_task_ids": sequential_reference(&plan.task_ids)});

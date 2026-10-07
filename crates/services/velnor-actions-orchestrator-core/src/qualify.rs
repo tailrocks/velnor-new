@@ -25,7 +25,7 @@ pub fn qualify_argv_staged() -> Result<Vec<String>, OrchestratorError> {
 
 /// Typed candidate-qualification request: artifact execution, never a rebuild.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct QualifyRequest {
+pub struct QualifyRequest {
     /// Downloaded candidate binary path (staged by download-artifact).
     binary: String,
     /// Scratch directory for the artifact-executed generation check.
@@ -34,7 +34,7 @@ pub(crate) struct QualifyRequest {
 
 impl QualifyRequest {
     /// Fixed request over the staged candidate path.
-    pub(crate) fn staged() -> Self {
+    pub fn staged() -> Self {
         Self {
             binary: CANDIDATE_BINARY_PATH.to_owned(),
             output_dir: QUALIFY_OUTPUT_DIR.to_owned(),
@@ -45,7 +45,7 @@ impl QualifyRequest {
     ///
     /// Runs the downloaded binary twice (plan, then a generation check
     /// into scratch) without invoking any build tool. Rejects rebuilds.
-    pub(crate) fn argv(&self) -> Result<Vec<String>, OrchestratorError> {
+    pub fn argv(&self) -> Result<Vec<String>, OrchestratorError> {
         let script = format!(
             "{} plan && {} generate --output-dir {} && test -f {}/.github/workflows/ci.yml",
             self.binary, self.binary, self.output_dir, self.output_dir

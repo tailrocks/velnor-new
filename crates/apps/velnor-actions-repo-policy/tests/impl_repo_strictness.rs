@@ -210,14 +210,13 @@ fn strictness_no_proof_literals_anywhere() -> Result<(), Box<dyn Error>> {
         files.extend(tree_files(&format!("{dir}/src"), "rs")?);
         files.extend(tree_files(&format!("{dir}/tests"), "rs")?);
     }
-    files.extend(tree_files(
-        "crates/services/velnor-actions-orchestrator/src",
-        "rs",
-    )?);
-    files.extend(tree_files(
-        "crates/services/velnor-actions-orchestrator/tests",
-        "rs",
-    )?);
+    for dir in [
+        "crates/services/velnor-actions-orchestrator",
+        "crates/services/velnor-actions-orchestrator-core",
+    ] {
+        files.extend(tree_files(&format!("{dir}/src"), "rs")?);
+        files.extend(tree_files(&format!("{dir}/tests"), "rs")?);
+    }
     for name in [
         "BaselineProof",
         "ManifestTaskProof",
@@ -309,7 +308,7 @@ fn strictness_matrix_agreement_uses_strict_boundary() -> Result<(), Box<dyn Erro
 
 #[test]
 fn strictness_orchestrator_errors_stay_distinct() -> Result<(), Box<dyn Error>> {
-    let source = read("crates/services/velnor-actions-orchestrator/src/error.rs")?;
+    let source = read("crates/services/velnor-actions-orchestrator-core/src/error.rs")?;
     for marker in [
         "Cancelled {",
         "Unsupported {",
@@ -374,11 +373,11 @@ fn strictness_negative_coverage_pinned() -> Result<(), Box<dyn Error>> {
             "task_proof_needs_valid_ids_and_digests",
         ),
         (
-            "crates/services/velnor-actions-orchestrator/src/error.rs",
+            "crates/services/velnor-actions-orchestrator-core/src/error.rs",
             "cancelled_and_unsupported_stay_distinct",
         ),
         (
-            "crates/services/velnor-actions-orchestrator/src/error.rs",
+            "crates/services/velnor-actions-orchestrator-core/src/error.rs",
             "unsupported_schema_maps_to_unsupported",
         ),
     ];

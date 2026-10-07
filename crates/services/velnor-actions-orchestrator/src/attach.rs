@@ -18,10 +18,10 @@ use velnor_actions_workflow_jobs::{
 };
 use velnor_actions_workflow_steps::steps::STAGED_BINARY_PREFIX;
 
-use crate::OrchestratorError;
 use crate::pins::{lock_acquire_for_runner, lock_acquire_step};
 use crate::vectors::{candidate_build_argv, mbx_probe_argv};
 use crate::workflow::WorkflowPlan;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Attach lock-backed Acquire steps to plan, final, publish, and crate jobs.
 ///

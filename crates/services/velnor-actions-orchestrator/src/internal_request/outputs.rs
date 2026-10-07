@@ -7,10 +7,11 @@ use velnor_actions_contract_workflow::{
     plan_json_bytes,
 };
 
-use crate::OrchestratorError;
-use crate::decisions::plan_artifact_dir;
-use crate::internal::{PlanResponse, check_schema, internal, internal_contract};
+use crate::internal::{PlanResponse, check_schema};
 use crate::plan_output_limits::{PlanOutputMode, check_plan_outputs};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::decisions::plan_artifact_dir;
+use velnor_actions_orchestrator_core::{internal, internal_contract};
 
 /// Canonical `plan`/`matrix` outputs for `$GITHUB_OUTPUT`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,18 +103,25 @@ fn write_plan_files(
     velnor_dir: &Path,
     dir: &Path,
 ) -> Result<(), OrchestratorError> {
-    crate::exclusive_write::create_dir_no_symlink(artifact_anchor(velnor_dir)?, dir)?;
+    velnor_actions_orchestrator_core::exclusive_write::create_dir_no_symlink(
+        artifact_anchor(velnor_dir)?,
+        dir,
+    )?;
     let plan = plan_json_bytes(&response.plan).map_err(internal_contract)?;
     let matrix = matrix_json_bytes(&response.matrix).map_err(internal_contract)?;
-    crate::exclusive_write::write_exclusive(&dir.join(PLAN_JSON_FILENAME), &plan, "plan_artifact")?;
-    crate::exclusive_write::write_exclusive(
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
+        &dir.join(PLAN_JSON_FILENAME),
+        &plan,
+        "plan_artifact",
+    )?;
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
         &dir.join(MATRIX_JSON_FILENAME),
         &matrix,
         "plan_artifact",
     )?;
     if let Some(manifest) = response.baseline_manifest.as_ref() {
         let bytes = canonical_json_bytes(manifest).map_err(internal_contract)?;
-        crate::exclusive_write::write_exclusive(
+        velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
             &dir.join(crate::baseline_publish::BASELINE_FILENAME),
             &bytes,
             "plan_artifact",
@@ -135,9 +143,12 @@ pub fn publish_final_report(
         serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
     check_schema(report.schema)?;
     let dir = plan_artifact_dir(velnor_dir, &report.run_key)?;
-    crate::exclusive_write::create_dir_no_symlink(artifact_anchor(velnor_dir)?, &dir)?;
+    velnor_actions_orchestrator_core::exclusive_write::create_dir_no_symlink(
+        artifact_anchor(velnor_dir)?,
+        &dir,
+    )?;
     let bytes = canonical_json_bytes(&report).map_err(internal_contract)?;
-    crate::exclusive_write::write_exclusive(
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
         &dir.join(FINAL_JSON_FILENAME),
         &bytes,
         "plan_artifact",

@@ -12,12 +12,12 @@ use velnor_actions_workflow_tree::guard::{self, SafeTreePath};
 use velnor_actions_workflow_tree::marker::rehead_actionlint_marker;
 use velnor_actions_workflow_tree::rendered::RenderedTree;
 
-use crate::OrchestratorError;
 use crate::finalized::owned_preparation;
 use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 use crate::provenance::{ProfileProvenance, profile_provenance};
 use crate::validate::validate_staged;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Filesystem guards: snapshots, destination validation, and ownership.
 pub(crate) mod guards;

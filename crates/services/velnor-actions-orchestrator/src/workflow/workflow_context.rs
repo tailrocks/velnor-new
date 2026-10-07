@@ -10,9 +10,9 @@ use velnor_actions_workflow_steps::steps::{
     DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
 };
 
-use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::vectors::{ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, zizmor_argv};
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 use super::{CHECKOUT_USES, REQUEST_DIR};
 

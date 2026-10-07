@@ -16,7 +16,7 @@ fn empty_discovery() -> Discovery {
         proposals: Vec::new(),
         feature_fallbacks: Vec::new(),
         tool_checks: Vec::new(),
-        clippy_memory: crate::clippy_groups::ClippyMemoryPlan {
+        clippy_memory: velnor_actions_orchestrator_core::clippy_groups::ClippyMemoryPlan {
             groups: Vec::new(),
             barriers: 0,
         },

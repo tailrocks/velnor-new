@@ -22,6 +22,7 @@ velnor-actions-rust = { version = "=0.1.1", path = "../../adapters/velnor-action
 velnor-actions-rust-core = { version = "=0.1.1", path = "../../adapters/velnor-actions-rust-core" }
 velnor-actions-tofu = { version = "=0.1.1", path = "../../adapters/velnor-actions-tofu" }
 velnor-actions-tofu-core = { version = "=0.1.1", path = "../../adapters/velnor-actions-tofu-core" }
+velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
 velnor-actions-workflow-cache = { version = "=0.1.1", path = "../velnor-actions-workflow-cache" }
 velnor-actions-workflow-document = { version = "=0.1.1", path = "../velnor-actions-workflow-document" }
 velnor-actions-workflow-generator = { version = "=0.1.1", path = "../velnor-actions-workflow-generator" }
@@ -37,7 +38,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true, features = ["alloc", "oid"] }
 tempfile = { workspace = true }
-thiserror = { workspace = true }
 toml = { workspace = true }
 
 [lints]

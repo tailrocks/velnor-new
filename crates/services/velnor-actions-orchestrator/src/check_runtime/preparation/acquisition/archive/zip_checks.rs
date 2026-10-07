@@ -4,9 +4,9 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
-use crate::OrchestratorError;
-use crate::internal::internal;
 use velnor_actions_mise::CheckDeadline;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 use super::{MAX_ENTRIES, check_deadline, io_error};
 

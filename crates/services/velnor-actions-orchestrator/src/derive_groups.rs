@@ -23,9 +23,9 @@ use velnor_actions_rust::{
 };
 use velnor_actions_rust_core::{CompileDriver, RustExecutionProfile};
 
-use crate::OrchestratorError;
-use crate::config::CONFIG_REL;
 use crate::discover::{PlannedWorkspace, workspace_manifest};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::config::CONFIG_REL;
 
 /// One configuration whose applied features differ from the request.
 ///

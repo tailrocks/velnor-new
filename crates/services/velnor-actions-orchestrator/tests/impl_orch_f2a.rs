@@ -13,13 +13,42 @@ pub(crate) fn orch_src() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src")
 }
 
-/// Sorted `.rs` files directly under `src/`.
+/// Family `src/` directories: the hub plus every extracted sibling crate.
+///
+/// Structural scans span the family so moved modules stay covered.
+/// Membership is the `velnor-actions-orchestrator` prefix (the hub
+/// itself plus every `orchestrator-` sibling), so later extractions
+/// join the scan without touching this file.
+fn family_src_dirs() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let Some(services) = manifest.parent() else {
+        return Ok(vec![manifest.join("src")]);
+    };
+    let mut dirs = Vec::new();
+    for entry in std::fs::read_dir(services)? {
+        let member = entry?.path();
+        let name = member
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if name == "velnor-actions-orchestrator" || name.starts_with("velnor-actions-orchestrator-")
+        {
+            dirs.push(member.join("src"));
+        }
+    }
+    dirs.sort();
+    Ok(dirs)
+}
+
+/// Sorted `.rs` files directly under every family `src/`.
 pub(crate) fn src_files() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     let mut out = Vec::new();
-    for entry in std::fs::read_dir(orch_src())? {
-        let path = entry?.path();
-        if path.extension().is_some_and(|ext| ext == "rs") {
-            out.push(path);
+    for dir in family_src_dirs()? {
+        for entry in std::fs::read_dir(&dir)? {
+            let path = entry?.path();
+            if path.extension().is_some_and(|ext| ext == "rs") {
+                out.push(path);
+            }
         }
     }
     out.sort();
@@ -59,17 +88,13 @@ pub(crate) fn code_of(path: &Path) -> Result<Vec<(usize, String)>, Box<dyn std::
         .collect())
 }
 
-/// Every `name:line` holding `token` in orchestrator code.
+/// Every `path:line` holding `token` in orchestrator family code.
 fn token_hits(token: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let mut hits = Vec::new();
     for path in src_files()? {
-        let name = path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
         for (line, code) in code_of(&path)? {
             if code.contains(token) {
-                hits.push(format!("{name}:{line}"));
+                hits.push(format!("{}:{line}", path.display()));
             }
         }
     }
@@ -94,9 +119,9 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
         );
     }
     for hit in token_hits("std::process")? {
-        let (name, line) = hit.split_once(':').unwrap_or(("", ""));
+        let (path, line) = hit.rsplit_once(':').unwrap_or(("", ""));
         let line: usize = line.parse().unwrap_or(0);
-        let code = code_of(&orch_src().join(name))?;
+        let code = code_of(Path::new(path))?;
         let body = code
             .iter()
             .find(|(number, _)| *number == line)
@@ -166,7 +191,7 @@ mod prepare;
 #[test]
 fn v1_registers_three_stacks_and_detects_rust_and_tofu() {
     use velnor_actions_contract_config::VelnorConfig;
-    use velnor_actions_orchestrator::decisions::{DetectorInfo, detector_registry};
+    use velnor_actions_orchestrator::{DetectorInfo, detector_registry};
     assert_eq!(VelnorConfig::REGISTERED_STACKS, &["mise", "rust", "tofu"]);
     assert_eq!(
         detector_registry(),

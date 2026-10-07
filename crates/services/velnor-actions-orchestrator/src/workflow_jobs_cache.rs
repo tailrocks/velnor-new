@@ -6,7 +6,7 @@
 use velnor_actions_contract_workflow::Step;
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
-use crate::OrchestratorError;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Plan-job cache steps: restore before fetch, save after (writer only).
 ///

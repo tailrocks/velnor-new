@@ -4,9 +4,9 @@ use std::io::{self, Read, Seek, SeekFrom};
 use flate2::read::GzDecoder;
 use lzma_rust2::XzReader;
 
-use crate::OrchestratorError;
-use crate::internal::internal;
 use velnor_actions_mise::CheckDeadline;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 use super::XZ_MEMORY_LIMIT_KIB;
 

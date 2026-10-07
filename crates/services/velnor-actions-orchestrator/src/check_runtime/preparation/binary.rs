@@ -1,9 +1,9 @@
 //! Snapshot the exact platform-qualified Mise bytes before any invocation.
-use crate::OrchestratorError;
-use crate::internal::internal;
 use std::path::Path;
 use velnor_actions_contract_config::config::CheckPlatform;
 use velnor_actions_mise::CheckDeadline;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 use velnor_actions_workflow_steps::setup::{
     MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
 };
@@ -65,7 +65,7 @@ fn project_binary_until(
         })
         .map_err(|_| internal("mise_binary_unreadable"))?;
     verify_binary_bytes(&bytes, expected)?;
-    crate::exclusive_write::write_exclusive_until(
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive_until(
         destination,
         &bytes,
         "qualified_mise_binary",

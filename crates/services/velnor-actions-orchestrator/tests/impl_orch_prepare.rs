@@ -66,7 +66,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         .split("fn bind_check(")
         .next()
         .expect("execution body");
-    assert!(execution.contains("crate::config::load_config(root)?"));
+    assert!(execution.contains("velnor_actions_orchestrator_core::config::load_config(root)?"));
     assert!(
         execution.contains("bind_check(root, &item, &plan, entry, task_id, &catalog, deadline)?")
     );

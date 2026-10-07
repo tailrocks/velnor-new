@@ -31,13 +31,13 @@ use velnor_actions_workflow_release::release_tree::{ReleaseRenderContext, render
 use velnor_actions_workflow_steps::MiseSetup;
 use velnor_actions_workflow_tree::rendered::RenderedFile;
 
-use crate::OrchestratorError;
-use crate::config::CONFIG_REL;
 use crate::prepare::GenerationPreparation;
 use crate::release_identity::{
     common_registry, head_sha, origin_repository, plan_id_for_source, workspace_slug,
 };
 use crate::release_steps::{JobInputs, assemble_jobs};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::config::CONFIG_REL;
 
 /// Release workflow display name (fixed; config carries no workflow name).
 const RELEASE_WORKFLOW_NAME: &str = "Velnor Release";

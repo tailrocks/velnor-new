@@ -3478,6 +3478,7 @@ dependencies = [
  "serde_json",
  "syn 3.0.6",
  "velnor-actions-orchestrator",
+ "velnor-actions-orchestrator-core",
 ]
 
 [[package]]
@@ -3621,7 +3622,6 @@ dependencies = [
  "sha2",
  "tar",
  "tempfile",
- "thiserror",
  "toml",
  "velnor-actions-actionlint",
  "velnor-actions-contract",
@@ -3630,6 +3630,7 @@ dependencies = [
  "velnor-actions-contract-release",
  "velnor-actions-contract-workflow",
  "velnor-actions-mise",
+ "velnor-actions-orchestrator-core",
  "velnor-actions-rust",
  "velnor-actions-rust-core",
  "velnor-actions-tofu",
@@ -3645,6 +3646,31 @@ dependencies = [
  "velnor-actions-workflow-steps",
  "velnor-actions-workflow-tree",
  "zip",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-core"
+version = "0.1.1"
+dependencies = [
+ "rustix 1.1.5",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "toml",
+ "velnor-actions-actionlint",
+ "velnor-actions-contract",
+ "velnor-actions-contract-config",
+ "velnor-actions-contract-planning",
+ "velnor-actions-contract-release",
+ "velnor-actions-contract-workflow",
+ "velnor-actions-mise",
+ "velnor-actions-orchestrator",
+ "velnor-actions-rust",
+ "velnor-actions-rust-core",
+ "velnor-actions-tofu-core",
+ "velnor-actions-workflow-steps",
+ "velnor-actions-workflow-tree",
 ]
 
 [[package]]

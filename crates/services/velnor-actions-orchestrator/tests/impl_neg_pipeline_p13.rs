@@ -9,9 +9,10 @@ use std::fs;
 
 use velnor_actions_contract_workflow::{FinalStatus, MatrixReport, MatrixStatus, TaskStatus};
 use velnor_actions_orchestrator::{
-    GenerateOptions, OrchestratorError, generate, merge_internal, merge_passed, plan_internal,
-    prepare, publish_final_report,
+    GenerateOptions, generate, merge_internal, merge_passed, plan_internal, prepare,
+    publish_final_report,
 };
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 use crate::impl_common::{
     TestResult, config_with_branch, err_of, git, git_line, make_repo, passing_reports,

@@ -3,7 +3,7 @@
 //! Declared via `#[path]` from `provenance_check.rs` under `cfg(test)`.
 //! Anchor cases build minimal git fixtures on disk and resolve them
 //! through the real `git config` query in
-//! [`crate::origin::origin_url_via_git`]: nothing here spawns git
+//! [`velnor_actions_orchestrator_core::origin::origin_url_via_git`]: nothing here spawns git
 //! (orchestrator sources never spawn), and nothing hand-reads the
 //! fixture config back.
 

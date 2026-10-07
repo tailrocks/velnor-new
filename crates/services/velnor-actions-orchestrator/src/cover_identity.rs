@@ -24,7 +24,6 @@ use velnor_actions_rust::{extension_for_proposal, tool_needs};
 use crate::cover_baseline::BaselineInputs;
 use crate::cover_baseline::provenance_check::ValidatedProvenance;
 use crate::discover::Discovery;
-use crate::extension_schemas::coverage_schema_known;
 use crate::external_data::{
     DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, external_data_kind, may_skip_external_data,
 };
@@ -34,6 +33,7 @@ use crate::internal_plan::identities::{extension_bundle_with_snapshot, platform_
 use crate::internal_plan::snapshot::{ExecutionSnapshot, canonical_digest};
 use crate::internal_plan::{nextest_config_for, toolchain_id};
 use crate::merge::BaselineManifest;
+use velnor_actions_orchestrator_core::extension_schemas::coverage_schema_known;
 
 pub(crate) use self::generator::{SOURCE_BUILD_REASON, is_source_build};
 

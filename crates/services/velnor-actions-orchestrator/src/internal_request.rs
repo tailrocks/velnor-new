@@ -8,9 +8,10 @@ use serde::Serialize;
 use velnor_actions_contract::{canonical_json_bytes, run_key_for_ci, validate_run_key};
 use velnor_actions_contract_workflow::{NAMED_CHECK_LANES_ENV, NamedCheckLane, WorkflowEvent};
 
-use crate::OrchestratorError;
-use crate::internal::{MERGE_OP, PLAN_OP, SCHEMA, internal, internal_contract};
+use crate::internal::{MERGE_OP, PLAN_OP, SCHEMA};
 use crate::request_event::{request_refs, workflow_event_for};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::{internal, internal_contract};
 
 mod outputs;
 pub use outputs::{
@@ -72,12 +73,12 @@ pub fn write_request() -> Result<PathBuf, OrchestratorError> {
     let Some(payload_path) = payload_path else {
         return Err(internal("missing_event_payload"));
     };
-    let payload_json = crate::safe_read::read_event_file(
+    let payload_json = velnor_actions_orchestrator_core::safe_read::read_event_file(
         Path::new(&payload_path),
-        crate::safe_read::MAX_REPO_FILE_BYTES,
+        velnor_actions_orchestrator_core::safe_read::MAX_REPO_FILE_BYTES,
     )?;
     let sha = env::var("GITHUB_SHA").ok().filter(|sha| !sha.is_empty());
-    let repository = env::var(crate::origin::GITHUB_REPOSITORY_ENV)
+    let repository = env::var(velnor_actions_orchestrator_core::origin::GITHUB_REPOSITORY_ENV)
         .ok()
         .filter(|slug| !slug.is_empty());
     let named_check_lanes = env::var(NAMED_CHECK_LANES_ENV)
@@ -173,9 +174,9 @@ fn write_request_parts_with_lanes(
     };
     let bytes = canonical_json_bytes(&request).map_err(internal_contract)?;
     if let Some(parent) = path.parent() {
-        crate::exclusive_write::create_dir_no_symlink(anchor, parent)?;
+        velnor_actions_orchestrator_core::exclusive_write::create_dir_no_symlink(anchor, parent)?;
     }
-    crate::exclusive_write::write_exclusive(&path, &bytes, "request")?;
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive(&path, &bytes, "request")?;
     Ok(path)
 }
 

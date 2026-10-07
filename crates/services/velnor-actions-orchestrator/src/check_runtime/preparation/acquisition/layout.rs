@@ -1,9 +1,9 @@
 //! Normalize retained verified payloads without multiplying extracted bytes.
-use crate::OrchestratorError;
-use crate::internal::internal;
 use std::path::{Path, PathBuf};
 use velnor_actions_contract_config::config::{CheckPlatform, QualifiedTool, QualifiedToolBackend};
 use velnor_actions_mise::CheckDeadline;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 mod cargo;
 mod rust;
@@ -18,7 +18,7 @@ pub(super) fn prepare_cargo_source(
 ) -> Result<(), OrchestratorError> {
     check_deadline(deadline)?;
     tool.validate("qualified_tools", &tool.id)
-        .map_err(crate::internal::internal_contract)?;
+        .map_err(velnor_actions_orchestrator_core::internal_contract)?;
     cargo::prepare_cargo_source(tool, platform, home, primary, dependencies, deadline)
 }
 
@@ -31,7 +31,7 @@ pub(super) fn normalize_payload(
 ) -> Result<(), OrchestratorError> {
     check_deadline(deadline)?;
     tool.validate("qualified_tools", &tool.id)
-        .map_err(crate::internal::internal_contract)?;
+        .map_err(velnor_actions_orchestrator_core::internal_contract)?;
     if !prefix.is_absolute() || roots.iter().any(|root| !root.is_absolute()) {
         return Err(internal("qualified_payload_requires_absolute_paths"));
     }

@@ -10,9 +10,9 @@ use std::path::Path;
 use tar::EntryType;
 use zip::ZipArchive;
 
-use crate::OrchestratorError;
-use crate::internal::internal;
 use velnor_actions_mise::CheckDeadline;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 mod archive_deadline;
 mod links;

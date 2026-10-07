@@ -5,8 +5,8 @@ use std::path::Path;
 
 use velnor_actions_mise::{PinnedTool, ProcessOutput, ToolCatalog};
 
-use crate::OrchestratorError;
 use crate::validate::{diagnose, pinned_output};
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 mod workflow;
 

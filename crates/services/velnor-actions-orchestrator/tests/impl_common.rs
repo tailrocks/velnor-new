@@ -9,8 +9,9 @@ use std::time::SystemTime;
 use tempfile::TempDir;
 use velnor_actions_contract_workflow::{MatrixReport, Plan};
 use velnor_actions_orchestrator::{
-    GenerationPreparation, OrchestratorError, finalized_jobs, plan_internal, plan_text,
+    GenerationPreparation, finalized_jobs, plan_internal, plan_text,
 };
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Test error shortcut.
 pub(crate) type TestResult = Result<(), Box<dyn std::error::Error>>;

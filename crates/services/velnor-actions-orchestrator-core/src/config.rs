@@ -16,7 +16,7 @@ use crate::OrchestratorError;
 use crate::config_stacks::PartialStacks;
 
 /// Config path as reported in diagnostics.
-pub(crate) const CONFIG_REL: &str = ".velnor/config.toml";
+pub const CONFIG_REL: &str = ".velnor/config.toml";
 
 /// Load, default, and validate `.velnor/config.toml` under `root`.
 ///
@@ -26,7 +26,7 @@ pub(crate) const CONFIG_REL: &str = ".velnor/config.toml";
 /// [`OrchestratorError::Config`] with file plus key path on parse or
 /// validation failure, and [`OrchestratorError::Io`] on read failure.
 /// Symlinks and root escapes fail closed as unsafe paths (X6).
-pub(crate) fn load_config(root: &Path) -> Result<VelnorConfig, OrchestratorError> {
+pub fn load_config(root: &Path) -> Result<VelnorConfig, OrchestratorError> {
     let path = root.join(CONFIG_REL);
     let text = match crate::safe_read::read_repo_file(
         root,
@@ -55,7 +55,7 @@ pub(crate) fn load_config(root: &Path) -> Result<VelnorConfig, OrchestratorError
 }
 
 /// Map validation failures to file plus key-path errors.
-pub(crate) fn config_error(error: velnor_actions_contract::ContractError) -> OrchestratorError {
+pub fn config_error(error: velnor_actions_contract::ContractError) -> OrchestratorError {
     match error {
         velnor_actions_contract::ContractError::Config {
             file,

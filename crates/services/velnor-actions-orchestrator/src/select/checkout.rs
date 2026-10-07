@@ -6,9 +6,9 @@ use std::path::Path;
 use velnor_actions_contract_workflow::WorkflowEvent;
 use velnor_actions_mise::{CheckDeadline, GitRequest};
 
-use crate::OrchestratorError;
-use crate::internal::internal;
-use crate::validators::validate_diff_rev;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
+use velnor_actions_orchestrator_core::validators::validate_diff_rev;
 
 /// Verify that the analyzed checkout matches the intended head.
 ///

@@ -1,7 +1,5 @@
 //! Qualified source bytes become retained, observed owned installation trees.
-use crate::OrchestratorError;
 use crate::check_evidence::gate::tools::{QualifiedToolReceipt, receipt};
-use crate::internal::internal;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use velnor_actions_contract_config::config::{
@@ -11,6 +9,8 @@ use velnor_actions_mise::check_tool_probes::{
     QualifiedExecutableObservation, QualifiedProbeHomes, verify_qualified_executable,
 };
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, QualifiedCheck};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 mod archive;
 mod layout;
@@ -34,7 +34,10 @@ pub(super) fn acquire(
             .qualified_tool_home(&tool.id)
             .map_err(|e| internal(&e.to_string()))?;
         for directory in ["downloads", "verified", "unpacked", "cargo", "target"] {
-            crate::exclusive_write::create_dir_no_symlink(home, &tool_home.join(directory))?;
+            velnor_actions_orchestrator_core::exclusive_write::create_dir_no_symlink(
+                home,
+                &tool_home.join(directory),
+            )?;
         }
         let primary = fetch_extract(
             handle,
@@ -140,7 +143,7 @@ fn fetch_extract(
             if dependency { "dependency" } else { "primary" }
         );
         let verified = tool_home.join("verified").join(&name);
-        crate::exclusive_write::write_exclusive_until(
+        velnor_actions_orchestrator_core::exclusive_write::write_exclusive_until(
             &verified,
             &bytes,
             "qualified_tool_archive",

@@ -8,8 +8,8 @@ use velnor_actions_contract_planning::{
 };
 use velnor_actions_mise::GitRequest;
 
-use crate::OrchestratorError;
-use crate::git_paths::split_nul_paths_skipping;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::git_paths::split_nul_paths_skipping;
 
 /// `git ls-files` outcome: non-git roots walk the filesystem, while
 /// undecodable entries skip with an explicit flag (never a silent

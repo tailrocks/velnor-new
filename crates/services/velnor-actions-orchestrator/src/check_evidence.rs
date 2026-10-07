@@ -1,13 +1,13 @@
 //! Strict scenario evidence bound to the source plan and named check.
 pub(crate) mod gate;
 
-use crate::OrchestratorError;
-use crate::internal::internal;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::path::{Component, Path};
 use velnor_actions_contract::{digest_b3, parse_strict_json};
 use velnor_actions_contract_config::config::{CheckEvidence, CheckPlatform};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 /// Producer payload; unknown fields and duplicate JSON keys fail closed.
 #[derive(Debug, Deserialize, Serialize)]
@@ -62,14 +62,20 @@ pub(crate) fn verify_evidence(
     platform: CheckPlatform,
 ) -> Result<EvidenceReceipt, OrchestratorError> {
     reject_link_components(root, &declaration.path)?;
-    let text = match crate::safe_read::read_repo_file(
+    let text = match velnor_actions_orchestrator_core::safe_read::read_repo_file(
         root,
         &declaration.path,
-        crate::safe_read::MAX_REPO_FILE_BYTES,
+        velnor_actions_orchestrator_core::safe_read::MAX_REPO_FILE_BYTES,
     )? {
-        crate::safe_read::RepoRead::Absent => return Err(internal("check_evidence_missing")),
-        crate::safe_read::RepoRead::Text(text) if !text.is_empty() => text,
-        crate::safe_read::RepoRead::Text(_) => return Err(internal("check_evidence_empty")),
+        velnor_actions_orchestrator_core::safe_read::RepoRead::Absent => {
+            return Err(internal("check_evidence_missing"));
+        }
+        velnor_actions_orchestrator_core::safe_read::RepoRead::Text(text) if !text.is_empty() => {
+            text
+        }
+        velnor_actions_orchestrator_core::safe_read::RepoRead::Text(_) => {
+            return Err(internal("check_evidence_empty"));
+        }
     };
     let value = parse_strict_json(&text).map_err(|_| internal("check_evidence_json"))?;
     let evidence: ScenarioEvidence =

@@ -14,10 +14,10 @@ use velnor_actions_contract_workflow::{
     ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, TaskReport, TaskStatus,
 };
 
-use crate::OrchestratorError;
-use crate::internal::internal_contract;
 use crate::internal_plan::wire_w2;
 use crate::merge::MergeRequest;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal_contract;
 
 pub(crate) use self::revalidate::revalidate_coverage;
 pub(crate) use crate::cover_baseline::{BaselineInputs, apply_baseline};

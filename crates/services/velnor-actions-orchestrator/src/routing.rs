@@ -15,8 +15,8 @@ use velnor_actions_workflow_tree::RenderedFile;
 
 mod generator_release_pins;
 
-use crate::OrchestratorError;
-use crate::config::{CONFIG_REL, config_error, load_config};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::config::{CONFIG_REL, config_error, load_config};
 
 /// Print or persist the schema 2 form of `.velnor/config.toml`.
 ///

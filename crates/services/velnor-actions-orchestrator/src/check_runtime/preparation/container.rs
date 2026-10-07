@@ -1,11 +1,11 @@
 //! Own typed container binaries and explicit runtime delegation before readonly probes.
-use crate::OrchestratorError;
-use crate::internal::internal;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use velnor_actions_contract_config::config::{CheckRunner, HostContainerProfile};
 use velnor_actions_mise::CheckDeadline;
 use velnor_actions_mise::checks::{CheckCapabilityProof, PreparedContainer};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 pub(crate) mod bundle;
 pub(crate) mod runtime;
 
@@ -174,9 +174,12 @@ fn project_executable(
     if bytes.is_empty() || observed != expected {
         return Err(internal("container_cli_sha256"));
     }
-    crate::exclusive_write::write_exclusive_until(destination, &bytes, "container_cli", || {
-        checkpoint(Some(deadline))
-    })?;
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive_until(
+        destination,
+        &bytes,
+        "container_cli",
+        || checkpoint(Some(deadline)),
+    )?;
     let fd = rustix::fs::open(
         destination,
         rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::CLOEXEC,

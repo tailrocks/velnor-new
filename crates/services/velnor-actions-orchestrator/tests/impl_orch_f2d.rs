@@ -108,7 +108,7 @@ fn cache_miss_cannot_fail_merge() -> TestResult {
         .iter()
         .find(|ob| ob.task_id == entry.task_id)
         .ok_or("ob")?;
-    let inputs = velnor_actions_orchestrator::decisions::NotSelectedInputs {
+    let inputs = velnor_actions_orchestrator_core::decisions::NotSelectedInputs {
         run_key: "local",
         event: velnor_actions_contract_workflow::WorkflowEvent::PullRequest,
         trust: velnor_actions_contract_workflow::Trust::Pr,
@@ -119,7 +119,7 @@ fn cache_miss_cannot_fail_merge() -> TestResult {
         reason: velnor_actions_contract_workflow::NotSelectedReason::UpstreamFailed,
     };
     let mut report: TaskReport =
-        velnor_actions_orchestrator::decisions::not_selected_report(&inputs)?;
+        velnor_actions_orchestrator_core::decisions::not_selected_report(&inputs)?;
     report.status = velnor_actions_contract_workflow::TaskStatus::Executed;
     report.not_selected_reason = None;
     report.cache = velnor_actions_contract_workflow::CacheOutcome {

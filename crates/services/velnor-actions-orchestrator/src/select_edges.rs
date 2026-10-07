@@ -10,10 +10,12 @@ use velnor_actions_mise::GitRequest;
 use velnor_actions_rust_core::{local_edge_pairs, manifest_edges};
 
 use crate::discover::Discovery;
-use crate::git_paths::split_nul_paths;
-use crate::schedule::resource_exclusions;
 use crate::select_affected::manifest_dir;
-use crate::validators::{validate_diff_rev, validate_select_diff_args, validate_select_show_args};
+use velnor_actions_orchestrator_core::git_paths::split_nul_paths;
+use velnor_actions_orchestrator_core::schedule::resource_exclusions;
+use velnor_actions_orchestrator_core::validators::{
+    validate_diff_rev, validate_select_diff_args, validate_select_show_args,
+};
 
 /// Max base manifests fetched; beyond this, broaden instead of reading.
 const MAX_BASE_MANIFEST_BATCH: usize = 512;

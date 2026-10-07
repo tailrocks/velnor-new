@@ -108,7 +108,8 @@ fn default_branch_for(catalog: &ToolCatalog, cwd: &Path, repo: &str) -> Option<S
 /// `{owner}`/`{repo}` template ever resolves from ambient state. A
 /// malformed slug yields no command instead of an unscoped one.
 fn default_branch_args(repo: &str) -> Vec<OsString> {
-    let Some(repo) = crate::origin::validate_repository_slug(repo) else {
+    let Some(repo) = velnor_actions_orchestrator_core::origin::validate_repository_slug(repo)
+    else {
         return Vec::new();
     };
     ["api", &format!("repos/{repo}"), "--jq", ".default_branch"]
@@ -152,7 +153,12 @@ fn stage_manifest(run_dir: &Path, manifest: &crate::merge::BaselineManifest) -> 
     let Ok(bytes) = canonical_json_bytes(manifest) else {
         return false;
     };
-    crate::exclusive_write::write_exclusive(&target, &bytes, "baseline_stage").is_ok()
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
+        &target,
+        &bytes,
+        "baseline_stage",
+    )
+    .is_ok()
 }
 
 #[cfg(test)]

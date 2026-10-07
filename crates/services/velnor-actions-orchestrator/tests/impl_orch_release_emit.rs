@@ -3,9 +3,8 @@
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_orchestrator::{
-    GenerateOptions, OrchestratorError, generate, prepare, render_staged_tree,
-};
+use velnor_actions_orchestrator::{GenerateOptions, generate, prepare, render_staged_tree};
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 use crate::impl_common::{
     TestResult, config_with_branch, err_of, git, git_line, make_repo, plan_for,

@@ -17,13 +17,13 @@ use std::process::ExitCode;
 use clap::Parser;
 use velnor_actions_orchestrator::{
     DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, GenerateOptions, MERGE_OP,
-    OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP,
-    PlanOutputMode, REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, execute_check,
-    generate_dispatched, init_config, merge_internal, merge_passed, parse_dispatch_mode,
-    plan_internal, plan_outputs, plan_text_checked, prepare, publish_final_report,
-    publish_plan_files, resolve_root, response_path_for, retrieve_reports, write_preseed_manifest,
-    write_request, write_task_report,
+    PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PlanOutputMode,
+    REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, execute_check, generate_dispatched,
+    merge_internal, merge_passed, parse_dispatch_mode, plan_internal, plan_outputs,
+    plan_text_checked, prepare, publish_final_report, publish_plan_files, response_path_for,
+    retrieve_reports, write_preseed_manifest, write_request, write_task_report,
 };
+use velnor_actions_orchestrator_core::{OrchestratorError, init_config, resolve_root};
 
 use crate::args::{Cli, Command};
 use crate::dispatch_publish::run_publish_internal;

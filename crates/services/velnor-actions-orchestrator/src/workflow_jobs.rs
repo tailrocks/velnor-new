@@ -17,9 +17,9 @@ use velnor_actions_workflow_steps::steps::{
     MERGE_OPERATION, PLAN_OPERATION, merge_step, plan_step, write_request_step,
 };
 
-use crate::OrchestratorError;
 use crate::source_prep::fetch_steps_for_plan;
-use crate::utf8::{strings_of, strings_of_env};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::utf8::{strings_of, strings_of_env};
 
 /// Always-on workflow-lint job ID, emitted for both policies.
 pub(crate) const LINT_JOB_ID: &str = "actionlint";

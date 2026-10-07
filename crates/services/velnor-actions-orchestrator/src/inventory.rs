@@ -10,13 +10,13 @@ use velnor_actions_contract_planning::{CandidateOutcome, StackCandidate};
 use velnor_actions_mise::{MetadataDiscovery, MetadataQualification, ToolCatalog};
 use velnor_actions_rust_core::{WorkspaceRecord, parse_metadata_json};
 
-use crate::OrchestratorError;
-use crate::decisions::{MetadataFailure, classify_metadata_failure};
 use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
 use crate::generate::ToolSnapshot;
 use crate::inventory_reuse::MemberIndex;
-use crate::safe_read::read_repo_file_cached;
 use crate::select_tofu::TofuSelectionUnit;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::decisions::{MetadataFailure, classify_metadata_failure};
+use velnor_actions_orchestrator_core::safe_read::read_repo_file_cached;
 
 /// Candidate outcomes plus successful manifest inventories.
 pub(crate) type Inventories = (Vec<CandidateOutcome>, Vec<(String, WorkspaceRecord)>);

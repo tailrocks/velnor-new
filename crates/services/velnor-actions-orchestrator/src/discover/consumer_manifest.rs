@@ -2,8 +2,8 @@
 
 use std::path::Path;
 
-use crate::OrchestratorError;
-use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 
 /// Committed consumer-manifest filename under `.velnor`.
 const RELEASE_MANIFEST_REL: &str = ".velnor/release-manifest.json";

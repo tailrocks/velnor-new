@@ -24,8 +24,8 @@ use std::path::Path;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use crate::OrchestratorError;
-use crate::internal::internal;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 /// Manifest-writing operation tag.
 pub const PRESEED_MANIFEST_OP: &str = "write-preseed-manifest-v1";

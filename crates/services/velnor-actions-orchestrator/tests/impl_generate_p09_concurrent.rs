@@ -5,7 +5,8 @@
 
 use std::fs;
 
-use velnor_actions_orchestrator::{GenerateOptions, OrchestratorError, generate, prepare};
+use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 use super::impl_common::{TestResult, config_with_branch, make_repo};
 

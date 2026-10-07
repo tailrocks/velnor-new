@@ -9,7 +9,8 @@ fn no_cargo_checks_gate_required_without_becoming_rust_jobs() {
         "schema = 1\n[workflow]\npolicy = 'velnor-repository-v1'\n",
     )
     .expect("config");
-    let config = crate::config::load_config(root.path()).expect("defaulted config");
+    let config = velnor_actions_orchestrator_core::config::load_config(root.path())
+        .expect("defaulted config");
     let workflow =
         crate::workflow::build_workflow(&config, "main", "ubuntu-26.04", &discovery, &[])
             .expect("named checks workflow");
@@ -251,7 +252,8 @@ fn ignored_rust_candidate_keeps_plan_inventory_toolchain() {
         "schema = 1\n[workflow]\npolicy = 'velnor-repository-v1'\n",
     )
     .expect("config");
-    let config = crate::config::load_config(root.path()).expect("defaulted config");
+    let config = velnor_actions_orchestrator_core::config::load_config(root.path())
+        .expect("defaulted config");
     let workflow =
         crate::workflow::build_workflow(&config, "main", "ubuntu-26.04", &discovery, &[])
             .expect("ignored Rust workflow");

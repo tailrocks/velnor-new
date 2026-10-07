@@ -1,11 +1,11 @@
 //! Filesystem custody for verified Cargo source archives.
-use crate::OrchestratorError;
-use crate::internal::internal;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use velnor_actions_mise::CheckDeadline;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 fn io(path: &Path, error: impl std::fmt::Display) -> OrchestratorError {
     OrchestratorError::io(path.display().to_string(), error.to_string())
@@ -150,7 +150,7 @@ pub(super) fn write_checksum(
     let bytes = serde_json::to_vec(&serde_json::json!({"files":files,"package":package}))
         .map_err(|error| internal(&format!("qualified_cargo_checksum:{error}")))?;
     check_deadline(deadline)?;
-    crate::exclusive_write::write_exclusive_until(
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive_until(
         &root.join(".cargo-checksum.json"),
         &bytes,
         "qualified_cargo_checksum",

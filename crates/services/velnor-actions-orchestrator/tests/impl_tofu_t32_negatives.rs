@@ -11,9 +11,8 @@ use std::fs;
 use serde_json::json;
 use tempfile::TempDir;
 use velnor_actions_contract_workflow::{FinalStatus, MatrixStatus, Plan, TaskStatus};
-use velnor_actions_orchestrator::{
-    OrchestratorError, merge_internal, merge_passed, prepare, publish_final_report,
-};
+use velnor_actions_orchestrator::{merge_internal, merge_passed, prepare, publish_final_report};
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 use super::impl_common::{TestResult, git, install_fixture_release_manifest, passing_reports};
 use super::impl_orch_core::{merge, merge_request, set_task, success_jobs};

@@ -23,7 +23,7 @@ use std::path::{Component, Path};
 use rustix::fs::{Mode, OFlags, open, openat};
 
 use crate::OrchestratorError;
-use crate::internal::internal;
+use crate::error::internal;
 
 /// Exclusively write one producer file, refusing symlinks.
 ///
@@ -36,16 +36,12 @@ use crate::internal::internal;
 ///
 /// Returns [`OrchestratorError::Internal`] for symlinks, pre-existing
 /// files, and unwritable paths.
-pub(crate) fn write_exclusive(
-    path: &Path,
-    bytes: &[u8],
-    context: &str,
-) -> Result<(), OrchestratorError> {
+pub fn write_exclusive(path: &Path, bytes: &[u8], context: &str) -> Result<(), OrchestratorError> {
     write_exclusive_until(path, bytes, context, || Ok(()))
 }
 
 /// Exclusively write in bounded chunks, checking the owning operation's deadline.
-pub(crate) fn write_exclusive_until(
+pub fn write_exclusive_until(
     path: &Path,
     bytes: &[u8],
     context: &str,
@@ -153,7 +149,7 @@ fn child_open_error(err: rustix::io::Errno, context: &str) -> OrchestratorError 
 ///
 /// Returns [`OrchestratorError::Internal`] for symlinks and anchor
 /// escapes; [`OrchestratorError::Io`] for mkdir failures.
-pub(crate) fn create_dir_no_symlink(anchor: &Path, dir: &Path) -> Result<(), OrchestratorError> {
+pub fn create_dir_no_symlink(anchor: &Path, dir: &Path) -> Result<(), OrchestratorError> {
     let relative = dir
         .strip_prefix(anchor)
         .map_err(|_| internal("anchor_escape"))?;

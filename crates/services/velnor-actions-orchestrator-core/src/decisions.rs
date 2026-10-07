@@ -26,7 +26,7 @@ use velnor_actions_contract_workflow::{
 use velnor_actions_rust_core::SelectionBroadening;
 
 use crate::OrchestratorError;
-use crate::internal::internal_contract;
+use crate::error::internal_contract;
 
 /// Why one manifest produced no inventory.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -239,7 +239,7 @@ pub fn not_selected_report(inputs: &NotSelectedInputs<'_>) -> Result<TaskReport,
 /// facts. Observed provisioner values bind later through
 /// [`RunnerImageEvidence::observed`], which rejects this marker, so
 /// the two states stay disjoint by construction (P03-4).
-pub(crate) fn runner_image_evidence() -> RunnerImageEvidence {
+pub fn runner_image_evidence() -> RunnerImageEvidence {
     RunnerImageEvidence::unobserved()
 }
 
@@ -265,7 +265,7 @@ pub fn selection_broadens_for_path(path: &str) -> Option<&'static str> {
 /// table itself broadens as global config via
 /// [`selection_broadens_for_path`].
 #[must_use]
-pub(crate) fn broadening_for_path(path: &str) -> Option<SelectionBroadening> {
+pub fn broadening_for_path(path: &str) -> Option<SelectionBroadening> {
     for stack in Stack::all() {
         match stack {
             Stack::Rust => {
@@ -304,24 +304,6 @@ pub fn omission_ledger(
         .collect();
     omitted.sort_by(|left, right| left.task_id.cmp(&right.task_id));
     omitted
-}
-
-/// One registered detector: stack ID plus record schema (par §1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DetectorInfo {
-    /// Registered stack ID.
-    pub stack_id: &'static str,
-    /// Detection record schema.
-    pub schema: u32,
-}
-
-/// Detector registry in ascending stack-ID order; V1 holds `rust` and `tofu`.
-#[must_use]
-pub fn detector_registry() -> Vec<DetectorInfo> {
-    crate::discover::detector_entries()
-        .into_iter()
-        .map(|(stack_id, schema)| DetectorInfo { stack_id, schema })
-        .collect()
 }
 
 /// Plan-file name under the run-key artifact directory (wf §4).

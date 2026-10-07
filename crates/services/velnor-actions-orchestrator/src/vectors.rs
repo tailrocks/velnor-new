@@ -11,7 +11,7 @@ use velnor_actions_mise::{
 use velnor_actions_rust::tool_needs;
 use velnor_actions_workflow_jobs::context::CandidateSpec;
 
-use crate::{OrchestratorError, qualify::QualifyRequest};
+use velnor_actions_orchestrator_core::{OrchestratorError, qualify::QualifyRequest};
 
 /// Qualified cargo-deny release.
 /// Source: `https://crates.io/api/v1/crates/cargo-deny`; checked 2026-09-29.

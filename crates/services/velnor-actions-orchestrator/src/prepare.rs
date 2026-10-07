@@ -7,12 +7,12 @@ use velnor_actions_contract_config::{RunnerSelection, VelnorConfig, WorkflowPoli
 use velnor_actions_contract_release::RunnerImageEvidence;
 use velnor_actions_mise::GitRequest;
 
-use crate::OrchestratorError;
-use crate::config::load_config;
-use crate::decisions::runner_image_evidence;
 use crate::discover::{Discovery, discover};
 use crate::source_prep::lockful_roots;
 use crate::workflow::{DEFAULT_RUNNER_LABEL, WorkflowPlan, build_workflow};
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::config::load_config;
+use velnor_actions_orchestrator_core::decisions::runner_image_evidence;
 
 /// Canonical repository identity allowed the Velnor-repository policy.
 const VELNOR_IDENTITY: &str = "tailrocks/velnor-new";
@@ -158,7 +158,8 @@ fn check_velnor_identity(root: &Path, config: &VelnorConfig) -> Result<(), Orche
         return Ok(());
     }
     if let Ok(hint) = std::env::var("GITHUB_REPOSITORY")
-        && crate::origin::validate_repository_slug(&hint).as_deref() != Some(VELNOR_IDENTITY)
+        && velnor_actions_orchestrator_core::origin::validate_repository_slug(&hint).as_deref()
+            != Some(VELNOR_IDENTITY)
     {
         return Err(OrchestratorError::IdentityRejected {
             problem: "github_repository_mismatch:velnor_policy_requires_tailrocks_velnor_new"
@@ -175,13 +176,14 @@ fn check_velnor_identity(root: &Path, config: &VelnorConfig) -> Result<(), Orche
 
 /// True when the local `origin` URL normalizes to the canonical identity.
 ///
-/// Resolution runs through the shared [`crate::origin::origin_url_via_git`]
+/// Resolution runs through the shared [`velnor_actions_orchestrator_core::origin::origin_url_via_git`]
 /// helper, so linked worktrees, includes, and worktree configuration all
 /// follow Git semantics. Only that one key counts; other sections, other
 /// keys, and decoy remotes never grant the identity. A missing or
 /// mismatched origin fails; nothing is fetched.
 fn origin_matches(root: &Path) -> bool {
-    crate::origin::origin_url_via_git(root).is_some_and(|url| url_matches_identity(&url))
+    velnor_actions_orchestrator_core::origin::origin_url_via_git(root)
+        .is_some_and(|url| url_matches_identity(&url))
 }
 
 /// True when a remote URL normalizes to the canonical identity.

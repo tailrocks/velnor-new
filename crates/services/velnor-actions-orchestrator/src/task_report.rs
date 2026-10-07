@@ -16,9 +16,9 @@ use velnor_actions_contract_workflow::{
     TaskReport, TaskStatus,
 };
 
-use crate::OrchestratorError;
-use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::{internal, internal_contract};
 mod timing;
 #[cfg(test)]
 use timing::now_ms;
@@ -313,7 +313,7 @@ pub(crate) fn terminal_task_report(
         queue: None,
         partition: None,
         reason: None,
-        timing: crate::schedule::measured_timing(duration_ms),
+        timing: velnor_actions_orchestrator_core::schedule::measured_timing(duration_ms),
     };
     report.validate()?;
     report.validate_outputs_declared(&entry.declared_outputs)?;
@@ -339,15 +339,18 @@ pub(crate) fn write_entry_reports(
         .join(&plan.run_key)
         .join(&entry.matrix_key);
     let task_files_dir = dir.join("tasks");
-    crate::exclusive_write::create_dir_no_symlink(runner_temp, &task_files_dir)?;
+    velnor_actions_orchestrator_core::exclusive_write::create_dir_no_symlink(
+        runner_temp,
+        &task_files_dir,
+    )?;
     let matrix_bytes = canonical_json_bytes(matrix).map_err(internal_contract)?;
     let task_bytes = canonical_json_bytes(task).map_err(internal_contract)?;
-    crate::exclusive_write::write_exclusive(
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
         &dir.join("matrix-report.json"),
         &matrix_bytes,
         "report",
     )?;
-    crate::exclusive_write::write_exclusive(
+    velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
         &task_files_dir.join(format!("{}.json", task.task_report_id)),
         &task_bytes,
         "report",

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::OrchestratorError;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 use super::{shellcheck_fail, unquote_run_scalar};
 

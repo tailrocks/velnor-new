@@ -27,12 +27,11 @@ use crate::OrchestratorError;
 ///
 /// Matches the contract's untrusted-document bound: legitimate config,
 /// manifest, and event-payload documents are kilobytes.
-pub(crate) const MAX_REPO_FILE_BYTES: u64 =
-    velnor_actions_contract_config::MAX_CHECK_SOURCE_BYTES as u64;
+pub const MAX_REPO_FILE_BYTES: u64 = velnor_actions_contract_config::MAX_CHECK_SOURCE_BYTES as u64;
 
 /// Outcome of a root-constrained repo file read.
 #[derive(Debug)]
-pub(crate) enum RepoRead {
+pub enum RepoRead {
     /// The file is absent.
     Absent,
     /// The file read within the bound.
@@ -41,7 +40,7 @@ pub(crate) enum RepoRead {
 
 /// Outcome of reading bounded root-contained repository bytes.
 #[derive(Debug)]
-pub(crate) enum RepoBytes {
+pub enum RepoBytes {
     /// The file is absent.
     Absent,
     /// The file read within the bound without an encoding assumption.
@@ -52,7 +51,7 @@ pub(crate) enum RepoBytes {
 ///
 /// Rejects symlinks, non-files, root escapes, oversize content, and
 /// invalid UTF-8 with typed errors; only absence returns [`RepoRead::Absent`].
-pub(crate) fn read_repo_file(
+pub fn read_repo_file(
     root: &Path,
     rel: &str,
     max_bytes: u64,
@@ -61,7 +60,7 @@ pub(crate) fn read_repo_file(
 }
 
 /// Read a root-contained text file while checking a shared check deadline.
-pub(crate) fn read_repo_file_until(
+pub fn read_repo_file_until(
     root: &Path,
     rel: &str,
     max_bytes: u64,
@@ -88,7 +87,7 @@ fn read_repo_file_until_inner(
 ///
 /// Preserves the text reader's root containment, symlink rejection, regular-file
 /// requirement and handle-pinned size bound.
-pub(crate) fn read_repo_bytes(
+pub fn read_repo_bytes(
     root: &Path,
     rel: &str,
     max_bytes: u64,
@@ -97,7 +96,7 @@ pub(crate) fn read_repo_bytes(
 }
 
 /// Read root-contained bytes while checking a shared named-check deadline.
-pub(crate) fn read_repo_bytes_until(
+pub fn read_repo_bytes_until(
     root: &Path,
     rel: &str,
     max_bytes: u64,
@@ -142,7 +141,7 @@ fn read_repo_bytes_until_inner(
 /// and store its outcome (text, absence, or the error's display
 /// string). Callers map the plain outcome onto their own handling;
 /// the secure checks always run on the miss path.
-pub(crate) fn read_repo_file_cached(
+pub fn read_repo_file_cached(
     root: &Path,
     rel: &str,
     max_bytes: u64,
@@ -166,8 +165,8 @@ pub(crate) fn read_repo_file_cached(
 /// The payload lives outside the repository by design, so no root
 /// constraint applies; symlinks, non-files, oversize content, and
 /// invalid UTF-8 still fail closed as unreadable payloads.
-pub(crate) fn read_event_file(path: &Path, max_bytes: u64) -> Result<String, OrchestratorError> {
-    use crate::internal::internal;
+pub fn read_event_file(path: &Path, max_bytes: u64) -> Result<String, OrchestratorError> {
+    use crate::error::internal;
     match fs::symlink_metadata(path) {
         Ok(meta) if meta.file_type().is_symlink() => {
             return Err(internal("unreadable_event_payload"));
@@ -250,7 +249,7 @@ fn check_deadline(
     if let Some(deadline) = deadline {
         deadline
             .remaining()
-            .map_err(|error| crate::internal::internal(&error.to_string()))?;
+            .map_err(|error| crate::error::internal(&error.to_string()))?;
     }
     Ok(())
 }

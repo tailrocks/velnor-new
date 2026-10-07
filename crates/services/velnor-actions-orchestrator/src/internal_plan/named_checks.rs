@@ -1,7 +1,6 @@
 //! Identity and transport for explicit opaque checks.
 pub(crate) mod plan;
 use crate::discover::Discovery;
-use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoBytes, read_repo_bytes};
 use std::path::Path;
 use velnor_actions_contract::cachekey::ToolchainInputs;
 use velnor_actions_contract::{
@@ -10,6 +9,9 @@ use velnor_actions_contract::{
 use velnor_actions_contract_config::NamedCheckIdentityExtension;
 use velnor_actions_contract_planning::ProposedTask;
 use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};
+use velnor_actions_orchestrator_core::safe_read::{
+    MAX_REPO_FILE_BYTES, RepoBytes, read_repo_bytes,
+};
 
 /// Require the discovered definition corresponding to the exact proposal.
 pub(crate) fn discovered<'a>(
@@ -110,7 +112,12 @@ pub(crate) fn resolve_closure_until(
         );
     for path in &task.identity.declared_inputs {
         let read = if let Some(deadline) = deadline {
-            crate::safe_read::read_repo_bytes_until(root, path, MAX_REPO_FILE_BYTES, deadline)
+            velnor_actions_orchestrator_core::safe_read::read_repo_bytes_until(
+                root,
+                path,
+                MAX_REPO_FILE_BYTES,
+                deadline,
+            )
         } else {
             read_repo_bytes(root, path, MAX_REPO_FILE_BYTES)
         }

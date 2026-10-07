@@ -6,9 +6,9 @@ use tempfile::TempDir;
 use velnor_actions_contract_config::RunnerSelection;
 use velnor_actions_contract_workflow::FinalReport;
 use velnor_actions_orchestrator::{
-    OrchestratorError, finalized_jobs, init_config, merge_internal, plan_internal, plan_text,
-    prepare, resolve_root,
+    finalized_jobs, merge_internal, plan_internal, plan_text, prepare,
 };
+use velnor_actions_orchestrator_core::{OrchestratorError, init_config, resolve_root};
 
 use crate::impl_common::{
     TestResult, config_with_branch, err_of, fixture_manifest_json, git, make_repo, passing_reports,

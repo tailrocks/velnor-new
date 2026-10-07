@@ -19,8 +19,8 @@ use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_workflow_jobs::{HelperProvenance, provision_acquire_step};
 use velnor_actions_workflow_steps::{MiseSetup, STAGED_BINARY_PREFIX};
 
-use crate::OrchestratorError;
 use crate::discover::Discovery;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Override key selecting the Mise setup action pin.
 const MISE_ACTION_KEY: &str = "jdx/mise-action";

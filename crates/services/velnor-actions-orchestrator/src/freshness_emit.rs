@@ -11,9 +11,9 @@ use velnor_actions_contract_workflow::{FRESHNESS_CRON_WEEKLY, ScheduleTrigger};
 use velnor_actions_workflow_jobs::freshness::{FreshnessSpec, render_freshness_workflow};
 use velnor_actions_workflow_tree::rendered::RenderedFile;
 
-use crate::OrchestratorError;
 use crate::prepare::GenerationPreparation;
 use crate::workflow::CHECKOUT_USES;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// True when the freshness workflow is emitted for this preparation.
 ///

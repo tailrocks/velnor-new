@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 velnor-actions-orchestrator = { version = "=0.1.1", path = "../../services/velnor-actions-orchestrator" }
+velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../../services/velnor-actions-orchestrator-core" }
 clap = { workspace = true }
 
 [lints]

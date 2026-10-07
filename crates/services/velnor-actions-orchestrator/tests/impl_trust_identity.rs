@@ -1,6 +1,7 @@
 //! Trust cases: repository identity hints versus git origin.
 
-use velnor_actions_orchestrator::{OrchestratorError, prepare};
+use velnor_actions_orchestrator::prepare;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 use crate::impl_common::{TestResult, err_of, git, make_repo};
 

@@ -1,8 +1,8 @@
 //! Admit every projected runtime socket against the executing target's Unix ABI.
 use super::{RuntimeEntryEvidence, RuntimeEntryKind};
-use crate::OrchestratorError;
-use crate::internal::internal;
 use std::path::Path;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 pub(super) fn validate(
     home: &Path,

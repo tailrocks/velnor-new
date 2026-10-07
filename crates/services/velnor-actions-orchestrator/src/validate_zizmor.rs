@@ -9,8 +9,8 @@ use velnor_actions_actionlint::config::{
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_tree::rendered::RenderedTree;
 
-use crate::OrchestratorError;
 use crate::validate::{diagnose, is_workflow_path, pinned_output};
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Staging-only zizmor config at the staging root, never generated.
 const ZIZMOR_CONFIG: &str = ".zizmor.yml";

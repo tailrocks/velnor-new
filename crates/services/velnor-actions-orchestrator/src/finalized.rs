@@ -12,11 +12,11 @@ use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_contract_workflow::{Job, expand_workflow};
 use velnor_actions_workflow_jobs::finalize_jobs as finalize_render_jobs;
 
-use crate::OrchestratorError;
 use crate::attach::{attach_lock_acquire, attach_preseed};
 use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 use crate::validate::verify_velnor_repository_files;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Owned preparation with the Velnor lock/preseed attach applied.
 ///

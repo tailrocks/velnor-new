@@ -7,7 +7,8 @@ use std::path::Path;
 use std::process::Command as StdCommand;
 
 use tempfile::TempDir;
-use velnor_actions_orchestrator::{OrchestratorError, prepare};
+use velnor_actions_orchestrator::prepare;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 use crate::impl_common::{TestResult, fixture_manifest_json, git, without_ambient_identity};
 

@@ -1,6 +1,6 @@
 //! Fail-closed limits for plan artifacts and job outputs.
 
-use crate::{OrchestratorError, internal::internal};
+use velnor_actions_orchestrator_core::{OrchestratorError, internal};
 
 /// GitHub's maximum jobs created by one matrix strategy.
 pub(crate) const MATRIX_JOB_LIMIT: usize = 256;

@@ -5,7 +5,7 @@ use std::path::Path;
 
 use velnor_actions_workflow_tree::rendered::RenderedTree;
 
-use crate::OrchestratorError;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Write every rendered file and symbolic link under `github_dir`.
 ///

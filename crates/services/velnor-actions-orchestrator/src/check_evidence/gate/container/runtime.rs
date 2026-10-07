@@ -1,6 +1,4 @@
-use crate::OrchestratorError;
 use crate::cover_identity::generator::sha256_hex;
-use crate::internal::internal;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
@@ -10,6 +8,8 @@ use velnor_actions_contract_config::config::{
     MAX_CHECK_CONTAINER_RUNTIME_ENTRY_PATH_BYTES,
 };
 use velnor_actions_mise::checks::ContainerObservation;
+use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::internal;
 
 pub(crate) use crate::check_runtime::preparation::container::runtime::{
     RuntimeObservation, RuntimeRootEvidence, SocketEvidence,

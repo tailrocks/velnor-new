@@ -5,8 +5,8 @@ use std::fs::OpenOptions;
 use std::io::{self, Read, Write};
 use std::path::{Component, Path, PathBuf};
 
-use crate::OrchestratorError;
 use velnor_actions_mise::CheckDeadline;
+use velnor_actions_orchestrator_core::OrchestratorError;
 
 use super::{internal, io_error, unsafe_path, unsafe_path_text};
 

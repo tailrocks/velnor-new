@@ -19,6 +19,7 @@ members = [
     "crates/core/velnor-actions-contract-release",
     "crates/core/velnor-actions-contract-workflow",
     "crates/services/velnor-actions-orchestrator",
+    "crates/services/velnor-actions-orchestrator-core",
     "crates/services/velnor-actions-workflow-cache",
     "crates/services/velnor-actions-workflow-document",
     "crates/services/velnor-actions-workflow-generator",
