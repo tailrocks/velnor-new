@@ -1,4 +1,5 @@
 use super::action_snapshots::{Actions, action};
+use super::cross_snapshots;
 use super::qualification_snapshots;
 
 pub(super) fn assert_pinned_gh_policy(actions: &Actions) {
@@ -167,12 +168,7 @@ fn assert_macos_build(body: &str, actions: &Actions) -> Result<(), Box<dyn std::
     let macos_action = action(actions, "generator-release-build-macos")?;
     assert!(macos_action.contains("*Mach-O*arm64*"), "{macos_action}");
     assert!(macos_action.contains("shasum -a 256"), "{macos_action}");
-    let intel = super::super::job_body(body, "build-macos-intel")?;
-    assert!(intel.contains("runs-on: macos-15-intel\n"), "{intel}");
-    let intel_action = action(actions, "generator-release-build-macos-intel")?;
-    assert!(intel_action.contains("*Mach-O*x86_64*"), "{intel_action}");
-    assert!(intel_action.contains("shasum -a 256"), "{intel_action}");
-    Ok(())
+    cross_snapshots::assert_intel_cross_build(body, actions)
 }
 
 pub(super) fn assert_manifest_job(

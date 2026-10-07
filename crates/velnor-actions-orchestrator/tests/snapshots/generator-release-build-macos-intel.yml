@@ -7,7 +7,7 @@ runs:
       uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
       with:
         version: 2026.9.18
-        sha256: 02d8ba561847f996925e361262c0610a24f59fcd9e06ba9ed0b6022e19b317c3
+        sha256: 484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f
         install: "false"
         env: "false"
         cache: "false"
@@ -15,9 +15,12 @@ runs:
     - name: Install pinned Rust and MBX
       shell: bash
       run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.1
+    - name: Install x86_64-apple-darwin Rust target
+      shell: bash
+      run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup target add --toolchain 1.98.1-aarch64-apple-darwin x86_64-apple-darwin
     - name: Build velnor-actions with MBX
       shell: bash
-      run: "set -eu\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions\ncp target/release/velnor-actions velnor-actions-0.1.1-x86_64-apple-darwin\ntest -s velnor-actions-0.1.1-x86_64-apple-darwin"
+      run: "set -eu\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions --target x86_64-apple-darwin\ncp target/x86_64-apple-darwin/release/velnor-actions velnor-actions-0.1.1-x86_64-apple-darwin\ntest -s velnor-actions-0.1.1-x86_64-apple-darwin"
     - name: Verify Mach-O x86_64 architecture
       shell: bash
       run: "set -eu\ndesc=\"$(file -b velnor-actions-0.1.1-x86_64-apple-darwin)\"\ncase \"$desc\" in\n  *Mach-O*x86_64*) ;;\n  *) echo \"not a x86_64 Mach-O: $desc\" >&2; exit 1 ;;\nesac"
