@@ -59,6 +59,7 @@
     "velnor-actions-orchestrator-cover-compat",
     "velnor-actions-orchestrator-external-data",
     "velnor-actions-orchestrator-retrieve-retry",
-    "velnor-actions-orchestrator-preseed-manifest"
+    "velnor-actions-orchestrator-preseed-manifest",
+    "velnor-actions-orchestrator-run-select"
   ]
 }

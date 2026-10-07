@@ -18,7 +18,7 @@ mod merge;
 mod merge_request;
 mod retrieve_baseline;
 mod retrieve_reports;
-pub mod run_select;
+pub use velnor_actions_orchestrator_run_select as run_select;
 mod task_report;
 
 pub use api::*;

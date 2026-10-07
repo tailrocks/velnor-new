@@ -221,6 +221,10 @@ const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
         &[],
     ),
     (
+        "crates/services/velnor-actions-orchestrator-run-select",
+        &[],
+    ),
+    (
         "crates/services/velnor-actions-orchestrator-runtime-evidence",
         &[
             "velnor-actions-contract",

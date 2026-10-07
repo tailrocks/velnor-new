@@ -217,6 +217,7 @@ const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
         ],
     ),
     ("velnor-actions-orchestrator-retrieve-retry", &[]),
+    ("velnor-actions-orchestrator-run-select", &[]),
     (
         "velnor-actions-orchestrator-runtime-evidence",
         &[

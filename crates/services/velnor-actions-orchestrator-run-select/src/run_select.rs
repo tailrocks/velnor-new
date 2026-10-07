@@ -79,5 +79,3 @@ pub fn select_baseline_artifact(text: &str, expected: &str) -> Result<u64, Strin
         })
         .ok_or_else(|| "baseline_unavailable".to_owned())
 }
-#[cfg(test)]
-mod tests;

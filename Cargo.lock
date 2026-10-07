@@ -3642,6 +3642,7 @@ dependencies = [
  "velnor-actions-orchestrator-provisioning",
  "velnor-actions-orchestrator-request-event",
  "velnor-actions-orchestrator-retrieve-retry",
+ "velnor-actions-orchestrator-run-select",
  "velnor-actions-orchestrator-runtime-evidence",
  "velnor-actions-orchestrator-runtime-execute",
  "velnor-actions-orchestrator-runtime-plan",
@@ -3953,6 +3954,13 @@ dependencies = [
 [[package]]
 name = "velnor-actions-orchestrator-retrieve-retry"
 version = "0.1.1"
+
+[[package]]
+name = "velnor-actions-orchestrator-run-select"
+version = "0.1.1"
+dependencies = [
+ "serde_json",
+]
 
 [[package]]
 name = "velnor-actions-orchestrator-runtime-evidence"

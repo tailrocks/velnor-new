@@ -36,6 +36,7 @@ members = [
     "crates/services/velnor-actions-orchestrator-provisioning",
     "crates/services/velnor-actions-orchestrator-request-event",
     "crates/services/velnor-actions-orchestrator-retrieve-retry",
+    "crates/services/velnor-actions-orchestrator-run-select",
     "crates/services/velnor-actions-orchestrator-runtime-evidence",
     "crates/services/velnor-actions-orchestrator-runtime-execute",
     "crates/services/velnor-actions-orchestrator-runtime-plan",
