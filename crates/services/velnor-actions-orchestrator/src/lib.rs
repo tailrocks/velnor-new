@@ -12,7 +12,6 @@ mod cover;
 mod cover_baseline;
 mod cover_identity;
 pub use velnor_actions_orchestrator_workflow_ir::crate_jobs;
-mod external_data;
 mod internal;
 mod internal_request;
 mod merge;

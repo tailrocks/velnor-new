@@ -205,11 +205,11 @@ pub(crate) fn revalidate_coverage_with_anchors(
         // the planner reruns (never covers) an advisory task without
         // fresh external data, so a covered claim here proves a forged
         // plan, not a stale-but-honest one.
-        if crate::external_data::external_data_kind(&task.task_id).is_some()
-            && !crate::external_data::may_skip_external_data(
+        if velnor_actions_orchestrator_external_data::external_data::external_data_kind(&task.task_id).is_some()
+            && !velnor_actions_orchestrator_external_data::external_data::may_skip_external_data(
                 true,
                 task.external_data.as_ref(),
-                crate::external_data::DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS,
+                velnor_actions_orchestrator_external_data::external_data::DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS,
             )
         {
             signals.planning_failed = true;

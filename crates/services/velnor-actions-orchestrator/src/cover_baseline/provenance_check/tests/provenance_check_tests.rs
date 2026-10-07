@@ -279,8 +279,9 @@ fn task_proof(
 }
 
 /// Stale external-data freshness with a malformed identity digest.
-fn stale_external_data() -> crate::external_data::ExternalDataFreshness {
-    crate::external_data::ExternalDataFreshness {
+fn stale_external_data()
+-> velnor_actions_orchestrator_external_data::external_data::ExternalDataFreshness {
+    velnor_actions_orchestrator_external_data::external_data::ExternalDataFreshness {
         source: "advisory-db".to_owned(),
         identity: "bogus".to_owned(),
         age_secs: 60,

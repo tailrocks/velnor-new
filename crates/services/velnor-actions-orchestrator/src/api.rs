@@ -2,10 +2,6 @@
 
 pub use super::baseline_publish::{PUBLISH_OP, PublishOutputs, baseline_publish};
 pub use super::check_runtime::{EXECUTE_CHECK_OP, execute_check};
-pub use super::external_data::{
-    DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, EXTERNAL_DATA_CHECK_KIND, ExternalDataFreshness,
-    external_data_kind, may_skip_external_data,
-};
 pub use super::internal::{
     MERGE_OP, PLAN_OP, PlanOutputs, REQUEST_FILE_ENV, WRITE_REQUEST_OP, merge_passed,
     plan_internal, plan_outputs, publish_final_report, publish_plan_files, response_path_for,
@@ -32,6 +28,10 @@ pub use velnor_actions_orchestrator_discovery::toolcheck::{
 };
 pub use velnor_actions_orchestrator_discovery::toolfindings::{
     CONFLICTING_TOOL_VALUES, UNSUPPORTED_TOOL_VALUE, finding_line, tool_check_lines, tool_conflicts,
+};
+pub use velnor_actions_orchestrator_external_data::external_data::{
+    DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, EXTERNAL_DATA_CHECK_KIND, ExternalDataFreshness,
+    external_data_kind, may_skip_external_data,
 };
 pub use velnor_actions_orchestrator_generation::finalized::finalized_jobs;
 pub use velnor_actions_orchestrator_generation::generate::{

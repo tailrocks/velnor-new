@@ -82,6 +82,13 @@ const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "crates/services/velnor-actions-orchestrator-external-data",
+        &[
+            "velnor-actions-contract",
+            "velnor-actions-orchestrator-core",
+        ],
+    ),
+    (
         "crates/services/velnor-actions-orchestrator-generation",
         &[
             "velnor-actions-actionlint",

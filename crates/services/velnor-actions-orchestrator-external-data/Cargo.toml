@@ -1,0 +1,19 @@
+[package]
+name = "velnor-actions-orchestrator-external-data"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[dependencies]
+velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
+velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
+serde = { workspace = true }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "velnor_orchestrator_external_data"
+path = "tests/main.rs"

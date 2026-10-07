@@ -23,13 +23,13 @@ use velnor_actions_rust::{extension_for_proposal, tool_needs};
 
 use crate::cover_baseline::BaselineInputs;
 use crate::cover_baseline::provenance_check::ValidatedProvenance;
-use crate::external_data::{
-    DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, external_data_kind, may_skip_external_data,
-};
 use crate::internal::plan_obligation::{changed_keys, member_changed};
 use crate::merge::BaselineManifest;
 use velnor_actions_orchestrator_core::extension_schemas::coverage_schema_known;
 use velnor_actions_orchestrator_discovery::discover::Discovery;
+use velnor_actions_orchestrator_external_data::external_data::{
+    DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, external_data_kind, may_skip_external_data,
+};
 use velnor_actions_orchestrator_graph::internal_plan::closure::resolve_closure_at_root;
 use velnor_actions_orchestrator_graph::internal_plan::identities::{
     extension_bundle_with_snapshot, platform_id_for_group,

@@ -26,6 +26,7 @@ members = [
     "crates/services/velnor-actions-orchestrator-cover-compat",
     "crates/services/velnor-actions-orchestrator-covered-tasks",
     "crates/services/velnor-actions-orchestrator-discovery",
+    "crates/services/velnor-actions-orchestrator-external-data",
     "crates/services/velnor-actions-orchestrator-generation",
     "crates/services/velnor-actions-orchestrator-graph",
     "crates/services/velnor-actions-orchestrator-noop-report",

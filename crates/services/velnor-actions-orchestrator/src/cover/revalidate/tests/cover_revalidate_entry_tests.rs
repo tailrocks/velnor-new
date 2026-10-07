@@ -80,11 +80,13 @@ fn merge_accepts_advisory_with_fresh_external_data() {
     let commit = "a".repeat(40);
     let mut manifest = manifest_for(&commit);
     manifest.tasks[0].task_id = "stack/rust/root/advisory/default".to_owned();
-    manifest.tasks[0].external_data = Some(crate::external_data::ExternalDataFreshness {
-        source: "advisory-db".to_owned(),
-        identity: digest_b3(b"db"),
-        age_secs: 60,
-    });
+    manifest.tasks[0].external_data = Some(
+        velnor_actions_orchestrator_external_data::external_data::ExternalDataFreshness {
+            source: "advisory-db".to_owned(),
+            identity: digest_b3(b"db"),
+            age_secs: 60,
+        },
+    );
     let mut plan = plan_for(&manifest, Some(&commit));
     plan.obligations[0].task_id = "stack/rust/root/advisory/default".to_owned();
     assert!(manifest_provenance_matches_plan(&plan, &manifest, NOW));
