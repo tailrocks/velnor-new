@@ -50,6 +50,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),
         execution: None,
+        docs: None,
     }
 }
 

@@ -8,8 +8,8 @@ use velnor_actions_contract_config::config::{
     ActionPinOverride, ActionsConfig, MiseCheck, QualifiedTool,
 };
 use velnor_actions_contract_config::{
-    DiscoveryConfig, GeneratorValidation, ResourcesConfig, TestShardingConfig, VelnorConfig,
-    VerificationTask, WorkflowConfig, WorkflowPolicy,
+    DiscoveryConfig, DocsLaneConfig, GeneratorValidation, ResourcesConfig, TestShardingConfig,
+    VelnorConfig, VerificationTask, WorkflowConfig, WorkflowPolicy,
 };
 
 use crate::OrchestratorError;
@@ -122,6 +122,9 @@ struct PartialConfig {
     /// Explicit qualified repository tool closure for named checks.
     #[serde(default)]
     qualified_tools: Vec<QualifiedTool>,
+    /// Docs-lane inputs; absent means no docs lane.
+    #[serde(default)]
+    docs: Option<PartialDocsLane>,
 }
 
 /// Workflow section with every value optional.
@@ -184,6 +187,22 @@ struct PartialActions {
     overrides: BTreeMap<String, ActionPinOverride>,
 }
 
+/// Docs-lane section with every value optional.
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PartialDocsLane {
+    /// Repo-relative app directory.
+    app_dir: Option<String>,
+    /// App-relative MDX collection directory.
+    content_dir: Option<String>,
+    /// Site base path serving the collection.
+    base_path: Option<String>,
+    /// App-relative build output directory.
+    output_dir: Option<String>,
+    /// Absolute smoke routes.
+    smoke_routes: Option<Vec<String>>,
+}
+
 impl PartialConfig {
     /// Fill hardcoded defaults for every omitted value.
     fn materialize(self) -> Result<VelnorConfig, OrchestratorError> {
@@ -201,6 +220,7 @@ impl PartialConfig {
             execution: self.execution,
             checks: self.checks,
             qualified_tools: self.qualified_tools,
+            docs: self.docs.map(PartialDocsLane::materialize),
         })
     }
 }
@@ -256,6 +276,26 @@ impl PartialActions {
     fn materialize(self) -> ActionsConfig {
         ActionsConfig {
             overrides: self.overrides,
+        }
+    }
+}
+
+impl PartialDocsLane {
+    /// Fill docs-lane defaults; omitted routes smoke `/` plus the base.
+    fn materialize(self) -> DocsLaneConfig {
+        let base_path = self.base_path.unwrap_or_else(|| "/docs".to_owned());
+        DocsLaneConfig {
+            app_dir: self.app_dir.unwrap_or_else(|| "docs".to_owned()),
+            content_dir: self
+                .content_dir
+                .unwrap_or_else(|| "content/docs".to_owned()),
+            output_dir: self
+                .output_dir
+                .unwrap_or_else(|| ".output/public".to_owned()),
+            smoke_routes: self
+                .smoke_routes
+                .unwrap_or_else(|| vec!["/".to_owned(), base_path.clone()]),
+            base_path,
         }
     }
 }

@@ -131,6 +131,24 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # test_runner = "cargo_test"       # Sticky override: "cargo_test" (default) or "cargo_nextest". Without it, .config/nextest.toml selects Nextest ([profile.ci] when declared, else the documented default profile).
 # Do not put free-form Mise commands in credential-bearing Rust jobs.
 
+# Optional shared Rust policy lane (any policy). The lane materializes the
+# pinned release, verifies its SHA-256, validates the Alint config, runs
+# Alint with fail-on-warning, and uploads check-gaps diagnostics.
+# [stacks.rust.policy]
+# version = "0.1.3"                   # Pinned rust-repository-policy release.
+# sha256 = "<64-hex>"                 # SHA-256 of the release tarball asset.
+# profile = "rust-strict-v1"          # Mandatory strict profile (only value).
+
+# Optional docs lane (any policy). Frozen Bun install, MDX frontmatter lint,
+# typecheck, build, absolute-link validation, and route smoke. Omitted
+# values use the reference fumadocs layout below.
+# [docs]
+# app_dir = "docs"                    # Repo-relative Bun app directory.
+# content_dir = "content/docs"        # App-relative MDX collection directory.
+# base_path = "/docs"                 # Site base path serving the collection.
+# output_dir = ".output/public"       # App-relative build output directory.
+# smoke_routes = ["/", "/docs"]       # Sorted, duplicate-free smoke routes.
+
 # Optional repository-relative POSIX globs excluded before detector input.
 # [discovery]
 # exclude = []
