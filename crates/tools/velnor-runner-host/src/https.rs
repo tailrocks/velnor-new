@@ -1,5 +1,9 @@
 //! HTTPS through `curl`. Credentials travel on stdin, never on argv.
 
+mod discovery;
+
+pub use discovery::BoundedDiscoveryTransport;
+
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
