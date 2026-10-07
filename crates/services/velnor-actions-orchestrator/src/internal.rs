@@ -35,9 +35,7 @@ pub use crate::internal_request::{
     PlanOutputs, merge_passed, plan_outputs, publish_final_report, publish_plan_files,
     response_path_for, write_request, write_request_parts,
 };
-
-/// Schema version accepted by both internal entrypoints.
-pub(crate) const SCHEMA: u32 = 1;
+pub(crate) use velnor_actions_orchestrator_merge_ports::{SCHEMA, check_schema};
 
 /// Maximum canonical `matrix.json` artifact bytes; oversize errors, never
 /// truncates. Job outputs have a separate UTF-16 aggregate budget.
@@ -246,15 +244,6 @@ fn check_matrix_budget(matrix: &PlanMatrix) -> Result<(), OrchestratorError> {
         )));
     }
     Ok(())
-}
-
-/// Reject any schema other than 1.
-pub(crate) fn check_schema(schema: u32) -> Result<(), OrchestratorError> {
-    if schema == SCHEMA {
-        Ok(())
-    } else {
-        Err(internal(&format!("unsupported_schema:{schema}")))
-    }
 }
 
 /// Repository root: explicit override or resolved from the current directory.

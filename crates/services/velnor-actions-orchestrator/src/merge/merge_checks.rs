@@ -88,22 +88,6 @@ pub(crate) fn check_trust_coherence(
     }
 }
 
-/// Head-bound candidate attestation written by the candidate job.
-///
-/// The candidate job observes the plan head from its downloaded plan
-/// artifact and embeds it as `commit`; the merge re-checks equality
-/// against its own plan head, so a stale or cross-plan candidate
-/// artifact fails closed instead of qualifying the wrong commit.
-/// Tokens reuse the closed miss set: absent is `source_missing`,
-/// mismatched is `trust_scope_mismatch`.
-#[derive(Debug, serde::Deserialize)]
-pub(crate) struct CandidateAttestation {
-    /// Attestation schema; must be 1.
-    schema: u32,
-    /// Plan head observed by the candidate job.
-    commit: String,
-}
-
 /// In candidate mode the attestation must bind the candidate to the plan head.
 ///
 /// Candidate mode is the candidate job's presence in the required

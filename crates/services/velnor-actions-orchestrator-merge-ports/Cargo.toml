@@ -1,0 +1,22 @@
+[package]
+name = "velnor-actions-orchestrator-merge-ports"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
+velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
+velnor-actions-orchestrator-external-data = { version = "=0.1.1", path = "../velnor-actions-orchestrator-external-data" }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "velnor_orchestrator_merge_ports"
+path = "tests/main.rs"

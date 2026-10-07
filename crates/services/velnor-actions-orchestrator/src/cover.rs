@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::task_report_id_for_task;
 use velnor_actions_contract_workflow::{
-    ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, TaskReport, TaskStatus,
+    ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, TaskStatus,
 };
 
 use crate::merge::MergeRequest;
@@ -21,35 +21,7 @@ use velnor_actions_orchestrator_graph::internal_plan::wire_w2;
 
 pub(crate) use self::revalidate::revalidate_coverage;
 pub(crate) use crate::cover_baseline::{BaselineInputs, apply_baseline};
-
-/// Aggregated merge signals feeding result precedence.
-#[derive(Debug, Default)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "five precedence signals read clearest as named bools"
-)]
-pub(crate) struct Signals {
-    /// Structural validation failed.
-    pub(crate) planning_failed: bool,
-    /// A required task, job, or candidate failed.
-    pub(crate) failed: bool,
-    /// A required task, job, or candidate was cancelled.
-    pub(crate) cancelled: bool,
-    /// A required task was blocked (`not_selected`).
-    pub(crate) blocked: bool,
-    /// A report is missing, malformed, duplicated, skipped, or not run.
-    pub(crate) not_run: bool,
-}
-
-/// Check-2 partition of submitted reports.
-pub(crate) struct Partition<'a> {
-    /// First valid report per expected report ID.
-    pub(crate) valid: BTreeMap<&'a str, &'a MatrixReport>,
-    /// Reports failing validation or bound to another run.
-    pub(crate) malformed: u32,
-    /// Extra reports beyond the first per report ID.
-    pub(crate) duplicates: u32,
-}
+pub(crate) use velnor_actions_orchestrator_merge_ports::{CoverSinks, Fold, Partition, Signals};
 
 /// Check 2: keep the first valid report per expected ID exactly.
 pub(crate) fn partition_reports<'a>(
@@ -92,38 +64,6 @@ pub(crate) fn partition_reports<'a>(
         malformed,
         duplicates,
     }
-}
-
-/// Folded task counts from covered reports.
-#[derive(Debug, Default)]
-pub(crate) struct Fold {
-    /// Reused tasks.
-    pub(crate) reused: u32,
-    /// Executed tasks.
-    pub(crate) executed: u32,
-    /// Empty-partition tasks.
-    pub(crate) empty_partition: u32,
-    /// Failed tasks.
-    pub(crate) failed: u32,
-    /// Cancelled tasks.
-    pub(crate) cancelled: u32,
-    /// Not-selected (blocked) tasks.
-    pub(crate) blocked: u32,
-}
-
-/// Mutable merge sinks threaded through per-entry coverage checks.
-#[derive(Debug)]
-pub(crate) struct CoverSinks<'a> {
-    /// Seen task-report IDs.
-    pub(crate) seen_task_reports: &'a mut BTreeSet<String>,
-    /// Partitioned per-task files keyed by task-report ID.
-    pub(crate) task_files: &'a BTreeMap<&'a str, &'a TaskReport>,
-    /// Folded task counts.
-    pub(crate) fold: &'a mut Fold,
-    /// Merge signals.
-    pub(crate) signals: &'a mut Signals,
-    /// Miss reasons for uncovered tasks.
-    pub(crate) miss_reasons: &'a mut BTreeSet<String>,
 }
 
 /// Check 3 for one entry: binding, task set, counts, digests; fold on cover.

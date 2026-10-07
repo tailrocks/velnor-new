@@ -15,7 +15,6 @@
 
 use std::collections::BTreeSet;
 
-use serde::{Deserialize, Serialize};
 use velnor_actions_contract_workflow::{
     FinalReport, JobConclusion, ObligationDecision, Plan, RequiredJobResult,
 };
@@ -24,71 +23,7 @@ use super::MergeRequest;
 use crate::cover::Signals;
 use velnor_actions_orchestrator_core::internal_contract;
 
-/// One trusted-baseline task proof: identities plus provenance run IDs.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct BaselineTaskEntry {
-    /// Covered task ID.
-    pub(crate) task_id: String,
-    /// Covered task digest.
-    pub(crate) task_digest: String,
-    /// Covered input digest.
-    pub(crate) input_digest: String,
-    /// Canonical digest over the task's complete input closure.
-    ///
-    /// Required with no default: entries recorded before closure binding
-    /// (schema 1) fail deserialization instead of covering blindly.
-    pub(crate) closure_digest: String,
-    /// Original direct-execution proof run.
-    pub(crate) proof_run_id: u64,
-    /// Carrying run that revalidated the proof.
-    pub(crate) observed_run_id: u64,
-    /// External-data freshness (required for advisory kinds).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) external_data:
-        Option<velnor_actions_orchestrator_external_data::external_data::ExternalDataFreshness>,
-    /// Structured task proof, when the publisher recorded one (PAR-5.3).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) proof: Option<velnor_actions_contract_workflow::ManifestTaskProof>,
-}
-
-/// Trusted `baseline.json`: minimum shape plus artifact binding.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct BaselineManifest {
-    /// Manifest schema; must be 2 (closure-bound entries).
-    pub(crate) schema: u32,
-    /// Repository identity digest.
-    pub(crate) repository_id: String,
-    /// Exact trusted source commit.
-    pub(crate) source_commit: String,
-    /// Protected ref under test.
-    #[serde(rename = "ref")]
-    pub ref_: String,
-    /// Protected event; must be `push`.
-    pub(crate) event: String,
-    /// Protected workflow ref.
-    pub(crate) workflow_ref: String,
-    /// Proof run ID.
-    pub(crate) run_id: u64,
-    /// Proof run attempt.
-    pub(crate) run_attempt: u64,
-    /// Final result; must be `passed`.
-    pub(crate) final_status: String,
-    /// Generator version.
-    pub(crate) generator_version: String,
-    /// Generator SHA-256.
-    pub generator_sha256: String,
-    /// Compatibility identity.
-    pub(crate) compatibility_id: String,
-    /// Manifest-assigned numeric fingerprint of the artifact name.
-    pub(crate) artifact_id: u64,
-    /// Derived baseline artifact name.
-    pub(crate) artifact_name: String,
-    /// Per-task proofs.
-    pub(crate) tasks: Vec<BaselineTaskEntry>,
-    /// Unix expiry; absent means the baseline never expires.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) expires_at_unix: Option<u64>,
-}
+pub(crate) use velnor_actions_orchestrator_merge_ports::{BaselineManifest, BaselineTaskEntry};
 
 /// Enforce the closed inventory: jobs and obligation proofs.
 ///

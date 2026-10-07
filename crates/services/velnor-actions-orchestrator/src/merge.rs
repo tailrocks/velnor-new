@@ -7,78 +7,26 @@ pub(crate) mod required_evidence;
 
 use std::collections::BTreeSet;
 
-use serde::Deserialize;
 use velnor_actions_contract::{parse_strict_json, validate_run_key};
 use velnor_actions_contract_workflow::{
-    FinalCounts, FinalReport, FinalStatus, MatrixReport, ObligationDecision, Plan, PlanMatrix,
-    RequiredJobResult, TaskReport, WorkflowEvent, final_report_id_for_run,
+    FinalCounts, FinalReport, FinalStatus, ObligationDecision, Plan, final_report_id_for_run,
 };
 
 use self::merge_checks::{
-    CandidateAttestation, check_agreement, check_candidate_binding, check_execute_inventory,
-    check_plan_evidence, check_plan_shape, check_trust_coherence, expected_task_reports,
-    partition_task_reports, plan_digests, plan_entries, shards_failed,
+    check_agreement, check_candidate_binding, check_execute_inventory, check_plan_evidence,
+    check_plan_shape, check_trust_coherence, expected_task_reports, partition_task_reports,
+    plan_digests, plan_entries, shards_failed,
 };
 pub(crate) use self::required_evidence::BaselineManifest;
 use self::required_evidence::{
     check_required_evidence, diagnostic_without_plan, fold_jobs, reported_job_results,
 };
-use crate::cover::shard::{ResourceLimits, ShardProof};
 use crate::cover::{CoverSinks, Fold, Signals, cover_entry, partition_reports};
 use crate::internal::{SCHEMA, check_schema};
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::internal_contract;
 
-/// `merge-v1` request: plan, matrix bytes, reports, and jobs.
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct MergeRequest {
-    /// Request schema; must be 1.
-    schema: u32,
-    /// Run key.
-    pub(crate) run_key: String,
-    /// Merge-time triggering event captured at assembly; the plan's
-    /// stamped event must match it exactly (a forged plan claiming a
-    /// stronger event fails closed instead of inheriting its stamp).
-    #[serde(default)]
-    actual_event: Option<WorkflowEvent>,
-    /// Head-bound candidate attestation; required in candidate mode.
-    #[serde(default)]
-    candidate_attestation: Option<CandidateAttestation>,
-    /// Validated plan; absent when the plan artifact never landed.
-    #[serde(default)]
-    plan: Option<Plan>,
-    /// `matrix.json` content; must agree with the plan matrix.
-    #[serde(default)]
-    matrix: Option<PlanMatrix>,
-    /// Matrix reports to aggregate.
-    pub(crate) matrix_reports: Vec<MatrixReport>,
-    /// Per-task report files backing every aggregate entry.
-    #[serde(default)]
-    pub(crate) task_reports: Vec<TaskReport>,
-    /// Named-check receipt plus exact downloaded scenario bytes.
-    #[serde(default)]
-    pub(crate) check_proofs: Vec<serde_json::Value>,
-    /// Declared validator inventory from the workflow `needs` channel.
-    pub(crate) required_job_ids: Vec<String>,
-    /// Observed validator conclusions covering the inventory exactly.
-    pub(crate) required_jobs: Vec<RequiredJobResult>,
-    /// Assembly failure details; every entry fails the verdict.
-    #[serde(default)]
-    pub(crate) assembly_errors: Vec<String>,
-    /// Trusted baseline manifest for coverage revalidation.
-    #[serde(default)]
-    baseline_manifest: Option<BaselineManifest>,
-    /// Shard proofs for partitioned test entries.
-    #[serde(default)]
-    shard_proofs: Vec<ShardProof>,
-    /// Configured resource limits revalidated here.
-    #[serde(default)]
-    limits: Option<ResourceLimits>,
-    /// Sequential-reference obligation set.
-    #[serde(default)]
-    reference_task_ids: Option<Vec<String>>,
-}
+pub(crate) use velnor_actions_orchestrator_merge_ports::MergeRequest;
 
 /// Aggregate matrix reports into the final gate report (schema-1 JSON).
 ///
