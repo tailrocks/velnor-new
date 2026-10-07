@@ -9,30 +9,32 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use serde::Serialize;
-use velnor_actions_contract::{Stack, StackExtension, canonical_json_bytes, digest_b3};
+use velnor_actions_contract::{Stack, StackExtension};
 use velnor_actions_contract_planning::ProposedTask;
 use velnor_actions_contract_workflow::{MatrixEntry, NamedCheckLane, PlanObligation};
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::restore::probe_tool_availability;
 use velnor_actions_rust::extension_for_proposal;
 
-use crate::discover::Discovery;
-use crate::internal_plan::closure::resolve_closure_at_root;
-use crate::internal_plan::identities::{
-    ExtensionBundle, extension_bundle_with_snapshot, platform_id_for_group,
-};
-use crate::internal_plan::snapshot::{ExecutionSnapshot, canonical_digest};
-use crate::internal_plan::wire_w2::{self, GroupWire};
-use crate::internal_plan::{
-    IdentityInputs, adapter_metadata, cache_ids_for, evidence_for_group, execute_ids,
-    nextest_config_for, record_task_cache, task_identity_digest, toolchain_id,
-};
-use crate::select::group_changed;
-use crate::vectors::task_argv;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::schedule::assign_lanes;
 use velnor_actions_orchestrator_core::{internal, internal_contract};
+use velnor_actions_orchestrator_discovery::discover::Discovery;
+use velnor_actions_orchestrator_graph::internal_plan::closure::resolve_closure_at_root;
+use velnor_actions_orchestrator_graph::internal_plan::identities::{
+    ExtensionBundle, extension_bundle_with_snapshot, platform_id_for_group,
+};
+use velnor_actions_orchestrator_graph::internal_plan::snapshot::{
+    ExecutionSnapshot, canonical_digest,
+};
+use velnor_actions_orchestrator_graph::internal_plan::task_digest::task_digest;
+use velnor_actions_orchestrator_graph::internal_plan::wire_w2::{self, GroupWire};
+use velnor_actions_orchestrator_graph::internal_plan::{
+    IdentityInputs, adapter_metadata, cache_ids_for, evidence_for_group, execute_ids,
+    nextest_config_for, record_task_cache, task_identity_digest, toolchain_id,
+};
+use velnor_actions_orchestrator_provisioning::vectors::task_argv;
+use velnor_actions_orchestrator_selection::select::group_changed;
 
 #[cfg(test)]
 mod tests;
@@ -121,8 +123,10 @@ fn extension_for_task(
         return Err(internal("named_check_definition_required"));
     }
     if stack == Stack::Tofu {
-        let ext = crate::internal_plan::tofu_extension_for(task, root, bundle, reads)
-            .map_err(internal_contract)?;
+        let ext = velnor_actions_orchestrator_graph::internal_plan::tofu_extension_for(
+            task, root, bundle, reads,
+        )
+        .map_err(internal_contract)?;
         return Ok((ext.to_stack_extension(), ext.reuse_eligible().is_ok()));
     }
     let ext = extension_for_proposal(task, &bundle.inputs()).map_err(internal_contract)?;
@@ -191,26 +195,30 @@ pub(crate) fn plan_group(
     reads: &mut velnor_actions_tofu_core::FileCache,
 ) -> Result<(PlanObligation, Vec<MatrixEntry>), OrchestratorError> {
     let task = inputs.task;
+    let argv = task_argv(task, inputs.catalog)?;
     if Stack::from_id(&task.stack_id) == Some(Stack::Mise) {
-        let item = crate::internal_plan::named_checks::discovered(inputs.discovery, task)
-            .map_err(internal_contract)?;
+        let item = velnor_actions_orchestrator_graph::internal_plan::named_checks::discovered(
+            inputs.discovery,
+            task,
+        )
+        .map_err(internal_contract)?;
         let job_id = format!("check-{}", item.check.id);
         let check_lanes = inputs
             .named_check_lanes
             .get(&job_id)
             .ok_or_else(|| internal("named_check_lane_missing"))?;
-        return crate::internal_plan::named_checks::plan::derive_lanes(
+        return velnor_actions_orchestrator_graph::internal_plan::named_checks::plan::derive_lanes(
             inputs.root,
             item,
             inputs.run_key,
             inputs.wire.generator,
             inputs.catalog,
             check_lanes,
+            &argv,
         );
     }
     let _ = inputs.lane;
     let toolchain = toolchain_id(task, inputs.catalog).map_err(internal_contract)?;
-    let argv = task_argv(task, inputs.catalog)?;
     let platform_id = platform_id_for_group(inputs.label, task).map_err(internal_contract)?;
     let identity = planned_identity(inputs, &argv, &toolchain, &platform_id, &mut *reads)?;
     let reuse_eligible = extension_for_task(task, inputs.root, &identity.bundle, reads)?.1;
@@ -323,38 +331,8 @@ fn record_lane_target_dir(metadata: &mut serde_json::Value, lane_id: &str) {
     };
     object.insert(
         "cargo_target_dir".to_owned(),
-        serde_json::Value::String(crate::internal_plan::target_dir_for_lane_id(lane_id)),
+        serde_json::Value::String(
+            velnor_actions_orchestrator_graph::internal_plan::target_dir_for_lane_id(lane_id),
+        ),
     );
-}
-
-/// Digest of canonical bytes for a serializable input struct.
-fn digest_of<T: Serialize>(inputs: &T) -> Result<String, velnor_actions_contract::ContractError> {
-    Ok(digest_b3(&canonical_json_bytes(inputs)?))
-}
-
-/// Task digest binding argv plus toolchain for one obligation.
-///
-/// Shared by event-time plan obligations and static crate-job
-/// obligations so both judge the same digest.
-pub(crate) fn task_digest(
-    task_id: &str,
-    argv: &[String],
-    toolchain_id: &str,
-) -> Result<String, velnor_actions_contract::ContractError> {
-    digest_of(&TaskDigestInputs {
-        task_id,
-        argv,
-        toolchain_id,
-    })
-}
-
-/// Task-digest preimage fields.
-#[derive(Debug, Serialize)]
-struct TaskDigestInputs<'a> {
-    /// Stable task ID.
-    task_id: &'a str,
-    /// Fixed argument vector.
-    argv: &'a [String],
-    /// Toolchain identity digest.
-    toolchain_id: &'a str,
 }

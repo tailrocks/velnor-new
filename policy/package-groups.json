@@ -36,6 +36,11 @@
     "velnor-runner-host": "library",
     "velnor-runner-launch": "library",
     "velnor-actions-mise-probes": "library",
-    "velnor-actions-orchestrator-core": "library"
+    "velnor-actions-orchestrator-core": "library",
+    "velnor-actions-orchestrator-discovery": "library",
+    "velnor-actions-orchestrator-graph": "library",
+    "velnor-actions-orchestrator-pins": "library",
+    "velnor-actions-orchestrator-provisioning": "library",
+    "velnor-actions-orchestrator-selection": "library"
   }
 }

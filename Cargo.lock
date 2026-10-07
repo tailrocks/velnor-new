@@ -3631,6 +3631,11 @@ dependencies = [
  "velnor-actions-contract-workflow",
  "velnor-actions-mise",
  "velnor-actions-orchestrator-core",
+ "velnor-actions-orchestrator-discovery",
+ "velnor-actions-orchestrator-graph",
+ "velnor-actions-orchestrator-pins",
+ "velnor-actions-orchestrator-provisioning",
+ "velnor-actions-orchestrator-selection",
  "velnor-actions-rust",
  "velnor-actions-rust-core",
  "velnor-actions-tofu",
@@ -3655,6 +3660,7 @@ dependencies = [
  "rustix 1.1.5",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror",
  "toml",
@@ -3671,6 +3677,107 @@ dependencies = [
  "velnor-actions-tofu-core",
  "velnor-actions-workflow-steps",
  "velnor-actions-workflow-tree",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-discovery"
+version = "0.1.1"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "toml",
+ "velnor-actions-contract",
+ "velnor-actions-contract-config",
+ "velnor-actions-contract-planning",
+ "velnor-actions-contract-release",
+ "velnor-actions-mise",
+ "velnor-actions-orchestrator-core",
+ "velnor-actions-rust",
+ "velnor-actions-rust-core",
+ "velnor-actions-tofu",
+ "velnor-actions-tofu-core",
+ "velnor-actions-workflow-renderer",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-graph"
+version = "0.1.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "velnor-actions-contract",
+ "velnor-actions-contract-config",
+ "velnor-actions-contract-planning",
+ "velnor-actions-contract-release",
+ "velnor-actions-contract-workflow",
+ "velnor-actions-mise",
+ "velnor-actions-orchestrator-core",
+ "velnor-actions-orchestrator-discovery",
+ "velnor-actions-orchestrator-provisioning",
+ "velnor-actions-rust",
+ "velnor-actions-rust-core",
+ "velnor-actions-tofu",
+ "velnor-actions-tofu-core",
+ "velnor-actions-workflow-document",
+ "velnor-actions-workflow-steps",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-pins"
+version = "0.1.1"
+dependencies = [
+ "velnor-actions-actionlint",
+ "velnor-actions-contract-config",
+ "velnor-actions-contract-release",
+ "velnor-actions-contract-workflow",
+ "velnor-actions-mise",
+ "velnor-actions-orchestrator-core",
+ "velnor-actions-orchestrator-discovery",
+ "velnor-actions-workflow-jobs",
+ "velnor-actions-workflow-steps",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-provisioning"
+version = "0.1.1"
+dependencies = [
+ "tempfile",
+ "velnor-actions-actionlint",
+ "velnor-actions-contract",
+ "velnor-actions-contract-config",
+ "velnor-actions-contract-planning",
+ "velnor-actions-contract-release",
+ "velnor-actions-contract-workflow",
+ "velnor-actions-mise",
+ "velnor-actions-orchestrator",
+ "velnor-actions-orchestrator-core",
+ "velnor-actions-orchestrator-discovery",
+ "velnor-actions-rust",
+ "velnor-actions-rust-core",
+ "velnor-actions-tofu-core",
+ "velnor-actions-workflow-cache",
+ "velnor-actions-workflow-jobs",
+ "velnor-actions-workflow-renderer",
+ "velnor-actions-workflow-steps",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-selection"
+version = "0.1.1"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "velnor-actions-contract-config",
+ "velnor-actions-contract-planning",
+ "velnor-actions-contract-workflow",
+ "velnor-actions-mise",
+ "velnor-actions-orchestrator-core",
+ "velnor-actions-orchestrator-discovery",
+ "velnor-actions-orchestrator-graph",
+ "velnor-actions-orchestrator-provisioning",
+ "velnor-actions-rust",
+ "velnor-actions-rust-core",
 ]
 
 [[package]]

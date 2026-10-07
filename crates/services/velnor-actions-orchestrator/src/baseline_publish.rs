@@ -306,7 +306,8 @@ fn publish_manifest(
         .ok_or_else(|| internal("publish_refused:unprotected_ref"))?;
     let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
     Ok(BaselineManifest {
-        schema: crate::internal_plan::snapshot::CANONICAL_SCHEMA_VERSION,
+        schema:
+            velnor_actions_orchestrator_graph::internal_plan::snapshot::CANONICAL_SCHEMA_VERSION,
         repository_id: digest_b3(format!("github.com/{slug}").as_bytes()),
         source_commit: request.head.clone(),
         ref_: git_ref.clone(),

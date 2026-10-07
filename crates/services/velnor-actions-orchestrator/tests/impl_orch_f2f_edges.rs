@@ -100,10 +100,11 @@ fn expected_mise_family(dir: &str) -> Option<Vec<&str>> {
     }
 }
 
-/// Orchestrator-family edges per member directory.
-fn expected_orchestrator_family(dir: &str) -> Option<Vec<&str>> {
-    match dir {
-        "crates/services/velnor-actions-orchestrator-core" => Some(vec![
+/// Orchestrator-family edges by member directory.
+const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
+    (
+        "crates/services/velnor-actions-orchestrator-core",
+        &[
             "velnor-actions-actionlint",
             "velnor-actions-contract",
             "velnor-actions-contract-config",
@@ -116,9 +117,95 @@ fn expected_orchestrator_family(dir: &str) -> Option<Vec<&str>> {
             "velnor-actions-tofu-core",
             "velnor-actions-workflow-steps",
             "velnor-actions-workflow-tree",
-        ]),
-        _ => None,
-    }
+        ],
+    ),
+    (
+        "crates/services/velnor-actions-orchestrator-discovery",
+        &[
+            "velnor-actions-contract",
+            "velnor-actions-contract-config",
+            "velnor-actions-contract-planning",
+            "velnor-actions-contract-release",
+            "velnor-actions-mise",
+            "velnor-actions-orchestrator-core",
+            "velnor-actions-rust",
+            "velnor-actions-rust-core",
+            "velnor-actions-tofu",
+            "velnor-actions-tofu-core",
+            "velnor-actions-workflow-renderer",
+        ],
+    ),
+    (
+        "crates/services/velnor-actions-orchestrator-graph",
+        &[
+            "velnor-actions-contract",
+            "velnor-actions-contract-config",
+            "velnor-actions-contract-planning",
+            "velnor-actions-contract-release",
+            "velnor-actions-contract-workflow",
+            "velnor-actions-mise",
+            "velnor-actions-orchestrator-core",
+            "velnor-actions-orchestrator-discovery",
+            "velnor-actions-rust",
+            "velnor-actions-rust-core",
+            "velnor-actions-tofu",
+            "velnor-actions-tofu-core",
+            "velnor-actions-workflow-document",
+            "velnor-actions-workflow-steps",
+        ],
+    ),
+    (
+        "crates/services/velnor-actions-orchestrator-pins",
+        &[
+            "velnor-actions-actionlint",
+            "velnor-actions-contract-config",
+            "velnor-actions-contract-release",
+            "velnor-actions-contract-workflow",
+            "velnor-actions-mise",
+            "velnor-actions-orchestrator-core",
+            "velnor-actions-orchestrator-discovery",
+            "velnor-actions-workflow-jobs",
+            "velnor-actions-workflow-steps",
+        ],
+    ),
+    (
+        "crates/services/velnor-actions-orchestrator-provisioning",
+        &[
+            "velnor-actions-actionlint",
+            "velnor-actions-contract",
+            "velnor-actions-contract-config",
+            "velnor-actions-contract-planning",
+            "velnor-actions-contract-release",
+            "velnor-actions-contract-workflow",
+            "velnor-actions-mise",
+            "velnor-actions-orchestrator-core",
+            "velnor-actions-orchestrator-discovery",
+            "velnor-actions-rust",
+            "velnor-actions-tofu-core",
+            "velnor-actions-workflow-cache",
+            "velnor-actions-workflow-jobs",
+            "velnor-actions-workflow-renderer",
+            "velnor-actions-workflow-steps",
+        ],
+    ),
+    (
+        "crates/services/velnor-actions-orchestrator-selection",
+        &[
+            "velnor-actions-contract-planning",
+            "velnor-actions-contract-workflow",
+            "velnor-actions-mise",
+            "velnor-actions-orchestrator-core",
+            "velnor-actions-orchestrator-discovery",
+            "velnor-actions-rust-core",
+        ],
+    ),
+];
+
+fn expected_orchestrator_family(dir: &str) -> Option<Vec<&str>> {
+    ORCHESTRATOR_FAMILY
+        .iter()
+        .find(|(name, _)| *name == dir)
+        .map(|(_, edges)| edges.to_vec())
 }
 
 /// Service/app edges per member directory.
@@ -133,6 +220,11 @@ fn expected_service(dir: &str) -> Option<Vec<&str>> {
             "velnor-actions-contract-workflow",
             "velnor-actions-mise",
             "velnor-actions-orchestrator-core",
+            "velnor-actions-orchestrator-discovery",
+            "velnor-actions-orchestrator-graph",
+            "velnor-actions-orchestrator-pins",
+            "velnor-actions-orchestrator-provisioning",
+            "velnor-actions-orchestrator-selection",
             "velnor-actions-rust",
             "velnor-actions-rust-core",
             "velnor-actions-tofu",

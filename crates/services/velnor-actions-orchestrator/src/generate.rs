@@ -13,17 +13,17 @@ use velnor_actions_workflow_tree::marker::rehead_actionlint_marker;
 use velnor_actions_workflow_tree::rendered::RenderedTree;
 
 use crate::finalized::owned_preparation;
-use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 use crate::provenance::{ProfileProvenance, profile_provenance};
 use crate::validate::validate_staged;
 use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_pins::pins::resolve_mise_setup;
 
 /// Filesystem guards: snapshots, destination validation, and ownership.
 pub(crate) mod guards;
 
 /// Re-exported snapshot: the `generate::ToolSnapshot` path is stable API.
-pub use guards::ToolSnapshot;
+pub use velnor_actions_orchestrator_discovery::tool_snapshot::ToolSnapshot;
 
 use guards::{GenerateOwnership, prepare_preview_dir, same_filesystem};
 
@@ -77,7 +77,9 @@ pub fn generate_dispatched(
 ) -> Result<GenerateReport, OrchestratorError> {
     fail_on_blocking_findings(prep)?;
     let tools = ToolSnapshot::capture(&prep.root);
-    let tofu_roots = crate::select_tofu::tofu_selected_roots(&prep.discovery.statuses);
+    let tofu_roots = velnor_actions_orchestrator_discovery::select_tofu::tofu_selected_roots(
+        &prep.discovery.statuses,
+    );
     let tofu_locks = velnor_actions_tofu_core::TofuLockSnapshot::capture(&prep.root, &tofu_roots);
     let tree = render_staged_tree_with(prep, dispatch)?;
     let validated_by = validate_staged(&tree)?;
@@ -103,7 +105,9 @@ pub fn generate_dispatched(
 
 /// Fail closed on transient-only profile evidence before touching `.github`.
 fn fail_on_blocking_findings(prep: &GenerationPreparation) -> Result<(), OrchestratorError> {
-    let blockers = crate::evidence::blocking_findings(&prep.discovery.workspaces);
+    let blockers = velnor_actions_orchestrator_discovery::evidence::blocking_findings(
+        &prep.discovery.workspaces,
+    );
     if !blockers.is_empty() {
         return Err(OrchestratorError::Profile {
             problem: format!(

@@ -1,5 +1,4 @@
 //! Own a declaration-bound local container socket and Docker context.
-use crate::cover_identity::generator::sha256_hex;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use velnor_actions_contract_config::config::{
@@ -9,6 +8,7 @@ use velnor_actions_mise::CheckDeadline;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::exclusive_write;
 use velnor_actions_orchestrator_core::internal;
+use velnor_actions_orchestrator_core::sha256::sha256_hex;
 
 mod context;
 mod inventory;

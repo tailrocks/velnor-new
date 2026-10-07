@@ -82,7 +82,7 @@ pub(super) fn observation() -> ContainerObservation {
 }
 
 pub(super) fn runtime() -> Value {
-    let context_hash = crate::cover_identity::generator::sha256_hex(b"ci");
+    let context_hash = velnor_actions_orchestrator_core::sha256::sha256_hex(b"ci");
     json!({
         "endpoint":"unix:///run/docker.sock",
         "context":"ci",

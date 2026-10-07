@@ -24,11 +24,11 @@ use velnor_actions_workflow_cache::cache_steps::CompileDriver as RenderDriver;
 use velnor_actions_workflow_jobs::context::PLAN_JOB_ID;
 
 use crate::crate_job_ids::{assign_group_ids, group_is_tofu, group_runnable};
-use crate::discover::Discovery;
-use crate::matrix_step::step_name_for;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::internal;
 use velnor_actions_orchestrator_core::obligation_order::obligation_order_key;
+use velnor_actions_orchestrator_discovery::discover::Discovery;
+use velnor_actions_orchestrator_provisioning::matrix_step::step_name_for;
 
 mod stage;
 
@@ -37,9 +37,10 @@ pub(crate) use stage::needs;
 pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
 
 /// Built crate jobs plus their driver selections for MBX gating.
-pub(crate) struct CrateBuild {
+#[derive(Debug)]
+pub struct CrateBuild {
     /// `(job_id, job)` pairs in deterministic job-ID order.
-    pub(crate) jobs: Vec<(String, Job)>,
+    pub jobs: Vec<(String, Job)>,
     /// Render-driver selection per crate job ID.
     pub(crate) drivers: BTreeMap<String, RenderDriver>,
 }
@@ -78,7 +79,7 @@ pub(crate) fn build_for_workflow(
 /// # Errors
 ///
 /// Returns contract, render-context, or tool-request errors.
-pub(crate) fn build_crate_jobs(
+pub fn build_crate_jobs(
     label: &str,
     policy: WorkflowPolicy,
     discovery: &Discovery,
@@ -192,9 +193,13 @@ fn obligation_for(
     executed: &BTreeSet<&str>,
     catalog: &ToolCatalog,
 ) -> Result<CrateObligation, OrchestratorError> {
-    let argv = crate::vectors::task_argv(task, catalog)?;
-    let toolchain = crate::internal_plan::toolchain_id(task, catalog)?;
-    let digest = crate::internal::plan_obligation::task_digest(&task.task_id, &argv, &toolchain)?;
+    let argv = velnor_actions_orchestrator_provisioning::vectors::task_argv(task, catalog)?;
+    let toolchain = velnor_actions_orchestrator_graph::internal_plan::toolchain_id(task, catalog)?;
+    let digest = velnor_actions_orchestrator_graph::internal_plan::task_digest::task_digest(
+        &task.task_id,
+        &argv,
+        &toolchain,
+    )?;
     let matrix_id = matrix_id_for_task_group(&task.stack_id, &task.task_id)?;
     let matrix_key = matrix_key_for_id(&matrix_id)?;
     Ok(CrateObligation {
@@ -257,16 +262,25 @@ fn render_job(
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(acquire.cloned());
-    steps.push(crate::matrix_step::download_plan_step()?);
+    steps.push(velnor_actions_orchestrator_provisioning::matrix_step::download_plan_step()?);
     let needs_validators =
-        crate::matrix_step::crate_needs_generate_validators(policy, &model.package_name);
-    steps.push(crate::matrix_step::prepare_crate_tools_step(
-        catalog,
-        use_rust,
-        use_nextest,
-        crate::matrix_step::prepare_install_opentofu(policy, &model.package_name, use_opentofu),
-        needs_validators,
-    )?);
+        velnor_actions_orchestrator_provisioning::matrix_step::crate_needs_generate_validators(
+            policy,
+            &model.package_name,
+        );
+    steps.push(
+        velnor_actions_orchestrator_provisioning::matrix_step::prepare_crate_tools_step(
+            catalog,
+            use_rust,
+            use_nextest,
+            velnor_actions_orchestrator_provisioning::matrix_step::prepare_install_opentofu(
+                policy,
+                &model.package_name,
+                use_opentofu,
+            ),
+            needs_validators,
+        )?,
+    );
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
@@ -279,8 +293,10 @@ fn render_job(
         repo_has_mbx,
     )?);
     if use_opentofu {
-        let root = crate::tofu_cache::tofu_root_for_obligations(&model.obligations)?;
-        steps.extend(crate::tofu_cache::provider_cache_step_for_tofu_root(
+        let root = velnor_actions_orchestrator_provisioning::tofu_cache::tofu_root_for_obligations(
+            &model.obligations,
+        )?;
+        steps.extend(velnor_actions_orchestrator_provisioning::tofu_cache::provider_cache_step_for_tofu_root(
             label, catalog, &root,
         )?);
     }
@@ -288,10 +304,12 @@ fn render_job(
         steps.extend(crate::mbx_preflight::steps_for_catalog(catalog)?);
     }
     if use_rust {
-        steps.extend(crate::source_prep::fetch_steps_for_crate(
-            catalog,
-            fetch_roots,
-        )?);
+        steps.extend(
+            velnor_actions_orchestrator_provisioning::source_prep::fetch_steps_for_crate(
+                catalog,
+                fetch_roots,
+            )?,
+        );
     }
     steps.extend(crate::workflow::wire_w1::maybe_task_cache_steps(
         None,
@@ -306,14 +324,18 @@ fn render_job(
         // The first obligation declares the root job's concurrency cap;
         // the renderer turns the marker into `strategy.max-parallel`.
         let cap = (index == 0 && use_opentofu).then_some(max_parallel_jobs);
-        steps.push(crate::matrix_step::obligation_step(
-            obligation,
-            catalog,
-            &downstream,
-            cap,
-        )?);
+        steps.push(
+            velnor_actions_orchestrator_provisioning::matrix_step::obligation_step(
+                obligation,
+                catalog,
+                &downstream,
+                cap,
+            )?,
+        );
     }
-    steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
+    steps.push(
+        velnor_actions_orchestrator_provisioning::matrix_step::crate_upload_step(&model.job_id)?,
+    );
     Ok(Job {
         display_name: model.display_name.clone(),
         runs_on: label.to_owned(),
@@ -354,13 +376,22 @@ fn restore_step_for_crate(
     if !use_mbx && !repo_has_mbx {
         let shared = format!(
             "{}-{target}-{rust}",
-            crate::source_cache::RUST_CACHE_SHARED_PREFIX
+            velnor_actions_orchestrator_provisioning::source_cache::RUST_CACHE_SHARED_PREFIX
         );
-        return crate::source_cache::rust_cache_step(&shared, false).map(Some);
+        return velnor_actions_orchestrator_provisioning::source_cache::rust_cache_step(
+            &shared, false,
+        )
+        .map(Some);
     }
-    let key = crate::source_cache::sources_cache_key(target, rust, fetch_roots)?;
-    let prefix = crate::source_cache::sources_restore_prefix(&key);
-    crate::source_cache::sources_restore_step(&key, &[prefix]).map(Some)
+    let key = velnor_actions_orchestrator_provisioning::source_cache::sources_cache_key(
+        target,
+        rust,
+        fetch_roots,
+    )?;
+    let prefix =
+        velnor_actions_orchestrator_provisioning::source_cache::sources_restore_prefix(&key);
+    velnor_actions_orchestrator_provisioning::source_cache::sources_restore_step(&key, &[prefix])
+        .map(Some)
 }
 
 #[cfg(test)]

@@ -54,7 +54,9 @@ fn fixture() -> Fixture {
             default_features: false,
             features: Vec::new(),
             installation: QualifiedCargoInstallation::Source {
-                source_lock_sha256: crate::cover_identity::generator::sha256_hex(lock.as_bytes()),
+                source_lock_sha256: velnor_actions_orchestrator_core::sha256::sha256_hex(
+                    lock.as_bytes(),
+                ),
             },
         },
         depends_on: vec!["rust".to_owned()],

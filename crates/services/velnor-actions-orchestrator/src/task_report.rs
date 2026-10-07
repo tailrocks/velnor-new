@@ -28,16 +28,9 @@ pub(crate) use crate::task_report_aggregate::single_task_aggregate;
 
 mod task_report_order;
 
-/// Report-production operation tag.
-pub const REPORT_OP: &str = "write-task-report-v1";
-/// Env key carrying the executed obligation's task ID.
-pub(crate) const TASK_ID_ENV: &str = "VELNOR_TASK_ID";
-/// Env key carrying the captured obligation exit code.
-pub(crate) const EXIT_CODE_ENV: &str = "VELNOR_EXIT_CODE";
-/// Env key carrying comma-separated downstream task IDs for skip reports.
-pub(crate) const DOWNSTREAM_IDS_ENV: &str = "VELNOR_DOWNSTREAM_TASK_IDS";
-/// Env key carrying the wrapper-captured start time (unix millis).
-pub(crate) const START_MS_ENV: &str = "VELNOR_START_MS";
+use velnor_actions_orchestrator_core::report_keys::{
+    DOWNSTREAM_IDS_ENV, EXIT_CODE_ENV, START_MS_ENV, TASK_ID_ENV,
+};
 
 /// Write the executed obligation's reports plus downstream skip reports.
 ///

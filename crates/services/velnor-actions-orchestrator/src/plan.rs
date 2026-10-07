@@ -271,7 +271,12 @@ fn clippy_lines(out: &mut String, prep: &GenerationPreparation) {
 /// layer would promise YAML that `generate` never writes.
 fn cache_layers(prep: &GenerationPreparation) -> String {
     let mut layers = vec!["Mise tools"];
-    if !crate::source_prep::lockful_roots(&prep.root, &prep.discovery.workspaces).is_empty() {
+    if !velnor_actions_orchestrator_provisioning::source_prep::lockful_roots(
+        &prep.root,
+        &prep.discovery.workspaces,
+    )
+    .is_empty()
+    {
         layers.push("Cargo sources");
     }
     if prep.discovery.workspaces.iter().any(|workspace| {

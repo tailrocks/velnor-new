@@ -13,10 +13,10 @@ use velnor_actions_contract_workflow::{Job, expand_workflow};
 use velnor_actions_workflow_jobs::finalize_jobs as finalize_render_jobs;
 
 use crate::attach::{attach_lock_acquire, attach_preseed};
-use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 use crate::validate::verify_velnor_repository_files;
 use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_pins::pins::resolve_mise_setup;
 
 /// Owned preparation with the Velnor lock/preseed attach applied.
 ///
@@ -40,8 +40,10 @@ pub(crate) fn owned_preparation(
                 env!("CARGO_PKG_VERSION"),
             )?;
         } else {
-            let fetch_roots =
-                crate::source_prep::lockful_roots(&prep.root, &prep.discovery.workspaces);
+            let fetch_roots = velnor_actions_orchestrator_provisioning::source_prep::lockful_roots(
+                &prep.root,
+                &prep.discovery.workspaces,
+            );
             attach_preseed(
                 &mut owned.workflow,
                 &prep.runner_label,

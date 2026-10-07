@@ -104,7 +104,7 @@ fn rq98_risk_triggers_documented() -> Result<(), Box<dyn Error>> {
         "mutant scope must be set"
     );
     assert!(
-        mutants.contains("crates/services/velnor-actions-orchestrator/src/select.rs"),
+        mutants.contains("crates/services/velnor-actions-orchestrator-selection/src/select.rs"),
         "selection must be in mutant scope"
     );
     assert!(

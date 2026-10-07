@@ -5,7 +5,7 @@
 use super::*;
 
 use crate::crate_job_ids::job_id_for_member;
-use crate::matrix_step::shard_suffix;
+use velnor_actions_orchestrator_provisioning::matrix_step::shard_suffix;
 use velnor_actions_rust::TaskKind;
 use velnor_actions_rust_core::CompileDriver;
 

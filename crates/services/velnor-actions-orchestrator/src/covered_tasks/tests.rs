@@ -120,26 +120,3 @@ fn covered_by_baseline_matches_decision_exactly() {
     assert!(covered_by_baseline(&plan, "stack/rust/b/clippy/default"));
     assert!(!covered_by_baseline(&plan, "stack/rust/c/clippy/default"));
 }
-
-#[test]
-fn skip_condition_gates_exact_id() {
-    assert_eq!(
-        skip_condition("stack/rust/a/clippy/default").expect("condition"),
-        "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/a/clippy/default,')"
-    );
-}
-
-#[test]
-fn skip_condition_rejects_malformed_ids() {
-    for bad in [
-        "",
-        "not-a-task",
-        "stack/rust/a/clippy/default,stack/rust/b/clippy/default",
-        "stack/rust/a/clippy/default'}",
-    ] {
-        assert!(
-            skip_condition(bad).is_err(),
-            "malformed IDs must never reach generated expressions: {bad:?}"
-        );
-    }
-}

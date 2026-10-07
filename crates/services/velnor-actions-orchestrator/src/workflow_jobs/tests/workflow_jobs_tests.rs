@@ -179,7 +179,7 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
 fn pure_tofu_plan_drops_all_rust_setup() {
     use velnor_actions_mise::PREPARE_RUST_COMPONENTS_STEP;
 
-    use crate::source_prep::FETCH_SOURCES_STEP;
+    use velnor_actions_orchestrator_provisioning::source_prep::FETCH_SOURCES_STEP;
     let catalog = ToolCatalog::pinned();
     let job = plan_job(
         "ubuntu-26.04",

@@ -19,15 +19,17 @@ use velnor_actions_orchestrator_core::{OrchestratorError, internal, internal_con
 
 use self::plan_obligation::{GroupInputs, changed_keys, lane_table, member_changed, plan_group};
 use crate::cover::{BaselineInputs, apply_baseline};
-use crate::discover::Discovery;
-use crate::internal_plan::snapshot::ExecutionSnapshot;
-use crate::internal_plan::wire_w2::GroupWire;
-use crate::internal_plan::{default_generator, plan_packages};
 use crate::internal_request::resolve_run_key;
 use crate::merge::BaselineManifest;
 use crate::prepare::prepare;
-use crate::select::{classify_changed, select_universe, verify_checkout};
-use crate::select_edges::plan_task_graph;
+use velnor_actions_orchestrator_discovery::discover::Discovery;
+use velnor_actions_orchestrator_discovery::select_edges::plan_task_graph;
+use velnor_actions_orchestrator_graph::internal_plan::snapshot::ExecutionSnapshot;
+use velnor_actions_orchestrator_graph::internal_plan::wire_w2::GroupWire;
+use velnor_actions_orchestrator_graph::internal_plan::{default_generator, plan_packages};
+use velnor_actions_orchestrator_selection::select::{
+    classify_changed, select_universe, verify_checkout,
+};
 
 pub use crate::internal_request::{
     PlanOutputs, merge_passed, plan_outputs, publish_final_report, publish_plan_files,
@@ -137,11 +139,13 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
     let named_check_lanes = resolve_named_check_lanes(&prep, request.named_check_lanes.take())?;
     let catalog = ToolCatalog::pinned();
     let mut warnings = Vec::new();
-    warnings.extend(crate::evidence::workspace_drift_warnings(
-        &prep.root,
-        &prep.discovery.workspaces,
-        &prep.runner_label,
-    ));
+    warnings.extend(
+        velnor_actions_orchestrator_discovery::evidence::workspace_drift_warnings(
+            &prep.root,
+            &prep.discovery.workspaces,
+            &prep.runner_label,
+        ),
+    );
     let universe = select_universe(&prep.discovery, &mut warnings);
     let changed = classify_changed(
         &prep.root,

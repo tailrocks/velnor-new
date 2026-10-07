@@ -1,4 +1,3 @@
-use crate::cover_identity::generator::sha256_hex;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
@@ -10,6 +9,7 @@ use velnor_actions_contract_config::config::{
 use velnor_actions_mise::checks::ContainerObservation;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::internal;
+use velnor_actions_orchestrator_core::sha256::sha256_hex;
 
 pub(crate) use crate::check_runtime::preparation::container::runtime::{
     RuntimeObservation, RuntimeRootEvidence, SocketEvidence,

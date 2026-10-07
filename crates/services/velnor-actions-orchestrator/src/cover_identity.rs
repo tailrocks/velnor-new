@@ -23,17 +23,21 @@ use velnor_actions_rust::{extension_for_proposal, tool_needs};
 
 use crate::cover_baseline::BaselineInputs;
 use crate::cover_baseline::provenance_check::ValidatedProvenance;
-use crate::discover::Discovery;
 use crate::external_data::{
     DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, external_data_kind, may_skip_external_data,
 };
 use crate::internal::plan_obligation::{changed_keys, member_changed};
-use crate::internal_plan::closure::resolve_closure_at_root;
-use crate::internal_plan::identities::{extension_bundle_with_snapshot, platform_id_for_group};
-use crate::internal_plan::snapshot::{ExecutionSnapshot, canonical_digest};
-use crate::internal_plan::{nextest_config_for, toolchain_id};
 use crate::merge::BaselineManifest;
 use velnor_actions_orchestrator_core::extension_schemas::coverage_schema_known;
+use velnor_actions_orchestrator_discovery::discover::Discovery;
+use velnor_actions_orchestrator_graph::internal_plan::closure::resolve_closure_at_root;
+use velnor_actions_orchestrator_graph::internal_plan::identities::{
+    extension_bundle_with_snapshot, platform_id_for_group,
+};
+use velnor_actions_orchestrator_graph::internal_plan::snapshot::{
+    ExecutionSnapshot, canonical_digest,
+};
+use velnor_actions_orchestrator_graph::internal_plan::{nextest_config_for, toolchain_id};
 
 pub(crate) use self::generator::{SOURCE_BUILD_REASON, is_source_build};
 
@@ -86,7 +90,7 @@ fn cover_closure_digest(
 fn verify_cover_extension(
     task: &ProposedTask,
     root: &Path,
-    bundle: &crate::internal_plan::identities::ExtensionBundle,
+    bundle: &velnor_actions_orchestrator_graph::internal_plan::identities::ExtensionBundle,
     reads: &mut velnor_actions_tofu_core::FileCache,
 ) -> Result<(), String> {
     let stack =
@@ -95,8 +99,10 @@ fn verify_cover_extension(
         return Err("undeclared_inputs".to_owned());
     }
     if stack == Stack::Tofu {
-        let ext = crate::internal_plan::tofu_extension_for(task, root, bundle, reads)
-            .map_err(|_| "extension_unverified:unparsable_spelling".to_owned())?;
+        let ext = velnor_actions_orchestrator_graph::internal_plan::tofu_extension_for(
+            task, root, bundle, reads,
+        )
+        .map_err(|_| "extension_unverified:unparsable_spelling".to_owned())?;
         if ext.coverage_eligible().is_err() || ext.conservative_execution_required() {
             return Err("undeclared_inputs".to_owned());
         }

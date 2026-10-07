@@ -7,12 +7,12 @@ use velnor_actions_contract_config::{RunnerSelection, VelnorConfig, WorkflowPoli
 use velnor_actions_contract_release::RunnerImageEvidence;
 use velnor_actions_mise::GitRequest;
 
-use crate::discover::{Discovery, discover};
-use crate::source_prep::lockful_roots;
 use crate::workflow::{DEFAULT_RUNNER_LABEL, WorkflowPlan, build_workflow};
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::config::load_config;
 use velnor_actions_orchestrator_core::decisions::runner_image_evidence;
+use velnor_actions_orchestrator_discovery::discover::{Discovery, discover};
+use velnor_actions_orchestrator_provisioning::source_prep::lockful_roots;
 
 /// Canonical repository identity allowed the Velnor-repository policy.
 const VELNOR_IDENTITY: &str = "tailrocks/velnor-new";
@@ -71,7 +71,7 @@ pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> 
         &fetch_roots,
     )?;
     let runner_image = runner_image_evidence();
-    let audit = crate::lock_audit::audit_prepare_installs(
+    let audit = velnor_actions_orchestrator_provisioning::lock_audit::audit_prepare_installs(
         &canonical,
         &workflow.ir,
         &runner_label,

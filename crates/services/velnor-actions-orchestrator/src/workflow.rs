@@ -26,11 +26,11 @@ use velnor_actions_workflow_jobs::context::{
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 use velnor_actions_workflow_steps::steps::PLAN_OPERATION;
 
-use crate::discover::Discovery;
-use crate::pins::consumer_acquire_step;
 use crate::workflow_jobs::{final_job, lint_job, plan_job};
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::utf8::{strings_of, strings_of_env};
+use velnor_actions_orchestrator_discovery::discover::Discovery;
+use velnor_actions_orchestrator_pins::pins::consumer_acquire_step;
 
 mod workflow_context;
 

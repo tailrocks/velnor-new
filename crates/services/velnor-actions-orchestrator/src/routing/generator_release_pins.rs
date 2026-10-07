@@ -7,9 +7,9 @@ use velnor_actions_contract_release::ReleaseTarget;
 use velnor_actions_mise::{MiseInstall, PinnedTool, PinnedToolExec, ToolCatalog};
 use velnor_actions_workflow_generator::GeneratorReleasePins;
 
-use crate::pins::resolve_mise_setup_for_release_target;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::utf8::strings_of;
+use velnor_actions_orchestrator_pins::pins::resolve_mise_setup_for_release_target;
 
 /// Build every release command through the Mise adapter's typed requests.
 pub(crate) fn resolve(config: &VelnorConfig) -> Result<GeneratorReleasePins, OrchestratorError> {

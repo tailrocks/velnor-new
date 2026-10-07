@@ -20,7 +20,11 @@ pub(crate) fn steps_for_catalog(catalog: &ToolCatalog) -> Result<[Step; 3], Orch
         MR_BOXINGTON_ACTION_VERSION,
     )?
     .uses_value();
-    let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
+    let env = velnor_actions_orchestrator_provisioning::matrix_step::task_step_env(
+        catalog,
+        &BTreeMap::new(),
+        true,
+    )?;
     let steps = mbx_steps_for_driver(
         &uses,
         CompileDriver::Mbx,

@@ -245,7 +245,7 @@ fn lockfile_committed_and_locked_used() -> Result<(), Box<dyn Error>> {
     assert!(tracked.status.success(), "Cargo.lock not committed");
     for file in [
         "crates/adapters/velnor-actions-mise-catalog/src/requests.rs",
-        "crates/services/velnor-actions-orchestrator/src/vectors.rs",
+        "crates/services/velnor-actions-orchestrator-provisioning/src/vectors.rs",
         ".github/workflows/ci.yml",
     ] {
         assert!(read(file)?.contains("--locked"), "{file} misses --locked");

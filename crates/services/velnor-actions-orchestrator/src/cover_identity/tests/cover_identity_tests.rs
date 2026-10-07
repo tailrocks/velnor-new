@@ -273,7 +273,7 @@ fn cover_bundle_for(
     discovery: &Discovery,
     task: &ProposedTask,
     root: &std::path::Path,
-) -> crate::internal_plan::identities::ExtensionBundle {
+) -> velnor_actions_orchestrator_graph::internal_plan::identities::ExtensionBundle {
     extension_bundle_with_snapshot(snapshot, discovery, task, Some(root), None)
 }
 

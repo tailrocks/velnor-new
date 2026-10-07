@@ -165,7 +165,9 @@ pub(crate) fn revalidate_coverage_with_anchors(
         miss_reasons.insert("source_missing".to_owned());
         return;
     };
-    if manifest.schema != crate::internal_plan::snapshot::CANONICAL_SCHEMA_VERSION {
+    if manifest.schema
+        != velnor_actions_orchestrator_graph::internal_plan::snapshot::CANONICAL_SCHEMA_VERSION
+    {
         signals.planning_failed = true;
         miss_reasons.insert("cache_corrupt".to_owned());
         return;

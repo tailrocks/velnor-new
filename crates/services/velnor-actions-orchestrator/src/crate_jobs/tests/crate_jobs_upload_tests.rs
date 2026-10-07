@@ -99,12 +99,12 @@ fn obligations_wrap_report_capture() {
         Some(clippy_id.as_str())
     );
     assert!(
-        !first_env.contains_key(crate::task_report::DOWNSTREAM_IDS_ENV),
+        !first_env.contains_key(velnor_actions_orchestrator_core::report_keys::DOWNSTREAM_IDS_ENV),
         "downstream ids are derived from the plan on failure"
     );
     assert!(
         !env_of(&demo, "Unit and integration tests")
-            .contains_key(crate::task_report::DOWNSTREAM_IDS_ENV),
+            .contains_key(velnor_actions_orchestrator_core::report_keys::DOWNSTREAM_IDS_ENV),
         "last obligation reports no downstream"
     );
 }

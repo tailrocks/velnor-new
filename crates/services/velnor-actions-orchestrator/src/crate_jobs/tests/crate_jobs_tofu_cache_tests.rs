@@ -192,9 +192,12 @@ fn mixed_job_restores_both_sources_and_providers() {
 
 #[test]
 fn provider_key_rejects_unknown_targets() {
-    let err =
-        crate::tofu_cache::tofu_providers_cache_key("mips-unknown-linux", "1.13.1", "stacks/a")
-            .expect_err("unknown targets fail closed");
+    let err = velnor_actions_orchestrator_provisioning::tofu_cache::tofu_providers_cache_key(
+        "mips-unknown-linux",
+        "1.13.1",
+        "stacks/a",
+    )
+    .expect_err("unknown targets fail closed");
     assert!(err.to_string().contains("bad_target"), "unexpected {err:?}");
 }
 
@@ -202,7 +205,7 @@ fn provider_key_rejects_unknown_targets() {
 fn provider_key_rejects_loose_tofu_versions() {
     for version in ["1.13", "latest", ">= 1.0", ""] {
         assert!(
-            crate::tofu_cache::tofu_providers_cache_key(
+            velnor_actions_orchestrator_provisioning::tofu_cache::tofu_providers_cache_key(
                 "x86_64-unknown-linux-gnu",
                 version,
                 "stacks/a"
@@ -212,7 +215,7 @@ fn provider_key_rejects_loose_tofu_versions() {
         );
     }
     assert!(
-        crate::tofu_cache::tofu_providers_cache_key(
+        velnor_actions_orchestrator_provisioning::tofu_cache::tofu_providers_cache_key(
             "x86_64-unknown-linux-gnu",
             "1.13.1",
             "stacks/a"
@@ -235,9 +238,12 @@ fn provider_key_rejects_unsafe_roots() {
         "a\\b",
         "a\nb",
     ] {
-        let err =
-            crate::tofu_cache::tofu_providers_cache_key("x86_64-unknown-linux-gnu", "1.13.1", root)
-                .expect_err("unsafe roots fail closed");
+        let err = velnor_actions_orchestrator_provisioning::tofu_cache::tofu_providers_cache_key(
+            "x86_64-unknown-linux-gnu",
+            "1.13.1",
+            root,
+        )
+        .expect_err("unsafe roots fail closed");
         assert!(
             err.to_string().contains("unsafe_fetch_root"),
             "{root:?}: {err}"
@@ -248,9 +254,12 @@ fn provider_key_rejects_unsafe_roots() {
 #[test]
 fn provider_key_rejects_leading_dash_roots() {
     for root in ["-evil", "-chdir"] {
-        let err =
-            crate::tofu_cache::tofu_providers_cache_key("x86_64-unknown-linux-gnu", "1.13.1", root)
-                .expect_err("leading-dash roots fail closed");
+        let err = velnor_actions_orchestrator_provisioning::tofu_cache::tofu_providers_cache_key(
+            "x86_64-unknown-linux-gnu",
+            "1.13.1",
+            root,
+        )
+        .expect_err("leading-dash roots fail closed");
         assert!(
             err.to_string().contains("leading_dash_root"),
             "{root:?}: {err}"
@@ -261,14 +270,21 @@ fn provider_key_rejects_leading_dash_roots() {
 #[test]
 fn provider_key_rejects_overlong_keys_from_deep_roots() {
     let deep = format!("{}leaf", "nest/".repeat(200));
-    let err =
-        crate::tofu_cache::tofu_providers_cache_key("x86_64-unknown-linux-gnu", "1.13.1", &deep)
-            .expect_err("deep roots overflow the key");
+    let err = velnor_actions_orchestrator_provisioning::tofu_cache::tofu_providers_cache_key(
+        "x86_64-unknown-linux-gnu",
+        "1.13.1",
+        &deep,
+    )
+    .expect_err("deep roots overflow the key");
     assert!(err.to_string().contains("key_too_long"), "{err}");
     let roomy = format!("{}leaf", "nest/".repeat(20));
     assert!(
-        crate::tofu_cache::tofu_providers_cache_key("x86_64-unknown-linux-gnu", "1.13.1", &roomy,)
-            .is_ok(),
+        velnor_actions_orchestrator_provisioning::tofu_cache::tofu_providers_cache_key(
+            "x86_64-unknown-linux-gnu",
+            "1.13.1",
+            &roomy,
+        )
+        .is_ok(),
         "ordinary nesting builds"
     );
 }

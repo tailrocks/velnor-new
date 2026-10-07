@@ -78,7 +78,7 @@ fn pure_tofu_group_renders_without_rust_setup() {
     use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, PREPARE_RUST_COMPONENTS_STEP};
     use velnor_actions_tofu_core::TofuTaskKind;
 
-    use crate::source_prep::FETCH_SOURCES_STEP;
+    use velnor_actions_orchestrator_provisioning::source_prep::FETCH_SOURCES_STEP;
     let tasks = vec![
         tofu_group("stacks/a", TofuTaskKind::Fmt),
         tofu_group("stacks/a", TofuTaskKind::InitForValidate),

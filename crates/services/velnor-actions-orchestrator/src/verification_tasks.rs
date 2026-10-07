@@ -6,9 +6,9 @@ use velnor_actions_contract_config::VelnorConfig;
 use velnor_actions_contract_workflow::Job;
 use velnor_actions_workflow_jobs::{VerificationTaskPolicy, build_verification_task_job};
 
-use crate::pins::resolve_verification_mise_setup;
 use crate::workflow::CHECKOUT_USES;
 use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_pins::pins::resolve_verification_mise_setup;
 
 /// Resolve each workflow task onto its fixed platform and Mise binary pin.
 pub(crate) fn policies(

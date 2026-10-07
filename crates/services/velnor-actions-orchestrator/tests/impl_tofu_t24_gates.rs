@@ -276,19 +276,24 @@ fn gate2_plan_and_generate_run_zero_tofu_operations() -> TestResult {
 #[test]
 fn gate3_single_index_single_traversal_bounded_walks() -> TestResult {
     let orch = crate_src("");
+    let disc = crate_src("../velnor-actions-orchestrator-discovery");
     let tofu = crate_src("../../adapters/velnor-actions-tofu");
     let mut calls = Vec::new();
-    for hit in token_hits(&orch, "build_file_index(")? {
-        if !hit_code(&orch, &hit)?.contains("fn build_file_index") {
-            calls.push(hit);
+    for (dir, prefix) in [(&orch, ""), (&disc, "discovery/")] {
+        for hit in token_hits(dir, "build_file_index(")? {
+            if !hit_code(dir, &hit)?.contains("fn build_file_index") {
+                calls.push(format!("{prefix}{hit}"));
+            }
         }
     }
     assert_eq!(calls.len(), 1, "one index per snapshot: {calls:?}");
-    assert!(calls[0].starts_with("discover.rs"), "{calls:?}");
+    assert!(calls[0].starts_with("discovery/discover.rs"), "{calls:?}");
     let mut selections = Vec::new();
-    for hit in token_hits(&orch, "select_roots(")? {
-        if !hit_code(&orch, &hit)?.contains("fn select_roots") {
-            selections.push(hit);
+    for (dir, prefix) in [(&orch, ""), (&disc, "discovery/")] {
+        for hit in token_hits(dir, "select_roots(")? {
+            if !hit_code(dir, &hit)?.contains("fn select_roots") {
+                selections.push(format!("{prefix}{hit}"));
+            }
         }
     }
     for hit in token_hits(&tofu, "select_roots(")? {
@@ -298,7 +303,7 @@ fn gate3_single_index_single_traversal_bounded_walks() -> TestResult {
     }
     assert_eq!(selections.len(), 1, "one traversal entry: {selections:?}");
     assert!(
-        selections[0].starts_with("select_tofu.rs"),
+        selections[0].starts_with("discovery/select_tofu.rs"),
         "{selections:?}"
     );
     let tofu_core = crate_src("../../adapters/velnor-actions-tofu-core");

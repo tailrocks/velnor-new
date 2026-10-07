@@ -213,6 +213,11 @@ fn strictness_no_proof_literals_anywhere() -> Result<(), Box<dyn Error>> {
     for dir in [
         "crates/services/velnor-actions-orchestrator",
         "crates/services/velnor-actions-orchestrator-core",
+        "crates/services/velnor-actions-orchestrator-discovery",
+        "crates/services/velnor-actions-orchestrator-graph",
+        "crates/services/velnor-actions-orchestrator-pins",
+        "crates/services/velnor-actions-orchestrator-provisioning",
+        "crates/services/velnor-actions-orchestrator-selection",
     ] {
         files.extend(tree_files(&format!("{dir}/src"), "rs")?);
         files.extend(tree_files(&format!("{dir}/tests"), "rs")?);

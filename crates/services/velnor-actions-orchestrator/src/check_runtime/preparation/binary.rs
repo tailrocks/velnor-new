@@ -76,7 +76,7 @@ fn project_binary_until(
 
 /// Hash the same bounded bytes subsequently written into owned storage.
 fn verify_binary_bytes(bytes: &[u8], expected: &str) -> Result<(), OrchestratorError> {
-    if bytes.is_empty() || crate::cover_identity::generator::sha256_hex(bytes) != expected {
+    if bytes.is_empty() || velnor_actions_orchestrator_core::sha256::sha256_hex(bytes) != expected {
         return Err(internal("mise_binary_unqualified_sha256"));
     }
     Ok(())

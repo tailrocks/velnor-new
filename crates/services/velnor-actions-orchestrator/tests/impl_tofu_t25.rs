@@ -24,14 +24,25 @@ use crate::impl_tofu_t24_gates::{crate_src, is_crate_job, token_hits};
 #[test]
 fn file_cache_constructions_are_hoisted_per_phase() -> TestResult {
     let orch = crate_src("");
-    let mut sites: Vec<String> = token_hits(&orch, "FileCache::new()")?
-        .into_iter()
-        .filter(|hit| !hit.starts_with("cover_identity_fixtures.rs:"))
-        .collect();
+    let disc = crate_src("../velnor-actions-orchestrator-discovery");
+    let mut sites: Vec<String> = Vec::new();
+    for (dir, prefix) in [(&orch, ""), (&disc, "discovery/")] {
+        sites.extend(
+            token_hits(dir, "FileCache::new()")?
+                .into_iter()
+                .filter(|hit| !hit.starts_with("cover_identity_fixtures.rs:"))
+                .map(|hit| format!("{prefix}{hit}")),
+        );
+    }
     sites.sort();
     let files: Vec<&str> = sites
         .iter()
-        .map(|hit| hit.split_once(':').map_or("", |(name, _)| name))
+        .map(|hit| {
+            hit.rsplit('/')
+                .next()
+                .and_then(|base| base.split_once(':'))
+                .map_or("", |(name, _)| name)
+        })
         .collect();
     assert_eq!(
         files,

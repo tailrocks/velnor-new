@@ -33,7 +33,7 @@ fn verified_bytes_above_old_budget_copy_identically() {
     let source = temp.path().join("synthetic-source");
     let destination = temp.path().join("owned");
     let bytes = vec![0x42; 64 * 1024 * 1024 + 1];
-    let expected = crate::cover_identity::generator::sha256_hex(&bytes);
+    let expected = velnor_actions_orchestrator_core::sha256::sha256_hex(&bytes);
     std::fs::write(&source, &bytes).expect("synthetic bytes");
     assert_eq!(
         crate::retrieve_reports::read_staged_bytes(&source, 64 * 1024 * 1024),

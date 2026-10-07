@@ -20,11 +20,11 @@ use self::provenance_check::{
 use self::provenance_resolve::{repository_anchor_for_slug, resolve_expected_repository};
 use crate::cover::shard;
 use crate::cover_identity::{SOURCE_BUILD_REASON, apply_coverage, is_source_build};
-use crate::discover::Discovery;
 use crate::merge::BaselineManifest;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::decisions::baseline_expired;
 use velnor_actions_orchestrator_core::internal_contract;
+use velnor_actions_orchestrator_discovery::discover::Discovery;
 
 /// Maximum accepted `baseline.json` bytes: evidence stays bounded.
 const MAX_BASELINE_MANIFEST_BYTES: usize = 1_048_576;
@@ -287,9 +287,15 @@ pub(crate) fn baseline_entry_for(
     let bound = u64::try_from(MAX_BASELINE_MANIFEST_BYTES).unwrap_or(u64::MAX);
     let bytes = crate::retrieve_reports::read_staged_bytes(&payload, bound).ok()?;
     let text = std::str::from_utf8(&bytes).ok()?;
-    let value = crate::internal_plan::snapshot::parse_canonical_json(text).ok()?;
+    let value =
+        velnor_actions_orchestrator_graph::internal_plan::snapshot::parse_canonical_json(text)
+            .ok()?;
     let manifest: BaselineManifest = serde_json::from_value(value).ok()?;
-    if crate::internal_plan::snapshot::check_canonical_version(manifest.schema).is_err() {
+    if velnor_actions_orchestrator_graph::internal_plan::snapshot::check_canonical_version(
+        manifest.schema,
+    )
+    .is_err()
+    {
         return None;
     }
     if manifest.source_commit == base

@@ -36,9 +36,9 @@ examine_globs = [
     "crates/adapters/velnor-actions-rust/src/identity.rs",
     "crates/services/velnor-actions-orchestrator/src/cover_identity.rs",
     # Selection: affected-package computation and edge closure.
-    "crates/services/velnor-actions-orchestrator/src/select.rs",
-    "crates/services/velnor-actions-orchestrator/src/select_affected.rs",
-    "crates/services/velnor-actions-orchestrator/src/select_edges.rs",
+    "crates/services/velnor-actions-orchestrator-selection/src/select.rs",
+    "crates/services/velnor-actions-orchestrator-selection/src/select_affected.rs",
+    "crates/services/velnor-actions-orchestrator-discovery/src/select_edges.rs",
     # Aggregation: baseline coverage, final merge, merge requests.
     "crates/services/velnor-actions-orchestrator/src/cover.rs",
     "crates/services/velnor-actions-orchestrator/src/cover_baseline.rs",
@@ -46,8 +46,8 @@ examine_globs = [
     "crates/services/velnor-actions-orchestrator/src/merge_request.rs",
     # Production wiring under review: inventory assembly, pin records,
     # staged validation verdict, and orchestrator wiring passes.
-    "crates/services/velnor-actions-orchestrator/src/inventory.rs",
-    "crates/services/velnor-actions-orchestrator/src/pins.rs",
+    "crates/services/velnor-actions-orchestrator-discovery/src/inventory.rs",
+    "crates/services/velnor-actions-orchestrator-pins/src/pins.rs",
     "crates/services/velnor-actions-orchestrator/src/validate.rs",
     "crates/services/velnor-actions-orchestrator/src/wire_w1.rs",
     "crates/services/velnor-actions-orchestrator/src/wire_w2.rs",

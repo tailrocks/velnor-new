@@ -10,9 +10,11 @@ use velnor_actions_workflow_steps::steps::{
     DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
 };
 
-use crate::discover::Discovery;
-use crate::vectors::{ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, zizmor_argv};
 use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_discovery::discover::Discovery;
+use velnor_actions_orchestrator_provisioning::vectors::{
+    ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, zizmor_argv,
+};
 
 use super::{CHECKOUT_USES, REQUEST_DIR};
 
@@ -75,7 +77,7 @@ pub(super) fn render_context(
         candidate,
         preseed: false,
         verification_tasks,
-        plan_consumer_env: crate::matrix_step::task_step_env(
+        plan_consumer_env: velnor_actions_orchestrator_provisioning::matrix_step::task_step_env(
             catalog,
             &std::collections::BTreeMap::new(),
             plan_needs_rust,

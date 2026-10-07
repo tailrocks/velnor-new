@@ -36,7 +36,7 @@ pub(crate) fn baseline_publish_job(
 ) -> Result<Job, OrchestratorError> {
     let mut steps = Vec::new();
     steps.extend(acquire);
-    steps.push(crate::matrix_step::download_plan_step()?);
+    steps.push(velnor_actions_orchestrator_provisioning::matrix_step::download_plan_step()?);
     steps.push(request_step(PUBLISH_OPERATION)?);
     steps.push(publish_step());
     steps.push(

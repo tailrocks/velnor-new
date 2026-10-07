@@ -136,7 +136,7 @@ fn verify_owned_cli(
         || read_deadline_checkpoint(deadline),
     )
     .map_err(|_| internal("container_owned_cli_unreadable"))?;
-    if crate::cover_identity::generator::sha256_hex(&bytes) != prepared.docker_sha256 {
+    if velnor_actions_orchestrator_core::sha256::sha256_hex(&bytes) != prepared.docker_sha256 {
         return Err(internal("container_owned_cli_changed"));
     }
     Ok(())
@@ -170,7 +170,7 @@ fn project_executable(
         || read_deadline_checkpoint(Some(deadline)),
     )
     .map_err(|_| internal("container_cli_unreadable"))?;
-    let observed = crate::cover_identity::generator::sha256_hex(&bytes);
+    let observed = velnor_actions_orchestrator_core::sha256::sha256_hex(&bytes);
     if bytes.is_empty() || observed != expected {
         return Err(internal("container_cli_sha256"));
     }

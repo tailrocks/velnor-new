@@ -18,10 +18,10 @@ use velnor_actions_workflow_jobs::{
 };
 use velnor_actions_workflow_steps::steps::STAGED_BINARY_PREFIX;
 
-use crate::pins::{lock_acquire_for_runner, lock_acquire_step};
-use crate::vectors::{candidate_build_argv, mbx_probe_argv};
 use crate::workflow::WorkflowPlan;
 use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_pins::pins::{lock_acquire_for_runner, lock_acquire_step};
+use velnor_actions_orchestrator_provisioning::vectors::{candidate_build_argv, mbx_probe_argv};
 
 /// Attach lock-backed Acquire steps to plan, final, publish, and crate jobs.
 ///
@@ -117,7 +117,11 @@ pub(crate) fn attach_preseed(
     let build = candidate_build_argv(&catalog)?;
     let probe = mbx_probe_argv(&catalog)?;
     let staged = format!("{STAGED_BINARY_PREFIX}{version}");
-    let homes = crate::matrix_step::task_step_env(&catalog, &BTreeMap::new(), true)?;
+    let homes = velnor_actions_orchestrator_provisioning::matrix_step::task_step_env(
+        &catalog,
+        &BTreeMap::new(),
+        true,
+    )?;
     let plan_steps = vec![
         preseed_build_step(&build, &homes)?,
         preseed_verify_step(&probe, catalog.version(PinnedTool::MrBoxington), &homes)?,
@@ -237,14 +241,19 @@ fn replace_plan_registry_cache(
         .ok_or_else(|| OrchestratorError::Contract {
             problem: format!("unsupported_target_for_runner:{label}"),
         })?;
-    let key = crate::source_cache::sources_cache_key(
+    let key = velnor_actions_orchestrator_provisioning::source_cache::sources_cache_key(
         target,
         catalog.version(PinnedTool::Rust),
         fetch_roots,
     )?;
-    let prefix = crate::source_cache::sources_restore_prefix(&key);
-    steps[registry[0]] = crate::source_cache::sources_restore_step(&key, &[prefix])?;
-    let save = crate::source_cache::sources_save_step(&key)?;
+    let prefix =
+        velnor_actions_orchestrator_provisioning::source_cache::sources_restore_prefix(&key);
+    steps[registry[0]] =
+        velnor_actions_orchestrator_provisioning::source_cache::sources_restore_step(
+            &key,
+            &[prefix],
+        )?;
+    let save = velnor_actions_orchestrator_provisioning::source_cache::sources_save_step(&key)?;
     let after_source_collection = steps
         .iter()
         .rposition(|step| step.role == Some(StepRole::CargoSourcesFetch))

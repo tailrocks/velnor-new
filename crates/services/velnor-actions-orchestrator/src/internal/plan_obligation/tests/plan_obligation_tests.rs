@@ -8,7 +8,7 @@ fn tofu_tasks_derive_the_tofu_envelope() {
     let task = tofu_proposal(TofuTaskKind::Validate);
     let discovery = empty_discovery();
     let snapshot = ExecutionSnapshot::build(&discovery);
-    let bundle = crate::internal_plan::identities::extension_bundle_with_snapshot(
+    let bundle = velnor_actions_orchestrator_graph::internal_plan::identities::extension_bundle_with_snapshot(
         &snapshot,
         &discovery,
         &task,
@@ -38,7 +38,7 @@ fn tofu_drift_fails_the_bridge_closed() {
     task.identity.compile_driver = "cargo".to_owned();
     let discovery = empty_discovery();
     let snapshot = ExecutionSnapshot::build(&discovery);
-    let bundle = crate::internal_plan::identities::extension_bundle_with_snapshot(
+    let bundle = velnor_actions_orchestrator_graph::internal_plan::identities::extension_bundle_with_snapshot(
         &snapshot,
         &discovery,
         &task,
@@ -88,7 +88,7 @@ fn rust_tasks_keep_the_rust_envelope() {
     let dir = TempDir::create("rust-ext").expect("tempdir");
     let discovery = empty_discovery();
     let snapshot = ExecutionSnapshot::build(&discovery);
-    let bundle = crate::internal_plan::identities::extension_bundle_with_snapshot(
+    let bundle = velnor_actions_orchestrator_graph::internal_plan::identities::extension_bundle_with_snapshot(
         &snapshot,
         &discovery,
         &task,

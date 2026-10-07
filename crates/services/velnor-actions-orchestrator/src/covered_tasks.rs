@@ -8,13 +8,9 @@
 //! never contain commas, and the empty set encodes as the empty
 //! string, which matches nothing and executes everything.
 
-use velnor_actions_contract::validate_task_id;
 use velnor_actions_contract_workflow::{ObligationDecision, Plan};
 // Re-exported: the CLI emits this exact output name (single-sourced).
 pub use velnor_actions_workflow_renderer::COVERED_TASKS_OUTPUT;
-
-use velnor_actions_orchestrator_core::OrchestratorError;
-use velnor_actions_orchestrator_core::internal_contract;
 
 /// Sorted unique covered task IDs of one plan.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -77,21 +73,6 @@ pub(crate) fn covered_by_baseline(plan: &Plan, task_id: &str) -> bool {
     plan.obligations
         .iter()
         .any(|obligation| obligation.task_id == task_id && decision_is_covered(obligation.decision))
-}
-
-/// Generated `if:` gate skipping `task_id` when the plan covered it.
-///
-/// Evaluates over the plan job's `covered_tasks` output, which the
-/// crate job reads through `needs.plan`; an absent or empty output
-/// matches nothing, so unknown coverage always executes.
-/// # Errors
-///
-/// Returns a contract error when the task ID is malformed.
-pub(crate) fn skip_condition(task_id: &str) -> Result<String, OrchestratorError> {
-    validate_task_id(task_id).map_err(internal_contract)?;
-    Ok(format!(
-        "!contains(needs.plan.outputs.{COVERED_TASKS_OUTPUT}, ',{task_id},')"
-    ))
 }
 
 #[cfg(test)]

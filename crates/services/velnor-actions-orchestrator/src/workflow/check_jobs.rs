@@ -11,8 +11,8 @@ use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};
 use velnor_actions_workflow_jobs::context::PLAN_JOB_ID;
 use velnor_actions_workflow_steps::steps::INTERNAL_OP_ENV;
 
-use crate::discover::Discovery;
 use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_discovery::discover::Discovery;
 
 /// Build one job per configured check, independent of Rust grouping and coverage.
 pub(crate) fn build_check_jobs(
@@ -24,11 +24,13 @@ pub(crate) fn build_check_jobs(
     for discovered in &discovery.mise_checks {
         let check = &discovered.check;
         let acquire = match policy {
-            WorkflowPolicy::ConsumerV1 => Some(crate::pins::consumer_acquire_for_runner(
-                &check.runner,
-                env!("CARGO_PKG_VERSION"),
-                discovery.consumer_manifest_json.as_deref(),
-            )?),
+            WorkflowPolicy::ConsumerV1 => Some(
+                velnor_actions_orchestrator_pins::pins::consumer_acquire_for_runner(
+                    &check.runner,
+                    env!("CARGO_PKG_VERSION"),
+                    discovery.consumer_manifest_json.as_deref(),
+                )?,
+            ),
             WorkflowPolicy::VelnorRepositoryV1 => None,
         };
         let id = format!("check-{}", check.id);
@@ -47,9 +49,10 @@ fn check_job(
     let check = &discovered.check;
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(acquire);
-    steps.push(crate::matrix_step::download_plan_step()?);
+    steps.push(velnor_actions_orchestrator_provisioning::matrix_step::download_plan_step()?);
     steps.push(execute_check_step(discovered, catalog)?);
-    let mut upload = crate::matrix_step::crate_upload_step(job_id)?;
+    let mut upload =
+        velnor_actions_orchestrator_provisioning::matrix_step::crate_upload_step(job_id)?;
     upload.condition = Some("always()".to_owned());
     steps.push(upload);
     let minutes =
@@ -89,10 +92,12 @@ fn execute_check_step(
         ),
         (INTERNAL_OP_ENV.to_owned(), "execute-check-v1".to_owned()),
     ]);
-    let env = crate::matrix_step::task_step_env(catalog, &identity, false)?;
+    let env = velnor_actions_orchestrator_provisioning::matrix_step::task_step_env(
+        catalog, &identity, false,
+    )?;
     velnor_actions_workflow_steps::shell_step(
         "Execute named check",
-        vec![crate::matrix_step::helper_path_for_version()],
+        vec![velnor_actions_orchestrator_provisioning::matrix_step::helper_path_for_version()],
         env,
     )
     .map_err(OrchestratorError::from)

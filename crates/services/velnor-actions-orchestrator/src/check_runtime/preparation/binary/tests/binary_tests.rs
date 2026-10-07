@@ -28,7 +28,7 @@ fn qualified_fixture_bytes_copy_exclusively_and_survive_source_replacement() {
     let source = temp.path().join("source");
     let destination = temp.path().join("owned");
     let bytes = b"qualified fixture bytes";
-    let expected = crate::cover_identity::generator::sha256_hex(bytes);
+    let expected = velnor_actions_orchestrator_core::sha256::sha256_hex(bytes);
     verify_binary_bytes(bytes, &expected).expect("positive identity");
     std::fs::write(&source, bytes).expect("source");
     project_binary(&source, &destination, &expected, 1024).expect("projection");
@@ -59,7 +59,7 @@ fn qualified_fixture_bytes_copy_exclusively_and_survive_source_replacement() {
 fn source_symlink_and_existing_destination_refuse() {
     let temp = tempfile::TempDir::new().expect("temp");
     let bytes = b"fixture";
-    let expected = crate::cover_identity::generator::sha256_hex(bytes);
+    let expected = velnor_actions_orchestrator_core::sha256::sha256_hex(bytes);
     let source = temp.path().join("source");
     std::fs::write(&source, bytes).expect("source");
     let link = temp.path().join("link");

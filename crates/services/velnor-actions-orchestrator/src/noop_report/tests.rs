@@ -6,7 +6,6 @@
 use std::collections::BTreeMap;
 use std::fs;
 
-use crate::matrix_step::OBLIGATION_TASK_DIGEST_ENV;
 use tempfile::TempDir;
 use velnor_actions_contract::plan_id_for_run;
 use velnor_actions_contract_config::RunnerSelection;
@@ -15,9 +14,10 @@ use velnor_actions_contract_workflow::{
     Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, TaskReport,
     TaskStatus, Trust, WorkflowEvent, matrix_json_bytes,
 };
+use velnor_actions_orchestrator_provisioning::matrix_step::OBLIGATION_TASK_DIGEST_ENV;
 
 use super::*;
-use crate::task_report::{EXIT_CODE_ENV, REPORT_OP, TASK_ID_ENV};
+use velnor_actions_orchestrator_core::report_keys::{EXIT_CODE_ENV, REPORT_OP, TASK_ID_ENV};
 
 /// Clippy fixture task ID.
 const CLIPPY: &str = "stack/rust/demo/clippy/default";

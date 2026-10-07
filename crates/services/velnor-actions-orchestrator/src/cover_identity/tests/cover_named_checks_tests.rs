@@ -33,14 +33,19 @@ fn exact_baseline_match_still_executes_named_check() {
         .remove(0);
     let id = item.proposal.task_id.clone();
     let mut plan = plan_with(&[&id]);
-    let (obligation, entry) = crate::internal_plan::named_checks::plan::derive(
-        temp.path(),
-        &item,
-        &plan.run_key,
-        &plan.generator,
-        &catalog,
-    )
-    .expect("plan");
+    let argv =
+        velnor_actions_orchestrator_provisioning::vectors::task_argv(&item.proposal, &catalog)
+            .expect("argv");
+    let (obligation, entry) =
+        velnor_actions_orchestrator_graph::internal_plan::named_checks::plan::derive(
+            temp.path(),
+            &item,
+            &plan.run_key,
+            &plan.generator,
+            &catalog,
+            &argv,
+        )
+        .expect("plan");
     plan.obligations = vec![obligation];
     plan.matrix.include = vec![entry];
     let mut manifest = manifest_with(&[(&id, &plan.obligations[0].closure_digest)]);

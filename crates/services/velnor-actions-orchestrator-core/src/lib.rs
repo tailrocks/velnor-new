@@ -24,9 +24,11 @@ pub mod init;
 pub mod obligation_order;
 pub mod origin;
 pub mod qualify;
+pub mod report_keys;
 pub mod root;
 pub mod safe_read;
 pub mod schedule;
+pub mod sha256;
 pub mod utf8;
 pub mod validators;
 

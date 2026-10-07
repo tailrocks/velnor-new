@@ -4,9 +4,9 @@ use std::collections::BTreeSet;
 
 use velnor_actions_contract_planning::DetectionStatus;
 
-use crate::discover::{PlannedWorkspace, local_dep_names};
 use crate::plan::push;
 use crate::prepare::GenerationPreparation;
+use velnor_actions_orchestrator_discovery::discover::{PlannedWorkspace, local_dep_names};
 
 /// Detected stacks, crates, profiles, and evidence.
 pub(crate) fn stacks_section(out: &mut String, prep: &GenerationPreparation) {

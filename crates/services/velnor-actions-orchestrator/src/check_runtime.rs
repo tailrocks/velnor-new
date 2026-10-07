@@ -32,7 +32,7 @@ pub fn execute_check() -> Result<usize, OrchestratorError> {
         .filter(|s| !s.is_empty())
         .ok_or_else(|| internal("missing_runner_temp"))?;
     let id = required_env(CHECK_ID_ENV)?;
-    let task_id = required_env(crate::task_report::TASK_ID_ENV)?;
+    let task_id = required_env(velnor_actions_orchestrator_core::report_keys::TASK_ID_ENV)?;
     let job_id = required_env(NAMED_CHECK_JOB_ID_ENV)?;
     let lane = required_env(NAMED_CHECK_LANE_VARIANT_ENV)?;
     let run_key = crate::internal_request::resolve_run_key(None)?;
@@ -75,7 +75,9 @@ pub(crate) fn execute_check_to(
         Duration::from_secs(u64::from(definition.timeout_minutes) * 60),
     )
     .map_err(|e| internal(&e.to_string()))?;
-    crate::select::verify_checkout_until(root, plan.event, &plan.head, deadline)?;
+    velnor_actions_orchestrator_selection::select::verify_checkout_until(
+        root, plan.event, &plan.head, deadline,
+    )?;
     let catalog = ToolCatalog::pinned();
     let mut discovered = discover_checks_until(
         root,
@@ -144,8 +146,10 @@ fn bind_check(
         variant: entry.lane_variant,
         job_id: entry.job_id.clone(),
     };
+    let argv =
+        velnor_actions_orchestrator_provisioning::vectors::task_argv(&item.proposal, catalog)?;
     let (expected, mut expected_entries) =
-        crate::internal_plan::named_checks::plan::derive_lanes_until(
+        velnor_actions_orchestrator_graph::internal_plan::named_checks::plan::derive_lanes_until(
             root,
             item,
             &plan.run_key,
@@ -153,6 +157,7 @@ fn bind_check(
             catalog,
             &[lane],
             Some(deadline),
+            &argv,
         )?;
     let expected_entry = expected_entries
         .pop()

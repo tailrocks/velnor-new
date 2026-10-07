@@ -29,7 +29,7 @@ fn exact_bytes_remain_owned_after_host_replacement() {
     let source = root.join("docker");
     let destination = root.join("owned");
     let bytes = b"qualified docker fixture";
-    let digest = crate::cover_identity::generator::sha256_hex(bytes);
+    let digest = velnor_actions_orchestrator_core::sha256::sha256_hex(bytes);
     std::fs::write(&source, bytes).expect("source");
     assert_eq!(
         project_executable(&source, &destination, &digest, deadline()).expect("copy"),
@@ -59,7 +59,7 @@ fn owned_cli_special_permission_bits_are_rejected() {
     std::fs::create_dir(home.join("bin")).expect("bin");
     let source = home.join("source");
     let bytes = b"qualified docker fixture";
-    let sha256 = crate::cover_identity::generator::sha256_hex(bytes);
+    let sha256 = velnor_actions_orchestrator_core::sha256::sha256_hex(bytes);
     std::fs::write(&source, bytes).expect("source");
     let docker_program = home.join("bin/docker");
     project_executable(&source, &docker_program, &sha256, deadline()).expect("copy");

@@ -1,4 +1,3 @@
-use crate::cover_identity::generator::sha256_hex;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -10,6 +9,7 @@ use velnor_actions_contract::canonical_json_bytes;
 use velnor_actions_mise::CheckDeadline;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::internal;
+use velnor_actions_orchestrator_core::sha256::sha256_hex;
 
 const MAX_ENTRIES: usize = 1_000;
 const MAX_BYTES: u64 = 256 * 1024 * 1024;

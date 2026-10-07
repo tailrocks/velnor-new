@@ -1,5 +1,7 @@
 use super::*;
 use velnor_actions_contract::digest_b3;
+use velnor_actions_orchestrator_core::sha256::sha256_hex;
+use velnor_actions_orchestrator_graph::internal_plan::current_exe_sha256;
 
 #[test]
 fn unverifiable_shas_detected() {

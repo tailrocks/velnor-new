@@ -1,12 +1,12 @@
 use super::tree;
 use super::*;
-use crate::cover_identity::generator::sha256_hex;
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use tempfile::TempDir;
 use velnor_actions_contract_config::config::HostOrbStackSdk;
+use velnor_actions_orchestrator_core::sha256::sha256_hex;
 
 fn fixture() -> (TempDir, PathBuf, HostOrbStackSdk, PathBuf) {
     let temp = tempfile::tempdir().expect("temp");

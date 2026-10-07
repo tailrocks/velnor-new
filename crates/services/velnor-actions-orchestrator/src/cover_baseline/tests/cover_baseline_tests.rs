@@ -138,8 +138,8 @@ fn marker_plan(marker: &str) -> velnor_actions_contract_workflow::Plan {
 }
 
 /// Discovery without task groups.
-fn empty_discovery() -> crate::discover::Discovery {
-    crate::discover::Discovery {
+fn empty_discovery() -> velnor_actions_orchestrator_discovery::discover::Discovery {
+    velnor_actions_orchestrator_discovery::discover::Discovery {
         mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
@@ -281,7 +281,9 @@ fn forwarded_proof_marks_baseline_unavailable() {
 #[test]
 fn source_build_keeps_marker_without_lock_fill() {
     use velnor_actions_mise::ToolCatalog;
-    let marker = crate::internal_plan::snapshot::UNRESOLVED_GENERATOR_SHA.to_owned();
+    let marker =
+        velnor_actions_orchestrator_graph::internal_plan::snapshot::UNRESOLVED_GENERATOR_SHA
+            .to_owned();
     let mut plan = marker_plan(&marker);
     let tmp = tempfile::tempdir().expect("tempdir");
     std::fs::create_dir(tmp.path().join(".velnor")).expect("dir");

@@ -82,7 +82,7 @@ fn task_cache_steps_need_fixture_and_live_mode() {
 fn crate_driver_tools_follow_role_selection() {
     use velnor_actions_mise::PinnedTool;
 
-    use crate::matrix_step::task_driver_tools;
+    use velnor_actions_orchestrator_provisioning::matrix_step::task_driver_tools;
     assert_eq!(task_driver_tools(true, false), vec![PinnedTool::Rust]);
     assert_eq!(task_driver_tools(true, false), vec![PinnedTool::Rust]);
     assert_eq!(
@@ -108,7 +108,7 @@ fn crate_driver_tools_follow_role_selection() {
 fn crate_tools_follow_selection_with_validators() {
     use velnor_actions_mise::PinnedTool;
 
-    use crate::matrix_step::prepare_crate_tools_step;
+    use velnor_actions_orchestrator_provisioning::matrix_step::prepare_crate_tools_step;
     let catalog = ToolCatalog::pinned();
     for (use_rust, use_mbx, use_nextest, use_opentofu, needs_validators) in [
         (true, false, false, false, false),
@@ -170,7 +170,7 @@ fn crate_tools_follow_selection_with_validators() {
 fn crate_tools_install_exact_pinned_set() {
     use velnor_actions_mise::PinnedTool;
 
-    use crate::matrix_step::prepare_crate_tools_step;
+    use velnor_actions_orchestrator_provisioning::matrix_step::prepare_crate_tools_step;
     let catalog = ToolCatalog::pinned();
     for needs_validators in [false, true] {
         for (use_rust, use_mbx, use_nextest, use_opentofu) in [

@@ -8,8 +8,8 @@
 
 use velnor_actions_contract::{digest_b3, validate_digest};
 
-use crate::internal_plan::snapshot::UNRESOLVED_GENERATOR_SHA;
 use crate::merge::BaselineManifest;
+use velnor_actions_orchestrator_graph::internal_plan::snapshot::UNRESOLVED_GENERATOR_SHA;
 
 // Unit tests live here so `provenance_check.rs` keeps its size gate.
 #[cfg(test)]
@@ -122,7 +122,11 @@ pub(crate) fn validate_provenance(
     let trusted = manifest.event == "push" && manifest.final_status == "passed";
     let generated = manifest.generator_version == expected.generator_version
         && manifest.generator_sha256 == expected.generator_sha256;
-    if crate::internal_plan::snapshot::check_canonical_version(manifest.schema).is_err() {
+    if velnor_actions_orchestrator_graph::internal_plan::snapshot::check_canonical_version(
+        manifest.schema,
+    )
+    .is_err()
+    {
         return Err(format!(
             "stale_schema:migration_required:v{}",
             manifest.schema

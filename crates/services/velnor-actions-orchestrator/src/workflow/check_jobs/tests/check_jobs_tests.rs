@@ -105,7 +105,8 @@ fn mixed_platform_checks_keep_exact_tools_and_unconditional_reports() {
         );
         assert!(
             job.steps.contains(
-                &crate::matrix_step::download_plan_step().expect("Plan artifact binding")
+                &velnor_actions_orchestrator_provisioning::matrix_step::download_plan_step()
+                    .expect("Plan artifact binding")
             )
         );
     }
@@ -140,8 +141,10 @@ fn generic_registry_id_generates_without_catalog_fallback_and_keeps_plan_identit
     assert_eq!(row.tool_specs, ["aqua:cli/cli@2.101.0"]);
     let job = &jobs[0].1;
     assert!(
-        job.steps
-            .contains(&crate::matrix_step::download_plan_step().expect("Plan artifact"))
+        job.steps.contains(
+            &velnor_actions_orchestrator_provisioning::matrix_step::download_plan_step()
+                .expect("Plan artifact")
+        )
     );
     assert!(!job.steps.iter().any(|s| s.name == "Prepare pinned tools"));
     let execute = job

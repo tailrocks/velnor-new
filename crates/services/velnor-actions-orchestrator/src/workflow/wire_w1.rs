@@ -23,9 +23,9 @@ use velnor_actions_workflow_cache::cache_steps::{
 use velnor_actions_workflow_jobs::context::PLAN_JOB_ID;
 use velnor_actions_workflow_jobs::plan_format;
 
-use crate::discover::Discovery;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::utf8::strings_of_env;
+use velnor_actions_orchestrator_discovery::discover::Discovery;
 
 /// Declared repository configuration variable names (GEN-2.14).
 ///
@@ -183,7 +183,7 @@ pub(crate) fn workspace_format_step(
     let Some(fmt) = workspace_fmt_group(discovery) else {
         return Ok(None);
     };
-    let argv = crate::vectors::task_argv(fmt, catalog)?;
+    let argv = velnor_actions_orchestrator_provisioning::vectors::task_argv(fmt, catalog)?;
     if argv.first().is_none_or(|program| program != "mise") {
         return Err(OrchestratorError::Contract {
             problem: "format_without_mise".to_owned(),
@@ -195,9 +195,13 @@ pub(crate) fn workspace_format_step(
         }
     })?;
     let matrix_key = matrix_key_for(fmt)?;
-    let outcome = crate::matrix_step::outcome_path_for_key(&matrix_key);
-    let start = crate::matrix_step::start_path_for_key(&matrix_key);
-    let run = crate::matrix_step::outcome_wrapper_argv(&joined, &outcome, &start);
+    let outcome =
+        velnor_actions_orchestrator_provisioning::matrix_step::outcome_path_for_key(&matrix_key);
+    let start =
+        velnor_actions_orchestrator_provisioning::matrix_step::start_path_for_key(&matrix_key);
+    let run = velnor_actions_orchestrator_provisioning::matrix_step::outcome_wrapper_argv(
+        &joined, &outcome, &start,
+    );
     let env = format_step_env(catalog)?;
     plan_format::format_step(run, &env)
         .map(Some)
@@ -220,19 +224,24 @@ pub(crate) fn workspace_format_report_steps(
         return Ok(Vec::new());
     };
     let matrix_key = matrix_key_for(fmt)?;
-    let outcome = crate::matrix_step::outcome_path_for_key(&matrix_key);
-    let start = crate::matrix_step::start_path_for_key(&matrix_key);
-    let helper = crate::matrix_step::helper_path_for_version();
+    let outcome =
+        velnor_actions_orchestrator_provisioning::matrix_step::outcome_path_for_key(&matrix_key);
+    let start =
+        velnor_actions_orchestrator_provisioning::matrix_step::start_path_for_key(&matrix_key);
+    let helper = velnor_actions_orchestrator_provisioning::matrix_step::helper_path_for_version();
     let report = velnor_actions_workflow_steps::shell_step(
         REPORT_FORMAT_NAME,
-        crate::matrix_step::deferred_report_argv(&outcome, &helper, &start),
+        velnor_actions_orchestrator_provisioning::matrix_step::deferred_report_argv(
+            &outcome, &helper, &start,
+        ),
         BTreeMap::from([(
-            crate::task_report::TASK_ID_ENV.to_owned(),
+            velnor_actions_orchestrator_core::report_keys::TASK_ID_ENV.to_owned(),
             fmt.task_id.clone(),
         )]),
     )
     .map_err(OrchestratorError::from)?;
-    let upload = crate::matrix_step::crate_upload_step(PLAN_JOB_ID)?;
+    let upload =
+        velnor_actions_orchestrator_provisioning::matrix_step::crate_upload_step(PLAN_JOB_ID)?;
     Ok(vec![report, upload])
 }
 
