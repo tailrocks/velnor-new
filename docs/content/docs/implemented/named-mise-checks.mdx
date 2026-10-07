@@ -1,4 +1,7 @@
-# Named Mise checks
+---
+title: "Named Mise checks"
+description: "Status: implementation contract for the current integration. This document does not establish release publication, live runner qualification, or full gate completion. V1 remains a workflow generator;"
+---
 
 Status: implementation contract for the current integration. This document does
 not establish release publication, live runner qualification, or full gate
@@ -19,7 +22,7 @@ removed.
 Example profiles below assume matching native tasks and declared input files
 exist. Every `tools` entry references an explicit root `qualified_tools` ID;
 there is no fallback to a built-in catalog name or consumer version selector.
-See [Qualified check tools](qualified-check-tools.md) for the frozen acquisition
+See [Qualified check tools](/docs/implemented/qualified-check-tools) for the frozen acquisition
 and proof contract. Existing Rust/OpenTofu adapter catalog selection is separate
 and unchanged. Pure native profiles use `tools = []`: Mise itself is always
 pinned in their toolchain identity. Native Swift and Xcode installations

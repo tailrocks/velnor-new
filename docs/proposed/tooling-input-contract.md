@@ -74,7 +74,7 @@ directory, input files, runner platform, tool pins, and optional named scenario
 evidence. Tools installation remains isolated; a separately qualified task
 projection grants only the declared task closure access to repository inputs.
 The removed Rust custom-task option is rejected as an unknown field. See the
-[implemented named-check contract](../implemented/named-mise-checks.md) for the
+[implemented named-check contract](../content/docs/implemented/named-mise-checks.mdx) for the
 execution boundary, trust admission, and Required evidence rules.
 
 ## 1.2. Isolated verification tasks

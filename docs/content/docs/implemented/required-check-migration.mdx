@@ -1,4 +1,7 @@
-# Required-check migration: `Velnor / Required` to `Required`
+---
+title: "Required-check migration: Velnor / Required to Required"
+description: "P05-9 procedure. The generator renamed the main workflow from .github/workflows/velnor.yml (display Velnor, gate Velnor / Required) to .github/workflows/ci.yml (display CI, gate Required). Branch"
+---
 
 P05-9 procedure. The generator renamed the main workflow from
 `.github/workflows/velnor.yml` (display `Velnor`, gate `Velnor / Required`)
@@ -32,7 +35,7 @@ the branch. Follow the order below exactly.
 3. NEEDS-HUMAN (repository admin): in branch protection, require
    `Required` and remove `Velnor / Required`; never remove the old
    check before the new one exists. Verify with:
-   `gh api repos/<owner>/<repo>/branches/<default>/protection
+   `gh api repos/&lt;owner>/&lt;repo>/branches/&lt;default>/protection
    --jq .required_status_checks.checks`.
    An automation agent cannot perform this step: it needs a
    human admin credential outside every agent trust boundary.
