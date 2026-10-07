@@ -1157,3 +1157,87 @@ Per-directory: root 3, `.github/` 2, `docs/` 2,
   (no root `.gitignore` edit).
 - Commits: `858a705cd` inventory, `60170cd50` scaffold sources,
   `1bbcc6ff7` lockfile + route tree — all signed off and pushed.
+
+## Docs slice 2: prose batch 1 to MDX (2026-10-07)
+
+Converted 39 of the 80 MDX-class files (13 `proposed/` + 26
+`implemented/`), each to `docs/content/docs/` mirroring its source
+path (`README.md` → `index.mdx`), then deleted the `.md` sources.
+Conversion rules: frontmatter (`title` from H1, `description` from
+first paragraph; H1 removed from body to avoid a duplicate
+`DocsTitle`), in-repo links → absolute `/docs/…` routes (extensionless,
+forward refs to not-yet-converted pages included), bare path refs to
+moved files → routes, fences byte-preserved, bare `<`/`{`/`}` in prose
+escaped (`&lt;`/`&#123;`/`&#125;`; autolinks kept). Link display text
+that exactly names a moved file drops the `.md` suffix. Staying `.md`
+files repoint at the new `.mdx` homes (repo-relative);
+`docs/content/**` is converter-owned and never rewritten by the ref
+fixer. Bare `foo.md` / `foo.md:line` citations in staying files are
+left for their owning conversion slice (historical line citations stay
+meaningful via git).
+
+Batch boundary (link-graph derived): every file with inbound refs from
+pinned, tool-interface, or test files is deferred so no frozen file is
+touched and no pinned content changes. Deferred to the pinned slice (4,
+named by `rust-quality-contract.md` content pins): `tooling-input`,
+`task-execution`, `agent-and-performance`, `version-policy`, plus
+`freshness-evidence-2026-10-04` (linked by pinned `update-procedure`).
+Deferred to the tool-interface slice (3, linked by root `README.md` /
+`AGENTS.md`): `bootstrap-and-release-contract`, `macos-scaleset-runner`,
+`subagent-model-policy`. Deferred to the evidence slice (11 dated
+files): `freshness-evidence-2026-10-05`, `mbx-native-owner-evidence`,
+`requirements-evidence`, `commit-trailer-evidence`,
+`pr29-pr30-disposition`, `review-ledger-p14`, `review-ledger-t29`,
+`perf-tofu-t24`, `perf-tofu-t25`, `performance-p13`,
+`cache-measurements`. Test files have zero outbound `.md` links, so no
+test-data file can dangle.
+
+New MDX homes (39): `content/docs/proposed/` — `index`,
+`architecture`, `cache-contract`, `cli-contract`,
+`generated-file-contract`, `host-seed-contract`, `implementation-plan`,
+`opentofu-goldens/index`, `parallelism-and-selection-contract`,
+`release-config-schema`, `release-contract`, `release-coverage`,
+`workflow-contract`; `content/docs/implemented/` — `index`,
+`fork-pr-trust-model`, `gate-0`…`gate-8` (full names),
+`gate-class-variances`, `gate-qualification-t28`, `macos-scaleset/`
+(checklist, decisions, evidence, legacy-disposition,
+runner-work-volume-proof, verification), `merge-report-contract`,
+`mise-platform-pins`, `named-mise-checks`, `owned-archive-preflight`,
+`performance`, `qualified-check-tools`, `required-check-migration`.
+
+Build posture: prerender crawls links and 404s on forward refs, so
+`failOnError: false` in `docs/vite.config.ts` until the last conversion
+slice (then flip back to fail-closed). Per-unit smoke asserts every new
+route's HTML exists with title text, covering the tolerance gap.
+Tooling fixes made mid-slice: the ref fixer double-applied its own
+output (`…mdxx`) and rewrote one pinned-blob permalink plus two generic
+`README.md` mentions — repaired in `95570eed3` (restored pristine,
+re-applied with lookahead + URL stash + no basename guessing +
+pinned/tool/test exclusions); fixer-owned frontmatter descriptions
+repaired in `c118e06cd`; the `<1` JSX hazard in `performance` handled by
+blanket `<` escaping.
+
+Known-stale after this slice (all recorded, none failing): the slice-1
+inventory table above (point-in-time snapshot at `caa63bec6`, frozen by
+design); the config-sample bytes naming the old named-checks path in
+`cli-contract.mdx` (fenced TOML) and `init.rs` `SAMPLE_BODY` (emitted
+bytes — move with the generator slice); forward route refs to
+not-yet-converted pages (404 until their slice lands). Four rustdoc
+comments repointed to `.mdx` homes (comment-only). Pinned, tool, and
+test files are byte-identical to slice start.
+
+Verify: frozen install + build green, 41 pages prerendered (2 scaffold
++ 39 new, each smoked), `tsc --noEmit` clean, dangling-path grep over
+all 39 deleted paths shows only the known-stale hits above, `alint
+check` at baseline (36 passing · 1 failing, 6× `ci-build-runs-on`),
+`check-gaps` exit 0 / 0 findings, docs-reader test suites green
+(repo-policy incl. quality/shape/goldens, freshness, commit-trailer
+script tests).
+
+- Commits: `a5d72552e` proposed core (6), `0019ad423` proposed
+  index/plan/release (7), `c118e06cd` description fix, `95570eed3`
+  ref-rewrite repair, `cedc585af` implemented index + gates 0–4 (6),
+  `d987e1e02` gates 5–8 + variances + T28 (6), `5ac3656f7`
+  macos-scaleset (6), `7307eb02a` final implemented batch (8), plus
+  the closing record + index-refresh commit — all signed off and
+  pushed.

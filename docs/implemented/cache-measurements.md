@@ -67,7 +67,7 @@ Seed = run 36754512444 (plan ran, crates skipped: plan failed at
 (plan + 7 crates + validators + Required; orchestrator FAILED —
 red run, cache branches only). Green = run 36777030585 (success,
 17 m 30 s created→updated, fully accounted in
-[performance.md](../content/docs/implemented/performance.mdx)).
+[performance](../content/docs/implemented/performance.mdx)).
 
 | Layer / step | Seed (cold) | Warm (N+1, red) | Green (N+2) |
 | --- | --- | --- | --- |
