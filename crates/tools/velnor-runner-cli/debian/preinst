@@ -1,0 +1,59 @@
+#!/bin/sh
+set -eu
+
+fail() {
+    printf 'velnor-host: refusing package operation: %s\n' "$1" >&2
+    exit 1
+}
+
+verify_existing_identity() {
+    ledger=/var/lib/velnor-host-package
+    checker=$ledger/account-check
+    if [ ! -d "$ledger" ] || [ -L "$ledger" ]; then
+        fail 'package identity ledger directory is invalid'
+    fi
+    [ "$(stat -Lc '%u:%g:%a' "$ledger")" = '0:0:700' ] || fail 'package identity ledger owner or mode is unsafe'
+    if [ ! -f "$checker" ] || [ -L "$checker" ]; then
+        fail 'package identity checker is unavailable'
+    fi
+    [ "$(stat -Lc '%u:%g:%a' "$checker")" = '0:0:700' ] || fail 'package identity checker owner or mode is unsafe'
+    "$checker" --verify
+}
+
+require_fresh_identity_names() {
+    if getent passwd velnor >/dev/null 2>&1; then
+        fail 'an existing velnor account has no Velnor package identity record'
+    else
+        lookup_status=$?
+        [ "$lookup_status" -eq 2 ] || fail 'cannot verify whether the velnor account exists'
+    fi
+    if getent group velnor >/dev/null 2>&1; then
+        fail 'an existing velnor group has no Velnor package identity record'
+    else
+        lookup_status=$?
+        [ "$lookup_status" -eq 2 ] || fail 'cannot verify whether the velnor group exists'
+    fi
+}
+
+case "${1:-}" in
+    install|upgrade)
+        if [ -e /var/lib/velnor-host-package ] || [ -L /var/lib/velnor-host-package ]; then
+            verify_existing_identity
+        else
+            require_fresh_identity_names
+        fi
+
+        group_entry=$(getent group docker) || fail 'host docker group is unavailable'
+        docker_gid=$(printf '%s\n' "$group_entry" | cut -d: -f3)
+        case "$docker_gid" in
+            ''|*[!0-9]*|0) fail 'host docker group has an invalid or privileged GID' ;;
+        esac
+        [ -S /var/run/docker.sock ] || fail 'host Docker socket is missing or is not a socket'
+        socket_owner_group_mode=$(stat -Lc '%u:%g:%a' /var/run/docker.sock) || fail 'cannot inspect host Docker socket'
+        [ "$socket_owner_group_mode" = "0:${docker_gid}:660" ] || fail 'host Docker socket owner, group, or mode differs from the docker group contract'
+        systemctl is-active --quiet docker.service || fail 'docker.service is not active'
+        ;;
+esac
+
+# cargo-deb inserts generated sysusers/tmpfiles/systemd fragments where needed.
+#DEBHELPER#

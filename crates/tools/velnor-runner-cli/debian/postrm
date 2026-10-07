@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+# cargo-deb inserts generated systemd cleanup fragments here. The package
+# does not delete operator configuration, credentials, or state.
+#DEBHELPER#
+
+case "${1:-}" in
+    remove|purge)
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload
+        fi
+        ;;
+esac

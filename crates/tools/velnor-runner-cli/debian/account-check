@@ -1,0 +1,208 @@
+#!/bin/sh
+set -eu
+
+fail() {
+    printf 'velnor-host: refusing unsafe service identity: %s\n' "$1" >&2
+    exit 1
+}
+
+mode=--verify
+root=/
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --verify|--initialize)
+            mode=$1
+            ;;
+        --root)
+            [ "$#" -ge 2 ] || fail 'missing fixture root'
+            root=$2
+            shift
+            ;;
+        *)
+            fail 'unknown account-check argument'
+            ;;
+    esac
+    shift
+done
+[ "$(id -u)" -eq 0 ] || fail 'account check must run as root'
+case "$root" in
+    /) prefix= ;;
+    /*) prefix=${root%/} ;;
+    *) fail 'root must be absolute' ;;
+esac
+[ -n "$prefix" ] || prefix=/
+
+passwd_file=$prefix/etc/passwd
+group_file=$prefix/etc/group
+shadow_file=$prefix/etc/shadow
+state_dir=$prefix/var/lib/velnor-host-package
+identity_file=$state_dir/identity
+saved_check=$state_dir/account-check
+config_dir=$prefix/etc/velnor-host
+config_file=$config_dir/host.toml
+credential_source=$config_dir/github-token
+service_state=$prefix/var/lib/velnor-host
+
+if [ ! -f "$passwd_file" ] || [ -L "$passwd_file" ]; then
+    fail 'local passwd database is unavailable'
+fi
+if [ ! -f "$group_file" ] || [ -L "$group_file" ]; then
+    fail 'local group database is unavailable'
+fi
+if [ ! -f "$shadow_file" ] || [ -L "$shadow_file" ]; then
+    fail 'local shadow database is unavailable'
+fi
+
+identity=$(awk -F: '
+    $1 == "velnor" {
+        named++
+        uid=$3
+        gid=$4
+        home=$6
+        shell=$7
+    }
+    END {
+        if (named != 1 || uid !~ /^[0-9]+$/ || gid !~ /^[0-9]+$/ ||
+            uid == 0 || gid == 0 || home != "/var/lib/velnor-host" ||
+            shell != "/usr/sbin/nologin") exit 1
+        print uid ":" gid
+    }
+' "$passwd_file") || fail 'velnor must be one non-root, non-login account with the expected home'
+uid=${identity%%:*}
+gid=${identity#*:}
+
+# systemd resolves User=, Group=, and the user's supplementary groups through
+# NSS. Verify the effective result, not only the local flat files, before the
+# credential-bearing service unit can be activated.
+nss_passwd=$(getent passwd velnor) || fail 'NSS does not resolve the Velnor service account'
+printf '%s\n' "$nss_passwd" | awk -F: -v wanted_uid="$uid" -v wanted_gid="$gid" '
+    NR != 1 || $1 != "velnor" || $3 != wanted_uid || $4 != wanted_gid ||
+    $6 != "/var/lib/velnor-host" || $7 != "/usr/sbin/nologin" { bad=1 }
+    END { if (NR != 1 || bad) exit 1 }
+' || fail 'NSS service-account identity differs from the recorded local identity'
+nss_group=$(getent group velnor) || fail 'NSS does not resolve the Velnor service group'
+printf '%s\n' "$nss_group" | awk -F: -v wanted_gid="$gid" '
+    NR != 1 || $1 != "velnor" || $3 != wanted_gid || $4 != "" { bad=1 }
+    END { if (NR != 1 || bad) exit 1 }
+' || fail 'NSS service-group identity differs from the recorded private group'
+supplementary_groups=$(id -G velnor) || fail 'cannot resolve Velnor supplementary groups through NSS'
+printf '%s\n' "$supplementary_groups" | awk -v wanted_gid="$gid" '
+    NR != 1 || NF != 1 || $1 !~ /^[0-9]+$/ || $1 != wanted_gid { bad=1 }
+    END { if (NR != 1 || bad) exit 1 }
+' || fail 'NSS adds an unexpected supplementary group to the Velnor service account'
+
+uid_count=$(awk -F: -v id="$uid" '$3 == id { n++ } END { print n+0 }' "$passwd_file")
+[ "$uid_count" -eq 1 ] || fail 'velnor UID is shared with another account'
+
+awk -F: -v wanted_gid="$gid" '
+    $1 == "velnor" {
+        named++
+        found_gid=$3
+        members=$4
+    }
+    END {
+        if (named != 1 || found_gid != wanted_gid || members != "") exit 1
+    }
+' "$group_file" || fail 'velnor must have one private primary group with no secondary members'
+gid_count=$(awk -F: -v id="$gid" '$3 == id { n++ } END { print n+0 }' "$group_file")
+[ "$gid_count" -eq 1 ] || fail 'velnor GID is shared with another group'
+if [ ! -d "$config_dir" ] || [ -L "$config_dir" ]; then
+    fail 'config directory is missing or a symlink'
+fi
+[ "$(stat -Lc '%u:%g:%a' "$config_dir")" = "0:${gid}:750" ] || fail 'config directory owner or mode is unsafe'
+if [ ! -d "$service_state" ] || [ -L "$service_state" ]; then
+    fail 'service state directory is missing or a symlink'
+fi
+[ "$(stat -Lc '%u:%g:%a' "$service_state")" = "${uid}:${gid}:750" ] || fail 'service state directory owner or mode is unsafe'
+if [ -e "$config_file" ] || [ -L "$config_file" ]; then
+    if [ ! -f "$config_file" ] || [ -L "$config_file" ]; then
+        fail 'host config is not a regular file'
+    fi
+    [ "$(stat -Lc '%u:%g:%a' "$config_file")" = "0:${gid}:640" ] || fail 'host config owner or mode is unsafe'
+fi
+if [ -e "$credential_source" ] || [ -L "$credential_source" ]; then
+    if [ ! -f "$credential_source" ] || [ -L "$credential_source" ]; then
+        fail 'credential source is not a regular file'
+    fi
+    [ "$(stat -Lc '%u:%g:%a' "$credential_source")" = '0:0:600' ] || fail 'credential source owner or mode is unsafe'
+    [ -s "$credential_source" ] || fail 'credential source is empty'
+fi
+
+shadow_ok=$(awk -F: '
+    $1 == "velnor" {
+        named++
+        locked=($2 ~ /^[!*]/)
+    }
+    END { if (named != 1 || !locked) exit 1; print "yes" }
+' "$shadow_file") || fail 'velnor login password is not locked'
+[ "$shadow_ok" = yes ] || fail 'velnor login password is not locked'
+
+check_state_dir() {
+    if [ ! -d "$state_dir" ] || [ -L "$state_dir" ]; then
+        fail 'identity ledger directory is missing or a symlink'
+    fi
+    [ "$(stat -Lc '%u:%g:%a' "$state_dir")" = '0:0:700' ] || fail 'identity ledger directory owner or mode is unsafe'
+}
+check_identity_file() {
+    check_state_dir
+    if [ ! -f "$identity_file" ] || [ -L "$identity_file" ]; then
+        fail 'identity ledger is missing or not a regular file'
+    fi
+    [ "$(stat -Lc '%u:%g:%a' "$identity_file")" = '0:0:600' ] || fail 'identity ledger owner or mode is unsafe'
+    printf 'schema=1\nuid=%s\ngid=%s\n' "$uid" "$gid" | cmp -s - "$identity_file" || fail 'account identity differs from the recorded package identity'
+}
+check_saved_check() {
+    if [ ! -f "$saved_check" ] || [ -L "$saved_check" ]; then
+        fail 'persistent account checker is missing'
+    fi
+    [ "$(stat -Lc '%u:%g:%a' "$saved_check")" = '0:0:700' ] || fail 'persistent account checker owner or mode is unsafe'
+}
+refresh_saved_check() {
+    temp_check=$(mktemp "$state_dir/.account-check.XXXXXX") || fail 'cannot stage persistent account checker'
+    cp "$0" "$temp_check"
+    chown 0:0 "$temp_check"
+    chmod 0700 "$temp_check"
+    sync -f "$temp_check"
+    mv -T "$temp_check" "$saved_check"
+    sync -f "$state_dir"
+}
+
+case "$mode" in
+    --verify)
+        check_identity_file
+        check_saved_check
+        ;;
+    --initialize)
+        if [ -e "$state_dir" ] || [ -L "$state_dir" ]; then
+            check_identity_file
+            check_saved_check
+            refresh_saved_check
+        else
+            parent=$prefix/var/lib
+            if [ ! -d "$parent" ] || [ -L "$parent" ]; then
+                fail 'system state directory is unavailable'
+            fi
+            temp_dir=$(mktemp -d "$parent/.velnor-host-package.XXXXXX") || fail 'cannot create identity ledger'
+            cleanup_temp() {
+                rm -f "$temp_dir/identity" "$temp_dir/account-check"
+                rmdir "$temp_dir" 2>/dev/null || true
+            }
+            trap cleanup_temp EXIT HUP INT TERM
+            chmod 0700 "$temp_dir"
+            printf 'schema=1\nuid=%s\ngid=%s\n' "$uid" "$gid" > "$temp_dir/identity"
+            cp "$0" "$temp_dir/account-check"
+            chown 0:0 "$temp_dir/identity" "$temp_dir/account-check"
+            chmod 0600 "$temp_dir/identity"
+            chmod 0700 "$temp_dir/account-check"
+            sync -f "$temp_dir/identity"
+            sync -f "$temp_dir/account-check"
+            sync -f "$temp_dir"
+            if [ -e "$state_dir" ] || [ -L "$state_dir" ]; then
+                fail 'identity ledger appeared during creation'
+            fi
+            mv -T "$temp_dir" "$state_dir"
+            trap - EXIT HUP INT TERM
+            sync -f "$parent"
+        fi
+        ;;
+esac
