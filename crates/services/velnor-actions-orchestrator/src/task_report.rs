@@ -49,18 +49,21 @@ pub fn write_task_report() -> Result<usize, OrchestratorError> {
         .ok()
         .filter(|value| !value.is_empty())
         .ok_or_else(|| internal("missing_exit_code"))?;
-    let reason = crate::noop_report::noop_reason_present();
-    let digest = env::var(crate::noop_report::TASK_DIGEST_ENV).ok();
+    let reason = velnor_actions_orchestrator_noop_report::noop_report::noop_reason_present();
+    let digest =
+        env::var(velnor_actions_orchestrator_noop_report::noop_report::TASK_DIGEST_ENV).ok();
     let exit_code = parse_exit_code(&exit_raw)?;
-    if let Some(request) =
-        crate::noop_report::parse_noop_request(reason.as_deref(), digest.as_deref())?
-    {
-        return crate::noop_report::write_noop_report_to(
+    if let Some(request) = velnor_actions_orchestrator_noop_report::noop_report::parse_noop_request(
+        reason.as_deref(),
+        digest.as_deref(),
+    )? {
+        return velnor_actions_orchestrator_noop_report::noop_report::write_noop_report_to(
             &run_key,
             &task_id,
             exit_code,
             &request,
             Path::new(&runner_temp),
+            crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES,
         );
     }
     let downstream_env = env::var(DOWNSTREAM_IDS_ENV).ok();
@@ -129,8 +132,12 @@ pub(crate) fn write_task_report_to(
         } else {
             downstream.to_vec()
         };
-        reported +=
-            crate::noop_report::write_skip_reports(&plan, task_id, &downstream_tasks, runner_temp)?;
+        reported += velnor_actions_orchestrator_noop_report::noop_report::write_skip_reports(
+            &plan,
+            task_id,
+            &downstream_tasks,
+            runner_temp,
+        )?;
     }
     Ok(reported)
 }

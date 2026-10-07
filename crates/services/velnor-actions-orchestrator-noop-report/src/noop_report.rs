@@ -22,20 +22,21 @@ use velnor_actions_orchestrator_core::decisions::{NotSelectedInputs, not_selecte
 use velnor_actions_orchestrator_core::{internal, internal_contract};
 
 /// Env key carrying the no-op `not_selected` reason vocabulary word.
-pub(crate) const NOT_SELECTED_REASON_ENV: &str = "VELNOR_NOT_SELECTED_REASON";
+pub const NOT_SELECTED_REASON_ENV: &str = "VELNOR_NOT_SELECTED_REASON";
 /// Env key carrying the skipped obligation's expected task digest.
 ///
 /// Must equal the renderer's `NOOP_DIGEST_ENV` and must differ from the
 /// exec leg digest key: otherwise every executed obligation dispatches
 /// into the no-op half-present error.
-pub(crate) const TASK_DIGEST_ENV: &str = "VELNOR_NOOP_TASK_DIGEST";
+pub const TASK_DIGEST_ENV: &str = "VELNOR_NOOP_TASK_DIGEST";
 
 /// One validated no-op report request.
-pub(crate) struct NoOpRequest {
+#[derive(Debug)]
+pub struct NoOpRequest {
     /// Closed-vocabulary skip reason.
-    pub(crate) reason: NotSelectedReason,
+    pub reason: NotSelectedReason,
     /// Expected task digest, cross-checked against the plan.
-    pub(crate) task_digest: String,
+    pub task_digest: String,
 }
 
 /// Parse one closed-vocabulary `not_selected` reason.
@@ -43,7 +44,7 @@ pub(crate) struct NoOpRequest {
 /// # Errors
 ///
 /// Returns [`OrchestratorError::Internal`] for unknown reasons.
-pub(crate) fn parse_not_selected_reason(raw: &str) -> Result<NotSelectedReason, OrchestratorError> {
+pub fn parse_not_selected_reason(raw: &str) -> Result<NotSelectedReason, OrchestratorError> {
     match raw {
         "upstream_failed" => Ok(NotSelectedReason::UpstreamFailed),
         "not_in_plan" => Ok(NotSelectedReason::NotInPlan),
@@ -61,7 +62,7 @@ pub(crate) fn parse_not_selected_reason(raw: &str) -> Result<NotSelectedReason, 
 ///
 /// Returns [`OrchestratorError::Internal`] for unknown reasons,
 /// malformed digests, and half-present pairs.
-pub(crate) fn parse_noop_request(
+pub fn parse_noop_request(
     reason: Option<&str>,
     task_digest: Option<&str>,
 ) -> Result<Option<NoOpRequest>, OrchestratorError> {
@@ -79,7 +80,7 @@ pub(crate) fn parse_noop_request(
 }
 
 /// Whether the current op invocation selects the no-op variant.
-pub(crate) fn noop_reason_present() -> Option<String> {
+pub fn noop_reason_present() -> Option<String> {
     std::env::var(NOT_SELECTED_REASON_ENV).ok()
 }
 
@@ -89,29 +90,27 @@ pub(crate) fn noop_reason_present() -> Option<String> {
 /// contradictory) and the expected digest must match the plan binding;
 /// anything else errors instead of emitting unbound bytes. A
 /// baseline-covered obligation succeeds silently with zero reports:
-/// the merge revalidates it against the manifest.
+/// the merge revalidates it against the manifest. The caller supplies
+/// the shared plan byte bound both `plan.json` readers honor.
 ///
 /// # Errors
 ///
 /// Returns [`OrchestratorError::Internal`] for malformed run keys,
 /// contradictory exits, digest mismatches, and the plan-resolution
 /// failures of the base op.
-pub(crate) fn write_noop_report_to(
+pub fn write_noop_report_to(
     run_key: &str,
     task_id: &str,
     exit_code: i32,
     request: &NoOpRequest,
     runner_temp: &Path,
+    max_plan_bytes: u64,
 ) -> Result<usize, OrchestratorError> {
     validate_run_key(run_key).map_err(internal_contract)?;
     if exit_code != 0 {
         return Err(internal("reason_with_failure"));
     }
-    let plan = load_plan(
-        run_key,
-        runner_temp,
-        crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES,
-    )?;
+    let plan = load_plan(run_key, runner_temp, max_plan_bytes)?;
     if velnor_actions_orchestrator_covered_tasks::covered_tasks::covered_by_baseline(&plan, task_id)
     {
         return Ok(0);
@@ -147,7 +146,7 @@ pub(crate) fn write_noop_report_to(
 ///
 /// Returns [`OrchestratorError::Internal`] for unbound downstream IDs
 /// and unwritable paths.
-pub(crate) fn write_skip_reports(
+pub fn write_skip_reports(
     plan: &Plan,
     task_id: &str,
     downstream: &[String],

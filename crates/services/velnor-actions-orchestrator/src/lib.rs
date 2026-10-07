@@ -18,7 +18,6 @@ mod internal;
 mod internal_request;
 mod merge;
 mod merge_request;
-mod noop_report;
 mod preseed_manifest;
 mod request_event;
 mod retrieve_baseline;

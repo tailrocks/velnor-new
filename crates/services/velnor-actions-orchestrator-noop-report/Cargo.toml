@@ -1,0 +1,27 @@
+[package]
+name = "velnor-actions-orchestrator-noop-report"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[dependencies]
+velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
+velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
+velnor-actions-orchestrator-covered-tasks = { version = "=0.1.1", path = "../velnor-actions-orchestrator-covered-tasks" }
+velnor-actions-orchestrator-task-report = { version = "=0.1.1", path = "../velnor-actions-orchestrator-task-report" }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
+velnor-actions-orchestrator-provisioning = { version = "=0.1.1", path = "../velnor-actions-orchestrator-provisioning" }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "velnor_orchestrator_noop_report"
+path = "tests/main.rs"

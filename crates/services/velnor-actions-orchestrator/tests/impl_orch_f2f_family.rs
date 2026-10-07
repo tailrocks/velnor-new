@@ -122,6 +122,16 @@ const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "crates/services/velnor-actions-orchestrator-noop-report",
+        &[
+            "velnor-actions-contract",
+            "velnor-actions-contract-workflow",
+            "velnor-actions-orchestrator-core",
+            "velnor-actions-orchestrator-covered-tasks",
+            "velnor-actions-orchestrator-task-report",
+        ],
+    ),
+    (
         "crates/services/velnor-actions-orchestrator-pins",
         &[
             "velnor-actions-actionlint",

@@ -9,7 +9,8 @@ fn noop_report_writes_not_selected_with_reason() {
         reason: NotSelectedReason::Unsupported,
         task_digest: task_digest.clone(),
     };
-    let reported = write_noop_report_to("local", CLIPPY, 0, &request, temp.path()).expect("report");
+    let reported =
+        write_noop_report_to("local", CLIPPY, 0, &request, temp.path(), u64::MAX).expect("report");
     assert_eq!(reported, 1);
     let expect_id =
         velnor_actions_contract::task_report_id_for_task("local", &entry.matrix_key, &task_digest)
@@ -61,13 +62,15 @@ fn noop_rejects_contradictions() {
         reason: NotSelectedReason::Unsupported,
         task_digest: task_digest.clone(),
     };
-    let err = write_noop_report_to("local", CLIPPY, 1, &request, temp.path()).expect_err("exit");
+    let err = write_noop_report_to("local", CLIPPY, 1, &request, temp.path(), u64::MAX)
+        .expect_err("exit");
     assert!(err.to_string().contains("reason_with_failure"), "{err}");
     let drifted = NoOpRequest {
         reason: NotSelectedReason::Unsupported,
         task_digest: digest(9),
     };
-    let err = write_noop_report_to("local", CLIPPY, 0, &drifted, temp.path()).expect_err("digest");
+    let err = write_noop_report_to("local", CLIPPY, 0, &drifted, temp.path(), u64::MAX)
+        .expect_err("digest");
     assert!(err.to_string().contains("noop_digest_mismatch"), "{err}");
     assert!(
         write_noop_report_to(
@@ -75,7 +78,8 @@ fn noop_rejects_contradictions() {
             "stack/rust/demo/test/default",
             0,
             &request,
-            temp.path()
+            temp.path(),
+            u64::MAX
         )
         .is_err()
     );
@@ -110,7 +114,8 @@ fn noop_rejects_malformed_run_key_before_path_join() {
         "local/../../evil",
         "r1-a1/x",
     ] {
-        let err = write_noop_report_to(bad, CLIPPY, 0, &request, temp.path()).expect_err("run key");
+        let err = write_noop_report_to(bad, CLIPPY, 0, &request, temp.path(), u64::MAX)
+            .expect_err("run key");
         assert!(
             err.to_string().contains("malformed_run_key"),
             "{bad}: {err}"

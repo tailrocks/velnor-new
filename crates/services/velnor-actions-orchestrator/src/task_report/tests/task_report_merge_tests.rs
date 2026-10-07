@@ -12,7 +12,9 @@ use velnor_actions_contract_workflow::{FinalStatus, Plan};
 
 use crate::merge::merge_internal;
 use crate::merge_request::assemble_with_needs;
-use crate::noop_report::{NoOpRequest, write_noop_report_to, write_skip_reports};
+use velnor_actions_orchestrator_noop_report::noop_report::{
+    NoOpRequest, write_noop_report_to, write_skip_reports,
+};
 
 /// Stage producer output as final-job `reports/<artifact-id>/` downloads.
 ///
@@ -161,7 +163,15 @@ fn merge_blocks_all_skipped_noop_end_to_end() {
             reason: velnor_actions_contract_workflow::NotSelectedReason::NotInPlan,
             task_digest: obligation.task_digest.clone(),
         };
-        write_noop_report_to("local", task, 0, &request, temp.path()).expect("noop report");
+        write_noop_report_to(
+            "local",
+            task,
+            0,
+            &request,
+            temp.path(),
+            crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES,
+        )
+        .expect("noop report");
     }
     stage_downloads(&plan, &temp);
 
