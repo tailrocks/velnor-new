@@ -15,7 +15,8 @@ use velnor_actions_actionlint::config::{
 };
 use velnor_actions_contract_workflow::FRESHNESS_WORKFLOW_PATH;
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog};
-use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
+use velnor_actions_orchestrator_generation::generate::{GenerateOptions, generate};
+use velnor_actions_orchestrator_generation::prepare::prepare;
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 /// Test error shortcut.
