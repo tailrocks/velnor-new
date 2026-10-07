@@ -92,16 +92,11 @@ set -eu
 exec gh "$@"
 "#;
 
-const TIMEOUT_STUB: &str = r#"#!/bin/sh
-set -eu
-test "$1" = --signal=TERM
-shift
-test "$1" = --kill-after=5s
-shift
-test "$1" = 60s
-shift
-exec "$@"
-"#;
+const TIMEOUT_STUB: &str = r"#!/bin/sh
+# Poison: the gh wrapper is a portable watchdog and must never invoke timeout.
+echo 'poison: timeout must never be invoked' >&2
+exit 99
+";
 
 const GIT_STUB: &str = r#"#!/bin/sh
 set -eu

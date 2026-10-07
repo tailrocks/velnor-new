@@ -47,6 +47,42 @@ pub(super) fn assert_intel_cross_build(
     Ok(())
 }
 
+/// Every GitHub-CLI-bearing action carries the portable watchdog, never GNU `timeout`.
+///
+/// GH-hosted macOS runners ship neither `timeout` nor `gtimeout`, so the
+/// emitted `gh()` wrapper bounds each call with a pure-bash watchdog: TERM
+/// at 60 s, KILL 5 s later, and the command's own exit status otherwise.
+pub(super) fn assert_portable_gh_watchdog(actions: &Actions) {
+    let mut checked = 0;
+    for (name, body) in actions {
+        if !["gh api ", "gh release ", "gh attestation "]
+            .iter()
+            .any(|needle| body.contains(needle))
+        {
+            continue;
+        }
+        checked += 1;
+        assert!(
+            !body.contains("timeout --signal"),
+            "{name} invokes GNU timeout, which macOS runners lack: {body}"
+        );
+        for marker in [
+            "( sleep 60; kill -TERM",
+            "sleep 5; kill -KILL",
+            "</dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!",
+            r#"wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?"#,
+            r#"exit \"$_velnor_gh_status\""#,
+            ") </dev/null",
+        ] {
+            assert!(
+                body.contains(marker),
+                "{name} lost watchdog marker {marker}: {body}"
+            );
+        }
+    }
+    assert!(checked > 0, "no GitHub-CLI-bearing action to check");
+}
+
 /// Every qualify action installs the exact tools `generate` validates with.
 ///
 /// `validate_staged` fails closed when actionlint, shellcheck, or zizmor

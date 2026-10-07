@@ -46,12 +46,12 @@ fn typed_gh_function_shadows_incompatible_cli_and_exports_to_script() -> Result<
             mise_log.display()
         ),
     )?;
-    let timeout_log = scratch.0.join("timeout-argv");
+    let timeout_called = scratch.0.join("timeout-called");
     write_executable(
         &mock_bin.join("timeout"),
         &format!(
-            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nwhile [ \"$#\" -gt 0 ]; do case \"$1\" in --signal=*|--kill-after=*) shift ;; *) break ;; esac; done\nshift\nexec \"$@\"\n",
-            timeout_log.display()
+            "#!/bin/sh\nprintf invoked > '{}'\nexit 99\n",
+            timeout_called.display()
         ),
     )?;
     let function = gh_function(&pinned_gh_argv())?;
@@ -77,8 +77,10 @@ fn typed_gh_function_shadows_incompatible_cli_and_exports_to_script() -> Result<
     assert!(
         invocation.contains("--no-config --no-env --no-hooks exec gh@2.102.0 -- gh api nested")
     );
-    let timeout_invocations = fs::read_to_string(timeout_log)?;
-    assert!(timeout_invocations.contains("--signal=TERM --kill-after=5s 60s mise"));
+    assert!(
+        !timeout_called.exists(),
+        "wrapper invoked GNU timeout, which macOS runners lack"
+    );
     let failure = Command::new("bash")
         .args(["-e", "-c", &format!("{function}\ngh api fail-status")])
         .env("PATH", path_with(&mock_bin)?)
@@ -89,21 +91,19 @@ fn typed_gh_function_shadows_incompatible_cli_and_exports_to_script() -> Result<
 
 #[test]
 fn bounded_gh_function_terminates_a_hung_request() -> Result<(), Box<dyn Error>> {
-    let version = Command::new("timeout").arg("--version").output();
-    let Ok(version) = version else {
-        eprintln!("GNU timeout is unavailable; hanging-request check runs on Linux CI");
-        return Ok(());
-    };
-    if !String::from_utf8_lossy(&version.stdout).contains("GNU coreutils") {
-        eprintln!("GNU timeout is unavailable; hanging-request check runs on Linux CI");
-        return Ok(());
-    }
-
     let scratch = Scratch::new()?;
     let mock_bin = scratch.0.join("mock-bin");
     fs::create_dir(&mock_bin)?;
-    write_executable(&mock_bin.join("mise"), "#!/bin/sh\nsleep 30\n")?;
+    write_executable(&mock_bin.join("mise"), "#!/bin/sh\nexec sleep 30\n")?;
+    write_executable(
+        &mock_bin.join("timeout"),
+        "#!/bin/sh\necho 'poison: timeout must never be invoked' >&2\nexit 99\n",
+    )?;
     let function = gh_function_with_timeout(&pinned_gh_argv(), 1)?;
+    assert!(
+        function.contains("( sleep 1; kill -TERM") && function.contains("sleep 5; kill -KILL"),
+        "watchdog lost its TERM-then-KILL budget: {function}"
+    );
     let started = std::time::Instant::now();
     let output = Command::new("bash")
         .args(["-e", "-c", &format!("{function}\ngh api hang")])
@@ -117,6 +117,10 @@ fn bounded_gh_function_terminates_a_hung_request() -> Result<(), Box<dyn Error>>
     assert!(
         started.elapsed() < std::time::Duration::from_secs(8),
         "hung request exceeded its timeout plus kill grace"
+    );
+    assert!(
+        started.elapsed() >= std::time::Duration::from_secs(1),
+        "hung request returned before its one-second budget"
     );
     Ok(())
 }
