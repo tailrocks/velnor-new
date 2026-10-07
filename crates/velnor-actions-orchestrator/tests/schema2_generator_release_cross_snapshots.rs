@@ -1,4 +1,7 @@
 use super::action_snapshots::{Actions, action};
+use velnor_actions_mise::catalog::{
+    ACTIONLINT_VERSION, RUST_VERSION, SHELLCHECK_VERSION, ZIZMOR_VERSION,
+};
 use velnor_actions_workflow_renderer::setup::{
     MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
 };
@@ -41,5 +44,46 @@ pub(super) fn assert_intel_cross_build(
     );
     let qualify = super::super::job_body(body, "qualify-macos-intel")?;
     assert!(qualify.contains("runs-on: macos-15-intel\n"), "{qualify}");
+    Ok(())
+}
+
+/// Every qualify action installs the exact tools `generate` validates with.
+///
+/// `validate_staged` fails closed when actionlint, shellcheck, or zizmor
+/// are missing, and the Mise setup step never installs (`install: "false"`),
+/// so the composite action installs the pinned qualification tools itself
+/// before downloading the candidate.
+pub(super) fn assert_qualify_install_tools(
+    actions: &Actions,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let run = format!(
+        "mise --no-config --no-env --no-hooks install rust@{RUST_VERSION} actionlint@{ACTIONLINT_VERSION} shellcheck@{SHELLCHECK_VERSION} zizmor@{ZIZMOR_VERSION}"
+    );
+    for name in [
+        "generator-release-qualify-linux",
+        "generator-release-qualify-macos",
+        "generator-release-qualify-macos-intel",
+    ] {
+        let body = action(actions, name)?;
+        let setup = body.find("Setup Mise").ok_or("missing Mise setup step")?;
+        let install = body
+            .find("Install pinned qualification tools")
+            .ok_or("missing pinned qualification tools install")?;
+        let download = body
+            .find("Download built asset archive")
+            .ok_or("missing built asset archive download")?;
+        assert!(
+            setup < install && install < download,
+            "{name}: install step must follow Mise setup and precede the download: {body}"
+        );
+        assert!(
+            body.contains(&run),
+            "{name}: install step must carry the pinned qualification specs: {body}"
+        );
+        assert!(
+            body.contains("install: \"false\""),
+            "{name}: Mise setup must stay install-free: {body}"
+        );
+    }
     Ok(())
 }
