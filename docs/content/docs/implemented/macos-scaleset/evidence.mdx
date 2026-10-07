@@ -1,4 +1,7 @@
-# macOS Scale Set evidence
+---
+title: "macOS Scale Set evidence"
+description: "Resolved 2026-10-03 with gh api from this machine. Offline generator and runner tests cited below have run. A per-user LaunchAgent was installed, observed, and removed. Image builds were inspected."
+---
 
 Resolved 2026-10-03 with `gh api` from this machine. Offline generator and
 runner tests cited below have run. A per-user LaunchAgent was installed,
@@ -229,7 +232,7 @@ Later, example `stage_once` called `start_pair_until` on this Mac (`HEAD` `c7c7f
 
 Qualification run [37103831130](https://github.com/tailrocks/velnor-new/actions/runs/37103831130) at `4f512e27099d2ba1e869bcbea6abd5a43824efde` concluded `success`. Job [111148411061](https://github.com/tailrocks/velnor-new/actions/runs/37103831130/job/111148411061) (`Verify / Velnor Scale Set / Linux x64`) concluded `success` on runner `m100000108` in group `Default`, started `2026-10-03T06:49:25Z`, completed `2026-10-03T06:49:35Z`. `launch_once` printed `set_id=1 started=true runner_id=7e0e126d41c56f113f5ba16b621c48f545df99b36bb252066917ae804c1fb8c9 dind_id=948d97b50f004e26bb6f7e96bbeaf3ad6369b28f81ad374083dc140affa80edb` and exited 0. That runner container image was `velnor-runner:ubuntu-26.04-2.337.0`. It started `2026-10-03T06:49:16Z` and exited 0 at `2026-10-03T06:49:36Z`. `docker exec` at `2026-10-03T06:51:24Z` failed: `container 7e0e126d41c56f113f5ba16b621c48f545df99b36bb252066917ae804c1fb8c9 is not running`. Scratch: `launch-once-exec.txt`, `g3-jit.txt`.
 
-No canary secret was planted in that job. This observation does not mark G3. The job log still has no cgroup or `AssertCompatibleOS` line. G4's cgroup proof is `BLOCKED_EXTERNAL` in `verification.md`.
+No canary secret was planted in that job. This observation does not mark G3. The job log still has no cgroup or `AssertCompatibleOS` line. G4's cgroup proof is `BLOCKED_EXTERNAL` in `/docs/implemented/macos-scaleset/verification`.
 
 ## Live exec during sleep 180
 
