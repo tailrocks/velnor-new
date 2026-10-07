@@ -48,7 +48,7 @@ examine_globs = [
     # staged validation verdict, and orchestrator wiring passes.
     "crates/services/velnor-actions-orchestrator-discovery/src/inventory.rs",
     "crates/services/velnor-actions-orchestrator-pins/src/pins.rs",
-    "crates/services/velnor-actions-orchestrator/src/validate.rs",
+    "crates/services/velnor-actions-orchestrator-staged-validation/src/validate.rs",
     "crates/services/velnor-actions-orchestrator/src/wire_w1.rs",
     "crates/services/velnor-actions-orchestrator/src/wire_w2.rs",
 ]

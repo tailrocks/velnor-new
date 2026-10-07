@@ -8,9 +8,9 @@ use velnor_actions_mise::catalog::lock::{load_text, parse_generator_lock, verify
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog};
 use velnor_actions_workflow_tree::rendered::RenderedTree;
 
-use crate::generate::write_tree;
 use crate::validate_shell::{run_shellcheck_bodies, run_shellcheck_probe};
 use crate::validate_zizmor::{run_zizmor, write_zizmor_config};
+use crate::write::write_tree;
 use velnor_actions_orchestrator_core::OrchestratorError;
 
 /// Velnor-repository-only bootstrap lock (never read for consumers).
@@ -33,7 +33,7 @@ const DIAG_CAP: usize = 4000;
 /// Runs before any replace or preview write, so any validator failure,
 /// tool failure, or empty workflow set leaves all output untouched.
 /// Returns the sorted pinned-validator specs that accepted the tree.
-pub(crate) fn validate_staged(tree: &RenderedTree) -> Result<Vec<String>, OrchestratorError> {
+pub fn validate_staged(tree: &RenderedTree) -> Result<Vec<String>, OrchestratorError> {
     let staging = tempfile::tempdir().map_err(|err| {
         OrchestratorError::io(std::env::temp_dir().display().to_string(), err.to_string())
     })?;
@@ -60,7 +60,7 @@ pub(crate) fn validate_staged(tree: &RenderedTree) -> Result<Vec<String>, Orches
 /// or when the lock is malformed. Missing files are skipped (pre-seed
 /// trust-on-review); the plan job then carries no Acquire step. Consumer
 /// generation never calls this: it must not read either file.
-pub(crate) fn verify_velnor_repository_files(
+pub fn verify_velnor_repository_files(
     root: &Path,
 ) -> Result<Option<GeneratorLock>, OrchestratorError> {
     let catalog = ToolCatalog::pinned();
@@ -90,7 +90,7 @@ fn contract_of(err: impl ToString) -> OrchestratorError {
     clippy::case_sensitive_file_extension_comparisons,
     reason = "rendered tree paths are exact lowercase by construction"
 )]
-pub(crate) fn is_workflow_path(path: &str) -> bool {
+pub fn is_workflow_path(path: &str) -> bool {
     path.starts_with(WORKFLOWS_DIR) && (path.ends_with(".yml") || path.ends_with(".yaml"))
 }
 
@@ -181,7 +181,7 @@ pub(crate) fn pinned_output(
 }
 
 /// Validator diagnostics, capped; exit code when streams are empty.
-pub(crate) fn diagnose(output: &ProcessOutput) -> String {
+pub fn diagnose(output: &ProcessOutput) -> String {
     let bytes = if output.stdout.is_empty() {
         output.stderr.as_slice()
     } else {

@@ -28,6 +28,7 @@ members = [
     "crates/services/velnor-actions-orchestrator-pins",
     "crates/services/velnor-actions-orchestrator-provisioning",
     "crates/services/velnor-actions-orchestrator-selection",
+    "crates/services/velnor-actions-orchestrator-staged-validation",
     "crates/services/velnor-actions-workflow-cache",
     "crates/services/velnor-actions-workflow-document",
     "crates/services/velnor-actions-workflow-generator",

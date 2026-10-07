@@ -14,7 +14,6 @@ use velnor_actions_workflow_jobs::finalize_jobs as finalize_render_jobs;
 
 use crate::attach::{attach_lock_acquire, attach_preseed};
 use crate::prepare::GenerationPreparation;
-use crate::validate::verify_velnor_repository_files;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_pins::pins::resolve_mise_setup;
 
@@ -32,7 +31,11 @@ pub(crate) fn owned_preparation(
 ) -> Result<GenerationPreparation, OrchestratorError> {
     let mut owned = prep.clone();
     if prep.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1 {
-        if let Some(lock) = verify_velnor_repository_files(&prep.root)? {
+        if let Some(lock) =
+            velnor_actions_orchestrator_staged_validation::validate::verify_velnor_repository_files(
+                &prep.root,
+            )?
+        {
             attach_lock_acquire(
                 &mut owned.workflow.ir,
                 &lock,

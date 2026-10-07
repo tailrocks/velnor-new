@@ -12,7 +12,7 @@ use velnor_actions_orchestrator_core::OrchestratorError;
 /// Parents are created and verified against symlinks before use; leaves are
 /// created exclusively, so overwrites and swapped links refuse instead of
 /// diverting writes.
-pub(crate) fn write_tree(github_dir: &Path, tree: &RenderedTree) -> Result<(), OrchestratorError> {
+pub fn write_tree(github_dir: &Path, tree: &RenderedTree) -> Result<(), OrchestratorError> {
     for file in &tree.files {
         let rel = file.path.strip_prefix(".github/").unwrap_or(&file.path);
         let dest = github_dir.join(rel);

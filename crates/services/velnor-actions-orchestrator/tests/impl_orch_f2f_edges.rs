@@ -231,6 +231,17 @@ const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
             "velnor-actions-rust-core",
         ],
     ),
+    (
+        "crates/services/velnor-actions-orchestrator-staged-validation",
+        &[
+            "velnor-actions-actionlint",
+            "velnor-actions-contract-config",
+            "velnor-actions-contract-release",
+            "velnor-actions-mise",
+            "velnor-actions-orchestrator-core",
+            "velnor-actions-workflow-tree",
+        ],
+    ),
 ];
 
 fn expected_orchestrator_family(dir: &str) -> Option<Vec<&str>> {
@@ -260,6 +271,7 @@ fn expected_service(dir: &str) -> Option<Vec<&str>> {
             "velnor-actions-orchestrator-pins",
             "velnor-actions-orchestrator-provisioning",
             "velnor-actions-orchestrator-selection",
+            "velnor-actions-orchestrator-staged-validation",
             "velnor-actions-rust",
             "velnor-actions-rust-core",
             "velnor-actions-tofu",

@@ -15,9 +15,10 @@ use velnor_actions_workflow_tree::rendered::RenderedTree;
 use crate::finalized::owned_preparation;
 use crate::prepare::GenerationPreparation;
 use crate::provenance::{ProfileProvenance, profile_provenance};
-use crate::validate::validate_staged;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_pins::pins::resolve_mise_setup;
+use velnor_actions_orchestrator_staged_validation::validate::validate_staged;
+use velnor_actions_orchestrator_staged_validation::write::write_tree;
 
 /// Filesystem guards: snapshots, destination validation, and ownership.
 pub(crate) mod guards;
@@ -330,9 +331,5 @@ fn write_preview(
     write_tree(&canonical.join(".github"), tree)
 }
 
-/// Staged tree writing: regular files and symbolic links.
-pub(crate) mod write;
-
-pub(crate) use write::write_tree;
 #[cfg(test)]
 mod tests;

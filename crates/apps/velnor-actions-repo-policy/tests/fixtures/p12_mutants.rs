@@ -61,7 +61,7 @@ fn mutant_scope_covers_risk_wiring() -> Result<(), Box<dyn Error>> {
         "crates/services/velnor-actions-orchestrator/src/cover_identity.rs",
         "crates/services/velnor-actions-orchestrator/src/merge_request.rs",
         "crates/services/velnor-actions-orchestrator-pins/src/pins.rs",
-        "crates/services/velnor-actions-orchestrator/src/validate.rs",
+        "crates/services/velnor-actions-orchestrator-staged-validation/src/validate.rs",
         "crates/services/velnor-actions-orchestrator/src/wire_w1.rs",
     ] {
         assert!(mutants.contains(file), "scope misses {file}");
