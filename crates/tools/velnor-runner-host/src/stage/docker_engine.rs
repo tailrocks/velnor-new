@@ -6,7 +6,7 @@ use bollard::query_parameters::RemoveContainerOptionsBuilder;
 
 use crate::HostError;
 use crate::docker_client::docker_deadline;
-use crate::docker_spec::RunnerImageProfile;
+use crate::docker_spec::{RunnerImageProfile, runner_plan_for_profile};
 use crate::worker::{
     CreateProjection, create_named_volumes, create_only, deliver_jit, dind_create,
     dind_create_for_profile, remove_worker_volumes, start_id,
@@ -30,7 +30,11 @@ impl PairEngine for Docker {
         profile: Option<&RunnerImageProfile>,
     ) -> Result<(), HostError> {
         let mounts = match profile {
-            Some(profile) => dind_create_for_profile(volume, profile)?.mounts,
+            Some(profile) => {
+                let mut mounts = runner_plan_for_profile(volume, profile)?.mounts;
+                mounts.extend(dind_create_for_profile(volume, profile)?.mounts);
+                mounts
+            }
             None => dind_create(volume)?.mounts,
         };
         Box::pin(docker_deadline(create_named_volumes(self, volume, &mounts))).await?

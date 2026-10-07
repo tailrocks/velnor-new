@@ -43,8 +43,8 @@ pub(crate) async fn remove_worker_volumes(
     docker: &Docker,
     worker: &str,
 ) -> Result<bool, HostError> {
-    // Check all known roles so recovery can remove either the legacy three-volume
-    // layout or the Linux profile's additional shared externals volume.
+    // Check all known roles so recovery can remove both the legacy and Linux
+    // profile layouts without scanning or deleting unrelated volumes.
     for volume in volume_catalog(worker)? {
         let Some(observed) = inspect_volume(docker, &volume.name).await? else {
             continue;
@@ -72,7 +72,7 @@ async fn inspect_volume(docker: &Docker, name: &str) -> Result<Option<Volume>, H
     }
 }
 
-fn volume_catalog(worker: &str) -> Result<[WorkerVolume; 4], HostError> {
+fn volume_catalog(worker: &str) -> Result<[WorkerVolume; 6], HostError> {
     if worker.is_empty()
         || !worker
             .bytes()
@@ -97,6 +97,14 @@ fn volume_catalog(worker: &str) -> Result<[WorkerVolume; 4], HostError> {
             name: format!("{worker}-docker"),
             role: "dind-data",
         },
+        WorkerVolume {
+            name: format!("{worker}-home"),
+            role: "home-state",
+        },
+        WorkerVolume {
+            name: format!("{worker}-tmp"),
+            role: "runner-temp",
+        },
     ])
 }
 
@@ -105,27 +113,58 @@ fn volumes_for_mounts(
     mounts: &[PlannedMount],
 ) -> Result<Vec<WorkerVolume>, HostError> {
     let all = volume_catalog(worker)?;
-    let legacy = [&all[0], &all[1], &all[3]];
-    let official = [&all[0], &all[1], &all[2], &all[3]];
-    let expected_mounts = |volumes: &[&WorkerVolume],
-                           target_for_role: fn(&str) -> Option<String>|
-     -> Result<Vec<PlannedMount>, HostError> {
-        volumes
-            .iter()
-            .map(|volume| {
-                Ok(PlannedMount {
-                    source: format!("volume:{}", volume.name),
-                    target: target_for_role(volume.role).ok_or(HostError::ForbiddenMount)?,
-                })
-            })
-            .collect()
-    };
-    if mounts == expected_mounts(&legacy, target)? {
-        Ok(legacy.into_iter().cloned().collect())
-    } else if mounts == expected_mounts(&official, official_target)? {
-        Ok(official.into_iter().cloned().collect())
+    let socket = volume_for_role(&all, "socket")?;
+    let work = volume_for_role(&all, "work")?;
+    let externals = volume_for_role(&all, "externals")?;
+    let dind_data = volume_for_role(&all, "dind-data")?;
+    let home = volume_for_role(&all, "home-state")?;
+    let temp = volume_for_role(&all, "runner-temp")?;
+    let legacy = vec![
+        volume_mount(socket, "/run", false),
+        volume_mount(work, &runner_work_path(), false),
+        volume_mount(dind_data, "/var/lib/docker", false),
+    ];
+    if mounts == legacy {
+        return Ok(vec![socket.clone(), work.clone(), dind_data.clone()]);
+    }
+
+    let mut official = vec![
+        volume_mount(home, "/home/runner", false),
+        volume_mount(work, &runner_work_path(), false),
+        volume_mount(externals, "/home/runner/externals", true),
+        volume_mount(socket, "/run/docker", false),
+        volume_mount(temp, "/tmp", false),
+    ];
+    official.extend([
+        volume_mount(socket, "/var/run", false),
+        volume_mount(work, &runner_work_path(), false),
+        volume_mount(externals, "/home/runner/externals", true),
+        volume_mount(dind_data, "/var/lib/docker", false),
+    ]);
+    if mounts == official {
+        Ok(all.to_vec())
     } else {
         Err(HostError::ForbiddenMount)
+    }
+}
+
+fn volume_for_role<'a>(
+    volumes: &'a [WorkerVolume; 6],
+    role: &'static str,
+) -> Result<&'a WorkerVolume, HostError> {
+    let mut matches = volumes.iter().filter(|volume| volume.role == role);
+    let volume = matches.next().ok_or(HostError::ForbiddenMount)?;
+    if matches.next().is_some() {
+        return Err(HostError::ForbiddenMount);
+    }
+    Ok(volume)
+}
+
+fn volume_mount(volume: &WorkerVolume, target: &str, read_only: bool) -> PlannedMount {
+    PlannedMount {
+        source: format!("volume:{}", volume.name),
+        target: target.to_owned(),
+        read_only,
     }
 }
 
@@ -134,25 +173,6 @@ fn labels(worker: &str, role: &str) -> HashMap<String, String> {
         ("velnor.role".to_owned(), role.to_owned()),
         ("velnor.worker".to_owned(), worker.to_owned()),
     ])
-}
-
-fn target(role: &str) -> Option<String> {
-    match role {
-        "socket" => Some("/run".to_owned()),
-        "work" => Some(runner_work_path()),
-        "externals" => Some("/home/runner/externals".to_owned()),
-        "dind-data" => Some("/var/lib/docker".to_owned()),
-        _ => None,
-    }
-}
-
-fn official_target(role: &str) -> Option<String> {
-    match role {
-        // DinD gets the shared private socket volume at /var/run, where its
-        // socket is /var/run/docker.sock as required by Runner.Worker actions.
-        "socket" => Some("/var/run".to_owned()),
-        _ => target(role),
-    }
 }
 
 fn owns(worker: &str, expected: &WorkerVolume, observed: &Volume) -> bool {

@@ -8,11 +8,13 @@ pub(super) fn base_plan() -> ContainerPlan {
         name: "worker-runner".to_owned(),
         privileged: false,
         platform: "linux/amd64".to_owned(),
+        readonly_rootfs: false,
         image: "velnor-runner:ubuntu-26.04-2.337.0".to_owned(),
         env: Vec::new(),
         cmd: vec!["/usr/local/bin/velnor-runner-entrypoint".to_owned()],
         labels: Vec::new(),
         mounts: Vec::new(),
+        image_mounts: Vec::new(),
         group_add: Vec::new(),
         security_opts: Vec::new(),
     }
@@ -23,6 +25,7 @@ pub(super) fn plan_with_mount(source: &str, target: &str) -> ContainerPlan {
     plan.mounts.push(Mount {
         source: source.to_owned(),
         target: target.to_owned(),
+        read_only: false,
     });
     plan
 }

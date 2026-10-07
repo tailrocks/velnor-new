@@ -9,6 +9,7 @@ use super::{ContainerPlan, Mount, RUNNER_PLATFORM, private_volume_name};
 
 const EXTERNALS_TARGET: &str = "/home/runner/externals";
 const OFFICIAL_SOCKET_TARGET: &str = "/run/docker";
+const RUNNER_HOME_TARGET: &str = "/home/runner";
 const APPARMOR_RUNNER: &str = "apparmor=velnor-runner";
 const OFFICIAL_RUNNER_IMAGE: &str = "ghcr.io/actions/actions-runner@sha256:660f7b9d1e0007274f7c867e220b3c382137ef5a30d8e501a025ad50dbd5fb9d";
 const OFFICIAL_DIND_IMAGE: &str = "docker.io/library/docker@sha256:dcac6f16dc25ddec91e2d467605775b95a035ab884b94cb4c2cc7cbef6fd726d";
@@ -301,12 +302,15 @@ pub fn runner_plan_for_profile(
 }
 
 fn profiled_runner_plan(private_volume: &str, profile: &RunnerImageProfile) -> ContainerPlan {
+    let home = format!("{private_volume}-home");
     let work = format!("{private_volume}-work");
     let externals = format!("{private_volume}-externals");
+    let temp = format!("{private_volume}-tmp");
     ContainerPlan {
         name: format!("{private_volume}-runner"),
         privileged: false,
         platform: profile.platform.to_owned(),
+        readonly_rootfs: true,
         image: profile.runner_image.to_owned(),
         env: vec![
             "DOCKER_HOST=unix:///run/docker/docker.sock".to_owned(),
@@ -320,18 +324,32 @@ fn profiled_runner_plan(private_volume: &str, profile: &RunnerImageProfile) -> C
         labels: super::runner_labels(private_volume),
         mounts: vec![
             Mount {
-                source: format!("volume:{private_volume}"),
-                target: OFFICIAL_SOCKET_TARGET.to_owned(),
+                source: format!("volume:{home}"),
+                target: RUNNER_HOME_TARGET.to_owned(),
+                read_only: false,
             },
             Mount {
                 source: format!("volume:{work}"),
                 target: runner_work_path(),
+                read_only: false,
             },
             Mount {
                 source: format!("volume:{externals}"),
                 target: EXTERNALS_TARGET.to_owned(),
+                read_only: true,
+            },
+            Mount {
+                source: format!("volume:{private_volume}"),
+                target: OFFICIAL_SOCKET_TARGET.to_owned(),
+                read_only: false,
+            },
+            Mount {
+                source: format!("volume:{temp}"),
+                target: "/tmp".to_owned(),
+                read_only: false,
             },
         ],
+        image_mounts: super::runner_image_mounts(profile.runner_image),
         group_add: vec![profile.dind_socket_gid.to_string()],
         security_opts: vec![APPARMOR_RUNNER.to_owned()],
     }
@@ -352,7 +370,9 @@ pub(super) fn audit_official_plan(plan: &ContainerPlan) -> Result<(), HostError>
     if plan.env != expected.env
         || plan.cmd != expected.cmd
         || plan.labels != expected.labels
+        || !plan.readonly_rootfs
         || plan.mounts != expected.mounts
+        || plan.image_mounts != expected.image_mounts
         || plan.group_add != expected.group_add
         || plan.security_opts != expected.security_opts
         || super::contains_payload_marker(
@@ -361,6 +381,7 @@ pub(super) fn audit_official_plan(plan: &ContainerPlan) -> Result<(), HostError>
             &plan.labels,
             &plan.security_opts,
             &plan.mounts,
+            &plan.image_mounts,
         )
     {
         return Err(HostError::ForbiddenMount);
