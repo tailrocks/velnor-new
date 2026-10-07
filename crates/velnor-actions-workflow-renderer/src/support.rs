@@ -1,16 +1,21 @@
-//! Policy gating and Velnor support-job construction.
+//! Policy gating and support-job construction.
 //!
-//! Consumer policy rejects support IR; Velnor policy merges one typed job
-//! per repository validator plus optional candidate jobs (P05-6: no Policy
-//! umbrella). No toolchain-qualification job exists. The always-on
-//! `actionlint` job arrives via typed IR and is emitted for both policies;
-//! it is never support IR.
+//! Consumer policy merges config-selected verification jobs only;
+//! Velnor policy merges one typed job per repository validator plus
+//! optional candidate jobs (P05-6: no Policy umbrella). No
+//! toolchain-qualification job exists. The always-on `actionlint` job
+//! arrives via typed IR and is emitted for both policies; it is never
+//! support IR.
 
 // Token-hygiene gate lives beside the policy gates (`#[path]`, no `lib.rs` edit).
 #[path = "support_tokens.rs"]
 mod tokens;
 
 pub(crate) use tokens::check_token_hygiene;
+
+#[cfg(test)]
+#[path = "support_tests.rs"]
+mod support_tests;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -43,21 +48,48 @@ pub(crate) const RELEASE_DISPLAY_NAME: &str = "Release";
 /// Release ref gate: the job runs only on protected refs (tags/branches).
 pub(crate) const RELEASE_REF_CONDITION: &str = "github.ref_protected == true";
 
-/// Consumer policy: reject support IR and Velnor-only job IDs.
+/// Consumer policy: config-selected verification jobs only.
 ///
-/// The lint job is a base IR job, not support IR, so it passes through.
-pub(crate) fn reject_consumer_support(
-    jobs: &BTreeMap<String, Job>,
+/// Empty support passes through (historical behavior); a non-empty
+/// support set merges exactly when every validator is consumer
+/// selectable ([`ValidatorKind::consumer_verify`]) and candidate
+/// validation is off. Anything else fails closed exactly as before.
+/// Velnor-only job IDs in base IR stay rejected: verification jobs
+/// arrive through support, never through IR.
+pub(crate) fn merge_consumer_verify(
+    jobs: &mut BTreeMap<String, Job>,
     support: Option<&VelnorSupportWorkflow>,
+    ctx: &RenderContext,
 ) -> Result<(), RenderError> {
-    if let Some(workflow) = support
-        && (!workflow.validators.is_empty() || workflow.candidate_validation)
-    {
+    reject_consumer_ir(jobs)?;
+    let Some(workflow) = support else {
+        return Ok(());
+    };
+    if workflow.validators.is_empty() && !workflow.candidate_validation {
+        return Ok(());
+    }
+    if workflow.candidate_validation {
         return Err(RenderError::PolicyRejected {
             policy: "consumer-v1".to_owned(),
             problem: "support_ir_rejected".to_owned(),
         });
     }
+    let allowed = ValidatorKind::consumer_verify();
+    for validator in &workflow.validators {
+        if !allowed.contains(validator) {
+            return Err(RenderError::PolicyRejected {
+                policy: "consumer-v1".to_owned(),
+                problem: format!("consumer_validator_rejected:{}", validator.job_id()),
+            });
+        }
+    }
+    merge_support_jobs(jobs, support, ctx, "consumer-v1")
+}
+
+/// Consumer policy: reject Velnor-only job IDs in base IR.
+///
+/// The lint job is a base IR job, not support IR, so it passes through.
+fn reject_consumer_ir(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
     for validator in ValidatorKind::repository_validators() {
         let id = validator.job_id();
         if jobs.contains_key(id) {
@@ -78,13 +110,15 @@ pub(crate) fn reject_consumer_support(
     Ok(())
 }
 
-/// Velnor policy: merge one typed job per validator plus candidates.
+/// Merge one typed job per validator plus candidates.
 /// The exhaustive `ValidatorKind` match is the whole support set, with no
-/// toolchain-qualification job and no umbrella grouping.
+/// toolchain-qualification job and no umbrella grouping. Both policies
+/// share it; each policy gates its support set before calling.
 pub(crate) fn merge_support_jobs(
     jobs: &mut BTreeMap<String, Job>,
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
+    policy: &str,
 ) -> Result<(), RenderError> {
     let Some(workflow) = support else {
         return Ok(());
@@ -93,13 +127,13 @@ pub(crate) fn merge_support_jobs(
     for validator in &workflow.validators {
         if *validator == ValidatorKind::Actionlint {
             return Err(RenderError::PolicyRejected {
-                policy: "velnor-repository-v1".to_owned(),
+                policy: policy.to_owned(),
                 problem: "actionlint_not_support".to_owned(),
             });
         }
         if !seen.insert(*validator) {
             return Err(RenderError::PolicyRejected {
-                policy: "velnor-repository-v1".to_owned(),
+                policy: policy.to_owned(),
                 problem: "duplicate_validator".to_owned(),
             });
         }
@@ -109,25 +143,30 @@ pub(crate) fn merge_support_jobs(
             ValidatorKind::Alint => alint_job(ctx)?,
             ValidatorKind::Actionlint => {
                 return Err(RenderError::PolicyRejected {
-                    policy: "velnor-repository-v1".to_owned(),
+                    policy: policy.to_owned(),
                     problem: "actionlint_not_support".to_owned(),
                 });
             }
-            ValidatorKind::CargoDeny | ValidatorKind::CargoMachete | ValidatorKind::Zizmor => {
-                validator_job(ctx, *validator)?
-            }
+            ValidatorKind::CargoDeny
+            | ValidatorKind::CargoMachete
+            | ValidatorKind::Zizmor
+            | ValidatorKind::Markdownlint
+            | ValidatorKind::StrictJson
+            | ValidatorKind::FrontmatterId
+            | ValidatorKind::LinkCheck
+            | ValidatorKind::NativeValidators => validator_job(ctx, *validator)?,
         };
-        insert_support_job(jobs, validator.job_id(), job)?;
+        insert_support_job(jobs, validator.job_id(), job, policy)?;
     }
     if workflow.candidate_validation {
         let Some(spec) = &ctx.candidate else {
             return Err(RenderError::PolicyRejected {
-                policy: "velnor-repository-v1".to_owned(),
+                policy: policy.to_owned(),
                 problem: "candidate_without_spec".to_owned(),
             });
         };
-        insert_support_job(jobs, CANDIDATE_JOB_ID, candidate_job(ctx, spec)?)?;
-        insert_support_job(jobs, RELEASE_JOB_ID, release_job(ctx)?)?;
+        insert_support_job(jobs, CANDIDATE_JOB_ID, candidate_job(ctx, spec)?, policy)?;
+        insert_support_job(jobs, RELEASE_JOB_ID, release_job(ctx)?, policy)?;
     }
     extend_final_needs(jobs, &workflow.validators, workflow.candidate_validation);
     Ok(())
@@ -168,10 +207,11 @@ pub(crate) fn insert_support_job(
     jobs: &mut BTreeMap<String, Job>,
     id: &str,
     job: Job,
+    policy: &str,
 ) -> Result<(), RenderError> {
     if jobs.contains_key(id) {
         return Err(RenderError::PolicyRejected {
-            policy: "velnor-repository-v1".to_owned(),
+            policy: policy.to_owned(),
             problem: format!("job_collision:{id}"),
         });
     }
@@ -235,6 +275,11 @@ pub(crate) fn validator_job(
         ValidatorKind::CargoDeny => StepRole::CargoDeny,
         ValidatorKind::CargoMachete => StepRole::CargoMachete,
         ValidatorKind::Zizmor => StepRole::Zizmor,
+        ValidatorKind::Markdownlint => StepRole::Markdownlint,
+        ValidatorKind::StrictJson => StepRole::StrictJson,
+        ValidatorKind::FrontmatterId => StepRole::FrontmatterId,
+        ValidatorKind::LinkCheck => StepRole::LinkCheck,
+        ValidatorKind::NativeValidators => StepRole::NativeValidators,
         ValidatorKind::Alint | ValidatorKind::Actionlint => {
             return Err(RenderError::InvalidWorkflow(format!(
                 "validator_not_shell:{}",
