@@ -236,7 +236,7 @@ fn official_runner_bootstrap(profile: &RunnerImageProfile) -> String {
             "  sleep 1\n",
             "done\n",
             "[ \"$ready\" -eq 1 ]\n",
-            "sudo -n chown {uid}:{gid} /home/runner/_work /home/runner/externals\n",
+            "sudo -n chown {uid}:{gid} /home/runner/_work\n",
             "IFS= read -r ACTIONS_RUNNER_INPUT_JITCONFIG || [ -n \"${{ACTIONS_RUNNER_INPUT_JITCONFIG:-}}\" ]\n",
             "[ -n \"${{ACTIONS_RUNNER_INPUT_JITCONFIG:-}}\" ]\n",
             "export ACTIONS_RUNNER_INPUT_JITCONFIG\n",

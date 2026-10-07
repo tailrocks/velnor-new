@@ -166,10 +166,14 @@ fn official_runner_plan_keeps_jit_payload_out_of_docker_configuration() -> Resul
     let bootstrap = &plan.cmd[2];
     assert!(bootstrap.contains("[ \"$ready\" -eq 1 ]"));
     let docker_probe = bootstrap.find("docker ps").ok_or(HostError::Config)?;
+    let work_owner = bootstrap
+        .find("sudo -n chown 1001:1001 /home/runner/_work")
+        .ok_or(HostError::Config)?;
     let jit_read = bootstrap
         .find("read -r ACTIONS_RUNNER_INPUT_JITCONFIG")
         .ok_or(HostError::Config)?;
-    assert!(docker_probe < jit_read);
+    assert!(docker_probe < work_owner && work_owner < jit_read);
+    assert!(!bootstrap.contains("/home/runner/externals"));
     assert!(bootstrap.contains("ACTIONS_RUNNER_INPUT_JITCONFIG"));
     assert!(!plan_contains(&plan, "JIT-SECRET-CANARY"));
     assert!(audit_plan(&plan).is_ok());
