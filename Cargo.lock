@@ -3626,9 +3626,6 @@ dependencies = [
  "velnor-actions-contract-workflow",
  "velnor-actions-mise",
  "velnor-actions-orchestrator-baseline-publish",
- "velnor-actions-orchestrator-check-acquisition",
- "velnor-actions-orchestrator-check-evidence",
- "velnor-actions-orchestrator-check-preparation",
  "velnor-actions-orchestrator-check-runtime",
  "velnor-actions-orchestrator-core",
  "velnor-actions-orchestrator-cover-compat",
@@ -3637,7 +3634,6 @@ dependencies = [
  "velnor-actions-orchestrator-external-data",
  "velnor-actions-orchestrator-generation",
  "velnor-actions-orchestrator-internal",
- "velnor-actions-orchestrator-merge-request",
  "velnor-actions-orchestrator-noop-report",
  "velnor-actions-orchestrator-pins",
  "velnor-actions-orchestrator-plan",
@@ -3650,7 +3646,6 @@ dependencies = [
  "velnor-actions-orchestrator-runtime-evidence",
  "velnor-actions-orchestrator-runtime-plan",
  "velnor-actions-orchestrator-staged-validation",
- "velnor-actions-orchestrator-task-report",
  "velnor-actions-orchestrator-task-report-write",
  "velnor-actions-orchestrator-workflow-ir",
  "velnor-actions-rust",
@@ -4281,11 +4276,22 @@ dependencies = [
 name = "velnor-actions-orchestrator-task-report-write"
 version = "0.1.1"
 dependencies = [
+ "serde_json",
  "tempfile",
  "velnor-actions-contract",
+ "velnor-actions-contract-config",
+ "velnor-actions-contract-workflow",
+ "velnor-actions-mise",
+ "velnor-actions-orchestrator-check-acquisition",
+ "velnor-actions-orchestrator-check-evidence",
+ "velnor-actions-orchestrator-check-preparation",
  "velnor-actions-orchestrator-core",
+ "velnor-actions-orchestrator-cover-compat",
  "velnor-actions-orchestrator-covered-tasks",
+ "velnor-actions-orchestrator-internal",
+ "velnor-actions-orchestrator-merge-request",
  "velnor-actions-orchestrator-noop-report",
+ "velnor-actions-orchestrator-retrieve",
  "velnor-actions-orchestrator-task-report",
 ]
 
