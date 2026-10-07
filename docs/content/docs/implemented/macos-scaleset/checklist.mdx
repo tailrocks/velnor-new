@@ -1,13 +1,16 @@
-# macOS Scale Set checklist
+---
+title: "macOS Scale Set checklist"
+description: "Status vocabulary: PASS, FAIL, BLOCKEDEXTERNAL, NOTRUN. A skipped test is not a pass. No row below is PASS unless /docs/implemented/macos-scaleset/evidence cites a command this repository"
+---
 
 Status vocabulary: `PASS`, `FAIL`, `BLOCKED_EXTERNAL`, `NOT_RUN`. A skipped
-test is not a pass. No row below is `PASS` unless `evidence.md` cites a command
+test is not a pass. No row below is `PASS` unless `/docs/implemented/macos-scaleset/evidence` cites a command
 this repository ran.
 
 | ID | Requirement | Status | Evidence |
 |---|---|---|---|
-| G0-identity | Current heads, tags, open PRs recorded | PASS | `evidence.md` identity table, parent `gh api` on 2026-10-03 |
-| G0-consumer | ChainArgos tasks and required contexts inventoried | PASS | `evidence.md` coverage table |
+| G0-identity | Current heads, tags, open PRs recorded | PASS | `/docs/implemented/macos-scaleset/evidence` identity table, parent `gh api` on 2026-10-03 |
+| G0-consumer | ChainArgos tasks and required contexts inventoried | PASS | `/docs/implemented/macos-scaleset/evidence` coverage table |
 | G0-supersede | Deferred conflicts marked superseded before feature code | PASS | `docs/deferred/self-hosted-runner.md` banners; `docs/proposed/macos-scaleset-runner.md` |
 | G0-tree | Unrelated dirty work preserved | PASS | Only this branch's docs and later commits; goal prompt files stay untracked |
 | G1-migrate | Schema migrate round-trip, idempotence, unknown fields | PASS | `impl_schema2` at `40e08e8`; preview does not write |
@@ -18,7 +21,7 @@ this repository ran.
 | G2-uncertain | Uncertain acquire and delete keep capacity | PASS | `release_permitted_gates_capacity_release` keeps occupancy at 1 until `CleanupProof`; `before_advertise_holds_uncertain_and_adopts` |
 | G3-isolation | Private DinD, no outer socket/home, canary absent from metadata | PASS | Secret job `111162832876` masked the canary. Composite job `111165489828` shared `_actions` inode `128829173`, then removed only owned ids. |
 | G3-ownership | Foreign objects survive; id mismatch quarantines | PASS | Foreign id `d377a7f7cfc3` survived `KeepForeign`. Job `111165489828` cleanup left the pre-existing 24 containers. |
-| G4-live | Real GitHub job on official runner and scale-set labels | PASS | job `111084145716` runner `m100000009`; one-class jobs in `evidence.md`, including cache rerun `37093907324` and same-port run `37096417428`; full G4 suite still open |
+| G4-live | Real GitHub job on official runner and scale-set labels | PASS | job `111084145716` runner `m100000009`; one-class jobs in `/docs/implemented/macos-scaleset/evidence`, including cache rerun `37093907324` and same-port run `37096417428`; full G4 suite still open |
 | G5-routing | Schema 1 unchanged; `both` duplicates verification only | PASS | `impl_schema2_routing.rs` at `40e08e8`; goldens unchanged |
 | G5-compare | Duplicate, missing lane, swapped artifact, unsafe archive fail closed | PASS | `compare_tests.rs` at `658154c` |
 | G6-launchd | User LaunchAgent foreground `daemon run`; second daemon fails | PASS | `launchctl print gui/501` at 2026-10-03: absolute `daemon run`, `forks = 0`; second `daemon run` exit 1; bootout removed the job |
