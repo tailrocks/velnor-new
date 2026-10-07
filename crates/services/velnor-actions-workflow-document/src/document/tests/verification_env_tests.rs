@@ -56,6 +56,7 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: "actions/checkout@0123456789abcdef0123456789abcdef01234567".to_owned(),
         validator_commands: Vec::new(),
+        rust_policy: None,
         candidate: None,
         preseed: false,
         verification_tasks: vec![policy],

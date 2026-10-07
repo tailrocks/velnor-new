@@ -15,6 +15,8 @@ use velnor_actions_workflow_steps::{
     ALINT_USES, RenderError, checkout_step, merge_step, shell_step,
 };
 
+use crate::impl_renderer_fixtures::policy_pin;
+
 const VERSION: &str = "0.1.0";
 const LABEL: &str = "ubuntu-26.04";
 const LINT_ID: &str = "actionlint";
@@ -32,6 +34,7 @@ fn fixture_ctx() -> RenderContext {
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),
         validator_commands: Vec::new(),
+        rust_policy: Some(policy_pin()),
         candidate: None,
         preseed: false,
         verification_tasks: Vec::new(),

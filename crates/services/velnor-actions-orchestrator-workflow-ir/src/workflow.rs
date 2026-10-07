@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax};
 use velnor_actions_contract::Stack;
 use velnor_actions_contract_config::{
-    GeneratorValidation, ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowPolicy,
+    ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowPolicy,
 };
 use velnor_actions_contract_workflow::{
     Concurrency, Job, Permissions, Step, StepKind, StepRole, Trigger, WorkflowIr,
@@ -120,7 +120,7 @@ pub fn build_workflow(
     let policy = config.workflow.policy;
     let verification_tasks = crate::verification_tasks::policies(config)?;
     let use_mbx = plan_uses_mbx(discovery);
-    let support = support_workflow(policy, config.workflow.generator_validation, discovery);
+    let support = support_workflow(config, discovery);
     let mut jobs = BTreeMap::new();
     let acquire = match policy {
         WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(label, &version, discovery)?),
@@ -201,13 +201,24 @@ fn workflow_ir(config: &VelnorConfig, branch: &str, jobs: BTreeMap<String, Job>)
     }
 }
 
-fn support_workflow(
-    policy: WorkflowPolicy,
-    validation: GeneratorValidation,
-    discovery: &Discovery,
-) -> Option<VelnorSupportWorkflow> {
+fn support_workflow(config: &VelnorConfig, discovery: &Discovery) -> Option<VelnorSupportWorkflow> {
+    let policy = config.workflow.policy;
+    let validation = config.workflow.generator_validation;
+    let rust_policy = config
+        .stacks
+        .rust
+        .as_ref()
+        .and_then(|rust| rust.policy.clone());
     let mut support = match policy {
-        WorkflowPolicy::ConsumerV1 => return None,
+        WorkflowPolicy::ConsumerV1 => {
+            if rust_policy.is_none() || !plan_uses_rust(discovery) {
+                return None;
+            }
+            VelnorSupportWorkflow {
+                validators: vec![ValidatorKind::Alint],
+                candidate_validation: false,
+            }
+        }
         WorkflowPolicy::VelnorRepositoryV1 => policy.support_workflow(validation),
     };
     if discovery.workspaces.is_empty() {

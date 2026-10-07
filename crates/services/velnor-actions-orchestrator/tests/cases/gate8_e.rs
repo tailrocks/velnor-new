@@ -55,6 +55,7 @@ fn ctx() -> RenderContext {
         request_dir: "${{ runner.temp }}/velnor/r".to_owned(),
         checkout_uses: format!("actions/checkout@{:040x}", 0),
         validator_commands: Vec::new(),
+        rust_policy: None,
         candidate: None,
         preseed: false,
         verification_tasks: Vec::new(),

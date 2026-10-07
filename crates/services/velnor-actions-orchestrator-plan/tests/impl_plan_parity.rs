@@ -43,7 +43,7 @@ fn make_velnor_repo() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
     fs::create_dir_all(root.join(".velnor"))?;
     fs::write(
         root.join(".velnor/config.toml"),
-        "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n",
+        "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n[stacks.rust.policy]\nversion = \"0.1.3\"\nsha256 = \"104c0d8b3a827875776358f941aa88f1c5837c1009305076af9380f4e3fcda25\"\nprofile = \"rust-strict-v1\"\n",
     )?;
     fs::write(
         root.join(".velnor/release-manifest.json"),

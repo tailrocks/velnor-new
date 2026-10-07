@@ -35,6 +35,36 @@ pub fn upload_artifact_step(name: &str, path: &str) -> Result<Step, RenderError>
     )
 }
 
+/// Diagnostics-artifact upload step over the pinned upload action.
+///
+/// Carries one lane-produced diagnostics file (the policy lane's
+/// `check-gaps` report); the caller attaches `if: always()` so the
+/// evidence uploads even when the lane fails.
+/// # Errors
+pub fn upload_diagnostics_step(
+    step_name: &str,
+    name: &str,
+    path: &str,
+) -> Result<Step, RenderError> {
+    if step_name.trim().is_empty() || name.trim().is_empty() || path.trim().is_empty() {
+        return Err(RenderError::BadActionRef("empty_artifact_io".to_owned()));
+    }
+    artifact_paths::check_artifact_path(path)?;
+    action_step(
+        step_name,
+        UPLOAD_ARTIFACT_USES,
+        BTreeMap::from([
+            ("name".to_owned(), name.to_owned()),
+            ("path".to_owned(), path.to_owned()),
+            ("if-no-files-found".to_owned(), "error".to_owned()),
+            (
+                "retention-days".to_owned(),
+                ARTIFACT_RETENTION_DAYS.to_string(),
+            ),
+        ]),
+    )
+}
+
 /// Candidate-artifact download step over the pinned download action.
 /// # Errors
 pub fn download_artifact_step(name: &str, path: &str) -> Result<Step, RenderError> {

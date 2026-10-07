@@ -11,6 +11,8 @@ use velnor_actions_workflow_jobs::{
 use velnor_actions_workflow_renderer::render_workflow_ir;
 use velnor_actions_workflow_steps::{RenderError, checkout_step, merge_step, plan_step};
 
+use crate::impl_renderer_fixtures::policy_pin;
+
 const VERSION: &str = "0.1.0";
 const LABEL: &str = "ubuntu-26.04";
 
@@ -26,6 +28,7 @@ pub(crate) fn fixture_ctx() -> RenderContext {
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),
         validator_commands: Vec::new(),
+        rust_policy: Some(policy_pin()),
         candidate: None,
         preseed: false,
         verification_tasks: Vec::new(),

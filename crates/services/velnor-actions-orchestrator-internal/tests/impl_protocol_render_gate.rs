@@ -82,6 +82,7 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses: pin,
         validator_commands: Vec::new(),
+        rust_policy: None,
         candidate: None,
         preseed: false,
         verification_tasks: Vec::new(),
