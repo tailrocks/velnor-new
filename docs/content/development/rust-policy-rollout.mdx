@@ -911,3 +911,59 @@ stays generator-owned.
 | Total (32 passing · 5 failing → 33 passing · 4 failing) | 21 | 19 | −2 |
 
 Helper gaps: 2 → 0 (`check-gaps` exit 0, empty output).
+
+## Slice 12: close native size/tests findings (2026-10-07)
+
+- Scope: the 13 native file findings only —
+  `size-lib-main-150` ×6, `size-file-400` ×3,
+  `tests-dir-present` ×4. `ci-build-runs-on` ×6 untouched
+  (generator-owned, Phase 4). Eight code commits (V1–V8) plus
+  this record, each pushed immediately with a per-commit
+  nextest test-ID bijection at 0 dropped.
+- Unit-suite splits (canonical `mod <case>;` +
+  `tests/<case>.rs`, fixtures `pub(super)` in the index, test
+  bodies verbatim): apparmor `tests.rs` 261 → 28 + modes 71 +
+  identity 170; host-config `config/tests.rs` 220 → 28 +
+  binding 102 + trust 96 and `config_file/tests.rs` 212 →
+  115 + lifecycle 102; cli `args/tests.rs` 161 → 62 +
+  connect-args 104 and `daemon_run/tests.rs` 163 → 114 +
+  linux 53; host `keychain/tests.rs` 258 → 92 + linux-secret
+  170 (Linux items type-checked via temporary ungate, gates
+  restored byte-exact).
+- `size-file-400` splits: cli `connect_tests.rs` 428 → common
+  132 + connect 164 + guard 141; github `actions.rs` 406 →
+  329 + `fork_workflows.rs` 89 (production move: fork-settings
+  family re-exported through `actions`, crate-root API
+  unchanged); plan `impl_prepare_generate.rs` 401 → 273 +
+  `impl_plan_fetch.rs` 135 (fetch trio + helper, registered in
+  `tests/main.rs`).
+- New `tests/` dirs (runner autodiscovery, one file each, no
+  new deps): apparmor `admission.rs` (2 fail-closed cases),
+  docker-spec `plan_contract.rs` (3), host-config
+  `config_contract.rs` (3), journal `durability.rs` (2 async,
+  existing tokio dev-dep).
+- Tests: workspace 3947 → 3957 IDs (10 new integration, 0
+  dropped; multiset-equal otherwise). Per package: apparmor
+  13 → 15, docker-spec 12 → 15, host-config 13 → 16, journal
+  22 → 24, cli 43 → 43, host 69 → 69, github 78 → 78
+  (byte-identical), plan 43 → 43. Final 8-package run 303/303
+  pass. Repo-policy pin suite: base 19 failed → 18 failed
+  (full `--no-fail-fast` both sides; `size_limits_hold` fixed
+  by the V8 split, 0 new failures — the rest are pre-existing
+  tree drifts).
+- Gates per commit: `cargo fmt`, `cargo check --locked`,
+  package nextest run, clippy clean on touched files,
+  `check-gaps` 0 throughout, `alint check` stepping 19 → 6.
+
+### Before/after counts (slice 12)
+
+| Rule ID | Before | After | Δ |
+|---|---|---|---|
+| `size-lib-main-150` | 6 | 0 | −6 (V1, V3, V5, V6) |
+| `size-file-400` | 3 | 0 | −3 (V5, V7, V8) |
+| `tests-dir-present` | 4 | 0 | −4 (V1–V4) |
+| `ci-build-runs-on` | 6 | 6 | 0 (generator-owned, untouched) |
+| `policy-gaps` | 0 | 0 | 0 |
+| Total (33 passing · 4 failing → 36 passing · 1 failing) | 19 | 6 | −13 |
+
+Helper gaps: 0 → 0 (`check-gaps` exit 0, empty output).
