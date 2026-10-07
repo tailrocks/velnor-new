@@ -1347,3 +1347,110 @@ environmental `size_limits_hold` only (proven by set diff),
   evidence (12), `b0b4ba045` images READMEs + contract-test
   moves (2), plus the closing record + index-refresh commit —
   all signed off and pushed.
+
+## Docs slice 4: final prose + goldens move + S8 interfaces (2026-10-07)
+
+Converted the last 2 narrative `.md` (38 tracked at slice start →
+36), moved the golden trees out of `docs/` into their owning
+package, and closed the tool-interface surface. No narrative `.md`
+remains outside `docs/content/` MDX.
+
+Units (each: frozen docs build + route smoke, affected Rust scope
+green-or-set-identical, signed off and pushed immediately):
+
+- A `345d1ff2b`: `bootstrap-and-release-contract.md` →
+  `content/docs/proposed/bootstrap-and-release-contract.mdx`
+  (zero links/hazards; resolves 4 forward refs).
+- B `fbbc80519`: `subagent-model-policy.md` →
+  `content/docs/implemented/subagent-model-policy.mdx` (the one
+  `AGENTS.md` link becomes a backtick cite — a repo-relative link
+  would be site-404 under the restored fail-closed build) +
+  implemented-index bullet.
+- C `f2f16bd12` (D09): `git mv docs/proposed/opentofu-goldens/`
+  → `crates/apps/velnor-actions-cli/fixtures/opentofu-goldens/`
+  (CLI owns: goldens are CLI plan/generate bytes; the capture
+  script builds the CLI; `impl_cli_release_manifest` runs the
+  harness). The 3 live path refs move with it (both capture
+  scripts' `GOLDEN_DIR`, `impl_repo_goldens`). Sibling
+  `fixtures/` — not `tests/` — so `tests-only-rust` cannot fire.
+- D1 `d063179c8` (S8): root `README.md` rewritten as an 18-line
+  stub (name + description + 5 canonical-doc links, all
+  resolving); root `AGENTS.md` repointed `.md` → `.mdx` homes
+  (54 lines, 4534 bytes, still pointer-only);
+  `agents_stays_lean` anchor moves `.md` → `.mdx` with it.
+- D2 `1622fde90` (S8): `docs/README.md` deleted (stale index;
+  its MUST/SHOULD paragraph migrates to `/docs`, `deviations.mdx`
+  repoints at it); the 4 repo-relative site-404 links become
+  code cites (`pr29-pr30` → `AGENTS.md`, `pr-1` trio → reviewed-head
+  paths); `failOnError` flips back to `true`; single
+  `.github/PULL_REQUEST_TEMPLATE.md` created (no `.tailrocks/pr.md`
+  or root/docs templates existed); the stale `named-mise-checks.md`
+  pointer fixed in `init.rs` `SAMPLE_BODY` + its `cli-contract.mdx`
+  mirror (no exact-match test pins those bytes).
+
+Goldens proof: tree fingerprint identical across the move
+(`681d67c4…ff95`, files + symlink identities);
+`golden_claude_files_are_agents_symlinks` passes at the new path;
+the CLI harness passes all 20 rejection cases against the new
+`GOLDEN_DIR` and fails at the identical pre-existing environmental
+stage (`FATAL: dogfood plan failed`); a manual nested-case
+recapture byte-matches the moved golden (`diff -r` clean).
+`check-gaps` stays 0 (package `fixtures/` trips no SIZE rule).
+
+Interface verdicts: both `AGENTS.md` stay (root: agent
+instructions pinned by `impl_repo_quality` + `rq11`; `.github/`:
+generator-emitted via `AGENTS_MD_PATH`, pinned by CLI smoke +
+renderer + orchestrator suites); both `CLAUDE.md` are mode-120000
+relative symlinks to `AGENTS.md` (verified). Root `README.md` is a
+hand-maintained stub: no README emitter exists in the generator
+(zero `README` hits in workflow-tree/renderer/contract-release),
+so "generated" is met as derived-stub shape (≤30 lines,
+name + description + links), not machine emission. The PR template
+is hand-added: `generate` replaces `.github/` wholesale (per the
+`init.rs` sample comment), so renderer adoption belongs to the
+generator slice. No new gate flips: dogfood `generate` already
+fails pre-existing on this branch (`workflow_too_large`, exit 1,
+no preview), and the template is invisible to alint (non-root),
+`size_limits_hold` (`docs/*.md` only), and every Rust suite
+(CLI set-identical after D2).
+
+Final `.md` inventory (36 = 6 TOOL + 30 TEST, 0 narrative):
+
+| Path | Class | Real consumer |
+|---|---|---|
+| `README.md` | TOOL | GitHub render/package interface |
+| `AGENTS.md` | TOOL | agents; `impl_repo_quality`, `rq11` |
+| `CLAUDE.md` | TOOL | Claude; symlink → `AGENTS.md` |
+| `.github/AGENTS.md` | TOOL | agents; generator-emitted (`AGENTS_MD_PATH`), CLI/renderer/orchestrator pins |
+| `.github/CLAUDE.md` | TOOL | Claude; symlink → `AGENTS.md` (`CLAUDE_MD_PATH`) |
+| `.github/PULL_REQUEST_TEMPLATE.md` | TOOL | GitHub PR UI (renderer adoption: generator slice) |
+| `fixtures/*/README.md` (19 subdirs) | TEST | presence-pinned by `rq52_counts_and_classification`; walked by `fixtures_hold_no_symlinks` |
+| `fixtures/nested`, `empty-suite`, `hostile-config`, `mbx-nextest`, `minimal-cargo` READMEs | TEST | above + committed input bytes via goldens `setup_case` |
+| `fixtures/parity/README.md` | TEST | above + corpus doc for `impl_cli_parity_golden` |
+| `fixtures/alint-negative/README.md` | TEST | above + dir consumed via `include_str!` in `impl_alint_negative` |
+| `fixtures/tofu-*` READMEs (10) | TEST | above + dirs walked via `fixture_dir()` in `velnor-actions-tofu` suites (`tofu-multiroot`: intent-doc for TempDir-built cases, cites root index) |
+| `fixtures/conflicting-runners`, `handwritten-workflow` READMEs | TEST | above + case shapes mirrored by `impl_rust_evidence` TempDir tests |
+| `fixtures/README.md` | TEST | tree index; cited by `tofu-multiroot/README.md` |
+| `crates/apps/velnor-actions-cli/fixtures/opentofu-goldens/cases/*/preview/.github/{AGENTS,CLAUDE}.md` (10) | TEST | `impl_repo_goldens` symlink pin, capture/check scripts, CLI harness fingerprint |
+
+Known-stale / follow-ups (frozen history untouched): the slice-1
+inventory table, the T04 evidence row's old golden path, dated
+backtick cites (`evidence.mdx`, pr-1 trio prose) stay as committed;
+the generator slice owns PR-template emission, the `build` job,
+and the `workflow_too_large` dogfood failure.
+
+Verify: frozen install (no changes) + fail-closed build green, 80
+pages prerendered (78 + 2, each smoked with title text), `tsc
+--noEmit` clean, `cargo fmt --check` clean, `alint check` at
+baseline (36 passing · 1 failing, exactly 6× `ci-build-runs-on`),
+`check-gaps` exit 0 / 0 findings, repo-policy 129/19 with the FAIL
+set byte-identical to base (19/19 diff clean), CLI 97/5 with the
+identical 5, CLI init 8/8 + orchestrator sample 1/1 green,
+`agents_stays_lean` + quality 7/7 green.
+
+- Commits: `345d1ff2b` bootstrap (1), `fbbc80519` subagent +
+  index (1), `f2f16bd12` goldens move + path refs (D09),
+  `d063179c8` README/AGENTS/quality-anchor (S8),
+  `1622fde90` docs-index removal + link repairs + fail-closed +
+  PR template (S8), plus this closing record — all signed off
+  and pushed.
