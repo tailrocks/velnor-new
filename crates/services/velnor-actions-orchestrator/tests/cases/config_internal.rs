@@ -16,11 +16,8 @@ use crate::support::{
     plan_for_source_change, without_ambient_identity,
 };
 
-#[path = "impl_config_internal/config.rs"]
 mod config;
-#[path = "impl_config_internal/plan.rs"]
 mod plan;
-#[path = "impl_config_internal/validation.rs"]
 mod validation;
 
 /// Uncomment a sample line when it carries TOML after the `#`.

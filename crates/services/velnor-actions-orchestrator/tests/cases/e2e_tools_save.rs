@@ -1,9 +1,9 @@
 //! End-to-end tools-save wiring checks over parsed workflow text.
 //!
-//! Split from `impl_e2e_wiring` (size gate): per-job save shape plus the
+//! Split from `cases::e2e_wiring` (size gate): per-job save shape plus the
 //! tree-wide one-saver-per-key check.
 
-use crate::impl_e2e_wiring::{JobText, StepText};
+use crate::cases::e2e_wiring::{JobText, StepText};
 
 /// Tools-cache step display names, asserted as emitted text.
 const RESTORE_TOOLS_TEXT: &str = "Restore Mise tools";

@@ -7,10 +7,10 @@
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 use velnor_actions_workflow_tree::MAX_WORKFLOW_BYTES;
 
+use crate::cases::perf_p13::perf_harness_p13::{perf_line, timed};
 use crate::cases::tofu_t24_gates::tofu_perf_fixtures_t24::{
     commit_two_tofu, plan_at_event, tofu_repo,
 };
-use crate::impl_perf_p13::perf_harness_p13::{perf_line, timed};
 use crate::support::TestResult;
 
 /// Plan wall plus obligation counts on 1/10/40-root fixtures.

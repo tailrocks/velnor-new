@@ -148,7 +148,7 @@ fn absent_manifest_fails_prepare_in_all_build_modes() -> TestResult {
 #[test]
 fn golden_manifest_fixture_uses_the_canonical_release_schema() -> TestResult {
     let manifest = velnor_actions_contract_release::ReleaseManifest::parse_json(
-        include_str!("../../../../fixtures/consumer-release-manifest.json"),
+        include_str!("../../../../../fixtures/consumer-release-manifest.json"),
         "fixtures/consumer-release-manifest.json",
     )?;
     manifest.validate("fixtures/consumer-release-manifest.json")?;

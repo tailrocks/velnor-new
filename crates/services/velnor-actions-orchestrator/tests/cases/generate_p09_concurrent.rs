@@ -1,7 +1,6 @@
 //! P09 concurrency case: parallel `generate` never writes partially.
 //!
-//! Split from the preview suite; wired into `velnor_orchestrator` by the
-//! orchestrator-test owner with one `mod` line.
+//! Split from the preview suite; indexed in `cases.rs` with one `mod` line.
 
 use std::fs;
 

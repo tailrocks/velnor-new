@@ -1,7 +1,7 @@
 //! P13 perf harness: plan timing plus obligation extraction.
 //!
-//! Included via `#[path]` from `impl_perf_p13`, so the parent wires a
-//! single `mod` line for the whole perf suite.
+//! Submodule of `cases::perf_p13`, so the parent wires a single `mod`
+//! line for the whole perf suite.
 
 use std::fs;
 use std::path::Path;

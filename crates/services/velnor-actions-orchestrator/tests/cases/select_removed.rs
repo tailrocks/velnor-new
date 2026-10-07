@@ -9,7 +9,7 @@ use std::path::Path;
 
 use tempfile::TempDir;
 
-use crate::impl_select::{commit, plan_pr, reasons_for};
+use crate::cases::select::{commit, plan_pr, reasons_for};
 use crate::support::{TestResult, config_with_branch, fixture_manifest_json, git};
 
 /// Nested workspace with a root package plus `members` under `rust/`.

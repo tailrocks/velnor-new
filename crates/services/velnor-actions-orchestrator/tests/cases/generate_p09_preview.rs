@@ -1,8 +1,7 @@
 //! P07/P09 regression cases: validated task-step env, preview and
 //! generate filesystem guarantees.
 //!
-//! Owned by the envfs builder; wired into `velnor_orchestrator` by the
-//! orchestrator-test owner with one `mod` line.
+//! Owned by the envfs builder; indexed in `cases.rs` with one `mod` line.
 
 use std::fs;
 

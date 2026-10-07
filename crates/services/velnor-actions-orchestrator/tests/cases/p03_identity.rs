@@ -1,7 +1,6 @@
 //! P03 identity matrix: generator, relocation, lanes, toolchain, closure.
 //!
-//! Unregistered: the parent wires this module into `velnor_orchestrator.rs`
-//! (P09 pattern). Cases run through the public plan API only.
+//! Indexed in `cases.rs` (P09 pattern). Cases run through the public plan API only.
 
 use velnor_actions_contract_workflow::{BaselineStatus, ObligationDecision, Plan};
 

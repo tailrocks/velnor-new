@@ -1,34 +1,4 @@
 //! Integration test entry point; cases live under `cases/`, shared helpers in `support`.
+
 mod cases;
-mod impl_bench_p13;
-mod impl_cache_fixtures;
-mod impl_cache_warm;
-mod impl_config_internal;
-mod impl_consumer_manifest_file;
-mod impl_cover_pipeline;
-mod impl_crate_graph;
-mod impl_discovery_cache;
-mod impl_e2e_scrub;
-mod impl_e2e_tools_save;
-mod impl_e2e_wiring;
-mod impl_final_orch;
-mod impl_fmt_scope;
-mod impl_freshness_emit;
-mod impl_generate_p09_concurrent;
-mod impl_generate_p09_preview;
-mod impl_generate_size_guard;
-mod impl_generate_tofu_env;
-mod impl_git_paths_p10;
-mod impl_lane_isolation;
-mod impl_local_shared_action;
-mod impl_matrix;
-mod impl_neg_pipeline_p13;
-mod impl_p03_identity;
-mod impl_p04_reuse;
-mod impl_p06_detection;
-mod impl_p06_detection_malformed;
-mod impl_perf_p13;
-mod impl_select;
-mod impl_select_base;
-mod impl_select_removed;
 mod support;

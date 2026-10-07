@@ -1,6 +1,6 @@
 //! Crate-job graph regressions: one ordered job per crate.
 //!
-//! Split from `impl_wire_w1`: generated-YAML shape, per-crate drivers,
+//! Split from `cases::wire_w1`: generated-YAML shape, per-crate drivers,
 //! obligation ordering, toolchain sharing, and cache silence.
 
 use std::fs;
