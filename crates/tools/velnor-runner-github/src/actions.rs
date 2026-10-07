@@ -32,6 +32,10 @@ pub struct ActionsRepository {
     pub full_name: String,
     /// Whether GitHub reports this repository as private.
     pub private: bool,
+    /// Whether GitHub reports that the authenticated actor has repository
+    /// administrator access. `None` means the endpoint omitted permissions;
+    /// discovery callers must not treat absence as authorization.
+    pub admin: Option<bool>,
 }
 
 /// GitHub Actions job state. `id` is the numeric REST job id, distinct from a
@@ -114,6 +118,7 @@ where
         id: parsed.id,
         full_name: parsed.full_name,
         private,
+        admin: parsed.permissions.and_then(|permissions| permissions.admin),
     })
 }
 
@@ -298,6 +303,12 @@ struct ActionsRepositoryResponse {
     id: i64,
     full_name: String,
     private: Option<bool>,
+    permissions: Option<RepositoryPermissions>,
+}
+
+#[derive(Deserialize)]
+struct RepositoryPermissions {
+    admin: Option<bool>,
 }
 
 #[derive(Deserialize)]

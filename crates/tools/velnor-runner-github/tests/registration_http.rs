@@ -5,8 +5,9 @@ mod regwire;
 
 use velnor_runner_github::{
     AdminConnectionCall, CAPACITY_HEADER, Method, RegistrationScope, RegistrationTokenCall,
-    SessionError, WireError, admin_connection, enterprise_registration_token_path,
-    organization_registration_token_path, registration_token, repository_registration_token_path,
+    SessionError, TransportFail, WireError, admin_connection, admin_connection_once,
+    enterprise_registration_token_path, organization_registration_token_path, registration_token,
+    repository_registration_token_path,
 };
 
 use regwire::{Script, exchange, header, show};
@@ -260,6 +261,41 @@ fn admin_connection_retries_403_then_stops() {
     );
     assert_eq!(err.err(), Some(SessionError::Wire(WireError::Forbidden)));
     assert_eq!(script.seen.len(), 2);
+}
+
+#[test]
+fn admin_connection_once_does_not_retry_explicit_auth_rejection() {
+    let mut script = Script::replies(vec![Ok(exchange(401, "")), Ok(exchange(200, "{}"))]);
+    let err = admin_connection_once(
+        &mut script,
+        &AdminConnectionCall {
+            config_url: "https://github.com/acme/widget",
+            registration_token: REG,
+        },
+    );
+    assert_eq!(
+        err.err(),
+        Some(SessionError::Wire(WireError::UnexpectedStatus))
+    );
+    assert_eq!(script.seen.len(), 1);
+}
+
+#[test]
+fn admin_connection_once_stops_after_dispatched_post_loses_response() {
+    let mut script = Script::replies(vec![Err(TransportFail::Timeout), Ok(exchange(200, "{}"))]);
+    let err = admin_connection_once(
+        &mut script,
+        &AdminConnectionCall {
+            config_url: "https://github.com/acme/widget",
+            registration_token: REG,
+        },
+    );
+    assert_eq!(err.err(), Some(SessionError::Uncertain));
+    // Script records the POST before simulating a lost response. The queued
+    // success proves this discovery variant does not issue a duplicate POST.
+    assert_eq!(script.seen.len(), 1);
+    assert_eq!(script.seen[0].method, Method::Post);
+    assert_eq!(script.seen[0].path, "/actions/runner-registration");
 }
 
 #[test]

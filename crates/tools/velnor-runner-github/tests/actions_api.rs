@@ -157,7 +157,7 @@ fn response_identity_must_match_requested_job_and_run() {
 #[test]
 fn repository_and_fork_policy_reads_are_explicit_read_only_inputs() -> Result<(), &'static str> {
     let mut script = Script::replies(&[
-        r#"{"id":829618808,"full_name":"ChainArgos/java-monorepo","private":true,"visibility":"private"}"#,
+        r#"{"id":829618808,"full_name":"ChainArgos/java-monorepo","private":true,"visibility":"private","permissions":{"admin":true}}"#,
         r#"{"run_workflows_from_fork_pull_requests":false,"send_write_tokens_to_workflows":false,"send_secrets_and_variables":false,"require_approval_for_fork_pr_workflows":false}"#,
     ]);
 
@@ -173,6 +173,7 @@ fn repository_and_fork_policy_reads_are_explicit_read_only_inputs() -> Result<()
             id: 829_618_808,
             full_name: "ChainArgos/java-monorepo".to_owned(),
             private: true,
+            admin: Some(true),
         }
     );
     assert_eq!(
@@ -205,6 +206,23 @@ fn repository_and_fork_policy_reads_are_explicit_read_only_inputs() -> Result<()
 }
 
 #[test]
+fn repository_admin_permission_preserves_missing_and_denied_as_distinct_metadata() {
+    let mut denied = Script::replies(&[
+        r#"{"id":829618808,"full_name":"ChainArgos/java-monorepo","private":true,"permissions":{"admin":false}}"#,
+    ]);
+    let denied = get_actions_repository(&mut denied, "ChainArgos", "java-monorepo", TOKEN)
+        .expect("repository metadata");
+    assert_eq!(denied.admin, Some(false));
+
+    let mut missing = Script::replies(&[
+        r#"{"id":829618808,"full_name":"ChainArgos/java-monorepo","private":true}"#,
+    ]);
+    let missing = get_actions_repository(&mut missing, "ChainArgos", "java-monorepo", TOKEN)
+        .expect("repository metadata");
+    assert_eq!(missing.admin, None);
+}
+
+#[test]
 fn trust_reads_reject_missing_fields_and_mismatched_repository() {
     let mut missing_private =
         Script::replies(&[r#"{"id":829618808,"full_name":"ChainArgos/java-monorepo"}"#]);
@@ -214,7 +232,7 @@ fn trust_reads_reject_missing_fields_and_mismatched_repository() {
     );
 
     let mut wrong_repo = Script::replies(&[
-        r#"{"id":829618808,"full_name":"another-org/java-monorepo","private":true}"#,
+        r#"{"id":829618808,"full_name":"another-org/java-monorepo","private":true,"permissions":{"admin":true}}"#,
     ]);
     assert_eq!(
         get_actions_repository(&mut wrong_repo, "ChainArgos", "java-monorepo", TOKEN),
