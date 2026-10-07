@@ -1,7 +1,12 @@
+---
+title: "Velnor Actions generated-file contract"
+description: "Status: Proposed specification. The orchestrator coordinates writes; named adapters own each generated format. No generated-file behavior is"
+---
+
 **Status:** Proposed specification. The orchestrator coordinates writes; named
 adapters own each generated format. No generated-file behavior is implemented.
 
-# Velnor Actions generated-file contract
+
 
 Velnor V1 generate writes one complete tree:
 
@@ -27,10 +32,10 @@ release-plz configs; with release disabled, `consumer-v1` emits none of
 the three. All workflow files are rendered from typed workflow IR by
 `velnor-actions-workflow-renderer`, each with an explicit `permissions:`
 block (least privilege for its role); see [workflow
-§3](workflow-contract.md).
+§3](/docs/proposed/workflow-contract).
 
 > Amendment 2026-09-30: the consumer release scope ([release
-> §11](release-contract.md)) overrides the earlier blanket
+> §11](/docs/proposed/release-contract)) overrides the earlier blanket
 > prohibition on consumer release emission. `consumer-v1` MUST emit
 > `release.yml` plus `.github/release-plz.toml` and
 > `.github/release-plz-bootstrap.toml` when
@@ -68,11 +73,11 @@ human report.
 ## 1. Internal task identities
 
 The generator assigns every product obligation a stable internal task ID:
-stack/<stack-id>/<component-key>/<task-kind>/<configuration>. Internal
-orchestration obligations use internal/<task-kind>/<configuration>. The Rust
+stack/&lt;stack-id>/&lt;component-key>/&lt;task-kind>/&lt;configuration>. Internal
+orchestration obligations use internal/&lt;task-kind>/&lt;configuration>. The Rust
 adapter uses a normalized repository-relative Cargo manifest path without
 /Cargo.toml, with root for the root manifest. A test shard appends
-/shard-<index>-of-<count>.
+/shard-&lt;index>-of-&lt;count>.
 
 These IDs are metadata only. They are not public CLI commands, Mise task
 names, generated files, or executable names. The workflow and reports preserve

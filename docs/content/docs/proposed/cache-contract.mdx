@@ -1,4 +1,7 @@
-# Velnor V1 Cache and Report Contract
+---
+title: "Velnor V1 Cache and Report Contract"
+description: "Status: proposed; defines task identity, cache ownership/trust, reports, and final status; not an implementation"
+---
 
 Status: proposed; defines task identity, cache ownership/trust, reports, and final status; not an implementation claim.
 
@@ -80,7 +83,7 @@ baseline coverage.
 `lane_id` MUST also include task/build configuration and a distinct concurrent writer lane. Concurrent Cargo
 writers never share a target directory. The complete graph, change selection, trusted baseline artifact, and
 status definitions are specified in the [parallelism and affected-work
-contract](parallelism-and-selection-contract.md).
+contract](/docs/proposed/parallelism-and-selection-contract).
 
 The GitHub cache key MUST be:
 
@@ -94,7 +97,7 @@ Cargo sources, and a unique run/matrix closure digest for MBX. The complete key 
 bytes; the generator MUST fail if it is longer. Restore prefixes MAY omit `snapshot_id` only for the same
 compatibility ID. A commit SHA alone MUST NOT be a cache identity.
 
-## 2. V1 Rust cache paths, transport, fallback, and [host seeds](host-seed-contract.md)
+## 2. V1 Rust cache paths, transport, fallback, and [host seeds](/docs/proposed/host-seed-contract)
 
 The Cargo/MBX paths below map generic cache rules for V1 Rust. Future adapters define their own paths and
 compatibility fields under the same invariants.

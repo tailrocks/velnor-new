@@ -2,7 +2,7 @@
 
 - State: recorded-pending-merge (branch `docs/velnor-actions-spec`; becomes implemented only on merge; required checks green at `bdfffb9` — run `36569723507`, `https://github.com/tailrocks/velnor-new/actions/runs/36569723507`)
 - Proof vocabulary: policy-on-source (baseline manifest validation, exact-base lookup argv, publish-forbidden rules) + qualification-of-generator (cover/narrow legs run green in CI)
-- Specification: [implementation-plan.md](../proposed/implementation-plan.md) Gate 5 + [cache-contract.md](../proposed/cache-contract.md) + [parallelism-and-selection-contract.md](../proposed/parallelism-and-selection-contract.md)
+- Specification: [implementation-plan.md](../proposed/implementation-plan.md) Gate 5 + [cache-contract.md](../content/../content/docs/proposed/cache-contract.mdxx) + [parallelism-and-selection-contract.md](../proposed/parallelism-and-selection-contract.md)
 - Landed by: unmerged branch `docs/velnor-actions-spec`, HEAD `bdfffb9`
 - Merge date: TBD
 - Delivered: evidence-only baseline artifact published after a protected default-branch push passes the final gate; exact-base-commit lookup for PR/merge-group/subsequent-push; planner classifies all obligations before building the execute-only matrix; exact successful base proof covers only matching task/input identities; missing/untrusted/malformed baselines broaden execution; PRs cannot publish trusted evidence; qualified forward dependency propagation, carry-forward, expiry, malformed artifacts, and final coverage aggregation. Owning crates: `velnor-actions-orchestrator`, `velnor-actions-mise` (pinned `gh` fetch argv).

@@ -126,7 +126,7 @@ record a `transient_profile_evidence` finding and `generate` MUST exit 1
 with instructions to declare explicit sticky keys. The sticky keys are
 `[stacks.rust] compile_driver = "cargo" | "mbx"` and `[stacks.rust]
 test_runner = "cargo_test" | "cargo_nextest"` (see
-[architecture §3](architecture.md)). A declared key that conflicts with
+[architecture §3](../content/../content/docs/proposed/architecture.mdxx)). A declared key that conflicts with
 durable evidence fails closed with exit 1. Every profile records its
 provenance (declared keys and evidence records with path, line, and
 command-or-setting) in the plan finding and the generation report.

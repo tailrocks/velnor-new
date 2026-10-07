@@ -4,8 +4,8 @@
 
 This contract defines how `velnor-actions` auto-detects registered stacks,
 selects obligations, omits work with valid evidence, and emits parallel
-GitHub Actions steps and jobs. It extends the [workflow contract](workflow-contract.md)
-and [cache/report contract](cache-contract.md).
+GitHub Actions steps and jobs. It extends the [workflow contract](../content/../content/docs/proposed/workflow-contract.mdxx)
+and [cache/report contract](../content/../content/docs/proposed/cache-contract.mdxx).
 
 ## 1. Required result invariant
 
