@@ -56,13 +56,8 @@ async fn hostile_subjects_fail_closed_without_a_row() -> Result<(), String> {
         .await
         .map_err(|error| error.to_string())?;
     assert_eq!(journal.begin("launch", "").await, Err(HostError::Journal));
-    assert!(
-        journal
-            .rows()
-            .await
-            .map_err(|error| error.to_string())?
-            .is_empty()
-    );
+    let rows = journal.rows().await.map_err(|error| error.to_string())?;
+    assert_eq!(rows, Vec::new());
     drop(journal);
     std::fs::remove_dir_all(dir).map_err(|error| error.to_string())?;
     Ok(())
