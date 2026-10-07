@@ -8,8 +8,10 @@ use velnor_actions_contract_workflow::{
     Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr,
 };
 use velnor_actions_workflow_renderer::{
-    ALINT_USES, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, RenderError,
-    ValidatorCommand, checkout_step, merge_step, render_workflow_ir, shell_step,
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, ValidatorCommand, render_workflow_ir,
+};
+use velnor_actions_workflow_steps::{
+    ALINT_USES, RenderError, checkout_step, merge_step, shell_step,
 };
 
 const VERSION: &str = "0.1.0";

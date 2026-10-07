@@ -4,11 +4,11 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION;
 use velnor_actions_contract_workflow::{Job, JobTimeout, Step, StepId, StepKind, StepRole};
-use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::cache_p08::elect_tofu_provider_savers;
 use velnor_actions_workflow_renderer::tofu_cache::{
     TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDERS_SAVE_USES, tofu_providers_save_step,
 };
+use velnor_actions_workflow_steps::RenderError;
 
 use super::impl_renderer_fixtures::*;
 

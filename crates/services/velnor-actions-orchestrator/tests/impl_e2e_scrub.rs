@@ -24,9 +24,9 @@ fn emitted_yaml_scrubs_repo_code_steps() -> TestResult {
     // Obligation wrappers execute repository code: `sh -c` scripts
     // carry the `unset` prelude naming every unset var, and the scrub
     // overlay blanks inheritance.
-    let prelude = velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude();
+    let prelude = velnor_actions_workflow_steps::toolchain_env::credential_unset_prelude();
     assert!(yaml.contains(&prelude), "scripts must unset:\n{yaml}");
-    for var in velnor_actions_workflow_renderer::toolchain_env::CREDENTIAL_UNSET_VARS {
+    for var in velnor_actions_workflow_steps::toolchain_env::CREDENTIAL_UNSET_VARS {
         assert!(prelude.contains(var), "prelude must unset {var}");
     }
     assert!(

@@ -1,8 +1,8 @@
 //! Versioned release manifest assembly and immutable publication.
 
-use crate::RenderError;
-use crate::yaml::Yaml;
 use velnor_actions_contract_release::RELEASE_MANIFEST_FILENAME;
+use velnor_actions_workflow_steps::RenderError;
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 use super::super::features::{base, finish};
 use super::GeneratorReleasePins;

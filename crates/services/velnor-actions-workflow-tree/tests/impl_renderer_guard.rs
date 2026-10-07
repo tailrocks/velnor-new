@@ -1,8 +1,9 @@
 //! Output-guard path cases.
 use std::path::Path;
-use velnor_actions_workflow_renderer::{
-    ACTIONLINT_PATH, RenderError, WORKFLOW_PATH, check_no_symlink, join_within_root,
-    validate_tree_path,
+use velnor_actions_contract_workflow::CI_WORKFLOW_PATH;
+use velnor_actions_workflow_steps::RenderError;
+use velnor_actions_workflow_tree::{
+    ACTIONLINT_PATH, check_no_symlink, join_within_root, validate_tree_path,
 };
 
 #[test]
@@ -11,7 +12,10 @@ fn guard_accepts_generated_tree_paths() -> Result<(), RenderError> {
         validate_tree_path(ACTIONLINT_PATH)?.as_str(),
         ACTIONLINT_PATH
     );
-    assert_eq!(validate_tree_path(WORKFLOW_PATH)?.as_str(), WORKFLOW_PATH);
+    assert_eq!(
+        validate_tree_path(CI_WORKFLOW_PATH)?.as_str(),
+        CI_WORKFLOW_PATH
+    );
     assert_eq!(
         validate_tree_path(".github/workflows/extra.yml")?.as_str(),
         ".github/workflows/extra.yml"
@@ -39,7 +43,7 @@ fn guard_rejects_unsafe_paths() {
 
 #[test]
 fn guard_join_stays_within_root() -> Result<(), RenderError> {
-    let rel = validate_tree_path(WORKFLOW_PATH)?;
+    let rel = validate_tree_path(CI_WORKFLOW_PATH)?;
     let joined = join_within_root(Path::new("/repo"), &rel);
     assert_eq!(joined, Path::new("/repo/.github/workflows/ci.yml"));
     assert!(joined.starts_with("/repo"));
@@ -48,7 +52,7 @@ fn guard_join_stays_within_root() -> Result<(), RenderError> {
 
 #[test]
 fn guard_symlink_probe_fails_closed() -> Result<(), RenderError> {
-    let rel = validate_tree_path(WORKFLOW_PATH)?;
+    let rel = validate_tree_path(CI_WORKFLOW_PATH)?;
     let root = Path::new("/repo");
     assert!(check_no_symlink(root, &rel, |_| false).is_ok());
     assert!(check_no_symlink(root, &rel, |_| true).is_err());

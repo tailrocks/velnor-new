@@ -112,7 +112,7 @@ fn lock_acquire_inserts_digest_verified_stage() {
 fn lock_acquire_records_source_commit() {
     use velnor_actions_contract_release::{GeneratorBinary, LockedGenerator, MiseBootstrap};
     use velnor_actions_contract_workflow::StepKind;
-    use velnor_actions_workflow_renderer::steps::RELEASE_COMMIT_ENV;
+    use velnor_actions_workflow_steps::steps::RELEASE_COMMIT_ENV;
     let lock = GeneratorLock {
         schema: 1,
         generator: LockedGenerator {
@@ -173,8 +173,8 @@ fn lock_acquire_records_source_commit() {
 fn preseed_attach_builds_once_and_sets_mode() {
     use velnor_actions_actionlint::ActionlintConfigInput;
     use velnor_actions_workflow_renderer::{
-        MBX_PREFLIGHT_NAME, MBX_VERSION_CHECK_NAME, PRESEED_BUILD_NAME, PRESEED_STAGE_NAME,
-        steps::MBX_RESTORE_NAME,
+        PRESEED_BUILD_NAME, PRESEED_STAGE_NAME, cache_steps::MBX_PREFLIGHT_NAME,
+        cache_steps::MBX_RESTORE_NAME, cache_steps::MBX_VERSION_CHECK_NAME,
     };
     let catalog = ToolCatalog::pinned();
     let mut plan = WorkflowPlan {

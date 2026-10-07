@@ -10,14 +10,13 @@ use velnor_actions_contract::validate_job_id;
 use velnor_actions_contract_workflow::{JobTimeout, Step, StepKind};
 
 use crate::{
-    RenderError,
     release_permissions::JobPermissions,
     release_spec::{
         BootstrapPlan, ReleaseConcurrency, ReleaseTriggers, check_lock_anchor, is_clean_text,
         publish_gate_condition, validate_environment, validate_repository,
     },
-    steps::scan_for_private_subcommands,
 };
+use velnor_actions_workflow_steps::{RenderError, steps::scan_for_private_subcommands};
 
 /// Release boundary role carried by one job (bootstrap optional).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -111,7 +110,7 @@ impl ReleaseJobSpec {
             )));
         }
         scan_for_private_subcommands(&self.display_name)?;
-        crate::guard::validate_runs_on(&self.runs_on)?;
+        velnor_actions_workflow_tree::guard::validate_runs_on(&self.runs_on)?;
         if self.steps.is_empty() {
             return Err(RenderError::InvalidWorkflow(format!("empty_steps:{id}")));
         }

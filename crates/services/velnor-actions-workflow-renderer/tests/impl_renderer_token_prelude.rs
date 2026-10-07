@@ -7,8 +7,9 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_contract_workflow::StepRole;
-use velnor_actions_workflow_renderer::{
-    RenderError, ambient_shell_step, checkout_step, plan_step, render_workflow_ir,
+use velnor_actions_workflow_renderer::render_workflow_ir;
+use velnor_actions_workflow_steps::{
+    RenderError, ambient_shell_step, checkout_step, plan_step,
     toolchain_env::credential_unset_prelude,
 };
 

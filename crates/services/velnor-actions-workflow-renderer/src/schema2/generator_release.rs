@@ -4,9 +4,9 @@
 //! `contents: write`. Only publish does.
 
 use super::{GeneratorReleasePins, Schema2WorkflowRequest};
-use crate::RenderError;
 use crate::runs_on::runs_on_yaml;
-use crate::yaml::Yaml;
+use velnor_actions_workflow_steps::RenderError;
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 /// GitHub-hosted macOS label. The arm64 binary is not built on Ubuntu.
 const MACOS_RUNS_ON: &str = "macos-15";

@@ -14,7 +14,8 @@ use std::fs;
 use velnor_actions_contract_workflow::StepKind;
 use velnor_actions_mise::{PREPARE_RUST_COMPONENTS_STEP, cache_sources};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
-use velnor_actions_workflow_renderer::{SETUP_MISE_NAME, render::WORKFLOW_PATH};
+use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
+use velnor_actions_workflow_steps::SETUP_MISE_NAME;
 
 use super::impl_common::{TestResult, config_with_branch, fixture_manifest_json, git};
 

@@ -12,7 +12,8 @@ pub use velnor_actions_contract_workflow::workflow::step_identity::{
 };
 use velnor_actions_contract_workflow::{Step, StepRole};
 
-use crate::{RenderError, marker, steps, yaml};
+use velnor_actions_workflow_steps::{RenderError, steps};
+use velnor_actions_workflow_tree::{marker, yaml};
 
 /// Display name of the provider restore step.
 pub const TOFU_PROVIDERS_RESTORE_NAME: &str = "Restore Tofu providers";
@@ -57,7 +58,7 @@ mkdir -m 700 "$d""#;
 /// # Errors
 pub(crate) fn provider_admission_file(
     version: &str,
-) -> Result<crate::tree::RenderedFile, RenderError> {
+) -> Result<velnor_actions_workflow_tree::rendered::RenderedFile, RenderError> {
     let body = yaml::Yaml::Map(vec![
         (
             "name".to_owned(),
@@ -83,7 +84,7 @@ pub(crate) fn provider_admission_file(
     let quoted = yaml::quote_run_values_in_yaml(body);
     let bytes = marker::with_marker(version, &yaml::render_yaml(&quoted))?;
     steps::scan_for_private_subcommands(&bytes)?;
-    Ok(crate::tree::RenderedFile {
+    Ok(velnor_actions_workflow_tree::rendered::RenderedFile {
         path: ".github/actions/tofu-provider-admission/action.yml".to_owned(),
         bytes,
     })
@@ -215,7 +216,7 @@ pub fn tofu_providers_save_step() -> Result<Step, RenderError> {
 
 /// Rename a built step; names are fixed by the caller contract.
 fn rename_step(mut step: Step, name: &str) -> Result<Step, RenderError> {
-    crate::steps::scan_for_private_subcommands(name)?;
+    velnor_actions_workflow_steps::steps::scan_for_private_subcommands(name)?;
     name.clone_into(&mut step.name);
     Ok(step)
 }

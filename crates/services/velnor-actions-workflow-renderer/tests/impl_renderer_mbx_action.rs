@@ -1,11 +1,12 @@
 use velnor_actions_contract::cachekey::mbx_cache_generation;
 use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_contract_workflow::{Step, StepKind};
-use velnor_actions_workflow_renderer::steps::{
+use velnor_actions_workflow_renderer::cache_steps::{
     CompileDriver, MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, mbx_steps_for_driver,
 };
-use velnor_actions_workflow_renderer::toolchain_env::credential_scrub;
-use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
+use velnor_actions_workflow_renderer::render_workflow_ir;
+use velnor_actions_workflow_steps::RenderError;
+use velnor_actions_workflow_steps::toolchain_env::credential_scrub;
 
 use super::impl_renderer_fixtures::{
     TEST_MBX_VERSION, TEST_RUST_TOOLCHAIN, fixture_ctx, fixture_ir, job, mbx_tool_env, step_names,
@@ -16,7 +17,7 @@ const MBX_ACTION: &str = "jdx/mr-boxington-action@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 fn steps(
     version: &str,
     rust: &str,
-) -> Result<[Step; 3], velnor_actions_workflow_renderer::RenderError> {
+) -> Result<[Step; 3], velnor_actions_workflow_steps::RenderError> {
     mbx_steps_for_driver(
         MBX_ACTION,
         CompileDriver::Mbx,
@@ -25,9 +26,7 @@ fn steps(
         mbx_tool_env(rust),
     )?
     .ok_or_else(|| {
-        velnor_actions_workflow_renderer::RenderError::InvalidWorkflow(
-            "mbx_steps_missing".to_owned(),
-        )
+        velnor_actions_workflow_steps::RenderError::InvalidWorkflow("mbx_steps_missing".to_owned())
     })
 }
 
@@ -38,7 +37,7 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
     assert_eq!(preflight.name, MBX_PREFLIGHT_NAME);
     assert_eq!(
         version_check.name,
-        velnor_actions_workflow_renderer::MBX_VERSION_CHECK_NAME
+        velnor_actions_workflow_renderer::cache_steps::MBX_VERSION_CHECK_NAME
     );
     let StepKind::Shell {
         run,

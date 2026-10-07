@@ -65,7 +65,7 @@ fn named_check_identity_and_report_upload_stay_on_their_exact_lane() {
             role: Some(StepRole::MatrixReportUpload),
             condition: Some("always()".to_owned()),
             kind: StepKind::Action {
-                uses: crate::steps::UPLOAD_ARTIFACT_USES.to_owned(),
+                uses: velnor_actions_workflow_steps::steps::UPLOAD_ARTIFACT_USES.to_owned(),
                 with: BTreeMap::from([
                     ("name".to_owned(), format!("velnor-crate-run-attempt-{id}")),
                     ("path".to_owned(), "reports".to_owned()),

@@ -7,7 +7,7 @@ use velnor_actions_contract_workflow::{Job, StepKind, StepRole};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::closure::download_plan_step;
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, WORKFLOW_PATH};
-use velnor_actions_workflow_renderer::steps::{MERGE_OPERATION, WRITE_REQUEST_OPERATION};
+use velnor_actions_workflow_steps::steps::{MERGE_OPERATION, WRITE_REQUEST_OPERATION};
 
 use super::impl_common::{TestResult, config_with_branch, make_repo};
 
@@ -99,8 +99,8 @@ fn rename_authority_steps(jobs: &mut std::collections::BTreeMap<String, Job>) {
 
 /// Compare the complete generated trees after removing only step labels.
 fn assert_generation_equivalent(
-    original: &velnor_actions_workflow_renderer::RenderedTree,
-    renamed: &velnor_actions_workflow_renderer::RenderedTree,
+    original: &velnor_actions_workflow_tree::RenderedTree,
+    renamed: &velnor_actions_workflow_tree::RenderedTree,
 ) -> TestResult {
     let original_yaml = original
         .get(WORKFLOW_PATH)
@@ -182,7 +182,7 @@ fn is_authority_role(role: StepRole) -> bool {
 }
 
 /// Replace only serialized step labels while retaining every semantic field.
-fn normalize_tree(tree: &velnor_actions_workflow_renderer::RenderedTree) -> Vec<(String, String)> {
+fn normalize_tree(tree: &velnor_actions_workflow_tree::RenderedTree) -> Vec<(String, String)> {
     tree.files
         .iter()
         .map(|file| {

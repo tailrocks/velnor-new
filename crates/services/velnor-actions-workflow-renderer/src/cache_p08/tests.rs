@@ -30,7 +30,7 @@ fn base_job(setup: &MiseSetup) -> Job {
         permissions: None,
         environment: None,
         steps: vec![
-            crate::steps::checkout_step(CHECKOUT).expect("checkout"),
+            velnor_actions_workflow_steps::steps::checkout_step(CHECKOUT).expect("checkout"),
             setup_step,
             Step {
                 name: "Run Cargo".to_owned(),

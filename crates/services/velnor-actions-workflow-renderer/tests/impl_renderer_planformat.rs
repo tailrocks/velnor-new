@@ -2,10 +2,9 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::{StepKind, StepRole};
+use velnor_actions_workflow_renderer::CHECK_GENERATED_NAME;
 use velnor_actions_workflow_renderer::plan_format::{FORMAT_STEP_NAME, ensure_plan_format};
-use velnor_actions_workflow_renderer::{
-    CHECK_GENERATED_NAME, RenderError, checkout_step, plan_step,
-};
+use velnor_actions_workflow_steps::{RenderError, checkout_step, plan_step};
 
 use super::impl_renderer_fixtures::*;
 

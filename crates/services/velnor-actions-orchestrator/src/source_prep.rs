@@ -65,7 +65,7 @@ pub(crate) fn isolated_manifest_flag(root: &str) -> String {
 /// first): shell sequencing for cargo isolation lives here, so the
 /// orchestrator's `sh` confinement set stays closed.
 pub(crate) fn privilege_drop_argv(install: &str, payload: &str) -> Vec<String> {
-    let prelude = velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude();
+    let prelude = velnor_actions_workflow_steps::toolchain_env::credential_unset_prelude();
     let script = format!(
         "{{ {install} && {prelude} }} && {}{payload}",
         cargo_isolation_prefix(),
@@ -144,7 +144,7 @@ fn fetch_steps_with(
         } else {
             format!("{FETCH_SOURCES_STEP} ({manifest})")
         };
-        let mut step = velnor_actions_workflow_renderer::ambient_shell_step(
+        let mut step = velnor_actions_workflow_steps::ambient_shell_step(
             &name,
             vec!["sh".to_owned(), "-c".to_owned(), script],
             env.clone(),

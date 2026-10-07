@@ -23,7 +23,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::{Step, StepRole};
 
-use crate::{
+use velnor_actions_workflow_steps::{
     RenderError,
     artifact_paths::{PRESEED_OUTPUT_DIR_EXPR, PRESEED_STAGE_DIR_EXPR},
     steps,

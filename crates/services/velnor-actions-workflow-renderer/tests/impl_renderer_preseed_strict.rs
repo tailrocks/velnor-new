@@ -2,8 +2,9 @@
 
 use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_workflow_renderer::{
-    PRESEED_STAGE_NAME, PRESEED_VERIFY_MANIFEST_NAME, RenderError, render_workflow_ir_strict,
+    PRESEED_STAGE_NAME, PRESEED_VERIFY_MANIFEST_NAME, render_workflow_ir_strict,
 };
+use velnor_actions_workflow_steps::RenderError;
 
 use super::impl_renderer_fixtures::*;
 use super::impl_renderer_preseed::{preseed_final, preseed_plan};

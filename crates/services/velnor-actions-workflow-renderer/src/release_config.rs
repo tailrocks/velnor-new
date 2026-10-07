@@ -5,11 +5,9 @@
 //! the bootstrap exception. The bootstrap-only file needs the distinct
 //! [`BootstrapReleasePlzConfig`] type, so the normal path can never emit it.
 
-use crate::{
-    RenderError, marker,
-    release_spec::{is_clean_text, validate_package_name},
-    steps::scan_for_private_subcommands,
-};
+use crate::release_spec::{is_clean_text, validate_package_name};
+use velnor_actions_workflow_steps::{RenderError, steps::scan_for_private_subcommands};
+use velnor_actions_workflow_tree::marker;
 
 /// One selected package in the effective config.
 #[derive(Debug, Clone, PartialEq, Eq)]

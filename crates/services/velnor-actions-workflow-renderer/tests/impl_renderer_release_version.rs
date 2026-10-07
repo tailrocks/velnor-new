@@ -1,9 +1,9 @@
 //! Bootstrap `version` dispatch binding and publisher-gate cases.
 use std::collections::BTreeMap;
-use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::release_spec::{
     BootstrapPlan, DispatchInput, ReleaseTriggers, publish_gate_condition,
 };
+use velnor_actions_workflow_steps::RenderError;
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 const REPO: &str = "acme/widgets";

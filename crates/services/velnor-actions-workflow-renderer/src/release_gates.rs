@@ -10,11 +10,10 @@
 use velnor_actions_contract_workflow::{Step, StepKind};
 
 use crate::{
-    RenderError, commands,
     release_checkout_gates::{check_checkout_shape, require_exact_checkout},
     release_jobs::{ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec},
-    steps,
 };
+use velnor_actions_workflow_steps::{RenderError, commands, steps};
 
 /// Forge-token env key every release-plz step carries.
 ///

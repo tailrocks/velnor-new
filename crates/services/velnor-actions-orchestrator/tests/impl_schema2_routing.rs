@@ -3,7 +3,7 @@
 use velnor_actions_orchestrator::{
     ExecutionMode, migrate_config, prepare, render_staged_tree, render_staged_tree_with,
 };
-use velnor_actions_workflow_renderer::RenderedTree;
+use velnor_actions_workflow_tree::RenderedTree;
 
 use crate::impl_common::{TestResult, config_with_branch, git, make_repo};
 use monitoring_fixture::MONITORING;

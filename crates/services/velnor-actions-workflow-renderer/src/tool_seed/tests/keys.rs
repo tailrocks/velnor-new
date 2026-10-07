@@ -7,7 +7,8 @@ use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
     let setup = setup_config();
     let expected = cache_key();
-    let mut checkout = crate::steps::checkout_step(CHECKOUT).expect("checkout");
+    let mut checkout =
+        velnor_actions_workflow_steps::steps::checkout_step(CHECKOUT).expect("checkout");
     checkout.name = "Fetch source".to_owned();
     let mut rendered_job = job(vec![checkout, mise_shell()]);
     crate::cache_p08::ensure_setup_p08(
@@ -31,7 +32,8 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
     assert_eq!(rendered_job.steps[2].name, "Setup Mise");
     assert_eq!(rendered_job.steps[2].role, Some(StepRole::MiseSetup));
 
-    let mut full_history_checkout = crate::steps::checkout_step(CHECKOUT).expect("checkout");
+    let mut full_history_checkout =
+        velnor_actions_workflow_steps::steps::checkout_step(CHECKOUT).expect("checkout");
     if let StepKind::Action { with, .. } = &mut full_history_checkout.kind {
         with.insert("fetch-depth".to_owned(), "0".to_owned());
     }
@@ -72,10 +74,13 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
     assert_wrong_pinned_checkout_stays_cold(&setup);
 }
 
-fn assert_wrong_pinned_checkout_stays_cold(setup: &crate::MiseSetup) {
-    let mut wrong_pin =
-        crate::steps::checkout_step("actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-            .expect("pinned checkout shape");
+fn assert_wrong_pinned_checkout_stays_cold(
+    setup: &velnor_actions_workflow_steps::setup::MiseSetup,
+) {
+    let mut wrong_pin = velnor_actions_workflow_steps::steps::checkout_step(
+        "actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    )
+    .expect("pinned checkout shape");
     wrong_pin.name = "Checkout".to_owned();
     let mut wrong_pin_job = job(vec![wrong_pin, mise_shell()]);
     crate::cache_p08::ensure_setup_p08(
@@ -95,8 +100,8 @@ fn assert_wrong_pinned_checkout_stays_cold(setup: &crate::MiseSetup) {
     );
 }
 
-fn setup_config() -> crate::MiseSetup {
-    crate::MiseSetup {
+fn setup_config() -> velnor_actions_workflow_steps::setup::MiseSetup {
+    velnor_actions_workflow_steps::setup::MiseSetup {
         uses: SETUP_USES.to_owned(),
         version: "2026.9.18".to_owned(),
         sha256: "a".repeat(64),
@@ -141,7 +146,7 @@ fn job(steps: Vec<Step>) -> Job {
 fn existing_seed_must_match_exact_job_key_and_payload() {
     let setup = setup_config();
     let mut rendered_job = job(vec![
-        crate::steps::checkout_step(CHECKOUT).expect("checkout"),
+        velnor_actions_workflow_steps::steps::checkout_step(CHECKOUT).expect("checkout"),
         mise_shell(),
     ]);
     crate::cache_p08::ensure_setup_p08(
@@ -202,7 +207,7 @@ fn existing_seed_must_match_exact_job_key_and_payload() {
 fn local_seed_action_payload_and_order_are_not_name_authorized() {
     let setup = setup_config();
     let mut rendered_job = job(vec![
-        crate::steps::checkout_step(CHECKOUT).expect("checkout"),
+        velnor_actions_workflow_steps::steps::checkout_step(CHECKOUT).expect("checkout"),
         mise_shell(),
     ]);
     crate::cache_p08::ensure_setup_p08(
@@ -233,7 +238,8 @@ fn local_seed_action_payload_and_order_are_not_name_authorized() {
 
     let mut conditional = job(vec![
         {
-            let mut step = crate::steps::checkout_step(CHECKOUT).expect("checkout");
+            let mut step =
+                velnor_actions_workflow_steps::steps::checkout_step(CHECKOUT).expect("checkout");
             step.condition = Some("always()".to_owned());
             step
         },

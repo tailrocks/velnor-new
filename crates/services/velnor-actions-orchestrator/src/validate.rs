@@ -6,7 +6,7 @@ use std::path::Path;
 use velnor_actions_contract_release::GeneratorLock;
 use velnor_actions_mise::catalog::lock::{load_text, parse_generator_lock, verify_version_policy};
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog};
-use velnor_actions_workflow_renderer::render::RenderedTree;
+use velnor_actions_workflow_tree::rendered::RenderedTree;
 
 use crate::OrchestratorError;
 use crate::generate::write_tree;

@@ -1,17 +1,20 @@
 //! Gate-8 renderer cases: artifacts, manifest script, rehead, release.
 use velnor_actions_contract_config::{GeneratorValidation, WorkflowPolicy};
 use velnor_actions_contract_workflow::StepKind;
-use velnor_actions_workflow_renderer::steps::{
-    ARTIFACT_RETENTION_DAYS, candidate_manifest_script, download_artifact_step,
-    rehead_actionlint_marker, upload_artifact_step,
-};
 use velnor_actions_workflow_renderer::{
-    CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR, PRESEED_OUTPUT_DIR_EXPR,
-    PRESEED_STAGE_DIR_EXPR, RenderError, candidate_artifact_name, checkout_step,
-    crate_job_report_upload_step, matrix_report_upload_step, merge_step, plan_step,
-    preseed_download_step, preseed_upload_step, publish_plan_step, render_workflow_ir,
-    write_request_step,
+    candidate_artifact_name, preseed_download_step, preseed_upload_step, publish_plan_step,
+    render_workflow_ir,
 };
+use velnor_actions_workflow_steps::steps::{
+    ARTIFACT_RETENTION_DAYS, candidate_manifest_script, download_artifact_step,
+    upload_artifact_step,
+};
+use velnor_actions_workflow_steps::{
+    CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR, PRESEED_OUTPUT_DIR_EXPR,
+    PRESEED_STAGE_DIR_EXPR, RenderError, checkout_step, crate_job_report_upload_step,
+    matrix_report_upload_step, merge_step, plan_step, write_request_step,
+};
+use velnor_actions_workflow_tree::marker::rehead_actionlint_marker;
 
 use super::impl_renderer_fixtures::*;
 

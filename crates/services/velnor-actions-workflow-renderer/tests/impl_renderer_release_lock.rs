@@ -6,7 +6,6 @@
 //! rejected), approved-plan dispatch binding, and the publish gate.
 use std::collections::BTreeMap;
 
-use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::release_spec::lock::{
     reject_prohibited_release_event, stable_lock_group,
 };
@@ -14,6 +13,7 @@ use velnor_actions_workflow_renderer::release_spec::{
     BootstrapPlan, DispatchInput, ReleaseConcurrency, ReleaseTriggers, check_lock_anchor,
     publish_gate_condition,
 };
+use velnor_actions_workflow_steps::RenderError;
 
 const REPOSITORY: &str = "acme/widgets";
 const PLAN_ID: &str = "plan-1";

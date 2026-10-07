@@ -5,9 +5,9 @@ use std::collections::BTreeMap;
 use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_contract_workflow::Permissions;
 use velnor_actions_contract_workflow::workflow::permissions::PermissionLevel;
-use velnor_actions_workflow_renderer::{
-    RenderError, ambient_shell_step, checkout_step, merge_step, plan_step, render_workflow_ir,
-    shell_step,
+use velnor_actions_workflow_renderer::render_workflow_ir;
+use velnor_actions_workflow_steps::{
+    RenderError, ambient_shell_step, checkout_step, merge_step, plan_step, shell_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -15,7 +15,7 @@ use super::impl_renderer_fixtures::*;
 #[test]
 fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
     use velnor_actions_contract_workflow::{Step, StepKind};
-    use velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub;
+    use velnor_actions_workflow_steps::toolchain_env::with_credential_scrub;
     // The shell constructor rejects `github.token` env values outright:
     // only the render-time fetch binding may carry one.
     let err = shell_step(
@@ -89,7 +89,7 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
 
 #[test]
 fn token_hygiene_allows_final_fetch_token() -> Result<(), RenderError> {
-    use velnor_actions_workflow_renderer::steps::{FETCH_OPERATION, internal_step};
+    use velnor_actions_workflow_steps::steps::{FETCH_OPERATION, internal_step};
     // The fetch binding is render-time only: the internal op renders
     // its fixed `GH_TOKEN`, never carried through IR env.
     let (id, mut final_job) = job(
@@ -156,7 +156,7 @@ fn token_hygiene_rejects_prints_and_task_tokens() -> Result<(), RenderError> {
 #[test]
 fn token_hygiene_constructor_owns_overlay_and_rejects_all_nine_keys() -> Result<(), RenderError> {
     use velnor_actions_contract_workflow::{Step, StepKind};
-    use velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST;
+    use velnor_actions_workflow_steps::toolchain_env::STEP_CREDENTIAL_DENYLIST;
     // Bare env: the constructor scrubs shut, so it renders clean.
     let clean = job(
         "velnor-task",
@@ -273,7 +273,7 @@ fn scrub_coverage_rejects_bare_and_partial_shell_env() -> Result<(), RenderError
 #[test]
 fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderError> {
     use velnor_actions_contract_workflow::StepRole;
-    use velnor_actions_workflow_renderer::steps::{DENY_STEP_NAME, MACHETE_STEP_NAME};
+    use velnor_actions_workflow_steps::steps::{DENY_STEP_NAME, MACHETE_STEP_NAME};
     // Ambient constructor (no scrub overlay): the typed role is the
     // authority, independent of the presentation name.
     for (name, role) in [

@@ -10,9 +10,7 @@
 
 use velnor_actions_contract_workflow::{Job, JobTimeout, Step};
 use velnor_actions_workflow_renderer::render::FINAL_JOB_ID;
-use velnor_actions_workflow_renderer::steps::{
-    PUBLISH_OPERATION, publish_step, write_request_step,
-};
+use velnor_actions_workflow_steps::steps::{PUBLISH_OPERATION, publish_step, write_request_step};
 
 use crate::OrchestratorError;
 
@@ -42,7 +40,7 @@ pub(crate) fn baseline_publish_job(
     steps.push(request_step(PUBLISH_OPERATION)?);
     steps.push(publish_step());
     steps.push(
-        velnor_actions_workflow_renderer::baseline_publish_upload_step().map_err(|err| {
+        velnor_actions_workflow_steps::baseline_publish_upload_step().map_err(|err| {
             OrchestratorError::Contract {
                 problem: err.to_string(),
             }

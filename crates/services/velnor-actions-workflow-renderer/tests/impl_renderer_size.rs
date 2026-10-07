@@ -7,11 +7,12 @@ use velnor_actions_workflow_renderer::freshness::{FreshnessSpec, render_freshnes
 use velnor_actions_workflow_renderer::release_tree::render_release_workflow;
 use velnor_actions_workflow_renderer::schema2::MbxQualificationPins;
 use velnor_actions_workflow_renderer::schema2::Schema2WorkflowRequest;
-use velnor_actions_workflow_renderer::setup::MiseSetup;
 use velnor_actions_workflow_renderer::{
-    MAX_WORKFLOW_BYTES, RenderError, RenderedFile, render_schema2_workflows, render_tree,
-    render_tree_with_extra, render_workflow_ir, with_marker,
+    render_schema2_workflows, render_tree, render_tree_with_extra, render_workflow_ir,
 };
+use velnor_actions_workflow_steps::RenderError;
+use velnor_actions_workflow_steps::setup::MiseSetup;
+use velnor_actions_workflow_tree::{MAX_WORKFLOW_BYTES, RenderedFile, with_marker};
 
 const VERSION: &str = "0.1.0";
 

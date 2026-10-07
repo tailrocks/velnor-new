@@ -2,9 +2,9 @@
 
 use velnor_actions_contract_release::AGENTS_MD_PATH;
 
-use crate::RenderError;
-use crate::marker::with_marker;
-use crate::render::RenderedFile;
+use velnor_actions_workflow_steps::RenderError;
+
+use crate::{marker::with_marker, rendered::RenderedFile};
 
 const AGENTS_MD_BODY: &str = "\
 # Generated GitHub Workflows and Configurations

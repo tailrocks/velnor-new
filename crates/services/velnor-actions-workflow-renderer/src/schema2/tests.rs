@@ -6,8 +6,8 @@ use super::{
     MbxQualificationPins, Schema2WorkflowRequest, monitoring, qualification,
     render_schema2_workflows,
 };
-use crate::setup::MiseSetup;
-use crate::yaml::Yaml;
+use velnor_actions_workflow_steps::setup::MiseSetup;
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 fn request() -> Schema2WorkflowRequest {
     Schema2WorkflowRequest {

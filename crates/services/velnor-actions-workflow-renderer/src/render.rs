@@ -16,9 +16,12 @@ use velnor_actions_contract_workflow::{
     REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, WorkflowIr,
 };
 
+use velnor_actions_workflow_steps::{RenderError, commands, setup::MiseSetup, steps};
+use velnor_actions_workflow_tree::{guard, marker, yaml::render_yaml};
+
 use crate::{
-    RenderError, cache_p08, closure, commands, document, final_steps, guard, marker, matrix, msrv,
-    preseed_closure, steps, support, workflow_policy, yaml::render_yaml,
+    cache_p08, closure, document, final_steps, matrix, msrv, preseed_closure, support,
+    workflow_policy,
 };
 
 mod action_pins_impl;
@@ -28,7 +31,6 @@ pub use crate::matrix::{
     COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
     MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
 };
-pub use crate::setup::MiseSetup;
 
 /// Generated workflow path inside the repository.
 ///
@@ -36,8 +38,6 @@ pub use crate::setup::MiseSetup;
 /// ([`velnor_actions_contract_workflow::RequiredCheckMigration`]) and the
 /// emitted tree share one source of truth, never retyped mirrors.
 pub const WORKFLOW_PATH: &str = CI_WORKFLOW_PATH;
-/// Generated actionlint config path inside the repository.
-pub const ACTIONLINT_PATH: &str = ".github/actionlint.yaml";
 /// Exact pull-request event types.
 pub const EXPECTED_PR_TYPES: &[&str] = &["opened", "synchronize", "reopened", "ready_for_review"];
 /// Exact concurrency group expression.
@@ -59,17 +59,6 @@ pub const TASK_JOB_ID: &str = "velnor-task";
 pub const CANDIDATE_JOB_ID: &str = "candidate";
 /// Baseline-publish job ID: runs after the final gate passes.
 pub const PUBLISH_JOB_ID: &str = "publish-baseline";
-/// Full-SHA Alint pin for the repository-policy `alint` job.
-pub const ALINT_USES: &str = "asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb";
-/// Pinned Alint binary release tag for the step's `version:` input.
-///
-/// Per the action's `action.yml`, a SHA-pinned `uses:` falls back to
-/// installing `latest` unless `version:` is set — a floating binary. Mirror of
-/// `ALINT_ACTION_VERSION` (`velnor-actions-actionlint`, same qualified
-/// release); the renderer cannot depend on that crate, so
-/// `scripts/check-freshness.sh` pins this mirror to the reviewed
-/// `asamarts/alint` inventory row instead of trusting the duplication.
-pub const ALINT_BINARY_VERSION: &str = "v0.16.1";
 
 /// Caller-supplied validated scalars the IR cannot carry.
 #[derive(Debug, Clone)]
@@ -126,7 +115,6 @@ pub struct CandidateSpec {
 }
 
 pub use crate::lane_share::RenderedWorkflow;
-pub use crate::tree::{RenderedFile, RenderedSymlink, RenderedTree};
 pub use velnor_actions_contract_release::{AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET};
 
 impl RenderContext {
@@ -363,9 +351,9 @@ fn render_merged(
         matrix::attach_plan_outputs(&mut document)?;
     }
     matrix::attach_crate_job_caps(&mut document, &caps)?;
-    let document = crate::yaml::quote_run_values_in_yaml(document);
+    let document = velnor_actions_workflow_tree::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
-    crate::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;
+    velnor_actions_workflow_tree::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;
     steps::scan_for_private_subcommands(&text)?;
     let mut files = shared.files;
     if crate::tool_seed::any_job_has_seed(&jobs) {

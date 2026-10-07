@@ -34,14 +34,18 @@ impl ShellToken {
 pub(super) fn has_external_mbx_selector(step: &Step) -> bool {
     match &step.kind {
         StepKind::Shell { run, .. } => {
-            let payload = &run[crate::toolchain_env::unset_prefix_len(run)..];
+            let payload =
+                &run[velnor_actions_workflow_steps::toolchain_env::unset_prefix_len(run)..];
             let Some(words) = selector_words(payload) else {
                 return true;
             };
             has_mbx_selector(&words)
         }
         StepKind::Action { uses, with, .. }
-            if uses.starts_with(&format!("{}@", crate::setup::MISE_ACTION_NAME)) =>
+            if uses.starts_with(&format!(
+                "{}@",
+                velnor_actions_workflow_steps::setup::MISE_ACTION_NAME
+            )) =>
         {
             let setup_installs_tools = with.get("install").is_none_or(|install| install != "false");
             setup_installs_tools
@@ -54,7 +58,7 @@ pub(super) fn has_external_mbx_selector(step: &Step) -> bool {
 }
 
 fn selector_words(run: &[String]) -> Option<Vec<ShellToken>> {
-    if crate::commands::is_inline_shell(run) {
+    if velnor_actions_workflow_steps::commands::is_inline_shell(run) {
         shell_words(run.get(2)?)
     } else {
         Some(run.iter().cloned().map(ShellToken::Word).collect())
@@ -222,7 +226,7 @@ pub(super) fn uses_mbx_command(step: &Step) -> bool {
     let StepKind::Shell { run, .. } = &step.kind else {
         return false;
     };
-    let payload = &run[crate::toolchain_env::unset_prefix_len(run)..];
+    let payload = &run[velnor_actions_workflow_steps::toolchain_env::unset_prefix_len(run)..];
     if is_mbx_argv(payload) {
         return true;
     }
@@ -240,7 +244,7 @@ pub(super) fn uses_mbx_command(step: &Step) -> bool {
 
 fn report_wrapped_command(script: &str) -> Option<&str> {
     let script = script
-        .strip_prefix(&crate::toolchain_env::credential_unset_prelude())?
+        .strip_prefix(&velnor_actions_workflow_steps::toolchain_env::credential_unset_prelude())?
         .strip_prefix(' ')?;
     let body = script.strip_prefix(REPORT_WRAPPER_PREFIX)?;
     let (command, suffix) = body.split_once(REPORT_WRAPPER_SEPARATOR)?;

@@ -7,7 +7,7 @@ use velnor_actions_actionlint::config::{
     ZizmorConfigInput, ZizmorWorkflowText, render_zizmor_yaml,
 };
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
-use velnor_actions_workflow_renderer::render::RenderedTree;
+use velnor_actions_workflow_tree::rendered::RenderedTree;
 
 use crate::OrchestratorError;
 use crate::validate::{diagnose, is_workflow_path, pinned_output};

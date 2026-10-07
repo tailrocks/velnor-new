@@ -1,10 +1,10 @@
 //! Effective release-plz config validation and rendering cases.
-use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::release_config::{
     BootstrapReleasePlzConfig, ReleasePlzConfig, ReleasePlzPackage,
     render_bootstrap_release_plz_config, render_release_plz_config, validate_feature_name,
     validate_tag_pattern,
 };
+use velnor_actions_workflow_steps::RenderError;
 
 const VERSION: &str = "0.1.0";
 const TAG: &str = "{{ package }}-v{{ version }}";

@@ -6,10 +6,10 @@
 //! built. Dispatch has no inputs, so a caller cannot supply a shell fragment
 //! or a checksum.
 
-use crate::RenderError;
 use crate::runs_on::runs_on_yaml;
-use crate::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
-use crate::yaml::Yaml;
+use velnor_actions_workflow_steps::RenderError;
+use velnor_actions_workflow_steps::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 use super::Schema2WorkflowRequest;
 use super::features::{CHECKOUT_USES, base, finish, publish_step, run_step};

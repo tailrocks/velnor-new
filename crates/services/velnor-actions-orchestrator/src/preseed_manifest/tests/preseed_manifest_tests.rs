@@ -111,7 +111,7 @@ fn names_match_renderer_consts() {
     );
     assert_eq!(
         PRESEED_MANIFEST_OP,
-        velnor_actions_workflow_renderer::WRITE_PRESEED_MANIFEST_OPERATION
+        velnor_actions_workflow_steps::WRITE_PRESEED_MANIFEST_OPERATION
     );
     assert_eq!(
         PRESEED_BINARY_ENV,

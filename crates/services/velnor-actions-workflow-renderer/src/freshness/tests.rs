@@ -115,6 +115,7 @@ fn rejects_internal_steps_fail_closed() {
             env: std::collections::BTreeMap::new(),
         },
     };
-    let err = crate::steps_plain::plain_step_to_yaml(&internal).expect_err("rejected");
+    let err = velnor_actions_workflow_tree::steps_plain::plain_step_to_yaml(&internal)
+        .expect_err("rejected");
     assert!(err.to_string().contains("internal_op_rejected"), "{err}");
 }

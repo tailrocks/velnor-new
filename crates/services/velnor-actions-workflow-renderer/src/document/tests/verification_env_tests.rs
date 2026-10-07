@@ -5,7 +5,8 @@ use std::collections::BTreeMap;
 use velnor_actions_contract_config::{VerificationRunner, VerificationTask, VerificationTaskKind};
 use velnor_actions_contract_workflow::workflow::permissions::PermissionLevel;
 
-use crate::{MiseSetup, RenderContext, VerificationTaskPolicy, build_verification_task_job};
+use crate::{RenderContext, VerificationTaskPolicy, build_verification_task_job};
+use velnor_actions_workflow_steps::MiseSetup;
 
 use super::super::job_to_yaml;
 
@@ -80,7 +81,7 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         },
     )
     .expect("render verification job");
-    let rendered = crate::yaml::render_yaml(&yaml);
+    let rendered = velnor_actions_workflow_tree::yaml::render_yaml(&yaml);
 
     assert!(rendered.contains("GITHUB_TOKEN: \"\""));
     assert!(rendered.contains("GH_TOKEN: \"\""));

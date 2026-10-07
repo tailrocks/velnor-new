@@ -12,8 +12,9 @@ use velnor_actions_contract_workflow::{Step, StepRole};
 use crate::composite::composite_yaml;
 use crate::document_steps::step_to_yaml;
 use crate::render::RenderContext;
-use crate::tree::RenderedFile;
-use crate::{RenderError, marker, steps, yaml::render_yaml};
+use velnor_actions_workflow_steps::{RenderError, steps};
+use velnor_actions_workflow_tree::rendered::RenderedFile;
+use velnor_actions_workflow_tree::{marker, yaml::render_yaml};
 
 /// Permit the one documented hosted-to-hosted named-check condition refinement.
 pub(crate) fn same_or_admitted_check_condition(hosted: &Job, local: &Job) -> bool {
@@ -168,7 +169,7 @@ pub(crate) fn factor_provider_preludes(
             kind: StepKind::Action {
                 uses: format!(
                     "{}{index}",
-                    crate::action_ref::TOFU_PROVIDER_PRELUDE_ACTION_PREFIX
+                    velnor_actions_workflow_steps::action_ref::TOFU_PROVIDER_PRELUDE_ACTION_PREFIX
                 ),
                 with: BTreeMap::new(),
                 env: BTreeMap::new(),
@@ -215,7 +216,7 @@ pub(crate) fn composite_file(
         )?);
     }
     let body = composite_yaml(logical, rendered)?;
-    let quoted = crate::yaml::quote_run_values_in_yaml(body);
+    let quoted = velnor_actions_workflow_tree::yaml::quote_run_values_in_yaml(body);
     let bytes = marker::with_marker(&ctx.generator_version, &render_yaml(&quoted))?;
     steps::scan_for_private_subcommands(&bytes)?;
     Ok(RenderedFile {

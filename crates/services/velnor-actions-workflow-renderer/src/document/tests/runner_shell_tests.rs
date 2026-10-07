@@ -84,7 +84,7 @@ fn typed_scale_set_jobs_declare_bash_while_hosted_jobs_keep_default() {
     let shared = crate::lane_share::share_lanes(&jobs, &ctx).expect("lane sharing validates");
     let rendered = workflow_to_yaml(&workflow(jobs), &shared, &ctx, &BTreeSet::new())
         .expect("workflow renders");
-    let yaml = crate::yaml::render_yaml(&rendered);
+    let yaml = velnor_actions_workflow_tree::yaml::render_yaml(&rendered);
     assert!(
         yaml.contains("- name: Run probe\n        run: echo probe"),
         "generated shell steps must put name first for shell scanning: {yaml}"
@@ -99,8 +99,11 @@ fn typed_scale_set_jobs_declare_bash_while_hosted_jobs_keep_default() {
     );
 }
 
-fn field<'a>(value: &'a crate::yaml::Yaml, key: &str) -> Option<&'a crate::yaml::Yaml> {
-    let crate::yaml::Yaml::Map(entries) = value else {
+fn field<'a>(
+    value: &'a velnor_actions_workflow_tree::yaml::Yaml,
+    key: &str,
+) -> Option<&'a velnor_actions_workflow_tree::yaml::Yaml> {
+    let velnor_actions_workflow_tree::yaml::Yaml::Map(entries) = value else {
         return None;
     };
     entries
@@ -146,22 +149,33 @@ fn rustdocflags_remain_scoped_to_the_documentation_step() {
         None,
         "task-specific rustdoc flags must not enter the job environment"
     );
-    let crate::yaml::Yaml::Seq(steps) = field(task, "steps").expect("job steps") else {
+    let velnor_actions_workflow_tree::yaml::Yaml::Seq(steps) =
+        field(task, "steps").expect("job steps")
+    else {
         panic!("steps must be a sequence");
     };
     let doc = steps
         .iter()
-        .find(|step| field(step, "name") == Some(&crate::yaml::Yaml::str("Documentation")))
+        .find(|step| {
+            field(step, "name")
+                == Some(&velnor_actions_workflow_tree::yaml::Yaml::str(
+                    "Documentation",
+                ))
+        })
         .expect("documentation step");
     let doc_env = field(doc, "env").expect("documentation step environment");
     assert_eq!(
         field(doc_env, "RUSTDOCFLAGS"),
-        Some(&crate::yaml::Yaml::str("-D warnings")),
+        Some(&velnor_actions_workflow_tree::yaml::Yaml::str(
+            "-D warnings"
+        )),
         "the documentation step keeps its typed flags"
     );
     let tests = steps
         .iter()
-        .find(|step| field(step, "name") == Some(&crate::yaml::Yaml::str("Tests")))
+        .find(|step| {
+            field(step, "name") == Some(&velnor_actions_workflow_tree::yaml::Yaml::str("Tests"))
+        })
         .expect("test step");
     if let Some(test_env) = field(tests, "env") {
         assert_eq!(

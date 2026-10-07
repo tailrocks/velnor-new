@@ -3,7 +3,8 @@
 use velnor_actions_contract_config::{RunsOn, SCALE_SET_NAME};
 use velnor_actions_contract_release::ReleaseTarget;
 
-use crate::{RenderError, yaml::Yaml};
+use velnor_actions_workflow_steps::RenderError;
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 /// Scale Set image shell for the active Ubuntu 26.04 linux/amd64 profile.
 /// The runner specification pins this base image and it includes Bash.

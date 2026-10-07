@@ -10,7 +10,8 @@ use velnor_actions_contract_workflow::{FRESHNESS_WORKFLOW_PATH, Job, RequiredChe
 use velnor_actions_rust::KIND_DISPLAY_WORDS;
 use velnor_actions_workflow_renderer::action_pins;
 use velnor_actions_workflow_renderer::release_tree::RELEASE_TREE_PATHS;
-use velnor_actions_workflow_renderer::render::{ACTIONLINT_PATH, WORKFLOW_PATH};
+use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
+use velnor_actions_workflow_tree::rendered::ACTIONLINT_PATH;
 
 use crate::OrchestratorError;
 use crate::finalized::finalized_jobs;

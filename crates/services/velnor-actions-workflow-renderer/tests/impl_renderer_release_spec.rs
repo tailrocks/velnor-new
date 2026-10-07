@@ -1,12 +1,12 @@
 //! Release scalar, trigger, concurrency, and bootstrap-plan cases.
 use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::ScheduleTrigger;
-use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::release_spec::{
     BootstrapPlan, DispatchInput, ReleaseConcurrency, ReleaseTriggers, check_lock_anchor,
     publish_gate_condition, validate_environment, validate_package_name, validate_package_version,
     validate_plan_id, validate_repository, validate_source_sha,
 };
+use velnor_actions_workflow_steps::RenderError;
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 const OTHER_SHA: &str = "abcdef0123456789abcdef0123456789abcdef01";

@@ -1,7 +1,7 @@
 use velnor_actions_contract_config::{VerificationRunner, VerificationTask, VerificationTaskKind};
 
 use super::VerificationTaskPolicy;
-use crate::MiseSetup;
+use velnor_actions_workflow_steps::setup::MiseSetup;
 
 const CHECKOUT: &str = "actions/checkout@0123456789abcdef0123456789abcdef01234567";
 

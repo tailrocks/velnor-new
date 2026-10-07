@@ -3,6 +3,8 @@
 //! Block style only, no anchors, aliases, or tags. Flow sequences are
 //! empty `[]` plus the typed `runs-on` selector. Key order is caller-controlled.
 
+use std::collections::BTreeMap;
+
 /// Minimal YAML value tree with explicit mapping order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Yaml {
@@ -78,7 +80,7 @@ pub fn render_yaml(value: &Yaml) -> String {
 }
 
 /// Quote bare env paths in every `run:` scalar.
-pub(crate) fn quote_run_values_in_yaml(node: Yaml) -> Yaml {
+pub fn quote_run_values_in_yaml(node: Yaml) -> Yaml {
     match node {
         Yaml::Map(entries) => Yaml::Map(
             entries
@@ -88,7 +90,7 @@ pub(crate) fn quote_run_values_in_yaml(node: Yaml) -> Yaml {
                         if let Yaml::Str(line) = value {
                             (
                                 key,
-                                Yaml::Str(crate::commands::quote_run_line_env_paths(&line)),
+                                Yaml::Str(velnor_actions_workflow_steps::commands::quote_run_line_env_paths(&line)),
                             )
                         } else {
                             (key, value)
@@ -347,4 +349,14 @@ fn quote_double(value: &str) -> String {
     }
     out.push('"');
     out
+}
+
+/// Sorted string map as YAML (shared by `with:` and `env:` emission).
+#[must_use]
+pub fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
+    Yaml::Map(
+        map.iter()
+            .map(|(key, value)| (key.clone(), Yaml::str(value.clone())))
+            .collect(),
+    )
 }

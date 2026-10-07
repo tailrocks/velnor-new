@@ -11,9 +11,9 @@ use velnor_actions_contract_workflow::{
 };
 use velnor_actions_orchestrator::write_request_parts;
 use velnor_actions_workflow_renderer::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, checkout_step, plan_step, render::RenderContext,
-    render_workflow_ir, steps::write_request_step,
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, render::RenderContext, render_workflow_ir,
 };
+use velnor_actions_workflow_steps::{checkout_step, plan_step, steps::write_request_step};
 
 use crate::impl_common::TestResult;
 

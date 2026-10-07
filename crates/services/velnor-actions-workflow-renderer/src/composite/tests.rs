@@ -2,7 +2,7 @@ use super::shared_call;
 
 #[test]
 fn shared_calls_use_only_canonical_repository_local_actions() {
-    let yaml = crate::yaml::render_yaml(
+    let yaml = velnor_actions_workflow_tree::yaml::render_yaml(
         &shared_call("./.github/actions/rust-0").expect("canonical local action"),
     );
     assert!(

@@ -1,6 +1,6 @@
 //! Fixed runner-temp path validators for the plan-job closure.
 
-use crate::RenderError;
+use velnor_actions_workflow_steps::RenderError;
 
 /// Helper binaries live under the staged runner-temp dir, never the repo.
 pub(crate) fn validate_helper_path(path: &str) -> Result<(), RenderError> {

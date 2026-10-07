@@ -7,12 +7,15 @@ use velnor_actions_contract_workflow::workflow::step_identity::{
 };
 use velnor_actions_contract_workflow::{Step, StepKind};
 
-use crate::{
+use velnor_actions_workflow_steps::{
     RenderError, commands,
+    steps::{self, INTERNAL_OP_ENV, REQUEST_FILE_ENV},
+};
+use velnor_actions_workflow_tree::yaml::{Yaml, string_map_yaml};
+
+use crate::{
     composite::push_composite_shell,
     render::{FINAL_JOB_ID, RenderContext},
-    steps::{self, INTERNAL_OP_ENV, REQUEST_FILE_ENV},
-    yaml::Yaml,
 };
 
 /// True for the final job's plan download (fetch is gated inline below).
@@ -111,8 +114,8 @@ fn action_step_to_yaml(
 ) -> Result<Yaml, RenderError> {
     steps::validate_uses(uses)?;
     for (key, value) in with {
-        crate::expressions::check_with_key(key)?;
-        crate::expressions::check_with_value(key, value)?;
+        velnor_actions_workflow_steps::expressions::check_with_key(key)?;
+        velnor_actions_workflow_steps::expressions::check_with_value(key, value)?;
         steps::scan_for_private_subcommands(key)?;
         steps::scan_for_private_subcommands(value)?;
     }
@@ -140,7 +143,7 @@ fn action_step_to_yaml(
         crate::tool_seed::validate_seed_action(step, None)?;
     }
     let uses_yaml = if matches!(uses, TOOL_SEED_USES | TOFU_PROVIDER_ADMISSION_USES)
-        || crate::action_ref::is_generated_provider_prelude(uses)
+        || velnor_actions_workflow_steps::action_ref::is_generated_provider_prelude(uses)
     {
         Yaml::annotated(uses, "zizmor: ignore[self-repository]")
     } else {
@@ -159,15 +162,6 @@ fn action_step_to_yaml(
         entries.push(("env".to_owned(), string_map_yaml(&filtered_env)));
     }
     Ok(Yaml::Map(entries))
-}
-
-/// Sorted string map as YAML (shared by `with:` and `env:` emission).
-pub(crate) fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
-    Yaml::Map(
-        map.iter()
-            .map(|(key, value)| (key.clone(), Yaml::str(value.clone())))
-            .collect(),
-    )
 }
 
 /// Render one step; internal ops become env plus request file, never argv.

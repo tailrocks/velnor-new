@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract_workflow::Job;
 
-use crate::RenderError;
+use velnor_actions_workflow_steps::RenderError;
 
 /// Typed overlap: two independent prep branches plus their join job.
 #[derive(Debug, Clone, PartialEq, Eq)]

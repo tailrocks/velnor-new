@@ -7,10 +7,10 @@ use std::path::{Path, PathBuf};
 use velnor_actions_actionlint::render_actionlint_yaml;
 use velnor_actions_contract_config::ExecutionMode;
 use velnor_actions_contract_workflow::expand_workflow;
-use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
-use velnor_actions_workflow_renderer::render::RenderedTree;
-use velnor_actions_workflow_renderer::steps::rehead_actionlint_marker;
 use velnor_actions_workflow_renderer::tree::render_tree_with_extra;
+use velnor_actions_workflow_tree::guard::{self, SafeTreePath};
+use velnor_actions_workflow_tree::marker::rehead_actionlint_marker;
+use velnor_actions_workflow_tree::rendered::RenderedTree;
 
 use crate::OrchestratorError;
 use crate::finalized::owned_preparation;

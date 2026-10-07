@@ -4,7 +4,7 @@
 
 use super::*;
 use velnor_actions_contract_workflow::StepKind;
-use velnor_actions_workflow_renderer::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
+use velnor_actions_workflow_steps::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
 
 /// Internal operation of one step, if any.
 fn operation_of(step: &Step) -> Option<&str> {

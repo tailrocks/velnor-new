@@ -2,9 +2,8 @@
 
 use velnor_actions_contract_workflow::{Concurrency, Trigger, WorkflowIr};
 
-use crate::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, RenderError, VerificationTaskPolicy,
-};
+use crate::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, VerificationTaskPolicy};
+use velnor_actions_workflow_steps::RenderError;
 
 /// Require the exact trigger shape: 4 PR types, one push branch, merge group.
 pub(crate) fn check_triggers(triggers: &Trigger) -> Result<(), RenderError> {

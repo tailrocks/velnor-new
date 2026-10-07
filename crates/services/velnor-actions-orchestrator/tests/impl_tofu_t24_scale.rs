@@ -5,7 +5,7 @@
 //! (`perf:` lines), not hosted deployment performance.
 
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
-use velnor_actions_workflow_renderer::MAX_WORKFLOW_BYTES;
+use velnor_actions_workflow_tree::MAX_WORKFLOW_BYTES;
 
 use crate::impl_common::TestResult;
 use crate::impl_perf_p13::perf_harness_p13::{perf_line, timed};

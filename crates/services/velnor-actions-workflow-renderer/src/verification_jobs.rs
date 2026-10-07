@@ -9,7 +9,7 @@ use velnor_actions_contract_workflow::{
     HOSTED_SUFFIX, Job, JobTimeout, PermissionLevel, Permissions, SCALE_SUFFIX, Step,
 };
 
-use crate::{MiseSetup, RenderError, mise_setup_step, shell_step, steps};
+use velnor_actions_workflow_steps::{MiseSetup, RenderError, mise_setup_step, shell_step, steps};
 
 #[cfg(test)]
 mod tests;

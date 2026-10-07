@@ -4,7 +4,7 @@ use crate::internal::internal;
 use std::path::Path;
 use velnor_actions_contract_config::config::CheckPlatform;
 use velnor_actions_mise::CheckDeadline;
-use velnor_actions_workflow_renderer::setup::{
+use velnor_actions_workflow_steps::setup::{
     MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
 };
 

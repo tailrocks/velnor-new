@@ -1,10 +1,10 @@
 use crate::schema2::GeneratorReleasePins;
 use crate::schema2::Schema2WorkflowRequest;
-use crate::setup::MiseSetup;
-use crate::yaml::Yaml;
 use std::collections::BTreeSet;
 use std::error::Error;
 use velnor_actions_contract_release::ReleaseTarget;
+use velnor_actions_workflow_steps::setup::MiseSetup;
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 #[test]
 fn each_archive_consumer_has_target_pinned_mise_before_extraction() -> Result<(), Box<dyn Error>> {

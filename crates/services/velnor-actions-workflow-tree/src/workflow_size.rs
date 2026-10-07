@@ -1,7 +1,8 @@
 //! Byte limit for every generated GitHub Actions workflow document.
 
-use crate::RenderError;
 use std::path::Path;
+
+use velnor_actions_workflow_steps::RenderError;
 
 /// Maximum rendered workflow size, including the marker; decimal 500 KB.
 ///
@@ -15,7 +16,7 @@ pub const MAX_WORKFLOW_BYTES: usize = 500_000;
 /// Non-workflow files do not use this limit. The tree assembler applies the
 /// same check to every workflow path, including workflows supplied as extras.
 /// # Errors
-pub(crate) fn check_workflow_size(path: &str, bytes: &str) -> Result<(), RenderError> {
+pub fn check_workflow_size(path: &str, bytes: &str) -> Result<(), RenderError> {
     if !is_workflow_path(path) || bytes.len() <= MAX_WORKFLOW_BYTES {
         return Ok(());
     }

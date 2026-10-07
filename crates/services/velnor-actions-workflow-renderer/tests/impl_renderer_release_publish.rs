@@ -5,13 +5,13 @@ use crate::impl_renderer_release_gates::{
 };
 use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::{Step, StepKind};
-use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::release_gates::check_release_jobs;
 use velnor_actions_workflow_renderer::release_jobs::{ReleaseJobSpec, ReleaseRole};
 use velnor_actions_workflow_renderer::release_spec::publish_gate_condition;
 use velnor_actions_workflow_renderer::release_tree::{
     RELEASE_BOOTSTRAP_CONFIG_PATH, RELEASE_CONFIG_PATH,
 };
+use velnor_actions_workflow_steps::RenderError;
 
 #[test]
 fn oidc_publish_carries_zero_token_material() -> Result<(), RenderError> {

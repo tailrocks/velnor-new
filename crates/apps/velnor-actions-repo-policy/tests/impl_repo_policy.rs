@@ -30,7 +30,7 @@ mod p12_policy_b;
 mod p12_upstream;
 
 /// Expected member directories (package name is the leaf).
-pub(crate) const MEMBERS: [&str; 20] = [
+pub(crate) const MEMBERS: [&str; 22] = [
     "crates/adapters/velnor-actions-actionlint",
     "crates/apps/velnor-actions-cli",
     "crates/apps/velnor-actions-repo-policy",
@@ -51,6 +51,8 @@ pub(crate) const MEMBERS: [&str; 20] = [
     "crates/adapters/velnor-actions-tofu",
     "crates/adapters/velnor-actions-tofu-core",
     "crates/services/velnor-actions-workflow-renderer",
+    "crates/services/velnor-actions-workflow-steps",
+    "crates/services/velnor-actions-workflow-tree",
 ];
 
 /// Package name for a member dir (the leaf segment).

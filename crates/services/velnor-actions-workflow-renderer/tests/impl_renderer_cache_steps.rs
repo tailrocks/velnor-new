@@ -1,11 +1,11 @@
 //! Gate 4 renderer cases: MBX objects, cache actions, lane target dirs.
 
 use velnor_actions_contract_workflow::{Step, StepKind};
-use velnor_actions_workflow_renderer::lane_target::target_dir_for_lane;
-use velnor_actions_workflow_renderer::steps::{
+use velnor_actions_workflow_renderer::cache_steps::{
     CompileDriver, MBX_CACHE_MODE_ENV, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME,
     cache_action_step, mbx_steps_for_driver, tools_cache_key, tools_restore_step, tools_save_step,
 };
+use velnor_actions_workflow_renderer::lane_target::target_dir_for_lane;
 
 use super::impl_renderer_fixtures::*;
 
@@ -26,10 +26,10 @@ fn kind_name(step: &Step) -> &'static str {
 #[test]
 fn step_kinds_have_no_parallel_syntax() {
     let uses = format!("actions/checkout@{}", sha());
-    let step = velnor_actions_workflow_renderer::steps::checkout_step(&uses).expect("checkout");
+    let step = velnor_actions_workflow_steps::steps::checkout_step(&uses).expect("checkout");
     assert_eq!(kind_name(&step), "action");
     assert_eq!(
-        kind_name(&velnor_actions_workflow_renderer::steps::plan_step()),
+        kind_name(&velnor_actions_workflow_steps::steps::plan_step()),
         "internal"
     );
 }
@@ -207,8 +207,8 @@ fn tools_restore_and_save_pin_mise_data_dir_only() {
 
 #[test]
 fn strict_restores_builtin_and_saves_on_elected_writer()
--> Result<(), velnor_actions_workflow_renderer::RenderError> {
-    use velnor_actions_workflow_renderer::checkout_step;
+-> Result<(), velnor_actions_workflow_steps::RenderError> {
+    use velnor_actions_workflow_steps::checkout_step;
     let lint = job(
         "actionlint",
         "Actionlint",
@@ -273,8 +273,8 @@ fn strict_restores_builtin_and_saves_on_elected_writer()
 
 #[test]
 fn strict_leaves_setup_less_jobs_without_tools_cache()
--> Result<(), velnor_actions_workflow_renderer::RenderError> {
-    use velnor_actions_workflow_renderer::{checkout_step, merge_step, plan_step};
+-> Result<(), velnor_actions_workflow_steps::RenderError> {
+    use velnor_actions_workflow_steps::{checkout_step, merge_step, plan_step};
     let plan = job(
         "plan",
         "Plan",

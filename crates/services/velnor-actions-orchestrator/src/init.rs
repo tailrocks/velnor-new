@@ -3,7 +3,7 @@
 use std::fs::OpenOptions;
 use std::path::Path;
 
-use velnor_actions_workflow_renderer::marker::marker_for_version;
+use velnor_actions_workflow_tree::marker::marker_for_version;
 
 use crate::OrchestratorError;
 

@@ -60,7 +60,7 @@ fn tf_predicate_parity_with_documented_divergence() {
         "PATH",
     ] {
         assert_eq!(
-            velnor_actions_workflow_renderer::toolchain_env::is_denied_tf_key(key),
+            velnor_actions_workflow_steps::toolchain_env::is_denied_tf_key(key),
             velnor_actions_mise::command::is_reserved_env_key(key),
             "TF-family parity for {key}"
         );
@@ -73,7 +73,7 @@ fn tf_predicate_parity_with_documented_divergence() {
         "mise must reserve the future family"
     );
     assert!(
-        !velnor_actions_workflow_renderer::toolchain_env::is_denied_tf_key("TOFU_FUTURE_KEY"),
+        !velnor_actions_workflow_steps::toolchain_env::is_denied_tf_key("TOFU_FUTURE_KEY"),
         "renderer must leave the future family alone"
     );
 }

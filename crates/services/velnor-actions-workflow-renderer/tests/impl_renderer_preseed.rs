@@ -3,11 +3,14 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::Job;
 use velnor_actions_workflow_renderer::{
-    INTERNAL_OP_ENV, PRESEED_BUILD_OUTPUT, PRESEED_MANIFEST_BINARY_ENV, PRESEED_MANIFEST_OUT_ENV,
-    PRESEED_MANIFEST_TARGET_ENV, PRESEED_MANIFEST_TOOLCHAIN_ENV, PreseedStageSource, RenderError,
-    WRITE_PRESEED_MANIFEST_OPERATION, checkout_step, merge_step, plan_step, preseed_build_step,
-    preseed_download_step, preseed_manifest_step, preseed_manifest_verify_step, preseed_stage_step,
-    preseed_upload_step, preseed_verify_step,
+    PRESEED_BUILD_OUTPUT, PRESEED_MANIFEST_BINARY_ENV, PRESEED_MANIFEST_OUT_ENV,
+    PRESEED_MANIFEST_TARGET_ENV, PRESEED_MANIFEST_TOOLCHAIN_ENV, PreseedStageSource,
+    preseed_build_step, preseed_download_step, preseed_manifest_step, preseed_manifest_verify_step,
+    preseed_stage_step, preseed_upload_step, preseed_verify_step,
+};
+use velnor_actions_workflow_steps::{
+    INTERNAL_OP_ENV, RenderError, WRITE_PRESEED_MANIFEST_OPERATION, checkout_step, merge_step,
+    plan_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -85,7 +88,7 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
     };
     assert_eq!(run.first().map(String::as_str), Some("env"));
     assert!(run.contains(&"GITHUB_TOKEN".to_owned()), "{run:?}");
-    for key in velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST {
+    for key in velnor_actions_workflow_steps::toolchain_env::STEP_CREDENTIAL_DENYLIST {
         assert_eq!(
             env.get(key).map(String::as_str),
             Some(""),

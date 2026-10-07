@@ -1,7 +1,7 @@
 use velnor_actions_contract_workflow::{Step, StepKind};
 
 use super::MiseToolsCacheKey;
-use crate::{MiseSetup, steps::validate_uses};
+use velnor_actions_workflow_steps::{MiseSetup, steps::validate_uses};
 
 /// Check qualified setup pins or the legacy restore-only shape.
 pub(super) fn setup_shape_ok(

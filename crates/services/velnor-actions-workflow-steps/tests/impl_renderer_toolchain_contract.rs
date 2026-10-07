@@ -1,7 +1,7 @@
 //! Validated task-step env contract cases (P07 rendered side).
 use std::collections::BTreeMap;
 
-use velnor_actions_workflow_renderer::toolchain_env::{
+use velnor_actions_workflow_steps::toolchain_env::{
     CREDENTIAL_UNSET_VARS, STEP_CREDENTIAL_DENYLIST, STEP_ENDPOINT_DENYLIST,
     STEP_ISOLATION_DENYLIST, STEP_TF_ALLOWLIST, STEP_TF_DENYLIST_PREFIXES, TOOLCHAIN_HOME_KEYS,
     checked_project_task_env, checked_task_env, credential_scrub, credential_unset_prelude,

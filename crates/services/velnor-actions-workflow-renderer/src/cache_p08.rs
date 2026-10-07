@@ -17,7 +17,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract_workflow::workflow::step_identity::is_configured_checkout;
 use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 
-use crate::{MiseSetup, RenderError, cache_p08_detect::detector_words, setup::MISE_ACTION_NAME};
+use crate::cache_p08_detect::detector_words;
+use velnor_actions_workflow_steps::{MiseSetup, RenderError, setup::MISE_ACTION_NAME};
 
 mod shape;
 use shape::setup_shape_ok;
@@ -120,8 +121,8 @@ pub fn mise_setup_step_p08(setup: &MiseSetup, cache_key: &str) -> Result<Step, R
             "bad_cache_key:{cache_key}"
         )));
     }
-    let mut step = crate::steps::action_step(
-        crate::setup::SETUP_MISE_NAME,
+    let mut step = velnor_actions_workflow_steps::steps::action_step(
+        velnor_actions_workflow_steps::setup::SETUP_MISE_NAME,
         &setup.uses,
         BTreeMap::from([
             ("version".to_owned(), setup.version.clone()),

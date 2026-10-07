@@ -6,7 +6,7 @@ use super::super::features::{
 };
 use super::steps::uses_with;
 use super::{Extras, RunnerSpec, both};
-use crate::yaml::Yaml;
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 const COMPOSE_UP: &str = "docker compose -f qualification/compose/stack.yml up -d --wait";
 const COMPOSE_PROOF: &str = "docker compose -f qualification/compose/stack.yml ps --services --status running > \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx api \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx db \"$RUNNER_TEMP/g4-compose-ps\"";

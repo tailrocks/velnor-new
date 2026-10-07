@@ -1,11 +1,11 @@
 //! T22 never-archive exclusions in rendered cache steps.
-use velnor_actions_workflow_renderer::RenderError;
-use velnor_actions_workflow_renderer::steps::{
+use velnor_actions_workflow_renderer::cache_steps::{
     NEVER_ARCHIVE_MARKERS, TOOLS_RESTORE_USES, cache_action_step, is_never_archive_path,
 };
 use velnor_actions_workflow_renderer::tofu_cache::{
     TOFU_PROVIDER_CACHE_BASE_EXPR, tofu_providers_path_ok,
 };
+use velnor_actions_workflow_steps::RenderError;
 
 const HOME: &str = "${{ runner.temp }}/velnor/cargo";
 const KEY: &str = "velnor-v1-sources-trusted-compat-snapshot";

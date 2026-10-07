@@ -1,6 +1,6 @@
 //! Exact-source eligibility shared by every product release job.
 
-use crate::yaml::Yaml;
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 use super::features::{CHECKOUT_USES, base, finish, run_step};
 

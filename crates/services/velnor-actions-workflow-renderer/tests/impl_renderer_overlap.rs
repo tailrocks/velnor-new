@@ -1,7 +1,7 @@
 //! Prep overlap-then-join: concurrent branches, needs join, no step syntax.
 use std::collections::BTreeMap;
 use velnor_actions_workflow_renderer::overlap::{PrepOverlap, wire_prep_join};
-use velnor_actions_workflow_renderer::{RenderError, checkout_step};
+use velnor_actions_workflow_steps::{RenderError, checkout_step};
 
 use super::impl_renderer_fixtures::*;
 

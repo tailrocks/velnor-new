@@ -240,8 +240,8 @@ impl From<velnor_actions_contract::ContractError> for OrchestratorError {
     }
 }
 
-impl From<velnor_actions_workflow_renderer::RenderError> for OrchestratorError {
-    fn from(error: velnor_actions_workflow_renderer::RenderError) -> Self {
+impl From<velnor_actions_workflow_steps::RenderError> for OrchestratorError {
+    fn from(error: velnor_actions_workflow_steps::RenderError) -> Self {
         Self::Render {
             problem: error.to_string(),
         }

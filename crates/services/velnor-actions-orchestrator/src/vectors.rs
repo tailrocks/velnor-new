@@ -226,7 +226,7 @@ pub(crate) fn deny_argv(workspace_roots: &[String]) -> Result<Vec<String>, Orche
 /// silently mis-spliced.
 fn join_quoted_argv(argv: &[String]) -> String {
     argv.iter()
-        .map(|element| velnor_actions_workflow_renderer::quote_run_arg(element))
+        .map(|element| velnor_actions_workflow_steps::quote_run_arg(element))
         .collect::<Vec<_>>()
         .join(" ")
 }

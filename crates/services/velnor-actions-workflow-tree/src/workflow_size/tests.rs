@@ -1,5 +1,5 @@
 use super::{MAX_WORKFLOW_BYTES, check_workflow_size};
-use crate::RenderError;
+use velnor_actions_workflow_steps::RenderError;
 
 fn marked_workflow_with_byte_size(size: usize) -> Result<String, RenderError> {
     let mut workflow = crate::marker::with_marker("0.1.0", "")?;

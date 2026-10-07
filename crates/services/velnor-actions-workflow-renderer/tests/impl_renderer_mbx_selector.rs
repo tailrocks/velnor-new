@@ -2,9 +2,8 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::StepKind;
-use velnor_actions_workflow_renderer::{
-    CompileDriver, RenderError, check_mbx_gating, mise_setup_step, shell_step,
-};
+use velnor_actions_workflow_renderer::{cache_steps::CompileDriver, cache_steps::check_mbx_gating};
+use velnor_actions_workflow_steps::{RenderError, mise_setup_step, shell_step};
 
 use super::impl_renderer_fixtures::*;
 

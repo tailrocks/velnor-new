@@ -282,7 +282,7 @@ fn acquisition_template_selects_native_checksum_by_typed_target() {
 
 #[test]
 fn setup_uses_extracted_binary_digest_for_each_platform() {
-    use velnor_actions_workflow_renderer::setup::{
+    use velnor_actions_workflow_steps::setup::{
         MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
     };
     let config = config_with(BTreeMap::new());

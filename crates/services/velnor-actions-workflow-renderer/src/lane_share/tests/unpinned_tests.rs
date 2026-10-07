@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::{Job, JobTimeout, Step, StepKind, StepRole};
 
 use super::super::{HOSTED_SUFFIX, SCALE_SUFFIX, share_lanes};
-use crate::RenderError;
 use crate::render::RenderContext;
+use velnor_actions_workflow_steps::RenderError;
 
 fn context(checkout_uses: &str) -> RenderContext {
     RenderContext {

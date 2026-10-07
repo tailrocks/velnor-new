@@ -11,8 +11,9 @@ use velnor_actions_contract_workflow::workflow::step_identity::{
 };
 use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 
-use crate::yaml::Yaml;
-use crate::{RenderError, cache_p08::MiseToolsCacheKey};
+use crate::cache_p08::MiseToolsCacheKey;
+use velnor_actions_workflow_steps::RenderError;
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 use crate::tool_seed_admission::trusted_seed_guard;
 pub(crate) use crate::tool_seed_admission::{SEED_ROOT, require_seed_root};
@@ -146,7 +147,7 @@ pub(crate) fn validate_seed_action(
 }
 
 fn seed_step(cache_key: &MiseToolsCacheKey) -> Result<Step, RenderError> {
-    let mut step = crate::steps::action_step(
+    let mut step = velnor_actions_workflow_steps::steps::action_step(
         TOOL_SEED_NAME,
         TOOL_SEED_USES,
         BTreeMap::from([("cache_key".to_owned(), cache_key.as_str().to_owned())]),
@@ -169,9 +170,11 @@ pub(crate) fn any_job_has_seed(jobs: &std::collections::BTreeMap<String, Job>) -
 /// # Errors
 ///
 /// Returns [`RenderError`] when the version or the script is invalid.
-pub(crate) fn action_file(version: &str) -> Result<crate::tree::RenderedFile, RenderError> {
+pub(crate) fn action_file(
+    version: &str,
+) -> Result<velnor_actions_workflow_tree::rendered::RenderedFile, RenderError> {
     let script = tool_seed_action_script(SEED_ROOT)?;
-    let step = crate::steps::shell_step(
+    let step = velnor_actions_workflow_steps::steps::shell_step(
         "Copy matching tool seed",
         vec!["bash".to_owned(), "-c".to_owned(), script],
         BTreeMap::from([("SEED_KEY".to_owned(), "${{ inputs.cache_key }}".to_owned())]),
@@ -179,11 +182,18 @@ pub(crate) fn action_file(version: &str) -> Result<crate::tree::RenderedFile, Re
     let StepKind::Shell { run, env } = &step.kind else {
         return Err(RenderError::InvalidWorkflow("tool_seed_step".to_owned()));
     };
-    let body = action_yaml(&step.name, env, &crate::commands::join_argv_for_run(run)?);
-    let quoted = crate::yaml::quote_run_values_in_yaml(body);
-    let bytes = crate::marker::with_marker(version, &crate::yaml::render_yaml(&quoted))?;
-    crate::steps::scan_for_private_subcommands(&bytes)?;
-    Ok(crate::tree::RenderedFile {
+    let body = action_yaml(
+        &step.name,
+        env,
+        &velnor_actions_workflow_steps::commands::join_argv_for_run(run)?,
+    );
+    let quoted = velnor_actions_workflow_tree::yaml::quote_run_values_in_yaml(body);
+    let bytes = velnor_actions_workflow_tree::marker::with_marker(
+        version,
+        &velnor_actions_workflow_tree::yaml::render_yaml(&quoted),
+    )?;
+    velnor_actions_workflow_steps::steps::scan_for_private_subcommands(&bytes)?;
+    Ok(velnor_actions_workflow_tree::rendered::RenderedFile {
         path: TOOL_SEED_ACTION_PATH.to_owned(),
         bytes,
     })
@@ -219,7 +229,7 @@ fn action_yaml(step_name: &str, env: &BTreeMap<String, String>, run: &str) -> Ya
                         ("name".to_owned(), Yaml::str(step_name.to_owned())),
                         (
                             "env".to_owned(),
-                            crate::document_steps::string_map_yaml(env),
+                            velnor_actions_workflow_tree::yaml::string_map_yaml(env),
                         ),
                         ("shell".to_owned(), Yaml::str("bash".to_owned())),
                         ("run".to_owned(), Yaml::str(run.to_owned())),

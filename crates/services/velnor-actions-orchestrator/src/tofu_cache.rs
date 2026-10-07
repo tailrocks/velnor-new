@@ -95,7 +95,7 @@ pub(crate) fn tofu_providers_restore_step(
     {
         return Err(bad_key("bad_provider_restore_identity".to_owned()));
     }
-    let mut step = velnor_actions_workflow_renderer::steps::action_step(
+    let mut step = velnor_actions_workflow_steps::steps::action_step(
         velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDERS_RESTORE_NAME,
         velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_ADMISSION_USES,
         std::collections::BTreeMap::from([

@@ -1,8 +1,9 @@
 //! F2 closure: matrix reports, write-request insertion, plan outputs.
 use velnor_actions_contract_config::WorkflowPolicy;
-use velnor_actions_workflow_renderer::{
-    MATRIX_REPORT_UPLOAD_NAME, PLAN_ID_OUTPUT, RUN_KEY_OUTPUT, RenderError, checkout_step,
-    merge_step, plan_step, render_workflow_ir, write_request_step,
+use velnor_actions_workflow_renderer::{PLAN_ID_OUTPUT, RUN_KEY_OUTPUT, render_workflow_ir};
+use velnor_actions_workflow_steps::{
+    MATRIX_REPORT_UPLOAD_NAME, RenderError, checkout_step, merge_step, plan_step,
+    write_request_step,
 };
 
 use super::impl_renderer_fixtures::*;

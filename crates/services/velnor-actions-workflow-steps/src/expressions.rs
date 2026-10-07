@@ -127,7 +127,7 @@ pub(crate) fn check_env_value(key: &str, value: &str) -> Result<(), RenderError>
 
 /// Reject bad action `with:` keys: empty, `${{`, or control characters.
 /// # Errors
-pub(crate) fn check_with_key(key: &str) -> Result<(), RenderError> {
+pub fn check_with_key(key: &str) -> Result<(), RenderError> {
     if key.is_empty()
         || key.contains("${{")
         || key.chars().any(|ch| ch == '\0' || ch == '\n' || ch == '\r')
@@ -143,7 +143,7 @@ pub(crate) fn check_with_key(key: &str) -> Result<(), RenderError> {
 /// lists (the YAML emitter double-quotes them safely). Nul and CR are
 /// never legitimate input content.
 /// # Errors
-pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError> {
+pub fn check_with_value(key: &str, value: &str) -> Result<(), RenderError> {
     if value.chars().any(|ch| ch == '\0' || ch == '\r') {
         return Err(RenderError::BadActionRef(format!("bad_with_value:{key}")));
     }

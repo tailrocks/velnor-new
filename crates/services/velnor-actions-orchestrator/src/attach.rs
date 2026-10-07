@@ -12,11 +12,11 @@ use velnor_actions_contract_release::{GeneratorLock, ReleaseTarget};
 use velnor_actions_contract_workflow::{Step, StepRole, WorkflowIr};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID};
-use velnor_actions_workflow_renderer::steps::STAGED_BINARY_PREFIX;
 use velnor_actions_workflow_renderer::{
     PreseedStageSource, preseed_build_step, preseed_download_step, preseed_manifest_step,
     preseed_manifest_verify_step, preseed_stage_step, preseed_upload_step, preseed_verify_step,
 };
+use velnor_actions_workflow_steps::steps::STAGED_BINARY_PREFIX;
 
 use crate::OrchestratorError;
 use crate::pins::{lock_acquire_for_runner, lock_acquire_step};

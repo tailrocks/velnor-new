@@ -110,7 +110,7 @@ fn report_wrapper_stamps_start_and_hands_env_to_helper() {
         script.ends_with("if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\""),
         "obligation code wins: {script}"
     );
-    velnor_actions_workflow_renderer::validate_command_argv(&argv).expect("valid wrapper");
+    velnor_actions_workflow_steps::validate_command_argv(&argv).expect("valid wrapper");
 }
 
 #[test]
@@ -142,7 +142,7 @@ fn outcome_and_deferred_share_one_start_file() {
         report[2]
     );
     for argv in [&save, &report] {
-        velnor_actions_workflow_renderer::validate_command_argv(argv).expect("valid wrapper");
+        velnor_actions_workflow_steps::validate_command_argv(argv).expect("valid wrapper");
         assert!(!argv[2].contains("$("), "file handoff only: {}", argv[2]);
     }
 }

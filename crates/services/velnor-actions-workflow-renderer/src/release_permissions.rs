@@ -6,7 +6,8 @@
 //! enforces it plus the two structural rules (`id-token: write` needs a
 //! pinned environment, validation roles never hold `contents: write`).
 
-use crate::{RenderError, release_jobs::ReleaseRole};
+use crate::release_jobs::ReleaseRole;
+use velnor_actions_workflow_steps::RenderError;
 
 /// One GitHub permission level (typed, never a raw string).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

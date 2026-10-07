@@ -20,6 +20,8 @@
     "velnor-actions-tofu": "library",
     "velnor-actions-tofu-core": "library",
     "velnor-actions-workflow-renderer": "library",
+    "velnor-actions-workflow-steps": "library",
+    "velnor-actions-workflow-tree": "library",
     "velnor-archive-guard": "tool",
     "velnor-runner-cli": "tool",
     "velnor-runner-core": "library",

@@ -1,7 +1,6 @@
 //! Release workflow rendering, file assembly, and determinism cases.
 use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::ScheduleTrigger;
-use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::release_config::{
     BootstrapReleasePlzConfig, ReleasePlzConfig, ReleasePlzPackage,
 };
@@ -16,7 +15,8 @@ use velnor_actions_workflow_renderer::release_tree::{
     RELEASE_BOOTSTRAP_CONFIG_PATH, RELEASE_CONFIG_PATH, RELEASE_TREE_PATHS, RELEASE_WORKFLOW_PATH,
     ReleaseRenderContext, release_stale_paths, render_release_files, render_release_workflow,
 };
-use velnor_actions_workflow_renderer::{action_step, ambient_shell_step};
+use velnor_actions_workflow_steps::RenderError;
+use velnor_actions_workflow_steps::{action_step, ambient_shell_step};
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 const REPO: &str = "acme/widgets";

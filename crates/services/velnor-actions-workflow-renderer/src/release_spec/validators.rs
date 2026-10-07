@@ -4,7 +4,7 @@
 //! empty, overlong, expression-carrying, and control-character values
 //! before any domain parsing runs.
 
-use crate::RenderError;
+use velnor_actions_workflow_steps::RenderError;
 
 /// Reject empty or overlong text plus `${{` and control characters.
 pub(crate) fn is_clean_text(value: &str, limit: usize) -> bool {

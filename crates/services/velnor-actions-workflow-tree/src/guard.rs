@@ -7,7 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::{RenderError, steps};
+use velnor_actions_workflow_steps::{RenderError, steps};
 
 /// A validated relative output path inside the generated tree.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -14,8 +14,8 @@
 use super::features::{checkout_step, finish, gated, lane_base, run_step};
 use super::{MbxQualificationPins, RunnerSpec};
 use crate::cache_steps::MBX_ACTION_NAME;
-use crate::yaml::Yaml;
-use crate::{RenderError, steps::validate_uses};
+use velnor_actions_workflow_steps::{RenderError, steps::validate_uses};
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 const MAIN_REF: &str = "github.ref == 'refs/heads/main' && github.ref_protected == true";
 const SMOKE_CRATE: &str = r#"set -eu

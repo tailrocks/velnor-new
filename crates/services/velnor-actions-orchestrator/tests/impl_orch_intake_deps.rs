@@ -24,7 +24,12 @@ fn intake_adapter_dependency_direction() -> TestResult {
         if let Some(deps) = manifest.get("dependencies").and_then(toml::Value::as_table) {
             for name in deps.keys() {
                 // SIZE-split foundations ride as `{adapter}-*` family children.
-                let family_child = name.starts_with(&format!("velnor-actions-{adapter}-"));
+                let family_child = name.starts_with(&format!("velnor-actions-{adapter}-"))
+                    // The renderer SIZE-split family shares the shorter
+                    // `workflow-` stem (`workflow-steps`, `workflow-tree`,
+                    // ...), not the full `workflow-renderer-` stem.
+                    || (adapter == "workflow-renderer"
+                        && name.starts_with("velnor-actions-workflow-"));
                 // The contract family is shared vocabulary below every
                 // adapter; depending on it preserves leaf-ness.
                 let contract_family = name == "velnor-actions-contract"

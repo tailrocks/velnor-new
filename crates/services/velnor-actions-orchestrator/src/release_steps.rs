@@ -23,7 +23,7 @@ use velnor_actions_workflow_renderer::release_permissions::JobPermissions;
 use velnor_actions_workflow_renderer::release_tree::{
     RELEASE_BOOTSTRAP_CONFIG_PATH, RELEASE_CONFIG_PATH,
 };
-use velnor_actions_workflow_renderer::{MiseSetup, ambient_shell_step, mise_setup_step};
+use velnor_actions_workflow_steps::{MiseSetup, ambient_shell_step, mise_setup_step};
 
 use crate::OrchestratorError;
 use crate::release_checkouts::{forge_env, policy_checkout, source_checkout, source_manifest};

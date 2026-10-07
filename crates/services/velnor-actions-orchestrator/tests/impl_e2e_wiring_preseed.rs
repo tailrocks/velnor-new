@@ -3,7 +3,7 @@
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::{
-    MBX_VERSION_CHECK_NAME, WORKFLOW_PATH, steps::MBX_RESTORE_NAME,
+    WORKFLOW_PATH, cache_steps::MBX_RESTORE_NAME, cache_steps::MBX_VERSION_CHECK_NAME,
 };
 
 use super::{JobText, check_tree, check_verify_mbx, make_velnor_repo};

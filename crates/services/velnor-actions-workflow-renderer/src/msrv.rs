@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::{Job, JobTimeout, Step, StepRole};
 
-use crate::{RenderError, steps};
+use velnor_actions_workflow_steps::{RenderError, steps};
 
 /// Typed per-crate MSRV check: product crate plus declared minimum.
 #[derive(Debug, Clone, PartialEq, Eq)]

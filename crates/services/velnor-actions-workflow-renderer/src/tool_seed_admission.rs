@@ -1,4 +1,4 @@
-use crate::RenderError;
+use velnor_actions_workflow_steps::RenderError;
 
 pub(crate) const SEED_ROOT: &str = "/opt/velnor/seed";
 const SEED_PROVENANCE: &str = "velnor-host-seed-v1";

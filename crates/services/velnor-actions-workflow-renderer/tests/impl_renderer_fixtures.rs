@@ -5,12 +5,14 @@ use velnor_actions_contract_workflow::workflow::permissions::PermissionLevel;
 use velnor_actions_contract_workflow::{
     Concurrency, Job, JobTimeout, Permissions, Step, Trigger, WorkflowIr,
 };
-use velnor_actions_workflow_renderer::steps::{CompileDriver, mbx_steps_for_driver};
+use velnor_actions_workflow_renderer::cache_steps::{CompileDriver, mbx_steps_for_driver};
 use velnor_actions_workflow_renderer::{
-    ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, MiseSetup,
-    RELEASE_COMMIT_ENV, RenderContext, RenderError, STAGED_BINARY_PREFIX, ValidatorCommand,
-    acquire_velnor_step, checkout_step, plan_step, render_workflow_ir, render_workflow_ir_strict,
-    shell_step,
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, ValidatorCommand, render_workflow_ir,
+    render_workflow_ir_strict,
+};
+use velnor_actions_workflow_steps::{
+    ASSET_SHA_ENV, ASSET_URL_ENV, MiseSetup, RELEASE_COMMIT_ENV, RenderError, STAGED_BINARY_PREFIX,
+    acquire_velnor_step, checkout_step, plan_step, shell_step,
 };
 
 pub(crate) const VERSION: &str = "0.1.0";

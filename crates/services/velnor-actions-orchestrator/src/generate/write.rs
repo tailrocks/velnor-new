@@ -3,7 +3,7 @@
 use std::io::Write;
 use std::path::Path;
 
-use velnor_actions_workflow_renderer::render::RenderedTree;
+use velnor_actions_workflow_tree::rendered::RenderedTree;
 
 use crate::OrchestratorError;
 

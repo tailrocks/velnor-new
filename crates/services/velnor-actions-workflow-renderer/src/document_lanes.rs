@@ -2,11 +2,11 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 
-use crate::RenderError;
 use crate::composite::shared_call;
 use crate::document_steps::step_to_yaml;
 use crate::render::RenderContext;
-use crate::yaml::Yaml;
+use velnor_actions_workflow_steps::RenderError;
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 pub(crate) struct SharedLaneSteps<'a> {
     pub checkouts: &'a BTreeMap<String, Step>,

@@ -5,7 +5,7 @@
 //! working. New helpers stay under `release_spec::lock::`.
 
 use super::{is_clean_text, validate_repository};
-use crate::{RenderError, steps::scan_for_private_subcommands};
+use velnor_actions_workflow_steps::{RenderError, steps::scan_for_private_subcommands};
 
 /// Stable serialized lock: fixed key, publishers never cancel.
 #[derive(Debug, Clone, PartialEq, Eq)]

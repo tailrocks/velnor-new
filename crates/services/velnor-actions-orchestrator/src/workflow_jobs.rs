@@ -13,7 +13,7 @@ use velnor_actions_mise::{
     ToolHomes,
 };
 use velnor_actions_workflow_renderer::render::{FINAL_CONDITION, FINAL_DISPLAY_NAME, PLAN_JOB_ID};
-use velnor_actions_workflow_renderer::steps::{
+use velnor_actions_workflow_steps::steps::{
     MERGE_OPERATION, PLAN_OPERATION, merge_step, plan_step, write_request_step,
 };
 
@@ -108,14 +108,11 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
     })?;
     let argv = strings_of(exec.argv(catalog))
         .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let mut lint = velnor_actions_workflow_renderer::ambient_shell_step(
-        "Run actionlint",
-        argv,
-        BTreeMap::new(),
-    )
-    .map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })?;
+    let mut lint =
+        velnor_actions_workflow_steps::ambient_shell_step("Run actionlint", argv, BTreeMap::new())
+            .map_err(|err| OrchestratorError::Contract {
+                problem: err.to_string(),
+            })?;
     lint.role = Some(StepRole::Actionlint);
     Ok(Job {
         display_name: LINT_DISPLAY_NAME.to_owned(),
@@ -235,10 +232,10 @@ fn prepare_pinned_tools_step(
     }
     .map_err(|problem| OrchestratorError::Contract { problem })?;
     let mut step =
-        velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
+        velnor_actions_workflow_steps::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
             .map_err(|err| OrchestratorError::Contract {
-            problem: err.to_string(),
-        })?;
+                problem: err.to_string(),
+            })?;
     step.role = Some(StepRole::PreparePinnedTools);
     Ok(step)
 }

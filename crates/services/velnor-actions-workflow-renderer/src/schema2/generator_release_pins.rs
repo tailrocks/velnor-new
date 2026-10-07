@@ -1,6 +1,6 @@
 use velnor_actions_contract_release::ReleaseTarget;
 
-use crate::setup::MiseSetup;
+use velnor_actions_workflow_steps::setup::MiseSetup;
 
 /// Pinned tools and runner-specific Mise setup for the generator release.
 ///

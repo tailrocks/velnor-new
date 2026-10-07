@@ -6,7 +6,7 @@ use velnor_actions_workflow_renderer::cache_p08::{
     check_no_rust_cache_with_mbx, infer_job_tools, mise_cache_key_for_tools, mise_setup_step_p08,
     tools_digest,
 };
-use velnor_actions_workflow_renderer::steps::cache_action_step;
+use velnor_actions_workflow_renderer::cache_steps::cache_action_step;
 
 use super::impl_renderer_fixtures::*;
 
@@ -57,7 +57,7 @@ fn job_tools_inferred_from_install_and_exec() {
         permissions: None,
         environment: None,
         steps: vec![
-            velnor_actions_workflow_renderer::shell_step(
+            velnor_actions_workflow_steps::shell_step(
                 "Prepare pinned tools",
                 vec![
                     "mise".to_owned(),
@@ -68,7 +68,7 @@ fn job_tools_inferred_from_install_and_exec() {
                 BTreeMap::new(),
             )
             .expect("prepare"),
-            velnor_actions_workflow_renderer::shell_step(
+            velnor_actions_workflow_steps::shell_step(
                 "Run lint",
                 mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
                 BTreeMap::new(),
@@ -100,7 +100,7 @@ fn job_tools_inferred_from_inline_shell_script() {
         permissions: None,
         environment: None,
         steps: vec![
-            velnor_actions_workflow_renderer::ambient_shell_step(
+            velnor_actions_workflow_steps::ambient_shell_step(
                 "Run cargo-deny",
                 vec!["sh".to_owned(), "-c".to_owned(), script.to_owned()],
                 BTreeMap::new(),
@@ -125,7 +125,7 @@ fn job_tools_inferred_from_quoted_spec() {
         permissions: None,
         environment: None,
         steps: vec![
-            velnor_actions_workflow_renderer::shell_step(
+            velnor_actions_workflow_steps::shell_step(
                 "Run task",
                 vec![
                     "sh".to_owned(),
@@ -247,9 +247,9 @@ fn rust_cache_never_stacks_over_mbx() {
 
 #[test]
 fn step_conditions_serialize_as_if_with_upload_default()
--> Result<(), velnor_actions_workflow_renderer::RenderError> {
+-> Result<(), velnor_actions_workflow_steps::RenderError> {
     use velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION;
-    use velnor_actions_workflow_renderer::{action_step, matrix_report_upload_step};
+    use velnor_actions_workflow_steps::{action_step, matrix_report_upload_step};
     let mut save = action_step(
         "Save Cargo sources",
         &format!("actions/cache/save@{}", "c".repeat(40)),
@@ -304,8 +304,8 @@ fn step_conditions_serialize_as_if_with_upload_default()
 
 #[test]
 fn strict_render_elects_single_writer_per_shared_key()
--> Result<(), velnor_actions_workflow_renderer::RenderError> {
-    use velnor_actions_workflow_renderer::{plan_step, shell_step};
+-> Result<(), velnor_actions_workflow_steps::RenderError> {
+    use velnor_actions_workflow_steps::{plan_step, shell_step};
     let prepare = || {
         shell_step(
             "Prepare pinned tools",

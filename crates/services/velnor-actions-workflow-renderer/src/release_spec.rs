@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract_workflow::ScheduleTrigger;
 
-use crate::{RenderError, steps::scan_for_private_subcommands};
+use velnor_actions_workflow_steps::{RenderError, steps::scan_for_private_subcommands};
 
 mod validators;
 

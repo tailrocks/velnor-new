@@ -105,7 +105,7 @@ pub(crate) fn derive_lanes_until(
         closure_digest,
         baseline_proof: None,
     };
-    let run = velnor_actions_workflow_renderer::join_argv_for_run(&argv)
+    let run = velnor_actions_workflow_steps::join_argv_for_run(&argv)
         .map_err(|e| internal(&e.to_string()))?;
     let mut entries = Vec::with_capacity(lanes.len());
     for lane in lanes {

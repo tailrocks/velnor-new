@@ -102,11 +102,14 @@ pub(super) fn render_jobs(
     ir: &WorkflowIr,
     shared: &super::LaneShare,
     ctx: &RenderContext,
-) -> Result<String, crate::RenderError> {
+) -> Result<String, velnor_actions_workflow_steps::RenderError> {
     let document =
         crate::document::workflow_to_yaml(ir, shared, ctx, &std::collections::BTreeSet::new())?;
-    let quoted = crate::yaml::quote_run_values_in_yaml(document);
-    crate::marker::with_marker(&ctx.generator_version, &crate::yaml::render_yaml(&quoted))
+    let quoted = velnor_actions_workflow_tree::yaml::quote_run_values_in_yaml(document);
+    velnor_actions_workflow_tree::marker::with_marker(
+        &ctx.generator_version,
+        &velnor_actions_workflow_tree::yaml::render_yaml(&quoted),
+    )
 }
 
 pub(super) fn paired(steps: &[Step]) -> BTreeMap<String, Job> {

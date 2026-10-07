@@ -5,10 +5,8 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::is_crate_job_id;
 use velnor_actions_contract_workflow::{Job, StepRole};
 
-use crate::{
-    RenderError,
-    render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID},
-};
+use crate::render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID};
+use velnor_actions_workflow_steps::RenderError;
 
 /// Pre-seed closure: single plan build plus artifact sharing (Gap A).
 ///

@@ -15,7 +15,7 @@ use velnor_actions_rust::TaskKind;
 /// wrapper-constructing files, and this helper only asserts shape
 /// without constructing a wrapper.
 fn is_sh_head(argv: &[String]) -> bool {
-    use velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude;
+    use velnor_actions_workflow_steps::toolchain_env::credential_unset_prelude;
     argv.len() == 3
         && argv[0].len() == 2
         && argv[0].starts_with('s')
@@ -115,7 +115,7 @@ fn obligations_upload_one_artifact_per_job() {
     let uploads: Vec<_> = demo
         .steps
         .iter()
-        .filter(|step| step.name == velnor_actions_workflow_renderer::CRATE_REPORT_UPLOAD_NAME)
+        .filter(|step| step.name == velnor_actions_workflow_steps::CRATE_REPORT_UPLOAD_NAME)
         .collect();
     assert_eq!(uploads.len(), 1, "one upload for two obligations");
     let step = uploads[0];
@@ -141,14 +141,14 @@ fn obligations_upload_one_artifact_per_job() {
     assert!(
         demo.steps.iter().all(|step| !step
             .name
-            .starts_with(velnor_actions_workflow_renderer::MATRIX_REPORT_UPLOAD_NAME)),
+            .starts_with(velnor_actions_workflow_steps::MATRIX_REPORT_UPLOAD_NAME)),
         "no per-entry matrix uploads survive",
     );
     let steps = names(&demo);
     let at = |name: &str| steps.iter().position(|seen| *seen == name);
     let (Some(run), Some(upload)) = (
         at("Unit and integration tests"),
-        at(velnor_actions_workflow_renderer::CRATE_REPORT_UPLOAD_NAME),
+        at(velnor_actions_workflow_steps::CRATE_REPORT_UPLOAD_NAME),
     ) else {
         panic!("report/upload steps missing: {steps:?}");
     };

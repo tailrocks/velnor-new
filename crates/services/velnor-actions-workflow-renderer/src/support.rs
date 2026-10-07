@@ -16,14 +16,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract_config::{ValidatorKind, VelnorSupportWorkflow};
 use velnor_actions_contract_workflow::{Job, JobTimeout, Step, StepKind, StepRole};
 
+use velnor_actions_workflow_steps::{ALINT_BINARY_VERSION, ALINT_USES, RenderError, steps};
+
 use crate::{
-    RenderError,
     candidate::{candidate_job, release_job},
     render::{
-        ALINT_BINARY_VERSION, ALINT_USES, CANDIDATE_JOB_ID, FINAL_CONDITION, FINAL_DISPLAY_NAME,
-        FINAL_JOB_ID, PLAN_JOB_ID, RenderContext, ValidatorCommand,
+        CANDIDATE_JOB_ID, FINAL_CONDITION, FINAL_DISPLAY_NAME, FINAL_JOB_ID, PLAN_JOB_ID,
+        RenderContext, ValidatorCommand,
     },
-    steps,
 };
 
 /// Always-on workflow-lint job ID, emitted for both policies.

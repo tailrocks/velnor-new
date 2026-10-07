@@ -1,6 +1,5 @@
 //! Release role, permission, shape, and workflow-graph cases.
 use std::collections::BTreeMap;
-use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::release_jobs::{
     ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec,
 };
@@ -8,7 +7,8 @@ use velnor_actions_workflow_renderer::release_permissions::{JobPermissions, Perm
 use velnor_actions_workflow_renderer::release_spec::{
     BootstrapPlan, DispatchInput, ReleaseConcurrency, ReleaseTriggers, publish_gate_condition,
 };
-use velnor_actions_workflow_renderer::shell_step;
+use velnor_actions_workflow_steps::RenderError;
+use velnor_actions_workflow_steps::shell_step;
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 const REPO: &str = "acme/widgets";

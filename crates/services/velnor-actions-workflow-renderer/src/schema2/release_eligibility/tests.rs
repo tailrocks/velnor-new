@@ -78,9 +78,13 @@ fn script_uses_the_expected_paginated_selectors_and_bounded_wait() {
 
 #[test]
 fn job_renders_a_read_only_source_gate() {
-    let (name, value) = job(crate::yaml::Yaml::str("ubuntu-latest"));
+    let (name, value) = job(velnor_actions_workflow_tree::yaml::Yaml::str(
+        "ubuntu-latest",
+    ));
     assert_eq!(name, JOB_ID);
-    let rendered = crate::yaml::render_yaml(&crate::yaml::Yaml::Map(vec![(name, value)]));
+    let rendered = velnor_actions_workflow_tree::yaml::render_yaml(
+        &velnor_actions_workflow_tree::yaml::Yaml::Map(vec![(name, value)]),
+    );
     assert!(rendered.contains("actions: read"));
     assert!(rendered.contains("contents: read"));
     assert!(rendered.contains("gh@2.102.0"));

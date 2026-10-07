@@ -12,12 +12,11 @@ use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 
 use crate::{
-    RenderError,
     closure_paths::{validate_helper_path, validate_output_dir},
     preseed,
     render::{PLAN_JOB_ID, RenderContext},
-    steps,
 };
+use velnor_actions_workflow_steps::{RenderError, steps};
 
 /// Contract-fixed display name of the freshness step.
 pub const CHECK_GENERATED_NAME: &str = "Check generated files";

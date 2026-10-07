@@ -5,18 +5,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    RenderError,
-    document_steps::string_map_yaml,
     lane_share::LaneShare,
     render::{FINAL_JOB_ID, RenderContext},
-    steps,
-    yaml::Yaml,
 };
 use velnor_actions_contract_config::config::RunsOn;
 use velnor_actions_contract_workflow::{
     Job, Permissions, StepKind, StepRole, Trigger, WorkflowIr,
     workflow::{ir::DispatchInput, permissions::PermissionLevel},
 };
+use velnor_actions_workflow_steps::{RenderError, steps};
+use velnor_actions_workflow_tree::{yaml::Yaml, yaml::string_map_yaml};
 
 #[cfg(test)]
 mod tests;
@@ -263,9 +261,9 @@ fn job_to_yaml(
             // Verification jobs intentionally execute repository-declared
             // Mise tasks, so they need Mise config while retaining the same
             // credential scrub as every other repository-code step.
-            crate::toolchain_env::credential_scrub()
+            velnor_actions_workflow_steps::toolchain_env::credential_scrub()
         } else {
-            crate::toolchain_env::job_level_env()
+            velnor_actions_workflow_steps::toolchain_env::job_level_env()
         }
     } else {
         BTreeMap::new()
@@ -282,9 +280,9 @@ fn job_to_yaml(
                 }
                 if step.role == Some(StepRole::AcquireVelnor) {
                     for key in [
-                        crate::steps::ASSET_SHA_ENV,
-                        crate::steps::ASSET_URL_ENV,
-                        crate::steps::RELEASE_COMMIT_ENV,
+                        velnor_actions_workflow_steps::steps::ASSET_SHA_ENV,
+                        velnor_actions_workflow_steps::steps::ASSET_URL_ENV,
+                        velnor_actions_workflow_steps::steps::RELEASE_COMMIT_ENV,
                     ] {
                         if let Some(val) = env.get(key) {
                             job_env.insert(key.to_owned(), val.clone());

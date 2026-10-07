@@ -20,7 +20,7 @@ pub(crate) use mbx_preflight::{
     MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE,
 };
 
-use crate::{
+use velnor_actions_workflow_steps::{
     RenderError,
     steps::{action_step, validate_uses},
 };

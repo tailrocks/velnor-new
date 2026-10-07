@@ -6,7 +6,7 @@
 //! scopes stay absent.
 use velnor_actions_contract_workflow::Permissions;
 use velnor_actions_contract_workflow::workflow::permissions::PermissionLevel;
-use velnor_actions_workflow_renderer::{RenderError, checkout_step, plan_step};
+use velnor_actions_workflow_steps::{RenderError, checkout_step, plan_step};
 
 use super::impl_renderer_fixtures::*;
 

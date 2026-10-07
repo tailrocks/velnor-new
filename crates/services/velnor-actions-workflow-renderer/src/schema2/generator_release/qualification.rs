@@ -1,7 +1,7 @@
 //! Candidate execution on an isolated, read-only qualification runner.
 
-use crate::RenderError;
-use crate::yaml::Yaml;
+use velnor_actions_workflow_steps::RenderError;
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 use super::super::features::{base, finish};
 use super::assets::ProductAsset;

@@ -4,14 +4,17 @@ use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_contract_workflow::{
     Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr,
 };
-use velnor_actions_workflow_renderer::steps::{
+use velnor_actions_workflow_renderer::{
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, render_workflow_ir,
+};
+use velnor_actions_workflow_steps::steps::{
     has_bare_env_expansion, quote_env_path_for_run, quote_run_line_env_paths,
 };
-use velnor_actions_workflow_renderer::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, RenderError, STAGED_BINARY_PREFIX,
-    checkout_step, join_argv_for_run, plan_step, quote_run_arg, quote_scalar, render_workflow_ir,
+use velnor_actions_workflow_steps::{
+    RenderError, STAGED_BINARY_PREFIX, checkout_step, join_argv_for_run, plan_step, quote_run_arg,
     shell_step,
 };
+use velnor_actions_workflow_tree::quote_scalar;
 
 fn pin(name: &str) -> String {
     format!("{name}@{:040x}", 0)
@@ -88,7 +91,7 @@ fn inline_shell_scripts_quote_whole_for_inner_expansion() {
 
 #[test]
 fn unset_wrapped_shell_still_quotes_script_whole() {
-    use velnor_actions_workflow_renderer::toolchain_env::{
+    use velnor_actions_workflow_steps::toolchain_env::{
         CREDENTIAL_UNSET_VARS, with_env_unset_argv,
     };
     let wrapped = with_env_unset_argv(&argv(&["sh", "-c", "read sha rest < f && echo \"$sha\""]));

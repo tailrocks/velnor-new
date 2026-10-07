@@ -5,7 +5,6 @@
 //! [`render_release_files`] adds the two effective release-plz configs.
 
 use crate::{
-    RenderError, guard, marker,
     release_config::{
         BootstrapReleasePlzConfig, ReleasePlzConfig, render_bootstrap_release_plz_config,
         render_release_plz_config,
@@ -13,8 +12,11 @@ use crate::{
     release_gates::{ReleaseConfigBinding, check_release_jobs},
     release_jobs::{ReleaseJobSpec, ReleaseWorkflowSpec},
     release_spec::ReleaseTriggers,
-    render::RenderedFile,
-    steps,
+};
+use velnor_actions_workflow_steps::{RenderError, steps};
+use velnor_actions_workflow_tree::{
+    guard, marker,
+    rendered::RenderedFile,
     yaml::{Yaml, render_yaml},
 };
 
@@ -93,9 +95,9 @@ pub fn render_release_workflow(
     };
     check_release_jobs(spec, &binding)?;
     let document = release_document(spec)?;
-    let document = crate::yaml::quote_run_values_in_yaml(document);
+    let document = velnor_actions_workflow_tree::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
-    crate::workflow_size::check_workflow_size(RELEASE_WORKFLOW_PATH, &text)?;
+    velnor_actions_workflow_tree::workflow_size::check_workflow_size(RELEASE_WORKFLOW_PATH, &text)?;
     steps::scan_for_private_subcommands(&text)?;
     Ok(text)
 }
@@ -215,7 +217,7 @@ fn release_job_to_yaml(job: &ReleaseJobSpec) -> Result<Yaml, RenderError> {
     }
     let mut rendered = Vec::with_capacity(job.steps.len());
     for step in &job.steps {
-        rendered.push(crate::steps_plain::plain_step_to_yaml(step)?);
+        rendered.push(velnor_actions_workflow_tree::steps_plain::plain_step_to_yaml(step)?);
     }
     entries.push(("steps".to_owned(), Yaml::Seq(rendered)));
     Ok(Yaml::Map(entries))

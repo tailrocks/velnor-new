@@ -1,10 +1,10 @@
 //! Reusable workflow steps and permission sets for the generator release.
 
-use crate::commands::join_argv_for_run;
-use crate::setup::SETUP_MISE_NAME;
-use crate::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
-use crate::yaml::Yaml;
-use crate::{MiseSetup, RenderError};
+use velnor_actions_workflow_steps::commands::join_argv_for_run;
+use velnor_actions_workflow_steps::setup::SETUP_MISE_NAME;
+use velnor_actions_workflow_steps::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
+use velnor_actions_workflow_steps::{MiseSetup, RenderError};
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 use super::super::features::CHECKOUT_USES;
 

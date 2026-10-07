@@ -1,6 +1,6 @@
 //! Same-run candidate manifest produced before native qualification.
 
-use crate::yaml::Yaml;
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 use super::super::features::{base, finish};
 use super::GeneratorReleasePins;
@@ -11,7 +11,7 @@ use velnor_actions_contract_release::ReleaseTarget;
 pub(super) fn job(
     hosted: Yaml,
     pins: &GeneratorReleasePins,
-) -> Result<(String, Yaml), crate::RenderError> {
+) -> Result<(String, Yaml), velnor_actions_workflow_steps::RenderError> {
     let candidate_path = manifest::candidate_path();
     let mut steps = Vec::new();
     for product in assets::ASSETS {

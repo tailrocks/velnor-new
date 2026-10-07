@@ -8,7 +8,7 @@ use velnor_actions_contract_workflow::{CrateObligation, Step, StepRole};
 use velnor_actions_mise::{ISOLATION_ENV, NO_AUTO_INSTALL_ENV, ToolCatalog, ToolHomes};
 use velnor_actions_rust::{payload_env_for_kind, step_base_name};
 use velnor_actions_workflow_renderer::plan_format::FORMAT_STEP_NAME;
-use velnor_actions_workflow_renderer::steps::{INTERNAL_OP_ENV, STAGED_BINARY_PREFIX};
+use velnor_actions_workflow_steps::steps::{INTERNAL_OP_ENV, STAGED_BINARY_PREFIX};
 
 use crate::OrchestratorError;
 use crate::task_report::{EXIT_CODE_ENV, REPORT_OP, START_MS_ENV, TASK_ID_ENV};
@@ -100,7 +100,7 @@ pub(crate) fn task_step_env(
     extra: &BTreeMap<String, String>,
     needs_rust: bool,
 ) -> Result<BTreeMap<String, String>, OrchestratorError> {
-    use velnor_actions_workflow_renderer::toolchain_env;
+    use velnor_actions_workflow_steps::toolchain_env;
     for key in extra.keys() {
         if velnor_actions_mise::command::is_reserved_env_key(key)
             || (!needs_rust && toolchain_env::TOOLCHAIN_HOME_KEYS.contains(&key.as_str()))
@@ -231,13 +231,13 @@ pub(crate) fn obligation_step(
     let needs_rust = obligation_stack(&obligation.task_id) != Some(Stack::Tofu);
     let env = task_step_env(catalog, &identity, needs_rust)?;
     let joined =
-        velnor_actions_workflow_renderer::join_argv_for_run(&obligation.run).map_err(|err| {
+        velnor_actions_workflow_steps::join_argv_for_run(&obligation.run).map_err(|err| {
             OrchestratorError::Contract {
                 problem: err.to_string(),
             }
         })?;
     let run = report_wrapper_argv(&joined, &helper_path_for_version());
-    let mut step = velnor_actions_workflow_renderer::shell_step(&obligation.step_name, run, env)
+    let mut step = velnor_actions_workflow_steps::shell_step(&obligation.step_name, run, env)
         .map_err(OrchestratorError::from)?;
     if !needs_rust {
         step.role = Some(StepRole::TofuProviderUse);
@@ -364,7 +364,7 @@ pub(crate) fn download_plan_step() -> Result<Step, OrchestratorError> {
 
 /// One always-on crate-report upload carrying a job's every entry.
 pub(crate) fn crate_upload_step(job_id: &str) -> Result<Step, OrchestratorError> {
-    velnor_actions_workflow_renderer::crate_job_report_upload_step(job_id).map_err(|err| {
+    velnor_actions_workflow_steps::crate_job_report_upload_step(job_id).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
         }

@@ -112,7 +112,7 @@ fn sources_step(
     )
     .map_err(OrchestratorError::from)?
     .uses_value();
-    let mut step = velnor_actions_workflow_renderer::steps::cache_action_step(
+    let mut step = velnor_actions_workflow_renderer::cache_steps::cache_action_step(
         restore,
         &uses,
         "sources",

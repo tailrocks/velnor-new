@@ -1,7 +1,7 @@
 //! Pinned Mise setup emission: template shape plus strict insertion.
 use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::Step;
-use velnor_actions_workflow_renderer::{
+use velnor_actions_workflow_steps::{
     MiseSetup, RenderError, SETUP_MISE_NAME, checkout_step, mise_setup_step, plan_step,
 };
 
@@ -216,7 +216,7 @@ fn strict_rejects_setup_misuse() -> Result<(), RenderError> {
 fn strict_mixed_platform_checks_use_native_setup_and_keep_global_runner() -> Result<(), RenderError>
 {
     use velnor_actions_contract_config::config::{CheckExecutor, CheckPlatform, CheckRunner};
-    use velnor_actions_workflow_renderer::setup::MISE_BINARY_SHA256_MACOS_ARM64;
+    use velnor_actions_workflow_steps::setup::MISE_BINARY_SHA256_MACOS_ARM64;
     let mut check = job(
         "check-native",
         "Native",
@@ -335,7 +335,7 @@ fn public_ephemeral_ir_rejects_fork_admission_bypass() -> Result<(), RenderError
 #[test]
 fn native_check_without_catalog_tools_still_bootstraps_mise() -> Result<(), RenderError> {
     use velnor_actions_contract_config::config::{CheckExecutor, CheckPlatform, CheckRunner};
-    use velnor_actions_workflow_renderer::setup::MISE_BINARY_SHA256_MACOS_ARM64;
+    use velnor_actions_workflow_steps::setup::MISE_BINARY_SHA256_MACOS_ARM64;
     let plain_step = || scrubbed_shell_step("Native helper", vec!["true".to_owned()]);
     let mut check = job(
         "check-native",

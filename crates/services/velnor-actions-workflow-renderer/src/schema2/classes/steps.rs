@@ -1,6 +1,6 @@
 //! Step maps for qualification classes.
 
-use crate::yaml::Yaml;
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 /// A `run` step with an id, so the job can publish its output.
 pub(super) fn run_id(name: &str, id: &str, run: &str) -> Yaml {

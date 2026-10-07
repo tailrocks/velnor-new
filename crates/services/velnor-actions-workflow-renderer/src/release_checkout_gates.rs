@@ -8,7 +8,8 @@
 
 use velnor_actions_contract_workflow::{Step, StepKind};
 
-use crate::{RenderError, release_jobs::ReleaseRole, release_tree::RELEASE_SOURCE_DIR};
+use crate::{release_jobs::ReleaseRole, release_tree::RELEASE_SOURCE_DIR};
+use velnor_actions_workflow_steps::RenderError;
 
 /// Expected `persist-credentials` for one checkout kind.
 ///

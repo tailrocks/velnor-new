@@ -254,7 +254,7 @@ pub fn with_env_unset_argv(argv: &[String]) -> Vec<String> {
 /// members. A bare `env` with no pairs still strips its one word;
 /// `-u` with a non-fixed name stops the prefix (payload, not wrapper).
 #[must_use]
-pub(crate) fn unset_prefix_len(argv: &[String]) -> usize {
+pub fn unset_prefix_len(argv: &[String]) -> usize {
     if argv.first().is_none_or(|arg| arg != "env") {
         return 0;
     }

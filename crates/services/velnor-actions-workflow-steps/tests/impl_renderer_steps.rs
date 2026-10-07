@@ -3,7 +3,7 @@
 //! Run-string quoting and join cases live in
 //! `impl_renderer_steps_quote`.
 use std::collections::BTreeMap;
-use velnor_actions_workflow_renderer::{
+use velnor_actions_workflow_steps::{
     ASSET_SHA_ENV, ASSET_URL_ENV, RELEASE_COMMIT_ENV, RenderError, STAGED_BINARY_PREFIX,
     acquire_velnor_step, action_step, checkout_step, internal_step, merge_step, plan_step,
     scan_for_private_subcommands, shell_step, validate_command_argv, validate_env, validate_uses,

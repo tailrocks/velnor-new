@@ -1,8 +1,6 @@
 //! Release step-content gate cases (authority separation, argv safety).
 use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::{Step, StepKind};
-use velnor_actions_workflow_renderer::RenderError;
-use velnor_actions_workflow_renderer::action_step;
 use velnor_actions_workflow_renderer::release_gates::{ReleaseConfigBinding, check_release_jobs};
 use velnor_actions_workflow_renderer::release_jobs::{
     ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec,
@@ -14,6 +12,8 @@ use velnor_actions_workflow_renderer::release_spec::{
 use velnor_actions_workflow_renderer::release_tree::{
     RELEASE_BOOTSTRAP_CONFIG_PATH, RELEASE_CONFIG_PATH,
 };
+use velnor_actions_workflow_steps::RenderError;
+use velnor_actions_workflow_steps::action_step;
 
 pub(crate) const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 pub(crate) const OTHER_SHA: &str = "abcdef0123456789abcdef0123456789abcdef01";

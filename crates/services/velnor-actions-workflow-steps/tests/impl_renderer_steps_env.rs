@@ -1,6 +1,6 @@
 //! Action-step env validation cases.
 use std::collections::BTreeMap;
-use velnor_actions_workflow_renderer::action_step_with_env;
+use velnor_actions_workflow_steps::action_step_with_env;
 
 fn pin(name: &str) -> String {
     format!("{name}@{:040x}", 0)

@@ -1,6 +1,6 @@
 //! Exact schema-2 generator-release workflow body, without the generator marker.
 
-use velnor_actions_workflow_renderer::RenderedTree;
+use velnor_actions_workflow_tree::RenderedTree;
 #[path = "schema2_generator_release_action_snapshots.rs"]
 mod action_snapshots;
 #[path = "schema2_generator_release_qualification_snapshots.rs"]

@@ -1,11 +1,13 @@
 //! Plan closure: freshness gate, publish upload, anchor, legacy path.
 use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_workflow_renderer::{
-    ACQUIRE_NAME, CHECK_GENERATED_NAME, CRATE_REPORT_UPLOAD_NAME, DOWNLOAD_PLAN_NAME,
-    FRESHNESS_OUTDIR, MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION, PUBLISH_PLAN_NAME, RUN_KEY_EXPR,
-    RenderError, SETUP_MISE_NAME, checkout_step, crate_job_report_upload_step, download_plan_step,
-    freshness_step, matrix_report_upload_step, merge_step, plan_step, publish_plan_step,
-    render_workflow_ir, write_request_step,
+    CHECK_GENERATED_NAME, DOWNLOAD_PLAN_NAME, FRESHNESS_OUTDIR, PUBLISH_PLAN_NAME,
+    download_plan_step, freshness_step, publish_plan_step, render_workflow_ir,
+};
+use velnor_actions_workflow_steps::{
+    ACQUIRE_NAME, CRATE_REPORT_UPLOAD_NAME, MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION,
+    RUN_KEY_EXPR, RenderError, SETUP_MISE_NAME, checkout_step, crate_job_report_upload_step,
+    matrix_report_upload_step, merge_step, plan_step, write_request_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -253,7 +255,7 @@ fn uploads_carry_if_always_and_downloads_do_not() -> Result<(), RenderError> {
     let publish_at = text.find(PUBLISH_PLAN_NAME).expect("publish step");
     let window = snip(&text, publish_at, 400);
     assert!(window.contains("if: always()"), "publish if:\n{window}");
-    let download = velnor_actions_workflow_renderer::steps::download_artifact_step(
+    let download = velnor_actions_workflow_steps::steps::download_artifact_step(
         "some-artifact",
         "${{ runner.temp }}/x",
     )?;

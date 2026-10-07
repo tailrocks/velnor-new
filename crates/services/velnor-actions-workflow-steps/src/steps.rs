@@ -6,16 +6,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::{Step, StepKind, StepRole};
 
-use crate::{RenderError, commands, marker};
-
-pub use crate::cache_steps::{
-    CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompileDriver, MBX_ACTION_NAME, MBX_CACHE_MODE_ENV,
-    MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, MBX_VERSION_CHECK_NAME, NEVER_ARCHIVE_MARKERS,
-    TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH, TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES,
-    TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step, check_cache_step_order, check_mbx_gating,
-    is_never_archive_path, mbx_steps_for_driver, tools_cache_key, tools_restore_step,
-    tools_save_step,
-};
+use crate::{RenderError, commands};
 
 pub use crate::action_ref::validate_uses;
 pub use crate::steps_artifact::{
@@ -23,7 +14,7 @@ pub use crate::steps_artifact::{
     baseline_publish_upload_step, crate_job_report_upload_step, download_artifact_step,
     matrix_report_upload_step, upload_artifact_step,
 };
-pub(crate) use crate::steps_internal::split_internal_operation;
+pub use crate::steps_internal::split_internal_operation;
 pub use crate::steps_internal::{
     internal_step, merge_step, plan_step, publish_step, write_request_step,
 };
@@ -262,21 +253,6 @@ pub fn ambient_shell_step(
         condition: None,
         kind: StepKind::Shell { run: argv, env },
     })
-}
-
-/// Replace the actionlint header line with the renderer marker.
-///
-/// The actionlint adapter emits its own header comment while the renderer
-/// requires its exact marker on every tree file; the composition boundary
-/// normalizes the first line only and passes the body through untouched.
-/// # Errors
-pub fn rehead_actionlint_marker(yaml: &str, version: &str) -> Result<String, RenderError> {
-    let Some((_, body)) = yaml.split_once('\n') else {
-        return Err(RenderError::BadCommand(
-            "actionlint_without_header".to_owned(),
-        ));
-    };
-    Ok(format!("{}\n{body}", marker::marker_for_version(version)?))
 }
 
 /// Fixed script writing the per-target candidate manifest JSON.

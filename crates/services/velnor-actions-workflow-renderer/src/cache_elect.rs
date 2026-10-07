@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 
-use crate::{RenderError, setup::MISE_ACTION_NAME};
+use velnor_actions_workflow_steps::{RenderError, setup::MISE_ACTION_NAME};
 
 /// Elect one Mise-cache writer per cache key across jobs.
 ///

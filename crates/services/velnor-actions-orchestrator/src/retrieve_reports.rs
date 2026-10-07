@@ -31,7 +31,7 @@ use crate::internal::{internal, internal_contract};
 use crate::retrieve_retry::download_with_retry;
 
 /// Retrieve operation tag (single-sourced from the renderer protocol).
-pub use velnor_actions_workflow_renderer::steps::FETCH_OPERATION as FETCH_OP;
+pub use velnor_actions_workflow_steps::steps::FETCH_OPERATION as FETCH_OP;
 
 /// Retrieve every plan-expected matrix artifact for this run.
 ///

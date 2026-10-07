@@ -2,7 +2,7 @@
 //!
 //! The marker carries the exact generator version and no dates.
 
-use crate::RenderError;
+use velnor_actions_workflow_steps::RenderError;
 
 /// Marker text before the version (re-exported from the contract crate).
 pub use velnor_actions_contract::MARKER_PREFIX;
@@ -65,4 +65,19 @@ pub fn validate_version(version: &str) -> Result<(), RenderError> {
     } else {
         Err(RenderError::BadVersion(version.to_owned()))
     }
+}
+
+/// Replace the actionlint header line with the renderer marker.
+///
+/// The actionlint adapter emits its own header comment while the renderer
+/// requires its exact marker on every tree file; the composition boundary
+/// normalizes the first line only and passes the body through untouched.
+/// # Errors
+pub fn rehead_actionlint_marker(yaml: &str, version: &str) -> Result<String, RenderError> {
+    let Some((_, body)) = yaml.split_once('\n') else {
+        return Err(RenderError::BadCommand(
+            "actionlint_without_header".to_owned(),
+        ));
+    };
+    Ok(format!("{}\n{body}", marker_for_version(version)?))
 }

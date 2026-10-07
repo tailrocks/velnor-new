@@ -13,11 +13,11 @@ use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::{Job, StepId, StepKind};
 
 use crate::{
-    RenderError,
     matrix_output_mode::mark_dynamic_matrix_output_mode,
     render::{PLAN_JOB_ID, TASK_JOB_ID},
-    yaml::Yaml,
 };
+use velnor_actions_workflow_steps::RenderError;
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 /// Matrix marker: producer job backing `needs.<job>.outputs.<output>`.
 pub const MATRIX_NEEDS_JOB_ENV: &str = "VELNOR_MATRIX_NEEDS_JOB";

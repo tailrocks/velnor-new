@@ -10,10 +10,12 @@ use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::{Job, JobTimeout, Step};
 
 use crate::{
-    RenderError,
-    artifact_paths::{CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR},
     closure::{FRESHNESS_OUTDIR, download_plan_step, freshness_step},
     render::{CANDIDATE_JOB_ID, CandidateSpec, PLAN_JOB_ID, RenderContext},
+};
+use velnor_actions_workflow_steps::{
+    RenderError,
+    artifact_paths::{CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR},
     steps,
 };
 

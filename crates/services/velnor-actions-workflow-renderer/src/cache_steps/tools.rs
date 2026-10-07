@@ -5,7 +5,7 @@
 
 use velnor_actions_contract_workflow::{Step, StepRole};
 
-use crate::RenderError;
+use velnor_actions_workflow_steps::RenderError;
 
 /// Pinned `actions/cache/restore` ref (v6.1.0, qualified 2026-09-28).
 pub const TOOLS_RESTORE_USES: &str =
@@ -104,7 +104,7 @@ pub fn tools_save_step(key: &str) -> Result<Step, RenderError> {
 
 /// Rename a built step; names are fixed by the caller contract.
 fn rename_step(mut step: Step, name: &str) -> Result<Step, RenderError> {
-    crate::steps::scan_for_private_subcommands(name)?;
+    velnor_actions_workflow_steps::steps::scan_for_private_subcommands(name)?;
     name.clone_into(&mut step.name);
     Ok(step)
 }

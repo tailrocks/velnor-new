@@ -13,7 +13,7 @@ use velnor_actions_orchestrator::{
     GenerateOptions, finalized_jobs, generate, plan_internal, prepare,
 };
 use velnor_actions_tofu_core::TofuLockSnapshot;
-use velnor_actions_workflow_renderer::steps as renderer_steps;
+use velnor_actions_workflow_renderer::cache_steps as renderer_steps;
 
 use super::impl_common::{TestResult, git, git_line, install_fixture_release_manifest, make_repo};
 

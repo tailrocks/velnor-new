@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 use super::mbx_command::{has_external_mbx_selector, uses_mbx_command};
 use super::mbx_preflight::mbx_version_check_step;
 use super::{CompileDriver, MBX_ACTION_NAME};
-use crate::RenderError;
 use velnor_actions_contract_workflow::{Job, Step, StepRole};
+use velnor_actions_workflow_steps::RenderError;
 
 /// Gate native MBX action and executable selection against each job's driver.
 ///

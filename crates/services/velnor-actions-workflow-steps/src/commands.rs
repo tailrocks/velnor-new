@@ -115,7 +115,8 @@ pub fn join_argv_for_run(argv: &[String]) -> Result<String, RenderError> {
 }
 
 /// True for `sh -c <script>`/`bash -c <script>` vectors.
-pub(crate) fn is_inline_shell(argv: &[String]) -> bool {
+#[must_use]
+pub fn is_inline_shell(argv: &[String]) -> bool {
     argv.len() > 2 && matches!(argv[0].as_str(), "sh" | "bash") && argv[1].as_str() == "-c"
 }
 

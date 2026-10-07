@@ -3,10 +3,10 @@
 use std::collections::BTreeMap;
 
 use super::{CompileDriver, MBX_ACTION_NAME};
-use crate::RenderError;
-use crate::steps::{action_step_with_env, shell_step, validate_uses};
 use velnor_actions_contract::cachekey::mbx_cache_generation;
 use velnor_actions_contract_workflow::{Step, StepRole};
+use velnor_actions_workflow_steps::RenderError;
+use velnor_actions_workflow_steps::steps::{action_step_with_env, shell_step, validate_uses};
 
 /// Display name for the strict Rust check before the action installs MBX.
 pub const MBX_PREFLIGHT_NAME: &str = "Verify Rust before MBX action";
@@ -215,7 +215,7 @@ fn cache_generation(mbx_version: &str, action_sha: &str) -> String {
 fn with_rustup_process_homes(
     mut env: BTreeMap<String, String>,
 ) -> Result<BTreeMap<String, String>, RenderError> {
-    crate::toolchain_env::check_toolchain_homes(&env)?;
+    velnor_actions_workflow_steps::toolchain_env::check_toolchain_homes(&env)?;
     let rustup_home = env
         .get("MISE_RUSTUP_HOME")
         .filter(|value| !value.is_empty())

@@ -23,6 +23,8 @@ velnor-actions-rust-core = { version = "=0.1.1", path = "../../adapters/velnor-a
 velnor-actions-tofu = { version = "=0.1.1", path = "../../adapters/velnor-actions-tofu" }
 velnor-actions-tofu-core = { version = "=0.1.1", path = "../../adapters/velnor-actions-tofu-core" }
 velnor-actions-workflow-renderer = { version = "=0.1.1", path = "../velnor-actions-workflow-renderer" }
+velnor-actions-workflow-steps = { version = "=0.1.1", path = "../velnor-actions-workflow-steps" }
+velnor-actions-workflow-tree = { version = "=0.1.1", path = "../velnor-actions-workflow-tree" }
 rustix = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

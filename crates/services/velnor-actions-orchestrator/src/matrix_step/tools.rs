@@ -145,7 +145,7 @@ pub(crate) fn prepare_crate_tools_step(
     }
     .map_err(|problem| OrchestratorError::Contract { problem })?;
     let mut step =
-        velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
+        velnor_actions_workflow_steps::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
             .map_err(OrchestratorError::from)?;
     step.role = Some(StepRole::PreparePinnedTools);
     Ok(step)

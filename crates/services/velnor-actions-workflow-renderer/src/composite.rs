@@ -3,8 +3,8 @@
 //! GitHub rejects a workflow file over 500 KB. Shared lane bodies live here
 //! so each lane job keeps only its id, `runs-on`, `needs`, and one call.
 
-use crate::yaml::Yaml;
-use crate::{RenderError, steps};
+use velnor_actions_workflow_steps::{RenderError, steps};
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 /// One local composite call. The path is renderer-owned, not a remote pin.
 /// Zizmor's self-repository advice uses `$/'`, which resolves at the workflow

@@ -20,7 +20,7 @@ use crate::{
 /// runner-temp velnor directory); `write-request-v1:<target>` gates on
 /// `write-request-v1` while materializing the target's request file.
 /// # Errors
-pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), RenderError> {
+pub fn split_internal_operation(operation: &str) -> Result<(&str, &str), RenderError> {
     if operation == PLAN_OPERATION
         || operation == MERGE_OPERATION
         || operation == FETCH_OPERATION

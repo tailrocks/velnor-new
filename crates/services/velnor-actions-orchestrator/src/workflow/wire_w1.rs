@@ -17,11 +17,11 @@ use velnor_actions_contract_planning::ProposedTask;
 use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 use velnor_actions_mise::{Gate6Fixture, TaskCacheMode, ToolCatalog, ToolHomes};
 use velnor_actions_rust::is_workspace_fmt_task;
-use velnor_actions_workflow_renderer::plan_format;
-use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
-use velnor_actions_workflow_renderer::steps::{
+use velnor_actions_workflow_renderer::cache_steps::{
     CompileDriver, TASK_ARTIFACTS_DIR, cache_action_step, check_mbx_gating,
 };
+use velnor_actions_workflow_renderer::plan_format;
+use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
@@ -189,7 +189,7 @@ pub(crate) fn workspace_format_step(
             problem: "format_without_mise".to_owned(),
         });
     }
-    let joined = velnor_actions_workflow_renderer::join_argv_for_run(&argv).map_err(|err| {
+    let joined = velnor_actions_workflow_steps::join_argv_for_run(&argv).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
         }
@@ -223,7 +223,7 @@ pub(crate) fn workspace_format_report_steps(
     let outcome = crate::matrix_step::outcome_path_for_key(&matrix_key);
     let start = crate::matrix_step::start_path_for_key(&matrix_key);
     let helper = crate::matrix_step::helper_path_for_version();
-    let report = velnor_actions_workflow_renderer::shell_step(
+    let report = velnor_actions_workflow_steps::shell_step(
         REPORT_FORMAT_NAME,
         crate::matrix_step::deferred_report_argv(&outcome, &helper, &start),
         BTreeMap::from([(

@@ -12,11 +12,8 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::{Job, Step, StepRole};
 
-use crate::{
-    RenderError,
-    render::{CANDIDATE_JOB_ID, FINAL_JOB_ID, RenderContext},
-    steps,
-};
+use crate::render::{CANDIDATE_JOB_ID, FINAL_JOB_ID, RenderContext};
+use velnor_actions_workflow_steps::{RenderError, steps};
 
 /// Contract-fixed display name of the matrix fan-in fetch step.
 pub(crate) const FETCH_REPORTS_NAME: &str = "Download every expected matrix artifact";

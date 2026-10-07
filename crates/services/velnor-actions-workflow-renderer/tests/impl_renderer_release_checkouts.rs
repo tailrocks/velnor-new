@@ -4,9 +4,9 @@ use crate::impl_renderer_release_gates::{
     source_checkout, with_steps,
 };
 use velnor_actions_contract_workflow::Step;
-use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::release_gates::check_release_jobs;
 use velnor_actions_workflow_renderer::release_tree::RELEASE_CONFIG_PATH;
+use velnor_actions_workflow_steps::RenderError;
 
 #[test]
 fn checkout_credentials_follow_role_and_kind() -> Result<(), RenderError> {

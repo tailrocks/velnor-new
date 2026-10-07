@@ -21,6 +21,8 @@
     "velnor-actions-tofu",
     "velnor-actions-tofu-core",
     "velnor-actions-workflow-renderer",
+    "velnor-actions-workflow-steps",
+    "velnor-actions-workflow-tree",
     "velnor-archive-guard",
     "velnor-runner-cli",
     "velnor-runner-core",

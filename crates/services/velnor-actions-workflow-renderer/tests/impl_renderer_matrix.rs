@@ -8,9 +8,9 @@ use velnor_actions_workflow_renderer::render::{
     MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
 };
 use velnor_actions_workflow_renderer::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, RenderError, checkout_step, plan_step,
-    render_workflow_ir, shell_step,
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, render_workflow_ir,
 };
+use velnor_actions_workflow_steps::{RenderError, checkout_step, plan_step, shell_step};
 
 const VERSION: &str = "0.1.0";
 const LABEL: &str = "ubuntu-26.04";

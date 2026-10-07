@@ -18,10 +18,13 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::{FRESHNESS_WORKFLOW_PATH, ScheduleTrigger, Step, StepRole};
 
-use crate::{
-    RenderError, guard, marker,
-    render::RenderedFile,
+use velnor_actions_workflow_steps::{
+    RenderError,
     steps::{self, action_step, shell_step},
+};
+use velnor_actions_workflow_tree::{
+    guard, marker,
+    rendered::RenderedFile,
     yaml::{Yaml, render_yaml},
 };
 
@@ -100,9 +103,12 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
         BTreeMap::new(),
     )?;
     let document = freshness_document(spec, &checkout, &probe)?;
-    let document = crate::yaml::quote_run_values_in_yaml(document);
+    let document = velnor_actions_workflow_tree::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&spec.generator_version, &render_yaml(&document))?;
-    crate::workflow_size::check_workflow_size(FRESHNESS_WORKFLOW_PATH, &text)?;
+    velnor_actions_workflow_tree::workflow_size::check_workflow_size(
+        FRESHNESS_WORKFLOW_PATH,
+        &text,
+    )?;
     steps::scan_for_private_subcommands(&text)?;
     Ok(RenderedFile {
         path: FRESHNESS_WORKFLOW_PATH.to_owned(),
@@ -138,8 +144,8 @@ fn freshness_document(
         (
             "steps".to_owned(),
             Yaml::Seq(vec![
-                crate::steps_plain::plain_step_to_yaml(checkout)?,
-                crate::steps_plain::plain_step_to_yaml(probe)?,
+                velnor_actions_workflow_tree::steps_plain::plain_step_to_yaml(checkout)?,
+                velnor_actions_workflow_tree::steps_plain::plain_step_to_yaml(probe)?,
             ]),
         ),
     ]);

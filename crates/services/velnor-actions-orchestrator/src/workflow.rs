@@ -23,7 +23,7 @@ use velnor_actions_workflow_renderer::render::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PLAN_JOB_ID,
     PUBLISH_JOB_ID, RenderContext, WORKFLOW_PATH,
 };
-use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
+use velnor_actions_workflow_steps::steps::PLAN_OPERATION;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
@@ -344,12 +344,9 @@ pub(crate) fn prepare_rust_components_step(
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     let env = strings_of_env(&request.env(catalog))
         .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let mut step = velnor_actions_workflow_renderer::ambient_shell_step(
-        PREPARE_RUST_COMPONENTS_STEP,
-        run,
-        env,
-    )
-    .map_err(OrchestratorError::from)?;
+    let mut step =
+        velnor_actions_workflow_steps::ambient_shell_step(PREPARE_RUST_COMPONENTS_STEP, run, env)
+            .map_err(OrchestratorError::from)?;
     step.role = Some(StepRole::PrepareRustComponents);
     Ok(step)
 }

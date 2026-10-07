@@ -2,8 +2,9 @@
 use velnor_actions_contract_config::{GeneratorValidation, WorkflowPolicy};
 use velnor_actions_contract_workflow::workflow::permissions::PermissionLevel;
 use velnor_actions_contract_workflow::{NeedsConclusions, Permissions};
-use velnor_actions_workflow_renderer::{
-    RenderError, checkout_step, merge_step, plan_step, render_workflow_ir, write_request_step,
+use velnor_actions_workflow_renderer::render_workflow_ir;
+use velnor_actions_workflow_steps::{
+    RenderError, checkout_step, merge_step, plan_step, write_request_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -107,7 +108,7 @@ fn verdict_download_continues_fetch_retries_and_publish_always_runs() -> Result<
 
 #[test]
 fn rendered_final_publish_carries_retention_days() -> Result<(), RenderError> {
-    use velnor_actions_workflow_renderer::steps::ARTIFACT_RETENTION_DAYS;
+    use velnor_actions_workflow_steps::steps::ARTIFACT_RETENTION_DAYS;
     let text = final_text()?;
     let publish = step_block(&text, "Publish final report");
     assert!(publish.contains("retention-days"), "{publish}");

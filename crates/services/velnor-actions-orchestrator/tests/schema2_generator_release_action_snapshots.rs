@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use velnor_actions_workflow_renderer::RenderedTree;
+use velnor_actions_workflow_tree::RenderedTree;
 
 pub(super) type Actions = BTreeMap<&'static str, String>;
 

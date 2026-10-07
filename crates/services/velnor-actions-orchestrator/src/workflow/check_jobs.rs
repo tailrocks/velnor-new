@@ -9,7 +9,7 @@ use velnor_actions_contract_workflow::{
 };
 use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
-use velnor_actions_workflow_renderer::steps::INTERNAL_OP_ENV;
+use velnor_actions_workflow_steps::steps::INTERNAL_OP_ENV;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
@@ -90,7 +90,7 @@ fn execute_check_step(
         (INTERNAL_OP_ENV.to_owned(), "execute-check-v1".to_owned()),
     ]);
     let env = crate::matrix_step::task_step_env(catalog, &identity, false)?;
-    velnor_actions_workflow_renderer::shell_step(
+    velnor_actions_workflow_steps::shell_step(
         "Execute named check",
         vec![crate::matrix_step::helper_path_for_version()],
         env,

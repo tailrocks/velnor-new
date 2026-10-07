@@ -5,9 +5,10 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_workflow_renderer::{
-    PRESEED_VERIFY_MANIFEST_NAME, RenderError, preseed_manifest_verify_script,
-    preseed_manifest_verify_step, preseed_verify_step,
+    PRESEED_VERIFY_MANIFEST_NAME, preseed_manifest_verify_script, preseed_manifest_verify_step,
+    preseed_verify_step,
 };
+use velnor_actions_workflow_steps::RenderError;
 
 /// Expected target triple the generator renders into the verify step.
 const TARGET: &str = "x86_64-unknown-linux-gnu";

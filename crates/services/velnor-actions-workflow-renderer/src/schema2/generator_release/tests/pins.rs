@@ -1,5 +1,5 @@
 use crate::schema2::GeneratorReleasePins;
-use crate::setup::MiseSetup;
+use velnor_actions_workflow_steps::setup::MiseSetup;
 
 pub(super) const PINNED_MISE_ARGUMENTS: &str = "--no-config --no-env --no-hooks exec gh@2.102.0 --";
 

@@ -2,7 +2,7 @@
 use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::StepRole;
 use velnor_actions_workflow_renderer::msrv::{MsrvSpec, msrv_job, msrv_step};
-use velnor_actions_workflow_renderer::{RenderError, checkout_step, plan_step, shell_step};
+use velnor_actions_workflow_steps::{RenderError, checkout_step, plan_step, shell_step};
 
 use super::impl_renderer_fixtures::*;
 

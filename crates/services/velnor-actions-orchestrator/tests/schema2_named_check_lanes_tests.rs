@@ -66,7 +66,7 @@ fn assert_mode(mode: &str, linux_ids: &[&str], linux_runner: &str) -> TestResult
 }
 
 fn assert_workflow(
-    tree: &velnor_actions_workflow_renderer::RenderedTree,
+    tree: &velnor_actions_workflow_tree::RenderedTree,
     mode: &str,
     linux_ids: &[&str],
     linux_runner: &str,

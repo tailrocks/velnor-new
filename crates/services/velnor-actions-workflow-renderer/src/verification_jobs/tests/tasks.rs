@@ -45,9 +45,9 @@ fn task_job_is_unconditional_cache_off_and_credential_scrubbed() {
     }
     for step in &job.steps[2..] {
         if let velnor_actions_contract_workflow::StepKind::Shell { run, env } = &step.kind {
-            let unset = crate::toolchain_env::with_env_unset_argv(&[]);
+            let unset = velnor_actions_workflow_steps::toolchain_env::with_env_unset_argv(&[]);
             assert!(run.starts_with(&unset));
-            for variable in crate::toolchain_env::STEP_CREDENTIAL_DENYLIST {
+            for variable in velnor_actions_workflow_steps::toolchain_env::STEP_CREDENTIAL_DENYLIST {
                 assert!(
                     env.get(variable).is_some_and(String::is_empty),
                     "{variable}"

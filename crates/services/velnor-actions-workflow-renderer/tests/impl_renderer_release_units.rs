@@ -6,7 +6,6 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::{Step, StepKind};
-use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::release_jobs::{
     ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec,
 };
@@ -16,6 +15,7 @@ use velnor_actions_workflow_renderer::release_spec::{
     validate_package_name, validate_package_version, validate_plan_id, validate_repository,
     validate_source_sha,
 };
+use velnor_actions_workflow_steps::RenderError;
 
 #[test]
 fn permission_matrix_matches_documented_roles() -> Result<(), RenderError> {

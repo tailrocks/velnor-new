@@ -1,6 +1,6 @@
 //! Credential-free source preparation for candidate qualification.
 
-use crate::Yaml;
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 use super::workflow_steps;
 

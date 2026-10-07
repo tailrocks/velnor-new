@@ -2,8 +2,9 @@
 use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::StepRole;
 use velnor_actions_workflow_renderer::{
-    CompileDriver, RenderError, check_mbx_gating, checkout_step, mbx_steps_for_driver, shell_step,
+    cache_steps::CompileDriver, cache_steps::check_mbx_gating, cache_steps::mbx_steps_for_driver,
 };
+use velnor_actions_workflow_steps::{RenderError, checkout_step, shell_step};
 
 use super::impl_renderer_fixtures::*;
 

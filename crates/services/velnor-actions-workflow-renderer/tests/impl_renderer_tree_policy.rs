@@ -6,9 +6,9 @@ use velnor_actions_contract_workflow::{
 };
 use velnor_actions_workflow_renderer::{
     CANDIDATE_JOB_ID, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, CandidateSpec, RenderContext,
-    RenderError, ValidatorCommand, checkout_step, merge_step, plan_step, render_workflow_ir,
-    shell_step, with_marker,
+    ValidatorCommand, render_workflow_ir,
 };
+use velnor_actions_workflow_steps::{RenderError, checkout_step, merge_step, plan_step};
 
 const VERSION: &str = "0.1.0";
 const LABEL: &str = "ubuntu-26.04";
@@ -87,7 +87,7 @@ pub(crate) fn fixture_ir() -> Result<WorkflowIr, RenderError> {
 }
 
 pub(crate) fn actionlint_bytes() -> Result<String, RenderError> {
-    with_marker(VERSION, "config-variables: []\n")
+    velnor_actions_workflow_tree::with_marker(VERSION, "config-variables: []\n")
 }
 
 fn simple_job(display: &str, needs: Vec<String>, steps: Vec<Step>) -> Job {
@@ -388,7 +388,7 @@ fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
     let mut ir = fixture_ir()?;
     ir.jobs.insert(
         "velnor-task".to_owned(),
-        task_job(shell_step(
+        task_job(velnor_actions_workflow_steps::shell_step(
             "Focused",
             vec!["true".to_owned()],
             BTreeMap::new(),

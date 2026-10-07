@@ -6,7 +6,7 @@
 //! run. `features` still selects every class.
 
 use super::{RunnerSpec, with_if};
-use crate::yaml::Yaml;
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 const JS: &str = "inputs.mode == 'features' || inputs.mode == 'js'";
 const SERVICES: &str = "inputs.mode == 'features' || inputs.mode == 'services'";

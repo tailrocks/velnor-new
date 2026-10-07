@@ -1,12 +1,13 @@
 //! F2 closure: candidate artifacts, verify-before-run, release.
 use velnor_actions_contract_config::{GeneratorValidation, WorkflowPolicy};
-use velnor_actions_workflow_renderer::steps::{
+use velnor_actions_workflow_renderer::{
+    CHECK_GENERATED_NAME, VERIFY_MANIFEST_NAME, candidate_artifact_name,
+    candidate_manifest_verify_script, candidate_manifest_verify_step, render_workflow_ir,
+};
+use velnor_actions_workflow_steps::RenderError;
+use velnor_actions_workflow_steps::steps::{
     candidate_attestation_script, download_artifact_step, matrix_report_upload_step,
     upload_artifact_step,
-};
-use velnor_actions_workflow_renderer::{
-    CHECK_GENERATED_NAME, RenderError, VERIFY_MANIFEST_NAME, candidate_artifact_name,
-    candidate_manifest_verify_script, candidate_manifest_verify_step, render_workflow_ir,
 };
 
 use super::impl_renderer_fixtures::*;

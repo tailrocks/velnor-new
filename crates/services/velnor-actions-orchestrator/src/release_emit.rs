@@ -28,7 +28,8 @@ use velnor_actions_workflow_renderer::release_spec::{
     validate_source_sha,
 };
 use velnor_actions_workflow_renderer::release_tree::{ReleaseRenderContext, render_release_files};
-use velnor_actions_workflow_renderer::{MiseSetup, render::RenderedFile};
+use velnor_actions_workflow_steps::MiseSetup;
+use velnor_actions_workflow_tree::rendered::RenderedFile;
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;

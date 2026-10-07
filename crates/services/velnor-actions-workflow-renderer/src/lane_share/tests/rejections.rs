@@ -2,9 +2,9 @@ use super::{
     HOSTED_RUNS, checkout, ctx, echo_step, lane_job, paired, render_jobs, scale_token, share_lanes,
     workflow_ir,
 };
-use crate::RenderError;
 use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::{Job, StepKind};
+use velnor_actions_workflow_steps::RenderError;
 
 #[test]
 fn differing_lane_bodies_fail_closed() {

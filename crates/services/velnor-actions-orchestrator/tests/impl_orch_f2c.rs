@@ -115,8 +115,8 @@ fn overlap_ratio_stays_descriptive() {
 
 #[test]
 fn cache_paths_have_single_owners() {
+    use velnor_actions_workflow_renderer::cache_steps::{TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH};
     use velnor_actions_workflow_renderer::lane_target::TARGET_DIR_PREFIX;
-    use velnor_actions_workflow_renderer::steps::{TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH};
     let table = cache_ownership_table();
     let mut seen: std::collections::BTreeMap<&str, &str> = std::collections::BTreeMap::new();
     for (path, owner) in &table {

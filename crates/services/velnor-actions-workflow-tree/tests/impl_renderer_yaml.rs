@@ -1,5 +1,5 @@
 //! Deterministic emitter, quoting, and indent cases.
-use velnor_actions_workflow_renderer::{Yaml, quote_scalar, render_yaml};
+use velnor_actions_workflow_tree::{Yaml, quote_scalar, render_yaml};
 
 #[test]
 fn yaml_renders_nested_documents_exactly() {

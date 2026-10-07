@@ -1,12 +1,12 @@
 //! Tofu provider-cache step cases: save shape, path allowlist, layer admission.
 use velnor_actions_contract_workflow::StepKind;
-use velnor_actions_workflow_renderer::RenderError;
-use velnor_actions_workflow_renderer::steps::TOOLS_SAVE_USES;
+use velnor_actions_workflow_renderer::cache_steps::TOOLS_SAVE_USES;
 use velnor_actions_workflow_renderer::tofu_cache::{
     TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDER_CACHE_BASE_EXPR, TOFU_PROVIDERS_KEY_OUTPUT_EXPR,
     TOFU_PROVIDERS_PATH_OUTPUT_EXPR, TOFU_PROVIDERS_RESTORE_NAME, TOFU_PROVIDERS_SAVE_NAME,
     TOFU_PROVIDERS_SAVE_USES, tofu_providers_path_ok, tofu_providers_save_step,
 };
+use velnor_actions_workflow_steps::RenderError;
 
 #[test]
 fn provider_save_step_shape_and_pin_parity() -> Result<(), RenderError> {

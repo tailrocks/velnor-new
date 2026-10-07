@@ -6,10 +6,8 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 
-use crate::{
-    RenderError,
-    render::{FINAL_JOB_ID, PLAN_JOB_ID},
-};
+use crate::render::{FINAL_JOB_ID, PLAN_JOB_ID};
+use velnor_actions_workflow_steps::RenderError;
 
 /// Token hygiene: `${{ github.token }}` only as plan/final `GH_TOKEN`.
 ///
@@ -19,7 +17,7 @@ use crate::{
 /// child environment. The final job's report fetch needs the same
 /// read-only token for exact `gh` artifact downloads. Enforced here
 /// against the full nine-key credential set (single source:
-/// [`crate::toolchain_env::STEP_CREDENTIAL_DENYLIST`], never a local
+/// [`velnor_actions_workflow_steps::toolchain_env::STEP_CREDENTIAL_DENYLIST`], never a local
 /// copy): any nonempty credential fails everywhere, `GH_TOKEN` carries
 /// the exact `${{ github.token }}` value only in the plan/final jobs,
 /// empty values are the explicit scrub overlay stopping ambient
@@ -94,7 +92,7 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
 /// Reject nonempty credentials everywhere; scope `GH_TOKEN` to plan/final jobs.
 ///
 /// Empty values on denylisted keys are the explicit scrub overlay (see
-/// [`crate::toolchain_env::credential_scrub`]) and pass; anything else
+/// [`velnor_actions_workflow_steps::toolchain_env::credential_scrub`]) and pass; anything else
 /// on those keys is a leak. `MISE_GITHUB_TOKEN` contains `GITHUB_TOKEN`
 /// as a substring, so it needs no separate `names_token` arm.
 /// True for the one scoped token binding: `GH_TOKEN` carrying exactly
@@ -107,7 +105,7 @@ fn is_scoped_gh_token(id: &str, env: &BTreeMap<String, String>) -> bool {
 }
 
 fn check_env_tokens(id: &str, env: &BTreeMap<String, String>) -> Result<(), RenderError> {
-    use crate::toolchain_env::is_denied_credential_key;
+    use velnor_actions_workflow_steps::toolchain_env::is_denied_credential_key;
     for (key, value) in env {
         if is_denied_credential_key(key) {
             if value.is_empty() {
@@ -146,7 +144,7 @@ fn check_scrub_coverage(
     role: Option<StepRole>,
     env: &BTreeMap<String, String>,
 ) -> Result<(), RenderError> {
-    use crate::toolchain_env::STEP_CREDENTIAL_DENYLIST;
+    use velnor_actions_workflow_steps::toolchain_env::STEP_CREDENTIAL_DENYLIST;
     if id == super::RELEASE_JOB_ID || is_ambient_auth_role(role) {
         return Ok(());
     }
@@ -170,7 +168,7 @@ fn check_scrub_coverage(
 /// anything else (including `-u` with a non-fixed name) still scans,
 /// and the payload after the prefix always scans.
 fn strip_unset_argv(run: &[String]) -> &[String] {
-    &run[crate::toolchain_env::unset_prefix_len(run)..]
+    &run[velnor_actions_workflow_steps::toolchain_env::unset_prefix_len(run)..]
 }
 
 /// Script with the exact credential-unset prelude stripped for scanning.
@@ -183,7 +181,7 @@ fn strip_unset_argv(run: &[String]) -> &[String] {
 /// embedding token names elsewhere, or doubling the prelude
 /// (caller/render drift) still scans whole and trips fail-closed.
 fn strip_unset_prelude(script: &str) -> String {
-    use crate::toolchain_env::credential_unset_prelude;
+    use velnor_actions_workflow_steps::toolchain_env::credential_unset_prelude;
     let prelude = credential_unset_prelude();
     for (at, _) in script.match_indices(prelude.as_str()) {
         if is_prelude_command_unit(&script[..at], &script[at + prelude.len()..]) {

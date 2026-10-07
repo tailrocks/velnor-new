@@ -2,7 +2,7 @@
 
 use velnor_actions_contract_release::ReleaseTarget;
 
-use crate::yaml::Yaml;
+use velnor_actions_workflow_tree::yaml::Yaml;
 
 use super::super::features::{base, finish};
 use super::archive;
@@ -85,7 +85,7 @@ pub(super) fn build_steps(
     verify_name: &str,
     verify: &str,
     pins: &crate::schema2::GeneratorReleasePins,
-) -> Result<Vec<Yaml>, crate::RenderError> {
+) -> Result<Vec<Yaml>, velnor_actions_workflow_steps::RenderError> {
     let build = build_script(product.binary, &pins.build_argv)?;
     Ok(vec![
         workflow_steps::mise_step(pins.setup_for(product.target))?,
@@ -111,10 +111,13 @@ pub(super) fn build_steps(
 }
 
 /// The build emits the filename recorded in the release manifest.
-fn build_script(asset: &str, build_argv: &[String]) -> Result<String, crate::RenderError> {
+fn build_script(
+    asset: &str,
+    build_argv: &[String],
+) -> Result<String, velnor_actions_workflow_steps::RenderError> {
     Ok(format!(
         "set -eu\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR {}\ncp target/release/velnor-actions {asset}\ntest -s {asset}",
-        crate::commands::join_argv_for_run(build_argv)?
+        velnor_actions_workflow_steps::commands::join_argv_for_run(build_argv)?
     ))
 }
 
@@ -263,7 +266,7 @@ pub(super) fn qualification_script(binary: &str, directory: &str) -> String {
 pub(super) fn source_gate_job(
     hosted: Yaml,
     pins: &crate::schema2::GeneratorReleasePins,
-) -> Result<(String, Yaml), crate::RenderError> {
+) -> Result<(String, Yaml), velnor_actions_workflow_steps::RenderError> {
     let steps = vec![
         checkout_step(),
         workflow_steps::mise_step(pins.setup_for(ReleaseTarget::LinuxX86_64))?,
@@ -294,7 +297,9 @@ pub(super) fn source_gate_job(
     Ok(finish("verify-release-source", fields, steps))
 }
 
-fn ci_check_step(pins: &crate::schema2::GeneratorReleasePins) -> Result<Yaml, crate::RenderError> {
+fn ci_check_step(
+    pins: &crate::schema2::GeneratorReleasePins,
+) -> Result<Yaml, velnor_actions_workflow_steps::RenderError> {
     workflow_steps::bash_step_with_token(
         "Require successful CI at exact main SHA",
         &ci_check_script(),
