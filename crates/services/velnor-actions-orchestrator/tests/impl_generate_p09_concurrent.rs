@@ -8,7 +8,7 @@ use std::fs;
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 use velnor_actions_orchestrator_core::OrchestratorError;
 
-use super::impl_common::{TestResult, config_with_branch, make_repo};
+use crate::support::{TestResult, config_with_branch, make_repo};
 
 #[test]
 fn concurrent_generate_never_writes_partially() -> TestResult {

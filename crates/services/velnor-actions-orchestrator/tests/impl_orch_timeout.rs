@@ -5,7 +5,7 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 
-use crate::impl_common::{TestResult, config_with_branch, make_repo};
+use crate::support::{TestResult, config_with_branch, make_repo};
 
 /// Per-job `timeout-minutes` parsed from one rendered workflow.
 fn job_timeouts(yaml: &str) -> BTreeMap<String, Vec<String>> {

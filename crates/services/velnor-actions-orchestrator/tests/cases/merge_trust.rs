@@ -2,8 +2,8 @@
 
 use velnor_actions_contract_workflow::FinalStatus;
 
-use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
-use crate::impl_merge::{merge, merge_request, success_jobs};
+use crate::cases::merge::{merge, merge_request, success_jobs};
+use crate::support::{TestResult, passing_reports, plan_for_source_change};
 
 #[test]
 fn trust_mismatch_fails_closed_with_scope_token() -> TestResult {

@@ -13,7 +13,7 @@ use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_jobs::context::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP};
 use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 
-use super::impl_common::{TestResult, fixture_manifest_json, git};
+use crate::support::{TestResult, fixture_manifest_json, git};
 
 /// Git-initialized pure-tofu repo: `roots` plus `extra` files, no Cargo.
 pub(crate) fn pure_tofu_repo(
@@ -222,7 +222,7 @@ fn tofu_triggers_and_concurrency_match_rust_byte_for_byte() -> TestResult {
     use velnor_actions_workflow_jobs::context::EXPECTED_PR_TYPES;
     let tofu = pure_tofu_repo(&["stacks/a", "stacks/b"], &[])?;
     let tofu_yaml = staged_yaml(tofu.path())?;
-    let rust = super::impl_common::make_repo(super::impl_common::config_with_branch())?;
+    let rust = crate::support::make_repo(crate::support::config_with_branch())?;
     let rust_yaml = staged_yaml(rust.path())?;
     assert_eq!(
         header_block(&tofu_yaml),

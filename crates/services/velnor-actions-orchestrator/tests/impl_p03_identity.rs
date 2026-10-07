@@ -5,11 +5,11 @@
 
 use velnor_actions_contract_workflow::{BaselineStatus, ObligationDecision, Plan};
 
-use super::impl_common::{
+use crate::cases::orch_core::{has_warning, manifest_for, plan_value};
+use crate::support::{
     TestResult, config_with_branch, git, git_line, make_repo, plan_for_source_change,
     write_nextest_task,
 };
-use super::impl_orch_core::{has_warning, manifest_for, plan_value};
 
 /// Typed plan from a plan-response value.
 fn typed(value: &serde_json::Value) -> Result<Plan, Box<dyn std::error::Error>> {

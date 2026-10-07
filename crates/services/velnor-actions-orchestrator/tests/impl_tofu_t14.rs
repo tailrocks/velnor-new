@@ -5,7 +5,7 @@ use std::fs;
 use velnor_actions_orchestrator::{GenerateOptions, generate, plan_text_checked, prepare};
 use velnor_actions_tofu_core::TofuLockSnapshot;
 
-use crate::impl_common::{TestResult, config_with_branch, make_repo};
+use crate::support::{TestResult, config_with_branch, make_repo};
 
 /// Fixture config with one tofu root beside the root crate.
 fn tofu_config(root: &str) -> String {

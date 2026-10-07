@@ -10,7 +10,7 @@ use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
-use super::impl_common::{TestResult, config_with_branch, make_repo};
+use crate::support::{TestResult, config_with_branch, make_repo};
 
 /// Staged workflow text for one config; temp keeps the dir alive.
 fn preview_yaml(config: &str) -> Result<(TempDir, String), Box<dyn std::error::Error>> {

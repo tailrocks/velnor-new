@@ -1,11 +1,11 @@
-//! Merge gate cases: round-trip, precedence, no-work (tamper: `impl_merge_tamper`).
+//! Merge gate cases: round-trip, precedence, no-work (tamper: `cases::merge_tamper`).
 
 use velnor_actions_contract_workflow::{
     FinalReport, FinalStatus, MatrixReport, MatrixStatus, Plan, TaskStatus,
 };
 use velnor_actions_orchestrator::merge_internal;
 
-use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
+use crate::support::{TestResult, passing_reports, plan_for_source_change};
 
 /// Merge one request and parse the final report.
 pub(crate) fn merge(
@@ -232,7 +232,7 @@ fn round_trip_passed_with_counts() -> TestResult {
 
 #[test]
 fn one_failed_crate_fails_required_with_counts() -> TestResult {
-    let (_repo, plan) = crate::impl_orch_core::plan_for_partial_change()?;
+    let (_repo, plan) = crate::cases::orch_core::plan_for_partial_change()?;
     let mut reports = passing_reports(&plan)?;
     let mut failed = 0;
     for report in reports

@@ -16,7 +16,7 @@ use velnor_actions_mise::{cache_sources, cache_trust};
 use velnor_actions_orchestrator::{GenerationPreparation, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
-use super::impl_common::{TestResult, config_with_branch, fixture_manifest_json, git};
+use crate::support::{TestResult, config_with_branch, fixture_manifest_json, git};
 
 /// Owned Cargo home expression shared by writers and readers.
 const SHARED_HOME: &str = "${{ runner.temp }}/velnor/cargo";

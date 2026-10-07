@@ -14,10 +14,10 @@ use velnor_actions_contract_workflow::{
 };
 use velnor_actions_orchestrator::plan_internal;
 
-use super::impl_common::{
+use crate::cases::orch_core::{merge, merge_request, success_jobs};
+use crate::support::{
     TestResult, git, git_line, install_fixture_release_manifest, passing_reports,
 };
-use super::impl_orch_core::{merge, merge_request, success_jobs};
 
 /// Git-initialized pure-tofu repo: `config` plus `files`, no Cargo.
 fn make_pure_tofu_repo(

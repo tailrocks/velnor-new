@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::Path;
 
-use crate::impl_common::{TestResult, config_with_branch, git, git_line, make_repo};
+use crate::support::{TestResult, config_with_branch, git, git_line, make_repo};
 use velnor_actions_orchestrator::prepare;
 
 /// Write a minimal nested Rust crate for discovery assertions.

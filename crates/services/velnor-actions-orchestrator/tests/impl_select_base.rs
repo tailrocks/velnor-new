@@ -6,10 +6,10 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_orchestrator::plan_internal;
 
-use crate::impl_common::{TestResult, git, git_line};
 use crate::impl_select::{
     assert_all_changed, commit, make_ws_repo, plan_pr, plan_push, reasons_for, selects_both,
 };
+use crate::support::{TestResult, git, git_line};
 
 /// Repo checked out at a merge commit; returns base, feature tip, merge HEAD.
 ///

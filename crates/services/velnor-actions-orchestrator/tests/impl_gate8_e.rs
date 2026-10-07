@@ -13,7 +13,7 @@ use velnor_actions_workflow_jobs::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP, Render
 use velnor_actions_workflow_renderer::render_workflow_ir;
 use velnor_actions_workflow_steps::{checkout_step, plan_step};
 
-use crate::impl_common::TestResult;
+use crate::support::TestResult;
 
 const GENERATOR_VERSION: &str = env!("CARGO_PKG_VERSION");
 

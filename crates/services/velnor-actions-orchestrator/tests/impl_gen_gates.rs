@@ -7,7 +7,7 @@ use std::path::Path;
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{GenerateOptions, generate, plan_internal, prepare};
 
-use crate::impl_common::{
+use crate::support::{
     TestResult, config_with_branch, err_of, fixture_manifest_json, git, make_repo, snapshot,
 };
 

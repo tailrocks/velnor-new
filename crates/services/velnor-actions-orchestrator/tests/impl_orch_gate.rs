@@ -12,7 +12,7 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 
-use crate::impl_common::{TestResult, config_with_branch, make_repo};
+use crate::support::{TestResult, config_with_branch, make_repo};
 
 /// `needs:` entries per job parsed from one rendered workflow.
 fn job_needs(yaml: &str) -> BTreeMap<String, Vec<String>> {

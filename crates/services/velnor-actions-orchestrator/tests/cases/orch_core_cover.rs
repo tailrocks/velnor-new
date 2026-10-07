@@ -1,6 +1,6 @@
 //! Covered-plan fixture: every obligation covered plus its manifest.
 //!
-//! Split from `impl_orch_core` so the core helper file keeps the 400-line
+//! Split from `cases::orch_core` so the core helper file keeps the 400-line
 //! gate; merge-shape tests build covered plans through this module.
 
 use velnor_actions_contract::{canonical_json_bytes, digest_b3};

@@ -60,7 +60,7 @@ toml = { workspace = true }
 workspace = true
 
 [[test]]
-name = "velnor_orchestrator"
+name = "integration"
 path = "tests/main.rs"
 
 [dev-dependencies]

@@ -17,8 +17,8 @@ use velnor_actions_contract_workflow::Plan;
 use velnor_actions_orchestrator::plan_internal;
 use velnor_actions_orchestrator_core::resolve_root;
 
-use crate::impl_common::{TestResult, git};
 use crate::impl_select::{commit, make_ws_repo, plan_pr, reasons_for};
+use crate::support::{TestResult, git};
 
 /// Plan the working tree against `HEAD` as a local run.
 fn plan_local(root: &Path, head: &str) -> Result<(Plan, Vec<String>), Box<dyn std::error::Error>> {

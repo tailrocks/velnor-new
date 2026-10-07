@@ -2,8 +2,8 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
-use crate::impl_orch_plansel::merge_status;
+use crate::cases::orch_plansel::merge_status;
+use crate::support::{TestResult, passing_reports, plan_for_source_change};
 
 #[path = "impl_orch_runtime_acquisition.rs"]
 mod runtime_acquisition;

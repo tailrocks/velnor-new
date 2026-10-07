@@ -9,9 +9,7 @@ use std::fs;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 
-use crate::impl_common::{
-    TestResult, config_with_branch, git, make_repo, without_ambient_identity,
-};
+use crate::support::{TestResult, config_with_branch, git, make_repo, without_ambient_identity};
 
 /// Realistic release manifest: GitHub asset URLs at the generator version.
 ///

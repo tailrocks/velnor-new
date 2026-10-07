@@ -10,11 +10,11 @@ use velnor_actions_orchestrator::{
 };
 use velnor_actions_orchestrator_core::{OrchestratorError, init_config, resolve_root};
 
-use crate::impl_common::{
+use crate::cases::merge::task_reports_for;
+use crate::support::{
     TestResult, config_with_branch, err_of, fixture_manifest_json, git, make_repo, passing_reports,
     plan_for_source_change, without_ambient_identity,
 };
-use crate::impl_merge::task_reports_for;
 
 #[path = "impl_config_internal/config.rs"]
 mod config;

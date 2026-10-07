@@ -10,7 +10,7 @@ use velnor_actions_workflow_jobs::context::FINAL_JOB_ID;
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 use velnor_actions_workflow_steps::steps::{MERGE_OPERATION, WRITE_REQUEST_OPERATION};
 
-use super::impl_common::{TestResult, config_with_branch, make_repo};
+use crate::support::{TestResult, config_with_branch, make_repo};
 
 const DEMO_LOCK: &str = "version = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n";
 

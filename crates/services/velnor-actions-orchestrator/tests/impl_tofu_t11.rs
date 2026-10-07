@@ -3,7 +3,7 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_orchestrator::prepare;
 
-use crate::impl_common::{TestResult, git, install_fixture_release_manifest, plan_for};
+use crate::support::{TestResult, git, install_fixture_release_manifest, plan_for};
 
 /// Git-initialized repo with `config` plus extra `files`.
 fn make_tofu_repo(

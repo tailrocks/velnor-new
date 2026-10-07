@@ -9,7 +9,7 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 
-use crate::impl_common::{
+use crate::support::{
     TestResult, err_of, fixture_manifest_json, git, plan_for, write_nextest_task,
 };
 

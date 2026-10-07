@@ -7,7 +7,7 @@ use std::fs;
 
 use velnor_actions_orchestrator::{GenerateOptions, GenerationPreparation, generate, prepare};
 
-use crate::impl_common::{TestResult, config_with_branch, err_of, make_repo, plan_for, snapshot};
+use crate::support::{TestResult, config_with_branch, err_of, make_repo, plan_for, snapshot};
 
 /// Finding code when transient-only evidence selects a non-default profile.
 const TRANSIENT_CODE: &str = "transient_evidence_requires_declaration";

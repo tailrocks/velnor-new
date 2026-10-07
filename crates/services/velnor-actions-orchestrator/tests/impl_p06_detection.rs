@@ -14,9 +14,7 @@ use velnor_actions_orchestrator::{
     GenerateOptions, GenerationPreparation, generate, plan_internal, prepare,
 };
 
-use crate::impl_common::{
-    TestResult, config_with_branch, err_of, git, git_line, make_repo, plan_for,
-};
+use crate::support::{TestResult, config_with_branch, err_of, git, git_line, make_repo, plan_for};
 
 /// Repository wrapper line: inline-table spelling with the shim env.
 const WRAPPER_INLINE: &str =

@@ -8,7 +8,7 @@ use velnor_actions_mise::{
 };
 use velnor_actions_orchestrator::prepare;
 
-use crate::impl_common::{TestResult, fixture_manifest_json, git, without_ambient_identity};
+use crate::support::{TestResult, fixture_manifest_json, git, without_ambient_identity};
 
 /// Velnor-policy workspace: a validator-spawning suite plus a plain crate.
 fn velnor_workspace() -> Result<TempDir, Box<dyn std::error::Error>> {

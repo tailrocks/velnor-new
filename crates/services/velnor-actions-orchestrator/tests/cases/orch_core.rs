@@ -13,11 +13,11 @@ use velnor_actions_orchestrator::{
     PlanOutputMode, baseline_artifact_numeric_id, merge_internal, plan_internal, plan_outputs,
 };
 
-use crate::impl_common::{
+use crate::cases::merge::task_reports_for;
+use crate::support::{
     TestResult, config_with_branch, fixture_manifest_json, git, git_line, make_repo,
     plan_for_source_change,
 };
-use crate::impl_merge::task_reports_for;
 
 /// Merge one request and parse the final report.
 pub(crate) fn merge(

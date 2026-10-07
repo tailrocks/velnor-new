@@ -13,9 +13,9 @@ use velnor_actions_contract::digest_b3;
 use velnor_actions_contract_workflow::FinalStatus;
 use velnor_actions_orchestrator::assemble_merge_request;
 
-use crate::impl_common::{TestResult, plan_for_source_change};
-use crate::impl_merge::merge;
-use crate::impl_orch_core_cover::covered_plan;
+use crate::cases::merge::merge;
+use crate::cases::orch_core_cover::covered_plan;
+use crate::support::{TestResult, plan_for_source_change};
 
 /// Marker proving the child already carries merge-channel env.
 const E2E_ENV: &str = "VELNOR_TEST_E2E_MERGE_ENV";

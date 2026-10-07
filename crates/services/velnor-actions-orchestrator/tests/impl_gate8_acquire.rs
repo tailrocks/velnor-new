@@ -4,7 +4,7 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 
-use crate::impl_common::{TestResult, git, make_repo, without_ambient_identity};
+use crate::support::{TestResult, git, make_repo, without_ambient_identity};
 
 fn binary_record(target: &str) -> String {
     format!(

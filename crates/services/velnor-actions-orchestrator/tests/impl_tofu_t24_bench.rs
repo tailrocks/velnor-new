@@ -11,7 +11,6 @@ use std::fs;
 
 use velnor_actions_contract_workflow::Plan;
 
-use crate::impl_common::{TestResult, git, git_line};
 use crate::impl_perf_p13::perf_harness_p13::{
     BenchSample, bench_line, obligation_digest, timed, timed_rss,
 };
@@ -19,6 +18,7 @@ use crate::impl_tofu_t24_gates::tofu_perf_fixtures_t24::{
     commit_two_tofu, index_baseline_ms, mixed_repo, plan_at_event, tofu_repo, tofu_repo_with_lock,
     tofu_repo_with_module,
 };
+use crate::support::{TestResult, git, git_line};
 
 /// Fixture width for the fixed-shape matrix cases (30 obligations).
 const BENCH_ROOTS: usize = 10;

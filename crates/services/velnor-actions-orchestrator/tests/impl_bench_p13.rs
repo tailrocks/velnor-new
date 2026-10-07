@@ -11,7 +11,6 @@ use std::collections::BTreeSet;
 use velnor_actions_orchestrator::prepare;
 use velnor_actions_rust_core::parse_metadata_json;
 
-use crate::impl_common::TestResult;
 use crate::impl_perf_p13::perf_fixtures_p13::{
     add_path_dep, workspace_repo, workspace_repo_linked,
 };
@@ -19,6 +18,7 @@ use crate::impl_perf_p13::perf_harness_p13::{
     BenchSample, RssSampler, bench_line, commit_two, metadata_baseline_ms, obligation_digest,
     obligation_task_ids, plan_at, timed, timed_rss, toolchain_metadata,
 };
+use crate::support::TestResult;
 
 /// Fixture width for every benchmark case (44 obligations, under budget).
 const BENCH_CRATES: usize = 10;

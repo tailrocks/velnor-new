@@ -11,7 +11,7 @@ use velnor_actions_orchestrator::{
 };
 use velnor_actions_orchestrator_core::OrchestratorError;
 
-use crate::impl_common::{
+use crate::support::{
     TestResult, config_with_branch, fixture_manifest_json, git, git_line, make_repo,
     plan_for_source_change, snapshot, without_ambient_identity,
 };
@@ -43,13 +43,13 @@ fn make_velnor_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Error>>
 fn plan_response_for_source_change() -> Result<(TempDir, String), Box<dyn std::error::Error>> {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
-    crate::impl_common::git(&["add", "."], root)?;
-    crate::impl_common::git(&["commit", "-m", "one"], root)?;
+    crate::support::git(&["add", "."], root)?;
+    crate::support::git(&["commit", "-m", "one"], root)?;
     fs::write(root.join("src/lib.rs"), "pub fn f() {}\npub fn g() {}\n")?;
-    crate::impl_common::git(&["add", "."], root)?;
-    crate::impl_common::git(&["commit", "-m", "two"], root)?;
-    let base = crate::impl_common::git_line(&["rev-parse", "HEAD~1"], root)?;
-    let head = crate::impl_common::git_line(&["rev-parse", "HEAD"], root)?;
+    crate::support::git(&["add", "."], root)?;
+    crate::support::git(&["commit", "-m", "two"], root)?;
+    let base = crate::support::git_line(&["rev-parse", "HEAD~1"], root)?;
+    let head = crate::support::git_line(&["rev-parse", "HEAD"], root)?;
     let request = serde_json::json!({"schema": 1, "run_key": "local", "base": base, "head": head, "event": "pull_request", "root": root.display().to_string()});
     Ok((repo, plan_internal(&request.to_string())?))
 }

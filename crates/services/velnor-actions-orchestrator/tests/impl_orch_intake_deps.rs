@@ -7,7 +7,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use crate::impl_common::TestResult;
+use crate::support::TestResult;
 
 #[test]
 fn intake_adapter_dependency_direction() -> TestResult {

@@ -1,8 +1,8 @@
-//! Integration test entry point; cases live in the sibling files.
+//! Integration test entry point; cases live under `cases/`, shared helpers in `support`.
+mod cases;
 mod impl_bench_p13;
 mod impl_cache_fixtures;
 mod impl_cache_warm;
-mod impl_common;
 mod impl_config_internal;
 mod impl_consumer_manifest_file;
 mod impl_cover_pipeline;
@@ -26,17 +26,10 @@ mod impl_generate_size_guard;
 mod impl_generate_tofu_env;
 mod impl_git_paths_p10;
 mod impl_lane_isolation;
-#[path = "impl_local_shared_action.rs"]
 mod impl_local_shared_action;
 mod impl_matrix;
-mod impl_merge;
-mod impl_merge_plan;
-mod impl_merge_tamper;
-mod impl_merge_trust;
 mod impl_neg_pipeline_p13;
 mod impl_orch_broaden;
-mod impl_orch_core;
-mod impl_orch_core_cover;
 mod impl_orch_f2a;
 mod impl_orch_f2a_prepare;
 mod impl_orch_f2b;
@@ -53,10 +46,7 @@ mod impl_orch_install_sets;
 mod impl_orch_intake;
 mod impl_orch_intake_deps;
 mod impl_orch_lock_audit;
-mod impl_orch_merge;
-mod impl_orch_merge_final;
 mod impl_orch_p08;
-mod impl_orch_plansel;
 mod impl_orch_release_emit;
 mod impl_orch_timeout;
 mod impl_p03_identity;
@@ -102,3 +92,4 @@ mod impl_trust_identity;
 mod impl_validators_repo;
 mod impl_wire_w1;
 mod impl_wire_w2;
+mod support;
