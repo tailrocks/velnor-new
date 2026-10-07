@@ -13,7 +13,7 @@ use velnor_actions_workflow_steps::steps::{
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_discovery::discover::Discovery;
 use velnor_actions_orchestrator_provisioning::vectors::{
-    ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, zizmor_argv,
+    ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, machete_crate_dirs, zizmor_argv,
 };
 
 use super::{CHECKOUT_USES, REQUEST_DIR};
@@ -48,18 +48,19 @@ pub(super) fn render_context(
                 argv: deny_argv(&workspaces)?,
             });
         }
-        validator_commands.extend([
-            ValidatorCommand {
+        let machete_dirs = machete_crate_dirs(discovery);
+        if !machete_dirs.is_empty() {
+            validator_commands.push(ValidatorCommand {
                 validator: ValidatorKind::CargoMachete,
                 name: MACHETE_STEP_NAME.to_owned(),
-                argv: machete_argv()?,
-            },
-            ValidatorCommand {
-                validator: ValidatorKind::Zizmor,
-                name: ZIZMOR_STEP_NAME.to_owned(),
-                argv: zizmor_argv(catalog)?,
-            },
-        ]);
+                argv: machete_argv(&machete_dirs)?,
+            });
+        }
+        validator_commands.extend([ValidatorCommand {
+            validator: ValidatorKind::Zizmor,
+            name: ZIZMOR_STEP_NAME.to_owned(),
+            argv: zizmor_argv(catalog)?,
+        }]);
     }
     let candidate =
         if velnor && config.workflow.generator_validation == GeneratorValidation::Candidate {

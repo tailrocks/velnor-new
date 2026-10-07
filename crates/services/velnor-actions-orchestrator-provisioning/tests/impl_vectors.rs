@@ -92,7 +92,7 @@ fn deny_rejects_empty_roots() {
 
 #[test]
 fn machete_runs_through_pinned_tool() {
-    let machete = machete_argv().expect("argv");
+    let machete = machete_argv(&["crates/demo".to_owned()]).expect("argv");
     assert_eq!(
         &machete[..5],
         ["mise", "--no-config", "--no-env", "--no-hooks", "exec"]

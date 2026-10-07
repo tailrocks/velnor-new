@@ -215,6 +215,11 @@ fn support_workflow(
             .validators
             .retain(|validator| *validator != ValidatorKind::CargoDeny);
     }
+    if velnor_actions_orchestrator_provisioning::vectors::machete_crate_dirs(discovery).is_empty() {
+        support
+            .validators
+            .retain(|validator| *validator != ValidatorKind::CargoMachete);
+    }
     Some(support)
 }
 
