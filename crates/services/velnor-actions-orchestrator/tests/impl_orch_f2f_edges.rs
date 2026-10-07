@@ -121,9 +121,31 @@ fn expected_service(dir: &str) -> Option<Vec<&str>> {
             "velnor-actions-workflow-jobs",
             "velnor-actions-workflow-release",
             "velnor-actions-workflow-renderer",
+            "velnor-actions-workflow-schema2",
             "velnor-actions-workflow-steps",
             "velnor-actions-workflow-tree",
         ]),
+        "crates/services/velnor-actions-workflow-renderer" => Some(vec![
+            "velnor-actions-contract",
+            "velnor-actions-contract-config",
+            "velnor-actions-contract-release",
+            "velnor-actions-contract-workflow",
+            "velnor-actions-workflow-cache",
+            "velnor-actions-workflow-document",
+            "velnor-actions-workflow-generator",
+            "velnor-actions-workflow-jobs",
+            "velnor-actions-workflow-steps",
+            "velnor-actions-workflow-tree",
+        ]),
+        "crates/apps/velnor-actions-cli" => Some(vec!["velnor-actions-orchestrator"]),
+        "crates/apps/velnor-actions-repo-policy" => Some(vec![]),
+        _ => expected_workflow_family(dir),
+    }
+}
+
+/// Workflow-family edges by member dir.
+fn expected_workflow_family(dir: &str) -> Option<Vec<&str>> {
+    match dir {
         "crates/services/velnor-actions-workflow-cache" => Some(vec![
             "velnor-actions-contract",
             "velnor-actions-contract-config",
@@ -161,15 +183,10 @@ fn expected_service(dir: &str) -> Option<Vec<&str>> {
             "velnor-actions-workflow-steps",
             "velnor-actions-workflow-tree",
         ]),
-        "crates/services/velnor-actions-workflow-renderer" => Some(vec![
-            "velnor-actions-contract",
+        "crates/services/velnor-actions-workflow-schema2" => Some(vec![
             "velnor-actions-contract-config",
-            "velnor-actions-contract-release",
-            "velnor-actions-contract-workflow",
             "velnor-actions-workflow-cache",
-            "velnor-actions-workflow-document",
             "velnor-actions-workflow-generator",
-            "velnor-actions-workflow-jobs",
             "velnor-actions-workflow-steps",
             "velnor-actions-workflow-tree",
         ]),
@@ -184,8 +201,6 @@ fn expected_service(dir: &str) -> Option<Vec<&str>> {
             "velnor-actions-contract-workflow",
             "velnor-actions-workflow-steps",
         ]),
-        "crates/apps/velnor-actions-cli" => Some(vec!["velnor-actions-orchestrator"]),
-        "crates/apps/velnor-actions-repo-policy" => Some(vec![]),
         _ => None,
     }
 }

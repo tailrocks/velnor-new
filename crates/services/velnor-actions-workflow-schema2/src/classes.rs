@@ -44,7 +44,7 @@ struct Extras {
 }
 
 /// One mode per class. `features` does not select these jobs.
-pub(super) fn class_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
+pub(crate) fn class_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     let mut jobs = action_classes(hosted, scale);
     jobs.extend(state_classes(hosted, scale));
     jobs.extend(more::jobs(hosted, scale));

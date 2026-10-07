@@ -3640,6 +3640,7 @@ dependencies = [
  "velnor-actions-workflow-jobs",
  "velnor-actions-workflow-release",
  "velnor-actions-workflow-renderer",
+ "velnor-actions-workflow-schema2",
  "velnor-actions-workflow-steps",
  "velnor-actions-workflow-tree",
  "zip",
@@ -3767,6 +3768,17 @@ dependencies = [
  "velnor-actions-workflow-document",
  "velnor-actions-workflow-generator",
  "velnor-actions-workflow-jobs",
+ "velnor-actions-workflow-steps",
+ "velnor-actions-workflow-tree",
+]
+
+[[package]]
+name = "velnor-actions-workflow-schema2"
+version = "0.1.1"
+dependencies = [
+ "velnor-actions-contract-config",
+ "velnor-actions-workflow-cache",
+ "velnor-actions-workflow-generator",
  "velnor-actions-workflow-steps",
  "velnor-actions-workflow-tree",
 ]

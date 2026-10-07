@@ -1,30 +1,30 @@
-use super::super::script;
-use super::{AUTHORITY, REPO, SHA, WORKFLOW};
+use super::impl_schema2_eligibility::{AUTHORITY, REPO, SHA, WORKFLOW};
 use std::error::Error;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use velnor_actions_workflow_schema2::release_eligibility::script;
 
 static NEXT_CASE: AtomicUsize = AtomicUsize::new(0);
 
-pub(super) struct Scenario {
-    pub(super) repository: String,
-    pub(super) ref_name: String,
-    pub(super) event: String,
-    pub(super) workflow_ref: String,
-    pub(super) source_sha: String,
-    pub(super) authority_sha: String,
-    pub(super) main_sha: String,
-    pub(super) second_main_sha: Option<String>,
-    pub(super) runs: String,
-    pub(super) second_runs: Option<String>,
-    pub(super) jobs: String,
+pub(crate) struct Scenario {
+    pub(crate) repository: String,
+    pub(crate) ref_name: String,
+    pub(crate) event: String,
+    pub(crate) workflow_ref: String,
+    pub(crate) source_sha: String,
+    pub(crate) authority_sha: String,
+    pub(crate) main_sha: String,
+    pub(crate) second_main_sha: Option<String>,
+    pub(crate) runs: String,
+    pub(crate) second_runs: Option<String>,
+    pub(crate) jobs: String,
 }
 
 impl Scenario {
-    pub(super) fn valid() -> Self {
+    pub(crate) fn valid() -> Self {
         let newest = run(
             42,
             12,
@@ -61,14 +61,14 @@ impl Scenario {
     }
 }
 
-pub(super) struct Execution {
-    pub(super) success: bool,
-    pub(super) stderr: String,
-    pub(super) output: String,
-    pub(super) calls: String,
+pub(crate) struct Execution {
+    pub(crate) success: bool,
+    pub(crate) stderr: String,
+    pub(crate) output: String,
+    pub(crate) calls: String,
 }
 
-pub(super) struct Fixture {
+pub(crate) struct Fixture {
     directory: PathBuf,
     bin: PathBuf,
     calls: PathBuf,
@@ -118,13 +118,13 @@ case "$endpoint" in
 esac
 "#;
 
-pub(super) fn write_executable(path: &Path, contents: &str) -> Result<(), Box<dyn Error>> {
+pub(crate) fn write_executable(path: &Path, contents: &str) -> Result<(), Box<dyn Error>> {
     fs::write(path, contents)?;
     fs::set_permissions(path, fs::Permissions::from_mode(0o755))?;
     Ok(())
 }
 
-pub(super) fn create_fixture(scenario: &Scenario) -> Result<Fixture, Box<dyn Error>> {
+pub(crate) fn create_fixture(scenario: &Scenario) -> Result<Fixture, Box<dyn Error>> {
     let id = NEXT_CASE.fetch_add(1, Ordering::Relaxed);
     let directory =
         std::env::temp_dir().join(format!("velnor-release-gate-{}-{id}", std::process::id()));
@@ -159,7 +159,7 @@ pub(super) fn create_fixture(scenario: &Scenario) -> Result<Fixture, Box<dyn Err
     })
 }
 
-pub(super) fn run(
+pub(crate) fn run(
     id: u64,
     number: u64,
     attempt: u64,
@@ -173,7 +173,7 @@ pub(super) fn run(
     )
 }
 
-pub(super) fn pages(pages: &[Vec<String>]) -> String {
+pub(crate) fn pages(pages: &[Vec<String>]) -> String {
     let encoded = pages
         .iter()
         .map(|runs| format!(r#"{{"workflow_runs":[{}]}}"#, runs.join(",")))
@@ -182,7 +182,7 @@ pub(super) fn pages(pages: &[Vec<String>]) -> String {
     format!("[{encoded}]")
 }
 
-pub(super) fn required_job(
+pub(crate) fn required_job(
     run_id: u64,
     attempt: u64,
     sha: &str,
@@ -195,11 +195,11 @@ pub(super) fn required_job(
     )
 }
 
-pub(super) fn job_pages(jobs: &[String]) -> String {
+pub(crate) fn job_pages(jobs: &[String]) -> String {
     format!(r#"[{{"jobs":[{}]}}]"#, jobs.join(","))
 }
 
-pub(super) fn execute(scenario: Scenario) -> Result<Execution, Box<dyn Error>> {
+pub(crate) fn execute(scenario: Scenario) -> Result<Execution, Box<dyn Error>> {
     let fixture = create_fixture(&scenario)?;
     let path = std::env::var("PATH")?;
     let output = Command::new("bash")

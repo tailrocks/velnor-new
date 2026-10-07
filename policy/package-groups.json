@@ -25,6 +25,7 @@
     "velnor-actions-workflow-jobs": "library",
     "velnor-actions-workflow-release": "library",
     "velnor-actions-workflow-renderer": "library",
+    "velnor-actions-workflow-schema2": "library",
     "velnor-actions-workflow-steps": "library",
     "velnor-actions-workflow-tree": "library",
     "velnor-archive-guard": "tool",

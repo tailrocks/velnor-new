@@ -7,69 +7,79 @@ use velnor_actions_workflow_document::lane_share::share_lanes;
 use velnor_actions_workflow_steps::RenderError;
 
 #[test]
-fn differing_lane_bodies_fail_closed() {
+fn differing_lane_bodies_fail_closed() -> Result<(), RenderError> {
     let step = echo_step(0, "one");
-    let mut jobs = paired(&[step]);
+    let mut jobs = paired(&[step])?;
     jobs.get_mut("rust-0__hosted").expect("hosted").steps.pop();
     let err = share_lanes(&jobs, &ctx()).expect_err("differs");
     assert!(
         matches!(err, RenderError::InvalidWorkflow(ref problem) if problem == "lane_body_differs:rust-0"),
         "{err}"
     );
+    Ok(())
 }
 
-fn assert_lane_pair_rejected(jobs: &BTreeMap<String, Job>) {
-    let err = share_lanes(jobs, &ctx()).expect_err("invalid lane checkout");
+fn assert_lane_pair_rejected(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
+    let Err(err) = share_lanes(jobs, &ctx()) else {
+        return Err(RenderError::InvalidWorkflow(
+            "invalid lane checkout must fail".to_owned(),
+        ));
+    };
     assert!(
         matches!(err, RenderError::InvalidWorkflow(ref problem) if problem == "lane_body_differs:rust-0"),
         "{err}"
     );
+    Ok(())
 }
 
 #[test]
-fn missing_lane_checkout_fails_closed() {
-    let mut jobs = paired(&[echo_step(0, "one")]);
+fn missing_lane_checkout_fails_closed() -> Result<(), RenderError> {
+    let mut jobs = paired(&[echo_step(0, "one")])?;
     jobs.get_mut("rust-0__hosted")
         .expect("hosted")
         .steps
         .remove(0);
-    assert_lane_pair_rejected(&jobs);
+    assert_lane_pair_rejected(&jobs)?;
+    Ok(())
 }
 
 #[test]
-fn nonleading_lane_checkout_fails_closed() {
-    let mut jobs = paired(&[echo_step(0, "one")]);
+fn nonleading_lane_checkout_fails_closed() -> Result<(), RenderError> {
+    let mut jobs = paired(&[echo_step(0, "one")])?;
     jobs.get_mut("rust-0__hosted")
         .expect("hosted")
         .steps
         .swap(0, 1);
-    assert_lane_pair_rejected(&jobs);
+    assert_lane_pair_rejected(&jobs)?;
+    Ok(())
 }
 
 #[test]
-fn duplicate_lane_checkout_fails_closed() {
-    let mut jobs = paired(&[echo_step(0, "one")]);
+fn duplicate_lane_checkout_fails_closed() -> Result<(), RenderError> {
+    let mut jobs = paired(&[echo_step(0, "one")])?;
     jobs.get_mut("rust-0__hosted")
         .expect("hosted")
         .steps
         .push(checkout());
-    assert_lane_pair_rejected(&jobs);
+    assert_lane_pair_rejected(&jobs)?;
+    Ok(())
 }
 
 #[test]
-fn mismatched_lane_checkout_inputs_fail_closed() {
-    let mut jobs = paired(&[echo_step(0, "one")]);
+fn mismatched_lane_checkout_inputs_fail_closed() -> Result<(), RenderError> {
+    let mut jobs = paired(&[echo_step(0, "one")])?;
     let local = jobs.get_mut("rust-0__local").expect("local");
     let StepKind::Action { with, .. } = &mut local.steps[0].kind else {
         panic!("checkout action");
     };
     with.insert("fetch-depth".to_owned(), "0".to_owned());
-    assert_lane_pair_rejected(&jobs);
+    assert_lane_pair_rejected(&jobs)?;
+    Ok(())
 }
 
 #[test]
-fn matching_lane_checkout_inputs_are_carried_outside_the_composite() {
-    let mut jobs = paired(&[echo_step(0, "one")]);
+fn matching_lane_checkout_inputs_are_carried_outside_the_composite() -> Result<(), RenderError> {
+    let mut jobs = paired(&[echo_step(0, "one")])?;
     for id in ["rust-0__hosted", "rust-0__local"] {
         let StepKind::Action { with, .. } = &mut jobs.get_mut(id).expect("lane").steps[0].kind
         else {
@@ -95,10 +105,11 @@ fn matching_lane_checkout_inputs_are_carried_outside_the_composite() {
     assert!(!action.bytes.contains("Checkout"));
     let yaml = render_jobs(&workflow_ir(), &shared, &ctx()).expect("yaml");
     assert!(yaml.contains("fetch-depth:"));
+    Ok(())
 }
 
 #[test]
-fn unsafe_logical_id_fails_closed() {
+fn unsafe_logical_id_fails_closed() -> Result<(), RenderError> {
     let step = echo_step(0, "one");
     let mut jobs = BTreeMap::new();
     jobs.insert(
@@ -107,13 +118,14 @@ fn unsafe_logical_id_fails_closed() {
     );
     jobs.insert(
         "rust.0__local".to_owned(),
-        lane_job("local", &scale_token(), vec![step]),
+        lane_job("local", &scale_token()?, vec![step]),
     );
     let err = share_lanes(&jobs, &ctx()).expect_err("bad id");
     assert!(
         matches!(err, RenderError::InvalidWorkflow(ref problem) if problem == "bad_lane_id:rust.0__hosted"),
         "{err}"
     );
+    Ok(())
 }
 
 #[test]
@@ -131,8 +143,8 @@ fn unpaired_jobs_stay_inline() {
 }
 
 #[test]
-fn elected_save_stays_on_the_winner_job() {
-    let mut jobs = paired(&[echo_step(0, "one")]);
+fn elected_save_stays_on_the_winner_job() -> Result<(), RenderError> {
+    let mut jobs = paired(&[echo_step(0, "one")])?;
     let expected_checkout = jobs
         .get("rust-0__hosted")
         .expect("hosted")
@@ -172,4 +184,5 @@ fn elected_save_stays_on_the_winner_job() {
     let call_at = yaml.find("uses: ./.github/actions/rust-0").expect("call");
     let save_at = yaml.find("name: Save Mise tools").expect("save");
     assert!(checkout_at < call_at && call_at < save_at);
+    Ok(())
 }

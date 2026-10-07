@@ -2,7 +2,8 @@ use std::collections::BTreeSet;
 
 use velnor_actions_contract_config::{RoutingWorkflow, SCALE_SET_NAME, VELNOR_LABEL};
 
-use super::{monitoring, qualification, render_schema2_workflows};
+use super::render_schema2_workflows;
+use super::workflows::{monitoring, qualification};
 use velnor_actions_workflow_generator::{MbxQualificationPins, Schema2WorkflowRequest};
 use velnor_actions_workflow_steps::setup::MiseSetup;
 use velnor_actions_workflow_tree::yaml::Yaml;

@@ -49,7 +49,7 @@ const REUSE_PROBE: &str = "set -e -o pipefail; df -B1 -P \"$RUNNER_TEMP\"; df -i
 ///
 /// # Errors
 /// Invalid action, Mise, MBX, or Rust pins fail closed.
-pub(super) fn jobs(
+pub(crate) fn jobs(
     request: &MbxQualificationPins,
     hosted: &RunnerSpec,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {

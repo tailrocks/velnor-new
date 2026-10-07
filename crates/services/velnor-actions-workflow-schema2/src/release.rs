@@ -80,7 +80,7 @@ shasum -a 256 velnor-host > SHA256SUMS";
 /// # Errors
 ///
 /// An illegal hosted label fails.
-pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
+pub(crate) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
     let hosted = runs_on_yaml(&request.hosted_label)?;
     let files = [RUNNER_TAR, DIND_TAR, CHECKSUMS];
     Ok(document(
@@ -129,7 +129,7 @@ pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
 /// # Errors
 ///
 /// An illegal macOS label fails.
-pub(super) fn macos_binary_release(_request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
+pub(crate) fn macos_binary_release(_request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
     let macos = runs_on_yaml(MACOS_RUNS_ON)?;
     let files = [HOST_BIN, CHECKSUMS];
     Ok(document(

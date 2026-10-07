@@ -10,7 +10,7 @@ use velnor_actions_contract_config::{
 };
 use velnor_actions_contract_release::targets::LATEST_RUNNER_LABEL;
 use velnor_actions_workflow_generator::{MbxQualificationPins, Schema2WorkflowRequest};
-use velnor_actions_workflow_renderer::render_schema2_workflows;
+use velnor_actions_workflow_schema2::render_schema2_workflows;
 use velnor_actions_workflow_tree::RenderedFile;
 
 mod generator_release_pins;

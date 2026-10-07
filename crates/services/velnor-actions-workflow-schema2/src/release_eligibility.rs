@@ -36,7 +36,8 @@ const LATEST_RUN_JQ: &str = r#"
     end
 "#;
 
-const REQUIRED_JOB_JQ: &str = r#"
+/// Selects the single `Required` job from workflow job pages.
+pub const REQUIRED_JOB_JQ: &str = r#"
   [ .[].jobs[]? | select(.name == "Required") ] as $required
   | if ($required | length) != 1 then error("expected one Required job")
     else $required[0]
@@ -102,7 +103,8 @@ pub fn job(runs_on: Yaml) -> (String, Yaml) {
 }
 
 /// Bash gate run before build and again inside each publisher.
-pub(super) fn script() -> String {
+#[must_use]
+pub fn script() -> String {
     ELIGIBILITY_SCRIPT
         .replace("@REPOSITORY@", REPOSITORY)
         .replace("@WORKFLOW_PATH@", WORKFLOW_PATH)
@@ -113,7 +115,8 @@ pub(super) fn script() -> String {
         .replace("@REQUIRED_JOB_JQ@", REQUIRED_JOB_JQ)
 }
 
-const ELIGIBILITY_SCRIPT: &str = r#"set -euo pipefail
+/// Eligibility gate script with `@VAR@` placeholders bound by [`script`].
+pub const ELIGIBILITY_SCRIPT: &str = r#"set -euo pipefail
 
 readonly repository='@REPOSITORY@'
 readonly workflow_path='@WORKFLOW_PATH@'
@@ -277,6 +280,3 @@ fn check_step() -> Yaml {
         ("run".to_owned(), Yaml::str(script())),
     ])
 }
-
-#[cfg(test)]
-mod tests;

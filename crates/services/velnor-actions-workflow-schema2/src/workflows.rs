@@ -1,9 +1,11 @@
-//! Qualification, image-release, macOS-binary-release, generator-release,
-//! and monitoring workflows. Emitted only when schema 2 requests them.
+//! Schema-2 workflow assembly: qualification, releases, monitoring.
 
+use super::{
+    GENERATOR_RELEASE_WORKFLOW, IMAGE_RELEASE_WORKFLOW, MACOS_BINARY_RELEASE_WORKFLOW,
+    MONITORING_WORKFLOW, QUALIFICATION_WORKFLOW, RunnerSpec,
+};
+use super::{classes, features, mbx_qualification, release};
 use velnor_actions_contract_config::RoutingWorkflow;
-use velnor_actions_contract_config::config::is_hosted_catalog;
-
 use velnor_actions_workflow_generator::Schema2WorkflowRequest;
 use velnor_actions_workflow_generator::generator_release;
 use velnor_actions_workflow_steps::RenderError;
@@ -11,75 +13,6 @@ use velnor_actions_workflow_tree::marker::with_marker;
 use velnor_actions_workflow_tree::rendered::RenderedFile;
 use velnor_actions_workflow_tree::runs_on::runs_on_yaml;
 use velnor_actions_workflow_tree::yaml::{Yaml, render_yaml};
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum RunnerLane {
-    Hosted,
-    ScaleSet,
-}
-
-pub(super) struct RunnerSpec {
-    pub(super) runs_on: Yaml,
-    lane: RunnerLane,
-}
-
-impl RunnerSpec {
-    fn hosted(label: &str) -> Result<Self, RenderError> {
-        if !is_hosted_catalog(label) {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "schema2_hosted_runner_not_catalog:{label}"
-            )));
-        }
-        Ok(Self {
-            runs_on: Yaml::str(label),
-            lane: RunnerLane::Hosted,
-        })
-    }
-
-    fn scale_set(runs_on: Yaml) -> Self {
-        Self {
-            runs_on,
-            lane: RunnerLane::ScaleSet,
-        }
-    }
-
-    pub(super) fn push_default_shell(&self, fields: &mut Vec<(String, Yaml)>, has_container: bool) {
-        if has_container {
-            fields.push(
-                velnor_actions_workflow_tree::runs_on::run_shell_defaults_field(
-                    velnor_actions_workflow_tree::runs_on::CONTAINER_RUN_SHELL,
-                ),
-            );
-        } else if self.lane == RunnerLane::ScaleSet {
-            fields.push(
-                velnor_actions_workflow_tree::runs_on::run_shell_defaults_field(
-                    velnor_actions_workflow_tree::runs_on::SCALE_SET_RUN_SHELL,
-                ),
-            );
-        }
-    }
-}
-
-/// Qualification workflow path.
-pub const QUALIFICATION_WORKFLOW: &str = ".github/workflows/qualification.yml";
-/// Image-release workflow path.
-pub const IMAGE_RELEASE_WORKFLOW: &str = ".github/workflows/image-release.yml";
-/// macOS binary-release workflow path.
-pub const MACOS_BINARY_RELEASE_WORKFLOW: &str = ".github/workflows/macos-binary-release.yml";
-/// Generator-release workflow path.
-pub const GENERATOR_RELEASE_WORKFLOW: &str = ".github/workflows/generator-release.yml";
-/// Queue-monitoring workflow path.
-pub const MONITORING_WORKFLOW: &str = ".github/workflows/monitoring.yml";
-
-mod classes;
-mod features;
-mod mbx_qualification;
-mod release;
-/// Exact-source gates for composed product-release workflows.
-pub mod release_eligibility;
-
-#[cfg(test)]
-mod tests;
 
 /// Render every requested workflow. Empty when nothing is requested.
 ///
@@ -148,7 +81,7 @@ fn file(path: &str, version: &str, body: &Yaml) -> Result<RenderedFile, RenderEr
     })
 }
 
-fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
+pub(crate) fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
     let hosted = RunnerSpec::hosted(&request.hosted_label)?;
     let scale = RunnerSpec::scale_set(runs_on_yaml(&request.scale_set.token())?);
     let echo = "inputs.mode == 'both'";
@@ -203,7 +136,7 @@ fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> 
     Ok(document("Qualification", mode_trigger(), jobs))
 }
 
-fn with_if((id, body): (String, Yaml), when: &str) -> (String, Yaml) {
+pub(crate) fn with_if((id, body): (String, Yaml), when: &str) -> (String, Yaml) {
     let Yaml::Map(mut fields) = body else {
         return (id, body);
     };
@@ -211,7 +144,7 @@ fn with_if((id, body): (String, Yaml), when: &str) -> (String, Yaml) {
     (id, Yaml::Map(fields))
 }
 
-fn monitoring(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
+pub(crate) fn monitoring(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
     let scale = RunnerSpec::scale_set(runs_on_yaml(&request.scale_set.token())?);
     let hosted = RunnerSpec::hosted(&request.hosted_label)?;
     Ok(document(

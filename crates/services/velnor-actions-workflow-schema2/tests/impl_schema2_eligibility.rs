@@ -1,15 +1,15 @@
-use super::{ELIGIBILITY_SCRIPT, JOB_ID, REQUIRED_JOB_JQ, job, script};
 use std::error::Error;
+use velnor_actions_workflow_schema2::release_eligibility::{
+    ELIGIBILITY_SCRIPT, JOB_ID, REQUIRED_JOB_JQ, job, script,
+};
 
-const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
-const AUTHORITY: &str = SHA;
-const REPO: &str = "tailrocks/velnor-new";
-const WORKFLOW: &str = "tailrocks/velnor-new/.github/workflows/product-release.yml@refs/heads/main";
+pub(crate) const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+pub(crate) const AUTHORITY: &str = SHA;
+pub(crate) const REPO: &str = "tailrocks/velnor-new";
+pub(crate) const WORKFLOW: &str =
+    "tailrocks/velnor-new/.github/workflows/product-release.yml@refs/heads/main";
 
-mod edge;
-mod harness;
-
-use harness::*;
+use super::impl_schema2_eligibility_harness::*;
 
 #[test]
 fn selects_latest_ci_attempt_across_paginated_results() -> Result<(), Box<dyn Error>> {

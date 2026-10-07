@@ -5,7 +5,8 @@
 //! One class per dispatch (`js`, `services`, `artifacts`, `buildx`) is one
 //! run. `features` still selects every class.
 
-use super::{RunnerSpec, with_if};
+use super::RunnerSpec;
+use super::workflows::with_if;
 use velnor_actions_workflow_tree::job_entries::{CHECKOUT_USES, base, finish};
 use velnor_actions_workflow_tree::yaml::Yaml;
 
@@ -26,7 +27,7 @@ const PROBE_LOCAL: &str =
 const BUILDX_RUN: &str = "docker buildx version && printf 'FROM scratch\\n' > Dockerfile && docker buildx build --progress=plain -t velnor-g4:probe .";
 
 /// Feature jobs. `features` runs every class. A class name runs that class.
-pub(super) fn feature_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
+pub(crate) fn feature_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     vec![
         gated(
             js_job("js-hosted", "JavaScript actions / GitHub hosted", hosted),
@@ -78,7 +79,7 @@ pub(super) fn feature_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(Stri
 }
 
 /// Jobs that run only when `inputs.mode` is `negative`. They must fail in GitHub.
-pub(super) fn negative_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
+pub(crate) fn negative_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     vec![
         gated(
             fail_job(
@@ -100,7 +101,7 @@ pub(super) fn negative_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(Str
 }
 
 /// Insert `if` at map index 1, matching the qualification document style.
-pub(super) fn gated(job: (String, Yaml), when: &str) -> (String, Yaml) {
+pub(crate) fn gated(job: (String, Yaml), when: &str) -> (String, Yaml) {
     with_if(job, when)
 }
 
@@ -155,12 +156,12 @@ fn fail_job(id: &str, name: &str, runs_on: &RunnerSpec) -> (String, Yaml) {
 }
 
 /// Shared preamble for typed qualification lanes.
-pub(super) fn lane_base(name: &str, runner: &RunnerSpec, timeout: i64) -> Vec<(String, Yaml)> {
+pub(crate) fn lane_base(name: &str, runner: &RunnerSpec, timeout: i64) -> Vec<(String, Yaml)> {
     lane_base_with_container(name, runner, timeout, false)
 }
 
 /// Shared preamble for a typed lane whose job executes in a container.
-pub(super) fn lane_base_with_container(
+pub(crate) fn lane_base_with_container(
     name: &str,
     runner: &RunnerSpec,
     timeout: i64,
@@ -173,7 +174,7 @@ pub(super) fn lane_base_with_container(
 
 /// Shared preamble for hosted product-release families.
 /// Redis 7 with the shared health options and published port 6379.
-pub(super) fn redis_service() -> Yaml {
+pub(crate) fn redis_service() -> Yaml {
     Yaml::Map(vec![(
         "redis".to_owned(),
         Yaml::Map(vec![
@@ -195,7 +196,7 @@ fn artifact_permissions() -> Yaml {
 }
 
 /// One `run` step.
-pub(super) fn run_step(name: &str, run: &str) -> Yaml {
+pub(crate) fn run_step(name: &str, run: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
         ("run".to_owned(), Yaml::str(run)),
@@ -203,7 +204,7 @@ pub(super) fn run_step(name: &str, run: &str) -> Yaml {
 }
 
 /// `gh` reads `GH_TOKEN`. The job token is not a dispatch input.
-pub(super) fn publish_step(run: &str) -> Yaml {
+pub(crate) fn publish_step(run: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Publish GitHub release")),
         (
@@ -219,7 +220,7 @@ pub(super) fn publish_step(run: &str) -> Yaml {
 
 /// Local `./` action. actionlint 1.7.12 rejects `$/`, so the
 /// self-repository auto-fix cannot be applied. The ignore stays on this line.
-pub(super) fn local_action_step(name: &str, uses: &str) -> Yaml {
+pub(crate) fn local_action_step(name: &str, uses: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
         (
@@ -230,7 +231,7 @@ pub(super) fn local_action_step(name: &str, uses: &str) -> Yaml {
 }
 
 /// Checkout with credentials disabled. Qualification must not persist a token.
-pub(super) fn checkout_step() -> Yaml {
+pub(crate) fn checkout_step() -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Check out")),
         ("uses".to_owned(), Yaml::str(CHECKOUT_USES)),

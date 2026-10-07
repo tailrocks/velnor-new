@@ -6,6 +6,7 @@ use velnor_actions_contract_config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LA
 use velnor_actions_contract_workflow::{
     Concurrency, Job, JobTimeout, Permissions, Step, StepKind, StepRole, Trigger, WorkflowIr,
 };
+use velnor_actions_workflow_steps::RenderError;
 
 use velnor_actions_contract_workflow::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
 use velnor_actions_workflow_jobs::{
@@ -53,13 +54,13 @@ pub(crate) fn workflow_ir() -> WorkflowIr {
     }
 }
 
-pub(crate) fn scale_token() -> String {
-    ScaleSetSelector::try_new(
+pub(crate) fn scale_token() -> Result<String, RenderError> {
+    Ok(ScaleSetSelector::try_new(
         SCALE_SET_NAME,
         &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
     )
-    .expect("scale selector")
-    .token()
+    .map_err(RenderError::Contract)?
+    .token())
 }
 
 pub(crate) fn echo_step(index: usize, payload: &str) -> Step {
@@ -121,8 +122,8 @@ pub(crate) fn render_jobs(
     )
 }
 
-pub(crate) fn paired(steps: &[Step]) -> BTreeMap<String, Job> {
-    let scale = scale_token();
+pub(crate) fn paired(steps: &[Step]) -> Result<BTreeMap<String, Job>, RenderError> {
+    let scale = scale_token()?;
     let mut lane_steps = vec![checkout()];
     lane_steps.extend_from_slice(steps);
     let mut jobs = BTreeMap::new();
@@ -141,5 +142,5 @@ pub(crate) fn paired(steps: &[Step]) -> BTreeMap<String, Job> {
             lane_job(&format!("{logical} local"), &scale, lane_steps.clone()),
         );
     }
-    jobs
+    Ok(jobs)
 }

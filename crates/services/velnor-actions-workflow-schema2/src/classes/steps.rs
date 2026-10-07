@@ -3,7 +3,7 @@
 use velnor_actions_workflow_tree::yaml::Yaml;
 
 /// A `run` step with an id, so the job can publish its output.
-pub(super) fn run_id(name: &str, id: &str, run: &str) -> Yaml {
+pub(crate) fn run_id(name: &str, id: &str, run: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
         ("id".to_owned(), Yaml::str(id)),
@@ -12,7 +12,7 @@ pub(super) fn run_id(name: &str, id: &str, run: &str) -> Yaml {
 }
 
 /// A `run` step that sets `shell`.
-pub(super) fn shell_step(name: &str, shell: &str, run: &str) -> Yaml {
+pub(crate) fn shell_step(name: &str, shell: &str, run: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
         ("shell".to_owned(), Yaml::str(shell)),
@@ -21,7 +21,7 @@ pub(super) fn shell_step(name: &str, shell: &str, run: &str) -> Yaml {
 }
 
 /// A `run` step with environment bindings.
-pub(super) fn run_env(name: &str, env: &[(&str, &str)], run: &str) -> Yaml {
+pub(crate) fn run_env(name: &str, env: &[(&str, &str)], run: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
         ("env".to_owned(), mapping(env)),
@@ -30,7 +30,7 @@ pub(super) fn run_env(name: &str, env: &[(&str, &str)], run: &str) -> Yaml {
 }
 
 /// A `uses` step with string inputs.
-pub(super) fn uses_with(name: &str, uses: &str, with: &[(&str, &str)]) -> Yaml {
+pub(crate) fn uses_with(name: &str, uses: &str, with: &[(&str, &str)]) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
         ("uses".to_owned(), Yaml::str(uses)),
@@ -39,7 +39,7 @@ pub(super) fn uses_with(name: &str, uses: &str, with: &[(&str, &str)]) -> Yaml {
 }
 
 /// A string mapping, in the given order.
-pub(super) fn mapping(pairs: &[(&str, &str)]) -> Yaml {
+pub(crate) fn mapping(pairs: &[(&str, &str)]) -> Yaml {
     Yaml::Map(
         pairs
             .iter()

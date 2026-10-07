@@ -1,4 +1,6 @@
-use super::*;
+use super::impl_schema2_eligibility::{REPO, SHA};
+use super::impl_schema2_eligibility_harness::*;
+use std::error::Error;
 
 #[test]
 fn rejects_missing_duplicate_failed_and_wrong_attempt_required_jobs() -> Result<(), Box<dyn Error>>
