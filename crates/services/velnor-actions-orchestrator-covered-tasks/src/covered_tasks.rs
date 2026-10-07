@@ -14,7 +14,7 @@ pub use velnor_actions_workflow_renderer::COVERED_TASKS_OUTPUT;
 
 /// Sorted unique covered task IDs of one plan.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct CoveredTasks {
+pub struct CoveredTasks {
     /// Covered IDs in sorted order.
     ids: Vec<String>,
 }
@@ -26,7 +26,7 @@ pub(crate) struct CoveredTasks {
 /// [`ObligationDecision`]: a future variant fails to compile here
 /// instead of silently skipping coverage somewhere.
 #[must_use]
-pub(crate) fn decision_is_covered(decision: ObligationDecision) -> bool {
+pub fn decision_is_covered(decision: ObligationDecision) -> bool {
     match decision {
         ObligationDecision::CoveredByTrustedBaseline => true,
         ObligationDecision::Execute | ObligationDecision::ReusedFromTaskCache => false,
@@ -35,7 +35,7 @@ pub(crate) fn decision_is_covered(decision: ObligationDecision) -> bool {
 
 /// True when any obligation claims trusted-baseline coverage.
 #[must_use]
-pub(crate) fn plan_has_covered(plan: &Plan) -> bool {
+pub fn plan_has_covered(plan: &Plan) -> bool {
     plan.obligations
         .iter()
         .any(|obligation| decision_is_covered(obligation.decision))
@@ -44,7 +44,7 @@ pub(crate) fn plan_has_covered(plan: &Plan) -> bool {
 impl CoveredTasks {
     /// Collect `CoveredByTrustedBaseline` obligations, sorted.
     #[must_use]
-    pub(crate) fn for_plan(plan: &Plan) -> Self {
+    pub fn for_plan(plan: &Plan) -> Self {
         let mut ids: Vec<String> = plan
             .obligations
             .iter()
@@ -58,7 +58,7 @@ impl CoveredTasks {
 
     /// Encode for `$GITHUB_OUTPUT`: wrapped joins, empty when none.
     #[must_use]
-    pub(crate) fn encode(&self) -> String {
+    pub fn encode(&self) -> String {
         if self.ids.is_empty() {
             String::new()
         } else {
@@ -69,7 +69,7 @@ impl CoveredTasks {
 
 /// True when the plan proves `task_id` by trusted baseline.
 #[must_use]
-pub(crate) fn covered_by_baseline(plan: &Plan, task_id: &str) -> bool {
+pub fn covered_by_baseline(plan: &Plan, task_id: &str) -> bool {
     plan.obligations
         .iter()
         .any(|obligation| obligation.task_id == task_id && decision_is_covered(obligation.decision))

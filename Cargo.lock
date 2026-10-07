@@ -3630,6 +3630,7 @@ dependencies = [
  "velnor-actions-orchestrator-check-evidence",
  "velnor-actions-orchestrator-check-preparation",
  "velnor-actions-orchestrator-core",
+ "velnor-actions-orchestrator-covered-tasks",
  "velnor-actions-orchestrator-discovery",
  "velnor-actions-orchestrator-generation",
  "velnor-actions-orchestrator-graph",
@@ -3732,6 +3733,16 @@ dependencies = [
  "velnor-actions-tofu-core",
  "velnor-actions-workflow-steps",
  "velnor-actions-workflow-tree",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-covered-tasks"
+version = "0.1.1"
+dependencies = [
+ "velnor-actions-contract",
+ "velnor-actions-contract-config",
+ "velnor-actions-contract-workflow",
+ "velnor-actions-workflow-renderer",
 ]
 
 [[package]]

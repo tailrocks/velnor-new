@@ -43,7 +43,11 @@ pub fn plan_outputs(
         matrix: canonical_json_str(&response.matrix).map_err(internal_contract)?,
         plan_id: response.plan.plan_id.clone(),
         run_key: response.plan.run_key.clone(),
-        covered_tasks: crate::covered_tasks::CoveredTasks::for_plan(&response.plan).encode(),
+        covered_tasks:
+            velnor_actions_orchestrator_covered_tasks::covered_tasks::CoveredTasks::for_plan(
+                &response.plan,
+            )
+            .encode(),
         job_outputs_utf16_bytes: 0,
     };
     outputs.job_outputs_utf16_bytes = check_plan_outputs(

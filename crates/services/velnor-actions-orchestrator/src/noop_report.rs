@@ -106,7 +106,8 @@ pub(crate) fn write_noop_report_to(
         return Err(internal("reason_with_failure"));
     }
     let plan = crate::task_report::load_plan(run_key, runner_temp)?;
-    if crate::covered_tasks::covered_by_baseline(&plan, task_id) {
+    if velnor_actions_orchestrator_covered_tasks::covered_tasks::covered_by_baseline(&plan, task_id)
+    {
         return Ok(0);
     }
     let (entry, digest) = entry_and_digest(&plan, task_id)?;
@@ -151,7 +152,10 @@ pub(crate) fn write_skip_reports(
         if downstream_id == task_id {
             return Err(internal("downstream_self"));
         }
-        if crate::covered_tasks::covered_by_baseline(plan, downstream_id) {
+        if velnor_actions_orchestrator_covered_tasks::covered_tasks::covered_by_baseline(
+            plan,
+            downstream_id,
+        ) {
             continue;
         }
         let (entry, digest) = entry_and_digest(plan, downstream_id)?;

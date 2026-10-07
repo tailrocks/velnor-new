@@ -112,7 +112,8 @@ pub(crate) fn write_task_report_to(
         return Err(internal("bad_exit_code"));
     }
     let plan = load_plan(run_key, runner_temp)?;
-    if crate::covered_tasks::covered_by_baseline(&plan, task_id) {
+    if velnor_actions_orchestrator_covered_tasks::covered_tasks::covered_by_baseline(&plan, task_id)
+    {
         return Ok(0);
     }
     let (entry, digest) = entry_and_digest(&plan, task_id)?;

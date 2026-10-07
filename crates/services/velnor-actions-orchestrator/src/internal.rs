@@ -227,7 +227,7 @@ fn resolve_named_check_lanes(
 /// The manifest rides along only behind covered obligations: a
 /// rejected manifest must never reach the plan artifact.
 fn plan_response(plan: Plan, manifest: Option<BaselineManifest>) -> PlanResponse {
-    let covered = crate::covered_tasks::plan_has_covered(&plan);
+    let covered = velnor_actions_orchestrator_covered_tasks::covered_tasks::plan_has_covered(&plan);
     PlanResponse {
         schema: SCHEMA,
         matrix: plan.matrix.clone(),

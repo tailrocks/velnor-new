@@ -76,7 +76,7 @@ pub(crate) fn retrieve_baseline_to(
 /// Delegates to the single covered-predicate so staging, fetching,
 /// encoding, and the skip gate can never disagree on what counts.
 fn plan_has_covered(plan: &Plan) -> bool {
-    crate::covered_tasks::plan_has_covered(plan)
+    velnor_actions_orchestrator_covered_tasks::covered_tasks::plan_has_covered(plan)
 }
 
 /// True when staged evidence already answers the merge.

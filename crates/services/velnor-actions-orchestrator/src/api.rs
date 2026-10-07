@@ -3,7 +3,6 @@
 pub use super::baseline_publish::{PUBLISH_OP, PublishOutputs, baseline_publish};
 pub use super::check_runtime::{EXECUTE_CHECK_OP, execute_check};
 pub use super::cover_compat::baseline_artifact_numeric_id;
-pub use super::covered_tasks::COVERED_TASKS_OUTPUT;
 pub use super::external_data::{
     DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, EXTERNAL_DATA_CHECK_KIND, ExternalDataFreshness,
     external_data_kind, may_skip_external_data,
@@ -23,6 +22,7 @@ pub use velnor_actions_contract_workflow::{
     DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV,
 };
 pub use velnor_actions_orchestrator_core::report_keys::REPORT_OP;
+pub use velnor_actions_orchestrator_covered_tasks::covered_tasks::COVERED_TASKS_OUTPUT;
 pub use velnor_actions_orchestrator_discovery::derive_groups::FeatureFallback;
 pub use velnor_actions_orchestrator_discovery::discover::{
     DetectorInfo, Discovery, PlannedWorkspace, detector_registry,

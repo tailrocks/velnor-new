@@ -210,22 +210,10 @@ fn strictness_no_proof_literals_anywhere() -> Result<(), Box<dyn Error>> {
         files.extend(tree_files(&format!("{dir}/src"), "rs")?);
         files.extend(tree_files(&format!("{dir}/tests"), "rs")?);
     }
-    for dir in [
-        "crates/services/velnor-actions-orchestrator",
-        "crates/services/velnor-actions-orchestrator-check-acquisition",
-        "crates/services/velnor-actions-orchestrator-check-evidence",
-        "crates/services/velnor-actions-orchestrator-check-preparation",
-        "crates/services/velnor-actions-orchestrator-core",
-        "crates/services/velnor-actions-orchestrator-discovery",
-        "crates/services/velnor-actions-orchestrator-generation",
-        "crates/services/velnor-actions-orchestrator-graph",
-        "crates/services/velnor-actions-orchestrator-pins",
-        "crates/services/velnor-actions-orchestrator-plan",
-        "crates/services/velnor-actions-orchestrator-provisioning",
-        "crates/services/velnor-actions-orchestrator-selection",
-        "crates/services/velnor-actions-orchestrator-staged-validation",
-        "crates/services/velnor-actions-orchestrator-workflow-ir",
-    ] {
+    for dir in MEMBERS.iter().filter(|dir| {
+        **dir == "crates/services/velnor-actions-orchestrator"
+            || dir.starts_with("crates/services/velnor-actions-orchestrator-")
+    }) {
         files.extend(tree_files(&format!("{dir}/src"), "rs")?);
         files.extend(tree_files(&format!("{dir}/tests"), "rs")?);
     }
