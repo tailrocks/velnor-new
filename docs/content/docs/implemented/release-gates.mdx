@@ -1,0 +1,71 @@
+---
+title: "Release gates: source and external evidence"
+description: "This record separates checked-in release mechanics from hosted evidence and infrastructure. PR46 adds the source-bound `generator-release.yml` workflow, including candidate qualification, a same-run manifest, and protected publication. Source and local tests do not prove a hosted qualification run, an immutable release, or GitHub environment protection. No release was published while preparing this change."
+---
+
+This record separates checked-in release mechanics from hosted evidence and
+infrastructure. PR46 adds the source-bound `generator-release.yml` workflow,
+including candidate qualification, a same-run manifest, and protected
+publication. Source and local tests do not prove a hosted qualification run,
+an immutable release, or GitHub environment protection. No release was
+published while preparing this change.
+
+## Seed and first release (BOOT)
+
+- BOOT-4.2 (seed v0): NEEDS-HUMAN. Unblock = a manually reviewed build with
+  pinned Mise + MBX (no Velnor binary), 2 distinct admin approvals, and an
+  independent reproducible rebuild (second party, pinned catalog, sha256
+  match) recorded in the seed PR (Gap E review). Pre-seed is trust-on-review.
+- BOOT-2.1 (release assets): SOURCE-IMPLEMENTED, NOT RELEASED. The protected
+  workflow builds three target binaries, qualifies the exact uploaded bytes,
+  and produces the canonical versioned manifest from their measured digests.
+  Unblock = a successful exact-source hosted run verifies all three native
+  targets and publishes the immutable assets and manifest; a separate review
+  then verifies the published bytes and updates consumer provenance.
+- BOOT-4.7 (protected release job): SOURCE-IMPLEMENTED, INFRASTRUCTURE
+  UNVERIFIED. The renderer emits a dispatch-only publisher with a protected
+  `generator-release` environment, serialized publication, source/CI rechecks,
+  immutable-tag preflight, and digest/attestation verification. Unblock =
+  verify the repository's actual environment rules and branch protections,
+  complete a qualified hosted run, and land the bootstrap-lock update in a
+  SEPARATE reviewed change while ordinary CI keeps using the previous seed.
+- BOOT-3.4 (mise-bootstrap equality): half done (`.mise-version` ==
+  `MISE_VERSION` const). Unblock = seed creates `.velnor/generator.lock`
+  with the same exact Mise release + SHA-256; the equality check then
+  becomes mechanical.
+
+## Freshness process gates (VER)
+
+- VER-1.5 (incompatible newest = migration): procedure defined in
+  [update-procedure](/docs/implemented/update-procedure) (one coherent set, migration
+  reported, never silent). Residual NEEDS-HUMAN: a maintainer MUST run the
+  update set and write the migration; no automation proposes migrations.
+- VER-1.7 (expedited security path): procedure defined (same-day set,
+  minimal scope, full gate before merge). Residual NEEDS-HUMAN: a human
+  MUST declare the security exception and drive it.
+- VER-2.18 (stale default blocks release): SOURCE-IMPLEMENTED, HOSTED RUN
+  UNVERIFIED. The publisher's source gate calls
+  `scripts/check-freshness.sh`, which rejects stale, missing, mismatched, or
+  expired holds. Unblock = a successful exact-source protected workflow run.
+- VER-3.2 / VER-3.3 (update machinery): procedure + Renovate proposals +
+  script gates exist. Residual NEEDS-HUMAN: a maintainer MUST assemble each
+  update set, record timestamp+delta, and run full qualification. No updater
+  binary exists and none is planned for V1 — this is the mechanical maximum.
+- VER-3.7 (merge-after-qual): SOURCE CHECKS EXIST; BRANCH PROTECTION
+  UNVERIFIED. The release gate checks the exact-source main CI run and its
+  `Required` job before building and repeats that check before publication.
+  Unblock = verify that repository branch protection requires the intended
+  CI qualification checks for merge; generated workflow source alone cannot
+  establish that setting.
+- VER-4.4 (refresh Velnor-owned locks only): procedure defined; refresh of
+  `Cargo.lock`/policy/generator/runner locks is a maintainer action, tool
+  files get recommendations only. Residual NEEDS-HUMAN: same as VER-3.3 —
+  human execution per update set.
+
+## Deferred (not a V1 gate failure)
+
+- VER-4.6 (`turso` exact + journal/txn/lock/durability/crash qual, Cloud
+  sync disabled): sanctioned V2 deferral. No `turso` in manifests by
+  design. Unblock = runner implementation starts (post-V1 gates) and
+  `.velnor/runner.lock` binds the full runner identity. See
+  [deferred work](/docs/deferred).

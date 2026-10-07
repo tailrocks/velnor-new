@@ -299,7 +299,8 @@ fn stale_evidence_names_source_and_timestamp() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn procedure_states_scheduled_producer() -> Result<(), Box<dyn Error>> {
-    let procedure = crate::impl_repo_policy::read("docs/implemented/update-procedure.md")?;
+    let procedure =
+        crate::impl_repo_policy::read("docs/content/docs/implemented/update-procedure.mdx")?;
     assert!(
         !procedure.contains("The scheduled job refreshes"),
         "procedure asserts automation that is not wired"

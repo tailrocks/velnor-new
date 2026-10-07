@@ -1157,3 +1157,193 @@ Per-directory: root 3, `.github/` 2, `docs/` 2,
   (no root `.gitignore` edit).
 - Commits: `858a705cd` inventory, `60170cd50` scaffold sources,
   `1bbcc6ff7` lockfile + route tree — all signed off and pushed.
+
+## Docs slice 2: prose batch 1 to MDX (2026-10-07)
+
+Converted 39 of the 80 MDX-class files (13 `proposed/` + 26
+`implemented/`), each to `docs/content/docs/` mirroring its source
+path (`README.md` → `index.mdx`), then deleted the `.md` sources.
+Conversion rules: frontmatter (`title` from H1, `description` from
+first paragraph; H1 removed from body to avoid a duplicate
+`DocsTitle`), in-repo links → absolute `/docs/…` routes (extensionless,
+forward refs to not-yet-converted pages included), bare path refs to
+moved files → routes, fences byte-preserved, bare `<`/`{`/`}` in prose
+escaped (`&lt;`/`&#123;`/`&#125;`; autolinks kept). Link display text
+that exactly names a moved file drops the `.md` suffix. Staying `.md`
+files repoint at the new `.mdx` homes (repo-relative);
+`docs/content/**` is converter-owned and never rewritten by the ref
+fixer. Bare `foo.md` / `foo.md:line` citations in staying files are
+left for their owning conversion slice (historical line citations stay
+meaningful via git).
+
+Batch boundary (link-graph derived): every file with inbound refs from
+pinned, tool-interface, or test files is deferred so no frozen file is
+touched and no pinned content changes. Deferred to the pinned slice (4,
+named by `rust-quality-contract.md` content pins): `tooling-input`,
+`task-execution`, `agent-and-performance`, `version-policy`, plus
+`freshness-evidence-2026-10-04` (linked by pinned `update-procedure`).
+Deferred to the tool-interface slice (3, linked by root `README.md` /
+`AGENTS.md`): `bootstrap-and-release-contract`, `macos-scaleset-runner`,
+`subagent-model-policy`. Deferred to the evidence slice (11 dated
+files): `freshness-evidence-2026-10-05`, `mbx-native-owner-evidence`,
+`requirements-evidence`, `commit-trailer-evidence`,
+`pr29-pr30-disposition`, `review-ledger-p14`, `review-ledger-t29`,
+`perf-tofu-t24`, `perf-tofu-t25`, `performance-p13`,
+`cache-measurements`. Test files have zero outbound `.md` links, so no
+test-data file can dangle.
+
+New MDX homes (39): `content/docs/proposed/` — `index`,
+`architecture`, `cache-contract`, `cli-contract`,
+`generated-file-contract`, `host-seed-contract`, `implementation-plan`,
+`opentofu-goldens/index`, `parallelism-and-selection-contract`,
+`release-config-schema`, `release-contract`, `release-coverage`,
+`workflow-contract`; `content/docs/implemented/` — `index`,
+`fork-pr-trust-model`, `gate-0`…`gate-8` (full names),
+`gate-class-variances`, `gate-qualification-t28`, `macos-scaleset/`
+(checklist, decisions, evidence, legacy-disposition,
+runner-work-volume-proof, verification), `merge-report-contract`,
+`mise-platform-pins`, `named-mise-checks`, `owned-archive-preflight`,
+`performance`, `qualified-check-tools`, `required-check-migration`.
+
+Build posture: prerender crawls links and 404s on forward refs, so
+`failOnError: false` in `docs/vite.config.ts` until the last conversion
+slice (then flip back to fail-closed). Per-unit smoke asserts every new
+route's HTML exists with title text, covering the tolerance gap.
+Tooling fixes made mid-slice: the ref fixer double-applied its own
+output (`…mdxx`) and rewrote one pinned-blob permalink plus two generic
+`README.md` mentions — repaired in `95570eed3` (restored pristine,
+re-applied with lookahead + URL stash + no basename guessing +
+pinned/tool/test exclusions); fixer-owned frontmatter descriptions
+repaired in `c118e06cd`; the `<1` JSX hazard in `performance` handled by
+blanket `<` escaping.
+
+Known-stale after this slice (all recorded, none failing): the slice-1
+inventory table above (point-in-time snapshot at `caa63bec6`, frozen by
+design); the config-sample bytes naming the old named-checks path in
+`cli-contract.mdx` (fenced TOML) and `init.rs` `SAMPLE_BODY` (emitted
+bytes — move with the generator slice); forward route refs to
+not-yet-converted pages (404 until their slice lands). Four rustdoc
+comments repointed to `.mdx` homes (comment-only). Pinned, tool, and
+test files are byte-identical to slice start.
+
+Verify: frozen install + build green, 41 pages prerendered (2 scaffold
++ 39 new, each smoked), `tsc --noEmit` clean, dangling-path grep over
+all 39 deleted paths shows only the known-stale hits above, `alint
+check` at baseline (36 passing · 1 failing, 6× `ci-build-runs-on`),
+`check-gaps` exit 0 / 0 findings, docs-reader test suites green
+(repo-policy incl. quality/shape/goldens, freshness, commit-trailer
+script tests).
+
+- Commits: `a5d72552e` proposed core (6), `0019ad423` proposed
+  index/plan/release (7), `c118e06cd` description fix, `95570eed3`
+  ref-rewrite repair, `cedc585af` implemented index + gates 0–4 (6),
+  `d987e1e02` gates 5–8 + variances + T28 (6), `5ac3656f7`
+  macos-scaleset (6), `7307eb02a` final implemented batch (8), plus
+  the closing record + index-refresh commit — all signed off and
+  pushed.
+
+## Docs slice 3: prose batch 2 to MDX (2026-10-07)
+
+Converted 38 of the 41 remaining MDX-class files (76 tracked `.md`
+at slice start → 38), each to `docs/content/docs/` mirroring its
+source path (`README.md` → `index.mdx`), then deleted the `.md`
+sources. Same conversion rules as batch 1, plus: frontmatter
+descriptions go through the same link/escape pass as the body;
+links with backticked or line-wrapped displays rewrite (placeholder
+extraction over fence-aware chunks); links to staying files keep
+working repo-relative by depth recompute.
+
+Batch boundary: the 3 files with inbound markdown LINKS from frozen
+tool-interface files defer to the final slice — `docs/README.md`
+(root `README.md` documentation-index link),
+`bootstrap-and-release-contract.md` (root `README.md` bootstrap
+link), `subagent-model-policy.md` (root `AGENTS.md` policy link).
+Backtick citations in frozen files (`AGENTS.md` runner-spec,
+pr-1-trio, opentofu pointers; `docs/README.md` table) go
+interim-dangling as git-meaningful citations, repaired when the
+final slice repoints the frozen files. Test files have zero
+outbound links (verified again: goldens match only their own
+`AGENTS.md` self-mention; `tofu-multiroot` cites staying
+`fixtures/README.md`), so no test-data file can dangle.
+
+New MDX homes (38): `content/docs/reviews/` — all 6
+(`opentofu-evidence`, `opentofu-final-summary`, `p00-repro`,
+`pr-1-adoption`, `pr-1-disposition`, `pr-1`);
+`content/docs/deferred/` + `references` + `proposed/`
+`macos-scaleset-runner`; `content/docs/proposed/` — the 8 pinned
+contracts (`rust-quality-contract`, `rust-test-policy`,
+`rust-dependency-policy`, `version-policy`, `opentofu-contract`,
+`task-execution-contract`, `tooling-input-contract`,
+`agent-and-performance-contract`); `content/docs/implemented/` —
+the 6 pinned procedures (`classification`, `deviations`,
+`release-gates`, `update-procedure`, `verification-triggers`,
+`codex-agent-configuration`) + 12 dated evidence files
+(`cache-measurements`, `commit-trailer-evidence`,
+`freshness-evidence` ×2, `mbx-native-owner-evidence`,
+`perf-tofu-t24`, `perf-tofu-t25`, `performance-p13`,
+`pr29-pr30-disposition`, `requirements-evidence`,
+`review-ledger-p14`, `review-ledger-t29`);
+`content/docs/images/` — `dind/index` + `runner/ubuntu-26.04/index`.
+
+Call-site moves (same unit, tree green at every commit):
+`impl_repo_quality` reads the 4 `.mdx` homes with route-form
+companion anchors (7/7 green); `impl_repo_shape`,
+`impl_repo_freshness`, and the 3 `p12_*` fixtures read `.mdx`
+homes with verbatim prose anchors (freshness 18/18 green;
+`rq41`/`rq52`/`rq53` fail identically at base on their
+`.alint.yml` halves — pre-existing adapter fallout, doc halves
+pass); `validate-commit-trailers.py` POLICY + its tests to the
+`.mdx` home (15/15 green; the validator itself is advisory-only —
+no hook or CI wiring); `runner_image_contract` `include_str!` to
+the images `.mdx` homes (2/2 green). Comment-only repoints:
+3 version-policy pins, the `tofu_t24` module doc, the freshness
+module doc, the quality module doc. The 2 `p11_alint_*`
+fixture comments naming the QC path stay (pinned pre-adapter
+set, reconciliation owns).
+
+Fixtures verdict (all 20 stay TEST): the 19 subdir READMEs are
+presence-pinned by `rq52_counts_and_classification` (any move
+breaks the test) and document co-located intent; per-dir
+consuming suites recorded (`alint-negative` via `include_str!`,
+`empty-suite`/`hostile-config`/`mbx-nextest`/`minimal-cargo` via
+goldens/CLI suites, `conflicting-runners`/`handwritten-workflow`
+mirroring the `impl_rust_evidence` TempDir cases,
+`tofu-*` via the tofu adapter suites, `nested`/`parity` via
+contract/runner suites). Root `fixtures/README.md` has no code
+reader but stays: frozen `tofu-multiroot/README.md` cites it,
+and it indexes the alint-excluded fixture tree.
+
+Tooling fixes made mid-slice: descriptions initially kept raw
+`.md` links (now processed); backticked-display and wrapped-display
+links slipped the first line-based pass (2 stale depths repaired
+in committed unit-A `pr-1.mdx`); one `mdxx` double-apply in the
+quality test (sed over hand-edited lines — repaired, tests green).
+
+Known-stale after this slice: interim dangles in frozen files
+(`docs/README.md` table rows 8/9/11; 6 `AGENTS.md` backtick
+citations) — final slice repairs; converted→staying relative
+links (`pr29-pr30` → `AGENTS.md`, pr-1 trio → repo files) are
+repo-correct but site-404 until the final slice flips
+`failOnError` back and repoints them; kept bare backtick
+filename mentions across converted MDX (same class as batch 1);
+the slice-1 inventory table (frozen snapshot); `init.rs`
+`SAMPLE_BODY` (generator owns); `size_limits_hold` fails in this
+worktree on untracked `docs/node_modules/` third-party `.md`
+(probed: fails at base with any 401-line untracked `.md` under
+`docs/` — environmental, no tracked `.md` exceeds 400).
+
+Verify: frozen install (no changes) + build green, 79 pages
+prerendered (41 + 38, each smoked with title text), `tsc
+--noEmit` clean, `alint check` at baseline (36 passing ·
+1 failing, exactly 6× `ci-build-runs-on`), `check-gaps` exit 0
+/ 0 findings, repo-policy failure set 19 = base 18 + the
+environmental `size_limits_hold` only (proven by set diff),
+`cargo fmt --check` clean.
+
+- Commits: `837392bbd` reviews (6), `2a52da126` deferred +
+  references + runner spec (4), `eacee995c` proposed contracts
+  + quality-test moves (8), `bc20a5a8f` pinned procedures +
+  trailer/shape/freshness/p12 moves (6), `d47c1f7cd` dated
+  evidence (12), `b0b4ba045` images READMEs + contract-test
+  moves (2), plus the closing record + index-refresh commit —
+  all signed off and pushed.

@@ -2,7 +2,7 @@
 //!
 //! Covers BOOT-3.4, GAP-E.2, RQ-2.11, RQ-9.8, VER-0.1, VER-1.5, VER-1.7,
 //! VER-2.27, VER-3.2, VER-3.3, VER-3.4, VER-3.7, VER-4.4. Mechanical halves
-//! only; human residuals live in docs/implemented/release-gates.md.
+//! only; human residuals live in docs/content/docs/implemented/release-gates.mdx.
 
 use std::error::Error;
 use std::path::PathBuf;
@@ -38,7 +38,7 @@ fn boot34_mise_version_matches_catalog() -> Result<(), Box<dyn Error>> {
         pinned.trim(),
         quoted_value(&catalog, "MISE_VERSION")?.as_str()
     );
-    let gates = read("docs/implemented/release-gates.md")?;
+    let gates = read("docs/content/docs/implemented/release-gates.mdx")?;
     assert!(
         gates.contains("BOOT-3.4"),
         "seed equality half must be recorded"
@@ -52,7 +52,7 @@ fn boot34_mise_version_matches_catalog() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn gape2_seed_rules_documented() -> Result<(), Box<dyn Error>> {
-    let gates = read("docs/implemented/release-gates.md")?;
+    let gates = read("docs/content/docs/implemented/release-gates.mdx")?;
     assert!(gates.contains("BOOT-4.2"), "seed rule must be recorded");
     assert!(
         gates.contains("2 distinct admin approvals"),
@@ -84,7 +84,7 @@ fn rq211_lock_staleness_probe() -> Result<(), Box<dyn Error>> {
         script.contains("exact `=x.y.z` (VER-2.26)"),
         "direct deps must declare exact versions"
     );
-    let procedure = read("docs/implemented/update-procedure.md")?;
+    let procedure = read("docs/content/docs/implemented/update-procedure.mdx")?;
     assert!(
         procedure.contains("MUST NOT remain stale"),
         "lock must not stay stale when the build passes"
@@ -111,7 +111,7 @@ fn rq98_risk_triggers_documented() -> Result<(), Box<dyn Error>> {
         mutants.contains("NOT wired into CI"),
         "manual-only status must be explicit"
     );
-    let triggers = read("docs/implemented/verification-triggers.md")?;
+    let triggers = read("docs/content/docs/implemented/verification-triggers.mdx")?;
     for technique in [
         "Mutation testing",
         "Property testing",
@@ -148,7 +148,7 @@ fn ver01_policy_header() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn ver15_incompatible_is_migration() -> Result<(), Box<dyn Error>> {
-    let procedure = read("docs/implemented/update-procedure.md")?;
+    let procedure = read("docs/content/docs/implemented/update-procedure.mdx")?;
     assert!(procedure.contains("VER-1.5"), "procedure must cite VER-1.5");
     assert!(
         procedure.contains("required migration"),
@@ -159,7 +159,7 @@ fn ver15_incompatible_is_migration() -> Result<(), Box<dyn Error>> {
         "holds must never be silent"
     );
     assert!(
-        read("docs/implemented/release-gates.md")?.contains("VER-1.5"),
+        read("docs/content/docs/implemented/release-gates.mdx")?.contains("VER-1.5"),
         "human residual must be recorded"
     );
     Ok(())
@@ -167,7 +167,7 @@ fn ver15_incompatible_is_migration() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn ver17_expedited_security_path() -> Result<(), Box<dyn Error>> {
-    let procedure = read("docs/implemented/update-procedure.md")?;
+    let procedure = read("docs/content/docs/implemented/update-procedure.mdx")?;
     assert!(procedure.contains("VER-1.7"), "procedure must cite VER-1.7");
     assert!(
         procedure.contains("same-day"),
@@ -198,7 +198,7 @@ fn ver227_renovate_proposes_all() -> Result<(), Box<dyn Error>> {
         assert!(renovate.contains(token), "renovate.json misses {token}");
     }
     assert!(
-        read("docs/implemented/update-procedure.md")?.contains("never merges"),
+        read("docs/content/docs/implemented/update-procedure.mdx")?.contains("never merges"),
         "renovate must propose only, never merge"
     );
     Ok(())
@@ -206,7 +206,7 @@ fn ver227_renovate_proposes_all() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn ver32_one_coherent_set() -> Result<(), Box<dyn Error>> {
-    let procedure = read("docs/implemented/update-procedure.md")?;
+    let procedure = read("docs/content/docs/implemented/update-procedure.mdx")?;
     assert!(procedure.contains("VER-3.2"), "procedure must cite VER-3.2");
     assert!(
         procedure.contains("ONE change covering ALL"),
@@ -217,7 +217,7 @@ fn ver32_one_coherent_set() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn ver33_records_and_qualifies() -> Result<(), Box<dyn Error>> {
-    let procedure = read("docs/implemented/update-procedure.md")?;
+    let procedure = read("docs/content/docs/implemented/update-procedure.mdx")?;
     assert!(procedure.contains("VER-3.3"), "procedure must cite VER-3.3");
     assert!(
         procedure.contains("timestamp + version delta"),
@@ -247,7 +247,7 @@ fn ver34_tool_files_untouched() -> Result<(), Box<dyn Error>> {
         renovate.contains("\"matchManagers\": [\"mise\"]"),
         "tool-input guard must match the mise manager that owns mise.toml/mise.lock"
     );
-    let procedure = read("docs/implemented/update-procedure.md")?;
+    let procedure = read("docs/content/docs/implemented/update-procedure.mdx")?;
     assert!(procedure.contains("VER-3.4"), "procedure must cite VER-3.4");
     assert!(
         procedure.contains("MUST NOT edit `mise.toml`"),
@@ -258,7 +258,7 @@ fn ver34_tool_files_untouched() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn ver37_merge_after_qual() -> Result<(), Box<dyn Error>> {
-    let procedure = read("docs/implemented/update-procedure.md")?;
+    let procedure = read("docs/content/docs/implemented/update-procedure.mdx")?;
     assert!(
         procedure.contains("only after qualification passes"),
         "pins must merge only after qual"
@@ -271,7 +271,7 @@ fn ver37_merge_after_qual() -> Result<(), Box<dyn Error>> {
         procedure.contains("never resolve versions"),
         "normal builds must never resolve versions"
     );
-    let gates = read("docs/implemented/release-gates.md")?;
+    let gates = read("docs/content/docs/implemented/release-gates.mdx")?;
     assert!(
         gates.contains("VER-3.7"),
         "protection residual must be recorded"
@@ -285,7 +285,7 @@ fn ver37_merge_after_qual() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn ver44_velnor_owned_refresh_only() -> Result<(), Box<dyn Error>> {
-    let procedure = read("docs/implemented/update-procedure.md")?;
+    let procedure = read("docs/content/docs/implemented/update-procedure.mdx")?;
     assert!(procedure.contains("VER-4.4"), "procedure must cite VER-4.4");
     assert!(
         procedure.contains("ONLY Velnor-owned pins and locks"),
@@ -296,7 +296,7 @@ fn ver44_velnor_owned_refresh_only() -> Result<(), Box<dyn Error>> {
         "tool files get recommendations only"
     );
     assert!(
-        read("docs/implemented/release-gates.md")?.contains("VER-4.4"),
+        read("docs/content/docs/implemented/release-gates.mdx")?.contains("VER-4.4"),
         "human residual must be recorded"
     );
     Ok(())

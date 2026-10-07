@@ -209,7 +209,7 @@ fn ver_overridable_actions_are_exact_eight() {
         ]
     );
     // The Alint pin is policy-owned, not consumer-overridable
-    // (docs/proposed/version-policy.md §2 (GitHub Action defaults)).
+    // (docs/content/docs/proposed/version-policy.mdx §2 (GitHub Action defaults)).
     assert!(!OVERRIDABLE_ACTIONS.contains(&"asamarts/alint"));
 }
 
