@@ -46,7 +46,9 @@ pub(crate) fn retrieve_baseline_to(
     if staged_baseline_present(run_dir) {
         return false;
     }
-    let Ok(name) = crate::cover_baseline::lookup_artifact_name(&typed, base) else {
+    let Ok(name) = velnor_actions_orchestrator_cover_baseline::cover_baseline::lookup_artifact_name(
+        &typed, base,
+    ) else {
         return false;
     };
     let Some(branch) = default_branch_for(catalog, run_dir, repo) else {

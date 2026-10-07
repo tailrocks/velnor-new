@@ -2,13 +2,13 @@ use super::super::*;
 use crate::cover_baseline::provenance_check::{
     ProvenanceExpectations, ValidatedProvenance, validate_provenance,
 };
-use crate::merge::required_evidence::BaselineTaskEntry;
 use velnor_actions_contract::{canonical_json_bytes, digest_b3};
 use velnor_actions_contract_config::RunnerSelection;
 use velnor_actions_contract_workflow::{
     PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, Trust, WorkflowEvent,
 };
 use velnor_actions_mise::ToolCatalog;
+use velnor_actions_orchestrator_merge::required_evidence::BaselineTaskEntry;
 
 /// Plan carrying one execute obligation per `task_ids`.
 pub(super) fn plan_with(task_ids: &[&str]) -> Plan {

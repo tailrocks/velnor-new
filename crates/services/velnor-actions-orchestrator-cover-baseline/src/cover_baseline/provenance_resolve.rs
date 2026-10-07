@@ -12,12 +12,12 @@ mod tests;
 /// Expected repository resolution: the request slug wins over the
 /// mutable git origin; disagreement fails closed at the caller.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ExpectedRepository {
+pub struct ExpectedRepository {
     /// Lowercase `owner/repo` slug, request-first then origin fallback.
-    pub(crate) slug: Option<String>,
+    pub slug: Option<String>,
     /// True when the request slug disagrees with the git origin, or
     /// the request slug is malformed (no trusted slug then).
-    pub(crate) conflict: bool,
+    pub conflict: bool,
 }
 
 /// Resolve the expected repository slug from an origin slug and request.
@@ -31,7 +31,7 @@ pub(crate) struct ExpectedRepository {
 /// to the origin would let a prior step launder an evil origin behind
 /// mangled request text, so callers fail closed instead of trusting
 /// either side.
-pub(crate) fn resolve_expected_repository(
+pub fn resolve_expected_repository(
     origin_slug: Option<&str>,
     request_slug: Option<&str>,
 ) -> ExpectedRepository {
@@ -56,6 +56,6 @@ pub(crate) fn resolve_expected_repository(
 }
 
 /// Repository identity digest for one expected slug.
-pub(crate) fn repository_anchor_for_slug(slug: &str) -> String {
+pub fn repository_anchor_for_slug(slug: &str) -> String {
     digest_b3(format!("github.com/{slug}").as_bytes())
 }

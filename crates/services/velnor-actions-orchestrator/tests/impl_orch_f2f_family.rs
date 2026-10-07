@@ -52,6 +52,25 @@ const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "crates/services/velnor-actions-orchestrator-cover-baseline",
+        &[
+            "velnor-actions-contract",
+            "velnor-actions-contract-planning",
+            "velnor-actions-contract-release",
+            "velnor-actions-contract-workflow",
+            "velnor-actions-mise",
+            "velnor-actions-orchestrator-core",
+            "velnor-actions-orchestrator-cover-compat",
+            "velnor-actions-orchestrator-discovery",
+            "velnor-actions-orchestrator-external-data",
+            "velnor-actions-orchestrator-graph",
+            "velnor-actions-orchestrator-merge",
+            "velnor-actions-orchestrator-merge-ports",
+            "velnor-actions-rust",
+            "velnor-actions-tofu-core",
+        ],
+    ),
+    (
         "crates/services/velnor-actions-orchestrator-cover-compat",
         &[
             "velnor-actions-contract",

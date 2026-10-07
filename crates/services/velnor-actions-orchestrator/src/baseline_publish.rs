@@ -13,7 +13,7 @@
 //! carried forward: this run executed no proof for them, and a carried
 //! proof without originating attestation fails validation downstream.
 //! Before staging, the op self-checks the manifest through the same
-//! [`validate_provenance`](crate::cover_baseline::provenance_check::validate_provenance)
+//! [`validate_provenance`](velnor_actions_orchestrator_cover_baseline::cover_baseline::provenance_check::validate_provenance)
 //! consumers run, so publish and consume agree by construction.
 
 use std::path::{Path, PathBuf};
@@ -22,14 +22,14 @@ use serde::Deserialize;
 use velnor_actions_contract::{canonical_json_bytes, digest_b3, parse_strict_json};
 use velnor_actions_contract_workflow::WorkflowEvent;
 
-use crate::cover_baseline::provenance_check::{
-    ProvenanceExpectations, is_unverifiable_generator_sha, validate_provenance,
-};
 use crate::internal::{SCHEMA, check_schema};
 use crate::internal_request::resolve_run_key;
 use crate::merge::BaselineManifest;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::{internal, internal_contract};
+use velnor_actions_orchestrator_cover_baseline::cover_baseline::provenance_check::{
+    ProvenanceExpectations, is_unverifiable_generator_sha, validate_provenance,
+};
 use velnor_actions_orchestrator_request_event::request_event::{request_refs, workflow_event_for};
 
 /// Publish operation tag.

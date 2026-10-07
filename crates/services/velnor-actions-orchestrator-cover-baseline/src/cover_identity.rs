@@ -3,7 +3,7 @@
 //! Coverage requires exact discovered identities and complete input closures.
 
 // Wired here so generator resolution compiles without touching `lib.rs`.
-pub(crate) mod generator;
+pub mod generator;
 // Unit tests live here so `cover_identity.rs` keeps its size gate.
 #[cfg(test)]
 mod tests;
@@ -23,8 +23,6 @@ use velnor_actions_rust::{extension_for_proposal, tool_needs};
 
 use crate::cover_baseline::BaselineInputs;
 use crate::cover_baseline::provenance_check::ValidatedProvenance;
-use crate::internal::plan_obligation::{changed_keys, member_changed};
-use crate::merge::BaselineManifest;
 use velnor_actions_orchestrator_core::extension_schemas::coverage_schema_known;
 use velnor_actions_orchestrator_discovery::discover::Discovery;
 use velnor_actions_orchestrator_external_data::external_data::{
@@ -38,8 +36,9 @@ use velnor_actions_orchestrator_graph::internal_plan::snapshot::{
     ExecutionSnapshot, canonical_digest,
 };
 use velnor_actions_orchestrator_graph::internal_plan::{nextest_config_for, toolchain_id};
+use velnor_actions_orchestrator_merge_ports::{BaselineManifest, changed_keys, member_changed};
 
-pub(crate) use self::generator::{SOURCE_BUILD_REASON, is_source_build};
+pub use self::generator::{SOURCE_BUILD_REASON, is_source_build};
 
 fn cover_closure_digest(
     snapshot: &ExecutionSnapshot,
@@ -192,7 +191,7 @@ fn verified_closure_digest(
 ///
 fn mark_covered(
     obligation: &mut PlanObligation,
-    task: &crate::merge::required_evidence::BaselineTaskEntry,
+    task: &velnor_actions_orchestrator_merge::required_evidence::BaselineTaskEntry,
     provenance: &ValidatedProvenance,
 ) -> bool {
     let Ok(proof) = BaselineProof::new(
@@ -217,7 +216,7 @@ fn mark_covered(
 fn gate_proof(
     warnings: &mut Vec<String>,
     label: &str,
-    task: &crate::merge::required_evidence::BaselineTaskEntry,
+    task: &velnor_actions_orchestrator_merge::required_evidence::BaselineTaskEntry,
     proposal: &ProposedTask,
     snapshot: &ExecutionSnapshot,
     discovery: &Discovery,
@@ -248,7 +247,7 @@ fn gate_proof(
 fn gate_guards(
     warnings: &mut Vec<String>,
     task_id: &str,
-    task: &crate::merge::required_evidence::BaselineTaskEntry,
+    task: &velnor_actions_orchestrator_merge::required_evidence::BaselineTaskEntry,
 ) -> bool {
     if !coverage_schema_known(task_id) {
         warnings.push(format!("baseline_miss:{task_id}:unknown_extension_schema"));
@@ -282,7 +281,7 @@ fn gate_opaque(warnings: &mut Vec<String>, task: &ProposedTask) -> bool {
 /// the changed hint stays as defense-in-depth only and never decides
 /// soundness alone. Baseline provenance is set by the caller from the
 /// returned count.
-pub(crate) fn apply_coverage(
+pub fn apply_coverage(
     plan: &mut Plan,
     manifest: &BaselineManifest,
     provenance: &ValidatedProvenance,

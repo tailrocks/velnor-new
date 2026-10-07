@@ -5,7 +5,7 @@
 
 use super::*;
 
-use crate::merge::required_evidence::BaselineTaskEntry;
+use velnor_actions_orchestrator_merge::required_evidence::BaselineTaskEntry;
 
 /// Valid manifest plus matching expectations over `base`.
 fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectations) {

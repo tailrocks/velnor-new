@@ -197,7 +197,7 @@ pub(crate) fn resolve_manifests(
     BaselineLookup::run(
         catalog,
         root,
-        crate::cover_baseline::baseline_download_args(
+        velnor_actions_orchestrator_cover_baseline::cover_baseline::baseline_download_args(
             base,
             workflow,
             branch,
@@ -222,8 +222,8 @@ pub(crate) fn resolve_manifests(
 /// before spawning anything, so no lookup ever queries a repo the
 /// runner did not bless or the checkout cannot name.
 fn resolve_lookup_repo(root: &Path, repository: Option<&str>) -> Result<String, String> {
-    let origin = crate::cover_baseline::provenance_check::repository_slug_from_origin(root);
-    let expected = crate::cover_baseline::provenance_resolve::resolve_expected_repository(
+    let origin = velnor_actions_orchestrator_cover_baseline::cover_baseline::provenance_check::repository_slug_from_origin(root);
+    let expected = velnor_actions_orchestrator_cover_baseline::cover_baseline::provenance_resolve::resolve_expected_repository(
         origin.as_deref(),
         repository,
     );
@@ -255,13 +255,15 @@ fn collect_manifests(
     let entries = std::fs::read_dir(dir).map_err(|_| "baseline_unavailable".to_owned())?;
     for entry in entries {
         let entry = entry.map_err(|_| "baseline_unavailable".to_owned())?;
-        if let Some(manifest) = crate::cover_baseline::baseline_entry_for(
-            &entry.path(),
-            base,
-            run_id,
-            attempt,
-            expected,
-        ) {
+        if let Some(manifest) =
+            velnor_actions_orchestrator_cover_baseline::cover_baseline::baseline_entry_for(
+                &entry.path(),
+                base,
+                run_id,
+                attempt,
+                expected,
+            )
+        {
             out.push(manifest);
         }
     }

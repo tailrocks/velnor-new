@@ -93,10 +93,17 @@ fn lookup_manifest_misses_without_base_or_obligations() {
     let catalog = velnor_actions_mise::ToolCatalog::pinned();
     let tmp = tempfile::tempdir().expect("tempdir");
     let mut baseless = lookup_plan(None);
-    assert!(lookup_manifest(&mut baseless, lookup_inputs(tmp.path(), &catalog)).is_none());
+    assert!(
+        lookup_manifest(
+            &NoLookup,
+            &mut baseless,
+            lookup_inputs(tmp.path(), &catalog)
+        )
+        .is_none()
+    );
     assert_eq!(baseless.baseline.reason(), Some("baseline_no_base"));
     let mut empty = lookup_plan(Some(&"a".repeat(40)));
     empty.obligations.clear();
-    assert!(lookup_manifest(&mut empty, lookup_inputs(tmp.path(), &catalog)).is_none());
+    assert!(lookup_manifest(&NoLookup, &mut empty, lookup_inputs(tmp.path(), &catalog)).is_none());
     assert_eq!(empty.baseline.reason(), Some("baseline_no_obligations"));
 }

@@ -120,6 +120,7 @@ fn expected_service(leaf: &str) -> Option<Vec<&str>> {
             "velnor-actions-orchestrator-check-evidence",
             "velnor-actions-orchestrator-check-preparation",
             "velnor-actions-orchestrator-core",
+            "velnor-actions-orchestrator-cover-baseline",
             "velnor-actions-orchestrator-cover-compat",
             "velnor-actions-orchestrator-covered-tasks",
             "velnor-actions-orchestrator-discovery",

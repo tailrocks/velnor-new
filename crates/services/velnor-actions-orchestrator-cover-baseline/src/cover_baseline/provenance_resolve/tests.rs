@@ -7,7 +7,7 @@ use super::super::provenance_check::{
     ProvenanceExpectations, baseline_artifact_name, validate_provenance,
 };
 use super::*;
-use crate::merge::BaselineManifest;
+use velnor_actions_orchestrator_merge_ports::BaselineManifest;
 
 /// Valid manifest plus matching expectations over `base`.
 ///

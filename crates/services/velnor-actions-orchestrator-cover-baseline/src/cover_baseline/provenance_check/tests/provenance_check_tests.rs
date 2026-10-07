@@ -246,8 +246,10 @@ fn include_defined_origin_resolves() {
 }
 
 /// Valid task entry over `digest`, observed by the manifest run.
-fn task_entry(digest: &str) -> crate::merge::required_evidence::BaselineTaskEntry {
-    crate::merge::required_evidence::BaselineTaskEntry {
+fn task_entry(
+    digest: &str,
+) -> velnor_actions_orchestrator_merge::required_evidence::BaselineTaskEntry {
+    velnor_actions_orchestrator_merge::required_evidence::BaselineTaskEntry {
         task_id: "stack/rust/root/clippy/default".to_owned(),
         task_digest: digest.to_owned(),
         input_digest: digest.to_owned(),
@@ -261,7 +263,7 @@ fn task_entry(digest: &str) -> crate::merge::required_evidence::BaselineTaskEntr
 
 /// Structured proof binding `entry`, with `input_digest` overridden.
 fn task_proof(
-    entry: &crate::merge::required_evidence::BaselineTaskEntry,
+    entry: &velnor_actions_orchestrator_merge::required_evidence::BaselineTaskEntry,
     input_digest: &str,
 ) -> velnor_actions_contract_workflow::ManifestTaskProof {
     velnor_actions_contract_workflow::ManifestTaskProof::new(
@@ -292,19 +294,21 @@ fn stale_external_data()
 fn task_entries_validate_identity_runs_freshness_and_proof_binding() {
     let base = "a".repeat(40);
     let digest = digest_b3(b"d");
-    let run = |entry: &crate::merge::required_evidence::BaselineTaskEntry| {
+    let run = |entry: &velnor_actions_orchestrator_merge::required_evidence::BaselineTaskEntry| {
         let (mut manifest, expected) = manifest_and_expected(&base);
         manifest.tasks = vec![entry.clone()];
         validate_provenance(&manifest, &digest_b3(b"m"), &expected)
     };
     let valid = task_entry(&digest);
     assert!(run(&valid).is_ok());
-    let proven = crate::merge::required_evidence::BaselineTaskEntry {
+    let proven = velnor_actions_orchestrator_merge::required_evidence::BaselineTaskEntry {
         proof: Some(task_proof(&valid, &valid.input_digest)),
         ..valid.clone()
     };
     assert!(run(&proven).is_ok());
-    let check = |mutate: &dyn Fn(&mut crate::merge::required_evidence::BaselineTaskEntry),
+    let check = |mutate: &dyn Fn(
+        &mut velnor_actions_orchestrator_merge::required_evidence::BaselineTaskEntry,
+    ),
                  reason: &str| {
         let mut entry = valid.clone();
         mutate(&mut entry);

@@ -214,16 +214,18 @@ fn forwarded_manifest(slug: &str, base: &str) -> BaselineManifest {
         compatibility_id: digest.clone(),
         artifact_id: baseline_artifact_numeric_id(&name),
         artifact_name: name,
-        tasks: vec![crate::merge::required_evidence::BaselineTaskEntry {
-            task_id: "stack/rust/root/clippy/default".to_owned(),
-            task_digest: digest.clone(),
-            input_digest: digest.clone(),
-            closure_digest: digest,
-            proof_run_id: 5,
-            observed_run_id: 7,
-            external_data: None,
-            proof: None,
-        }],
+        tasks: vec![
+            velnor_actions_orchestrator_merge::required_evidence::BaselineTaskEntry {
+                task_id: "stack/rust/root/clippy/default".to_owned(),
+                task_digest: digest.clone(),
+                input_digest: digest.clone(),
+                closure_digest: digest,
+                proof_run_id: 5,
+                observed_run_id: 7,
+                external_data: None,
+                proof: None,
+            },
+        ],
         expires_at_unix: None,
     }
 }
@@ -249,7 +251,8 @@ fn forwarded_proof_marks_baseline_unavailable() {
         catalog: &catalog,
         repository: None,
     };
-    apply_baseline(
+    apply_baseline_with(
+        &NoLookup,
         &mut plan,
         WorkflowEvent::PullRequest,
         inputs,
@@ -306,7 +309,8 @@ fn source_build_keeps_marker_without_lock_fill() {
         catalog: &catalog,
         repository: None,
     };
-    apply_baseline(
+    apply_baseline_with(
+        &NoLookup,
         &mut plan,
         WorkflowEvent::PullRequest,
         inputs,

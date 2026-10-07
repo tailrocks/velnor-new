@@ -8,13 +8,13 @@ use velnor_actions_contract::{canonical_json_bytes, digest_b3, validate_digest};
 use velnor_actions_contract_workflow::{ObligationDecision, Plan};
 
 use crate::cover::Signals;
-use crate::cover_baseline::provenance_check::{
+use crate::merge::BaselineManifest;
+use velnor_actions_orchestrator_core::decisions::baseline_expired;
+use velnor_actions_orchestrator_cover_baseline::cover_baseline::provenance_check::{
     baseline_artifact_name, is_unverifiable_generator_sha, parse_workflow_ref, task_run_ids_bound,
     validate_task_entry,
 };
-use crate::cover_baseline::unix_now;
-use crate::merge::BaselineManifest;
-use velnor_actions_orchestrator_core::decisions::baseline_expired;
+use velnor_actions_orchestrator_cover_baseline::cover_baseline::unix_now;
 
 /// Merge-time anchor expectations from runner-owned environment.
 ///
@@ -239,11 +239,11 @@ pub(crate) fn revalidate_coverage_with_anchors(
 ///
 /// A covered plan without a base can prove nothing; every other field
 /// compares against the plan value or the trusted invariant. Mirrors the
-/// plan-time [`validate_provenance`](crate::cover_baseline::provenance_check::validate_provenance)
+/// plan-time [`validate_provenance`](velnor_actions_orchestrator_cover_baseline::cover_baseline::provenance_check::validate_provenance)
 /// manifest checks (identified run, verifiable generator, derived
 /// artifact name, per-task entry validation, freshness) so a manifest
 /// the plan rejects can never pass at merge. Per-task entry validation
-/// is the shared [`validate_task_entry`](crate::cover_baseline::provenance_check::validate_task_entry):
+/// is the shared [`validate_task_entry`](velnor_actions_orchestrator_cover_baseline::cover_baseline::provenance_check::validate_task_entry):
 /// identity shapes, run binding, structured-proof match, and
 /// external-data validity are identical on both sides by
 /// construction, not by parallel reimplementation. Advisory
