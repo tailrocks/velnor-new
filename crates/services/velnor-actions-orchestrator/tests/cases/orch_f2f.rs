@@ -12,7 +12,7 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
 }
 
-use crate::impl_orch_f2f_edges::expected_internal;
+use crate::cases::orch_f2f_edges::expected_internal;
 
 /// Member directories in dependency-table order.
 fn members() -> Vec<&'static str> {

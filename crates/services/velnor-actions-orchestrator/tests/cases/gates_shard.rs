@@ -177,7 +177,7 @@ fn merge_with(
     for (key, value) in extra.as_object().ok_or("not an object")? {
         request[key] = value.clone();
     }
-    Ok(crate::impl_gates_shard_tokens::merge_report_with(plan, reports, proofs, extra)?.status)
+    Ok(crate::cases::gates_shard_tokens::merge_report_with(plan, reports, proofs, extra)?.status)
 }
 
 /// Canonical sharded plan plus inventory, proofs, and passing reports.

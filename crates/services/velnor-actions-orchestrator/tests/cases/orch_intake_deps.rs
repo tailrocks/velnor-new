@@ -1,8 +1,7 @@
 //! Intake dependency-direction case: adapters stay leaf-only.
 //!
-//! Split from `impl_orch_intake` to hold the 400-line size gate; wired
-//! into `velnor_orchestrator` by the parent with one `mod` line. Uses
-//! `crate::impl_common` fixtures.
+//! Split from `cases::orch_intake` to hold the 400-line size gate; indexed
+//! in `cases.rs` with one `mod` line. Uses `crate::support` fixtures.
 
 use std::fs;
 use std::path::PathBuf;

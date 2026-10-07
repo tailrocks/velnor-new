@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use crate::cases::orch_plansel::merge_status;
 use crate::support::{TestResult, passing_reports, plan_for_source_change};
 
-#[path = "impl_orch_runtime_acquisition.rs"]
 mod runtime_acquisition;
 
 /// Orchestrator `src/` directory.
@@ -13,7 +12,6 @@ pub(crate) fn orch_src() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src")
 }
 
-#[path = "impl_orch_f2a_scan.rs"]
 mod scan;
 
 pub(crate) use scan::{code_of, family_file, src_files};
@@ -115,7 +113,6 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
     Ok(())
 }
 
-#[path = "impl_orch_prepare.rs"]
 mod prepare;
 
 #[test]

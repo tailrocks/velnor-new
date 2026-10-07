@@ -1,7 +1,6 @@
 //! F2F orchestrator-family edges, split from the edge table (size gate).
 
 /// Orchestrator-family edges by member directory.
-#[path = "impl_orch_f2f_family_b.rs"]
 mod family_b;
 
 const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
