@@ -12,7 +12,7 @@ use crate::impl_repo_policy::repo_root;
 
 #[test]
 fn golden_claude_files_are_agents_symlinks() -> Result<(), Box<dyn Error>> {
-    let cases = repo_root().join("docs/proposed/opentofu-goldens/cases");
+    let cases = repo_root().join("crates/apps/velnor-actions-cli/fixtures/opentofu-goldens/cases");
     let mut entries: Vec<_> = std::fs::read_dir(&cases)?.collect::<Result<_, _>>()?;
     entries.sort_by_key(std::fs::DirEntry::file_name);
     let mut seen = 0;
