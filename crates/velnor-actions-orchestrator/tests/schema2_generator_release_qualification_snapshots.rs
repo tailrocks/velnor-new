@@ -160,4 +160,34 @@ fn assert_release_fixture_generation_requirements() {
         qualification_helpers.contains("could not normalize candidate manifest commit in $file"),
         "{qualification_helpers}"
     );
+    assert!(
+        qualification_helpers.contains(
+            "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked"
+        ),
+        "{qualification_helpers}"
+    );
+    assert!(
+        qualification_helpers.contains(
+            r#"for manifest in "$repo/Cargo.toml" "$repo/crates/velnor-runner/Cargo.toml""#
+        ),
+        "{qualification_helpers}"
+    );
+    assert!(
+        qualification_helpers.contains("could not fetch dogfood cargo sources"),
+        "{qualification_helpers}"
+    );
+    let dogfood = qualification_helpers
+        .find("capture_release_dogfood()")
+        .expect("dogfood capture must exist");
+    let window = &qualification_helpers[dogfood..];
+    let fetch = window
+        .find("cargo fetch --locked")
+        .expect("dogfood must warm the cargo cache");
+    let generate = window
+        .find("release candidate dogfood generate failed")
+        .expect("dogfood must run the candidate generate");
+    assert!(
+        fetch < generate,
+        "dogfood cargo fetch must precede the candidate generate"
+    );
 }
