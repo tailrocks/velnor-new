@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 
 use crate::document_steps::step_to_yaml;
-use crate::render::RenderContext;
+use velnor_actions_workflow_jobs::RenderContext;
 use velnor_actions_workflow_steps::RenderError;
 use velnor_actions_workflow_tree::composite::shared_call;
 use velnor_actions_workflow_tree::yaml::Yaml;

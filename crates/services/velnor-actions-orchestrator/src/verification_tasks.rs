@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract_config::VelnorConfig;
 use velnor_actions_contract_workflow::Job;
-use velnor_actions_workflow_renderer::{VerificationTaskPolicy, build_verification_task_job};
+use velnor_actions_workflow_jobs::{VerificationTaskPolicy, build_verification_task_job};
 
 use crate::OrchestratorError;
 use crate::pins::resolve_verification_mise_setup;

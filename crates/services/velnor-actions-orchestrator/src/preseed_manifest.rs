@@ -16,7 +16,7 @@
 //! them would defeat verification). See the renderer's contract
 //! exception note on [`preseed_manifest_verify_script`].
 //!
-//! [`preseed_manifest_verify_script`]: velnor_actions_workflow_renderer::preseed_manifest_verify_script
+//! [`preseed_manifest_verify_script`]: velnor_actions_workflow_jobs::preseed_manifest_verify_script
 
 use std::env;
 use std::path::Path;

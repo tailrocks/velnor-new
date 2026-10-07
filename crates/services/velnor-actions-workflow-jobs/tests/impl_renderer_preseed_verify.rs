@@ -4,7 +4,7 @@
 //! tests pin the download-side verify script without plan/final fixtures.
 use std::collections::BTreeMap;
 
-use velnor_actions_workflow_renderer::{
+use velnor_actions_workflow_jobs::{
     PRESEED_VERIFY_MANIFEST_NAME, preseed_manifest_verify_script, preseed_manifest_verify_step,
     preseed_verify_step,
 };
@@ -127,7 +127,7 @@ fn preseed_verify_fails_when_mise_emits_version_then_exits_nonzero()
     use std::os::unix::fs::PermissionsExt;
     use std::process::Command;
 
-    use super::impl_renderer_fixtures::mise_argv;
+    use super::impl_jobs_fixtures::mise_argv;
 
     let step = preseed_verify_step(
         &mise_argv("rust@1.98.1", "mbx", &["--version"]),

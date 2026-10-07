@@ -8,7 +8,7 @@
 
 use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_contract_workflow::{FRESHNESS_CRON_WEEKLY, ScheduleTrigger};
-use velnor_actions_workflow_renderer::freshness::{FreshnessSpec, render_freshness_workflow};
+use velnor_actions_workflow_jobs::freshness::{FreshnessSpec, render_freshness_workflow};
 use velnor_actions_workflow_tree::rendered::RenderedFile;
 
 use crate::OrchestratorError;

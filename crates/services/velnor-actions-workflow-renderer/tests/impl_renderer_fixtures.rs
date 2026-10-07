@@ -6,10 +6,10 @@ use velnor_actions_contract_workflow::{
     Concurrency, Job, JobTimeout, Permissions, Step, Trigger, WorkflowIr,
 };
 use velnor_actions_workflow_cache::cache_steps::{CompileDriver, mbx_steps_for_driver};
-use velnor_actions_workflow_renderer::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, ValidatorCommand, render_workflow_ir,
-    render_workflow_ir_strict,
+use velnor_actions_workflow_jobs::{
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, ValidatorCommand,
 };
+use velnor_actions_workflow_renderer::{render_workflow_ir, render_workflow_ir_strict};
 use velnor_actions_workflow_steps::{
     ASSET_SHA_ENV, ASSET_URL_ENV, MiseSetup, RELEASE_COMMIT_ENV, RenderError, STAGED_BINARY_PREFIX,
     acquire_velnor_step, checkout_step, plan_step, shell_step,
@@ -131,7 +131,7 @@ pub(crate) fn job(id: &str, display: &str, needs: Vec<String>, steps: Vec<Step>)
             timeout_minutes: JobTimeout::CRATE,
             needs,
             condition: None,
-            permissions: (id == velnor_actions_workflow_renderer::render::FINAL_JOB_ID).then_some(
+            permissions: (id == velnor_actions_workflow_jobs::context::FINAL_JOB_ID).then_some(
                 Permissions {
                     contents: PermissionLevel::Read,
                     actions: PermissionLevel::Read,
@@ -221,7 +221,7 @@ pub(crate) fn validator_commands() -> Vec<ValidatorCommand> {
 pub(crate) fn candidate_ctx() -> RenderContext {
     let mut ctx = fixture_ctx();
     ctx.validator_commands = validator_commands();
-    ctx.candidate = Some(velnor_actions_workflow_renderer::CandidateSpec {
+    ctx.candidate = Some(velnor_actions_workflow_jobs::CandidateSpec {
         build: mise_argv("mbx@1.0.0", "mbx", &["build"]),
         qualify: vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
     });

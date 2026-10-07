@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::{Job, Step, StepRole};
 
-use crate::render::{CANDIDATE_JOB_ID, FINAL_JOB_ID, RenderContext};
+use crate::context::{CANDIDATE_JOB_ID, FINAL_JOB_ID, RenderContext};
 use velnor_actions_workflow_steps::{RenderError, steps};
 
 /// Contract-fixed display name of the matrix fan-in fetch step.
@@ -72,7 +72,7 @@ pub(crate) fn publish_final_report_step() -> Result<Step, RenderError> {
 /// attestation. Without a final job there is nothing to close over.
 /// Re-running never dupes.
 /// # Errors
-pub(crate) fn insert_final_fanin(
+pub fn insert_final_fanin(
     jobs: &mut BTreeMap<String, Job>,
     ctx: &RenderContext,
 ) -> Result<(), RenderError> {
@@ -123,7 +123,7 @@ fn download_attestation_step(ctx: &RenderContext) -> Result<Step, RenderError> {
         .ok_or_else(|| {
             RenderError::InvalidWorkflow(format!("unsupported_target_for_runner:{}", ctx.runs_on))
         })?;
-    let artifact = crate::candidate_artifact_name(target.triple())?;
+    let artifact = crate::candidate::candidate_artifact_name(target.triple())?;
     let path = format!(
         "{}/{}",
         crate::closure::PLAN_ARTIFACT_PATH,

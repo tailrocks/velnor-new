@@ -19,10 +19,11 @@ use velnor_actions_mise::{
     PREPARE_RUST_COMPONENTS_STEP, PrepareRustComponents, ToolCatalog, ToolHomes,
 };
 use velnor_actions_rust_core::{CompileDriver, TestRunner};
-use velnor_actions_workflow_renderer::render::{
+use velnor_actions_workflow_jobs::context::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PLAN_JOB_ID,
-    PUBLISH_JOB_ID, RenderContext, WORKFLOW_PATH,
+    PUBLISH_JOB_ID, RenderContext,
 };
+use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 use velnor_actions_workflow_steps::steps::PLAN_OPERATION;
 
 use crate::OrchestratorError;

@@ -115,7 +115,7 @@ pub(crate) fn check_candidate_binding(
     signals: &mut Signals,
     miss_reasons: &mut BTreeSet<String>,
 ) {
-    use velnor_actions_workflow_renderer::render::CANDIDATE_JOB_ID;
+    use velnor_actions_workflow_jobs::context::CANDIDATE_JOB_ID;
     if !request
         .required_job_ids
         .iter()

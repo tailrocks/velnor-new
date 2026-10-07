@@ -4,8 +4,8 @@ use velnor_actions_contract_config::{
     GeneratorValidation, ValidatorKind, VelnorConfig, WorkflowPolicy,
 };
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_workflow_renderer::VerificationTaskPolicy;
-use velnor_actions_workflow_renderer::render::{RenderContext, ValidatorCommand};
+use velnor_actions_workflow_jobs::VerificationTaskPolicy;
+use velnor_actions_workflow_jobs::context::{RenderContext, ValidatorCommand};
 use velnor_actions_workflow_steps::steps::{
     DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
 };

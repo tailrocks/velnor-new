@@ -6,7 +6,7 @@ use velnor_actions_contract_workflow::{
     Concurrency, Job, JobTimeout, Permissions, Step, StepKind, StepRole, Trigger, WorkflowIr,
 };
 use velnor_actions_mise::PREPARE_PINNED_TOOLS_STEP;
-use velnor_actions_workflow_renderer::render::ValidatorCommand;
+use velnor_actions_workflow_jobs::context::ValidatorCommand;
 use velnor_actions_workflow_steps::steps::DENY_STEP_NAME;
 
 use super::audit_prepare_installs;

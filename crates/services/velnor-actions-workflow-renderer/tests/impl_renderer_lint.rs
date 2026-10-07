@@ -7,9 +7,10 @@ use velnor_actions_contract_workflow::workflow::permissions::PermissionLevel;
 use velnor_actions_contract_workflow::{
     Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr,
 };
-use velnor_actions_workflow_renderer::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, ValidatorCommand, render_workflow_ir,
+use velnor_actions_workflow_jobs::{
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, ValidatorCommand,
 };
+use velnor_actions_workflow_renderer::render_workflow_ir;
 use velnor_actions_workflow_steps::{
     ALINT_USES, RenderError, checkout_step, merge_step, shell_step,
 };

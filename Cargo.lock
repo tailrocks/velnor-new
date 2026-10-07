@@ -3636,6 +3636,7 @@ dependencies = [
  "velnor-actions-tofu-core",
  "velnor-actions-workflow-cache",
  "velnor-actions-workflow-generator",
+ "velnor-actions-workflow-jobs",
  "velnor-actions-workflow-release",
  "velnor-actions-workflow-renderer",
  "velnor-actions-workflow-steps",
@@ -3719,6 +3720,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "velnor-actions-workflow-jobs"
+version = "0.1.1"
+dependencies = [
+ "velnor-actions-contract",
+ "velnor-actions-contract-config",
+ "velnor-actions-contract-release",
+ "velnor-actions-contract-workflow",
+ "velnor-actions-workflow-cache",
+ "velnor-actions-workflow-steps",
+ "velnor-actions-workflow-tree",
+]
+
+[[package]]
 name = "velnor-actions-workflow-release"
 version = "0.1.1"
 dependencies = [
@@ -3738,6 +3752,7 @@ dependencies = [
  "velnor-actions-contract-workflow",
  "velnor-actions-workflow-cache",
  "velnor-actions-workflow-generator",
+ "velnor-actions-workflow-jobs",
  "velnor-actions-workflow-steps",
  "velnor-actions-workflow-tree",
 ]

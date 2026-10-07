@@ -4,12 +4,11 @@ use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_contract_workflow::{
     Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr,
 };
+use velnor_actions_workflow_jobs::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext};
 use velnor_actions_workflow_renderer::render::{
     MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
 };
-use velnor_actions_workflow_renderer::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, render_workflow_ir,
-};
+use velnor_actions_workflow_renderer::render_workflow_ir;
 use velnor_actions_workflow_steps::{RenderError, checkout_step, plan_step, shell_step};
 
 const VERSION: &str = "0.1.0";

@@ -20,8 +20,8 @@ use velnor_actions_rust::is_workspace_fmt_task;
 use velnor_actions_workflow_cache::cache_steps::{
     CompileDriver, TASK_ARTIFACTS_DIR, cache_action_step, check_mbx_gating,
 };
-use velnor_actions_workflow_renderer::plan_format;
-use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
+use velnor_actions_workflow_jobs::context::PLAN_JOB_ID;
+use velnor_actions_workflow_jobs::plan_format;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;

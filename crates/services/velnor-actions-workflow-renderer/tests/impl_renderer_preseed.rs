@@ -2,7 +2,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::Job;
-use velnor_actions_workflow_renderer::{
+use velnor_actions_workflow_jobs::{
     PRESEED_BUILD_OUTPUT, PRESEED_MANIFEST_BINARY_ENV, PRESEED_MANIFEST_OUT_ENV,
     PRESEED_MANIFEST_TARGET_ENV, PRESEED_MANIFEST_TOOLCHAIN_ENV, PreseedStageSource,
     preseed_build_step, preseed_download_step, preseed_manifest_step, preseed_manifest_verify_step,

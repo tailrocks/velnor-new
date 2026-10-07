@@ -12,10 +12,8 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::{Job, StepId, StepKind};
 
-use crate::{
-    matrix_output_mode::mark_dynamic_matrix_output_mode,
-    render::{PLAN_JOB_ID, TASK_JOB_ID},
-};
+use crate::matrix_output_mode::mark_dynamic_matrix_output_mode;
+use velnor_actions_workflow_jobs::context::{PLAN_JOB_ID, TASK_JOB_ID};
 use velnor_actions_workflow_steps::RenderError;
 use velnor_actions_workflow_tree::yaml::Yaml;
 

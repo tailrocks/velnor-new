@@ -20,7 +20,6 @@ mod impl_renderer_planclose;
 mod impl_renderer_planformat;
 mod impl_renderer_preseed;
 mod impl_renderer_preseed_strict;
-mod impl_renderer_preseed_verify;
 mod impl_renderer_protocol;
 mod impl_renderer_setup;
 mod impl_renderer_size;

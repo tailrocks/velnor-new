@@ -11,7 +11,7 @@ use velnor_actions_contract_workflow::{Job, JobTimeout, Step};
 
 use crate::{
     closure::{FRESHNESS_OUTDIR, download_plan_step, freshness_step},
-    render::{CANDIDATE_JOB_ID, CandidateSpec, PLAN_JOB_ID, RenderContext},
+    context::{CANDIDATE_JOB_ID, CandidateSpec, PLAN_JOB_ID, RenderContext},
 };
 use velnor_actions_workflow_steps::{
     RenderError,

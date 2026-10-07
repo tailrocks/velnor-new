@@ -6,7 +6,10 @@ use velnor_actions_contract_workflow::{
 };
 
 use super::{HOSTED_SUFFIX, SCALE_SUFFIX, share_lanes};
-use crate::render::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext};
+use velnor_actions_workflow_jobs::{
+    RenderContext,
+    context::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP},
+};
 
 const HOSTED_RUNS: &str = "ubuntu-26.04";
 const LOGICAL_JOBS: usize = 21;

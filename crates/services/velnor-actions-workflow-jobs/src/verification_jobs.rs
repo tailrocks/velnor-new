@@ -226,7 +226,7 @@ pub(crate) fn extend_required_needs(
     if verification_ids.is_empty() {
         return Ok(());
     }
-    let required = jobs.get_mut(crate::render::FINAL_JOB_ID).ok_or_else(|| {
+    let required = jobs.get_mut(crate::context::FINAL_JOB_ID).ok_or_else(|| {
         RenderError::InvalidWorkflow("verification_tasks_require_required_job".to_owned())
     })?;
     for id in verification_ids {

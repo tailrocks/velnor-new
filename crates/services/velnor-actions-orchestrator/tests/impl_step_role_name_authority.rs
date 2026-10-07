@@ -5,8 +5,9 @@ use std::path::Path;
 
 use velnor_actions_contract_workflow::{Job, StepKind, StepRole};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
-use velnor_actions_workflow_renderer::closure::download_plan_step;
-use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, WORKFLOW_PATH};
+use velnor_actions_workflow_jobs::closure::download_plan_step;
+use velnor_actions_workflow_jobs::context::FINAL_JOB_ID;
+use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 use velnor_actions_workflow_steps::steps::{MERGE_OPERATION, WRITE_REQUEST_OPERATION};
 
 use super::impl_common::{TestResult, config_with_branch, make_repo};

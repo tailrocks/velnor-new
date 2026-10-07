@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
 use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 
-use crate::render::RenderContext;
+use velnor_actions_workflow_jobs::RenderContext;
 use velnor_actions_workflow_steps::RenderError;
 use velnor_actions_workflow_tree::rendered::RenderedFile;
 

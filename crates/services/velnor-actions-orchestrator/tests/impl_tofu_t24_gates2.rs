@@ -11,7 +11,8 @@ use velnor_actions_tofu_core::kinds::TofuTaskKind;
 use velnor_actions_tofu_core::task_identity::{
     DigestSlot, ExtensionInputs, TofuTaskIdentityExtension,
 };
-use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, WORKFLOW_PATH};
+use velnor_actions_workflow_jobs::context::{FINAL_JOB_ID, PLAN_JOB_ID};
+use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use crate::impl_common::TestResult;
 use crate::impl_tofu_t24_gates::tofu_perf_fixtures_t24::{

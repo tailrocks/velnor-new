@@ -62,7 +62,7 @@ fn fresh_binary_manifest_passes_shell_verifier() -> TestResult {
         root.join("out").join("preseed-manifest.json"),
         stage.join("preseed-manifest.json"),
     )?;
-    let script = velnor_actions_workflow_renderer::preseed_manifest_verify_script(target);
+    let script = velnor_actions_workflow_jobs::preseed_manifest_verify_script(target);
     let run = || {
         StdCommand::new("sh")
             .args(["-c", &script])

@@ -12,7 +12,7 @@ use velnor_actions_contract::{
     CRATE_JOB_ID_PREFIX, Stack, TOFU_JOB_ID_PREFIX, assign_crate_job_ids,
 };
 use velnor_actions_contract_planning::ProposedTask;
-use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
+use velnor_actions_workflow_jobs::context::PLAN_JOB_ID;
 
 /// Owning job ID for one plan-universe member.
 ///

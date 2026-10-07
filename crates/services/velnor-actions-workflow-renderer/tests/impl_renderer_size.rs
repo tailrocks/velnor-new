@@ -5,7 +5,7 @@ use velnor_actions_contract_config::{RoutingWorkflow, WorkflowPolicy};
 use velnor_actions_contract_workflow::ScheduleTrigger;
 use velnor_actions_workflow_generator::MbxQualificationPins;
 use velnor_actions_workflow_generator::Schema2WorkflowRequest;
-use velnor_actions_workflow_renderer::freshness::{FreshnessSpec, render_freshness_workflow};
+use velnor_actions_workflow_jobs::freshness::{FreshnessSpec, render_freshness_workflow};
 use velnor_actions_workflow_renderer::{
     render_schema2_workflows, render_tree, render_tree_with_extra, render_workflow_ir,
 };

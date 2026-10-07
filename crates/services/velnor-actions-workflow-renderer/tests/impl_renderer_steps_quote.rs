@@ -4,9 +4,8 @@ use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_contract_workflow::{
     Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr,
 };
-use velnor_actions_workflow_renderer::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, render_workflow_ir,
-};
+use velnor_actions_workflow_jobs::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext};
+use velnor_actions_workflow_renderer::render_workflow_ir;
 use velnor_actions_workflow_steps::steps::{
     has_bare_env_expansion, quote_env_path_for_run, quote_run_line_env_paths,
 };

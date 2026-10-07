@@ -4,7 +4,8 @@ use velnor_actions_contract_config::{GeneratorValidation, WorkflowPolicy};
 use velnor_actions_workflow_cache::cache_steps::{
     TOOLS_RESTORE_USES, cache_action_step, tools_cache_key,
 };
-use velnor_actions_workflow_renderer::{PUBLISH_PLAN_NAME, render_workflow_ir};
+use velnor_actions_workflow_jobs::PUBLISH_PLAN_NAME;
+use velnor_actions_workflow_renderer::render_workflow_ir;
 use velnor_actions_workflow_steps::{ALINT_BINARY_VERSION, RenderError, merge_step, shell_step};
 
 use super::impl_renderer_fixtures::*;

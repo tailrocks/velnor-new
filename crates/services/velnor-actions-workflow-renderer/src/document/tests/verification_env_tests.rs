@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 use velnor_actions_contract_config::{VerificationRunner, VerificationTask, VerificationTaskKind};
 use velnor_actions_contract_workflow::workflow::permissions::PermissionLevel;
 
-use crate::{RenderContext, VerificationTaskPolicy, build_verification_task_job};
+use velnor_actions_workflow_jobs::{
+    RenderContext, VerificationTaskPolicy, build_verification_task_job,
+};
 use velnor_actions_workflow_steps::MiseSetup;
 
 use super::super::job_to_yaml;

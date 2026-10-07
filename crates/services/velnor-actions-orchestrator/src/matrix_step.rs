@@ -7,7 +7,7 @@ use velnor_actions_contract::{Stack, sanitize_error_detail};
 use velnor_actions_contract_workflow::{CrateObligation, Step, StepRole};
 use velnor_actions_mise::{ISOLATION_ENV, NO_AUTO_INSTALL_ENV, ToolCatalog, ToolHomes};
 use velnor_actions_rust::{payload_env_for_kind, step_base_name};
-use velnor_actions_workflow_renderer::plan_format::FORMAT_STEP_NAME;
+use velnor_actions_workflow_jobs::plan_format::FORMAT_STEP_NAME;
 use velnor_actions_workflow_steps::steps::{INTERNAL_OP_ENV, STAGED_BINARY_PREFIX};
 
 use crate::OrchestratorError;
@@ -170,7 +170,7 @@ pub(crate) fn obligation_identity_env(
     if let Some(cap) = matrix_cap {
         identity.insert(
             velnor_actions_workflow_renderer::MATRIX_NEEDS_JOB_ENV.to_owned(),
-            velnor_actions_workflow_renderer::render::PLAN_JOB_ID.to_owned(),
+            velnor_actions_workflow_jobs::context::PLAN_JOB_ID.to_owned(),
         );
         identity.insert(
             velnor_actions_workflow_renderer::MATRIX_OUTPUT_ENV.to_owned(),
@@ -355,10 +355,8 @@ pub(crate) fn start_path_for_key(matrix_key: &str) -> String {
 
 /// Plan-artifact download: report wrappers resolve identities from it.
 pub(crate) fn download_plan_step() -> Result<Step, OrchestratorError> {
-    velnor_actions_workflow_renderer::download_plan_step().map_err(|err| {
-        OrchestratorError::Contract {
-            problem: err.to_string(),
-        }
+    velnor_actions_workflow_jobs::download_plan_step().map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
     })
 }
 

@@ -254,7 +254,7 @@ fn authority_order_gates_pipeline() -> TestResult {
 
 #[test]
 fn lint_freshness_and_advisory_run_every_generate() -> TestResult {
-    use velnor_actions_workflow_renderer::closure::CHECK_GENERATED_NAME;
+    use velnor_actions_workflow_jobs::closure::CHECK_GENERATED_NAME;
     let repo = make_repo(config_with_branch())?;
     let prep = prepare(repo.path())?;
     let parent = TempDir::new()?;
@@ -328,7 +328,7 @@ fn has_bare_ampersand(line: &str) -> bool {
 
 #[test]
 fn committed_workflow_carries_generator_gates() -> TestResult {
-    use velnor_actions_workflow_renderer::closure::CHECK_GENERATED_NAME;
+    use velnor_actions_workflow_jobs::closure::CHECK_GENERATED_NAME;
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
         .canonicalize()?;

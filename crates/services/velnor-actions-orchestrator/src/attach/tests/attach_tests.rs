@@ -9,7 +9,8 @@ use crate::workflow::{CHECKOUT_USES, REQUEST_DIR};
 use crate::workflow_jobs::{final_job, plan_job};
 use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::{Job, JobTimeout};
-use velnor_actions_workflow_renderer::render::{RenderContext, WORKFLOW_PATH};
+use velnor_actions_workflow_jobs::context::RenderContext;
+use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 /// Minimal crate job covering the crate attach branch.
 fn legacy_task_job() -> Job {
@@ -176,7 +177,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
         cache_steps::MBX_PREFLIGHT_NAME, cache_steps::MBX_RESTORE_NAME,
         cache_steps::MBX_VERSION_CHECK_NAME,
     };
-    use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_STAGE_NAME};
+    use velnor_actions_workflow_jobs::{PRESEED_BUILD_NAME, PRESEED_STAGE_NAME};
     let catalog = ToolCatalog::pinned();
     let mut plan = WorkflowPlan {
         ir: bare_ir(BTreeMap::from([
@@ -251,7 +252,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
 
 /// Download, verify, then stage exactly once; never rebuild.
 fn assert_consumer_triple(id: &str, names: &[&str]) {
-    use velnor_actions_workflow_renderer::{
+    use velnor_actions_workflow_jobs::{
         PRESEED_BUILD_NAME, PRESEED_DOWNLOAD_NAME, PRESEED_STAGE_NAME, PRESEED_VERIFY_MANIFEST_NAME,
     };
     let position = |name: &str| names.iter().position(|step| *step == name);

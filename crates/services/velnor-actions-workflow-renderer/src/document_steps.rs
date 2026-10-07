@@ -13,7 +13,7 @@ use velnor_actions_workflow_steps::{
 };
 use velnor_actions_workflow_tree::yaml::{Yaml, string_map_yaml};
 
-use crate::render::{FINAL_JOB_ID, RenderContext};
+use velnor_actions_workflow_jobs::{RenderContext, context::FINAL_JOB_ID};
 use velnor_actions_workflow_tree::composite::push_composite_shell;
 
 /// True for the final job's plan download (fetch is gated inline below).
@@ -126,7 +126,7 @@ fn action_step_to_yaml(
     } else if uses == steps::UPLOAD_ARTIFACT_USES {
         entries.push((
             "if".to_owned(),
-            Yaml::str(crate::render::FINAL_CONDITION.to_owned()),
+            Yaml::str(velnor_actions_workflow_jobs::context::FINAL_CONDITION.to_owned()),
         ));
     }
     if job_id == FINAL_JOB_ID && is_verdict_download(step) {

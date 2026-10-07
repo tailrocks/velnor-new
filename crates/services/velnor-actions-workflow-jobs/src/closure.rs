@@ -13,8 +13,8 @@ use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 
 use crate::{
     closure_paths::{validate_helper_path, validate_output_dir},
+    context::{PLAN_JOB_ID, RenderContext},
     preseed,
-    render::{PLAN_JOB_ID, RenderContext},
 };
 use velnor_actions_workflow_steps::{RenderError, steps};
 
@@ -243,10 +243,10 @@ pub fn download_plan_step() -> Result<Step, RenderError> {
 /// Without the download the final job has no plan to merge. Without a
 /// final job there is nothing to close over. Re-running never dupes.
 /// # Errors
-pub(crate) fn insert_final_closure(
+pub fn insert_final_closure(
     jobs: &mut std::collections::BTreeMap<String, Job>,
 ) -> Result<(), RenderError> {
-    let Some(final_job) = jobs.get_mut(crate::render::FINAL_JOB_ID) else {
+    let Some(final_job) = jobs.get_mut(crate::context::FINAL_JOB_ID) else {
         return Ok(());
     };
     let present = final_job
@@ -279,7 +279,7 @@ fn final_download_at(job: &Job) -> usize {
 /// close over and the job is left untouched (the strict entrypoint
 /// rejects anchorless plan jobs separately). Re-running never dupes.
 /// # Errors
-pub(crate) fn insert_plan_closure(
+pub fn insert_plan_closure(
     jobs: &mut std::collections::BTreeMap<String, Job>,
     ctx: &RenderContext,
 ) -> Result<(), RenderError> {
@@ -322,12 +322,12 @@ pub(crate) fn insert_plan_closure(
 /// request steps are never duplicated, and insertion always lands after
 /// any Acquire step (directly before the already-staged consumer).
 /// # Errors
-pub(crate) fn insert_request_closure(
+pub fn insert_request_closure(
     jobs: &mut std::collections::BTreeMap<String, Job>,
 ) -> Result<(), RenderError> {
     for (job_id, target) in [
         (PLAN_JOB_ID, steps::PLAN_OPERATION),
-        (crate::render::FINAL_JOB_ID, steps::MERGE_OPERATION),
+        (crate::context::FINAL_JOB_ID, steps::MERGE_OPERATION),
     ] {
         let Some(job) = jobs.get_mut(job_id) else {
             continue;
@@ -355,10 +355,10 @@ pub(crate) fn insert_request_closure(
 /// leg's `matrix-report.json` plus `tasks/` files under the derived
 /// `velnor-matrix-<run-key>-<matrix-key>` name. Idempotent.
 /// # Errors
-pub(crate) fn insert_task_closure(
+pub fn insert_task_closure(
     jobs: &mut std::collections::BTreeMap<String, Job>,
 ) -> Result<(), RenderError> {
-    let Some(task) = jobs.get_mut(crate::render::TASK_JOB_ID) else {
+    let Some(task) = jobs.get_mut(crate::context::TASK_JOB_ID) else {
         return Ok(());
     };
     let present = task

@@ -3,7 +3,8 @@ use crate::workflow::{CHECKOUT_USES, REQUEST_DIR};
 use crate::workflow_jobs::{final_job, plan_job};
 use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::{Concurrency, Permissions, Trigger};
-use velnor_actions_workflow_renderer::render::{RenderContext, WORKFLOW_PATH};
+use velnor_actions_workflow_jobs::context::RenderContext;
+use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 /// Assert one plan step runs under the owned fetch homes.
 fn assert_owned_homes(

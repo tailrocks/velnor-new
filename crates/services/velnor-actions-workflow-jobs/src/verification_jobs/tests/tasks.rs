@@ -102,7 +102,7 @@ fn all_declared_tasks_join_required_fan_in() {
             build_verification_task_job(&macos, CHECKOUT).expect("macOS job"),
         ),
         (
-            crate::render::FINAL_JOB_ID.to_owned(),
+            crate::context::FINAL_JOB_ID.to_owned(),
             Job {
                 display_name: "Required".to_owned(),
                 runs_on: "ubuntu-26.04".to_owned(),
@@ -121,7 +121,7 @@ fn all_declared_tasks_join_required_fan_in() {
 
     extend_required_needs(&mut jobs, &ids).expect("required job exists");
     assert_eq!(
-        jobs[crate::render::FINAL_JOB_ID].needs,
+        jobs[crate::context::FINAL_JOB_ID].needs,
         vec![
             "plan".to_owned(),
             "task-linux-lint".to_owned(),
@@ -154,7 +154,7 @@ fn paired_task_lanes_are_complete_and_join_required_together() {
         (hosted_id.clone(), hosted),
         (scale_id.clone(), scale),
         (
-            crate::render::FINAL_JOB_ID.to_owned(),
+            crate::context::FINAL_JOB_ID.to_owned(),
             Job {
                 display_name: "Required".to_owned(),
                 runs_on: "ubuntu-26.04".to_owned(),
@@ -173,7 +173,7 @@ fn paired_task_lanes_are_complete_and_join_required_together() {
     extend_required_needs(&mut jobs, &ids).expect("required job exists");
     assert_eq!(ids, [hosted_id, scale_id]);
     assert_eq!(
-        jobs[crate::render::FINAL_JOB_ID].needs,
+        jobs[crate::context::FINAL_JOB_ID].needs,
         vec!["plan", "task-linux-lint__hosted", "task-linux-lint__local"]
     );
 }

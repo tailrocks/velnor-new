@@ -9,9 +9,8 @@ use velnor_actions_contract_workflow::{
 use velnor_actions_mise::catalog::lock::{
     parse_generator_lock, parse_release_manifest, verify_lock_against_manifest,
 };
-use velnor_actions_workflow_renderer::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, render_workflow_ir,
-};
+use velnor_actions_workflow_jobs::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext};
+use velnor_actions_workflow_renderer::render_workflow_ir;
 use velnor_actions_workflow_steps::{checkout_step, plan_step};
 
 use crate::impl_common::TestResult;

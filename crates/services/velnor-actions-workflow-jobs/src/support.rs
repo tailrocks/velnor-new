@@ -20,7 +20,7 @@ use velnor_actions_workflow_steps::{ALINT_BINARY_VERSION, ALINT_USES, RenderErro
 
 use crate::{
     candidate::{candidate_job, release_job},
-    render::{
+    context::{
         CANDIDATE_JOB_ID, FINAL_CONDITION, FINAL_DISPLAY_NAME, FINAL_JOB_ID, PLAN_JOB_ID,
         RenderContext, ValidatorCommand,
     },

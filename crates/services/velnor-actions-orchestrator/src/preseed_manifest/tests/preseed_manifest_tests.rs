@@ -107,7 +107,7 @@ fn invalid_inputs_fail_closed() {
 fn names_match_renderer_consts() {
     assert_eq!(
         MANIFEST_FILE,
-        velnor_actions_workflow_renderer::PRESEED_MANIFEST_FILE
+        velnor_actions_workflow_jobs::PRESEED_MANIFEST_FILE
     );
     assert_eq!(
         PRESEED_MANIFEST_OP,
@@ -115,18 +115,18 @@ fn names_match_renderer_consts() {
     );
     assert_eq!(
         PRESEED_BINARY_ENV,
-        velnor_actions_workflow_renderer::PRESEED_MANIFEST_BINARY_ENV
+        velnor_actions_workflow_jobs::PRESEED_MANIFEST_BINARY_ENV
     );
     assert_eq!(
         PRESEED_OUT_ENV,
-        velnor_actions_workflow_renderer::PRESEED_MANIFEST_OUT_ENV
+        velnor_actions_workflow_jobs::PRESEED_MANIFEST_OUT_ENV
     );
     assert_eq!(
         PRESEED_TARGET_ENV,
-        velnor_actions_workflow_renderer::PRESEED_MANIFEST_TARGET_ENV
+        velnor_actions_workflow_jobs::PRESEED_MANIFEST_TARGET_ENV
     );
     assert_eq!(
         PRESEED_TOOLCHAIN_ENV,
-        velnor_actions_workflow_renderer::PRESEED_MANIFEST_TOOLCHAIN_ENV
+        velnor_actions_workflow_jobs::PRESEED_MANIFEST_TOOLCHAIN_ENV
     );
 }

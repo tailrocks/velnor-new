@@ -2,7 +2,8 @@
 use std::collections::BTreeMap;
 use velnor_actions_contract_config::{GeneratorValidation, WorkflowPolicy};
 use velnor_actions_contract_workflow::JobTimeout;
-use velnor_actions_workflow_renderer::{msrv::msrv_job, render_workflow_ir};
+use velnor_actions_workflow_jobs::msrv::msrv_job;
+use velnor_actions_workflow_renderer::render_workflow_ir;
 use velnor_actions_workflow_steps::{
     RenderError, checkout_step, merge_step, plan_step, shell_step, write_request_step,
 };
@@ -120,7 +121,7 @@ fn support_candidate_release_and_msrv_jobs_carry_per_kind_timeouts() -> Result<(
     let msrv = msrv_job(
         LABEL,
         &checkout_pin(),
-        &velnor_actions_workflow_renderer::msrv::MsrvSpec {
+        &velnor_actions_workflow_jobs::msrv::MsrvSpec {
             package: "demo".to_owned(),
             rust_version: "1.98".to_owned(),
         },

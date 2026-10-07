@@ -10,8 +10,8 @@ use std::path::Path;
 
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
+use velnor_actions_workflow_jobs::context::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP};
 use velnor_actions_workflow_renderer::WORKFLOW_PATH;
-use velnor_actions_workflow_renderer::render::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP};
 
 use super::impl_common::{TestResult, fixture_manifest_json, git};
 
@@ -219,7 +219,7 @@ fn required_needs_span_plan_tofu_and_lint() -> TestResult {
 /// Tofu renders under the same triggers and concurrency as rust, byte for byte.
 #[test]
 fn tofu_triggers_and_concurrency_match_rust_byte_for_byte() -> TestResult {
-    use velnor_actions_workflow_renderer::render::EXPECTED_PR_TYPES;
+    use velnor_actions_workflow_jobs::context::EXPECTED_PR_TYPES;
     let tofu = pure_tofu_repo(&["stacks/a", "stacks/b"], &[])?;
     let tofu_yaml = staged_yaml(tofu.path())?;
     let rust = super::impl_common::make_repo(super::impl_common::config_with_branch())?;

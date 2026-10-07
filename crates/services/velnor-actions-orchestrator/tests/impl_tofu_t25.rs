@@ -8,7 +8,7 @@
 //! download; only duplicates within a job are waste).
 
 use velnor_actions_orchestrator::{finalized_jobs, prepare};
-use velnor_actions_workflow_renderer::render::PUBLISH_JOB_ID;
+use velnor_actions_workflow_jobs::context::PUBLISH_JOB_ID;
 
 use crate::impl_common::TestResult;
 use crate::impl_tofu_t24_gates::tofu_perf_fixtures_t24::tofu_repo;

@@ -16,7 +16,7 @@ use velnor_actions_contract_release::{
 };
 use velnor_actions_contract_workflow::Step;
 use velnor_actions_mise::MISE_VERSION;
-use velnor_actions_workflow_renderer::{HelperProvenance, provision_acquire_step};
+use velnor_actions_workflow_jobs::{HelperProvenance, provision_acquire_step};
 use velnor_actions_workflow_steps::{MiseSetup, STAGED_BINARY_PREFIX};
 
 use crate::OrchestratorError;

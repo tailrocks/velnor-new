@@ -9,7 +9,7 @@ use velnor_actions_mise::{
     custom_run::custom_task_run_argv, validate_exact_version,
 };
 use velnor_actions_rust::tool_needs;
-use velnor_actions_workflow_renderer::render::CandidateSpec;
+use velnor_actions_workflow_jobs::context::CandidateSpec;
 
 use crate::{OrchestratorError, qualify::QualifyRequest};
 

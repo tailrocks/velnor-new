@@ -1,7 +1,8 @@
 //! Emission sweeps: step names, policy order, candidate check, tree shape.
 use velnor_actions_contract_config::{GeneratorValidation, WorkflowPolicy};
+use velnor_actions_workflow_jobs::CHECK_GENERATED_NAME;
 use velnor_actions_workflow_renderer::{
-    CHECK_GENERATED_NAME, render_tree, render_workflow_ir, render_workflow_ir_strict,
+    render_tree, render_workflow_ir, render_workflow_ir_strict,
 };
 use velnor_actions_workflow_steps::{RenderError, checkout_step, merge_step, plan_step};
 use velnor_actions_workflow_tree::with_marker;
@@ -12,7 +13,7 @@ use super::impl_renderer_fixtures::*;
 fn every_emitted_step_has_name() -> Result<(), RenderError> {
     let mut ctx = fixture_ctx();
     ctx.validator_commands = validator_commands();
-    ctx.candidate = Some(velnor_actions_workflow_renderer::CandidateSpec {
+    ctx.candidate = Some(velnor_actions_workflow_jobs::CandidateSpec {
         build: mise_argv("mbx@1.0.0", "mbx", &["build"]),
         qualify: vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
     });
@@ -85,7 +86,7 @@ fn every_emitted_step_has_name() -> Result<(), RenderError> {
 fn final_gate_needs_plan_lint_and_support() -> Result<(), RenderError> {
     let mut ctx = fixture_ctx();
     ctx.validator_commands = validator_commands();
-    ctx.candidate = Some(velnor_actions_workflow_renderer::CandidateSpec {
+    ctx.candidate = Some(velnor_actions_workflow_jobs::CandidateSpec {
         build: mise_argv("mbx@1.0.0", "mbx", &["build"]),
         qualify: vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
     });
@@ -212,7 +213,7 @@ fn validators_render_deny_machete_zizmor_in_order() -> Result<(), RenderError> {
 fn candidate_check_uses_downloaded_binary() -> Result<(), RenderError> {
     let mut ctx = fixture_ctx();
     ctx.validator_commands = validator_commands();
-    ctx.candidate = Some(velnor_actions_workflow_renderer::CandidateSpec {
+    ctx.candidate = Some(velnor_actions_workflow_jobs::CandidateSpec {
         build: mise_argv("mbx@1.0.0", "mbx", &["build"]),
         qualify: vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
     });

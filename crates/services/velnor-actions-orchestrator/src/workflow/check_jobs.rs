@@ -8,7 +8,7 @@ use velnor_actions_contract_workflow::{
     Job, JobTimeout, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, Permissions, Step,
 };
 use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};
-use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
+use velnor_actions_workflow_jobs::context::PLAN_JOB_ID;
 use velnor_actions_workflow_steps::steps::INTERNAL_OP_ENV;
 
 use crate::OrchestratorError;

@@ -64,7 +64,7 @@ fn rendered_needs_inventory(yaml: &str) -> Result<Vec<String>, Box<dyn std::erro
         .ok_or("needs-expected quoting")?;
     let raw = unquoted.replace("\\\"", "\"");
     let mut inventory: Vec<String> = serde_json::from_str(&raw)?;
-    inventory.retain(|id| id != velnor_actions_workflow_renderer::render::TASK_JOB_ID);
+    inventory.retain(|id| id != velnor_actions_workflow_jobs::context::TASK_JOB_ID);
     inventory.sort();
     Ok(inventory)
 }

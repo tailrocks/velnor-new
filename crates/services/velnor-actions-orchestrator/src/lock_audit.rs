@@ -32,7 +32,7 @@ use velnor_actions_mise::toolfiles::lockfile::{
     parse_mise_lockfile, subject_for_install_spec,
 };
 use velnor_actions_mise::{MISE_LOCK_FILE, ToolCatalog};
-use velnor_actions_workflow_renderer::render::ValidatorCommand;
+use velnor_actions_workflow_jobs::context::ValidatorCommand;
 
 use crate::vectors::validator_install_pin;
 mod names;

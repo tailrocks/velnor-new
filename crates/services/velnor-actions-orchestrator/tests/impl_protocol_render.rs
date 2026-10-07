@@ -10,9 +10,9 @@ use velnor_actions_contract_workflow::{
     Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr,
 };
 use velnor_actions_orchestrator::write_request_parts;
-use velnor_actions_workflow_renderer::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, render::RenderContext, render_workflow_ir,
-};
+use velnor_actions_workflow_jobs::RenderContext;
+use velnor_actions_workflow_jobs::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP};
+use velnor_actions_workflow_renderer::render_workflow_ir;
 use velnor_actions_workflow_steps::{checkout_step, plan_step, steps::write_request_step};
 
 use crate::impl_common::TestResult;

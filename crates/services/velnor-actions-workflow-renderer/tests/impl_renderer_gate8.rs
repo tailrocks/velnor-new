@@ -1,10 +1,10 @@
 //! Gate-8 renderer cases: artifacts, manifest script, rehead, release.
 use velnor_actions_contract_config::{GeneratorValidation, WorkflowPolicy};
 use velnor_actions_contract_workflow::StepKind;
-use velnor_actions_workflow_renderer::{
+use velnor_actions_workflow_jobs::{
     candidate_artifact_name, preseed_download_step, preseed_upload_step, publish_plan_step,
-    render_workflow_ir,
 };
+use velnor_actions_workflow_renderer::render_workflow_ir;
 use velnor_actions_workflow_steps::steps::{
     ARTIFACT_RETENTION_DAYS, candidate_manifest_script, download_artifact_step,
     upload_artifact_step,
@@ -93,7 +93,7 @@ fn artifact_paths_reject_shell_expansions() {
 fn rendered_action_inputs_carry_no_shell_expansions() -> Result<(), RenderError> {
     let mut ctx = fixture_ctx();
     ctx.validator_commands = validator_commands();
-    ctx.candidate = Some(velnor_actions_workflow_renderer::CandidateSpec {
+    ctx.candidate = Some(velnor_actions_workflow_jobs::CandidateSpec {
         build: mise_argv("rust@1.98.1", "mbx", &["build"]),
         qualify: vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
     });

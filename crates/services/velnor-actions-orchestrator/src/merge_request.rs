@@ -149,7 +149,7 @@ fn read_attestation(
     use velnor_actions_contract_workflow::{
         CANDIDATE_ATTESTATION_FILENAME, CANDIDATE_EVIDENCE_SUBDIR,
     };
-    use velnor_actions_workflow_renderer::render::CANDIDATE_JOB_ID;
+    use velnor_actions_workflow_jobs::context::CANDIDATE_JOB_ID;
     if !inventory.iter().any(|id| id == CANDIDATE_JOB_ID) {
         return serde_json::Value::Null;
     }

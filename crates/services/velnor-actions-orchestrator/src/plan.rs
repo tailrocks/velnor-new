@@ -8,8 +8,8 @@ use velnor_actions_contract_config::{RunnerSelection, WorkflowPolicy};
 use velnor_actions_contract_planning::ProposedTask;
 use velnor_actions_contract_workflow::{FRESHNESS_WORKFLOW_PATH, Job, RequiredCheckMigration};
 use velnor_actions_rust::KIND_DISPLAY_WORDS;
+use velnor_actions_workflow_jobs::action_pins;
 use velnor_actions_workflow_release::release_tree::RELEASE_TREE_PATHS;
-use velnor_actions_workflow_renderer::action_pins;
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 use velnor_actions_workflow_tree::rendered::ACTIONLINT_PATH;
 

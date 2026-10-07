@@ -4,15 +4,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{
-    lane_share::LaneShare,
-    render::{FINAL_JOB_ID, RenderContext},
-};
+use crate::lane_share::LaneShare;
 use velnor_actions_contract_config::config::RunsOn;
 use velnor_actions_contract_workflow::{
     Job, Permissions, StepKind, StepRole, Trigger, WorkflowIr,
     workflow::{ir::DispatchInput, permissions::PermissionLevel},
 };
+use velnor_actions_workflow_jobs::{RenderContext, context::FINAL_JOB_ID};
 use velnor_actions_workflow_steps::{RenderError, steps};
 use velnor_actions_workflow_tree::{yaml::Yaml, yaml::string_map_yaml};
 

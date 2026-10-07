@@ -1,9 +1,10 @@
 //! Plan closure: freshness gate, publish upload, anchor, legacy path.
 use velnor_actions_contract_config::WorkflowPolicy;
-use velnor_actions_workflow_renderer::{
+use velnor_actions_workflow_jobs::{
     CHECK_GENERATED_NAME, DOWNLOAD_PLAN_NAME, FRESHNESS_OUTDIR, PUBLISH_PLAN_NAME,
-    download_plan_step, freshness_step, publish_plan_step, render_workflow_ir,
+    download_plan_step, freshness_step, publish_plan_step,
 };
+use velnor_actions_workflow_renderer::render_workflow_ir;
 use velnor_actions_workflow_steps::{
     ACQUIRE_NAME, CRATE_REPORT_UPLOAD_NAME, MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION,
     RUN_KEY_EXPR, RenderError, SETUP_MISE_NAME, checkout_step, crate_job_report_upload_step,

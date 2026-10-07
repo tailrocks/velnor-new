@@ -262,7 +262,7 @@ fn candidate_mode_downloads_attestation_before_merge() -> Result<(), RenderError
 #[test]
 fn expected_inventory_excludes_post_gate_jobs() -> Result<(), RenderError> {
     use velnor_actions_contract_workflow::NEEDS_EXPECTED_ENV;
-    use velnor_actions_workflow_renderer::render::{
+    use velnor_actions_workflow_jobs::context::{
         FINAL_CONDITION, FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID,
     };
     let plan = job(

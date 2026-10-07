@@ -4,10 +4,11 @@ use velnor_actions_contract_config::{GeneratorValidation, ValidatorKind, Workflo
 use velnor_actions_contract_workflow::{
     Concurrency, Job, JobTimeout, PermissionLevel, Permissions, Step, StepKind, Trigger, WorkflowIr,
 };
-use velnor_actions_workflow_renderer::{
+use velnor_actions_workflow_jobs::{
     CANDIDATE_JOB_ID, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, CandidateSpec, RenderContext,
-    ValidatorCommand, render_workflow_ir,
+    ValidatorCommand,
 };
+use velnor_actions_workflow_renderer::render_workflow_ir;
 use velnor_actions_workflow_steps::{RenderError, checkout_step, merge_step, plan_step};
 
 const VERSION: &str = "0.1.0";

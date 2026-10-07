@@ -18,7 +18,7 @@
 //! review is the trust root for the committed `needs` set.
 
 use velnor_actions_contract_workflow::JobConclusion;
-use velnor_actions_workflow_renderer::render::TASK_JOB_ID;
+use velnor_actions_workflow_jobs::context::TASK_JOB_ID;
 
 /// Environment channel carrying the final gate's `needs` conclusions.
 pub(crate) const NEEDS_ENV: &str = "VELNOR_NEEDS_JSON";

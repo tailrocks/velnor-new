@@ -6,7 +6,10 @@ use velnor_actions_contract_workflow::{
 };
 
 use super::super::workflow_to_yaml;
-use crate::render::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext};
+use velnor_actions_workflow_jobs::{
+    RenderContext,
+    context::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP},
+};
 
 fn runner_token() -> String {
     ScaleSetSelector::try_new(

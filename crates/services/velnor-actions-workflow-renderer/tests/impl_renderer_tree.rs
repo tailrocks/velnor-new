@@ -6,9 +6,11 @@ use velnor_actions_contract_config::{
 use velnor_actions_contract_workflow::{
     Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr,
 };
+use velnor_actions_workflow_jobs::{
+    CANDIDATE_JOB_ID, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, ValidatorCommand,
+};
 use velnor_actions_workflow_renderer::{
-    AGENTS_MD_PATH, CANDIDATE_JOB_ID, CLAUDE_MD_PATH, CLAUDE_MD_TARGET, CONCURRENCY_CANCEL,
-    CONCURRENCY_GROUP, RenderContext, ValidatorCommand, WORKFLOW_PATH, render_tree,
+    AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET, WORKFLOW_PATH, render_tree,
     render_workflow_ir,
 };
 use velnor_actions_workflow_steps::{

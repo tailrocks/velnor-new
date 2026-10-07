@@ -3,7 +3,7 @@ use super::*;
 #[test]
 fn preseed_restores_mbx_builds_after_sources_with_homes() {
     use velnor_actions_contract_workflow::StepRole;
-    use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
+    use velnor_actions_workflow_jobs::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
     let roots = [String::new()];
     let mut plan = preseed_fixture(true, &roots);
     attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0", &roots).expect("attach");
