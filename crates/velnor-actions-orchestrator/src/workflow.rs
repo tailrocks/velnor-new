@@ -53,7 +53,7 @@ pub(crate) const REQUEST_DIR: &str = "${{ runner.temp }}/velnor/request";
 pub struct WorkflowPlan {
     /// Stack-neutral workflow IR.
     pub ir: WorkflowIr,
-    /// Support jobs for the Velnor policy, none for consumers.
+    /// Support jobs: policy validators plus config-selected verification.
     pub support: Option<VelnorSupportWorkflow>,
     /// Validated renderer scalars.
     pub context: RenderContext,
@@ -100,7 +100,9 @@ pub(crate) fn build_workflow(
     let version = env!("CARGO_PKG_VERSION").to_owned();
     let policy = config.workflow.policy;
     let workflow_tasks = crate::workflow_task_jobs::policies(root, config, discovery)?;
-    let support = support_workflow(policy, config.workflow.generator_validation, discovery);
+    let validation = config.workflow.generator_validation;
+    let verify = crate::verify::verify_kinds(&config.workflow.verify.jobs)?;
+    let support = support_workflow(policy, validation, discovery, &verify);
     let mut jobs = BTreeMap::new();
     let acquire = match policy {
         WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(label, &version, discovery)?),
@@ -161,6 +163,7 @@ pub(crate) fn build_workflow(
         discovery,
         rust.has_compiler(),
         workflow_tasks,
+        &verify,
     )?;
     let actionlint = actionlint_input(config, &version, label);
     Ok(WorkflowPlan {
@@ -200,15 +203,31 @@ fn support_workflow(
     policy: WorkflowPolicy,
     validation: GeneratorValidation,
     discovery: &Discovery,
+    verify: &[ValidatorKind],
 ) -> Option<VelnorSupportWorkflow> {
     let mut support = match policy {
-        WorkflowPolicy::ConsumerV1 => return None,
+        WorkflowPolicy::ConsumerV1 => {
+            if verify.is_empty() {
+                return None;
+            }
+            VelnorSupportWorkflow {
+                validators: verify.to_vec(),
+                candidate_validation: false,
+            }
+        }
         WorkflowPolicy::VelnorRepositoryV1 => policy.support_workflow(validation),
     };
     if discovery.workspaces.is_empty() {
         support
             .validators
             .retain(|validator| *validator != ValidatorKind::CargoDeny);
+    }
+    if policy == WorkflowPolicy::VelnorRepositoryV1 {
+        for kind in verify {
+            if !support.validators.contains(kind) {
+                support.validators.push(*kind);
+            }
+        }
     }
     Some(support)
 }

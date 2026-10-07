@@ -43,6 +43,19 @@ pub(crate) fn validator_install_pin(
             velnor_actions_mise::catalog::ZIZMOR_VERSION,
             "zizmor",
         )),
+        "npm:markdownlint-cli2" if version == crate::verify::MARKDOWNLINT_VERSION => Some((
+            "markdownlint-cli2",
+            crate::verify::MARKDOWNLINT_VERSION,
+            "npm:markdownlint-cli2",
+        )),
+        "node" if version == crate::verify::VERIFY_NODE_VERSION => {
+            Some(("node", crate::verify::VERIFY_NODE_VERSION, "node"))
+        }
+        "ubi:lycheeverse/lychee" if version == crate::verify::LYCHEE_VERSION => Some((
+            "lychee",
+            crate::verify::LYCHEE_VERSION,
+            "ubi:lycheeverse/lychee",
+        )),
         _ => None,
     }
 }
@@ -58,7 +71,13 @@ const CARGO_MACHETE_TOOL_SPEC: &str = concat!(
 );
 
 /// Mise tool specs the validator vectors may select, without versions.
-const VALIDATOR_TOOL_SPECS: [&str; 2] = ["cargo-deny", CARGO_MACHETE_TOOL_SPEC];
+const VALIDATOR_TOOL_SPECS: [&str; 5] = [
+    "cargo-deny",
+    CARGO_MACHETE_TOOL_SPEC,
+    "npm:markdownlint-cli2",
+    "node",
+    "ubi:lycheeverse/lychee",
+];
 
 /// Product crates scanned by the machete vector, in contract order.
 ///
@@ -304,13 +323,13 @@ pub(crate) fn machete_install_argv() -> Result<Vec<String>, OrchestratorError> {
     strings_of(install.argv()).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-/// One validator vector: an allowlisted tool spec plus a fixed cargo payload.
+/// One validator vector: an allowlisted tool spec plus a fixed payload.
 ///
 /// Built through the Mise adapter's isolated `exec` constructor, so the
 /// emitted shape (global flags, spec, `--` separator, payload) matches the
 /// typed `PinnedToolExec` vectors byte for byte. The spec name must be
 /// allowlisted and the version an exact pin; anything else fails closed.
-fn validator_argv(
+pub(crate) fn validator_argv(
     spec: &str,
     version: &str,
     program: &str,

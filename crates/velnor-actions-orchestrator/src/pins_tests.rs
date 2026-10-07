@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig};
 use velnor_actions_contract::{
     DiscoveryConfig, GeneratorValidation, PullRequestCachePolicy, ResourcesConfig, StacksConfig,
-    TestShardingConfig, WorkflowConfig, WorkflowPolicy,
+    TestShardingConfig, VerifyConfig, WorkflowConfig, WorkflowPolicy,
 };
 
 /// Config carrying exactly the given action-pin overrides.
@@ -22,6 +22,7 @@ pub(super) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
             runner_label: None,
             tasks: Vec::new(),
             tofu_apply: None,
+            verify: VerifyConfig::default(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
