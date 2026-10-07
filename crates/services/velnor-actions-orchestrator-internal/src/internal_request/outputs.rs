@@ -66,7 +66,10 @@ impl PlanOutputs {
             ("matrix", &self.matrix),
             ("plan_id", &self.plan_id),
             ("run_key", &self.run_key),
-            (crate::COVERED_TASKS_OUTPUT, &self.covered_tasks),
+            (
+                velnor_actions_orchestrator_covered_tasks::covered_tasks::COVERED_TASKS_OUTPUT,
+                &self.covered_tasks,
+            ),
         ]
     }
 
@@ -75,7 +78,10 @@ impl PlanOutputs {
     pub fn promoted_job_outputs(&self, mode: PlanOutputMode) -> Vec<(&'static str, &str)> {
         match mode {
             PlanOutputMode::Static => {
-                vec![(crate::COVERED_TASKS_OUTPUT, &self.covered_tasks)]
+                vec![(
+                    velnor_actions_orchestrator_covered_tasks::covered_tasks::COVERED_TASKS_OUTPUT,
+                    &self.covered_tasks,
+                )]
             }
             PlanOutputMode::DynamicMatrix => self.step_outputs(),
         }

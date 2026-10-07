@@ -26,11 +26,13 @@ fn file_cache_constructions_are_hoisted_per_phase() -> TestResult {
     let orch = crate_src("");
     let disc = crate_src("../velnor-actions-orchestrator-discovery");
     let cover = crate_src("../velnor-actions-orchestrator-cover-baseline");
+    let internal = crate_src("../velnor-actions-orchestrator-internal");
     let mut sites: Vec<String> = Vec::new();
     for (dir, prefix) in [
         (&orch, ""),
         (&disc, "discovery/"),
         (&cover, "cover-baseline/"),
+        (&internal, "internal/"),
     ] {
         sites.extend(
             token_hits(dir, "FileCache::new()")?
