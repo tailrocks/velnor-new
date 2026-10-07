@@ -136,7 +136,7 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # Alint with fail-on-warning, and uploads check-gaps diagnostics.
 # [stacks.rust.policy]
 # version = "0.1.3"                   # Pinned rust-repository-policy release.
-# sha256 = "<64-hex>"                 # SHA-256 of the release tarball asset.
+# sha256 = "104c0d8b3a827875776358f941aa88f1c5837c1009305076af9380f4e3fcda25"  # SHA-256 of the release tarball asset.
 # profile = "rust-strict-v1"          # Mandatory strict profile (only value).
 
 # Optional docs lane (any policy). Frozen Bun install, MDX frontmatter lint,
