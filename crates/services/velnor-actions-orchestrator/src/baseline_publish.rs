@@ -28,9 +28,9 @@ use crate::cover_baseline::provenance_check::{
 use crate::internal::{SCHEMA, check_schema};
 use crate::internal_request::resolve_run_key;
 use crate::merge::BaselineManifest;
-use crate::request_event::{request_refs, workflow_event_for};
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::{internal, internal_contract};
+use velnor_actions_orchestrator_request_event::request_event::{request_refs, workflow_event_for};
 
 /// Publish operation tag.
 pub const PUBLISH_OP: &str = "publish-baseline-v1";

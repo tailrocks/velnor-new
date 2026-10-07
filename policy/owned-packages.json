@@ -54,6 +54,7 @@
     "velnor-actions-orchestrator-runtime-plan",
     "velnor-actions-orchestrator-runtime-evidence",
     "velnor-actions-orchestrator-runtime-execute",
-    "velnor-actions-orchestrator-noop-report"
+    "velnor-actions-orchestrator-noop-report",
+    "velnor-actions-orchestrator-request-event"
   ]
 }

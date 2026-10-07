@@ -1,0 +1,19 @@
+[package]
+name = "velnor-actions-orchestrator-request-event"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[dependencies]
+velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
+velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "velnor_orchestrator_request_event"
+path = "tests/main.rs"

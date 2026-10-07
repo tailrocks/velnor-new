@@ -16,7 +16,7 @@ use velnor_actions_orchestrator_core::internal;
 /// would launder an untrusted fork run into the trusted PR scope.
 /// Comment triggers (`issue_comment` and friends) have no mapping and
 /// fail closed as `unsupported_event`: no comment path is trusted.
-pub(crate) fn workflow_event_for(
+pub fn workflow_event_for(
     event_name: &str,
     payload: &serde_json::Value,
 ) -> Result<WorkflowEvent, OrchestratorError> {
@@ -40,7 +40,7 @@ fn fork_flag(payload: &serde_json::Value) -> Option<bool> {
 
 /// Base/head refs for one event: PR `base.sha`/`head.sha`, merge-group
 /// `base_sha`/`head_sha`, push `before`/`after` (SHA fallback).
-pub(crate) fn request_refs(
+pub fn request_refs(
     event: WorkflowEvent,
     payload: &serde_json::Value,
     github_sha: Option<&str>,

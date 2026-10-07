@@ -9,9 +9,9 @@ use velnor_actions_contract::{canonical_json_bytes, run_key_for_ci, validate_run
 use velnor_actions_contract_workflow::{NAMED_CHECK_LANES_ENV, NamedCheckLane, WorkflowEvent};
 
 use crate::internal::{MERGE_OP, PLAN_OP, SCHEMA};
-use crate::request_event::{request_refs, workflow_event_for};
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::{internal, internal_contract};
+use velnor_actions_orchestrator_request_event::request_event::{request_refs, workflow_event_for};
 
 mod outputs;
 pub use outputs::{

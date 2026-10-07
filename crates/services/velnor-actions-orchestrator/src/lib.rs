@@ -19,7 +19,6 @@ mod internal_request;
 mod merge;
 mod merge_request;
 mod preseed_manifest;
-mod request_event;
 mod retrieve_baseline;
 mod retrieve_reports;
 mod retrieve_retry;

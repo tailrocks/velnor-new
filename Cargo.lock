@@ -3638,6 +3638,7 @@ dependencies = [
  "velnor-actions-orchestrator-pins",
  "velnor-actions-orchestrator-plan",
  "velnor-actions-orchestrator-provisioning",
+ "velnor-actions-orchestrator-request-event",
  "velnor-actions-orchestrator-runtime-evidence",
  "velnor-actions-orchestrator-runtime-execute",
  "velnor-actions-orchestrator-runtime-plan",
@@ -3902,6 +3903,15 @@ dependencies = [
  "velnor-actions-workflow-jobs",
  "velnor-actions-workflow-renderer",
  "velnor-actions-workflow-steps",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-request-event"
+version = "0.1.1"
+dependencies = [
+ "serde_json",
+ "velnor-actions-contract-workflow",
+ "velnor-actions-orchestrator-core",
 ]
 
 [[package]]

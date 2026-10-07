@@ -188,6 +188,13 @@ const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "velnor-actions-orchestrator-request-event",
+        &[
+            "velnor-actions-contract-workflow",
+            "velnor-actions-orchestrator-core",
+        ],
+    ),
+    (
         "velnor-actions-orchestrator-runtime-evidence",
         &[
             "velnor-actions-contract",

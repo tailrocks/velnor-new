@@ -36,9 +36,9 @@ use velnor_actions_contract_workflow::NEEDS_EXPECTED_ENV;
 
 use self::needs_channel::{NEEDS_ENV, parse_needs};
 use crate::internal_request::resolve_run_key;
-use crate::request_event::workflow_event_for;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::{internal, internal_contract};
+use velnor_actions_orchestrator_request_event::request_event::workflow_event_for;
 
 /// Assemble one canonical merge request from a run directory.
 ///
