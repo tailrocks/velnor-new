@@ -158,6 +158,41 @@ async fn volume_delete_error_fails_closed() -> Result<(), String> {
     Ok(())
 }
 
+fn inspect_json_with_cgroupns(mode: Option<&str>) -> String {
+    let labels = serde_json::json!({
+        "velnor.worker": WORKER,
+        "velnor.volume": WORKER,
+        "velnor.role": "runner"
+    });
+    let mut response = serde_json::json!({"Id": "runner-id", "Config": {"Labels": labels}});
+    if let Some(mode) = mode {
+        response["HostConfig"] = serde_json::json!({"CgroupnsMode": mode});
+    }
+    response.to_string()
+}
+
+#[tokio::test]
+async fn container_identity_requires_private_cgroup_namespace() -> Result<(), String> {
+    let stub = DockerStub::open(vec![
+        http(200, &inspect_json_with_cgroupns(Some("private"))),
+        http(200, &inspect_json_with_cgroupns(Some("host"))),
+        http(200, &inspect_json_with_cgroupns(None)),
+    ])?;
+
+    assert_eq!(
+        worker_id_for_name(&stub.docker, "wtransport-runner", WORKER, "runner").await,
+        Ok(Some("runner-id".to_owned()))
+    );
+    for _ in 0..2 {
+        assert_eq!(
+            worker_id_for_name(&stub.docker, "wtransport-runner", WORKER, "runner").await,
+            Err(HostError::Docker)
+        );
+    }
+    assert_eq!(stub.finish().await?.len(), 3);
+    Ok(())
+}
+
 #[tokio::test]
 async fn container_identity_requires_id_and_exact_labels() -> Result<(), String> {
     let stub = DockerStub::open(vec![

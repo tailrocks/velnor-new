@@ -1,4 +1,4 @@
-use bollard::models::MountType;
+use bollard::models::{HostConfigCgroupnsModeEnum, MountType};
 
 use super::{bollard, projection};
 use crate::{
@@ -24,6 +24,22 @@ fn runner_create_opens_stdin_and_is_not_privileged() -> Result<(), HostError> {
     );
     assert_eq!(spec.env, Vec::<String>::new());
     assert!(spec.network_mode.is_none());
+    Ok(())
+}
+
+#[test]
+fn runner_and_private_dind_use_private_cgroup_namespaces() -> Result<(), HostError> {
+    for spec in [projection("worker_a")?, dind_create("worker_a")?] {
+        let created = bollard_create(&spec)?;
+        assert_eq!(
+            created
+                .config
+                .host_config
+                .as_ref()
+                .and_then(|host| host.cgroupns_mode),
+            Some(HostConfigCgroupnsModeEnum::PRIVATE)
+        );
+    }
     Ok(())
 }
 

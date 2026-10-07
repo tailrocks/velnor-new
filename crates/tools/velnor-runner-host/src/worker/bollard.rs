@@ -3,7 +3,8 @@
 use std::collections::HashMap;
 
 use ::bollard::models::{
-    ContainerCreateBody, HostConfig, Mount as DockerMount, MountImageOptions, MountType,
+    ContainerCreateBody, HostConfig, HostConfigCgroupnsModeEnum, Mount as DockerMount,
+    MountImageOptions, MountType,
 };
 use ::bollard::query_parameters::CreateContainerOptions;
 
@@ -66,6 +67,7 @@ fn none_if_empty(items: &[String]) -> Option<Vec<String>> {
 
 fn host_config(spec: &CreateProjection) -> Result<HostConfig, HostError> {
     Ok(HostConfig {
+        cgroupns_mode: Some(HostConfigCgroupnsModeEnum::PRIVATE),
         privileged: Some(spec.privileged),
         group_add: none_if_empty(&spec.group_add),
         mounts: docker_mounts(&spec.mounts, &spec.image_mounts)?,
