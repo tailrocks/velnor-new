@@ -29,6 +29,20 @@ fn help_lists_every_command() -> Result<(), String> {
 }
 
 #[test]
+fn service_help_lists_package_preflight() -> Result<(), String> {
+    let help = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-host"))
+        .args(["service", "--help"])
+        .output()
+        .map_err(|err| err.to_string())?;
+    if !help.status.success() {
+        return Err(format!("service help status {:?}", help.status));
+    }
+    let text = String::from_utf8(help.stdout).map_err(|err| err.to_string())?;
+    assert!(text.contains("preflight"), "preflight missing from {text}");
+    Ok(())
+}
+
+#[test]
 fn help_exits_success_and_a_bad_command_does_not() -> Result<(), String> {
     let help = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-host"))
         .arg("--help")

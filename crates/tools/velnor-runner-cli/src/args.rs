@@ -147,6 +147,8 @@ pub enum Command {
 pub enum ServiceAction {
     /// Read whether the host service is active, stopped, or unknown.
     Status,
+    /// Verify the effective package unit before systemd starts the controller.
+    Preflight,
     /// Install or enable the platform service.
     Install,
     /// Start the installed service; durable drain remains set until `resume`.
