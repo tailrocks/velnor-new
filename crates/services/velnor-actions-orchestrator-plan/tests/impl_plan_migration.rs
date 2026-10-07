@@ -6,7 +6,7 @@
 //! marked as the external admin step the generator cannot perform.
 
 use velnor_actions_contract_workflow::RequiredCheckMigration;
-use velnor_actions_orchestrator::prepare;
+use velnor_actions_orchestrator_generation::prepare::prepare;
 
 use super::impl_common::{TestResult, config_with_branch, make_repo, plan_for};
 

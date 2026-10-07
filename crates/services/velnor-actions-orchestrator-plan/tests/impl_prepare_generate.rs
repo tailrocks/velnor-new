@@ -5,9 +5,12 @@ use std::path::Path;
 
 use tempfile::TempDir;
 use velnor_actions_contract_workflow::StepKind;
-use velnor_actions_orchestrator::{GenerateOptions, generate, prepare, render_staged_tree};
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::decisions::{MetadataFailure, classify_metadata_failure};
+use velnor_actions_orchestrator_generation::generate::{
+    GenerateOptions, generate, render_staged_tree,
+};
+use velnor_actions_orchestrator_generation::prepare::prepare;
 
 use crate::impl_common::{
     ReadonlyGuard, TestResult, config_with_branch, err_of, make_repo, plan_for, snapshot,
