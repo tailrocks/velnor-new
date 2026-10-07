@@ -1,7 +1,10 @@
-# Deferred: Velnor self-hosted execution
+---
+title: "Deferred: Velnor self-hosted execution"
+description: "**Status:** Partially superseded. The active runner specification is [macOS Scale Set runner](/docs/proposed/macos-scaleset-runner). Clauses marked **Superseded** below are not normative. Workspace separation, no second task graph, no generator-adapter dependency, one task and cache authority, exact lock identities, durable recovery, truthful conclusions, and the ban on mounting the host home or the outer Docker socket into a job remain in force."
+---
 
 **Status:** Partially superseded. The active runner specification is
-[macOS Scale Set runner](../proposed/macos-scaleset-runner.md). Clauses marked
+[macOS Scale Set runner](/docs/proposed/macos-scaleset-runner). Clauses marked
 **Superseded** below are not normative. Workspace separation, no second task
 graph, no generator-adapter dependency, one task and cache authority, exact
 lock identities, durable recovery, truthful conclusions, and the ban on mounting
@@ -23,7 +26,7 @@ Runner implementation MUST NOT start until all applicable V1 gates are recorded 
 5. Task-result reuse and invalidation tests passing.
 6. Velnor's own generated CI running from the pinned bootstrap binary.
 
-V2/V3 versions MUST follow the [Velnor version policy](../proposed/version-policy.md).
+V2/V3 versions MUST follow the [Velnor version policy](/docs/proposed/version-policy).
 Create and protect `.velnor/runner.lock` before runner implementation; the
 runner lock and exact Turso crate pin MUST pass upstream freshness and platform
 qualification checks before release.
@@ -116,7 +119,7 @@ platform = "linux-arm64" # linux-x64 or linux-arm64
 ```
 
 `github-hosted` keeps the exact V1 Ubuntu image-family label from the
-[version policy](../proposed/version-policy.md) and emits no runner profile.
+[version policy](/docs/proposed/version-policy) and emits no runner profile.
 **Superseded:** classic self-hosted labels
 `["self-hosted", "Linux", "ARM64", "velnor-rust-ci-v1"]` and the X64 variant.
 The active selectors are `runs-on: ubuntu-26.04` (hosted) and
