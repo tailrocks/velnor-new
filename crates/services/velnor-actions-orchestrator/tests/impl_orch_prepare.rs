@@ -48,7 +48,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
     config_calls.sort();
     assert_eq!(
         config_calls,
-        ["check_runtime.rs", "prepare.rs", "routing.rs"],
+        ["execute.rs", "prepare.rs", "routing.rs"],
         "preparation, execution, and routing load configuration at their boundaries"
     );
     let internal = std::fs::read_to_string(family_file("internal.rs")?)?;
@@ -58,12 +58,12 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         generate.contains("prep: &GenerationPreparation"),
         "generate consumes preparation"
     );
-    let runtime = std::fs::read_to_string(family_file("check_runtime.rs")?)?;
+    let runtime = std::fs::read_to_string(family_file("execute.rs")?)?;
     let execution = runtime
-        .split("pub(crate) fn execute_check_to(")
+        .split("pub fn execute_check_to(")
         .nth(1)
         .expect("production execution boundary")
-        .split("struct CheckOutcome {")
+        .split("fn run_check(")
         .next()
         .expect("execution body");
     assert!(execution.contains("velnor_actions_orchestrator_core::config::load_config(root)?"));

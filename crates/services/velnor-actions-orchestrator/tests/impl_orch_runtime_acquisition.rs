@@ -59,7 +59,7 @@ fn acquisition_exception_is_exact_and_runtime_only() {
 
 #[test]
 fn acquisition_requires_bound_plan_and_verified_archive() -> TestResult {
-    let runtime = std::fs::read_to_string(super::orch_src().join("check_runtime.rs"))?;
+    let runtime = std::fs::read_to_string(super::family_file("execute.rs")?)?;
     assert_order(
         &runtime,
         &[

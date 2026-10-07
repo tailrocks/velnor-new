@@ -52,6 +52,7 @@
     "velnor-actions-orchestrator-covered-tasks": "library",
     "velnor-actions-orchestrator-task-report": "library",
     "velnor-actions-orchestrator-runtime-plan": "library",
-    "velnor-actions-orchestrator-runtime-evidence": "library"
+    "velnor-actions-orchestrator-runtime-evidence": "library",
+    "velnor-actions-orchestrator-runtime-execute": "library"
   }
 }

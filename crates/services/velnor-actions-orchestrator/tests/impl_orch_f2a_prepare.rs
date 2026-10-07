@@ -41,7 +41,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
     assert!(
         config_calls
             .iter()
-            .any(|call| call.starts_with("check_runtime.rs")),
+            .any(|call| call.starts_with("execute.rs")),
         "{config_calls:?}"
     );
     assert!(
@@ -53,7 +53,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
     assert!(
         config_calls.iter().all(|call| {
             call.starts_with("prepare.rs")
-                || call.starts_with("check_runtime.rs")
+                || call.starts_with("execute.rs")
                 || call.starts_with("routing.rs")
         }),
         "{config_calls:?}"
