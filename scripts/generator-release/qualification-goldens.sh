@@ -239,6 +239,18 @@ capture_release_dogfood() {
          GIT_AUTHOR_DATE='2026-01-01T00:00:00Z' GIT_COMMITTER_DATE='2026-01-01T00:00:00Z' \
          git -c commit.gpgsign=false commit -qm "golden"
   ) >/dev/null 2>&1 || { echo "FATAL: dogfood git setup failed"; exit 2; }
+  # Warm the cargo cache for both lockful dogfood workspaces ahead of the
+  # candidate's locked/offline discovery (Gate 1): the qualify runner
+  # starts with a virgin cache, so without this fetch the candidate's
+  # `cargo metadata --locked --offline` fails with preparation_incomplete.
+  # Same HOME/mise environment as the candidate run below, so the same
+  # cache is warmed. `--locked` keeps a lock rewrite from slipping in.
+  for manifest in "$repo/Cargo.toml" "$repo/crates/velnor-runner/Cargo.toml"; do
+    if ! mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path "$manifest"; then
+      echo "FATAL: could not fetch dogfood cargo sources for $manifest"
+      exit 2
+    fi
+  done
   if ! (cd "$repo" && "$BIN" generate --output-dir "$preview" >"$out/stdout.txt" 2>"$out/stderr.txt"); then
     echo "FATAL: release candidate dogfood generate failed"
     exit 2
