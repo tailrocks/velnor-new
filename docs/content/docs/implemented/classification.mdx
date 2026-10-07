@@ -1,4 +1,7 @@
-# File classification registry
+---
+title: "File classification registry"
+description: "Living registry for RQ-4.2 / RQ-5.2: every lockfile, fixture, vendored, and generated file class in this repository has an explicit classification and owner. Handwritten product code is the default class and needs no entry."
+---
 
 Living registry for RQ-4.2 / RQ-5.2: every lockfile, fixture, vendored, and
 generated file class in this repository has an explicit classification and
@@ -14,7 +17,7 @@ review; the row must name a verification rule that actually runs.
 |---|---|---|---|
 | Cargo lockfile | `Cargo.lock` | repo maintainers (`CODEOWNERS`) | `cargo metadata --locked` in CI; `scripts/check-freshness.sh` declared-vs-locked probe (RQ-2.11) |
 | Version-policy mirror + inventory | `.velnor/version-policy.toml`, `.velnor/freshness-inventory.json` | repo maintainers | `repo_policy_mirror_matches_compiled_catalog`; `scripts/check-freshness.sh` |
-| Alint baseline | none — no `.alint-baseline.json` at HEAD | repo maintainers | §5 limits are hard errors; no grandfathering ([update-procedure.md](update-procedure.md)) |
+| Alint baseline | none — no `.alint-baseline.json` at HEAD | repo maintainers | §5 limits are hard errors; no grandfathering ([update-procedure](/docs/implemented/update-procedure)) |
 | Test fixtures (committed inputs) | `fixtures/**` | owning crate's tests | Excluded from Alint's walked index (`.alint.yml` `ignore:`); each fixture dir carries a `README.md` stating intent |
 | Generated CI tree | `.github/workflows/ci.yml`, `.github/actionlint.yaml`, `.github/AGENTS.md`, `.github/CLAUDE.md` | generator (`velnor-actions` binary, generator version in header marker) | First-line version marker, no dates; regen must be byte-identical (RQ-1.9); validated by actionlint+zizmor before replace; inventory/condition edits are security-sensitive and review-gated (repo `CODEOWNERS` + branch protection — D7: the merge cannot distinguish regen from tampering, review is the trust root) |
 | Generator preview output | `$RUNNER_TEMP/.../.github/**` (never committed) | ephemeral, CI job | Byte-compared against in-place render; outside repo root |
@@ -29,4 +32,4 @@ review; the row must name a verification rule that actually runs.
   create or refresh it (RQ-2.12). If maintainers adopt it, add a row here.
 - `.velnor/generator.lock` / `.velnor/runner.lock` do not exist yet (pre-seed
   / deferred V2). Their rows are pre-declared in
-  [update-procedure.md](update-procedure.md) and move here on creation.
+  [update-procedure](/docs/implemented/update-procedure) and move here on creation.

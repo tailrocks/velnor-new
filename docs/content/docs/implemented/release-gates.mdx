@@ -1,4 +1,7 @@
-# Release gates: source and external evidence
+---
+title: "Release gates: source and external evidence"
+description: "This record separates checked-in release mechanics from hosted evidence and infrastructure. PR46 adds the source-bound `generator-release.yml` workflow, including candidate qualification, a same-run manifest, and protected publication. Source and local tests do not prove a hosted qualification run, an immutable release, or GitHub environment protection. No release was published while preparing this change."
+---
 
 This record separates checked-in release mechanics from hosted evidence and
 infrastructure. PR46 adds the source-bound `generator-release.yml` workflow,
@@ -34,7 +37,7 @@ published while preparing this change.
 ## Freshness process gates (VER)
 
 - VER-1.5 (incompatible newest = migration): procedure defined in
-  [update-procedure.md](update-procedure.md) (one coherent set, migration
+  [update-procedure](/docs/implemented/update-procedure) (one coherent set, migration
   reported, never silent). Residual NEEDS-HUMAN: a maintainer MUST run the
   update set and write the migration; no automation proposes migrations.
 - VER-1.7 (expedited security path): procedure defined (same-day set,
@@ -65,4 +68,4 @@ published while preparing this change.
   sync disabled): sanctioned V2 deferral. No `turso` in manifests by
   design. Unblock = runner implementation starts (post-V1 gates) and
   `.velnor/runner.lock` binds the full runner identity. See
-  [deferred work](../deferred/README.md).
+  [deferred work](/docs/deferred).

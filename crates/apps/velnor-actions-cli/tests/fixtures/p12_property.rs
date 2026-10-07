@@ -249,7 +249,7 @@ fn crate_repo(
 
 #[test]
 fn property_path_documented_honestly() -> Result<(), Box<dyn Error>> {
-    let procedure = super::read("docs/implemented/update-procedure.md")?;
+    let procedure = super::read("docs/content/docs/implemented/update-procedure.mdx")?;
     for marker in [
         "p12_property",
         "proptest",
