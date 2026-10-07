@@ -144,4 +144,20 @@ fn assert_release_fixture_generation_requirements() {
         qualification_helpers.contains("candidate manifest digest does not match candidate CLI"),
         "{qualification_helpers}"
     );
+    assert!(
+        qualification_helpers.contains(r#"commit_placeholder="$(printf '%040d' 0 | tr '0' 'b')""#),
+        "{qualification_helpers}"
+    );
+    assert!(
+        qualification_helpers.contains(r#"jq -er '.commit | strings' "$CANDIDATE_MANIFEST""#),
+        "{qualification_helpers}"
+    );
+    assert!(
+        qualification_helpers.contains("candidate manifest contains a malformed source commit"),
+        "{qualification_helpers}"
+    );
+    assert!(
+        qualification_helpers.contains("could not normalize candidate manifest commit in $file"),
+        "{qualification_helpers}"
+    );
 }
