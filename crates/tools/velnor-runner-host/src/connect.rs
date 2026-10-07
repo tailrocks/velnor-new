@@ -1,6 +1,6 @@
 //! Connect and disconnect decisions. Adopted sets are not deleted.
 
-use crate::config::HostConfig;
+use velnor_runner_host_config::HostConfig;
 
 /// Result of comparing a request with stored config.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

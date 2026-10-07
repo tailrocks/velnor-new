@@ -1,7 +1,7 @@
 //! Structural validation for the host configuration.
 
 use super::{DockerConfig, GithubSection, JobTrustPolicy};
-use crate::HostError;
+use velnor_runner_journal::HostError;
 
 pub(super) fn validate_github(github: &GithubSection) -> Result<(), HostError> {
     if repository_ok(&github.repository)

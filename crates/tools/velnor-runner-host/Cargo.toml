@@ -11,16 +11,15 @@ workspace = true
 [dependencies]
 bollard = { workspace = true }
 getrandom = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-toml = { workspace = true }
 zeroize = { workspace = true }
 velnor-runner-apparmor = { version = "=0.1.1", path = "../velnor-runner-apparmor" }
 velnor-runner-core = { version = "=0.1.1", path = "../velnor-runner-core" }
 velnor-runner-docker-spec = { version = "=0.1.1", path = "../velnor-runner-docker-spec" }
 velnor-runner-github = { version = "=0.1.1", path = "../velnor-runner-github" }
+velnor-runner-host-config = { version = "=0.1.1", path = "../velnor-runner-host-config" }
 velnor-runner-journal = { version = "=0.1.1", path = "../velnor-runner-journal" }
 
 [target.'cfg(target_os = "macos")'.dependencies]

@@ -5,7 +5,7 @@ use serde::Deserialize;
 use self::validation::{
     keychain_ref, split_repository, validate_docker, validate_github, validate_trust,
 };
-use crate::HostError;
+use velnor_runner_journal::HostError;
 
 mod validation;
 

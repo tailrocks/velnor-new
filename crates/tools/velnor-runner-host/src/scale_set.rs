@@ -8,8 +8,8 @@ use velnor_runner_github::{
 };
 
 use crate::HostError;
-use crate::config::{RegistrationScopeKind, ScaleSetBinding};
 use crate::https::HttpsTransport;
+use velnor_runner_host_config::{RegistrationScopeKind, ScaleSetBinding};
 
 const GITHUB_API: &str = "https://api.github.com";
 

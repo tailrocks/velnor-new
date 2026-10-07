@@ -37,6 +37,7 @@
     "velnor-runner-docker-spec",
     "velnor-runner-github",
     "velnor-runner-host",
+    "velnor-runner-host-config",
     "velnor-runner-journal",
     "velnor-runner-launch",
     "velnor-runner-launch-slot",

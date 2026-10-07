@@ -1,0 +1,15 @@
+[package]
+name = "velnor-runner-host-config"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }
+toml = { workspace = true }
+velnor-runner-docker-spec = { version = "=0.1.1", path = "../velnor-runner-docker-spec" }
+velnor-runner-journal = { version = "=0.1.1", path = "../velnor-runner-journal" }

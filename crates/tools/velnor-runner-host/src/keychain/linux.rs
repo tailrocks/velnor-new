@@ -13,8 +13,9 @@ pub(super) fn store_configured(path: &Path, secret: &[u8]) -> Result<(), HostErr
     if path != Path::new(CREDENTIAL_SOURCE) || current_uid()? != 0 {
         return Err(HostError::Keychain);
     }
-    let group_id = crate::linux_service_group_id().map_err(|_| HostError::Keychain)?;
-    crate::config_file::validate_linux_directory(Path::new(CREDENTIAL_DIRECTORY), group_id)
+    let group_id =
+        velnor_runner_host_config::linux_service_group_id().map_err(|_| HostError::Keychain)?;
+    velnor_runner_host_config::validate_linux_directory(Path::new(CREDENTIAL_DIRECTORY), group_id)
         .map_err(|_| HostError::Keychain)?;
     let policy = SecretFilePolicy {
         directory_uid: 0,
@@ -31,7 +32,8 @@ pub(super) fn remove_configured(path: &Path) -> Result<(), HostError> {
     if path != Path::new(CREDENTIAL_SOURCE) {
         return Err(HostError::Keychain);
     }
-    let group_id = crate::linux_service_group_id().map_err(|_| HostError::Keychain)?;
+    let group_id =
+        velnor_runner_host_config::linux_service_group_id().map_err(|_| HostError::Keychain)?;
     let policy = SecretFilePolicy {
         directory_uid: 0,
         directory_gid: group_id,
@@ -133,7 +135,7 @@ fn secure_secret_temporary(path: &Path, policy: &SecretFilePolicy) -> Result<(),
     use std::fs::{self, OpenOptions};
     use std::os::unix::fs::PermissionsExt;
 
-    crate::config_file::assign_owner(path, policy.file_uid, policy.file_gid)
+    velnor_runner_host_config::assign_owner(path, policy.file_uid, policy.file_gid)
         .map_err(|_| HostError::Keychain)?;
     fs::set_permissions(path, fs::Permissions::from_mode(policy.file_mode))
         .map_err(|_| HostError::Keychain)?;

@@ -36,6 +36,7 @@
     "velnor-runner-docker-spec": "library",
     "velnor-runner-github": "library",
     "velnor-runner-host": "library",
+    "velnor-runner-host-config": "library",
     "velnor-runner-journal": "library",
     "velnor-runner-launch": "library",
     "velnor-runner-launch-slot": "library",
