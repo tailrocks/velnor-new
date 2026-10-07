@@ -8,7 +8,6 @@
 mod api;
 mod attach;
 mod baseline_publish;
-mod check_evidence;
 mod check_runtime;
 mod cover;
 mod cover_baseline;

@@ -1,5 +1,4 @@
 //! Qualified execution of one named check, through the existing plan/report gate.
-use crate::check_evidence::{EvidenceReceipt, verify_evidence};
 use std::env;
 use std::ffi::OsString;
 use std::path::Path;
@@ -12,6 +11,7 @@ use velnor_actions_contract_workflow::{
 };
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, ToolCatalog, discover_checks_until};
 use velnor_actions_orchestrator_check_acquisition::tools::QualifiedToolReceipt;
+use velnor_actions_orchestrator_check_evidence::scenario::{EvidenceReceipt, verify_evidence};
 use velnor_actions_orchestrator_check_preparation::container_receipts::ContainerReceipt;
 use velnor_actions_orchestrator_check_preparation::preparation::container;
 use velnor_actions_orchestrator_check_preparation::preparation::prepare_check;
@@ -274,7 +274,7 @@ fn write_execution_receipt(
     item: &DiscoveredCheck,
     outcome: &CheckOutcome,
 ) -> Result<(), OrchestratorError> {
-    let mut execution = crate::check_evidence::gate::execution_receipt(
+    let mut execution = velnor_actions_orchestrator_check_evidence::gate::execution_receipt(
         plan,
         entry,
         &item.check.id,

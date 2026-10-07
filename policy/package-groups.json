@@ -43,6 +43,7 @@
     "velnor-actions-orchestrator-provisioning": "library",
     "velnor-actions-orchestrator-selection": "library",
     "velnor-actions-orchestrator-check-acquisition": "library",
-    "velnor-actions-orchestrator-check-preparation": "library"
+    "velnor-actions-orchestrator-check-preparation": "library",
+    "velnor-actions-orchestrator-check-evidence": "library"
   }
 }

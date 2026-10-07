@@ -1,6 +1,4 @@
 //! Strict scenario evidence bound to the source plan and named check.
-pub(crate) mod gate;
-
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -13,7 +11,7 @@ use velnor_actions_orchestrator_core::link_safety::reject_link_components;
 /// Producer payload; unknown fields and duplicate JSON keys fail closed.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct ScenarioEvidence {
+pub struct ScenarioEvidence {
     pub schema: u32,
     pub source: String,
     pub head: String,
@@ -24,7 +22,7 @@ pub(crate) struct ScenarioEvidence {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct Scenario {
+pub struct Scenario {
     pub id: String,
     pub executed: bool,
     pub status: ScenarioStatus,
@@ -32,7 +30,7 @@ pub(crate) struct Scenario {
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum ScenarioStatus {
+pub enum ScenarioStatus {
     Passed,
     Failed,
     Skipped,
@@ -41,7 +39,7 @@ pub(crate) enum ScenarioStatus {
 /// Trusted receipt records precisely the bytes examined by this helper.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct EvidenceReceipt {
+pub struct EvidenceReceipt {
     pub schema: u32,
     pub check_id: String,
     pub source: String,
@@ -55,7 +53,7 @@ pub(crate) struct EvidenceReceipt {
 }
 
 /// Validate declared scenarios and produce a byte-bound receipt.
-pub(crate) fn verify_evidence(
+pub fn verify_evidence(
     root: &Path,
     declaration: &CheckEvidence,
     id: &str,
@@ -95,7 +93,7 @@ pub(crate) fn verify_evidence(
     })
 }
 
-pub(crate) fn validate_evidence(
+pub fn validate_evidence(
     evidence: &ScenarioEvidence,
     declaration: &CheckEvidence,
     id: &str,

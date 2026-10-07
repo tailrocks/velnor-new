@@ -1,6 +1,8 @@
 //! Named scenario proof rejects empty, skipped, stale, and foreign reports.
-use crate::check_evidence::{Scenario, ScenarioEvidence, ScenarioStatus, validate_evidence};
 use velnor_actions_contract_config::config::{CheckEvidence, CheckPlatform};
+use velnor_actions_orchestrator_check_evidence::scenario::{
+    Scenario, ScenarioEvidence, ScenarioStatus, validate_evidence,
+};
 
 fn declaration() -> CheckEvidence {
     CheckEvidence {
@@ -75,7 +77,7 @@ fn skipped_failed_unexecuted_and_stale_rejected() {
 fn evidence_files_missing_empty_and_symlink_refuse() {
     let root = tempfile::TempDir::new().expect("temp");
     let verify = || {
-        crate::check_evidence::verify_evidence(
+        velnor_actions_orchestrator_check_evidence::scenario::verify_evidence(
             root.path(),
             &declaration(),
             "docker",
@@ -112,7 +114,7 @@ fn strict_evidence_parser_rejects_duplicate_and_foreign_fields() {
         bad.push('}');
         std::fs::write(root.path().join("proof.json"), bad).expect("write");
         assert!(
-            crate::check_evidence::verify_evidence(
+            velnor_actions_orchestrator_check_evidence::scenario::verify_evidence(
                 root.path(),
                 &declaration(),
                 "docker",

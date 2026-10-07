@@ -112,6 +112,18 @@ const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "velnor-actions-orchestrator-check-evidence",
+        &[
+            "velnor-actions-contract",
+            "velnor-actions-contract-config",
+            "velnor-actions-contract-workflow",
+            "velnor-actions-mise",
+            "velnor-actions-orchestrator-check-acquisition",
+            "velnor-actions-orchestrator-check-preparation",
+            "velnor-actions-orchestrator-core",
+        ],
+    ),
+    (
         "velnor-actions-orchestrator-check-preparation",
         &[
             "velnor-actions-contract",
@@ -240,6 +252,7 @@ fn expected_service(leaf: &str) -> Option<Vec<&str>> {
             "velnor-actions-contract-workflow",
             "velnor-actions-mise",
             "velnor-actions-orchestrator-check-acquisition",
+            "velnor-actions-orchestrator-check-evidence",
             "velnor-actions-orchestrator-check-preparation",
             "velnor-actions-orchestrator-core",
             "velnor-actions-orchestrator-discovery",

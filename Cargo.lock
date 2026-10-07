@@ -3628,6 +3628,7 @@ dependencies = [
  "velnor-actions-contract-workflow",
  "velnor-actions-mise",
  "velnor-actions-orchestrator-check-acquisition",
+ "velnor-actions-orchestrator-check-evidence",
  "velnor-actions-orchestrator-check-preparation",
  "velnor-actions-orchestrator-core",
  "velnor-actions-orchestrator-discovery",
@@ -3669,6 +3670,22 @@ dependencies = [
  "velnor-actions-mise",
  "velnor-actions-orchestrator-core",
  "zip",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-check-evidence"
+version = "0.1.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "velnor-actions-contract",
+ "velnor-actions-contract-config",
+ "velnor-actions-contract-workflow",
+ "velnor-actions-mise",
+ "velnor-actions-orchestrator-check-acquisition",
+ "velnor-actions-orchestrator-check-preparation",
+ "velnor-actions-orchestrator-core",
 ]
 
 [[package]]

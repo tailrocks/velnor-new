@@ -1,5 +1,5 @@
 //! Mandatory named-check execution and scenario proof at the ordinary final fold.
-use super::{EvidenceReceipt, ScenarioEvidence, validate_evidence};
+use crate::scenario::{EvidenceReceipt, ScenarioEvidence, validate_evidence};
 use serde::{Deserialize, Serialize};
 
 use std::collections::BTreeSet;
@@ -15,7 +15,7 @@ use velnor_actions_orchestrator_core::link_safety::reject_link_components;
 /// Helper-produced execution receipt inside the existing matrix artifact.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct CheckExecutionReceipt {
+pub struct CheckExecutionReceipt {
     pub schema: u32,
     pub source: String,
     pub run_key: String,
@@ -40,7 +40,7 @@ struct DownloadedProof {
     evidence: Option<String>,
 }
 
-pub(crate) fn execution_receipt(
+pub fn execution_receipt(
     plan: &Plan,
     entry: &MatrixEntry,
     check_id: &str,
@@ -68,7 +68,7 @@ pub(crate) fn execution_receipt(
 }
 
 /// Read only plan-named receipts and evidence from exact downloaded matrix homes.
-pub(crate) fn read_proofs(
+pub fn read_proofs(
     plan: &serde_json::Value,
     reports_dir: &Path,
     tasks: &[serde_json::Value],
@@ -158,11 +158,7 @@ fn declaration_for(entry: &MatrixEntry) -> Result<Option<CheckEvidence>, &'stati
 }
 
 /// Every successful named task needs exactly one valid proof; foreign proofs fail.
-pub(crate) fn validate_proofs(
-    plan: &Plan,
-    tasks: &[TaskReport],
-    proofs: &[serde_json::Value],
-) -> bool {
+pub fn validate_proofs(plan: &Plan, tasks: &[TaskReport], proofs: &[serde_json::Value]) -> bool {
     if plan.obligations.iter().any(|ob| {
         ob.task_id.starts_with("stack/mise/")
             && ob.decision != velnor_actions_contract_workflow::ObligationDecision::Execute

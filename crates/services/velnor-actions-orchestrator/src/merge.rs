@@ -254,7 +254,7 @@ fn check_final_inputs(
     check_candidate_binding(plan, request, signals, miss_reasons);
     check_plan_evidence(plan, request, signals, miss_reasons);
     check_execute_inventory(plan, signals, miss_reasons);
-    if !crate::check_evidence::gate::validate_proofs(
+    if !velnor_actions_orchestrator_check_evidence::gate::validate_proofs(
         plan,
         &request.task_reports,
         &request.check_proofs,

@@ -112,7 +112,7 @@ pub(crate) fn assemble_with_needs(
         &run_dir.join("reports"),
         &mut errors,
     );
-    let check_proofs = crate::check_evidence::gate::read_proofs(
+    let check_proofs = velnor_actions_orchestrator_check_evidence::gate::read_proofs(
         &plan,
         &run_dir.join("reports"),
         &task_reports,

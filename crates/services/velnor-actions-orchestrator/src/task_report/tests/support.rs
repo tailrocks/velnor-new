@@ -1,5 +1,4 @@
 use super::super::*;
-use crate::check_evidence::{gate::execution_receipt, verify_evidence};
 use std::collections::BTreeMap;
 use std::fs;
 use tempfile::TempDir;
@@ -13,6 +12,8 @@ use velnor_actions_contract_workflow::{
     PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, TaskReport, Trust,
     WorkflowEvent, matrix_json_bytes,
 };
+use velnor_actions_orchestrator_check_evidence::gate::execution_receipt;
+use velnor_actions_orchestrator_check_evidence::scenario::verify_evidence;
 
 /// Clippy fixture task ID.
 pub(super) const CLIPPY: &str = "stack/rust/demo/clippy/default";
