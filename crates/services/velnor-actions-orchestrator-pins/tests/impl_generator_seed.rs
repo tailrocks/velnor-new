@@ -1,6 +1,6 @@
 //! The generator seed copy runs the shipped acquire script.
 //!
-//! Orchestrator `src/` must not spawn a process. This test executes
+//! Pins `src/` must not spawn a process. This test executes
 //! `acquire_script_argv` from the integration crate.
 
 use std::os::unix::fs::PermissionsExt;
@@ -8,7 +8,7 @@ use std::path::Path;
 use std::process::{Command, Output};
 
 use velnor_actions_contract_release::ReleaseTarget;
-use velnor_actions_orchestrator::acquire_script_argv;
+use velnor_actions_orchestrator_pins::pins::acquire_script_argv;
 
 #[test]
 fn generator_seed_hit_skips_curl_and_a_bad_hash_does_not_copy()
