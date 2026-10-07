@@ -7,9 +7,9 @@ use crate::config::HostConfig;
 pub enum ConnectPlan {
     /// Nothing is stored yet.
     Create,
-    /// Same repository, set, platform, and context.
+    /// Exact same binding, trust policy, capacity, platform, and Docker settings.
     Idempotent,
-    /// A different repository or binding. Refused.
+    /// Any stored configuration differs. Refused.
     Rejected,
 }
 
@@ -31,18 +31,14 @@ pub enum DisconnectEffect {
     DeleteSet,
 }
 
-/// Idempotent when the binding matches. Any other stored binding is rejected.
+/// Idempotent only when every stored configuration field matches. Any change
+/// requires an explicit disconnect and reconfiguration.
 #[must_use]
 pub fn connect_plan(existing: Option<&HostConfig>, request: &HostConfig) -> ConnectPlan {
     let Some(current) = existing else {
         return ConnectPlan::Create;
     };
-    let same = current.github.repository == request.github.repository
-        && current.github.scale_set_name == request.github.scale_set_name
-        && current.docker.platform == request.docker.platform
-        && current.docker.context == request.docker.context
-        && current.docker.endpoint == request.docker.endpoint;
-    if same {
+    if current == request {
         ConnectPlan::Idempotent
     } else {
         ConnectPlan::Rejected

@@ -106,7 +106,7 @@ fn drive(state: &Path, config: &HostConfig) {
         repo,
         &config.docker.endpoint,
         &state.join("launch.db"),
-        config.host.max_jobs,
+        config.max_jobs(),
     ) {
         Ok(report) => finish_launch(&report),
         Err(error) => {
