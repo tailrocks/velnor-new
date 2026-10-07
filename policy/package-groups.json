@@ -24,6 +24,7 @@
     "velnor-actions-workflow-generator": "library",
     "velnor-actions-workflow-jobs": "library",
     "velnor-actions-workflow-release": "library",
+    "velnor-actions-workflow-render-strict": "library",
     "velnor-actions-workflow-renderer": "library",
     "velnor-actions-workflow-schema2": "library",
     "velnor-actions-workflow-steps": "library",

@@ -9,18 +9,19 @@ use velnor_actions_workflow_cache::cache_steps::{CompileDriver, mbx_steps_for_dr
 use velnor_actions_workflow_jobs::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, ValidatorCommand,
 };
-use velnor_actions_workflow_renderer::render_workflow_ir;
+use velnor_actions_workflow_render_strict::render_workflow_ir_strict;
 use velnor_actions_workflow_steps::{
-    ASSET_SHA_ENV, ASSET_URL_ENV, RELEASE_COMMIT_ENV, RenderError, STAGED_BINARY_PREFIX,
+    ASSET_SHA_ENV, ASSET_URL_ENV, MiseSetup, RELEASE_COMMIT_ENV, RenderError, STAGED_BINARY_PREFIX,
     acquire_velnor_step, checkout_step, plan_step, shell_step,
 };
 
 pub(crate) const VERSION: &str = "0.1.0";
 pub(crate) const LABEL: &str = "ubuntu-26.04";
+pub(crate) const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
+pub(crate) const MISE_VERSION: &str = "2026.9.18";
+pub(crate) const MISE_SHA256: &str =
+    "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4";
 pub(crate) const STAGED: &str = "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0";
-
-pub(crate) const TEST_MBX_VERSION: &str = "1.21.1";
-pub(crate) const TEST_RUST_TOOLCHAIN: &str = "1.98.1";
 
 pub(crate) fn mbx_tool_env(rust_toolchain: &str) -> BTreeMap<String, String> {
     BTreeMap::from([
@@ -59,6 +60,14 @@ pub(crate) fn mbx_tool_steps(
 
 pub(crate) fn checkout_pin() -> String {
     format!("actions/checkout@{:040x}", 0)
+}
+
+pub(crate) fn mise() -> MiseSetup {
+    MiseSetup {
+        uses: MISE_USES.to_owned(),
+        version: MISE_VERSION.to_owned(),
+        sha256: MISE_SHA256.to_owned(),
+    }
 }
 
 pub(crate) fn fixture_ctx() -> RenderContext {
@@ -155,6 +164,10 @@ pub(crate) fn fixture_ir(jobs: Vec<(String, Job)>) -> WorkflowIr {
     }
 }
 
+pub(crate) fn strict(ir: &WorkflowIr, ctx: &RenderContext) -> Result<String, RenderError> {
+    render_workflow_ir_strict(ir, WorkflowPolicy::ConsumerV1, None, ctx, &mise())
+}
+
 /// Step display names in render order for one job section.
 pub(crate) fn step_names(text: &str, job_id: &str) -> Vec<String> {
     let mut names = Vec::new();
@@ -201,88 +214,9 @@ pub(crate) fn validator_commands() -> Vec<ValidatorCommand> {
     .collect()
 }
 
-/// Candidate context: validator commands plus build/qualify spec.
-pub(crate) fn candidate_ctx() -> RenderContext {
-    let mut ctx = fixture_ctx();
-    ctx.validator_commands = validator_commands();
-    ctx.candidate = Some(velnor_actions_workflow_jobs::CandidateSpec {
-        build: mise_argv("mbx@1.0.0", "mbx", &["build"]),
-        qualify: vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
-    });
-    ctx
-}
-
-/// Task job wired for matrix fan-out plus the matrix report upload.
-pub(crate) fn matrix_task_job()
--> Result<(String, velnor_actions_contract_workflow::Job), RenderError> {
-    let env = BTreeMap::from([
-        (
-            "VELNOR_TASK_ID".to_owned(),
-            "${{ matrix.task_id }}".to_owned(),
-        ),
-        ("VELNOR_TASK_RUN".to_owned(), "${{ matrix.run }}".to_owned()),
-        (
-            velnor_actions_workflow_renderer::MATRIX_NEEDS_JOB_ENV.to_owned(),
-            "plan".to_owned(),
-        ),
-        (
-            velnor_actions_workflow_renderer::MATRIX_OUTPUT_ENV.to_owned(),
-            "matrix".to_owned(),
-        ),
-        (
-            velnor_actions_workflow_renderer::MATRIX_MAX_PARALLEL_ENV.to_owned(),
-            "2".to_owned(),
-        ),
-    ]);
-    // Unscrubbed base: the constructor owns the overlay.
-    let step = shell_step(
-        "Run task",
-        vec!["sh".to_owned(), "-c".to_owned(), "echo hi".to_owned()],
-        env,
-    )?;
-    Ok(job(
-        "velnor-task",
-        "Task",
-        vec!["plan".to_owned()],
-        vec![checkout_step(&checkout_pin())?, step],
-    ))
-}
-
 /// Shell fixture carrying the credential scrub overlay (D1 gate input).
 ///
 /// The constructor applies the overlay; callers pass the bare base.
 pub(crate) fn scrubbed_shell_step(name: &str, argv: Vec<String>) -> Result<Step, RenderError> {
     shell_step(name, argv, BTreeMap::new())
-}
-
-/// Minimal plan job with one caller-supplied shell step (hygiene input).
-pub(crate) fn token_plan_job(
-    name: &str,
-    argv: Vec<String>,
-    env: BTreeMap<String, String>,
-) -> Result<(String, Job), RenderError> {
-    Ok(job(
-        "plan",
-        "Plan",
-        Vec::new(),
-        vec![
-            checkout_step(&checkout_pin())?,
-            shell_step(name, argv, env)?,
-            plan_step(),
-        ],
-    ))
-}
-
-/// Assert a job set fails render with one error marker.
-pub(crate) fn render_fails_with(jobs: Vec<(String, Job)>, want: &str) {
-    assert!(
-        render_workflow_ir(
-            &fixture_ir(jobs),
-            WorkflowPolicy::ConsumerV1,
-            None,
-            &fixture_ctx(),
-        )
-        .is_err_and(|err| format!("{err:?}").contains(want)),
-        "must fail with {want}"
-    );
 }

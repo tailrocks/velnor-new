@@ -1,5 +1,5 @@
 [package]
-name = "velnor-actions-workflow-renderer"
+name = "velnor-actions-workflow-render-strict"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,14 +7,11 @@ license.workspace = true
 autotests = false
 
 [dependencies]
-velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
 velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
-velnor-actions-contract-release = { version = "=0.1.1", path = "../../core/velnor-actions-contract-release" }
 velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
 velnor-actions-workflow-cache = { version = "=0.1.1", path = "../velnor-actions-workflow-cache" }
 velnor-actions-workflow-document = { version = "=0.1.1", path = "../velnor-actions-workflow-document" }
 velnor-actions-workflow-jobs = { version = "=0.1.1", path = "../velnor-actions-workflow-jobs" }
-velnor-actions-workflow-render-strict = { version = "=0.1.1", path = "../velnor-actions-workflow-render-strict" }
 velnor-actions-workflow-steps = { version = "=0.1.1", path = "../velnor-actions-workflow-steps" }
 velnor-actions-workflow-tree = { version = "=0.1.1", path = "../velnor-actions-workflow-tree" }
 
@@ -22,5 +19,5 @@ velnor-actions-workflow-tree = { version = "=0.1.1", path = "../velnor-actions-w
 workspace = true
 
 [[test]]
-name = "velnor_workflow_renderer"
+name = "velnor_workflow_render_strict"
 path = "tests/main.rs"

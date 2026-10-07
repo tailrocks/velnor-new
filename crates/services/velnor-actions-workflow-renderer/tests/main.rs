@@ -1,7 +1,5 @@
 //! Integration test entry point; cases live in the sibling files.
 mod impl_adapter_wire_renderer;
-mod impl_renderer_acquire;
-mod impl_renderer_cache_steps;
 mod impl_renderer_f2close;
 mod impl_renderer_f2close_hygiene;
 mod impl_renderer_f2close_matrix;
@@ -13,15 +11,8 @@ mod impl_renderer_matrix;
 mod impl_renderer_mbx_action;
 mod impl_renderer_mbx_gc_policy;
 mod impl_renderer_mbx_native_owner;
-mod impl_renderer_msrv;
-mod impl_renderer_overlap;
-mod impl_renderer_p08;
 mod impl_renderer_planclose;
-mod impl_renderer_planformat;
-mod impl_renderer_preseed;
-mod impl_renderer_preseed_strict;
 mod impl_renderer_protocol;
-mod impl_renderer_setup;
 mod impl_renderer_size;
 mod impl_renderer_steps_quote;
 mod impl_renderer_sweep;
@@ -32,4 +23,3 @@ mod impl_renderer_token_prelude;
 mod impl_renderer_tree;
 mod impl_renderer_tree_policy;
 mod impl_renderer_tree_rejections;
-mod impl_renderer_typed_ir;

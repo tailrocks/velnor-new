@@ -162,7 +162,7 @@ fn render_all(
             problem: err.to_string(),
         }
     })?;
-    let rendered = velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared(
+    let rendered = velnor_actions_workflow_render_strict::render_workflow_ir_strict_shared(
         &ir,
         prep.config.workflow.policy,
         prep.workflow.support.as_ref(),

@@ -9,7 +9,7 @@ pub mod tree;
 pub use render::{
     AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET, COVERED_TASKS_OUTPUT,
     MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV, MatrixSource, PLAN_ID_OUTPUT,
-    PLAN_STEP_ID, RUN_KEY_OUTPUT, WORKFLOW_PATH, render_workflow_ir, render_workflow_ir_strict,
+    PLAN_STEP_ID, RUN_KEY_OUTPUT, WORKFLOW_PATH, render_workflow_ir,
 };
 pub use tree::{render_tree, render_tree_with_extra};
 

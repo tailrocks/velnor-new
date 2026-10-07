@@ -220,7 +220,7 @@ fn strict_restores_builtin_and_saves_on_elected_writer()
             )?,
         ],
     );
-    let rendered = velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared(
+    let rendered = velnor_actions_workflow_render_strict::render_workflow_ir_strict_shared(
         &fixture_ir(vec![lint]),
         velnor_actions_contract_config::WorkflowPolicy::ConsumerV1,
         None,

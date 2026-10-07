@@ -25,6 +25,7 @@
     "velnor-actions-workflow-generator",
     "velnor-actions-workflow-jobs",
     "velnor-actions-workflow-release",
+    "velnor-actions-workflow-render-strict",
     "velnor-actions-workflow-renderer",
     "velnor-actions-workflow-schema2",
     "velnor-actions-workflow-steps",
