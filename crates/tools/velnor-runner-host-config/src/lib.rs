@@ -9,7 +9,7 @@ mod config_file;
 
 pub use config::{
     DockerConfig, GithubSection, HostConfig, HostLimits, HostPlatform, JobTrustPolicy,
-    RegistrationScopeKind, RunnerConfig, ScaleSetBinding,
+    RegistrationScope, RegistrationScopeKind, RunnerConfig, ScaleSetBinding,
 };
 pub use config_file::{
     LINUX_CONFIG_PATH, assign_owner, linux_service_group_id, persist_host_config_file,

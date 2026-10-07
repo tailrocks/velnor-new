@@ -7,7 +7,10 @@ use self::validation::{
 };
 use velnor_runner_journal::HostError;
 
+mod scope;
 mod validation;
+
+pub use scope::{RegistrationScope, RegistrationScopeKind};
 
 /// Top-level controller file. Schema 1 accepts legacy macOS fields and
 /// requires the explicit trust, scope, group, and image profile for Linux.
@@ -45,22 +48,14 @@ pub enum HostPlatform {
     Linux,
 }
 
-/// Registration scope supported by this product configuration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RegistrationScopeKind {
-    /// Repository-scoped GitHub App/PAT registration.
-    Repository,
-}
-
 /// Exact Scale Set identity for registration and scheduling calls.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScaleSetBinding {
-    /// Registration scope.
-    pub scope: RegistrationScopeKind,
-    /// Repository owner.
+    /// Exact token-minting scope.
+    pub scope: RegistrationScope,
+    /// Target repository owner, used by workflow-trust policy.
     pub owner: String,
-    /// Repository name.
+    /// Target repository name, used by workflow-trust policy.
     pub repository: String,
     /// Scale Set name.
     pub scale_set_name: String,
@@ -129,6 +124,10 @@ pub struct GithubSection {
     /// Explicit registration scope on newly configured controllers.
     #[serde(default)]
     pub registration_scope: Option<RegistrationScopeKind>,
+    /// Exact organization login when `registration_scope = "organization"`.
+    /// Repository scope forbids this field and remains derived from `repository`.
+    #[serde(default)]
+    pub registration_scope_name: Option<String>,
     /// Explicit runner group id on newly configured controllers.
     #[serde(default)]
     pub runner_group_id: Option<i64>,
@@ -204,7 +203,15 @@ impl HostConfig {
             self.github.runner_group_id.is_some() && self.github.runner_group_name.is_some();
         if !legacy_macos
             && (!has_group
-                || self.github.registration_scope != Some(RegistrationScopeKind::Repository))
+                || !matches!(
+                    self.github.registration_scope,
+                    Some(RegistrationScopeKind::Repository | RegistrationScopeKind::Organization)
+                ))
+        {
+            return Err(HostError::Config);
+        }
+        if platform == HostPlatform::Macos
+            && self.github.registration_scope == Some(RegistrationScopeKind::Organization)
         {
             return Err(HostError::Config);
         }
@@ -249,11 +256,25 @@ impl HostConfig {
             (None, None) if self.host.platform.is_none() => (1, "Default"),
             _ => return Err(HostError::Config),
         };
+        let scope = match self
+            .github
+            .registration_scope
+            .unwrap_or(RegistrationScopeKind::Repository)
+        {
+            RegistrationScopeKind::Repository => RegistrationScope::Repository {
+                owner: owner.to_owned(),
+                repository: repository.to_owned(),
+            },
+            RegistrationScopeKind::Organization => RegistrationScope::Organization {
+                organization: self
+                    .github
+                    .registration_scope_name
+                    .clone()
+                    .ok_or(HostError::Config)?,
+            },
+        };
         let binding = ScaleSetBinding {
-            scope: self
-                .github
-                .registration_scope
-                .unwrap_or(RegistrationScopeKind::Repository),
+            scope,
             owner: owner.to_owned(),
             repository: repository.to_owned(),
             scale_set_name: self.github.scale_set_name.clone(),

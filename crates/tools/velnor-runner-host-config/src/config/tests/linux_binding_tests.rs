@@ -1,4 +1,4 @@
-use super::super::{HostConfig, HostPlatform};
+use super::super::{HostConfig, HostPlatform, RegistrationScope};
 use super::LINUX;
 use crate::HostError;
 
@@ -8,6 +8,13 @@ fn linux_config_binds_explicit_scope_group_trust_profile_and_drain() -> Result<(
     config.validate_for_host(HostPlatform::Linux)?;
     assert_eq!(config.drain_timeout_secs()?, 1800);
     let binding = config.scale_set_binding()?;
+    assert_eq!(
+        binding.scope,
+        RegistrationScope::Repository {
+            owner: "ChainArgos".to_owned(),
+            repository: "java-monorepo".to_owned(),
+        }
+    );
     assert_eq!(binding.owner, "ChainArgos");
     assert_eq!(binding.repository, "java-monorepo");
     assert_eq!(binding.runner_group_id, 1);
@@ -24,6 +31,58 @@ fn linux_config_binds_explicit_scope_group_trust_profile_and_drain() -> Result<(
         ".github/workflows/ci.yml",
     ));
     Ok(())
+}
+
+#[test]
+fn organization_scope_is_typed_and_separate_from_the_trust_target() -> Result<(), HostError> {
+    let text = LINUX.replace(
+        "registration_scope = \"repository\"\n",
+        "registration_scope = \"organization\"\nregistration_scope_name = \"ChainArgos\"\n",
+    );
+    let config = HostConfig::parse(&text)?;
+    config.validate_for_host(HostPlatform::Linux)?;
+    let binding = config.scale_set_binding()?;
+    assert_eq!(
+        binding.scope,
+        RegistrationScope::Organization {
+            organization: "ChainArgos".to_owned(),
+        }
+    );
+    assert_eq!(binding.owner, "ChainArgos");
+    assert_eq!(binding.repository, "java-monorepo");
+    assert_eq!(
+        config.job_trust_policy()?.allowed_repositories,
+        ["ChainArgos/java-monorepo"]
+    );
+    Ok(())
+}
+
+#[test]
+fn organization_scope_rejects_missing_mismatched_and_mac_values() {
+    let missing_name = LINUX.replace(
+        "registration_scope = \"repository\"\n",
+        "registration_scope = \"organization\"\n",
+    );
+    assert!(HostConfig::parse(&missing_name).is_err());
+
+    let mismatch = LINUX.replace(
+        "registration_scope = \"repository\"\n",
+        "registration_scope = \"organization\"\nregistration_scope_name = \"other-org\"\n",
+    );
+    assert!(HostConfig::parse(&mismatch).is_err());
+
+    let repository_with_name = LINUX.replace(
+        "registration_scope = \"repository\"\n",
+        "registration_scope = \"repository\"\nregistration_scope_name = \"ChainArgos\"\n",
+    );
+    assert!(HostConfig::parse(&repository_with_name).is_err());
+
+    let mac = HostConfig::parse(&LINUX.replace(
+        "registration_scope = \"repository\"\n",
+        "registration_scope = \"organization\"\nregistration_scope_name = \"ChainArgos\"\n",
+    ))
+    .expect("organization syntax is valid");
+    assert!(mac.validate_for_host(HostPlatform::Macos).is_err());
 }
 
 #[test]

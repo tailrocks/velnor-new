@@ -185,6 +185,7 @@ fn structs_used_by_connect_plan_stay_secret_free() {
             scale_set_name: "ubuntu-26.04-scale-set".to_owned(),
             credential_ref: "keychain:item".to_owned(),
             registration_scope: None,
+            registration_scope_name: None,
             runner_group_id: None,
             runner_group_name: None,
         },

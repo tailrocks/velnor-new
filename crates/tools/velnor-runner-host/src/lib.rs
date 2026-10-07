@@ -45,7 +45,7 @@ pub use velnor_runner_docker_spec::{
 };
 pub use velnor_runner_host_config::{
     DockerConfig, GithubSection, HostConfig, HostLimits, HostPlatform, JobTrustPolicy,
-    LINUX_CONFIG_PATH, RegistrationScopeKind, RunnerConfig, ScaleSetBinding,
+    LINUX_CONFIG_PATH, RegistrationScope, RegistrationScopeKind, RunnerConfig, ScaleSetBinding,
     linux_service_group_id, persist_host_config_file, read_host_config_file,
     remove_host_config_file, validate_host_config_target,
 };
