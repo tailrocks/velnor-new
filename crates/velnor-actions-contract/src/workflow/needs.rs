@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::errors::ContractError;
 use crate::workflow::ir::Job;
+use crate::workflow::jobs::{CI_WORKFLOW_PATH, REQUIRED_DISPLAY_NAME, STALE_WORKFLOW_PATHS};
 
 /// Env key carrying the finalized `needs` conclusions payload.
 pub const NEEDS_CHANNEL_ENV: &str = "VELNOR_NEEDS_JSON";
@@ -101,6 +102,51 @@ impl NeedsConclusions {
             needs.sort();
             needs == self.inventory
         })
+    }
+}
+
+/// Required-check migration from the branded gate to `Required` (P05-9).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RequiredCheckMigration {
+    /// Old workflow path.
+    pub old_workflow: String,
+    /// Old required-check name.
+    pub old_check: String,
+    /// New workflow path.
+    pub new_workflow: String,
+    /// New required-check name.
+    pub new_check: String,
+}
+
+impl RequiredCheckMigration {
+    /// The P05 `velnor.yml` to `ci.yml` migration.
+    #[must_use]
+    pub fn velnor_to_ci() -> Self {
+        Self {
+            old_workflow: STALE_WORKFLOW_PATHS[0].to_owned(),
+            old_check: "Velnor / Required".to_owned(),
+            new_workflow: CI_WORKFLOW_PATH.to_owned(),
+            new_check: REQUIRED_DISPLAY_NAME.to_owned(),
+        }
+    }
+
+    /// Ordered migration steps; the last needs repository-admin access.
+    #[must_use]
+    pub fn steps(&self) -> Vec<String> {
+        vec![
+            format!(
+                "Merge the generator change so {} replaces {} in one commit.",
+                self.new_workflow, self.old_workflow
+            ),
+            format!(
+                "Let one {} run complete on the default branch so the {} check appears.",
+                self.new_workflow, self.new_check
+            ),
+            format!(
+                "In branch protection, require {} and remove {}; never remove the old check before the new one exists.",
+                self.new_check, self.old_check
+            ),
+        ]
     }
 }
 

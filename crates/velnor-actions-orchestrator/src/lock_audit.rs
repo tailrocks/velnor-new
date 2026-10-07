@@ -27,7 +27,7 @@ use velnor_actions_mise::toolfiles::lockfile::{
 use velnor_actions_mise::{MISE_LOCK_FILE, ToolCatalog};
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 
-use crate::vectors::validator_install_pin;
+use crate::verify::validator_install_pin;
 #[path = "lock_audit_names.rs"]
 mod names;
 use names::subject_names;

@@ -1,4 +1,5 @@
 use super::*;
+use crate::verify::validator_install_pin;
 use velnor_actions_rust::{CompileDriver, TestRunner};
 
 /// Owned argv expectation from literals.

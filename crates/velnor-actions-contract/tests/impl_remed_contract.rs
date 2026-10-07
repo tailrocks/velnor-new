@@ -27,6 +27,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             runner_label: None,
             tasks: Vec::new(),
             tofu_apply: None,
+            verify: velnor_actions_contract::VerifyConfig::default(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,

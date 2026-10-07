@@ -48,6 +48,25 @@ pub struct WorkflowConfig {
     /// Optional protected post-merge `OpenTofu` apply workflow.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tofu_apply: Option<TofuApplyConfig>,
+    /// Consumer-selected verification jobs; empty disables them all.
+    #[serde(default, skip_serializing_if = "VerifyConfig::is_empty")]
+    pub verify: VerifyConfig,
+}
+
+/// `[workflow.verify]`: config-selected verification jobs.
+///
+/// Each entry names a [`ValidatorKind::consumer_verify`] job ID; the
+/// generator emits one support job per entry on any policy and the
+/// required gate covers them. Unknown or duplicated names fail
+/// validation closed. Enabled jobs may require repository-owned
+/// policy files (`.alint.yml`, `.zizmor.yml`); a missing file fails
+/// that job, never silently.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VerifyConfig {
+    /// Verification job IDs to emit, in canonical emission order.
+    #[serde(default)]
+    pub jobs: Vec<String>,
 }
 
 /// Cache-write policy for pull-request workflows.
@@ -161,6 +180,7 @@ impl WorkflowConfig {
                 ));
             }
         }
+        self.verify.validate(file)?;
         Ok(())
     }
 
@@ -202,6 +222,37 @@ impl WorkflowConfig {
                 return Err(ContractError::config(file, "workflow.tasks", problem));
             }
             previous = Some(id);
+        }
+        Ok(())
+    }
+}
+
+impl VerifyConfig {
+    /// True when no verification job is selected.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.jobs.is_empty()
+    }
+
+    /// Validate the verify allowlist: known IDs, no duplicates.
+    /// # Errors
+    pub fn validate(&self, file: &str) -> Result<(), ContractError> {
+        let mut seen = std::collections::BTreeSet::new();
+        for job in &self.jobs {
+            if ValidatorKind::from_verify_name(job).is_none() {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.verify.jobs",
+                    format!("unknown_verify_job:{job}"),
+                ));
+            }
+            if !seen.insert(job) {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.verify.jobs",
+                    format!("duplicate_verify_job:{job}"),
+                ));
+            }
         }
         Ok(())
     }

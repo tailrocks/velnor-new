@@ -61,6 +61,16 @@ pub enum ValidatorKind {
     Actionlint,
     /// Workflow security audit.
     Zizmor,
+    /// Markdown lint over repository docs.
+    Markdownlint,
+    /// Strict JSON syntax plus duplicate-key rejection.
+    StrictJson,
+    /// Skill frontmatter and ID agreement (Agent Skills spec).
+    FrontmatterId,
+    /// Markdown link checking.
+    LinkCheck,
+    /// Host-native plugin/skill validators, where installed.
+    NativeValidators,
 }
 
 impl ValidatorKind {
@@ -73,6 +83,11 @@ impl ValidatorKind {
             Self::CargoMachete => "cargo-machete",
             Self::Actionlint => "actionlint",
             Self::Zizmor => "zizmor",
+            Self::Markdownlint => "markdownlint",
+            Self::StrictJson => "strict-json",
+            Self::FrontmatterId => "frontmatter-id",
+            Self::LinkCheck => "link-check",
+            Self::NativeValidators => "native-validators",
         }
     }
 
@@ -85,18 +100,28 @@ impl ValidatorKind {
             Self::CargoMachete => "Cargo Machete",
             Self::Actionlint => "Actionlint",
             Self::Zizmor => "Zizmor",
+            Self::Markdownlint => "Markdownlint",
+            Self::StrictJson => "Strict JSON",
+            Self::FrontmatterId => "Frontmatter ID",
+            Self::LinkCheck => "Link Check",
+            Self::NativeValidators => "Native Validators",
         }
     }
 
     /// Every validator kind in emission order.
     #[must_use]
-    pub fn all() -> [Self; 5] {
+    pub fn all() -> [Self; 10] {
         [
             Self::Alint,
             Self::CargoDeny,
             Self::CargoMachete,
             Self::Actionlint,
             Self::Zizmor,
+            Self::Markdownlint,
+            Self::StrictJson,
+            Self::FrontmatterId,
+            Self::LinkCheck,
+            Self::NativeValidators,
         ]
     }
 
@@ -111,6 +136,39 @@ impl ValidatorKind {
             Self::CargoMachete,
             Self::Zizmor,
         ]
+    }
+}
+
+impl ValidatorKind {
+    /// Consumer-selectable validators, in canonical emission order.
+    ///
+    /// The `[workflow.verify]` allowlist names a subset of these by job
+    /// ID; the renderer merges them as support jobs on any policy.
+    /// Cargo-backed validators stay Velnor-only: their vectors assume
+    /// the Velnor workspace layout.
+    #[must_use]
+    pub fn consumer_verify() -> [Self; 7] {
+        [
+            Self::Zizmor,
+            Self::Alint,
+            Self::Markdownlint,
+            Self::StrictJson,
+            Self::FrontmatterId,
+            Self::LinkCheck,
+            Self::NativeValidators,
+        ]
+    }
+
+    /// Resolve a `[workflow.verify]` job name to its validator kind.
+    ///
+    /// Names are the stable job IDs; anything else (including the
+    /// Velnor-only and always-on IDs) resolves to `None` and fails
+    /// config validation closed.
+    #[must_use]
+    pub fn from_verify_name(name: &str) -> Option<Self> {
+        Self::consumer_verify()
+            .into_iter()
+            .find(|kind| kind.job_id() == name)
     }
 }
 
@@ -304,85 +362,6 @@ pub fn assign_crate_job_ids(
         assigned.insert((package_id.clone(), configuration.clone()), id);
     }
     assigned
-}
-
-/// Cron schedule for a generated workflow (P12-4 contract half).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ScheduleTrigger {
-    /// Cron expressions (five fields each).
-    pub cron: Vec<String>,
-}
-
-impl ScheduleTrigger {
-    /// Validate five-field cron shape plus charset.
-    /// # Errors
-    pub fn validate(&self) -> Result<(), ContractError> {
-        if self.cron.is_empty() {
-            return Err(ContractError::identity("schedule.cron", "empty_cron"));
-        }
-        for entry in &self.cron {
-            let fields: Vec<&str> = entry.split_whitespace().collect();
-            let shape = fields.len() == 5
-                && fields.iter().all(|field| {
-                    !field.is_empty()
-                        && field.bytes().all(|b| {
-                            b.is_ascii_alphanumeric() || matches!(b, b'*' | b'/' | b'-' | b',')
-                        })
-                });
-            if !shape {
-                return Err(ContractError::identity(
-                    "schedule.cron",
-                    format!("bad_cron:{entry}"),
-                ));
-            }
-        }
-        Ok(())
-    }
-}
-
-/// Required-check migration from the branded gate to `Required` (P05-9).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RequiredCheckMigration {
-    /// Old workflow path.
-    pub old_workflow: String,
-    /// Old required-check name.
-    pub old_check: String,
-    /// New workflow path.
-    pub new_workflow: String,
-    /// New required-check name.
-    pub new_check: String,
-}
-
-impl RequiredCheckMigration {
-    /// The P05 `velnor.yml` to `ci.yml` migration.
-    #[must_use]
-    pub fn velnor_to_ci() -> Self {
-        Self {
-            old_workflow: STALE_WORKFLOW_PATHS[0].to_owned(),
-            old_check: "Velnor / Required".to_owned(),
-            new_workflow: CI_WORKFLOW_PATH.to_owned(),
-            new_check: REQUIRED_DISPLAY_NAME.to_owned(),
-        }
-    }
-
-    /// Ordered migration steps; the last needs repository-admin access.
-    #[must_use]
-    pub fn steps(&self) -> Vec<String> {
-        vec![
-            format!(
-                "Merge the generator change so {} replaces {} in one commit.",
-                self.new_workflow, self.old_workflow
-            ),
-            format!(
-                "Let one {} run complete on the default branch so the {} check appears.",
-                self.new_workflow, self.new_check
-            ),
-            format!(
-                "In branch protection, require {} and remove {}; never remove the old check before the new one exists.",
-                self.new_check, self.old_check
-            ),
-        ]
-    }
 }
 
 #[cfg(test)]

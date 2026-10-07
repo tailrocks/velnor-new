@@ -1,6 +1,6 @@
 //! Stack-neutral GitHub Actions workflow IR.
 use super::dispatch::WorkflowDispatch;
-use super::jobs::{ScheduleTrigger, is_safe_display_name};
+use super::jobs::is_safe_display_name;
 use super::permissions::{PermissionLevel, Permissions};
 pub use super::step::{Step, StepKind};
 #[path = "job_validation.rs"]
@@ -148,6 +148,40 @@ impl Trigger {
         Ok(())
     }
 }
+/// Cron schedule for a generated workflow (P12-4 contract half).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScheduleTrigger {
+    /// Cron expressions (five fields each).
+    pub cron: Vec<String>,
+}
+
+impl ScheduleTrigger {
+    /// Validate five-field cron shape plus charset.
+    /// # Errors
+    pub fn validate(&self) -> Result<(), ContractError> {
+        if self.cron.is_empty() {
+            return Err(ContractError::identity("schedule.cron", "empty_cron"));
+        }
+        for entry in &self.cron {
+            let fields: Vec<&str> = entry.split_whitespace().collect();
+            let shape = fields.len() == 5
+                && fields.iter().all(|field| {
+                    !field.is_empty()
+                        && field.bytes().all(|b| {
+                            b.is_ascii_alphanumeric() || matches!(b, b'*' | b'/' | b'-' | b',')
+                        })
+                });
+            if !shape {
+                return Err(ContractError::identity(
+                    "schedule.cron",
+                    format!("bad_cron:{entry}"),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Check a protected environment name (nonempty, safe charset/segments).
 fn is_valid_environment(name: &str) -> bool {
     !name.is_empty()

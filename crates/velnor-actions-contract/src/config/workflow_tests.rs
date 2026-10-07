@@ -1,4 +1,6 @@
-use super::{GeneratorValidation, PullRequestCachePolicy, WorkflowConfig, WorkflowPolicy};
+use super::{
+    GeneratorValidation, PullRequestCachePolicy, VerifyConfig, WorkflowConfig, WorkflowPolicy,
+};
 use crate::config::{
     BuildTask, BuildTaskRunner, NativeImageCachePolicy, NativeImagePlatform, NativeImageTask,
     VerificationRunner, VerificationTask, WorkflowTask,
@@ -16,6 +18,7 @@ fn named(name: &str) -> WorkflowConfig {
         runner_label: None,
         tasks: Vec::new(),
         tofu_apply: None,
+        verify: VerifyConfig::default(),
     }
 }
 
@@ -231,4 +234,46 @@ fn native_image_tasks_share_ids_and_have_one_hosted_capability_slot() {
         .validate("config.toml")
         .expect_err("image tasks use the workflow-wide ID namespace");
     assert!(error.to_string().contains("bad_workflow_task_id"));
+}
+
+#[test]
+fn verify_jobs_accept_known_ids_in_any_order() {
+    let mut config = named("CI");
+    config.verify.jobs = vec![
+        "native-validators".to_owned(),
+        "alint".to_owned(),
+        "strict-json".to_owned(),
+    ];
+    assert!(config.validate("config.toml").is_ok());
+}
+
+#[test]
+fn verify_jobs_reject_unknown_and_duplicates() {
+    let mut config = named("CI");
+    config.verify.jobs = vec!["bogus".to_owned()];
+    let err = config
+        .validate("config.toml")
+        .expect_err("unknown job fails");
+    assert!(
+        err.to_string().contains("unknown_verify_job:bogus"),
+        "{err}"
+    );
+    for forbidden in ["cargo-deny", "cargo-machete", "actionlint", "plan"] {
+        config.verify.jobs = vec![forbidden.to_owned()];
+        let err = config
+            .validate("config.toml")
+            .expect_err("non-verify ID fails");
+        assert!(
+            err.to_string().contains("unknown_verify_job"),
+            "{forbidden}: {err}"
+        );
+    }
+    config.verify.jobs = vec!["alint".to_owned(), "alint".to_owned()];
+    let err = config
+        .validate("config.toml")
+        .expect_err("duplicate job fails");
+    assert!(
+        err.to_string().contains("duplicate_verify_job:alint"),
+        "{err}"
+    );
 }

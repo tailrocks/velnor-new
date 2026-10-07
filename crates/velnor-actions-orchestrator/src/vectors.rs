@@ -20,45 +20,24 @@ use crate::{OrchestratorError, qualify::QualifyRequest};
 /// reported cargo-deny 0.20.2.
 pub(crate) const CARGO_DENY_VERSION: &str = "0.20.2";
 
-/// Resolve an emitted validator install spec to its pinned name and version.
-///
-/// Supported validator installation pins. The version must equal the pinned
-/// const or the emitted shape drifted and the audit fails closed.
-#[must_use]
-pub(crate) fn validator_install_pin(
-    spec: &str,
-) -> Option<(&'static str, &'static str, &'static str)> {
-    let (key, version) = spec.split_once('@')?;
-    match key {
-        "cargo-deny" if version == CARGO_DENY_VERSION => {
-            Some(("cargo-deny", CARGO_DENY_VERSION, "cargo-deny"))
-        }
-        CARGO_MACHETE_TOOL_SPEC if version == CARGO_MACHETE_VERSION => Some((
-            "cargo-machete",
-            CARGO_MACHETE_VERSION,
-            CARGO_MACHETE_TOOL_SPEC,
-        )),
-        "zizmor" if version == velnor_actions_mise::catalog::ZIZMOR_VERSION => Some((
-            "zizmor",
-            velnor_actions_mise::catalog::ZIZMOR_VERSION,
-            "zizmor",
-        )),
-        _ => None,
-    }
-}
-
 /// Exact Linux `x86_64` musl release for cargo-machete.
 /// GitHub's release API digest, its published `.sha256` companion, and the
 /// downloaded asset hash agree. Ubi's cold install enumerated the broad API.
-const CARGO_MACHETE_VERSION: &str = "0.9.2";
-const CARGO_MACHETE_TOOL_SPEC: &str = concat!(
+pub(crate) const CARGO_MACHETE_VERSION: &str = "0.9.2";
+pub(crate) const CARGO_MACHETE_TOOL_SPEC: &str = concat!(
     "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/",
     "download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,",
     "checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]",
 );
 
 /// Mise tool specs the validator vectors may select, without versions.
-const VALIDATOR_TOOL_SPECS: [&str; 2] = ["cargo-deny", CARGO_MACHETE_TOOL_SPEC];
+const VALIDATOR_TOOL_SPECS: [&str; 5] = [
+    "cargo-deny",
+    CARGO_MACHETE_TOOL_SPEC,
+    "npm:markdownlint-cli2",
+    "node",
+    "ubi:lycheeverse/lychee",
+];
 
 /// Product crates scanned by the machete vector, in contract order.
 ///
@@ -304,13 +283,13 @@ pub(crate) fn machete_install_argv() -> Result<Vec<String>, OrchestratorError> {
     strings_of(install.argv()).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-/// One validator vector: an allowlisted tool spec plus a fixed cargo payload.
+/// One validator vector: an allowlisted tool spec plus a fixed payload.
 ///
 /// Built through the Mise adapter's isolated `exec` constructor, so the
 /// emitted shape (global flags, spec, `--` separator, payload) matches the
 /// typed `PinnedToolExec` vectors byte for byte. The spec name must be
 /// allowlisted and the version an exact pin; anything else fails closed.
-fn validator_argv(
+pub(crate) fn validator_argv(
     spec: &str,
     version: &str,
     program: &str,

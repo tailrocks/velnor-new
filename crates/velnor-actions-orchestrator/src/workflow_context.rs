@@ -21,6 +21,10 @@ use super::{CHECKOUT_USES, REQUEST_DIR};
 /// The plan-consumer env follows the plan role: pure-tofu plans run
 /// the plan-op and freshness steps triple-less, every other role
 /// keeps the owned-homes triple.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "verify selection rides with the context inputs"
+)]
 pub(super) fn render_context(
     config: &VelnorConfig,
     label: &str,
@@ -29,6 +33,7 @@ pub(super) fn render_context(
     discovery: &Discovery,
     plan_needs_rust: bool,
     workflow_tasks: Vec<WorkflowTaskPolicy>,
+    verify: &[ValidatorKind],
 ) -> Result<RenderContext, OrchestratorError> {
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let velnor = config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1;
@@ -72,6 +77,7 @@ pub(super) fn render_context(
             },
         ]);
     }
+    crate::verify::push_verify_commands(&mut validator_commands, verify, catalog)?;
     let candidate =
         if velnor && config.workflow.generator_validation == GeneratorValidation::Candidate {
             Some(candidate_spec(catalog)?)

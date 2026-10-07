@@ -7,7 +7,7 @@ use serde::Deserialize;
 use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig, MiseCheck, QualifiedTool};
 use velnor_actions_contract::{
     DiscoveryConfig, GeneratorValidation, PullRequestCachePolicy, ResourcesConfig,
-    TestShardingConfig, VelnorConfig, WorkflowConfig, WorkflowPolicy, WorkflowTask,
+    TestShardingConfig, VelnorConfig, VerifyConfig, WorkflowConfig, WorkflowPolicy, WorkflowTask,
 };
 
 use crate::OrchestratorError;
@@ -146,6 +146,9 @@ struct PartialWorkflow {
     tasks: Vec<WorkflowTask>,
     /// Optional protected post-merge `OpenTofu` apply declaration.
     tofu_apply: Option<velnor_actions_contract::TofuApplyConfig>,
+    /// Consumer-selected verification jobs.
+    #[serde(default)]
+    verify: VerifyConfig,
 }
 
 /// Resources section with every value optional.
@@ -223,6 +226,7 @@ impl PartialWorkflow {
             runner_label: self.runner_label,
             tasks: self.tasks,
             tofu_apply: self.tofu_apply,
+            verify: self.verify,
         }
     }
 }

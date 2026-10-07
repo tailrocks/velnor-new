@@ -68,7 +68,7 @@ pub use tofu_apply::{GitHubTokenSecret, S3BackendConfig, TofuApplyConfig};
 pub use verification::{VerificationRunner, VerificationTask};
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, PullRequestCachePolicy, RUNNER_LABEL_CATALOG,
-    RunnerSelection, VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,
+    RunnerSelection, VelnorSupportWorkflow, VerifyConfig, WorkflowConfig, WorkflowPolicy,
 };
 pub use workflow_task::{WORKFLOW_TASK_JOB_PREFIX, WorkflowTask, is_valid_workflow_task_id};
 
