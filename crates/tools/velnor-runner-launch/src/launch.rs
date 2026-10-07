@@ -19,6 +19,7 @@ use velnor_runner_host::listen::{Link, Secret, admin_link};
 use velnor_runner_host::reconcile::Reconcile;
 use velnor_runner_host::scale_set::EnsureError;
 use velnor_runner_host::worker::Started;
+use velnor_runner_launch_slot as slot;
 
 mod bind;
 mod capacity;
@@ -31,7 +32,6 @@ mod inspect;
 
 mod mint_origin;
 mod session;
-mod slot;
 mod steps;
 mod trace;
 mod turn;

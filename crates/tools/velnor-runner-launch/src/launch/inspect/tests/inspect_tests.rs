@@ -1,9 +1,10 @@
 use std::time::Duration;
 
 use crate::launch::docker_stub::{DockerStub, closed, hanging, http};
+use crate::launch::gate;
 use crate::launch::harness::{journal, launch_row, no_response_body_in_journal, within};
-use crate::launch::{gate, slot};
 use velnor_runner_host::{EnsureError, HostError, IntentState, Outcome};
+use velnor_runner_launch_slot as slot;
 
 #[tokio::test]
 async fn non_not_found_inspect_error_blocks_admission_and_reconcile() -> Result<(), String> {

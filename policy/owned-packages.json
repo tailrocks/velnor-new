@@ -36,6 +36,7 @@
     "velnor-runner-github",
     "velnor-runner-host",
     "velnor-runner-launch",
+    "velnor-runner-launch-slot",
     "velnor-actions-orchestrator-core",
     "velnor-actions-orchestrator-discovery",
     "velnor-actions-orchestrator-graph",

@@ -7,7 +7,8 @@ use velnor_runner_host::reconcile::IntentRow;
 use velnor_runner_host::scale_set::EnsureError;
 use velnor_runner_host::stage::PairEngine;
 
-pub(super) async fn busy<E: PairEngine + ?Sized>(
+/// Busy means occupancy or the running count has reached capacity.
+pub async fn busy<E: PairEngine + ?Sized>(
     journal: &Journal,
     engine: &E,
     capacity: u32,
@@ -18,7 +19,8 @@ pub(super) async fn busy<E: PairEngine + ?Sized>(
     Ok(running_count(journal, engine).await? >= capacity)
 }
 
-pub(super) async fn occupied(journal: &Journal) -> Result<u32, EnsureError> {
+/// Count journal rows currently holding a launch slot.
+pub async fn occupied(journal: &Journal) -> Result<u32, EnsureError> {
     let rows = journal.rows().await.map_err(map_journal)?;
     let count = rows.iter().filter(|row| holds(row)).count();
     u32::try_from(count).map_err(|_| EnsureError::Unexpected {
@@ -27,7 +29,8 @@ pub(super) async fn occupied(journal: &Journal) -> Result<u32, EnsureError> {
     })
 }
 
-pub(super) async fn running_count<E: PairEngine + ?Sized>(
+/// Count held rows whose recorded worker is still running.
+pub async fn running_count<E: PairEngine + ?Sized>(
     journal: &Journal,
     engine: &E,
 ) -> Result<u32, EnsureError> {
@@ -48,7 +51,7 @@ pub(super) async fn running_count<E: PairEngine + ?Sized>(
 }
 
 /// Recover and clean exact worker resources after the runner exits.
-pub(super) async fn release_exited<E: PairEngine + ?Sized>(
+pub async fn release_exited<E: PairEngine + ?Sized>(
     journal: &Journal,
     engine: &E,
 ) -> Result<(), EnsureError> {
@@ -193,7 +196,8 @@ async fn delete_owned<E: PairEngine + ?Sized>(
     }
 }
 
-pub(super) fn holds(row: &IntentRow) -> bool {
+/// A launch row holds its slot until cleanup is proven or it failed.
+pub fn holds(row: &IntentRow) -> bool {
     row.kind == "launch" && !row.cleanup_proven && row.state != IntentState::Failed
 }
 

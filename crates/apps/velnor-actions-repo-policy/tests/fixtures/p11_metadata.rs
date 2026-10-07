@@ -9,12 +9,16 @@
 use std::error::Error;
 
 const WORKSPACE_MANIFESTS: [&str; 2] = ["Cargo.toml", "crates/velnor-runner/Cargo.toml"];
-pub(super) const RUNNER_MEMBERS: [(&str, &str); 5] = [
+pub(super) const RUNNER_MEMBERS: [(&str, &str); 6] = [
     ("crates/tools/velnor-runner-cli", "velnor-runner-cli"),
     ("crates/tools/velnor-runner-core", "velnor-runner-core"),
     ("crates/tools/velnor-runner-github", "velnor-runner-github"),
     ("crates/tools/velnor-runner-host", "velnor-runner-host"),
     ("crates/tools/velnor-runner-launch", "velnor-runner-launch"),
+    (
+        "crates/tools/velnor-runner-launch-slot",
+        "velnor-runner-launch-slot",
+    ),
 ];
 
 /// Minimal JSON value: enough for `cargo metadata` documents.

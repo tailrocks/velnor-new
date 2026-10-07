@@ -92,7 +92,7 @@ async fn idless_uncertain_reservation_blocks_turn_without_jit_or_ack() -> Result
     assert_eq!(result.map(|outcome| outcome.stop), Ok(false));
     assert_eq!(script.calls, Vec::<&'static str>::new());
     assert_eq!(workers, Vec::<Started>::new());
-    assert_eq!(crate::launch::slot::occupied(&journal).await, Ok(1));
+    assert_eq!(velnor_runner_launch_slot::occupied(&journal).await, Ok(1));
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].id, row);
@@ -138,7 +138,7 @@ async fn full_uncertain_slot_still_acks_progress_notice() -> Result<(), String> 
 
     assert_eq!(decision, crate::launch::Admit::Ack { stop: false });
     assert_eq!(script.calls, ["ack"]);
-    assert_eq!(crate::launch::slot::occupied(&journal).await, Ok(1));
+    assert_eq!(velnor_runner_launch_slot::occupied(&journal).await, Ok(1));
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].id, row);

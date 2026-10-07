@@ -8,10 +8,10 @@ use velnor_runner_host::scale_set::EnsureError;
 use velnor_runner_host::worker::Started;
 
 use super::capacity::{self, Admit};
-use super::slot;
 use super::steps;
 use super::trace;
 use super::{Ready, ack_ready, drive_ready, scale_session};
+use velnor_runner_launch_slot as slot;
 
 /// Poll until admission stops and no owned launch container is running.
 ///

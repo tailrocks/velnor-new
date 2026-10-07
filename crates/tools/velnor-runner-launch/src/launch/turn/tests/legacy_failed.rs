@@ -114,7 +114,7 @@ async fn legacy_ambiguous_launch_rows_are_quarantined_before_restart() -> Result
     assert_eq!(unrelated.state, IntentState::Failed);
     assert!(unrelated.cleanup_proven);
 
-    assert_eq!(crate::launch::slot::occupied(&journal).await, Ok(3));
+    assert_eq!(velnor_runner_launch_slot::occupied(&journal).await, Ok(3));
     for message_id in [96, 98, 99] {
         assert_assignment_is_held(&journal, message_id).await?;
     }
