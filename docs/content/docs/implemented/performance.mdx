@@ -1,4 +1,7 @@
-# V1 performance acceptance — local + CI-observable measurements
+---
+title: "V1 performance acceptance — local + CI-observable measurements"
+description: "Commits measured: 75f150a (historical cases), bdfffb9 (counts), 347976d (cache seed/warm), 695752e (green CI run 36777030585), 69dcc90 (this lane: cold run, pinned case 2/4/5, preflight, local"
+---
 
 Commits measured: `75f150a` (historical cases), `bdfffb9`
 (counts), `347976d` (cache seed/warm), `695752e` (green CI run
@@ -47,7 +50,7 @@ cargo test --workspace --locked --offline   # 526.26 s wall, exit 0
 Split: compile 97 s (`Finished` 1 m 37 s, 65 locked packages + 7
 workspace crates, 0 downloads during test); test execution ~418 s
 (cli 100.05 s, orch lib 29.44 s, orch int 282.03 s, mise 2.59 s,
-rest <1 s); ~11 s harness/link overhead. 1662/1662 pass. The cold
+rest &lt;1 s); ~11 s harness/link overhead. 1662/1662 pass. The cold
 registry slows test execution itself (in-test cargo work
 re-extracts: cli 100 s cold vs 18.82 s warm).
 Proves: from-zero local compile+test is green in ~9 min here
@@ -207,7 +210,7 @@ MBX restore costs 10–14 s/job returning `No mbx cache found`
 clippy→build reuse (7.73 s avoided contract, 9.67 s
 orchestrator). Sources HIT 17,568,922 B in all 8 restoring jobs
 (aggregate 140,551,376 B DERIVED — see
-[cache-measurements.md](cache-measurements.md)). Tools MISS every
+[cache-measurements.md](/docs/implemented/cache-measurements)). Tools MISS every
 job (~114 s run-wide cold install). Final report: `status:
 passed`, 41/41 expected reports, 0 failed, 13/13 required jobs
 success (artifact-verified, not log-inferred).
@@ -221,12 +224,12 @@ for the trail, never cited for current-topology verdicts): green
 case 6). Merge-queue timing UNMEASURED (no samples).
 
 Warm-cache red run 36760724180 (6 m 46 s, orchestrator FAILED): cache-branch
-evidence + corrected 45 s accounting live in [cache-measurements.md](cache-measurements.md) §2.
+evidence + corrected 45 s accounting live in [cache-measurements.md](/docs/implemented/cache-measurements) §2.
 Red run: cache-hit evidence only, never a green verdict.
 
 ## Budget verdicts
 
-- Provisioned structural preflight < 2 s: PASSED. Hosted pinned
+- Provisioned structural preflight &lt; 2 s: PASSED. Hosted pinned
   CI (ubuntu-26.04, exact pins): `Plan` step 0.27 s end-to-end
   (21:07:31.348→31.622Z, binary + runner overhead; binary-only
   time not isolated — bounded above by 0.27 s), no compilation,
@@ -271,8 +274,8 @@ Red run: cache-hit evidence only, never a green verdict.
 
 ## P13 inventory reuse + bench harness
 
-Moved to [performance-p13.md](performance-p13.md) (file-size gate); budgets in [Budget verdicts](#budget-verdicts) govern.
+Moved to [performance-p13.md](/docs/implemented/performance-p13) (file-size gate); budgets in [Budget verdicts](#budget-verdicts) govern.
 
 ## P08 cache measurements + warm-reuse proof (R11/R12)
 
-Full evidence lives in [cache-measurements.md](cache-measurements.md).
+Full evidence lives in [cache-measurements.md](/docs/implemented/cache-measurements).

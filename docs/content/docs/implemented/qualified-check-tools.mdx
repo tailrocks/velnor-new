@@ -1,4 +1,7 @@
-# Qualified check tools
+---
+title: "Qualified check tools"
+description: "Status: source integration contract. This document does not establish full gate completion, live qualification of an example, or publication of a new release. It defines the explicit tool boundary"
+---
 
 Status: source integration contract. This document does not establish full
 gate completion, live qualification of an example, or publication of a new
@@ -10,7 +13,7 @@ Schema 1 accepts a root `qualified_tools` array. A named check's `tools` array
 contains only IDs from that registry. Missing IDs fail validation; matching a
 built-in catalog name does not grant authority. Pure native checks may select
 `tools = []`. Native macOS `system_tools` pins are a separate observation
-contract, documented in [Named Mise checks](named-mise-checks.md).
+contract, documented in [Named Mise checks](/docs/implemented/named-mise-checks).
 
 Each `QualifiedTool` contains `id`, `backend`, exact `version`, typed `options`,
 sorted `depends_on` IDs, and sorted `platforms`. The complete registry is

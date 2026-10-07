@@ -1,4 +1,7 @@
-# Fork-PR trust model (G1)
+---
+title: "Fork-PR trust model (G1)"
+description: "ci.yml renders pullrequest / push / mergegroup triggers only (orchestrator::workflow::buildworkflow, crates/services/velnor-actions-orchestrator/src/workflow.rs:130-138; PR types opened, synchronize,"
+---
 
 `ci.yml` renders `pull_request` / `push` / `merge_group` triggers only
 (`orchestrator::workflow::build_workflow`,
@@ -45,7 +48,7 @@ review is the trust root for the committed `needs` set"
 - Forge the asset digest: a wrong `VELNOR_ASSET_SHA256` fails
   `sha256sum -c` in the Acquire step (`pins.rs:192-198`) — red, not green.
 - Poison shared caches: PR runs restore read-only; saves are
-  push-gated (`gate-4-tool-compilation-reuse.md`, R13).
+  push-gated (`/docs/implemented/gate-4-tool-compilation-reuse`, R13).
 - Fake validator conclusions at runtime: `needs` conclusions are
   server-side; any observed-vs-expected divergence fails closed
   (`needs_channel.rs:81-83`).

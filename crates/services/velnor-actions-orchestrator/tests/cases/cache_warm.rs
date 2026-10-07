@@ -6,7 +6,7 @@
 //! offline-skip branch, and lockfile deltas change the cache identity.
 //! Lock CONTENT deltas re-key at runtime via `hashFiles` (same template,
 //! different resolved key); the hosted seed/warm pair in
-//! `docs/implemented/performance.md` shows both sides of that branch.
+//! `docs/content/docs/implemented/performance.mdx` shows both sides of that branch.
 
 use std::collections::BTreeMap;
 use std::fs;

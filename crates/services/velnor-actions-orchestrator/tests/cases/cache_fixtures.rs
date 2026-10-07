@@ -5,7 +5,7 @@
 //! qualified Mise key shape per tool union (never job-suffixed), a single
 //! plan writer, and restore-before-fetch order. The service-report test
 //! pins the `gh cache list --json` reporting path on a fixed format sample
-//! (live numbers live in `docs/implemented/performance.md`, never here).
+//! (live numbers live in `docs/content/docs/implemented/performance.mdx`, never here).
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -342,7 +342,7 @@ fn cargo_only_shared_registry_single_shape() -> TestResult {
 #[test]
 fn service_report_parses_live_shape_for_sequential_runs() {
     // Fixed format sample (live `gh cache list --json` shape); the numbers
-    // it carries are illustrative — real totals live in performance.md.
+    // it carries are illustrative — real totals live in performance.mdx.
     let body = r#"[{"key":"velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-aa","sizeInBytes":17568922},{"key":"mise-v1-x86_64-unknown-linux-gnu-2026.9.16-bb","sizeInBytes":65857248}]"#;
     let report =
         cache_trust::summarize_cache_usage(body, 10_737_418_240, 17_568_922, 3).expect("report");
