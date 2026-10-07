@@ -195,12 +195,12 @@ pub const PREPARE_RUST_COMPONENTS_STEP: &str = "Prepare Rust components";
 /// Rust components the prepare step guarantees, sorted.
 const RUST_COMPONENTS: [&str; 2] = ["clippy", "rustfmt"];
 
-/// Pinned-toolchain rustup program for the fixed components payload.
+/// Pinned-toolchain rustup program for the fixed rustup payloads.
 ///
 /// The source-policy gate bans bare `"rustup"` spellings; this alias is
-/// the acknowledgement: the only sanctioned direct `rustup` invocation,
-/// fixed argv under Velnor-owned homes (see the type docs).
-const FORBIDDEN_ACKNOWLEDGED_RUSTUP: &str = "rustup";
+/// the acknowledgement: sanctioned direct `rustup` invocations spell the
+/// program through this const only, fixed argv (see the type docs).
+pub(crate) const FORBIDDEN_ACKNOWLEDGED_RUSTUP: &str = "rustup";
 
 /// Fixed `rustup component add` for the pinned toolchain as one named step.
 ///

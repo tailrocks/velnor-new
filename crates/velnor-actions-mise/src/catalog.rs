@@ -353,7 +353,16 @@ impl ToolCatalog {
     /// `mise install rust@<exact>` creates; never an ambient toolchain.
     #[must_use]
     pub fn rust_toolchain_name(&self) -> String {
-        format!("{}-{RUST_TARGET_TRIPLE}", self.version(PinnedTool::Rust))
+        self.rust_toolchain_name_for_host(RUST_TARGET_TRIPLE)
+    }
+
+    /// Exact `rustup` toolchain name on one build host triple.
+    ///
+    /// Cross-compile legs address the host toolchain (where `mise install`
+    /// ran), never the target triple being built for.
+    #[must_use]
+    pub fn rust_toolchain_name_for_host(&self, host: &str) -> String {
+        format!("{}-{host}", self.version(PinnedTool::Rust))
     }
 
     /// Mise selectors for several tools, in the given order.

@@ -2,9 +2,9 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 use velnor_actions_mise::{
-    MiseError, PREPARE_PINNED_TOOLS_STEP, PREPARE_RUST_COMPONENTS_STEP, PinnedTool,
-    PreparePinnedTools, PrepareRustComponents, ToolCatalog, ToolHomes, VERIFY_PREPARED_INPUTS_STEP,
-    VerifyPreparedInputs,
+    MiseError, PREPARE_PINNED_TOOLS_STEP, PREPARE_RUST_COMPONENTS_STEP, PREPARE_RUST_TARGET_STEP,
+    PinnedTool, PreparePinnedTools, PrepareRustComponents, PrepareRustTarget, ToolCatalog,
+    ToolHomes, VERIFY_PREPARED_INPUTS_STEP, VerifyPreparedInputs,
 };
 
 fn pinned() -> ToolCatalog {
@@ -319,6 +319,51 @@ fn env_value<'a>(env: &'a [(OsString, OsString)], key: &str) -> Option<&'a OsStr
     env.iter()
         .find(|(item_key, _)| item_key == key)
         .map(|(_, value)| value)
+}
+
+#[test]
+fn rust_target_step_name_matches_contract() {
+    assert_eq!(PREPARE_RUST_TARGET_STEP, "Prepare Rust target");
+    assert_eq!(PrepareRustTarget::step_name(), PREPARE_RUST_TARGET_STEP);
+}
+
+#[test]
+fn rust_target_argv_pins_host_toolchain_and_target() -> Result<(), String> {
+    let request = PrepareRustTarget::new("aarch64-apple-darwin", "x86_64-apple-darwin")
+        .map_err(|err| err.to_string())?;
+    assert_eq!(request.host(), "aarch64-apple-darwin");
+    assert_eq!(request.target(), "x86_64-apple-darwin");
+    assert_eq!(
+        request.argv(&pinned()),
+        strings(&[
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+            "rust@1.98.1",
+            "--",
+            "rustup",
+            "target",
+            "add",
+            "--toolchain",
+            "1.98.1-aarch64-apple-darwin",
+            "x86_64-apple-darwin",
+        ])
+    );
+    Ok(())
+}
+
+#[test]
+fn rust_target_rejects_empty_triple() {
+    assert!(matches!(
+        PrepareRustTarget::new("", "x86_64-apple-darwin"),
+        Err(MiseError::InvalidStepInput { .. })
+    ));
+    assert!(matches!(
+        PrepareRustTarget::new("aarch64-apple-darwin", ""),
+        Err(MiseError::InvalidStepInput { .. })
+    ));
 }
 
 #[test]
