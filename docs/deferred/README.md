@@ -2,7 +2,7 @@
 
 **Status:** Deferred. No runner implementation is claimed by this document.
 
-Velnor's proposed V1 product is the workflow generator. Self-hosted runner work MUST NOT start until every V1 entry gate in the [implementation plan](../proposed/implementation-plan.md) passes and Velnor dogfoods its generated workflow on GitHub-hosted runners.
+Velnor's proposed V1 product is the workflow generator. Self-hosted runner work MUST NOT start until every V1 entry gate in the [implementation plan](../content/../content/docs/proposed/implementation-plan.mdxx) passes and Velnor dogfoods its generated workflow on GitHub-hosted runners.
 
 ## Deferred specifications
 
