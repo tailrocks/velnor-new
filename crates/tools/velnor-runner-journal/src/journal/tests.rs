@@ -72,6 +72,7 @@ pub(super) fn intent(state: IntentState, kind: &str) -> IntentRow {
         kind: kind.to_owned(),
         subject: "job".to_owned(),
         state,
+        launch_effect: crate::journal::LaunchEffectState::Unknown,
         docker_id: None,
         dind_id: None,
         worker_volume: None,

@@ -1,4 +1,5 @@
 use super::intent;
+use crate::journal::LaunchEffectState;
 use crate::reconcile::{before_advertise, occupies};
 use crate::{IntentState, Reconcile};
 
@@ -97,5 +98,25 @@ fn failed_acquire_does_not_occupy_and_clean_rows_advertise() {
             adopt: vec![],
             occupied: 1,
         }
+    );
+}
+
+#[test]
+fn failed_launch_without_durable_no_effect_evidence_still_occupies() {
+    let unknown = intent(IntentState::Failed, "launch");
+    assert!(occupies(&unknown));
+    assert_eq!(
+        before_advertise(&[unknown], &[], &[], &[]),
+        Reconcile::Hold {
+            adopt: vec![],
+            occupied: 1,
+        }
+    );
+    let mut released = intent(IntentState::Failed, "launch");
+    released.launch_effect = LaunchEffectState::DefiniteNoEffect;
+    assert!(!occupies(&released));
+    assert_eq!(
+        before_advertise(&[released], &[], &[], &[]),
+        Reconcile::Advertise { occupied: 0 }
     );
 }

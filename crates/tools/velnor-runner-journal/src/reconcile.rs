@@ -1,6 +1,6 @@
 //! Restart reconcile. Pure: no database, Docker, or HTTP.
 
-use crate::journal::IntentState;
+use crate::journal::{IntentState, LaunchEffectState};
 
 /// One durable intent loaded for reconcile.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -13,6 +13,8 @@ pub struct IntentRow {
     pub subject: String,
     /// Durable state.
     pub state: IntentState,
+    /// Monotonic evidence about whether an external launch effect may have run.
+    pub launch_effect: LaunchEffectState,
     /// Runner container id. Not a name.
     pub docker_id: Option<String>,
     /// Private `DinD` container id. Not a name.
@@ -83,6 +85,10 @@ pub fn occupies(row: &IntentRow) -> bool {
     if row.cleanup_proven {
         return false;
     }
+    if row.kind == "launch" {
+        return !(row.state == IntentState::Failed
+            && row.launch_effect == LaunchEffectState::DefiniteNoEffect);
+    }
     !(row.state == IntentState::Failed && row.kind == "acquire")
 }
 
@@ -113,6 +119,12 @@ fn blocks(rows: &[IntentRow], observed_docker: &[&str], observed_github: &[&str]
 fn row_blocks(row: &IntentRow, observed_docker: &[&str], observed_github: &[&str]) -> bool {
     if row.cleanup_proven {
         return false;
+    }
+    if row.kind == "launch"
+        && row.state == IntentState::Failed
+        && row.launch_effect != LaunchEffectState::DefiniteNoEffect
+    {
+        return true;
     }
     if !matches!(row.state, IntentState::Done | IntentState::Failed) {
         return true;

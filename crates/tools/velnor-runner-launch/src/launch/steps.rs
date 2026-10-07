@@ -58,6 +58,10 @@ where
         )
         .await
         .map_err(map_journal)?;
+    journal
+        .record_launch_effect_intent(id)
+        .await
+        .map_err(map_journal)?;
     match taken(lane, ctx, request_id) {
         Ok(AcquireOutcome::Acquired(ids)) if ids.is_empty() => reject_empty(journal, id).await,
         Ok(_) => {

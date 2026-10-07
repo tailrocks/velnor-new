@@ -46,7 +46,7 @@ impl Journal {
         let state_text = state.as_str().to_owned();
         let changed = conn
             .execute(
-                "UPDATE intents SET state = ?1, effect_state = CASE WHEN replay_key_version = 1 AND ?1 IN ('done', 'uncertain') THEN 'may_have_effect' ELSE effect_state END WHERE id = ?2 AND (replay_key_version != 1 OR state = ?1 OR state = 'pending' OR (state = 'uncertain' AND ?1 = 'done'))",
+                "UPDATE intents SET state = ?1, effect_state = CASE WHEN replay_key_version = 1 AND ?1 IN ('done', 'uncertain') THEN 'may_have_effect' ELSE effect_state END WHERE id = ?2 AND (replay_key_version != 1 OR state = ?1 OR state = 'pending' OR (state = 'uncertain' AND ?1 = 'done')) AND (kind != 'discovery-credential' OR state = ?1 OR state = 'pending')",
                 (state_text, id),
             )
             .await
@@ -186,7 +186,7 @@ impl Journal {
         let conn = self.connection().await?;
         let mut query = conn
             .query(
-                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id, worker_volume, message_id, runner_request_id, requested_workflow_run_id, requested_job_id, runner_name, observed_job_id, observed_workflow_run_id, remote_terminal FROM intents ORDER BY id",
+                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id, worker_volume, message_id, runner_request_id, requested_workflow_run_id, requested_job_id, runner_name, observed_job_id, observed_workflow_run_id, remote_terminal, effect_state FROM intents ORDER BY id",
                 (),
             )
             .await
@@ -241,6 +241,9 @@ fn intent_row(row: &turso::Row) -> Result<IntentRow, HostError> {
         kind: row.get(1).map_err(|_| HostError::Journal)?,
         subject: row.get(2).map_err(|_| HostError::Journal)?,
         state: IntentState::parse(&state_text)?,
+        launch_effect: crate::journal::LaunchEffectState::parse(
+            &row.get::<String>(17).map_err(|_| HostError::Journal)?,
+        )?,
         docker_id: row.get(4).map_err(|_| HostError::Journal)?,
         dind_id: row.get(7).map_err(|_| HostError::Journal)?,
         worker_volume: row.get(8).map_err(|_| HostError::Journal)?,

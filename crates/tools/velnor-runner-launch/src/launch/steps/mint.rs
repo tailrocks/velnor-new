@@ -48,6 +48,10 @@ where
         name,
         origin,
     } = request;
+    journal
+        .record_launch_effect_intent(id)
+        .await
+        .map_err(map_journal)?;
     let encoded = match fetch_jit(lane, ctx, name) {
         Ok(encoded) => encoded,
         Err(error) => return fail_jit(journal, id, origin, error).await,
@@ -64,6 +68,10 @@ where
         )
         .await;
     };
+    journal
+        .record_launch_effect_intent(id)
+        .await
+        .map_err(map_journal)?;
     let Ok(started) = start(&volume, encoded.expose().as_bytes(), bound).await else {
         return hold(journal, id, EnsureError::Uncertain).await;
     };

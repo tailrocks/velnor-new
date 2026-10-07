@@ -142,6 +142,8 @@ pub(super) fn ready<'a>(session: &'a QueueSession, polled: &'a Poll) -> Ready<'a
 #[cfg(all(test, unix))]
 mod admission_volume_tests;
 #[cfg(all(test, unix))]
+mod effect_replay;
+#[cfg(all(test, unix))]
 mod legacy_failed;
 #[cfg(all(test, unix))]
 mod progress_tests;

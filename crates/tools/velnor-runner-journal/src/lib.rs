@@ -10,7 +10,8 @@ pub mod reconcile;
 
 pub use error::HostError;
 pub use journal::{
-    CapacityClaim, IntentState, Journal, LaunchClaim, Outcome, ReplayRoute, ScopedLaunchIdentity,
+    CapacityClaim, IntentState, Journal, LaunchClaim, LaunchEffectState, Outcome, ReplayRoute,
+    ScopedLaunchIdentity,
 };
 pub use reconcile::{
     IntentRow, Reconcile, ReleaseFact, before_advertise, occupies, release_permitted,

@@ -1,6 +1,6 @@
 //! A replay-aware launch intent claim.
 
-use super::{Journal, LaunchClaim, live_id, one_row, token_rejected};
+use super::{Journal, LaunchClaim, one_row, token_rejected};
 use crate::error::HostError;
 
 impl Journal {
@@ -99,7 +99,7 @@ impl Journal {
         let result = async {
             let mut rows = conn
                 .query(
-                    "SELECT id, state, cleanup_proven, remote_terminal FROM intents WHERE kind = 'launch' AND subject = ?1 ORDER BY id DESC LIMIT 1",
+                    "SELECT id, cleanup_proven, remote_terminal FROM intents WHERE kind = 'launch' AND subject = ?1 AND NOT (state = 'failed' AND replay_key_version = 1 AND effect_state = 'definite_no_effect' AND docker_id IS NULL AND github_runner_id IS NULL AND dind_id IS NULL AND worker_volume IS NULL AND observed_job_id IS NULL AND observed_workflow_run_id IS NULL AND remote_terminal = 0) ORDER BY id DESC LIMIT 1",
                     [subject],
                 )
                 .await
@@ -107,17 +107,14 @@ impl Journal {
             let latest = if let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
                 Some((
                     row.get::<i64>(0).map_err(|_| HostError::Journal)?,
-                    row.get::<String>(1).map_err(|_| HostError::Journal)?,
+                    row.get::<i64>(1).map_err(|_| HostError::Journal)?,
                     row.get::<i64>(2).map_err(|_| HostError::Journal)?,
-                    row.get::<i64>(3).map_err(|_| HostError::Journal)?,
                 ))
             } else {
                 None
             };
             drop(rows);
-            if let Some((id, state, cleanup, terminal)) = latest
-                && state != "failed"
-            {
+            if let Some((id, cleanup, terminal)) = latest {
                 return match (cleanup, terminal) {
                     (1, 1) => Ok(LaunchClaim::Resolved(id)),
                     (0, 0 | 1) | (1, 0) => Ok(LaunchClaim::Existing(id)),
@@ -207,7 +204,21 @@ fn valid_runner_name(runner_name: &str) -> bool {
 }
 
 async fn launch_id(conn: &turso::Connection, subject: &str) -> Result<(i64, bool), HostError> {
-    if let Some(id) = live_id(conn, "launch", subject).await? {
+    let mut rows = conn
+        .query(
+            "SELECT id FROM intents WHERE kind = 'launch' AND subject = ?1 AND NOT (state = 'failed' AND replay_key_version = 1 AND effect_state = 'definite_no_effect' AND docker_id IS NULL AND github_runner_id IS NULL AND dind_id IS NULL AND worker_volume IS NULL AND observed_job_id IS NULL AND observed_workflow_run_id IS NULL AND remote_terminal = 0) ORDER BY id DESC LIMIT 1",
+            [subject],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let live = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .map(|row| row.get::<i64>(0).map_err(|_| HostError::Journal))
+        .transpose()?;
+    drop(rows);
+    if let Some(id) = live {
         return Ok((id, false));
     }
     conn.execute(

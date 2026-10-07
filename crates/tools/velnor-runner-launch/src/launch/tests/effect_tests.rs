@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::launch::fakes::Engine;
 use crate::launch::harness::{Mode, Script, absent, available, ctx, open};
 use velnor_runner_host::{EnsureError, HostError, IntentState};
+use velnor_runner_journal::journal::LaunchEffectState;
 
 use super::super::{Admit, admission, drive_offer};
 
@@ -107,6 +108,11 @@ async fn assert_occupied_uncertain(
     assert_eq!(rows[0].state, IntentState::Uncertain, "{label}");
     assert_eq!(rows[0].docker_id, None, "{label}");
     assert_eq!(rows[0].dind_id, None, "{label}");
+    assert_eq!(
+        journal.launch_effect_state(rows[0].id).await,
+        Ok(LaunchEffectState::MayHaveEffect),
+        "{label}: the marker must be committed before the external call"
+    );
     let decision = admission(&Engine::new(), journal, 1, 1, 0, &available(&[3]))
         .await
         .map_err(|error| error.to_string())?;
