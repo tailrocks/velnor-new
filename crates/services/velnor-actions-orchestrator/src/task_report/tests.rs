@@ -10,6 +10,7 @@ use velnor_actions_contract_workflow::{ExecuteTaskRef, TaskReport, TaskStatus};
 use velnor_actions_contract_workflow::{FinalStatus, Plan};
 use velnor_actions_orchestrator_check_acquisition::tools::QualifiedToolReceipt;
 use velnor_actions_orchestrator_check_preparation::container_receipts::ContainerReceipt;
+use velnor_actions_orchestrator_merge_request::assemble_with_needs;
 use velnor_actions_orchestrator_task_report::task_report::{
     derive_downstream, single_task_aggregate,
 };
@@ -22,7 +23,7 @@ fn artifact(temp: &tempfile::TempDir, plan: &Plan, name: &str) -> std::path::Pat
         .join(name)
 }
 fn assembled(temp: &tempfile::TempDir) -> String {
-    crate::merge_request::assemble_with_needs(
+    assemble_with_needs(
         "local",
         &temp.path().join("velnor/local"),
         Some(r#"{"plan":"success","check-demo":"success"}"#),

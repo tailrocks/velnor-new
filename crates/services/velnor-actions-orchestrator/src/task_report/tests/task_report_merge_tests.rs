@@ -11,7 +11,7 @@ use tempfile::TempDir;
 use velnor_actions_contract_workflow::{FinalStatus, Plan};
 
 use crate::merge::merge_internal;
-use crate::merge_request::assemble_with_needs;
+use velnor_actions_orchestrator_merge_request::assemble_with_needs;
 use velnor_actions_orchestrator_noop_report::noop_report::{
     NoOpRequest, write_noop_report_to, write_skip_reports,
 };

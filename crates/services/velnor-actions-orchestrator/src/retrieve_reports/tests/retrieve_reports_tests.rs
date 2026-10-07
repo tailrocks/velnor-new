@@ -6,6 +6,7 @@ use super::*;
 
 use velnor_actions_contract::{digest_b3, task_report_id_for_task};
 use velnor_actions_orchestrator_core::staged_reads::{read_staged_bytes, read_staged_text};
+use velnor_actions_orchestrator_merge_request::{MAX_STAGED_REPORT_BYTES, read_staged_reports};
 
 /// Plan expecting one matrix leg plus one task file.
 fn plan_for(artifact_id: &str, task_id: &str, digest: &str) -> serde_json::Value {

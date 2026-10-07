@@ -156,6 +156,18 @@ const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "velnor-actions-orchestrator-merge-request",
+        &[
+            "velnor-actions-contract",
+            "velnor-actions-contract-workflow",
+            "velnor-actions-orchestrator-check-evidence",
+            "velnor-actions-orchestrator-core",
+            "velnor-actions-orchestrator-merge-request-ports",
+            "velnor-actions-orchestrator-request-event",
+            "velnor-actions-workflow-jobs",
+        ],
+    ),
+    (
         "velnor-actions-orchestrator-merge-request-ports",
         &["velnor-actions-orchestrator-core"],
     ),

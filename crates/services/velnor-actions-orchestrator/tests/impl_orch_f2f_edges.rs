@@ -125,6 +125,8 @@ fn expected_service(dir: &str) -> Option<Vec<&str>> {
             "velnor-actions-orchestrator-graph",
             "velnor-actions-orchestrator-merge",
             "velnor-actions-orchestrator-merge-ports",
+            "velnor-actions-orchestrator-merge-request",
+            "velnor-actions-orchestrator-merge-request-ports",
             "velnor-actions-orchestrator-noop-report",
             "velnor-actions-orchestrator-pins",
             "velnor-actions-orchestrator-plan",

@@ -3637,6 +3637,8 @@ dependencies = [
  "velnor-actions-orchestrator-graph",
  "velnor-actions-orchestrator-merge",
  "velnor-actions-orchestrator-merge-ports",
+ "velnor-actions-orchestrator-merge-request",
+ "velnor-actions-orchestrator-merge-request-ports",
  "velnor-actions-orchestrator-noop-report",
  "velnor-actions-orchestrator-pins",
  "velnor-actions-orchestrator-plan",
@@ -3879,10 +3881,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "velnor-actions-orchestrator-merge-request-ports"
+name = "velnor-actions-orchestrator-merge-request"
 version = "0.1.1"
 dependencies = [
  "serde_json",
+ "tempfile",
+ "velnor-actions-contract",
+ "velnor-actions-contract-workflow",
+ "velnor-actions-orchestrator-check-evidence",
+ "velnor-actions-orchestrator-core",
+ "velnor-actions-orchestrator-merge-request-ports",
+ "velnor-actions-orchestrator-request-event",
+ "velnor-actions-workflow-jobs",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-merge-request-ports"
+version = "0.1.1"
+dependencies = [
  "velnor-actions-orchestrator-core",
 ]
 

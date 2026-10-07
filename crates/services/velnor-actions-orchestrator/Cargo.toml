@@ -30,6 +30,8 @@ velnor-actions-orchestrator-generation = { version = "=0.1.1", path = "../velnor
 velnor-actions-orchestrator-graph = { version = "=0.1.1", path = "../velnor-actions-orchestrator-graph" }
 velnor-actions-orchestrator-merge = { version = "=0.1.1", path = "../velnor-actions-orchestrator-merge" }
 velnor-actions-orchestrator-merge-ports = { version = "=0.1.1", path = "../velnor-actions-orchestrator-merge-ports" }
+velnor-actions-orchestrator-merge-request = { version = "=0.1.1", path = "../velnor-actions-orchestrator-merge-request" }
+velnor-actions-orchestrator-merge-request-ports = { version = "=0.1.1", path = "../velnor-actions-orchestrator-merge-request-ports" }
 velnor-actions-orchestrator-noop-report = { version = "=0.1.1", path = "../velnor-actions-orchestrator-noop-report" }
 velnor-actions-orchestrator-pins = { version = "=0.1.1", path = "../velnor-actions-orchestrator-pins" }
 velnor-actions-orchestrator-plan = { version = "=0.1.1", path = "../velnor-actions-orchestrator-plan" }
