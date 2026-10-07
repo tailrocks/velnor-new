@@ -1,12 +1,11 @@
 //! T24 efficiency gates 1–4 (spec §9) as named invariant tests.
 //!
 //! Each gate quotes its spec line and pins the enforcing machinery.
-//! Gates 5–7 live in `impl_tofu_t24_gates2` (size split); gate 7
+//! Gates 5–7 live in `cases::tofu_t24_gates2` (size split); gate 7
 //! (docs-only, from the §9 budget table) is derived in
-//! `docs/implemented/perf-tofu-t24.md`. Owns the `#[path]` fixture
-//! helper the bench/scale suites share.
+//! `docs/implemented/perf-tofu-t24.md`. Owns the fixture submodule
+//! the bench/scale suites share.
 
-#[path = "tofu_perf_fixtures_t24.rs"]
 pub(crate) mod tofu_perf_fixtures_t24;
 
 use std::collections::BTreeMap;

@@ -1,8 +1,8 @@
 //! T24 tofu perf fixtures: N-root synthetic repos + matrix case builders.
 //!
-//! Included via `#[path]` from `impl_tofu_t24_gates`, so the bench and
-//! scale suites reuse it through that parent (the P13
-//! `perf_fixtures_p13` precedent: one owner, `crate::` sharing).
+//! Submodule of `cases::tofu_t24_gates`, so the bench and scale suites
+//! reuse it through that parent (the P13 `perf_fixtures_p13`
+//! precedent: one owner, `crate::` sharing).
 
 use std::fs;
 use std::path::Path;
