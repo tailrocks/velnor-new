@@ -43,7 +43,6 @@ examine_globs = [
     # Aggregation: baseline coverage, final merge, merge requests.
     "crates/services/velnor-actions-orchestrator-cover/src/**/*.rs",
     "crates/services/velnor-actions-orchestrator/src/cover_baseline.rs",
-    "crates/services/velnor-actions-orchestrator/src/merge.rs",
     "crates/services/velnor-actions-orchestrator/src/merge_request.rs",
     "crates/services/velnor-actions-orchestrator-merge-ports/src/**/*.rs",
     "crates/services/velnor-actions-orchestrator-merge/src/**/*.rs",

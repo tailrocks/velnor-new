@@ -6,9 +6,8 @@
 //! Mise, vectors to `vectors` via Mise requests, text to the renderer.
 
 mod api;
-pub use velnor_actions_orchestrator_workflow_ir::crate_jobs;
-mod merge;
 pub use velnor_actions_orchestrator_run_select as run_select;
+pub use velnor_actions_orchestrator_workflow_ir::crate_jobs;
 mod task_report;
 
 pub use api::*;

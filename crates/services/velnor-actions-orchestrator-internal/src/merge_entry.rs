@@ -1,4 +1,4 @@
-//! Merge entrypoint over the extracted merge crate (cover/merge seam).
+//! Merge entrypoint over the cover port implementation.
 //!
 //! Merge behavior lives in `velnor-actions-orchestrator-merge` and calls
 //! cover only through the merge-ports cover trait, which the cover crate

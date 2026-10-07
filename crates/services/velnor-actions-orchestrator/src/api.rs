@@ -1,6 +1,5 @@
 //! Public orchestrator API re-exports.
 
-pub use super::merge::merge_internal;
 pub use super::task_report::write_task_report;
 pub use velnor_actions_contract_config::ExecutionMode;
 pub use velnor_actions_contract_workflow::{
@@ -42,6 +41,7 @@ pub use velnor_actions_orchestrator_internal::internal::{
     plan_internal, plan_outputs, publish_final_report, publish_plan_files, response_path_for,
     write_request, write_request_parts,
 };
+pub use velnor_actions_orchestrator_internal::merge_entry::merge_internal;
 pub use velnor_actions_orchestrator_internal::merge_request::assemble_merge_request;
 pub use velnor_actions_orchestrator_pins::pins::{
     acquire_script_argv, consumer_acquire_step_with_manifest,
