@@ -146,8 +146,8 @@ fn write_request_parts_with_lanes(
     if op == MERGE_OP {
         return crate::merge_request::write_merge_request(&path);
     }
-    if op == crate::baseline_publish::PUBLISH_OP {
-        return crate::baseline_publish::write_publish_request(
+    if op == velnor_actions_orchestrator_baseline_publish::baseline_publish::PUBLISH_OP {
+        return velnor_actions_orchestrator_baseline_publish::baseline_publish::write_publish_request(
             &path,
             event_name,
             payload_json,
@@ -208,7 +208,10 @@ fn request_op(path: &Path) -> Result<String, OrchestratorError> {
         .and_then(|name| name.to_str())
         .unwrap_or_default();
     let op = name.strip_suffix("-request.json").unwrap_or_default();
-    if op == PLAN_OP || op == MERGE_OP || op == crate::baseline_publish::PUBLISH_OP {
+    if op == PLAN_OP
+        || op == MERGE_OP
+        || op == velnor_actions_orchestrator_baseline_publish::baseline_publish::PUBLISH_OP
+    {
         Ok(op.to_owned())
     } else {
         Err(internal("unknown_request_op"))

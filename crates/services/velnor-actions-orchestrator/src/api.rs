@@ -1,6 +1,5 @@
 //! Public orchestrator API re-exports.
 
-pub use super::baseline_publish::{PUBLISH_OP, PublishOutputs, baseline_publish};
 pub use super::check_runtime::{EXECUTE_CHECK_OP, execute_check};
 pub use super::internal::{
     MERGE_OP, PLAN_OP, PlanOutputs, REQUEST_FILE_ENV, WRITE_REQUEST_OP, merge_passed,
@@ -14,6 +13,9 @@ pub use super::task_report::write_task_report;
 pub use velnor_actions_contract_config::ExecutionMode;
 pub use velnor_actions_contract_workflow::{
     DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV,
+};
+pub use velnor_actions_orchestrator_baseline_publish::baseline_publish::{
+    PUBLISH_OP, PublishOutputs, baseline_publish,
 };
 pub use velnor_actions_orchestrator_core::report_keys::REPORT_OP;
 pub use velnor_actions_orchestrator_cover_compat::cover_compat::baseline_artifact_numeric_id;

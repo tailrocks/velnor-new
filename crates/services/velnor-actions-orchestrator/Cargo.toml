@@ -18,6 +18,7 @@ velnor-actions-rust = { version = "=0.1.1", path = "../../adapters/velnor-action
 velnor-actions-rust-core = { version = "=0.1.1", path = "../../adapters/velnor-actions-rust-core" }
 velnor-actions-tofu = { version = "=0.1.1", path = "../../adapters/velnor-actions-tofu" }
 velnor-actions-tofu-core = { version = "=0.1.1", path = "../../adapters/velnor-actions-tofu-core" }
+velnor-actions-orchestrator-baseline-publish = { version = "=0.1.1", path = "../velnor-actions-orchestrator-baseline-publish" }
 velnor-actions-orchestrator-check-acquisition = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-acquisition" }
 velnor-actions-orchestrator-check-evidence = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-evidence" }
 velnor-actions-orchestrator-check-preparation = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-preparation" }

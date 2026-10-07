@@ -22,20 +22,20 @@ use serde::Deserialize;
 use velnor_actions_contract::{canonical_json_bytes, digest_b3, parse_strict_json};
 use velnor_actions_contract_workflow::WorkflowEvent;
 
-use crate::internal::{SCHEMA, check_schema};
-use crate::merge::BaselineManifest;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::run_key::resolve_run_key;
 use velnor_actions_orchestrator_core::{internal, internal_contract};
 use velnor_actions_orchestrator_cover_baseline::cover_baseline::provenance_check::{
     ProvenanceExpectations, is_unverifiable_generator_sha, validate_provenance,
 };
+use velnor_actions_orchestrator_merge::BaselineManifest;
+use velnor_actions_orchestrator_merge_ports::{SCHEMA, check_schema};
 use velnor_actions_orchestrator_request_event::request_event::{request_refs, workflow_event_for};
 
 /// Publish operation tag.
 pub const PUBLISH_OP: &str = "publish-baseline-v1";
 /// Staged baseline filename inside the run directory.
-pub(crate) const BASELINE_FILENAME: &str = "baseline.json";
+pub const BASELINE_FILENAME: &str = "baseline.json";
 
 /// `publish-baseline-v1` request: push refs plus protected-branch evidence.
 ///
@@ -86,7 +86,7 @@ pub struct PublishOutputs {
 /// Returns [`OrchestratorError::Internal`] for malformed payloads,
 /// unsupported events, missing refs, anchor escapes, or unwritable
 /// paths.
-pub(crate) fn write_publish_request(
+pub fn write_publish_request(
     request_path: &Path,
     event_name: &str,
     payload_json: &str,
@@ -159,7 +159,7 @@ pub fn baseline_publish(
 /// Returns [`OrchestratorError::Internal`] for malformed requests,
 /// refused gates, unreadable plans, and unwritable paths;
 /// [`OrchestratorError::Io`] for IO failures.
-pub(crate) fn baseline_publish_to(
+pub fn baseline_publish_to(
     request_json: &str,
     run_key: &str,
     runner_temp: &Path,
@@ -277,16 +277,18 @@ fn publish_manifest(
     for obligation in &plan.obligations {
         match obligation.decision {
             velnor_actions_contract_workflow::ObligationDecision::Execute => {
-                tasks.push(crate::merge::required_evidence::BaselineTaskEntry {
-                    task_id: obligation.task_id.clone(),
-                    task_digest: obligation.task_digest.clone(),
-                    input_digest: obligation.input_digest.clone(),
-                    closure_digest: obligation.closure_digest.clone(),
-                    proof_run_id: run_id,
-                    observed_run_id: run_id,
-                    external_data: None,
-                    proof: None,
-                });
+                tasks.push(
+                    velnor_actions_orchestrator_merge::required_evidence::BaselineTaskEntry {
+                        task_id: obligation.task_id.clone(),
+                        task_digest: obligation.task_digest.clone(),
+                        input_digest: obligation.input_digest.clone(),
+                        closure_digest: obligation.closure_digest.clone(),
+                        proof_run_id: run_id,
+                        observed_run_id: run_id,
+                        external_data: None,
+                        proof: None,
+                    },
+                );
             }
             velnor_actions_contract_workflow::ObligationDecision::CoveredByTrustedBaseline => {}
             velnor_actions_contract_workflow::ObligationDecision::ReusedFromTaskCache => {

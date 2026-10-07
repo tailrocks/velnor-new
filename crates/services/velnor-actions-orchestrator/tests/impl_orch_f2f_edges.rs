@@ -113,6 +113,7 @@ fn expected_service(dir: &str) -> Option<Vec<&str>> {
             "velnor-actions-contract-release",
             "velnor-actions-contract-workflow",
             "velnor-actions-mise",
+            "velnor-actions-orchestrator-baseline-publish",
             "velnor-actions-orchestrator-check-acquisition",
             "velnor-actions-orchestrator-check-evidence",
             "velnor-actions-orchestrator-check-preparation",

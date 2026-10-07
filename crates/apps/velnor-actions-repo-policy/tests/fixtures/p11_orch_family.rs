@@ -6,6 +6,23 @@ mod family_b;
 
 const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
     (
+        "velnor-actions-orchestrator-baseline-publish",
+        &[
+            "velnor-actions-contract",
+            "velnor-actions-contract-workflow",
+            "velnor-actions-orchestrator-core",
+            "velnor-actions-orchestrator-cover-baseline",
+            "velnor-actions-orchestrator-cover-compat",
+            "velnor-actions-orchestrator-graph",
+            "velnor-actions-orchestrator-merge",
+            "velnor-actions-orchestrator-merge-ports",
+            "velnor-actions-orchestrator-request-event",
+            "velnor-actions-orchestrator-retrieve",
+            "velnor-actions-orchestrator-task-report",
+            "velnor-actions-workflow-renderer",
+        ],
+    ),
+    (
         "velnor-actions-orchestrator-check-acquisition",
         &[
             "velnor-actions-contract",

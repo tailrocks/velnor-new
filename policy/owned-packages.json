@@ -70,6 +70,7 @@
     "velnor-actions-orchestrator-cover-baseline",
     "velnor-actions-orchestrator-task-report-write",
     "velnor-actions-orchestrator-cover",
-    "velnor-actions-orchestrator-retrieve"
+    "velnor-actions-orchestrator-retrieve",
+    "velnor-actions-orchestrator-baseline-publish"
   ]
 }

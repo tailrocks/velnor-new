@@ -126,7 +126,9 @@ fn write_plan_files(
     if let Some(manifest) = response.baseline_manifest.as_ref() {
         let bytes = canonical_json_bytes(manifest).map_err(internal_contract)?;
         velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
-            &dir.join(crate::baseline_publish::BASELINE_FILENAME),
+            &dir.join(
+                velnor_actions_orchestrator_baseline_publish::baseline_publish::BASELINE_FILENAME,
+            ),
             &bytes,
             "plan_artifact",
         )?;
