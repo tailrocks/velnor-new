@@ -2,7 +2,7 @@
 
 - State: recorded-pending-merge (branch `docs/velnor-actions-spec`; becomes implemented only on merge; required checks green at `bdfffb9` — run `36569723507`, `https://github.com/tailrocks/velnor-new/actions/runs/36569723507`)
 - Proof vocabulary: policy-on-source (shard coverage proofs, max_parallel, native-parallelism ban asserted) + qualification-of-generator (fan-out/merge legs run green in CI)
-- Specification: [implementation-plan.md](../proposed/implementation-plan.md) Gate 7 + [parallelism-and-selection-contract.md](../proposed/parallelism-and-selection-contract.md)
+- Specification: [implementation-plan.md](../content/../content/docs/proposed/implementation-plan.mdxx) Gate 7 + [parallelism-and-selection-contract.md](../content/../content/docs/proposed/parallelism-and-selection-contract.mdxx)
 - Landed by: unmerged branch `docs/velnor-actions-spec`, HEAD `bdfffb9`
 - Merge date: TBD
 - Delivered: for detected Nextest workspaces, each test configuration compiled once into an archive; small suites stay in one test-runner job, sharding only when measured execution exceeds archive transfer + runner setup; Cargo-test workspaces use the detected Cargo/MBX command with no Nextest archive; isolated Cargo target dirs per concurrent compiler task, explicit resource budgets, non-fast-failing crate matrix; merge verifies exact test-identity coverage (union equals selected tests, pairwise intersections empty) and fails on missing/duplicate results. Owning crates: `velnor-actions-orchestrator` (shard/merge), `velnor-actions-mise` (Nextest argv), `velnor-actions-rust` (sharding gates).

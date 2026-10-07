@@ -1,8 +1,11 @@
-# Velnor V1 implementation plan
+---
+title: "Velnor V1 implementation plan"
+description: "Status: Proposed. Each gate below is future work until implemented and"
+---
 
 **Status:** Proposed. Each gate below is future work until implemented and verified.
 
-The implementation MUST follow these gates in order. Do not begin self-hosted runner work until Gate 8 passes. Each gate produces reviewable code, fixtures, and evidence before the next gate starts. Parallel scheduling and safe omission rules are normative in the [parallelism and affected-work contract](parallelism-and-selection-contract.md).
+The implementation MUST follow these gates in order. Do not begin self-hosted runner work until Gate 8 passes. Each gate produces reviewable code, fixtures, and evidence before the next gate starts. Parallel scheduling and safe omission rules are normative in the [parallelism and affected-work contract](/docs/proposed/parallelism-and-selection-contract).
 
 ## Work packages and merge gates
 
@@ -52,7 +55,7 @@ logic, the renderer emits Mise syntax, or the CLI invokes external tools.
 It MUST also fail if process execution escapes the Mise adapter or if the
 orchestrator constructs shell commands instead of issuing typed tool requests.
 Policy fixtures are committed policy tests per [rust-quality
-§5](rust-quality-contract.md) (cargo-metadata edge test, exact member-set
+§5](/docs/proposed/rust-quality-contract) (cargo-metadata edge test, exact member-set
 test, literal-substring ownership tests, Alint-generic plus Clippy sizes,
 human-reviewed snapshots); custom linters are forbidden and Alint stays
 generic-only.
@@ -68,7 +71,7 @@ with the vocabulary it satisfies.
 
 ## Gate 0: bootstrap repository contract
 
-Create the virtual Cargo workspace and files defined in [architecture](../content/../content/docs/proposed/architecture.mdxx), including `.velnor/version-policy.toml` and `.alint.yml`. Velnor's own `workflow.policy = "velnor-repository-v1"` enables a separate required Alint job using exactly `asamarts/alint@v0.16.1`; `consumer-v1` does not require `.alint.yml`.
+Create the virtual Cargo workspace and files defined in [architecture](../content//docs/proposed/architecturex), including `.velnor/version-policy.toml` and `.alint.yml`. Velnor's own `workflow.policy = "velnor-repository-v1"` enables a separate required Alint job using exactly `asamarts/alint@v0.16.1`; `consumer-v1` does not require `.alint.yml`.
 
 Alint MUST enforce only configured capabilities supported by its selected
 version: file and path rules, required-file rules, structured configuration
@@ -81,7 +84,7 @@ must not be presented as Alint capabilities.
 
 ## Gate 1–2: deterministic inputs and outputs
 
-Keep all domain planning pure. Use Cargo's metadata JSON as the inventory format; use the exact command and schemas in [architecture](../content/../content/docs/proposed/architecture.mdxx). First run metadata without dependency resolution for inventory. Resolve the locked graph only after preparation, with network disabled. Treat failure to resolve as an explicit preparation error; do not fall back to parsing Rust source or silently produce an incomplete graph.
+Keep all domain planning pure. Use Cargo's metadata JSON as the inventory format; use the exact command and schemas in [architecture](../content//docs/proposed/architecturex). First run metadata without dependency resolution for inventory. Resolve the locked graph only after preparation, with network disabled. Treat failure to resolve as an explicit preparation error; do not fall back to parsing Rust source or silently produce an incomplete graph.
 
 Define stable package/task IDs before rendering workflows. `plan` and `generate` MUST share one analysis and workflow-IR implementation. Plan output lists detected workspaces/crates and intended workflow files/jobs/steps in deterministic human-readable text, writes no repository files, and emits no YAML or JSON. Its facts MUST match the generated workflow for identical inputs. Generated output MUST be ordered deterministically, use safe YAML scalar quoting, include a generator/schema version, and include a first-line ownership header with no generation date. `generate` renders to a temporary destination first, validates every output, and then atomically replaces the root `.github` tree. `generate --output-dir PATH` writes the same tree to the explicit preview destination and never edits the repository. There is no `--check` command or option.
 
@@ -97,7 +100,7 @@ The planner emits one schema-1 `plan.json` and one compact
 matrix job writes one task report per expected task plus one aggregate matrix
 report. The final job aggregates only those declared IDs and fails on missing,
 duplicate, malformed, or unexpected reports. The exact fields, paths, and
-derivation rules are normative in [the cache contract](../content/../content/docs/proposed/cache-contract.mdxx).
+derivation rules are normative in [the cache contract](../content//docs/proposed/cache-contractx).
 
 ## Gate 4: tools and compilation cache qualification
 
@@ -119,7 +122,7 @@ For detected Nextest workspaces, compile each test configuration once into an ar
 
 ## Gate 8: non-circular bootstrap and self-hosting
 
-Implement the [bootstrap and release contract](bootstrap-and-release-contract.md).
+Implement the [bootstrap and release contract](/docs/proposed/bootstrap-and-release-contract).
 Velnor's own protected `.velnor/generator.lock` selects its bootstrap; consumer
 workflows embed the exact released generator URL and SHA-256. The bootstrap
 MUST determine the current graph and MUST NOT wait for a binary built from the
@@ -153,7 +156,7 @@ previous Velnor release: its fixed Mise/MBX build invocation and manually
 reviewed seed artifact are the only bootstrap inputs.
 
 The internal plan/matrix/report wiring MUST follow the
-[workflow](../content/../content/docs/proposed/workflow-contract.mdxx) and [cache/report](../content/../content/docs/proposed/cache-contract.mdxx)
+[workflow](../content//docs/proposed/workflow-contractx) and [cache/report](../content//docs/proposed/cache-contractx)
 contracts. These are implementation artifacts, not public CLI commands:
 
 - The generated workflow creates the internal plan, emits the exact
@@ -193,7 +196,7 @@ Capture elapsed and queue time separately; tool restore/install; cache transfer;
 
 ## Recording implementation status
 
-The [implemented index](../implemented/README.md) records only landed code.
+The [implemented index](/docs/implemented) records only landed code.
 Every implementation pull request MUST add or update its record in that same
 pull request, including its spec link, delivered scope, merged PR link, and
 passing acceptance evidence. Missing records block merge. Never record a draft,

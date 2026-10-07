@@ -2,7 +2,7 @@
 
 - State: recorded-pending-merge (branch `docs/velnor-actions-spec`; becomes implemented only on merge; required checks green at `bdfffb9` — run `36569723507`, `https://github.com/tailrocks/velnor-new/actions/runs/36569723507`)
 - Proof vocabulary: policy-on-source (cache identity/ownership/trust asserted over descriptors) + qualification-of-generator (restore/miss/fallback legs run green in CI)
-- Specification: [implementation-plan.md](../proposed/implementation-plan.md) Gate 4 + [cache-contract.md](../content/../content/docs/proposed/cache-contract.mdxx) + [tooling-input-contract.md](../proposed/tooling-input-contract.md)
+- Specification: [implementation-plan.md](../content/../content/docs/proposed/implementation-plan.mdxx) Gate 4 + [cache-contract.md](../content/../content/docs/proposed/cache-contract.mdxx) + [tooling-input-contract.md](../proposed/tooling-input-contract.md)
 - Landed by: unmerged branch `docs/velnor-actions-spec`, HEAD `bdfffb9`
 - Merge date: TBD
 - Delivered: layered caches in plan order — exact Velnor-pinned Mise tool install, Cargo-source transport, MBX compilation objects — each with one owner and reasoned hit/miss/bypass/invalidation/unavailable reports; cache misses execute the task (never skip checks); MBX hits never satisfy test obligations; untrusted PR caches cannot enter the release path; project tool files stay byte-identical (read-only inspection + human recommendations only). Owning crates: `velnor-actions-mise`, `velnor-actions-orchestrator`, `velnor-actions-workflow-renderer`.

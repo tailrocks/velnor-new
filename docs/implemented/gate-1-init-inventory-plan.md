@@ -2,7 +2,7 @@
 
 - State: recorded-pending-merge (branch `docs/velnor-actions-spec`; becomes implemented only on merge; required checks green at `bdfffb9` — run `36569723507`, `https://github.com/tailrocks/velnor-new/actions/runs/36569723507`)
 - Proof vocabulary: policy-on-source (CLI surface, config schema, detector ordering asserted over repo files and fixtures) + qualification-of-generator (generated workflow carries the same init/plan behavior in CI)
-- Specification: [implementation-plan.md](../proposed/implementation-plan.md) Gate 1 + [cli-contract.md](../content/../content/docs/proposed/cli-contract.mdxx) + [architecture.md](../content/../content/docs/proposed/architecture.mdxx) (discovery/config)
+- Specification: [implementation-plan.md](../content/../content/docs/proposed/implementation-plan.mdxx) Gate 1 + [cli-contract.md](../content/../content/docs/proposed/cli-contract.mdxx) + [architecture.md](../content/../content/docs/proposed/architecture.mdxx) (discovery/config)
 - Landed by: unmerged branch `docs/velnor-actions-spec`, HEAD `bdfffb9`
 - Merge date: TBD
 - Delivered: `velnor-actions init` locates the Git root from CWD, writes one non-overwriting sample `.velnor/config.toml`, and writes nowhere else; automatic detector registry (V1 registers Rust only; `[discovery].exclude` applied before detection, `[stacks].ignore` after); `plan` prints a deterministic human-readable summary from the same analysis path as `generate`, writes no files, emits no YAML/JSON; malformed manifests and bad config return documented nonzero codes naming the file/key. Owning crates: `velnor-actions-cli`, `velnor-actions-rust`, `velnor-actions-orchestrator`.

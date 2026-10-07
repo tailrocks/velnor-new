@@ -88,7 +88,7 @@ the Cargo-profile task job.
 The matrix job MUST execute Clippy before test compilation. Different matrix entries MUST run in
 parallel. Matrix `fail-fast` MUST be false so a package failure does not cancel independent package
 obligations. Test build and test execution steps MUST NOT run for a package whose Clippy task failed. See
-the [parallelism and affected-work contract](parallelism-and-selection-contract.md) for native
+the [parallelism and affected-work contract](../content/../content/docs/proposed/parallelism-and-selection-contract.mdxx) for native
 background/wait groups, resource bounds, exact baseline coverage, and complete test partitioning.
 Formatting runs once in `plan` unless the package has an explicit formatting configuration.
 

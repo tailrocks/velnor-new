@@ -2,7 +2,7 @@
 
 - State: recorded-pending-merge (branch `docs/velnor-actions-spec`; becomes implemented only on merge; required checks green at `bdfffb9` — run `36569723507`, `https://github.com/tailrocks/velnor-new/actions/runs/36569723507`)
 - Proof vocabulary: policy-on-source (workspace shape, lints, Alint config asserted over repo files) + qualification-of-generator (generated `alint` job runs the pinned binary in CI)
-- Specification: [implementation-plan.md](../proposed/implementation-plan.md) Gate 0 + [rust-quality-contract.md](../proposed/rust-quality-contract.md) §1/§4/§5
+- Specification: [implementation-plan.md](../content/../content/docs/proposed/implementation-plan.mdxx) Gate 0 + [rust-quality-contract.md](../proposed/rust-quality-contract.md) §1/§4/§5
 - Landed by: unmerged branch `docs/velnor-actions-spec`, HEAD `bdfffb9`
 - Merge date: TBD
 - Delivered: virtual Cargo workspace with exactly the seven product crates (`velnor-actions-contract`, `-rust`, `-mise`, `-actionlint`, `-workflow-renderer`, `-orchestrator`, `-cli`; CLI declares the `velnor-actions` binary); `.alint.yml` extending the five pr-1 R04 bundles (OSS, GitHub Actions, Rust, lockfiles, no-tracked-artifacts) plus local generic file/path, required-file, line-count, CLAUDE.md-symlink, and agent-instruction rules, consumed by a separate required `alint` job pinned to full SHA `asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb` (`ALINT_USES` in `crates/services/velnor-actions-workflow-renderer/src/render.rs`); workspace lints (Clippy `too_many_lines = "deny"`, `unwrap_used`/`expect_used`/`panic` denied, `unsafe_code` forbidden).

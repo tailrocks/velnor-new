@@ -1,4 +1,7 @@
-# Velnor Actions release contract (consumer-release scope amendment)
+---
+title: "Velnor Actions release contract (consumer-release scope amendment)"
+description: "Status: Proposed. No release behavior is implemented. This document amends the V1 generator boundary with a reviewed consumer-release scope; it does not authorize the deferred runner, Docker,"
+---
 
 **Status:** Proposed. No release behavior is implemented. This document amends
 the V1 generator boundary with a reviewed consumer-release scope; it does not
@@ -120,7 +123,7 @@ The normal effective config MUST preserve all of the following:
 - an explicit package allowlist (workspace `release = false` plus selected
   package `release = true` entries);
 - a stable package-qualified tag convention (`git_tag_name =
-  "{{ package }}-v{{ version }}"`), configured explicitly so tags do not
+  "&#123;&#123; package &#125;&#125;-v&#123;&#123; version &#125;&#125;"`), configured explicitly so tags do not
   shift when workspace membership changes.
 
 Illustrative normal effective config (not a complete workflow or credential
