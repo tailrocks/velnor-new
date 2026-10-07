@@ -382,5 +382,117 @@ pub fn crate_upload_step(job_id: &str) -> Result<Step, OrchestratorError> {
     })
 }
 
+/// Every workspace member: package name plus member directory.
+///
+/// The `crates/` group walk is the discovery, not a frozen list: new
+/// groups and packages join automatically.
+#[cfg(test)]
+pub(crate) fn workspace_suites(root: &std::path::Path) -> Vec<(String, std::path::PathBuf)> {
+    let mut members = Vec::new();
+    let crates = std::fs::read_dir(root.join("crates")).expect("crates dir lists");
+    for entry in crates {
+        let group = entry.expect("dir entry reads").path();
+        if !group.is_dir() {
+            continue;
+        }
+        let packages = std::fs::read_dir(&group).expect("group dir lists");
+        for package in packages {
+            let dir = package.expect("package entry reads").path();
+            let manifest = dir.join("Cargo.toml");
+            if !manifest.is_file() {
+                continue;
+            }
+            let text = std::fs::read_to_string(&manifest).expect("member manifest reads");
+            let mut in_package = false;
+            for line in text.lines() {
+                if line.trim() == "[package]" {
+                    in_package = true;
+                } else if line.starts_with('[') {
+                    in_package = false;
+                } else if in_package && line.trim_start().starts_with("name = ") {
+                    let name = line
+                        .trim_start()
+                        .trim_start_matches("name = ")
+                        .trim()
+                        .trim_matches('"');
+                    members.push((name.to_owned(), dir.clone()));
+                    break;
+                }
+            }
+        }
+    }
+    members.sort();
+    members
+}
+
+/// Suite sources: integration `tests/` plus unit `tests.rs` files.
+///
+/// Embedded `src/**/tests/*.rs` harnesses (including the caller's own
+/// classification test) are NOT suite sources, so marker vocabulary in
+/// test scaffolding never trips the scan.
+#[cfg(test)]
+fn suite_files(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    let mut pending = vec![dir.join("tests")];
+    while let Some(path) = pending.pop() {
+        let Ok(entries) = std::fs::read_dir(&path) else {
+            continue;
+        };
+        for entry in entries {
+            let entry = entry.expect("suite entry reads");
+            if entry.file_type().expect("suite entry types").is_dir() {
+                pending.push(entry.path());
+            } else if entry.path().extension().is_some_and(|ext| ext == "rs") {
+                out.push(entry.path());
+            }
+        }
+    }
+    let mut src_pending = vec![dir.join("src")];
+    while let Some(path) = src_pending.pop() {
+        let Ok(entries) = std::fs::read_dir(&path) else {
+            continue;
+        };
+        for entry in entries {
+            let entry = entry.expect("src entry reads");
+            if entry.file_type().expect("src entry types").is_dir() {
+                src_pending.push(entry.path());
+            } else if entry
+                .path()
+                .file_name()
+                .is_some_and(|name| name == "tests.rs")
+            {
+                out.push(entry.path());
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// True when any suite file contains any marker.
+#[cfg(test)]
+pub(crate) fn suite_has_marker(dir: &std::path::Path, markers: &[&str]) -> bool {
+    suite_files(dir).iter().any(|path| {
+        let text = std::fs::read_to_string(path).expect("suite file reads");
+        markers.iter().any(|marker| text.contains(marker))
+    })
+}
+
+/// True when one suite file contains the primary plus any secondary.
+///
+/// Same-file pairing distinguishes real execution (`tofu_exec`
+/// plus a `run_*` call) from ctor-only and env-assertion uses.
+#[cfg(test)]
+pub(crate) fn suite_has_marker_pair(
+    dir: &std::path::Path,
+    primary: &str,
+    secondaries: &[&str],
+) -> bool {
+    suite_files(dir).iter().any(|path| {
+        let text = std::fs::read_to_string(path).expect("suite file reads");
+        text.contains(primary) && secondaries.iter().any(|marker| text.contains(marker))
+    })
+}
+
 #[cfg(test)]
 mod tests;
