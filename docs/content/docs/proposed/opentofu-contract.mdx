@@ -1,11 +1,14 @@
-# Velnor Actions: native OpenTofu contract (adopted)
+---
+title: "Velnor Actions: native OpenTofu contract (adopted)"
+description: "**Status:** Proposed implementation contract. Unchecked ledger items are not implemented or verified. **Parent:** `velnor-actions-opentofu-spec.md` (research 2026-10-01) plus the normative tightenings in §§4–6 below. This file is the single adopted copy; do not maintain a diverging duplicate (goal §\"Specification\"). **Ledger:** [`opentofu-evidence`](/docs/reviews/opentofu-evidence) (T01–T36 evidence rows; the SOLE checklist tracker — this contract does not duplicate it). **Phase A branch:** `feat/native-opentofu` from `origin/main` 106bfd7."
+---
 
 **Status:** Proposed implementation contract. Unchecked ledger items are not
 implemented or verified.
 **Parent:** `velnor-actions-opentofu-spec.md` (research 2026-10-01) plus the
 normative tightenings in §§4–6 below. This file is the single adopted copy;
 do not maintain a diverging duplicate (goal §"Specification").
-**Ledger:** [`../reviews/opentofu-evidence.md`](../reviews/opentofu-evidence.md)
+**Ledger:** [`opentofu-evidence`](/docs/reviews/opentofu-evidence)
 (T01–T36 evidence rows; the SOLE checklist tracker — this contract does not
 duplicate it).
 **Phase A branch:** `feat/native-opentofu` from `origin/main` 106bfd7.
@@ -58,8 +61,8 @@ dispatch. BR-28 lands the tofu fixture corpus (10 dirs, 77 files, no code).
 
 Add **`crates/adapters/velnor-actions-tofu`** (Phase B): stack ID `tofu`, Mise tool
 `opentofu`, executable `tofu` — distinct concepts, no aliases. Dependency
-direction: orchestrator → {contract, rust, tofu, mise, actionlint,
-renderer}; all adapters → contract only. Tofu owns domain semantics; Mise
+direction: orchestrator → &#123;contract, rust, tofu, mise, actionlint,
+renderer&#125;; all adapters → contract only. Tofu owns domain semantics; Mise
 owns execution; renderer owns representation; orchestrator composes.
 
 Rust constraints (spec §3 + hard invariants 10–12) hold throughout,
@@ -77,7 +80,7 @@ fn-pointer style with closed-`Stack` dispatch arms. Do NOT introduce a
 Evidence:
 
 1. The live head already converged on this seam: `DetectorEntry =
-   (&'static str, u32, fn(&FileIndex) -> Vec<StackCandidate>)`
+   (&'static str, u32, fn(&FileIndex) -> Vec&lt;StackCandidate>)`
    (`contract/src/discover/registry.rs:14`), `DETECTORS` array
    (`orchestrator/src/discover.rs:127`), and exhaustive
    `match Stack::require_known` arms in `closure.rs:30`,
@@ -277,7 +280,7 @@ One job per validation root (`tofu-<root>`, display `OpenTofu — <root>`);
 fmt/init/validate as same-job ordered steps (init→validate `Data` edge);
 tofu fmt once per scope, init once per root per attempt;
 `MatrixEntry::derive("tofu", …)`;
-`required.needs` ⊇ {plan, tofu jobs, lint}. Reports flow through
+`required.needs` ⊇ &#123;plan, tofu jobs, lint&#125;. Reports flow through
 `write-task-report-v1` → exact-name fetch → `merge-v1` unchanged; reuse
 disabled for tofu (`ReusedFromTaskCache` already fails closed); docs-only =
 explicit `covered`/no-obligation disposition, never `Executed`; `NoWork`

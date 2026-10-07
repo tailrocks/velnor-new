@@ -1,4 +1,7 @@
-# Velnor V1 Rust Quality Contract
+---
+title: "Velnor V1 Rust Quality Contract"
+description: "**Status:** Proposed specification. Landed implementation records live in `docs/implemented/` and must change in the same implementation pull request."
+---
 
 **Status:** Proposed specification. Landed implementation records live in
 `docs/implemented/` and must change in the same implementation pull request.
@@ -140,7 +143,7 @@ Velnor MUST check for `rust-toolchain.toml`, `mise.toml`, and `mise.lock`; it
 MAY report their versions, components, tasks, lock coverage, and conflicts.
 They are never generated, synchronized, locked, rewritten, or used to override
 Velnor pins. Missing/malformed files produce manual recommendations, not
-automatic repair or generation failure. See the [tooling input contract](tooling-input-contract.md).
+automatic repair or generation failure. See the [tooling input contract](/docs/proposed/tooling-input-contract).
 
 Every member MUST inherit the workspace metadata and lints:
 
@@ -155,7 +158,7 @@ workspace = true
 
 `Cargo.lock` MUST be committed and normal commands MUST use `--locked`. The
 latest-stable selection, freshness inventory, update cadence, exceptions, and
-required policy behavior is normative in the [version policy](version-policy.md).
+required policy behavior is normative in the [version policy](/docs/proposed/version-policy).
 `Cargo.lock` MUST NOT remain stale merely because its current build passes.
 Optional `mise.lock` is repository-owned; Velnor reports findings but never
 creates or refreshes it.
@@ -172,7 +175,7 @@ Mise MUST install and execute Rust, components, MBX, selected Nextest, `gh`,
 policy tools, and Rust binaries. Exact pins come from the compiled catalog and
 explicit Mise arguments; Velnor's version-policy file mirrors them for
 freshness checks. Consumer `mise.toml` and `mise.lock` are optional,
-repository-owned, read-only inputs. See [version policy](version-policy.md).
+repository-owned, read-only inputs. See [version policy](/docs/proposed/version-policy).
 An illustrative hand-maintained project config is:
 
 ```toml
@@ -204,7 +207,7 @@ profiles, and no second cache may archive its store.
 
 ## 4. Tests and source layout
 
-Detail lives in [rust-test-policy.md](rust-test-policy.md).
+Detail lives in [rust-test-policy](/docs/proposed/rust-test-policy).
 
 ## 5. Size and architecture limits
 
@@ -310,7 +313,7 @@ stays in infrastructure owners.
 
 ## 7. Dependencies and supply chain
 
-Detail lives in [rust-dependency-policy.md](rust-dependency-policy.md). A
+Detail lives in [rust-dependency-policy](/docs/proposed/rust-dependency-policy). A
 mature HCL parser MUST be researched and qualified for maintenance, license,
 MSRV, behavior, and build cost; do not hand-write a regex parser for HCL.
 
@@ -357,7 +360,7 @@ replace those entries with workspace-wide Clippy or test runs.
 The following are logical task definitions, not shell command templates.
 `velnor-actions-mise` emits and executes them through pinned Mise. Exact
 executable and argument vectors for generated Rust tasks are defined by the
-[task execution contract](task-execution-contract.md); each task uses the
+[task execution contract](/docs/proposed/task-execution-contract); each task uses the
 workspace's detected Cargo or MBX compile driver and Cargo-test or Nextest test
 runner. Generated workflow YAML does not invoke Rust commands outside Mise.
 
@@ -392,4 +395,4 @@ custom synchronization, and `cargo-semver-checks` for published APIs. Coverage
 does not replace behavioral or mutation evidence. Retries are disabled by
 default; a retry requires a reviewed reason.
 
-Agent instructions, performance measurements, acceptance budgets, and readiness evidence are specified in the [agent and performance contract](agent-and-performance-contract.md).
+Agent instructions, performance measurements, acceptance budgets, and readiness evidence are specified in the [agent and performance contract](/docs/proposed/agent-and-performance-contract).

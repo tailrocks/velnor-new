@@ -1,8 +1,9 @@
 //! Quality-contract pins: spec §3 integration lives in QC; OC mirrors by ref.
 //!
-//! T26 keeps `docs/proposed/rust-quality-contract.md` (QC) as the detailed
-//! owner of the spec §3 policy and reconciles the `opentofu-contract.md`
-//! (OC) §§4.4–4.5 tofu mirrors by reference. These tests pin the §-level
+//! T26 keeps `docs/content/docs/proposed/rust-quality-contract.mdx` (QC)
+//! as the detailed owner of the spec §3 policy and reconciles the
+//! `opentofu-contract.mdx` (OC) §§4.4–4.5 tofu mirrors by reference.
+//! These tests pin the §-level
 //! integration map, the eight-crate fix, the homonym notes, the two
 //! divergence resolutions, and the no-orphan rule (every original QC
 //! normative anchor survives).
@@ -35,10 +36,10 @@ const ORIGINAL_ANCHORS: [&str; 13] = [
     "RUSTUP_TOOLCHAIN",
     "400 physical lines",
     "`cargo-metadata` edge test",
-    "tooling-input-contract.md",
-    "task-execution-contract.md",
-    "agent-and-performance-contract.md",
-    "version-policy.md",
+    "/docs/proposed/tooling-input-contract",
+    "/docs/proposed/task-execution-contract",
+    "/docs/proposed/agent-and-performance-contract",
+    "/docs/proposed/version-policy",
     "150 physical lines",
 ];
 
@@ -72,7 +73,7 @@ fn is_pointer_only(body: &str) -> bool {
 
 #[test]
 fn qc_integrates_spec_section3() -> Result<(), Box<dyn Error>> {
-    let qc = read("docs/proposed/rust-quality-contract.md")?;
+    let qc = read("docs/content/docs/proposed/rust-quality-contract.mdx")?;
     for anchor in INTEGRATION_ANCHORS {
         assert!(qc.contains(anchor), "QC misses integrated clause {anchor}");
     }
@@ -81,7 +82,7 @@ fn qc_integrates_spec_section3() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn qc_states_eight_member_workspace() -> Result<(), Box<dyn Error>> {
-    let qc = read("docs/proposed/rust-quality-contract.md")?;
+    let qc = read("docs/content/docs/proposed/rust-quality-contract.mdx")?;
     for anchor in [
         "exactly the eight product package names",
         "The eight V1 crates",
@@ -102,7 +103,7 @@ fn qc_states_eight_member_workspace() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn qc_disambiguates_homonyms() -> Result<(), Box<dyn Error>> {
-    let qc = read("docs/proposed/rust-quality-contract.md")?;
+    let qc = read("docs/content/docs/proposed/rust-quality-contract.mdx")?;
     for anchor in [
         "cargo-fmt",
         "tofu fmt",
@@ -116,21 +117,24 @@ fn qc_disambiguates_homonyms() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn qc_keeps_original_normatives() -> Result<(), Box<dyn Error>> {
-    let qc = read("docs/proposed/rust-quality-contract.md")?;
+    let qc = read("docs/content/docs/proposed/rust-quality-contract.mdx")?;
     for anchor in ORIGINAL_ANCHORS {
         assert!(qc.contains(anchor), "condensation orphaned {anchor}");
     }
-    let policy = qc.matches("version-policy.md").count();
+    let policy = qc.matches("/docs/proposed/version-policy").count();
     assert!(policy >= 2, "version-policy cited only {policy}x (need 2)");
     // Split companions keep their moved MUSTs verbatim; stubs point at them.
-    for stub in ["rust-test-policy.md", "rust-dependency-policy.md"] {
+    for stub in [
+        "/docs/proposed/rust-test-policy",
+        "/docs/proposed/rust-dependency-policy",
+    ] {
         assert!(qc.contains(stub), "QC § stub misses {stub}");
     }
-    let tests = read("docs/proposed/rust-test-policy.md")?;
+    let tests = read("docs/content/docs/proposed/rust-test-policy.mdx")?;
     for anchor in ["--no-tests fail", "src/parser/tests.rs", "proptest"] {
         assert!(tests.contains(anchor), "test-policy orphaned {anchor}");
     }
-    let deps = read("docs/proposed/rust-dependency-policy.md")?;
+    let deps = read("docs/content/docs/proposed/rust-dependency-policy.mdx")?;
     for anchor in ["narrow features", "MUST reject yanked", "cargo machete"] {
         assert!(deps.contains(anchor), "dependency-policy orphaned {anchor}");
     }
@@ -139,7 +143,7 @@ fn qc_keeps_original_normatives() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn oc_reconciles_mirrors_by_reference() -> Result<(), Box<dyn Error>> {
-    let oc = read("docs/proposed/opentofu-contract.md")?;
+    let oc = read("docs/content/docs/proposed/opentofu-contract.mdx")?;
     for anchor in OC_ANCHORS {
         assert!(oc.contains(anchor), "OC misses reconciliation {anchor}");
     }
@@ -169,8 +173,8 @@ fn agents_stays_lean_pointer_only() -> Result<(), Box<dyn Error>> {
 #[test]
 fn contracts_carry_no_fragment_links() -> Result<(), Box<dyn Error>> {
     for doc in [
-        "docs/proposed/rust-quality-contract.md",
-        "docs/proposed/opentofu-contract.md",
+        "docs/content/docs/proposed/rust-quality-contract.mdx",
+        "docs/content/docs/proposed/opentofu-contract.mdx",
     ] {
         assert!(
             !read(doc)?.contains(".md#"),
