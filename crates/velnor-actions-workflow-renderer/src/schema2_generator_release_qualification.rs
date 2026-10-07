@@ -24,9 +24,13 @@ pub(super) fn job(
     pins: &ProductReleasePins,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<(String, Yaml), RenderError> {
-    let mut action_steps = vec![workflow_steps::mise_step(
-        pins.setup_for(job.product.target),
-    )?];
+    let mut action_steps = vec![
+        workflow_steps::mise_step(pins.setup_for(job.product.target))?,
+        workflow_steps::command_step(
+            "Install pinned qualification tools",
+            &pins.install_qualify_tools_argv,
+        )?,
+    ];
     action_steps.extend(assets::download_build_steps(
         job.product,
         "Download built asset archive",

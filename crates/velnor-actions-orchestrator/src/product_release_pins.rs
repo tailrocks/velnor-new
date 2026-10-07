@@ -42,6 +42,7 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, Orche
             &[PinnedTool::Rust, PinnedTool::MrBoxington],
             &catalog,
         )?,
+        install_qualify_tools_argv: qualify_install_argv(&catalog)?,
         install_runner_build_tools_argv: install_argv(&[PinnedTool::Rust], &catalog)?,
         install_gh_argv: install_argv(&[PinnedTool::Gh], &catalog)?,
         build_argv: mbx_build_argv(&[], &catalog)?,
@@ -99,6 +100,19 @@ fn install_argv(
 ) -> Result<Vec<String>, OrchestratorError> {
     let install = MiseInstall::new(tools.to_vec()).map_err(contract_error)?;
     strings_of(install.argv(catalog)).map_err(contract_error)
+}
+
+/// Exact `mise install` argv for candidate qualification tools.
+fn qualify_install_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
+    install_argv(
+        &[
+            PinnedTool::Rust,
+            PinnedTool::Actionlint,
+            PinnedTool::Shellcheck,
+            PinnedTool::Zizmor,
+        ],
+        catalog,
+    )
 }
 
 fn mbx_build_argv(extra: &[&str], catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {

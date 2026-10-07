@@ -13,6 +13,7 @@ pub(super) fn test_pins() -> ProductReleasePins {
         macos_x86_64_setup: setup,
         install_gate_tools_argv: vec!["mise".to_owned(), "install".to_owned()],
         install_build_tools_argv: vec!["mise".to_owned(), "install".to_owned()],
+        install_qualify_tools_argv: vec!["mise".to_owned(), "install".to_owned()],
         install_runner_build_tools_argv: vec!["mise".to_owned(), "install".to_owned()],
         install_gh_argv: [
             "mise",

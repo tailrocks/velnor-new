@@ -125,6 +125,8 @@ pub struct ProductReleasePins {
     pub install_gate_tools_argv: Vec<String>,
     /// Exact `mise install` argv for native candidate build tools.
     pub install_build_tools_argv: Vec<String>,
+    /// Exact `mise install` argv for candidate qualification tools.
+    pub install_qualify_tools_argv: Vec<String>,
     /// Exact `mise install` argv for the macOS host binary build.
     pub install_runner_build_tools_argv: Vec<String>,
     /// Exact `mise install` argv for GitHub CLI.
