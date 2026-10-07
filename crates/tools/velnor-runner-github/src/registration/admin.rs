@@ -125,7 +125,9 @@ where
     decode_admin(&exchange.body)
 }
 
-fn admin_request(call: &AdminConnectionCall<'_>) -> Result<SessionRequest, SessionError> {
+pub(crate) fn admin_request(
+    call: &AdminConnectionCall<'_>,
+) -> Result<SessionRequest, SessionError> {
     if call.registration_token.is_empty() {
         return Err(SessionError::Wire(WireError::RegistrationRejected));
     }
@@ -203,7 +205,7 @@ const fn retries_auth(status: u16) -> bool {
     matches!(status, 401 | 403)
 }
 
-fn decode_admin(body: &[u8]) -> Result<AdminConnection, SessionError> {
+pub(crate) fn decode_admin(body: &[u8]) -> Result<AdminConnection, SessionError> {
     let parsed: AdminFields = serde_json::from_slice(body).map_err(|_| WireError::Malformed)?;
     match (secret_text(parsed.url), secret_text(parsed.token)) {
         (Some(url), Some(token)) => Ok(AdminConnection::new(url, token)),

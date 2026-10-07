@@ -4,6 +4,7 @@
 mod admin;
 mod discovery;
 mod discovery_admin;
+mod discovery_async;
 mod groups;
 mod runners;
 mod scale_set;
@@ -20,6 +21,11 @@ pub use discovery::{
     read_repository_admin_evidence,
 };
 pub use discovery_admin::RepositoryDiscoveryAdmin;
+pub use discovery_async::{
+    AsyncDiscoveryIntentStore, AsyncDiscoveryTransport, DiscoveryExchange, DiscoveryStoreFuture,
+    exchange_repository_discovery_admin_once_async, issue_repository_discovery_token_async,
+    read_repository_admin_evidence_async,
+};
 pub use groups::{RunnerGroup, list_runner_groups};
 pub use runners::{get_runner_by_name, remove_runner};
 pub use scale_set::{

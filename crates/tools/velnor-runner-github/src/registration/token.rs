@@ -156,19 +156,25 @@ pub fn registration_token<T>(
 where
     T: Transport + ?Sized,
 {
-    let path = scope_path(call.scope)?;
-    let request = SessionRequest {
-        method: Method::Post,
-        path,
-        query: None,
-        headers: vec![v3_content(), bearer(call.pat)?, user_agent()],
-        body: Vec::new(),
-    };
+    let request = registration_token_request(call)?;
     let exchange = execute(transport, &request)?;
     if exchange.status != 201 {
         return Err(other_status(exchange.status));
     }
     decode_token(&exchange.body)
+}
+
+pub(crate) fn registration_token_request(
+    call: &RegistrationTokenCall<'_>,
+) -> Result<SessionRequest, SessionError> {
+    let path = scope_path(call.scope)?;
+    Ok(SessionRequest {
+        method: Method::Post,
+        path,
+        query: None,
+        headers: vec![v3_content(), bearer(call.pat)?, user_agent()],
+        body: Vec::new(),
+    })
 }
 
 fn v3_content() -> (String, String) {
@@ -178,7 +184,7 @@ fn v3_content() -> (String, String) {
     )
 }
 
-fn decode_token(body: &[u8]) -> Result<RegistrationToken, SessionError> {
+pub(crate) fn decode_token(body: &[u8]) -> Result<RegistrationToken, SessionError> {
     let parsed: TokenJson = serde_json::from_slice(body).map_err(|_| WireError::Malformed)?;
     let Some(token) = parsed.token else {
         return Err(SessionError::Wire(WireError::RegistrationRejected));

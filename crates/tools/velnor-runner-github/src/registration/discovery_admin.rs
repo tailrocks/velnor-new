@@ -5,6 +5,7 @@ use std::fmt;
 use crate::{AdminConnection, RunnerGroup, ScaleSetByName, ScaleSetFound, SessionError, WireError};
 
 use super::discovery::DiscoveryTransport;
+use super::discovery_async::{AsyncDiscoveryTransport, execute_discovery};
 
 /// Actions-service credential restricted to the discovery GET methods below.
 ///
@@ -78,6 +79,65 @@ impl RepositoryDiscoveryAdmin {
                 admin_token: self.connection.expose_token(),
             },
         )
+    }
+
+    /// Asynchronously read runner-group IDs and names from the Actions service.
+    ///
+    /// The returned metadata is untrusted and does not prove group visibility
+    /// or workflow restrictions. The transport must provide the bounded owned
+    /// worker described by [`AsyncDiscoveryTransport`].
+    ///
+    /// # Errors
+    ///
+    /// Returns a secret-safe transport, service, or decoding error.
+    pub async fn list_runner_groups_async<T>(
+        &self,
+        transport: &mut T,
+    ) -> Result<Vec<RunnerGroup>, SessionError>
+    where
+        T: AsyncDiscoveryTransport + ?Sized,
+    {
+        transport.bind_actions_service_origin(self.connection.expose_url())?;
+        let request = super::groups::groups_request(self.connection.expose_token())?;
+        let exchange = execute_discovery(transport, request).await?;
+        if exchange.status != 200 {
+            return Err(super::other_status(exchange.status));
+        }
+        super::groups::decode_groups(&exchange.body)
+    }
+
+    /// Asynchronously read one exact existing product Scale Set by name.
+    ///
+    /// This performs only one GET. `NotFound` remains distinct from errors and
+    /// never triggers create. A found set is untrusted discovery metadata, not
+    /// an admission permit.
+    ///
+    /// # Errors
+    ///
+    /// Returns a secret-safe validation, transport, service, or decoding error.
+    pub async fn get_existing_product_scale_set_async<T>(
+        &self,
+        transport: &mut T,
+        runner_group_id: i64,
+        scale_set_name: &str,
+    ) -> Result<ScaleSetFound, SessionError>
+    where
+        T: AsyncDiscoveryTransport + ?Sized,
+    {
+        if runner_group_id <= 0 || !super::is_supported_product_selector(scale_set_name) {
+            return Err(WireError::RegistrationRejected.into());
+        }
+        transport.bind_actions_service_origin(self.connection.expose_url())?;
+        let request = super::scale_set::scale_set_name_request(&ScaleSetByName {
+            runner_group_id,
+            name: scale_set_name,
+            admin_token: self.connection.expose_token(),
+        })?;
+        let exchange = execute_discovery(transport, request).await?;
+        if exchange.status != 200 {
+            return Err(super::other_status(exchange.status));
+        }
+        super::scale_set::decode_page(&exchange.body, scale_set_name)
     }
 }
 
