@@ -148,7 +148,9 @@ pub(super) fn staged_with_envelope(
     declarations: &[QualifiedTool],
     qualified_tools: &[velnor_actions_orchestrator_check_acquisition::tools::QualifiedToolReceipt],
     container_profile: Option<&HostContainerProfile>,
-    container: Option<&crate::check_evidence::gate::container::ContainerReceipt>,
+    container: Option<
+        &velnor_actions_orchestrator_check_preparation::container_receipts::ContainerReceipt,
+    >,
 ) -> (tempfile::TempDir, Plan) {
     let temp = tempfile::TempDir::new().expect("temp");
     let mut plan = plan_with_tools(declarations);

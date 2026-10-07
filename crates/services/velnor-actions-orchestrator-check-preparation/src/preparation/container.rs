@@ -7,13 +7,13 @@ use velnor_actions_mise::checks::{CheckCapabilityProof, PreparedContainer};
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::internal;
 pub(crate) mod bundle;
-pub(crate) mod runtime;
+pub mod runtime;
 
 #[derive(Debug)]
-pub(crate) struct OwnedContainer {
-    pub prepared: PreparedContainer,
-    pub sdk: Option<bundle::SdkProjection>,
-    pub runtime: runtime::RuntimeProjection,
+pub struct OwnedContainer {
+    pub(crate) prepared: PreparedContainer,
+    pub(crate) sdk: Option<bundle::SdkProjection>,
+    pub(crate) runtime: runtime::RuntimeProjection,
 }
 
 pub(super) fn prepare(
@@ -60,12 +60,12 @@ pub(super) fn prepare(
 }
 
 #[derive(Debug)]
-pub(crate) struct ObservedContainer {
-    pub proof: CheckCapabilityProof,
-    pub runtime: Option<runtime::RuntimeObservation>,
+pub struct ObservedContainer {
+    pub(crate) proof: CheckCapabilityProof,
+    pub(crate) runtime: Option<runtime::RuntimeObservation>,
 }
 
-pub(crate) fn probe(
+pub fn probe(
     runner: &CheckRunner,
     owned: Option<&OwnedContainer>,
     deadline: CheckDeadline,
@@ -102,13 +102,13 @@ pub(crate) fn probe(
     Ok(ObservedContainer { proof, runtime })
 }
 
-pub(crate) fn receipt(
+pub fn receipt(
     runner: &CheckRunner,
     owned: Option<&OwnedContainer>,
     before: ObservedContainer,
     after: ObservedContainer,
-) -> Result<Option<crate::check_evidence::gate::container::ContainerReceipt>, OrchestratorError> {
-    crate::check_evidence::gate::container::container_receipt(
+) -> Result<Option<crate::container_receipts::ContainerReceipt>, OrchestratorError> {
+    crate::container_receipts::container_receipt(
         runner,
         before.proof,
         after.proof,

@@ -12,11 +12,12 @@ use velnor_actions_contract_workflow::{
 };
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, ToolCatalog, discover_checks_until};
 use velnor_actions_orchestrator_check_acquisition::tools::QualifiedToolReceipt;
+use velnor_actions_orchestrator_check_preparation::container_receipts::ContainerReceipt;
+use velnor_actions_orchestrator_check_preparation::preparation::container;
+use velnor_actions_orchestrator_check_preparation::preparation::prepare_check;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::link_safety::reject_link_components;
 use velnor_actions_orchestrator_core::{internal, internal_contract};
-pub(crate) mod preparation;
-use preparation::prepare_check;
 
 /// Internal execution operation for a statically authorized native Mise task.
 pub const EXECUTE_CHECK_OP: &str = "execute-check-v1";
@@ -192,7 +193,7 @@ fn parse_lane_variant(value: &str) -> Result<Option<NamedCheckLaneVariant>, Orch
 
 struct CheckOutcome {
     evidence: Option<EvidenceReceipt>,
-    container: Option<crate::check_evidence::gate::container::ContainerReceipt>,
+    container: Option<ContainerReceipt>,
     system_tools: Vec<velnor_actions_mise::checks::SystemToolProof>,
     qualified_tools: Vec<QualifiedToolReceipt>,
 }
@@ -229,24 +230,18 @@ fn run_check(
             ),
         ),
     ];
-    let before =
-        preparation::container::probe(&item.check.runner, owned.container.as_ref(), deadline)?;
+    let before = container::probe(&item.check.runner, owned.container.as_ref(), deadline)?;
     let command = owned
         .command(deadline, velnor_actions_mise::MISE_VERSION)
         .map_err(|e| internal(&e.to_string()))?
         .with_env(&pairs)
         .map_err(|e| internal(&e.to_string()))?;
     let task_output = command.run_until(8 * 1024 * 1024, deadline);
-    let after_result =
-        preparation::container::probe(&item.check.runner, owned.container.as_ref(), deadline);
+    let after_result = container::probe(&item.check.runner, owned.container.as_ref(), deadline);
     let output = task_output.map_err(|e| internal(&e.to_string()))?;
     let after = after_result?;
-    let container = preparation::container::receipt(
-        &item.check.runner,
-        owned.container.as_ref(),
-        before,
-        after,
-    )?;
+    let container =
+        container::receipt(&item.check.runner, owned.container.as_ref(), before, after)?;
     output
         .require_success("mise-check")
         .map_err(|e| internal(&e.to_string()))?;

@@ -1,0 +1,29 @@
+[package]
+name = "velnor-actions-orchestrator-check-preparation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[dependencies]
+rustix = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
+velnor-actions-mise = { version = "=0.1.1", path = "../../adapters/velnor-actions-mise" }
+velnor-actions-orchestrator-check-acquisition = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-acquisition" }
+velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
+velnor-actions-workflow-steps = { version = "=0.1.1", path = "../velnor-actions-workflow-steps" }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "velnor_orchestrator_check_preparation"
+path = "tests/main.rs"
+
+[dev-dependencies]
+tempfile = { workspace = true }

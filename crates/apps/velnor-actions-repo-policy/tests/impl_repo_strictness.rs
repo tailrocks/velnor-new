@@ -213,6 +213,7 @@ fn strictness_no_proof_literals_anywhere() -> Result<(), Box<dyn Error>> {
     for dir in [
         "crates/services/velnor-actions-orchestrator",
         "crates/services/velnor-actions-orchestrator-check-acquisition",
+        "crates/services/velnor-actions-orchestrator-check-preparation",
         "crates/services/velnor-actions-orchestrator-core",
         "crates/services/velnor-actions-orchestrator-discovery",
         "crates/services/velnor-actions-orchestrator-graph",

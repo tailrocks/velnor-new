@@ -1,7 +1,6 @@
 //! Mandatory named-check execution and scenario proof at the ordinary final fold.
 use super::{EvidenceReceipt, ScenarioEvidence, validate_evidence};
 use serde::{Deserialize, Serialize};
-pub(crate) mod container;
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -10,6 +9,7 @@ use velnor_actions_contract_config::config::MAX_CHECK_EXECUTION_RECEIPT_BYTES;
 use velnor_actions_contract_config::config::{CheckEvidence, CheckPlatform, CheckRunner};
 use velnor_actions_contract_workflow::{MatrixEntry, Plan, TaskReport, TaskStatus};
 use velnor_actions_orchestrator_check_acquisition::tools;
+use velnor_actions_orchestrator_check_preparation::container_receipts as container;
 use velnor_actions_orchestrator_core::link_safety::reject_link_components;
 
 /// Helper-produced execution receipt inside the existing matrix artifact.

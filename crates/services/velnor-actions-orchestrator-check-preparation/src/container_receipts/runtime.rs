@@ -11,7 +11,7 @@ use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::internal;
 use velnor_actions_orchestrator_core::sha256::sha256_hex;
 
-pub(crate) use crate::check_runtime::preparation::container::runtime::{
+pub use crate::preparation::container::runtime::{
     RuntimeObservation, RuntimeRootEvidence, SocketEvidence,
 };
 

@@ -11,18 +11,18 @@ use velnor_actions_orchestrator_core::internal;
 use velnor_actions_orchestrator_core::link_safety::reject_link_components;
 
 mod binary;
-pub(crate) mod container;
+pub mod container;
 
 static NEXT_HOME: AtomicU64 = AtomicU64::new(0);
 
 /// Own cleanup while the immutable typed command handle lives.
 #[derive(Debug)]
-pub(super) struct OwnedCheck {
+pub struct OwnedCheck {
     qualified: QualifiedCheck,
     home: PathBuf,
-    pub(super) container: Option<container::OwnedContainer>,
-    pub(super) system_tools: Vec<SystemToolProof>,
-    pub(super) qualified_tools: Vec<QualifiedToolReceipt>,
+    pub container: Option<container::OwnedContainer>,
+    pub system_tools: Vec<SystemToolProof>,
+    pub qualified_tools: Vec<QualifiedToolReceipt>,
 }
 struct PreparedParts {
     qualified: QualifiedCheck,
@@ -45,7 +45,7 @@ impl Drop for OwnedCheck {
 }
 
 /// Materialize one source-bound projection and credential-free tool home.
-pub(super) fn prepare_check(
+pub fn prepare_check(
     root: &Path,
     temp: &Path,
     check: &DiscoveredCheck,

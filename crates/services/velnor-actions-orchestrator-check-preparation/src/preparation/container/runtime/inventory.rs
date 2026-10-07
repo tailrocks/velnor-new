@@ -14,7 +14,7 @@ const MAX_RUNTIME_METADATA_BYTES: u64 = 64 * 1024;
 /// Stable identity of the declared Unix socket endpoint.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct SocketEvidence {
+pub struct SocketEvidence {
     /// Canonical absolute socket path.
     pub path: String,
     /// Owning Unix user ID.
@@ -32,7 +32,7 @@ pub(crate) struct SocketEvidence {
 /// Stable identity of the declared `OrbStack` runtime directory.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct RuntimeRootEvidence {
+pub struct RuntimeRootEvidence {
     /// Canonical absolute runtime directory path.
     pub path: String,
     /// Owning Unix user ID.
@@ -50,7 +50,7 @@ pub(crate) struct RuntimeRootEvidence {
 /// Fresh identity evidence captured after runtime revalidation.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct RuntimeObservation {
+pub struct RuntimeObservation {
     /// Fresh socket identity.
     pub socket: SocketEvidence,
     /// Fresh `OrbStack` runtime directory identity.

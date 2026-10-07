@@ -112,6 +112,17 @@ const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "crates/services/velnor-actions-orchestrator-check-preparation",
+        &[
+            "velnor-actions-contract",
+            "velnor-actions-contract-config",
+            "velnor-actions-mise",
+            "velnor-actions-orchestrator-check-acquisition",
+            "velnor-actions-orchestrator-core",
+            "velnor-actions-workflow-steps",
+        ],
+    ),
+    (
         "crates/services/velnor-actions-orchestrator-core",
         &[
             "velnor-actions-actionlint",
@@ -229,6 +240,7 @@ fn expected_service(dir: &str) -> Option<Vec<&str>> {
             "velnor-actions-contract-workflow",
             "velnor-actions-mise",
             "velnor-actions-orchestrator-check-acquisition",
+            "velnor-actions-orchestrator-check-preparation",
             "velnor-actions-orchestrator-core",
             "velnor-actions-orchestrator-discovery",
             "velnor-actions-orchestrator-graph",

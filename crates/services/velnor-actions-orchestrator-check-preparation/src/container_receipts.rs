@@ -8,10 +8,10 @@ use velnor_actions_mise::checks::{
 };
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::{internal, internal_contract};
-pub(crate) mod runtime;
+pub mod runtime;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct ContainerReceipt {
+pub struct ContainerReceipt {
     pub profile_digest: String,
     pub before: CheckCapabilityProof,
     pub after: CheckCapabilityProof,
@@ -21,7 +21,7 @@ pub(crate) struct ContainerReceipt {
     pub before_runtime: Option<runtime::RuntimeObservation>,
     pub after_runtime: Option<runtime::RuntimeObservation>,
 }
-pub(crate) fn container_receipt<S: Serialize, R: Serialize>(
+pub fn container_receipt<S: Serialize, R: Serialize>(
     runner: &CheckRunner,
     before: CheckCapabilityProof,
     after: CheckCapabilityProof,
@@ -58,7 +58,7 @@ pub(crate) fn container_receipt<S: Serialize, R: Serialize>(
     validate_container_receipt(runner, Some(&receipt))?;
     Ok(Some(receipt))
 }
-pub(crate) fn validate_container_receipt(
+pub fn validate_container_receipt(
     runner: &CheckRunner,
     receipt: Option<&ContainerReceipt>,
 ) -> Result<(), OrchestratorError> {
@@ -271,13 +271,3 @@ fn validate_sdk(
 }
 #[cfg(test)]
 mod tests;
-
-#[cfg(test)]
-pub(crate) fn budget_test_profile() -> HostContainerProfile {
-    tests::profile()
-}
-
-#[cfg(test)]
-pub(crate) fn budget_test_receipt() -> ContainerReceipt {
-    tests::receipt()
-}

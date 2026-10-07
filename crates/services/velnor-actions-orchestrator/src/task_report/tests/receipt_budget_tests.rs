@@ -1,8 +1,11 @@
 use super::*;
 
+use serde_json::json;
 use std::path::PathBuf;
+use velnor_actions_contract::{canonical_json_bytes, digest_b3};
 use velnor_actions_contract_config::config::{
-    CheckExecutor, CheckRunner, HostContainerProfile, MAX_CHECK_CONTAINER_PATH_BYTES,
+    CheckExecutor, CheckRunner, ContainerPlatform, DaemonIdentityPolicy, HostContainerProfile,
+    HostDockerCli, HostDockerDaemon, MAX_CHECK_CONTAINER_PATH_BYTES,
     MAX_CHECK_EXECUTION_RECEIPT_BYTES, MAX_CHECK_QUALIFIED_PROBE_EXPECTED_BYTES, MiseCheck,
     QualifiedToolArtifact, QualifiedToolBackend, QualifiedToolExecutable, QualifiedToolOptions,
     QualifiedToolPlatform, QualifiedToolProbe,
@@ -10,7 +13,13 @@ use velnor_actions_contract_config::config::{
 use velnor_actions_mise::check_tool_probes::{
     QualifiedExecutableObservation, QualifiedExecutableProof,
 };
+use velnor_actions_mise::checks::{
+    CheckCapabilityProof, ContainerObservation, ContainerProbeOutput, DockerDaemonObservation,
+};
 use velnor_actions_orchestrator_check_acquisition::tools::{QualifiedToolReceipt, receipt};
+use velnor_actions_orchestrator_check_preparation::container_receipts::runtime::{
+    RuntimeObservation, SocketEvidence,
+};
 
 fn declaration(id: String) -> QualifiedTool {
     let mut expected = "bun 1.3.14".to_owned();
@@ -147,6 +156,115 @@ fn admitted_declarations(profile: Option<&HostContainerProfile>) -> Vec<Qualifie
     admitted
 }
 
+/// Docker container fixtures for the container-budget test.
+///
+/// Local copies of the preparation crate's docker-only generators:
+/// cross-crate `#[cfg(test)]` helpers are unavailable here, so the
+/// budget test rebuilds the same fixtures from public evidence types.
+fn container_profile() -> HostContainerProfile {
+    HostContainerProfile::Docker {
+        context: "ci".into(),
+        socket_path: "/run/docker.sock".into(),
+        socket_uid: 0,
+        cli: HostDockerCli {
+            path: "/usr/local/bin/docker".into(),
+            sha256: "a".repeat(64),
+            version: "1.2.3".into(),
+            build: "build".into(),
+        },
+        daemon: HostDockerDaemon {
+            version: "1.2.3".into(),
+            platform: ContainerPlatform::LinuxX64,
+            operating_system: "Docker".into(),
+            identity_policy: DaemonIdentityPolicy::ExecutionScoped,
+        },
+    }
+}
+
+fn container_receipt_fixture() -> ContainerReceipt {
+    let proof = CheckCapabilityProof {
+        container: Some(container_observation()),
+    };
+    let profile = container_profile();
+    ContainerReceipt {
+        profile_digest: digest_b3(&canonical_json_bytes(&profile).expect("profile")),
+        before: proof.clone(),
+        after: proof,
+        sdk: None,
+        runtime: container_runtime_value(),
+        before_runtime: Some(container_runtime_observation()),
+        after_runtime: Some(container_runtime_observation()),
+    }
+}
+
+fn container_probe(stdout: &str) -> ContainerProbeOutput {
+    ContainerProbeOutput {
+        stdout: stdout.into(),
+        stderr: String::new(),
+        stdout_digest: digest_b3(stdout.as_bytes()),
+        stderr_digest: digest_b3(b""),
+    }
+}
+
+fn container_observation() -> ContainerObservation {
+    let endpoint = "unix:///run/docker.sock";
+    let daemon_probe = r#"{"ID":"daemon-1","ServerVersion":"1.2.3","OSType":"linux","Architecture":"x86_64","OperatingSystem":"Docker"}"#;
+    ContainerObservation {
+        profile: container_profile(),
+        docker_program: PathBuf::from("/tmp/velnor-check/bin/docker"),
+        docker_sha256: "a".repeat(64),
+        endpoint: endpoint.into(),
+        docker_cli: container_probe("Docker version 1.2.3, build build"),
+        context_probe: container_probe(endpoint),
+        daemon: DockerDaemonObservation {
+            id: "daemon-1".into(),
+            version: "1.2.3".into(),
+            platform: ContainerPlatform::LinuxX64,
+            architecture: "x86_64".into(),
+            operating_system: "Docker".into(),
+            probe: container_probe(daemon_probe),
+        },
+        orbctl: None,
+    }
+}
+
+fn container_runtime_value() -> serde_json::Value {
+    let context_hash = velnor_actions_orchestrator_core::sha256::sha256_hex(b"ci");
+    json!({
+        "endpoint":"unix:///run/docker.sock",
+        "context":"ci",
+        "docker_config":"/tmp/velnor-check/docker",
+        "context_metadata":format!("/tmp/velnor-check/docker/contexts/meta/{context_hash}/meta.json"),
+        "context_hash":context_hash,
+        "runtime_dir":null,
+        "runtime_link":null,
+        "runtime_entries":[{"path":"/run/docker.sock","kind":"unix_socket","owner":0}],
+        "socket": {
+            "path":"/run/docker.sock",
+            "owner":0,
+            "group":0,
+            "mode":0o140_600,
+            "device":1,
+            "inode":2
+        },
+        "runtime_root":null
+    })
+}
+
+fn container_runtime_observation() -> RuntimeObservation {
+    RuntimeObservation {
+        socket: SocketEvidence {
+            path: "/run/docker.sock".into(),
+            owner: 0,
+            group: 0,
+            mode: 0o140_600,
+            device: 1,
+            inode: 2,
+        },
+        runtime_root: None,
+    }
+}
+
 #[test]
 fn maximum_admitted_receipt_survives_the_staged_gate_reader() {
     let declarations = admitted_declarations(None);
@@ -169,7 +287,7 @@ fn maximum_admitted_receipt_survives_the_staged_gate_reader() {
 
 #[test]
 fn maximum_container_admitted_receipt_survives_the_staged_gate_reader() {
-    let profile = crate::check_evidence::gate::container::budget_test_profile();
+    let profile = container_profile();
     let declarations = admitted_declarations(Some(&profile));
     assert!(!declarations.is_empty(), "container-qualified probes fit");
     let check = selected_container_check(&declarations, profile.clone());
@@ -178,7 +296,7 @@ fn maximum_container_admitted_receipt_survives_the_staged_gate_reader() {
             .expect("container receipt estimate");
     assert!(bound <= MAX_CHECK_EXECUTION_RECEIPT_BYTES);
     let qualified_tools = declarations.iter().map(proof).collect::<Vec<_>>();
-    let container = crate::check_evidence::gate::container::budget_test_receipt();
+    let container = container_receipt_fixture();
     let (temp, plan) =
         staged_with_container(true, &declarations, &qualified_tools, &profile, &container);
     let bytes = fs::read(artifact(&temp, &plan, "check-execution.json")).expect("receipt");

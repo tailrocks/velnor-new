@@ -3628,6 +3628,7 @@ dependencies = [
  "velnor-actions-contract-workflow",
  "velnor-actions-mise",
  "velnor-actions-orchestrator-check-acquisition",
+ "velnor-actions-orchestrator-check-preparation",
  "velnor-actions-orchestrator-core",
  "velnor-actions-orchestrator-discovery",
  "velnor-actions-orchestrator-graph",
@@ -3668,6 +3669,23 @@ dependencies = [
  "velnor-actions-mise",
  "velnor-actions-orchestrator-core",
  "zip",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-check-preparation"
+version = "0.1.1"
+dependencies = [
+ "rustix 1.1.5",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "velnor-actions-contract",
+ "velnor-actions-contract-config",
+ "velnor-actions-mise",
+ "velnor-actions-orchestrator-check-acquisition",
+ "velnor-actions-orchestrator-core",
+ "velnor-actions-workflow-steps",
 ]
 
 [[package]]

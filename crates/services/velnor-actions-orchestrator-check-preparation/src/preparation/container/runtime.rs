@@ -14,7 +14,7 @@ mod context;
 mod inventory;
 mod socket_paths;
 use context::{context_config_bytes, context_metadata_bytes, validate_owned_context};
-pub(crate) use inventory::{RuntimeObservation, RuntimeRootEvidence, SocketEvidence};
+pub use inventory::{RuntimeObservation, RuntimeRootEvidence, SocketEvidence};
 use inventory::{inspect_runtime_until, owner, validate_socket};
 
 /// Safe, declaration-bound runtime evidence retained for the capability receipt.
