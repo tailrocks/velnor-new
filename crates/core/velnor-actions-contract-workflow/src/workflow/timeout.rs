@@ -6,7 +6,7 @@
 //! renderer `ReleaseJobSpec` field), so every generated job carries
 //! `timeout-minutes` by construction and the renderer emits it
 //! unconditionally. Defaults come from the measured green run
-//! in `docs/implemented/performance.md` (run 36777030585), never from
+//! in `docs/content/docs/implemented/performance.mdx` (run 36777030585), never from
 //! guesswork; see each constant.
 
 use serde::{Deserialize, Serialize};
