@@ -10,9 +10,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 
 use velnor_actions_contract_workflow::Job;
-use velnor_actions_orchestrator::{
-    GenerationPreparation, finalized_jobs, prepare, render_staged_tree,
-};
+use velnor_actions_orchestrator_generation::finalized::finalized_jobs;
+use velnor_actions_orchestrator_generation::generate::render_staged_tree;
+use velnor_actions_orchestrator_generation::prepare::{GenerationPreparation, prepare};
 use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 
 use crate::impl_common::{

@@ -27,6 +27,8 @@ velnor-actions-workflow-tree = { version = "=0.1.1", path = "../velnor-actions-w
 
 [dev-dependencies]
 tempfile = { workspace = true }
+velnor-actions-mise = { version = "=0.1.1", path = "../../adapters/velnor-actions-mise" }
+velnor-actions-workflow-cache = { version = "=0.1.1", path = "../velnor-actions-workflow-cache" }
 
 [lints]
 workspace = true

@@ -6,7 +6,8 @@
 //! plan job must install exact pins first.
 
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
-use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_orchestrator_generation::generate::render_staged_tree;
+use velnor_actions_orchestrator_generation::prepare::prepare;
 use velnor_actions_workflow_cache::{
     cache_steps::MBX_RESTORE_NAME, cache_steps::MBX_VERSION_CHECK_NAME,
 };
