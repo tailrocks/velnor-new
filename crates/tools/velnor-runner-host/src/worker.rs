@@ -119,7 +119,9 @@ pub fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, HostError
 /// Join `spec` to the private `DinD` network namespace.
 ///
 /// Published service ports and Testcontainers then bind on the runner's localhost.
-/// `dind_id` must be one Docker container id. `host` and other modes are rejected.
+/// `dind_id` must be one full 64-character Docker container id. Abbreviated
+/// ids are rejected so Docker cannot resolve an ambiguous prefix to another
+/// worker's network namespace. `host` and other modes are rejected.
 ///
 /// # Errors
 ///
@@ -136,7 +138,10 @@ pub fn join_dind_net(
 }
 
 fn dind_container_id(id: &str) -> bool {
-    (12..=64).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_hexdigit())
+    id.len() == 64
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 /// Private `DinD` create. Privilege is not a flag on the runner plan.

@@ -83,12 +83,19 @@ fn runner_joins_only_its_dind_netns() -> Result<(), HostError> {
         Err(HostError::ForbiddenMount)
     );
     let not_hex = "g".repeat(64);
+    let short_hex = "a".repeat(63);
+    let long_hex = "a".repeat(65);
+    let uppercase_hex = "A".repeat(64);
     for bad in [
         "",
         "host",
         "container:abc",
         "../id",
         "short",
+        "a23456789012",
+        short_hex.as_str(),
+        long_hex.as_str(),
+        uppercase_hex.as_str(),
         not_hex.as_str(),
     ] {
         assert_eq!(
@@ -110,6 +117,14 @@ fn runner_joins_only_its_dind_netns() -> Result<(), HostError> {
         .ok_or(HostError::Docker)?;
     assert_eq!(host.privileged, Some(false));
     assert_eq!(host.network_mode.as_deref(), Some(mode.as_str()));
+    for ambiguous in ["a23456789012", short_hex.as_str(), uppercase_hex.as_str()] {
+        let mut abbreviated_mode = projection("worker_a")?;
+        abbreviated_mode.network_mode = Some(format!("container:{ambiguous}"));
+        assert_eq!(
+            bollard_create(&abbreviated_mode),
+            Err(HostError::ForbiddenMount)
+        );
+    }
     let dind = bollard_create(&dind_create("worker_a")?)?;
     let dind_host = dind.config.host_config.as_ref().ok_or(HostError::Docker)?;
     assert!(dind_host.network_mode.is_none());
