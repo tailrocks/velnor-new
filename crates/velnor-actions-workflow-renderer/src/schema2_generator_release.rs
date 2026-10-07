@@ -11,7 +11,9 @@ use velnor_actions_contract::ReleaseTarget;
 
 /// GitHub-hosted macOS label. The arm64 binary is not built on Ubuntu.
 const MACOS_RUNS_ON: &str = "macos-15";
-/// Intel macOS runner for the `x86_64` release binary.
+/// Intel macOS runner for native `x86_64` execution (qualify and attest).
+/// The `x86_64` binary itself cross-compiles on the ARM runner, where the
+/// pinned `mr-boxington` release is installable.
 const MACOS_INTEL_RUNS_ON: &str = "macos-15-intel";
 #[path = "schema2_generator_release_archive.rs"]
 mod archive;
@@ -150,8 +152,14 @@ pub(super) fn generator_release(
         &source_step,
         &mut actions,
     )?);
-    jobs.extend(macos_arm64_jobs(macos, pins, &source_step, &mut actions)?);
+    jobs.extend(macos_arm64_jobs(
+        macos.clone(),
+        pins,
+        &source_step,
+        &mut actions,
+    )?);
     jobs.extend(macos_x86_64_jobs(
+        macos,
         macos_intel,
         pins,
         &source_step,
@@ -174,6 +182,7 @@ fn linux_jobs(
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
     let steps = assets::build_steps(
         assets::LINUX,
+        ReleaseTarget::LinuxX86_64,
         "Verify ELF architecture",
         &assets::linux_verify(assets::LINUX.binary),
         pins,
@@ -221,6 +230,7 @@ fn macos_arm64_jobs(
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
     let steps = assets::build_steps(
         assets::MACOS_ARM64,
+        ReleaseTarget::MacosArm64,
         "Verify Mach-O architecture",
         &assets::macos_verify(assets::MACOS_ARM64.binary, "arm64"),
         pins,
@@ -261,13 +271,15 @@ fn macos_arm64_jobs(
 }
 
 fn macos_x86_64_jobs(
-    macos: Yaml,
+    build_runs_on: Yaml,
+    native_runs_on: Yaml,
     pins: &ProductReleasePins,
     source_step: &Yaml,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
     let steps = assets::build_steps(
         assets::MACOS_X86_64,
+        ReleaseTarget::MacosArm64,
         "Verify Mach-O x86_64 architecture",
         &assets::macos_verify(assets::MACOS_X86_64.binary, "x86_64"),
         pins,
@@ -277,7 +289,7 @@ fn macos_x86_64_jobs(
             "build-macos-intel",
             "Build macOS x86_64 velnor-actions",
             "generator-release-build-macos-intel",
-            macos.clone(),
+            build_runs_on,
             steps,
             assets::MACOS_X86_64,
             actions,
@@ -287,7 +299,7 @@ fn macos_x86_64_jobs(
                 id: "qualify-macos-intel",
                 name: "Qualify macOS x86_64 velnor-actions",
                 action: "generator-release-qualify-macos-intel",
-                runs_on: macos.clone(),
+                runs_on: native_runs_on.clone(),
                 build_job: "build-macos-intel",
                 product: assets::MACOS_X86_64,
                 source_step,
@@ -299,7 +311,7 @@ fn macos_x86_64_jobs(
             "attest-macos-intel",
             "Attest macOS x86_64 velnor-actions",
             "generator-release-attest-macos-intel",
-            macos,
+            native_runs_on,
             assets::MACOS_X86_64,
             pins,
             actions,
