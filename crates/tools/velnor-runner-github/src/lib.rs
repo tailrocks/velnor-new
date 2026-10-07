@@ -29,10 +29,11 @@ pub use refresh::{RefreshGate, StatusClass, classify_status};
 pub use registration::{
     AdminConnection, AdminConnectionCall, CreateLabel, Label, RegistrationScope, RegistrationToken,
     RegistrationTokenCall, RunnerGroup, ScaleSetById, ScaleSetByName, ScaleSetCreate,
-    ScaleSetFound, ScaleSetView, accept_scale_set, admin_connection, admin_token_is_fresh,
-    create_body, create_runner_scale_set, enterprise_registration_token_path, get_runner_by_name,
-    get_runner_scale_set, get_runner_scale_set_by_id, http_create_body, list_runner_groups,
-    organization_registration_token_path, product_create_labels, registration_token, remove_runner,
+    ScaleSetFound, ScaleSetView, accept_scale_set, accept_scale_set_for, admin_connection,
+    admin_token_is_fresh, create_body, create_runner_scale_set, enterprise_registration_token_path,
+    get_runner_by_name, get_runner_scale_set, get_runner_scale_set_by_id, http_create_body,
+    http_create_body_for, list_runner_groups, organization_registration_token_path,
+    product_create_labels, product_create_labels_for, registration_token, remove_runner,
     repository_registration_token_path,
 };
 pub use runner::RunnerReference;

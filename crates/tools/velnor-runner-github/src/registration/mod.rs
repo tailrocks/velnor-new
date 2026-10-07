@@ -84,9 +84,41 @@ pub fn product_create_labels() -> [CreateLabel; 2] {
     ]
 }
 
+/// Product labels for an explicitly supported Scale Set selector.
+///
+/// The legacy selector remains available for the existing macOS path. Linux
+/// currently uses the official Ubuntu 24.04 runner profile. Image/profile
+/// pairing is validated by the host before registration; this client only
+/// derives the routing labels from the exact selector.
+///
+/// # Errors
+///
+/// Returns [`WireError::RegistrationRejected`] for an unknown selector.
+pub fn product_create_labels_for(scale_set_name: &str) -> Result<[CreateLabel; 2], WireError> {
+    if !is_supported_product_selector(scale_set_name) {
+        return Err(WireError::RegistrationRejected);
+    }
+    Ok([
+        CreateLabel {
+            name: "velnor".to_owned(),
+            label_type: "System".to_owned(),
+        },
+        CreateLabel {
+            name: scale_set_name.to_owned(),
+            label_type: "System".to_owned(),
+        },
+    ])
+}
+
+pub(super) fn is_supported_product_selector(value: &str) -> bool {
+    matches!(value, "ubuntu-26.04-scale-set" | "ubuntu-24.04-scale-set")
+}
+
 /// Create JSON for the product set: both product labels and `disableUpdate`.
 ///
-/// This is not [`create_body`], which omits labels.
+/// This legacy helper keeps emitting the Ubuntu 26.04 Scale Set label for
+/// existing callers. Use [`http_create_body_for`] for an explicit profile.
+/// It is not [`create_body`], which omits labels.
 ///
 /// # Errors
 ///
@@ -97,6 +129,17 @@ pub fn http_create_body(name: &str) -> Result<String, WireError> {
         return Err(WireError::RegistrationRejected);
     }
     outgoing_json(name, &product_create_labels(), 0)
+}
+
+/// Create JSON for the product set selected by an explicit supported profile.
+///
+/// # Errors
+///
+/// Returns [`WireError::RegistrationRejected`] for an unknown selector and
+/// [`WireError::Encode`] if serialization fails.
+pub fn http_create_body_for(name: &str) -> Result<String, WireError> {
+    let labels = product_create_labels_for(name)?;
+    outgoing_json(name, &labels, 0)
 }
 
 /// Label object returned by the service.
@@ -143,6 +186,40 @@ pub fn accept_scale_set(view: &ScaleSetView, expected_name: &str) -> Result<(), 
         return Err(WireError::RegistrationRejected);
     }
     if !names.contains(&"velnor") || !names.contains(&"ubuntu-26.04-scale-set") {
+        return Err(WireError::RegistrationRejected);
+    }
+    Ok(())
+}
+
+/// Accept a Scale Set whose label matches one supported product selector.
+///
+/// The selector is also the expected set name. Linux image-profile pairing is
+/// checked by the host before this GitHub API is called.
+///
+/// # Errors
+///
+/// Returns [`WireError::RegistrationRejected`] for unknown selectors, an
+/// identity mismatch, enabled runner updates, or missing/conflicting labels.
+pub fn accept_scale_set_for(view: &ScaleSetView, expected_name: &str) -> Result<(), WireError> {
+    if !is_supported_product_selector(expected_name)
+        || view.id <= 0
+        || view.name != expected_name
+        || !view.runner_setting.disable_update
+    {
+        return Err(WireError::RegistrationRejected);
+    }
+    let names: Vec<&str> = view
+        .labels
+        .iter()
+        .map(|label| label.name.as_str())
+        .collect();
+    if names.contains(&"ubuntu-26.04")
+        || !names.contains(&"velnor")
+        || !names.contains(&expected_name)
+        || names
+            .iter()
+            .any(|name| is_supported_product_selector(name) && *name != expected_name)
+    {
         return Err(WireError::RegistrationRejected);
     }
     Ok(())
