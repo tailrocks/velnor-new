@@ -131,6 +131,10 @@ pub struct ProductReleasePins {
     pub install_gh_argv: Vec<String>,
     /// Exact pinned `mbx build` argv.
     pub build_argv: Vec<String>,
+    /// Exact pinned `mbx build` argv for the Intel cross-compile leg.
+    pub intel_build_argv: Vec<String>,
+    /// Exact `rustup target add` argv for the Intel target std.
+    pub install_intel_target_argv: Vec<String>,
     /// Exact pinned macOS host binary build argv.
     pub runner_build_argv: Vec<String>,
     /// Exact pinned actionlint argv.

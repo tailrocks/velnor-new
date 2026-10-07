@@ -26,6 +26,8 @@ pub(super) fn test_pins() -> ProductReleasePins {
         .map(str::to_owned)
         .collect(),
         build_argv: vec!["mise".to_owned(), "exec".to_owned()],
+        intel_build_argv: vec!["mise".to_owned(), "exec".to_owned()],
+        install_intel_target_argv: vec!["mise".to_owned(), "exec".to_owned()],
         runner_build_argv: vec!["mise".to_owned(), "exec".to_owned()],
         actionlint_argv: vec!["mise".to_owned(), "exec".to_owned()],
         zizmor_argv: vec!["mise".to_owned(), "exec".to_owned()],

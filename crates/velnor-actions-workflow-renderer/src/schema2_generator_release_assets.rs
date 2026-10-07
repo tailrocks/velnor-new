@@ -82,20 +82,44 @@ pub(super) const MACOS_X86_64: ProductAsset = ProductAsset {
 
 pub(super) const ASSETS: [ProductAsset; 3] = [LINUX, MACOS_ARM64, MACOS_X86_64];
 
-/// Build, inspect, and checksum one native candidate before uploading it.
+/// Build, inspect, and checksum one candidate before uploading it.
+///
+/// `build_host` selects the Mise setup for the runner executing the build.
+/// The Intel asset cross-compiles on the ARM host; `product` still names
+/// the emitted binary, the provenance target, and the archives.
 pub(super) fn build_steps(
     product: ProductAsset,
+    build_host: ReleaseTarget,
     verify_name: &str,
     verify: &str,
     pins: &crate::schema2::ProductReleasePins,
 ) -> Result<Vec<Yaml>, crate::RenderError> {
-    let build = build_script(product.binary, &pins.build_argv)?;
-    Ok(vec![
-        workflow_steps::mise_step(pins.setup_for(product.target))?,
+    let cross = product.target == ReleaseTarget::MacosX86_64;
+    let build_argv = if cross {
+        &pins.intel_build_argv
+    } else {
+        &pins.build_argv
+    };
+    let target_dir = if cross {
+        format!("target/{}/release", product.target.triple())
+    } else {
+        "target/release".to_owned()
+    };
+    let build = build_script(product.binary, build_argv, &target_dir)?;
+    let mut steps = vec![
+        workflow_steps::mise_step(pins.setup_for(build_host))?,
         workflow_steps::command_step(
             "Install pinned Rust and MBX",
             &pins.install_build_tools_argv,
         )?,
+    ];
+    if cross {
+        steps.push(workflow_steps::command_step(
+            &format!("Install {} Rust target", product.target.triple()),
+            &pins.install_intel_target_argv,
+        )?);
+    }
+    steps.extend([
         workflow_steps::bash_step("Build velnor-actions with MBX", &build),
         workflow_steps::bash_step(verify_name, verify),
         workflow_steps::bash_step(
@@ -110,13 +134,18 @@ pub(super) fn build_steps(
             "Package candidate preserving executable mode",
             &archive_script(product),
         ),
-    ])
+    ]);
+    Ok(steps)
 }
 
 /// The build emits the filename recorded in the release manifest.
-fn build_script(asset: &str, build_argv: &[String]) -> Result<String, crate::RenderError> {
+fn build_script(
+    asset: &str,
+    build_argv: &[String],
+    target_dir: &str,
+) -> Result<String, crate::RenderError> {
     Ok(format!(
-        "set -eu\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR {}\ncp target/release/velnor-actions {asset}\ntest -s {asset}",
+        "set -eu\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR {}\ncp {target_dir}/velnor-actions {asset}\ntest -s {asset}",
         crate::commands::join_argv_for_run(build_argv)?
     ))
 }

@@ -72,6 +72,7 @@ fn expected_modules() -> Vec<&'static str> {
         "reuse.rs",
         "runtime_paths.rs",
         "steps.rs",
+        "steps_rust_target.rs",
         "template.rs",
         "toml_parser.rs",
         "toml_scan.rs",

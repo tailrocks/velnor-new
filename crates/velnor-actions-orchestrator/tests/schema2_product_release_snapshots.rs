@@ -6,6 +6,8 @@ use velnor_actions_workflow_renderer::RenderedTree;
 
 #[path = "schema2_generator_release_action_snapshots.rs"]
 mod action_snapshots;
+#[path = "schema2_generator_release_cross_snapshots.rs"]
+mod cross_snapshots;
 #[path = "schema2_generator_release_publication_snapshots.rs"]
 mod publication_snapshots;
 #[path = "schema2_generator_release_qualification_snapshots.rs"]

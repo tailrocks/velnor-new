@@ -249,7 +249,7 @@ jobs:
         with:
           artifact_id: ${{ needs.build-macos.outputs.artifact_id }}
   build-macos-intel:
-    runs-on: macos-15-intel
+    runs-on: macos-15
     timeout-minutes: 120
     permissions:
       actions: write

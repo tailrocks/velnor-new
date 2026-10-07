@@ -3,7 +3,9 @@
 use std::ffi::{OsStr, OsString};
 
 use velnor_actions_contract::{ReleaseTarget, VelnorConfig};
-use velnor_actions_mise::{MiseInstall, PinnedTool, PinnedToolExec, ToolCatalog};
+use velnor_actions_mise::{
+    MiseInstall, PinnedTool, PinnedToolExec, PrepareRustTarget, ToolCatalog,
+};
 use velnor_actions_workflow_renderer::ProductReleasePins;
 use velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv;
 
@@ -42,18 +44,14 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, Orche
         )?,
         install_runner_build_tools_argv: install_argv(&[PinnedTool::Rust], &catalog)?,
         install_gh_argv: install_argv(&[PinnedTool::Gh], &catalog)?,
-        build_argv: exec_argv(
-            &[PinnedTool::Rust, PinnedTool::MrBoxington],
-            "mbx",
-            &[
-                "build",
-                "--release",
-                "--locked",
-                "--package",
-                "velnor-actions-cli",
-                "--bin",
-                "velnor-actions",
-            ],
+        build_argv: mbx_build_argv(&[], &catalog)?,
+        intel_build_argv: mbx_build_argv(
+            &["--target", ReleaseTarget::MacosX86_64.triple()],
+            &catalog,
+        )?,
+        install_intel_target_argv: target_argv(
+            ReleaseTarget::MacosArm64.triple(),
+            ReleaseTarget::MacosX86_64.triple(),
             &catalog,
         )?,
         runner_build_argv: exec_argv(
@@ -103,6 +101,25 @@ fn install_argv(
     strings_of(install.argv(catalog)).map_err(contract_error)
 }
 
+fn mbx_build_argv(extra: &[&str], catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
+    let mut args = vec![
+        "build",
+        "--release",
+        "--locked",
+        "--package",
+        "velnor-actions-cli",
+        "--bin",
+        "velnor-actions",
+    ];
+    args.extend(extra.iter().copied());
+    exec_argv(
+        &[PinnedTool::Rust, PinnedTool::MrBoxington],
+        "mbx",
+        &args,
+        catalog,
+    )
+}
+
 fn exec_argv(
     tools: &[PinnedTool],
     program: &str,
@@ -116,6 +133,15 @@ fn exec_argv(
     )
     .map_err(contract_error)?;
     strings_of(exec.argv(catalog)).map_err(contract_error)
+}
+
+fn target_argv(
+    host: &str,
+    target: &str,
+    catalog: &ToolCatalog,
+) -> Result<Vec<String>, OrchestratorError> {
+    let request = PrepareRustTarget::new(host, target).map_err(contract_error)?;
+    strings_of(request.argv(catalog)).map_err(contract_error)
 }
 
 fn contract_error(problem: impl std::fmt::Display) -> OrchestratorError {
