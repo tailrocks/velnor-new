@@ -3,11 +3,11 @@
 use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION;
 use velnor_actions_contract_workflow::{Job, JobTimeout, Step, StepKind, StepRole};
-use velnor_actions_workflow_renderer::cache_p08::{elect_mise_cache_writers, mise_setup_step_p08};
-use velnor_actions_workflow_renderer::cache_steps::{TOOLS_CACHE_PATH, TOOLS_SAVE_USES};
+use velnor_actions_workflow_cache::cache_p08::{elect_mise_cache_writers, mise_setup_step_p08};
+use velnor_actions_workflow_cache::cache_steps::{TOOLS_CACHE_PATH, TOOLS_SAVE_USES};
 use velnor_actions_workflow_steps::RenderError;
 
-use super::impl_renderer_fixtures::*;
+use super::impl_cache_fixtures::*;
 
 /// `cache_save` carried by one job's Mise setup step, when present.
 fn setup_save(job: &Job) -> Option<&str> {

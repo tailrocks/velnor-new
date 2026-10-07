@@ -140,7 +140,8 @@ fn elected_save_stays_on_the_winner_job() {
         .first()
         .expect("checkout")
         .clone();
-    let save = crate::cache_steps::tools_save_step("mise-v1").expect("save");
+    let save =
+        velnor_actions_workflow_cache::cache_steps::tools_save_step("mise-v1").expect("save");
     jobs.get_mut("rust-0__hosted")
         .expect("hosted")
         .steps

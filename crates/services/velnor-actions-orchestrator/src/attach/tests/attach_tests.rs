@@ -172,10 +172,11 @@ fn lock_acquire_records_source_commit() {
 #[test]
 fn preseed_attach_builds_once_and_sets_mode() {
     use velnor_actions_actionlint::ActionlintConfigInput;
-    use velnor_actions_workflow_renderer::{
-        PRESEED_BUILD_NAME, PRESEED_STAGE_NAME, cache_steps::MBX_PREFLIGHT_NAME,
-        cache_steps::MBX_RESTORE_NAME, cache_steps::MBX_VERSION_CHECK_NAME,
+    use velnor_actions_workflow_cache::{
+        cache_steps::MBX_PREFLIGHT_NAME, cache_steps::MBX_RESTORE_NAME,
+        cache_steps::MBX_VERSION_CHECK_NAME,
     };
+    use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_STAGE_NAME};
     let catalog = ToolCatalog::pinned();
     let mut plan = WorkflowPlan {
         ir: bare_ir(BTreeMap::from([

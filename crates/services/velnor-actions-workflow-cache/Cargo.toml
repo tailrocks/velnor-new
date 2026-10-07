@@ -1,5 +1,5 @@
 [package]
-name = "velnor-actions-workflow-renderer"
+name = "velnor-actions-workflow-cache"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,7 +11,6 @@ velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-action
 velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
 velnor-actions-contract-release = { version = "=0.1.1", path = "../../core/velnor-actions-contract-release" }
 velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
-velnor-actions-workflow-cache = { version = "=0.1.1", path = "../velnor-actions-workflow-cache" }
 velnor-actions-workflow-steps = { version = "=0.1.1", path = "../velnor-actions-workflow-steps" }
 velnor-actions-workflow-tree = { version = "=0.1.1", path = "../velnor-actions-workflow-tree" }
 
@@ -19,5 +18,5 @@ velnor-actions-workflow-tree = { version = "=0.1.1", path = "../velnor-actions-w
 workspace = true
 
 [[test]]
-name = "velnor_workflow_renderer"
+name = "velnor_workflow_cache"
 path = "tests/main.rs"

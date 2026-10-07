@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::{Job, JobTimeout, Step, StepKind, StepRole};
-use velnor_actions_workflow_renderer::cache_p08::check_mbx_before_fetch;
+use velnor_actions_workflow_cache::cache_p08::check_mbx_before_fetch;
 
-use super::impl_renderer_fixtures::LABEL;
+use super::impl_cache_fixtures::LABEL;
 
 #[test]
 fn typed_mbx_owner_precedes_cargo_source_fetch_independent_of_labels() {

@@ -13,10 +13,10 @@ use crate::internal::internal;
 
 /// Provider-cache key prefix (per-root: target + tofu + root slug).
 pub(crate) const TOFU_PROVIDERS_KEY_PREFIX: &str =
-    velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDERS_KEY_PREFIX;
+    velnor_actions_workflow_cache::tofu_cache::TOFU_PROVIDERS_KEY_PREFIX;
 /// Owned plugin-cache base (expression form; mirrors the renderer's).
 pub(crate) const TOFU_PROVIDER_CACHE_BASE_EXPR: &str =
-    velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_CACHE_BASE_EXPR;
+    velnor_actions_workflow_cache::tofu_cache::TOFU_PROVIDER_CACHE_BASE_EXPR;
 /// Per-root provider-cache key: target + tofu + root slug + lock hash.
 ///
 /// Static segments invalidate exactly when pins or the root change;
@@ -91,13 +91,13 @@ pub(crate) fn tofu_providers_restore_step(
     path: &str,
 ) -> Result<Step, OrchestratorError> {
     if key.trim().is_empty()
-        || !velnor_actions_workflow_renderer::tofu_cache::tofu_providers_path_ok(path)
+        || !velnor_actions_workflow_cache::tofu_cache::tofu_providers_path_ok(path)
     {
         return Err(bad_key("bad_provider_restore_identity".to_owned()));
     }
     let mut step = velnor_actions_workflow_steps::steps::action_step(
-        velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDERS_RESTORE_NAME,
-        velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_ADMISSION_USES,
+        velnor_actions_workflow_cache::tofu_cache::TOFU_PROVIDERS_RESTORE_NAME,
+        velnor_actions_workflow_cache::tofu_cache::TOFU_PROVIDER_ADMISSION_USES,
         std::collections::BTreeMap::from([
             ("cache-key".to_owned(), key.to_owned()),
             ("cache-path".to_owned(), path.to_owned()),

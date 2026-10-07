@@ -9,7 +9,8 @@ use velnor_actions_contract_workflow::Job;
 ///
 /// The stable logical cache path is physically private to the hosted runner
 /// or Scale Set worker namespace. All MBX jobs receive the same store policy.
-pub(crate) fn jobs_with_mbx_objects(jobs: &BTreeMap<String, Job>) -> BTreeSet<String> {
+#[must_use]
+pub fn jobs_with_mbx_objects(jobs: &BTreeMap<String, Job>) -> BTreeSet<String> {
     jobs.iter()
         .filter(|(_, job)| {
             typed_runner(&job.runs_on) && job.steps.iter().any(crate::cache_steps::is_mbx_action)

@@ -11,12 +11,12 @@ mod mbx_command;
 mod mbx_gate;
 mod mbx_preflight;
 pub use mbx_gate::check_mbx_gating;
-pub(crate) use mbx_gate::is_mbx_action;
+pub use mbx_gate::is_mbx_action;
 pub use mbx_preflight::{
     MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, MBX_VERSION_CHECK_NAME,
     mbx_steps_for_driver,
 };
-pub(crate) use mbx_preflight::{
+pub use mbx_preflight::{
     MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE,
 };
 

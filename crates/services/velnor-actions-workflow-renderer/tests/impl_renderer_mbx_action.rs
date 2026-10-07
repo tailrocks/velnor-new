@@ -1,7 +1,7 @@
 use velnor_actions_contract::cachekey::mbx_cache_generation;
 use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_contract_workflow::{Step, StepKind};
-use velnor_actions_workflow_renderer::cache_steps::{
+use velnor_actions_workflow_cache::cache_steps::{
     CompileDriver, MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, mbx_steps_for_driver,
 };
 use velnor_actions_workflow_renderer::render_workflow_ir;
@@ -37,7 +37,7 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
     assert_eq!(preflight.name, MBX_PREFLIGHT_NAME);
     assert_eq!(
         version_check.name,
-        velnor_actions_workflow_renderer::cache_steps::MBX_VERSION_CHECK_NAME
+        velnor_actions_workflow_cache::cache_steps::MBX_VERSION_CHECK_NAME
     );
     let StepKind::Shell {
         run,

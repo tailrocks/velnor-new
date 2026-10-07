@@ -3,13 +3,12 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract_config::WorkflowPolicy;
-use velnor_actions_workflow_renderer::cache_steps::{
+use velnor_actions_workflow_cache::cache_steps::check_cache_step_order;
+use velnor_actions_workflow_cache::cache_steps::{
     TOOLS_CACHE_PATH, TOOLS_RESTORE_USES, TOOLS_SAVE_USES, cache_action_step,
 };
 use velnor_actions_workflow_renderer::lane_target::lane_cargo_target_env;
-use velnor_actions_workflow_renderer::{
-    cache_steps::check_cache_step_order, check_release_build, render_workflow_ir,
-};
+use velnor_actions_workflow_renderer::{check_release_build, render_workflow_ir};
 use velnor_actions_workflow_steps::toolchain_env::{
     TOOLCHAIN_HOME_KEYS, check_toolchain_homes, with_toolchain_homes,
 };

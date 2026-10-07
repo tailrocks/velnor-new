@@ -1,7 +1,7 @@
 //! Tofu provider-cache step cases: save shape, path allowlist, layer admission.
 use velnor_actions_contract_workflow::StepKind;
-use velnor_actions_workflow_renderer::cache_steps::TOOLS_SAVE_USES;
-use velnor_actions_workflow_renderer::tofu_cache::{
+use velnor_actions_workflow_cache::cache_steps::TOOLS_SAVE_USES;
+use velnor_actions_workflow_cache::tofu_cache::{
     TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDER_CACHE_BASE_EXPR, TOFU_PROVIDERS_KEY_OUTPUT_EXPR,
     TOFU_PROVIDERS_PATH_OUTPUT_EXPR, TOFU_PROVIDERS_RESTORE_NAME, TOFU_PROVIDERS_SAVE_NAME,
     TOFU_PROVIDERS_SAVE_USES, tofu_providers_path_ok, tofu_providers_save_step,

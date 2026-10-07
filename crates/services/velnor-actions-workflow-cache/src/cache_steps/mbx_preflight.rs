@@ -47,12 +47,13 @@ pub const MBX_RESTORE_NAME: &str = "Restore MBX objects";
 /// Display name for the exact MBX binary placed on PATH by its native action.
 pub const MBX_VERSION_CHECK_NAME: &str = "Verify native MBX version";
 /// Preserve MBX's automatic collection for low-disk recovery.
-pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
+pub const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
 /// MBX automatic collection remains enabled for the native object store.
-pub(crate) const MBX_GC_AUTO_VALUE: &str = "1";
+pub const MBX_GC_AUTO_VALUE: &str = "1";
 /// Disable shared `OUT_DIR` stabilization in each independently mounted store.
-pub(crate) const MBX_SHARE_OUT_DIR_ENV: &str = "MBX_SHARE_OUT_DIR";
-pub(crate) const MBX_SHARE_OUT_DIR_VALUE: &str = "0";
+pub const MBX_SHARE_OUT_DIR_ENV: &str = "MBX_SHARE_OUT_DIR";
+/// Shared `OUT_DIR` stabilization stays off in every mounted store.
+pub const MBX_SHARE_OUT_DIR_VALUE: &str = "0";
 /// Stable logical store path; runner namespaces provide physical job isolation.
 pub(crate) const MBX_CACHE_DIR_ENV: &str = "MBX_CACHE_DIR";
 pub(crate) const MBX_CACHE_DIR_VALUE: &str = "${{ runner.temp }}/velnor/mbx";

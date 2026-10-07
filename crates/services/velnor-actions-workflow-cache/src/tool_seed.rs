@@ -96,7 +96,9 @@ fn checkout_before(job: &Job, setup_index: usize, checkout_uses: &str) -> Option
         .position(|step| is_configured_checkout(step, checkout_uses))
 }
 
-pub(crate) fn reject_orphan_seed(job_id: &str, job: &Job) -> Result<(), RenderError> {
+/// Reject tool-seed steps in jobs that must not carry them.
+/// # Errors
+pub fn reject_orphan_seed(job_id: &str, job: &Job) -> Result<(), RenderError> {
     if seed_indices(job).is_empty() {
         Ok(())
     } else {
@@ -121,10 +123,9 @@ fn is_tool_seed_action(step: &Step) -> bool {
     )
 }
 
-pub(crate) fn validate_seed_action(
-    step: &Step,
-    expected_key: Option<&str>,
-) -> Result<(), RenderError> {
+/// Validate a tool-seed restore step against the expected cache key.
+/// # Errors
+pub fn validate_seed_action(step: &Step, expected_key: Option<&str>) -> Result<(), RenderError> {
     let StepKind::Action { uses, with, env } = &step.kind else {
         return Err(RenderError::InvalidWorkflow(
             "tool_seed_bad_action".to_owned(),
@@ -157,7 +158,8 @@ fn seed_step(cache_key: &MiseToolsCacheKey) -> Result<Step, RenderError> {
 }
 
 /// True when any job renders the tool-seed step.
-pub(crate) fn any_job_has_seed(jobs: &std::collections::BTreeMap<String, Job>) -> bool {
+#[must_use]
+pub fn any_job_has_seed(jobs: &std::collections::BTreeMap<String, Job>) -> bool {
     jobs.values()
         .any(|job| job.steps.iter().any(is_tool_seed_step))
 }
@@ -170,7 +172,7 @@ pub(crate) fn any_job_has_seed(jobs: &std::collections::BTreeMap<String, Job>) -
 /// # Errors
 ///
 /// Returns [`RenderError`] when the version or the script is invalid.
-pub(crate) fn action_file(
+pub fn action_file(
     version: &str,
 ) -> Result<velnor_actions_workflow_tree::rendered::RenderedFile, RenderError> {
     let script = tool_seed_action_script(SEED_ROOT)?;

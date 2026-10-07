@@ -20,9 +20,9 @@ use velnor_actions_workflow_steps::{RenderError, commands, setup::MiseSetup, ste
 use velnor_actions_workflow_tree::{guard, marker, yaml::render_yaml};
 
 use crate::{
-    cache_p08, closure, document, final_steps, matrix, msrv, preseed_closure, support,
-    workflow_policy,
+    closure, document, final_steps, matrix, msrv, preseed_closure, support, workflow_policy,
 };
+use velnor_actions_workflow_cache::cache_p08;
 
 mod action_pins_impl;
 pub use action_pins_impl::action_pins;
@@ -246,7 +246,7 @@ pub fn finalize_jobs(
             .iter()
             .any(|task| task.owns_job_id(id))
         {
-            crate::tool_seed::reject_orphan_seed(id, job)?;
+            velnor_actions_workflow_cache::tool_seed::reject_orphan_seed(id, job)?;
             closure::check_internal_staged(id, job, ctx.preseed)?;
             continue;
         }
@@ -342,7 +342,7 @@ fn render_merged(
     } else {
         jobs.clone()
     };
-    let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
+    let mbx_jobs = velnor_actions_workflow_cache::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
     let shared = crate::lane_share::share_lanes(&jobs, ctx)?;
     let mut document = document::workflow_to_yaml(ir, &shared, ctx, &mbx_jobs)?;
     if let Some((source, max_parallel)) = &matrix {
@@ -356,8 +356,10 @@ fn render_merged(
     velnor_actions_workflow_tree::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;
     steps::scan_for_private_subcommands(&text)?;
     let mut files = shared.files;
-    if crate::tool_seed::any_job_has_seed(&jobs) {
-        files.push(crate::tool_seed::action_file(&ctx.generator_version)?);
+    if velnor_actions_workflow_cache::tool_seed::any_job_has_seed(&jobs) {
+        files.push(velnor_actions_workflow_cache::tool_seed::action_file(
+            &ctx.generator_version,
+        )?);
     }
     Ok(RenderedWorkflow {
         yaml: text,

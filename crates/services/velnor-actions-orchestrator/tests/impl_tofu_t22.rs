@@ -13,7 +13,7 @@ use velnor_actions_orchestrator::{
     GenerateOptions, finalized_jobs, generate, plan_internal, prepare,
 };
 use velnor_actions_tofu_core::TofuLockSnapshot;
-use velnor_actions_workflow_renderer::cache_steps as renderer_steps;
+use velnor_actions_workflow_cache::cache_steps as renderer_steps;
 
 use super::impl_common::{TestResult, git, git_line, install_fixture_release_manifest, make_repo};
 
@@ -123,7 +123,7 @@ fn provider_admission_discards_prefix_and_missing_matches() -> TestResult {
     };
     assert_eq!(
         uses,
-        velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
+        velnor_actions_workflow_cache::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
     );
     let expected = with
         .get("cache-key")
@@ -188,10 +188,10 @@ fn run_admission(
     let script = if verify_cleared {
         format!(
             "{}; test ! -e \"$TOFU_PROVIDER_CACHE_PATH/verified-provider\"",
-            velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_ADMISSION_SCRIPT
+            velnor_actions_workflow_cache::tofu_cache::TOFU_PROVIDER_ADMISSION_SCRIPT
         )
     } else {
-        velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_ADMISSION_SCRIPT.to_owned()
+        velnor_actions_workflow_cache::tofu_cache::TOFU_PROVIDER_ADMISSION_SCRIPT.to_owned()
     };
     let mut command = Command::new("sh");
     command

@@ -8,7 +8,7 @@ fn provider_restore_composite_binds_exact_key_and_owned_path() {
     let path = tofu_provider_cache_path("stacks/vpc").expect("path builds");
     assert_eq!(
         TOFU_PROVIDER_CACHE_BASE_EXPR,
-        velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_CACHE_BASE_EXPR,
+        velnor_actions_workflow_cache::tofu_cache::TOFU_PROVIDER_CACHE_BASE_EXPR,
         "one base across crates"
     );
     assert!(
@@ -23,7 +23,7 @@ fn provider_restore_composite_binds_exact_key_and_owned_path() {
     };
     assert_eq!(
         uses,
-        velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
+        velnor_actions_workflow_cache::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
     );
     assert_eq!(
         with.get("cache-key").map(String::as_str),
@@ -35,7 +35,7 @@ fn provider_restore_composite_binds_exact_key_and_owned_path() {
         Some(path.as_str()),
         "the composite receives only the owned plugin-cache path"
     );
-    let script = velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_ADMISSION_SCRIPT;
+    let script = velnor_actions_workflow_cache::tofu_cache::TOFU_PROVIDER_ADMISSION_SCRIPT;
     for expected in [
         "[ \"$TOFU_CACHE_HIT\" = true ]",
         "[ \"$TOFU_MATCHED_KEY\" = \"$TOFU_EXPECTED_KEY\" ]",

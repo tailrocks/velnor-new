@@ -79,7 +79,9 @@ pub(crate) fn peel_mbx_prelude(steps: &[Step]) -> Option<(Vec<Step>, &[Step])> {
     }
     let prelude = &steps[..end];
     if prelude.first()?.role != Some(StepRole::MbxPreflight)
-        || !prelude.iter().any(crate::cache_steps::is_mbx_action)
+        || !prelude
+            .iter()
+            .any(velnor_actions_workflow_cache::cache_steps::is_mbx_action)
     {
         return None;
     }

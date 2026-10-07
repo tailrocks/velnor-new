@@ -17,7 +17,7 @@ use velnor_actions_contract_planning::ProposedTask;
 use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 use velnor_actions_mise::{Gate6Fixture, TaskCacheMode, ToolCatalog, ToolHomes};
 use velnor_actions_rust::is_workspace_fmt_task;
-use velnor_actions_workflow_renderer::cache_steps::{
+use velnor_actions_workflow_cache::cache_steps::{
     CompileDriver, TASK_ARTIFACTS_DIR, cache_action_step, check_mbx_gating,
 };
 use velnor_actions_workflow_renderer::plan_format;

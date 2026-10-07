@@ -78,9 +78,11 @@ pub(crate) fn share_lanes(
             .iter()
             .any(|step| step.role == Some(StepRole::TofuProvidersRestore))
     }) {
-        files.push(crate::tofu_cache::provider_admission_file(
-            &ctx.generator_version,
-        )?);
+        files.push(
+            velnor_actions_workflow_cache::tofu_cache::provider_admission_file(
+                &ctx.generator_version,
+            )?,
+        );
     }
     for hosted_id in hosted_ids(jobs) {
         let Some(logical) = logical_id(&hosted_id) else {
@@ -211,8 +213,12 @@ fn split_shared_steps(
     hosted_steps: &[Step],
     local_steps: &[Step],
 ) -> Option<SharedLaneParts> {
-    let hosted_action = hosted_steps.iter().any(crate::cache_steps::is_mbx_action);
-    let local_action = local_steps.iter().any(crate::cache_steps::is_mbx_action);
+    let hosted_action = hosted_steps
+        .iter()
+        .any(velnor_actions_workflow_cache::cache_steps::is_mbx_action);
+    let local_action = local_steps
+        .iter()
+        .any(velnor_actions_workflow_cache::cache_steps::is_mbx_action);
     if hosted_action != local_action {
         return None;
     }

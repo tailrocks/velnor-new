@@ -140,7 +140,7 @@ fn action_step_to_yaml(
                 "tool_seed_bad_action_ref".to_owned(),
             ));
         }
-        crate::tool_seed::validate_seed_action(step, None)?;
+        velnor_actions_workflow_cache::tool_seed::validate_seed_action(step, None)?;
     }
     let uses_yaml = if matches!(uses, TOOL_SEED_USES | TOFU_PROVIDER_ADMISSION_USES)
         || velnor_actions_workflow_steps::action_ref::is_generated_provider_prelude(uses)

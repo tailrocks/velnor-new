@@ -1,7 +1,7 @@
 //! F2 closure: cache layers and forbidden content.
 use std::collections::BTreeMap;
 use velnor_actions_contract_config::{GeneratorValidation, WorkflowPolicy};
-use velnor_actions_workflow_renderer::cache_steps::{
+use velnor_actions_workflow_cache::cache_steps::{
     TOOLS_RESTORE_USES, cache_action_step, tools_cache_key,
 };
 use velnor_actions_workflow_renderer::{PUBLISH_PLAN_NAME, render_workflow_ir};
@@ -60,11 +60,14 @@ fn cache_layers_restore_independently() -> Result<(), RenderError> {
         "task",
         "k",
         &[],
-        &[velnor_actions_workflow_renderer::cache_steps::TASK_ARTIFACTS_DIR.to_owned()],
+        &[velnor_actions_workflow_cache::cache_steps::TASK_ARTIFACTS_DIR.to_owned()],
     )?;
-    let tools = velnor_actions_workflow_renderer::cache_steps::tools_restore_step(
-        &tools_cache_key("x86_64-unknown-linux-gnu", "2026.9.16", "0.1.0", "plan")?,
-    )?;
+    let tools = velnor_actions_workflow_cache::cache_steps::tools_restore_step(&tools_cache_key(
+        "x86_64-unknown-linux-gnu",
+        "2026.9.16",
+        "0.1.0",
+        "plan",
+    )?)?;
     for step in [&sources, &task, &tools] {
         let velnor_actions_contract_workflow::StepKind::Action { uses, .. } = &step.kind else {
             panic!("restore must be an action step");
@@ -78,7 +81,7 @@ fn cache_layers_restore_independently() -> Result<(), RenderError> {
             "sources",
             "k",
             &[],
-            &[velnor_actions_workflow_renderer::cache_steps::TASK_ARTIFACTS_DIR.to_owned()],
+            &[velnor_actions_workflow_cache::cache_steps::TASK_ARTIFACTS_DIR.to_owned()],
         )
         .is_err(),
         "task path via sources layer must fail"

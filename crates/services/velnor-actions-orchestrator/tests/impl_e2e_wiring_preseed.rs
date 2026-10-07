@@ -2,9 +2,10 @@
 
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
-use velnor_actions_workflow_renderer::{
-    WORKFLOW_PATH, cache_steps::MBX_RESTORE_NAME, cache_steps::MBX_VERSION_CHECK_NAME,
+use velnor_actions_workflow_cache::{
+    cache_steps::MBX_RESTORE_NAME, cache_steps::MBX_VERSION_CHECK_NAME,
 };
+use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 
 use super::{JobText, check_tree, check_verify_mbx, make_velnor_repo};
 use crate::impl_common::{TestResult, without_ambient_identity};

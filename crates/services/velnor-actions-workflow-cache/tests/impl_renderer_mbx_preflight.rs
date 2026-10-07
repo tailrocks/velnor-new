@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use velnor_actions_contract_workflow::StepKind;
 
-use super::impl_renderer_fixtures::{TEST_MBX_VERSION, TEST_RUST_TOOLCHAIN, mbx_tool_steps};
+use super::impl_cache_fixtures::{TEST_MBX_VERSION, TEST_RUST_TOOLCHAIN, mbx_tool_steps};
 
 #[path = "impl_renderer_mbx_preflight_store.rs"]
 mod store;

@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
+use velnor_actions_contract_workflow::{Job, PLAN_JOB_ID, Step, StepKind, StepRole};
 
 use velnor_actions_workflow_steps::{RenderError, setup::MISE_ACTION_NAME};
 
@@ -36,7 +36,7 @@ pub fn elect_mise_cache_writers(jobs: &mut BTreeMap<String, Job>) -> Result<(), 
     for (key, owners) in &by_key {
         let winner = owners
             .iter()
-            .find(|id| id.as_str() == crate::render::PLAN_JOB_ID)
+            .find(|id| id.as_str() == PLAN_JOB_ID)
             .or_else(|| owners.iter().min())
             .map(String::as_str)
             .unwrap_or_default();

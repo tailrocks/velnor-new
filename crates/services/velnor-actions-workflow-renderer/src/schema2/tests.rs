@@ -23,7 +23,7 @@ fn request() -> Schema2WorkflowRequest {
             },
             candidate_action_uses: format!(
                 "{}@{}",
-                crate::cache_steps::MBX_ACTION_NAME,
+                velnor_actions_workflow_cache::cache_steps::MBX_ACTION_NAME,
                 "b".repeat(40)
             ),
             mbx_version: "1.0.0".to_owned(),

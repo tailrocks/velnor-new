@@ -3,7 +3,7 @@
 use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_contract_config::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
 use velnor_actions_contract_workflow::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
-use velnor_actions_workflow_renderer::cache_steps::MBX_CACHE_MODE_ENV;
+use velnor_actions_workflow_cache::cache_steps::MBX_CACHE_MODE_ENV;
 use velnor_actions_workflow_renderer::render_workflow_ir;
 use velnor_actions_workflow_steps::RenderError;
 use velnor_actions_workflow_steps::steps::checkout_step;

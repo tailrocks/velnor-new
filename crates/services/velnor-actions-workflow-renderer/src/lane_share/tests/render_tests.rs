@@ -2,9 +2,11 @@ use std::collections::BTreeMap;
 
 use super::super::share_lanes;
 use super::{ctx, echo_step, paired, render_jobs, workflow_ir};
-use crate::tofu_cache::{TOFU_PROVIDER_ADMISSION_USES, tofu_providers_save_step};
 use velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION;
 use velnor_actions_contract_workflow::{Step, StepId, StepKind, StepRole};
+use velnor_actions_workflow_cache::tofu_cache::{
+    TOFU_PROVIDER_ADMISSION_USES, tofu_providers_save_step,
+};
 
 const CAP: usize = 500_000;
 const LOGICAL_JOBS: usize = 21;

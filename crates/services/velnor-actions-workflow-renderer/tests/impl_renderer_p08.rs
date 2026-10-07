@@ -2,11 +2,11 @@
 
 use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::{Job, JobTimeout, StepKind};
-use velnor_actions_workflow_renderer::cache_p08::{
+use velnor_actions_workflow_cache::cache_p08::{
     check_no_rust_cache_with_mbx, infer_job_tools, mise_cache_key_for_tools, mise_setup_step_p08,
     tools_digest,
 };
-use velnor_actions_workflow_renderer::cache_steps::cache_action_step;
+use velnor_actions_workflow_cache::cache_steps::cache_action_step;
 
 use super::impl_renderer_fixtures::*;
 

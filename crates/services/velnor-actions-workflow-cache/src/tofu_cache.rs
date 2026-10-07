@@ -56,7 +56,7 @@ mkdir -m 700 "$d""#;
 
 /// Render the single local composite that restores and admits provider-cache bytes.
 /// # Errors
-pub(crate) fn provider_admission_file(
+pub fn provider_admission_file(
     version: &str,
 ) -> Result<velnor_actions_workflow_tree::rendered::RenderedFile, RenderError> {
     let body = yaml::Yaml::Map(vec![

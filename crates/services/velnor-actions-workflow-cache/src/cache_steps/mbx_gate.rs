@@ -162,6 +162,7 @@ fn check_mbx_version_order(
 }
 
 /// True for the pinned native MBX action.
-pub(crate) fn is_mbx_action(step: &Step) -> bool {
+#[must_use]
+pub fn is_mbx_action(step: &Step) -> bool {
     matches!(&step.kind, velnor_actions_contract_workflow::StepKind::Action { uses, .. } if uses.starts_with(&format!("{MBX_ACTION_NAME}@")))
 }

@@ -252,9 +252,7 @@ fn strict_mixed_platform_checks_use_native_setup_and_keep_global_runner() -> Res
 #[test]
 fn qualified_linux_setup_cannot_bypass_macos_artifact_selection() -> Result<(), RenderError> {
     use velnor_actions_contract_config::config::{CheckExecutor, CheckPlatform, CheckRunner};
-    use velnor_actions_workflow_renderer::cache_p08::{
-        mise_cache_key_for_tools, mise_setup_step_p08,
-    };
+    use velnor_actions_workflow_cache::cache_p08::{mise_cache_key_for_tools, mise_setup_step_p08};
     let key = mise_cache_key_for_tools(
         "x86_64-unknown-linux-gnu",
         MISE_VERSION,

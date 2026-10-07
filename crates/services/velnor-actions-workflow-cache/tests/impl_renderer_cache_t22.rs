@@ -1,8 +1,8 @@
 //! T22 never-archive exclusions in rendered cache steps.
-use velnor_actions_workflow_renderer::cache_steps::{
+use velnor_actions_workflow_cache::cache_steps::{
     NEVER_ARCHIVE_MARKERS, TOOLS_RESTORE_USES, cache_action_step, is_never_archive_path,
 };
-use velnor_actions_workflow_renderer::tofu_cache::{
+use velnor_actions_workflow_cache::tofu_cache::{
     TOFU_PROVIDER_CACHE_BASE_EXPR, tofu_providers_path_ok,
 };
 use velnor_actions_workflow_steps::RenderError;

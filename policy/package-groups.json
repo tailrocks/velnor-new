@@ -19,6 +19,7 @@
     "velnor-actions-rust-core": "library",
     "velnor-actions-tofu": "library",
     "velnor-actions-tofu-core": "library",
+    "velnor-actions-workflow-cache": "library",
     "velnor-actions-workflow-renderer": "library",
     "velnor-actions-workflow-steps": "library",
     "velnor-actions-workflow-tree": "library",

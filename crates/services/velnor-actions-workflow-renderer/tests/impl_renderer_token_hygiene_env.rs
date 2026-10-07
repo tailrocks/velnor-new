@@ -6,7 +6,8 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_contract_workflow::{Job, StepRole};
-use velnor_actions_workflow_renderer::{cache_steps::MBX_CACHE_MODE_ENV, render_workflow_ir};
+use velnor_actions_workflow_cache::cache_steps::MBX_CACHE_MODE_ENV;
+use velnor_actions_workflow_renderer::render_workflow_ir;
 use velnor_actions_workflow_steps::{
     RenderError, action_step_with_env, ambient_shell_step, checkout_step, plan_step,
 };

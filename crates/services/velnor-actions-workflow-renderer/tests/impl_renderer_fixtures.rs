@@ -5,7 +5,7 @@ use velnor_actions_contract_workflow::workflow::permissions::PermissionLevel;
 use velnor_actions_contract_workflow::{
     Concurrency, Job, JobTimeout, Permissions, Step, Trigger, WorkflowIr,
 };
-use velnor_actions_workflow_renderer::cache_steps::{CompileDriver, mbx_steps_for_driver};
+use velnor_actions_workflow_cache::cache_steps::{CompileDriver, mbx_steps_for_driver};
 use velnor_actions_workflow_renderer::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, ValidatorCommand, render_workflow_ir,
     render_workflow_ir_strict,

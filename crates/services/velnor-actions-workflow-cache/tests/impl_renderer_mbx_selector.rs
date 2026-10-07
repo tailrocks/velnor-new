@@ -2,10 +2,10 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::StepKind;
-use velnor_actions_workflow_renderer::{cache_steps::CompileDriver, cache_steps::check_mbx_gating};
+use velnor_actions_workflow_cache::{cache_steps::CompileDriver, cache_steps::check_mbx_gating};
 use velnor_actions_workflow_steps::{RenderError, mise_setup_step, shell_step};
 
-use super::impl_renderer_fixtures::*;
+use super::impl_cache_fixtures::*;
 
 fn selector_error(run: Vec<String>, driver: Option<CompileDriver>) -> Result<(), RenderError> {
     let step = shell_step("External tool selection", run, BTreeMap::new())?;

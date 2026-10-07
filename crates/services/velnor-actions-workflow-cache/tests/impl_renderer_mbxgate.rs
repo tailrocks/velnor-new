@@ -1,12 +1,12 @@
 //! MBX action gating: emitted only for MBX-selected drivers.
 use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::StepRole;
-use velnor_actions_workflow_renderer::{
+use velnor_actions_workflow_cache::{
     cache_steps::CompileDriver, cache_steps::check_mbx_gating, cache_steps::mbx_steps_for_driver,
 };
 use velnor_actions_workflow_steps::{RenderError, checkout_step, shell_step};
 
-use super::impl_renderer_fixtures::*;
+use super::impl_cache_fixtures::*;
 
 fn mbx_pin() -> String {
     format!("jdx/mr-boxington-action@{:040x}", 0)

@@ -20,7 +20,7 @@ use velnor_actions_contract_workflow::{
     CrateJob, CrateObligation, Job, JobTimeout, Step, crate_display_name, tofu_display_name,
 };
 use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
-use velnor_actions_workflow_renderer::cache_steps::CompileDriver as RenderDriver;
+use velnor_actions_workflow_cache::cache_steps::CompileDriver as RenderDriver;
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 
 use crate::OrchestratorError;

@@ -13,7 +13,7 @@
 
 use super::features::{checkout_step, finish, gated, lane_base, run_step};
 use super::{MbxQualificationPins, RunnerSpec};
-use crate::cache_steps::MBX_ACTION_NAME;
+use velnor_actions_workflow_cache::cache_steps::MBX_ACTION_NAME;
 use velnor_actions_workflow_steps::{RenderError, steps::validate_uses};
 use velnor_actions_workflow_tree::yaml::Yaml;
 

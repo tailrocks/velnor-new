@@ -159,7 +159,7 @@ fn finalized_tofu_jobs_save_exactly_their_restored_key() -> TestResult {
         let key = with.get("cache-key").ok_or("restore key")?.clone();
         let path = with.get("cache-path").ok_or("restore path")?;
         assert!(
-            velnor_actions_workflow_renderer::tofu_cache::tofu_providers_path_ok(path),
+            velnor_actions_workflow_cache::tofu_cache::tofu_providers_path_ok(path),
             "{id} restores one owned plugin-cache leaf"
         );
         let saves: Vec<_> = job

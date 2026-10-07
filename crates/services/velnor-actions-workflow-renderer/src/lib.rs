@@ -3,10 +3,6 @@
 //! Validated IR plus fixed argv in, marked YAML out: no subprocesses, no
 //! stack or tool branching, quoting-only shell shaping.
 
-pub mod cache_elect;
-pub mod cache_p08;
-mod cache_p08_detect;
-pub mod cache_steps;
 mod candidate;
 pub mod closure;
 mod closure_paths;
@@ -21,7 +17,6 @@ mod lane_share_sections;
 pub mod lane_target;
 mod matrix;
 mod matrix_output_mode;
-mod mbx_gc_policy;
 pub mod msrv;
 pub mod overlap;
 pub mod plan_format;
@@ -38,10 +33,6 @@ pub mod render;
 mod runs_on;
 pub mod schema2;
 mod support;
-pub mod tofu_cache;
-mod tool_seed;
-mod tool_seed_admission;
-mod tool_seed_test_support;
 pub mod tree;
 mod verification_jobs;
 mod workflow_policy;

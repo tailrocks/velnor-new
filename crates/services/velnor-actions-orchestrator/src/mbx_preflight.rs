@@ -6,7 +6,7 @@ use velnor_actions_actionlint::PinnedActionRef;
 use velnor_actions_actionlint::actions::{MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION};
 use velnor_actions_contract_workflow::Step;
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
-use velnor_actions_workflow_renderer::cache_steps::{CompileDriver, mbx_steps_for_driver};
+use velnor_actions_workflow_cache::cache_steps::{CompileDriver, mbx_steps_for_driver};
 
 use crate::OrchestratorError;
 
