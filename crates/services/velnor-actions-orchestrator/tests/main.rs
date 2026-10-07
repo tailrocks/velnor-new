@@ -42,7 +42,6 @@ mod impl_orch_core_cover;
 mod impl_orch_f2a;
 mod impl_orch_f2a_prepare;
 mod impl_orch_f2b;
-mod impl_orch_f2c;
 mod impl_orch_f2d;
 mod impl_orch_f2e;
 mod impl_orch_f2f;

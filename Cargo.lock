@@ -3783,6 +3783,8 @@ dependencies = [
  "velnor-actions-rust",
  "velnor-actions-rust-core",
  "velnor-actions-tofu-core",
+ "velnor-actions-workflow-cache",
+ "velnor-actions-workflow-document",
  "velnor-actions-workflow-steps",
  "velnor-actions-workflow-tree",
 ]
