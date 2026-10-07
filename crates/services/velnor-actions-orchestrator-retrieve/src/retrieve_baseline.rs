@@ -21,6 +21,14 @@ use velnor_actions_contract_workflow::Plan;
 use velnor_actions_mise::ToolCatalog;
 
 use velnor_actions_orchestrator_cover::cover::shard::{BaselineLookup, resolve_manifests};
+use velnor_actions_orchestrator_merge_ports::BaselineManifest;
+
+/// Staged baseline filename inside the run directory.
+///
+/// Matches the publish-step staged filename (the O25 assembly-bound
+/// precedent): the fetch stages exactly the file publish writes and
+/// the merge reads, so the three can never disagree on the name.
+const BASELINE_FILENAME: &str = "baseline.json";
 
 /// Fetch the plan's exact baseline into `<run-dir>/baseline.json`.
 ///
@@ -28,7 +36,7 @@ use velnor_actions_orchestrator_cover::cover::shard::{BaselineLookup, resolve_ma
 /// short-circuit, then default-branch resolution plus the exact
 /// download. `repo` is the already-validated repository slug scoping
 /// every lookup call. `true` only when these bytes were written here.
-pub(crate) fn retrieve_baseline_to(
+pub fn retrieve_baseline_to(
     catalog: &ToolCatalog,
     run_dir: &Path,
     plan: &serde_json::Value,
@@ -86,7 +94,7 @@ fn plan_has_covered(plan: &Plan) -> bool {
 /// `symlink_metadata` never follows: a planted symlink counts as
 /// present (skip) so the fetch never writes through it.
 fn staged_baseline_present(run_dir: &Path) -> bool {
-    std::fs::symlink_metadata(run_dir.join(crate::baseline_publish::BASELINE_FILENAME)).is_ok()
+    std::fs::symlink_metadata(run_dir.join(BASELINE_FILENAME)).is_ok()
 }
 
 /// Default branch for the explicit repository through pinned `gh`.
@@ -150,8 +158,8 @@ fn parse_default_branch(text: &str) -> Option<String> {
 /// Exclusive create: staged evidence is never overwritten, and a
 /// symlink planted between the presence check and this write refuses
 /// instead of writing through.
-fn stage_manifest(run_dir: &Path, manifest: &crate::merge::BaselineManifest) -> bool {
-    let target = run_dir.join(crate::baseline_publish::BASELINE_FILENAME);
+fn stage_manifest(run_dir: &Path, manifest: &BaselineManifest) -> bool {
+    let target = run_dir.join(BASELINE_FILENAME);
     let Ok(bytes) = canonical_json_bytes(manifest) else {
         return false;
     };

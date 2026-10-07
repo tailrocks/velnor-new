@@ -83,6 +83,21 @@ pub(crate) const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
             "velnor-actions-orchestrator-core",
         ],
     ),
+    (
+        "velnor-actions-orchestrator-retrieve",
+        &[
+            "velnor-actions-contract",
+            "velnor-actions-contract-workflow",
+            "velnor-actions-mise",
+            "velnor-actions-orchestrator-core",
+            "velnor-actions-orchestrator-cover",
+            "velnor-actions-orchestrator-cover-baseline",
+            "velnor-actions-orchestrator-covered-tasks",
+            "velnor-actions-orchestrator-merge-ports",
+            "velnor-actions-orchestrator-retrieve-retry",
+            "velnor-actions-workflow-renderer",
+        ],
+    ),
     ("velnor-actions-orchestrator-retrieve-retry", &[]),
     ("velnor-actions-orchestrator-run-select", &[]),
     (

@@ -169,7 +169,7 @@ fn merge_blocks_all_skipped_noop_end_to_end() {
             0,
             &request,
             temp.path(),
-            crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES,
+            velnor_actions_orchestrator_retrieve::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES,
         )
         .expect("noop report");
     }

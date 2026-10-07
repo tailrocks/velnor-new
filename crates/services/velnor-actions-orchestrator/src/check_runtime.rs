@@ -33,7 +33,7 @@ pub fn execute_check() -> Result<usize, OrchestratorError> {
         &task_id,
         &job_id,
         &lane,
-        crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES,
+        velnor_actions_orchestrator_retrieve::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES,
     )
 }
 fn required_env(key: &str) -> Result<String, OrchestratorError> {

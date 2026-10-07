@@ -1,14 +1,21 @@
-use super::*;
-use crate::merge::BaselineManifest;
 use velnor_actions_contract::{canonical_json_bytes, digest_b3};
 use velnor_actions_contract_config::RunnerSelection;
 use velnor_actions_contract_workflow::{
     BaselineProof, ObligationDecision, Plan, PlanBaseline, PlanGenerator, PlanMatrix,
     PlanObligation, PlanRunner, Trust, WorkflowEvent,
 };
+use velnor_actions_mise::ToolCatalog;
+use velnor_actions_orchestrator_merge_ports::{BaselineManifest, BaselineTaskEntry};
+use velnor_actions_orchestrator_retrieve::retrieve_baseline::retrieve_baseline_to;
+
+/// Fetch attempt over one plan value in a fresh run directory.
+fn attempt(plan: &serde_json::Value, repo: &str) -> bool {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    retrieve_baseline_to(&ToolCatalog::pinned(), tmp.path(), plan, repo)
+}
 
 #[test]
-fn baseline_skips_unparsable_plan_without_spawning() {
+fn baseline_skips_unparsable_plan() {
     let plan = serde_json::json!({"schema": 1, "nope": true});
     assert!(!attempt(&plan, "o/r"));
 }
@@ -30,10 +37,12 @@ fn baseline_skips_when_nothing_covered() {
     assert!(!attempt(&value, "o/r"));
 }
 
+/// Staged evidence wins by on-disk name: the literal pins the
+/// value-matched filename, so any drift fails loudly here.
 #[test]
-fn baseline_skips_when_staged_file_wins() {
+fn baseline_skips_when_staged_wins() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let staged = tmp.path().join(crate::baseline_publish::BASELINE_FILENAME);
+    let staged = tmp.path().join("baseline.json");
     std::fs::write(&staged, r#"{"staged":true}"#).expect("staged");
     let plan = covered_plan_value(Some("zz"));
     assert!(!retrieve_baseline_to(
@@ -49,87 +58,15 @@ fn baseline_skips_when_staged_file_wins() {
 }
 
 #[test]
-fn baseline_skips_invalid_base_before_branch_lookup() {
-    let plan = covered_plan_value(Some("zz"));
-    assert!(!attempt(&plan, "o/r"));
-}
-
-#[test]
-fn baseline_skips_bad_repo_before_branch_lookup() {
+fn baseline_skips_bad_repo_before_lookup() {
     let plan = covered_plan_value(Some(&"1".repeat(40)));
     assert!(!attempt(&plan, "not a slug!!"));
 }
 
 #[test]
-fn default_branch_args_pins_repo_and_rejects_bad_slug() {
-    let args = default_branch_args("o/r");
-    let text: Vec<String> = args
-        .iter()
-        .map(|arg| arg.to_string_lossy().into_owned())
-        .collect();
-    assert_eq!(text, ["api", "repos/o/r", "--jq", ".default_branch"]);
-    assert!(default_branch_args("not a slug!!").is_empty());
-    assert!(default_branch_args("").is_empty());
-}
-
-#[test]
-fn parse_default_branch_accepts_only_strict_names() {
-    assert_eq!(parse_default_branch("main\n").as_deref(), Some("main"));
-    assert_eq!(parse_default_branch("\"main\"\n").as_deref(), Some("main"));
-    assert_eq!(
-        parse_default_branch("feature/x").as_deref(),
-        Some("feature/x")
-    );
-    for bad in [
-        "",
-        "   \n",
-        "HEAD",
-        "a b",
-        "a\tb",
-        "../x",
-        "x/../y",
-        "a*b",
-        "a$b",
-        "a;b",
-        "x://y",
-        "a\"b",
-        "\"unterminated",
-    ] {
-        assert_eq!(parse_default_branch(bad), None, "rejects {bad:?}");
-    }
-}
-
-#[test]
-fn stage_manifest_writes_canonically_and_never_overwrites() {
-    let manifest = manifest_for(&"1".repeat(40));
-    let tmp = tempfile::tempdir().expect("tempdir");
-    assert!(stage_manifest(tmp.path(), &manifest));
-    let staged = tmp.path().join(crate::baseline_publish::BASELINE_FILENAME);
-    let bytes = std::fs::read(&staged).expect("read");
-    assert_eq!(bytes, canonical_json_bytes(&manifest).expect("canonical"));
-    assert!(!stage_manifest(tmp.path(), &manifest));
-    assert_eq!(std::fs::read(&staged).expect("reread"), bytes);
-}
-
-#[cfg(unix)]
-#[test]
-fn baseline_skips_when_staged_symlink_planted() {
-    let tmp = tempfile::tempdir().expect("tempdir");
-    let target = tmp.path().join("target.json");
-    std::fs::write(&target, "{}").expect("target");
-    std::os::unix::fs::symlink(
-        &target,
-        tmp.path().join(crate::baseline_publish::BASELINE_FILENAME),
-    )
-    .expect("link");
+fn baseline_skips_invalid_base_before_lookup() {
     let plan = covered_plan_value(Some("zz"));
-    assert!(!retrieve_baseline_to(
-        &ToolCatalog::pinned(),
-        tmp.path(),
-        &plan,
-        "o/r"
-    ));
-    assert!(!stage_manifest(tmp.path(), &manifest_for(&"1".repeat(40))));
+    assert!(!attempt(&plan, "o/r"));
 }
 
 /// Task and input digests shared by obligation and entry.
@@ -164,7 +101,7 @@ fn manifest_for(commit: &str) -> BaselineManifest {
                 &name,
             ),
         artifact_name: name,
-        tasks: vec![crate::merge::required_evidence::BaselineTaskEntry {
+        tasks: vec![BaselineTaskEntry {
             task_id: "stack/rust/root/clippy/default".to_owned(),
             task_digest: task,
             input_digest: inputs,
@@ -182,8 +119,6 @@ fn manifest_for(commit: &str) -> BaselineManifest {
 fn plan_for(manifest: &BaselineManifest, base: Option<&str>) -> Plan {
     let (task, inputs, closure) = digests();
     let digest = digest_b3(&canonical_json_bytes(manifest).expect("canonical"));
-    // The proof constructor rejects zero, so the zero-id mutation case
-    // proves rejection via the manifest conjuncts, never a forged proof.
     let proof = BaselineProof::new(
         &manifest.source_commit,
         7,

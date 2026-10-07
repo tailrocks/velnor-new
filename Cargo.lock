@@ -3647,6 +3647,7 @@ dependencies = [
  "velnor-actions-orchestrator-preseed-manifest",
  "velnor-actions-orchestrator-provisioning",
  "velnor-actions-orchestrator-request-event",
+ "velnor-actions-orchestrator-retrieve",
  "velnor-actions-orchestrator-retrieve-retry",
  "velnor-actions-orchestrator-run-select",
  "velnor-actions-orchestrator-runtime-evidence",
@@ -4052,6 +4053,27 @@ dependencies = [
  "serde_json",
  "velnor-actions-contract-workflow",
  "velnor-actions-orchestrator-core",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-retrieve"
+version = "0.1.1"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "velnor-actions-contract",
+ "velnor-actions-contract-config",
+ "velnor-actions-contract-workflow",
+ "velnor-actions-mise",
+ "velnor-actions-orchestrator-core",
+ "velnor-actions-orchestrator-cover",
+ "velnor-actions-orchestrator-cover-baseline",
+ "velnor-actions-orchestrator-cover-compat",
+ "velnor-actions-orchestrator-covered-tasks",
+ "velnor-actions-orchestrator-merge-ports",
+ "velnor-actions-orchestrator-merge-request",
+ "velnor-actions-orchestrator-retrieve-retry",
+ "velnor-actions-workflow-renderer",
 ]
 
 [[package]]
