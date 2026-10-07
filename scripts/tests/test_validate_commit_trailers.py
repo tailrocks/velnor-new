@@ -80,21 +80,21 @@ class CommitTrailerValidationTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
 
     def test_ambiguous_policy_heading_fails_closed(self) -> None:
-        policy = (ROOT / "docs/implemented/codex-agent-configuration.md").read_text(
+        policy = (ROOT / "docs/content/docs/implemented/codex-agent-configuration.mdx").read_text(
             encoding="utf-8"
         )
         with self.assertRaises(MODULE.ValidationError):
             MODULE.canonical_values(policy + "\n## Commit identity and trailers\n")
 
     def test_ambiguous_trailer_block_fails_closed(self) -> None:
-        policy = (ROOT / "docs/implemented/codex-agent-configuration.md").read_text(
+        policy = (ROOT / "docs/content/docs/implemented/codex-agent-configuration.mdx").read_text(
             encoding="utf-8"
         )
         with self.assertRaises(MODULE.ValidationError):
             MODULE.canonical_values(policy + "\n```text\nextra\n```\n")
 
     def test_blank_line_inside_canonical_block_fails_closed(self) -> None:
-        policy = (ROOT / "docs/implemented/codex-agent-configuration.md").read_text(
+        policy = (ROOT / "docs/content/docs/implemented/codex-agent-configuration.mdx").read_text(
             encoding="utf-8"
         )
         split_trailers = TRAILERS.replace("\nSigned-off-by:", "\n\nSigned-off-by:")

@@ -1,4 +1,7 @@
-# Update and exception procedure
+---
+title: "Update and exception procedure"
+description: "Mechanical procedure for version-policy §1–§4, RQ-2.11, RQ-5.3, RQ-9.8, VER-2.27, VER-3.2, VER-3.3, VER-3.4, VER-3.7, VER-4.4. No updater binary exists: the mechanical maximum is `scripts/check-freshness.sh` (gates) + Renovate (proposals) + this procedure (human steps). Nothing here invents automation that is not wired."
+---
 
 Mechanical procedure for version-policy §1–§4, RQ-2.11, RQ-5.3, RQ-9.8,
 VER-2.27, VER-3.2, VER-3.3, VER-3.4, VER-3.7, VER-4.4. No updater binary
@@ -120,7 +123,7 @@ system and `Runner Image` image/version/release values from a successful
 hosted workflow log. Keep a normal CI runtime observation separate from a
 formal `Qualification` workflow result: a newer CI observation refreshes
 image identity only and does not claim the qualification matrix ran again.
-The [2026-10-04 evidence snapshot](freshness-evidence-2026-10-04.md)
+The [2026-10-04 evidence snapshot](/docs/implemented/freshness-evidence-2026-10-04)
 records this distinction.
 
 ## Exceptions (≤14 days)
@@ -231,7 +234,7 @@ files MUST be split, and grandfathering new or existing debt is forbidden.
 ## Row pre-declaration (locks not yet created)
 
 - `.velnor/generator.lock`: Velnor bootstrap identity; created at seed
-  ([release-gates.md](release-gates.md)). Refresh rule: protected release
+  ([release-gates](/docs/implemented/release-gates)). Refresh rule: protected release
   job only, separate reviewed change.
 - `.velnor/runner.lock`: deferred V2 self-hosted runner identity. Refresh
   rule: reviewed, binds image digest + runner version + arch + API versions.

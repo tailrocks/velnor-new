@@ -252,7 +252,8 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn procedure_is_reconciled() -> Result<(), Box<dyn Error>> {
-    let procedure = crate::impl_repo_policy::read("docs/implemented/update-procedure.md")?;
+    let procedure =
+        crate::impl_repo_policy::read("docs/content/docs/implemented/update-procedure.mdx")?;
     for marker in [
         "local-pin",
         "policy-mirror",

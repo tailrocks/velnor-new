@@ -1,4 +1,7 @@
-# Recorded deviations (SHOULD rows)
+---
+title: "Recorded deviations (SHOULD rows)"
+description: "Per `docs/README.md`, a SHOULD recommendation may be changed only by recording the reason and impact. Each entry names the row, the chosen behavior, and why. MUST / MUST-NOT halves are unaffected and still bind."
+---
 
 Per `docs/README.md`, a SHOULD recommendation may be changed only by
 recording the reason and impact. Each entry names the row, the chosen
@@ -44,7 +47,7 @@ hand-written boundary fixtures instead.
 - Impact: no property coverage until the risk-triggered rollout fires;
   example coverage carries parser/plan invariants meanwhile.
 - Status: reviewed 2026-09-29; revisit when the first risk trigger fires
-  per [verification-triggers.md](verification-triggers.md) or at V1
+  per [verification-triggers](/docs/implemented/verification-triggers) or at V1
   code-complete, whichever is first.
 
 ## RQ-2.12 — `mise.lock` absent (no deviation)
@@ -86,5 +89,5 @@ against every code check. The control is procedural: generated
 workflow files change only through reviewed PRs (repo `CODEOWNERS`
 covers `.github/workflows/`; branch protection enforces review), and
 inventory/condition edits are security-sensitive by policy
-([classification.md](classification.md)). No deviation is claimed: no
+([classification](/docs/implemented/classification)). No deviation is claimed: no
 code check promises tamper-evidence for the committed `needs` set.
