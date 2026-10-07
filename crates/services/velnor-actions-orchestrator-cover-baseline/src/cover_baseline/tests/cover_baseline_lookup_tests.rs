@@ -5,9 +5,12 @@
 
 use super::*;
 
+use std::path::Path;
+
 use velnor_actions_contract_config::RunnerSelection;
 use velnor_actions_contract_workflow::{
     ObligationDecision, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, Trust,
+    WorkflowEvent,
 };
 
 /// Plan with `base`, one obligation, and a verifiable generator.
@@ -106,4 +109,35 @@ fn lookup_manifest_misses_without_base_or_obligations() {
     empty.obligations.clear();
     assert!(lookup_manifest(&NoLookup, &mut empty, lookup_inputs(tmp.path(), &catalog)).is_none());
     assert_eq!(empty.baseline.reason(), Some("baseline_no_obligations"));
+}
+
+#[test]
+fn baseline_publish_and_download_rules() {
+    assert!(publish_event_eligible(WorkflowEvent::Push));
+    assert!(!publish_event_eligible(WorkflowEvent::PullRequest));
+    assert!(!publish_event_eligible(WorkflowEvent::MergeGroup));
+    let base = "a".repeat(40);
+    let dir = Path::new("/tmp/x");
+    let name = format!("velnor-baseline-{base}-{}", digest_b3(b"c"));
+    let named: Vec<String> = baseline_download_args(
+        &base,
+        ".github/workflows/ci.yml",
+        "testmain",
+        Some(&name),
+        7,
+        dir,
+        "o/r",
+    )
+    .iter()
+    .map(|arg| arg.to_string_lossy().into_owned())
+    .collect();
+    assert_eq!(&named[0..4], &["run", "download", "7", "--name"]);
+    assert_eq!(named[4], name);
+    assert_eq!(&named[named.len() - 2..], &["--repo", "o/r"]);
+    assert!(baseline_download_args(&base, "w", "b", None, 7, dir, "o/r").is_empty());
+    assert!(baseline_download_args(&base, "w", "b", Some(""), 7, dir, "o/r").is_empty());
+    assert!(
+        baseline_download_args(&base, "w", "b", Some(&name), 7, dir, "not-a-slug").is_empty(),
+        "a malformed repo yields no unscoped command"
+    );
 }

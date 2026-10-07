@@ -6,37 +6,6 @@ use super::*;
 
 use velnor_actions_orchestrator_cover_compat::cover_compat::baseline_artifact_numeric_id;
 
-#[test]
-fn baseline_publish_and_download_rules() {
-    assert!(publish_event_eligible(WorkflowEvent::Push));
-    assert!(!publish_event_eligible(WorkflowEvent::PullRequest));
-    assert!(!publish_event_eligible(WorkflowEvent::MergeGroup));
-    let base = "a".repeat(40);
-    let dir = Path::new("/tmp/x");
-    let name = format!("velnor-baseline-{base}-{}", digest_b3(b"c"));
-    let named: Vec<String> = baseline_download_args(
-        &base,
-        ".github/workflows/ci.yml",
-        "testmain",
-        Some(&name),
-        7,
-        dir,
-        "o/r",
-    )
-    .iter()
-    .map(|arg| arg.to_string_lossy().into_owned())
-    .collect();
-    assert_eq!(&named[0..4], &["run", "download", "7", "--name"]);
-    assert_eq!(named[4], name);
-    assert_eq!(&named[named.len() - 2..], &["--repo", "o/r"]);
-    assert!(baseline_download_args(&base, "w", "b", None, 7, dir, "o/r").is_empty());
-    assert!(baseline_download_args(&base, "w", "b", Some(""), 7, dir, "o/r").is_empty());
-    assert!(
-        baseline_download_args(&base, "w", "b", Some(&name), 7, dir, "not-a-slug").is_empty(),
-        "a malformed repo yields no unscoped command"
-    );
-}
-
 /// Minimal valid manifest JSON for `base`/`name`, run 7 attempt 1.
 fn manifest_json(base: &str, name: &str) -> serde_json::Value {
     let digest = digest_b3(b"d");

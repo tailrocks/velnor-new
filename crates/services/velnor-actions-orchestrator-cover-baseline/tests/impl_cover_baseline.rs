@@ -172,6 +172,50 @@ fn download_args_without_exact_artifact_is_empty() {
 }
 
 #[test]
+fn download_args_malformed_base_yields_no_command() {
+    let name = entry_name(&base());
+    assert!(
+        baseline_download_args(
+            "xyz",
+            ".github/workflows/ci.yml",
+            "testmain",
+            Some(&name),
+            7,
+            Path::new("/tmp/x"),
+            "o/r",
+        )
+        .is_empty(),
+        "short SHAs never name a lookup"
+    );
+}
+
+#[test]
+fn entry_without_payload_misses() {
+    let base = base();
+    let name = entry_name(&base);
+    let numeric = baseline_artifact_numeric_id(&name);
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let entry = tmp.path().join(&name);
+    std::fs::create_dir(&entry).expect("entry");
+    assert!(
+        baseline_entry_for(&entry, &base, 7, 1, numeric).is_none(),
+        "empty entry dir carries no evidence"
+    );
+}
+
+#[test]
+fn entry_malformed_json_misses() {
+    let base = base();
+    let name = entry_name(&base);
+    let numeric = baseline_artifact_numeric_id(&name);
+    let tmp = staged_entry(&name, "{oops");
+    assert!(
+        baseline_entry_for(&tmp.path().join(&name), &base, 7, 1, numeric).is_none(),
+        "unparseable payload never loads"
+    );
+}
+
+#[test]
 fn unix_now_is_plausible() {
     let now = unix_now();
     assert!(now >= 1_700_000_000, "unexpected: {now}");
