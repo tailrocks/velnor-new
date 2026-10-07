@@ -9,7 +9,11 @@
 use std::error::Error;
 
 const WORKSPACE_MANIFESTS: [&str; 2] = ["Cargo.toml", "crates/velnor-runner/Cargo.toml"];
-pub(super) const RUNNER_MEMBERS: [(&str, &str); 7] = [
+pub(super) const RUNNER_MEMBERS: [(&str, &str); 8] = [
+    (
+        "crates/tools/velnor-runner-apparmor",
+        "velnor-runner-apparmor",
+    ),
     ("crates/tools/velnor-runner-cli", "velnor-runner-cli"),
     ("crates/tools/velnor-runner-core", "velnor-runner-core"),
     ("crates/tools/velnor-runner-github", "velnor-runner-github"),

@@ -3,9 +3,9 @@
 use bollard::Docker;
 
 use crate::HostError;
-use crate::apparmor::RunnerProfileAdmission;
 use crate::docker_spec::{RunnerImageProfile, runner_plan_for_profile};
 use crate::worker::{dind_create_for_profile, join_dind_net, runner_create};
+use velnor_runner_apparmor::RunnerProfileAdmission;
 
 use super::{Forget, PairEngine, PairSink, PairStop, PartialPair, drive_inner};
 

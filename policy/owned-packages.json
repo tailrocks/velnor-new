@@ -31,6 +31,7 @@
     "velnor-actions-workflow-steps",
     "velnor-actions-workflow-tree",
     "velnor-archive-guard",
+    "velnor-runner-apparmor",
     "velnor-runner-cli",
     "velnor-runner-core",
     "velnor-runner-github",
