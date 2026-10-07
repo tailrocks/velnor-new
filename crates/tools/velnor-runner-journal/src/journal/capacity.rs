@@ -327,7 +327,7 @@ async fn reserve_in_transaction(
     }
 
     conn.execute(
-        "INSERT INTO intents (kind, subject, state, replay_key_version, effect_state) VALUES ('launch', ?1, 'pending', 1, 'not_started')",
+        "INSERT INTO intents (kind, subject, state, replay_key_version, effect_state, runner_start_state) VALUES ('launch', ?1, 'pending', 1, 'not_started', 'not_requested')",
         [identity.subject.as_str()],
     )
     .await

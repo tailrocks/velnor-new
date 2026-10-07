@@ -136,7 +136,7 @@ impl Journal {
                 1 => Ok(LaunchClaim::Draining),
                 0 => {
                     conn.execute(
-                        "INSERT INTO intents (kind, subject, state) VALUES ('launch', ?1, 'pending')",
+                        "INSERT INTO intents (kind, subject, state, runner_start_state) VALUES ('launch', ?1, 'pending', 'not_requested')",
                         [subject],
                     )
                     .await
@@ -222,7 +222,7 @@ async fn launch_id(conn: &turso::Connection, subject: &str) -> Result<(i64, bool
         return Ok((id, false));
     }
     conn.execute(
-        "INSERT INTO intents (kind, subject, state) VALUES ('launch', ?1, 'pending')",
+        "INSERT INTO intents (kind, subject, state, runner_start_state) VALUES ('launch', ?1, 'pending', 'not_requested')",
         [subject],
     )
     .await

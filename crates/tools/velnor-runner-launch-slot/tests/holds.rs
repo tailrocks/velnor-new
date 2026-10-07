@@ -25,6 +25,9 @@ fn row(kind: &str, state: IntentState, cleanup_proven: bool) -> IntentRow {
         observed_workflow_run_id: None,
         remote_terminal: false,
         cleanup_proven,
+        outer_network_name: None,
+        outer_network_id: None,
+        runner_start_intent: velnor_runner_journal::RunnerStartIntent::UnknownLegacy,
     }
 }
 

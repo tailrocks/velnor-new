@@ -86,6 +86,9 @@ pub(super) fn intent(state: IntentState, kind: &str) -> IntentRow {
         observed_workflow_run_id: None,
         remote_terminal: false,
         cleanup_proven: false,
+        outer_network_name: None,
+        outer_network_id: None,
+        runner_start_intent: crate::journal::RunnerStartIntent::UnknownLegacy,
     }
 }
 
