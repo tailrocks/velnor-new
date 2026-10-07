@@ -1,5 +1,7 @@
 //! Dispatch-level command tests.
 
+mod connect_common;
+mod connect_guard_tests;
 mod connect_tests;
 
 use std::path::Path;
