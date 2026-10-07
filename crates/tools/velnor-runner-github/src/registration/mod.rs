@@ -2,12 +2,24 @@
 //! HTTP registration calls live beside those checks and inject [`crate::Transport`].
 
 mod admin;
+mod discovery;
+mod discovery_admin;
 mod groups;
 mod runners;
 mod scale_set;
 mod token;
 
-pub use admin::{AdminConnection, AdminConnectionCall, admin_connection, admin_token_is_fresh};
+pub use admin::{
+    AdminConnection, AdminConnectionCall, admin_connection, admin_connection_once,
+    admin_token_is_fresh,
+};
+pub use discovery::{
+    DiscoveryCredentialOutcome, DiscoveryCredentialStep, DiscoveryIntentId, DiscoveryIntentStore,
+    DiscoveryTransport, RepositoryAdminEvidence, RepositoryDiscoveryToken,
+    exchange_repository_discovery_admin_once, issue_repository_discovery_token,
+    read_repository_admin_evidence,
+};
+pub use discovery_admin::RepositoryDiscoveryAdmin;
 pub use groups::{RunnerGroup, list_runner_groups};
 pub use runners::{get_runner_by_name, remove_runner};
 pub use scale_set::{

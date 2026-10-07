@@ -91,11 +91,46 @@ pub fn admin_connection<T>(
 where
     T: Transport + ?Sized,
 {
+    let request = admin_request(call)?;
+    let exchange = post_with_one_auth_retry(transport, &request)?;
+    decode_admin(&exchange.body)
+}
+
+/// Exchange one repository registration token for an Actions Service admin
+/// connection with exactly one transport attempt.
+///
+/// This narrow variant is for bounded metadata-discovery flows. It does not
+/// retry 401/403 or transport failures: a timeout/reset means the POST outcome
+/// is uncertain and the caller must stop. It does not create a Scale Set,
+/// session, acquired job, JIT configuration, or runner. The returned connection
+/// is still a secret capability and must remain in the control plane.
+///
+/// # Errors
+///
+/// Returns [`WireError::RegistrationRejected`] for an empty registration
+/// token or malformed response. HTTP errors are returned without a retry;
+/// timeout/reset is [`SessionError::Uncertain`].
+pub fn admin_connection_once<T>(
+    transport: &mut T,
+    call: &AdminConnectionCall<'_>,
+) -> Result<AdminConnection, SessionError>
+where
+    T: Transport + ?Sized,
+{
+    let request = admin_request(call)?;
+    let exchange = execute(transport, &request)?;
+    if !is_2xx(exchange.status) {
+        return Err(other_status(exchange.status));
+    }
+    decode_admin(&exchange.body)
+}
+
+fn admin_request(call: &AdminConnectionCall<'_>) -> Result<SessionRequest, SessionError> {
     if call.registration_token.is_empty() {
         return Err(SessionError::Wire(WireError::RegistrationRejected));
     }
     let body = admin_body(call.config_url)?;
-    let request = SessionRequest {
+    Ok(SessionRequest {
         method: Method::Post,
         path: "/actions/runner-registration".to_owned(),
         query: None,
@@ -105,9 +140,7 @@ where
             user_agent(),
         ],
         body,
-    };
-    let exchange = post_with_one_auth_retry(transport, &request)?;
-    decode_admin(&exchange.body)
+    })
 }
 
 /// Fresh when `expires_at` is more than 60 seconds after `now`.
