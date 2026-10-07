@@ -38,6 +38,8 @@ workspace = true
 
 [dev-dependencies]
 tempfile = { workspace = true }
+velnor-actions-workflow-jobs = { version = "=0.1.1", path = "../velnor-actions-workflow-jobs" }
+velnor-actions-workflow-steps = { version = "=0.1.1", path = "../velnor-actions-workflow-steps" }
 
 [[test]]
 name = "velnor_orchestrator_internal"

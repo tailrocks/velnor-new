@@ -73,8 +73,6 @@ mod impl_plan_parity;
 mod impl_plan_prepare;
 mod impl_prepare_generate;
 mod impl_protocol;
-mod impl_protocol_render;
-mod impl_protocol_render_gate;
 mod impl_required_evidence;
 mod impl_required_reports;
 mod impl_required_validators;
