@@ -48,9 +48,31 @@ pub(crate) fn service(action: ServiceAction, config_path: &Path, state_path: &Pa
     }
 }
 
+pub(crate) const fn controller_service_status_line(
+    state: ControllerServiceState,
+) -> Option<&'static str> {
+    match state {
+        ControllerServiceState::InUse => Some("controller_service=in_use"),
+        ControllerServiceState::Stopped => Some("controller_service=stopped_or_absent"),
+        ControllerServiceState::Unknown => None,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn print_controller_service_status(state: ControllerServiceState) -> ExitCode {
+    if let Some(line) = controller_service_status_line(state) {
+        println!("{line}");
+        ExitCode::SUCCESS
+    } else {
+        eprintln!("controller_service=unknown");
+        ExitCode::from(1)
+    }
+}
+
 #[cfg(target_os = "macos")]
 fn service_macos(action: ServiceAction) -> ExitCode {
     match action {
+        ServiceAction::Status => print_controller_service_status(controller_service_state()),
         ServiceAction::Install => install(),
         ServiceAction::Start => start(),
         ServiceAction::Stop => stop(),

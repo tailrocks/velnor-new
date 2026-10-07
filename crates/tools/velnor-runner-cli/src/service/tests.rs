@@ -1,9 +1,25 @@
 use std::path::Path;
 
 use super::{
-    ControllerServiceState, bootout_argv, bootstrap_argv, launchctl_service_state,
-    systemd_service_state, with_logs,
+    ControllerServiceState, bootout_argv, bootstrap_argv, controller_service_status_line,
+    launchctl_service_state, systemd_service_state, with_logs,
 };
+
+#[test]
+fn controller_service_status_is_distinct_from_readiness() {
+    assert_eq!(
+        controller_service_status_line(ControllerServiceState::InUse),
+        Some("controller_service=in_use")
+    );
+    assert_eq!(
+        controller_service_status_line(ControllerServiceState::Stopped),
+        Some("controller_service=stopped_or_absent")
+    );
+    assert_eq!(
+        controller_service_status_line(ControllerServiceState::Unknown),
+        None
+    );
+}
 
 #[test]
 fn launchctl_uses_the_gui_domain_and_does_not_fork() {

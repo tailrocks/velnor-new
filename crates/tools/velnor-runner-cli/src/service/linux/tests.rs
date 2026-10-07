@@ -188,6 +188,31 @@ fn start_verifies_the_packaged_unit_and_running_postcondition() {
 }
 
 #[test]
+fn status_reads_only_systemd_state_and_fails_closed_on_unknown() {
+    let stopped =
+        b"LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\n";
+    let mut manager = FakeManager::with_outputs([manager_output(true, stopped.to_vec())]);
+    assert_eq!(perform(ServiceAction::Status, &mut manager, 0), Ok(()));
+    assert_eq!(
+        manager.calls,
+        vec![vec![
+            "show".to_owned(),
+            "--no-pager".to_owned(),
+            "--property=LoadState,ActiveState,SubState,MainPID,ControlPID".to_owned(),
+            UNIT.to_owned(),
+        ]]
+    );
+    assert_eq!(manager.busctl_calls, Vec::<Vec<String>>::new());
+
+    let mut manager = FakeManager::with_outputs([manager_output(false, stopped.to_vec())]);
+    assert_eq!(
+        perform(ServiceAction::Status, &mut manager, 0),
+        Err(ServiceFault::UnknownState)
+    );
+    assert_eq!(manager.calls.len(), 1);
+}
+
+#[test]
 fn start_does_not_mutate_a_unit_with_an_unexpected_command() {
     let snapshot = unit_snapshot(UnitSnapshot {
         active_state: "inactive",

@@ -41,6 +41,7 @@ const IDENTITY_SHOW_PROPERTIES: &str = concat!(
     "LoadState,ExecStart,User,Group,UMask,NoNewPrivileges,ProtectSystem,Type,",
     "RemainAfterExit,Before"
 );
+const SERVICE_STATE_SHOW_PROPERTIES: &str = "LoadState,ActiveState,SubState,MainPID,ControlPID";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ManagerOutput {
@@ -113,6 +114,16 @@ impl ServiceFault {
 }
 
 pub(super) fn service(action: ServiceAction, config_path: &Path, state_path: &Path) -> ExitCode {
+    if matches!(action, ServiceAction::Status) {
+        let mut manager = Systemctl;
+        return match perform(action, &mut manager, 0) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(fault) => {
+                eprintln!("{}", fault.message());
+                ExitCode::from(1)
+            }
+        };
+    }
     if matches!(action, ServiceAction::Install | ServiceAction::Uninstall) {
         eprintln!("{}", ServiceFault::PackageOwned.message());
         return ExitCode::from(1);
@@ -144,10 +155,29 @@ fn perform(
     drain_timeout_secs: u64,
 ) -> Result<(), ServiceFault> {
     match action {
+        ServiceAction::Status => service_status(manager),
         ServiceAction::Install | ServiceAction::Uninstall => Err(ServiceFault::PackageOwned),
         ServiceAction::Start => start(manager, drain_timeout_secs),
         ServiceAction::Stop => Err(ServiceFault::DrainUnavailable),
     }
+}
+
+fn service_status(manager: &mut impl Manager) -> Result<(), ServiceFault> {
+    let output = manager_call_output(
+        manager,
+        &[
+            "show",
+            "--no-pager",
+            &format!("--property={SERVICE_STATE_SHOW_PROPERTIES}"),
+            UNIT,
+        ],
+    )?;
+    let state = super::systemd_service_state(output.success, &output.stdout);
+    let Some(line) = super::controller_service_status_line(state) else {
+        return Err(ServiceFault::UnknownState);
+    };
+    println!("{line}");
+    Ok(())
 }
 
 fn start(manager: &mut impl Manager, drain_timeout_secs: u64) -> Result<(), ServiceFault> {
