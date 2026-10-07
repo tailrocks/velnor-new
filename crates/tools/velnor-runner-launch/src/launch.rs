@@ -61,17 +61,11 @@ pub struct LaunchReport {
     pub workers: Vec<Started>,
 }
 
-/// Open one session, start the admitted workers, then delete that session.
+/// Run one session; unresolved polls and capacity holds preserve its delivery row.
 ///
 /// # Errors
 ///
-/// Returns [`EnsureError`] when registration, acquire, JIT, Docker, or the
-/// session delete fails. A failed delete is returned even when the poll failed,
-/// because a leaked session blocks the next create. The next open deletes only
-/// session ids this journal recorded. Timeout after acquire keeps the journal
-/// row uncertain and does not acknowledge. `VELNOR_RECONCILE=1` can fail the
-/// journal read before a session exists, and a hold skips it. The session stays
-/// open while an owned launch container is still running.
+/// Returns [`EnsureError`] on failure or when an unacknowledged hold fences session exit.
 pub async fn launch_once(
     pat: &str,
     owner: &str,
@@ -79,6 +73,7 @@ pub async fn launch_once(
     docker: &bollard::Docker,
     journal: &Journal,
 ) -> Result<LaunchReport, EnsureError> {
+    session::require_no_unresolved(journal).await?;
     let ceiling = job_capacity();
     let capacity = velnor_runner_host::guest::discover_guest_capacity(docker, ceiling)
         .await
@@ -113,14 +108,18 @@ pub async fn launch_once(
         docker,
     )
     .await;
-    let closed = session::close_session(
-        &mut link,
-        set.id,
-        &session.session_id,
-        row,
-        admin.expose(),
-        journal,
-    )
+    let retain_session = driven.as_ref().is_ok_and(|outcome| outcome.retain_session);
+    let closed = session::close_after_poll(&driven, retain_session, || async {
+        session::close_session(
+            &mut link,
+            set.id,
+            &session.session_id,
+            row,
+            admin.expose(),
+            journal,
+        )
+        .await
+    })
     .await;
     report(set.id, driven, closed)
 }
@@ -259,11 +258,13 @@ where
 
 fn report(
     set_id: i64,
-    driven: Result<Vec<Started>, EnsureError>,
+    driven: Result<turn::PollOutcome, EnsureError>,
     closed: Result<(), EnsureError>,
 ) -> Result<LaunchReport, EnsureError> {
     match (driven, closed) {
-        (Ok(workers), Ok(())) => {
+        (Ok(outcome), Ok(())) if outcome.retain_session => Err(EnsureError::Uncertain),
+        (Ok(outcome), Ok(())) => {
+            let workers = outcome.workers;
             let started = workers.first().cloned();
             Ok(LaunchReport {
                 set_id,

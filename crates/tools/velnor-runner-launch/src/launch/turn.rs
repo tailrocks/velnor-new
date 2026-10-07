@@ -1,5 +1,7 @@
 //! One session loop. A running owned worker keeps the session up.
 
+use std::collections::BTreeSet;
+
 use velnor_runner_github::{Poll, QueueSession};
 
 use velnor_runner_host::listen::{Link, point_at_queue, poll_path, restore_base};
@@ -25,7 +27,7 @@ pub(super) async fn poll_and_drive(
     admin_token: &str,
     journal: &Journal,
     docker: &bollard::Docker,
-) -> Result<Vec<Started>, EnsureError> {
+) -> Result<PollOutcome, EnsureError> {
     trace::session(session);
     let mut workers = Vec::new();
     let capacity = capacity::job_capacity();
@@ -52,6 +54,7 @@ pub(super) async fn poll_and_drive(
         capacity,
         target,
         last_message_id: 0,
+        held_offers: HeldOffers::default(),
     };
     let bound = if target > capacity {
         capacity::poll_bound_wide()
@@ -59,7 +62,39 @@ pub(super) async fn poll_and_drive(
         capacity::poll_bound(capacity)
     };
     until_idle(&mut turn, &mut workers, bound).await?;
-    Ok(workers)
+    Ok(PollOutcome {
+        workers,
+        retain_session: turn.held_offers.requires_retention(),
+    })
+}
+
+/// Result of polling, including whether an unacknowledged offer still needs this session.
+pub(super) struct PollOutcome {
+    pub(super) workers: Vec<Started>,
+    pub(super) retain_session: bool,
+}
+
+#[derive(Default)]
+struct HeldOffers {
+    message_ids: BTreeSet<i64>,
+}
+
+impl HeldOffers {
+    fn observe_batch(&mut self, polled: &Poll) {
+        if let Poll::Batch(batch) = polled {
+            self.message_ids.insert(batch.message_id);
+        }
+    }
+
+    fn observe_ack(&mut self, message_id: Option<i64>) {
+        if let Some(message_id) = message_id {
+            self.message_ids.remove(&message_id);
+        }
+    }
+
+    fn requires_retention(&self) -> bool {
+        !self.message_ids.is_empty()
+    }
 }
 
 /// One session's poll and running-count source.
@@ -185,6 +220,7 @@ struct Turn<'a> {
     capacity: u32,
     target: u32,
     last_message_id: i64,
+    held_offers: HeldOffers,
 }
 
 impl Turn<'_> {
@@ -227,6 +263,9 @@ impl Turn<'_> {
         queue: Option<String>,
         polled: &Poll,
     ) -> Result<bool, EnsureError> {
+        // Any real message remains attached to this session until its exact
+        // id receives a successful DELETE, regardless of the admission branch.
+        self.held_offers.observe_batch(polled);
         match decision {
             // HTTP 202 keeps the session open. A job can arrive on a later poll.
             Admit::Stay => self.stay(workers).await,
@@ -237,7 +276,7 @@ impl Turn<'_> {
                 step: "queue",
             }),
             Admit::Ack { stop } => {
-                if let Some(message_id) = ack_ready(
+                let acknowledged = ack_ready(
                     self.link,
                     self.set_id,
                     self.session,
@@ -245,13 +284,17 @@ impl Turn<'_> {
                     path,
                     queue,
                     polled,
-                )? {
+                )?;
+                self.held_offers.observe_ack(acknowledged);
+                if let Some(message_id) = acknowledged {
                     self.last_message_id = message_id;
                 }
                 Ok(stop)
             }
             Admit::Start { stop } => {
                 let outcome = self.start(workers, path, queue, polled, stop).await?;
+                self.held_offers
+                    .observe_ack(outcome.acknowledged_message_id);
                 if let Some(message_id) = outcome.acknowledged_message_id {
                     self.last_message_id = message_id;
                 }
