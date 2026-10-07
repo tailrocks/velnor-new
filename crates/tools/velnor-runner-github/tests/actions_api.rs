@@ -3,8 +3,10 @@
 use std::collections::VecDeque;
 
 use velnor_runner_github::{
-    ActionsJob, ActionsWorkflowRun, Exchange, Method, SessionError, SessionRequest, Transport,
-    TransportFail, WireError, get_actions_job, get_actions_workflow_run,
+    ActionsJob, ActionsRepository, ActionsWorkflowRun, Exchange, ForkPullRequestWorkflowSetting,
+    Method, PrivateRepoForkWorkflowSettings, SessionError, SessionRequest, Transport,
+    TransportFail, WireError, get_actions_job, get_actions_repository, get_actions_workflow_run,
+    get_private_repo_fork_workflow_settings,
 };
 
 const TOKEN: &str = "actions-read-canary";
@@ -42,7 +44,7 @@ impl Transport for Script {
 fn actions_job_and_run_are_read_only_and_keep_distinct_identities() -> Result<(), &'static str> {
     let mut script = Script::replies(&[
         r#"{"id":119,"run_id":88,"status":"completed","conclusion":"success","runner_id":31,"runner_name":"velnor-job-31","runner_group_id":3,"runner_group_name":"Default"}"#,
-        r#"{"id":88,"run_attempt":2,"status":"completed","conclusion":"success","event":"push","head_sha":"abc123","head_repository":{"full_name":"ChainArgos/java-monorepo"}}"#,
+        r#"{"id":88,"path":".github/workflows/ci.yml","run_attempt":2,"status":"completed","conclusion":"success","event":"push","head_sha":"abc123","head_repository":{"full_name":"ChainArgos/java-monorepo"}}"#,
     ]);
 
     let job = get_actions_job(&mut script, "ChainArgos", "java-monorepo", "119", TOKEN)
@@ -67,6 +69,7 @@ fn actions_job_and_run_are_read_only_and_keep_distinct_identities() -> Result<()
         run,
         ActionsWorkflowRun {
             id: 88,
+            path: ".github/workflows/ci.yml".to_owned(),
             run_attempt: 2,
             status: "completed".to_owned(),
             conclusion: Some("success".to_owned()),
@@ -96,7 +99,7 @@ fn actions_job_and_run_are_read_only_and_keep_distinct_identities() -> Result<()
             header(request, "Authorization"),
             Some("Bearer actions-read-canary")
         );
-        assert_eq!(request.body, Vec::<u8>::new());
+        assert_eq!(request.body, [] as [u8; 0]);
         assert!(!format!("{request:?}").contains(TOKEN));
     }
     Ok(())
@@ -143,10 +146,102 @@ fn response_identity_must_match_requested_job_and_run() {
     );
 
     let mut wrong_run = Script::replies(&[
-        r#"{"id":88,"run_attempt":1,"status":"completed","event":"push","head_sha":"abc123","head_repository":null}"#,
+        r#"{"id":88,"path":".github/workflows/ci.yml","run_attempt":1,"status":"completed","event":"push","head_sha":"abc123","head_repository":null}"#,
     ]);
     assert_eq!(
         get_actions_workflow_run(&mut wrong_run, "org", "repo", 89, TOKEN),
+        Err(SessionError::Wire(WireError::Malformed))
+    );
+}
+
+#[test]
+fn repository_and_fork_policy_reads_are_explicit_read_only_inputs() -> Result<(), &'static str> {
+    let mut script = Script::replies(&[
+        r#"{"id":829618808,"full_name":"ChainArgos/java-monorepo","private":true,"visibility":"private"}"#,
+        r#"{"run_workflows_from_fork_pull_requests":false,"send_write_tokens_to_workflows":false,"send_secrets_and_variables":false,"require_approval_for_fork_pr_workflows":false}"#,
+    ]);
+
+    let repo = get_actions_repository(&mut script, "ChainArgos", "java-monorepo", TOKEN)
+        .map_err(|_| "repo metadata")?;
+    let fork_settings =
+        get_private_repo_fork_workflow_settings(&mut script, "ChainArgos", "java-monorepo", TOKEN)
+            .map_err(|_| "fork settings")?;
+
+    assert_eq!(
+        repo,
+        ActionsRepository {
+            id: 829_618_808,
+            full_name: "ChainArgos/java-monorepo".to_owned(),
+            private: true,
+        }
+    );
+    assert_eq!(
+        fork_settings,
+        PrivateRepoForkWorkflowSettings {
+            run_workflows_from_fork_pull_requests: ForkPullRequestWorkflowSetting::Disabled,
+            send_write_tokens_to_workflows: false,
+            send_secrets_and_variables: false,
+            require_approval_for_fork_pr_workflows: false,
+        }
+    );
+    assert_eq!(script.seen.len(), 2);
+    assert_eq!(script.seen[0].method, Method::Get);
+    assert_eq!(script.seen[0].path, "repos/ChainArgos/java-monorepo");
+    assert_eq!(
+        script.seen[1].path,
+        "repos/ChainArgos/java-monorepo/actions/permissions/fork-pr-workflows-private-repos"
+    );
+    for request in &script.seen {
+        assert_eq!(request.method, Method::Get);
+        assert_eq!(request.body, [] as [u8; 0]);
+        assert_eq!(request.query, None);
+        assert_eq!(header(request, "X-GitHub-Api-Version"), Some("2026-03-10"));
+        assert_eq!(
+            header(request, "Authorization"),
+            Some("Bearer actions-read-canary")
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn trust_reads_reject_missing_fields_and_mismatched_repository() {
+    let mut missing_private =
+        Script::replies(&[r#"{"id":829618808,"full_name":"ChainArgos/java-monorepo"}"#]);
+    assert_eq!(
+        get_actions_repository(&mut missing_private, "ChainArgos", "java-monorepo", TOKEN),
+        Err(SessionError::Wire(WireError::Malformed))
+    );
+
+    let mut wrong_repo = Script::replies(&[
+        r#"{"id":829618808,"full_name":"another-org/java-monorepo","private":true}"#,
+    ]);
+    assert_eq!(
+        get_actions_repository(&mut wrong_repo, "ChainArgos", "java-monorepo", TOKEN),
+        Err(SessionError::Wire(WireError::Malformed))
+    );
+
+    let mut missing_policy = Script::replies(&[
+        r#"{"run_workflows_from_fork_pull_requests":false,"send_write_tokens_to_workflows":false,"send_secrets_and_variables":false}"#,
+    ]);
+    assert_eq!(
+        get_private_repo_fork_workflow_settings(
+            &mut missing_policy,
+            "ChainArgos",
+            "java-monorepo",
+            TOKEN
+        ),
+        Err(SessionError::Wire(WireError::Malformed))
+    );
+}
+
+#[test]
+fn missing_workflow_path_is_not_accepted_as_trust_evidence() {
+    let mut response = Script::replies(&[
+        r#"{"id":88,"run_attempt":1,"status":"completed","event":"push","head_sha":"abc123","head_repository":{"full_name":"ChainArgos/java-monorepo"}}"#,
+    ]);
+    assert_eq!(
+        get_actions_workflow_run(&mut response, "ChainArgos", "java-monorepo", 88, TOKEN),
         Err(SessionError::Wire(WireError::Malformed))
     );
 }

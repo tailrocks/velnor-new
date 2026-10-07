@@ -14,7 +14,11 @@ mod secret;
 pub mod session;
 
 pub use acquire::{AcquireOutcome, Certainty, TransportFail, classify_acquire, effect_certainty};
-pub use actions::{ActionsJob, ActionsWorkflowRun, get_actions_job, get_actions_workflow_run};
+pub use actions::{
+    ActionsJob, ActionsRepository, ActionsWorkflowRun, ForkPullRequestWorkflowSetting,
+    PrivateRepoForkWorkflowSettings, get_actions_job, get_actions_repository,
+    get_actions_workflow_run, get_private_repo_fork_workflow_settings,
+};
 pub use error::WireError;
 pub use paths::{
     CAPACITY_HEADER, acquire_path, capacity_header_value, jit_path, last_message_query,

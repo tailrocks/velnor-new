@@ -8,6 +8,42 @@ use crate::{Method, SessionError, SessionRequest, Transport, WireError};
 const API_VERSION: &str = "2026-03-10";
 const ACCEPT: &str = "application/vnd.github+json";
 
+/// Repository identity and visibility facts from the repository REST endpoint.
+/// This DTO is evidence only; callers decide whether the returned policy is
+/// sufficient for their trust boundary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActionsRepository {
+    /// Numeric GitHub repository ID.
+    pub id: i64,
+    /// Canonical `owner/repository` identity.
+    pub full_name: String,
+    /// Whether GitHub reports this repository as private.
+    pub private: bool,
+}
+
+/// Whether private-repository fork pull-request workflows are enabled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ForkPullRequestWorkflowSetting {
+    /// GitHub allows workflows from fork pull requests to run.
+    Enabled,
+    /// GitHub blocks workflows from fork pull requests.
+    Disabled,
+}
+
+/// Private-repository fork workflow settings from GitHub's Actions REST API.
+/// These settings are policy inputs, not a standalone runner authorization.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrivateRepoForkWorkflowSettings {
+    /// Whether workflows from fork pull requests may run.
+    pub run_workflows_from_fork_pull_requests: ForkPullRequestWorkflowSetting,
+    /// Whether fork workflows receive write tokens.
+    pub send_write_tokens_to_workflows: bool,
+    /// Whether fork workflows receive secrets and variables.
+    pub send_secrets_and_variables: bool,
+    /// Whether fork pull request workflows require approval.
+    pub require_approval_for_fork_pr_workflows: bool,
+}
+
 /// GitHub Actions job state. `id` is the numeric REST job id, distinct from a
 /// Scale Set message's opaque string `jobId`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,6 +71,8 @@ pub struct ActionsJob {
 pub struct ActionsWorkflowRun {
     /// Numeric workflow run id.
     pub id: i64,
+    /// Workflow file path reported by the workflow-run REST response.
+    pub path: String,
     /// Run attempt, starting at one.
     pub run_attempt: i64,
     /// Current REST status.
@@ -47,6 +85,97 @@ pub struct ActionsWorkflowRun {
     pub head_sha: String,
     /// Full name of the source repository, absent when GitHub reports null.
     pub head_repository_full_name: Option<String>,
+}
+
+/// Read repository identity and privacy metadata.
+///
+/// The caller's host-only REST credential needs repository `Metadata:read`
+/// (fine-grained GitHub App/PAT) or `repo` (classic token) for private repos.
+/// The returned fields are evidence only; callers must compare the returned
+/// identity and privacy with their configured trust policy.
+///
+/// # Errors
+///
+/// Returns an error if the input is invalid, transport or GitHub API access
+/// fails, or the response omits or mismatches the required repository facts.
+pub fn get_actions_repository<T>(
+    transport: &mut T,
+    owner: &str,
+    repository: &str,
+    rest_token: &str,
+) -> Result<ActionsRepository, SessionError>
+where
+    T: Transport + ?Sized,
+{
+    validate_repository(owner, repository, rest_token)?;
+    let request = actions_request(format!("repos/{owner}/{repository}"), rest_token)?;
+    let exchange = execute(transport, &request)?;
+    if exchange.status != 200 {
+        return Err(status_error(exchange.status));
+    }
+    let parsed: ActionsRepositoryResponse =
+        serde_json::from_slice(&exchange.body).map_err(|_| WireError::Malformed)?;
+    let expected_full_name = format!("{owner}/{repository}");
+    let private = parsed.private.ok_or(WireError::Malformed)?;
+    if parsed.id <= 0 || !parsed.full_name.eq_ignore_ascii_case(&expected_full_name) {
+        return Err(WireError::Malformed.into());
+    }
+    Ok(ActionsRepository {
+        id: parsed.id,
+        full_name: parsed.full_name,
+        private,
+    })
+}
+
+/// Read the four private-repository fork-workflow controls.
+///
+/// The caller's host-only REST credential needs repository `Administration:read`
+/// (fine-grained GitHub App/PAT) or `repo` (classic token). This method returns
+/// raw settings; it does not decide whether they authorize runner admission.
+///
+/// # Errors
+///
+/// Returns an error if the input is invalid, transport or GitHub API access
+/// fails, or any required policy field is missing from the response.
+pub fn get_private_repo_fork_workflow_settings<T>(
+    transport: &mut T,
+    owner: &str,
+    repository: &str,
+    rest_token: &str,
+) -> Result<PrivateRepoForkWorkflowSettings, SessionError>
+where
+    T: Transport + ?Sized,
+{
+    validate_repository(owner, repository, rest_token)?;
+    let request = actions_request(
+        format!("repos/{owner}/{repository}/actions/permissions/fork-pr-workflows-private-repos"),
+        rest_token,
+    )?;
+    let exchange = execute(transport, &request)?;
+    if exchange.status != 200 {
+        return Err(status_error(exchange.status));
+    }
+    let parsed: ForkWorkflowSettingsResponse =
+        serde_json::from_slice(&exchange.body).map_err(|_| WireError::Malformed)?;
+    Ok(PrivateRepoForkWorkflowSettings {
+        run_workflows_from_fork_pull_requests: if parsed
+            .run_workflows_from_fork_pull_requests
+            .ok_or(WireError::Malformed)?
+        {
+            ForkPullRequestWorkflowSetting::Enabled
+        } else {
+            ForkPullRequestWorkflowSetting::Disabled
+        },
+        send_write_tokens_to_workflows: parsed
+            .send_write_tokens_to_workflows
+            .ok_or(WireError::Malformed)?,
+        send_secrets_and_variables: parsed
+            .send_secrets_and_variables
+            .ok_or(WireError::Malformed)?,
+        require_approval_for_fork_pr_workflows: parsed
+            .require_approval_for_fork_pr_workflows
+            .ok_or(WireError::Malformed)?,
+    })
 }
 
 /// Read an Actions job using the REST job endpoint.
@@ -146,8 +275,13 @@ where
     {
         return Err(WireError::Malformed.into());
     }
+    let path = parsed
+        .path
+        .filter(|path| !path.is_empty())
+        .ok_or(WireError::Malformed)?;
     Ok(ActionsWorkflowRun {
         id: parsed.id,
+        path,
         run_attempt: parsed.run_attempt,
         status: parsed.status,
         conclusion: parsed.conclusion,
@@ -221,6 +355,21 @@ fn status_error(status: u16) -> SessionError {
 }
 
 #[derive(Deserialize)]
+struct ActionsRepositoryResponse {
+    id: i64,
+    full_name: String,
+    private: Option<bool>,
+}
+
+#[derive(Deserialize)]
+struct ForkWorkflowSettingsResponse {
+    run_workflows_from_fork_pull_requests: Option<bool>,
+    send_write_tokens_to_workflows: Option<bool>,
+    send_secrets_and_variables: Option<bool>,
+    require_approval_for_fork_pr_workflows: Option<bool>,
+}
+
+#[derive(Deserialize)]
 struct JobResponse {
     id: i64,
     run_id: i64,
@@ -235,6 +384,7 @@ struct JobResponse {
 #[derive(Deserialize)]
 struct WorkflowRunResponse {
     id: i64,
+    path: Option<String>,
     run_attempt: i64,
     status: String,
     conclusion: Option<String>,
