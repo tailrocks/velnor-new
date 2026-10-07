@@ -61,6 +61,14 @@ pub(crate) fn checkout_pin() -> String {
     format!("actions/checkout@{:040x}", 0)
 }
 
+pub(crate) fn policy_pin() -> velnor_actions_contract_config::RustPolicyConfig {
+    velnor_actions_contract_config::RustPolicyConfig {
+        version: "0.1.3".to_owned(),
+        sha256: "104c0d8b3a827875776358f941aa88f1c5837c1009305076af9380f4e3fcda25".to_owned(),
+        profile: velnor_actions_contract_config::RustPolicyProfile::RustStrictV1,
+    }
+}
+
 pub(crate) fn fixture_ctx() -> RenderContext {
     RenderContext {
         generator_version: VERSION.to_owned(),
@@ -69,6 +77,7 @@ pub(crate) fn fixture_ctx() -> RenderContext {
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),
         validator_commands: Vec::new(),
+        rust_policy: Some(policy_pin()),
         candidate: None,
         preseed: false,
         verification_tasks: Vec::new(),

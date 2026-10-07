@@ -3,15 +3,15 @@
 ## V1 generator boundaries
 
 - V1 is a workflow generator: `plan`/`generate` turn repository evidence into CI workflows. It is not a runner, interpreter, or second task graph.
-- Do not implement runner behavior in V1 generator crates. The active runner spec is `docs/proposed/macos-scaleset-runner.md` (nested `crates/velnor-runner`). Conflicting deferred clauses are superseded. `actions/runner` and `actions/scaleset` are the protocol sources of truth: match them, never guess.
+- Do not implement runner behavior in V1 generator crates. The active runner spec is `docs/content/docs/proposed/macos-scaleset-runner.mdx` (nested `crates/velnor-runner`). Conflicting deferred clauses are superseded. `actions/runner` and `actions/scaleset` are the protocol sources of truth: match them, never guess.
 - No legacy code. Finish every migration: remove old paths completely—no compatibility shims, aliases, or deprecation periods. Breaking changes are preferred.
 - Research project: unsafe, breaking changes expected, never production-ready. Break things when needed; deliver fast.
 
 ## Source of truth
 
-- Requirements: `docs/reviews/pr-1.md`, adopted in `docs/reviews/pr-1-adoption.md`, tracked in `docs/reviews/pr-1-disposition.md`.
-- Contracts: `docs/proposed/*`; implemented gates and procedures: `docs/implemented/*`.
-- OpenTofu: `docs/proposed/opentofu-contract.md`, tracked in `docs/reviews/opentofu-evidence.md`.
+- Requirements: `docs/content/docs/reviews/pr-1.mdx`, adopted in `docs/content/docs/reviews/pr-1-adoption.mdx`, tracked in `docs/content/docs/reviews/pr-1-disposition.mdx`.
+- Contracts: `docs/content/docs/proposed/*`; implemented gates and procedures: `docs/content/docs/implemented/*`.
+- OpenTofu: `docs/content/docs/proposed/opentofu-contract.mdx`, tracked in `docs/content/docs/reviews/opentofu-evidence.mdx`.
 - Pins and exceptions: `.velnor/version-policy.toml`, `.velnor/freshness-inventory.json`.
 
 ## Verify from the repo root
@@ -51,4 +51,4 @@
 - Implementation, execution, and implementation-oriented research use exactly `gpt-6-luna` with `max` reasoning effort.
 - Review, verification, and independent assessment use exactly `gpt-6.1-sol` with `medium` reasoning effort.
 - Do not use fallback, automatic routing, or model substitution. If the exact model and effort cannot be guaranteed, stop and report.
-- Keep implementation and review separate; substantive work requires independent review. Follow the full role, delegation, and compliance rules in [the mandatory subagent model policy](docs/implemented/subagent-model-policy.md).
+- Keep implementation and review separate; substantive work requires independent review. Follow the full role, delegation, and compliance rules in [the mandatory subagent model policy](docs/content/docs/implemented/subagent-model-policy.mdx).

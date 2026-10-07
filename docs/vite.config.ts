@@ -15,10 +15,9 @@ export default defineConfig({
     tanstackStart({
       prerender: {
         enabled: true,
-        // Migration posture: content slices link forward to not-yet-converted
-        // pages (404 until their slice lands). Flip back to true once every
-        // .md source is converted so dangling routes fail the build again.
-        failOnError: false,
+        // Fail-closed: every .md source is converted, so a dangling route
+        // is a broken link and must fail the build.
+        failOnError: true,
       },
     }),
     react(),

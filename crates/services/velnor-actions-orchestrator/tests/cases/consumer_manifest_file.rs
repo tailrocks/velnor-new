@@ -182,7 +182,7 @@ fn velnor_repository_generation_needs_no_consumer_manifest() -> TestResult {
     without_ambient_identity(
         "velnor_repository_generation_needs_no_consumer_manifest",
         || {
-            let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\n";
+            let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\n[stacks.rust.policy]\nversion = \"0.1.3\"\nsha256 = \"104c0d8b3a827875776358f941aa88f1c5837c1009305076af9380f4e3fcda25\"\nprofile = \"rust-strict-v1\"\n";
             let repo = make_repo(config)?;
             fs::remove_file(repo.path().join(".velnor/release-manifest.json"))?;
             git(

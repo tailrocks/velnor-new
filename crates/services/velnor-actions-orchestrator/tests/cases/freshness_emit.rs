@@ -14,7 +14,7 @@ use crate::support::{
 const FRESHNESS_PATH: &str = ".github/workflows/freshness.yml";
 
 /// Velnor-policy config selecting the fixture crate.
-const VELNOR_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\n";
+const VELNOR_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\n[stacks.rust.policy]\nversion = \"0.1.3\"\nsha256 = \"104c0d8b3a827875776358f941aa88f1c5837c1009305076af9380f4e3fcda25\"\nprofile = \"rust-strict-v1\"\n";
 
 /// Fixture accepted by the Velnor-repository identity check (local origin).
 fn make_velnor_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Error>> {

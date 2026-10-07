@@ -47,23 +47,6 @@ const CARGO_MACHETE_VERSION: &str = "0.9.2";
 /// Mise tool specs the validator vectors may select, without versions.
 const VALIDATOR_TOOL_SPECS: [&str; 2] = ["cargo-deny", "ubi:bnjbvr/cargo-machete"];
 
-/// Product crates scanned by the machete vector, in contract order.
-///
-/// Fixed paths keep the scan hermetic: it covers exactly the product
-/// crates, never fixtures or tooling trees (a bare walk previously
-/// errored on a symlink-hazard fixture; hazards now live only in
-/// TempDir-built tests, never in the tree).
-const MACHETE_SCAN_CRATES: [&str; 8] = [
-    "crates/core/velnor-actions-contract",
-    "crates/adapters/velnor-actions-rust",
-    "crates/adapters/velnor-actions-tofu",
-    "crates/adapters/velnor-actions-mise",
-    "crates/adapters/velnor-actions-actionlint",
-    "crates/services/velnor-actions-workflow-renderer",
-    "crates/services/velnor-actions-orchestrator",
-    "crates/apps/velnor-actions-cli",
-];
-
 /// Contract-fixed display name of the policy zizmor step.
 pub const ZIZMOR_STEP_NAME: &str = "Run zizmor";
 
@@ -259,16 +242,78 @@ pub fn zizmor_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorErr
     )
 }
 
-/// Fixed validator-job vector: `cargo machete` over product crates via Mise.
-pub fn machete_argv() -> Result<Vec<String>, OrchestratorError> {
+/// Fixed validator-job vector: `cargo machete` over discovered crates via Mise.
+///
+/// The caller supplies every in-workspace crate directory from complete
+/// package discovery (never a fixed list, never fixtures or tooling
+/// trees: a bare walk previously errored on a symlink-hazard fixture,
+/// and hazards now live only in TempDir-built tests, never in the
+/// tree). Sorted and deduped so emission is deterministic.
+pub fn machete_argv(crate_dirs: &[String]) -> Result<Vec<String>, OrchestratorError> {
+    let mut dirs = crate_dirs.to_vec();
+    dirs.sort();
+    dirs.dedup();
+    if dirs.is_empty() {
+        return Err(OrchestratorError::Contract {
+            problem: "machete_requires_crates".to_owned(),
+        });
+    }
+    for dir in &dirs {
+        validate_crate_dir(dir)?;
+    }
     let mut args = vec!["machete"];
-    args.extend(MACHETE_SCAN_CRATES);
+    args.extend(dirs.iter().map(String::as_str));
     validator_argv(
         "ubi:bnjbvr/cargo-machete",
         CARGO_MACHETE_VERSION,
         "cargo",
         &args,
     )
+}
+
+/// Every in-workspace crate directory across all discovered workspaces.
+///
+/// Derived from complete package discovery: each member manifest's
+/// parent dir (`.` for the workspace root manifest). External packages
+/// (absolute manifests outside the root) never enter the scan.
+#[must_use]
+pub fn machete_crate_dirs(
+    discovery: &velnor_actions_orchestrator_discovery::discover::Discovery,
+) -> Vec<String> {
+    discovery
+        .workspaces
+        .iter()
+        .flat_map(|workspace| workspace.record.packages.iter())
+        .filter(|package| package.in_workspace && !package.external)
+        .filter_map(|package| {
+            if package.manifest.is_empty() {
+                return None;
+            }
+            Some(match package.manifest.rsplit_once('/') {
+                Some((dir, _)) => dir.to_owned(),
+                None => ".".to_owned(),
+            })
+        })
+        .collect()
+}
+
+/// One machete scan dir: `.` for the workspace root, else a relative
+/// path without traversal, escapes, or control bytes.
+fn validate_crate_dir(dir: &str) -> Result<(), OrchestratorError> {
+    if dir == "." {
+        return Ok(());
+    }
+    let bad = dir.is_empty()
+        || dir.starts_with('/')
+        || dir.contains('\\')
+        || dir.bytes().any(|b| b.is_ascii_control())
+        || dir.split('/').any(|seg| seg.is_empty() || seg == "..");
+    if bad {
+        return Err(OrchestratorError::Contract {
+            problem: "machete_bad_crate_dir".to_owned(),
+        });
+    }
+    Ok(())
 }
 
 /// One validator vector: an allowlisted tool spec plus a fixed cargo payload.

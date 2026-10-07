@@ -220,7 +220,7 @@ fn check_tree(yaml: &str) -> Result<Vec<JobText>, String> {
 /// Velnor-policy fixture: canonical origin, lock optional (pre-seed omits it).
 fn make_velnor_repo() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
     let repo = make_repo(
-        "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n",
+        "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n[stacks.rust.policy]\nversion = \"0.1.3\"\nsha256 = \"104c0d8b3a827875776358f941aa88f1c5837c1009305076af9380f4e3fcda25\"\nprofile = \"rust-strict-v1\"\n",
     )?;
     git(
         &[

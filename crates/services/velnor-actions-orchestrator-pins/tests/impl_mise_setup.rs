@@ -43,6 +43,7 @@ fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> VelnorConfig {
         },
         actions: ActionsConfig { overrides },
         execution: None,
+        docs: None,
     }
 }
 

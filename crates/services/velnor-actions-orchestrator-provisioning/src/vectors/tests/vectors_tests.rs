@@ -41,7 +41,12 @@ fn policy_vectors_pin_specs_and_payloads() {
         !root_only[2].contains("velnor-runner"),
         "discovery without a nested runner must not inject its manifest"
     );
-    let machete = machete_argv().expect("machete argv");
+    let machete = machete_argv(&[
+        "crates/services/demo-b".to_owned(),
+        "crates/core/demo-a".to_owned(),
+        "crates/services/demo-b".to_owned(),
+    ])
+    .expect("machete argv");
     let want = argv_of(&[
         "mise",
         "--no-config",
@@ -52,16 +57,15 @@ fn policy_vectors_pin_specs_and_payloads() {
         "--",
         "cargo",
         "machete",
-        "crates/core/velnor-actions-contract",
-        "crates/adapters/velnor-actions-rust",
-        "crates/adapters/velnor-actions-tofu",
-        "crates/adapters/velnor-actions-mise",
-        "crates/adapters/velnor-actions-actionlint",
-        "crates/services/velnor-actions-workflow-renderer",
-        "crates/services/velnor-actions-orchestrator",
-        "crates/apps/velnor-actions-cli",
+        "crates/core/demo-a",
+        "crates/services/demo-b",
     ]);
     assert_eq!(machete, want);
+    assert!(machete_argv(&[]).is_err());
+    assert!(machete_argv(&[".".to_owned()]).is_ok());
+    for bad in ["", "/abs", "a/../b", "a//b", "a\\b", ".."] {
+        assert!(machete_argv(&[bad.to_owned()]).is_err(), "{bad}");
+    }
     assert!(validator_argv("evil-tool", "1.2.3", "cargo", &["deny"]).is_err());
     assert!(validator_argv("cargo-deny", "latest", "cargo", &["deny"]).is_err());
 }

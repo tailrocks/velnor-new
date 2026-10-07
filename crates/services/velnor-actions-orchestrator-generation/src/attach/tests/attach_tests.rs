@@ -217,6 +217,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
             request_dir: REQUEST_DIR.to_owned(),
             checkout_uses: CHECKOUT_USES.to_owned(),
             validator_commands: Vec::new(),
+            rust_policy: None,
             candidate: None,
             preseed: false,
             verification_tasks: Vec::new(),
