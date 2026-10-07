@@ -9,9 +9,7 @@ use velnor_actions_orchestrator::{
     GenerationPreparation, finalized_jobs, prepare, render_staged_tree,
 };
 
-use crate::impl_common::{
-    TestResult, config_with_branch, git, make_repo, without_ambient_identity,
-};
+use crate::support::{TestResult, config_with_branch, git, make_repo, without_ambient_identity};
 
 fn indentation(line: &str) -> usize {
     line.len() - line.trim_start().len()

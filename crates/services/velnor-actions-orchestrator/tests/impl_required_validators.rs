@@ -11,10 +11,10 @@ use velnor_actions_orchestrator::{
     GenerationPreparation, merge_passed, plan_internal, prepare, render_staged_tree,
 };
 
-use crate::impl_common::{
+use crate::cases::orch_core::{merge, merge_request};
+use crate::support::{
     TestResult, git, git_line, make_repo, passing_reports, without_ambient_identity,
 };
-use crate::impl_orch_core::{merge, merge_request};
 
 /// Velnor-policy config: repository validators join the workflow.
 fn velnor_config() -> String {

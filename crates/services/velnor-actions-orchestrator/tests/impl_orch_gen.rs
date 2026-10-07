@@ -10,7 +10,7 @@ use velnor_actions_orchestrator::{
 };
 use velnor_actions_orchestrator_core::OrchestratorError;
 
-use crate::impl_common::{
+use crate::support::{
     TestResult, config_with_branch, err_of, git, make_repo, plan_for, snapshot,
     without_ambient_identity,
 };

@@ -9,12 +9,12 @@ use velnor_actions_orchestrator::{
     plan_outputs, publish_plan_files, response_path_for, write_request_parts,
 };
 
-use crate::impl_common::{
+use crate::cases::merge::task_reports_for;
+use crate::cases::orch_core_cover::covered_plan;
+use crate::support::{
     TestResult, config_with_branch, err_of, git, git_line, make_repo, passing_reports,
     plan_for_source_change,
 };
-use crate::impl_merge::task_reports_for;
-use crate::impl_orch_core_cover::covered_plan;
 
 #[test]
 fn write_request_materializes_pull_request() -> TestResult {

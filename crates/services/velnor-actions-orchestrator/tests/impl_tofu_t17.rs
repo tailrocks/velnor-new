@@ -9,7 +9,7 @@ use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_jobs::context::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
-use super::impl_common::{TestResult, make_repo};
+use crate::support::{TestResult, make_repo};
 
 /// True for generated crate jobs (neither plan, lint, gate, nor publish).
 fn is_crate_job(id: &str) -> bool {

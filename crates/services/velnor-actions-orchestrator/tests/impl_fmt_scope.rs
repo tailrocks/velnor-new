@@ -7,10 +7,8 @@ use std::fs;
 
 use velnor_actions_orchestrator::prepare;
 
-use super::impl_common::{
-    TestResult, config_with_branch, git, git_line, make_repo, make_virtual_repo,
-};
-use super::impl_orch_core::plan_value;
+use crate::cases::orch_core::plan_value;
+use crate::support::{TestResult, config_with_branch, git, git_line, make_repo, make_virtual_repo};
 
 /// Two-configuration fixture config (termpane shape: `default` + `full`).
 fn two_config() -> String {

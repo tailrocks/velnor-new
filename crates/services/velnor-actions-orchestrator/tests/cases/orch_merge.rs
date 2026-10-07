@@ -8,16 +8,16 @@ use velnor_actions_contract_workflow::{
 };
 use velnor_actions_orchestrator::{assemble_merge_request, plan_internal};
 
-use crate::impl_common::{
-    TestResult, err_of, git, git_line, passing_reports, plan_for_source_change,
-    without_ambient_ci_env,
-};
-use crate::impl_merge::task_reports_for;
-use crate::impl_orch_core::{
+use crate::cases::merge::task_reports_for;
+use crate::cases::orch_core::{
     committed_repo, merge, merge_request, plan_for_partial_change, push_request, set_task,
     success_jobs, wide_repo,
 };
-use crate::impl_orch_core_cover::covered_plan;
+use crate::cases::orch_core_cover::covered_plan;
+use crate::support::{
+    TestResult, err_of, git, git_line, passing_reports, plan_for_source_change,
+    without_ambient_ci_env,
+};
 
 #[test]
 fn orch_core_merge_counts_cover_five_states() -> TestResult {
@@ -181,7 +181,7 @@ fn orch_core_plan_retains_all_package_tasks() -> TestResult {
 
 #[test]
 fn obligation_universe_matches_independent_oracle() -> TestResult {
-    use crate::impl_orch_plansel::{BUMP, commit, make_ws, plan_at, put};
+    use crate::cases::orch_plansel::{BUMP, commit, make_ws, plan_at, put};
     use velnor_actions_contract_workflow::ObligationDecision::Execute;
     let repo = make_ws(&["alpha", "beta"], &[])?;
     let root = repo.path();

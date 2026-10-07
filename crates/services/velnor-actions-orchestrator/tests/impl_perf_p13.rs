@@ -21,8 +21,8 @@ use self::perf_fixtures_p13::{malformed_repo, nested_path_dep_repo, nested_repo,
 use self::perf_harness_p13::{
     commit_two, obligation_task_ids, perf_line, plan_at, plan_two_commits, timed,
 };
-use crate::impl_common::err_of;
-use crate::impl_common::{TestResult, git, git_line};
+use crate::support::err_of;
+use crate::support::{TestResult, git, git_line};
 
 /// Plan wall time plus obligation counts on 1/10/40-crate workspaces.
 ///

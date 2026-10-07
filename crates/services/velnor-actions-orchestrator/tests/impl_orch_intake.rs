@@ -10,7 +10,7 @@ use velnor_actions_mise::{GitRequest, is_allowed_git_verb};
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 use velnor_actions_orchestrator_core::{OrchestratorError, init_config, resolve_root};
 
-use crate::impl_common::{
+use crate::support::{
     TestResult, config_with_branch, err_of, make_repo, plan_for, snapshot, write_nextest_task,
 };
 

@@ -9,8 +9,8 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 
-use super::impl_common::{TestResult, plan_for, snapshot};
 use super::impl_tofu_t20::pure_tofu_repo;
+use crate::support::{TestResult, plan_for, snapshot};
 
 /// Stale lock bytes (T14-proven non-blocking through generate).
 const STALE_LOCK: &str = "provider \"example.com/a/b\" {\nversion = \"1.0.0\"\n}\n";

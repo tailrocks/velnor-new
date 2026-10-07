@@ -13,7 +13,7 @@ use velnor_actions_workflow_cache::cache_steps::{
     CompileDriver, TASK_ARTIFACTS_DIR, cache_action_step, mbx_steps_for_driver,
 };
 
-use crate::impl_common::without_ambient_identity;
+use crate::support::without_ambient_identity;
 
 /// Test error shortcut.
 type TestResult = Result<(), Box<dyn std::error::Error>>;

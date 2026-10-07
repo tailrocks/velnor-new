@@ -6,7 +6,7 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_orchestrator::ToolSnapshot;
 
-use crate::impl_common::{TestResult, err_of};
+use crate::support::{TestResult, err_of};
 
 #[test]
 fn snapshot_tracks_mise_version_and_lock_files() -> TestResult {

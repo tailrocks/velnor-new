@@ -12,8 +12,8 @@ use velnor_actions_orchestrator_core::decisions::{
     plan_json_path, selection_broadens_for_path,
 };
 
-use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
-use crate::impl_orch_plansel::merge_status;
+use crate::cases::orch_plansel::merge_status;
+use crate::support::{TestResult, passing_reports, plan_for_source_change};
 
 /// Baseline inputs: eligible for reuse or coverage.
 fn open_inputs() -> ObligationInputs {

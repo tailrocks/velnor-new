@@ -9,11 +9,11 @@ use velnor_actions_orchestrator::{
 };
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
-use super::impl_common::{
+use crate::cases::merge::{merge, merge_request, success_jobs};
+use crate::support::{
     TestResult, config_with_branch, git, git_line, make_repo, passing_reports, plan_for,
     plan_for_source_change,
 };
-use crate::impl_merge::{merge, merge_request, success_jobs};
 
 /// Preview `ci.yml` text for one config; temps keep the dirs alive.
 fn preview_yml(config: &str) -> Result<(TempDir, TempDir, String), Box<dyn std::error::Error>> {

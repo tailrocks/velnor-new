@@ -12,7 +12,7 @@ use tempfile::TempDir;
 use velnor_actions_contract_workflow::Plan;
 use velnor_actions_orchestrator::plan_internal;
 
-use crate::impl_common::{TestResult, fixture_manifest_json, git, git_line};
+use crate::support::{TestResult, fixture_manifest_json, git, git_line};
 
 /// Tofu config over `roots` with 2-wide staging.
 pub(crate) fn tofu_config_for(roots: &[String]) -> String {

@@ -2,8 +2,8 @@
 
 use velnor_actions_contract_workflow::FinalStatus;
 
-use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
-use crate::impl_orch_core::{merge, merge_request, success_jobs};
+use crate::cases::orch_core::{merge, merge_request, success_jobs};
+use crate::support::{TestResult, passing_reports, plan_for_source_change};
 
 #[test]
 fn orch_core_adapter_metadata_round_trips() -> TestResult {

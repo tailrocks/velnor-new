@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use serde_json::Value as Json;
 
-use crate::impl_common::TestResult;
+use crate::support::TestResult;
 
 /// Workspace root (two levels above this crate).
 fn repo_root() -> PathBuf {

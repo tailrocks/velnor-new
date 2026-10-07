@@ -6,7 +6,7 @@ use velnor_actions_contract_workflow::StepKind;
 use velnor_actions_mise::PREPARE_PINNED_TOOLS_STEP;
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 
-use crate::impl_common::{TestResult, config_with_branch, make_repo, plan_for};
+use crate::support::{TestResult, config_with_branch, make_repo, plan_for};
 
 /// Consumer fixture install set: plan + crate + required Prepare tools.
 const PINS: [(&str, &str); 5] = [

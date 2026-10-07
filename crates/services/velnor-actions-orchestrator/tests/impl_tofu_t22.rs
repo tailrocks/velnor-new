@@ -15,7 +15,7 @@ use velnor_actions_orchestrator::{
 use velnor_actions_tofu_core::TofuLockSnapshot;
 use velnor_actions_workflow_cache::cache_steps as renderer_steps;
 
-use super::impl_common::{TestResult, git, git_line, install_fixture_release_manifest, make_repo};
+use crate::support::{TestResult, git, git_line, install_fixture_release_manifest, make_repo};
 
 /// Fixture config with one tofu root.
 fn tofu_config(root: &str) -> String {
@@ -370,7 +370,7 @@ fn version_excluding_toolchain_diagnoses_while_provider_transport_renders() -> T
 /// restore-only at runtime.
 #[test]
 fn fork_event_plans_pr_trust_and_generates_restore_only_roundtrip() -> TestResult {
-    use super::impl_orch_core::plan_value;
+    use crate::cases::orch_core::plan_value;
     use velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION;
     let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.tofu]\nroots = [\"stacks/a\"]\n";
     let dir = make_pure_tofu_repo(config, &[("stacks/a/main.tf", "variable \"x\" {}\n")])?;

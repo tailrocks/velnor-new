@@ -9,7 +9,7 @@ use std::path::Path;
 
 use tempfile::TempDir;
 
-use crate::impl_common::{TestResult, config_with_branch, fixture_manifest_json, git};
+use crate::support::{TestResult, config_with_branch, fixture_manifest_json, git};
 
 /// Write `.velnor` inputs: config plus the consumer-manifest fixture.
 fn write_velnor(root: &Path) -> TestResult {

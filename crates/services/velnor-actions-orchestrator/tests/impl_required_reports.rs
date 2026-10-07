@@ -4,8 +4,8 @@ use serde_json::json;
 use velnor_actions_contract_workflow::FinalStatus;
 use velnor_actions_orchestrator::{assemble_merge_request, merge_internal};
 
-use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
-use crate::impl_merge::task_reports_for;
+use crate::cases::merge::task_reports_for;
+use crate::support::{TestResult, passing_reports, plan_for_source_change};
 
 /// Staged run directory with `plan.json` plus `matrix.json` written.
 fn stage_run(

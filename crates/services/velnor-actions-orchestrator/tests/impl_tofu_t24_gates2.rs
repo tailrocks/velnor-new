@@ -14,11 +14,11 @@ use velnor_actions_tofu_core::task_identity::{
 use velnor_actions_workflow_jobs::context::{FINAL_JOB_ID, PLAN_JOB_ID};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
-use crate::impl_common::TestResult;
 use crate::impl_tofu_t24_gates::tofu_perf_fixtures_t24::{
     commit_two_tofu, plan_at_event, tofu_repo,
 };
 use crate::impl_tofu_t24_gates::{crate_src, is_crate_job, token_hits};
+use crate::support::TestResult;
 
 /// Extension inputs over fixed digests for one root/kind.
 fn gate_inputs<'a>(

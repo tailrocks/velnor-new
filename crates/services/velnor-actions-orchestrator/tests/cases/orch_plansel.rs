@@ -1,9 +1,9 @@
 //! Plan-selection acceptance: narrow selection (OW2).
-use crate::impl_common::{
+use crate::cases::merge::task_reports_for;
+use crate::support::{
     TestResult, config_with_branch, fixture_manifest_json, git, git_line, passing_reports,
     plan_for_source_change,
 };
-use crate::impl_merge::task_reports_for;
 use serde_json::Value as Json;
 use std::fs;
 use std::path::Path;
@@ -137,7 +137,7 @@ pub(crate) fn reasons_are(plan: &Plan, needle: &str, reason: &str) -> bool {
     any
 }
 
-pub(crate) use crate::impl_common::{anchor_id, anchor_repo};
+pub(crate) use crate::support::{anchor_id, anchor_repo};
 
 /// Manifest binding `base` with `tasks` entries for the seed plan.
 pub(crate) fn manifest_for(plan: &Plan, base: &str, tasks: &Json) -> Json {

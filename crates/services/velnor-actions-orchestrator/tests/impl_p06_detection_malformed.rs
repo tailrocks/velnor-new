@@ -9,7 +9,7 @@ use std::path::Path;
 
 use velnor_actions_orchestrator::prepare;
 
-use crate::impl_common::{TestResult, config_with_branch, err_of, make_repo, snapshot};
+use crate::support::{TestResult, config_with_branch, err_of, make_repo, snapshot};
 
 /// Write `content` to `relative` under `root`, creating parents.
 fn write_file(root: &Path, relative: &str, content: &str) -> TestResult {

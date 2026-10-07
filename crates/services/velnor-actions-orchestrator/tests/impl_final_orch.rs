@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 
-use crate::impl_common::{TestResult, config_with_branch, err_of, make_repo, plan_for};
+use crate::support::{TestResult, config_with_branch, err_of, make_repo, plan_for};
 use velnor_actions_orchestrator::{
     CONFLICTING_TOOL_VALUES, DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, ExternalDataFreshness, ToolParse,
     UNSUPPORTED_TOOL_VALUE, check_tool_inputs, critical_path_for_groups, external_data_kind,

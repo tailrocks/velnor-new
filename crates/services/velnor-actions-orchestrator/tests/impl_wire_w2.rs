@@ -10,13 +10,13 @@ use velnor_actions_contract_workflow as CW;
 use velnor_actions_orchestrator::{PlanOutputMode, plan_outputs, prepare, publish_plan_files};
 use velnor_actions_orchestrator_core::decisions::plan_json_path;
 
-use super::impl_common::{
-    TestResult, anchor_id, anchor_repo, config_with_branch, err_of, git, git_line, make_repo,
-    passing_reports, plan_for, plan_for_source_change, write_nextest_task,
-};
-use super::impl_orch_core::{
+use crate::cases::orch_core::{
     WireResult, has_warning, manifest_for, merge, merge_request, merge_request_for, plan_value,
     pr_value, success_jobs,
+};
+use crate::support::{
+    TestResult, anchor_id, anchor_repo, config_with_branch, err_of, git, git_line, make_repo,
+    passing_reports, plan_for, plan_for_source_change, write_nextest_task,
 };
 
 fn shard_config() -> String {

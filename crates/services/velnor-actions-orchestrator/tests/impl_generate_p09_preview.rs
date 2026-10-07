@@ -15,7 +15,7 @@ use velnor_actions_orchestrator::{
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
-use super::impl_common::{TestResult, config_with_branch, err_of, make_repo, snapshot};
+use crate::support::{TestResult, config_with_branch, err_of, make_repo, snapshot};
 
 /// Preview-generate helper: `Ok` report or the typed error.
 fn preview(

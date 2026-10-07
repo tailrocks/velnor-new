@@ -11,7 +11,7 @@ use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_rust::TaskKind;
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
-use super::impl_common::{TestResult, config_with_branch, make_repo};
+use crate::support::{TestResult, config_with_branch, make_repo};
 
 /// Hand-written lock for a no-deps fixture package: hermetic, no network.
 fn demo_lock(name: &str) -> String {

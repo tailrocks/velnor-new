@@ -3,7 +3,7 @@
 use velnor_actions_contract_workflow::ExecuteTaskRef;
 use velnor_actions_contract_workflow::{FinalStatus, MatrixReport, MatrixStatus, Plan, TaskStatus};
 
-use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
+use crate::support::{TestResult, passing_reports, plan_for_source_change};
 
 /// One test identity value: package, target, features, binary, name.
 fn test_value(name: &str) -> serde_json::Value {
@@ -161,7 +161,7 @@ fn merge_with(
 ) -> Result<FinalStatus, Box<dyn std::error::Error>> {
     let plan_value = serde_json::to_value(plan).unwrap_or(serde_json::Value::Null);
     let reports_value = serde_json::to_value(reports).unwrap_or(serde_json::Value::Null);
-    let task_files = crate::impl_merge::task_reports_for(&plan_value, &reports_value);
+    let task_files = crate::cases::merge::task_reports_for(&plan_value, &reports_value);
     let mut request = serde_json::json!({
         "schema": 1,
         "run_key": "local",

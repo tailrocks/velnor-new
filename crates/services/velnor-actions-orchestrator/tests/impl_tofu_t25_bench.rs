@@ -11,11 +11,11 @@
 use velnor_actions_contract::digest_b3;
 use velnor_actions_mise::restore_evidence::{RestoreObservation, verify_provider_restore};
 
-use crate::impl_common::TestResult;
 use crate::impl_perf_p13::perf_harness_p13::{BenchSample, bench_line, timed, timed_rss};
 use crate::impl_tofu_t24_gates::tofu_perf_fixtures_t24::{
     commit_two_tofu, index_baseline_ms, plan_at_event, tofu_repo_with_lock,
 };
+use crate::support::TestResult;
 
 /// Tampered provider bytes against the recorded digest.
 fn corrupt_observation() -> RestoreObservation {

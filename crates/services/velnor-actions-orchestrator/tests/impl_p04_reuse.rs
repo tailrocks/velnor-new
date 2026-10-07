@@ -6,11 +6,11 @@
 use velnor_actions_contract::digest_b3;
 use velnor_actions_contract_workflow::{BaselineStatus, ObligationDecision, Plan};
 
-use super::impl_common::{
+use crate::cases::orch_core::{has_warning, manifest_for, plan_value};
+use crate::support::{
     TestResult, config_with_branch, git, git_line, make_repo, plan_for_source_change,
     write_nextest_task,
 };
-use super::impl_orch_core::{has_warning, manifest_for, plan_value};
 
 /// Anchor test repos to a fixed origin so provenance can validate.
 ///
@@ -245,7 +245,7 @@ fn anchored_repository_binds_and_unanchored_fails_closed() -> TestResult {
     let root = repo.path();
     git(&["add", "."], root)?;
     git(&["commit", "-m", "one"], root)?;
-    let head = super::impl_common::git_line(&["rev-parse", "HEAD"], root)?;
+    let head = crate::support::git_line(&["rev-parse", "HEAD"], root)?;
     let seed = typed(&plan_value(root, "pull_request", Some(&head), &head, None)?)?;
     let mut manifest = manifest_for(&seed, &head, "testmain")?;
     manifest["repository_id"] = serde_json::Value::String(anchor_id());

@@ -6,7 +6,7 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare, render_staged_tree};
 
-use crate::impl_common::{
+use crate::support::{
     TestResult, config_with_branch, make_repo, plan_for, without_ambient_identity,
 };
 

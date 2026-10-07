@@ -8,7 +8,7 @@ use velnor_actions_workflow_cache::{
 use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 
 use super::{JobText, check_tree, check_verify_mbx, make_velnor_repo};
-use crate::impl_common::{TestResult, without_ambient_identity};
+use crate::support::{TestResult, without_ambient_identity};
 
 fn assert_native_preseed_owner(jobs: &[JobText], yaml: &str) -> TestResult {
     let builds: Vec<(&str, &str)> = jobs

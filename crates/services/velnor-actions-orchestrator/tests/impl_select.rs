@@ -7,7 +7,7 @@ use tempfile::TempDir;
 use velnor_actions_contract_workflow::{ObligationDecision, Plan};
 use velnor_actions_orchestrator::plan_internal;
 
-use crate::impl_common::{TestResult, config_with_branch, fixture_manifest_json, git, git_line};
+use crate::support::{TestResult, config_with_branch, fixture_manifest_json, git, git_line};
 
 /// Init a git repo with Velnor config plus release fixture.
 fn scaffold(root: &Path) -> TestResult {

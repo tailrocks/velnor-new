@@ -1,6 +1,6 @@
 //! Execution-bound acquisition preserves the offline analysis boundary.
 
-use crate::impl_common::TestResult;
+use crate::support::TestResult;
 
 pub(super) fn scrub_bound_acquisition(name: &str, code: &str) -> String {
     if name != "check_tool_acquire.rs" {

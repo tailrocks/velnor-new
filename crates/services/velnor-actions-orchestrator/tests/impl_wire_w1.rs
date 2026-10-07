@@ -14,7 +14,7 @@ use velnor_actions_orchestrator::{DEFAULT_RUNNER_LABEL, prepare, render_staged_t
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 use velnor_actions_workflow_tree::rendered::ACTIONLINT_PATH;
 
-use super::impl_common::{
+use crate::support::{
     TestResult, config_with_branch, make_repo, make_virtual_repo, without_ambient_identity,
 };
 

@@ -6,7 +6,7 @@ use tempfile::TempDir;
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare, render_staged_tree};
 use velnor_actions_orchestrator_core::OrchestratorError;
 
-use crate::impl_common::{
+use crate::support::{
     TestResult, config_with_branch, err_of, git, git_line, make_repo, plan_for,
     without_ambient_identity,
 };

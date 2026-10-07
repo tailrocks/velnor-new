@@ -6,13 +6,13 @@ use serde_json::Value as Json;
 use velnor_actions_contract_workflow::{FinalStatus, ObligationDecision, Plan};
 use velnor_actions_orchestrator::{merge_internal, plan_internal};
 
-use crate::impl_common::{
-    TestResult, config_with_branch, git, install_fixture_release_manifest, make_repo,
-    passing_reports, plan_for_source_change,
-};
-use crate::impl_orch_plansel::{
+use crate::cases::orch_plansel::{
     BUMP, anchor_repo, commit, entries_for, has, make_ws, manifest_for, merge_status, plan_at,
     plan_change, put,
+};
+use crate::support::{
+    TestResult, config_with_branch, git, install_fixture_release_manifest, make_repo,
+    passing_reports, plan_for_source_change,
 };
 
 #[test]

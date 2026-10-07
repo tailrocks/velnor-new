@@ -11,8 +11,8 @@ use std::path::Path;
 
 use velnor_actions_contract_workflow::Plan;
 
-use crate::impl_common::{TestResult, make_repo};
 use crate::impl_select::{commit, plan_pr, reasons_for};
+use crate::support::{TestResult, make_repo};
 
 /// Fixture config with two sorted tofu roots beside the root crate.
 fn tofu_config() -> String {

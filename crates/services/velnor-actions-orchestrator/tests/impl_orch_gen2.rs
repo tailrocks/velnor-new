@@ -3,8 +3,8 @@
 use std::fs;
 use std::path::PathBuf;
 
-use crate::impl_common::TestResult;
 use crate::impl_orch_f2a::family_file;
+use crate::support::TestResult;
 
 #[test]
 fn orch_gen_no_direct_process_spawn_in_source() -> TestResult {

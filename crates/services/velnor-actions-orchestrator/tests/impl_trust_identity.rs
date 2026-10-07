@@ -3,7 +3,7 @@
 use velnor_actions_orchestrator::prepare;
 use velnor_actions_orchestrator_core::OrchestratorError;
 
-use crate::impl_common::{TestResult, err_of, git, make_repo};
+use crate::support::{TestResult, err_of, git, make_repo};
 
 /// Child-side identity probe for one `VELNOR_TRUST_PROBE` scenario; a no-op
 /// without it. The spawner re-executes this binary per scenario with exact

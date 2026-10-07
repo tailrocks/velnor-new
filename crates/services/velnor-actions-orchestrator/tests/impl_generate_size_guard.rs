@@ -5,7 +5,7 @@ use std::fs;
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 use velnor_actions_workflow_tree::MAX_WORKFLOW_BYTES;
 
-use crate::impl_common::{TestResult, make_repo};
+use crate::support::{TestResult, make_repo};
 
 #[test]
 fn workflow_size_failure_preserves_existing_github_tree() -> TestResult {

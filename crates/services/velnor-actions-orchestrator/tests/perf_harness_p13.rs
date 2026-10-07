@@ -10,7 +10,7 @@ use std::time::Instant;
 use velnor_actions_contract_workflow::Plan;
 use velnor_actions_orchestrator::plan_internal;
 
-use crate::impl_common::{git, git_line};
+use crate::support::{git, git_line};
 
 /// Wall time of `op` in whole milliseconds plus its value.
 pub(crate) fn timed<T>(op: impl FnOnce() -> T) -> (T, u128) {

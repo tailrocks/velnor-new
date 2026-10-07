@@ -17,7 +17,7 @@ use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 use velnor_actions_workflow_steps::SETUP_MISE_NAME;
 
-use super::impl_common::{TestResult, config_with_branch, fixture_manifest_json, git};
+use crate::support::{TestResult, config_with_branch, fixture_manifest_json, git};
 
 /// Two-crate workspace repo; `lock` selects the lockfile body.
 fn make_workspace(lock: &str, mbx: bool) -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {

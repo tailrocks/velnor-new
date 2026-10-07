@@ -1,10 +1,10 @@
 //! Plan-selection acceptance: broaden, baseline, shards (OW2).
 
-use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
-use crate::impl_orch_plansel::{
+use crate::cases::orch_plansel::{
     BUMP, anchor_repo, commit, entries_for, has, inv_digest, make_ws, manifest_for, merge_status,
     plan_at, plan_change, proof, put, reasons_are, shard_plan, sharded_reports, test_value,
 };
+use crate::support::{TestResult, passing_reports, plan_for_source_change};
 use serde_json::Value as Json;
 use velnor_actions_contract_workflow::{FinalStatus, ObligationDecision, Plan};
 use velnor_actions_orchestrator::plan_internal;

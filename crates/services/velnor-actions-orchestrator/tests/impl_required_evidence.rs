@@ -4,11 +4,11 @@ use serde_json::json;
 use velnor_actions_contract_workflow::{FinalStatus, JobConclusion, ObligationDecision};
 use velnor_actions_orchestrator::{assemble_merge_request, merge_internal};
 
-use crate::impl_common::{TestResult, make_repo, passing_reports, plan_for_source_change};
-use crate::impl_orch_core::{merge, merge_request, success_jobs};
-use crate::impl_orch_plansel::{
+use crate::cases::orch_core::{merge, merge_request, success_jobs};
+use crate::cases::orch_plansel::{
     BUMP, anchor_repo, commit, entries_for, make_ws, manifest_for, plan_at, put,
 };
+use crate::support::{TestResult, make_repo, passing_reports, plan_for_source_change};
 
 /// Merge status for one hand-built request value.
 fn status_of(request: &serde_json::Value) -> Result<FinalStatus, Box<dyn std::error::Error>> {
@@ -350,10 +350,10 @@ fn plan_reuse_decisions_rejected_without_proof() -> TestResult {
 
 #[test]
 fn checkout_mismatch_rejects_plan() -> TestResult {
-    let repo = make_repo(crate::impl_common::config_with_branch())?;
+    let repo = make_repo(crate::support::config_with_branch())?;
     let root = repo.path();
-    crate::impl_common::git(&["add", "."], root)?;
-    crate::impl_common::git(&["commit", "-m", "one"], root)?;
+    crate::support::git(&["add", "."], root)?;
+    crate::support::git(&["commit", "-m", "one"], root)?;
     let output = std::process::Command::new("git")
         .args(["rev-parse", "HEAD"])
         .current_dir(root)
