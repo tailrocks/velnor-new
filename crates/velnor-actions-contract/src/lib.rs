@@ -59,10 +59,10 @@ pub use config::{
     RustStackConfig, S3BackendConfig, SCALE_SET_NAME, SCALE_SET_PROFILE_ID, ScaleSetSelector,
     ShardTimingEvidence, StacksConfig, TestShardingConfig, TofuApplyConfig, TofuStackConfig,
     Utf8RepoRelDir, VELNOR_LABEL, VelnorConfig, VelnorSupportWorkflow, VerificationRunner,
-    VerificationTask, WORKFLOW_TASK_JOB_PREFIX, WorkflowConfig, WorkflowPolicy, WorkflowTask,
-    check_execution_receipt_upper_bound, is_valid_build_tool_key, is_valid_feature_name,
-    is_valid_mise_task_name, is_valid_rust_target, is_valid_workflow_task_id,
-    validate_qualified_tools, validate_shard_changes_need_evidence,
+    VerificationTask, VerifyConfig, WORKFLOW_TASK_JOB_PREFIX, WorkflowConfig, WorkflowPolicy,
+    WorkflowTask, check_execution_receipt_upper_bound, is_valid_build_tool_key,
+    is_valid_feature_name, is_valid_mise_task_name, is_valid_rust_target,
+    is_valid_workflow_task_id, validate_qualified_tools, validate_shard_changes_need_evidence,
 };
 pub use discover::{
     BUILTIN_EXCLUSIONS, DETECTION_SCHEMA, DetectError, DetectedProject, DetectionStatus,

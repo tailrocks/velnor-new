@@ -3,8 +3,8 @@
 //! Declared via `#[path]` from `jobs.rs` under `cfg(test)`.
 
 use super::{
-    TOFU_DISPLAY_PREFIX, crate_display_label, crate_display_name, is_safe_display_name,
-    tofu_display_name, validate_job_id,
+    TOFU_DISPLAY_PREFIX, ValidatorKind, crate_display_label, crate_display_name,
+    is_safe_display_name, tofu_display_name, validate_job_id,
 };
 
 #[test]
@@ -65,4 +65,14 @@ fn branding_gate_skips_package_slugs_only() {
     assert!(validate_job_id("velnor-plan").is_err());
     assert!(validate_job_id("task-velnor-final").is_err());
     assert!(validate_job_id("").is_err());
+}
+
+#[test]
+fn verify_names_resolve_exactly() {
+    for kind in ValidatorKind::consumer_verify() {
+        assert_eq!(ValidatorKind::from_verify_name(kind.job_id()), Some(kind));
+    }
+    for name in ["cargo-deny", "cargo-machete", "actionlint", "plan", ""] {
+        assert_eq!(ValidatorKind::from_verify_name(name), None, "{name}");
+    }
 }

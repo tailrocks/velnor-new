@@ -77,6 +77,16 @@ pub enum StepRole {
     Actionlint,
     /// Authenticated zizmor analyzer bootstrap.
     Zizmor,
+    /// Authenticated markdownlint analyzer bootstrap.
+    Markdownlint,
+    /// Authenticated strict-JSON check bootstrap.
+    StrictJson,
+    /// Authenticated frontmatter-ID check bootstrap.
+    FrontmatterId,
+    /// Authenticated link-check analyzer bootstrap.
+    LinkCheck,
+    /// Authenticated native-validators probe bootstrap.
+    NativeValidators,
     /// Planner producing the plan outputs.
     PlanProducer,
     /// Baseline publisher producing the artifact name output.
@@ -190,6 +200,11 @@ impl StepRole {
             | Self::CargoMachete
             | Self::Actionlint
             | Self::Zizmor
+            | Self::Markdownlint
+            | Self::StrictJson
+            | Self::FrontmatterId
+            | Self::LinkCheck
+            | Self::NativeValidators
             | Self::AcquireVelnor
             | Self::PreseedStage
             | Self::CheckGenerated
