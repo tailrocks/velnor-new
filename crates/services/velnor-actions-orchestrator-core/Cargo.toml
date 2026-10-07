@@ -38,3 +38,5 @@ tempfile = { workspace = true }
 velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
 velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
 velnor-actions-orchestrator = { version = "=0.1.1", path = "../velnor-actions-orchestrator" }
+velnor-actions-workflow-cache = { version = "=0.1.1", path = "../velnor-actions-workflow-cache" }
+velnor-actions-workflow-document = { version = "=0.1.1", path = "../velnor-actions-workflow-document" }
