@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use super::{
-    ConfigReadError, DaemonIntent, daemon_backend_supported, daemon_intent, read_daemon_config,
+    ConfigReadError, DaemonIntent, daemon_backend_supported, daemon_intent, read_daemon_config_with,
 };
 use velnor_runner_host::{DaemonLock, HostConfig, HostError, HostPlatform};
 
@@ -49,14 +49,29 @@ fn daemon_reads_the_selected_config_file_not_state_host_toml() -> Result<(), Str
         .map_err(|error| error.to_string())?;
     std::fs::write(&selected, SAMPLE).map_err(|error| error.to_string())?;
 
-    let config = read_daemon_config(&selected, HostPlatform::Macos)
-        .map_err(|error| format!("selected config failed: {error:?}"))?
-        .ok_or("selected config was treated as missing")?;
+    let config = read_daemon_config_with(&selected, HostPlatform::Macos, |path, platform| {
+        if platform != HostPlatform::Macos {
+            return Err(());
+        }
+        match std::fs::read_to_string(path) {
+            Ok(text) => Ok(Some(text)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(_) => Err(()),
+        }
+    })
+    .map_err(|error| format!("selected config failed: {error:?}"))?
+    .ok_or("selected config was treated as missing")?;
     if config.github.repository != "tailrocks/velnor-new" {
         return Err("daemon did not read the configured path".to_owned());
     }
     if !matches!(
-        read_daemon_config(&state.join("host.toml"), HostPlatform::Macos),
+        read_daemon_config_with(&state.join("host.toml"), HostPlatform::Macos, |path, _| {
+            match std::fs::read_to_string(path) {
+                Ok(text) => Ok(Some(text)),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+                Err(_) => Err(()),
+            }
+        }),
         Err(ConfigReadError::Invalid)
     ) {
         return Err("fixture did not distinguish the legacy fallback path".to_owned());
