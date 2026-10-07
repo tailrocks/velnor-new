@@ -3,6 +3,7 @@
 //! Callers persist intent before an external effect and never hold a
 //! transaction across that effect.
 
+mod apparmor;
 pub mod assign;
 mod config;
 mod connect;
@@ -29,7 +30,8 @@ pub use connect::{ConnectPlan, DisconnectEffect, SetOwnership, connect_plan, dis
 pub use daemon_lock::DaemonLock;
 pub use docker_client::connect_unix;
 pub use docker_spec::{
-    ContainerPlan, DeleteDecision, audit_plan, delete_decision, plan_contains, runner_plan,
+    ContainerPlan, DeleteDecision, RunnerImageProfile, audit_plan, delete_decision, plan_contains,
+    resolve_runner_profile, runner_plan, runner_plan_for_profile,
 };
 pub use error::HostError;
 pub use guest::guest_slots;
@@ -44,8 +46,11 @@ pub use reconcile::{
     IntentRow, Reconcile, ReleaseFact, before_advertise, occupies, release_permitted,
 };
 pub use scale_set::{EnsureError, EnsuredSet, ensure_product_scale_set, product_runner_groups};
-pub use stage::{PairStop, PartialPair, remove_recorded, start_pair_until};
+pub use stage::{
+    PairStop, PartialPair, drive_with_profile, remove_recorded, start_pair_until,
+    start_pair_until_with_profile,
+};
 pub use worker::{
-    BollardCreate, CreateProjection, Started, bollard_create, dind_create, runner_create,
-    start_pair,
+    BollardCreate, CreateProjection, Started, bollard_create, dind_create, dind_create_for_profile,
+    runner_create, start_pair, start_pair_with_profile,
 };

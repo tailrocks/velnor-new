@@ -3,16 +3,18 @@
 //! `remove_recorded` deletes only when the name still resolves to the owned id.
 
 use bollard::Docker;
-use bollard::errors::Error as DockerError;
-use bollard::query_parameters::RemoveContainerOptionsBuilder;
 
-use crate::docker_client::docker_deadline;
-use crate::docker_spec::{DeleteDecision, delete_decision, runner_plan};
+use crate::docker_spec::{
+    DeleteDecision, RunnerImageProfile, delete_decision, runner_plan, runner_plan_for_profile,
+};
 use crate::error::HostError;
 use crate::worker::{
-    CreateProjection, create_named_volumes, create_only, deliver_jit, dind_create, join_dind_net,
-    remove_worker_volumes, runner_create, start_id,
+    CreateProjection, dind_create, dind_create_for_profile, join_dind_net, runner_create,
 };
+
+mod docker_engine;
+mod profile;
+pub use profile::{drive_with_profile, start_pair_until_with_profile};
 
 /// Where `start_pair_until` returns. Later steps are not started.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,6 +51,15 @@ pub struct PartialPair {
 pub trait PairEngine {
     /// Create the named volumes for `volume`.
     async fn prepare_volumes(&self, volume: &str) -> Result<(), HostError>;
+    /// Create volumes for an explicit image profile. Existing engines keep the
+    /// legacy path unless they override this method.
+    async fn prepare_volumes_for_profile(
+        &self,
+        volume: &str,
+        _profile: Option<&RunnerImageProfile>,
+    ) -> Result<(), HostError> {
+        self.prepare_volumes(volume).await
+    }
     /// Create one container from `spec`. Returns its id.
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError>;
     /// Start container `id`.
@@ -108,74 +119,6 @@ impl PairSink for Forget {
     }
 }
 
-impl PairEngine for Docker {
-    async fn prepare_volumes(&self, volume: &str) -> Result<(), HostError> {
-        Box::pin(docker_deadline(create_named_volumes(
-            self,
-            volume,
-            &dind_create(volume)?.mounts,
-        )))
-        .await?
-    }
-
-    async fn create(&self, spec: &CreateProjection) -> Result<String, HostError> {
-        Box::pin(docker_deadline(create_only(self, spec))).await?
-    }
-
-    async fn start(&self, id: &str) -> Result<(), HostError> {
-        Box::pin(docker_deadline(start_id(self, id))).await?
-    }
-
-    async fn write_jit(&self, id: &str, jit: &[u8]) -> Result<(), HostError> {
-        Box::pin(docker_deadline(deliver_jit(self, id, jit))).await?
-    }
-
-    async fn remove(&self, id: &str) -> Result<(), HostError> {
-        let options = RemoveContainerOptionsBuilder::new().force(true).build();
-        Box::pin(docker_deadline(self.remove_container(id, Some(options))))
-            .await?
-            .map_err(|_| HostError::Docker)
-    }
-
-    async fn id_for_name(&self, name: &str) -> Result<Option<String>, HostError> {
-        if name.is_empty() {
-            return Err(HostError::Docker);
-        }
-        match Box::pin(docker_deadline(self.inspect_container(name, None))).await? {
-            Ok(body) => body
-                .id
-                .filter(|id| !id.is_empty())
-                .map(Some)
-                .ok_or(HostError::Docker),
-            Err(DockerError::DockerResponseServerError {
-                status_code: 404, ..
-            }) => Ok(None),
-            Err(_) => Err(HostError::Docker),
-        }
-    }
-
-    async fn worker_id_for_name(
-        &self,
-        name: &str,
-        volume: &str,
-        role: &str,
-    ) -> Result<Option<String>, HostError> {
-        crate::worker::worker_id_for_name(self, name, volume, role).await
-    }
-
-    async fn remove_worker_volumes(&self, volume: &str) -> Result<bool, HostError> {
-        remove_worker_volumes(self, volume).await
-    }
-
-    async fn running(&self, id: &str) -> Result<bool, HostError> {
-        let response = Box::pin(docker_deadline(self.inspect_container(id, None))).await?;
-        match crate::docker_client::classify_inspect(response) {
-            Ok(running) => Ok(running),
-            Err(_) => Err(HostError::Docker),
-        }
-    }
-}
-
 /// Create through `stop`, then return. `Jit` matches [`crate::worker::start_pair`].
 ///
 /// # Errors
@@ -205,13 +148,65 @@ pub async fn drive<E: PairEngine, S: PairSink>(
     stop: PairStop,
     sink: &S,
 ) -> Result<PartialPair, HostError> {
+    drive_inner(engine, private_volume, jit, stop, sink, None).await
+}
+
+/// Shared runner/DinD pair lifecycle used by both the legacy and explicit profile paths.
+pub(super) async fn drive_inner<E: PairEngine, S: PairSink>(
+    engine: &E,
+    private_volume: &str,
+    jit: &[u8],
+    stop: PairStop,
+    sink: &S,
+    profile: Option<&RunnerImageProfile>,
+) -> Result<PartialPair, HostError> {
     if jit.is_empty() {
         return Err(HostError::EmptyJit);
     }
-    let runner = runner_create(&runner_plan(private_volume)?)?;
-    let dind = dind_create(private_volume)?;
+    let admission = if profile.is_some() {
+        Some(crate::apparmor::verify_runner_profile()?)
+    } else {
+        None
+    };
+    drive_inner_admitted(
+        engine,
+        private_volume,
+        jit,
+        stop,
+        sink,
+        profile,
+        admission.as_ref(),
+    )
+    .await
+}
+
+async fn drive_inner_admitted<E: PairEngine, S: PairSink>(
+    engine: &E,
+    private_volume: &str,
+    jit: &[u8],
+    stop: PairStop,
+    sink: &S,
+    profile: Option<&RunnerImageProfile>,
+    admission: Option<&crate::apparmor::RunnerProfileAdmission>,
+) -> Result<PartialPair, HostError> {
+    if profile.is_some() != admission.is_some() {
+        return Err(HostError::Config);
+    }
+    if jit.is_empty() {
+        return Err(HostError::EmptyJit);
+    }
+    let (runner_plan, dind) = match profile {
+        Some(profile) => (
+            runner_plan_for_profile(private_volume, profile)?,
+            dind_create_for_profile(private_volume, profile)?,
+        ),
+        None => (runner_plan(private_volume)?, dind_create(private_volume)?),
+    };
+    let runner = runner_create(&runner_plan)?;
     sink.volume(private_volume).await?;
-    engine.prepare_volumes(private_volume).await?;
+    engine
+        .prepare_volumes_for_profile(private_volume, profile)
+        .await?;
     if stop == PairStop::Volumes {
         return Ok(PartialPair::none());
     }
@@ -247,6 +242,28 @@ pub async fn drive<E: PairEngine, S: PairSink>(
         return drop_both(engine, &dind_id, &runner_id, error).await;
     }
     Ok(PartialPair::both(dind_id, runner_id))
+}
+
+#[cfg(test)]
+pub(super) async fn drive_with_profile_for_test<E: PairEngine, S: PairSink>(
+    engine: &E,
+    private_volume: &str,
+    jit: &[u8],
+    stop: PairStop,
+    sink: &S,
+    profile: &RunnerImageProfile,
+) -> Result<PartialPair, HostError> {
+    let admission = crate::apparmor::test_runner_profile_admission();
+    drive_inner_admitted(
+        engine,
+        private_volume,
+        jit,
+        stop,
+        sink,
+        Some(profile),
+        Some(&admission),
+    )
+    .await
 }
 
 /// Inspect `name`, then delete `owned_id` only on [`DeleteDecision::Delete`].

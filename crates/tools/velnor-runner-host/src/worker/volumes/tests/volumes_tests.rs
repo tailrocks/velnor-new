@@ -5,9 +5,10 @@ use bollard::Docker;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 
-use super::{WORKER, container_json, volume_json, volume_names};
+use super::{WORKER, container_json, official_volume_names, volume_json, volume_names};
+use crate::docker_spec::resolve_runner_profile;
 use crate::worker::{create_named_volumes, remove_worker_volumes, worker_id_for_name};
-use crate::{HostError, dind_create};
+use crate::{HostError, dind_create, dind_create_for_profile};
 
 #[tokio::test]
 async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
@@ -22,7 +23,7 @@ async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
     assert!(foreign_requests[0].starts_with("GET "));
 
     let mut responses = Vec::new();
-    for (name, role) in volume_names() {
+    for (name, role) in official_volume_names() {
         responses.push(http(200, &volume_json(name, WORKER, role)));
         responses.push(http(204, ""));
         responses.push(http(404, r#"{"message":"missing"}"#));
@@ -32,13 +33,13 @@ async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
     let requests = owned.finish().await?;
 
     assert_eq!(removed, Ok(true));
-    assert_eq!(requests.len(), 9);
+    assert_eq!(requests.len(), 12);
     assert_eq!(
         requests
             .iter()
             .filter(|line| line.starts_with("DELETE "))
             .count(),
-        3
+        4
     );
     Ok(())
 }
@@ -70,6 +71,43 @@ async fn created_volumes_have_exact_worker_and_role_labels() -> Result<(), Strin
             Some(&serde_json::json!({"velnor.worker": WORKER, "velnor.role": role}))
         );
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn official_profile_creates_the_shared_externals_volume() -> Result<(), String> {
+    let expected = official_volume_names();
+    let responses = expected
+        .iter()
+        .map(|(name, role)| http(201, &volume_json(name, WORKER, role)))
+        .collect();
+    let stub = DockerStub::open(responses)?;
+    let profile = resolve_runner_profile("ubuntu-24.04-amd64", "ubuntu-24.04-scale-set")
+        .map_err(|error| error.to_string())?;
+    let plan = dind_create_for_profile(WORKER, &profile).map_err(|error| error.to_string())?;
+    assert_eq!(plan.mounts[0].source, format!("volume:{WORKER}"));
+    assert_eq!(plan.mounts[0].target, "/var/run");
+    assert_eq!(
+        plan.cmd.get(1).map(String::as_str),
+        Some("--host=unix:///var/run/docker.sock")
+    );
+    assert_eq!(plan.mounts[1].target, "/home/runner/_work");
+    assert_eq!(plan.mounts[2].target, "/home/runner/externals");
+    let created = create_named_volumes(&stub.docker, WORKER, &plan.mounts).await;
+    let requests = stub.finish().await?;
+
+    assert_eq!(created, Ok(()));
+    assert_eq!(requests.len(), expected.len());
+    let external = requests
+        .iter()
+        .find(|request| request.contains("wtransport-externals"))
+        .ok_or_else(|| "missing externals volume request".to_owned())?;
+    let body = request_body(external)?;
+    let value: serde_json::Value = serde_json::from_str(body).map_err(|error| error.to_string())?;
+    assert_eq!(
+        value.get("Labels"),
+        Some(&serde_json::json!({"velnor.worker": WORKER, "velnor.role": "externals"}))
+    );
     Ok(())
 }
 

@@ -1,7 +1,10 @@
 use bollard::models::MountType;
 
 use super::{bollard, projection};
-use crate::{HostError, bollard_create, dind_create, runner_create, runner_plan};
+use crate::docker_spec::{resolve_runner_profile, runner_plan_for_profile};
+use crate::{
+    HostError, bollard_create, dind_create, dind_create_for_profile, runner_create, runner_plan,
+};
 
 #[test]
 fn runner_create_opens_stdin_and_is_not_privileged() -> Result<(), HostError> {
@@ -153,6 +156,82 @@ fn bollard_create_rejects_a_host_bind() -> Result<(), HostError> {
     let mut spec = dind_create("worker_a")?;
     spec.mounts[0].source = "/var/run/docker.sock".to_owned();
     assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
+    Ok(())
+}
+
+#[test]
+fn official_profile_uses_private_unix_dind_and_shared_runner_paths() -> Result<(), HostError> {
+    let profile = resolve_runner_profile("ubuntu-24.04-amd64", "ubuntu-24.04-scale-set")?;
+    let runner_plan = runner_plan_for_profile("worker_a", &profile)?;
+    let runner = runner_create(&runner_plan)?;
+    assert_eq!(runner.image, profile.runner_image());
+    assert!(!runner.privileged);
+    assert_eq!(
+        runner.security_opts,
+        vec!["apparmor=velnor-runner".to_owned()]
+    );
+    assert_eq!(runner.group_add, vec!["2375".to_owned()]);
+    assert!(
+        runner
+            .env
+            .contains(&"DOCKER_HOST=unix:///run/docker/docker.sock".to_owned())
+    );
+    assert_eq!(runner.mounts[0].target, "/run/docker");
+    assert!(runner.mounts.iter().any(|mount| {
+        mount.source == "volume:worker_a-externals" && mount.target == "/home/runner/externals"
+    }));
+
+    let dind = dind_create_for_profile("worker_a", &profile)?;
+    assert_eq!(dind.image, profile.dind_image());
+    assert!(dind.privileged);
+    assert_eq!(
+        dind.cmd,
+        vec![
+            "dockerd".to_owned(),
+            "--host=unix:///var/run/docker.sock".to_owned(),
+            "--group=docker".to_owned(),
+        ]
+    );
+    assert_eq!(dind.group_add, Vec::<String>::new());
+    assert!(dind.cmd.iter().all(|argument| !argument.contains("tcp://")));
+    assert_eq!(runner.mounts[0].source, dind.mounts[0].source);
+    assert_eq!(runner.mounts[0].target, "/run/docker");
+    assert_eq!(dind.mounts[0].target, "/var/run");
+    assert_eq!(&dind.mounts[1..3], &runner.mounts[1..3]);
+    assert_eq!(
+        dind.mounts
+            .last()
+            .map(|mount| (mount.source.as_str(), mount.target.as_str())),
+        Some(("volume:worker_a-docker", "/var/lib/docker"))
+    );
+
+    let runner_bollard = bollard_create(&crate::worker::join_dind_net(runner, &"a".repeat(64))?)?;
+    let expected_network = format!("container:{}", "a".repeat(64));
+    let host = runner_bollard
+        .config
+        .host_config
+        .as_ref()
+        .ok_or(HostError::Docker)?;
+    assert_eq!(
+        host.security_opt,
+        Some(vec!["apparmor=velnor-runner".to_owned()])
+    );
+    assert_eq!(host.group_add, Some(vec!["2375".to_owned()]));
+    assert_eq!(
+        host.network_mode.as_deref(),
+        Some(expected_network.as_str())
+    );
+
+    let dind_bollard = bollard_create(&dind)?;
+    let dind_host = dind_bollard
+        .config
+        .host_config
+        .as_ref()
+        .ok_or(HostError::Docker)?;
+    assert_eq!(dind_host.privileged, Some(true));
+    assert!(dind_host.group_add.is_none());
+    assert!(dind_host.security_opt.is_none());
+    assert!(dind_host.port_bindings.is_none());
     Ok(())
 }
 

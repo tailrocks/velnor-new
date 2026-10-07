@@ -1,7 +1,10 @@
-//! One Ubuntu 26.04 runner. Platform is `linux/amd64`. JIT stays off the plan.
+//! Audited runner and private `DinD` container plans.
 
 use crate::error::HostError;
 use velnor_runner_core::runner_work_path;
+
+mod profile;
+pub use profile::{RunnerImageProfile, resolve_runner_profile, runner_plan_for_profile};
 
 /// One mount. `source` is `volume:<name>` or a bind path.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,16 +17,17 @@ pub struct Mount {
 
 /// Docker create projection the controller is allowed to send.
 ///
-/// One runner. JIT is not a field: stdin feeds the entrypoint, not env, cmd, or labels.
+/// JIT payload is not a field: the launcher feeds Docker stdin, then the fixed
+/// bootstrap forwards it to the official runner input boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContainerPlan {
     /// Deterministic per-worker container name used for crash recovery.
     pub name: String,
     /// Must stay false for the runner.
     pub privileged: bool,
-    /// Requested OCI platform. Always `linux/amd64`, never the host or VM arch.
+    /// Requested OCI platform. The supported runner profile is `linux/amd64`.
     pub platform: String,
-    /// Ubuntu 26.04 runner image. Not an ARM tag.
+    /// Immutable image reference selected by the runner profile.
     pub image: String,
     /// Env pairs. Must not carry JIT, host paths, or management tokens.
     pub env: Vec<String>,
@@ -33,6 +37,10 @@ pub struct ContainerPlan {
     pub labels: Vec<String>,
     /// Private volumes for this worker's socket and work tree.
     pub mounts: Vec<Mount>,
+    /// Fixed supplemental groups needed by the private Docker socket.
+    pub group_add: Vec<String>,
+    /// Fixed host security options. The Linux runner requires its configured LSM profile.
+    pub security_opts: Vec<String>,
 }
 
 /// What a delete may do.
@@ -50,7 +58,6 @@ const RUNNER_PLATFORM: &str = "linux/amd64";
 const RUNNER_IMAGE: &str = "velnor-runner:ubuntu-26.04-2.337.0";
 const ENTRYPOINT: &str = "/usr/local/bin/velnor-runner-entrypoint";
 const SOCKET_TARGET: &str = "/run";
-
 const HOST_NEEDLES: &[&str] = &[
     "ssh-agent",
     "ssh_auth_sock",
@@ -96,6 +103,8 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
                 target: runner_work_path(),
             },
         ],
+        group_add: Vec::new(),
+        security_opts: Vec::new(),
     })
 }
 
@@ -105,7 +114,8 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
 ///
 /// Returns [`HostError::PrivilegedRunner`] when privileged.
 /// Returns [`HostError::ForbiddenMount`] for host paths, tokens, `OrbStack`, the outer
-/// socket, JIT in Docker config, an ARM image, or a platform other than `linux/amd64`.
+/// socket, JIT payload in Docker configuration, an ARM image, or a platform other
+/// than `linux/amd64`.
 pub fn audit_plan(plan: &ContainerPlan) -> Result<(), HostError> {
     if plan.privileged {
         return Err(HostError::PrivilegedRunner);
@@ -116,20 +126,58 @@ pub fn audit_plan(plan: &ContainerPlan) -> Result<(), HostError> {
     for mount in &plan.mounts {
         reject_mount(mount)?;
     }
-    Ok(())
+    if plan.image == RUNNER_IMAGE {
+        audit_legacy_plan(plan)
+    } else {
+        profile::audit_official_plan(plan)
+    }
 }
 
 fn shape_rejected(plan: &ContainerPlan) -> bool {
     !private_volume_name(&plan.name)
         || plan.platform != RUNNER_PLATFORM
-        || image_rejected(&plan.image)
-        || contains_jit(&plan.env)
-        || contains_jit(&plan.cmd)
-        || contains_jit(&plan.labels)
+        || (plan.image != RUNNER_IMAGE && !profile::is_supported_runner_image(&plan.image))
 }
 
-fn image_rejected(image: &str) -> bool {
-    image != RUNNER_IMAGE
+fn audit_legacy_plan(plan: &ContainerPlan) -> Result<(), HostError> {
+    if !plan.security_opts.is_empty()
+        || !plan.group_add.is_empty()
+        || contains_jit(&plan.env)
+        || contains_jit(&plan.cmd)
+        || plan
+            .cmd
+            .iter()
+            .any(|item| item.to_ascii_lowercase().contains("jit"))
+        || contains_jit(&plan.labels)
+    {
+        return Err(HostError::ForbiddenMount);
+    }
+    Ok(())
+}
+
+fn runner_labels(private_volume: &str) -> Vec<String> {
+    vec![
+        "velnor.role=runner".to_owned(),
+        format!("velnor.volume={private_volume}"),
+        format!("velnor.worker={private_volume}"),
+    ]
+}
+
+fn contains_payload_marker(
+    env: &[String],
+    cmd: &[String],
+    labels: &[String],
+    security_opts: &[String],
+    mounts: &[Mount],
+) -> bool {
+    env.iter()
+        .chain(cmd)
+        .chain(labels)
+        .chain(security_opts)
+        .any(|value| value.contains("JIT-SECRET-CANARY"))
+        || mounts.iter().any(|mount| {
+            mount.source.contains("JIT-SECRET-CANARY") || mount.target.contains("JIT-SECRET-CANARY")
+        })
 }
 
 fn contains_jit(items: &[String]) -> bool {
@@ -180,7 +228,11 @@ fn forbidden_source(source: &str) -> bool {
 
 fn env_forbidden(entry: &str) -> bool {
     let folded = entry.to_ascii_lowercase();
-    secret_key(env_key(&folded)) || folded.contains("jitconfig") || host_exposure(&folded)
+    let key = env_key(&folded);
+    if key == "docker_host" && entry == "DOCKER_HOST=unix:///run/docker/docker.sock" {
+        return false;
+    }
+    secret_key(key) || folded.contains("jitconfig") || host_exposure(&folded)
 }
 
 fn env_key(entry: &str) -> &str {
@@ -252,6 +304,7 @@ pub fn plan_contains(plan: &ContainerPlan, canary: &str) -> bool {
     field_contains(&plan.env, canary)
         || field_contains(&plan.cmd, canary)
         || field_contains(&plan.labels, canary)
+        || field_contains(&plan.security_opts, canary)
         || plan
             .mounts
             .iter()

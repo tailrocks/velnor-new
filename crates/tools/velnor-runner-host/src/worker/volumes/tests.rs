@@ -13,6 +13,15 @@ pub(super) fn volume_names() -> [(&'static str, &'static str); 3] {
     ]
 }
 
+pub(super) fn official_volume_names() -> [(&'static str, &'static str); 4] {
+    [
+        ("wtransport", "socket"),
+        ("wtransport-work", "work"),
+        ("wtransport-externals", "externals"),
+        ("wtransport-docker", "dind-data"),
+    ]
+}
+
 pub(super) fn volume_json(name: &str, worker: &str, role: &str) -> String {
     serde_json::json!({
         "Name": name,

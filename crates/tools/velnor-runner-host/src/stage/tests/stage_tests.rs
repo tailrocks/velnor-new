@@ -3,8 +3,12 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use super::super::{Forget, PairEngine, PairStop, decide, drive};
+use super::super::{
+    Forget, PairEngine, PairSink, PairStop, decide, drive, drive_with_profile,
+    drive_with_profile_for_test,
+};
 use crate::HostError;
+use crate::docker_spec::resolve_runner_profile;
 use crate::worker::CreateProjection;
 
 struct Fake {
@@ -12,6 +16,7 @@ struct Fake {
     ids: Mutex<Vec<String>>,
     names: Mutex<HashMap<String, String>>,
     removed: Mutex<Vec<String>>,
+    specs: Mutex<Vec<CreateProjection>>,
     /// Fail the Nth call of this method name. `None` never fails.
     fail_at: Mutex<Option<(&'static str, u8)>>,
     counts: Mutex<HashMap<&'static str, u8>>,
@@ -24,6 +29,7 @@ impl Fake {
             ids: Mutex::new(Vec::new()),
             names: Mutex::new(HashMap::new()),
             removed: Mutex::new(Vec::new()),
+            specs: Mutex::new(Vec::new()),
             fail_at: Mutex::new(None),
             counts: Mutex::new(HashMap::new()),
         }
@@ -38,6 +44,13 @@ impl Fake {
 
     fn removed(&self) -> Vec<String> {
         self.removed
+            .lock()
+            .map(|guard| guard.clone())
+            .unwrap_or_default()
+    }
+
+    fn specs(&self) -> Vec<CreateProjection> {
+        self.specs
             .lock()
             .map(|guard| guard.clone())
             .unwrap_or_default()
@@ -72,6 +85,10 @@ impl PairEngine for Fake {
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError> {
         self.hit("create")?;
         push(&self.events, "create")?;
+        self.specs
+            .lock()
+            .map_err(|_| HostError::Docker)?
+            .push(spec.clone());
         let mut ids = self.ids.lock().map_err(|_| HostError::Docker)?;
         let id = format!("{:012x}", ids.len() + 1);
         ids.push(id.clone());
@@ -128,6 +145,27 @@ impl PairEngine for Fake {
 
     async fn running(&self, _id: &str) -> Result<bool, HostError> {
         Ok(false)
+    }
+}
+
+#[expect(
+    clippy::unused_async_trait_impl,
+    reason = "fake sink matches the async trait and records synchronously"
+)]
+impl PairSink for Fake {
+    async fn volume(&self, _volume: &str) -> Result<(), HostError> {
+        self.hit("sink-volume")?;
+        push(&self.events, "sink-volume")
+    }
+
+    async fn dind(&self, _id: &str) -> Result<(), HostError> {
+        self.hit("sink-dind")?;
+        push(&self.events, "sink-dind")
+    }
+
+    async fn runner(&self, _id: &str) -> Result<(), HostError> {
+        self.hit("sink-runner")?;
+        push(&self.events, "sink-runner")
     }
 }
 
@@ -221,6 +259,73 @@ async fn runner_created_does_not_start() -> Result<(), HostError> {
     assert!(partial.dind_id.is_some() && partial.runner_id.is_some());
     assert_eq!(engine.events(), ["volumes", "create", "start", "create"]);
     Ok(())
+}
+
+#[tokio::test]
+async fn profile_path_uses_official_pinned_runner_and_private_dind() -> Result<(), HostError> {
+    let profile = resolve_runner_profile("ubuntu-24.04-amd64", "ubuntu-24.04-scale-set")?;
+    let engine = Fake::new();
+    let partial = drive_with_profile_for_test(
+        &engine,
+        "worker_a",
+        b"jit-canary-not-a-job-env",
+        PairStop::Jit,
+        &Forget,
+        &profile,
+    )
+    .await?;
+    assert!(partial.dind_id.is_some());
+    assert!(partial.runner_id.is_some());
+    let specs = engine.specs();
+    assert_eq!(specs.len(), 2);
+    assert_eq!(specs[0].image, profile.dind_image());
+    assert!(specs[0].privileged);
+    assert_eq!(specs[0].cmd.first().map(String::as_str), Some("dockerd"));
+    assert_eq!(specs[1].image, profile.runner_image());
+    assert!(!specs[1].privileged);
+    assert_eq!(
+        specs[1].security_opts,
+        vec!["apparmor=velnor-runner".to_owned()]
+    );
+    assert_eq!(specs[1].group_add, ["2375".to_owned()]);
+    assert_eq!(
+        specs[1].network_mode.as_deref(),
+        Some("container:000000000001")
+    );
+    assert!(specs.iter().all(|spec| {
+        !spec
+            .env
+            .iter()
+            .any(|entry| entry.contains("jit-canary-not-a-job-env"))
+            && !spec
+                .cmd
+                .iter()
+                .any(|entry| entry.contains("jit-canary-not-a-job-env"))
+            && !spec
+                .labels
+                .iter()
+                .any(|entry| entry.contains("jit-canary-not-a-job-env"))
+    }));
+    Ok(())
+}
+
+#[tokio::test]
+async fn profile_path_fails_closed_before_side_effects_without_approved_policy() {
+    let Ok(profile) = resolve_runner_profile("ubuntu-24.04-amd64", "ubuntu-24.04-scale-set") else {
+        panic!("the pinned image profile must resolve for this test");
+    };
+    let engine = Fake::new();
+    let result = drive_with_profile(
+        &engine,
+        "worker_a",
+        b"jit-canary",
+        PairStop::Jit,
+        &engine,
+        &profile,
+    )
+    .await;
+    assert_eq!(result, Err(HostError::Config));
+    assert_eq!(engine.events(), Vec::<&'static str>::new());
 }
 
 #[tokio::test]

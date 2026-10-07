@@ -13,6 +13,8 @@ pub(super) fn base_plan() -> ContainerPlan {
         cmd: vec!["/usr/local/bin/velnor-runner-entrypoint".to_owned()],
         labels: Vec::new(),
         mounts: Vec::new(),
+        group_add: Vec::new(),
+        security_opts: Vec::new(),
     }
 }
 
