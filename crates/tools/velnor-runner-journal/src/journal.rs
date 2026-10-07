@@ -5,12 +5,15 @@ use std::path::{Path, PathBuf};
 
 use crate::error::HostError;
 
+mod capacity;
 mod controller;
 mod events;
 mod intent;
 mod launch;
 mod schema;
 mod worker_volume;
+
+pub use capacity::{CapacityClaim, ReplayRoute, ScopedLaunchIdentity};
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -25,6 +25,14 @@ impl Journal {
 
     /// Record the outcome of exactly one row on a new connection.
     ///
+    /// Scoped launch rows have monotonic outcomes. `Pending` may advance to any
+    /// result, and `Uncertain` may later become `Done`; a generic result cannot
+    /// rewrite `Uncertain` or `Done` to `Failed`. `Done` and `Uncertain` also
+    /// persist `effect_state = 'may_have_effect'`. A scoped definite no-effect
+    /// result must use [`Journal::record_launch_no_effect`], which validates the
+    /// durable pre-effect state atomically. Legacy rows retain their historical
+    /// transition behavior and always occupy scoped capacity accounting.
+    ///
     /// # Errors
     ///
     /// Returns [`HostError::Journal`] when the id is missing or the write fails.
@@ -35,10 +43,11 @@ impl Journal {
             Outcome::DefiniteFailure => IntentState::Failed,
         };
         let conn = self.connection().await?;
+        let state_text = state.as_str().to_owned();
         let changed = conn
             .execute(
-                "UPDATE intents SET state = ?1 WHERE id = ?2",
-                (state.as_str().to_owned(), id),
+                "UPDATE intents SET state = ?1, effect_state = CASE WHEN replay_key_version = 1 AND ?1 IN ('done', 'uncertain') THEN 'may_have_effect' ELSE effect_state END WHERE id = ?2 AND (replay_key_version != 1 OR state = ?1 OR state = 'pending' OR (state = 'uncertain' AND ?1 = 'done'))",
+                (state_text, id),
             )
             .await
             .map_err(|_| HostError::Journal)?;

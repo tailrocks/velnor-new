@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use crate::error::HostError;
 
-const JOURNAL_VERSION: i64 = 3;
+const JOURNAL_VERSION: i64 = 5;
 const BASE_COLUMNS: [&str; 9] = [
     "id",
     "kind",
@@ -16,7 +16,7 @@ const BASE_COLUMNS: [&str; 9] = [
     "dind_id",
     "worker_volume",
 ];
-const CURRENT_COLUMNS: [&str; 17] = [
+const CURRENT_COLUMNS: [&str; 19] = [
     "id",
     "kind",
     "subject",
@@ -34,6 +34,8 @@ const CURRENT_COLUMNS: [&str; 17] = [
     "observed_job_id",
     "observed_workflow_run_id",
     "remote_terminal",
+    "replay_key_version",
+    "effect_state",
 ];
 
 pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError> {
@@ -55,13 +57,26 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
         0 => {
             migrate_version_zero(conn).await?;
             migrate_version_one(conn).await?;
-            migrate_version_two(conn).await
+            migrate_version_two(conn).await?;
+            migrate_version_three(conn).await?;
+            migrate_version_four(conn).await
         }
         1 => {
             migrate_version_one(conn).await?;
-            migrate_version_two(conn).await
+            migrate_version_two(conn).await?;
+            migrate_version_three(conn).await?;
+            migrate_version_four(conn).await
         }
-        2 => migrate_version_two(conn).await,
+        2 => {
+            migrate_version_two(conn).await?;
+            migrate_version_three(conn).await?;
+            migrate_version_four(conn).await
+        }
+        3 => {
+            migrate_version_three(conn).await?;
+            migrate_version_four(conn).await
+        }
+        4 => migrate_version_four(conn).await,
         JOURNAL_VERSION => validate_current_schema(conn).await,
         _ => Err(HostError::Journal),
     }
@@ -142,8 +157,42 @@ async fn migrate_version_two(conn: &turso::Connection) -> Result<(), HostError> 
             .map_err(|_| HostError::Journal)?;
         }
     }
-    validate_current_schema(conn).await?;
+    validate_v3_schema(conn).await?;
     conn.execute("PRAGMA user_version = 3", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
+async fn migrate_version_three(conn: &turso::Connection) -> Result<(), HostError> {
+    let columns = read_columns(conn).await?;
+    if !columns.contains("replay_key_version") {
+        conn.execute(
+            "ALTER TABLE intents ADD COLUMN replay_key_version INTEGER NOT NULL DEFAULT 0 CHECK (replay_key_version IN (0, 1))",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    }
+    validate_v4_schema(conn).await?;
+    conn.execute("PRAGMA user_version = 4", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
+async fn migrate_version_four(conn: &turso::Connection) -> Result<(), HostError> {
+    let columns = read_columns(conn).await?;
+    if !columns.contains("effect_state") {
+        conn.execute(
+            "ALTER TABLE intents ADD COLUMN effect_state TEXT NOT NULL DEFAULT 'unknown' CHECK (effect_state IN ('unknown', 'not_started', 'may_have_effect', 'definite_no_effect'))",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    }
+    validate_current_schema(conn).await?;
+    conn.execute("PRAGMA user_version = 5", ())
         .await
         .map_err(|_| HostError::Journal)?;
     Ok(())
@@ -168,6 +217,30 @@ async fn validate_current_schema(conn: &turso::Connection) -> Result<(), HostErr
     let columns = read_columns(conn).await?;
     if !CURRENT_COLUMNS
         .iter()
+        .all(|column| columns.contains(*column))
+    {
+        return Err(HostError::Journal);
+    }
+    validate_controller_schema(conn).await
+}
+
+async fn validate_v4_schema(conn: &turso::Connection) -> Result<(), HostError> {
+    let columns = read_columns(conn).await?;
+    if !CURRENT_COLUMNS
+        .iter()
+        .take(18)
+        .all(|column| columns.contains(*column))
+    {
+        return Err(HostError::Journal);
+    }
+    validate_controller_schema(conn).await
+}
+
+async fn validate_v3_schema(conn: &turso::Connection) -> Result<(), HostError> {
+    let columns = read_columns(conn).await?;
+    if !CURRENT_COLUMNS
+        .iter()
+        .take(17)
         .all(|column| columns.contains(*column))
     {
         return Err(HostError::Journal);
