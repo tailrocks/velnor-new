@@ -555,7 +555,7 @@ where
 fn report_linux_drain(status: LinuxDrainStatus) -> ExitCode {
     match status {
         LinuxDrainStatus::Requested => {
-            println!("drain_requested");
+            println!("{}", linux_drain_requested_message());
             ExitCode::SUCCESS
         }
         LinuxDrainStatus::Drained => {
@@ -587,6 +587,10 @@ fn report_linux_drain(status: LinuxDrainStatus) -> ExitCode {
             ExitCode::from(2)
         }
     }
+}
+
+fn linux_drain_requested_message() -> &'static str {
+    "drain_request_persisted; active_daemon_enforcement_and_quiescence_are_not_proven"
 }
 
 fn linux_drain_unknown_message(reason: DrainUnknown) -> String {

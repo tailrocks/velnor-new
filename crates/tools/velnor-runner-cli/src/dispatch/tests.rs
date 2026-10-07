@@ -12,8 +12,8 @@ use clap::Parser;
 use super::{
     ConfigObservation, DependencyObservation, JournalObservation, LinuxDrainSettings,
     LinuxDrainStatus, config_path, credential_is_available, disconnect_for_os, drain_for_os,
-    journal_file_observation, linux_drain_unknown_message, linux_drain_with, requested_wait,
-    resume_for_os, selected_config_path, status_observation_with,
+    journal_file_observation, linux_drain_requested_message, linux_drain_unknown_message,
+    linux_drain_with, requested_wait, resume_for_os, selected_config_path, status_observation_with,
 };
 use crate::args::Cli;
 
@@ -177,6 +177,10 @@ fn linux_drain_without_wait_records_only_the_durable_request() {
         |_, _, _| panic!("non-waiting drain must not enter the waiter"),
     );
     assert_eq!(status, LinuxDrainStatus::Requested);
+    assert_eq!(
+        linux_drain_requested_message(),
+        "drain_request_persisted; active_daemon_enforcement_and_quiescence_are_not_proven"
+    );
 }
 
 #[test]
