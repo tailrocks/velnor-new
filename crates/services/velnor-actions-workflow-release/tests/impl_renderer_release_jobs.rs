@@ -1,10 +1,10 @@
 //! Release role, permission, shape, and workflow-graph cases.
 use std::collections::BTreeMap;
-use velnor_actions_workflow_renderer::release_jobs::{
+use velnor_actions_workflow_release::release_jobs::{
     ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec,
 };
-use velnor_actions_workflow_renderer::release_permissions::{JobPermissions, PermissionLevel};
-use velnor_actions_workflow_renderer::release_spec::{
+use velnor_actions_workflow_release::release_permissions::{JobPermissions, PermissionLevel};
+use velnor_actions_workflow_release::release_spec::{
     BootstrapPlan, DispatchInput, ReleaseConcurrency, ReleaseTriggers, publish_gate_condition,
 };
 use velnor_actions_workflow_steps::RenderError;

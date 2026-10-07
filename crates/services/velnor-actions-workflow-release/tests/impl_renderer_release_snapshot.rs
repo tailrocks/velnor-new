@@ -1,6 +1,6 @@
 //! Golden release-workflow snapshot (byte-exact rendered YAML).
 use crate::impl_renderer_release_tree::{ctx, spec};
-use velnor_actions_workflow_renderer::release_tree::render_release_workflow;
+use velnor_actions_workflow_release::release_tree::render_release_workflow;
 use velnor_actions_workflow_steps::RenderError;
 
 #[test]

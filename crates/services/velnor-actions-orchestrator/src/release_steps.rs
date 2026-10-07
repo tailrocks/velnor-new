@@ -18,9 +18,9 @@ use velnor_actions_contract_config::config::{ReleaseAuthentication, RustReleaseC
 use velnor_actions_contract_workflow::{JobTimeout, Step};
 use velnor_actions_mise::catalog::release_plz::{ReleasePrRequest, ReleaseRequest as PlzRelease};
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
-use velnor_actions_workflow_renderer::release_jobs::{ReleaseJobSpec, ReleaseRole};
-use velnor_actions_workflow_renderer::release_permissions::JobPermissions;
-use velnor_actions_workflow_renderer::release_tree::{
+use velnor_actions_workflow_release::release_jobs::{ReleaseJobSpec, ReleaseRole};
+use velnor_actions_workflow_release::release_permissions::JobPermissions;
+use velnor_actions_workflow_release::release_tree::{
     RELEASE_BOOTSTRAP_CONFIG_PATH, RELEASE_CONFIG_PATH,
 };
 use velnor_actions_workflow_steps::{MiseSetup, ambient_shell_step, mise_setup_step};

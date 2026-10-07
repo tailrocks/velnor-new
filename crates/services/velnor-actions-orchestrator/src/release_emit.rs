@@ -19,15 +19,15 @@ use velnor_actions_rust_core::release_select::{
     DEFAULT_REGISTRY, ReleaseRequest as SelectRequest, ReleaseScope, ReleaseSelection,
     select_release_set,
 };
-use velnor_actions_workflow_renderer::release_config::{
+use velnor_actions_workflow_release::release_config::{
     BootstrapReleasePlzConfig, ReleasePlzConfig, ReleasePlzPackage,
 };
-use velnor_actions_workflow_renderer::release_jobs::ReleaseWorkflowSpec;
-use velnor_actions_workflow_renderer::release_spec::{
+use velnor_actions_workflow_release::release_jobs::ReleaseWorkflowSpec;
+use velnor_actions_workflow_release::release_spec::{
     BootstrapPlan, DispatchInput, ReleaseTriggers, lock::stable_lock_group, publish_gate_condition,
     validate_source_sha,
 };
-use velnor_actions_workflow_renderer::release_tree::{ReleaseRenderContext, render_release_files};
+use velnor_actions_workflow_release::release_tree::{ReleaseRenderContext, render_release_files};
 use velnor_actions_workflow_steps::MiseSetup;
 use velnor_actions_workflow_tree::rendered::RenderedFile;
 

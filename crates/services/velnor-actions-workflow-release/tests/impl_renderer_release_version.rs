@@ -1,6 +1,6 @@
 //! Bootstrap `version` dispatch binding and publisher-gate cases.
 use std::collections::BTreeMap;
-use velnor_actions_workflow_renderer::release_spec::{
+use velnor_actions_workflow_release::release_spec::{
     BootstrapPlan, DispatchInput, ReleaseTriggers, publish_gate_condition,
 };
 use velnor_actions_workflow_steps::RenderError;

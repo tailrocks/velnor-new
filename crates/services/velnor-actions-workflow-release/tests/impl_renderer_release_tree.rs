@@ -1,17 +1,17 @@
 //! Release workflow rendering, file assembly, and determinism cases.
 use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::ScheduleTrigger;
-use velnor_actions_workflow_renderer::release_config::{
+use velnor_actions_workflow_release::release_config::{
     BootstrapReleasePlzConfig, ReleasePlzConfig, ReleasePlzPackage,
 };
-use velnor_actions_workflow_renderer::release_jobs::{
+use velnor_actions_workflow_release::release_jobs::{
     ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec,
 };
-use velnor_actions_workflow_renderer::release_permissions::JobPermissions;
-use velnor_actions_workflow_renderer::release_spec::{
+use velnor_actions_workflow_release::release_permissions::JobPermissions;
+use velnor_actions_workflow_release::release_spec::{
     BootstrapPlan, DispatchInput, ReleaseConcurrency, ReleaseTriggers, publish_gate_condition,
 };
-use velnor_actions_workflow_renderer::release_tree::{
+use velnor_actions_workflow_release::release_tree::{
     RELEASE_BOOTSTRAP_CONFIG_PATH, RELEASE_CONFIG_PATH, RELEASE_TREE_PATHS, RELEASE_WORKFLOW_PATH,
     ReleaseRenderContext, release_stale_paths, render_release_files, render_release_workflow,
 };

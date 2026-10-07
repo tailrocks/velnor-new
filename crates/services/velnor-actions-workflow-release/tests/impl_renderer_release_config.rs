@@ -1,5 +1,5 @@
 //! Effective release-plz config validation and rendering cases.
-use velnor_actions_workflow_renderer::release_config::{
+use velnor_actions_workflow_release::release_config::{
     BootstrapReleasePlzConfig, ReleasePlzConfig, ReleasePlzPackage,
     render_bootstrap_release_plz_config, render_release_plz_config, validate_feature_name,
     validate_tag_pattern,

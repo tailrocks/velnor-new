@@ -6,11 +6,11 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::{Step, StepKind};
-use velnor_actions_workflow_renderer::release_jobs::{
+use velnor_actions_workflow_release::release_jobs::{
     ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec,
 };
-use velnor_actions_workflow_renderer::release_permissions::{JobPermissions, PermissionLevel};
-use velnor_actions_workflow_renderer::release_spec::{
+use velnor_actions_workflow_release::release_permissions::{JobPermissions, PermissionLevel};
+use velnor_actions_workflow_release::release_spec::{
     BootstrapPlan, ReleaseConcurrency, ReleaseTriggers, validate_environment,
     validate_package_name, validate_package_version, validate_plan_id, validate_repository,
     validate_source_sha,
