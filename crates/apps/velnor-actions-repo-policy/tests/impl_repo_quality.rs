@@ -164,7 +164,7 @@ fn agents_stays_lean_pointer_only() -> Result<(), Box<dyn Error>> {
     assert!(agents.len() <= 16384, "AGENTS.md exceeds 16 KiB");
     assert!(is_pointer_only(&agents), "AGENTS.md carries quality detail");
     assert!(
-        agents.contains("opentofu-contract.md"),
+        agents.contains("opentofu-contract.mdx"),
         "AGENTS.md misses the adopted-contract pointer"
     );
     Ok(())
