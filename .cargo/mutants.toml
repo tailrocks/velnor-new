@@ -35,6 +35,7 @@ examine_globs = [
     "crates/core/velnor-actions-contract-workflow/src/workflow/cache_ids.rs",
     "crates/adapters/velnor-actions-rust/src/identity.rs",
     "crates/services/velnor-actions-orchestrator-cover-baseline/src/**/*.rs",
+    "crates/services/velnor-actions-orchestrator-task-report-write/src/**/*.rs",
     # Selection: affected-package computation and edge closure.
     "crates/services/velnor-actions-orchestrator-selection/src/select.rs",
     "crates/services/velnor-actions-orchestrator-selection/src/select_affected.rs",

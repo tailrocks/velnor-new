@@ -47,6 +47,7 @@ velnor-actions-orchestrator-runtime-plan = { version = "=0.1.1", path = "../veln
 velnor-actions-orchestrator-selection = { version = "=0.1.1", path = "../velnor-actions-orchestrator-selection" }
 velnor-actions-orchestrator-staged-validation = { version = "=0.1.1", path = "../velnor-actions-orchestrator-staged-validation" }
 velnor-actions-orchestrator-task-report = { version = "=0.1.1", path = "../velnor-actions-orchestrator-task-report" }
+velnor-actions-orchestrator-task-report-write = { version = "=0.1.1", path = "../velnor-actions-orchestrator-task-report-write" }
 velnor-actions-orchestrator-workflow-ir = { version = "=0.1.1", path = "../velnor-actions-orchestrator-workflow-ir" }
 velnor-actions-workflow-cache = { version = "=0.1.1", path = "../velnor-actions-workflow-cache" }
 velnor-actions-workflow-document = { version = "=0.1.1", path = "../velnor-actions-workflow-document" }
