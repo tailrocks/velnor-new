@@ -6,11 +6,28 @@ description: Velnor documentation.
 Velnor documentation lives here.
 
 - [Proposed V1 specification](/docs/proposed) — normative generator
-  contracts (batch 1 converted; pinned contracts land with their tests).
+  contracts, including the quality/test/dependency policy trio, the
+  adopted OpenTofu contract, and the execution/tooling/version
+  contracts (batch 2 converted with their test pins).
 - [Implemented work](/docs/implemented) — landed records, gates 0–8,
-  and the macOS Scale Set family.
+  the macOS Scale Set family, procedures (classification, deviations,
+  release gates, update procedure, verification triggers), and dated
+  evidence snapshots.
+- [Deferred runner work](/docs/deferred) — the deferred
+  self-hosted-execution roadmap, superseded by the macOS Scale Set
+  runner spec where they conflict.
+- [Reviews](/docs/reviews) — PR #1 feedback, adoption, and
+  disposition records plus the OpenTofu evidence ledger.
+- [Image contracts](/docs/images/dind) and the
+  [ubuntu-26.04 runner image](/docs/images/runner/ubuntu-26.04) —
+  container build/run contracts pinned by the runner test suite.
+- [Design references](/docs/references) — versioned upstream
+  sources behind the proposed and deferred specifications.
 - [Golden evidence](/docs/proposed/opentofu-goldens) — Rust-only
   golden bracket notes.
 
-Remaining families (`deferred/`, `reviews/`, dated evidence, pinned
-contracts) convert in later docs slices.
+Only the tool-interface slice remains: the root `README.md` /
+`AGENTS.md`, `.github/` agent instructions, and the three prose files
+they link (`docs/README.md`, the bootstrap/release contract, the
+subagent model policy). Test-data `README.md` files under
+`fixtures/` and the golden previews stay `.md` by design.
