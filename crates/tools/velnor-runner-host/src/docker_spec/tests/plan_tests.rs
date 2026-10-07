@@ -68,6 +68,14 @@ fn canary_is_found_in_env_cmd_labels_and_mounts() -> Result<(), HostError> {
     plan.mounts.push(Mount {
         source: format!("volume:{canary}"),
         target: "/mnt".to_owned(),
+        read_only: false,
+    });
+    assert!(plan_contains(&plan, canary));
+    plan.mounts.clear();
+    plan.image_mounts.push(crate::docker_spec::ImageMount {
+        image: canary.to_owned(),
+        subpath: "home/runner/bin".to_owned(),
+        target: "/home/runner/bin".to_owned(),
     });
     assert!(plan_contains(&plan, canary));
     Ok(())
@@ -156,11 +164,29 @@ fn official_runner_plan_keeps_jit_payload_out_of_docker_configuration() -> Resul
             "RUNNER_WAIT_FOR_DOCKER_IN_SECONDS=120".to_owned(),
         ]
     );
-    assert_eq!(plan.mounts.len(), 3);
-    assert_eq!(plan.mounts[0].target, "/run/docker");
+    assert!(plan.readonly_rootfs);
+    assert_eq!(plan.mounts.len(), 5);
+    assert_eq!(plan.mounts[0].target, "/home/runner");
     assert_eq!(plan.mounts[1].target, "/home/runner/_work");
     assert_eq!(plan.mounts[2].source, "volume:worker_a-externals");
     assert_eq!(plan.mounts[2].target, "/home/runner/externals");
+    assert!(plan.mounts[2].read_only);
+    assert_eq!(plan.mounts[3].target, "/run/docker");
+    assert_eq!(plan.mounts[4].target, "/tmp");
+    assert_eq!(
+        plan.image_mounts
+            .iter()
+            .map(|mount| mount.target.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "/home/runner/bin",
+            "/home/runner/run.sh",
+            "/home/runner/run-helper.sh.template",
+            "/home/runner/safe_sleep.sh",
+            "/home/runner/env.sh",
+            "/home/runner/config.sh",
+        ]
+    );
     assert_eq!(plan.security_opts, ["apparmor=velnor-runner".to_owned()]);
     assert_eq!(plan.group_add, ["2375".to_owned()]);
     let bootstrap = &plan.cmd[2];
@@ -186,5 +212,24 @@ fn official_runner_plan_keeps_jit_payload_out_of_docker_configuration() -> Resul
     let mut wrong_socket = runner_plan_for_profile("worker_a", &profile)?;
     wrong_socket.mounts[0].target = "/run".to_owned();
     assert_eq!(audit_plan(&wrong_socket), Err(HostError::ForbiddenMount));
+
+    let mut writable_root = runner_plan_for_profile("worker_a", &profile)?;
+    writable_root.readonly_rootfs = false;
+    assert_eq!(audit_plan(&writable_root), Err(HostError::ForbiddenMount));
+
+    let mut writable_externals = runner_plan_for_profile("worker_a", &profile)?;
+    writable_externals.mounts[2].read_only = false;
+    assert_eq!(
+        audit_plan(&writable_externals),
+        Err(HostError::ForbiddenMount)
+    );
+
+    let mut replaced_runner = runner_plan_for_profile("worker_a", &profile)?;
+    replaced_runner.image_mounts[0].image = "untrusted:latest".to_owned();
+    assert_eq!(audit_plan(&replaced_runner), Err(HostError::ForbiddenMount));
+
+    let mut escaping_mount = runner_plan_for_profile("worker_a", &profile)?;
+    escaping_mount.image_mounts[0].subpath = "home/runner/../../etc".to_owned();
+    assert_eq!(audit_plan(&escaping_mount), Err(HostError::ForbiddenMount));
     Ok(())
 }

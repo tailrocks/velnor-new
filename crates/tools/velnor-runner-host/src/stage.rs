@@ -5,12 +5,8 @@
 use bollard::Docker;
 
 use crate::HostError;
-use crate::docker_spec::{
-    DeleteDecision, RunnerImageProfile, delete_decision, runner_plan, runner_plan_for_profile,
-};
-use crate::worker::{
-    CreateProjection, dind_create, dind_create_for_profile, join_dind_net, runner_create,
-};
+use crate::docker_spec::{DeleteDecision, RunnerImageProfile, delete_decision, runner_plan};
+use crate::worker::{CreateProjection, dind_create, join_dind_net, runner_create};
 
 mod docker_engine;
 mod profile;
@@ -23,7 +19,7 @@ pub enum PairStop {
     Volumes,
     /// `DinD` exists and is not started.
     DindCreated,
-    /// `DinD` is running. The runner does not exist.
+    /// `DinD` is running. The profiled path may already have created the stopped runner.
     DindStarted,
     /// The runner exists and is not started.
     RunnerCreated,
@@ -195,13 +191,20 @@ async fn drive_inner_admitted<E: PairEngine, S: PairSink>(
     if jit.is_empty() {
         return Err(HostError::EmptyJit);
     }
-    let (runner_plan, dind) = match profile {
-        Some(profile) => (
-            runner_plan_for_profile(private_volume, profile)?,
-            dind_create_for_profile(private_volume, profile)?,
-        ),
-        None => (runner_plan(private_volume)?, dind_create(private_volume)?),
-    };
+    if let Some(profile) = profile {
+        return profile::drive_admitted(
+            engine,
+            private_volume,
+            jit,
+            stop,
+            sink,
+            profile,
+            *admission.ok_or(HostError::Config)?,
+        )
+        .await;
+    }
+    let runner_plan = runner_plan(private_volume)?;
+    let dind = dind_create(private_volume)?;
     let runner = runner_create(&runner_plan)?;
     sink.volume(private_volume).await?;
     engine

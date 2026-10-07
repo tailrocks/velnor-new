@@ -5,10 +5,19 @@ use bollard::Docker;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 
-use super::{WORKER, container_json, official_volume_names, volume_json, volume_names};
-use crate::docker_spec::resolve_runner_profile;
+use super::{WORKER, container_json, volume_json, volume_names};
+use crate::docker_spec::{resolve_runner_profile, runner_plan_for_profile};
 use crate::worker::{create_named_volumes, remove_worker_volumes, worker_id_for_name};
 use crate::{HostError, dind_create, dind_create_for_profile};
+
+fn profile_volume_names() -> [(&'static str, &'static str); 6] {
+    let mut names = super::official_volume_names().to_vec();
+    names.extend([
+        ("wtransport-home", "home-state"),
+        ("wtransport-tmp", "runner-temp"),
+    ]);
+    names.try_into().expect("the profile has six owned volumes")
+}
 
 #[tokio::test]
 async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
@@ -23,7 +32,7 @@ async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
     assert!(foreign_requests[0].starts_with("GET "));
 
     let mut responses = Vec::new();
-    for (name, role) in official_volume_names() {
+    for (name, role) in profile_volume_names() {
         responses.push(http(200, &volume_json(name, WORKER, role)));
         responses.push(http(204, ""));
         responses.push(http(404, r#"{"message":"missing"}"#));
@@ -33,13 +42,13 @@ async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
     let requests = owned.finish().await?;
 
     assert_eq!(removed, Ok(true));
-    assert_eq!(requests.len(), 12);
+    assert_eq!(requests.len(), 18);
     assert_eq!(
         requests
             .iter()
             .filter(|line| line.starts_with("DELETE "))
             .count(),
-        4
+        6
     );
     Ok(())
 }
@@ -74,9 +83,28 @@ async fn created_volumes_have_exact_worker_and_role_labels() -> Result<(), Strin
     Ok(())
 }
 
+#[test]
+fn legacy_volumes_keep_the_pre_rofs_catalog() -> Result<(), String> {
+    let plan = dind_create(WORKER).map_err(|error| error.to_string())?;
+    let catalog = super::super::volumes_for_mounts(WORKER, &plan.mounts)
+        .map_err(|error| error.to_string())?;
+    let observed = catalog
+        .iter()
+        .map(|volume| (volume.name.as_str(), volume.role))
+        .collect::<Vec<_>>();
+
+    assert_eq!(observed, volume_names());
+    assert!(
+        observed
+            .iter()
+            .all(|(_, role)| !matches!(*role, "externals" | "home-state" | "runner-temp"))
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn official_profile_creates_the_shared_externals_volume() -> Result<(), String> {
-    let expected = official_volume_names();
+    let expected = profile_volume_names();
     let responses = expected
         .iter()
         .map(|(name, role)| http(201, &volume_json(name, WORKER, role)))
@@ -93,7 +121,11 @@ async fn official_profile_creates_the_shared_externals_volume() -> Result<(), St
     );
     assert_eq!(plan.mounts[1].target, "/home/runner/_work");
     assert_eq!(plan.mounts[2].target, "/home/runner/externals");
-    let created = create_named_volumes(&stub.docker, WORKER, &plan.mounts).await;
+    let mut mounts = runner_plan_for_profile(WORKER, &profile)
+        .map_err(|error| error.to_string())?
+        .mounts;
+    mounts.extend(plan.mounts);
+    let created = create_named_volumes(&stub.docker, WORKER, &mounts).await;
     let requests = stub.finish().await?;
 
     assert_eq!(created, Ok(()));
