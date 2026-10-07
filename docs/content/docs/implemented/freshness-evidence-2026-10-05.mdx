@@ -1,0 +1,107 @@
+---
+title: "Freshness evidence — 2026-10-05"
+description: "This page records two separate observations: the hosted-runner identity check and the tool/action release-metadata check. The latter updates observation metadata only; it does not qualify a new tool, action, or cache route."
+---
+
+This page records two separate observations: the hosted-runner identity check
+and the tool/action release-metadata check. The latter updates observation
+metadata only; it does not qualify a new tool, action, or cache route.
+
+## Hosted runner
+
+The [GitHub-hosted runners reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
+was rechecked on 2026-10-05. Its public and private standard-runner tables
+still list ubuntu-26.04, ubuntu-24.04, and ubuntu-22.04, matching the
+inventory's supported labels and unchanged ubuntu-26.04 default.
+
+Protected-main [CI run 37300188152](https://github.com/tailrocks/velnor-new/actions/runs/37300188152)
+completed successfully at head 2d9bca8a37b0440e29a3520aa03e77752079f400.
+Its successful [Rust / velnor-actions-cli job](https://github.com/tailrocks/velnor-new/actions/runs/37300188152/job/111731481419)
+started at 2026-10-05T11:02:45Z. The runner log records Ubuntu 26.04.1,
+image ubuntu-26.04, image version 20260927.149.1, runner version 2.337.0,
+and [image release ubuntu26/20260927.149](https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20260927.149).
+The retained log is /tmp/velnor-pr75-cli-111731481419.log (SHA-256
+3eae40aa0fd8203775391ecbd8550bc6acd15c6db2ddac68b30d0ae05abc28be). The
+job checked out source head 2d9bca8a37b0440e29a3520aa03e77752079f400; this
+runner observation is separate from the d435ac5 inventory source below. It
+is a runtime image observation only; it is not a formal Qualification run.
+
+## Tool and action releases
+
+Replacement A/B observations were captured from the exact inventory at main
+d435ac5b7e686ad9c9c594dde4b024b702435e47 (tree
+32b2bad140a9bc00d3daa7d0e54993c995fabc97). The source inventory blob is
+7807bf94f5f3ea32e93a242b16d1e1d7ad7b5eb5; its SHA-256 is
+ea12f4c9dd41a194d90dc9b92d22bae54e5ac4af4ab5799992fff75275fb72c6. The
+collector /private/tmp/velnor-capture-upstream-d435-v2.py has SHA-256
+6f5cbd14bee1a6a1a6842c6d7bb19be840e53f7614bb0e72a1d161be45fbeac0. It
+made unauthenticated, sequential HTTPS requests with the repository probe's
+10-second timeout and 512-KiB body cap. It retained status, final URL, selected
+response headers, the manifest requested_at value recorded after body read and
+parse (not a request-start time), persisted body length/hash, truncation status,
+and parsed latest version for each source. The capture directory and raw
+responses remain at /private/tmp/velnor-pr75-captures-d435-20261005-r2/.
+
+Capture A ran from 2026-10-05T12:21:25Z through 12:21:38Z. Its manifest
+A/manifest.json has SHA-256
+7b038374d3eca856457aa8044f6273785d13120835c58baaecdafe8d53e212e5; parsed
+table A/parsed-table.json has SHA-256
+e48a110cca8b04da021feb594bc55cde487c7fbed251a313d9ea44026489d5f7.
+Capture B ran from 2026-10-05T12:26:36Z through 12:26:50Z; its manifest
+B/manifest.json has SHA-256
+09c1e54500c68871599ae56c969dde5282af3e10ef7f9269876bfa957fb40ce0; parsed
+table B/parsed-table.json has SHA-256
+d3f727c61f294a4afd26e4193728f8f022eb7e6b0b44c989d6a45e0932fc78ec. All 18
+source requests returned HTTP 200. The two captures' latest values match
+row-by-row across all 19 inventory rows; the manifest and table files have
+different hashes because they identify separate captures and times. The raw
+response paths and persisted-byte hashes are recorded in each manifest.
+
+The stable Rust channel response advertised a Content-Length of 943,486
+bytes. Each capture retained the first 524,288 bytes, with
+truncated_to_cap: true; SHA-256
+af513485c004f709556925f707785a659595a655014b3b616df29d2d6afbadff hashes
+that persisted prefix, not the full upstream response. In both prefixes, byte
+offset 80,035 (raw line 1,759) contains [pkg.rust] followed by
+version = "1.99.0 (b940084d7 2026-09-28)". The repository parser at
+scripts/check-freshness.sh:1078-1082 selects that table's version; it does not
+select the earlier [pkg.cargo] version. The prefix includes the complete field
+used by the parser.
+
+The initial collector attempt is retained separately at
+/private/tmp/velnor-pr75-capture-A.log (SHA-256
+f9bb5dccca58f7307aa15b956c31050e51cbb45ca4b7c05301709035b5e9bc46). It
+failed when the Rust channel response exceeded the configured cap and is not
+counted as an observation. The earlier revision's cited A/B capture artifacts
+were unavailable for independent revalidation; this replacement pair does not
+claim to verify those earlier hashes.
+
+| Inventory row | Latest observed | Disposition |
+| --- | --- | --- |
+| tool mise | v2026.10.3 | held at 2026.9.18 under #6 |
+| tool rust | 1.99.0 | held at 1.98.1 under #6 |
+| tool mr-boxington | v1.22.0 | held at 1.21.1 under #29 |
+| tool gh | v2.102.0 | matches pin |
+| tool actionlint | v1.7.12 | matches pin |
+| tool shellcheck | v0.11.0 | matches pin |
+| tool zizmor | v1.30.1 | matches pin |
+| tool nextest | 0.9.146 | matches pin |
+| tool opentofu | v1.13.1 | matches pin |
+| tool release-plz | 0.3.169 | matches pin |
+| action jdx/mise-action | v5.1.1 | held at v5.0.0 under #6 |
+| action actions/checkout | v7.0.1 | matches pin |
+| action actions/download-artifact | v8.0.1 | matches pin |
+| action actions/upload-artifact | v7.0.1 | matches pin |
+| action actions/cache/restore | v6.1.0 | matches pin |
+| action actions/cache/save | v6.1.0 | matches pin |
+| action jdx/mr-boxington-action | v1.7.1 | held at v1.6.0 under #29 |
+| action asamarts/alint | v0.17.0 | held at v0.16.1 under #6 |
+| action Swatinem/rust-cache | v2.9.2 | matches pin |
+
+The 13 current rows still match their pins, and all six existing held rows
+remain held with the same pin, qualified version/SHA, exception owner, issue,
+and expiry. The captured latest values match the PR75 inventory; no version,
+qualification, or hold was promoted by this follow-up. Inventory checked_at
+values for these 19 tool/action rows and the top-level inventory are set to the
+end of Capture B, 2026-10-05T12:26:50Z. The hosted-runner row retains its
+separate observation time.

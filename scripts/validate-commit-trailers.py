@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-POLICY = ROOT / "docs/implemented/codex-agent-configuration.md"
+POLICY = ROOT / "docs/content/docs/implemented/codex-agent-configuration.mdx"
 TRAILER_LABEL = re.compile(r"^(co-authored-by|signed-off-by)\b", re.IGNORECASE)
 IDENTITY = re.compile(
     r"repository-local identity `(?P<name>[^`]+) <(?P<email>[^`]+)>`"

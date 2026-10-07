@@ -162,7 +162,7 @@ fn override_unknown_action_rejected() {
 #[test]
 fn override_alint_approved_pair_rejected() {
     // The Alint pin is policy-owned, not consumer-overridable
-    // (docs/proposed/version-policy.md §2 (GitHub Action defaults)).
+    // (docs/content/docs/proposed/version-policy.mdx §2 (GitHub Action defaults)).
     let mut catalog = ApprovedPinCatalog::new();
     assert!(matches!(
         catalog.insert("asamarts/alint", ALINT_ACTION_SHA, ALINT_ACTION_VERSION),

@@ -158,7 +158,7 @@ fn rq11_repo_shape_files_present() {
 
 #[test]
 fn rq41_deviation_and_no_enforcement() -> Result<(), Box<dyn Error>> {
-    let deviations = read("docs/implemented/deviations.md")?;
+    let deviations = read("docs/content/docs/implemented/deviations.mdx")?;
     assert!(
         deviations.contains("RQ-4.1"),
         "SHOULD deviation must be recorded"
@@ -180,7 +180,7 @@ fn rq41_deviation_and_no_enforcement() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn rq42_classification_registry_complete() -> Result<(), Box<dyn Error>> {
-    let registry = read("docs/implemented/classification.md")?;
+    let registry = read("docs/content/docs/implemented/classification.mdx")?;
     assert!(
         registry.contains("Adding a row requires"),
         "new rows must require review (no escape hatch)"
@@ -220,7 +220,7 @@ fn rq42_classification_registry_complete() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn rq52_counts_and_classification() -> Result<(), Box<dyn Error>> {
-    let registry = read("docs/implemented/classification.md")?;
+    let registry = read("docs/content/docs/implemented/classification.mdx")?;
     assert!(
         registry.contains("physical lines including comments and"),
         "counts must include comments"
@@ -248,7 +248,7 @@ fn rq52_counts_and_classification() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn rq53_limits_discipline_no_baseline() -> Result<(), Box<dyn Error>> {
-    let procedure = read("docs/implemented/update-procedure.md")?;
+    let procedure = read("docs/content/docs/implemented/update-procedure.mdx")?;
     for clause in [
         "may raise a §5 limit",
         "arbitrary exclusion",
@@ -320,7 +320,8 @@ fn rq66_rustfmt_baseline() -> Result<(), Box<dyn Error>> {
         .count();
     assert_eq!(live, 3, "rustfmt.toml must hold exactly 3 stable settings");
     assert!(
-        read("docs/implemented/update-procedure.md")?.contains("cargo fmt --all -- --check"),
+        read("docs/content/docs/implemented/update-procedure.mdx")?
+            .contains("cargo fmt --all -- --check"),
         "qual procedure must run the fmt check"
     );
     Ok(())

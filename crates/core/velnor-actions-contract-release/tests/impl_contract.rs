@@ -228,7 +228,7 @@ fn actions_overrides_validate_allowlist_and_pin_shape() {
             pin("9f9d34ba0eae3888299b9e570f43338b0e7f2cdb", "v0.16.1"),
         )]),
     };
-    // Alint pin is policy-owned, not overridable (version-policy.md §2, GitHub Action defaults).
+    // Alint pin is policy-owned, not overridable (version-policy.mdx §2, GitHub Action defaults).
     assert!(matches!(
         alint.validate("cfg"),
         Err(ContractError::Config { problem, .. }) if problem == "unknown_action"
