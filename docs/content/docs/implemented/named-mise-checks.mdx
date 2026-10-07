@@ -1,0 +1,315 @@
+---
+title: "Named Mise checks"
+description: "Status: implementation contract for the current integration. This document does not establish release publication, live runner qualification, or full gate completion. V1 remains a workflow generator;"
+---
+
+Status: implementation contract for the current integration. This document does
+not establish release publication, live runner qualification, or full gate
+completion. V1 remains a workflow generator; runner provisioning and the
+`actions/runner` protocol remain deferred.
+
+## Configuration
+
+Schema 1 accepts top-level `[[checks]]` entries in `.velnor/config.toml`.
+Configured named checks are mandatory. `stacks.ignore` accepts detector-based
+Rust and Tofu stack IDs; `ignore = ["mise"]` is rejected even when no checks are
+declared. Explicit checks are removed by removing their declarations.
+Each entry creates an independent `stack/mise/<id>/check/default` obligation
+and `check-<id>` job. IDs must be unique. There is no custom argv, environment,
+plugin URL, command, or YAML field. The obsolete Rust `custom_tasks` option is
+removed.
+
+Example profiles below assume matching native tasks and declared input files
+exist. Every `tools` entry references an explicit root `qualified_tools` ID;
+there is no fallback to a built-in catalog name or consumer version selector.
+See [Qualified check tools](/docs/implemented/qualified-check-tools) for the frozen acquisition
+and proof contract. Existing Rust/OpenTofu adapter catalog selection is separate
+and unchanged. Pure native profiles use `tools = []`: Mise itself is always
+pinned in their toolchain identity. Native Swift and Xcode installations
+use exact `system_tools` declarations, verified through fixed system probes.
+Tasks emit evidence for their actual scenarios.
+
+The Swift/Xcode pins below illustrate one observed host installation; they are
+not universal hosted-runner defaults. Set pins to the exact installation your
+runner supplies. A different version or build fails the check.
+Container entries below are schema templates: replace every angle-bracket value
+with a measured identity from the declared existing installation. These
+placeholders are deliberately invalid admission data, not qualification proof.
+
+```toml
+schema = 1
+
+[[checks]]
+id = "swift-ffi"
+task = "test:swift-ffi"
+directory = "."
+inputs = ["Package.swift", "scripts/test-swift-ffi.sh"]
+tools = []
+system_tools = [
+  { kind = "swift", version = "6.4", build = "swiftlang-6.4.0.34.1 clang-2100.3.34.1" },
+  { kind = "xcode", version = "27.0", build = "27A266a" },
+]
+timeout_minutes = 30
+[checks.runner]
+label = "macos-15"
+platform = "macos_arm64"
+executor = "hosted"
+[checks.evidence]
+path = "evidence/swift-ffi.json"
+expected_scenarios = ["ffi-call", "swift-tests"]
+
+[[checks]]
+id = "production-container"
+task = "test:production-container"
+inputs = ["Dockerfile", "scripts/test-production-container.sh"]
+tools = []
+[checks.runner]
+label = "ubuntu-26.04"
+platform = "linux_x64"
+executor = "hosted"
+[checks.runner.container]
+provider = "docker"
+context = "default"
+socket_path = "<canonical local Unix socket path>"
+socket_uid = 0
+cli = { path = "<canonical Docker executable path>", sha256 = "<measured Docker SHA-256>", version = "<observed CLI version>", build = "<observed CLI build>" }
+daemon = { version = "<observed server version>", platform = "linux_x64", operating_system = "<exact reported OS description>", identity_policy = "execution_scoped" }
+[checks.evidence]
+path = "evidence/production-container.json"
+expected_scenarios = ["production-build", "production-smoke"]
+
+[[checks]]
+id = "orbstack-container"
+task = "test:orbstack-container"
+inputs = ["Dockerfile", "scripts/test-orbstack-container.sh"]
+tools = []
+[checks.runner]
+label = "native-macos-checks"
+platform = "macos_arm64"
+executor = "ephemeral_self_hosted"
+[checks.runner.container]
+provider = "orb_stack"
+context = "ci-orbstack"
+socket_path = "/Users/ci/.orbstack/run/docker.sock"
+cli = { path = "<canonical Docker executable path>", sha256 = "<measured Docker SHA-256>", version = "<observed CLI version>", build = "<observed CLI build>" }
+daemon = { version = "<observed server version>", platform = "linux_arm64", operating_system = "OrbStack", identity_policy = "execution_scoped" }
+[checks.runner.container.sdk]
+app_bundle_path = "<canonical outer app path>"
+bundle_id = "<observed outer bundle ID>"
+team_id = "<verified signing Team ID>"
+version = "<observed outer app version>"
+build = "<observed outer app build>"
+info_plist_sha256 = "<measured outer Info.plist SHA-256>"
+main_executable_path = "<outer-relative main executable path>"
+main_executable_sha256 = "<measured outer executable SHA-256>"
+cli_bundle_path = "<canonical contained signed CLI app path>"
+source_tree_sha256 = "<measured original CLI tree SHA-256>"
+owned_tree_sha256 = "<measured normalized owned CLI tree SHA-256>"
+cli_relative_path = "<nested-relative CLI executable path>"
+cli_sha256 = "<measured CLI executable SHA-256>"
+cli_version = "<observed CLI product version>"
+cli_build = "<observed CLI numeric build>"
+cli_commit = "<observed CLI commit SHA>"
+runtime_dir = "/Users/ci/.orbstack/run"
+runtime_uid = 501
+[checks.evidence]
+path = "evidence/orbstack-container.json"
+expected_scenarios = ["production-build", "production-smoke"]
+```
+
+`directory` defaults to `.`; timeout defaults to 30 minutes and accepts 1–360.
+Inputs must be nonempty and unique; tool IDs must be unique. Select an explicitly
+declared qualified Rust tool ID when a task needs Rust for FFI fixtures or
+helpers. Non-Rust qualified tools requiring Cargo source installation, exposing
+`cargo`/`rustc`, or declaring Nextest/Rustc probes must declare exactly one direct
+qualified Rust prerequisite, with complete platform
+coverage; see the qualified-tool admission contract. Evidence is optional for
+a plain command obligation. When declared, its JSON path and
+nonempty, sorted, unique expected scenario IDs are mandatory. Paths are
+repository-relative; path
+escapes and unsupported name syntax fail validation. The task configuration
+itself becomes an additional identity input. `system_tools` defaults to empty;
+its closed kinds are `swift` and `xcode`, sorted uniquely in that order. Native
+tool pins require a macOS platform and exact version/build strings. They
+describe existing installations, never install sources or arbitrary commands.
+
+## Placement, admission, and Required
+
+Platforms are `linux_x64`, `macos_arm64`, and `macos_x64`. Hosted labels must
+match the explicit platform's release target. An ephemeral executor uses one
+explicit custom label; generic `self-hosted`, floating labels, expressions,
+and hosted catalog labels are rejected.
+
+Ephemeral jobs admit push, merge-group, and same-repository pull-request events
+only. Fork pull requests and unknown event classes cannot allocate these
+runners. Admission does not remove the obligation from Required: a job that
+does not run supplies no passing proof, and final aggregation fails closed.
+Jobs depend on the plan, carry an empty permissions override, and always
+attempt report upload. The ordinary Required inventory and final fold cover
+every configured check, alongside Rust and OpenTofu obligations.
+
+`runner.container` is an optional typed host profile, tagged `docker` or
+`orb_stack`. The former capability-name/context fields are removed completely.
+A declared profile binds its explicit context, canonical Docker CLI path,
+executable SHA-256, CLI version/build, and exact daemon version, Linux platform,
+operating-system description, and absolute local Unix `socket_path`. The context
+must resolve to that declared socket. Docker profiles support Linux hosted or
+ephemeral runners; macOS Docker requires ephemeral placement. OrbStack profiles
+require a macOS ephemeral runner. The daemon's `linux_x64` or `linux_arm64`
+identity is separate from the native check runner platform; a Linux daemon
+does not establish native Darwin execution.
+
+Docker requires an explicit `socket_uid`; zero is valid for a root-owned Linux
+socket. The example's zero is illustrative and must match the declared socket
+owner. It has no optional/default/wildcard form. OrbStack uses the SDK's positive
+`runtime_uid` as its expected socket UID. Runtime observation and the mandatory
+receipt must match that declared UID exactly; HOME ownership cannot infer it.
+
+OrbStack additionally binds the signed outer app identity and contained signed
+CLI bundle, separate outer/CLI version/build identities, executable and plist
+SHA-256 values, original CLI source-tree and normalized owned-tree SHA-256, and
+an explicit canonical `runtime_dir` ending in `/.orbstack/run`, and a positive
+`runtime_uid`. The example's UID 501 is illustrative and must match the runtime
+owner; its socket must be an immediate child of the declared runtime directory.
+Source/owned SDK tree hashes bind full permission mode as well as path, entry
+kind, file bytes, and contained link target; they use the SDK-specific tree
+recipe rather than the qualified-tool executable-mode recipe. The retained CLI uses a private HOME with
+only the narrow `.orbstack/run` connection to that declared existing socket
+directory. Runtime probes require the declared daemon identity and exact CLI
+status `Running`. They do not read the full ambient HOME, resolve CLI authority
+from ambient PATH, start a daemon, or install an app. Context metadata excludes
+Docker authentication configuration. A mandatory capability receipt binds these
+observations; final aggregation compares it against the declared host profile.
+Daemon identity policy is `execution_scoped`: the initial fixed observation
+must supply a nonempty daemon ID, which stays identical through the pre-task
+and post-task observations and receipt. This avoids declaring one fixed daemon
+ID for every member of an ephemeral fleet while detecting daemon replacement
+during a check.
+
+Consumer jobs acquire the versioned helper for their explicit platform from
+the pinned release manifest, verify SHA-256, and stage the helper. Linux uses
+`sha256sum`; Darwin uses `shasum -a 256`. Mise setup uses the platform-specific
+pinned binary checksum. Missing platform assets fail generation. These paths
+do not prove that matching release assets have already been published.
+
+## Task discovery and execution
+
+Planning statically reads exactly one `mise.toml` or `.mise.toml` in the task
+directory; it executes no task or config code. Supported tasks are ordinary
+`[tasks.<name>]` tables with static names and dependency references. Native
+Mise owns execution of its dependency graph. Includes, file-task discovery,
+nested task tables, dynamic templates, missing references, and unsupported task
+fields fail explicitly rather than being approximated.
+
+Execution rechecks the checkout, source configuration, declared input bytes,
+plan obligation, matrix entry, and host OS/architecture. The orchestrator runtime
+constructs a temporary task-only projection outside the checkout, preserves
+native dependency relationships, and binds tasks to the declared repository
+directory. It removes native `sources` and `outputs` freshness shortcuts.
+Projection bytes are revalidated before invocation; original config files are
+not rewritten. The orchestrator owns materialization, temporary homes, and
+cleanup. Mise remains a read-only inspection and subprocess adapter, returning
+typed projection/command data without owning temporary-file writes. This keeps
+the existing tooling ownership boundary.
+
+Named checks execute through the staged helper directly and measure task
+duration with Rust `Instant`. They may run on Linux or macOS. The GNU `date`
+millisecond wrapper used by ordinary workflow task jobs is restricted to the
+Ubuntu-only generic workflow runner catalog and is not used for named checks.
+
+Tool preparation uses frozen qualified acquisition recipes over owned verified
+archives and prefixes. Archive and dependency SHA-256, full installed-tree
+SHA-256, executable SHA-256, and typed exact version probes must all match the
+explicit platform declaration. No ordinary Mise backend install, ambient
+plugin/settings lookup, source fallback, or `--tool` activation authorizes a
+check tool. Verified prefixes are linked locally and their executables exposed
+through the owned PATH. The dedicated qualified-check constructor exposes only
+the task projection to execution, with env-file loading, hooks, auto-install,
+and task cache disabled. Before any Mise invocation, the helper verifies its
+platform binary SHA-256 and copies those exact bytes to a fixed owned path;
+version probing additionally checks the release. Task invocation uses that
+copy with `run --force --task-cache off --skip-tools`.
+
+The child environment is cleared, apart from the existing proxy passthrough
+contract and explicit overlays. HOME, XDG, Mise, Cargo, Rustup, PATH, and Docker
+context state use isolated homes; parent credentials and user/global config
+are not inherited. Native verification captures `/usr/bin/xcode-select -p`
+once, canonicalizes the selected developer directory, and freezes it as
+`DEVELOPER_DIR` for subsequent `/usr/bin/xcrun`, `/usr/bin/xcodebuild`, and task
+execution. Swift observation binds its discovered executable, complete compiler
+build tuple, and native target; Xcode binds its version and build. Proofs record
+the declared pins, observed identities, developer directory, and probe-output
+digests. Mismatched pins, host architecture, or developer selection fail closed.
+Task code receives `VELNOR_CHECK_ID`, `VELNOR_CHECK_HEAD`,
+and `VELNOR_CHECK_PLATFORM` for evidence production. Repository task bodies
+still execute arbitrary repository code: this is an environment boundary,
+not a filesystem or daemon sandbox. One absolute task deadline starts before
+check preparation and covers container and system-tool probes, tool acquisition,
+the task, and the independent pre-task and post-task container observations.
+Archive decoding, extraction, installed-tree walks and hashes also check the
+same deadline as they process bounded chunks. TAR admission scans the decoded
+stream before the TAR library parses entries; GNU long-name/link and PAX
+metadata is limited to 64 KiB per entry, 64 entries, and 1 MiB in total. Every
+subprocess receives only the remaining budget; output is bounded. Timings use
+the helper's Rust clock, not GNU-only `date` behavior.
+
+## Scenario evidence
+
+The task creates a fresh declared JSON file. A preexisting file is rejected
+before execution, and symlink path components are rejected. For the first
+example, the producer payload is:
+
+```json
+{
+  "schema": 1,
+  "source": "mise-task-v1",
+  "head": "<checked-out commit SHA>",
+  "check_id": "swift-ffi",
+  "platform": "macos_arm64",
+  "scenarios": [
+    {"id": "ffi-call", "executed": true, "status": "passed"},
+    {"id": "swift-tests", "executed": true, "status": "passed"}
+  ]
+}
+```
+
+Unknown fields, duplicate JSON keys, wrong source/head/check/platform,
+duplicate or unexpected scenario IDs, missing scenarios, `executed: false`,
+and failed or skipped statuses fail verification. Exit zero does not override
+invalid evidence. Producers must set `executed` and `status` from actual
+scenario outcomes; structural validation cannot independently establish the
+truthfulness of arbitrary repository test code.
+
+The helper saves validated evidence bytes, a digest-bound evidence receipt,
+and a plan-bound `check-execution.json` receipt with the normal task/matrix
+reports. The execution receipt also carries observed native tool proofs and
+qualified acquisition/executable proofs.
+Configuration admission computes a worst-case serialized receipt from each
+check's selected qualified-tool closure, probe declarations, container profile,
+and evidence scenarios. Checks whose receipt could exceed the existing 1 MiB
+staged-report reader limit are rejected before execution, so an otherwise
+successful check always remains readable by final aggregation.
+Final aggregation independently verifies the downloaded bytes, receipt
+identities, native and qualified tool proofs against the exact declarations,
+the mandatory container capability receipt against its typed profile, the
+exact expected scenario set, and declared task outputs.
+Each successful named obligation needs exactly one execution proof; missing,
+duplicate, or foreign proofs fail Required.
+
+## No result reuse
+
+Named checks are opaque: declared inputs bind identity but do not prove a
+complete input closure. Compilation reuse, task-result reuse, native Mise
+task caching, reusable artifact publication, and trusted-baseline coverage
+are disabled. Every configured check remains an Execute obligation even when
+source inputs are unchanged. Reused or empty-partition reports for named
+checks are rejected at the final fold.
+
+## Recorded host observation scope
+
+A current host observation exercised a copied signed CLI bundle under a fresh
+private HOME with an explicit narrow runtime-directory connection. The copied
+CLI reported `Running`; copied Docker connected to an existing Linux OrbStack
+daemon. This establishes that connection shape on that observed host only. It
+does not establish execution of the example scenarios, native test coverage,
+generated CI success, or release publication.

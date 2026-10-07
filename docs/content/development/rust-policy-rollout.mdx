@@ -911,3 +911,249 @@ stays generator-owned.
 | Total (32 passing · 5 failing → 33 passing · 4 failing) | 21 | 19 | −2 |
 
 Helper gaps: 2 → 0 (`check-gaps` exit 0, empty output).
+
+## Slice 12: close native size/tests findings (2026-10-07)
+
+- Scope: the 13 native file findings only —
+  `size-lib-main-150` ×6, `size-file-400` ×3,
+  `tests-dir-present` ×4. `ci-build-runs-on` ×6 untouched
+  (generator-owned, Phase 4). Eight code commits (V1–V8) plus
+  this record, each pushed immediately with a per-commit
+  nextest test-ID bijection at 0 dropped.
+- Unit-suite splits (canonical `mod <case>;` +
+  `tests/<case>.rs`, fixtures `pub(super)` in the index, test
+  bodies verbatim): apparmor `tests.rs` 261 → 28 + modes 71 +
+  identity 170; host-config `config/tests.rs` 220 → 28 +
+  binding 102 + trust 96 and `config_file/tests.rs` 212 →
+  115 + lifecycle 102; cli `args/tests.rs` 161 → 62 +
+  connect-args 104 and `daemon_run/tests.rs` 163 → 114 +
+  linux 53; host `keychain/tests.rs` 258 → 92 + linux-secret
+  170 (Linux items type-checked via temporary ungate, gates
+  restored byte-exact).
+- `size-file-400` splits: cli `connect_tests.rs` 428 → common
+  132 + connect 164 + guard 141; github `actions.rs` 406 →
+  329 + `fork_workflows.rs` 89 (production move: fork-settings
+  family re-exported through `actions`, crate-root API
+  unchanged); plan `impl_prepare_generate.rs` 401 → 273 +
+  `impl_plan_fetch.rs` 135 (fetch trio + helper, registered in
+  `tests/main.rs`).
+- New `tests/` dirs (runner autodiscovery, one file each, no
+  new deps): apparmor `admission.rs` (2 fail-closed cases),
+  docker-spec `plan_contract.rs` (3), host-config
+  `config_contract.rs` (3), journal `durability.rs` (2 async,
+  existing tokio dev-dep).
+- Tests: workspace 3947 → 3957 IDs (10 new integration, 0
+  dropped; multiset-equal otherwise). Per package: apparmor
+  13 → 15, docker-spec 12 → 15, host-config 13 → 16, journal
+  22 → 24, cli 43 → 43, host 69 → 69, github 78 → 78
+  (byte-identical), plan 43 → 43. Final 8-package run 303/303
+  pass. Repo-policy pin suite: base 19 failed → 18 failed
+  (full `--no-fail-fast` both sides; `size_limits_hold` fixed
+  by the V8 split, 0 new failures — the rest are pre-existing
+  tree drifts).
+- Gates per commit: `cargo fmt`, `cargo check --locked`,
+  package nextest run, clippy clean on touched files,
+  `check-gaps` 0 throughout, `alint check` stepping 19 → 6.
+
+### Before/after counts (slice 12)
+
+| Rule ID | Before | After | Δ |
+|---|---|---|---|
+| `size-lib-main-150` | 6 | 0 | −6 (V1, V3, V5, V6) |
+| `size-file-400` | 3 | 0 | −3 (V5, V7, V8) |
+| `tests-dir-present` | 4 | 0 | −4 (V1–V4) |
+| `ci-build-runs-on` | 6 | 6 | 0 (generator-owned, untouched) |
+| `policy-gaps` | 0 | 0 | 0 |
+| Total (33 passing · 4 failing → 36 passing · 1 failing) | 19 | 6 | −13 |
+
+Helper gaps: 0 → 0 (`check-gaps` exit 0, empty output).
+
+## Docs slice 1: prose inventory + docs-app skeleton (2026-10-07)
+
+- Re-enumerated every tracked `.md` at `caa63bec6`:
+  `git ls-files '*.md'` = **115 entries**, matching the audit count.
+  `plans/` does not exist (0 entries). Working tree clean, no untracked `.md`.
+- Classes: **MDX** = authored prose converting to `docs/content/` MDX;
+  **TOOL** = tool-interface allowlist, stays `.md` at its fixed path;
+  **TEST** = test data (fixture inputs, golden bytes), stays;
+  **DEL** = delete with evidence.
+- TOOL set (5, derived from repo evidence — agent/CI consumers plus the
+  `docs-root-only-allowed` root allowlist): root `AGENTS.md` + `CLAUDE.md`
+  symlink (agent instructions, content pinned by `impl_repo_quality`);
+  root `README.md` (render/package interface); `.github/AGENTS.md` +
+  `CLAUDE.md` symlink (generator-emitted agent instructions,
+  `AGENTS_MD_PATH` in `contract-release/src/formats.rs`).
+- TEST set (30): all 20 `fixtures/*/README.md` (presence required by
+  `rq52_counts_and_classification`, contents walked as test inputs) +
+  the 10 golden `preview/.github/{AGENTS,CLAUDE}.md` under
+  `docs/proposed/opentofu-goldens/cases/` (pinned by `MANIFEST.sha256`,
+  asserted by `impl_repo_goldens` + `capture-opentofu-goldens.sh check`).
+- MDX set (80): all other prose, including the goldens `README.md`
+  (bracket documentation, not golden bytes). 12 are test-pinned and must
+  move together with their call sites in the conversion slice:
+  `classification`, `deviations`, `release-gates`, `update-procedure`,
+  `verification-triggers`, `codex-agent-configuration` (also read by the
+  `validate-commit-trailers.py` tool), `opentofu-contract`,
+  `rust-quality-contract`, `rust-test-policy`, `rust-dependency-policy`,
+  and both `images/*/README.md` (`include_str!` in
+  `runner_image_contract.rs`). Cross-cutting: `agents_stays_lean`
+  requires root `AGENTS.md` to keep pointing at `docs/proposed` and
+  `opentofu-contract.md` (or the test moves with the content).
+- DEL set (0): every `.md` has a live reader (prose consumer, tool, or
+  test); dated evidence files convert as historical records. No
+  orphan or duplicate found; deletion decisions belong to a later
+  curation slice, not this inventory.
+
+### Counts (docs slice 1)
+
+| Class | Count |
+|---|---|
+| convert-to-MDX | 80 |
+| tool-interface-allowlist | 5 |
+| test-data | 30 |
+| delete-with-evidence | 0 |
+| **Total** | **115** |
+
+Per-directory: root 3, `.github/` 2, `docs/` 2,
+`docs/deferred/` 2, `docs/implemented/` 45, `docs/proposed/` 33
+(22 prose + 11 goldens), `docs/reviews/` 6, `fixtures/` 20, `images/` 2.
+
+### Full inventory (115 entries)
+
+| Path | Class | Notes |
+|---|---|---|
+| `.github/AGENTS.md` | TOOL | stays .md at fixed path |
+| `.github/CLAUDE.md` | TOOL | stays .md at fixed path |
+| `AGENTS.md` | TOOL | stays .md at fixed path |
+| `CLAUDE.md` | TOOL | stays .md at fixed path |
+| `docs/deferred/README.md` | MDX |  |
+| `docs/deferred/self-hosted-runner.md` | MDX |  |
+| `docs/implemented/cache-measurements.md` | MDX |  |
+| `docs/implemented/classification.md` | MDX | test-pinned; update call sites on convert |
+| `docs/implemented/codex-agent-configuration.md` | MDX | tool-read (validate-commit-trailers.py) + test-pinned |
+| `docs/implemented/commit-trailer-evidence.md` | MDX |  |
+| `docs/implemented/deviations.md` | MDX | test-pinned; update call sites on convert |
+| `docs/implemented/fork-pr-trust-model.md` | MDX |  |
+| `docs/implemented/freshness-evidence-2026-10-04.md` | MDX |  |
+| `docs/implemented/freshness-evidence-2026-10-05.md` | MDX |  |
+| `docs/implemented/gate-0-repository-contract.md` | MDX |  |
+| `docs/implemented/gate-1-init-inventory-plan.md` | MDX |  |
+| `docs/implemented/gate-2-deterministic-generator.md` | MDX |  |
+| `docs/implemented/gate-3-execution-visible-jobs.md` | MDX |  |
+| `docs/implemented/gate-4-tool-compilation-reuse.md` | MDX |  |
+| `docs/implemented/gate-5-trusted-baseline.md` | MDX |  |
+| `docs/implemented/gate-6-task-result-reuse.md` | MDX |  |
+| `docs/implemented/gate-7-parallel-fanout.md` | MDX |  |
+| `docs/implemented/gate-8-dogfooding.md` | MDX |  |
+| `docs/implemented/gate-class-variances.md` | MDX |  |
+| `docs/implemented/gate-qualification-t28.md` | MDX |  |
+| `docs/implemented/macos-scaleset/checklist.md` | MDX |  |
+| `docs/implemented/macos-scaleset/decisions.md` | MDX |  |
+| `docs/implemented/macos-scaleset/evidence.md` | MDX |  |
+| `docs/implemented/macos-scaleset/legacy-disposition.md` | MDX |  |
+| `docs/implemented/macos-scaleset/runner-work-volume-proof.md` | MDX |  |
+| `docs/implemented/macos-scaleset/verification.md` | MDX |  |
+| `docs/implemented/mbx-native-owner-evidence-2026-10-05.md` | MDX |  |
+| `docs/implemented/merge-report-contract.md` | MDX |  |
+| `docs/implemented/mise-platform-pins.md` | MDX |  |
+| `docs/implemented/named-mise-checks.md` | MDX |  |
+| `docs/implemented/owned-archive-preflight.md` | MDX |  |
+| `docs/implemented/perf-tofu-t24.md` | MDX |  |
+| `docs/implemented/perf-tofu-t25.md` | MDX |  |
+| `docs/implemented/performance-p13.md` | MDX |  |
+| `docs/implemented/performance.md` | MDX |  |
+| `docs/implemented/pr29-pr30-disposition-2026-10-05.md` | MDX |  |
+| `docs/implemented/qualified-check-tools.md` | MDX |  |
+| `docs/implemented/README.md` | MDX |  |
+| `docs/implemented/release-gates.md` | MDX | test-pinned; update call sites on convert |
+| `docs/implemented/required-check-migration.md` | MDX |  |
+| `docs/implemented/requirements-evidence.md` | MDX |  |
+| `docs/implemented/review-ledger-p14.md` | MDX |  |
+| `docs/implemented/review-ledger-t29.md` | MDX |  |
+| `docs/implemented/subagent-model-policy.md` | MDX |  |
+| `docs/implemented/update-procedure.md` | MDX | test-pinned; update call sites on convert |
+| `docs/implemented/verification-triggers.md` | MDX | test-pinned; update call sites on convert |
+| `docs/proposed/agent-and-performance-contract.md` | MDX |  |
+| `docs/proposed/architecture.md` | MDX |  |
+| `docs/proposed/bootstrap-and-release-contract.md` | MDX |  |
+| `docs/proposed/cache-contract.md` | MDX |  |
+| `docs/proposed/cli-contract.md` | MDX |  |
+| `docs/proposed/generated-file-contract.md` | MDX |  |
+| `docs/proposed/host-seed-contract.md` | MDX |  |
+| `docs/proposed/implementation-plan.md` | MDX |  |
+| `docs/proposed/macos-scaleset-runner.md` | MDX |  |
+| `docs/proposed/opentofu-contract.md` | MDX | test-pinned; update call sites on convert |
+| `docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/AGENTS.md` | TEST | test input/golden |
+| `docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/CLAUDE.md` | TEST | test input/golden |
+| `docs/proposed/opentofu-goldens/cases/empty-suite/preview/.github/AGENTS.md` | TEST | test input/golden |
+| `docs/proposed/opentofu-goldens/cases/empty-suite/preview/.github/CLAUDE.md` | TEST | test input/golden |
+| `docs/proposed/opentofu-goldens/cases/mbx-nextest/preview/.github/AGENTS.md` | TEST | test input/golden |
+| `docs/proposed/opentofu-goldens/cases/mbx-nextest/preview/.github/CLAUDE.md` | TEST | test input/golden |
+| `docs/proposed/opentofu-goldens/cases/minimal-cargo/preview/.github/AGENTS.md` | TEST | test input/golden |
+| `docs/proposed/opentofu-goldens/cases/minimal-cargo/preview/.github/CLAUDE.md` | TEST | test input/golden |
+| `docs/proposed/opentofu-goldens/cases/nested/preview/.github/AGENTS.md` | TEST | test input/golden |
+| `docs/proposed/opentofu-goldens/cases/nested/preview/.github/CLAUDE.md` | TEST | test input/golden |
+| `docs/proposed/opentofu-goldens/README.md` | MDX |  |
+| `docs/proposed/parallelism-and-selection-contract.md` | MDX |  |
+| `docs/proposed/README.md` | MDX |  |
+| `docs/proposed/release-config-schema.md` | MDX |  |
+| `docs/proposed/release-contract.md` | MDX |  |
+| `docs/proposed/release-coverage.md` | MDX |  |
+| `docs/proposed/rust-dependency-policy.md` | MDX | test-pinned; update call sites on convert |
+| `docs/proposed/rust-quality-contract.md` | MDX | test-pinned; update call sites on convert |
+| `docs/proposed/rust-test-policy.md` | MDX | test-pinned; update call sites on convert |
+| `docs/proposed/task-execution-contract.md` | MDX |  |
+| `docs/proposed/tooling-input-contract.md` | MDX |  |
+| `docs/proposed/version-policy.md` | MDX |  |
+| `docs/proposed/workflow-contract.md` | MDX |  |
+| `docs/README.md` | MDX |  |
+| `docs/references.md` | MDX |  |
+| `docs/reviews/opentofu-evidence.md` | MDX |  |
+| `docs/reviews/opentofu-final-summary.md` | MDX |  |
+| `docs/reviews/p00-repro.md` | MDX |  |
+| `docs/reviews/pr-1-adoption.md` | MDX |  |
+| `docs/reviews/pr-1-disposition.md` | MDX |  |
+| `docs/reviews/pr-1.md` | MDX |  |
+| `fixtures/alint-negative/README.md` | TEST | test input/golden |
+| `fixtures/conflicting-runners/README.md` | TEST | test input/golden |
+| `fixtures/empty-suite/README.md` | TEST | test input/golden |
+| `fixtures/handwritten-workflow/README.md` | TEST | test input/golden |
+| `fixtures/hostile-config/README.md` | TEST | test input/golden |
+| `fixtures/mbx-nextest/README.md` | TEST | test input/golden |
+| `fixtures/minimal-cargo/README.md` | TEST | test input/golden |
+| `fixtures/nested/README.md` | TEST | test input/golden |
+| `fixtures/parity/README.md` | TEST | test input/golden |
+| `fixtures/README.md` | TEST | test input/golden |
+| `fixtures/tofu-consumer-mirror/README.md` | TEST | test input/golden |
+| `fixtures/tofu-json/README.md` | TEST | test input/golden |
+| `fixtures/tofu-lockfile/README.md` | TEST | test input/golden |
+| `fixtures/tofu-malformed/README.md` | TEST | test input/golden |
+| `fixtures/tofu-modules/README.md` | TEST | test input/golden |
+| `fixtures/tofu-multiroot/README.md` | TEST | test input/golden |
+| `fixtures/tofu-override/README.md` | TEST | test input/golden |
+| `fixtures/tofu-precedence/README.md` | TEST | test input/golden |
+| `fixtures/tofu-remote/README.md` | TEST | test input/golden |
+| `fixtures/tofu-tfvars/README.md` | TEST | test input/golden |
+| `images/dind/README.md` | MDX | include_str!-pinned; update call sites on convert |
+| `images/runner/ubuntu-26.04/README.md` | MDX | include_str!-pinned; update call sites on convert |
+| `README.md` | TOOL | stays .md at fixed path |
+
+### Scaffold (docs slice 1)
+
+- App: `docs/` Bun workspace (`docs/package.json` exact pins +
+  `docs/bun.lock`, 377 packages) — TanStack Start file routes
+  (`/`, `/docs/$`, `/api/search`), `fumadocsMdx()` first in the
+  Vite plugin list, prerender on, Tailwind 4, content dir
+  `content/docs` (new `index.mdx` smoke page only; the existing
+  `content/development/` record untouched, nothing converted).
+  Upstream `tslib` resolve alias dropped: it broke the server
+  bundle (`tslib/modules` unresolvable, prerender 0 pages).
+- Verified from clean tree: `bun install --frozen-lockfile`,
+  `bun run build` exit 0 prerendering `/` + `/docs` (smoke text
+  present in `.output/public/docs/index.html`), `tsc --noEmit`
+  clean. `alint check` 36 passing · 1 failing (6×
+  `ci-build-runs-on` only), `check-gaps` exit 0 / 0 findings —
+  baseline holds. Build outputs ignored via `docs/.gitignore`
+  (no root `.gitignore` edit).
+- Commits: `858a705cd` inventory, `60170cd50` scaffold sources,
+  `1bbcc6ff7` lockfile + route tree — all signed off and pushed.

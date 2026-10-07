@@ -88,7 +88,7 @@ the Cargo-profile task job.
 The matrix job MUST execute Clippy before test compilation. Different matrix entries MUST run in
 parallel. Matrix `fail-fast` MUST be false so a package failure does not cancel independent package
 obligations. Test build and test execution steps MUST NOT run for a package whose Clippy task failed. See
-the [parallelism and affected-work contract](parallelism-and-selection-contract.md) for native
+the [parallelism and affected-work contract](../content/docs/proposed/parallelism-and-selection-contract.mdx) for native
 background/wait groups, resource bounds, exact baseline coverage, and complete test partitioning.
 Formatting runs once in `plan` unless the package has an explicit formatting configuration.
 
@@ -126,7 +126,7 @@ record a `transient_profile_evidence` finding and `generate` MUST exit 1
 with instructions to declare explicit sticky keys. The sticky keys are
 `[stacks.rust] compile_driver = "cargo" | "mbx"` and `[stacks.rust]
 test_runner = "cargo_test" | "cargo_nextest"` (see
-[architecture §3](architecture.md)). A declared key that conflicts with
+[architecture §3](../content/docs/proposed/architecture.mdx)). A declared key that conflicts with
 durable evidence fails closed with exit 1. Every profile records its
 provenance (declared keys and evidence records with path, line, and
 command-or-setting) in the plan finding and the generation report.

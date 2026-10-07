@@ -1,6 +1,6 @@
 # P13 inventory reuse + bench-harness measurements
 
-Split from [performance.md](performance.md) (file-size gate); budgets in the parent doc govern.
+Split from [performance.md](../content/docs/implemented/performance.mdx) (file-size gate); budgets in the parent doc govern.
 
 ## P13 inventory reuse + perf foundations
 
