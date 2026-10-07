@@ -5,9 +5,14 @@ use velnor_runner_host::IntentState;
 use velnor_runner_host::scale_set::EnsureError;
 use velnor_runner_host::stage::PairEngine;
 use velnor_runner_journal::journal::Journal;
+use velnor_runner_journal::journal::LaunchEffectState;
 use velnor_runner_journal::reconcile::IntentRow;
 
 /// Busy means occupancy or the running count has reached capacity.
+///
+/// # Errors
+///
+/// Returns an error if the journal or Docker engine cannot report occupancy.
 pub async fn busy<E: PairEngine + ?Sized>(
     journal: &Journal,
     engine: &E,
@@ -20,6 +25,10 @@ pub async fn busy<E: PairEngine + ?Sized>(
 }
 
 /// Count journal rows currently holding a launch slot.
+///
+/// # Errors
+///
+/// Returns an error if the journal cannot be read or the count exceeds `u32`.
 pub async fn occupied(journal: &Journal) -> Result<u32, EnsureError> {
     let rows = journal.rows().await.map_err(map_journal)?;
     let count = rows.iter().filter(|row| holds(row)).count();
@@ -30,6 +39,10 @@ pub async fn occupied(journal: &Journal) -> Result<u32, EnsureError> {
 }
 
 /// Count held rows whose recorded worker is still running.
+///
+/// # Errors
+///
+/// Returns an error if the journal or Docker engine cannot inspect a worker.
 pub async fn running_count<E: PairEngine + ?Sized>(
     journal: &Journal,
     engine: &E,
@@ -51,6 +64,10 @@ pub async fn running_count<E: PairEngine + ?Sized>(
 }
 
 /// Recover and clean exact worker resources after the runner exits.
+///
+/// # Errors
+///
+/// Returns an error if journal or Docker operations fail during reconciliation.
 pub async fn release_exited<E: PairEngine + ?Sized>(
     journal: &Journal,
     engine: &E,
@@ -197,8 +214,12 @@ async fn delete_owned<E: PairEngine + ?Sized>(
 }
 
 /// A launch row holds its slot until cleanup is proven or it failed.
+#[must_use]
 pub fn holds(row: &IntentRow) -> bool {
-    row.kind == "launch" && !row.cleanup_proven && row.state != IntentState::Failed
+    row.kind == "launch"
+        && !row.cleanup_proven
+        && !(row.state == IntentState::Failed
+            && row.launch_effect == LaunchEffectState::DefiniteNoEffect)
 }
 
 fn map_journal(error: velnor_runner_host::HostError) -> EnsureError {

@@ -118,6 +118,31 @@ pub enum CapacityClaim {
     },
 }
 
+/// Persisted evidence that launch side effects may have been dispatched.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LaunchEffectState {
+    /// No effect intent is known; migrated rows use this state.
+    Unknown,
+    /// A new scoped reservation has not dispatched an effect.
+    NotStarted,
+    /// An effect intent was durably committed before dispatch.
+    MayHaveEffect,
+    /// A typed no-effect transition released a scoped reservation.
+    DefiniteNoEffect,
+}
+
+impl LaunchEffectState {
+    pub(super) fn parse(value: &str) -> Result<Self, HostError> {
+        match value {
+            "unknown" => Ok(Self::Unknown),
+            "not_started" => Ok(Self::NotStarted),
+            "may_have_effect" => Ok(Self::MayHaveEffect),
+            "definite_no_effect" => Ok(Self::DefiniteNoEffect),
+            _ => Err(HostError::Journal),
+        }
+    }
+}
+
 impl Journal {
     /// Reserve one global launch slot under the durable drain fence.
     ///
@@ -159,16 +184,21 @@ impl Journal {
         result
     }
 
-    /// Persist that a scoped launch may perform an external effect.
+    /// Persist that a launch may perform an external effect.
     ///
     /// Call this and wait for its commit before dispatching Acquire, registration,
     /// JIT, or Docker work. The marker is monotonic; it cannot be reset by
     /// [`Journal::finish`] and keeps the capacity permit occupied.
     ///
+    /// Scoped reservations transition from `not_started`; legacy reservations
+    /// may transition from `unknown`. Repeated calls are idempotent. The write
+    /// is committed before the caller may dispatch Acquire, JIT, registration,
+    /// or Docker work.
+    ///
     /// # Errors
     ///
-    /// Returns [`HostError::Journal`] unless this is a pending scoped reservation
-    /// whose effect marker is still `not_started` or already `may_have_effect`.
+    /// Returns [`HostError::Journal`] unless this is a pending launch row with
+    /// an unresolved marker that can monotonically advance to `may_have_effect`.
     pub async fn record_launch_effect_intent(&self, id: i64) -> Result<(), HostError> {
         if self.read_only {
             return Err(HostError::Journal);
@@ -176,12 +206,32 @@ impl Journal {
         let conn = self.connection().await?;
         let changed = conn
             .execute(
-                "UPDATE intents SET effect_state = 'may_have_effect' WHERE id = ?1 AND kind = 'launch' AND replay_key_version = 1 AND state = 'pending' AND effect_state IN ('not_started', 'may_have_effect')",
+                "UPDATE intents SET effect_state = 'may_have_effect' WHERE id = ?1 AND kind = 'launch' AND state = 'pending' AND ((replay_key_version = 1 AND effect_state IN ('not_started', 'may_have_effect')) OR (replay_key_version = 0 AND effect_state IN ('unknown', 'may_have_effect'))) ",
                 [id],
             )
             .await
             .map_err(|_| HostError::Journal)?;
         one_row(changed)
+    }
+
+    /// Read the monotonic effect marker for an intent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Journal`] if the row is missing or its marker is invalid.
+    pub async fn launch_effect_state(&self, id: i64) -> Result<LaunchEffectState, HostError> {
+        let conn = self.connection().await?;
+        let mut rows = conn
+            .query("SELECT effect_state FROM intents WHERE id = ?1", [id])
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let row = rows
+            .next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?;
+        let state: String = row.get(0).map_err(|_| HostError::Journal)?;
+        LaunchEffectState::parse(&state)
     }
 
     /// Release a scoped reservation only when no external effect was dispatched.

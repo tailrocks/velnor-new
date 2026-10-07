@@ -13,7 +13,7 @@ mod launch;
 mod schema;
 mod worker_volume;
 
-pub use capacity::{CapacityClaim, ReplayRoute, ScopedLaunchIdentity};
+pub use capacity::{CapacityClaim, LaunchEffectState, ReplayRoute, ScopedLaunchIdentity};
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -116,11 +116,13 @@ async fn live_id(
     kind: &str,
     subject: &str,
 ) -> Result<Option<i64>, HostError> {
+    let query = if kind == "launch" {
+        "SELECT id FROM intents WHERE kind = ?1 AND subject = ?2 AND NOT (state = 'failed' AND replay_key_version = 1 AND effect_state = 'definite_no_effect' AND docker_id IS NULL AND github_runner_id IS NULL AND dind_id IS NULL AND worker_volume IS NULL AND observed_job_id IS NULL AND observed_workflow_run_id IS NULL AND remote_terminal = 0) ORDER BY id DESC LIMIT 1"
+    } else {
+        "SELECT id FROM intents WHERE kind = ?1 AND subject = ?2 AND state != 'failed' AND cleanup_proven = 0 ORDER BY id DESC LIMIT 1"
+    };
     let mut rows = conn
-        .query(
-            "SELECT id FROM intents WHERE kind = ?1 AND subject = ?2 AND state != 'failed' AND cleanup_proven = 0 ORDER BY id DESC LIMIT 1",
-            (kind.to_owned(), subject.to_owned()),
-        )
+        .query(query, (kind.to_owned(), subject.to_owned()))
         .await
         .map_err(|_| HostError::Journal)?;
     let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {

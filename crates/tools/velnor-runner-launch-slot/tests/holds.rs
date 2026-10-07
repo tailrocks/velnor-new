@@ -1,6 +1,7 @@
 //! Slot-hold truth table: launch rows hold until cleanup or failure.
 
 use velnor_runner_host::IntentState;
+use velnor_runner_journal::journal::LaunchEffectState;
 use velnor_runner_journal::reconcile::IntentRow;
 use velnor_runner_launch_slot::holds;
 
@@ -10,6 +11,7 @@ fn row(kind: &str, state: IntentState, cleanup_proven: bool) -> IntentRow {
         kind: kind.to_owned(),
         subject: "subject".to_owned(),
         state,
+        launch_effect: LaunchEffectState::Unknown,
         docker_id: None,
         dind_id: None,
         worker_volume: None,
@@ -39,7 +41,18 @@ fn launch_row_holds_until_cleanup_proven() {
 
 #[test]
 fn failed_rows_never_hold() {
-    assert!(!holds(&row("launch", IntentState::Failed, false)));
+    let mut no_effect = row("launch", IntentState::Failed, false);
+    no_effect.launch_effect = LaunchEffectState::DefiniteNoEffect;
+    assert!(!holds(&no_effect));
+}
+
+#[test]
+fn failed_rows_with_unknown_or_dispatched_effects_still_hold() {
+    for effect in [LaunchEffectState::Unknown, LaunchEffectState::MayHaveEffect] {
+        let mut failed = row("launch", IntentState::Failed, false);
+        failed.launch_effect = effect;
+        assert!(holds(&failed), "{effect:?}");
+    }
 }
 
 #[test]

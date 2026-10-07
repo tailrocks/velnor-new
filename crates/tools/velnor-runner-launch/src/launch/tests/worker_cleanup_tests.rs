@@ -110,8 +110,10 @@ async fn completed_worker_exit_recovers_ids_cleans_pair_and_starts_new_generatio
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert!(rows[0].cleanup_proven);
 
+    // A later poll carries a distinct message/request identity. Reusing the
+    // completed offer's subject would be a replay, not a new generation.
     let (next_row, next_fresh) = journal
-        .begin_launch("m9r73")
+        .begin_launch("m10r74")
         .await
         .map_err(|err| err.to_string())?;
     assert!(next_fresh);

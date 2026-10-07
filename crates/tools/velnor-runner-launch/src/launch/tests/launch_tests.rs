@@ -3,9 +3,10 @@
 use std::sync::{Arc, Mutex};
 
 use crate::launch::drive_offer;
-use crate::launch::fakes::valid_worker_volume;
+use crate::launch::fakes::{Engine, valid_worker_volume};
 use crate::launch::harness::{CANARY, Mode, Script, absent, available, ctx, open};
 use velnor_runner_host::{EnsureError, HostError, IntentState, Started};
+use velnor_runner_journal::journal::LaunchEffectState;
 
 #[tokio::test]
 async fn launch_acks_only_after_start_and_hides_jit() -> Result<(), String> {
@@ -50,6 +51,15 @@ async fn launch_acks_only_after_start_and_hides_jit() -> Result<(), String> {
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Done);
+    assert_eq!(
+        journal.launch_effect_state(rows[0].id).await,
+        Ok(LaunchEffectState::MayHaveEffect)
+    );
+    assert_eq!(
+        crate::launch::admission(&Engine::new(), &journal, 1, 1, 0, &available(&[3])).await,
+        Ok(crate::launch::Admit::Hold),
+        "a generic failure cannot erase the pre-acquire effect intent"
+    );
     assert_eq!(rows[0].docker_id.as_deref(), Some("runner-1"));
     assert_eq!(rows[0].dind_id.as_deref(), Some("dind-1"));
     assert_eq!(rows[0].message_id, Some(4));
@@ -120,6 +130,10 @@ async fn forbidden_acquire_is_failed_and_not_acked() -> Result<(), String> {
     assert_eq!(script.calls, ["acquire"]);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows[0].state, IntentState::Failed);
+    assert_eq!(
+        journal.launch_effect_state(rows[0].id).await,
+        Ok(LaunchEffectState::MayHaveEffect)
+    );
     Ok(())
 }
 

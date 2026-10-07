@@ -122,7 +122,7 @@ async fn legacy_ambiguous_launch_rows_are_quarantined_before_restart() -> Result
 }
 
 #[tokio::test]
-async fn new_definite_failures_remain_retryable_after_migration() -> Result<(), String> {
+async fn legacy_generic_failure_does_not_authorize_retry_after_migration() -> Result<(), String> {
     let scratch = Scratch::new("new-definite-failure").map_err(|error| error.to_string())?;
     let path = scratch.file();
     seed_legacy_journal(&path).await?;
@@ -152,8 +152,8 @@ async fn new_definite_failures_remain_retryable_after_migration() -> Result<(), 
         .begin_launch("m97")
         .await
         .map_err(|error| error.to_string())?;
-    assert!(retry.1);
-    assert_ne!(retry.0, fresh.0);
+    assert!(!retry.1);
+    assert_eq!(retry.0, fresh.0);
     Ok(())
 }
 
