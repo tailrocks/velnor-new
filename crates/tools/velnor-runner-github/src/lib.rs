@@ -5,6 +5,7 @@ mod acquire;
 mod actions;
 mod error;
 mod paths;
+pub mod policy;
 mod poll;
 mod refresh;
 mod registration;
