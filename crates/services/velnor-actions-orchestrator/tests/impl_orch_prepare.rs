@@ -63,20 +63,19 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         .split("pub(crate) fn execute_check_to(")
         .nth(1)
         .expect("production execution boundary")
-        .split("fn bind_check(")
+        .split("struct CheckOutcome {")
         .next()
         .expect("execution body");
     assert!(execution.contains("velnor_actions_orchestrator_core::config::load_config(root)?"));
-    assert!(
-        execution.contains("bind_check(root, &item, &plan, entry, task_id, &catalog, deadline)?")
-    );
-    let binding = runtime
-        .split("fn bind_check(")
+    assert!(execution.contains("velnor_actions_orchestrator_runtime_plan::binding::bind_check("));
+    let binding = std::fs::read_to_string(family_file("binding.rs")?)?
+        .split("pub fn bind_check(")
         .nth(1)
         .expect("production binding boundary")
-        .split("fn run_check(")
+        .split("pub fn parse_lane_variant(")
         .next()
-        .expect("binding body");
+        .expect("binding body")
+        .to_owned();
     assert!(
         binding.contains("named_checks::plan::derive_lanes_until("),
         "runtime shares planner identity"

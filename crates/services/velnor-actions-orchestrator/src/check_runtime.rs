@@ -6,8 +6,7 @@ use std::time::{Duration, Instant};
 use velnor_actions_contract::canonical_json_bytes;
 use velnor_actions_contract_config::config::MAX_CHECK_EXECUTION_RECEIPT_BYTES;
 use velnor_actions_contract_workflow::{
-    MatrixEntry, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, NamedCheckLane,
-    NamedCheckLaneVariant, ObligationDecision, Plan,
+    MatrixEntry, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, Plan,
 };
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, ToolCatalog, discover_checks_until};
 use velnor_actions_orchestrator_check_acquisition::tools::QualifiedToolReceipt;
@@ -100,11 +99,13 @@ pub(crate) fn execute_check_to(
         velnor_actions_orchestrator_task_report::task_report::entry_and_digest_for_job(
             &plan, task_id, job_id,
         )?;
-    let lane_variant = parse_lane_variant(lane)?;
+    let lane_variant = velnor_actions_orchestrator_runtime_plan::binding::parse_lane_variant(lane)?;
     if entry.lane_variant != lane_variant {
         return Err(internal("check_lane_variant_mismatch"));
     }
-    bind_check(root, &item, &plan, entry, task_id, &catalog, deadline)?;
+    velnor_actions_orchestrator_runtime_plan::binding::bind_check(
+        root, &item, &plan, entry, task_id, &catalog, deadline,
+    )?;
     let outcome = run_check(root, temp, &item, &plan, deadline);
     let (code, receipt) = match &outcome {
         Ok(success) => (0, success.evidence.as_ref()),
@@ -138,73 +139,6 @@ pub(crate) fn execute_check_to(
         temp, &plan, entry, &task, &matrix,
     )?;
     outcome.map(|_| 1)
-}
-
-/// Reuse exactly the planner's derivation, binding definition, task bytes and inputs.
-fn bind_check(
-    root: &Path,
-    item: &DiscoveredCheck,
-    plan: &Plan,
-    entry: &MatrixEntry,
-    task_id: &str,
-    catalog: &ToolCatalog,
-    deadline: CheckDeadline,
-) -> Result<(), OrchestratorError> {
-    if item.proposal.task_id != task_id {
-        return Err(internal("check_task_identity"));
-    }
-    if item.check.runner.platform.os() != std::env::consts::OS
-        || item.check.runner.platform.arch() != std::env::consts::ARCH
-    {
-        return Err(internal("check_host_platform"));
-    }
-    for input in &item.config_inputs {
-        reject_link_components(root, input)?;
-    }
-    let lane = NamedCheckLane {
-        variant: entry.lane_variant,
-        job_id: entry.job_id.clone(),
-    };
-    let argv =
-        velnor_actions_orchestrator_provisioning::vectors::task_argv(&item.proposal, catalog)?;
-    let (expected, mut expected_entries) =
-        velnor_actions_orchestrator_graph::internal_plan::named_checks::plan::derive_lanes_until(
-            root,
-            item,
-            &plan.run_key,
-            &plan.generator,
-            catalog,
-            &[lane],
-            Some(deadline),
-            &argv,
-        )?;
-    let expected_entry = expected_entries
-        .pop()
-        .ok_or_else(|| internal("named_check_lane_missing"))?;
-    let actual = plan
-        .obligations
-        .iter()
-        .find(|ob| ob.task_id == task_id)
-        .ok_or_else(|| internal("check_obligation_missing"))?;
-    if actual.decision != ObligationDecision::Execute
-        || actual.task_digest != expected.task_digest
-        || actual.input_digest != expected.input_digest
-        || actual.closure_digest != expected.closure_digest
-        || canonical_json_bytes(entry).map_err(internal_contract)?
-            != canonical_json_bytes(&expected_entry).map_err(internal_contract)?
-    {
-        return Err(internal("check_plan_identity"));
-    }
-    Ok(())
-}
-
-fn parse_lane_variant(value: &str) -> Result<Option<NamedCheckLaneVariant>, OrchestratorError> {
-    match value {
-        "single" => Ok(None),
-        "hosted" => Ok(Some(NamedCheckLaneVariant::Hosted)),
-        "scale_set" => Ok(Some(NamedCheckLaneVariant::ScaleSet)),
-        _ => Err(internal("check_lane_variant_invalid")),
-    }
 }
 
 struct CheckOutcome {

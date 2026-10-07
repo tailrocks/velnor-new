@@ -63,7 +63,7 @@ fn acquisition_requires_bound_plan_and_verified_archive() -> TestResult {
     assert_order(
         &runtime,
         &[
-            "bind_check(root, &item, &plan, entry, task_id, &catalog, deadline)?;",
+            "velnor_actions_orchestrator_runtime_plan::binding::bind_check(",
             "let outcome = run_check(root, temp, &item, &plan, deadline);",
         ],
     )?;
