@@ -47,8 +47,16 @@ pub struct InnerJob {
     pub kind: InnerKind,
     /// `runnerRequestId` when present.
     pub request_id: Option<i64>,
-    /// Numeric `jobId` only. Other shapes are dropped.
+    /// Opaque `jobId` supplied as a string by the Scale Set message.
     pub job_id: Option<String>,
+    /// `workflowRunId` supplied by the Scale Set message.
+    pub workflow_run_id: Option<i64>,
+    /// Base repository owner from `ownerName`.
+    pub owner_name: Option<String>,
+    /// Base repository name from `repositoryName`.
+    pub repository_name: Option<String>,
+    /// Trigger event from `eventName`.
+    pub event_name: Option<String>,
     /// `requestLabels` names. Empty when the field is absent.
     pub labels: Vec<String>,
     /// `runnerId` on `JobStarted` and `JobCompleted` when present.
@@ -142,7 +150,14 @@ fn parse_inner(value: &Value) -> Result<InnerJob, WireError> {
         .and_then(Value::as_str)
         .ok_or(WireError::Malformed)?;
     let request_id = value.get("runnerRequestId").and_then(Value::as_i64);
-    let job_id = numeric_job_id(value.get("jobId").and_then(Value::as_str));
+    let job_id = bounded_text(value.get("jobId").and_then(Value::as_str), 256);
+    let workflow_run_id = value
+        .get("workflowRunId")
+        .and_then(Value::as_i64)
+        .filter(|id| *id > 0);
+    let owner_name = bounded_text(value.get("ownerName").and_then(Value::as_str), 100);
+    let repository_name = bounded_text(value.get("repositoryName").and_then(Value::as_str), 100);
+    let event_name = bounded_text(value.get("eventName").and_then(Value::as_str), 100);
     let labels = label_names(value.get("requestLabels"));
     let runner_id = value.get("runnerId").and_then(Value::as_i64);
     let runner_name = value
@@ -165,6 +180,10 @@ fn parse_inner(value: &Value) -> Result<InnerJob, WireError> {
         kind,
         request_id,
         job_id,
+        workflow_run_id,
+        owner_name,
+        repository_name,
+        event_name,
         labels,
         runner_id,
         runner_name,
@@ -173,9 +192,9 @@ fn parse_inner(value: &Value) -> Result<InnerJob, WireError> {
     })
 }
 
-fn numeric_job_id(value: Option<&str>) -> Option<String> {
+fn bounded_text(value: Option<&str>, maximum: usize) -> Option<String> {
     let text = value?;
-    if text.is_empty() || text.len() > 24 || !text.bytes().all(|byte| byte.is_ascii_digit()) {
+    if text.is_empty() || text.len() > maximum || text.chars().any(char::is_control) {
         return None;
     }
     Some(text.to_owned())

@@ -20,6 +20,8 @@ pub use config::{jit, jit_request};
 pub use error::SessionError;
 pub use jobs::acquire;
 pub use messages::poll;
-pub use open::{QueueSession, create_session, refresh_if_current, refresh_session};
+pub use open::{
+    QueueSession, create_session, refresh_if_current, refresh_queue_request, refresh_session,
+};
 pub use reopen::reopen_session;
 pub use request::{Exchange, Method, SessionRequest, Transport};

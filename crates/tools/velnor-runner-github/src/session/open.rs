@@ -71,7 +71,7 @@ pub fn create_session<T>(
 where
     T: Transport + ?Sized,
 {
-    if owner.is_empty() || admin_token.is_empty() {
+    if owner.is_empty() || !safe_token(admin_token) {
         return Err(SessionError::Wire(WireError::RegistrationRejected));
     }
     let body = serde_json::to_vec(&Owner { owner_name: owner }).map_err(|_| WireError::Encode)?;
@@ -99,7 +99,7 @@ pub fn refresh_session<T>(
 where
     T: Transport + ?Sized,
 {
-    if session_id.is_empty() || admin_token.is_empty() {
+    if session_id.is_empty() || !safe_token(admin_token) {
         return Err(SessionError::Wire(WireError::RegistrationRejected));
     }
     let request = session_request(
@@ -137,6 +137,52 @@ where
     refresh_session(transport, scale_set_id, &held.session_id, admin_token).map(Some)
 }
 
+/// Refresh the queue session used by an operation that received HTTP 401.
+///
+/// If `request` still carries the current queue token, this sends the pinned
+/// `PATCH .../sessions/{id}` request and replaces the in-memory session with
+/// the response. If another operation already refreshed `session`, it skips
+/// the PATCH and uses that newer token. In both cases the request bearer is
+/// replaced before the caller retries the operation.
+///
+/// The returned URL is the current `messageQueueUrl`. The caller must validate
+/// it and route the transport and request path to that URL before returning
+/// from its refresh callback. In particular, a changed queue origin must not
+/// be replayed against the stale origin.
+///
+/// # Errors
+///
+/// Returns [`SessionError::Wire`] when the request has no unique bearer,
+/// [`WireError::Malformed`] if the PATCH changes session identity, and the
+/// errors from [`refresh_session`].
+pub fn refresh_queue_request<'s, T>(
+    transport: &mut T,
+    scale_set_id: i64,
+    session: &'s mut QueueSession,
+    admin_token: &str,
+    request: &mut SessionRequest,
+) -> Result<&'s str, SessionError>
+where
+    T: Transport + ?Sized,
+{
+    if session.session_id.is_empty() || !safe_token(admin_token) {
+        return Err(SessionError::Wire(WireError::RegistrationRejected));
+    }
+    if request.bearer_token().is_none() {
+        return Err(SessionError::Wire(WireError::RegistrationRejected));
+    }
+    if request.uses_bearer(session.token()) {
+        let session_id = session.session_id.clone();
+        let refreshed = refresh_session(transport, scale_set_id, &session_id, admin_token)?;
+        if refreshed.session_id != session_id {
+            return Err(SessionError::Wire(WireError::Malformed));
+        }
+        *session = refreshed;
+    }
+    request.replace_bearer(session.token())?;
+    Ok(session.message_queue_url.as_str())
+}
+
 fn session_request(
     method: Method,
     path: String,
@@ -155,6 +201,13 @@ fn session_request(
     }
 }
 
+fn safe_token(token: &str) -> bool {
+    !token.is_empty()
+        && !token
+            .bytes()
+            .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
+}
+
 fn finish(exchange: &Exchange) -> Result<QueueSession, SessionError> {
     match classify_status(exchange.status, &fresh_gate()) {
         Ok(StatusClass::Ok) => decode(&exchange.body),
@@ -168,6 +221,10 @@ fn decode(body: &[u8]) -> Result<QueueSession, SessionError> {
     if parsed.session_id.is_empty()
         || parsed.message_queue_url.is_empty()
         || parsed.message_queue_access_token.is_empty()
+        || parsed
+            .message_queue_access_token
+            .bytes()
+            .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
     {
         return Err(SessionError::Wire(WireError::Malformed));
     }

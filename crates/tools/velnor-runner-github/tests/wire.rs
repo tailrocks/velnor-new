@@ -87,6 +87,21 @@ fn completed_message_decodes_runner_identity_and_keeps_job_fields() -> Result<()
 }
 
 #[test]
+fn scale_set_identity_and_opaque_job_id_are_preserved() -> Result<(), &'static str> {
+    let raw = r#"{"messageId":3,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobAvailable\",\"runnerRequestId\":19,\"jobId\":\"gha:job/119?attempt=2\",\"workflowRunId\":88,\"ownerName\":\"ChainArgos\",\"repositoryName\":\"java-monorepo\",\"eventName\":\"pull_request\",\"requestLabels\":[\"ubuntu-26.04-scale-set\"]}]"}"#;
+    let Poll::Batch(batch) = parse_poll(200, raw).map_err(|_| "batch")? else {
+        return Err("batch");
+    };
+    let job = batch.jobs.first().ok_or("job")?;
+    assert_eq!(job.job_id.as_deref(), Some("gha:job/119?attempt=2"));
+    assert_eq!(job.workflow_run_id, Some(88));
+    assert_eq!(job.owner_name.as_deref(), Some("ChainArgos"));
+    assert_eq!(job.repository_name.as_deref(), Some("java-monorepo"));
+    assert_eq!(job.event_name.as_deref(), Some("pull_request"));
+    Ok(())
+}
+
+#[test]
 fn partial_acquire_outside_ids_and_noop() -> Result<(), &'static str> {
     let partial = classify_acquire(&[1, 2, 3], &[1, 3], &[]).map_err(|_| "partial")?;
     assert_eq!(partial, AcquireOutcome::Acquired(vec![1, 3]));

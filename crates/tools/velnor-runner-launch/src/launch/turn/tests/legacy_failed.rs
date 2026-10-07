@@ -61,9 +61,9 @@ async fn assert_assignment_is_held(journal: &Journal, message_id: i64) -> Result
     docker.finish().await?;
 
     assert_eq!(decision, crate::launch::Admit::Hold);
-    assert_eq!(result, Ok(false));
-    assert!(script.calls.is_empty());
-    assert!(workers.is_empty());
+    assert_eq!(result.map(|outcome| outcome.stop), Ok(false));
+    assert_eq!(script.calls, Vec::<&'static str>::new());
+    assert_eq!(workers, Vec::<velnor_runner_host::worker::Started>::new());
     Ok(())
 }
 

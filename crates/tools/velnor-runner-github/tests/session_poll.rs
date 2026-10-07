@@ -41,9 +41,15 @@ fn poll_preserves_statistics() -> Result<(), &'static str> {
 
 fn poll_batch(body: &str) -> Result<ParsedBatch, &'static str> {
     let mut script = Script::once(200, body);
-    let polled = poll(&mut script, QUEUE, 0, 2, TOKEN, &RefreshGate::new(), || {
-        Ok(())
-    })
+    let polled = poll(
+        &mut script,
+        QUEUE,
+        0,
+        2,
+        TOKEN,
+        &RefreshGate::new(),
+        |_, _| Ok(()),
+    )
     .map_err(|_| "poll")?;
     let Some(request) = script.seen.first() else {
         return Err("request");
@@ -66,9 +72,15 @@ fn poll_batch(body: &str) -> Result<ParsedBatch, &'static str> {
 #[test]
 fn empty_poll_is_not_acknowledged() -> Result<(), &'static str> {
     let mut script = Script::replies(vec![Ok(exchange(202, NULL_STATS)), Ok(exchange(204, ""))]);
-    let polled = poll(&mut script, QUEUE, 4, 9, TOKEN, &RefreshGate::new(), || {
-        Ok(())
-    })
+    let polled = poll(
+        &mut script,
+        QUEUE,
+        4,
+        9,
+        TOKEN,
+        &RefreshGate::new(),
+        |_, _| Ok(()),
+    )
     .map_err(|_| "poll")?;
     assert_eq!(polled, Poll::Empty);
     assert_eq!(script.seen.len(), 1);
@@ -94,7 +106,7 @@ fn one_cursor(cursor: i64) -> Result<(), &'static str> {
         5,
         TOKEN,
         &RefreshGate::new(),
-        || Ok(()),
+        |_, _| Ok(()),
     )
     .map_err(|_| "poll")?;
     let Some(request) = script.seen.first() else {
@@ -128,7 +140,7 @@ fn poll_retries_unauthorized_once_then_reads() -> Result<(), &'static str> {
     ]);
     let mut refreshes = 0_u32;
     let gate = RefreshGate::new();
-    let polled = poll(&mut script, QUEUE, 1, 2, TOKEN, &gate, || {
+    let polled = poll(&mut script, QUEUE, 1, 2, TOKEN, &gate, |_, _| {
         refreshes += 1;
         Ok(())
     })
@@ -150,7 +162,7 @@ fn poll_second_unauthorized_fails_without_a_third_call() -> Result<(), &'static 
     ]);
     let mut refreshes = 0_u32;
     let gate = RefreshGate::new();
-    let err = must_err(&poll(&mut script, QUEUE, 0, 2, TOKEN, &gate, || {
+    let err = must_err(&poll(&mut script, QUEUE, 0, 2, TOKEN, &gate, |_, _| {
         refreshes += 1;
         Ok(())
     }))?;
@@ -171,7 +183,7 @@ fn poll_timeout_is_uncertain() -> Result<(), &'static str> {
         1,
         TOKEN,
         &RefreshGate::new(),
-        || Ok(()),
+        |_, _| Ok(()),
     ))?;
     assert_eq!(err, SessionError::Uncertain);
     assert_eq!(err.certainty(), Certainty::Uncertain);
@@ -186,7 +198,7 @@ fn poll_forbidden_does_not_retry() -> Result<(), &'static str> {
     ]);
     let mut refreshes = 0_u32;
     let gate = RefreshGate::new();
-    let err = must_err(&poll(&mut script, QUEUE, -1, 2, TOKEN, &gate, || {
+    let err = must_err(&poll(&mut script, QUEUE, -1, 2, TOKEN, &gate, |_, _| {
         refreshes += 1;
         Ok(())
     }))?;
@@ -207,7 +219,7 @@ fn empty_queue_token_does_not_call_transport() -> Result<(), &'static str> {
         1,
         "",
         &RefreshGate::new(),
-        || Ok(()),
+        |_, _| Ok(()),
     ))?;
     assert_eq!(err, SessionError::Wire(WireError::RegistrationRejected));
     assert_eq!(script.seen.len(), 0);

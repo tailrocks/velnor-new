@@ -2,6 +2,7 @@
 //! Session calls live in [`session`].
 
 mod acquire;
+mod actions;
 mod error;
 mod paths;
 mod poll;
@@ -13,6 +14,7 @@ mod secret;
 pub mod session;
 
 pub use acquire::{AcquireOutcome, Certainty, TransportFail, classify_acquire, effect_certainty};
+pub use actions::{ActionsJob, ActionsWorkflowRun, get_actions_job, get_actions_workflow_run};
 pub use error::WireError;
 pub use paths::{
     CAPACITY_HEADER, acquire_path, capacity_header_value, jit_path, last_message_query,
@@ -34,5 +36,5 @@ pub use secret::EncodedJit;
 pub use session::{
     Ack, AckScope, Exchange, Method, QueueSession, SessionError, SessionRequest, Transport, ack,
     acquire, create_session, delete_session, jit, jit_request, poll, refresh_if_current,
-    refresh_session, reopen_session,
+    refresh_queue_request, refresh_session, reopen_session,
 };

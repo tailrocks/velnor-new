@@ -92,7 +92,7 @@ fn suppressed(
         batch,
         &scope(replay_safe, sole_unacquired_offer),
         &RefreshGate::new(),
-        || Ok(()),
+        |_, _| Ok(()),
     )
     .map_err(|_| "ack")?;
     assert_eq!(decision, Ack::Suppressed);
@@ -104,8 +104,8 @@ fn suppressed(
 fn acquire_keeps_partial_ids_and_rejects_foreign_ids() -> Result<(), &'static str> {
     let gate = RefreshGate::new();
     let mut script = Script::once(200, r#"{"count":2,"value":[1,3]}"#);
-    let partial =
-        acquire(&mut script, 3, &[1, 2, 3], &[], TOKEN, &gate, || Ok(())).map_err(|_| "partial")?;
+    let partial = acquire(&mut script, 3, &[1, 2, 3], &[], TOKEN, &gate, |_, _| Ok(()))
+        .map_err(|_| "partial")?;
     assert_eq!(partial, AcquireOutcome::Acquired(vec![1, 3]));
     assert_eq!(script.seen[0].method, Method::Post);
     assert_eq!(script.seen[0].path, acquire_path(3));
@@ -129,16 +129,18 @@ fn acquire_keeps_partial_ids_and_rejects_foreign_ids() -> Result<(), &'static st
         &[],
         TOKEN,
         &gate,
-        || Ok(()),
+        |_, _| Ok(()),
     ))?;
     assert_eq!(err, SessionError::Uncertain);
     assert_eq!(err.certainty(), Certainty::Uncertain);
     let mut same = Script::once(200, r#"{"count":2,"value":[2,1]}"#);
     let noop =
-        acquire(&mut same, 3, &[1, 2], &[1, 2], TOKEN, &gate, || Ok(())).map_err(|_| "noop")?;
+        acquire(&mut same, 3, &[1, 2], &[1, 2], TOKEN, &gate, |_, _| Ok(())).map_err(|_| "noop")?;
     assert_eq!(noop, AcquireOutcome::Noop);
     let mut bad = Script::once(200, r#"{"count":1,"value":[1,2]}"#);
-    let err = must_err(&acquire(&mut bad, 3, &[1, 2], &[], TOKEN, &gate, || Ok(())))?;
+    let err = must_err(&acquire(&mut bad, 3, &[1, 2], &[], TOKEN, &gate, |_, _| {
+        Ok(())
+    }))?;
     assert_eq!(err, SessionError::Uncertain);
     assert_eq!(err.certainty(), Certainty::Uncertain);
     Ok(())
@@ -149,13 +151,17 @@ fn acquire_timeout_and_reset_are_not_definite_failures() -> Result<(), &'static 
     let gate = RefreshGate::new();
     for fail in [TransportFail::Timeout, TransportFail::Reset] {
         let mut script = Script::fail(fail);
-        let err = must_err(&acquire(&mut script, 3, &[1], &[], TOKEN, &gate, || Ok(())))?;
+        let err = must_err(&acquire(&mut script, 3, &[1], &[], TOKEN, &gate, |_, _| {
+            Ok(())
+        }))?;
         assert_eq!(err, SessionError::Uncertain);
         assert_eq!(err.certainty(), Certainty::Uncertain);
         assert_eq!(gate.started().map_err(|_| "started")?, 0);
     }
     let mut script = Script::once(403, "");
-    let err = must_err(&acquire(&mut script, 3, &[1], &[], TOKEN, &gate, || Ok(())))?;
+    let err = must_err(&acquire(&mut script, 3, &[1], &[], TOKEN, &gate, |_, _| {
+        Ok(())
+    }))?;
     assert_eq!(err, SessionError::Wire(WireError::Forbidden));
     assert_eq!(err.certainty(), Certainty::Definite);
     assert_eq!(script.seen.len(), 1);
@@ -192,7 +198,7 @@ fn ack_skips_unsafe_batches_and_deletes_real_ids() -> Result<(), &'static str> {
         &zero,
         &scope(true, false),
         &RefreshGate::new(),
-        || Ok(()),
+        |_, _| Ok(()),
     )
     .map_err(|_| "ack")?;
     assert_eq!(decision, Ack::Deleted);
@@ -206,7 +212,7 @@ fn ack_skips_unsafe_batches_and_deletes_real_ids() -> Result<(), &'static str> {
         &available,
         &scope(true, false),
         &RefreshGate::new(),
-        || Ok(()),
+        |_, _| Ok(()),
     )
     .map_err(|_| "ack")?;
     assert_eq!(decision, Ack::Deleted);
@@ -228,7 +234,7 @@ fn ack_non_204_fails_and_unauthorized_retries_once() -> Result<(), &'static str>
         &zero,
         &scope(true, false),
         &RefreshGate::new(),
-        || Ok(()),
+        |_, _| Ok(()),
     ))?;
     assert_eq!(err, SessionError::Wire(WireError::UnexpectedStatus));
     assert_eq!(script.seen.len(), 1);
@@ -244,7 +250,7 @@ fn ack_non_204_fails_and_unauthorized_retries_once() -> Result<(), &'static str>
         &zero,
         &scope(true, false),
         &RefreshGate::new(),
-        || {
+        |_, _| {
             refreshes += 1;
             Ok(())
         },

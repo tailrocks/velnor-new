@@ -2,7 +2,7 @@
 
 use crate::refresh::RefreshGate;
 use crate::refresh::StatusClass;
-use crate::{ParsedBatch, WireError, may_ack};
+use crate::{ParsedBatch, may_ack};
 
 use super::error::{SessionError, reject};
 use super::request::{Method, SessionRequest, Transport};
@@ -42,7 +42,8 @@ pub enum Ack {
 ///
 /// Returns [`SessionError::Uncertain`] on timeout or reset,
 /// [`SessionError::Conflict`] on HTTP 409, and [`SessionError::Wire`] for any
-/// other non-204 outcome. A second HTTP 401 is [`WireError::RefreshExhausted`].
+/// other non-204 outcome. A second HTTP 401 is
+/// [`crate::WireError::RefreshExhausted`].
 pub fn ack<T, R>(
     transport: &mut T,
     queue_path: &str,
@@ -53,19 +54,19 @@ pub fn ack<T, R>(
 ) -> Result<Ack, SessionError>
 where
     T: Transport + ?Sized,
-    R: FnMut() -> Result<(), WireError>,
+    R: FnMut(&mut T, &mut SessionRequest) -> Result<(), SessionError>,
 {
     if scope.sole_unacquired_offer || !may_ack(batch, scope.replay_safe) {
         return Ok(Ack::Suppressed);
     }
-    let request = SessionRequest {
+    let mut request = SessionRequest {
         method: Method::Delete,
         path: message_path(queue_path, batch.message_id),
         query: None,
         headers: vec![json_content(), bearer(scope.queue_token)?, user_agent()],
         body: Vec::new(),
     };
-    let answer = attempt(transport, &request, gate, refresh)?;
+    let answer = attempt(transport, &mut request, gate, refresh)?;
     match answer.class {
         StatusClass::Acked => Ok(Ack::Deleted),
         other => Err(reject(other)),

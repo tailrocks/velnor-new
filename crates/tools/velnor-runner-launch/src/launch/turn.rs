@@ -21,7 +21,7 @@ use super::{Ready, ack_ready, drive_ready, scale_session};
 pub(super) async fn poll_and_drive(
     link: &mut Link,
     set_id: i64,
-    session: &QueueSession,
+    session: &mut QueueSession,
     admin_token: &str,
     journal: &Journal,
     docker: &bollard::Docker,
@@ -51,6 +51,7 @@ pub(super) async fn poll_and_drive(
         docker,
         capacity,
         target,
+        last_message_id: 0,
     };
     let bound = if target > capacity {
         capacity::poll_bound_wide()
@@ -177,21 +178,33 @@ pub async fn admission<E: velnor_runner_host::stage::PairEngine + ?Sized>(
 struct Turn<'a> {
     link: &'a mut Link,
     set_id: i64,
-    session: &'a QueueSession,
+    session: &'a mut QueueSession,
     admin_token: &'a str,
     journal: &'a Journal,
     docker: &'a bollard::Docker,
     capacity: u32,
     target: u32,
+    last_message_id: i64,
 }
 
 impl Turn<'_> {
     async fn drive_poll(&mut self, workers: &mut Vec<Started>) -> Result<bool, EnsureError> {
+        let admin = self.link.base().to_owned();
+        let polled = poll_path(
+            self.link,
+            self.session,
+            self.set_id,
+            self.admin_token,
+            self.last_message_id,
+            self.capacity,
+        );
+        let polled = polled?;
         let (saved, path) = point_at_queue(self.link, &self.session.message_queue_url)?;
         let queue = saved.as_ref().map(|_| self.link.base().to_owned());
-        let polled = poll_path(self.link, self.session, &path, self.capacity);
         restore_base(self.link, saved)?;
-        let polled = polled?;
+        if self.link.base() != admin {
+            return Err(EnsureError::Endpoint);
+        }
         trace::batch(&polled);
         let started = u32::try_from(workers.len()).unwrap_or(u32::MAX);
         let decision = admission(
@@ -224,10 +237,26 @@ impl Turn<'_> {
                 step: "queue",
             }),
             Admit::Ack { stop } => {
-                ack_ready(self.link, self.session, path, queue, polled)?;
+                if let Some(message_id) = ack_ready(
+                    self.link,
+                    self.set_id,
+                    self.session,
+                    self.admin_token,
+                    path,
+                    queue,
+                    polled,
+                )? {
+                    self.last_message_id = message_id;
+                }
                 Ok(stop)
             }
-            Admit::Start { stop } => self.start(workers, path, queue, polled, stop).await,
+            Admit::Start { stop } => {
+                let outcome = self.start(workers, path, queue, polled, stop).await?;
+                if let Some(message_id) = outcome.acknowledged_message_id {
+                    self.last_message_id = message_id;
+                }
+                Ok(outcome.stop)
+            }
         }
     }
 
@@ -238,19 +267,24 @@ impl Turn<'_> {
         queue: Option<String>,
         polled: &Poll,
         stop: bool,
-    ) -> Result<bool, EnsureError> {
+    ) -> Result<StartOutcome, EnsureError> {
         let admin = self.link.base().to_owned();
-        let mut lane = super::HostLane {
+        let queue_token = self.session.token().to_owned();
+        let mut lane = super::host_lane::HostLane {
             link: self.link,
             admin,
             queue: queue.clone(),
+            queue_path: path.clone(),
+            session: Some(self.session),
+            set_id: self.set_id,
+            admin_token: self.admin_token,
         };
         start_turn(
             &mut lane,
             workers,
             Ready {
                 set_id: self.set_id,
-                session: self.session,
+                queue_token,
                 admin_token: self.admin_token,
                 path,
                 polled,
@@ -289,15 +323,24 @@ async fn start_turn<T>(
     docker: &bollard::Docker,
     capacity: u32,
     stop: bool,
-) -> Result<bool, EnsureError>
+) -> Result<StartOutcome, EnsureError>
 where
     T: velnor_runner_github::Transport + super::Lane,
 {
-    let Some(worker) = drive_ready(lane, ready, journal, docker, capacity).await? else {
-        return Ok(false);
-    };
-    workers.push(worker);
-    Ok(stop)
+    let outcome = drive_ready(lane, ready, journal, docker, capacity).await?;
+    if let Some(worker) = outcome.started {
+        workers.push(worker);
+    }
+    Ok(StartOutcome {
+        stop,
+        acknowledged_message_id: outcome.acknowledged_message_id,
+    })
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct StartOutcome {
+    stop: bool,
+    acknowledged_message_id: Option<i64>,
 }
 
 #[cfg(test)]

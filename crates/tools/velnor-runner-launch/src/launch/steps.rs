@@ -3,8 +3,8 @@
 use std::future::Future;
 
 use velnor_runner_github::{
-    Ack, AckScope, AcquireOutcome, Certainty, Poll, RefreshGate, SessionError, ack, acquire,
-    may_ack,
+    Ack, AckScope, AcquireOutcome, Certainty, Poll, RefreshGate, SessionError, SessionRequest, ack,
+    acquire, may_ack,
 };
 
 use velnor_runner_host::HostError;
@@ -182,10 +182,11 @@ where
 
 fn taken<T>(lane: &mut T, ctx: &Drive, request_id: i64) -> Result<AcquireOutcome, SessionError>
 where
-    T: velnor_runner_github::Transport + ?Sized,
+    T: velnor_runner_github::Transport + Lane + ?Sized,
 {
     let gate = RefreshGate::new();
-    let refresh = || Ok(());
+    let refresh =
+        |transport: &mut T, request: &mut SessionRequest| transport.refresh_queue(request, None);
     acquire(
         lane,
         ctx.set_id,
@@ -289,13 +290,17 @@ where
 {
     lane.on_queue()?;
     let gate = RefreshGate::new();
-    let refresh = || Ok(());
+    let queue_path = lane.message_queue_path(&ctx.queue_path);
+    let suffix = batch.message_id.to_string();
+    let mut refresh = |transport: &mut T, request: &mut SessionRequest| {
+        transport.refresh_queue(request, Some(&suffix))
+    };
     let scope = AckScope {
         replay_safe: true,
         sole_unacquired_offer: false,
         queue_token: &ctx.queue_token,
     };
-    let acked = ack(lane, &ctx.queue_path, batch, &scope, &gate, refresh);
+    let acked = ack(lane, &queue_path, batch, &scope, &gate, &mut refresh);
     let restored = lane.on_admin();
     let deleted = match acked {
         Ok(Ack::Deleted) => Ok(()),

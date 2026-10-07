@@ -3,7 +3,7 @@
 use velnor_runner_github::{
     AdminConnection, AdminConnectionCall, Poll, QueueSession, RefreshGate, RegistrationScope,
     RegistrationTokenCall, SessionError, WireError, admin_connection, create_session,
-    delete_session, poll, registration_token,
+    delete_session, poll, refresh_queue_request, registration_token,
 };
 use zeroize::Zeroize;
 
@@ -14,6 +14,10 @@ use crate::error::HostError;
 use crate::https::HttpsTransport;
 use crate::scale_set::EnsureError;
 use crate::scale_set::ensure_product_scale_set;
+
+mod url;
+pub(crate) use url::queue_target;
+pub use url::{Absolute, absolute_https, queue_path};
 
 /// Session owner sent to the scale-set service.
 pub const OWNER_NAME: &str = "velnor-host";
@@ -110,9 +114,9 @@ pub fn probe_once(pat: &str, owner: &str, repo: &str) -> Result<SessionProbe, En
     let set = ensure_product_scale_set(pat, owner, repo)?;
     let mut link = admin_link(pat, owner, repo)?;
     let token = Secret::new(link.token());
-    let session = create_session(&mut link.transport, set.id, OWNER_NAME, token.expose())
+    let mut session = create_session(&mut link.transport, set.id, OWNER_NAME, token.expose())
         .map_err(|err| annotate(err, "create-session"))?;
-    let polled = poll_available(&mut link, &session);
+    let polled = poll_available(&mut link, &mut session, set.id, token.expose());
     let closed = delete_session(
         &mut link.transport,
         set.id,
@@ -125,20 +129,6 @@ pub fn probe_once(pat: &str, owner: &str, repo: &str) -> Result<SessionProbe, En
         set_id: set.id,
         available,
     })
-}
-
-/// Path relative to the admin origin. Absolute URLs that are not under `base` are rejected.
-#[must_use]
-pub fn queue_path<'a>(base: &str, queue_url: &'a str) -> Option<&'a str> {
-    let relative = queue_url
-        .strip_prefix(base)
-        .unwrap_or(queue_url)
-        .trim_start_matches('/');
-    if relative.is_empty() || relative.contains("://") {
-        None
-    } else {
-        Some(relative)
-    }
 }
 
 /// Admin bearer copy. Zeroized on drop.
@@ -248,13 +238,15 @@ pub fn admin_link(pat: &str, owner: &str, repo: &str) -> Result<Link, EnsureErro
     })
 }
 
-fn poll_available(link: &mut Link, session: &QueueSession) -> Result<bool, EnsureError> {
-    let (saved, path) = point_at_queue(link, &session.message_queue_url)?;
+fn poll_available(
+    link: &mut Link,
+    session: &mut QueueSession,
+    set_id: i64,
+    admin_token: &str,
+) -> Result<bool, EnsureError> {
     // Probe path never installs the launch capacity override: parse the env directly.
     let capacity = parse_job_capacity(std::env::var("VELNOR_MAX_JOBS").ok().as_deref());
-    let polled = poll_path(link, session, &path, capacity);
-    restore_base(link, saved)?;
-    let polled = polled?;
+    let polled = poll_path(link, session, set_id, admin_token, 0, capacity)?;
     Ok(matches!(offer(&polled), Offer::Acquire { .. }))
 }
 
@@ -264,19 +256,17 @@ fn poll_available(link: &mut Link, session: &QueueSession) -> Result<bool, Ensur
 ///
 /// Returns [`EnsureError`] when the URL is not a usable `https` queue.
 pub fn point_at_queue(link: &mut Link, url: &str) -> Result<(Option<String>, String), EnsureError> {
-    if let Some(path) = queue_path(&link.base, url) {
-        return Ok((None, path.to_owned()));
-    }
-    let absolute = absolute_https(url).ok_or(EnsureError::Unexpected {
+    let target = queue_target(&link.base, url).ok_or(EnsureError::Unexpected {
         status: 0,
         step: "queue-path",
     })?;
+    if target.origin == link.base {
+        return Ok((None, target.path));
+    }
     let saved = link.base.clone();
-    link.transport
-        .set_base(&absolute.origin)
-        .map_err(map_host)?;
-    link.base = absolute.origin;
-    Ok((Some(saved), absolute.path))
+    link.transport.set_base(&target.origin).map_err(map_host)?;
+    link.base = target.origin;
+    Ok((Some(saved), target.path))
 }
 
 /// One poll on the current origin.
@@ -288,22 +278,46 @@ pub fn point_at_queue(link: &mut Link, url: &str) -> Result<(Option<String>, Str
 /// Returns [`EnsureError`] when the poll is refused.
 pub fn poll_path(
     link: &mut Link,
-    session: &QueueSession,
-    path: &str,
+    session: &mut QueueSession,
+    set_id: i64,
+    admin_token: &str,
+    last_message_id: i64,
     total_capacity: u32,
 ) -> Result<Poll, EnsureError> {
+    let admin_origin = link.base.clone();
+    let initial =
+        queue_target(&admin_origin, &session.message_queue_url).ok_or(EnsureError::Unexpected {
+            status: 0,
+            step: "queue-path",
+        })?;
+    link.set_base(&initial.origin)?;
+    let queue_token = Secret::new(session.token());
     let gate = RefreshGate::new();
-    let refresh = || Ok::<(), WireError>(());
-    poll(
+    let mut refresh = |transport: &mut HttpsTransport,
+                       request: &mut velnor_runner_github::SessionRequest| {
+        transport
+            .set_base(&admin_origin)
+            .map_err(|_| SessionError::Wire(WireError::Malformed))?;
+        let url = refresh_queue_request(transport, set_id, session, admin_token, request)?;
+        let target =
+            queue_target(&admin_origin, url).ok_or(SessionError::Wire(WireError::Malformed))?;
+        transport
+            .set_base(&target.origin)
+            .map_err(|_| SessionError::Wire(WireError::Malformed))?;
+        request.path = target.path;
+        Ok(())
+    };
+    let polled = poll(
         &mut link.transport,
-        path,
-        0,
+        &initial.path,
+        last_message_id,
         total_capacity,
-        session.token(),
+        queue_token.expose(),
         &gate,
-        refresh,
-    )
-    .map_err(|err| annotate(err, "poll"))
+        &mut refresh,
+    );
+    link.set_base(&admin_origin)?;
+    polled.map_err(|err| annotate(err, "poll"))
 }
 
 /// Restore the admin origin saved by [`point_at_queue`].
@@ -318,29 +332,6 @@ pub fn restore_base(link: &mut Link, saved: Option<String>) -> Result<(), Ensure
     link.transport.set_base(&base).map_err(map_host)?;
     link.base = base;
     Ok(())
-}
-
-/// Split `https` URL: origin plus path.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Absolute {
-    /// `https://host` without path.
-    pub origin: String,
-    /// Path without leading slash.
-    pub path: String,
-}
-
-/// Split an `https` URL into origin and path. Rejects anything else.
-#[must_use]
-pub fn absolute_https(url: &str) -> Option<Absolute> {
-    let rest = url.strip_prefix("https://")?;
-    let (host, path) = rest.split_once('/')?;
-    if host.is_empty() || path.is_empty() || host.contains('@') {
-        return None;
-    }
-    Some(Absolute {
-        origin: format!("https://{host}"),
-        path: path.to_owned(),
-    })
 }
 
 /// Map a local endpoint failure. Other host errors stay off the body.

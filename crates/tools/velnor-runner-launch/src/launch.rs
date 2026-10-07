@@ -9,7 +9,7 @@ use std::future::Future;
 use zeroize::Zeroize;
 
 use velnor_runner_github::{
-    Exchange, Poll, QueueSession, SessionRequest, Transport, TransportFail,
+    Poll, QueueSession, SessionError, SessionRequest, Transport, WireError,
 };
 
 use velnor_runner_host::HostError;
@@ -26,6 +26,7 @@ mod docker_stub;
 mod fakes;
 mod gate;
 pub mod harness;
+mod host_lane;
 mod inspect;
 
 mod mint_origin;
@@ -38,6 +39,8 @@ mod turn;
 pub(crate) use capacity::{install_job_capacity, job_capacity};
 
 pub use capacity::Admit;
+
+use host_lane::HostLane;
 
 #[cfg(test)]
 pub(crate) use capacity::{
@@ -99,9 +102,17 @@ pub async fn launch_once(
     }
     let mut link = admin_link(pat, owner, repo)?;
     let admin = Secret::new(link.token());
-    let (session, row) = session::open_session(&mut link, set.id, admin.expose(), journal).await?;
-    let driven =
-        turn::poll_and_drive(&mut link, set.id, &session, admin.expose(), journal, docker).await;
+    let (mut session, row) =
+        session::open_session(&mut link, set.id, admin.expose(), journal).await?;
+    let driven = turn::poll_and_drive(
+        &mut link,
+        set.id,
+        &mut session,
+        admin.expose(),
+        journal,
+        docker,
+    )
+    .await;
     let closed = session::close_session(
         &mut link,
         set.id,
@@ -160,6 +171,24 @@ pub(crate) trait Lane {
     ///
     /// Returns [`EnsureError`] when the origin cannot be selected.
     fn on_queue(&mut self) -> Result<(), EnsureError>;
+
+    /// Current path after selecting the message queue origin.
+    fn message_queue_path(&self, fallback: &str) -> String {
+        fallback.to_owned()
+    }
+
+    /// Refresh the same session after one queue 401 and prepare the single replay.
+    ///
+    /// `ack_suffix` is present only for a message DELETE. Acquire replay stays on
+    /// the admin origin and keeps its original request path and body.
+    fn refresh_queue(
+        &mut self,
+        request: &mut SessionRequest,
+        ack_suffix: Option<&str>,
+    ) -> Result<(), SessionError> {
+        let _ = (request, ack_suffix);
+        Err(SessionError::Wire(WireError::Malformed))
+    }
 }
 
 /// Acquire, JIT, and start for one poll. No session create.
@@ -168,6 +197,7 @@ pub(crate) trait Lane {
 ///
 /// Returns [`EnsureError`] when more than one job is offered, or a later step fails.
 /// An uncertain acquire is not acknowledged.
+#[cfg(test)]
 pub(crate) async fn drive_offer<T, S, F>(
     lane: &mut T,
     ctx: &Drive,
@@ -180,16 +210,51 @@ where
     S: FnOnce(&str, &[u8], bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
+    drive_offer_tracked(lane, ctx, polled, journal, start)
+        .await
+        .map(|outcome| outcome.started)
+}
+
+/// Worker start plus the queue message deleted by this exact successful offer.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct DriveOutcome {
+    /// Worker newly started by the offer, if any.
+    pub(crate) started: Option<Started>,
+    /// Message whose DELETE returned success after the worker path completed.
+    pub(crate) acknowledged_message_id: Option<i64>,
+}
+
+/// Same start path as the test-only convenience wrapper, retaining positive ACK evidence.
+pub(crate) async fn drive_offer_tracked<T, S, F>(
+    lane: &mut T,
+    ctx: &Drive,
+    polled: &Poll,
+    journal: &Journal,
+    start: S,
+) -> Result<DriveOutcome, EnsureError>
+where
+    T: velnor_runner_github::Transport + Lane,
+    S: FnOnce(&str, &[u8], bind::Bind) -> F,
+    F: Future<Output = Result<Started, HostError>>,
+{
     if matches!(steps::idle(polled), steps::Idle::Scale) {
         let Poll::Batch(batch) = polled else {
-            return Ok(None);
+            return Ok(DriveOutcome::default());
         };
-        return steps::scale_id(lane, ctx, batch, journal, start).await;
+        let started = steps::scale_id(lane, ctx, batch, journal, start).await?;
+        return Ok(DriveOutcome {
+            started,
+            acknowledged_message_id: Some(batch.message_id),
+        });
     }
     let Some((batch, request_id)) = steps::assignment(polled)? else {
-        return Ok(None);
+        return Ok(DriveOutcome::default());
     };
-    steps::launch_id(lane, ctx, batch, journal, request_id, start).await
+    let started = steps::launch_id(lane, ctx, batch, journal, request_id, start).await?;
+    Ok(DriveOutcome {
+        started,
+        acknowledged_message_id: Some(batch.message_id),
+    })
 }
 
 fn report(
@@ -235,6 +300,10 @@ async fn scale_session(
         link,
         admin,
         queue: None,
+        queue_path: String::new(),
+        session: None,
+        set_id,
+        admin_token,
     };
     let name = runner_name(&session.session_id);
     steps::scale_unacked(&mut lane, &ctx, journal, &name, |volume, jit, bind| {
@@ -261,7 +330,7 @@ fn runner_name(session_id: &str) -> String {
 
 struct Ready<'a> {
     set_id: i64,
-    session: &'a QueueSession,
+    queue_token: String,
     admin_token: &'a str,
     path: String,
     polled: &'a Poll,
@@ -273,20 +342,20 @@ async fn drive_ready<T>(
     journal: &Journal,
     docker: &bollard::Docker,
     capacity: u32,
-) -> Result<Option<Started>, EnsureError>
+) -> Result<DriveOutcome, EnsureError>
 where
     T: Transport + Lane,
 {
     if slot::busy(journal, docker, capacity).await? {
-        return Ok(None);
+        return Ok(DriveOutcome::default());
     }
     let ctx = Drive {
         set_id: ready.set_id,
         queue_path: ready.path,
-        queue_token: ready.session.token().to_owned(),
+        queue_token: ready.queue_token,
         admin_token: ready.admin_token.to_owned(),
     };
-    drive_offer(lane, &ctx, ready.polled, journal, |volume, jit, bind| {
+    drive_offer_tracked(lane, &ctx, ready.polled, journal, |volume, jit, bind| {
         let volume = volume.to_owned();
         let payload = jit.to_vec();
         async move { bind::start_bound(docker, &volume, &payload, &bind).await }
@@ -296,49 +365,34 @@ where
 
 fn ack_ready(
     link: &mut Link,
-    session: &QueueSession,
+    set_id: i64,
+    session: &mut QueueSession,
+    admin_token: &str,
     path: String,
     queue: Option<String>,
     polled: &Poll,
-) -> Result<(), EnsureError> {
+) -> Result<Option<i64>, EnsureError> {
     let Poll::Batch(batch) = polled else {
-        return Ok(());
+        return Ok(None);
     };
     let ctx = Drive {
-        set_id: 0,
+        set_id,
         queue_path: path,
         queue_token: session.token().to_owned(),
-        admin_token: String::new(),
+        admin_token: admin_token.to_owned(),
     };
     let admin = link.base().to_owned();
-    let mut lane = HostLane { link, admin, queue };
-    steps::acknowledge(&mut lane, &ctx, batch)
-}
-
-struct HostLane<'a> {
-    link: &'a mut Link,
-    admin: String,
-    queue: Option<String>,
-}
-
-impl Transport for HostLane<'_> {
-    fn exchange(&mut self, request: &SessionRequest) -> Result<Exchange, TransportFail> {
-        self.link.transport().exchange(request)
-    }
-}
-
-impl Lane for HostLane<'_> {
-    fn on_admin(&mut self) -> Result<(), EnsureError> {
-        let admin = self.admin.clone();
-        self.link.set_base(&admin)
-    }
-
-    fn on_queue(&mut self) -> Result<(), EnsureError> {
-        let Some(origin) = self.queue.clone() else {
-            return Ok(());
-        };
-        self.link.set_base(&origin)
-    }
+    let mut lane = HostLane {
+        link,
+        admin,
+        queue,
+        queue_path: String::new(),
+        session: Some(session),
+        set_id,
+        admin_token,
+    };
+    steps::acknowledge(&mut lane, &ctx, batch)?;
+    Ok(Some(batch.message_id))
 }
 
 #[cfg(test)]

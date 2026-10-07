@@ -103,6 +103,10 @@ fn job(kind: InnerKind) -> InnerJob {
         kind,
         request_id: None,
         job_id: None,
+        workflow_run_id: None,
+        owner_name: None,
+        repository_name: None,
+        event_name: None,
         labels: Vec::new(),
         runner_id: None,
         runner_name: None,
@@ -194,7 +198,7 @@ async fn uncertain_acquire_does_not_ack() -> Result<(), String> {
     )
     .await;
     assert_eq!(replayed, Err(EnsureError::Uncertain));
-    assert!(replay.calls.is_empty());
+    assert_eq!(replay.calls, Vec::<&'static str>::new());
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].id, id);
@@ -276,7 +280,7 @@ async fn two_offers_are_not_acquired() -> Result<(), String> {
     );
     assert_eq!(script.calls, Vec::<&str>::new());
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert_eq!(rows, Vec::new());
+    assert_eq!(rows, Vec::<velnor_runner_host::reconcile::IntentRow>::new());
     Ok(())
 }
 

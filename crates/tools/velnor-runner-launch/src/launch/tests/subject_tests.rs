@@ -73,7 +73,7 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
     .await
     .map_err(|err| err.to_string())?;
     assert_eq!(repeated, None);
-    assert!(replay.calls.is_empty());
+    assert_eq!(replay.calls, Vec::<&'static str>::new());
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].subject, "s-one");

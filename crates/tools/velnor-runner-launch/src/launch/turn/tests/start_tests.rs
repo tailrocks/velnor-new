@@ -41,9 +41,9 @@ async fn zero_initial_census_and_positive_poll_keep_jit_conflict_unacked() -> Re
     .await;
     drop(docker);
 
-    assert_eq!(result, Err(EnsureError::Conflict));
+    assert!(matches!(result, Err(EnsureError::Conflict)));
     assert_eq!(script.calls, ["jit"]);
-    assert!(workers.is_empty());
+    assert_eq!(workers, Vec::<Started>::new());
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].subject, "m91");
@@ -89,9 +89,9 @@ async fn idless_uncertain_reservation_blocks_turn_without_jit_or_ack() -> Result
     docker.finish().await?;
 
     assert_eq!(decision, crate::launch::Admit::Hold);
-    assert_eq!(result, Ok(false));
-    assert!(script.calls.is_empty());
-    assert!(workers.is_empty());
+    assert_eq!(result.map(|outcome| outcome.stop), Ok(false));
+    assert_eq!(script.calls, Vec::<&'static str>::new());
+    assert_eq!(workers, Vec::<Started>::new());
     assert_eq!(crate::launch::slot::occupied(&journal).await, Ok(1));
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
@@ -176,12 +176,9 @@ async fn missing_current_census_blocks_ack_and_start() -> Result<(), String> {
     .await
     .map_err(|error| error.to_string())?;
     assert_eq!(decision, crate::launch::Admit::Error);
-    assert!(
-        journal
-            .rows()
-            .await
-            .map_err(|error| error.to_string())?
-            .is_empty()
+    assert_eq!(
+        journal.rows().await.map_err(|error| error.to_string())?,
+        Vec::<velnor_runner_host::reconcile::IntentRow>::new()
     );
     absent(&scratch.file())
 }
@@ -225,9 +222,9 @@ async fn bound_running_worker_acks_without_a_second_jit_request() -> Result<(), 
     .await;
     docker.finish().await?;
 
-    assert_eq!(result, Ok(false));
+    assert_eq!(result.map(|outcome| outcome.stop), Ok(false));
     assert_eq!(script.calls, ["ack"]);
-    assert!(workers.is_empty());
+    assert_eq!(workers, Vec::<Started>::new());
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows[0].state, IntentState::Done);
     assert_eq!(rows[0].docker_id.as_deref(), Some("runner-container"));
@@ -289,9 +286,9 @@ async fn bound_resource_keeps_assignment(
     .await;
     drop(docker);
 
-    assert_eq!(result, Err(EnsureError::Uncertain));
-    assert!(script.calls.is_empty());
-    assert!(workers.is_empty());
+    assert!(matches!(result, Err(EnsureError::Uncertain)));
+    assert_eq!(script.calls, Vec::<&'static str>::new());
+    assert_eq!(workers, Vec::<Started>::new());
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Uncertain);

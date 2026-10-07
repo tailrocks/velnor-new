@@ -32,17 +32,17 @@ pub fn acquire<T, R>(
 ) -> Result<AcquireOutcome, SessionError>
 where
     T: Transport + ?Sized,
-    R: FnMut() -> Result<(), WireError>,
+    R: FnMut(&mut T, &mut SessionRequest) -> Result<(), SessionError>,
 {
     let body = serde_json::to_vec(requested).map_err(|_| WireError::Encode)?;
-    let request = SessionRequest {
+    let mut request = SessionRequest {
         method: Method::Post,
         path: acquire_path(scale_set_id),
         query: Some(API_QUERY.to_owned()),
         headers: vec![json_content(), bearer(queue_token)?, user_agent()],
         body,
     };
-    let answer = attempt(transport, &request, gate, refresh)?;
+    let answer = attempt(transport, &mut request, gate, refresh)?;
     accepted(&answer, requested, already)
 }
 

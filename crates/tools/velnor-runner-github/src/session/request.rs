@@ -4,7 +4,7 @@ use std::fmt;
 
 use zeroize::Zeroize;
 
-use crate::TransportFail;
+use crate::{TransportFail, WireError};
 
 /// Verb used by the pinned session client.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +34,68 @@ pub struct SessionRequest {
     pub headers: Vec<(String, String)>,
     /// Request bytes. [`Debug`] prints `[redacted]` instead.
     pub body: Vec<u8>,
+}
+
+impl SessionRequest {
+    /// Return the token from exactly one well-formed bearer header.
+    pub(crate) fn bearer_token(&self) -> Option<&str> {
+        let mut authorization = self
+            .headers
+            .iter()
+            .filter(|(key, _)| key.eq_ignore_ascii_case("authorization"));
+        let (_, value) = authorization.next()?;
+        if authorization.next().is_some() {
+            return None;
+        }
+        let token = value.strip_prefix("Bearer ")?;
+        if token.is_empty()
+            || token
+                .bytes()
+                .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
+        {
+            return None;
+        }
+        Some(token)
+    }
+
+    /// Whether the request has exactly one bearer header with `token`.
+    pub(crate) fn uses_bearer(&self, token: &str) -> bool {
+        self.bearer_token() == Some(token)
+    }
+
+    /// Replace the request's one bearer header, wiping its previous value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`WireError::RegistrationRejected`] for an empty token or a
+    /// request without exactly one authorization header.
+    pub(crate) fn replace_bearer(&mut self, token: &str) -> Result<(), WireError> {
+        if token.is_empty()
+            || token
+                .bytes()
+                .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
+        {
+            return Err(WireError::RegistrationRejected);
+        }
+        let authorization_count = self
+            .headers
+            .iter()
+            .filter(|(key, _)| key.eq_ignore_ascii_case("authorization"))
+            .count();
+        if authorization_count != 1 {
+            return Err(WireError::RegistrationRejected);
+        }
+        let Some((_, value)) = self
+            .headers
+            .iter_mut()
+            .find(|(key, _)| key.eq_ignore_ascii_case("authorization"))
+        else {
+            return Err(WireError::RegistrationRejected);
+        };
+        value.zeroize();
+        *value = format!("Bearer {token}");
+        Ok(())
+    }
 }
 
 impl fmt::Debug for SessionRequest {

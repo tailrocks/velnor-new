@@ -75,7 +75,7 @@ async fn uncertain_volume_holds_without_remote_settlement() -> Result<(), String
     let requests = stub.finish().await?;
 
     assert_eq!(decision, Ok(Admit::Hold));
-    assert!(requests.is_empty());
+    assert_eq!(requests, Vec::<String>::new());
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Uncertain);

@@ -27,7 +27,7 @@ pub(super) fn zero_assignment_session() -> Result<QueueSession, String> {
 pub(super) fn ready<'a>(session: &'a QueueSession, polled: &'a Poll) -> Ready<'a> {
     Ready {
         set_id: 1,
-        session,
+        queue_token: session.token().to_owned(),
         admin_token: "admin-token",
         path: "messages".to_owned(),
         polled,

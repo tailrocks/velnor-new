@@ -108,13 +108,13 @@ fn effect_is_uncertain(fail: TransportFail) -> bool {
 
 pub(crate) fn attempt<T, R>(
     transport: &mut T,
-    request: &SessionRequest,
+    request: &mut SessionRequest,
     gate: &RefreshGate,
     refresh: R,
 ) -> Result<Answer, SessionError>
 where
     T: Transport + ?Sized,
-    R: FnMut() -> Result<(), WireError>,
+    R: FnMut(&mut T, &mut SessionRequest) -> Result<(), SessionError>,
 {
     let mut exchange = execute(transport, request)?;
     if exchange.status >= 500 {
@@ -129,21 +129,21 @@ where
 
 fn refresh_once<T, R>(
     transport: &mut T,
-    request: &SessionRequest,
+    request: &mut SessionRequest,
     gate: &RefreshGate,
     mut refresh: R,
 ) -> Result<Answer, SessionError>
 where
     T: Transport + ?Sized,
-    R: FnMut() -> Result<(), WireError>,
+    R: FnMut(&mut T, &mut SessionRequest) -> Result<(), SessionError>,
 {
-    refresh().map_err(SessionError::Wire)?;
+    refresh(transport, request)?;
     finished(transport, request, gate)
 }
 
 fn finished<T>(
     transport: &mut T,
-    request: &SessionRequest,
+    request: &mut SessionRequest,
     gate: &RefreshGate,
 ) -> Result<Answer, SessionError>
 where

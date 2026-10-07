@@ -2,9 +2,9 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::launch::drive_offer;
 use crate::launch::fakes::valid_worker_volume;
 use crate::launch::harness::{CANARY, Mode, Script, absent, assigned_wait, ctx, open};
+use crate::launch::{drive_offer, drive_offer_tracked};
 use velnor_runner_host::{EnsureError, HostError, IntentState, Outcome, Started};
 
 #[tokio::test]
@@ -16,7 +16,7 @@ async fn scale_mints_jit_then_acks_without_acquire() -> Result<(), String> {
         calls: Vec::new(),
         mode: Mode::Ok,
     };
-    let started = drive_offer(
+    let outcome = drive_offer_tracked(
         &mut script,
         &ctx(),
         &assigned_wait(7, 1),
@@ -40,7 +40,8 @@ async fn scale_mints_jit_then_acks_without_acquire() -> Result<(), String> {
     )
     .await
     .map_err(|err| err.to_string())?;
-    let started = started.ok_or_else(|| "missing worker".to_owned())?;
+    assert_eq!(outcome.acknowledged_message_id, Some(7));
+    let started = outcome.started.ok_or_else(|| "missing worker".to_owned())?;
     assert_eq!(started.runner_id, "runner-1");
     assert_eq!(script.calls, ["jit", "ack"]);
     {
@@ -77,7 +78,7 @@ async fn idless_uncertain_subject_keeps_its_reservation() -> Result<(), String> 
     )
     .await;
     assert_eq!(result, Err(EnsureError::Uncertain));
-    assert!(script.calls.is_empty());
+    assert_eq!(script.calls, Vec::<&'static str>::new());
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].id, row);
@@ -117,7 +118,7 @@ async fn partial_uncertain_subject_does_not_mint() -> Result<(), String> {
     )
     .await;
     assert_eq!(error, Err(EnsureError::Uncertain));
-    assert!(script.calls.is_empty());
+    assert_eq!(script.calls, Vec::<&'static str>::new());
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Uncertain);
@@ -176,7 +177,7 @@ async fn finished_scale_row_does_not_block_the_next_message() -> Result<(), Stri
         calls: Vec::new(),
         mode: Mode::Ok,
     };
-    let again = drive_offer(
+    let again = drive_offer_tracked(
         &mut second,
         &ctx(),
         &assigned_wait(8, 1),
@@ -191,9 +192,10 @@ async fn finished_scale_row_does_not_block_the_next_message() -> Result<(), Stri
     .await
     .map_err(|err| err.to_string())?;
     assert_eq!(
-        again.map(|item| item.runner_id).as_deref(),
+        again.started.as_ref().map(|item| item.runner_id.as_str()),
         Some("runner-2")
     );
+    assert_eq!(again.acknowledged_message_id, Some(8));
     assert_eq!(second.calls, ["jit", "ack"]);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 2);
@@ -229,7 +231,7 @@ async fn redelivered_scale_row_does_not_count_as_a_worker() -> Result<(), String
         calls: Vec::new(),
         mode: Mode::Ok,
     };
-    let again = drive_offer(
+    let again = drive_offer_tracked(
         &mut second,
         &ctx(),
         &assigned_wait(7, 1),
@@ -238,7 +240,8 @@ async fn redelivered_scale_row_does_not_count_as_a_worker() -> Result<(), String
     )
     .await
     .map_err(|err| err.to_string())?;
-    assert_eq!(again, None);
+    assert_eq!(again.started, None);
+    assert_eq!(again.acknowledged_message_id, Some(7));
     assert_eq!(second.calls, ["ack"]);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 1);

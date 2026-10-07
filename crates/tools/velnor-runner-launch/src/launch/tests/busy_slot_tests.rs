@@ -57,12 +57,12 @@ async fn busy_slot_does_not_ack_scale_assignment() -> Result<(), String> {
     };
     let mut started_any = false;
     for polled in &polls {
-        let started = within(
+        let outcome = within(
             drive_ready(
                 &mut script,
                 Ready {
                     set_id: 1,
-                    session: &session,
+                    queue_token: session.token().to_owned(),
                     admin_token: "admin-token",
                     path: "queues/messages".to_owned(),
                     polled,
@@ -75,11 +75,12 @@ async fn busy_slot_does_not_ack_scale_assignment() -> Result<(), String> {
         )
         .await?
         .map_err(|err| err.to_string())?;
-        started_any |= started.is_some();
+        assert_eq!(outcome.acknowledged_message_id, None);
+        started_any |= outcome.started.is_some();
     }
     stub.finish().await?;
     assert!(!started_any);
-    assert!(script.calls.is_empty());
+    assert_eq!(script.calls, Vec::<&'static str>::new());
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Pending);

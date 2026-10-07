@@ -32,9 +32,9 @@ pub fn poll<T, R>(
 ) -> Result<Poll, SessionError>
 where
     T: Transport + ?Sized,
-    R: FnMut() -> Result<(), WireError>,
+    R: FnMut(&mut T, &mut SessionRequest) -> Result<(), SessionError>,
 {
-    let request = SessionRequest {
+    let mut request = SessionRequest {
         method: Method::Get,
         path: queue_path.to_owned(),
         query: Some(poll_query(cursor)),
@@ -46,7 +46,7 @@ where
         ],
         body: Vec::new(),
     };
-    let answer = attempt(transport, &request, gate, refresh)?;
+    let answer = attempt(transport, &mut request, gate, refresh)?;
     match answer.class {
         StatusClass::EmptyPoll => Ok(Poll::Empty),
         StatusClass::Ok => parse_body(answer.status, answer.body()),
