@@ -1,4 +1,4 @@
-use super::super::{daemon_backend_supported, read_daemon_config};
+use super::super::{daemon_backend_supported, read_daemon_config, read_daemon_config_with};
 use velnor_runner_host::HostPlatform;
 
 const LINUX_SAMPLE: &str = concat!(
@@ -28,15 +28,29 @@ const LINUX_SAMPLE: &str = concat!(
 );
 
 #[test]
-fn linux_config_is_parsed_but_not_routed_through_legacy_admission() -> Result<(), String> {
-    let dir = std::env::temp_dir().join(format!("velnor-daemon-linux-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
-    let selected = dir.join("host.toml");
-    std::fs::write(&selected, LINUX_SAMPLE).map_err(|error| error.to_string())?;
-    let config = read_daemon_config(&selected, HostPlatform::Linux)
-        .map_err(|error| format!("Linux config failed: {error:?}"))?
-        .ok_or("Linux config was treated as missing")?;
+fn linux_config_preflight_uses_the_package_path_and_systemd_credential() -> Result<(), String> {
+    let config = read_daemon_config_with(
+        std::path::Path::new(velnor_runner_host::LINUX_CONFIG_PATH),
+        HostPlatform::Linux,
+        |path, platform| {
+            if path != std::path::Path::new(velnor_runner_host::LINUX_CONFIG_PATH)
+                || platform != HostPlatform::Linux
+            {
+                return Err(());
+            }
+            Ok(Some(LINUX_SAMPLE.to_owned()))
+        },
+    )
+    .map_err(|error| format!("Linux config failed: {error:?}"))?
+    .ok_or("Linux config was treated as missing")?;
     if config.github.credential_ref != "systemd-credential:github-token"
+        || config.github.scale_set_name != "ubuntu-24.04-scale-set"
+        || config
+            .runner
+            .as_ref()
+            .map(|runner| runner.image_profile.as_str())
+            != Some("ubuntu-24.04-amd64")
+        || config.docker.platform != "linux/amd64"
         || config
             .job_trust_policy()
             .map_err(|error| error.to_string())?
@@ -48,6 +62,15 @@ fn linux_config_is_parsed_but_not_routed_through_legacy_admission() -> Result<()
             "Linux settings were not validated or admission was not fail-closed".to_owned(),
         );
     }
-    std::fs::remove_dir_all(dir).map_err(|error| error.to_string())?;
     Ok(())
+}
+
+#[test]
+fn linux_daemon_config_reader_rejects_a_non_package_path_before_reading() {
+    let path =
+        std::env::temp_dir().join(format!("velnor-daemon-linux-{}.toml", std::process::id()));
+    assert!(matches!(
+        read_daemon_config(&path, HostPlatform::Linux),
+        Err(super::super::ConfigReadError::Unreadable)
+    ));
 }

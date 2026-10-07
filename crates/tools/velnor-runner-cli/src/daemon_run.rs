@@ -5,7 +5,9 @@ use std::process::ExitCode;
 use std::thread;
 use std::time::Duration;
 
-use velnor_runner_host::{DaemonLock, HostConfig, HostPlatform, load_configured_secret};
+use velnor_runner_host::{
+    DaemonLock, HostConfig, HostPlatform, load_configured_secret, read_host_config_file,
+};
 use velnor_runner_launch::{LaunchReport, launch_blocking};
 
 const RETRY: Duration = Duration::from_secs(5);
@@ -68,16 +70,29 @@ fn read_daemon_config(
     config_path: &Path,
     platform: HostPlatform,
 ) -> Result<Option<HostConfig>, ConfigReadError> {
-    let text = match std::fs::read_to_string(config_path) {
-        Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(_) => return Err(ConfigReadError::Unreadable),
+    read_daemon_config_with(config_path, platform, |path, host_platform| {
+        read_host_config_file(path, host_platform).map_err(|_| ())
+    })
+}
+
+fn read_daemon_config_with(
+    config_path: &Path,
+    platform: HostPlatform,
+    read: impl FnOnce(&Path, HostPlatform) -> Result<Option<String>, ()>,
+) -> Result<Option<HostConfig>, ConfigReadError> {
+    let text = read(config_path, platform).map_err(|()| ConfigReadError::Unreadable)?;
+    let Some(text) = text else {
+        return Ok(None);
     };
-    let config = HostConfig::parse(&text).map_err(|_| ConfigReadError::Invalid)?;
+    parse_daemon_config(&text, platform).map(Some)
+}
+
+fn parse_daemon_config(text: &str, platform: HostPlatform) -> Result<HostConfig, ConfigReadError> {
+    let config = HostConfig::parse(text).map_err(|_| ConfigReadError::Invalid)?;
     config
         .validate_for_host(platform)
         .map_err(|_| ConfigReadError::Invalid)?;
-    Ok(Some(config))
+    Ok(config)
 }
 
 fn step(state: &Path, config_path: &Path) -> bool {
