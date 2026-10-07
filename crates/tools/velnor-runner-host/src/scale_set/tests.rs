@@ -1,10 +1,13 @@
 use super::{EnsureError, require_group_policy_evidence, validate_binding, validate_group};
-use crate::{RegistrationScopeKind, ScaleSetBinding};
+use crate::{RegistrationScope, ScaleSetBinding};
 use velnor_runner_github::RunnerGroup;
 
 fn binding() -> ScaleSetBinding {
     ScaleSetBinding {
-        scope: RegistrationScopeKind::Repository,
+        scope: RegistrationScope::Repository {
+            owner: "ChainArgos".to_owned(),
+            repository: "java-monorepo".to_owned(),
+        },
         owner: "ChainArgos".to_owned(),
         repository: "java-monorepo".to_owned(),
         scale_set_name: "ubuntu-26.04-scale-set".to_owned(),
@@ -84,4 +87,28 @@ fn linux_binding_is_rejected_when_scope_policy_evidence_is_missing() {
         Err(EnsureError::GroupPolicyUnavailable)
     );
     assert_eq!(require_group_policy_evidence(&binding()), Ok(()));
+}
+
+#[test]
+fn organization_binding_stays_fenced_without_matching_scope_proof() {
+    let mut organization = binding();
+    organization.scope = RegistrationScope::Organization {
+        organization: "ChainArgos".to_owned(),
+    };
+    organization.scale_set_name = "ubuntu-24.04-scale-set".to_owned();
+    organization.runner_image_profile = Some("ubuntu-24.04-amd64".to_owned());
+
+    assert!(validate_binding("credential", &organization).is_ok());
+    assert_eq!(
+        require_group_policy_evidence(&organization),
+        Err(EnsureError::GroupPolicyUnavailable)
+    );
+
+    organization.scope = RegistrationScope::Organization {
+        organization: "another-org".to_owned(),
+    };
+    assert_eq!(
+        validate_binding("credential", &organization),
+        Err(EnsureError::Rejected)
+    );
 }

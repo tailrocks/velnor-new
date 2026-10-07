@@ -4,9 +4,22 @@ use super::{DockerConfig, GithubSection, JobTrustPolicy};
 use velnor_runner_journal::HostError;
 
 pub(super) fn validate_github(github: &GithubSection) -> Result<(), HostError> {
+    let scope_ok = match (
+        github.registration_scope,
+        github.registration_scope_name.as_deref(),
+    ) {
+        (None | Some(super::RegistrationScopeKind::Repository), None) => true,
+        (Some(super::RegistrationScopeKind::Organization), Some(organization)) => {
+            safe_segment(organization)
+                && split_repository(&github.repository)
+                    .is_ok_and(|(owner, _)| owner == organization)
+        }
+        _ => false,
+    };
     if repository_ok(&github.repository)
         && scale_set_name_ok(&github.scale_set_name)
         && credential_ref_ok(&github.credential_ref)
+        && scope_ok
     {
         Ok(())
     } else {

@@ -1,17 +1,17 @@
 //! Resolve the configured runner group and Scale Set before launch.
 
 use velnor_runner_github::{
-    AdminConnectionCall, Exchange, RegistrationScope, RegistrationTokenCall, RunnerGroup,
-    ScaleSetByName, ScaleSetCreate, ScaleSetFound, SessionError, SessionRequest, Transport,
-    TransportFail, WireError, admin_connection, create_runner_scale_set, get_runner_scale_set,
-    list_runner_groups, product_create_labels_for, registration_token,
+    Exchange, RunnerGroup, ScaleSetByName, ScaleSetCreate, ScaleSetFound, SessionError,
+    SessionRequest, Transport, TransportFail, WireError, create_runner_scale_set,
+    get_runner_scale_set, list_runner_groups, product_create_labels_for,
 };
 
 use crate::HostError;
 use crate::https::HttpsTransport;
-use velnor_runner_host_config::{RegistrationScopeKind, ScaleSetBinding};
+use velnor_runner_host_config::{RegistrationScope, ScaleSetBinding};
 
-const GITHUB_API: &str = "https://api.github.com";
+mod registration;
+use registration::open_admin;
 
 /// Identifiers safe to print. No token and no service URL.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,7 +77,10 @@ pub fn ensure_product_scale_set(
     repo: &str,
 ) -> Result<EnsuredSet, EnsureError> {
     let binding = ScaleSetBinding {
-        scope: RegistrationScopeKind::Repository,
+        scope: RegistrationScope::Repository {
+            owner: owner.to_owned(),
+            repository: repo.to_owned(),
+        },
         owner: owner.to_owned(),
         repository: repo.to_owned(),
         scale_set_name: "ubuntu-26.04-scale-set".to_owned(),
@@ -104,7 +107,7 @@ pub fn ensure_product_scale_set_for_binding(
 ) -> Result<EnsuredSet, EnsureError> {
     validate_binding(pat, binding)?;
     require_group_policy_evidence(binding)?;
-    let (mut transport, admin) = open_admin(pat, &binding.owner, &binding.repository)?;
+    let (mut transport, admin) = open_admin(pat, &binding.scope)?;
     validate_runner_group(&mut transport, admin.expose_token(), binding)?;
     let found = get_runner_scale_set(
         &mut transport,
@@ -149,7 +152,7 @@ pub fn discover_product_scale_set(
 ) -> Result<EnsuredSet, EnsureError> {
     validate_binding(pat, binding)?;
     require_group_policy_evidence(binding)?;
-    let (mut transport, admin) = open_admin(pat, &binding.owner, &binding.repository)?;
+    let (mut transport, admin) = open_admin(pat, &binding.scope)?;
     validate_runner_group(&mut transport, admin.expose_token(), binding)?;
     let found = get_runner_scale_set(
         &mut transport,
@@ -179,44 +182,19 @@ pub fn product_runner_groups(
     if pat.is_empty() || owner.is_empty() || repo.is_empty() {
         return Err(EnsureError::Rejected);
     }
-    let (mut transport, admin) = open_admin(pat, owner, repo)?;
+    let (mut transport, admin) = open_admin(
+        pat,
+        &RegistrationScope::Repository {
+            owner: owner.to_owned(),
+            repository: repo.to_owned(),
+        },
+    )?;
     list_runner_groups(&mut transport, admin.expose_token())
         .map_err(|err| map_session(err, &transport))
 }
 
-fn open_admin(
-    pat: &str,
-    owner: &str,
-    repo: &str,
-) -> Result<(Recording, velnor_runner_github::AdminConnection), EnsureError> {
-    let mut transport = Recording::new(HttpsTransport::new(GITHUB_API).map_err(map_host)?);
-    let registration = registration_token(
-        &mut transport,
-        &RegistrationTokenCall {
-            scope: RegistrationScope::Repository { owner, repo },
-            pat,
-        },
-    )
-    .map_err(|err| map_session(err, &transport))?;
-    let config_url = format!("https://github.com/{owner}/{repo}");
-    let admin = admin_connection(
-        &mut transport,
-        &AdminConnectionCall {
-            config_url: &config_url,
-            registration_token: registration.expose(),
-        },
-    )
-    .map_err(|err| map_session(err, &transport))?;
-    transport
-        .inner
-        .set_base(admin.expose_url())
-        .map_err(map_host)?;
-    Ok((transport, admin))
-}
-
 fn validate_binding(pat: &str, binding: &ScaleSetBinding) -> Result<(), EnsureError> {
     if pat.is_empty()
-        || binding.scope != RegistrationScopeKind::Repository
         || !safe_segment(&binding.owner)
         || !safe_segment(&binding.repository)
         || !safe_scale_set_name(&binding.scale_set_name)
@@ -225,13 +203,23 @@ fn validate_binding(pat: &str, binding: &ScaleSetBinding) -> Result<(), EnsureEr
     {
         return Err(EnsureError::Rejected);
     }
+    let scope_matches_target = match &binding.scope {
+        RegistrationScope::Repository { owner, repository } => {
+            owner == &binding.owner && repository == &binding.repository
+        }
+        RegistrationScope::Organization { organization } => organization == &binding.owner,
+    };
+    if !scope_matches_target {
+        return Err(EnsureError::Rejected);
+    }
     match binding.runner_image_profile.as_deref() {
         Some(profile) => {
             let _profile =
                 velnor_runner_docker_spec::resolve_runner_profile(profile, &binding.scale_set_name)
                     .map_err(|_| EnsureError::Rejected)?;
         }
-        None if binding.scale_set_name == "ubuntu-26.04-scale-set" => {}
+        None if matches!(&binding.scope, RegistrationScope::Repository { .. })
+            && binding.scale_set_name == "ubuntu-26.04-scale-set" => {}
         None => return Err(EnsureError::Rejected),
     }
     validate_group_identity(binding)
@@ -241,7 +229,9 @@ fn validate_binding(pat: &str, binding: &ScaleSetBinding) -> Result<(), EnsureEr
 /// read exists for the repository-scoped group. The current protocol DTO only
 /// provides group identity; it cannot prove private repository/workflow scope.
 fn require_group_policy_evidence(binding: &ScaleSetBinding) -> Result<(), EnsureError> {
-    if binding.runner_image_profile.is_some() {
+    if binding.runner_image_profile.is_some()
+        || matches!(&binding.scope, RegistrationScope::Organization { .. })
+    {
         Err(EnsureError::GroupPolicyUnavailable)
     } else {
         Ok(())
