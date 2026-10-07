@@ -1,5 +1,12 @@
 //! Read-only GitHub Actions REST lookups used to reconcile Scale Set messages.
 
+mod reconciliation;
+
+pub use reconciliation::{
+    ActionsJobReconciliation, ActionsJobReconciliationReason, ActionsJobReconciliationState,
+    ObservedScaleSetJob, reconcile_observed_scale_set_job,
+};
+
 use serde::Deserialize;
 
 use crate::session::execute;
