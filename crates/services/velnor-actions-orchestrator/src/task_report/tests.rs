@@ -41,7 +41,10 @@ fn staged_with_tools(
     staged_with_envelope(with_proof, declarations, qualified_tools, None, None)
 }
 fn verdict(request: &str) -> FinalReport {
-    serde_json::from_str(&crate::merge_internal(request).expect("merge")).expect("final report")
+    serde_json::from_str(
+        &velnor_actions_orchestrator_internal::merge_entry::merge_internal(request).expect("merge"),
+    )
+    .expect("final report")
 }
 fn plan() -> Plan {
     plan_with_tools(&[])

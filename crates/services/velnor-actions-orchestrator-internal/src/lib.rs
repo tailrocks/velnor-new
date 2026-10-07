@@ -15,4 +15,5 @@
 pub mod cover_baseline;
 pub mod internal;
 pub mod internal_request;
+pub mod merge_entry;
 pub mod merge_request;

@@ -24,14 +24,12 @@ velnor-actions-orchestrator-check-evidence = { version = "=0.1.1", path = "../ve
 velnor-actions-orchestrator-check-preparation = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-preparation" }
 velnor-actions-orchestrator-check-runtime = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-runtime" }
 velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
-velnor-actions-orchestrator-cover = { version = "=0.1.1", path = "../velnor-actions-orchestrator-cover" }
 velnor-actions-orchestrator-cover-compat = { version = "=0.1.1", path = "../velnor-actions-orchestrator-cover-compat" }
 velnor-actions-orchestrator-covered-tasks = { version = "=0.1.1", path = "../velnor-actions-orchestrator-covered-tasks" }
 velnor-actions-orchestrator-discovery = { version = "=0.1.1", path = "../velnor-actions-orchestrator-discovery" }
 velnor-actions-orchestrator-external-data = { version = "=0.1.1", path = "../velnor-actions-orchestrator-external-data" }
 velnor-actions-orchestrator-generation = { version = "=0.1.1", path = "../velnor-actions-orchestrator-generation" }
 velnor-actions-orchestrator-internal = { version = "=0.1.1", path = "../velnor-actions-orchestrator-internal" }
-velnor-actions-orchestrator-merge = { version = "=0.1.1", path = "../velnor-actions-orchestrator-merge" }
 velnor-actions-orchestrator-merge-request = { version = "=0.1.1", path = "../velnor-actions-orchestrator-merge-request" }
 velnor-actions-orchestrator-noop-report = { version = "=0.1.1", path = "../velnor-actions-orchestrator-noop-report" }
 velnor-actions-orchestrator-pins = { version = "=0.1.1", path = "../velnor-actions-orchestrator-pins" }
