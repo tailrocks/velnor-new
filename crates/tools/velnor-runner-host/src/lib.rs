@@ -22,7 +22,7 @@ pub use connect::{ConnectPlan, DisconnectEffect, SetOwnership, connect_plan, dis
 pub use daemon_lock::DaemonLock;
 pub use docker_client::connect_unix;
 pub use guest::guest_slots;
-pub use https::HttpsTransport;
+pub use https::{BoundedDiscoveryTransport, HttpsTransport};
 pub use ipc::{MAX_FRAME, SOCKET_DIR_MODE, decode_frame, encode_frame};
 pub use keychain::{
     import_secret, load_configured_secret, load_secret, read_secret, remove_configured_secret,
