@@ -15,9 +15,11 @@ pub mod session;
 
 pub use acquire::{AcquireOutcome, Certainty, TransportFail, classify_acquire, effect_certainty};
 pub use actions::{
-    ActionsJob, ActionsRepository, ActionsWorkflowRun, ForkPullRequestWorkflowSetting,
-    PrivateRepoForkWorkflowSettings, get_actions_job, get_actions_repository,
-    get_actions_workflow_run, get_private_repo_fork_workflow_settings,
+    ActionsJob, ActionsJobReconciliation, ActionsJobReconciliationReason,
+    ActionsJobReconciliationState, ActionsRepository, ActionsWorkflowRun,
+    ForkPullRequestWorkflowSetting, ObservedScaleSetJob, PrivateRepoForkWorkflowSettings,
+    get_actions_job, get_actions_repository, get_actions_workflow_run,
+    get_private_repo_fork_workflow_settings, reconcile_observed_scale_set_job,
 };
 pub use error::WireError;
 pub use paths::{
