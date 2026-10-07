@@ -2,6 +2,7 @@
 
 mod fork_workflows;
 mod reconciliation;
+pub(crate) mod trust;
 
 pub use fork_workflows::{
     ForkPullRequestWorkflowSetting, PrivateRepoForkWorkflowSettings,
