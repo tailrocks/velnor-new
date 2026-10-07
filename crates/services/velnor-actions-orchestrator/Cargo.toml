@@ -22,6 +22,7 @@ velnor-actions-orchestrator-baseline-publish = { version = "=0.1.1", path = "../
 velnor-actions-orchestrator-check-acquisition = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-acquisition" }
 velnor-actions-orchestrator-check-evidence = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-evidence" }
 velnor-actions-orchestrator-check-preparation = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-preparation" }
+velnor-actions-orchestrator-check-runtime = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-runtime" }
 velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
 velnor-actions-orchestrator-cover = { version = "=0.1.1", path = "../velnor-actions-orchestrator-cover" }
 velnor-actions-orchestrator-cover-baseline = { version = "=0.1.1", path = "../velnor-actions-orchestrator-cover-baseline" }
@@ -46,7 +47,6 @@ velnor-actions-orchestrator-retrieve = { version = "=0.1.1", path = "../velnor-a
 velnor-actions-orchestrator-retrieve-retry = { version = "=0.1.1", path = "../velnor-actions-orchestrator-retrieve-retry" }
 velnor-actions-orchestrator-run-select = { version = "=0.1.1", path = "../velnor-actions-orchestrator-run-select" }
 velnor-actions-orchestrator-runtime-evidence = { version = "=0.1.1", path = "../velnor-actions-orchestrator-runtime-evidence" }
-velnor-actions-orchestrator-runtime-execute = { version = "=0.1.1", path = "../velnor-actions-orchestrator-runtime-execute" }
 velnor-actions-orchestrator-runtime-plan = { version = "=0.1.1", path = "../velnor-actions-orchestrator-runtime-plan" }
 velnor-actions-orchestrator-selection = { version = "=0.1.1", path = "../velnor-actions-orchestrator-selection" }
 velnor-actions-orchestrator-staged-validation = { version = "=0.1.1", path = "../velnor-actions-orchestrator-staged-validation" }

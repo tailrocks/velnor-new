@@ -3629,6 +3629,7 @@ dependencies = [
  "velnor-actions-orchestrator-check-acquisition",
  "velnor-actions-orchestrator-check-evidence",
  "velnor-actions-orchestrator-check-preparation",
+ "velnor-actions-orchestrator-check-runtime",
  "velnor-actions-orchestrator-core",
  "velnor-actions-orchestrator-cover",
  "velnor-actions-orchestrator-cover-baseline",
@@ -3653,7 +3654,6 @@ dependencies = [
  "velnor-actions-orchestrator-retrieve-retry",
  "velnor-actions-orchestrator-run-select",
  "velnor-actions-orchestrator-runtime-evidence",
- "velnor-actions-orchestrator-runtime-execute",
  "velnor-actions-orchestrator-runtime-plan",
  "velnor-actions-orchestrator-selection",
  "velnor-actions-orchestrator-staged-validation",
@@ -3749,6 +3749,20 @@ dependencies = [
  "velnor-actions-orchestrator-check-acquisition",
  "velnor-actions-orchestrator-core",
  "velnor-actions-workflow-steps",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-check-runtime"
+version = "0.1.1"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "velnor-actions-contract-config",
+ "velnor-actions-contract-workflow",
+ "velnor-actions-orchestrator-check-evidence",
+ "velnor-actions-orchestrator-core",
+ "velnor-actions-orchestrator-retrieve",
+ "velnor-actions-orchestrator-runtime-execute",
 ]
 
 [[package]]

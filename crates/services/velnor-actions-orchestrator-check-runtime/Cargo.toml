@@ -1,0 +1,26 @@
+[package]
+name = "velnor-actions-orchestrator-check-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[dependencies]
+velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
+velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
+velnor-actions-orchestrator-retrieve = { version = "=0.1.1", path = "../velnor-actions-orchestrator-retrieve" }
+velnor-actions-orchestrator-runtime-execute = { version = "=0.1.1", path = "../velnor-actions-orchestrator-runtime-execute" }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
+velnor-actions-orchestrator-check-evidence = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-evidence" }
+
+[[test]]
+name = "velnor_orchestrator_check_runtime"
+path = "tests/main.rs"

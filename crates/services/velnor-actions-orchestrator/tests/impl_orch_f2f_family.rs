@@ -55,6 +55,15 @@ const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "crates/services/velnor-actions-orchestrator-check-runtime",
+        &[
+            "velnor-actions-contract-workflow",
+            "velnor-actions-orchestrator-core",
+            "velnor-actions-orchestrator-retrieve",
+            "velnor-actions-orchestrator-runtime-execute",
+        ],
+    ),
+    (
         "crates/services/velnor-actions-orchestrator-core",
         &[
             "velnor-actions-actionlint",
