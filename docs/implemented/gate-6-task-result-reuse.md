@@ -2,7 +2,7 @@
 
 - State: recorded-pending-merge (branch `docs/velnor-actions-spec`; becomes implemented only on merge; required checks green at `bdfffb9` — run `36569723507`, `https://github.com/tailrocks/velnor-new/actions/runs/36569723507`)
 - Proof vocabulary: policy-on-source (qualified-only argv shape, no-remote-cache render asserted) + qualification-of-generator (reuse/invalidation legs run green in CI)
-- Specification: [implementation-plan.md](../content/../content/docs/proposed/implementation-plan.mdxx) Gate 6 + [cache-contract.md](../content/../content/docs/proposed/cache-contract.mdxx)
+- Specification: [implementation-plan.md](../content/docs/proposed/implementation-plan.mdx) Gate 6 + [cache-contract.md](../content/docs/proposed/cache-contract.mdx)
 - Landed by: unmerged branch `docs/velnor-actions-spec`, HEAD `bdfffb9`
 - Merge date: TBD
 - Delivered: Mise task-result caching enabled only for explicitly qualified tasks (complete declared inputs, environment, outputs, trust rules, independent invalidation fixtures); exact-input warm results reused, each changed declared input invalidates; undeclared/non-deterministic tasks run normally; unavailable or failed-qualification cache executes the task and reports `cache_unavailable`; MBX compilation hits never satisfy task-result reuse. Owning crates: `velnor-actions-mise`, `velnor-actions-orchestrator`.
