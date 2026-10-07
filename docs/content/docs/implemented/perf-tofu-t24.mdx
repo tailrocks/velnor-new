@@ -1,4 +1,7 @@
-# T24 tofu efficiency gates + benchmark matrix + scaling (spec §9)
+---
+title: "T24 tofu efficiency gates + benchmark matrix + scaling (spec §9)"
+description: "T24 names the seven deterministic efficiency gates as invariant tests, records the cold/warm/docs/root/module/lock/mixed/fork matrix with raw `bench:` evidence, and scales plan/prepare/generate across 1/10/100 synthetic roots. Budgets stay text until T25 measures them: this doc records matrix numbers, not budget PASSED verdicts."
+---
 
 T24 names the seven deterministic efficiency gates as invariant
 tests, records the cold/warm/docs/root/module/lock/mixed/fork matrix
@@ -9,7 +12,7 @@ this doc records matrix numbers, not budget PASSED verdicts.
 Commit measured: `f57e0b4` (local T24 measurement commit —
 DANGLING, contained in no branch, absent from origin; the pushed T24
 commit adds only this doc file over it, code tree identical —
-verify with `git diff f57e0b4 <pushed> -- .
+verify with `git diff f57e0b4 &lt;pushed> -- .
 ':!docs/implemented/perf-tofu-t24.md'`, which must be empty).
 Machine: `arm64`, macOS 27.0, 128 GiB RAM.
 Toolchain: rustc/cargo 1.98.1 (48a229cea/797e8a9bc), mise

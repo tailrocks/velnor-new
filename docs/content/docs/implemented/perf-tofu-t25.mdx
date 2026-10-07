@@ -1,4 +1,7 @@
-# T25 tofu budgets, telemetry, and waste removal (spec §9)
+---
+title: "T25 tofu budgets, telemetry, and waste removal (spec §9)"
+description: "T25 measures the contract runtime/planning budgets against the T24 harness, emits the first real tofu timing slots, and removes the avoidable repeated tofu reads behind one shared cache. Verdicts extend the T24 record (`perf-tofu-t24.md`, untouched); nothing here rewrites an earlier verdict."
+---
 
 T25 measures the contract runtime/planning budgets against the T24
 harness, emits the first real tofu timing slots, and removes the
@@ -9,7 +12,7 @@ rewrites an earlier verdict.
 Commit measured: `c2a77b7` (local T25 measurement commit —
 DANGLING after the fold, contained in no branch; the pushed T25
 commit adds only this doc file over it, code tree identical —
-verify with `git diff c2a77b7 <pushed> -- .
+verify with `git diff c2a77b7 &lt;pushed> -- .
 ':!docs/implemented/perf-tofu-t25.md'`, which must be empty).
 Machine: `arm64`, macOS 27.0, 128 GiB RAM.
 Toolchain: rustc/cargo 1.98.1 (48a229cea/797e8a9bc), mise

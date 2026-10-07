@@ -3,7 +3,7 @@
 //! Each gate quotes its spec line and pins the enforcing machinery.
 //! Gates 5–7 live in `cases::tofu_t24_gates2` (size split); gate 7
 //! (docs-only, from the §9 budget table) is derived in
-//! `docs/implemented/perf-tofu-t24.md`. Owns the fixture submodule
+//! `docs/content/docs/implemented/perf-tofu-t24.mdx`. Owns the fixture submodule
 //! the bench/scale suites share.
 
 pub(crate) mod tofu_perf_fixtures_t24;
