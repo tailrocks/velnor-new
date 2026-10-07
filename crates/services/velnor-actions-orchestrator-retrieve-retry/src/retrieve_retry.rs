@@ -10,14 +10,14 @@
 /// Replaces the old `continue-on-error` fetch tail: retries absorb
 /// flakes, while hard environment failures fail the job instead of
 /// being masked.
-pub(crate) const MAX_DOWNLOAD_ATTEMPTS: u32 = 3;
+pub const MAX_DOWNLOAD_ATTEMPTS: u32 = 3;
 
 /// Attempt one download up to the bounded retry limit.
 ///
 /// Returns success plus the attempts spent (1 on first-try success,
 /// [`MAX_DOWNLOAD_ATTEMPTS`] on persistent failure). Pure over the
 /// attempt closure so the bound is unit-testable without `gh`.
-pub(crate) fn download_with_retry(mut attempt: impl FnMut() -> bool) -> (bool, u32) {
+pub fn download_with_retry(mut attempt: impl FnMut() -> bool) -> (bool, u32) {
     let mut attempts = 0u32;
     loop {
         attempts += 1;

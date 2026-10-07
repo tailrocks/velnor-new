@@ -33,6 +33,7 @@ velnor-actions-orchestrator-pins = { version = "=0.1.1", path = "../velnor-actio
 velnor-actions-orchestrator-plan = { version = "=0.1.1", path = "../velnor-actions-orchestrator-plan" }
 velnor-actions-orchestrator-provisioning = { version = "=0.1.1", path = "../velnor-actions-orchestrator-provisioning" }
 velnor-actions-orchestrator-request-event = { version = "=0.1.1", path = "../velnor-actions-orchestrator-request-event" }
+velnor-actions-orchestrator-retrieve-retry = { version = "=0.1.1", path = "../velnor-actions-orchestrator-retrieve-retry" }
 velnor-actions-orchestrator-runtime-evidence = { version = "=0.1.1", path = "../velnor-actions-orchestrator-runtime-evidence" }
 velnor-actions-orchestrator-runtime-execute = { version = "=0.1.1", path = "../velnor-actions-orchestrator-runtime-execute" }
 velnor-actions-orchestrator-runtime-plan = { version = "=0.1.1", path = "../velnor-actions-orchestrator-runtime-plan" }

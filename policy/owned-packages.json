@@ -57,6 +57,7 @@
     "velnor-actions-orchestrator-noop-report",
     "velnor-actions-orchestrator-request-event",
     "velnor-actions-orchestrator-cover-compat",
-    "velnor-actions-orchestrator-external-data"
+    "velnor-actions-orchestrator-external-data",
+    "velnor-actions-orchestrator-retrieve-retry"
   ]
 }

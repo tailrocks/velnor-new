@@ -5,7 +5,7 @@
 //! derived name with pinned `gh` (`gh run download <run-id> --name
 //! <artifact-id> --dir reports/<artifact-id>`), never a wildcard. Each
 //! leg retries transient failures up to
-//! [`crate::retrieve_retry::MAX_DOWNLOAD_ATTEMPTS`];
+//! [`MAX_DOWNLOAD_ATTEMPTS`](velnor_actions_orchestrator_retrieve_retry::retrieve_retry::MAX_DOWNLOAD_ATTEMPTS);
 //! persistent failure skips that job's entries (merge judges
 //! `not_run`). A missing or unparsable plan downloads nothing and
 //! still exits success so the merge reaches its `planning_failed`
@@ -22,10 +22,10 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::ToolCatalog;
 
-use crate::retrieve_retry::download_with_retry;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::staged_reads::{path_is_symlink, read_staged_text};
 use velnor_actions_orchestrator_core::{internal, internal_contract};
+use velnor_actions_orchestrator_retrieve_retry::retrieve_retry::download_with_retry;
 
 /// Retrieve operation tag (single-sourced from the renderer protocol).
 pub use velnor_actions_workflow_steps::steps::FETCH_OPERATION as FETCH_OP;

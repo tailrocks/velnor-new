@@ -19,7 +19,6 @@ mod merge_request;
 mod preseed_manifest;
 mod retrieve_baseline;
 mod retrieve_reports;
-mod retrieve_retry;
 pub mod run_select;
 mod task_report;
 
