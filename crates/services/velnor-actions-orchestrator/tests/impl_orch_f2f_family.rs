@@ -178,6 +178,19 @@ const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "crates/services/velnor-actions-orchestrator-runtime-evidence",
+        &[
+            "velnor-actions-contract",
+            "velnor-actions-contract-config",
+            "velnor-actions-contract-workflow",
+            "velnor-actions-mise",
+            "velnor-actions-orchestrator-check-acquisition",
+            "velnor-actions-orchestrator-check-evidence",
+            "velnor-actions-orchestrator-check-preparation",
+            "velnor-actions-orchestrator-core",
+        ],
+    ),
+    (
         "crates/services/velnor-actions-orchestrator-runtime-plan",
         &[
             "velnor-actions-contract",

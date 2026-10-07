@@ -51,6 +51,7 @@
     "velnor-actions-orchestrator-plan",
     "velnor-actions-orchestrator-covered-tasks",
     "velnor-actions-orchestrator-task-report",
-    "velnor-actions-orchestrator-runtime-plan"
+    "velnor-actions-orchestrator-runtime-plan",
+    "velnor-actions-orchestrator-runtime-evidence"
   ]
 }

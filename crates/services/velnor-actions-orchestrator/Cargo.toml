@@ -29,6 +29,7 @@ velnor-actions-orchestrator-graph = { version = "=0.1.1", path = "../velnor-acti
 velnor-actions-orchestrator-pins = { version = "=0.1.1", path = "../velnor-actions-orchestrator-pins" }
 velnor-actions-orchestrator-plan = { version = "=0.1.1", path = "../velnor-actions-orchestrator-plan" }
 velnor-actions-orchestrator-provisioning = { version = "=0.1.1", path = "../velnor-actions-orchestrator-provisioning" }
+velnor-actions-orchestrator-runtime-evidence = { version = "=0.1.1", path = "../velnor-actions-orchestrator-runtime-evidence" }
 velnor-actions-orchestrator-runtime-plan = { version = "=0.1.1", path = "../velnor-actions-orchestrator-runtime-plan" }
 velnor-actions-orchestrator-selection = { version = "=0.1.1", path = "../velnor-actions-orchestrator-selection" }
 velnor-actions-orchestrator-staged-validation = { version = "=0.1.1", path = "../velnor-actions-orchestrator-staged-validation" }

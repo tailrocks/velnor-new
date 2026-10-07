@@ -3,20 +3,19 @@ use std::env;
 use std::ffi::OsString;
 use std::path::Path;
 use std::time::{Duration, Instant};
-use velnor_actions_contract::canonical_json_bytes;
-use velnor_actions_contract_config::config::MAX_CHECK_EXECUTION_RECEIPT_BYTES;
 use velnor_actions_contract_workflow::{
-    MatrixEntry, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, Plan,
+    NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, Plan,
 };
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, ToolCatalog, discover_checks_until};
-use velnor_actions_orchestrator_check_acquisition::tools::QualifiedToolReceipt;
-use velnor_actions_orchestrator_check_evidence::scenario::{EvidenceReceipt, verify_evidence};
-use velnor_actions_orchestrator_check_preparation::container_receipts::ContainerReceipt;
+use velnor_actions_orchestrator_check_evidence::scenario::verify_evidence;
 use velnor_actions_orchestrator_check_preparation::preparation::container;
 use velnor_actions_orchestrator_check_preparation::preparation::prepare_check;
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::link_safety::reject_link_components;
 use velnor_actions_orchestrator_core::{internal, internal_contract};
+use velnor_actions_orchestrator_runtime_evidence::evidence::{
+    CheckOutcome, save_evidence, write_execution_receipt,
+};
 
 /// Internal execution operation for a statically authorized native Mise task.
 pub const EXECUTE_CHECK_OP: &str = "execute-check-v1";
@@ -141,13 +140,6 @@ pub(crate) fn execute_check_to(
     outcome.map(|_| 1)
 }
 
-struct CheckOutcome {
-    evidence: Option<EvidenceReceipt>,
-    container: Option<ContainerReceipt>,
-    system_tools: Vec<velnor_actions_mise::checks::SystemToolProof>,
-    qualified_tools: Vec<QualifiedToolReceipt>,
-}
-
 fn run_check(
     root: &Path,
     temp: &Path,
@@ -215,62 +207,6 @@ fn run_check(
         system_tools: owned.system_tools.clone(),
         qualified_tools: owned.qualified_tools.clone(),
     })
-}
-
-fn write_execution_receipt(
-    temp: &Path,
-    plan: &Plan,
-    entry: &MatrixEntry,
-    item: &DiscoveredCheck,
-    outcome: &CheckOutcome,
-) -> Result<(), OrchestratorError> {
-    let mut execution = velnor_actions_orchestrator_check_evidence::gate::execution_receipt(
-        plan,
-        entry,
-        &item.check.id,
-        item.check.runner.platform,
-        outcome.evidence.clone(),
-        outcome.system_tools.clone(),
-        outcome.qualified_tools.clone(),
-    );
-    execution.container.clone_from(&outcome.container);
-    let bytes = canonical_json_bytes(&execution).map_err(internal_contract)?;
-    if bytes.len() > MAX_CHECK_EXECUTION_RECEIPT_BYTES {
-        return Err(internal("check_execution_receipt_size_limit"));
-    }
-    let base = temp
-        .join("velnor")
-        .join(&plan.run_key)
-        .join(&entry.matrix_key);
-    velnor_actions_orchestrator_core::exclusive_write::create_dir_no_symlink(temp, &base)?;
-    velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
-        &base.join("check-execution.json"),
-        &bytes,
-        "check_execution",
-    )
-}
-
-fn save_evidence(
-    temp: &Path,
-    plan: &Plan,
-    entry: &MatrixEntry,
-    receipt: &EvidenceReceipt,
-) -> Result<(), OrchestratorError> {
-    let base = temp
-        .join("velnor")
-        .join(&plan.run_key)
-        .join(&entry.matrix_key);
-    let artifact = base.join("evidence").join(&receipt.path);
-    let parent = artifact
-        .parent()
-        .ok_or_else(|| internal("check_evidence_path"))?;
-    velnor_actions_orchestrator_core::exclusive_write::create_dir_no_symlink(temp, parent)?;
-    velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
-        &artifact,
-        &receipt.bytes,
-        "check_evidence",
-    )?;
-    Ok(())
 }
 
 #[cfg(test)]

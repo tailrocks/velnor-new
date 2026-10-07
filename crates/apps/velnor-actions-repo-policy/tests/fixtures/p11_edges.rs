@@ -127,6 +127,7 @@ fn expected_service(leaf: &str) -> Option<Vec<&str>> {
             "velnor-actions-orchestrator-pins",
             "velnor-actions-orchestrator-plan",
             "velnor-actions-orchestrator-provisioning",
+            "velnor-actions-orchestrator-runtime-evidence",
             "velnor-actions-orchestrator-runtime-plan",
             "velnor-actions-orchestrator-selection",
             "velnor-actions-orchestrator-staged-validation",
