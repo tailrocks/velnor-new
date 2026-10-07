@@ -68,7 +68,7 @@ with the vocabulary it satisfies.
 
 ## Gate 0: bootstrap repository contract
 
-Create the virtual Cargo workspace and files defined in [architecture](architecture.md), including `.velnor/version-policy.toml` and `.alint.yml`. Velnor's own `workflow.policy = "velnor-repository-v1"` enables a separate required Alint job using exactly `asamarts/alint@v0.16.1`; `consumer-v1` does not require `.alint.yml`.
+Create the virtual Cargo workspace and files defined in [architecture](../content/../content/docs/proposed/architecture.mdxx), including `.velnor/version-policy.toml` and `.alint.yml`. Velnor's own `workflow.policy = "velnor-repository-v1"` enables a separate required Alint job using exactly `asamarts/alint@v0.16.1`; `consumer-v1` does not require `.alint.yml`.
 
 Alint MUST enforce only configured capabilities supported by its selected
 version: file and path rules, required-file rules, structured configuration
@@ -81,7 +81,7 @@ must not be presented as Alint capabilities.
 
 ## Gate 1–2: deterministic inputs and outputs
 
-Keep all domain planning pure. Use Cargo's metadata JSON as the inventory format; use the exact command and schemas in [architecture](architecture.md). First run metadata without dependency resolution for inventory. Resolve the locked graph only after preparation, with network disabled. Treat failure to resolve as an explicit preparation error; do not fall back to parsing Rust source or silently produce an incomplete graph.
+Keep all domain planning pure. Use Cargo's metadata JSON as the inventory format; use the exact command and schemas in [architecture](../content/../content/docs/proposed/architecture.mdxx). First run metadata without dependency resolution for inventory. Resolve the locked graph only after preparation, with network disabled. Treat failure to resolve as an explicit preparation error; do not fall back to parsing Rust source or silently produce an incomplete graph.
 
 Define stable package/task IDs before rendering workflows. `plan` and `generate` MUST share one analysis and workflow-IR implementation. Plan output lists detected workspaces/crates and intended workflow files/jobs/steps in deterministic human-readable text, writes no repository files, and emits no YAML or JSON. Its facts MUST match the generated workflow for identical inputs. Generated output MUST be ordered deterministically, use safe YAML scalar quoting, include a generator/schema version, and include a first-line ownership header with no generation date. `generate` renders to a temporary destination first, validates every output, and then atomically replaces the root `.github` tree. `generate --output-dir PATH` writes the same tree to the explicit preview destination and never edits the repository. There is no `--check` command or option.
 
@@ -97,7 +97,7 @@ The planner emits one schema-1 `plan.json` and one compact
 matrix job writes one task report per expected task plus one aggregate matrix
 report. The final job aggregates only those declared IDs and fails on missing,
 duplicate, malformed, or unexpected reports. The exact fields, paths, and
-derivation rules are normative in [the cache contract](cache-contract.md).
+derivation rules are normative in [the cache contract](../content/../content/docs/proposed/cache-contract.mdxx).
 
 ## Gate 4: tools and compilation cache qualification
 
@@ -153,7 +153,7 @@ previous Velnor release: its fixed Mise/MBX build invocation and manually
 reviewed seed artifact are the only bootstrap inputs.
 
 The internal plan/matrix/report wiring MUST follow the
-[workflow](workflow-contract.md) and [cache/report](cache-contract.md)
+[workflow](../content/../content/docs/proposed/workflow-contract.mdxx) and [cache/report](../content/../content/docs/proposed/cache-contract.mdxx)
 contracts. These are implementation artifacts, not public CLI commands:
 
 - The generated workflow creates the internal plan, emits the exact

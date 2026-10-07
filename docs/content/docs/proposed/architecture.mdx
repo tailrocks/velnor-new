@@ -1,13 +1,16 @@
-# Velnor V1 architecture
+---
+title: "Velnor V1 architecture"
+description: "Status: Proposed implementation specification. No implementation is"
+---
 
 **Status:** Proposed implementation specification. No implementation is claimed.
 
 This document defines Velnor's V1 crates, repository inputs, data contracts,
 and generated-file ownership. The exact executable interface is in the [CLI
-contract](cli-contract.md); workflow details are in [the workflow
-contract](workflow-contract.md); cache/report details are in [the cache
-contract](cache-contract.md); Rust tooling rules are in [the quality
-contract](rust-quality-contract.md).
+contract](/docs/proposed/cli-contract); workflow details are in [the workflow
+contract](/docs/proposed/workflow-contract); cache/report details are in [the cache
+contract](/docs/proposed/cache-contract); Rust tooling rules are in [the quality
+contract](/docs/proposed/rust-quality-contract).
 
 Normative terms **MUST**, **MUST NOT**, **SHOULD**, and **MAY** have their usual requirement meanings. Missing or invalid input MUST fail with a diagnostic; it MUST NOT silently select a broader or narrower behavior except where this spec says to broaden verification.
 
@@ -114,7 +117,7 @@ fixtures/rust-workspaces/
 
 `rust-toolchain.toml`, `mise.toml`, and `mise.lock` are optional inputs, not
 required files. Their read-only behavior and missing-file recommendations are
-defined in the [tooling input contract](tooling-input-contract.md).
+defined in the [tooling input contract](/docs/proposed/tooling-input-contract).
 
 `.mise-version` is a Velnor-repository bootstrap pin, not a generated output
 or consumer-project input. A reviewed Velnor version-policy change updates it
@@ -129,7 +132,7 @@ Velnor's own repository as a mirror for freshness checks. Consumers do not
 need it. Velnor
 reports missing, malformed, stale, or conflicting settings with manual
 recommendations; it never creates or edits them. V1 generates only the
-`.github` tree listed in the [generated-file contract](generated-file-contract.md).
+`.github` tree listed in the [generated-file contract](/docs/proposed/generated-file-contract).
 Every generated text file has a first-line Velnor Actions version marker with
 no date. Velnor uses its own exact tool pins through Mise; project Mise files
 are advisory inputs and cannot change generated tool versions. The Mise
@@ -194,7 +197,7 @@ or fetch a remote to guess. `generator_validation` is `bootstrap` or
 `candidate`; Velnor uses `candidate`. `max_parallel_jobs`, compiler/test
 budgets, and shard settings bound execution.
 
-`stacks.ignore` is a sorted, duplicate-free list of exact eligible registered stack IDs (`rust` and `tofu`). Explicit Mise checks are mandatory; `ignore = ["mise"]` is rejected regardless of the check inventory. For example, `ignore = ["rust"]` disables Rust task planning and generation. Detection still runs, and matching detections appear with status `ignored`. Unknown IDs fail configuration validation. CLI flags cannot change this list. Stack-specific options belong under `[stacks.<id>]`; Rust supports `configurations`, `compile_driver`, `test_runner`, and `release`. Tofu validation roots belong under `[stacks.tofu]`. The driver/runner keys are sticky profile declarations; conflicts with durable evidence fail closed (see [task execution](task-execution-contract.md)). If the Rust configuration field is absent, use one documented default Rust configuration. `discovery.exclude` contains repository-relative POSIX path globs applied before detectors; it is not a stack selector. Invalid, absolute, parent-traversal, or malformed patterns fail validation. The registry contains `mise`, `rust`, and `tofu` in ascending ID order. Mise checks are explicit top-level `[[checks]]` declarations, independent of detected Rust projects and Tofu roots; each declaration selects a repository-owned task and binds its input files, runner platform, tool pins, and optional named scenario evidence. The config rejects shell fragments, raw YAML, arbitrary `uses:` actions, installation commands, and plugin URLs. The removed Rust custom-task option is rejected. Task bodies execute through a qualified projection of repository-owned Mise configuration, under the hosted or ephemeral admission policy. See the [implemented named-check contract](../implemented/named-mise-checks.md) for execution isolation and Required evidence rules.
+`stacks.ignore` is a sorted, duplicate-free list of exact eligible registered stack IDs (`rust` and `tofu`). Explicit Mise checks are mandatory; `ignore = ["mise"]` is rejected regardless of the check inventory. For example, `ignore = ["rust"]` disables Rust task planning and generation. Detection still runs, and matching detections appear with status `ignored`. Unknown IDs fail configuration validation. CLI flags cannot change this list. Stack-specific options belong under `[stacks.<id>]`; Rust supports `configurations`, `compile_driver`, `test_runner`, and `release`. Tofu validation roots belong under `[stacks.tofu]`. The driver/runner keys are sticky profile declarations; conflicts with durable evidence fail closed (see [task execution](/docs/proposed/task-execution-contract)). If the Rust configuration field is absent, use one documented default Rust configuration. `discovery.exclude` contains repository-relative POSIX path globs applied before detectors; it is not a stack selector. Invalid, absolute, parent-traversal, or malformed patterns fail validation. The registry contains `mise`, `rust`, and `tofu` in ascending ID order. Mise checks are explicit top-level `[[checks]]` declarations, independent of detected Rust projects and Tofu roots; each declaration selects a repository-owned task and binds its input files, runner platform, tool pins, and optional named scenario evidence. The config rejects shell fragments, raw YAML, arbitrary `uses:` actions, installation commands, and plugin URLs. The removed Rust custom-task option is rejected. Task bodies execute through a qualified projection of repository-owned Mise configuration, under the hosted or ephemeral admission policy. See the [implemented named-check contract](/docs/implemented/named-mise-checks) for execution isolation and Required evidence rules.
 
 Generic non-Rust validation also supports sorted `[[workflow.tasks]]` declarations. V1 accepts only `kind = "verification"`, argv-safe Mise task names, a bounded timeout, and `linux-x64` or `macos-arm64` runners. Each task is an unconditional standalone job on every pull request, push, and merge-group run; its base job key is `task-{id}` and every emitted task job joins the `Required` fan-in. Under schema 2, Linux x64 tasks follow the selected execution mode: `hosted` emits the hosted base job, `scale-set` emits the Scale Set base job, and `both` emits hosted and Scale Set copies. macOS ARM64 tasks stay on `macos-15` in every mode because the current Scale Set is Linux/amd64; their hosted result is required but does not qualify as paired-lane execution. The job token grants `contents: read` with every other declared permission set to `none`; checkout does not persist credentials. The job uses the pinned Mise binary and its runner-specific digest, disables Mise caches and environment activation, then clears credential variables before locked installs or task code reads repository configuration. It writes no artifacts or caches and exports no downstream task outputs. Task authors own the locked tool closure and change-coverage tests. Keeping verification scripts free of Rust compilation is an authoring and review invariant; V1 does not inspect or enforce task bodies. Protected release and signing remain a separate capability.
 
@@ -204,7 +207,7 @@ Configuration validation MUST report file, key path, and problem. Unknown `schem
 
 Bootstrap identity, compiled-in version catalog, `.velnor/generator.lock`,
 Mise bootstrap, candidate qualification, and release promotion are specified
-in the [bootstrap and release contract](bootstrap-and-release-contract.md).
+in the [bootstrap and release contract](/docs/proposed/bootstrap-and-release-contract).
 
 ## 4. Cargo discovery and metadata
 
@@ -250,7 +253,7 @@ canonicalized, escape fails closed, and no repository write occurs.
 
 The inventory MUST retain workspace root, Cargo package ID, repository-relative manifest path, package name/version, members/exclusions, target kind/name/test status, normal/build/dev/target-specific dependencies, local path edges, declared features, required features, doctests, build scripts, toolchain/config inputs, and declared external files.
 
-Per-workspace profile evidence and rules are fixed in the [task execution contract](task-execution-contract.md); the profile enters task and cache identities.
+Per-workspace profile evidence and rules are fixed in the [task execution contract](/docs/proposed/task-execution-contract); the profile enters task and cache identities.
 
 The local affected graph contains only first-party workspace packages and local path dependencies. Registry dependencies affect task identity but are not reverse-selection nodes.
 
@@ -313,7 +316,7 @@ Plan JSON MUST use schema version 1 and contain:
 
 `run_key` is `r<github.run_id>-a<github.run_attempt>` in CI and `local` for
 local planning. `plan_id` is `plan-<run-key>`. `matrix.include` MUST use the
-exact entry shape and derived ID rules in [the workflow contract](workflow-contract.md).
+exact entry shape and derived ID rules in [the workflow contract](/docs/proposed/workflow-contract).
 The plan lists every current obligation; each matrix entry lists only its
 `execute_task_ids`. Covered and cached obligations remain in `obligations` and
 must carry their evidence reference. `packages` contains the complete Rust
@@ -324,7 +327,7 @@ fails. Each omitted package/task MUST have an explanation available to
 internal explanation records. The plan written to its run-scoped location and
 the matrix sent through `GITHUB_OUTPUT` MUST have the same canonical matrix bytes.
 
-Field grammars in this contract and the [cache contract](cache-contract.md)
+Field grammars in this contract and the [cache contract](/docs/proposed/cache-contract)
 are normative over examples; on conflict the grammar wins. `*_digest`
 fields are path-independent semantic identities: BLAKE3 over canonical
 JSON with absolute paths stripped and repository-relative POSIX paths.
@@ -337,11 +340,11 @@ is correlation, not identity, and MUST NOT enter task/input digests.
 Platform, toolchain, cache-format, or declared-input changes invalidate
 prior identities. A `shard-1-of-1` entry runs in one step; multi-shard
 entries use archive-plus-partition fan-out (see [parallelism
-§8](parallelism-and-selection-contract.md)). Report publication is
+§8](/docs/proposed/parallelism-and-selection-contract)). Report publication is
 atomic: validate in staging, then rename-swap; on failure prior bytes
 remain byte-identical.
 
-Generated workflow and Mise task ownership, task naming, rendering, and atomic write rules are specified in the [generated-file contract](generated-file-contract.md).
+Generated workflow and Mise task ownership, task naming, rendering, and atomic write rules are specified in the [generated-file contract](/docs/proposed/generated-file-contract).
 
 ## 7. Acceptance table
 

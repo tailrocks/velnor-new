@@ -1,4 +1,7 @@
-# Velnor V1 Workflow Contract
+---
+title: "Velnor V1 Workflow Contract"
+description: "Status: proposed specification; implementation requires Velnor"
+---
 
 Status: proposed specification; implementation requires Velnor dogfooding.
 
@@ -161,7 +164,7 @@ permissions:
 
 All other permissions MUST be absent or `none`. Release publication uses a
 separate workflow with explicit permissions; fork pull requests receive no write access. `[stacks.rust.release]`
-adds `release.yml` (see [release contract](release-contract.md)) with per-job permissions that MUST NOT weaken
+adds `release.yml` (see [release contract](/docs/proposed/release-contract)) with per-job permissions that MUST NOT weaken
 this default.
 
 The workflow concurrency group MUST be:
@@ -175,7 +178,7 @@ For `workflow.policy = "consumer-v1"`, compose detections into `plan`, one `rust
 per selected crate, `actionlint`, and `required`. V1 registers only the Rust stack detector, so the selected
 stack set is empty or `{rust}`; future adapters add namespaced crate jobs without CLI selectors.
 
-Typed `[[workflow.tasks]]` verification jobs join `Required` under either workflow policy; schema-2 routing, fail-closed admission, and authoring limits are defined in the [tooling input contract](tooling-input-contract.md).
+Typed `[[workflow.tasks]]` verification jobs join `Required` under either workflow policy; schema-2 routing, fail-closed admission, and authoring limits are defined in the [tooling input contract](/docs/proposed/tooling-input-contract).
 
 The following labels are GitHub Actions job IDs only. They are not Cargo packages, executable
 names, generated command labels, or CLI subcommands. The sole Velnor executable is `velnor-actions`.
@@ -188,7 +191,7 @@ names, generated command labels, or CLI subcommands. The sole Velnor executable 
    complete plan report. In bootstrap mode it checks generated files with the locked binary; candidate mode
    does not invoke the candidate or require the bootstrap to reproduce its output.
 2. `rust-<slug>`: one job per selected crate, grouping its obligations in contract order. It runs the focused
-steps in the [task execution contract](task-execution-contract.md) and uploads one stack-neutral report after failure too.
+steps in the [task execution contract](/docs/proposed/task-execution-contract) and uploads one stack-neutral report after failure too.
 3. `actionlint`: checkout without persisted credentials; setup Mise with pinned action, version,
    and SHA-256; install exact
    Actionlint and ShellCheck versions with project config, env, and hooks disabled; run
@@ -226,13 +229,13 @@ validation, and the candidate report when candidate mode is enabled.
 The final job MUST have stable display name `Required`; branch protection requires that exact check.
 Every generated job MUST use the same single literal, versioned Ubuntu label in `runs-on`. With no
 `workflow.runner_label` override, Velnor MUST use the latest pinned x64 label from [version
-policy](version-policy.md); the current snapshot selects `ubuntu-26.04`. An explicit older label is allowed
+policy](/docs/proposed/version-policy); the current snapshot selects `ubuntu-26.04`. An explicit older label is allowed
 only when listed in the policy's supported-label set and named in `.velnor/config.toml`. Velnor MUST reject
 `ubuntu-latest`, every `*-latest` alias, unversioned labels, unsupported labels, expressions, matrices, and
 aliases in every generated `runs-on` field. V1 emits no self-hosted labels. The plan records the selected label and whether it came from `latest_default` or `config_override`.
 
 Every generated job MUST carry a per-job `timeout-minutes` below GitHub's 360 minute default; the bound is a required typed Job IR field (1–360 minutes),
-rendered right after `runs-on`. Per-kind defaults follow the measured green-run walls in `docs/implemented/performance.md`: 30 minutes for crate-shaped jobs, 10 minutes for `plan`, `required`, validator, and release jobs.
+rendered right after `runs-on`. Per-kind defaults follow the measured green-run walls in `/docs/implemented/performance`: 30 minutes for crate-shaped jobs, 10 minutes for `plan`, `required`, validator, and release jobs.
 
 `plan` MUST upload its plan report with `if: always()` and fail above a 512 KiB canonical `matrix.json` artifact or, when the workflow promotes an output-fed matrix, above 256 expanded jobs or 900,000 aggregate UTF-16 bytes across promoted job outputs. The artifact cap is independent of job outputs; count actual `matrix.include` entries only on the dynamic path because static artifact rows are not matrix jobs. GitHub documents a 1 MB per-job output limit approximated in UTF-16 and a 256-job matrix maximum in its [workflow syntax reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax).
 `plan` MUST report a clear planning error and request a broadened or reduced plan instead of truncating entries.
@@ -255,15 +258,15 @@ and never written to the repo.
 `install: false`, and `env: false`; project tool files, task definitions, and hooks must not run.
 3. `Prepare pinned tools`: run `mise install --no-env --no-hooks <tool>@<exact>...` using exact versions
 embedded in the generator release catalog; set Velnor-owned `MISE_RUSTUP_HOME`/`MISE_CARGO_HOME`. The committed
-`mise.lock` is verified (see [tooling-input §1.1](tooling-input-contract.md)); project env and hooks stay disabled.
+`mise.lock` is verified (see [tooling-input §1.1](/docs/proposed/tooling-input-contract)); project env and hooks stay disabled.
 4. `Acquire Velnor`: for consumers, download the exact target asset and verify SHA-256 from the embedded
 release descriptor; for Velnor, use and verify the matching `.velnor/generator.lock` record.
 5. `Format`: run the generated fixed format command through pinned Mise; use
 the detected Rust compile driver (MBX only when project evidence selects it).
 6. `Check generated files`: invoke the public `velnor-actions generate
---output-dir "$RUNNER_TEMP/velnor-actions-\${GITHUB_RUN_ID}-\${GITHUB_RUN_ATTEMPT}"` in bootstrap mode;
+--output-dir "$RUNNER_TEMP/velnor-actions-\$&#123;GITHUB_RUN_ID&#125;-\$&#123;GITHUB_RUN_ATTEMPT&#125;"` in bootstrap mode;
 compare its `.github` tree byte-for-byte with the committed tree. Candidate mode performs the same check with
-the candidate binary. Only this step and the `candidate` qualification checks may invoke the candidate artifact; every other step uses the bootstrap-descriptor helper version (see [cli §1 and §6](cli-contract.md)).
+the candidate binary. Only this step and the `candidate` qualification checks may invoke the candidate artifact; every other step uses the bootstrap-descriptor helper version (see [cli §1 and §6](/docs/proposed/cli-contract)).
 7. `Plan`: run the generated fixed planner step with the exact event
 comparison refs. It writes the schema-1 plan to `$RUNNER_TEMP/velnor/<run-key>/plan.json`. Both refs MUST
 identify the exact event comparison, including the pull request merge result where applicable. The step uses
@@ -299,7 +302,7 @@ Velnor's compiled-in action registry supplies the latest stable release, full
 40-character SHA, matching `# vX.Y.Z` comment, and action metadata. Per-project
 exact overrides are permitted only through `.velnor/config.toml` and must
 validate against the registry contract. The default current pins are listed in
-the [version policy](version-policy.md). The workflow renderer MUST emit
+the [version policy](/docs/proposed/version-policy). The workflow renderer MUST emit
 `jdx/mise-action` for Mise setup, `actions/checkout` for source access,
 cache restore/save for their respective cache phases, and upload/download
 artifact actions for required reports or transferred outputs. It MUST emit
@@ -384,8 +387,8 @@ remain visible in the plan.
 
 The plan file written by `plan` MUST be `$RUNNER_TEMP/velnor/<run-key>/plan.json` and contain the same
 `matrix.include` array sent through `GITHUB_OUTPUT`. Its schema-1 shape is defined by the
-[architecture contract](architecture.md); baseline and obligation fields use the exact proof format in the
-[parallelism and affected-work contract](parallelism-and-selection-contract.md).
+[architecture contract](/docs/proposed/architecture); baseline and obligation fields use the exact proof format in the
+[parallelism and affected-work contract](/docs/proposed/parallelism-and-selection-contract).
 
 `plan_id` is `plan-<run-key>`. `detections`, `obligations`, `matrix.include`, and `task_ids` MUST be sorted as
 defined by the architecture contract. `task_ids` contains every obligation; matrix `execute_task_ids` contains
@@ -397,4 +400,4 @@ stacks. The plan artifact MUST contain `plan.json` and `matrix.json`, where `mat
 
 ## 5. Task execution
 
-Rust task profiles follow the [task execution contract](task-execution-contract.md); future adapters own typed profiles.
+Rust task profiles follow the [task execution contract](/docs/proposed/task-execution-contract); future adapters own typed profiles.

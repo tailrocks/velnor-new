@@ -12,7 +12,7 @@ architectural rationale (never effort).
   (`crates/services/velnor-actions-workflow-renderer/src/msrv.rs:114-135`); the
   contract promises per-crate checks against the exact `rust-version`
   "not repeated on every pull request"
-  (`docs/proposed/workflow-contract.md`, MSRV paragraph). Rationale:
+  (`../content/docs/proposed/workflow-contract.mdx`, MSRV paragraph). Rationale:
   minimum-version qualification is a toolchain property, not a
   per-change signal — repeating it per PR multiplies CI cost without new
   information about the change under review.

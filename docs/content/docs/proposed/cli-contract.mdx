@@ -1,4 +1,7 @@
-# Velnor Actions CLI Contract
+---
+title: "Velnor Actions CLI Contract"
+description: "Status: Proposed. The velnor-actions binary is not implemented"
+---
 
 **Status:** Proposed. The `velnor-actions` binary is not implemented yet.
 
@@ -69,7 +72,7 @@ An unsatisfiable gate (unknown op, missing inputs) on a bare invocation
 likewise falls through to Clap and fails with the usage diagnostic
 (exit 2). A satisfied gate that fails operationally exits 1 with empty
 stdout and a one-line stderr diagnostic. Helper staging and version
-rules are in §6 and [workflow §3](workflow-contract.md).
+rules are in §6 and [workflow §3](/docs/proposed/workflow-contract).
 
 ## 2. Repository root
 
@@ -341,7 +344,7 @@ additional repository-owned generated files.
 A workflow helper is the SHA-256-verified generating-release binary
 staged at `$RUNNER_TEMP`, never a repository path or a second
 executable. The helper version MUST equal the bootstrap descriptor
-selected in [workflow §3](workflow-contract.md), EXCEPT the enumerated
+selected in [workflow §3](/docs/proposed/workflow-contract), EXCEPT the enumerated
 candidate-qualification steps in candidate mode (`Check generated
 files` and the `candidate` qualification checks), which use the
 verified candidate artifact. No other step may invoke the candidate.
@@ -352,7 +355,7 @@ verified candidate artifact. No other step may invoke the candidate.
 recommendations about optional tooling files and detection findings to stderr.
 When `generate` replaces the `.github` tree, it MUST also list every
 removed path that was not Velnor-generated output on stderr (see
-[generated-file §3](generated-file-contract.md)); previews report the
+[generated-file §3](/docs/proposed/generated-file-contract)); previews report the
 same list without modifying the repository.
 Neither `plan` nor `generate` has JSON or format-selection options. The
 generated workflow is the machine-readable product; detailed plans and reports

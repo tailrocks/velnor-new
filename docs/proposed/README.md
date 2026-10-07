@@ -54,14 +54,14 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 
 ## Normative specifications
 
-1. [Architecture](architecture.md) defines workspace crates, configuration, discovery, data contracts, and generated-file ownership.
+1. [Architecture](../content/../content/docs/proposed/architecture.mdxx) defines workspace crates, configuration, discovery, data contracts, and generated-file ownership.
 2. [Bootstrap and release contract](bootstrap-and-release-contract.md) defines consumer bootstrap assets, the compiled version catalog, Velnor's bootstrap lock, and release promotion.
-3. [Generated-file contract](generated-file-contract.md) defines task names, file ownership, safe rendering, and atomic output replacement.
-4. [CLI contract](cli-contract.md) fixes the stack-generic `velnor-actions` Clap command tree (`init`, `plan`, and `generate`), automatic detection, TOML ignore settings, and V1 Rust behavior.
-5. [Workflow contract](workflow-contract.md) defines triggers, jobs, and matrix data.
+3. [Generated-file contract](../content/../content/docs/proposed/generated-file-contract.mdxx) defines task names, file ownership, safe rendering, and atomic output replacement.
+4. [CLI contract](../content/../content/docs/proposed/cli-contract.mdxx) fixes the stack-generic `velnor-actions` Clap command tree (`init`, `plan`, and `generate`), automatic detection, TOML ignore settings, and V1 Rust behavior.
+5. [Workflow contract](../content/../content/docs/proposed/workflow-contract.mdxx) defines triggers, jobs, and matrix data.
 6. [Task execution contract](task-execution-contract.md) defines task steps, Mise invocation, execution, and reports.
-7. [Cache and report contract](cache-contract.md) defines task identities, cache ownership/trust, reports, and final status aggregation.
-8. [Host-image seed admission contract](host-seed-contract.md) defines trusted preinstalled seed inputs and fail-cold admission.
+7. [Cache and report contract](../content/../content/docs/proposed/cache-contract.mdxx) defines task identities, cache ownership/trust, reports, and final status aggregation.
+8. [Host-image seed admission contract](../content/../content/docs/proposed/host-seed-contract.mdxx) defines trusted preinstalled seed inputs and fail-cold admission.
 9. [Parallelism and affected-work contract](parallelism-and-selection-contract.md) defines dependency-aware selection, trusted baseline coverage, native background/wait steps, bounded concurrency, and complete test partitioning.
 10. [Rust quality contract](rust-quality-contract.md) defines tests, lints, file limits, dependencies, verification and policy protection.
 11. [Agent and performance contract](agent-and-performance-contract.md) defines agent instructions, performance measurements, acceptance budgets, and readiness evidence.
