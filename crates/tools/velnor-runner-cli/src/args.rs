@@ -80,7 +80,7 @@ pub enum Command {
     },
     /// Read-only checks.
     Doctor {
-        /// Reconcile existing controller state and Docker without launching a probe job.
+        /// Perform a read-only Docker Engine GET /version; this does not prove controller readiness.
         #[arg(long)]
         probe: bool,
     },

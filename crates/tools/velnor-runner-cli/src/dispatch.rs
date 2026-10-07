@@ -4,9 +4,10 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::Parser;
+use velnor_runner_host::docker_client::{self, DockerVersion};
 use velnor_runner_host::{
-    DisconnectEffect, Readiness, SetOwnership, disconnect_effects, doctor_json,
-    readiness_for_empty, status_json,
+    DisconnectEffect, HostConfig, HostError, HostPlatform, Readiness, SetOwnership,
+    disconnect_effects, doctor_json, read_host_config_file, readiness_for_empty, status_json,
 };
 
 use crate::args::{Cli, Command, DaemonAction};
@@ -33,7 +34,7 @@ fn dispatch(cli: &Cli) -> ExitCode {
     let config = selected_config_path(cli, &state);
     match &cli.command {
         Command::Status { json } => print_status(&state, *json),
-        Command::Doctor { probe } => print_doctor(&state, *probe),
+        Command::Doctor { probe } => print_doctor(&state, &config, *probe),
         Command::Logs { follow } => crate::service::logs(*follow),
         Command::Drain { .. } => flag(&state, "drain"),
         Command::Resume => remove_flag(&state, "drain"),
@@ -117,9 +118,83 @@ fn print_status(state: &Path, json: bool) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn print_doctor(state: &Path, probe: bool) -> ExitCode {
-    println!("{}", doctor_json(observe(state), probe));
-    ExitCode::SUCCESS
+fn print_doctor(state: &Path, config_path: &Path, probe: bool) -> ExitCode {
+    if !probe {
+        println!("{}", doctor_json(observe(state), false));
+        return ExitCode::SUCCESS;
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    let result = {
+        let platform = host_platform();
+        read_host_config_file(config_path, platform)
+            .map_err(|_| DoctorProbeFailure::Config)
+            .and_then(|config| config.ok_or(DoctorProbeFailure::Config))
+            .and_then(|text| {
+                probe_config_text(&text, platform, docker_client::read_version_blocking)
+            })
+    };
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    let result = Err(DoctorProbeFailure::Config);
+    println!("{}", doctor_probe_document(result.clone()));
+    if result.is_ok() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    }
+}
+
+#[cfg(target_os = "linux")]
+const fn host_platform() -> HostPlatform {
+    HostPlatform::Linux
+}
+
+#[cfg(target_os = "macos")]
+const fn host_platform() -> HostPlatform {
+    HostPlatform::Macos
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DoctorProbeFailure {
+    Config,
+    Docker,
+}
+
+fn probe_config_text(
+    text: &str,
+    platform: HostPlatform,
+    probe: impl FnOnce(&str) -> Result<DockerVersion, HostError>,
+) -> Result<DockerVersion, DoctorProbeFailure> {
+    let config = HostConfig::parse(text).map_err(|_| DoctorProbeFailure::Config)?;
+    config
+        .validate_for_host(platform)
+        .map_err(|_| DoctorProbeFailure::Config)?;
+    probe(&config.docker.endpoint).map_err(|_| DoctorProbeFailure::Docker)
+}
+
+fn doctor_probe_document(result: Result<DockerVersion, DoctorProbeFailure>) -> serde_json::Value {
+    match result {
+        Ok(version) => serde_json::json!({
+            "command": "doctor",
+            "docker": {
+                "status": "available",
+                "server_version": version.server_version,
+                "api_version": version.api_version,
+                "os": version.os,
+                "architecture": version.architecture,
+            },
+            "global_readiness": "not_proven",
+        }),
+        Err(failure) => serde_json::json!({
+            "command": "doctor",
+            "docker": { "status": "unavailable" },
+            "failure": match failure {
+                DoctorProbeFailure::Config => "invalid_or_unavailable_config",
+                DoctorProbeFailure::Docker => "docker_version_probe_failed",
+            },
+            "global_readiness": "not_proven",
+        }),
+    }
 }
 
 fn observe(_state: &Path) -> Readiness {
