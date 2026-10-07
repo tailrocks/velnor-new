@@ -6,7 +6,7 @@ use std::io::Read;
 
 use zeroize::Zeroizing;
 
-use crate::error::HostError;
+use crate::HostError;
 
 const MAX_SECRET_LEN: usize = 4096;
 

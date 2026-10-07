@@ -3,7 +3,7 @@
 use std::fs::{File, OpenOptions};
 use std::path::Path;
 
-use crate::error::HostError;
+use crate::HostError;
 
 /// Held advisory lock. Dropping the file releases it.
 #[derive(Debug)]

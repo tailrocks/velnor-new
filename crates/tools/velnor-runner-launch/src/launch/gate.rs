@@ -3,9 +3,9 @@
 use bollard::Docker;
 
 use velnor_runner_host::HostError;
-use velnor_runner_host::journal::Journal;
-use velnor_runner_host::reconcile::{IntentRow, Reconcile, before_advertise};
 use velnor_runner_host::scale_set::EnsureError;
+use velnor_runner_journal::journal::Journal;
+use velnor_runner_journal::reconcile::{IntentRow, Reconcile, before_advertise};
 
 use super::inspect::container_running;
 

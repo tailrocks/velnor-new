@@ -5,8 +5,8 @@ use std::path::Path;
 use crate::launch::{self, LaunchReport};
 use velnor_runner_host::HostError;
 use velnor_runner_host::docker_client::connect_unix;
-use velnor_runner_host::journal::Journal;
 use velnor_runner_host::scale_set::EnsureError;
+use velnor_runner_journal::journal::Journal;
 
 /// `launch_once` failed, or the local socket or journal did.
 #[derive(Debug, thiserror::Error)]

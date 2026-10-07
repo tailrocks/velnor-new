@@ -1,6 +1,6 @@
 //! Provenance for JIT requests that can fail after a remote job was acquired.
 
-use velnor_runner_host::journal::Outcome;
+use velnor_runner_journal::journal::Outcome;
 
 /// Whether a JIT request follows an already successful acquire operation.
 pub(super) enum MintOrigin {

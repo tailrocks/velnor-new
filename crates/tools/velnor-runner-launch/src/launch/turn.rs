@@ -2,10 +2,10 @@
 
 use velnor_runner_github::{Poll, QueueSession};
 
-use velnor_runner_host::journal::Journal;
 use velnor_runner_host::listen::{Link, point_at_queue, poll_path, restore_base};
 use velnor_runner_host::scale_set::EnsureError;
 use velnor_runner_host::worker::Started;
+use velnor_runner_journal::journal::Journal;
 
 use super::capacity::{self, Admit};
 use super::steps;

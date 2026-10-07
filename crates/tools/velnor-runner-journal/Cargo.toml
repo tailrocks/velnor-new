@@ -1,0 +1,18 @@
+[package]
+name = "velnor-runner-journal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+turso = { workspace = true }
+velnor-runner-github = { version = "=0.1.1", path = "../velnor-runner-github" }
+
+[dev-dependencies]
+tokio = { workspace = true }
+velnor-runner-core = { version = "=0.1.1", path = "../velnor-runner-core" }

@@ -2,8 +2,8 @@
 //!
 //! JIT is not a field. `start_pair` writes it on stdin and does not store it.
 
+use crate::HostError;
 use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_plan};
-use crate::error::HostError;
 use crate::stage::PairStop;
 use ::bollard::Docker;
 

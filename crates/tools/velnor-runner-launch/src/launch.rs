@@ -14,11 +14,11 @@ use velnor_runner_github::{
 
 use velnor_runner_host::HostError;
 use velnor_runner_host::ensure_product_scale_set;
-use velnor_runner_host::journal::Journal;
 use velnor_runner_host::listen::{Link, Secret, admin_link};
-use velnor_runner_host::reconcile::Reconcile;
 use velnor_runner_host::scale_set::EnsureError;
 use velnor_runner_host::worker::Started;
+use velnor_runner_journal::journal::Journal;
+use velnor_runner_journal::reconcile::Reconcile;
 use velnor_runner_launch_slot as slot;
 
 mod bind;

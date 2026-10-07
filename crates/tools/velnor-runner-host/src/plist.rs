@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use crate::error::HostError;
+use crate::HostError;
 
 /// Plist whose program is absolute `velnor-host daemon run`. No double-fork.
 ///

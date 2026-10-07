@@ -3,9 +3,9 @@
 use velnor_runner_github::{QueueSession, delete_session, reopen_session};
 
 use velnor_runner_host::HostError;
-use velnor_runner_host::journal::Journal;
 use velnor_runner_host::listen::{Link, OWNER_NAME, annotate, map_listen};
 use velnor_runner_host::scale_set::EnsureError;
+use velnor_runner_journal::journal::Journal;
 
 const KIND: &str = "session";
 

@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use ::bollard::models::{ContainerCreateBody, HostConfig, Mount as DockerMount, MountType};
 use ::bollard::query_parameters::CreateContainerOptions;
 
+use crate::HostError;
 use crate::docker_spec::Mount;
-use crate::error::HostError;
 
 use super::{CreateProjection, PLATFORM};
 

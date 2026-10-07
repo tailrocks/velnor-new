@@ -2,10 +2,10 @@
 //! Busy means occupancy or the running count has reached capacity.
 
 use velnor_runner_host::IntentState;
-use velnor_runner_host::journal::Journal;
-use velnor_runner_host::reconcile::IntentRow;
 use velnor_runner_host::scale_set::EnsureError;
 use velnor_runner_host::stage::PairEngine;
+use velnor_runner_journal::journal::Journal;
+use velnor_runner_journal::reconcile::IntentRow;
 
 /// Busy means occupancy or the running count has reached capacity.
 pub async fn busy<E: PairEngine + ?Sized>(

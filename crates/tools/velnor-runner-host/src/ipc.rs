@@ -1,6 +1,6 @@
 //! Length-prefixed local frames. The socket directory mode is `0700`.
 
-use crate::error::HostError;
+use crate::HostError;
 
 /// Maximum payload size: 1 MiB.
 pub const MAX_FRAME: usize = 1024 * 1024;

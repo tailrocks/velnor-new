@@ -5,7 +5,7 @@ use std::future::Future;
 use bollard::errors::Error as DockerError;
 use std::time::Duration;
 
-use crate::error::HostError;
+use crate::HostError;
 use crate::scale_set::EnsureError;
 
 /// Deadline for one request to the selected Docker engine.

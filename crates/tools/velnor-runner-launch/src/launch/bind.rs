@@ -1,9 +1,9 @@
 //! Journal binding for one pair. Ids are committed before the container starts.
 
 use velnor_runner_host::HostError;
-use velnor_runner_host::journal::Journal;
 use velnor_runner_host::stage::{PairSink, PairStop, drive};
 use velnor_runner_host::worker::Started;
+use velnor_runner_journal::journal::Journal;
 
 /// Owned journal handle for the row this pair belongs to.
 #[derive(Debug, Clone)]

@@ -9,8 +9,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 
 use super::super::{PairEngine, remove_recorded};
+use crate::HostError;
 use crate::docker_spec::DeleteDecision;
-use crate::error::HostError;
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 

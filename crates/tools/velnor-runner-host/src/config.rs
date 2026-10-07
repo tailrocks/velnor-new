@@ -2,7 +2,7 @@
 
 use serde::Deserialize;
 
-use crate::error::HostError;
+use crate::HostError;
 
 /// Top-level controller file. Schema 1. Unknown fields fail.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]

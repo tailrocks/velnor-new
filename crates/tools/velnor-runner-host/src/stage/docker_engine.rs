@@ -4,9 +4,9 @@ use bollard::Docker;
 use bollard::errors::Error as DockerError;
 use bollard::query_parameters::RemoveContainerOptionsBuilder;
 
+use crate::HostError;
 use crate::docker_client::docker_deadline;
 use crate::docker_spec::RunnerImageProfile;
-use crate::error::HostError;
 use crate::worker::{
     CreateProjection, create_named_volumes, create_only, deliver_jit, dind_create,
     dind_create_for_profile, remove_worker_volumes, start_id,

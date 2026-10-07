@@ -175,7 +175,10 @@ async fn two_offers_are_not_acquired() -> Result<(), String> {
     );
     assert_eq!(script.calls, Vec::<&str>::new());
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert_eq!(rows, Vec::<velnor_runner_host::reconcile::IntentRow>::new());
+    assert_eq!(
+        rows,
+        Vec::<velnor_runner_journal::reconcile::IntentRow>::new()
+    );
     Ok(())
 }
 

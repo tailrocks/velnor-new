@@ -9,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use velnor_runner_github::{Exchange, Method, SessionRequest, Transport, TransportFail};
 
-use crate::error::HostError;
+use crate::HostError;
 
 /// One Actions or GitHub API origin. The path on each call is relative.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -5,10 +5,10 @@ use std::future::Future;
 use velnor_runner_github::{EncodedJit, SessionError, Transport, jit, jit_request};
 
 use velnor_runner_host::HostError;
-use velnor_runner_host::journal::Journal;
 use velnor_runner_host::listen::map_listen;
 use velnor_runner_host::scale_set::EnsureError;
 use velnor_runner_host::worker::Started;
+use velnor_runner_journal::journal::Journal;
 
 use super::super::mint_origin::MintOrigin;
 use super::super::{Drive, Lane};

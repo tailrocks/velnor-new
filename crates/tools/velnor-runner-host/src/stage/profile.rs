@@ -2,8 +2,8 @@
 
 use bollard::Docker;
 
+use crate::HostError;
 use crate::docker_spec::RunnerImageProfile;
-use crate::error::HostError;
 
 use super::{Forget, PairEngine, PairSink, PairStop, PartialPair, drive_inner};
 

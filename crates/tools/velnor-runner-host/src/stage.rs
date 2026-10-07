@@ -4,10 +4,10 @@
 
 use bollard::Docker;
 
+use crate::HostError;
 use crate::docker_spec::{
     DeleteDecision, RunnerImageProfile, delete_decision, runner_plan, runner_plan_for_profile,
 };
-use crate::error::HostError;
 use crate::worker::{
     CreateProjection, dind_create, dind_create_for_profile, join_dind_net, runner_create,
 };

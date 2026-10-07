@@ -35,6 +35,7 @@
     "velnor-runner-core",
     "velnor-runner-github",
     "velnor-runner-host",
+    "velnor-runner-journal",
     "velnor-runner-launch",
     "velnor-runner-launch-slot",
     "velnor-actions-orchestrator-core",

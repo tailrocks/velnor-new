@@ -1,7 +1,7 @@
 //! Slot-hold truth table: launch rows hold until cleanup or failure.
 
 use velnor_runner_host::IntentState;
-use velnor_runner_host::reconcile::IntentRow;
+use velnor_runner_journal::reconcile::IntentRow;
 use velnor_runner_launch_slot::holds;
 
 fn row(kind: &str, state: IntentState, cleanup_proven: bool) -> IntentRow {

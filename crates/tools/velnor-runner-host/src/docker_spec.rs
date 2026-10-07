@@ -1,6 +1,6 @@
 //! Audited runner and private `DinD` container plans.
 
-use crate::error::HostError;
+use crate::HostError;
 use velnor_runner_core::runner_work_path;
 
 mod profile;

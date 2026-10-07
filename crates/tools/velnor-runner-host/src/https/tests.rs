@@ -3,7 +3,7 @@
 use velnor_runner_github::{Method, SessionRequest};
 
 use super::{CURL_ARGV, HttpsTransport, join_url};
-use crate::error::HostError;
+use crate::HostError;
 
 #[test]
 fn https_base_rejects_plain_http() {

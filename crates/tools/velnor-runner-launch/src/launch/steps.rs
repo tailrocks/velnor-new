@@ -8,10 +8,10 @@ use velnor_runner_github::{
 };
 
 use velnor_runner_host::HostError;
-use velnor_runner_host::journal::{Journal, Outcome};
 use velnor_runner_host::listen::map_listen;
 use velnor_runner_host::scale_set::EnsureError;
 use velnor_runner_host::worker::Started;
+use velnor_runner_journal::journal::{Journal, Outcome};
 
 mod mint;
 

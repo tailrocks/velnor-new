@@ -6,8 +6,8 @@
 
 use bollard::Docker;
 
+use crate::HostError;
 use crate::docker_client::{DOCKER_OPERATION_TIMEOUT, docker_deadline_after};
-use crate::error::HostError;
 
 /// vCPU reserved for one job, after one core is left for the daemon.
 const CPU_PER_JOB: u32 = 4;

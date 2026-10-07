@@ -34,6 +34,7 @@
     "velnor-runner-core": "library",
     "velnor-runner-github": "library",
     "velnor-runner-host": "library",
+    "velnor-runner-journal": "library",
     "velnor-runner-launch": "library",
     "velnor-runner-launch-slot": "library",
     "velnor-actions-mise-probes": "library",

@@ -2,7 +2,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::error::HostError;
+use crate::HostError;
 use velnor_runner_core::runner_work_path;
 
 use super::{ContainerPlan, Mount, RUNNER_PLATFORM, private_volume_name};

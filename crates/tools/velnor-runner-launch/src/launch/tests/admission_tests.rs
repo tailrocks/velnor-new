@@ -140,7 +140,7 @@ async fn malformed_available_in_mixed_wire_batch_is_redelivered_without_effects(
         assert_eq!(script.calls, Vec::<&'static str>::new());
         assert_eq!(
             journal.rows().await.map_err(|error| error.to_string())?,
-            Vec::<velnor_runner_host::reconcile::IntentRow>::new()
+            Vec::<velnor_runner_journal::reconcile::IntentRow>::new()
         );
     }
     absent(&scratch.file())

@@ -4330,11 +4330,22 @@ dependencies = [
  "thiserror",
  "tokio",
  "toml",
+ "velnor-runner-core",
+ "velnor-runner-github",
+ "velnor-runner-journal",
+ "velnor-runner-launch",
+ "zeroize",
+]
+
+[[package]]
+name = "velnor-runner-journal"
+version = "0.1.1"
+dependencies = [
+ "thiserror",
+ "tokio",
  "turso",
  "velnor-runner-core",
  "velnor-runner-github",
- "velnor-runner-launch",
- "zeroize",
 ]
 
 [[package]]
@@ -4348,6 +4359,7 @@ dependencies = [
  "turso",
  "velnor-runner-github",
  "velnor-runner-host",
+ "velnor-runner-journal",
  "velnor-runner-launch-slot",
  "zeroize",
 ]
@@ -4357,6 +4369,7 @@ name = "velnor-runner-launch-slot"
 version = "0.1.1"
 dependencies = [
  "velnor-runner-host",
+ "velnor-runner-journal",
 ]
 
 [[package]]

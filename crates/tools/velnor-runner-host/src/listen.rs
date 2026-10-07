@@ -10,7 +10,7 @@ use zeroize::Zeroize;
 use crate::Offer;
 use crate::offer;
 
-use crate::error::HostError;
+use crate::HostError;
 use crate::https::HttpsTransport;
 use crate::scale_set::EnsureError;
 use crate::scale_set::ensure_product_scale_set;

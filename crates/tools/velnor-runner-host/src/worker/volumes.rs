@@ -7,9 +7,9 @@ use ::bollard::errors::Error as DockerError;
 use ::bollard::models::{Volume, VolumeCreateRequest};
 use ::bollard::query_parameters::RemoveVolumeOptions;
 
+use crate::HostError;
 use crate::docker_client::docker_deadline;
 use crate::docker_spec::Mount as PlannedMount;
-use crate::error::HostError;
 use velnor_runner_core::runner_work_path;
 
 #[derive(Clone)]

@@ -61,6 +61,7 @@ members = [
     "crates/tools/velnor-runner-core",
     "crates/tools/velnor-runner-github",
     "crates/tools/velnor-runner-host",
+    "crates/tools/velnor-runner-journal",
     "crates/tools/velnor-runner-launch",
     "crates/tools/velnor-runner-launch-slot",
 ]

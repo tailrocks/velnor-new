@@ -8,9 +8,9 @@ use super::super::{PollHost, admission, pump};
 use crate::launch::capacity::Admit;
 use crate::launch::harness::{Mode, Script, absent, ctx, open};
 use crate::launch::steps;
-use velnor_runner_host::journal::Outcome;
 use velnor_runner_host::scale_set::EnsureError;
 use velnor_runner_host::worker::Started;
+use velnor_runner_journal::journal::Outcome;
 
 struct ProgressPolls<'a> {
     journal: &'a velnor_runner_host::Journal,

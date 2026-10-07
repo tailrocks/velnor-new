@@ -7,7 +7,7 @@ use velnor_runner_github::{
     list_runner_groups, product_create_labels, registration_token,
 };
 
-use crate::error::HostError;
+use crate::HostError;
 use crate::https::HttpsTransport;
 
 const SET_NAME: &str = "ubuntu-26.04-scale-set";

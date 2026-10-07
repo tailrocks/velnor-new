@@ -6,9 +6,9 @@ use super::super::start_turn;
 use super::{ready, zero_assignment_session};
 use crate::launch::docker_stub::{DockerStub, http};
 use crate::launch::harness::{Mode, Script, absent, assigned_wait, ctx, open, started_progress};
-use velnor_runner_host::journal::Outcome;
 use velnor_runner_host::worker::Started;
 use velnor_runner_host::{EnsureError, IntentState};
+use velnor_runner_journal::journal::Outcome;
 
 #[tokio::test]
 async fn zero_initial_census_and_positive_poll_keep_jit_conflict_unacked() -> Result<(), String> {
@@ -178,7 +178,7 @@ async fn missing_current_census_blocks_ack_and_start() -> Result<(), String> {
     assert_eq!(decision, crate::launch::Admit::Error);
     assert_eq!(
         journal.rows().await.map_err(|error| error.to_string())?,
-        Vec::<velnor_runner_host::reconcile::IntentRow>::new()
+        Vec::<velnor_runner_journal::reconcile::IntentRow>::new()
     );
     absent(&scratch.file())
 }

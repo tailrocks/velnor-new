@@ -1,6 +1,6 @@
 //! Queue path. No network.
 
-use crate::error::HostError;
+use crate::HostError;
 use crate::listen::{absolute_https, queue_target};
 use crate::queue_path;
 

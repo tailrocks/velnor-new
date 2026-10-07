@@ -4,8 +4,8 @@ use ::bollard::Docker;
 use ::bollard::query_parameters::{AttachContainerOptionsBuilder, StartContainerOptions};
 use tokio::io::AsyncWriteExt;
 
+use crate::HostError;
 use crate::docker_client::docker_deadline;
-use crate::error::HostError;
 
 use super::{CreateProjection, bollard_create};
 

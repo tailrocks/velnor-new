@@ -11,6 +11,7 @@ workspace = true
 [dependencies]
 velnor-runner-github = { version = "=0.1.1", path = "../velnor-runner-github" }
 velnor-runner-host = { version = "=0.1.1", path = "../velnor-runner-host" }
+velnor-runner-journal = { version = "=0.1.1", path = "../velnor-runner-journal" }
 velnor-runner-launch-slot = { version = "=0.1.1", path = "../velnor-runner-launch-slot" }
 bollard = { workspace = true }
 thiserror = { workspace = true }

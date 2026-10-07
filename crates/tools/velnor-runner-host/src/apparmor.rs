@@ -7,7 +7,7 @@
 
 use std::{fs, path::Path};
 
-use crate::error::HostError;
+use crate::HostError;
 
 const PROFILE_NAMES: [&str; 3] = ["velnor-runner", "velnor-worker", "velnor-job"];
 const PROFILE_LIST: &str = "/sys/kernel/security/apparmor/profiles";
