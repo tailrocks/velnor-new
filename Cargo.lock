@@ -3888,6 +3888,7 @@ name = "velnor-actions-orchestrator-generation"
 version = "0.1.1"
 dependencies = [
  "rustix 1.1.5",
+ "serde_json",
  "tempfile",
  "toml",
  "velnor-actions-actionlint",
@@ -3898,6 +3899,7 @@ dependencies = [
  "velnor-actions-mise",
  "velnor-actions-orchestrator-core",
  "velnor-actions-orchestrator-discovery",
+ "velnor-actions-orchestrator-internal",
  "velnor-actions-orchestrator-pins",
  "velnor-actions-orchestrator-provisioning",
  "velnor-actions-orchestrator-staged-validation",

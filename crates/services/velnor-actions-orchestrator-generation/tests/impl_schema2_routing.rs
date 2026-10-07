@@ -1,8 +1,11 @@
 //! Schema 2 generation on temp fixtures. Do not generate into the repository tree.
 
-use velnor_actions_orchestrator::{
-    ExecutionMode, migrate_config, prepare, render_staged_tree, render_staged_tree_with,
+use velnor_actions_contract_config::ExecutionMode;
+use velnor_actions_orchestrator_generation::generate::{
+    render_staged_tree, render_staged_tree_with,
 };
+use velnor_actions_orchestrator_generation::prepare::prepare;
+use velnor_actions_orchestrator_generation::routing::migrate_config;
 use velnor_actions_workflow_tree::RenderedTree;
 
 use crate::impl_common::{TestResult, config_with_branch, git, make_repo};

@@ -7,7 +7,8 @@ use tempfile::TempDir;
 use velnor_actions_actionlint::actions::{
     MR_BOXINGTON_ACTION_CANDIDATE_SHA, MR_BOXINGTON_ACTION_SHA,
 };
-use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_orchestrator_generation::generate::render_staged_tree;
+use velnor_actions_orchestrator_generation::prepare::prepare;
 
 use crate::impl_common::{TestResult, make_repo};
 
