@@ -270,12 +270,26 @@ async fn profile_path_uses_official_pinned_runner_and_private_dind() -> Result<(
         "worker_a",
         b"jit-canary-not-a-job-env",
         PairStop::Jit,
-        &Forget,
+        &engine,
         &profile,
     )
     .await?;
     assert!(partial.dind_id.is_some());
     assert!(partial.runner_id.is_some());
+    assert_eq!(
+        engine.events(),
+        [
+            "sink-volume",
+            "volumes",
+            "create",
+            "sink-dind",
+            "create",
+            "sink-runner",
+            "start",
+            "start",
+            "jit",
+        ]
+    );
     let specs = engine.specs();
     assert_eq!(specs.len(), 2);
     assert_eq!(specs[0].image, profile.dind_image());
@@ -292,6 +306,9 @@ async fn profile_path_uses_official_pinned_runner_and_private_dind() -> Result<(
         specs[1].network_mode.as_deref(),
         Some("container:000000000001")
     );
+    assert!(specs[1].readonly_rootfs);
+    assert_eq!(specs[1].mounts[2].target, "/home/runner/externals");
+    assert!(specs[1].mounts[2].read_only);
     assert!(specs.iter().all(|spec| {
         !spec
             .env
@@ -306,6 +323,7 @@ async fn profile_path_uses_official_pinned_runner_and_private_dind() -> Result<(
                 .iter()
                 .any(|entry| entry.contains("jit-canary-not-a-job-env"))
     }));
+
     Ok(())
 }
 

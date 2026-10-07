@@ -22,13 +22,14 @@ pub fn dind_create_for_profile(
     profile: &RunnerImageProfile,
 ) -> Result<CreateProjection, HostError> {
     let runner = runner_plan_for_profile(private_volume, profile)?;
-    let mounts = dind_mounts_for_profile(runner.mounts, private_volume)?;
+    let mounts = dind_mounts_for_profile(private_volume)?;
     let mut labels = worker_labels(private_volume, "dind");
     labels.sort_unstable();
     Ok(CreateProjection {
         name: format!("{private_volume}-dind"),
         image: profile.dind_image().to_owned(),
         platform: runner.platform,
+        readonly_rootfs: false,
         env: Vec::new(),
         cmd: vec![
             "dockerd".to_owned(),
@@ -37,6 +38,7 @@ pub fn dind_create_for_profile(
         ],
         labels,
         mounts,
+        image_mounts: Vec::new(),
         privileged: true,
         group_add: Vec::new(),
         security_opts: Vec::new(),

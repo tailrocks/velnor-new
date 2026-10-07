@@ -13,6 +13,19 @@ pub struct Mount {
     pub source: String,
     /// Container path.
     pub target: String,
+    /// Whether the mount is read-only. `false` preserves the legacy default.
+    pub read_only: bool,
+}
+
+/// Immutable OCI image subpath mounted read-only over a container path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImageMount {
+    /// Immutable image reference selected by the runner profile.
+    pub image: String,
+    /// Relative path inside the selected image.
+    pub subpath: String,
+    /// Container path covered by the image layer.
+    pub target: String,
 }
 
 /// Docker create projection the controller is allowed to send.
@@ -27,6 +40,8 @@ pub struct ContainerPlan {
     pub privileged: bool,
     /// Requested OCI platform. The supported runner profile is `linux/amd64`.
     pub platform: String,
+    /// Mount the runner image root read-only.
+    pub readonly_rootfs: bool,
     /// Immutable image reference selected by the runner profile.
     pub image: String,
     /// Env pairs. Must not carry JIT, host paths, or management tokens.
@@ -37,6 +52,8 @@ pub struct ContainerPlan {
     pub labels: Vec<String>,
     /// Private volumes for this worker's socket and work tree.
     pub mounts: Vec<Mount>,
+    /// Profile-owned immutable image mounts over writable parent volumes.
+    pub image_mounts: Vec<ImageMount>,
     /// Fixed supplemental groups needed by the private Docker socket.
     pub group_add: Vec<String>,
     /// Fixed host security options. The Linux runner requires its configured LSM profile.
@@ -85,6 +102,7 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
         name: format!("{private_volume}-runner"),
         privileged: false,
         platform: RUNNER_PLATFORM.to_owned(),
+        readonly_rootfs: false,
         image: RUNNER_IMAGE.to_owned(),
         env: Vec::new(),
         cmd: vec![ENTRYPOINT.to_owned()],
@@ -97,12 +115,15 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
             Mount {
                 source: format!("volume:{private_volume}"),
                 target: SOCKET_TARGET.to_owned(),
+                read_only: false,
             },
             Mount {
                 source: format!("volume:{work}"),
                 target: runner_work_path(),
+                read_only: false,
             },
         ],
+        image_mounts: Vec::new(),
         group_add: Vec::new(),
         security_opts: Vec::new(),
     })
@@ -140,7 +161,9 @@ fn shape_rejected(plan: &ContainerPlan) -> bool {
 }
 
 fn audit_legacy_plan(plan: &ContainerPlan) -> Result<(), HostError> {
-    if !plan.security_opts.is_empty()
+    if plan.readonly_rootfs
+        || !plan.image_mounts.is_empty()
+        || !plan.security_opts.is_empty()
         || !plan.group_add.is_empty()
         || contains_jit(&plan.env)
         || contains_jit(&plan.cmd)
@@ -163,12 +186,31 @@ fn runner_labels(private_volume: &str) -> Vec<String> {
     ]
 }
 
+fn runner_image_mounts(image: &str) -> Vec<ImageMount> {
+    [
+        "bin",
+        "run.sh",
+        "run-helper.sh.template",
+        "safe_sleep.sh",
+        "env.sh",
+        "config.sh",
+    ]
+    .iter()
+    .map(|path| ImageMount {
+        image: image.to_owned(),
+        subpath: format!("home/runner/{path}"),
+        target: format!("/home/runner/{path}"),
+    })
+    .collect()
+}
+
 fn contains_payload_marker(
     env: &[String],
     cmd: &[String],
     labels: &[String],
     security_opts: &[String],
     mounts: &[Mount],
+    image_mounts: &[ImageMount],
 ) -> bool {
     env.iter()
         .chain(cmd)
@@ -177,6 +219,11 @@ fn contains_payload_marker(
         .any(|value| value.contains("JIT-SECRET-CANARY"))
         || mounts.iter().any(|mount| {
             mount.source.contains("JIT-SECRET-CANARY") || mount.target.contains("JIT-SECRET-CANARY")
+        })
+        || image_mounts.iter().any(|mount| {
+            mount.image.contains("JIT-SECRET-CANARY")
+                || mount.subpath.contains("JIT-SECRET-CANARY")
+                || mount.target.contains("JIT-SECRET-CANARY")
         })
 }
 
@@ -309,6 +356,11 @@ pub fn plan_contains(plan: &ContainerPlan, canary: &str) -> bool {
             .mounts
             .iter()
             .any(|mount| mount.source.contains(canary) || mount.target.contains(canary))
+        || plan.image_mounts.iter().any(|mount| {
+            mount.image.contains(canary)
+                || mount.subpath.contains(canary)
+                || mount.target.contains(canary)
+        })
 }
 
 fn field_contains(items: &[String], canary: &str) -> bool {

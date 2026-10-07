@@ -3,9 +3,10 @@
 //! JIT is not a field. `start_pair` writes it on stdin and does not store it.
 
 use crate::HostError;
-use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_plan};
+use crate::docker_spec::{ContainerPlan, ImageMount, Mount, audit_plan, runner_plan};
 use crate::stage::PairStop;
 use ::bollard::Docker;
+use velnor_runner_core::runner_work_path;
 
 mod bollard;
 mod engine;
@@ -56,6 +57,8 @@ pub struct CreateProjection {
     pub image: String,
     /// OCI platform. Always `linux/amd64`.
     pub platform: String,
+    /// Mount the container root filesystem read-only.
+    pub readonly_rootfs: bool,
     /// Env pairs. Empty when the image environment stands.
     pub env: Vec<String>,
     /// Command. Empty when the image entrypoint stands.
@@ -64,6 +67,8 @@ pub struct CreateProjection {
     pub labels: Vec<String>,
     /// Mounts. Volume sources use `volume:<name>`.
     pub mounts: Vec<Mount>,
+    /// Immutable image subpaths mounted read-only over writable parent volumes.
+    pub image_mounts: Vec<ImageMount>,
     /// Host privilege. False for the runner. True only for private `DinD`.
     pub privileged: bool,
     /// Additional numeric groups. Linux runner uses this for the private `DinD` socket.
@@ -97,10 +102,12 @@ pub fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, HostError
         name: plan.name.clone(),
         image: plan.image.clone(),
         platform: plan.platform.clone(),
+        readonly_rootfs: plan.readonly_rootfs,
         env: plan.env.clone(),
         cmd: plan.cmd.clone(),
         labels: plan.labels.clone(),
         mounts: plan.mounts.clone(),
+        image_mounts: plan.image_mounts.clone(),
         privileged: false,
         group_add: plan.group_add.clone(),
         security_opts: plan.security_opts.clone(),
@@ -151,10 +158,12 @@ pub fn dind_create(private_volume: &str) -> Result<CreateProjection, HostError> 
         name: format!("{private_volume}-dind"),
         image: DIND_IMAGE.to_owned(),
         platform: runner.platform,
+        readonly_rootfs: false,
         env: Vec::new(),
         cmd: Vec::new(),
         labels,
         mounts,
+        image_mounts: Vec::new(),
         privileged: true,
         group_add: Vec::new(),
         security_opts: Vec::new(),
@@ -173,30 +182,40 @@ fn dind_mounts(mut mounts: Vec<Mount>, private_volume: &str) -> Result<Vec<Mount
     mounts.push(Mount {
         source: format!("volume:{private_volume}-docker"),
         target: "/var/lib/docker".to_owned(),
+        read_only: false,
     });
     Ok(mounts)
 }
 
-fn dind_mounts_for_profile(
-    mut mounts: Vec<Mount>,
-    private_volume: &str,
-) -> Result<Vec<Mount>, HostError> {
+fn dind_mounts_for_profile(private_volume: &str) -> Result<Vec<Mount>, HostError> {
     if !private_volume
         .bytes()
         .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-'))
     {
         return Err(HostError::ForbiddenMount);
     }
-    let socket = mounts.first_mut().ok_or(HostError::ForbiddenMount)?;
-    if socket.source != format!("volume:{private_volume}") || socket.target != "/run/docker" {
-        return Err(HostError::ForbiddenMount);
-    }
-    // Runner.Worker v2.338.0 hardcodes /var/run/docker.sock as the source for
-    // Docker action containers. Docker resolves that source inside this DinD
-    // container, so mount the same private volume at /var/run while retaining
-    // the runner's narrower /run/docker mount and endpoint.
-    "/var/run".clone_into(&mut socket.target);
-    dind_mounts(mounts, private_volume)
+    Ok(vec![
+        Mount {
+            source: format!("volume:{private_volume}"),
+            target: "/var/run".to_owned(),
+            read_only: false,
+        },
+        Mount {
+            source: format!("volume:{private_volume}-work"),
+            target: runner_work_path(),
+            read_only: false,
+        },
+        Mount {
+            source: format!("volume:{private_volume}-externals"),
+            target: "/home/runner/externals".to_owned(),
+            read_only: true,
+        },
+        Mount {
+            source: format!("volume:{private_volume}-docker"),
+            target: "/var/lib/docker".to_owned(),
+            read_only: false,
+        },
+    ])
 }
 
 fn worker_labels(private_volume: &str, role: &str) -> Vec<String> {
