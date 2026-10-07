@@ -1,11 +1,37 @@
 //! Integration case index; one module per file under `cases/`.
 
+pub(crate) mod gapc;
+pub(crate) mod gate8_acquire;
+pub(crate) mod gate8_e;
+pub(crate) mod gates_shard;
+pub(crate) mod gates_shard_tokens;
+pub(crate) mod gen_gates;
 pub(crate) mod merge;
 pub(crate) mod merge_plan;
 pub(crate) mod merge_tamper;
 pub(crate) mod merge_trust;
+pub(crate) mod orch_broaden;
 pub(crate) mod orch_core;
 pub(crate) mod orch_core_cover;
+pub(crate) mod orch_f2a;
+pub(crate) mod orch_f2a_prepare;
+pub(crate) mod orch_f2b;
+pub(crate) mod orch_f2d;
+pub(crate) mod orch_f2e;
+pub(crate) mod orch_f2f;
+pub(crate) mod orch_f2f_edges;
+pub(crate) mod orch_f2f_family;
+pub(crate) mod orch_features;
+pub(crate) mod orch_gate;
+pub(crate) mod orch_gen;
+pub(crate) mod orch_gen2;
+pub(crate) mod orch_install_sets;
+pub(crate) mod orch_intake;
+pub(crate) mod orch_intake_deps;
+pub(crate) mod orch_lock_audit;
 pub(crate) mod orch_merge;
 pub(crate) mod orch_merge_final;
+pub(crate) mod orch_p08;
 pub(crate) mod orch_plansel;
+pub(crate) mod orch_release_emit;
+pub(crate) mod orch_timeout;

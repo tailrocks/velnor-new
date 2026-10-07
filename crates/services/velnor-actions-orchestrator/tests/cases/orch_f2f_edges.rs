@@ -100,7 +100,7 @@ fn expected_mise_family(dir: &str) -> Option<Vec<&str>> {
     }
 }
 
-use crate::impl_orch_f2f_family::expected_orchestrator_family;
+use crate::cases::orch_f2f_family::expected_orchestrator_family;
 
 /// Service/app edges per member directory.
 fn expected_service(dir: &str) -> Option<Vec<&str>> {

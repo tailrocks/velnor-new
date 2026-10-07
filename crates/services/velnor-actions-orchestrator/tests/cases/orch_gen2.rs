@@ -1,9 +1,9 @@
-//! OW3 remediation: source hygiene cases (split from `impl_orch_gen`).
+//! OW3 remediation: source hygiene cases (split from `cases::orch_gen`).
 
 use std::fs;
 use std::path::PathBuf;
 
-use crate::impl_orch_f2a::family_file;
+use crate::cases::orch_f2a::family_file;
 use crate::support::TestResult;
 
 #[test]

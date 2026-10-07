@@ -2,7 +2,7 @@
 
 use velnor_actions_contract_workflow::{FinalStatus, MatrixReport, Plan};
 
-use crate::impl_gates_shard::sharded_case;
+use crate::cases::gates_shard::sharded_case;
 use crate::support::{TestResult, passing_reports, plan_for_source_change};
 
 /// Full final report for one merge request (status plus miss tokens).

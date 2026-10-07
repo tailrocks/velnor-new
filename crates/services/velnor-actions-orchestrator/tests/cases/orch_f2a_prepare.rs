@@ -1,6 +1,6 @@
-//! Prepare-path scan split from `impl_orch_f2a` (400-line gate).
+//! Prepare-path scan split from `cases::orch_f2a` (400-line gate).
 
-use crate::impl_orch_f2a::{code_of, family_file, src_files};
+use crate::cases::orch_f2a::{code_of, family_file, src_files};
 use crate::support::TestResult;
 
 #[test]
