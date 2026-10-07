@@ -9,6 +9,18 @@ use crate::args::ServiceAction;
 
 const LABEL: &str = "com.tailrocks.velnor.host";
 
+/// Read-only view of whether the platform may still own the controller.
+/// Unknown is never treated as stopped by mutating commands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ControllerServiceState {
+    /// The controller unit/job is loaded, running, or transitioning.
+    InUse,
+    /// The platform positively reported the controller absent or inactive.
+    Stopped,
+    /// The manager could not provide a complete, trustworthy observation.
+    Unknown,
+}
+
 pub(crate) fn service(action: ServiceAction) -> ExitCode {
     match action {
         ServiceAction::Install => install(),
@@ -45,6 +57,125 @@ pub(crate) fn logs(follow: bool) -> ExitCode {
         let _ = follow;
         eprintln!("log backend unsupported on this host");
         ExitCode::from(1)
+    }
+}
+
+/// Query the platform service manager without treating errors as stopped.
+pub(crate) fn controller_service_state() -> ControllerServiceState {
+    #[cfg(target_os = "linux")]
+    {
+        let output = Command::new("systemctl")
+            .args([
+                "show",
+                "--no-pager",
+                "--property=LoadState,ActiveState,SubState,MainPID,ControlPID",
+                "velnor-host.service",
+            ])
+            .output();
+        match output {
+            Ok(output) => systemd_service_state(output.status.success(), &output.stdout),
+            Err(_) => ControllerServiceState::Unknown,
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if read_uid().is_none() {
+            return ControllerServiceState::Unknown;
+        }
+        match Command::new("launchctl").arg("list").output() {
+            Ok(output) => launchctl_service_state(output.status.success(), &output.stdout, LABEL),
+            Err(_) => ControllerServiceState::Unknown,
+        }
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        ControllerServiceState::Unknown
+    }
+}
+
+fn systemd_service_state(success: bool, output: &[u8]) -> ControllerServiceState {
+    if !success {
+        return ControllerServiceState::Unknown;
+    }
+    let Ok(output) = std::str::from_utf8(output) else {
+        return ControllerServiceState::Unknown;
+    };
+    let mut load = None;
+    let mut active = None;
+    let mut sub = None;
+    let mut main_pid = None;
+    let mut control_pid = None;
+    for line in output.lines() {
+        let Some((key, value)) = line.split_once('=') else {
+            return ControllerServiceState::Unknown;
+        };
+        let target = match key {
+            "LoadState" => &mut load,
+            "ActiveState" => &mut active,
+            "SubState" => &mut sub,
+            "MainPID" => &mut main_pid,
+            "ControlPID" => &mut control_pid,
+            _ => continue,
+        };
+        if target.replace(value).is_some() {
+            return ControllerServiceState::Unknown;
+        }
+    }
+    let (Some(load), Some(active), Some(sub), Some(main_pid), Some(control_pid)) =
+        (load, active, sub, main_pid, control_pid)
+    else {
+        return ControllerServiceState::Unknown;
+    };
+    let (Ok(main_pid), Ok(control_pid)) = (main_pid.parse::<u32>(), control_pid.parse::<u32>())
+    else {
+        return ControllerServiceState::Unknown;
+    };
+    if main_pid != 0 || control_pid != 0 {
+        return ControllerServiceState::InUse;
+    }
+    match (load, active, sub) {
+        ("loaded" | "not-found", "inactive", "dead") => ControllerServiceState::Stopped,
+        ("loaded", "active" | "activating" | "deactivating" | "reloading", _) => {
+            ControllerServiceState::InUse
+        }
+        _ => ControllerServiceState::Unknown,
+    }
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn launchctl_service_state(success: bool, output: &[u8], label: &str) -> ControllerServiceState {
+    if !success {
+        return ControllerServiceState::Unknown;
+    }
+    let Ok(output) = std::str::from_utf8(output) else {
+        return ControllerServiceState::Unknown;
+    };
+    let mut saw_header = false;
+    let mut saw_row = false;
+    for line in output.lines().filter(|line| !line.trim().is_empty()) {
+        let fields = line.split_whitespace().collect::<Vec<_>>();
+        if fields == ["PID", "Status", "Label"] {
+            if saw_header || saw_row {
+                return ControllerServiceState::Unknown;
+            }
+            saw_header = true;
+            continue;
+        }
+        if fields.len() != 3
+            || (fields[0] != "-" && fields[0].parse::<u32>().is_err())
+            || fields[1].parse::<i32>().is_err()
+        {
+            return ControllerServiceState::Unknown;
+        }
+        saw_row = true;
+        if fields[2] == label {
+            return ControllerServiceState::InUse;
+        }
+    }
+    if saw_header || saw_row {
+        ControllerServiceState::Stopped
+    } else {
+        ControllerServiceState::Unknown
     }
 }
 

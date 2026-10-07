@@ -1,6 +1,9 @@
 use std::path::Path;
 
-use super::{bootout_argv, bootstrap_argv, with_logs};
+use super::{
+    ControllerServiceState, bootout_argv, bootstrap_argv, launchctl_service_state,
+    systemd_service_state, with_logs,
+};
 
 #[test]
 fn launchctl_uses_the_gui_domain_and_does_not_fork() {
@@ -34,4 +37,89 @@ fn plist_logs_stay_out_of_the_secret_channel() {
     assert!(body.contains("/Users/example/Library/Logs/Velnor/host.log"));
     assert!(!body.contains("ACTIONS_RUNNER_INPUT_JITCONFIG"));
     assert!(!body.contains("daemon fork"));
+}
+
+#[test]
+fn systemd_requires_a_complete_positive_stopped_observation() {
+    let stopped =
+        b"LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\n";
+    assert_eq!(
+        systemd_service_state(true, stopped),
+        ControllerServiceState::Stopped
+    );
+
+    let transitional =
+        b"LoadState=loaded\nActiveState=activating\nSubState=start\nMainPID=0\nControlPID=0\n";
+    assert_eq!(
+        systemd_service_state(true, transitional),
+        ControllerServiceState::InUse
+    );
+
+    let active_with_pid =
+        b"LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=12\nControlPID=0\n";
+    assert_eq!(
+        systemd_service_state(true, active_with_pid),
+        ControllerServiceState::InUse
+    );
+}
+
+#[test]
+fn systemd_query_failures_and_incomplete_states_are_unknown() {
+    let stopped =
+        b"LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\n";
+    assert_eq!(
+        systemd_service_state(false, stopped),
+        ControllerServiceState::Unknown
+    );
+    assert_eq!(
+        systemd_service_state(true, b"LoadState=loaded\nActiveState=inactive\n"),
+        ControllerServiceState::Unknown
+    );
+    assert_eq!(
+        systemd_service_state(
+            true,
+            b"LoadState=loaded\nActiveState=failed\nSubState=failed\nMainPID=0\nControlPID=0\n"
+        ),
+        ControllerServiceState::Unknown
+    );
+}
+
+#[test]
+fn launchctl_requires_success_and_parses_the_exact_label() {
+    assert_eq!(
+        launchctl_service_state(
+            true,
+            b"PID Status Label\n501 0 com.tailrocks.velnor.host\n",
+            "com.tailrocks.velnor.host"
+        ),
+        ControllerServiceState::InUse
+    );
+    assert_eq!(
+        launchctl_service_state(
+            true,
+            b"PID Status Label\n- 0 com.example.other\n",
+            "com.tailrocks.velnor.host"
+        ),
+        ControllerServiceState::Stopped
+    );
+    assert_eq!(
+        launchctl_service_state(true, b"PID Status Label\n", "com.tailrocks.velnor.host"),
+        ControllerServiceState::Stopped
+    );
+    assert_eq!(
+        launchctl_service_state(false, b"", "com.tailrocks.velnor.host"),
+        ControllerServiceState::Unknown
+    );
+    assert_eq!(
+        launchctl_service_state(true, b"unexpected output\n", "com.tailrocks.velnor.host"),
+        ControllerServiceState::Unknown
+    );
+    assert_eq!(
+        launchctl_service_state(
+            true,
+            b"PID Status Label\nPID Status Label\n",
+            "com.tailrocks.velnor.host"
+        ),
+        ControllerServiceState::Unknown
+    );
 }
