@@ -1,10 +1,10 @@
 //! F2 structural scan (overflow): CLI carries no stack vocabulary.
 //!
-//! Split from `impl_orch_f2a` (size gate): tree-scan helper plus its one test.
+//! Tree-scan helper plus its one test, colocated with the scanned tree.
 
 use std::path::PathBuf;
 
-use crate::impl_common::TestResult;
+type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// All `.rs` files under a crate-relative directory, recursively.
 fn tree_rs(relative: &str) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
@@ -27,7 +27,7 @@ fn tree_rs(relative: &str) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
 
 #[test]
 fn cli_carries_no_stack_flags() -> TestResult {
-    for path in tree_rs("../../apps/velnor-actions-cli/src")? {
+    for path in tree_rs("src")? {
         let text = std::fs::read_to_string(&path)?;
         assert!(
             !text.to_lowercase().contains("stack"),
