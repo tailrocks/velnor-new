@@ -188,8 +188,14 @@ capture_release_case() {
 }
 
 normalize_candidate_digests() {
-  local preview="$1" digest file normalized placeholder
+  local preview="$1" digest file normalized placeholder commit commit_placeholder
   placeholder="$(printf '%064d' 0 | tr '0' 'a')"
+  commit_placeholder="$(printf '%040d' 0 | tr '0' 'b')"
+  if ! commit="$(jq -er '.commit | strings' "$CANDIDATE_MANIFEST" 2>/dev/null)" \
+    || [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "FATAL: candidate manifest contains a malformed source commit" >&2
+    return 1
+  fi
   while IFS= read -r digest; do
     if [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
       echo "FATAL: candidate manifest contains a malformed asset digest" >&2
@@ -205,6 +211,15 @@ normalize_candidate_digests() {
       fi
     done < <(find "$preview/.github" -type f -print)
   done < <(jq -r '.targets[].sha256' "$CANDIDATE_MANIFEST")
+  while IFS= read -r file; do
+    normalized="$file.normalized"
+    if ! sed -e "s/$commit/$commit_placeholder/g" "$file" >"$normalized" \
+      || ! mv "$normalized" "$file"; then
+      rm -f "$normalized"
+      echo "FATAL: could not normalize candidate manifest commit in $file" >&2
+      return 1
+    fi
+  done < <(find "$preview/.github" -type f -print)
 }
 
 capture_release_dogfood() {
