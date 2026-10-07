@@ -11,11 +11,13 @@ mod controller;
 mod events;
 mod intent;
 mod launch;
+mod lifecycle;
 mod schema;
 mod worker_volume;
 
 pub use auth_intent::{DiscoveryCredentialOutcome, DiscoveryCredentialStep};
 pub use capacity::{CapacityClaim, LaunchEffectState, ReplayRoute, ScopedLaunchIdentity};
+pub use lifecycle::RunnerStartIntent;
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

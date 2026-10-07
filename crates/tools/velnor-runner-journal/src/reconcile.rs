@@ -1,6 +1,6 @@
 //! Restart reconcile. Pure: no database, Docker, or HTTP.
 
-use crate::journal::{IntentState, LaunchEffectState};
+use crate::journal::{IntentState, LaunchEffectState, RunnerStartIntent};
 
 /// One durable intent loaded for reconcile.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +41,12 @@ pub struct IntentRow {
     pub remote_terminal: bool,
     /// Cleanup of the recorded ids was proven.
     pub cleanup_proven: bool,
+    /// Deterministic private bridge name durably stored before network creation.
+    pub outer_network_name: Option<String>,
+    /// Exact Docker network ID returned by host inspection after creation.
+    pub outer_network_id: Option<String>,
+    /// Durable intent immediately before runner start; migrated rows stay unknown.
+    pub runner_start_intent: RunnerStartIntent,
 }
 
 /// Whether the host may advertise free capacity.

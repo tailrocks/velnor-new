@@ -48,7 +48,12 @@ fn container_json(id: &str, worker: Option<&str>, role: Option<&str>) -> String 
         }),
         _ => serde_json::json!({}),
     };
-    serde_json::json!({"Id": id, "Config": {"Labels": labels}}).to_string()
+    serde_json::json!({
+        "Id": id,
+        "HostConfig": {"CgroupnsMode": "private"},
+        "Config": {"Labels": labels}
+    })
+    .to_string()
 }
 
 #[tokio::test]

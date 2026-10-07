@@ -97,9 +97,11 @@ impl Journal {
         Ok(id)
     }
 
-    /// Store plain docker and GitHub runner ids after the effect returns.
+    /// Bind plain Docker and GitHub runner ids after the effect returns.
     ///
-    /// `None` leaves the existing column. Empty ids are rejected.
+    /// `None` leaves the existing column. Once present, each id is immutable;
+    /// cleanup and start evidence must continue to refer to the same generation.
+    /// Empty ids are rejected.
     ///
     /// # Errors
     ///
@@ -116,7 +118,7 @@ impl Journal {
         let conn = self.connection().await?;
         let changed = conn
             .execute(
-                "UPDATE intents SET docker_id = COALESCE(?1, docker_id), github_runner_id = COALESCE(?2, github_runner_id) WHERE id = ?3",
+                "UPDATE intents SET docker_id = COALESCE(docker_id, ?1), github_runner_id = COALESCE(github_runner_id, ?2) WHERE id = ?3 AND (?1 IS NULL OR docker_id IS NULL OR docker_id = ?1) AND (?2 IS NULL OR github_runner_id IS NULL OR github_runner_id = ?2)",
                 (
                     docker_id.map(str::to_owned),
                     github_runner_id.map(str::to_owned),
@@ -125,7 +127,11 @@ impl Journal {
             )
             .await
             .map_err(|_| HostError::Journal)?;
-        one_row(changed)
+        match changed {
+            1 => Ok(()),
+            0 => same_bind_ids(&conn, id, docker_id, github_runner_id).await,
+            _ => Err(HostError::Journal),
+        }
     }
 
     /// Store the runner id and the private `DinD` id. `None` keeps the column.
@@ -186,7 +192,7 @@ impl Journal {
         let conn = self.connection().await?;
         let mut query = conn
             .query(
-                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id, worker_volume, message_id, runner_request_id, requested_workflow_run_id, requested_job_id, runner_name, observed_job_id, observed_workflow_run_id, remote_terminal, effect_state FROM intents ORDER BY id",
+                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id, worker_volume, message_id, runner_request_id, requested_workflow_run_id, requested_job_id, runner_name, observed_job_id, observed_workflow_run_id, remote_terminal, effect_state, outer_network_name, outer_network_id, runner_start_state FROM intents ORDER BY id",
                 (),
             )
             .await
@@ -196,6 +202,33 @@ impl Journal {
             out.push(intent_row(&row)?);
         }
         Ok(out)
+    }
+}
+
+async fn same_bind_ids(
+    conn: &turso::Connection,
+    id: i64,
+    docker_id: Option<&str>,
+    github_runner_id: Option<&str>,
+) -> Result<(), HostError> {
+    let mut rows = conn
+        .query(
+            "SELECT docker_id, github_runner_id FROM intents WHERE id = ?1",
+            [id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
+        return Err(HostError::Journal);
+    };
+    let existing_docker: Option<String> = row.get(0).map_err(|_| HostError::Journal)?;
+    let existing_runner: Option<String> = row.get(1).map_err(|_| HostError::Journal)?;
+    let exact = docker_id.is_none_or(|value| existing_docker.as_deref() == Some(value))
+        && github_runner_id.is_none_or(|value| existing_runner.as_deref() == Some(value));
+    if exact {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
     }
 }
 
@@ -225,12 +258,21 @@ async fn insert_live(
     if let Some(id) = live_id(conn, kind, subject).await? {
         return Ok(id);
     }
-    conn.execute(
-        "INSERT INTO intents (kind, subject, state) VALUES (?1, ?2, 'pending')",
-        (kind.to_owned(), subject.to_owned()),
-    )
-    .await
-    .map_err(|_| HostError::Journal)?;
+    if kind == "launch" {
+        conn.execute(
+            "INSERT INTO intents (kind, subject, state, runner_start_state) VALUES (?1, ?2, 'pending', 'not_requested')",
+            (kind.to_owned(), subject.to_owned()),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    } else {
+        conn.execute(
+            "INSERT INTO intents (kind, subject, state) VALUES (?1, ?2, 'pending')",
+            (kind.to_owned(), subject.to_owned()),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    }
     Ok(conn.last_insert_rowid())
 }
 
@@ -261,6 +303,11 @@ fn intent_row(row: &turso::Row) -> Result<IntentRow, HostError> {
             _ => return Err(HostError::Journal),
         },
         cleanup_proven: row.get(6).map_err(|_| HostError::Journal)?,
+        outer_network_name: row.get(18).map_err(|_| HostError::Journal)?,
+        outer_network_id: row.get(19).map_err(|_| HostError::Journal)?,
+        runner_start_intent: crate::journal::RunnerStartIntent::parse(
+            &row.get::<String>(20).map_err(|_| HostError::Journal)?,
+        )?,
     })
 }
 
