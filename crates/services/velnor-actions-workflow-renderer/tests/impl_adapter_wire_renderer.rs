@@ -7,8 +7,8 @@ use velnor_actions_workflow_cache::cache_steps::check_cache_step_order;
 use velnor_actions_workflow_cache::cache_steps::{
     TOOLS_CACHE_PATH, TOOLS_RESTORE_USES, TOOLS_SAVE_USES, cache_action_step,
 };
+use velnor_actions_workflow_document::lane_target::lane_cargo_target_env;
 use velnor_actions_workflow_jobs::check_release_build;
-use velnor_actions_workflow_renderer::lane_target::lane_cargo_target_env;
 use velnor_actions_workflow_renderer::render_workflow_ir;
 use velnor_actions_workflow_steps::toolchain_env::{
     TOOLCHAIN_HOME_KEYS, check_toolchain_homes, with_toolchain_homes,

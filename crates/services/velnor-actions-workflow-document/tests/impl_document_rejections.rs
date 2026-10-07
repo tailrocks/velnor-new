@@ -1,9 +1,9 @@
-use super::{
-    HOSTED_RUNS, checkout, ctx, echo_step, lane_job, paired, render_jobs, scale_token, share_lanes,
-    workflow_ir,
+use super::impl_document_lane_helpers::{
+    HOSTED_RUNS, checkout, ctx, echo_step, lane_job, paired, render_jobs, scale_token, workflow_ir,
 };
 use std::collections::BTreeMap;
 use velnor_actions_contract_workflow::{Job, StepKind};
+use velnor_actions_workflow_document::lane_share::share_lanes;
 use velnor_actions_workflow_steps::RenderError;
 
 #[test]

@@ -3,14 +3,6 @@
 //! Validated IR plus fixed argv in, marked YAML out: no subprocesses, no
 //! stack or tool branching, quoting-only shell shaping.
 
-mod document;
-mod document_lanes;
-mod document_steps;
-mod lane_share;
-mod lane_share_sections;
-pub mod lane_target;
-mod matrix;
-mod matrix_output_mode;
 pub mod render;
 pub mod schema2;
 pub mod tree;

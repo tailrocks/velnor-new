@@ -143,7 +143,7 @@ pub(crate) fn cache_ids_for(
 /// this path so concurrent writers never share a target dir. The path
 /// derives from the responsibility-based lane digest, never an ordinal.
 pub(crate) fn target_dir_for_lane_id(lane_id: &str) -> String {
-    velnor_actions_workflow_renderer::lane_target::target_dir_for_lane(lane_id)
+    velnor_actions_workflow_document::lane_target::target_dir_for_lane(lane_id)
 }
 
 /// Toolchain identity digest for one task.

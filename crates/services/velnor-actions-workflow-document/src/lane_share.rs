@@ -24,7 +24,7 @@ pub struct RenderedWorkflow {
 
 /// Jobs rewritten to call a shared action, plus those action files.
 #[derive(Debug)]
-pub(crate) struct LaneShare {
+pub struct LaneShare {
     /// Same jobs, with shared lanes keeping their headers and elected saves.
     pub jobs: BTreeMap<String, Job>,
     /// Job id to local `uses` path.
@@ -61,7 +61,7 @@ struct SharedLaneParts {
 /// steps differ fails closed. Report uploads, named-check execution identity,
 /// and elected cache saves stay on the lane that owns them. An unsafe logical
 /// id fails closed.
-pub(crate) fn share_lanes(
+pub fn share_lanes(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
 ) -> Result<LaneShare, RenderError> {

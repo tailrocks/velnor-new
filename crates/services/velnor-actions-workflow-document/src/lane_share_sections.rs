@@ -1,3 +1,5 @@
+//! Shared lane sections: prelude, postlude, and report uploads.
+
 use std::collections::BTreeMap;
 
 use velnor_actions_contract_config::config::{

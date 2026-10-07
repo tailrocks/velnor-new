@@ -68,7 +68,11 @@ fn marker_trio(job: &Job) -> Option<[Option<String>; 3]> {
 }
 
 /// Task matrix directive from the fixed-step env trio (`None` = static).
-pub(crate) fn task_matrix_of(
+///
+/// # Errors
+///
+/// Malformed matrix markers fail.
+pub fn task_matrix_of(
     jobs: &BTreeMap<String, Job>,
 ) -> Result<Option<(MatrixSource, u32)>, RenderError> {
     let Some(task) = jobs.get(TASK_JOB_ID) else {
@@ -110,9 +114,11 @@ pub(crate) fn task_matrix_of(
 /// Every non-task job carrying any trio key must carry the full trio
 /// with a live producer and a positive cap, exactly like the task
 /// matrix; unmarked jobs stay out.
-pub(crate) fn crate_job_caps(
-    jobs: &BTreeMap<String, Job>,
-) -> Result<BTreeMap<String, u32>, RenderError> {
+///
+/// # Errors
+///
+/// Partial trios, dead producers, or non-positive caps fail.
+pub fn crate_job_caps(jobs: &BTreeMap<String, Job>) -> Result<BTreeMap<String, u32>, RenderError> {
     let mut caps = BTreeMap::new();
     for (id, job) in jobs {
         if id == TASK_JOB_ID {
@@ -145,7 +151,8 @@ pub(crate) fn crate_job_caps(
 }
 
 /// Clone jobs minus the matrix marker trio, which never renders.
-pub(crate) fn scrub_matrix_marker(jobs: &BTreeMap<String, Job>) -> BTreeMap<String, Job> {
+#[must_use]
+pub fn scrub_matrix_marker(jobs: &BTreeMap<String, Job>) -> BTreeMap<String, Job> {
     let mut scrubbed = jobs.clone();
     for job in scrubbed.values_mut() {
         for step in &mut job.steps {
@@ -172,7 +179,11 @@ fn is_matrix_name(value: &str) -> bool {
 }
 
 /// Emit the task `strategy`, producer `outputs`, and plan step ID.
-pub(crate) fn attach_task_matrix(
+///
+/// # Errors
+///
+/// Malformed matrix directives fail.
+pub fn attach_task_matrix(
     document: &mut Yaml,
     source: &MatrixSource,
     max_parallel: u32,
@@ -224,7 +235,11 @@ pub(crate) fn attach_task_matrix(
 /// The cap declares the lane-staging bound the orchestrator enforces
 /// through `needs`; without it the staging would be invisible. Empty
 /// caps change nothing.
-pub(crate) fn attach_crate_job_caps(
+///
+/// # Errors
+///
+/// Malformed cap markers fail.
+pub fn attach_crate_job_caps(
     document: &mut Yaml,
     caps: &BTreeMap<String, u32>,
 ) -> Result<(), RenderError> {
@@ -257,7 +272,11 @@ pub(crate) fn attach_crate_job_caps(
 /// Static (non-matrix) workflows still gate obligation steps on plan
 /// coverage, so the plan job always exports the covered set; without
 /// a plan job or plan step there is nothing to export.
-pub(crate) fn attach_plan_outputs(document: &mut Yaml) -> Result<(), RenderError> {
+///
+/// # Errors
+///
+/// A document without a jobs mapping fails.
+pub fn attach_plan_outputs(document: &mut Yaml) -> Result<(), RenderError> {
     let Yaml::Map(entries) = document else {
         return Err(matrix_invalid("matrix_without_document"));
     };

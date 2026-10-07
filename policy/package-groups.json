@@ -20,6 +20,7 @@
     "velnor-actions-tofu": "library",
     "velnor-actions-tofu-core": "library",
     "velnor-actions-workflow-cache": "library",
+    "velnor-actions-workflow-document": "library",
     "velnor-actions-workflow-generator": "library",
     "velnor-actions-workflow-jobs": "library",
     "velnor-actions-workflow-release": "library",

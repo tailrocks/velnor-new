@@ -21,6 +21,7 @@
     "velnor-actions-tofu",
     "velnor-actions-tofu-core",
     "velnor-actions-workflow-cache",
+    "velnor-actions-workflow-document",
     "velnor-actions-workflow-generator",
     "velnor-actions-workflow-jobs",
     "velnor-actions-workflow-release",

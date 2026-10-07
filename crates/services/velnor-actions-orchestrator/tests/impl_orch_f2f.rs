@@ -37,6 +37,7 @@ fn members() -> Vec<&'static str> {
         "crates/adapters/velnor-actions-tofu",
         "crates/adapters/velnor-actions-tofu-core",
         "crates/services/velnor-actions-workflow-cache",
+        "crates/services/velnor-actions-workflow-document",
         "crates/services/velnor-actions-workflow-generator",
         "crates/services/velnor-actions-workflow-jobs",
         "crates/services/velnor-actions-workflow-release",

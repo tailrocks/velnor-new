@@ -11,7 +11,7 @@ use crate::impl_common::TestResult;
 
 #[test]
 fn lanes_isolate_cargo_writers() {
-    use velnor_actions_workflow_renderer::lane_target::{TARGET_DIR_PREFIX, target_dir_for_lane};
+    use velnor_actions_workflow_document::lane_target::{TARGET_DIR_PREFIX, target_dir_for_lane};
     let ids = ["b".to_owned(), "a".to_owned(), "c".to_owned()];
     let lanes = assign_lanes(&ids);
     assert_eq!(lanes.len(), 3);
@@ -116,7 +116,7 @@ fn overlap_ratio_stays_descriptive() {
 #[test]
 fn cache_paths_have_single_owners() {
     use velnor_actions_workflow_cache::cache_steps::{TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH};
-    use velnor_actions_workflow_renderer::lane_target::TARGET_DIR_PREFIX;
+    use velnor_actions_workflow_document::lane_target::TARGET_DIR_PREFIX;
     let table = cache_ownership_table();
     let mut seen: std::collections::BTreeMap<&str, &str> = std::collections::BTreeMap::new();
     for (path, owner) in &table {

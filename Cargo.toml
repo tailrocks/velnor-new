@@ -22,6 +22,7 @@ members = [
     "crates/services/velnor-actions-workflow-cache",
     "crates/services/velnor-actions-workflow-renderer",
     "crates/services/velnor-actions-workflow-generator",
+    "crates/services/velnor-actions-workflow-document",
     "crates/services/velnor-actions-workflow-jobs",
     "crates/services/velnor-actions-workflow-release",
     "crates/services/velnor-actions-workflow-steps",

@@ -19,9 +19,9 @@ use velnor_actions_workflow_jobs::{
     finalize::{finalize_jobs, merged_jobs, validate_final_jobs},
 };
 
-use crate::{document, matrix};
+use velnor_actions_workflow_document::{document, matrix};
 
-pub use crate::matrix::{
+pub use velnor_actions_workflow_document::matrix::{
     COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
     MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
 };
@@ -33,8 +33,8 @@ pub use crate::matrix::{
 /// emitted tree share one source of truth, never retyped mirrors.
 pub const WORKFLOW_PATH: &str = CI_WORKFLOW_PATH;
 
-pub use crate::lane_share::RenderedWorkflow;
 pub use velnor_actions_contract_release::{AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET};
+pub use velnor_actions_workflow_document::lane_share::RenderedWorkflow;
 /// Render one workflow document from IR under a policy gate.
 ///
 /// Inserts the mandated closures (plan, request, task, final) shared by
@@ -123,7 +123,7 @@ fn render_merged(
         jobs.clone()
     };
     let mbx_jobs = velnor_actions_workflow_cache::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
-    let shared = crate::lane_share::share_lanes(&jobs, ctx)?;
+    let shared = velnor_actions_workflow_document::lane_share::share_lanes(&jobs, ctx)?;
     let mut document = document::workflow_to_yaml(ir, &shared, ctx, &mbx_jobs)?;
     if let Some((source, max_parallel)) = &matrix {
         matrix::attach_task_matrix(&mut document, source, *max_parallel)?;

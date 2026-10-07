@@ -5,7 +5,7 @@ use velnor_actions_contract_workflow::{
     Concurrency, Job, JobTimeout, Permissions, Step, StepKind, StepRole, Trigger, WorkflowIr,
 };
 
-use super::{HOSTED_SUFFIX, SCALE_SUFFIX, share_lanes};
+use super::{HOSTED_SUFFIX, SCALE_SUFFIX};
 use velnor_actions_workflow_jobs::{
     RenderContext,
     context::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP},
@@ -139,7 +139,6 @@ pub(super) fn paired(steps: &[Step]) -> BTreeMap<String, Job> {
 }
 
 mod named_check_tests;
-mod rejections;
 mod render_tests;
 mod shell_tests;
 mod unpinned_tests;

@@ -97,9 +97,9 @@ fn gate6_limits_bound_fanout_and_subprocess_budgets() -> TestResult {
     assert_eq!(JobTimeout::CRATE.minutes(), 30);
     assert_eq!(JobTimeout::REQUIRED.minutes(), 10);
     assert_eq!(JobTimeout::VALIDATOR.minutes(), 10);
-    let renderer = crate_src("../velnor-actions-workflow-renderer");
+    let document = crate_src("../velnor-actions-workflow-document");
     assert!(
-        token_hits(&renderer, "MATRIX_MAX_PARALLEL_ENV")?
+        token_hits(&document, "MATRIX_MAX_PARALLEL_ENV")?
             .iter()
             .any(|hit| hit.starts_with("matrix.rs:")),
         "matrix cap env stays wired"

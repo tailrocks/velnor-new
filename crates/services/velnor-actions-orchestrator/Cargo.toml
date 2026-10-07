@@ -23,6 +23,7 @@ velnor-actions-rust-core = { version = "=0.1.1", path = "../../adapters/velnor-a
 velnor-actions-tofu = { version = "=0.1.1", path = "../../adapters/velnor-actions-tofu" }
 velnor-actions-tofu-core = { version = "=0.1.1", path = "../../adapters/velnor-actions-tofu-core" }
 velnor-actions-workflow-cache = { version = "=0.1.1", path = "../velnor-actions-workflow-cache" }
+velnor-actions-workflow-document = { version = "=0.1.1", path = "../velnor-actions-workflow-document" }
 velnor-actions-workflow-generator = { version = "=0.1.1", path = "../velnor-actions-workflow-generator" }
 velnor-actions-workflow-jobs = { version = "=0.1.1", path = "../velnor-actions-workflow-jobs" }
 velnor-actions-workflow-release = { version = "=0.1.1", path = "../velnor-actions-workflow-release" }

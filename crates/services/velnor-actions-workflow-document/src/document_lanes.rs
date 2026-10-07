@@ -1,3 +1,5 @@
+//! Lane jobs calling shared composite actions.
+
 use std::collections::BTreeMap;
 
 use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};

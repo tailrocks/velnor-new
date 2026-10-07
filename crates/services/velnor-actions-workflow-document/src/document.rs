@@ -18,7 +18,11 @@ use velnor_actions_workflow_tree::{yaml::Yaml, yaml::string_map_yaml};
 mod tests;
 
 /// Build the workflow document: name, on, permissions, concurrency, jobs.
-pub(crate) fn workflow_to_yaml(
+///
+/// # Errors
+///
+/// Returns [`RenderError`] for an inconsistent lane share or bad job shape.
+pub fn workflow_to_yaml(
     ir: &WorkflowIr,
     shared: &LaneShare,
     ctx: &RenderContext,

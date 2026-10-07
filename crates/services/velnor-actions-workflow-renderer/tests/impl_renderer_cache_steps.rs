@@ -5,7 +5,6 @@ use velnor_actions_workflow_cache::cache_steps::{
     CompileDriver, MBX_CACHE_MODE_ENV, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME,
     cache_action_step, mbx_steps_for_driver, tools_cache_key, tools_restore_step, tools_save_step,
 };
-use velnor_actions_workflow_renderer::lane_target::target_dir_for_lane;
 
 use super::impl_renderer_fixtures::*;
 
@@ -301,14 +300,6 @@ fn strict_leaves_setup_less_jobs_without_tools_cache()
         "setup-less job must not cache: {names:?}"
     );
     Ok(())
-}
-
-#[test]
-fn lane_target_dirs_stay_isolated() {
-    let one = target_dir_for_lane("lane-one");
-    let two = target_dir_for_lane("lane-two");
-    assert!(one.starts_with("$RUNNER_TEMP/velnor/target/"), "{one}");
-    assert_ne!(one, two, "lanes never share a target dir");
 }
 
 #[test]
