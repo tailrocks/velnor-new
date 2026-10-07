@@ -57,7 +57,12 @@ fn dispatch(cli: &Cli) -> ExitCode {
         }),
         Command::Service { action } => crate::service::service(*action, &config, &state),
         Command::Daemon { action } => daemon(&state, &config, *action),
-        Command::Compare { evidence, .. } => compare_command(evidence.as_deref()),
+        Command::Compare {
+            repo,
+            run_id,
+            attempt,
+            evidence,
+        } => compare_command(repo, *run_id, *attempt, evidence.as_deref()),
         Command::Disconnect {
             drain,
             wait,
@@ -236,9 +241,14 @@ fn run_daemon(state: &Path, config: &Path) -> ExitCode {
     crate::daemon_run::run_daemon(state, config)
 }
 
-fn compare_command(evidence: Option<&Path>) -> ExitCode {
+fn compare_command(
+    repository: &str,
+    run_id: u64,
+    attempt: u64,
+    evidence: Option<&Path>,
+) -> ExitCode {
     match evidence {
-        Some(path) => crate::compare::compare_dir(path),
+        Some(path) => crate::compare::compare_dir_for(path, repository, run_id, attempt),
         None => not_proven(),
     }
 }

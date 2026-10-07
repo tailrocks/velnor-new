@@ -115,16 +115,16 @@ pub enum Command {
     },
     /// Fail-closed lane comparison.
     Compare {
-        /// Repository.
+        /// Repository whose identity must be represented by the evidence.
         #[arg(long)]
         repo: String,
-        /// Workflow run id.
+        /// Workflow run ID to match against scoped evidence.
         #[arg(long)]
         run_id: u64,
-        /// Run attempt.
+        /// Positive workflow run attempt to match against the evidence keys.
         #[arg(long)]
         attempt: u64,
-        /// Directory of expected, observed, and census JSON.
+        /// Directory of expected, observed, and census JSON. Current records omit repository/run ID, so scoped comparison remains `NOT_PROVEN`.
         #[arg(long, value_name = "DIR")]
         evidence: Option<PathBuf>,
     },
