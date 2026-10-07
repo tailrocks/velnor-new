@@ -142,7 +142,7 @@ fn verify_exec_pairs_with_matching_install() {
                     "{kind:?} prepares through install"
                 );
                 assert!(
-                    crate::vectors::validator_install_pin(spec).is_some(),
+                    super::validator_install_pin(spec).is_some(),
                     "{spec} resolves through the validator pin"
                 );
             }

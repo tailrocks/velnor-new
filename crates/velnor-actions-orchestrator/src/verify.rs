@@ -13,6 +13,7 @@ use velnor_actions_mise::{IsolatedCommand, PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 
 use crate::OrchestratorError;
+use crate::vectors::{CARGO_DENY_VERSION, CARGO_MACHETE_TOOL_SPEC, CARGO_MACHETE_VERSION};
 
 /// Qualified markdownlint-cli2 release (npm, latest).
 /// Source: `npm view markdownlint-cli2 versions`; checked 2026-10-07.
@@ -31,6 +32,42 @@ pub(crate) const VERIFY_NODE_VERSION: &str = "24.21.0";
 /// No macOS/aarch64 asset exists, so the probe ran resolution only;
 /// the release carries `x86_64-unknown-linux-gnu` for CI runners.
 pub(crate) const LYCHEE_VERSION: &str = "0.15.1";
+
+/// Resolve an emitted validator install spec to its pinned name and version.
+///
+/// Supported validator installation pins. The version must equal the pinned
+/// const or the emitted shape drifted and the audit fails closed.
+#[must_use]
+pub(crate) fn validator_install_pin(
+    spec: &str,
+) -> Option<(&'static str, &'static str, &'static str)> {
+    let (key, version) = spec.split_once('@')?;
+    match key {
+        "cargo-deny" if version == CARGO_DENY_VERSION => {
+            Some(("cargo-deny", CARGO_DENY_VERSION, "cargo-deny"))
+        }
+        CARGO_MACHETE_TOOL_SPEC if version == CARGO_MACHETE_VERSION => Some((
+            "cargo-machete",
+            CARGO_MACHETE_VERSION,
+            CARGO_MACHETE_TOOL_SPEC,
+        )),
+        "zizmor" if version == velnor_actions_mise::catalog::ZIZMOR_VERSION => Some((
+            "zizmor",
+            velnor_actions_mise::catalog::ZIZMOR_VERSION,
+            "zizmor",
+        )),
+        "npm:markdownlint-cli2" if version == MARKDOWNLINT_VERSION => Some((
+            "markdownlint-cli2",
+            MARKDOWNLINT_VERSION,
+            "npm:markdownlint-cli2",
+        )),
+        "node" if version == VERIFY_NODE_VERSION => Some(("node", VERIFY_NODE_VERSION, "node")),
+        "ubi:lycheeverse/lychee" if version == LYCHEE_VERSION => {
+            Some(("lychee", LYCHEE_VERSION, "ubi:lycheeverse/lychee"))
+        }
+        _ => None,
+    }
+}
 
 /// Mise tool spec for the markdownlint vector.
 const MARKDOWNLINT_SPEC: &str = "npm:markdownlint-cli2";

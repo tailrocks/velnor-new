@@ -20,51 +20,11 @@ use crate::{OrchestratorError, qualify::QualifyRequest};
 /// reported cargo-deny 0.20.2.
 pub(crate) const CARGO_DENY_VERSION: &str = "0.20.2";
 
-/// Resolve an emitted validator install spec to its pinned name and version.
-///
-/// Supported validator installation pins. The version must equal the pinned
-/// const or the emitted shape drifted and the audit fails closed.
-#[must_use]
-pub(crate) fn validator_install_pin(
-    spec: &str,
-) -> Option<(&'static str, &'static str, &'static str)> {
-    let (key, version) = spec.split_once('@')?;
-    match key {
-        "cargo-deny" if version == CARGO_DENY_VERSION => {
-            Some(("cargo-deny", CARGO_DENY_VERSION, "cargo-deny"))
-        }
-        CARGO_MACHETE_TOOL_SPEC if version == CARGO_MACHETE_VERSION => Some((
-            "cargo-machete",
-            CARGO_MACHETE_VERSION,
-            CARGO_MACHETE_TOOL_SPEC,
-        )),
-        "zizmor" if version == velnor_actions_mise::catalog::ZIZMOR_VERSION => Some((
-            "zizmor",
-            velnor_actions_mise::catalog::ZIZMOR_VERSION,
-            "zizmor",
-        )),
-        "npm:markdownlint-cli2" if version == crate::verify::MARKDOWNLINT_VERSION => Some((
-            "markdownlint-cli2",
-            crate::verify::MARKDOWNLINT_VERSION,
-            "npm:markdownlint-cli2",
-        )),
-        "node" if version == crate::verify::VERIFY_NODE_VERSION => {
-            Some(("node", crate::verify::VERIFY_NODE_VERSION, "node"))
-        }
-        "ubi:lycheeverse/lychee" if version == crate::verify::LYCHEE_VERSION => Some((
-            "lychee",
-            crate::verify::LYCHEE_VERSION,
-            "ubi:lycheeverse/lychee",
-        )),
-        _ => None,
-    }
-}
-
 /// Exact Linux `x86_64` musl release for cargo-machete.
 /// GitHub's release API digest, its published `.sha256` companion, and the
 /// downloaded asset hash agree. Ubi's cold install enumerated the broad API.
-const CARGO_MACHETE_VERSION: &str = "0.9.2";
-const CARGO_MACHETE_TOOL_SPEC: &str = concat!(
+pub(crate) const CARGO_MACHETE_VERSION: &str = "0.9.2";
+pub(crate) const CARGO_MACHETE_TOOL_SPEC: &str = concat!(
     "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/",
     "download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,",
     "checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]",
