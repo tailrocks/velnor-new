@@ -12,7 +12,7 @@ pub use crate::action_ref::validate_uses;
 pub use crate::steps_artifact::{
     ARTIFACT_NAME_OUTPUT, BASELINE_PUBLISH_UPLOAD_NAME, BASELINE_RETENTION_DAYS, PUBLISH_STEP_ID,
     baseline_publish_upload_step, crate_job_report_upload_step, download_artifact_step,
-    matrix_report_upload_step, upload_artifact_step,
+    matrix_report_upload_step, upload_artifact_step, upload_diagnostics_step,
 };
 pub use crate::steps_internal::split_internal_operation;
 pub use crate::steps_internal::{

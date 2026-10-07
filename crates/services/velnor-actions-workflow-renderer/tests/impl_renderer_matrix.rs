@@ -26,6 +26,7 @@ fn fixture_ctx() -> RenderContext {
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),
         validator_commands: Vec::new(),
+        rust_policy: None,
         candidate: None,
         preseed: false,
         verification_tasks: Vec::new(),

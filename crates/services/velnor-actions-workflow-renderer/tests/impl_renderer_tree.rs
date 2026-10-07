@@ -19,6 +19,8 @@ use velnor_actions_workflow_steps::{
 };
 use velnor_actions_workflow_tree::{ACTIONLINT_PATH, with_marker};
 
+use crate::impl_renderer_fixtures::policy_pin;
+
 const VERSION: &str = "0.1.0";
 const LABEL: &str = "ubuntu-26.04";
 
@@ -34,6 +36,7 @@ pub(crate) fn fixture_ctx() -> RenderContext {
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),
         validator_commands: Vec::new(),
+        rust_policy: Some(policy_pin()),
         candidate: None,
         preseed: false,
         verification_tasks: Vec::new(),
@@ -144,16 +147,53 @@ fn consumer_tree_has_exactly_two_sorted_paths() -> Result<(), RenderError> {
 }
 
 #[test]
-fn consumer_tree_has_no_codeowners_and_rejects_support_jobs() -> Result<(), RenderError> {
+fn consumer_tree_has_no_codeowners_and_merges_only_the_policy_lane() -> Result<(), RenderError> {
     let ir = fixture_ir()?;
     let ctx = fixture_ctx();
-    let with_support = VelnorSupportWorkflow {
+    let policy_lane = VelnorSupportWorkflow {
         validators: vec![ValidatorKind::Alint],
         candidate_validation: false,
     };
+    let text = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, Some(&policy_lane), &ctx)?;
+    let alint_at = text.find("  alint:").expect("consumer policy lane");
+    let lane = &text[alint_at..];
+    for pin in [
+        "Materialize Rust policy",
+        "Validate policy config",
+        "Run Alint",
+        "Collect policy gap diagnostics",
+        "Upload policy gap diagnostics",
+        "rust-repository-policy-0.1.3.tar.gz",
+        "rust-strict-v1.yml",
+        "check-gaps",
+    ] {
+        assert!(lane.contains(pin), "consumer lane misses {pin}");
+    }
+    let mut unpinned = fixture_ctx();
+    unpinned.rust_policy = None;
+    let err = render_workflow_ir(
+        &ir,
+        WorkflowPolicy::ConsumerV1,
+        Some(&policy_lane),
+        &unpinned,
+    )
+    .expect_err("policy lane without identity must fail");
     assert!(
-        render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, Some(&with_support), &ctx).is_err()
+        format!("{err:?}").contains("alint_without_policy_identity"),
+        "wrong rejection: {err:?}"
     );
+    for forbidden in [ValidatorKind::CargoDeny, ValidatorKind::Zizmor] {
+        let denied = VelnorSupportWorkflow {
+            validators: vec![forbidden],
+            candidate_validation: false,
+        };
+        let err = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, Some(&denied), &ctx)
+            .expect_err("non-policy validator must fail");
+        assert!(
+            format!("{err:?}").contains("forbidden_job"),
+            "wrong rejection: {err:?}"
+        );
+    }
     let with_candidate = VelnorSupportWorkflow {
         validators: Vec::new(),
         candidate_validation: true,
@@ -167,6 +207,7 @@ fn consumer_tree_has_no_codeowners_and_rejects_support_jobs() -> Result<(), Rend
     };
     let text = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, Some(&empty), &ctx)?;
     assert!(!text.contains("CODEOWNERS"));
+    assert!(!text.contains("  alint:"));
     let tree = render_tree(&text, &actionlint_bytes()?, VERSION)?;
     assert_eq!(tree.files.len(), 3);
     assert_eq!(tree.symlinks.len(), 1);
@@ -272,18 +313,63 @@ fn velnor_alint_job_materializes_policy_before_running() -> Result<(), RenderErr
         "rust-repository-policy-0.1.3.tar.gz",
         "104c0d8b3a827875776358f941aa88f1c5837c1009305076af9380f4e3fcda25",
         ".cache/rust-policy",
+        ".cache/rust-policy/profiles/rust-strict-v1.yml",
         "sha256sum -c",
         "GITHUB_PATH",
+        "alint-v0.16.1-",
+        "Validate policy config",
+        "validate-config",
+        "Collect policy gap diagnostics",
+        "check-gaps",
+        "Upload policy gap diagnostics",
+        "policy-gaps",
     ] {
         assert!(lane.contains(pin), "policy lane misses {pin}");
     }
     let materialize_at = lane.find("Materialize Rust policy").expect("lane step");
+    let validate_at = lane.find("Validate policy config").expect("validate step");
     let run_at = lane.find("Run Alint").expect("run step");
+    let collect_at = lane
+        .find("Collect policy gap diagnostics")
+        .expect("collect step");
+    let upload_at = lane
+        .find("Upload policy gap diagnostics")
+        .expect("upload step");
     let checkout_at = lane.find("Checkout").expect("checkout step");
     assert!(
-        checkout_at < materialize_at && materialize_at < run_at,
+        checkout_at < materialize_at
+            && materialize_at < validate_at
+            && validate_at < run_at
+            && run_at < collect_at
+            && collect_at < upload_at,
         "policy lane out of order"
     );
+    Ok(())
+}
+
+#[test]
+fn policy_lane_runs_unconditionally_on_every_trigger() -> Result<(), RenderError> {
+    let ir = fixture_ir()?;
+    let mut ctx = fixture_ctx();
+    ctx.validator_commands = validator_commands();
+    for policy in [
+        WorkflowPolicy::ConsumerV1,
+        WorkflowPolicy::VelnorRepositoryV1,
+    ] {
+        let support = VelnorSupportWorkflow {
+            validators: vec![ValidatorKind::Alint],
+            candidate_validation: false,
+        };
+        let text = render_workflow_ir(&ir, policy, Some(&support), &ctx)?;
+        assert!(!text.contains("paths:"), "path filter emitted: {text}");
+        let alint_at = text.find("  alint:").expect("alint job");
+        let steps_at = text[alint_at..].find("    steps:").expect("steps block");
+        let header = &text[alint_at..alint_at + steps_at];
+        assert!(
+            !header.contains("if:"),
+            "policy job carries a condition: {header}"
+        );
+    }
     Ok(())
 }
 

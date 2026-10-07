@@ -274,7 +274,7 @@ fn lint_freshness_and_advisory_run_every_generate() -> TestResult {
 #[test]
 fn validator_commands_stay_velnor_only() -> TestResult {
     without_ambient_identity("validator_commands_stay_velnor_only", || {
-        let velnor_config = "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n";
+        let velnor_config = "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n[stacks.rust.policy]\nversion = \"0.1.3\"\nsha256 = \"104c0d8b3a827875776358f941aa88f1c5837c1009305076af9380f4e3fcda25\"\nprofile = \"rust-strict-v1\"\n";
         let velnor = make_velnor_repo(velnor_config)?;
         let prep = prepare(velnor.path())?;
         let parent = TempDir::new()?;

@@ -322,7 +322,7 @@ fn orch_gen_consumer_ignores_policy_mirror_and_lock() -> TestResult {
     assert_eq!(before, snapshot(root)?, "consumer leaves .velnor alone");
     without_ambient_identity("orch_gen_consumer_ignores_policy_mirror_and_lock", || {
         let velnor = make_velnor_repo(
-            "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\n",
+            "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\n[stacks.rust.policy]\nversion = \"0.1.3\"\nsha256 = \"104c0d8b3a827875776358f941aa88f1c5837c1009305076af9380f4e3fcda25\"\nprofile = \"rust-strict-v1\"\n",
         )?;
         fs::write(
             velnor.path().join(".velnor/version-policy.toml"),
@@ -346,7 +346,7 @@ fn orch_gen_consumer_ignores_policy_mirror_and_lock() -> TestResult {
 fn orch_gen_candidate_qualify_is_artifact_only() -> TestResult {
     without_ambient_identity("orch_gen_candidate_qualify_is_artifact_only", || {
         let repo = make_velnor_repo(
-            "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\ngenerator_validation = \"candidate\"\n",
+            "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\ngenerator_validation = \"candidate\"\n[stacks.rust.policy]\nversion = \"0.1.3\"\nsha256 = \"104c0d8b3a827875776358f941aa88f1c5837c1009305076af9380f4e3fcda25\"\nprofile = \"rust-strict-v1\"\n",
         )?;
         fs::write(repo.path().join(".velnor/generator.lock"), lock_text()?)?;
         let prep = prepare(repo.path())?;

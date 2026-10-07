@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract_config::ValidatorKind;
+use velnor_actions_contract_config::{RustPolicyConfig, ValidatorKind};
 use velnor_actions_contract_workflow::{
     PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID, REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
@@ -50,6 +50,10 @@ pub struct RenderContext {
     pub checkout_uses: String,
     /// Fixed shell steps for repository validator jobs (P05-6: no umbrella).
     pub validator_commands: Vec<ValidatorCommand>,
+    /// Shared Rust policy identity for the policy lane, from
+    /// `[stacks.rust.policy]`. Required whenever the Alint validator
+    /// merges, on any policy; absent otherwise.
+    pub rust_policy: Option<RustPolicyConfig>,
     /// Fixed vectors for the `candidate` job, when enabled.
     pub candidate: Option<CandidateSpec>,
     /// Pre-seed mode: Velnor policy without a bootstrap lock (trust-on-

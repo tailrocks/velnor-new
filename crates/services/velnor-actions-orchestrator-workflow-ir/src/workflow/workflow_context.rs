@@ -68,6 +68,11 @@ pub(super) fn render_context(
         } else {
             None
         };
+    let rust_policy = config
+        .stacks
+        .rust
+        .as_ref()
+        .and_then(|rust| rust.policy.clone());
     Ok(RenderContext {
         generator_version: version.to_owned(),
         runs_on: label.to_owned(),
@@ -75,6 +80,7 @@ pub(super) fn render_context(
         request_dir: REQUEST_DIR.to_owned(),
         checkout_uses: CHECKOUT_USES.to_owned(),
         validator_commands,
+        rust_policy,
         candidate,
         preseed: false,
         verification_tasks,

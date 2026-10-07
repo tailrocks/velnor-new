@@ -121,12 +121,7 @@ pub fn merged_jobs(
     workflow_policy::check_concurrency(&ir.concurrency)?;
     workflow_policy::check_single_label(ir, &ctx.runs_on, &ctx.verification_tasks)?;
     let mut jobs = ir.jobs.clone();
-    match policy {
-        WorkflowPolicy::ConsumerV1 => support::reject_consumer_support(&jobs, support)?,
-        WorkflowPolicy::VelnorRepositoryV1 => {
-            support::merge_support_jobs(&mut jobs, support, ctx)?;
-        }
-    }
+    support::merge_support_jobs(&mut jobs, support, ctx, policy)?;
     let verification_ids = verification_jobs::validate_verification_jobs(
         &jobs,
         &ctx.verification_tasks,
