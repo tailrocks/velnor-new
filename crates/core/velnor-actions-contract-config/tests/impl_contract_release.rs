@@ -250,6 +250,7 @@ fn release_wired_into_stack_validation_with_key_paths() {
         test_runner: None,
         run_ignored: None,
         release: valid_release(),
+        policy: None,
     };
     assert_eq!(stack.validate(FILE), Ok(()));
     let mut bad = stack.clone();

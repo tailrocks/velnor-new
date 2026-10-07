@@ -48,6 +48,7 @@ fn config_validation_reports_key_paths() {
                 test_runner: None,
                 run_ignored: None,
                 release: RustReleaseConfig::default(),
+                policy: None,
             }),
             tofu: None,
         },
@@ -56,6 +57,7 @@ fn config_validation_reports_key_paths() {
         },
         actions: ActionsConfig::default(),
         execution: None,
+        docs: None,
     };
     assert_eq!(valid.validate(".velnor/config.toml"), Ok(()));
     let support = WorkflowPolicy::ConsumerV1.support_workflow(GeneratorValidation::Bootstrap);
@@ -118,6 +120,7 @@ fn runner_label_uses_exact_catalog_match() {
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),
         execution: None,
+        docs: None,
     };
     assert!(RUNNER_LABEL_CATALOG.contains(&LATEST_RUNNER_LABEL));
     for label in RUNNER_LABEL_CATALOG {
@@ -188,12 +191,14 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
                 test_runner: None,
                 run_ignored: None,
                 release: RustReleaseConfig::default(),
+                policy: None,
             }),
             tofu: None,
         },
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),
         execution: None,
+        docs: None,
     };
     let Err(ContractError::Config {
         key_path, problem, ..
