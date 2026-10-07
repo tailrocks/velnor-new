@@ -1,6 +1,39 @@
 use super::*;
 
 #[test]
+fn parse_execstartpre_matches_systemctl_output_from_loaded_unit() {
+    // Read-only observation from systemd 257.13's loaded ssh.service. The
+    // parser must retain argv boundaries and the systemd error policy used by
+    // the package's boot-time ExecStartPre contract.
+    let mut service = String::from_utf8(unit_snapshot(UnitSnapshot {
+        active_state: "activating",
+        sub_state: "start-pre",
+        main_pid: 0,
+        control_pid: 1,
+        result: "success",
+        stop_code: "(null)",
+        stop_status: "0/0",
+        timeout: "31s",
+    }))
+    .expect("ASCII unit fixture");
+    let package_preflight = format!(
+        "ExecStartPre={{ path=/usr/bin/velnor-host ; argv[]={} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }}",
+        preflight_argv().join(" ")
+    );
+    let observed = "ExecStartPre={ path=/usr/sbin/sshd ; argv[]=/usr/sbin/sshd -t ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }";
+    assert!(service.contains(&package_preflight));
+    service = service.replace(&package_preflight, observed);
+
+    let parsed = super::super::systemd::parse_snapshot(service.as_bytes())
+        .expect("systemctl show output from a loaded unit");
+    let invocation = parsed.exec_start_pre;
+
+    assert_eq!(invocation.path, "/usr/sbin/sshd");
+    assert_eq!(invocation.argv, ["/usr/sbin/sshd", "-t"]);
+    assert_eq!(invocation.ignore_errors, "no");
+}
+
+#[test]
 fn start_rejects_commands_that_ignore_failures_or_have_incomplete_error_policy() {
     let valid = unit_snapshot(UnitSnapshot {
         active_state: "inactive",
@@ -13,7 +46,7 @@ fn start_rejects_commands_that_ignore_failures_or_have_incomplete_error_policy()
         timeout: "30s",
     });
     let source = String::from_utf8_lossy(&valid);
-    for command in ["ExecStart=", "ExecStop="] {
+    for command in ["ExecStartPre=", "ExecStart=", "ExecStop="] {
         let altered = source
             .lines()
             .map(|line| {

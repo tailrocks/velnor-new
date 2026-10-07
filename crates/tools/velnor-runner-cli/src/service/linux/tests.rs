@@ -4,7 +4,7 @@ use std::io;
 use super::{
     EXPECTED_CREDENTIAL_PROPERTY, IDENTITY_OBJECT_PATH, IDENTITY_UNIT, Manager, ManagerOutput,
     ServiceFault, StopTimeout, UNIT, conditions::condition_output, package_paths_supported,
-    parse_stop_timeout, parse_timespan_usec, perform, start_argv, stop_argv,
+    parse_stop_timeout, parse_timespan_usec, perform, preflight_argv, start_argv, stop_argv,
 };
 use crate::args::ServiceAction;
 
@@ -96,10 +96,11 @@ fn unit_snapshot(snapshot: UnitSnapshot<'_>) -> Vec<u8> {
         timeout,
     } = snapshot;
     let start = start_argv().join(" ");
+    let preflight = preflight_argv().join(" ");
     let stop = stop_argv().join(" ");
     let identity_unit = IDENTITY_UNIT;
     format!(
-        "LoadState=loaded\nActiveState={active_state}\nSubState={sub_state}\nMainPID={main_pid}\nControlPID={control_pid}\nResult={result}\nExecStart={{ path=/usr/bin/velnor-host ; argv[]={start} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid={main_pid} ; code=(null) ; status=0/0 }}\nExecStop={{ path=/usr/bin/velnor-host ; argv[]={stop} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code={stop_code} ; status={stop_status} }}\nTimeoutStopUSec={timeout}\nUser=velnor\nGroup=velnor\nSupplementaryGroups=docker\nWorkingDirectory=/var/lib/velnor-host\nUMask=0077\nNoNewPrivileges=yes\nProtectSystem=strict\nReadWritePaths=/var/lib/velnor-host\nRequires=docker.service {identity_unit}\nAfter=network-online.target docker.service {identity_unit}\nType=exec\n"
+        "LoadState=loaded\nActiveState={active_state}\nSubState={sub_state}\nMainPID={main_pid}\nControlPID={control_pid}\nResult={result}\nExecStartPre={{ path=/usr/bin/velnor-host ; argv[]={preflight} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }}\nExecStart={{ path=/usr/bin/velnor-host ; argv[]={start} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid={main_pid} ; code=(null) ; status=0/0 }}\nExecStop={{ path=/usr/bin/velnor-host ; argv[]={stop} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code={stop_code} ; status={stop_status} }}\nTimeoutStopUSec={timeout}\nUser=velnor\nGroup=velnor\nSupplementaryGroups=docker\nWorkingDirectory=/var/lib/velnor-host\nUMask=0077\nNoNewPrivileges=yes\nProtectSystem=strict\nReadWritePaths=/var/lib/velnor-host\nRequires=docker.service {identity_unit}\nAfter=network-online.target docker.service {identity_unit}\nType=simple\n"
     )
     .into_bytes()
 }

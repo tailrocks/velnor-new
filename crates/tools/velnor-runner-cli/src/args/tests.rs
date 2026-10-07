@@ -72,4 +72,17 @@ fn service_status_is_an_explicit_read_only_action() -> Result<(), String> {
     Ok(())
 }
 
+#[test]
+fn service_preflight_is_an_explicit_action() -> Result<(), String> {
+    let cli = Cli::try_parse_from(["velnor-host", "service", "preflight"])
+        .map_err(|error| error.to_string())?;
+    assert!(matches!(
+        cli.command,
+        Command::Service {
+            action: ServiceAction::Preflight
+        }
+    ));
+    Ok(())
+}
+
 mod connect_args_tests;

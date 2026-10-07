@@ -8,6 +8,7 @@ pub(super) struct UnitSnapshot {
     pub(super) main_pid: u32,
     pub(super) control_pid: u32,
     pub(super) result: String,
+    pub(super) exec_start_pre: ExecInvocation,
     pub(super) exec_start: ExecInvocation,
     pub(super) exec_stop: ExecInvocation,
     pub(super) identity_marker_condition_matches: bool,
@@ -61,6 +62,7 @@ pub(super) fn parse_snapshot(output: &[u8]) -> Option<UnitSnapshot> {
     let mut main_pid = None;
     let mut control_pid = None;
     let mut result = None;
+    let mut exec_start_pre = None;
     let mut exec_start = None;
     let mut exec_stop = None;
     let mut timeout_stop = None;
@@ -84,6 +86,7 @@ pub(super) fn parse_snapshot(output: &[u8]) -> Option<UnitSnapshot> {
             "MainPID" => set_once(&mut main_pid, value.parse::<u32>().ok()?)?,
             "ControlPID" => set_once(&mut control_pid, value.parse::<u32>().ok()?)?,
             "Result" => set_once(&mut result, value)?,
+            "ExecStartPre" => set_once(&mut exec_start_pre, parse_exec_invocation(value)?)?,
             "ExecStart" => set_once(&mut exec_start, parse_exec_invocation(value)?)?,
             "ExecStop" => set_once(&mut exec_stop, parse_exec_invocation(value)?)?,
             "TimeoutStopUSec" => set_once(&mut timeout_stop, parse_stop_timeout(value)?)?,
@@ -108,6 +111,7 @@ pub(super) fn parse_snapshot(output: &[u8]) -> Option<UnitSnapshot> {
         main_pid: main_pid?,
         control_pid: control_pid?,
         result: result?.to_owned(),
+        exec_start_pre: exec_start_pre?,
         exec_start: exec_start?,
         exec_stop: exec_stop?,
         identity_marker_condition_matches: false,

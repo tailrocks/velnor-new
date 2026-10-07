@@ -4,18 +4,23 @@ use std::io;
 use std::path::Path;
 use std::process::{Command, ExitCode};
 
-use velnor_runner_host::{HostConfig, HostPlatform};
-
 use crate::args::ServiceAction;
 use conditions::read_identity_marker_condition;
-use systemd::{
-    IdentityUnitSnapshot, StopTimeout, UnitSnapshot, parse_identity_snapshot, parse_snapshot,
-};
+use systemd::{IdentityUnitSnapshot, UnitSnapshot, parse_identity_snapshot, parse_snapshot};
 #[cfg(test)]
-use systemd::{parse_stop_timeout, parse_timespan_usec};
+use systemd::{StopTimeout, parse_stop_timeout, parse_timespan_usec};
 
 mod conditions;
+mod contract;
+mod preflight;
 mod systemd;
+
+use contract::{
+    configured_drain_timeout, package_paths_supported, verify_identity_contract,
+    verify_package_contract,
+};
+#[cfg(test)]
+use contract::{preflight_argv, start_argv, stop_argv};
 
 const UNIT: &str = "velnor-host.service";
 const IDENTITY_UNIT: &str = "velnor-host-identity-check.service";
@@ -33,7 +38,7 @@ const CREDENTIAL_PROPERTY: &str = "LoadCredential";
 const EXPECTED_CREDENTIAL_PROPERTY: &str =
     "a(ss) 1 \"github-token\" \"/etc/velnor-host/github-token\"";
 const SHOW_PROPERTIES: &str = concat!(
-    "LoadState,ActiveState,SubState,MainPID,ControlPID,Result,ExecStart,ExecStop,",
+    "LoadState,ActiveState,SubState,MainPID,ControlPID,Result,ExecStartPre,ExecStart,ExecStop,",
     "TimeoutStopUSec,User,Group,SupplementaryGroups,WorkingDirectory,UMask,",
     "NoNewPrivileges,ProtectSystem,ReadWritePaths,Requires,After,Type"
 );
@@ -156,6 +161,7 @@ fn perform(
 ) -> Result<(), ServiceFault> {
     match action {
         ServiceAction::Status => service_status(manager),
+        ServiceAction::Preflight => preflight::verify_loaded_unit(manager, drain_timeout_secs),
         ServiceAction::Install | ServiceAction::Uninstall => Err(ServiceFault::PackageOwned),
         ServiceAction::Start => start(manager, drain_timeout_secs),
         ServiceAction::Stop => Err(ServiceFault::DrainUnavailable),
@@ -268,104 +274,6 @@ fn read_snapshot(manager: &mut impl Manager) -> Result<UnitSnapshot, ServiceFaul
     snapshot.identity_marker_condition_matches =
         read_identity_marker_condition(manager, UNIT_OBJECT_PATH)?;
     Ok(snapshot)
-}
-
-fn verify_package_contract(
-    snapshot: &UnitSnapshot,
-    drain_timeout_secs: u64,
-) -> Result<(), ServiceFault> {
-    let drain_timeout_usec = u128::from(drain_timeout_secs)
-        .checked_mul(1_000_000)
-        .ok_or(ServiceFault::InvalidConfig)?;
-    if snapshot.load_state != "loaded"
-        || snapshot.exec_start.path != BINARY
-        || snapshot.exec_start.argv != start_argv()
-        || snapshot.exec_start.ignore_errors != "no"
-        || snapshot.exec_stop.path != BINARY
-        || snapshot.exec_stop.argv != stop_argv()
-        || snapshot.exec_stop.ignore_errors != "no"
-        || !matches!(
-            snapshot.timeout_stop,
-            StopTimeout::Finite(timeout) if timeout > drain_timeout_usec
-        )
-        || snapshot.user != "velnor"
-        || snapshot.group != "velnor"
-        || snapshot.supplementary_groups != "docker"
-        || snapshot.working_directory != STATE
-        || snapshot.umask != "0077"
-        || snapshot.no_new_privileges != "yes"
-        || snapshot.protect_system != "strict"
-        || snapshot.read_write_paths != [STATE]
-        || !snapshot
-            .requires
-            .iter()
-            .any(|unit| unit == "docker.service")
-        || !snapshot.requires.iter().any(|unit| unit == IDENTITY_UNIT)
-        || !snapshot
-            .after
-            .iter()
-            .any(|unit| unit == "network-online.target")
-        || !snapshot.after.iter().any(|unit| unit == "docker.service")
-        || !snapshot.after.iter().any(|unit| unit == IDENTITY_UNIT)
-        || snapshot.unit_type != "exec"
-        || !snapshot.identity_marker_condition_matches
-    {
-        return Err(ServiceFault::ServiceContract);
-    }
-    Ok(())
-}
-
-fn verify_identity_contract(snapshot: &IdentityUnitSnapshot) -> Result<(), ServiceFault> {
-    if snapshot.load_state != "loaded"
-        || snapshot.exec_start.path != IDENTITY_BINARY
-        || snapshot.exec_start.argv != [IDENTITY_BINARY, "--verify"]
-        || snapshot.exec_start.ignore_errors != "no"
-        || snapshot.user != "root"
-        || snapshot.group != "root"
-        || snapshot.umask != "0077"
-        || snapshot.no_new_privileges != "yes"
-        || snapshot.protect_system != "strict"
-        || snapshot.unit_type != "oneshot"
-        || snapshot.remain_after_exit != "no"
-        || !snapshot.before.iter().any(|unit| unit == UNIT)
-        || !snapshot.identity_marker_condition_matches
-    {
-        return Err(ServiceFault::ServiceContract);
-    }
-    Ok(())
-}
-
-fn configured_drain_timeout(config_path: &Path) -> Result<u64, ServiceFault> {
-    let text = std::fs::read_to_string(config_path).map_err(|_| ServiceFault::InvalidConfig)?;
-    let config = HostConfig::parse(&text).map_err(|_| ServiceFault::InvalidConfig)?;
-    config
-        .validate_for_host(HostPlatform::Linux)
-        .map_err(|_| ServiceFault::InvalidConfig)?;
-    config
-        .drain_timeout_secs()
-        .map_err(|_| ServiceFault::InvalidConfig)
-}
-
-fn package_paths_supported(config_path: &Path, state_path: &Path) -> bool {
-    config_path == Path::new(CONFIG) && state_path == Path::new(STATE)
-}
-
-fn start_argv() -> Vec<String> {
-    [
-        BINARY, "--config", CONFIG, "--state", STATE, "daemon", "run",
-    ]
-    .into_iter()
-    .map(str::to_owned)
-    .collect()
-}
-
-fn stop_argv() -> Vec<String> {
-    [
-        BINARY, "--config", CONFIG, "--state", STATE, "drain", "--wait",
-    ]
-    .into_iter()
-    .map(str::to_owned)
-    .collect()
 }
 
 fn is_running(snapshot: &UnitSnapshot) -> bool {
