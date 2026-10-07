@@ -7,9 +7,10 @@ use velnor_runner_host::{dind_create, runner_plan};
 const RUNNER_DOCKERFILE: &str = include_str!("../../../../images/runner/ubuntu-26.04/Dockerfile");
 const RUNNER_ENTRYPOINT: &str =
     include_str!("../../../../images/runner/ubuntu-26.04/entrypoint.sh");
-const RUNNER_README: &str = include_str!("../../../../images/runner/ubuntu-26.04/README.md");
+const RUNNER_README: &str =
+    include_str!("../../../../docs/content/docs/images/runner/ubuntu-26.04/index.mdx");
 const DIND_DOCKERFILE: &str = include_str!("../../../../images/dind/Dockerfile");
-const DIND_README: &str = include_str!("../../../../images/dind/README.md");
+const DIND_README: &str = include_str!("../../../../docs/content/docs/images/dind/index.mdx");
 
 #[test]
 fn jit_work_folder_resolves_to_both_worker_mounts() -> Result<(), String> {
