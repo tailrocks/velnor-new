@@ -79,11 +79,11 @@ pub(super) fn assert_candidate_qualification(
         )),
         "{action_body}"
     );
-    assert_release_fixture_generation_requirements();
+    assert_release_fixture_generation_requirements()?;
     Ok(())
 }
 
-fn assert_release_fixture_generation_requirements() {
+fn assert_release_fixture_generation_requirements() -> Result<(), Box<dyn std::error::Error>> {
     let fixture_check = include_str!("../../../scripts/capture-opentofu-goldens.sh");
     assert!(
         fixture_check.contains("generate --output-dir"),
@@ -160,6 +160,13 @@ fn assert_release_fixture_generation_requirements() {
         qualification_helpers.contains("could not normalize candidate manifest commit in $file"),
         "{qualification_helpers}"
     );
+    assert_dogfood_cargo_warmup(qualification_helpers)?;
+    Ok(())
+}
+
+fn assert_dogfood_cargo_warmup(
+    qualification_helpers: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     assert!(
         qualification_helpers.contains(
             "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked"
@@ -178,16 +185,17 @@ fn assert_release_fixture_generation_requirements() {
     );
     let dogfood = qualification_helpers
         .find("capture_release_dogfood()")
-        .expect("dogfood capture must exist");
+        .ok_or("dogfood capture must exist")?;
     let window = &qualification_helpers[dogfood..];
     let fetch = window
         .find("cargo fetch --locked")
-        .expect("dogfood must warm the cargo cache");
+        .ok_or("dogfood must warm the cargo cache")?;
     let generate = window
         .find("release candidate dogfood generate failed")
-        .expect("dogfood must run the candidate generate");
+        .ok_or("dogfood must run the candidate generate")?;
     assert!(
         fetch < generate,
         "dogfood cargo fetch must precede the candidate generate"
     );
+    Ok(())
 }
