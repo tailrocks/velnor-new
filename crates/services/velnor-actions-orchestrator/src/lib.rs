@@ -8,7 +8,6 @@
 mod api;
 pub use velnor_actions_orchestrator_workflow_ir::crate_jobs;
 mod merge;
-mod retrieve_reports;
 pub use velnor_actions_orchestrator_run_select as run_select;
 mod task_report;
 

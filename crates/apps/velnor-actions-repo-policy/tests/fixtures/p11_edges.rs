@@ -138,6 +138,7 @@ fn expected_service(leaf: &str) -> Option<Vec<&str>> {
             "velnor-actions-orchestrator-preseed-manifest",
             "velnor-actions-orchestrator-provisioning",
             "velnor-actions-orchestrator-retrieve",
+            "velnor-actions-orchestrator-retrieve-reports",
             "velnor-actions-orchestrator-retrieve-retry",
             "velnor-actions-orchestrator-run-select",
             "velnor-actions-orchestrator-runtime-evidence",
