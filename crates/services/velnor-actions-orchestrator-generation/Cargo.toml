@@ -1,5 +1,5 @@
 [package]
-name = "velnor-actions-orchestrator"
+name = "velnor-actions-orchestrator-generation"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,31 +7,24 @@ license.workspace = true
 autotests = false
 
 [dependencies]
+rustix = { workspace = true }
+tempfile = { workspace = true }
+toml = { workspace = true }
 velnor-actions-actionlint = { version = "=0.1.1", path = "../../adapters/velnor-actions-actionlint" }
 velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
 velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
-velnor-actions-contract-planning = { version = "=0.1.1", path = "../../core/velnor-actions-contract-planning" }
 velnor-actions-contract-release = { version = "=0.1.1", path = "../../core/velnor-actions-contract-release" }
 velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
 velnor-actions-mise = { version = "=0.1.1", path = "../../adapters/velnor-actions-mise" }
-velnor-actions-rust = { version = "=0.1.1", path = "../../adapters/velnor-actions-rust" }
-velnor-actions-rust-core = { version = "=0.1.1", path = "../../adapters/velnor-actions-rust-core" }
-velnor-actions-tofu = { version = "=0.1.1", path = "../../adapters/velnor-actions-tofu" }
-velnor-actions-tofu-core = { version = "=0.1.1", path = "../../adapters/velnor-actions-tofu-core" }
-velnor-actions-orchestrator-check-acquisition = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-acquisition" }
-velnor-actions-orchestrator-check-evidence = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-evidence" }
-velnor-actions-orchestrator-check-preparation = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-preparation" }
 velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
 velnor-actions-orchestrator-discovery = { version = "=0.1.1", path = "../velnor-actions-orchestrator-discovery" }
-velnor-actions-orchestrator-generation = { version = "=0.1.1", path = "../velnor-actions-orchestrator-generation" }
-velnor-actions-orchestrator-graph = { version = "=0.1.1", path = "../velnor-actions-orchestrator-graph" }
 velnor-actions-orchestrator-pins = { version = "=0.1.1", path = "../velnor-actions-orchestrator-pins" }
 velnor-actions-orchestrator-provisioning = { version = "=0.1.1", path = "../velnor-actions-orchestrator-provisioning" }
-velnor-actions-orchestrator-selection = { version = "=0.1.1", path = "../velnor-actions-orchestrator-selection" }
 velnor-actions-orchestrator-staged-validation = { version = "=0.1.1", path = "../velnor-actions-orchestrator-staged-validation" }
 velnor-actions-orchestrator-workflow-ir = { version = "=0.1.1", path = "../velnor-actions-orchestrator-workflow-ir" }
+velnor-actions-rust-core = { version = "=0.1.1", path = "../../adapters/velnor-actions-rust-core" }
+velnor-actions-tofu-core = { version = "=0.1.1", path = "../../adapters/velnor-actions-tofu-core" }
 velnor-actions-workflow-cache = { version = "=0.1.1", path = "../velnor-actions-workflow-cache" }
-velnor-actions-workflow-document = { version = "=0.1.1", path = "../velnor-actions-workflow-document" }
 velnor-actions-workflow-generator = { version = "=0.1.1", path = "../velnor-actions-workflow-generator" }
 velnor-actions-workflow-jobs = { version = "=0.1.1", path = "../velnor-actions-workflow-jobs" }
 velnor-actions-workflow-release = { version = "=0.1.1", path = "../velnor-actions-workflow-release" }
@@ -40,24 +33,10 @@ velnor-actions-workflow-renderer = { version = "=0.1.1", path = "../velnor-actio
 velnor-actions-workflow-schema2 = { version = "=0.1.1", path = "../velnor-actions-workflow-schema2" }
 velnor-actions-workflow-steps = { version = "=0.1.1", path = "../velnor-actions-workflow-steps" }
 velnor-actions-workflow-tree = { version = "=0.1.1", path = "../velnor-actions-workflow-tree" }
-serde = { workspace = true }
-serde_json = { workspace = true }
-sha2 = { workspace = true }
-tempfile = { workspace = true }
-toml = { workspace = true }
 
 [lints]
 workspace = true
 
 [[test]]
-name = "velnor_orchestrator"
+name = "velnor_orchestrator_generation"
 path = "tests/main.rs"
-
-[[test]]
-name = "validation_failure"
-path = "tests/validation_failure.rs"
-
-[dev-dependencies]
-serde_json = { workspace = true }
-tempfile = { workspace = true }
-velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }

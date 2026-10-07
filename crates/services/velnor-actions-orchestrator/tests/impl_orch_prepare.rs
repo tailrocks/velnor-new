@@ -1,5 +1,5 @@
 //! Preparation and execution share the named-check identity derivation.
-use super::{TestResult, code_of, orch_src, src_files};
+use super::{TestResult, code_of, family_file, src_files};
 /// Match the complete invoked identifier, excluding declarations and suffix names.
 fn invokes(code: &str, name: &str) -> bool {
     if code.contains(&format!("fn {name}(")) {
@@ -51,14 +51,14 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         ["check_runtime.rs", "prepare.rs", "routing.rs"],
         "preparation, execution, and routing load configuration at their boundaries"
     );
-    let internal = std::fs::read_to_string(orch_src().join("internal.rs"))?;
+    let internal = std::fs::read_to_string(family_file("internal.rs")?)?;
     assert!(internal.contains("prepare(&root)"), "plan runs preparation");
-    let generate = std::fs::read_to_string(orch_src().join("generate.rs"))?;
+    let generate = std::fs::read_to_string(family_file("generate.rs")?)?;
     assert!(
         generate.contains("prep: &GenerationPreparation"),
         "generate consumes preparation"
     );
-    let runtime = std::fs::read_to_string(orch_src().join("check_runtime.rs"))?;
+    let runtime = std::fs::read_to_string(family_file("check_runtime.rs")?)?;
     let execution = runtime
         .split("pub(crate) fn execute_check_to(")
         .nth(1)
@@ -81,7 +81,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         binding.contains("named_checks::plan::derive_lanes_until("),
         "runtime shares planner identity"
     );
-    let planning = std::fs::read_to_string(orch_src().join("internal/plan_obligation.rs"))?;
+    let planning = std::fs::read_to_string(family_file("internal/plan_obligation.rs")?)?;
     let group = planning
         .split("pub(crate) fn plan_group(")
         .nth(1)

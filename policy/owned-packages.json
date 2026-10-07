@@ -46,6 +46,7 @@
     "velnor-actions-orchestrator-check-preparation",
     "velnor-actions-orchestrator-check-evidence",
     "velnor-actions-orchestrator-staged-validation",
-    "velnor-actions-orchestrator-workflow-ir"
+    "velnor-actions-orchestrator-workflow-ir",
+    "velnor-actions-orchestrator-generation"
   ]
 }

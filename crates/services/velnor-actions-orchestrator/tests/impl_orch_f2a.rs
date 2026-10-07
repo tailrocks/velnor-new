@@ -40,6 +40,22 @@ fn family_src_dirs() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     Ok(dirs)
 }
 
+/// The one family `src/<name>` file; extractions move files across siblings.
+pub(crate) fn family_file(name: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let hits: Vec<PathBuf> = family_src_dirs()?
+        .iter()
+        .map(|dir| dir.join(name))
+        .filter(|path| path.is_file())
+        .collect();
+    if hits.len() == 1 {
+        hits.into_iter()
+            .next()
+            .ok_or_else(|| format!("no match for {name}").into())
+    } else {
+        Err(format!("{} matches for {name}", hits.len()).into())
+    }
+}
+
 /// Sorted `.rs` files directly under every family `src/`.
 pub(crate) fn src_files() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     let mut out = Vec::new();

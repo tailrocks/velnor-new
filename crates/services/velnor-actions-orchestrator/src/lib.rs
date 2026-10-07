@@ -6,7 +6,6 @@
 //! Mise, vectors to `vectors` via Mise requests, text to the renderer.
 
 mod api;
-mod attach;
 mod baseline_publish;
 mod check_runtime;
 mod cover;
@@ -17,9 +16,6 @@ mod covered_tasks;
 pub use velnor_actions_orchestrator_workflow_ir::crate_jobs;
 mod critical_path;
 mod external_data;
-mod finalized;
-mod freshness_emit;
-mod generate;
 mod internal;
 mod internal_request;
 mod merge;
@@ -28,18 +24,11 @@ mod noop_report;
 mod plan;
 mod plan_output_limits;
 mod plan_stacks;
-mod prepare;
 mod preseed_manifest;
-mod provenance;
-mod release_checkouts;
-mod release_emit;
-mod release_identity;
-mod release_steps;
 mod request_event;
 mod retrieve_baseline;
 mod retrieve_reports;
 mod retrieve_retry;
-mod routing;
 pub mod run_select;
 mod task_report;
 mod task_report_aggregate;

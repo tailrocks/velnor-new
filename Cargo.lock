@@ -3614,7 +3614,6 @@ dependencies = [
 name = "velnor-actions-orchestrator"
 version = "0.1.1"
 dependencies = [
- "rustix 1.1.5",
  "serde",
  "serde_json",
  "sha2",
@@ -3632,6 +3631,7 @@ dependencies = [
  "velnor-actions-orchestrator-check-preparation",
  "velnor-actions-orchestrator-core",
  "velnor-actions-orchestrator-discovery",
+ "velnor-actions-orchestrator-generation",
  "velnor-actions-orchestrator-graph",
  "velnor-actions-orchestrator-pins",
  "velnor-actions-orchestrator-provisioning",
@@ -3751,6 +3751,38 @@ dependencies = [
  "velnor-actions-tofu",
  "velnor-actions-tofu-core",
  "velnor-actions-workflow-renderer",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-generation"
+version = "0.1.1"
+dependencies = [
+ "rustix 1.1.5",
+ "tempfile",
+ "toml",
+ "velnor-actions-actionlint",
+ "velnor-actions-contract",
+ "velnor-actions-contract-config",
+ "velnor-actions-contract-release",
+ "velnor-actions-contract-workflow",
+ "velnor-actions-mise",
+ "velnor-actions-orchestrator-core",
+ "velnor-actions-orchestrator-discovery",
+ "velnor-actions-orchestrator-pins",
+ "velnor-actions-orchestrator-provisioning",
+ "velnor-actions-orchestrator-staged-validation",
+ "velnor-actions-orchestrator-workflow-ir",
+ "velnor-actions-rust-core",
+ "velnor-actions-tofu-core",
+ "velnor-actions-workflow-cache",
+ "velnor-actions-workflow-generator",
+ "velnor-actions-workflow-jobs",
+ "velnor-actions-workflow-release",
+ "velnor-actions-workflow-render-strict",
+ "velnor-actions-workflow-renderer",
+ "velnor-actions-workflow-schema2",
+ "velnor-actions-workflow-steps",
+ "velnor-actions-workflow-tree",
 ]
 
 [[package]]

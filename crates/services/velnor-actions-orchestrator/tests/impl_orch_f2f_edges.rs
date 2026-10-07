@@ -118,6 +118,7 @@ fn expected_service(dir: &str) -> Option<Vec<&str>> {
             "velnor-actions-orchestrator-check-preparation",
             "velnor-actions-orchestrator-core",
             "velnor-actions-orchestrator-discovery",
+            "velnor-actions-orchestrator-generation",
             "velnor-actions-orchestrator-graph",
             "velnor-actions-orchestrator-pins",
             "velnor-actions-orchestrator-provisioning",

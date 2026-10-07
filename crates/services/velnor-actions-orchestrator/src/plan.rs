@@ -13,11 +13,11 @@ use velnor_actions_workflow_release::release_tree::RELEASE_TREE_PATHS;
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 use velnor_actions_workflow_tree::rendered::ACTIONLINT_PATH;
 
-use crate::finalized::finalized_jobs;
-use crate::generate::render_staged_tree;
 use crate::plan_stacks::stacks_section;
-use crate::prepare::GenerationPreparation;
 use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_generation::finalized::finalized_jobs;
+use velnor_actions_orchestrator_generation::generate::render_staged_tree;
+use velnor_actions_orchestrator_generation::prepare::GenerationPreparation;
 
 /// Render the concise deterministic `plan` report from a preparation,
 /// after rendering the full tree in memory and discarding the bytes.
@@ -135,7 +135,7 @@ fn pin_lines(out: &mut String, jobs: &BTreeMap<String, Job>) {
 /// The checked plan entrypoint surfaces config errors from its discarded
 /// render pass first, so an error here means nothing is emitted.
 fn release_file_lines(out: &mut String, prep: &GenerationPreparation) {
-    let enabled = crate::release_emit::enabled_release(prep)
+    let enabled = velnor_actions_orchestrator_generation::release_emit::enabled_release(prep)
         .ok()
         .flatten()
         .is_some();
@@ -148,7 +148,7 @@ fn release_file_lines(out: &mut String, prep: &GenerationPreparation) {
 
 /// Freshness workflow path, exactly when `generate` emits it.
 fn freshness_file_lines(out: &mut String, prep: &GenerationPreparation) {
-    if crate::freshness_emit::freshness_enabled(prep) {
+    if velnor_actions_orchestrator_generation::freshness_emit::freshness_enabled(prep) {
         push(out, &format!("  {FRESHNESS_WORKFLOW_PATH}"));
     }
 }

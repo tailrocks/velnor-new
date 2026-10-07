@@ -133,7 +133,7 @@ pub(crate) fn release_files(
 /// the filename keeps its Velnor-internal meaning there, so consumer
 /// release content must not be emitted and the explicit opt-in must
 /// not be silently ignored.
-pub(crate) fn enabled_release(
+pub fn enabled_release(
     prep: &GenerationPreparation,
 ) -> Result<Option<&RustReleaseConfig>, OrchestratorError> {
     let release = prep.config.stacks.rust.as_ref().map(|stack| &stack.release);

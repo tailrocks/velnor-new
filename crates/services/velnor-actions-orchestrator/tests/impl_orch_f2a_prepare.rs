@@ -1,7 +1,7 @@
 //! Prepare-path scan split from `impl_orch_f2a` (400-line gate).
 
 use crate::impl_common::TestResult;
-use crate::impl_orch_f2a::{code_of, orch_src, src_files};
+use crate::impl_orch_f2a::{code_of, family_file, src_files};
 
 #[test]
 fn plan_and_generate_share_one_prepare_path() -> TestResult {
@@ -58,9 +58,9 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         }),
         "{config_calls:?}"
     );
-    let internal = std::fs::read_to_string(orch_src().join("internal.rs"))?;
+    let internal = std::fs::read_to_string(family_file("internal.rs")?)?;
     assert!(internal.contains("prepare(&root)"), "plan runs prepare");
-    let generate = std::fs::read_to_string(orch_src().join("generate.rs"))?;
+    let generate = std::fs::read_to_string(family_file("generate.rs")?)?;
     assert!(
         generate.contains("prep: &GenerationPreparation"),
         "generate consumes preparation"

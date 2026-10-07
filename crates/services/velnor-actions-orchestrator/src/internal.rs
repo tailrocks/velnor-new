@@ -21,9 +21,9 @@ use self::plan_obligation::{GroupInputs, changed_keys, lane_table, member_change
 use crate::cover::{BaselineInputs, apply_baseline};
 use crate::internal_request::resolve_run_key;
 use crate::merge::BaselineManifest;
-use crate::prepare::prepare;
 use velnor_actions_orchestrator_discovery::discover::Discovery;
 use velnor_actions_orchestrator_discovery::select_edges::plan_task_graph;
+use velnor_actions_orchestrator_generation::prepare::prepare;
 use velnor_actions_orchestrator_graph::internal_plan::snapshot::ExecutionSnapshot;
 use velnor_actions_orchestrator_graph::internal_plan::wire_w2::GroupWire;
 use velnor_actions_orchestrator_graph::internal_plan::{default_generator, plan_packages};
@@ -198,7 +198,7 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
 }
 
 fn resolve_named_check_lanes(
-    prep: &crate::prepare::GenerationPreparation,
+    prep: &velnor_actions_orchestrator_generation::prepare::GenerationPreparation,
     supplied: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
 ) -> Result<BTreeMap<String, Vec<NamedCheckLane>>, OrchestratorError> {
     let candidates = [

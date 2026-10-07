@@ -2,7 +2,7 @@
 //!
 //! [`owned_preparation`] applies the Velnor lock/preseed attach;
 //! [`finalized_jobs`] runs the full renderer finalization over it. Both
-//! `generate` and [`crate::plan_text`] build from these so the two
+//! `generate` and `plan_text` build from these so the two
 //! surfaces agree by construction instead of echoing different
 //! pipeline stages.
 
@@ -19,7 +19,7 @@ use velnor_actions_orchestrator_pins::pins::resolve_mise_setup;
 
 /// Owned preparation with the Velnor lock/preseed attach applied.
 ///
-/// Shared by [`crate::render_staged_tree`] and [`finalized_jobs`] so
+/// Shared by [`crate::generate::render_staged_tree`] and [`finalized_jobs`] so
 /// `plan` lists the same finalized IR `generate` writes, never the
 /// pre-attach discovery IR.
 ///
