@@ -40,3 +40,7 @@ workspace = true
 [[test]]
 name = "velnor_orchestrator_generation"
 path = "tests/main.rs"
+
+[[test]]
+name = "validation_failure"
+path = "tests/validation_failure.rs"

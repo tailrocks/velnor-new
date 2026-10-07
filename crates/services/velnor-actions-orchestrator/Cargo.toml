@@ -63,10 +63,6 @@ workspace = true
 name = "velnor_orchestrator"
 path = "tests/main.rs"
 
-[[test]]
-name = "validation_failure"
-path = "tests/validation_failure.rs"
-
 [dev-dependencies]
 serde_json = { workspace = true }
 tempfile = { workspace = true }
