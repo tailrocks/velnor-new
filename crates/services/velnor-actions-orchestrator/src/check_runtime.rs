@@ -24,7 +24,7 @@ pub fn execute_check() -> Result<usize, OrchestratorError> {
     let task_id = required_env(velnor_actions_orchestrator_core::report_keys::TASK_ID_ENV)?;
     let job_id = required_env(NAMED_CHECK_JOB_ID_ENV)?;
     let lane = required_env(NAMED_CHECK_LANE_VARIANT_ENV)?;
-    let run_key = crate::internal_request::resolve_run_key(None)?;
+    let run_key = velnor_actions_orchestrator_core::run_key::resolve_run_key(None)?;
     execute_check_to(
         Path::new(&root),
         Path::new(&temp),

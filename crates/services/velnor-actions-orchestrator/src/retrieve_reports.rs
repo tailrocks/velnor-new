@@ -30,7 +30,7 @@ pub fn retrieve_reports() -> Result<usize, OrchestratorError> {
         .ok_or_else(|| internal("missing_run_id"))?
         .parse::<u64>()
         .map_err(|_| internal("bad_run_id"))?;
-    let run_key = crate::internal_request::resolve_run_key(None)?;
+    let run_key = velnor_actions_orchestrator_core::run_key::resolve_run_key(None)?;
     let temp = std::env::var_os("RUNNER_TEMP")
         .filter(|value| !value.is_empty())
         .ok_or_else(|| internal("missing_runner_temp"))?;

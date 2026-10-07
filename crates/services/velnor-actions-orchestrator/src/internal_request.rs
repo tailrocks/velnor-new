@@ -5,7 +5,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use velnor_actions_contract::{canonical_json_bytes, run_key_for_ci, validate_run_key};
+use velnor_actions_contract::canonical_json_bytes;
 use velnor_actions_contract_workflow::{NAMED_CHECK_LANES_ENV, NamedCheckLane, WorkflowEvent};
 
 use crate::internal::{MERGE_OP, PLAN_OP, SCHEMA};
@@ -199,24 +199,6 @@ pub fn response_path_for(request_path: &Path) -> Result<PathBuf, OrchestratorErr
     };
     let parent = request_path.parent().unwrap_or_else(|| Path::new("."));
     Ok(parent.join(format!("{op}-response.json")))
-}
-
-/// Explicit run key, else `r<run-id>-a<attempt>` from the GitHub environment.
-pub(crate) fn resolve_run_key(explicit: Option<&str>) -> Result<String, OrchestratorError> {
-    if let Some(key) = explicit.filter(|key| !key.trim().is_empty()) {
-        validate_run_key(key).map_err(internal_contract)?;
-        return Ok(key.to_owned());
-    }
-    let id = env::var("GITHUB_RUN_ID").ok().filter(|v| !v.is_empty());
-    let attempt = env::var("GITHUB_RUN_ATTEMPT")
-        .ok()
-        .filter(|v| !v.is_empty());
-    let (Some(id), Some(attempt)) = (id, attempt) else {
-        return Err(internal("missing_run_key"));
-    };
-    let id: u64 = id.parse().map_err(|_| internal("bad_run_id"))?;
-    let attempt: u64 = attempt.parse().map_err(|_| internal("bad_run_attempt"))?;
-    Ok(run_key_for_ci(id, attempt))
 }
 
 /// Consuming op from one `<op>-request.json` file name.

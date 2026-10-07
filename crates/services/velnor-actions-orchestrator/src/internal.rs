@@ -19,8 +19,8 @@ use velnor_actions_orchestrator_core::{OrchestratorError, internal, internal_con
 
 use self::plan_obligation::{GroupInputs, changed_keys, lane_table, member_changed, plan_group};
 use crate::cover_baseline::{BaselineInputs, apply_baseline};
-use crate::internal_request::resolve_run_key;
 use crate::merge::BaselineManifest;
+use velnor_actions_orchestrator_core::run_key::resolve_run_key;
 use velnor_actions_orchestrator_discovery::discover::Discovery;
 use velnor_actions_orchestrator_discovery::select_edges::plan_task_graph;
 use velnor_actions_orchestrator_generation::prepare::prepare;

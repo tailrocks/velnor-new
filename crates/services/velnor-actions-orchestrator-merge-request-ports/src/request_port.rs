@@ -1,7 +1,7 @@
 //! Run-key resolution consumed by merge-request assembly, behind a port trait.
 //!
-//! Assembly calls exactly this hub function. The hub implements
-//! [`RequestPort`] by delegating to its `internal_request` module, so
+//! Assembly calls exactly this core function. The hub implements
+//! [`RequestPort`] by delegating to the core run-key module, so
 //! merge-request assembly depends only on this contract and the direct
 //! `internal_request`/`merge_request` cycle is broken.
 //!

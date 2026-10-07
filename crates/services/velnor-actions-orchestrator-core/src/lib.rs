@@ -10,7 +10,8 @@
 //! [`git_paths`], [`origin`], and [`root`] hold git plumbing;
 //! [`decisions`] holds planner decisions; [`extension_schemas`],
 //! [`init`], [`obligation_order`], [`qualify`], and [`utf8`] hold small
-//! shared vocabulary.
+//! shared vocabulary; [`run_key`] resolves the CI run key from an
+//! explicit value or the GitHub environment.
 
 pub mod clippy_groups;
 pub mod config;
@@ -27,6 +28,7 @@ pub mod origin;
 pub mod qualify;
 pub mod report_keys;
 pub mod root;
+pub mod run_key;
 pub mod safe_read;
 pub mod schedule;
 pub mod sha256;

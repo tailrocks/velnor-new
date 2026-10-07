@@ -23,9 +23,9 @@ use velnor_actions_contract::{canonical_json_bytes, digest_b3, parse_strict_json
 use velnor_actions_contract_workflow::WorkflowEvent;
 
 use crate::internal::{SCHEMA, check_schema};
-use crate::internal_request::resolve_run_key;
 use crate::merge::BaselineManifest;
 use velnor_actions_orchestrator_core::OrchestratorError;
+use velnor_actions_orchestrator_core::run_key::resolve_run_key;
 use velnor_actions_orchestrator_core::{internal, internal_contract};
 use velnor_actions_orchestrator_cover_baseline::cover_baseline::provenance_check::{
     ProvenanceExpectations, is_unverifiable_generator_sha, validate_provenance,

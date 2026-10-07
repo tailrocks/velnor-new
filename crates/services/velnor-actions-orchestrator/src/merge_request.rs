@@ -16,7 +16,7 @@ struct HubRequest;
 
 impl RequestPort for HubRequest {
     fn resolve_run_key(&self, explicit: Option<&str>) -> Result<String, OrchestratorError> {
-        crate::internal_request::resolve_run_key(explicit)
+        velnor_actions_orchestrator_core::run_key::resolve_run_key(explicit)
     }
 }
 

@@ -21,7 +21,7 @@ use velnor_actions_orchestrator_task_report_write::write_task_report_with_key;
 /// invalid plans, run-key mismatches, unknown or multi-task entries, and
 /// unwritable report paths; [`OrchestratorError::Io`] for IO failures.
 pub fn write_task_report() -> Result<usize, OrchestratorError> {
-    let run_key = crate::internal_request::resolve_run_key(None)?;
+    let run_key = velnor_actions_orchestrator_core::run_key::resolve_run_key(None)?;
     write_task_report_with_key(&run_key)
 }
 
