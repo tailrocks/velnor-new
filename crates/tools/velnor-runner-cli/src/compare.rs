@@ -13,9 +13,11 @@ use velnor_runner_core::{
     ParityProof, VerifiedExecutionReport, VerifiedJobCensus, verify_complete_results,
 };
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) enum Fail {
     Closed,
+    InvocationMismatch,
+    ScopeUnavailable,
     Checker(EvidenceError),
 }
 
@@ -27,6 +29,7 @@ pub(crate) enum Fail {
 /// errors print `NOT_PROVEN` and the [`velnor_runner_core::EvidenceError`] on
 /// stderr only.
 #[must_use]
+#[cfg(test)]
 pub(crate) fn compare_dir(path: &Path) -> ExitCode {
     match prove(path) {
         Ok(proof) => {
@@ -35,14 +38,102 @@ pub(crate) fn compare_dir(path: &Path) -> ExitCode {
         }
         Err(fail) => {
             println!("NOT_PROVEN");
-            if let Fail::Checker(err) = fail {
-                eprintln!("{err}");
+            match fail {
+                Fail::Checker(err) => eprintln!("{err}"),
+                Fail::InvocationMismatch => eprintln!("evidence attempt does not match command"),
+                Fail::ScopeUnavailable => {
+                    eprintln!("evidence does not contain repository and run-id bindings");
+                }
+                Fail::Closed => {}
             }
             ExitCode::from(1)
         }
     }
 }
 
+/// Compare evidence only when its represented scope can be matched to the
+/// command. Current evidence records attempts but do not record repository or
+/// workflow run ID, so they cannot prove a scoped CLI request.
+#[must_use]
+pub(crate) fn compare_dir_for(
+    path: &Path,
+    repository: &str,
+    run_id: u64,
+    attempt: u64,
+) -> ExitCode {
+    match prove_for(path, repository, run_id, attempt) {
+        Ok(proof) => {
+            println!(
+                "PROVEN lanes={} repository={} run_id={} attempt={}",
+                proof.lanes, repository, run_id, attempt
+            );
+            ExitCode::SUCCESS
+        }
+        Err(fail) => {
+            println!("NOT_PROVEN");
+            match fail {
+                Fail::Checker(err) => eprintln!("{err}"),
+                Fail::InvocationMismatch => eprintln!("evidence attempt does not match command"),
+                Fail::ScopeUnavailable => {
+                    eprintln!("evidence does not contain repository and run-id bindings");
+                }
+                Fail::Closed => {}
+            }
+            ExitCode::from(1)
+        }
+    }
+}
+
+fn prove_for(
+    path: &Path,
+    repository: &str,
+    run_id: u64,
+    attempt: u64,
+) -> Result<ParityProof, Fail> {
+    if !valid_repository(repository) || run_id == 0 || attempt == 0 {
+        return Err(Fail::Closed);
+    }
+    let expected = expected_set(&load(path, "expected.json")?)?;
+    if expected
+        .items
+        .iter()
+        .any(|item| item.key.attempt != attempt)
+    {
+        return Err(Fail::InvocationMismatch);
+    }
+    let seen = observed(&load(path, "observed.json")?)?;
+    if seen.iter().any(|report| report.key.attempt != attempt) {
+        return Err(Fail::InvocationMismatch);
+    }
+    let github = census(&load(path, "census.json")?)?;
+    if github
+        .success_on_expected_runner
+        .iter()
+        .any(|key| key.attempt != attempt)
+    {
+        return Err(Fail::InvocationMismatch);
+    }
+    let proof = verify_complete_results(&expected, &seen, &github).map_err(Fail::Checker)?;
+
+    // The current records have no repository or workflow run ID. A local
+    // declaration would not add provider evidence, so do not manufacture the
+    // missing binding from CLI arguments or a sidecar file.
+    let _ = (repository, run_id);
+    let _ = proof;
+    Err(Fail::ScopeUnavailable)
+}
+
+fn valid_repository(repository: &str) -> bool {
+    let Some((owner, name)) = repository.split_once('/') else {
+        return false;
+    };
+    !owner.is_empty()
+        && !name.is_empty()
+        && !name.contains('/')
+        && !repository.chars().any(char::is_whitespace)
+}
+
+#[cfg(test)]
 pub(crate) fn prove(path: &Path) -> Result<ParityProof, Fail> {
     if !path.is_dir() {
         return Err(Fail::Closed);

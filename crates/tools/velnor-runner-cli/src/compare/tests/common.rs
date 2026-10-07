@@ -128,6 +128,8 @@ fn require_rejected(dir: &Path, expected: EvidenceError) -> Result<(), String> {
     match prove(dir) {
         Err(Fail::Checker(err)) if err == expected => Ok(()),
         Err(Fail::Checker(err)) => Err(format!("checker {err:?} want {expected:?}")),
+        Err(Fail::InvocationMismatch) => Err("unexpected invocation mismatch".to_owned()),
+        Err(Fail::ScopeUnavailable) => Err("unexpected missing invocation scope".to_owned()),
         Err(Fail::Closed) => Err("closed before checker".to_owned()),
         Ok(_) => Err(format!("prove succeeded for {expected}")),
     }

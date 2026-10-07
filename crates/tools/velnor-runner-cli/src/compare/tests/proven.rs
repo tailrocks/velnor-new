@@ -30,6 +30,8 @@ fn hosted_and_scale_set_pair_is_proven() -> Result<(), String> {
         Ok(proof) if proof.lanes == 2 => Ok(()),
         Ok(proof) => Err(format!("lanes {}", proof.lanes)),
         Err(Fail::Checker(err)) => Err(err.to_string()),
+        Err(Fail::InvocationMismatch) => Err("unexpected invocation mismatch".to_owned()),
+        Err(Fail::ScopeUnavailable) => Err("unexpected missing invocation scope".to_owned()),
         Err(Fail::Closed) => Err("closed before checker".to_owned()),
     }
 }
