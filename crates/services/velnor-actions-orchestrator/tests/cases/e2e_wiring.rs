@@ -9,10 +9,9 @@
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 
-use crate::impl_e2e_tools_save::{check_one_tools_saver_per_key, check_tools_save_shape};
+use crate::cases::e2e_tools_save::{check_one_tools_saver_per_key, check_tools_save_shape};
 use crate::support::{TestResult, config_with_branch, git, make_repo, without_ambient_identity};
 
-#[path = "impl_e2e_wiring_preseed.rs"]
 mod preseed_tests;
 
 /// One parsed step: display name plus full step body.

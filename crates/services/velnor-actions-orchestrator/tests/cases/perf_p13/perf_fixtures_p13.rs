@@ -1,7 +1,7 @@
 //! P13 perf fixture generator: multi-crate workspace repos.
 //!
-//! Included via `#[path]` from `impl_perf_p13`, so the parent wires a
-//! single `mod` line for the whole perf suite.
+//! Submodule of `cases::perf_p13`, so the parent wires a single `mod`
+//! line for the whole perf suite.
 
 use std::fmt::Write as _;
 use std::fs;

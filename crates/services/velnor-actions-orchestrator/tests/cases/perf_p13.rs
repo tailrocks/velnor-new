@@ -1,13 +1,11 @@
 //! P13 performance/verification foundations: scaling, detection, determinism.
 //!
-//! Owned by the P13 perf builder; wired into `velnor_orchestrator` by the
-//! parent with one `mod` line. Fixture and harness helpers ride along via
-//! `#[path]` includes, so no other registration is needed.
+//! Owned by the P13 perf builder; indexed in `cases.rs` with one `mod`
+//! line. Fixture and harness helpers ride along as submodules, so no
+//! other registration is needed.
 
-#[path = "perf_fixtures_p13.rs"]
 pub(crate) mod perf_fixtures_p13;
 
-#[path = "perf_harness_p13.rs"]
 pub(crate) mod perf_harness_p13;
 
 use velnor_actions_orchestrator::{

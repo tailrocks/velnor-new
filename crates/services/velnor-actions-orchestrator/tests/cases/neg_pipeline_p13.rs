@@ -15,7 +15,7 @@ use velnor_actions_orchestrator::{
 use velnor_actions_orchestrator_core::OrchestratorError;
 
 use crate::cases::merge::{merge_request, success_jobs};
-use crate::impl_perf_p13::perf_fixtures_p13::workspace_repo;
+use crate::cases::perf_p13::perf_fixtures_p13::workspace_repo;
 use crate::support::{
     TestResult, config_with_branch, err_of, git, git_line, make_repo, passing_reports,
     plan_for_source_change,

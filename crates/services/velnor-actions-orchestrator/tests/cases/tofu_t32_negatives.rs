@@ -15,7 +15,7 @@ use velnor_actions_orchestrator::{merge_internal, merge_passed, prepare, publish
 use velnor_actions_orchestrator_core::OrchestratorError;
 
 use crate::cases::orch_core::{merge, merge_request, set_task, success_jobs};
-use crate::impl_select::{commit, plan_pr};
+use crate::cases::select::{commit, plan_pr};
 use crate::support::{TestResult, git, install_fixture_release_manifest, passing_reports};
 
 /// Consumer-shaped config: single tofu root at `.`.

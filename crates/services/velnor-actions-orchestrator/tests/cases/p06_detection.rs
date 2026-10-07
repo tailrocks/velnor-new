@@ -1,7 +1,7 @@
 //! P06 detection cases: wrappers, Nextest config, overrides, combos.
 //!
-//! Owned by the P06 detection builder; wired into `velnor_orchestrator` by
-//! the parent with one `mod` line. Uses `crate::impl_common` fixtures.
+//! Owned by the P06 detection builder; indexed in `cases.rs` with one
+//! `mod` line. Uses `crate::support` fixtures.
 
 use std::fs;
 #[cfg(unix)]

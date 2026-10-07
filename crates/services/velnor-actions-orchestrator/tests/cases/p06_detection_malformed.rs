@@ -1,8 +1,7 @@
 //! P06 detection fail-closed cases: malformed configs, section wrappers.
 //!
-//! Split from `impl_p06_detection` to hold the 400-line size gate; wired
-//! into `velnor_orchestrator` by the parent with one `mod` line. Uses
-//! `crate::impl_common` fixtures.
+//! Split from `cases::p06_detection` to hold the 400-line size gate;
+//! indexed in `cases.rs` with one `mod` line. Uses `crate::support` fixtures.
 
 use std::fs;
 use std::path::Path;
