@@ -58,7 +58,11 @@ fn dispatch(cli: &Cli) -> ExitCode {
         Command::Service { action } => crate::service::service(*action, &config, &state),
         Command::Daemon { action } => daemon(&state, &config, *action),
         Command::Compare { evidence, .. } => compare_command(evidence.as_deref()),
-        Command::Disconnect { drain, .. } => disconnect(*drain),
+        Command::Disconnect {
+            drain,
+            wait,
+            timeout_secs,
+        } => disconnect(&state, *drain, *wait, *timeout_secs),
     }
 }
 
@@ -202,14 +206,15 @@ fn observe(_state: &Path) -> Readiness {
 }
 
 fn flag(state: &Path, name: &str) -> ExitCode {
-    if std::fs::create_dir_all(state).is_err() {
-        return ExitCode::from(1);
-    }
-    if std::fs::write(state.join(name), b"1").is_err() {
+    if !write_flag_marker(state, name) {
         return ExitCode::from(1);
     }
     println!("draining");
     ExitCode::SUCCESS
+}
+
+fn write_flag_marker(state: &Path, name: &str) -> bool {
+    std::fs::create_dir_all(state).is_ok() && std::fs::write(state.join(name), b"1").is_ok()
 }
 
 fn remove_flag(state: &Path, name: &str) -> ExitCode {
@@ -246,12 +251,50 @@ fn not_proven() -> ExitCode {
 #[cfg(test)]
 mod tests;
 
-fn disconnect(drain: bool) -> ExitCode {
-    let effects = disconnect_effects(SetOwnership::Adopted, drain);
+fn disconnect(state: &Path, drain: bool, wait: bool, timeout_secs: Option<u64>) -> ExitCode {
+    disconnect_for_os(state, drain, wait, timeout_secs, std::env::consts::OS)
+}
+
+fn disconnect_for_os(
+    state: &Path,
+    drain: bool,
+    wait: bool,
+    timeout_secs: Option<u64>,
+    os: &str,
+) -> ExitCode {
+    if !drain || !wait {
+        eprintln!("disconnect requires --drain --wait");
+        return ExitCode::from(2);
+    }
+
+    let effects = disconnect_effects(SetOwnership::Adopted, true);
     if effects.contains(&DisconnectEffect::DeleteSet) {
         eprintln!("refusing to delete an adopted set");
         return ExitCode::from(1);
     }
-    println!("disconnected");
-    ExitCode::SUCCESS
+
+    if os == "macos" {
+        if !write_flag_marker(state, "drain") {
+            eprintln!("failed to record the legacy drain marker");
+            return ExitCode::from(1);
+        }
+        eprintln!(
+            "legacy drain marker recorded; {} drain wait, physical quiescence, and remote scale-set disconnection are not proven",
+            requested_wait(timeout_secs)
+        );
+    } else {
+        eprintln!(
+            "{} disconnect is unavailable; {} drain wait and remote scale-set disconnection are not proven",
+            os,
+            requested_wait(timeout_secs)
+        );
+    }
+    ExitCode::from(1)
+}
+
+fn requested_wait(timeout_secs: Option<u64>) -> String {
+    match timeout_secs {
+        Some(seconds) => format!("the requested {seconds}-second"),
+        None => "the configured-timeout".to_owned(),
+    }
 }
