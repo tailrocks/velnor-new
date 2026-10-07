@@ -1137,3 +1137,23 @@ Per-directory: root 3, `.github/` 2, `docs/` 2,
 | `images/dind/README.md` | MDX | include_str!-pinned; update call sites on convert |
 | `images/runner/ubuntu-26.04/README.md` | MDX | include_str!-pinned; update call sites on convert |
 | `README.md` | TOOL | stays .md at fixed path |
+
+### Scaffold (docs slice 1)
+
+- App: `docs/` Bun workspace (`docs/package.json` exact pins +
+  `docs/bun.lock`, 377 packages) — TanStack Start file routes
+  (`/`, `/docs/$`, `/api/search`), `fumadocsMdx()` first in the
+  Vite plugin list, prerender on, Tailwind 4, content dir
+  `content/docs` (new `index.mdx` smoke page only; the existing
+  `content/development/` record untouched, nothing converted).
+  Upstream `tslib` resolve alias dropped: it broke the server
+  bundle (`tslib/modules` unresolvable, prerender 0 pages).
+- Verified from clean tree: `bun install --frozen-lockfile`,
+  `bun run build` exit 0 prerendering `/` + `/docs` (smoke text
+  present in `.output/public/docs/index.html`), `tsc --noEmit`
+  clean. `alint check` 36 passing · 1 failing (6×
+  `ci-build-runs-on` only), `check-gaps` exit 0 / 0 findings —
+  baseline holds. Build outputs ignored via `docs/.gitignore`
+  (no root `.gitignore` edit).
+- Commits: `858a705cd` inventory, `60170cd50` scaffold sources,
+  `1bbcc6ff7` lockfile + route tree — all signed off and pushed.
