@@ -7,7 +7,10 @@ use serde::Deserialize;
 use crate::session::{API_QUERY, bearer, execute, json_content, user_agent};
 use crate::{Method, SessionError, SessionRequest, Transport, WireError, scale_set_path};
 
-use super::{CreateLabel, ScaleSetView, accept_scale_set, other_status, outgoing_json};
+use super::{
+    CreateLabel, ScaleSetView, accept_scale_set, accept_scale_set_for,
+    is_supported_product_selector, other_status, outgoing_json, product_create_labels_for,
+};
 
 /// Get-by-name inputs. `Debug` hides `admin_token`.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -38,7 +41,7 @@ impl fmt::Debug for ScaleSetByName<'_> {
 pub struct ScaleSetById<'a> {
     /// Scale-set id placed on the path.
     pub scale_set_id: i64,
-    /// Name [`accept_scale_set`](crate::accept_scale_set) must see.
+    /// Name [`accept_scale_set_for`](crate::accept_scale_set_for) must see.
     pub name: &'a str,
     /// Actions admin bearer.
     pub admin_token: &'a str,
@@ -87,7 +90,7 @@ impl fmt::Debug for ScaleSetCreate<'_> {
 pub enum ScaleSetFound {
     /// The service returned `count` 0. The caller may create.
     NotFound,
-    /// One set passed [`accept_scale_set`](crate::accept_scale_set).
+    /// One set passed [`accept_scale_set_for`](crate::accept_scale_set_for).
     Found(ScaleSetView),
 }
 
@@ -102,7 +105,8 @@ pub enum ScaleSetFound {
 /// # Errors
 ///
 /// Returns [`WireError::RegistrationRejected`] for an empty admin token, for
-/// `count > 1`, or when [`accept_scale_set`](crate::accept_scale_set) fails.
+/// `count > 1`, or when [`accept_scale_set_for`](crate::accept_scale_set_for)
+/// fails.
 /// A count that does not match `value` is [`WireError::Malformed`].
 /// Any status other than 200 is the pinned status class.
 pub fn get_runner_scale_set<T>(
@@ -156,14 +160,16 @@ where
 
 /// `POST` a scale set. Empty labels become one `System` label named `name`
 /// before the call, matching `ensureLabels`. Empty label types become `System`.
-/// Product callers pass [`product_create_labels`](crate::product_create_labels).
+/// Product callers pass [`product_create_labels`](crate::product_create_labels)
+/// or [`product_create_labels_for`](crate::product_create_labels_for).
 ///
 /// # Errors
 ///
-/// Returns [`WireError::RegistrationRejected`] for an empty admin token, or
-/// when the name and the labels are both empty. Any status other than 200 is
+/// Returns [`WireError::RegistrationRejected`] for an empty admin token or a
+/// product-marked create with an unsupported selector or mismatched labels.
+/// Those product identity checks happen before the POST. Any status other than 200 is
 /// [`WireError::UnexpectedStatus`]. The 200 body must pass
-/// [`accept_scale_set`](crate::accept_scale_set).
+/// [`accept_scale_set_for`](crate::accept_scale_set_for).
 pub fn create_runner_scale_set<T>(
     transport: &mut T,
     call: &ScaleSetCreate<'_>,
@@ -171,6 +177,7 @@ pub fn create_runner_scale_set<T>(
 where
     T: Transport + ?Sized,
 {
+    validate_create_identity(call)?;
     let body = outgoing_json(call.name, call.labels, call.runner_group_id)?.into_bytes();
     let request = SessionRequest {
         method: Method::Post,
@@ -210,7 +217,7 @@ fn decode_page(body: &[u8], expected_name: &str) -> Result<ScaleSetFound, Sessio
         0 => Ok(ScaleSetFound::NotFound),
         1 => {
             let view = sets.pop().ok_or(WireError::Malformed)?;
-            accept_scale_set(&view, expected_name)?;
+            accept_expected_product_or_legacy(&view, expected_name)?;
             Ok(ScaleSetFound::Found(view))
         }
         _ => Err(SessionError::from(WireError::RegistrationRejected)),
@@ -219,8 +226,52 @@ fn decode_page(body: &[u8], expected_name: &str) -> Result<ScaleSetFound, Sessio
 
 fn decode_one(body: &[u8], expected_name: &str) -> Result<ScaleSetView, SessionError> {
     let view: ScaleSetView = serde_json::from_slice(body).map_err(|_| WireError::Malformed)?;
-    accept_scale_set(&view, expected_name)?;
+    accept_expected_product_or_legacy(&view, expected_name)?;
     Ok(view)
+}
+
+fn validate_create_identity(call: &ScaleSetCreate<'_>) -> Result<(), SessionError> {
+    let has_product_label = call.labels.iter().any(|label| {
+        label.name == "velnor"
+            || is_supported_product_selector(label.name.as_str())
+            || label.name.ends_with("-scale-set")
+    });
+    let product_intent = has_product_label
+        || is_supported_product_selector(call.name)
+        || call.name.ends_with("-scale-set");
+    if !product_intent {
+        return Ok(());
+    }
+
+    // Product intent in either the name or labels requires a known selector
+    // and the exact pair of Velnor labels before the POST.
+    let _expected_labels = product_create_labels_for(call.name)?;
+
+    let names: Vec<&str> = call
+        .labels
+        .iter()
+        .map(|label| label.name.as_str())
+        .collect();
+    let valid_types = call
+        .labels
+        .iter()
+        .all(|label| label.label_type.is_empty() || label.label_type == "System");
+    if names.len() != 2 || !names.contains(&"velnor") || !names.contains(&call.name) || !valid_types
+    {
+        return Err(WireError::RegistrationRejected.into());
+    }
+    Ok(())
+}
+
+fn accept_expected_product_or_legacy(
+    view: &ScaleSetView,
+    expected_name: &str,
+) -> Result<(), WireError> {
+    if is_supported_product_selector(expected_name) {
+        accept_scale_set_for(view, expected_name)
+    } else {
+        accept_scale_set(view, expected_name)
+    }
 }
 
 #[derive(Deserialize)]

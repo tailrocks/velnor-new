@@ -4,9 +4,9 @@
 mod regwire;
 
 use velnor_runner_github::{
-    CAPACITY_HEADER, Method, ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetFound,
-    SessionError, WireError, admin_token_is_fresh, create_runner_scale_set, get_runner_scale_set,
-    get_runner_scale_set_by_id, http_create_body, product_create_labels,
+    CAPACITY_HEADER, CreateLabel, Method, ScaleSetById, ScaleSetByName, ScaleSetCreate,
+    ScaleSetFound, SessionError, WireError, admin_token_is_fresh, create_runner_scale_set,
+    get_runner_scale_set, get_runner_scale_set_by_id, http_create_body, product_create_labels,
 };
 
 use regwire::{Script, header, show};
@@ -146,7 +146,7 @@ fn empty_create_labels_use_the_set_name() -> Result<(), String> {
     let err = create_runner_scale_set(
         &mut script,
         &ScaleSetCreate {
-            name: NAME,
+            name: "generic-linux-build",
             runner_group_id: 1,
             labels: &[],
             admin_token: ADMIN,
@@ -157,7 +157,7 @@ fn empty_create_labels_use_the_set_name() -> Result<(), String> {
     let body = String::from_utf8(request.body.clone()).map_err(|_| "utf8".to_owned())?;
     assert_eq!(
         body,
-        r#"{"name":"ubuntu-26.04-scale-set","runnerGroupId":1,"labels":[{"type":"System","name":"ubuntu-26.04-scale-set"}],"RunnerSetting":{"disableUpdate":true}}"#
+        r#"{"name":"generic-linux-build","runnerGroupId":1,"labels":[{"type":"System","name":"generic-linux-build"}],"RunnerSetting":{"disableUpdate":true}}"#
     );
     let mut refused = Script::once(200, &one_set(7));
     let err = create_runner_scale_set(
@@ -175,6 +175,60 @@ fn empty_create_labels_use_the_set_name() -> Result<(), String> {
     );
     assert_eq!(refused.seen.len(), 0);
     Ok(())
+}
+
+#[test]
+fn product_names_require_exact_labels_before_transport() {
+    for name in ["ubuntu-24.04-scale-set", NAME] {
+        let no_labels: [CreateLabel; 0] = [];
+        let vel_labels = [CreateLabel {
+            name: "velnor".to_owned(),
+            label_type: "System".to_owned(),
+        }];
+        let selector_labels = [CreateLabel {
+            name: name.to_owned(),
+            label_type: "System".to_owned(),
+        }];
+
+        for labels in [&no_labels[..], &vel_labels[..], &selector_labels[..]] {
+            let mut script = Script::once(200, "{}");
+            let result = create_runner_scale_set(
+                &mut script,
+                &ScaleSetCreate {
+                    name,
+                    runner_group_id: 1,
+                    labels,
+                    admin_token: ADMIN,
+                },
+            );
+            assert_eq!(
+                result,
+                Err(SessionError::Wire(WireError::RegistrationRejected)),
+                "product selector {name} with {} labels must fail before POST",
+                labels.len()
+            );
+            assert!(script.seen.is_empty(), "transport called for {name}");
+        }
+    }
+}
+
+#[test]
+fn unsupported_scale_set_name_with_empty_labels_fails_before_transport() {
+    let mut script = Script::once(200, "{}");
+    let result = create_runner_scale_set(
+        &mut script,
+        &ScaleSetCreate {
+            name: "ubuntu-25.04-scale-set",
+            runner_group_id: 1,
+            labels: &[],
+            admin_token: ADMIN,
+        },
+    );
+    assert_eq!(
+        result,
+        Err(SessionError::Wire(WireError::RegistrationRejected))
+    );
+    assert_eq!(script.seen.len(), 0);
 }
 
 #[test]
