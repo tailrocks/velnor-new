@@ -3616,7 +3616,6 @@ version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
- "sha2",
  "tempfile",
  "toml",
  "velnor-actions-actionlint",
@@ -3639,6 +3638,7 @@ dependencies = [
  "velnor-actions-orchestrator-noop-report",
  "velnor-actions-orchestrator-pins",
  "velnor-actions-orchestrator-plan",
+ "velnor-actions-orchestrator-preseed-manifest",
  "velnor-actions-orchestrator-provisioning",
  "velnor-actions-orchestrator-request-event",
  "velnor-actions-orchestrator-retrieve-retry",
@@ -3901,6 +3901,20 @@ dependencies = [
  "velnor-actions-workflow-release",
  "velnor-actions-workflow-renderer",
  "velnor-actions-workflow-tree",
+]
+
+[[package]]
+name = "velnor-actions-orchestrator-preseed-manifest"
+version = "0.1.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+ "velnor-actions-contract",
+ "velnor-actions-contract-release",
+ "velnor-actions-orchestrator-core",
+ "velnor-actions-workflow-jobs",
+ "velnor-actions-workflow-steps",
 ]
 
 [[package]]

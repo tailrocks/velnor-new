@@ -31,6 +31,7 @@ velnor-actions-orchestrator-graph = { version = "=0.1.1", path = "../velnor-acti
 velnor-actions-orchestrator-noop-report = { version = "=0.1.1", path = "../velnor-actions-orchestrator-noop-report" }
 velnor-actions-orchestrator-pins = { version = "=0.1.1", path = "../velnor-actions-orchestrator-pins" }
 velnor-actions-orchestrator-plan = { version = "=0.1.1", path = "../velnor-actions-orchestrator-plan" }
+velnor-actions-orchestrator-preseed-manifest = { version = "=0.1.1", path = "../velnor-actions-orchestrator-preseed-manifest" }
 velnor-actions-orchestrator-provisioning = { version = "=0.1.1", path = "../velnor-actions-orchestrator-provisioning" }
 velnor-actions-orchestrator-request-event = { version = "=0.1.1", path = "../velnor-actions-orchestrator-request-event" }
 velnor-actions-orchestrator-retrieve-retry = { version = "=0.1.1", path = "../velnor-actions-orchestrator-retrieve-retry" }
@@ -53,7 +54,6 @@ velnor-actions-workflow-steps = { version = "=0.1.1", path = "../velnor-actions-
 velnor-actions-workflow-tree = { version = "=0.1.1", path = "../velnor-actions-workflow-tree" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
 tempfile = { workspace = true }
 toml = { workspace = true }
 

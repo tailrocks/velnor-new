@@ -16,7 +16,6 @@ mod internal;
 mod internal_request;
 mod merge;
 mod merge_request;
-mod preseed_manifest;
 mod retrieve_baseline;
 mod retrieve_reports;
 pub mod run_select;

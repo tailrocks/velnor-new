@@ -182,6 +182,14 @@ const ORCHESTRATOR_FAMILY: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "velnor-actions-orchestrator-preseed-manifest",
+        &[
+            "velnor-actions-contract",
+            "velnor-actions-contract-release",
+            "velnor-actions-orchestrator-core",
+        ],
+    ),
+    (
         "velnor-actions-orchestrator-provisioning",
         &[
             "velnor-actions-actionlint",

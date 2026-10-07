@@ -14,9 +14,10 @@
 //! consumers must verify the manifest BEFORE staging, and pre-staging
 //! they hold no trusted executor (executing downloaded bytes to verify
 //! them would defeat verification). See the renderer's contract
-//! exception note on [`preseed_manifest_verify_script`].
+//! exception note on `preseed_manifest_verify_script`.
 //!
-//! [`preseed_manifest_verify_script`]: velnor_actions_workflow_jobs::preseed_manifest_verify_script
+//! Renderer side: `preseed_manifest_verify_script` in
+//! `velnor-actions-workflow-jobs`.
 
 use std::env;
 use std::path::Path;
@@ -30,13 +31,13 @@ use velnor_actions_orchestrator_core::internal;
 /// Manifest-writing operation tag.
 pub const PRESEED_MANIFEST_OP: &str = "write-preseed-manifest-v1";
 /// Env key carrying the fresh binary path (build output, relative ok).
-pub(crate) const PRESEED_BINARY_ENV: &str = "VELNOR_PRESEED_BINARY";
+pub const PRESEED_BINARY_ENV: &str = "VELNOR_PRESEED_BINARY";
 /// Env key carrying the expanded manifest output directory.
-pub(crate) const PRESEED_OUT_ENV: &str = "VELNOR_PRESEED_OUT";
+pub const PRESEED_OUT_ENV: &str = "VELNOR_PRESEED_OUT";
 /// Env key carrying the literal target triple.
-pub(crate) const PRESEED_TARGET_ENV: &str = "VELNOR_PRESEED_TARGET";
+pub const PRESEED_TARGET_ENV: &str = "VELNOR_PRESEED_TARGET";
 /// Env key carrying the toolchain identity derived from the build vector.
-pub(crate) const PRESEED_TOOLCHAIN_ENV: &str = "VELNOR_PRESEED_TOOLCHAIN";
+pub const PRESEED_TOOLCHAIN_ENV: &str = "VELNOR_PRESEED_TOOLCHAIN";
 /// Env key carrying the source commit (ambient GitHub SHA).
 const COMMIT_ENV: &str = "GITHUB_SHA";
 /// Env key scoping the output directory (unexpanded expressions rejected).
@@ -46,7 +47,7 @@ const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
 ///
 /// Pinned equal to the renderer's `PRESEED_MANIFEST_FILE` by test: the
 /// writer and the uploader/download sides must name one file.
-const MANIFEST_FILE: &str = "preseed-manifest.json";
+pub const MANIFEST_FILE: &str = "preseed-manifest.json";
 
 /// §4.4 manifest shape: schema, commit, target, toolchain, digest.
 ///
@@ -105,7 +106,7 @@ pub fn write_preseed_manifest() -> Result<(), OrchestratorError> {
 ///
 /// Returns [`OrchestratorError::Internal`] for invalid inputs and
 /// [`OrchestratorError::Io`] for filesystem failures.
-pub(crate) fn write_preseed_manifest_to(
+pub fn write_preseed_manifest_to(
     binary: &str,
     out: &str,
     target: &str,
@@ -171,5 +172,3 @@ fn hex_lower(bytes: &[u8]) -> String {
     }
     out
 }
-#[cfg(test)]
-mod tests;
