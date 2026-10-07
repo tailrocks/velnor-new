@@ -5,15 +5,14 @@ use std::process::ExitCode;
 use std::thread;
 use std::time::Duration;
 
-use velnor_runner_host::{DaemonLock, HostConfig, load_secret};
+use velnor_runner_host::{DaemonLock, HostConfig, HostPlatform, load_configured_secret};
 use velnor_runner_launch::{LaunchReport, launch_blocking};
-
-use crate::dispatch::{KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE};
 
 const RETRY: Duration = Duration::from_secs(5);
 
 /// Missing file waits. Valid TOML listens. Rejected TOML is an error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(test)]
 pub(crate) enum DaemonIntent {
     /// `host.toml` is absent.
     Wait,
@@ -25,6 +24,7 @@ pub(crate) enum DaemonIntent {
 
 /// Classify `host.toml` text. `None` means the file is missing.
 #[must_use]
+#[cfg(test)]
 pub(crate) fn daemon_intent(toml_text: Option<&str>) -> DaemonIntent {
     match toml_text {
         None => DaemonIntent::Wait,
@@ -36,15 +36,15 @@ pub(crate) fn daemon_intent(toml_text: Option<&str>) -> DaemonIntent {
 }
 
 /// Hold `daemon.lock` and launch until the lock is lost.
-pub(crate) fn run_daemon(state: &Path) -> ExitCode {
+pub(crate) fn run_daemon(state: &Path, config_path: &Path) -> ExitCode {
     let Ok(lock) = DaemonLock::try_acquire(&state.join("daemon.lock")) else {
         eprintln!("daemon already running");
         return ExitCode::from(1);
     };
-    serve(state, &lock)
+    serve(state, config_path, &lock)
 }
 
-fn serve(state: &Path, lock: &DaemonLock) -> ExitCode {
+fn serve(state: &Path, config_path: &Path, lock: &DaemonLock) -> ExitCode {
     if !lock.is_held() {
         return ExitCode::from(1);
     }
@@ -52,33 +52,57 @@ fn serve(state: &Path, lock: &DaemonLock) -> ExitCode {
         if !lock.is_held() {
             return ExitCode::from(1);
         }
-        step(state);
+        if !step(state, config_path) {
+            return ExitCode::from(1);
+        }
     }
 }
 
-fn step(state: &Path) {
-    let text = std::fs::read_to_string(state.join("host.toml")).ok();
-    match daemon_intent(text.as_deref()) {
-        DaemonIntent::Wait => pause(),
-        DaemonIntent::Err => {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConfigReadError {
+    Invalid,
+    Unreadable,
+}
+
+fn read_daemon_config(
+    config_path: &Path,
+    platform: HostPlatform,
+) -> Result<Option<HostConfig>, ConfigReadError> {
+    let text = match std::fs::read_to_string(config_path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err(ConfigReadError::Unreadable),
+    };
+    let config = HostConfig::parse(&text).map_err(|_| ConfigReadError::Invalid)?;
+    config
+        .validate_for_host(platform)
+        .map_err(|_| ConfigReadError::Invalid)?;
+    Ok(Some(config))
+}
+
+fn step(state: &Path, config_path: &Path) -> bool {
+    match read_daemon_config(config_path, native_host_platform()) {
+        Ok(None) => pause(),
+        Err(ConfigReadError::Invalid | ConfigReadError::Unreadable) => {
             eprintln!("invalid config");
             pause();
         }
-        DaemonIntent::Listen => listen_config(state, text.as_deref()),
+        Ok(Some(config)) => return listen_config(state, &config),
     }
+    true
 }
 
-fn listen_config(state: &Path, text: Option<&str>) {
-    let Some(text) = text else {
-        pause();
-        return;
-    };
-    let Ok(config) = HostConfig::parse(text) else {
-        eprintln!("invalid config");
-        pause();
-        return;
-    };
-    drive(state, &config);
+fn listen_config(state: &Path, config: &HostConfig) -> bool {
+    if !daemon_backend_supported(native_host_platform()) {
+        eprintln!("Linux Scale Set admission is not enabled in this build");
+        return false;
+    }
+    drive(state, config);
+    true
+}
+
+const fn daemon_backend_supported(platform: HostPlatform) -> bool {
+    matches!(platform, HostPlatform::Macos)
 }
 
 fn drive(state: &Path, config: &HostConfig) {
@@ -87,7 +111,7 @@ fn drive(state: &Path, config: &HostConfig) {
         pause();
         return;
     };
-    let secret = match load_secret(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT) {
+    let secret = match load_configured_secret(&config.github.credential_ref) {
         Ok(secret) => secret,
         Err(error) => {
             eprintln!("{error}");
@@ -139,6 +163,21 @@ fn split_repo(repository: &str) -> Option<(&str, &str)> {
 
 fn pause() {
     thread::sleep(RETRY);
+}
+
+const fn native_host_platform() -> HostPlatform {
+    #[cfg(target_os = "linux")]
+    {
+        HostPlatform::Linux
+    }
+    #[cfg(target_os = "macos")]
+    {
+        HostPlatform::Macos
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        HostPlatform::Linux
+    }
 }
 
 #[cfg(test)]
