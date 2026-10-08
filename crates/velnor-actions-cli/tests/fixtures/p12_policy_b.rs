@@ -49,8 +49,8 @@ fn dated(key: &str, granted: &str, expires: &str) -> String {
 #[test]
 fn missing_tool_row_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-missing-tool")?;
-    let row = "{\"name\":\"release-plz\",\"pinned\":\"0.3.169\",\
-        \"qualified\":\"0.3.169\",\
+    let row = "{\"name\":\"release-plz\",\"pinned\":\"0.3.170\",\
+        \"qualified\":\"0.3.170\",\
         \"source\":\"https://crates.io/api/v1/crates/release-plz\",\
         \"status\":\"current\"}";
     harness::mutate(&fixture.dir, INVENTORY, &format!(",{row}"), "")?;
@@ -285,8 +285,8 @@ fn dated_exception_missing_field_fails() -> Result<(), Box<dyn Error>> {
 #[test]
 fn non_object_entries_fail() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-shapes")?;
-    let row = "{\"name\":\"mise\",\"pinned\":\"2026.9.16\",\
-        \"qualified\":\"2026.9.16\",\
+    let row = "{\"name\":\"mise\",\"pinned\":\"2026.10.4\",\
+        \"qualified\":\"2026.10.4\",\
         \"source\":\"https://api.github.com/repos/jdx/mise/releases/latest\",\
         \"status\":\"current\"}";
     harness::mutate(

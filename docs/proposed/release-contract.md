@@ -47,13 +47,16 @@ an enabled section requires exactly one of the two.
 
 ## 2. Pinned release-plz toolchain selection
 
-Qualified 2026-09-30 from official sources; reverify at execution. Pin the
-executable content and the Action identity separately. No runtime `latest`
-lookup and no recompilation of the coordinator on every release.
+The table records the initial 2026-09-30 qualification. Velnor's current
+release-plz CLI pin is `0.3.170`, with crate checksum and source evidence in
+[`freshness-evidence-2026-10-08.md`](../implemented/freshness-evidence-2026-10-08.md).
+Reverify at execution. Pin the executable content and Action identity
+separately. No runtime `latest` lookup and no recompilation of the coordinator
+on every release.
 
 | Component | Selection | Evidence |
 |---|---|---|
-| release-plz CLI | `0.3.169` | `release-plz-v0.3.169` release exists; tag `63a04978…`, commit `786894b6…` |
+| release-plz CLI | `0.3.169` (initial qualified baseline) | `release-plz-v0.3.169` release exists; tag `63a04978…`, commit `786894b6…` |
 | GitHub Action | `release-plz/action@v0.5.139` pinned to full SHA `b8d6b54b02889ff2ae2bb82e8b57c3a8fc1683a5` | Tag verified via `git ls-remote` on `release-plz/action`; peeled commit recorded |
 | Binary digest | TBD-integrator | Upstream publishes no checksum asset for `release-plz-v0.3.169`; the integrator MUST measure and record the SHA-256 of the exact consumed artifact out of band before protected use |
 

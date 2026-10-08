@@ -53,7 +53,7 @@ pub(crate) struct JobInputs<'a> {
     /// Approved source SHA every source checkout pins.
     pub(crate) sha: &'a str,
     /// `--registry` value; `None` omits the flag for the cargo-implicit
-    /// default (release-plz 0.3.169 cannot resolve that name from config).
+    /// default (release-plz 0.3.170 cannot resolve that name from config).
     pub(crate) registry: Option<&'a str>,
     /// Literal runner label.
     pub(crate) label: &'a str,

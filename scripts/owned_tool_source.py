@@ -23,9 +23,9 @@ FIELDS = {"tool", "version", "source_commit", "source_tree", "upstream_base_comm
           "patch_url", "patch_sha256", "lockfile_sha256", "license_files"}
 OWNED_VERSION_PATTERN = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-(?:owned-[a-z0-9]+(?:-[a-z0-9]+)*|velnor\.[1-9][0-9]*)"
 PORTABLE_LICENSE_PATTERN = r"[A-Za-z0-9._/-]+"
-BASES = {"mise": ("jdx/mise", "bc11f90c74eba23bf0d7350efb540e62fb7d9ffd"),
+BASES = {"mise": ("jdx/mise", "96cca90d3e55519a47cffa0cb99baa4c3d3ecca3"),
          "mbx": ("jdx/mr-boxington", "a0a44c61ca6aaa8da41d59deeebdfc46fc9d3313")}
-BOOTSTRAP = ["rust@1.98.1"]
+BOOTSTRAP = ["rust@1.99.0"]
 PREFIX = ["--no-config", "--no-env", "--no-hooks", "exec", *BOOTSTRAP, "--"]
 BUILD = {
     "mise": ["<verified-bootstrap-mbx>", "build", "--release", "--locked", "--package", "mise",
@@ -35,14 +35,17 @@ BUILD = {
             "--bin", "mbx", "--features", "owned-cache-transport"],
 }
 ABI = {"mise": "mise-owned-cargo-wrapper-v1", "mbx": None}
-OFFICIAL_MISE_BASE = "https://github.com/jdx/mise/releases/download/v2026.10.0/mise-v2026.10.0-"
+OFFICIAL_MISE_VERSION = "2026.10.4"
+OFFICIAL_MISE_SOURCE_COMMIT = "96cca90d3e55519a47cffa0cb99baa4c3d3ecca3"
+OFFICIAL_MISE_SOURCE_TREE = "92dda3fb668211ebaa2cf4edd832a184526ee918"
+OFFICIAL_MISE_BASE = "https://github.com/jdx/mise/releases/download/v2026.10.4/mise-v2026.10.4-"
 OFFICIAL_MISE_PINS = {
-    "linux-x64": ("standalone", "57ced973f968b8fbab07aa8e32bd7077d4a357e200a22356d98963c723c6de0a",
-                  "57ced973f968b8fbab07aa8e32bd7077d4a357e200a22356d98963c723c6de0a"),
-    "linux-arm64.tar.gz": ("tar.gz", "107c5e46693cdfeb1fdec91717078b298d6fcc9ebbd14f8333917cfe37965138",
-                           "4b8cacffac83e8493fc5d1eef25f6365edba73ccbed5a1f3987b7cb3f5079656"),
-    "macos-arm64.tar.gz": ("tar.gz", "e6a966e44f871403df905d50019ca6f7b84624ddfe1d5c095f5bc3f18709259e",
-                           "8d2007efdae0c2b64e3955257533e6ec17197bc2fdcbc5dd8f6847f92881deea"),
+    "linux-x64": ("standalone", "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75",
+                  "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75"),
+    "linux-arm64.tar.gz": ("tar.gz", "8760841cdbf964ecf9902a50c94716c77185a99af7f8eb55c9c51ec73ecd8880",
+                           "9013ce1d7d9bbbf65254cda178562f5450c474a705907c18b77e6b678bb10041"),
+    "macos-arm64.tar.gz": ("tar.gz", "744ae45f9b7c2a443adfa61df48397930e88b13c541834b7bd22ca31d4dfcfcd",
+                           "5c530143fc750e8a98c9a36be8d361e5dd953fa0b004d58f7577783f7cf2ac24"),
 }
 OFFICIAL_MISE_HOSTS = {"x86_64-unknown-linux-gnu": "linux-x64",
                       "aarch64-unknown-linux-gnu": "linux-arm64.tar.gz",
@@ -83,7 +86,7 @@ def digest(data):
 
 
 def recipe(tool):
-    return {"schema": 1, "bootstrap_mise": {"version": "2026.10.0", "assets": official_assets("mise")},
+    return {"schema": 1, "bootstrap_mise": {"version": "2026.10.4", "assets": official_assets("mise")},
             "bootstrap_mbx": {"version": "1.21.1", "assets": official_assets("mbx")},
             "argv": PREFIX + BUILD[tool], "behavior_abi": ABI[tool],
             "source_admission": "git-tree-lock-license-base-patch-v1"}
@@ -100,9 +103,9 @@ def official_assets(tool):
         assets[host] = {"url": OFFICIAL_MISE_BASE + name, "format": archive_format,
                         "archive_sha256": archive_sha, "binary_sha256": binary_sha,
                         "binary_member": "" if archive_format == "standalone" else "mise/bin/mise",
-                        "version": "2026.10.0", "source_repository": "https://github.com/jdx/mise",
-                        "source_commit": BASES["mise"][1],
-                        "source_tree": "172af04ce7a3cbc05920575992459a8e7d92135a"}
+                        "version": OFFICIAL_MISE_VERSION, "source_repository": "https://github.com/jdx/mise",
+                        "source_commit": OFFICIAL_MISE_SOURCE_COMMIT,
+                        "source_tree": OFFICIAL_MISE_SOURCE_TREE}
     return assets
 
 

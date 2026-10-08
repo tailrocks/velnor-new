@@ -317,7 +317,7 @@ fn assert_image_producer(body: &str) -> TestResult {
 fn assert_macos_producer(body: &str) -> TestResult {
     let build = job_body(body, "build-binary")?;
     assert!(build.contains("runs-on: macos-15"), "{build}");
-    assert!(build.contains("jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5"));
+    assert!(build.contains("jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca"));
     assert!(build.contains("rust@1.98.1"), "{build}");
     assert!(body.contains(
         "cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-runner-cli"

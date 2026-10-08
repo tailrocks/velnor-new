@@ -230,14 +230,14 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
         "supported = [\"ubuntu-26.04\", \"ubuntu-24.04\", \"ubuntu-22.04\"]",
         "[validation-tools]",
         "cargo-mutants = \"27.1.0\"",
-        "mise = \"2026.9.18\"",
+        "mise = \"2026.10.4\"",
         "rust = \"1.98.1\"",
         "mr-boxington = \"1.21.1\"",
         "gh = \"2.102.0\"",
         "actionlint = \"1.7.12\"",
         "shellcheck = \"0.11.0\"",
         "zizmor = \"1.30.1\"",
-        "nextest = \"0.9.146\"",
+        "nextest = \"0.9.148\"",
     ] {
         assert!(policy.contains(marker), "policy misses {marker}");
     }

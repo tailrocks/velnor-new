@@ -317,10 +317,7 @@ if [[ -n "$prerelease" ]]; then
       fail 'release version has a leading zero in a numeric prerelease identifier'
     fi
   done
-  is_prerelease=true
   release_args+=(--prerelease)
-else
-  is_prerelease=false
 fi
 linux_name="@@BINARY@@-${RELEASE_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
 macos_name="@@BINARY@@-${RELEASE_VERSION}-aarch64-apple-darwin.tar.gz"

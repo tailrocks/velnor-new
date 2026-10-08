@@ -55,7 +55,6 @@ fn local_pin_mismatch_fails() -> Result<(), Box<dyn Error>> {
     harness::cleanup(&fixture);
     Ok(())
 }
-
 #[test]
 fn policy_mirror_drift_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-mirror")?;
@@ -70,7 +69,6 @@ fn policy_mirror_drift_fails() -> Result<(), Box<dyn Error>> {
     harness::cleanup(&fixture);
     Ok(())
 }
-
 #[test]
 fn policy_runner_supported_rejects_non_string_and_duplicate_labels() -> Result<(), Box<dyn Error>> {
     let anchor = "supported = [\"ubuntu-26.04\", \"ubuntu-24.04\", \"ubuntu-22.04\"]";

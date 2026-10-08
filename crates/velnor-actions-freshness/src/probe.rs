@@ -3,7 +3,11 @@
 use serde_json::Value;
 
 use crate::context::{FreshnessContext, iso_timestamp, norm_version};
-use transport::fetch_text;
+use transport::{fetch_prefix_text, fetch_text};
+
+const RUST_STABLE_MANIFEST_SOURCE: &str =
+    "https://static.rust-lang.org/dist/channel-rust-stable.toml";
+const RUST_STABLE_MANIFEST_PREFIX_BYTES: usize = 128 * 1024;
 
 mod transport;
 
@@ -61,7 +65,22 @@ fn html_release(body: &str) -> Option<String> {
     {
         return Some(version.to_owned());
     }
-    let document = body.parse::<toml::Table>().ok()?;
+    let mut rust_table = None::<String>;
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            if rust_table.is_some() {
+                break;
+            }
+            if trimmed == "[pkg.rust]" {
+                rust_table = Some("[pkg.rust]\n".to_owned());
+            }
+        } else if let Some(table) = &mut rust_table {
+            table.push_str(line);
+            table.push('\n');
+        }
+    }
+    let document = rust_table?.parse::<toml::Table>().ok()?;
     let version = document
         .get("pkg")?
         .get("rust")?
@@ -120,7 +139,12 @@ fn value_text(value: &Value, key: &str, fallback: &str) -> String {
 }
 
 fn probe_pin(ctx: &mut FreshnessContext, subject: &str, source: &str, pinned: &str, stamp: &str) {
-    let result = fetch_text(source).and_then(|body| {
+    let response = if source == RUST_STABLE_MANIFEST_SOURCE {
+        fetch_prefix_text(source, RUST_STABLE_MANIFEST_PREFIX_BYTES)
+    } else {
+        fetch_text(source)
+    };
+    let result = response.and_then(|body| {
         sniff_latest(source, &body).ok_or_else(|| "no stable release parsed".to_owned())
     });
     match result {

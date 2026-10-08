@@ -10,10 +10,12 @@ trap 'rm -rf "$TEST_ROOT"' EXIT
 FAKE_BIN="$TEST_ROOT/bin"
 FAKE_RUSTUP_HOME="$TEST_ROOT/rustup"
 FAKE_TOOLCHAIN="$FAKE_RUSTUP_HOME/toolchains/1.98.1-test"
+FAKE_TOOLCHAIN_199="$FAKE_RUSTUP_HOME/toolchains/1.99.0-test"
 FAKE_MBX_BIN="$TEST_ROOT/mbx/bin"
 TEST_TMPDIR="$TEST_ROOT/tmp"
 LOG_FILE="$TEST_ROOT/cargo-target"
-mkdir -p "$FAKE_BIN" "$FAKE_TOOLCHAIN/bin" "$FAKE_MBX_BIN" "$TEST_TMPDIR" "$TEST_ROOT/cargo-home"
+mkdir -p "$FAKE_BIN" "$FAKE_TOOLCHAIN/bin" "$FAKE_TOOLCHAIN_199/bin" \
+  "$FAKE_MBX_BIN" "$TEST_TMPDIR" "$TEST_ROOT/cargo-home"
 TEST_TMPDIR="$(cd "$TEST_TMPDIR" && pwd -P)"
 
 cat > "$FAKE_BIN/rustup" <<'EOF'
@@ -23,7 +25,7 @@ if [[ "$1" == show && "$2" == home ]]; then
   printf '%s\n' "$LOCAL_CARGO_TEST_RUSTUP_HOME"
   exit 0
 fi
-if [[ "$1" == which && "$2" == --toolchain && "$3" == 1.98.1 ]]; then
+if [[ "$1" == which && "$2" == --toolchain && "$3" == "$LOCAL_CARGO_TEST_POLICY_RUST" ]]; then
   tool="$4"
   if [[ "$LOCAL_CARGO_TEST_BAD_SHIM" == 1 && "$tool" == cargo ]]; then
     printf '%s/cargo\n' "$LOCAL_CARGO_TEST_MBX_BIN"
@@ -40,13 +42,13 @@ cat > "$FAKE_TOOLCHAIN/bin/cargo" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ "${1:-}" == --version ]]; then
-  echo 'cargo 1.98.1 (self-test)'
+  printf 'cargo %s (self-test)\n' "$LOCAL_CARGO_TEST_POLICY_RUST"
   exit 0
 fi
 [[ "$0" == "$LOCAL_CARGO_TEST_TOOLCHAIN/bin/cargo" ]]
 [[ "$RUSTC" == "$LOCAL_CARGO_TEST_TOOLCHAIN/bin/rustc" ]]
 [[ "$RUSTDOC" == "$LOCAL_CARGO_TEST_TOOLCHAIN/bin/rustdoc" ]]
-[[ "$RUSTUP_TOOLCHAIN" == 1.98.1 ]]
+[[ "$RUSTUP_TOOLCHAIN" == "$LOCAL_CARGO_TEST_POLICY_RUST" ]]
 [[ "$CARGO_BUILD_JOBS" == 2 ]]
 [[ "$PATH" == "$LOCAL_CARGO_TEST_TOOLCHAIN/bin:"* ]]
 [[ "$(type -P cargo)" == "$LOCAL_CARGO_TEST_TOOLCHAIN/bin/cargo" ]]
@@ -65,13 +67,13 @@ EOF
 
 cat > "$FAKE_TOOLCHAIN/bin/rustc" <<'EOF'
 #!/usr/bin/env bash
-if [[ "${1:-}" == --version ]]; then echo 'rustc 1.98.1 (self-test)'; exit 0; fi
+if [[ "${1:-}" == --version ]]; then printf 'rustc %s (self-test)\n' "$LOCAL_CARGO_TEST_POLICY_RUST"; exit 0; fi
 exit 2
 EOF
 
 cat > "$FAKE_TOOLCHAIN/bin/rustdoc" <<'EOF'
 #!/usr/bin/env bash
-if [[ "${1:-}" == --version ]]; then echo 'rustdoc 1.98.1 (self-test)'; exit 0; fi
+if [[ "${1:-}" == --version ]]; then printf 'rustdoc %s (self-test)\n' "$LOCAL_CARGO_TEST_POLICY_RUST"; exit 0; fi
 exit 2
 EOF
 
@@ -100,11 +102,17 @@ fi
 exec /usr/bin/mktemp "$@"
 EOF
 
+cp "$FAKE_TOOLCHAIN/bin/cargo" "$FAKE_TOOLCHAIN_199/bin/cargo"
+cp "$FAKE_TOOLCHAIN/bin/rustc" "$FAKE_TOOLCHAIN_199/bin/rustc"
+cp "$FAKE_TOOLCHAIN/bin/rustdoc" "$FAKE_TOOLCHAIN_199/bin/rustdoc"
 chmod +x "$FAKE_BIN/rustup" "$FAKE_BIN/mktemp" \
   "$FAKE_TOOLCHAIN/bin/cargo" "$FAKE_TOOLCHAIN/bin/rustc" \
-  "$FAKE_TOOLCHAIN/bin/rustdoc" "$FAKE_MBX_BIN/cargo" "$FAKE_MBX_BIN/mbx"
+  "$FAKE_TOOLCHAIN/bin/rustdoc" "$FAKE_TOOLCHAIN_199/bin/cargo" \
+  "$FAKE_TOOLCHAIN_199/bin/rustc" "$FAKE_TOOLCHAIN_199/bin/rustdoc" \
+  "$FAKE_MBX_BIN/cargo" "$FAKE_MBX_BIN/mbx"
 
 export LOCAL_CARGO_TEST_RUSTUP_HOME="$FAKE_RUSTUP_HOME"
+export LOCAL_CARGO_TEST_POLICY_RUST=1.98.1
 export LOCAL_CARGO_TEST_TOOLCHAIN="$FAKE_TOOLCHAIN"
 export LOCAL_CARGO_TEST_MBX_BIN="$FAKE_MBX_BIN"
 export LOCAL_CARGO_TEST_MBX_SENTINEL="$TEST_ROOT/mbx-invoked"
@@ -156,4 +164,26 @@ expect_failure symlink-target "$HELPER" "$LOCAL_CARGO_TEST_NAMESPACE" test --loc
 [[ ! -f "$LOG_FILE" ]] || { echo 'FAIL: Cargo ran with a symlinked target' >&2; exit 1; }
 rm "$TEST_TMPDIR/velnor-local-cargo-$LOCAL_CARGO_TEST_NAMESPACE.link"
 
-echo 'PASS: local-cargo routing, namespace, MBX, target, and cleanup checks'
+MISMATCH_REPO="$TEST_ROOT/policy-mismatch"
+mkdir -p "$MISMATCH_REPO/scripts" "$MISMATCH_REPO/.velnor"
+cp "$HELPER" "$MISMATCH_REPO/scripts/local-cargo.sh"
+printf '[tools]\nrust = "1.98.1"\n' > "$MISMATCH_REPO/mise.toml"
+printf '[tools]\nrust = "1.99.0"\n' > "$MISMATCH_REPO/.velnor/version-policy.toml"
+export LOCAL_CARGO_TEST_POLICY_RUST=1.99.0
+export LOCAL_CARGO_TEST_TOOLCHAIN="$FAKE_TOOLCHAIN_199"
+export LOCAL_CARGO_TEST_NAMESPACE=policy-mismatch
+export LOCAL_CARGO_TEST_SYMLINK_TARGET=0
+MISMATCH_OUTPUT="$TEST_ROOT/policy-mismatch.out"
+if ! "$MISMATCH_REPO/scripts/local-cargo.sh" "$LOCAL_CARGO_TEST_NAMESPACE" test --locked -p example >"$MISMATCH_OUTPUT" 2>&1; then
+  cat "$MISMATCH_OUTPUT" >&2
+  echo 'FAIL: local-cargo rejected the policy Rust pin when mise.toml differed' >&2
+  exit 1
+fi
+/usr/bin/grep -F \
+  'local-cargo: warning: mise.toml Rust 1.98.1 differs from Velnor policy Rust 1.99.0; using policy' \
+  "$MISMATCH_OUTPUT" >/dev/null || { cat "$MISMATCH_OUTPUT" >&2; echo 'FAIL: policy mismatch warning missing' >&2; exit 1; }
+TARGET_DIR="$(cat "$LOG_FILE")"
+[[ ! -e "$TARGET_DIR" ]] || { echo 'FAIL: policy mismatch target was not removed' >&2; exit 1; }
+[[ ! -e "$LOCAL_CARGO_TEST_MBX_SENTINEL" ]] || { echo 'FAIL: MBX shim ran during policy mismatch' >&2; exit 1; }
+
+echo 'PASS: local-cargo routing, policy pin selection, warning, MBX, target, and cleanup checks'

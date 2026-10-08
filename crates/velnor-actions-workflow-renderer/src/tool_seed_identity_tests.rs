@@ -131,7 +131,7 @@ fn assert_wrong_pinned_checkout_stays_cold(setup: &crate::MiseSetup) {
 fn setup_config() -> crate::MiseSetup {
     crate::MiseSetup {
         uses: SETUP_USES.to_owned(),
-        version: "2026.9.18".to_owned(),
+        version: "2026.10.4".to_owned(),
         sha256: "a".repeat(64),
     }
 }
@@ -198,7 +198,7 @@ fn malformed_seed_key_and_preexisting_v2_steps_are_rejected() {
                 uses: TOOL_SEED_USES.to_owned(),
                 with: BTreeMap::from([(
                     "cache_key".to_owned(),
-                    "mise-v1-x86_64-unknown-linux-gnu-2026.9.18-0123456789abcdef".to_owned(),
+                    "mise-v1-x86_64-unknown-linux-gnu-2026.10.4-0123456789abcdef".to_owned(),
                 )]),
                 env: BTreeMap::new(),
             },

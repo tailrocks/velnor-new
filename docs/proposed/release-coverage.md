@@ -38,7 +38,7 @@ dispatch charset/order, schedule and environment safety.
 
 ## Coordinator argv (`velnor-actions-mise`)
 
-`impl_mise_release_plz.rs`: exact `0.3.169` pin, full-SHA256 cksum,
+`impl_mise_release_plz.rs`: exact `0.3.170` pin, full-SHA256 cksum,
 release-pr/release argv shapes, phase separation, explicit `--config`,
 token/OIDC constructor split, trusted-publishing gate, pinned coordinator
 command, policy/freshness mirrors. `impl_mise_release_modes.rs` adds:

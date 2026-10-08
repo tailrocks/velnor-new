@@ -12,17 +12,17 @@ use crate::impl_common::{TestResult, err_of};
 fn snapshot_tracks_mise_version_and_lock_files() -> TestResult {
     let dir = TempDir::new()?;
     let root = dir.path();
-    fs::write(root.join(".mise-version"), "1.98.1\n")?;
+    fs::write(root.join(".mise-version"), "2026.10.4\n")?;
     fs::write(root.join(".mise.lock"), "lock-bytes")?;
     let snap = ToolSnapshot::capture(root);
     assert!(snap.verify(root).is_ok(), "unchanged verifies");
-    fs::write(root.join(".mise-version"), "1.97.0\n")?;
+    fs::write(root.join(".mise-version"), "2026.10.3\n")?;
     let err = err_of(snap.verify(root), "version drift")?;
     assert!(
         err.to_string().contains("tool_files_changed:.mise-version"),
         "got {err}"
     );
-    fs::write(root.join(".mise-version"), "1.98.1\n")?;
+    fs::write(root.join(".mise-version"), "2026.10.4\n")?;
     fs::write(root.join(".mise.lock"), "rotated-bytes")?;
     let err = err_of(snap.verify(root), "lock drift")?;
     assert!(
@@ -48,7 +48,7 @@ fn snapshot_missing_files_stay_missing() -> TestResult {
 fn snapshot_unreadable_version_file_fails_closed() -> TestResult {
     let dir = TempDir::new()?;
     let root = dir.path();
-    fs::write(root.join(".mise-version"), "1.98.1\n")?;
+    fs::write(root.join(".mise-version"), "2026.10.4\n")?;
     let snap = ToolSnapshot::capture(root);
     assert!(snap.verify(root).is_ok(), "readable verifies");
     fs::remove_file(root.join(".mise-version"))?;

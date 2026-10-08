@@ -290,31 +290,28 @@ pub(crate) fn check_policy_mirror(ctx: &mut FreshnessContext) {
     mirror::check_policy_mirror(ctx);
 }
 
-/// Parse and compare the three bootstrap tools used by `verify-local.sh`.
+/// Parse the canonical tool specs used by `verify-local.sh` from version policy.
 pub(crate) fn toolchain_specs(root: &Path) -> Result<Vec<String>, String> {
-    let mise = read_toml(root.join("mise.toml"))?;
     let policy = read_toml(root.join(".velnor/version-policy.toml"))?;
-    let mise_tools = mise
-        .get("tools")
-        .and_then(TomlValue::as_table)
-        .ok_or("mise.toml [tools] table missing")?;
     let policy_tools = policy
         .get("tools")
         .and_then(TomlValue::as_table)
         .ok_or("version-policy [tools] table missing")?;
-    let pairs = [
+    let tools = [
         ("rust", "rust"),
         ("mr-boxington", "mr-boxington"),
         ("aqua:nextest-rs/nextest/cargo-nextest", "nextest"),
     ];
-    pairs.into_iter().map(|(mise_key, policy_key)| {
-        let mise_pin = mise_tools.get(mise_key).and_then(TomlValue::as_str).ok_or_else(|| format!("mise.toml[{mise_key}] missing"))?;
-        let policy_pin = policy_tools.get(policy_key).and_then(TomlValue::as_str).ok_or_else(|| format!("version-policy[{policy_key}] missing"))?;
-        if mise_pin != policy_pin {
-            return Err(format!("pin drift: mise.toml[{mise_key}]={mise_pin:?} vs version-policy[{policy_key}]={policy_pin:?}"));
-        }
-        Ok(format!("{mise_key}@{mise_pin}"))
-    }).collect()
+    tools
+        .into_iter()
+        .map(|(spec_key, policy_key)| {
+            let policy_pin = policy_tools
+                .get(policy_key)
+                .and_then(TomlValue::as_str)
+                .ok_or_else(|| format!("version-policy[{policy_key}] missing"))?;
+            Ok(format!("{spec_key}@{policy_pin}"))
+        })
+        .collect()
 }
 
 /// Return the policy's Mise version for the local verification warning.
@@ -344,16 +341,4 @@ fn display_json(value: Option<&Value>) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{policy_mise_version, toolchain_specs};
-    use std::path::Path;
-
-    #[test]
-    fn verify_local_toolchain_specs_match_the_policy() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let specs = toolchain_specs(&root);
-        assert!(specs.is_ok(), "toolchain specs: {specs:?}");
-        assert_eq!(specs.unwrap_or_default().len(), 3);
-        assert_eq!(policy_mise_version(&root), Ok("2026.9.18".to_owned()));
-    }
-}
+mod tests;

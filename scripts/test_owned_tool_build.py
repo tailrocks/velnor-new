@@ -46,7 +46,7 @@ def archive(entries):
 
 
 def fixture(tool="mise"):
-    return {"tool": tool, "version": "2026.10.0-owned-cargo-wrapper" if tool == "mise" else "1.21.1-velnor.1",
+    return {"tool": tool, "version": "2026.10.4-owned-cargo-wrapper" if tool == "mise" else "1.21.1-velnor.1",
             "source_commit": "1" * 40, "source_tree": "2" * 40,
             "upstream_base_commit": source.BASES[tool][1],
             "archive_url": "https://github.com/tailrocks/velnor-new/releases/download/owned-source/source.tar",
@@ -93,7 +93,7 @@ class SourceTests(unittest.TestCase):
         spec = fixture()
         self.assertEqual(source.descriptor(json.dumps(spec), "f" * 40), spec)
         mutations = [{"unknown": True}, {"source_commit": "f" * 40},
-                     {"version": "2026.10.0"}, {"version": "02026.10.0-owned-wrapper"},
+                     {"version": "2026.10.4"}, {"version": "02026.10.0-owned-wrapper"},
                      {"version": "2026.10.0-velnor.0"}, {"archive_sha256": "a" * 63},
                      {"archive_sha256": "0" * 64}, {"source_commit": "0" * 40},
                      {"archive_url": spec["archive_url"].replace("tailrocks", "attacker")},
@@ -266,7 +266,7 @@ class BuildTests(unittest.TestCase):
 
     def mocked_candidate(self, tool, banner=None, target="aarch64-apple-darwin"):
         spec, calls = fixture(tool), []
-        compiler = "rustc 1.98.1\nhost: aarch64-apple-darwin\nrelease: 1.98.1"
+        compiler = "rustc 1.99.0\nhost: aarch64-apple-darwin\nrelease: 1.99.0"
         def admit(_spec, path, _env):
             path.mkdir()
             (path / "LICENSE").write_bytes(b"license")
@@ -313,13 +313,13 @@ class BuildTests(unittest.TestCase):
                 self.assertEqual(tar.extractfile(expected[0]).read(), NATIVE_BINARY)
 
     def test_unowned_debug_or_wrong_compiler_rejected(self):
-        for banner in ("2026.10.0", "2026.10.0-owned-cargo-wrapper-DEBUG", "2026.10.1-owned-cargo-wrapper"):
+        for banner in ("2026.10.4", "2026.10.4-owned-cargo-wrapper-DEBUG", "2026.10.5-owned-cargo-wrapper"):
             with self.subTest(banner=banner), self.assertRaises(ValueError):
                 self.mocked_candidate("mise", banner)
         with self.assertRaises(ValueError):
             builder.compiler_identity("release: 1.98.0\nhost: aarch64-apple-darwin")
         with self.assertRaises(ValueError):
-            builder.compiler_identity("release: 1.98.1\nhost: x86_64-apple-darwin")
+            builder.compiler_identity("release: 1.99.0\nhost: x86_64-apple-darwin")
         with self.assertRaises(ValueError):
             self.mocked_candidate("mise", target="x86_64-unknown-linux-gnu")
 

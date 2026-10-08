@@ -1,5 +1,18 @@
 # T04 Rust-only golden evidence (Phase A behavior bracket)
 
+## Toolchain refresh (2026-10-08)
+
+The toolchain update tracked by issue #6 refreshed the five checked-in case
+trees from the current Velnor CLI. `scripts/capture-opentofu-goldens.sh capture`
+completed with exit 0; the dogfood preview was byte-identical to the generated
+root `.github` tree. The capture ran with Mise 2026.10.4 and Rust 1.98.1, and
+`MANIFEST.sha256` was regenerated with the case outputs. Mise action v5.1.1 is
+used at reviewed commit `2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca`; this
+current stable release supersedes issue #6's earlier v5.0.1 target.
+
+The 2026-10-05 checkpoint and capture environment below record the earlier
+source state and remain as historical evidence.
+
 ## PR41 + PR46 integration checkpoint (2026-10-05)
 
 After syncing main `2d9bca8` (including the PR71 generator correction and the

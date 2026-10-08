@@ -108,9 +108,21 @@ fn is_env_name(value: &str) -> bool {
                 | "RELEASE_VERSION"
                 | "RELEASE_TAG"
                 | "RUSTUP_TOOLCHAIN"
+                | "RUSTC"
+                | "RUSTDOC"
+                | "RUSTFLAGS"
+                | "RUSTDOCFLAGS"
                 | "GH_TOKEN"
         )
-        && !["GITHUB_", "RUNNER_", "ACTIONS_", "MISE_", "CARGO_"]
+        && ![
+            "GITHUB_",
+            "RUNNER_",
+            "ACTIONS_",
+            "MISE_",
+            "CARGO_",
+            "RUSTC_",
+            "RUSTDOC_",
+        ]
             .iter()
             .any(|prefix| value.starts_with(prefix))
 }

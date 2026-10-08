@@ -256,7 +256,7 @@ const TOOL_PROBE_ROWS: &[(&str, &str, &str)] = &[
     (
         "https://api.github.com/repos/jdx/mise/releases/latest",
         "mise.json",
-        "{\"tag_name\": \"v2026.9.16\"}",
+        "{\"tag_name\": \"v2026.10.4\"}",
     ),
     (
         "https://static.rust-lang.org/dist/channel-rust-stable.toml",
@@ -291,12 +291,12 @@ const TOOL_PROBE_ROWS: &[(&str, &str, &str)] = &[
     (
         "https://crates.io/api/v1/crates/cargo-nextest",
         "nextest.json",
-        "{\"crate\": {\"max_version\": \"0.9.146\"}}",
+        "{\"crate\": {\"max_version\": \"0.9.148\"}}",
     ),
     (
         "https://crates.io/api/v1/crates/release-plz",
         "release-plz.json",
-        "{\"crate\": {\"max_version\": \"0.3.169\"}}",
+        "{\"crate\": {\"max_version\": \"0.3.170\"}}",
     ),
     (
         "https://api.github.com/repos/opentofu/opentofu/releases/latest",
@@ -309,7 +309,7 @@ const ACTION_PROBE_ROWS: &[(&str, &str, &str)] = &[
     (
         "https://api.github.com/repos/jdx/mise-action/releases/latest",
         "mise-action.json",
-        "{\"tag_name\": \"v4.3.0\"}",
+        "{\"tag_name\": \"v5.1.1\"}",
     ),
     (
         "https://api.github.com/repos/actions/checkout/releases/latest",

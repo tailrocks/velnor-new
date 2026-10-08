@@ -85,10 +85,20 @@ if ! command -v mise >/dev/null 2>&1; then
 fi
 
 cd "$PROJECT_ROOT"
+RUST_POLICY="$(awk -v key=rust -f "$PROJECT_ROOT/scripts/toml-tool-pin.awk" \
+  "$ROOT/.velnor/version-policy.toml")" || {
+  echo "check-freshness: version policy has no exact Rust pin" >&2
+  exit 1
+}
+MBX_POLICY="$(awk -v key=mr-boxington -f "$PROJECT_ROOT/scripts/toml-tool-pin.awk" \
+  "$ROOT/.velnor/version-policy.toml")" || {
+  echo "check-freshness: version policy has no exact MBX pin" >&2
+  exit 1
+}
 env \
   VELNOR_INTERNAL_OP=repo-policy-v1 \
   VELNOR_REPO_POLICY_ACTION=freshness \
   VELNOR_REPO_POLICY_ROOT="$ROOT" \
   VELNOR_REPO_POLICY_CHECK_UPSTREAM="$CHECK_UPSTREAM" \
   VELNOR_REPO_POLICY_WITH_ADVISORIES="$WITH_ADVISORIES" \
-  mise exec -- cargo run --quiet --locked -p velnor-actions-cli --bin velnor-actions
+  mise exec "rust@$RUST_POLICY" "mr-boxington@$MBX_POLICY" -- cargo run --quiet --locked -p velnor-actions-cli --bin velnor-actions

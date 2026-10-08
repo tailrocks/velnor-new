@@ -22,10 +22,13 @@ prints concise text instead of YAML, and writes no repository files.
 
 ## Local build from a clean checkout
 
-No ambient Cargo, Rust, or MBX is required: `mise.toml` pins every tool
-(Rust 1.98.1, MBX 1.21.1, Nextest 0.9.146) and `mise install` resolves them.
-Historical clean-checkout proof, 2026-10-01 at `34550e8` in a fresh clone with `cargo`/`mbx` absent
-from `PATH`:
+No ambient Cargo, Rust, or MBX is required: `mise.toml` pins the local
+developer tool selection (Rust 1.98.1, MBX 1.21.1, Nextest 0.9.146), and
+`mise install` resolves those versions. Velnor's CI toolchain is owned by
+`.velnor/version-policy.toml` and the compiled catalog; it currently uses
+Rust 1.98.1 and Nextest 0.9.148 while the workspace MSRV remains Rust 1.98.
+Historical clean-checkout proof, 2026-10-01 at `34550e8` in a fresh clone
+with `cargo`/`mbx` absent from `PATH`:
 
 ```sh
 git clone https://github.com/tailrocks/velnor-new.git
@@ -40,10 +43,15 @@ mise exec -- cargo build --locked -p velnor-actions-cli
 diff -r .github /private/tmp/velnor-preview/.github  # no output: preview matches
 ```
 
-Retained tool pins on 2026-10-05: Mise 2026.9.18 under hold #6 and MBX
-1.21.1 under hold #29. The MBX macOS ARM64 binary passed an isolated Rust
-1.98.1 build/test and cache export/import/rebuild fixture; the historical
-output above is unchanged.
+Current Velnor CI tool pins checked on 2026-10-08: Mise 2026.10.4,
+Rust 1.98.1, Nextest 0.9.148, and release-plz 0.3.170. Issue [#6](https://github.com/tailrocks/velnor-new/issues/6)
+proposes Rust 1.99.0, but this update keeps the selected toolchain aligned
+with the declared Rust 1.98 MSRV while a separate compatibility decision is
+pending. `mise.toml` remains a read-only local developer input.
+The workflow pins `jdx/mise-action` v5.1.1 to reviewed commit
+`2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca`; the action's
+`persist_github_token` default is false, and Velnor leaves it unset. This
+supersedes issue #6's earlier v5.0.1 target.
 
 Notes: `plan`/`generate` require the checkout's origin to be
 `tailrocks/velnor-new` (a local-path clone is identity-rejected until its

@@ -2,9 +2,9 @@
 # Local verification entrypoint: the offline subset of CI in one command.
 #
 # Stages (every stage always runs; all failures are reported):
-#   toolchain       resolve the pinned toolchain (mise.toml [tools] must
-#                   equal the CI mirror in .velnor/version-policy.toml for
-#                   rust/mr-boxington/nextest, else fail on drift), `mise
+#   toolchain       resolve the exact CI toolchain from
+#                   .velnor/version-policy.toml, report local mise.toml
+#                   tool versions for context, and install policy specs; `mise
 #                   install` the specs, and record the effective versions
 #   fmt               pinned `cargo fmt --all --check`
 #   repo-policy       `scripts/check-freshness.sh` (pins, policy mirror,
@@ -27,8 +27,9 @@
 #                     available, else pinned `cargo test`
 #
 # Every cargo/nextest invocation runs under `mise exec` with explicit
-# `tool@exact` specs resolved from mise.toml and cross-checked against
-# the CI version-policy mirror: bare ambient cargo never runs here, and
+# `tool@exact` specs from .velnor/version-policy.toml; mise.toml holds
+# local developer selections and may differ without changing the CI pins.
+# Bare ambient cargo never runs here, and
 # the repo mise wrapper routes cargo through the pinned MBX shim. Every
 # cargo invocation also passes `--locked`; the lockfile is policy. The
 # script honors `CARGO_TARGET_DIR` from the environment. Exit status is 0
@@ -74,32 +75,28 @@ toml_tool_pin() {
 }
 
 # --- pinned toolchain ----------------------------------------------------------
-# Specs come from mise.toml [tools]; each must equal the CI mirror
-# (.velnor/version-policy.toml [tools], itself checked against the compiled
-# catalog by dogfood generate), so local runs use CI's exact pins.
+# Velnor's CI toolchain is owned by version policy and the compiled catalog.
+# mise.toml remains a local developer selection, so report its values but do
+# not rewrite them or require them to equal the Velnor-owned CI pins.
 echo "--- verify-local: toolchain"
 SPECS=""
-RUST_MISE="$(toml_tool_pin mise.toml rust 2>"/tmp/verify-local-toolchain.log")"
-RUST_POLICY="$(toml_tool_pin .velnor/version-policy.toml rust 2>>"/tmp/verify-local-toolchain.log")"
-MBX_MISE="$(toml_tool_pin mise.toml mr-boxington 2>>"/tmp/verify-local-toolchain.log")"
+RUST_LOCAL="$(toml_tool_pin mise.toml rust 2>/dev/null || true)"
+MBX_LOCAL="$(toml_tool_pin mise.toml mr-boxington 2>/dev/null || true)"
+NEXTEST_LOCAL="$(toml_tool_pin mise.toml aqua:nextest-rs/nextest/cargo-nextest 2>/dev/null || true)"
+RUST_POLICY="$(toml_tool_pin .velnor/version-policy.toml rust 2>"/tmp/verify-local-toolchain.log")"
 MBX_POLICY="$(toml_tool_pin .velnor/version-policy.toml mr-boxington 2>>"/tmp/verify-local-toolchain.log")"
-NEXTEST_MISE="$(toml_tool_pin mise.toml aqua:nextest-rs/nextest/cargo-nextest 2>>"/tmp/verify-local-toolchain.log")"
 NEXTEST_POLICY="$(toml_tool_pin .velnor/version-policy.toml nextest 2>>"/tmp/verify-local-toolchain.log")"
-if [ -z "$RUST_MISE" ] || [ -z "$RUST_POLICY" ] ||
-   [ -z "$MBX_MISE" ] || [ -z "$MBX_POLICY" ] ||
-   [ -z "$NEXTEST_MISE" ] || [ -z "$NEXTEST_POLICY" ]; then
+if [ -z "$RUST_POLICY" ] || [ -z "$MBX_POLICY" ] || [ -z "$NEXTEST_POLICY" ]; then
   cat "/tmp/verify-local-toolchain.log" >&2 || true
-  echo "verify-local: FAIL: toolchain (pin drift; log: /tmp/verify-local-toolchain.log)"
+  echo "verify-local: FAIL: toolchain (missing policy pin; log: /tmp/verify-local-toolchain.log)"
   exit 1
 fi
-if [ "$RUST_MISE" != "$RUST_POLICY" ] || [ "$MBX_MISE" != "$MBX_POLICY" ] ||
-   [ "$NEXTEST_MISE" != "$NEXTEST_POLICY" ]; then
-  echo "pin drift: mise.toml rust=$RUST_MISE mr-boxington=$MBX_MISE nextest=$NEXTEST_MISE" >&2
-  echo "           version-policy rust=$RUST_POLICY mr-boxington=$MBX_POLICY nextest=$NEXTEST_POLICY" >&2
-  echo "verify-local: FAIL: toolchain (pin drift; log: /tmp/verify-local-toolchain.log)"
-  exit 1
+echo "local mise.toml tools: rust=${RUST_LOCAL:-<missing>} mr-boxington=${MBX_LOCAL:-<missing>} nextest=${NEXTEST_LOCAL:-<missing>}"
+if [ "$RUST_LOCAL" != "$RUST_POLICY" ] || [ "$MBX_LOCAL" != "$MBX_POLICY" ] ||
+   [ "$NEXTEST_LOCAL" != "$NEXTEST_POLICY" ]; then
+  echo "WARNING: local mise.toml tools differ from Velnor CI policy; verify-local uses policy pins"
 fi
-SPECS="rust@$RUST_MISE mr-boxington@$MBX_MISE aqua:nextest-rs/nextest/cargo-nextest@$NEXTEST_MISE"
+SPECS="rust@$RUST_POLICY mr-boxington@$MBX_POLICY aqua:nextest-rs/nextest/cargo-nextest@$NEXTEST_POLICY"
 echo "pinned specs: $SPECS"
 # Order is fixed by the pairs list above: rust, mr-boxington, nextest.
 # shellcheck disable=SC2206

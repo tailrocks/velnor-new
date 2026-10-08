@@ -61,7 +61,7 @@ class EvidenceTests(unittest.TestCase):
             lambda r: r["source"].update(commit="f" * 40),
             lambda r: r["artifact"].update(binary_sha256="f" * 64),
             lambda r: r.update(version_banner="wrong owned version"),
-            lambda r: r["compiler"].update(rustc_vv="release: 1.98.1\nhost: wrong"),
+            lambda r: r["compiler"].update(rustc_vv="release: 1.99.0\nhost: wrong"),
             lambda r: r["behavioral_qualification"].update(passed=False),
             lambda r: r["behavioral_qualification"].update(candidate_receipt_sha256="f" * 64),
             lambda r: r["behavioral_qualification"]["artifact_admission"].update(artifact_id=True),

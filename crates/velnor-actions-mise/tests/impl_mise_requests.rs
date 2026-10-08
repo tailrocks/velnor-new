@@ -160,7 +160,7 @@ fn pinned_exec_accepts_all_catalog_tools() -> Result<(), String> {
         "actionlint@1.7.12",
         "shellcheck@0.11.0",
         "zizmor@1.30.1",
-        "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
+        "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
         "opentofu@1.13.1",
     ] {
         assert!(argv.iter().any(|arg| arg == spec), "missing spec: {spec}");
@@ -192,7 +192,7 @@ fn pinned_exec_runs_nextest_without_preinstalled_tools() -> Result<(), String> {
             "--no-hooks",
             "exec",
             "rust@1.98.1",
-            "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
+            "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
             "--",
             "cargo",
             "nextest",

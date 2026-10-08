@@ -118,7 +118,7 @@ def validate_qualified(receipt, report, manifest, artifact, environment=None):
             exact(receipt["recipe"], recipe(manifest["tool"])), "qualified receipt identity mismatch")
     closed(receipt["compiler"], "rustc_vv linker")
     compiler = dict(line.split(": ", 1) for line in receipt["compiler"]["rustc_vv"].splitlines() if ": " in line)
-    require(compiler.get("host") == artifact["target"] and compiler.get("release") == "1.98.1"
+    require(compiler.get("host") == artifact["target"] and compiler.get("release") == "1.99.0"
             and isinstance(receipt["compiler"]["linker"], str) and receipt["compiler"]["linker"],
             "qualified compiler identity mismatch")
     closed(receipt["runner"], "image_os image_version")
