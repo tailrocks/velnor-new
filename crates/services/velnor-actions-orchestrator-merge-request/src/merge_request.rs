@@ -30,16 +30,17 @@
 mod artifact_build_context;
 mod needs_channel;
 mod staged_reports;
+mod task_report_outputs;
 
 use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{canonical_json_str, parse_strict_json};
-use velnor_actions_contract_workflow::ARTIFACT_BUILD_OBSERVATIONS_FILENAME;
 use velnor_actions_contract_workflow::NEEDS_EXPECTED_ENV;
 
-use self::artifact_build_context::{has_artifact_build_tasks, read_artifact_build_context};
+use self::artifact_build_context::has_artifact_build_tasks;
 use self::needs_channel::{NEEDS_ENV, parse_needs};
 pub use self::staged_reports::{MAX_STAGED_REPORT_BYTES, read_staged_reports};
+use self::task_report_outputs::{AssemblyChannels, FanInInput};
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::{internal, internal_contract};
 use velnor_actions_orchestrator_merge_request_ports::RequestPort;
@@ -62,18 +63,20 @@ use velnor_actions_orchestrator_request_event::request_event::workflow_event_for
 pub fn assemble_merge_request(run_key: &str, run_dir: &Path) -> Result<String, OrchestratorError> {
     let needs = std::env::var(NEEDS_ENV).ok();
     let expected = std::env::var(NEEDS_EXPECTED_ENV).ok();
+    let task_report_channels = AssemblyChannels::from_environment();
     let event_name = std::env::var("GITHUB_EVENT_NAME").ok();
     let event_payload = std::env::var_os("GITHUB_EVENT_PATH")
         .filter(|value| !value.is_empty())
         .as_deref()
         .and_then(event_payload_from);
-    assemble_with_needs(
+    assemble_with_task_report_channels(
         run_key,
         run_dir,
         needs.as_deref(),
         expected.as_deref(),
         event_name.as_deref(),
         event_payload.as_deref(),
+        task_report_channels,
     )
 }
 
@@ -107,6 +110,27 @@ pub fn assemble_with_needs(
     event_name: Option<&str>,
     event_payload: Option<&str>,
 ) -> Result<String, OrchestratorError> {
+    assemble_with_task_report_channels(
+        run_key,
+        run_dir,
+        needs,
+        expected,
+        event_name,
+        event_payload,
+        AssemblyChannels::legacy(),
+    )
+}
+
+/// Assemble one merge request with the optional finalized report-producer channel.
+fn assemble_with_task_report_channels(
+    run_key: &str,
+    run_dir: &Path,
+    needs: Option<&str>,
+    expected: Option<&str>,
+    event_name: Option<&str>,
+    event_payload: Option<&str>,
+    task_report_channels: AssemblyChannels<'_>,
+) -> Result<String, OrchestratorError> {
     let mut errors = Vec::new();
     let actual_event = resolve_actual_event(event_name, event_payload, &mut errors);
     let plan = read_json(run_dir, "plan.json", "plan", true, &mut errors);
@@ -123,28 +147,31 @@ pub fn assemble_with_needs(
     let (inventory, jobs) = parse_needs(needs, expected, &mut errors);
     let attestation = read_attestation(run_dir, &inventory, &mut errors);
     let artifact_build_required = has_artifact_build_tasks(&plan);
-    let artifact_build_context = if artifact_build_required {
-        read_artifact_build_context(&plan, run_key, &mut errors)
-    } else {
-        None
-    };
-    let artifact_build_observations = if artifact_build_required {
-        let value = read_json(
-            run_dir,
-            ARTIFACT_BUILD_OBSERVATIONS_FILENAME,
-            "artifact_build_observations",
-            true,
-            &mut errors,
-        );
-        if let serde_json::Value::Array(items) = value {
-            items
-        } else {
-            errors.push("artifact_build_observations_not_array".to_owned());
-            Vec::new()
-        }
-    } else {
-        Vec::new()
-    };
+    let (artifact_build_context, task_report_origin) = task_report_outputs::runtime_identity(
+        artifact_build_required,
+        &task_report_channels.producer_expected,
+        &plan,
+        run_key,
+        task_report_channels.runtime_identity_override,
+        &mut errors,
+    );
+    let task_report_outputs = task_report_outputs::build(
+        FanInInput {
+            channel: task_report_channels.producer_expected,
+            needs,
+            required_job_ids: &inventory,
+            plan_value: &plan,
+            run_key,
+            run_context: artifact_build_context.as_ref(),
+            server_url: task_report_origin.as_deref(),
+        },
+        &mut errors,
+    );
+    let artifact_build_observations = task_report_outputs::artifact_build_observations(
+        artifact_build_required,
+        run_dir,
+        &mut errors,
+    );
     let mut request = serde_json::json!({
         "schema": 1,
         "run_key": run_key,
@@ -168,6 +195,10 @@ pub fn assemble_with_needs(
         };
         request["artifact_build_observations"] =
             serde_json::Value::Array(artifact_build_observations);
+    }
+    if let Some(outputs) = task_report_outputs {
+        request["task_report_outputs"] =
+            serde_json::to_value(outputs).map_err(|_| internal("task_report_outputs_encode"))?;
     }
     canonical_json_str(&request).map_err(internal_contract)
 }
