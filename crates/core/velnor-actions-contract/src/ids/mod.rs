@@ -7,18 +7,17 @@
 //! paths, or `run_key`.
 
 pub mod artifact;
+pub mod check_run;
 pub mod job_ids;
 pub mod shard;
 mod task_ids;
 
+pub use self::{check_run::CheckRunId, shard::split_shard_suffix};
+use crate::{canonical::validate_digest, errors::ContractError};
 pub use artifact::{
     artifact_id_for_baseline, artifact_id_for_crate_job, artifact_id_for_final,
     artifact_id_for_matrix, artifact_id_for_plan, target_key, validate_artifact_id,
 };
-pub use shard::split_shard_suffix;
-
-use crate::canonical::validate_digest;
-use crate::errors::ContractError;
 use task_ids::{validate_shard, validate_stack_task_id};
 
 /// Define a validated identifier newtype with a private constructor.
