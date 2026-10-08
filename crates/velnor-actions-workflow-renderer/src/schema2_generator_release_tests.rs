@@ -44,10 +44,12 @@ enum Failure {
     WrongDraftReleaseId,
     WrongDraftDigest,
     WrongDraftUrl,
+    UntaggedDraftHtmlUrl,
     WrongDraftSize,
     WrongDraftInventory,
     ChangedReleaseId,
     WrongPublishedDigest,
+    WrongPublishedUrl,
     MutablePublished,
 }
 
@@ -66,10 +68,12 @@ fn complete_publish_script_uses_parent_tag_and_checks_all_assets() -> Result<(),
         Failure::WrongDraftReleaseId,
         Failure::WrongDraftDigest,
         Failure::WrongDraftUrl,
+        Failure::UntaggedDraftHtmlUrl,
         Failure::WrongDraftSize,
         Failure::WrongDraftInventory,
         Failure::ChangedReleaseId,
         Failure::WrongPublishedDigest,
+        Failure::WrongPublishedUrl,
         Failure::MutablePublished,
     ] {
         run_publish_case(case)?;
@@ -93,6 +97,29 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
     let gh_function = super::workflow_steps::gh_function(&test_pins().gh_argv)?;
     let output = run_publish_command(&scratch.0, case, &script, &gh_function)?;
     assert_publish_result(&scratch.0, case, &output)?;
+    if case == Failure::UntaggedDraftHtmlUrl {
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains(
+                "https://github.com/tailrocks/velnor-new/releases/tag/untagged-c155089fcae36e2c5c68"
+            ),
+            "mock release creation did not return the observed draft URL: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        publish_fixtures::assert_draft_metadata_is_only_url_mismatch(&scratch.0)?;
+        publish_fixtures::assert_draft_asset_validation_passes(&scratch.0)?;
+        assert_eq!(
+            fs::read_to_string(scratch.0.join("tag-source"))?,
+            format!("{SOURCE_SHA}\n")
+        );
+        let calls = fs::read_to_string(scratch.0.join("gh-calls"))?;
+        assert!(calls.contains("release view v0.1.4"), "{calls}");
+        assert!(
+            calls.contains("api repos/tailrocks/velnor-new/releases/123"),
+            "{calls}"
+        );
+        assert!(calls.contains("--method PATCH -F draft=false"), "{calls}");
+        assert!(scratch.0.join("patch-log").is_file());
+    }
     cli_tests::assert_pinned_publish_calls(&scratch.0, case)
 }
 
@@ -182,7 +209,7 @@ fn assert_publish_result(
     case: Failure,
     output: &std::process::Output,
 ) -> Result<(), Box<dyn Error>> {
-    let should_succeed = case == Failure::None;
+    let should_succeed = matches!(case, Failure::None | Failure::UntaggedDraftHtmlUrl);
     let calls = fs::read_to_string(root.join("gh-calls")).unwrap_or_default();
     let mise_calls = fs::read_to_string(root.join("mise-calls")).unwrap_or_default();
     assert_eq!(
@@ -198,10 +225,12 @@ fn assert_publish_result(
             | Failure::WrongDraftReleaseId
             | Failure::WrongDraftDigest
             | Failure::WrongDraftUrl
+            | Failure::UntaggedDraftHtmlUrl
             | Failure::WrongDraftSize
             | Failure::WrongDraftInventory
             | Failure::ChangedReleaseId
             | Failure::WrongPublishedDigest
+            | Failure::WrongPublishedUrl
             | Failure::MutablePublished
             | Failure::TagMovedBeforePublish
     );
@@ -211,7 +240,7 @@ fn assert_publish_result(
             fs::read_to_string(root.join("asset-args"))?,
             expected_asset_args()
         );
-        if case == Failure::None {
+        if should_succeed {
             assert!(
                 root.join("release-accepted/release-manifest.json")
                     .is_file()
