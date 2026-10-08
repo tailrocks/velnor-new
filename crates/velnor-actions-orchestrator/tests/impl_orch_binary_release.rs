@@ -7,6 +7,22 @@ use velnor_actions_orchestrator::{plan_text_checked, prepare, render_staged_tree
 use crate::impl_common::{TestResult, config_with_branch, make_repo, plan_for};
 
 const CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.binary_release]\nenabled = true\nmanifest_path = \"Cargo.toml\"\npackage = \"demo\"\nbinary = \"demo\"\nsource_commit_env = \"REPO_SCAN_SOURCE_COMMIT\"\n";
+const CONFIG_WITH_ACTION_OVERRIDES: &str = r#"
+schema = 1
+[workflow]
+name = "CI"
+default_branch = "testmain"
+[stacks.rust.binary_release]
+enabled = true
+manifest_path = "Cargo.toml"
+package = "demo"
+binary = "demo"
+source_commit_env = "REPO_SCAN_SOURCE_COMMIT"
+[actions.overrides]
+"actions/checkout" = { version = "v7.0.1", sha = "3d3c42e5aac5ba805825da76410c181273ba90b1" }
+"actions/download-artifact" = { version = "v8.0.1", sha = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" }
+"actions/upload-artifact" = { version = "v7.0.1", sha = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" }
+"#;
 
 #[test]
 fn binary_release_is_generated_and_planned_only_when_enabled() -> TestResult {
@@ -76,15 +92,84 @@ fn binary_release_is_generated_and_planned_only_when_enabled() -> TestResult {
     let plan = plan_for(&prep)?;
     assert!(plan.contains(".github/workflows/binary-release.yml"));
 
+    Ok(())
+}
+
+#[test]
+fn disabled_binary_release_is_not_generated_or_planned() -> TestResult {
     let disabled = make_repo(config_with_branch())?;
-    let disabled_prep = prepare(disabled.path())?;
-    let disabled_tree = render_staged_tree(&disabled_prep)?;
+    let prep = prepare(disabled.path())?;
+    let tree = render_staged_tree(&prep)?;
     assert!(
-        disabled_tree
-            .files
+        tree.files
             .iter()
             .all(|file| file.path != ".github/workflows/binary-release.yml")
     );
-    assert!(!plan_text_checked(&disabled_prep)?.contains(".github/workflows/binary-release.yml"));
+    assert!(!plan_text_checked(&prep)?.contains(".github/workflows/binary-release.yml"));
+    Ok(())
+}
+
+#[test]
+fn binary_release_uses_configured_action_pin_overrides() -> TestResult {
+    let repo = make_repo(CONFIG_WITH_ACTION_OVERRIDES)?;
+    fs::write(repo.path().join("src/main.rs"), "fn main() {}\n")?;
+    let prep = prepare(repo.path())?;
+    let tree = render_staged_tree(&prep)?;
+    let workflow = tree
+        .files
+        .iter()
+        .find(|file| file.path == ".github/workflows/binary-release.yml")
+        .expect("enabled binary release output");
+    for (expected, count) in [
+        (
+            "uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            3,
+        ),
+        (
+            "uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+            2,
+        ),
+        (
+            "uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            2,
+        ),
+    ] {
+        assert_eq!(
+            workflow.bytes.matches(expected).count(),
+            count,
+            "{expected}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn unapproved_binary_release_action_pin_override_fails_generation() -> TestResult {
+    for (action, version) in [
+        ("actions/checkout", "v7.0.1"),
+        ("actions/download-artifact", "v8.0.1"),
+        ("actions/upload-artifact", "v7.0.1"),
+    ] {
+        let config = format!(
+            r#"
+schema = 1
+[workflow]
+name = "CI"
+default_branch = "testmain"
+[stacks.rust.binary_release]
+enabled = true
+manifest_path = "Cargo.toml"
+package = "demo"
+binary = "demo"
+[actions.overrides]
+"{action}" = {{ version = "{version}", sha = "1111111111111111111111111111111111111111" }}
+"#
+        );
+        let repo = make_repo(&config)?;
+        fs::write(repo.path().join("src/main.rs"), "fn main() {}\n")?;
+        let prep = prepare(repo.path())?;
+        let error = render_staged_tree(&prep).expect_err("unapproved action ref must fail closed");
+        assert!(error.to_string().contains("unapproved_pair"), "{error}");
+    }
     Ok(())
 }

@@ -42,6 +42,10 @@ pub(super) fn verify_job(
                 "tag".to_owned(),
                 Yaml::str("${{ steps.verify.outputs.tag }}"),
             ),
+            (
+                "resume_release_id".to_owned(),
+                Yaml::str("${{ steps.verify.outputs.resume_release_id }}"),
+            ),
         ]),
     ));
     fields.push((
@@ -145,7 +149,7 @@ pub(super) fn build_job(
                 ],
             ),
             run_step_with("Build and verify binary", "build", &script, &build_env),
-            upload_step(artifact, &path),
+            upload_step(artifact, &path, &request.upload_artifact_uses),
         ]),
     ));
     Yaml::Map(fields)
@@ -192,6 +196,10 @@ pub(super) fn publish_job(
                 "RELEASE_TAG".to_owned(),
                 Yaml::str("${{ needs.verify-source.outputs.tag }}"),
             ),
+            (
+                "RESUME_RELEASE_ID".to_owned(),
+                Yaml::str("${{ needs.verify-source.outputs.resume_release_id }}"),
+            ),
         ]),
     ));
     fields.push((
@@ -203,11 +211,13 @@ pub(super) fn publish_job(
                 "Download Linux x86_64 asset",
                 "${{ needs.build-linux.outputs.artifact_id }}",
                 "assets/incoming-linux",
+                &request.download_artifact_uses,
             ),
             download_step(
                 "Download macOS ARM64 asset",
                 "${{ needs.build-macos.outputs.artifact_id }}",
                 "assets/incoming-macos",
+                &request.download_artifact_uses,
             ),
             run_step("Validate archives and prepare checksums", &prepare_script),
             run_step_with(

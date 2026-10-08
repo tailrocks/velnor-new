@@ -35,6 +35,8 @@ fn request() -> RustBinaryReleaseRequest {
         config,
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         checkout_uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1".to_owned(),
+        download_artifact_uses: crate::steps::DOWNLOAD_ARTIFACT_USES.to_owned(),
+        upload_artifact_uses: crate::steps::UPLOAD_ARTIFACT_USES.to_owned(),
         linux_setup: MiseSetup {
             uses: "jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c".to_owned(),
             version: "2026.9.18".to_owned(),
@@ -181,6 +183,59 @@ fn renderer_emits_trusted_scheduled_release_and_repo_scan_build_env() {
         !yaml.contains("@@"),
         "all trusted template fields substituted"
     );
+}
+
+#[test]
+fn renderer_routes_exact_draft_resume_through_the_publisher() {
+    let yaml = render_rust_binary_release_workflow(&request()).expect("binary workflow");
+    for expected in [
+        "resume_release_id=%s",
+        "RESUME_RELEASE_ID: ${{ needs.verify-source.outputs.resume_release_id }}",
+        "release_assets_match_expected",
+        "release_assets_are_complete",
+        "existing draft cannot be resumed",
+        "release upload",
+        "selected draft has unexpected or mismatched assets",
+        "draft=false",
+    ] {
+        let serialized = expected.replace('\\', "\\\\").replace('"', "\\\"");
+        assert!(yaml.contains(&serialized), "missing `{expected}`:\n{yaml}");
+    }
+    let publish = yaml
+        .find("Verify checksums, recheck tag, and publish")
+        .expect("publisher step");
+    let token = yaml.rfind("GH_TOKEN:").expect("publish token");
+    let token_script = &yaml[publish..token];
+    assert!(token_script.contains("release upload"));
+    assert!(token_script.contains("draft=false"));
+}
+
+#[test]
+fn renderer_uses_the_requested_checkout_and_artifact_action_refs() {
+    let mut input = request();
+    input.checkout_uses = "actions/checkout@1111111111111111111111111111111111111111".to_owned();
+    input.download_artifact_uses =
+        "actions/download-artifact@2222222222222222222222222222222222222222".to_owned();
+    input.upload_artifact_uses =
+        "actions/upload-artifact@3333333333333333333333333333333333333333".to_owned();
+
+    let yaml = render_rust_binary_release_workflow(&input).expect("binary workflow");
+    for (expected, count) in [
+        (
+            "uses: actions/checkout@1111111111111111111111111111111111111111",
+            3,
+        ),
+        (
+            "uses: actions/download-artifact@2222222222222222222222222222222222222222",
+            2,
+        ),
+        (
+            "uses: actions/upload-artifact@3333333333333333333333333333333333333333",
+            2,
+        ),
+    ] {
+        assert_eq!(yaml.matches(expected).count(), count, "{expected}");
+    }
 }
 
 #[test]

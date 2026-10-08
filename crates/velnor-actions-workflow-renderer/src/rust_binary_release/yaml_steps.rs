@@ -1,6 +1,5 @@
 //! YAML step helpers for the generic Rust binary-release workflow.
 
-use crate::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
 use crate::yaml::Yaml;
 
 use crate::setup::MiseSetup;
@@ -79,11 +78,11 @@ pub(super) fn run_step_with(name: &str, id: &str, run: &str, env: &[(&str, &str)
     Yaml::Map(fields)
 }
 
-pub(super) fn upload_step(name: &str, path: &str) -> Yaml {
+pub(super) fn upload_step(name: &str, path: &str, uses: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Upload binary artifact")),
         ("id".to_owned(), Yaml::str("upload")),
-        ("uses".to_owned(), Yaml::str(UPLOAD_ARTIFACT_USES)),
+        ("uses".to_owned(), Yaml::str(uses)),
         (
             "with".to_owned(),
             Yaml::Map(vec![
@@ -96,10 +95,10 @@ pub(super) fn upload_step(name: &str, path: &str) -> Yaml {
     ])
 }
 
-pub(super) fn download_step(name: &str, artifact: &str, path: &str) -> Yaml {
+pub(super) fn download_step(name: &str, artifact: &str, path: &str, uses: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
-        ("uses".to_owned(), Yaml::str(DOWNLOAD_ARTIFACT_USES)),
+        ("uses".to_owned(), Yaml::str(uses)),
         (
             "with".to_owned(),
             Yaml::Map(vec![

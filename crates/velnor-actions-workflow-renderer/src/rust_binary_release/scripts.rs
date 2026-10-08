@@ -3,6 +3,7 @@
 use velnor_actions_contract::RustBinaryReleaseConfig;
 
 use super::RenderedCommands;
+mod resume;
 
 const SEMVER_TAG_SORTER: &str = r#"python3 - "$tag_file" "$ordered_tag_file" "@@PACKAGE@@-v" <<'PY' || fail 'cannot order release tags by SemVer precedence'
 import functools
@@ -69,12 +70,7 @@ with open(sys.argv[2], "w", encoding="utf-8", errors="surrogateescape") as targe
     target.writelines(tag[0] + "\n" for tag in tags)
 PY"#;
 
-pub(super) fn verify_source(
-    config: &RustBinaryReleaseConfig,
-    binary: &str,
-    commands: &RenderedCommands,
-) -> String {
-    let template = r#"set -euo pipefail
+const VERIFY_SOURCE_TEMPLATE: &str = r#"set -euo pipefail
 
 fail() { printf 'binary release verification: %s\n' "$1" >&2; exit 1; }
 api_token="${GH_TOKEN-}"
@@ -97,66 +93,94 @@ default_sha="$(gh_api "repos/$repository/commits/$default_branch_ref" --jq '.sha
 [[ "$default_sha" =~ ^[0-9a-f]{40}$ ]] || fail 'current default branch SHA is malformed'
 
 if [[ "$default_sha" != "$trusted_sha" ]]; then
-  printf 'should_release=false\ndefault_sha=%s\n' "$trusted_sha" >> "$GITHUB_OUTPUT"
+  printf 'should_release=false\ndefault_sha=%s\nresume_release_id=\n' "$trusted_sha" >> "$GITHUB_OUTPUT"
   exit 0
 fi
 
 existing_releases="$(gh_api --paginate "repos/$repository/releases?per_page=100" --jq '.[].tag_name')" || fail 'cannot inventory existing releases'
+existing_drafts="$(gh_api --paginate "repos/$repository/releases?per_page=100" --jq '.[] | select(.draft == true) | [.tag_name, (.id|tostring)] | @tsv')" || fail 'cannot inventory existing draft releases'
 unset api_token
-release_file="$(mktemp "$RUNNER_TEMP/binary-release-existing.XXXXXX")" || fail 'cannot create release inventory'; tag_file="$(mktemp "$RUNNER_TEMP/binary-release-tags.XXXXXX")" || fail 'cannot create tag inventory'; ordered_tag_file="$(mktemp "$RUNNER_TEMP/binary-release-ordered-tags.XXXXXX")" || fail 'cannot create ordered tag inventory'
+release_file="$(mktemp "$RUNNER_TEMP/binary-release-existing.XXXXXX")" || fail 'cannot create release inventory'; draft_file="$(mktemp "$RUNNER_TEMP/binary-release-drafts.XXXXXX")" || fail 'cannot create draft inventory'; tag_file="$(mktemp "$RUNNER_TEMP/binary-release-tags.XXXXXX")" || fail 'cannot create tag inventory'; ordered_tag_file="$(mktemp "$RUNNER_TEMP/binary-release-ordered-tags.XXXXXX")" || fail 'cannot create ordered tag inventory'; draft_tag_file="$(mktemp "$RUNNER_TEMP/binary-release-draft-tags.XXXXXX")" || fail 'cannot create draft tag inventory'; ordered_draft_file="$(mktemp "$RUNNER_TEMP/binary-release-ordered-drafts.XXXXXX")" || fail 'cannot create ordered draft inventory'; candidate_tag_file="$(mktemp "$RUNNER_TEMP/binary-release-candidates.XXXXXX")" || fail 'cannot create candidate inventory'
 printf '%s\n' "$existing_releases" > "$release_file"
+printf '%s\n' "$existing_drafts" > "$draft_file"
 git for-each-ref --format='%(refname:strip=2)' "refs/tags/@@PACKAGE@@-v*" > "$tag_file" || fail 'cannot inventory release tags'
 @@SEMVER_TAG_SORTER@@
-selected_tag=''; selected_version=''; selected_sha=''
+awk -F '\t' -v prefix='@@PACKAGE@@-v' 'index($1, prefix) == 1 { print $1 }' "$draft_file" > "$draft_tag_file" || fail 'cannot prepare draft tag inventory'
+draft_tag_count="$(wc -l < "$draft_tag_file" | tr -d ' ')" || fail 'cannot count draft tags'
+local_tag_file="$tag_file"; ordered_local_file="$ordered_tag_file"
+tag_file="$draft_tag_file"; ordered_tag_file="$ordered_draft_file"
+@@SEMVER_TAG_SORTER@@
+ordered_draft_count="$(wc -l < "$ordered_draft_file" | tr -d ' ')" || fail 'cannot count ordered draft tags'
+[[ "$draft_tag_count" == "$ordered_draft_count" ]] || fail 'an existing package draft has an invalid release tag'
+awk '!seen[$0]++' "$ordered_draft_file" "$ordered_local_file" > "$candidate_tag_file" || fail 'cannot prioritize pending drafts'
+selected_tag=''; selected_version=''; selected_sha=''; selected_resume_id=''; candidate_resume_id=''
+reject_draft_candidate() { if [[ -n "$candidate_resume_id" ]]; then fail "existing draft cannot be resumed: $1"; fi; }
 
 while IFS= read -r candidate_tag; do
   [[ -n "$candidate_tag" ]] || continue
   version="${candidate_tag#@@PACKAGE@@-v}"
   [[ "$candidate_tag" == "@@PACKAGE@@-v$version" ]] || continue
-  grep -Fxq -- "$candidate_tag" "$release_file" && continue
+  candidate_resume_id=''
+  if grep -Fxq -- "$candidate_tag" "$release_file"; then
+    draft_ids="$(awk -F '\t' -v tag="$candidate_tag" '$1 == tag { print $2 }' "$draft_file")" || fail 'cannot inspect matching draft release'
+    [[ -n "$draft_ids" ]] || continue
+    [[ "$(wc -l <<<"$draft_ids" | tr -d ' ')" == 1 ]] || fail 'multiple drafts exist for the same release tag'
+    candidate_resume_id="${draft_ids%%$'\n'*}"
+    [[ "$candidate_resume_id" =~ ^[0-9]+$ ]] || fail 'existing draft release ID is malformed'
+  fi
 
   tag_ref="refs/tags/$candidate_tag"
-  tag_type="$(git cat-file -t "$tag_ref" 2>/dev/null)" || continue
+  tag_type="$(git cat-file -t "$tag_ref" 2>/dev/null)" || { reject_draft_candidate 'tag is missing locally'; continue; }
   case "$tag_type" in
-    commit) candidate_sha="$(git rev-parse "$tag_ref")" || continue ;;
+    commit) candidate_sha="$(git rev-parse "$tag_ref")" || { reject_draft_candidate 'tag target is unreadable'; continue; } ;;
     tag)
-      tag_header="$(git cat-file tag "$tag_ref")" || continue
+      tag_header="$(git cat-file tag "$tag_ref")" || { reject_draft_candidate 'annotated tag is malformed'; continue; }
       target_type="$(sed -n 's/^type //p' <<<"$tag_header" | head -n 1)"
       candidate_sha="$(sed -n 's/^object //p' <<<"$tag_header" | head -n 1)"
-      [[ "$target_type" == commit && "$candidate_sha" =~ ^[0-9a-f]{40}$ ]] || continue
-      [[ "$(git cat-file -t "$candidate_sha" 2>/dev/null)" == commit ]] || continue
+      [[ "$target_type" == commit && "$candidate_sha" =~ ^[0-9a-f]{40}$ ]] || { reject_draft_candidate 'annotated tag does not point to a commit'; continue; }
+      [[ "$(git cat-file -t "$candidate_sha" 2>/dev/null)" == commit ]] || { reject_draft_candidate 'tag target commit is missing'; continue; }
       ;;
-    *) continue ;;
+    *) reject_draft_candidate 'tag does not point to a commit'; continue ;;
   esac
-  [[ "$candidate_sha" =~ ^[0-9a-f]{40}$ ]] || continue
-  git merge-base --is-ancestor "$candidate_sha" "$trusted_sha" || continue
+  [[ "$candidate_sha" =~ ^[0-9a-f]{40}$ ]] || { reject_draft_candidate 'tag target SHA is malformed'; continue; }
+  git merge-base --is-ancestor "$candidate_sha" "$trusted_sha" || { reject_draft_candidate 'tag target is not reachable from the trusted branch'; continue; }
 
   candidate_root="$(mktemp -d "$RUNNER_TEMP/binary-release-source.XXXXXX")" || fail 'cannot create candidate source directory'
   if ! git archive --format=tar "$candidate_sha" | tar -xf - -C "$candidate_root"; then
     rm -rf -- "$candidate_root"
+    reject_draft_candidate 'tagged source cannot be extracted'
     continue
   fi
   # Cargo metadata reads source manifests but does not run build scripts. The
   # read token is unset before parsing any tag-controlled repository content.
   if ! metadata="$(cd "$candidate_root" && env -u GH_TOKEN @@CARGO_METADATA@@)"; then
     rm -rf -- "$candidate_root"
+    reject_draft_candidate 'tagged source metadata cannot be read'
     continue
   fi
   candidate_version="$(jq -er --arg package '@@PACKAGE@@' --arg binary '@@BINARY@@' '[.packages[] | select(.name == $package)] as $packages | if ($packages | length) != 1 then error("selected Cargo package must be unique") elif ([$packages[0].targets[] | select(.name == $binary and (.kind | index("bin")))] | length) != 1 then error("selected binary target must be unique") else $packages[0].version end' <<<"$metadata")" || candidate_version=''
-  rm -rf -- "$candidate_root"; [[ "$candidate_version" == "$version" ]] || continue
+  rm -rf -- "$candidate_root"; [[ "$candidate_version" == "$version" ]] || { reject_draft_candidate 'tag does not match its Cargo package version'; continue; }
 
   selected_tag="$candidate_tag"
   selected_version="$candidate_version"
   selected_sha="$candidate_sha"
+  selected_resume_id="$candidate_resume_id"
   break
-done < "$ordered_tag_file"; rm -f -- "$release_file" "$tag_file" "$ordered_tag_file"
+done < "$candidate_tag_file"; rm -f -- "$release_file" "$draft_file" "$local_tag_file" "$ordered_local_file" "$draft_tag_file" "$ordered_draft_file" "$candidate_tag_file"
 
 if [[ -z "$selected_tag" ]]; then
-  printf 'should_release=false\ndefault_sha=%s\n' "$trusted_sha" >> "$GITHUB_OUTPUT"
+  printf 'should_release=false\ndefault_sha=%s\nresume_release_id=\n' "$trusted_sha" >> "$GITHUB_OUTPUT"
   exit 0
 fi
-printf 'should_release=true\nsource_sha=%s\ndefault_sha=%s\nversion=%s\ntag=%s\n' \
-  "$selected_sha" "$trusted_sha" "$selected_version" "$selected_tag" >> "$GITHUB_OUTPUT""#;
+printf 'should_release=true\nsource_sha=%s\ndefault_sha=%s\nversion=%s\ntag=%s\nresume_release_id=%s\n' \
+  "$selected_sha" "$trusted_sha" "$selected_version" "$selected_tag" "$selected_resume_id" >> "$GITHUB_OUTPUT""#;
+
+pub(super) fn verify_source(
+    config: &RustBinaryReleaseConfig,
+    binary: &str,
+    commands: &RenderedCommands,
+) -> String {
+    let template = VERIFY_SOURCE_TEMPLATE;
     template
         .replace("@@SEMVER_TAG_SORTER@@", SEMVER_TAG_SORTER)
         .replace("@@CARGO_METADATA@@", &commands.metadata)
@@ -282,6 +306,7 @@ source_sha="${SOURCE_SHA-}"
 default_sha="${DEFAULT_SHA-}"
 tag="${RELEASE_TAG-}"
 version="${RELEASE_VERSION-}"
+resume_release_id="${RESUME_RELEASE_ID-}"
 [[ "$source_sha" =~ ^[0-9a-f]{40}$ && "$default_sha" =~ ^[0-9a-f]{40}$ ]] || fail 'source or default-branch SHA is malformed'
 [[ "$tag" == "@@PACKAGE@@-v$version" ]] || fail 'release tag and version disagree'
 semver_pattern='^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)(-([0-9A-Za-z-]+([.][0-9A-Za-z-]+)*))?([+]([0-9A-Za-z-]+([.][0-9A-Za-z-]+)*))?$'
@@ -295,7 +320,10 @@ if [[ -n "$prerelease" ]]; then
       fail 'release version has a leading zero in a numeric prerelease identifier'
     fi
   done
+  is_prerelease=true
   release_args+=(--prerelease)
+else
+  is_prerelease=false
 fi
 linux_name="@@BINARY@@-${RELEASE_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
 macos_name="@@BINARY@@-${RELEASE_VERSION}-aarch64-apple-darwin.tar.gz"
@@ -325,9 +353,14 @@ comparison="$(gh_api "repos/$GITHUB_REPOSITORY/compare/$source_sha...$default_sh
 comparison_status="$(jq -er '.status' <<<"$comparison")" || fail 'default-branch comparison is malformed'
 [[ "$comparison_status" == ahead || "$comparison_status" == identical ]] || fail 'release source is no longer reachable from captured default branch'
 
-@@GH_PREFIX@@ "${release_args[@]}" "$linux_name" "$macos_name" SHA256SUMS"#;
+if [[ -n "$resume_release_id" ]]; then
+@@RESUME_RELEASE@@
+else
+  @@GH_PREFIX@@ "${release_args[@]}" "$linux_name" "$macos_name" SHA256SUMS || fail 'release creation failed; a leftover draft will be checked on the next run'
+fi"#;
     template
         .replace("@@BINARY@@", binary)
         .replace("@@PACKAGE@@", package)
+        .replace("@@RESUME_RELEASE@@", resume::PUBLISH_RESUME)
         .replace("@@GH_PREFIX@@", gh_prefix)
 }

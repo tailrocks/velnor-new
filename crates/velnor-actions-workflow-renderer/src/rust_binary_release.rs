@@ -6,6 +6,12 @@
 
 mod commands;
 mod jobs;
+#[cfg(test)]
+#[path = "rust_binary_release_prepare_assets_test.rs"]
+mod prepare_assets_tests;
+#[cfg(test)]
+#[path = "rust_binary_release_resume_test.rs"]
+mod resume_tests;
 mod scripts;
 #[cfg(test)]
 #[path = "rust_binary_release_scripts_test.rs"]
@@ -61,6 +67,10 @@ pub struct RustBinaryReleaseRequest {
     pub generator_version: String,
     /// Pinned checkout action selected by the orchestrator.
     pub checkout_uses: String,
+    /// Pinned artifact download action selected by the orchestrator.
+    pub download_artifact_uses: String,
+    /// Pinned artifact upload action selected by the orchestrator.
+    pub upload_artifact_uses: String,
     /// Verified Mise setup for Linux `x86_64`.
     pub linux_setup: MiseSetup,
     /// Verified Mise setup for macOS ARM64.
@@ -92,6 +102,22 @@ pub fn render_rust_binary_release_workflow(
     steps::validate_uses(&request.checkout_uses)?;
     if !request.checkout_uses.starts_with("actions/checkout@") {
         return Err(RenderError::BadActionRef("not_checkout".to_owned()));
+    }
+    steps::validate_uses(&request.download_artifact_uses)?;
+    if !request
+        .download_artifact_uses
+        .starts_with("actions/download-artifact@")
+    {
+        return Err(RenderError::BadActionRef(
+            "not_download_artifact".to_owned(),
+        ));
+    }
+    steps::validate_uses(&request.upload_artifact_uses)?;
+    if !request
+        .upload_artifact_uses
+        .starts_with("actions/upload-artifact@")
+    {
+        return Err(RenderError::BadActionRef("not_upload_artifact".to_owned()));
     }
     request.linux_setup.validate()?;
     request.macos_setup.validate()?;

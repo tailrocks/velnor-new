@@ -2,13 +2,21 @@
 
 use std::ffi::{OsStr, OsString};
 
-use velnor_actions_contract::{ReleaseTarget, WorkflowPolicy};
+use velnor_actions_actionlint::actions::{
+    CHECKOUT_ACTION_SHA, CHECKOUT_ACTION_VERSION, DOWNLOAD_ARTIFACT_ACTION_SHA,
+    DOWNLOAD_ARTIFACT_ACTION_VERSION, UPLOAD_ARTIFACT_ACTION_SHA, UPLOAD_ARTIFACT_ACTION_VERSION,
+};
+use velnor_actions_actionlint::overrides::{
+    ActionPinOverride as ApprovedOverride, ApprovedPinCatalog,
+};
+use velnor_actions_contract::{ReleaseTarget, VelnorConfig, WorkflowPolicy};
 use velnor_actions_mise::{MiseInstall, PinnedTool, PinnedToolExec, ToolCatalog};
 use velnor_actions_workflow_renderer::render::RenderedFile;
 use velnor_actions_workflow_renderer::rust_binary_release::{
     BINARY_RELEASE_WORKFLOW_PATH, RustBinaryReleaseCommands, RustBinaryReleaseRequest,
     render_rust_binary_release_workflow,
 };
+use velnor_actions_workflow_renderer::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
 
 use crate::OrchestratorError;
 use crate::pins::resolve_mise_setup_for_release_target;
@@ -48,7 +56,27 @@ pub(crate) fn binary_release_files(
     let request = RustBinaryReleaseRequest {
         config: config.clone(),
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
-        checkout_uses: CHECKOUT_USES.to_owned(),
+        checkout_uses: action_uses(
+            &prep.config,
+            "actions/checkout",
+            CHECKOUT_USES,
+            CHECKOUT_ACTION_SHA,
+            CHECKOUT_ACTION_VERSION,
+        )?,
+        download_artifact_uses: action_uses(
+            &prep.config,
+            "actions/download-artifact",
+            DOWNLOAD_ARTIFACT_USES,
+            DOWNLOAD_ARTIFACT_ACTION_SHA,
+            DOWNLOAD_ARTIFACT_ACTION_VERSION,
+        )?,
+        upload_artifact_uses: action_uses(
+            &prep.config,
+            "actions/upload-artifact",
+            UPLOAD_ARTIFACT_USES,
+            UPLOAD_ARTIFACT_ACTION_SHA,
+            UPLOAD_ARTIFACT_ACTION_VERSION,
+        )?,
         linux_setup: resolve_mise_setup_for_release_target(
             &prep.config,
             ReleaseTarget::LinuxX86_64,
@@ -63,6 +91,26 @@ pub(crate) fn binary_release_files(
         path: BINARY_RELEASE_WORKFLOW_PATH.to_owned(),
         bytes: render_rust_binary_release_workflow(&request)?,
     }])
+}
+
+fn action_uses(
+    config: &VelnorConfig,
+    action: &str,
+    default: &str,
+    default_sha: &str,
+    default_version: &str,
+) -> Result<String, OrchestratorError> {
+    let Some(pin) = config.actions.overrides.get(action) else {
+        return Ok(default.to_owned());
+    };
+    let mut catalog = ApprovedPinCatalog::new();
+    catalog.insert(action, default_sha, default_version)?;
+    let request = ApprovedOverride {
+        action: action.to_owned(),
+        sha: pin.sha.clone(),
+        version: pin.version.clone(),
+    };
+    Ok(catalog.validate_override(&request)?.uses_value())
 }
 
 fn resolve_commands(
