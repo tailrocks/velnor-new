@@ -4,8 +4,9 @@ use std::path::Path;
 use velnor_runner_host::{HostError, HostPlatform};
 
 use super::super::{
-    EXPECTED_CREDENTIAL_PROPERTY, IDENTITY_UNIT, Manager, ManagerOutput, ServiceFault, UNIT,
-    conditions::condition_output, perform,
+    ENVIRONMENT_PROPERTY, EXPECTED_CREDENTIAL_PROPERTY, EXPECTED_ENVIRONMENT_PROPERTY,
+    IDENTITY_UNIT, Manager, ManagerOutput, ServiceFault, UNIT, conditions::condition_output,
+    perform,
 };
 use super::{verify_loaded_unit, verify_loaded_unit_for_config};
 use crate::args::ServiceAction;
@@ -14,6 +15,7 @@ use crate::args::ServiceAction;
 struct FakeManager {
     systemctl_outputs: VecDeque<ManagerOutput>,
     busctl_outputs: VecDeque<ManagerOutput>,
+    environment_outputs: VecDeque<ManagerOutput>,
     systemctl_calls: Vec<Vec<String>>,
     busctl_calls: Vec<Vec<String>>,
 }
@@ -33,6 +35,12 @@ impl Manager for FakeManager {
         if args.last() == Some(&"Conditions") {
             return Ok(condition_output(true));
         }
+        if args.last() == Some(&ENVIRONMENT_PROPERTY) {
+            return Ok(self
+                .environment_outputs
+                .pop_front()
+                .unwrap_or_else(environment_property));
+        }
         self.busctl_outputs
             .pop_front()
             .ok_or_else(|| io::Error::other("unexpected busctl call"))
@@ -44,6 +52,13 @@ fn output(success: bool, stdout: impl Into<Vec<u8>>) -> ManagerOutput {
         success,
         stdout: stdout.into(),
     }
+}
+
+fn environment_property() -> ManagerOutput {
+    output(
+        true,
+        format!("{EXPECTED_ENVIRONMENT_PROPERTY}\n").into_bytes(),
+    )
 }
 
 fn loaded_service(timeout: &str) -> ManagerOutput {
@@ -93,13 +108,50 @@ fn preflight_accepts_activation_state_when_effective_stop_timeout_exceeds_config
         manager.systemctl_calls[1].last().map(String::as_str),
         Some(IDENTITY_UNIT)
     );
-    assert_eq!(manager.busctl_calls.len(), 3);
+    assert_eq!(manager.busctl_calls.len(), 4);
+    assert!(manager.busctl_calls.iter().any(|call| {
+        call.get(4)
+            .is_some_and(|path| path == "/org/freedesktop/systemd1/unit/velnor_2dhost_2eservice")
+            && call
+                .get(5)
+                .is_some_and(|interface| interface == "org.freedesktop.systemd1.Service")
+            && call
+                .last()
+                .is_some_and(|property| property == ENVIRONMENT_PROPERTY)
+    }));
     assert!(
         manager
             .busctl_calls
             .iter()
             .any(|call| call.last().is_some_and(|v| v == "LoadCredential"))
     );
+}
+
+#[test]
+fn preflight_rejects_missing_redirected_or_non_singleton_environment_before_identity_query() {
+    for environment in [
+        b"as 0\n".as_slice(),
+        b"as 1 \"PATH=/usr/bin:/bin\"\n".as_slice(),
+        b"as 2 \"PATH=/usr/sbin:/usr/bin:/sbin:/bin\" \"EXTRA=value\"\n".as_slice(),
+        b"as 1 \"PATH=/usr/sbin:/usr/bin:/sbin:/bin\" \"EXTRA=value\"\n".as_slice(),
+        b"s \"PATH=/usr/sbin:/usr/bin:/sbin:/bin\"\n".as_slice(),
+    ] {
+        let mut manager = valid_manager("31s");
+        manager
+            .environment_outputs
+            .push_back(output(true, environment.to_vec()));
+
+        assert_eq!(
+            verify_loaded_unit(&mut manager, 30),
+            Err(ServiceFault::ServiceEnvironmentUnavailable)
+        );
+        assert_eq!(manager.systemctl_calls.len(), 1);
+        assert_eq!(manager.busctl_calls.len(), 3);
+        assert!(manager.busctl_calls.last().is_some_and(|call| {
+            call.last()
+                .is_some_and(|property| property == ENVIRONMENT_PROPERTY)
+        }));
+    }
 }
 
 #[test]
@@ -218,7 +270,7 @@ fn service_preflight_dispatch_accepts_the_systemd_activation_phase() {
 
     assert_eq!(perform(ServiceAction::Preflight, &mut manager, 30), Ok(()));
     assert_eq!(manager.systemctl_calls.len(), 2);
-    assert_eq!(manager.busctl_calls.len(), 3);
+    assert_eq!(manager.busctl_calls.len(), 4);
 }
 
 #[test]

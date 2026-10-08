@@ -10,7 +10,7 @@ mod tests;
 
 use super::{
     Manager, ServiceFault, read_identity_snapshot, read_snapshot, verify_identity_contract,
-    verify_load_credential, verify_package_contract,
+    verify_load_credential, verify_package_contract, verify_service_environment,
 };
 use std::path::Path;
 use velnor_runner_host::{HostError, HostPlatform};
@@ -33,6 +33,7 @@ pub(super) fn verify_loaded_unit(
     let service = read_snapshot(manager)?;
     verify_package_contract(&service, drain_timeout_secs)?;
     verify_load_credential(manager)?;
+    verify_service_environment(manager)?;
     let identity = read_identity_snapshot(manager)?;
     verify_identity_contract(&identity)
 }
