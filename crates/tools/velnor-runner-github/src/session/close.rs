@@ -5,7 +5,7 @@ use crate::refresh::{StatusClass, classify_status};
 use crate::registration::{AsyncDiscoveryTransport, execute_discovery};
 
 use super::error::{SessionError, reject};
-use super::request::{Method, SessionRequest, Transport};
+use super::request::{BearerRole, Method, RequestPurpose, SessionRequest, Transport};
 use super::retry::{API_QUERY, bearer, execute, fresh_gate, json_content};
 
 /// Delete the owned session with the admin bearer. Any status other than 204 is not success.
@@ -30,6 +30,8 @@ where
     T: Transport + ?Sized,
 {
     let request = SessionRequest {
+        purpose: RequestPurpose::SessionClose,
+        bearer_role: BearerRole::ActionsAdmin,
         method: Method::Delete,
         path: format!("{SCALE_SET_ENDPOINT}/{scale_set_id}/sessions/{session_id}"),
         query: Some(API_QUERY.to_owned()),
@@ -60,6 +62,8 @@ where
         return Err(crate::WireError::RegistrationRejected.into());
     }
     let request = SessionRequest {
+        purpose: RequestPurpose::SessionClose,
+        bearer_role: BearerRole::ActionsAdmin,
         method: Method::Delete,
         path: format!("{SCALE_SET_ENDPOINT}/{scale_set_id}/sessions/{session_id}"),
         query: Some(API_QUERY.to_owned()),

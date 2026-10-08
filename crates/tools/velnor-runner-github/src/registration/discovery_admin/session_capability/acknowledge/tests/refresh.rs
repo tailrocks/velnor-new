@@ -1,23 +1,5 @@
 use super::*;
 
-fn route_refreshed_queue(
-    transport: &mut Script,
-    queue_url: &str,
-    request: &mut SessionRequest,
-) -> Result<String, SessionError> {
-    let rest = queue_url
-        .strip_prefix("https://")
-        .ok_or(SessionError::Uncertain)?;
-    let (host, path) = rest.split_once('/').ok_or(SessionError::Uncertain)?;
-    if host.is_empty() || host.contains('@') || host.chars().any(char::is_whitespace) {
-        return Err(SessionError::Uncertain);
-    }
-    transport.origin = format!("https://{host}");
-    let base_path = format!("/{path}");
-    request.path.clone_from(&base_path);
-    Ok(base_path)
-}
-
 #[test]
 fn refreshed_ack_retries_exact_message_path_and_next_poll_uses_cached_queue_base()
 -> Result<(), &'static str> {
@@ -32,6 +14,11 @@ fn refreshed_ack_retries_exact_message_path_and_next_poll_uses_cached_queue_base
             ],
         )?;
     assert_eq!(message_id, 17);
+    assert_eq!(script.seen[2].path, MESSAGE_PATH);
+    assert_eq!(
+        script.seen[2].query.as_deref(),
+        Some("tenant=private%2Fid&lastMessageId=old&lastMessageId=duplicate")
+    );
     let result = capability
         .acknowledge_resolved_message(
             &mut script,
@@ -39,14 +26,14 @@ fn refreshed_ack_retries_exact_message_path_and_next_poll_uses_cached_queue_base
             message_id,
             true,
             &RefreshGate::new(),
-            route_refreshed_queue,
         )
         .map_err(|_| "ack after refresh")?;
     assert_eq!(result, Ack::Deleted);
     assert_ack_refresh_exchange(&script, message_id);
+    assert_eq!(session.queue_route.path(), REFRESHED_MESSAGE_PATH);
     assert_eq!(
-        session.message_queue_url(),
-        "https://queue-new.example/_apis/runtime/runnerscalesets/7/sessions/session-1/rotated/messages"
+        session.queue_route.query(),
+        Some("tenant=private%2Fid&lastMessageId=refresh")
     );
 
     let next = capability
@@ -56,7 +43,6 @@ fn refreshed_ack_retries_exact_message_path_and_next_poll_uses_cached_queue_base
             message_id,
             1,
             &RefreshGate::new(),
-            route_refreshed_queue,
         )
         .map_err(|_| "poll after refreshed ack")?;
     assert!(matches!(next, PollWithTrust::Empty));
@@ -88,7 +74,14 @@ fn assert_ack_refresh_exchange(script: &Script, message_id: i64) {
         replay_delete.path,
         format!("{REFRESHED_MESSAGE_PATH}/{message_id}")
     );
-    assert_eq!(replay_delete.query, first_delete.query);
+    assert_eq!(
+        first_delete.query.as_deref(),
+        Some("tenant=private%2Fid&lastMessageId=old&lastMessageId=duplicate")
+    );
+    assert_eq!(
+        replay_delete.query.as_deref(),
+        Some("tenant=private%2Fid&lastMessageId=refresh")
+    );
     assert_eq!(replay_delete.body, first_delete.body);
     assert_eq!(authorization(first_delete), Some("Bearer queue-canary"));
     assert_eq!(
@@ -102,6 +95,10 @@ fn assert_cached_queue_poll(script: &Script) {
     assert_eq!(script.origins[6], "https://queue-new.example");
     assert_eq!(script.seen[6].method, Method::Get);
     assert_eq!(script.seen[6].path, REFRESHED_MESSAGE_PATH);
+    assert_eq!(
+        script.seen[6].query.as_deref(),
+        Some("lastMessageId=17&tenant=private%2Fid")
+    );
     assert_eq!(
         authorization(&script.seen[6]),
         Some("Bearer replacement-queue-canary")
@@ -135,7 +132,6 @@ fn uncertain_refreshed_ack_remains_one_shot_and_does_not_advance_queue() -> Resu
             message_id,
             true,
             &RefreshGate::new(),
-            route_refreshed_queue,
         ),
         Err(SessionError::Uncertain)
     );
@@ -145,9 +141,10 @@ fn uncertain_refreshed_ack_remains_one_shot_and_does_not_advance_queue() -> Resu
         script.seen[5].path,
         format!("{REFRESHED_MESSAGE_PATH}/{message_id}")
     );
+    assert_eq!(session.queue_route.path(), REFRESHED_MESSAGE_PATH);
     assert_eq!(
-        session.message_queue_url(),
-        "https://queue-new.example/_apis/runtime/runnerscalesets/7/sessions/session-1/rotated/messages"
+        session.queue_route.query(),
+        Some("tenant=private%2Fid&lastMessageId=refresh")
     );
 
     assert!(
@@ -158,7 +155,6 @@ fn uncertain_refreshed_ack_remains_one_shot_and_does_not_advance_queue() -> Resu
                 message_id,
                 true,
                 &RefreshGate::new(),
-                route_refreshed_queue,
             )
             .is_err()
     );
@@ -170,7 +166,6 @@ fn uncertain_refreshed_ack_remains_one_shot_and_does_not_advance_queue() -> Resu
                 message_id,
                 1,
                 &RefreshGate::new(),
-                route_refreshed_queue,
             )
             .is_err()
     );

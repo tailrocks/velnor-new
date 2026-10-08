@@ -2,10 +2,10 @@
 
 use serde::Deserialize;
 
-use super::{actions_request, status_error, validate_repository};
+use super::{actions_request_with_purpose, status_error, validate_repository};
 use crate::registration::{AsyncDiscoveryTransport, execute_discovery};
 use crate::session::execute;
-use crate::{SessionError, SessionRequest, Transport, WireError};
+use crate::{RequestPurpose, SessionError, SessionRequest, Transport, WireError};
 
 /// Whether private-repository fork pull-request workflows are enabled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,9 +88,10 @@ pub(crate) fn fork_workflow_settings_request(
     rest_token: &str,
 ) -> Result<SessionRequest, SessionError> {
     validate_repository(owner, repository, rest_token)?;
-    actions_request(
+    actions_request_with_purpose(
         format!("repos/{owner}/{repository}/actions/permissions/fork-pr-workflows-private-repos"),
         rest_token,
+        RequestPurpose::PrivateForkPolicyRead,
     )
 }
 

@@ -7,7 +7,7 @@ use velnor_runner_github::{
     create_session, refresh_if_current, refresh_session,
 };
 
-const BODY: &str = r#"{"sessionId":"sess","messageQueueUrl":"_apis/runtime/runnerscalesets/7/sessions/sess/messages","messageQueueAccessToken":"queue-token-canary","ownerName":"velnor-host"}"#;
+const BODY: &str = r#"{"sessionId":"sess","messageQueueUrl":"_apis/runtime/runnerscalesets/7/sessions/sess/messages?dispatch=private%2Fid","messageQueueAccessToken":"queue-token-canary","ownerName":"velnor-host"}"#;
 
 struct Script {
     replies: VecDeque<Result<Exchange, TransportFail>>,
@@ -44,6 +44,7 @@ fn create_stores_the_queue_and_hides_the_token() -> Result<(), &'static str> {
     assert!(created.statistics().is_none());
     let rendered = format!("{created:?} {:?}", script.seen[0]);
     assert!(!rendered.contains("queue-token-canary"));
+    assert!(!rendered.contains("private%2Fid"));
     assert!(!rendered.contains("admin-canary"));
     assert_eq!(script.seen[0].method, Method::Post);
     assert!(script.seen[0].path.ends_with("/7/sessions"));

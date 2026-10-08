@@ -1,6 +1,6 @@
 //! Bind the shared Actions transport to the exact origin for each operation.
 
-use crate::{DiscoveryTransport, SessionError};
+use crate::{DiscoveryTransport, SessionError, WireError};
 
 use super::VerifiedPoolSessionAdmin;
 use super::types::VerifiedQueueSession;
@@ -22,7 +22,11 @@ pub(super) fn bind_queue_origin<T>(
 where
     T: DiscoveryTransport + ?Sized,
 {
-    bind_service_origin(transport, &session.inner.message_queue_url)
+    let observed = transport.bind_message_queue_origin(&session.inner.message_queue_url)?;
+    if !observed.same_target(&session.queue_route) {
+        return Err(WireError::RegistrationRejected.into());
+    }
+    Ok(())
 }
 
 fn bind_service_origin<T>(transport: &mut T, url: &str) -> Result<(), SessionError>

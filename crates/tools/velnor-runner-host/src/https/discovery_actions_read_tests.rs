@@ -8,7 +8,10 @@ use velnor_runner_github::{
     reconcile_observed_scale_set_job_async,
 };
 
-use super::{BoundedDiscoveryTransport, Origin, actions_get, api_get, validate_discovery_request};
+use super::{
+    BoundedDiscoveryTransport, Origin, actions_get, actions_rest_get, api_get,
+    validate_discovery_request,
+};
 
 #[test]
 fn only_exact_workflow_run_and_attempt_jobs_routes_are_allowlisted() {
@@ -19,13 +22,14 @@ fn only_exact_workflow_run_and_attempt_jobs_routes_are_allowlisted() {
         "repos/acme/widget/actions/runs/18446744073709551615",
     ] {
         assert!(
-            validate_discovery_request(&api, &api_get(path)).is_some(),
+            validate_discovery_request(&api, &actions_rest_get(path)).is_some(),
             "{path}"
         );
     }
 
     for page in 1..=4 {
-        let mut request = api_get("repos/ChainArgos/java-monorepo/actions/runs/88/attempts/2/jobs");
+        let mut request =
+            actions_rest_get("repos/ChainArgos/java-monorepo/actions/runs/88/attempts/2/jobs");
         request.query = Some(format!("per_page=100&page={page}"));
         assert!(
             validate_discovery_request(&api, &request).is_some(),
@@ -56,7 +60,7 @@ fn invalid_actions_paths_queries_methods_headers_and_origins_stay_rejected() {
         "orgs/acme/actions/runs/88",
     ] {
         assert!(
-            validate_discovery_request(&api, &api_get(path)).is_none(),
+            validate_discovery_request(&api, &actions_rest_get(path)).is_none(),
             "unexpectedly accepted {path}"
         );
     }
@@ -73,7 +77,7 @@ fn invalid_actions_paths_queries_methods_headers_and_origins_stay_rejected() {
         "per_page=100&page=%31",
         "per_page=100&page=",
     ] {
-        let mut request = api_get("repos/acme/widget/actions/runs/88/attempts/1/jobs");
+        let mut request = actions_rest_get("repos/acme/widget/actions/runs/88/attempts/1/jobs");
         request.query = Some(query.to_owned());
         assert!(
             validate_discovery_request(&api, &request).is_none(),
@@ -81,7 +85,7 @@ fn invalid_actions_paths_queries_methods_headers_and_origins_stay_rejected() {
         );
     }
 
-    let mut run_query = api_get("repos/acme/widget/actions/runs/88");
+    let mut run_query = actions_rest_get("repos/acme/widget/actions/runs/88");
     run_query.query = Some("per_page=100&page=1".to_owned());
     assert!(validate_discovery_request(&api, &run_query).is_none());
 
@@ -89,15 +93,15 @@ fn invalid_actions_paths_queries_methods_headers_and_origins_stay_rejected() {
     repository_query.query = Some("page=1".to_owned());
     assert!(validate_discovery_request(&api, &repository_query).is_none());
 
-    let mut post = api_get("repos/acme/widget/actions/runs/88");
+    let mut post = actions_rest_get("repos/acme/widget/actions/runs/88");
     post.method = Method::Post;
     assert!(validate_discovery_request(&api, &post).is_none());
 
-    let mut body = api_get("repos/acme/widget/actions/runs/88");
+    let mut body = actions_rest_get("repos/acme/widget/actions/runs/88");
     body.body = b"{}".to_vec();
     assert!(validate_discovery_request(&api, &body).is_none());
 
-    let mut bad_headers = api_get("repos/acme/widget/actions/runs/88");
+    let mut bad_headers = actions_rest_get("repos/acme/widget/actions/runs/88");
     bad_headers.headers[0].1 = "application/json".to_owned();
     assert!(validate_discovery_request(&api, &bad_headers).is_none());
     bad_headers.headers[0].1 = "application/vnd.github+json".to_owned();
@@ -107,8 +111,11 @@ fn invalid_actions_paths_queries_methods_headers_and_origins_stay_rejected() {
     assert!(validate_discovery_request(&api, &bad_headers).is_none());
 
     assert!(
-        validate_discovery_request(&actions, &api_get("repos/acme/widget/actions/runs/88"))
-            .is_none()
+        validate_discovery_request(
+            &actions,
+            &actions_rest_get("repos/acme/widget/actions/runs/88")
+        )
+        .is_none()
     );
     assert!(
         validate_discovery_request(
@@ -138,7 +145,7 @@ fn exact_actions_read_requests_dispatch_through_bounded_transport() {
         transport
             .bind_github_api_origin()
             .expect("fixed GitHub API origin should bind");
-        let mut request = api_get(path);
+        let mut request = actions_rest_get(path);
         request.query = query.map(str::to_owned);
         let exchange = transport
             .exchange(&request)

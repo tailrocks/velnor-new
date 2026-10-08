@@ -4,9 +4,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use velnor_runner_github::{
-    AsyncDiscoveryIntentStore, AsyncDiscoveryTransport, DiscoveryCredentialOutcome,
-    DiscoveryCredentialStep, DiscoveryIntentId, DiscoveryStoreFuture, Method, ScaleSetFound,
-    SessionRequest, TransportFail, exchange_repository_discovery_admin_once_async,
+    AsyncDiscoveryIntentStore, AsyncDiscoveryTransport, BearerRole, DiscoveryCredentialOutcome,
+    DiscoveryCredentialStep, DiscoveryIntentId, DiscoveryStoreFuture, Method, RequestPurpose,
+    ScaleSetFound, SessionRequest, TransportFail, exchange_repository_discovery_admin_once_async,
     issue_repository_discovery_token_async, read_repository_admin_evidence_async,
 };
 
@@ -293,6 +293,8 @@ fn dropping_the_async_exchange_cancels_and_reaps_the_owned_curl_worker() {
 
 fn repository_get() -> SessionRequest {
     SessionRequest {
+        purpose: RequestPurpose::RepositoryRead,
+        bearer_role: BearerRole::GithubRestCredential,
         method: Method::Get,
         path: "repos/acme/widget".to_owned(),
         query: None,

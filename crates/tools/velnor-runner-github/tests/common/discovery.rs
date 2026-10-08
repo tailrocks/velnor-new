@@ -4,8 +4,8 @@ use std::rc::Rc;
 
 use velnor_runner_github::{
     DiscoveryCredentialOutcome, DiscoveryCredentialStep, DiscoveryIntentId, DiscoveryIntentStore,
-    DiscoveryTransport, Exchange, SessionError, SessionRequest, Transport, TransportFail,
-    WireError,
+    DiscoveryTransport, Exchange, MessageQueueRoute, SessionError, SessionRequest, Transport,
+    TransportFail, WireError,
 };
 
 pub(crate) const OWNER: &str = "ChainArgos";
@@ -76,6 +76,31 @@ impl DiscoveryTransport for Script {
         }
         self.actions_bindings.push(url.to_owned());
         Ok(())
+    }
+
+    fn bind_message_queue_origin(&mut self, url: &str) -> Result<MessageQueueRoute, SessionError> {
+        self.events.borrow_mut().push("bind-queue".to_owned());
+        if self.reject_binding || self.reject_actions_binding {
+            return Err(WireError::RegistrationRejected.into());
+        }
+        self.actions_bindings.push(url.to_owned());
+        let rest = url
+            .strip_prefix("https://")
+            .ok_or(SessionError::Uncertain)?;
+        let (authority, suffix) = rest.split_once('/').unwrap_or((rest, ""));
+        if authority.is_empty() || authority.contains('@') || authority.contains('?') {
+            return Err(SessionError::Uncertain);
+        }
+        let (path, query) = suffix.split_once('?').unwrap_or((suffix, ""));
+        MessageQueueRoute::from_parts(
+            if path.is_empty() {
+                "/".to_owned()
+            } else {
+                format!("/{path}")
+            },
+            (!query.is_empty()).then(|| query.to_owned()),
+        )
+        .map_err(Into::into)
     }
 }
 

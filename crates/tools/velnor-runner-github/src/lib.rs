@@ -68,7 +68,8 @@ pub use runner_group_policy::{
 };
 pub use secret::EncodedJit;
 pub use session::{
-    Ack, AckScope, Exchange, Method, QueueSession, SessionError, SessionRequest, Transport, ack,
-    acquire, create_session, delete_session, jit, jit_request, poll, poll_with_trust,
-    refresh_if_current, refresh_queue_request, refresh_session, reopen_session,
+    Ack, AckScope, BearerRole, Exchange, MessageQueueRoute, Method, QueueSession, RequestPurpose,
+    SessionError, SessionRequest, Transport, ack, acquire, create_session, delete_session, jit,
+    jit_request, poll, poll_with_trust, refresh_if_current, refresh_queue_request, refresh_session,
+    reopen_session,
 };

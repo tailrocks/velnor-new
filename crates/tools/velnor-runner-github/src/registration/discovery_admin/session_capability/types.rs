@@ -3,7 +3,7 @@ use std::fmt;
 use std::time::SystemTime;
 
 use crate::policy::VerifiedJobTrust;
-use crate::{ParsedBatch, Statistics, session::QueueSession};
+use crate::{MessageQueueRoute, ParsedBatch, Statistics, session::QueueSession};
 
 /// Result of one single-request Acquire attempt.
 #[derive(Debug, PartialEq, Eq)]
@@ -239,12 +239,14 @@ impl SessionPopulationObservation {
 #[must_use]
 pub struct VerifiedQueueSession {
     pub(super) inner: QueueSession,
-    pub(super) queue_path: String,
+    pub(super) queue_route: MessageQueueRoute,
     pub(super) scale_set_id: i64,
     pub(super) policy_digest: String,
     pub(super) available_requests: BTreeSet<i64>,
+    pub(super) unrequested_requests: BTreeSet<i64>,
     pub(super) unresolved_requests: BTreeSet<i64>,
     pub(super) acquired_requests: BTreeSet<i64>,
+    pub(super) completed_requests: BTreeSet<i64>,
     pub(super) unresolved_available: bool,
     pub(super) last_message_id: Option<i64>,
     pub(super) last_batch: Option<ParsedBatch>,
@@ -259,12 +261,6 @@ impl VerifiedQueueSession {
     #[must_use]
     pub fn session_id(&self) -> &str {
         &self.inner.session_id
-    }
-
-    /// Current message queue URL. Host code must validate it before routing.
-    #[must_use]
-    pub fn message_queue_url(&self) -> &str {
-        &self.inner.message_queue_url
     }
 
     /// Last service message ID delivered by the verified polling method.
@@ -288,7 +284,7 @@ impl fmt::Debug for VerifiedQueueSession {
         formatter
             .debug_struct("VerifiedQueueSession")
             .field("session", &self.inner)
-            .field("queue_path", &self.queue_path)
+            .field("queue_route", &self.queue_route)
             .field("scale_set_id", &self.scale_set_id)
             .field("policy_digest", &self.policy_digest)
             .field("last_message_id", &self.last_message_id)
@@ -305,8 +301,13 @@ impl fmt::Debug for VerifiedQueueSession {
             )
             .field("close_attempted", &self.one_shot.close_attempted)
             .field("available_request_count", &self.available_requests.len())
+            .field(
+                "unrequested_request_count",
+                &self.unrequested_requests.len(),
+            )
             .field("unresolved_request_count", &self.unresolved_requests.len())
             .field("acquired_request_count", &self.acquired_requests.len())
+            .field("completed_request_count", &self.completed_requests.len())
             .field("unresolved_available", &self.unresolved_available)
             .field("ack_attempted", &self.one_shot.ack_attempted)
             .finish_non_exhaustive()

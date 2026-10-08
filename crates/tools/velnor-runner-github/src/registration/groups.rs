@@ -5,7 +5,9 @@ use std::collections::HashSet;
 use serde::Deserialize;
 
 use crate::session::{API_QUERY, bearer, execute, json_content, user_agent};
-use crate::{Method, SessionError, SessionRequest, Transport, WireError};
+use crate::{
+    BearerRole, Method, RequestPurpose, SessionError, SessionRequest, Transport, WireError,
+};
 
 use super::other_status;
 
@@ -47,6 +49,8 @@ pub(crate) fn groups_request(admin_token: &str) -> Result<SessionRequest, Sessio
         return Err(SessionError::Wire(WireError::RegistrationRejected));
     }
     Ok(SessionRequest {
+        purpose: RequestPurpose::ActionsMetadataRead,
+        bearer_role: BearerRole::ActionsAdmin,
         method: Method::Get,
         path: "_apis/runtime/runnergroups".to_owned(),
         query: Some(API_QUERY.to_owned()),

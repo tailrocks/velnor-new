@@ -1,8 +1,16 @@
 use super::Origin;
 use velnor_runner_github::{Method, SessionRequest};
 
+#[path = "discovery_validation/actions.rs"]
+mod actions;
 #[path = "discovery_actions_delete_validation.rs"]
 mod actions_delete_validation;
+#[path = "discovery_validation/identity.rs"]
+mod identity;
+#[path = "discovery_validation/queue.rs"]
+mod queue;
+#[path = "discovery_validation/session.rs"]
+mod session;
 
 pub(super) struct ValidatedTarget<'a> {
     pub(super) path: &'a str,
@@ -21,13 +29,17 @@ pub(super) fn validate_discovery_request<'a>(
     origin: &Origin,
     request: &'a SessionRequest,
 ) -> Option<ValidatedTarget<'a>> {
+    if let Origin::MessageQueue(queue_origin) = origin {
+        return queue::validate(queue_origin, request);
+    }
     let path = request.path.strip_prefix('/').unwrap_or(&request.path);
     if path.starts_with('/') || path.contains(['\\', '%', '#', '?']) {
         return None;
     }
     match origin {
         Origin::GithubApi => validate_github_request(path, request),
-        Origin::Actions(_) => validate_actions_request(path, request),
+        Origin::Actions(_) => actions::validate(path, request),
+        Origin::MessageQueue(_) => None,
     }
 }
 
@@ -35,7 +47,9 @@ fn validate_github_request<'a>(
     path: &'a str,
     request: &'a SessionRequest,
 ) -> Option<ValidatedTarget<'a>> {
-    if !request.body.is_empty() && request.method == Method::Get {
+    if !identity::github_request_is_valid(path, request)
+        || (!request.body.is_empty() && request.method == Method::Get)
+    {
         return None;
     }
     match request.method {
@@ -77,39 +91,6 @@ fn validate_github_request<'a>(
     }
 }
 
-fn validate_actions_request<'a>(
-    path: &'a str,
-    request: &'a SessionRequest,
-) -> Option<ValidatedTarget<'a>> {
-    if !request.body.is_empty() {
-        return None;
-    }
-    let admin_headers = ActionsHeaders::AdminJsonBearer;
-    match (request.method, path, request.query.as_deref()) {
-        (Method::Get, "_apis/runtime/runnergroups", Some("api-version=6.0-preview")) => {
-            validated_target(
-                path,
-                request.query.as_deref(),
-                headers_are(request, admin_headers),
-            )
-        }
-        (Method::Get, "_apis/runtime/runnerscalesets", Some(query)) => validated_target(
-            path,
-            request.query.as_deref(),
-            headers_are(request, admin_headers)
-                && actions_delete_validation::valid_scale_set_query(query),
-        ),
-        (Method::Delete, path, Some(query)) => validated_target(
-            path,
-            request.query.as_deref(),
-            query == "api-version=6.0-preview"
-                && actions_delete_validation::session_delete_path(path)
-                && headers_are(request, admin_headers),
-        ),
-        _ => None,
-    }
-}
-
 #[derive(Clone, Copy)]
 enum GithubHeaders {
     RepositoryGet,
@@ -120,6 +101,7 @@ enum GithubHeaders {
 #[derive(Clone, Copy)]
 enum ActionsHeaders {
     AdminJsonBearer,
+    AdminSessionClose,
 }
 
 fn headers_are(request: &SessionRequest, kind: impl HeaderKind) -> bool {
@@ -214,6 +196,13 @@ impl HeaderKind for ActionsHeaders {
                     && accept.is_none()
                     && version.is_none()
                     && agent == Some("velnor-host")
+            }
+            Self::AdminSessionClose => {
+                auth_scheme(auth, "Bearer")
+                    && content == Some("application/json")
+                    && accept.is_none()
+                    && version.is_none()
+                    && agent.is_none()
             }
         }
     }

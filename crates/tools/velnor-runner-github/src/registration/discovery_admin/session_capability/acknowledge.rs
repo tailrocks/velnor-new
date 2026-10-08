@@ -3,13 +3,12 @@ use std::collections::BTreeSet;
 use zeroize::Zeroize;
 
 use crate::refresh::RefreshGate;
-use crate::session::{Ack, AckScope, SessionError, SessionRequest, ack};
-use crate::{DiscoveryTransport, ParsedBatch, WireError, may_ack};
+use crate::session::{Ack, AckScope, SessionError, ack_with_route};
+use crate::{DiscoveryTransport, InnerKind, ParsedBatch, SessionRequest, WireError, may_ack};
 
 use super::VerifiedPoolSessionAdmin;
 use super::origin::{bind_admin_origin, bind_queue_origin};
 use super::types::VerifiedQueueSession;
-use super::valid_queue_path;
 
 impl VerifiedPoolSessionAdmin {
     /// Acknowledge only the exact latest message, after every unique Available
@@ -28,18 +27,16 @@ impl VerifiedPoolSessionAdmin {
     /// Returns a secret-safe session or transport error. A transport error
     /// after the DELETE is sent is uncertain and this capability will reject a
     /// second ACK attempt for the same message.
-    pub fn acknowledge_resolved_message<T, F>(
+    pub fn acknowledge_resolved_message<T>(
         &self,
         transport: &mut T,
         session: &mut VerifiedQueueSession,
         message_id: i64,
         replay_safe: bool,
         gate: &RefreshGate,
-        mut route_after_refresh: F,
     ) -> Result<Ack, SessionError>
     where
         T: DiscoveryTransport + ?Sized,
-        F: FnMut(&mut T, &str, &mut SessionRequest) -> Result<String, SessionError>,
     {
         self.require_session(session)?;
         if session.last_message_id != Some(message_id)
@@ -57,11 +54,15 @@ impl VerifiedPoolSessionAdmin {
         };
         if !acknowledgement_allowed(
             &batch,
-            replay_safe,
-            session.unresolved_available,
-            &session.available_requests,
-            &session.unresolved_requests,
-            &session.acquired_requests,
+            AckState {
+                replay_safe,
+                unresolved_available: session.unresolved_available,
+                available_requests: &session.available_requests,
+                unrequested_requests: &session.unrequested_requests,
+                unresolved_requests: &session.unresolved_requests,
+                acquired_requests: &session.acquired_requests,
+                completed_requests: &session.completed_requests,
+            },
         ) {
             return Ok(Ack::Suppressed);
         }
@@ -70,10 +71,10 @@ impl VerifiedPoolSessionAdmin {
         session.one_shot.ack_attempted = true;
         session.population_observation = None;
         let queue_token = session.inner.token().to_owned();
-        let queue_path = session.queue_path.clone();
-        let result = ack(
+        let queue_route = session.queue_route.duplicate();
+        let result = ack_with_route(
             transport,
-            &queue_path,
+            &queue_route,
             &batch,
             &AckScope {
                 replay_safe,
@@ -82,14 +83,7 @@ impl VerifiedPoolSessionAdmin {
             },
             gate,
             |transport, request| {
-                refresh_ack_and_route(
-                    transport,
-                    self,
-                    session,
-                    request,
-                    message_id,
-                    &mut route_after_refresh,
-                )
+                refresh_ack_and_route(transport, self, session, request, message_id)
             },
         );
         let mut queue_token = queue_token;
@@ -98,6 +92,8 @@ impl VerifiedPoolSessionAdmin {
             Ack::Deleted => {
                 session.last_batch = None;
                 session.last_message_id = None;
+                session.unrequested_requests.clear();
+                session.completed_requests.clear();
                 Ok(Ack::Deleted)
             }
             Ack::Suppressed => Ok(Ack::Suppressed),
@@ -105,17 +101,15 @@ impl VerifiedPoolSessionAdmin {
     }
 }
 
-fn refresh_ack_and_route<T, F>(
+fn refresh_ack_and_route<T>(
     transport: &mut T,
     capability: &VerifiedPoolSessionAdmin,
     session: &mut VerifiedQueueSession,
     request: &mut SessionRequest,
     message_id: i64,
-    route_after_refresh: &mut F,
 ) -> Result<(), SessionError>
 where
     T: DiscoveryTransport + ?Sized,
-    F: FnMut(&mut T, &str, &mut SessionRequest) -> Result<String, SessionError>,
 {
     bind_admin_origin(transport, capability)?;
     let queue_url = crate::session::refresh_queue_request(
@@ -125,29 +119,78 @@ where
         capability.connection.expose_token(),
         request,
     )?;
-    let refreshed_base = route_after_refresh(transport, queue_url, request)?;
-    if !valid_queue_path(&refreshed_base) {
-        return Err(SessionError::Wire(WireError::RegistrationRejected));
-    }
-
-    session.queue_path.clone_from(&refreshed_base);
-    request.path = format!("{}/{message_id}", refreshed_base.trim_end_matches('/'));
+    let refreshed_route = transport.bind_message_queue_origin(queue_url)?;
+    let path = refreshed_route.acknowledgement_path(message_id);
+    let query = refreshed_route.query().map(str::to_owned);
+    request.replace_target(path, query);
+    session.queue_route.replace_with(refreshed_route);
     Ok(())
 }
 
-fn acknowledgement_allowed(
-    batch: &ParsedBatch,
+#[derive(Clone, Copy)]
+struct AckState<'a> {
     replay_safe: bool,
     unresolved_available: bool,
-    available_requests: &BTreeSet<i64>,
-    unresolved_requests: &BTreeSet<i64>,
-    acquired_requests: &BTreeSet<i64>,
+    available_requests: &'a BTreeSet<i64>,
+    unrequested_requests: &'a BTreeSet<i64>,
+    unresolved_requests: &'a BTreeSet<i64>,
+    acquired_requests: &'a BTreeSet<i64>,
+    completed_requests: &'a BTreeSet<i64>,
+}
+
+fn acknowledgement_allowed(batch: &ParsedBatch, state: AckState<'_>) -> bool {
+    !state.unresolved_available
+        && state.available_requests.is_empty()
+        && state
+            .unrequested_requests
+            .is_disjoint(state.available_requests)
+        && state
+            .unrequested_requests
+            .is_disjoint(state.unresolved_requests)
+        && state
+            .unrequested_requests
+            .is_disjoint(state.acquired_requests)
+        && state
+            .unrequested_requests
+            .is_disjoint(state.completed_requests)
+        && state.unresolved_requests.is_empty()
+        && state.acquired_requests.is_empty()
+        && offers_accounted_for(batch, state.unrequested_requests, state.completed_requests)
+        && may_ack(batch, state.replay_safe)
+}
+
+fn offers_accounted_for(
+    batch: &ParsedBatch,
+    unrequested_requests: &BTreeSet<i64>,
+    completed_requests: &BTreeSet<i64>,
 ) -> bool {
-    !unresolved_available
-        && available_requests.is_empty()
-        && unresolved_requests.is_empty()
-        && acquired_requests.is_empty()
-        && may_ack(batch, replay_safe)
+    if !unrequested_requests.is_disjoint(completed_requests) {
+        return false;
+    }
+
+    let mut available_ids = BTreeSet::new();
+    let mut available_count = 0usize;
+    for job in &batch.jobs {
+        if !matches!(job.kind, InnerKind::Available) {
+            continue;
+        }
+        available_count += 1;
+        let Some(request_id) = job.request_id.filter(|id| *id > 0) else {
+            return false;
+        };
+        if !available_ids.insert(request_id) {
+            return false;
+        }
+    }
+
+    if available_ids.len() != available_count
+        || available_ids.len() != unrequested_requests.len() + completed_requests.len()
+    {
+        return false;
+    }
+    available_ids
+        .iter()
+        .all(|id| unrequested_requests.contains(id) || completed_requests.contains(id))
 }
 
 #[cfg(test)]

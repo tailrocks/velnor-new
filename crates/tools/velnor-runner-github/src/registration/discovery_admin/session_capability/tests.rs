@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::time::{Duration, SystemTime};
 
+use self::close_claim::TestCloseClaim;
 use crate::policy::{
     JobTrustEvidence, JobTrustPolicyView, JobTrustRuleView, PollWithTrust, PoolBinding,
     PoolRegistrationScope, ReusableWorkflowRuleView, verify_job_offer,
@@ -11,6 +12,9 @@ use crate::{
     VerifiedAcquireOutcome, VerifiedPoolSessionAdmin, WireError, admin_connection_once,
 };
 
+#[cfg(test)]
+mod close_claim;
+
 const SET_ID: i64 = 7;
 const QUEUE_PATH: &str = "/_apis/runtime/runnerscalesets/7/sessions/session-1/messages";
 const ADMIN_BODY: &str =
@@ -19,6 +23,7 @@ const SESSION_BODY: &str = r#"{"sessionId":"session-1","messageQueueUrl":"https:
 const ASSIGNED_WITH_DEMAND: &str = r#"{"messageId":19,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobAssigned\",\"jobWorkflowRef\":\"ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main\"}]","statistics":{"totalAvailableJobs":0,"totalAcquiredJobs":1,"totalAssignedJobs":1,"totalRunningJobs":0,"totalRegisteredRunners":0,"totalBusyRunners":0,"totalIdleRunners":0}}"#;
 const ASSIGNED_EXCESS_DEMAND: &str = r#"{"messageId":23,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobAssigned\"}]","statistics":{"totalAvailableJobs":0,"totalAcquiredJobs":4,"totalAssignedJobs":5,"totalRunningJobs":1,"totalRegisteredRunners":1,"totalBusyRunners":1,"totalIdleRunners":0}}"#;
 const AVAILABLE_WITH_DEMAND: &str = r#"{"messageId":20,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobAvailable\",\"runnerRequestId\":23,\"jobWorkflowRef\":\"ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main\"}]","statistics":{"totalAvailableJobs":1,"totalAcquiredJobs":0,"totalAssignedJobs":1,"totalRunningJobs":0,"totalRegisteredRunners":0,"totalBusyRunners":0,"totalIdleRunners":0}}"#;
+const MULTI_AVAILABLE_TRUSTED: &str = r#"{"messageId":24,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobAvailable\",\"runnerRequestId\":23,\"jobId\":\"opaque-job-23\",\"workflowRunId\":31,\"ownerName\":\"ChainArgos\",\"repositoryName\":\"java-monorepo\",\"eventName\":\"push\",\"jobWorkflowRef\":\"ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main\"},{\"messageType\":\"JobAvailable\",\"runnerRequestId\":24,\"jobId\":\"opaque-job-24\",\"workflowRunId\":31,\"ownerName\":\"ChainArgos\",\"repositoryName\":\"java-monorepo\",\"eventName\":\"push\",\"jobWorkflowRef\":\"ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main\"}]","statistics":{"totalAvailableJobs":2,"totalAcquiredJobs":0,"totalAssignedJobs":2,"totalRunningJobs":0,"totalRegisteredRunners":0,"totalBusyRunners":0,"totalIdleRunners":0}}"#;
 const STARTED_WITH_NO_DEMAND: &str = r#"{"messageId":21,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobStarted\",\"runnerId\":5,\"runnerName\":\"runner-a\",\"workflowRunId\":31}]","statistics":{"totalAvailableJobs":0,"totalAcquiredJobs":0,"totalAssignedJobs":0,"totalRunningJobs":0,"totalRegisteredRunners":0,"totalBusyRunners":0,"totalIdleRunners":0}}"#;
 const AVAILABLE_TRUSTED: &str = r#"{"messageId":22,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobAvailable\",\"runnerRequestId\":23,\"jobId\":\"opaque-job\",\"workflowRunId\":31,\"ownerName\":\"ChainArgos\",\"repositoryName\":\"java-monorepo\",\"eventName\":\"push\",\"jobWorkflowRef\":\"ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main\"}]","statistics":{"totalAvailableJobs":1,"totalAcquiredJobs":0,"totalAssignedJobs":1,"totalRunningJobs":0,"totalRegisteredRunners":0,"totalBusyRunners":0,"totalIdleRunners":0}}"#;
 const TRUST_RUN_BODY: &str = r#"{"id":31,"run_attempt":1,"status":"queued","event":"push","path":".github/workflows/ci.yml@main","head_sha":"0123456789abcdef0123456789abcdef01234567","head_branch":"main","head_repository":{"full_name":"ChainArgos/java-monorepo"},"referenced_workflows":[]}"#;
@@ -73,6 +78,30 @@ impl DiscoveryTransport for Script {
         self.origin = format!("https://{authority}");
         Ok(())
     }
+
+    fn bind_message_queue_origin(
+        &mut self,
+        url: &str,
+    ) -> Result<crate::MessageQueueRoute, SessionError> {
+        let rest = url
+            .strip_prefix("https://")
+            .ok_or(SessionError::Uncertain)?;
+        let (authority, suffix) = rest.split_once('/').unwrap_or((rest, ""));
+        if authority.is_empty() || authority.contains('@') || authority.contains('?') {
+            return Err(SessionError::Uncertain);
+        }
+        self.origin = format!("https://{authority}");
+        let (path, query) = suffix.split_once('?').unwrap_or((suffix, ""));
+        crate::MessageQueueRoute::from_parts(
+            if path.is_empty() {
+                "/".to_owned()
+            } else {
+                format!("/{path}")
+            },
+            (!query.is_empty()).then(|| query.to_owned()),
+        )
+        .map_err(SessionError::from)
+    }
 }
 
 fn exchange(status: u16, body: &str) -> Exchange {
@@ -104,8 +133,9 @@ fn capability_and_polled_session(
     )
     .map_err(|_| "admin")?;
     let binding = PoolBinding {
-        registration_scope: PoolRegistrationScope::Organization {
-            organization: "ChainArgos".to_owned(),
+        registration_scope: PoolRegistrationScope::Repository {
+            owner: "ChainArgos".to_owned(),
+            repository: "java-monorepo".to_owned(),
         },
         repository_id: 829_618_808,
         repository_full_name: "ChainArgos/java-monorepo".to_owned(),
@@ -133,49 +163,41 @@ fn capability_and_polled_session(
     // the admin service origin again before creating its queue session.
     script.origin = "https://stale.example".to_owned();
     let mut session = capability
-        .create_session(&mut script, "velnor-test", route_created_queue)
+        .create_session(&mut script, "velnor-test")
         .map_err(|_| "create")?;
     assert_eq!(
         script.origins[1],
         "https://pipelinesghubeus9.actions.githubusercontent.com"
     );
-    let polled = capability
-        .poll_with_trust(
-            &mut script,
-            &mut session,
-            0,
-            1,
-            &RefreshGate::new(),
-            route_queue_request,
+    assert_eq!(
+        (script.seen[0].purpose, script.seen[0].bearer_role),
+        (
+            crate::RequestPurpose::ActionsAdminExchange,
+            crate::BearerRole::RegistrationToken
         )
+    );
+    assert_eq!(
+        (script.seen[1].purpose, script.seen[1].bearer_role),
+        (
+            crate::RequestPurpose::SessionCreate,
+            crate::BearerRole::ActionsAdmin
+        )
+    );
+    let polled = capability
+        .poll_with_trust(&mut script, &mut session, 0, 1, &RefreshGate::new())
         .map_err(|_| "poll")?;
     let PollWithTrust::Batch(batch) = polled else {
         return Err("expected batch");
     };
     assert_eq!(script.origins[2], "https://queue.example");
+    assert_eq!(
+        (script.seen[2].purpose, script.seen[2].bearer_role),
+        (
+            crate::RequestPurpose::MessageQueuePoll,
+            crate::BearerRole::SessionQueue
+        )
+    );
     Ok((script, capability, session, batch))
-}
-
-fn route_created_queue(transport: &mut Script, queue_url: &str) -> Result<String, SessionError> {
-    let (origin, path) = queue_url
-        .strip_prefix("https://")
-        .and_then(|value| value.split_once('/'))
-        .ok_or(SessionError::Uncertain)?;
-    if origin.is_empty() || origin.contains('@') || path.is_empty() {
-        return Err(SessionError::Uncertain);
-    }
-    transport.origin = format!("https://{origin}");
-    Ok(format!("/{path}"))
-}
-
-fn route_queue_request(
-    transport: &mut Script,
-    queue_url: &str,
-    request: &mut SessionRequest,
-) -> Result<String, SessionError> {
-    let path = route_created_queue(transport, queue_url)?;
-    request.path.clone_from(&path);
-    Ok(path)
 }
 
 fn bearer(request: &SessionRequest) -> Option<&str> {
@@ -246,13 +268,7 @@ fn available_offer_is_trust_checked_acquired_then_jit_and_acknowledged() -> Resu
     assert_eq!(trust.scale_set_job_id(), Some("opaque-job"));
 
     let acquired = capability
-        .acquire_verified(
-            &mut script,
-            &mut session,
-            trust,
-            &RefreshGate::new(),
-            |_, _, _| Ok(QUEUE_PATH.to_owned()),
-        )
+        .acquire_verified(&mut script, &mut session, trust, &RefreshGate::new())
         .map_err(|_| "acquire")?;
     let VerifiedAcquireOutcome::Acquired(acquired) = acquired else {
         return Err("exact acquire ID");
@@ -280,14 +296,7 @@ fn available_offer_is_trust_checked_acquired_then_jit_and_acknowledged() -> Resu
     assert_eq!(bearer(&script.seen[5]), Some("Bearer admin-canary"));
     assert_eq!(
         capability
-            .acknowledge_resolved_message(
-                &mut script,
-                &mut session,
-                22,
-                true,
-                &RefreshGate::new(),
-                |_, _, _| Ok(QUEUE_PATH.to_owned()),
-            )
+            .acknowledge_resolved_message(&mut script, &mut session, 22, true, &RefreshGate::new(),)
             .map_err(|_| "ack")?,
         Ack::Deleted
     );
@@ -301,6 +310,14 @@ fn available_offer_is_trust_checked_acquired_then_jit_and_acknowledged() -> Resu
 fn verify_test_offer(
     script: &mut Script,
     batch: &crate::policy::ParsedTrustBatch,
+) -> Result<crate::policy::VerifiedJobTrust, &'static str> {
+    verify_test_offer_at_index(script, batch, 0)
+}
+
+fn verify_test_offer_at_index(
+    script: &mut Script,
+    batch: &crate::policy::ParsedTrustBatch,
+    event_index: usize,
 ) -> Result<crate::policy::VerifiedJobTrust, &'static str> {
     let run = crate::policy::get_actions_workflow_trust_run(
         script,
@@ -333,7 +350,8 @@ fn verify_test_offer(
         allow_forks: false,
         policy_digest: "synthetic-policy-digest",
     };
-    let JobTrustEvidence::Verified(trust) = verify_job_offer(batch, 0, &run, &policy) else {
+    let JobTrustEvidence::Verified(trust) = verify_job_offer(batch, event_index, &run, &policy)
+    else {
         return Err("exact event trust");
     };
     Ok(*trust)
@@ -344,6 +362,9 @@ mod acquire_refresh;
 
 #[cfg(test)]
 mod assigned_demand;
+
+#[cfg(test)]
+mod unrequested;
 
 #[cfg(test)]
 mod close_tests;

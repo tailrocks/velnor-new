@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use velnor_runner_github::{Method, SessionRequest, TransportFail};
+use velnor_runner_github::{BearerRole, Method, RequestPurpose, SessionRequest, TransportFail};
 
 use super::{perform_curl, perform_curl_cancellable, perform_curl_until_cancellable};
 
@@ -22,8 +22,10 @@ fn expired_absolute_deadline_does_not_spawn_curl() {
         .expect("stub should be executable");
     let expired_at = Instant::now();
     let request = SessionRequest {
+        purpose: RequestPurpose::RepositoryRead,
+        bearer_role: BearerRole::GithubRestCredential,
         method: Method::Get,
-        path: "/safe".to_owned(),
+        path: "repos/acme/widget".to_owned(),
         query: None,
         headers: Vec::new(),
         body: Vec::new(),
@@ -32,7 +34,7 @@ fn expired_absolute_deadline_does_not_spawn_curl() {
     assert!(matches!(
         perform_curl_until_cancellable(
             executable.to_str().expect("stub path is UTF-8"),
-            "https://api.github.com/safe",
+            "https://api.github.com/repos/acme/widget",
             &request,
             1024,
             expired_at,
@@ -55,31 +57,37 @@ fn control_characters_are_rejected_before_curl_is_spawned() {
 
     let requests = [
         SessionRequest {
+            purpose: RequestPurpose::RepositoryRead,
+            bearer_role: BearerRole::GithubRestCredential,
             method: Method::Get,
-            path: "/safe".to_owned(),
+            path: "repos/acme/widget".to_owned(),
             query: None,
             headers: Vec::new(),
             body: Vec::new(),
         },
         SessionRequest {
+            purpose: RequestPurpose::RepositoryRead,
+            bearer_role: BearerRole::GithubRestCredential,
             method: Method::Get,
-            path: "/safe".to_owned(),
+            path: "repos/acme/widget".to_owned(),
             query: None,
             headers: vec![("X-Test".to_owned(), "bad\nvalue".to_owned())],
             body: Vec::new(),
         },
         SessionRequest {
+            purpose: RequestPurpose::RegistrationTokenIssue,
+            bearer_role: BearerRole::GithubRestCredential,
             method: Method::Post,
-            path: "/safe".to_owned(),
+            path: "repos/acme/widget/actions/runners/registration-token".to_owned(),
             query: None,
             headers: Vec::new(),
             body: b"bad\tvalue".to_vec(),
         },
     ];
     let urls = [
-        "https://api.github.com/safe\n--next",
-        "https://api.github.com/safe",
-        "https://api.github.com/safe",
+        "https://api.github.com/repos/acme/widget\n--next",
+        "https://api.github.com/repos/acme/widget",
+        "https://api.github.com/repos/acme/widget/actions/runners/registration-token",
     ];
     for (request, url) in requests.iter().zip(urls) {
         assert!(matches!(
@@ -109,8 +117,10 @@ fn cancellation_kills_and_reaps_the_owned_curl_process() {
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o700))
         .expect("stub should be executable");
     let request = SessionRequest {
+        purpose: RequestPurpose::ActionsAdminExchange,
+        bearer_role: BearerRole::RegistrationToken,
         method: Method::Post,
-        path: "/safe".to_owned(),
+        path: "actions/runner-registration".to_owned(),
         query: None,
         headers: Vec::new(),
         body: b"bounded body".to_vec(),
@@ -121,7 +131,7 @@ fn cancellation_kills_and_reaps_the_owned_curl_process() {
     let worker = thread::spawn(move || {
         perform_curl_cancellable(
             &executable_text,
-            "https://api.github.com/safe",
+            "https://pipelinesghubeus13.actions.githubusercontent.com/actions/runner-registration",
             &request,
             1024,
             Duration::from_secs(5),
@@ -170,8 +180,10 @@ fn cancellation_returns_bounded_when_an_inherited_pipe_stays_open() {
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o700))
         .expect("stub should be executable");
     let request = SessionRequest {
+        purpose: RequestPurpose::ActionsAdminExchange,
+        bearer_role: BearerRole::RegistrationToken,
         method: Method::Post,
-        path: "/safe".to_owned(),
+        path: "actions/runner-registration".to_owned(),
         query: None,
         headers: Vec::new(),
         body: b"bounded body".to_vec(),
@@ -183,7 +195,7 @@ fn cancellation_returns_bounded_when_an_inherited_pipe_stays_open() {
     let worker = thread::spawn(move || {
         let result = perform_curl_cancellable(
             &executable_text,
-            "https://api.github.com/safe",
+            "https://pipelinesghubeus13.actions.githubusercontent.com/actions/runner-registration",
             &request,
             1024,
             Duration::from_secs(3),
@@ -228,8 +240,10 @@ fn escaped_pipe_holder_survives_after_curl_leader_reap() {
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o700))
         .expect("stub should be executable");
     let request = SessionRequest {
+        purpose: RequestPurpose::RepositoryRead,
+        bearer_role: BearerRole::GithubRestCredential,
         method: Method::Get,
-        path: "/safe".to_owned(),
+        path: "repos/acme/widget".to_owned(),
         query: None,
         headers: Vec::new(),
         body: Vec::new(),
@@ -240,7 +254,7 @@ fn escaped_pipe_holder_survives_after_curl_leader_reap() {
     let worker = thread::spawn(move || {
         perform_curl_cancellable(
             &executable_text,
-            "https://api.github.com/safe",
+            "https://api.github.com/repos/acme/widget",
             &request,
             1024,
             Duration::from_secs(4),

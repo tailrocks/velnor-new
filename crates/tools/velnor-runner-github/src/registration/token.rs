@@ -6,7 +6,9 @@ use serde::Deserialize;
 use zeroize::Zeroize;
 
 use crate::session::{bearer, execute, user_agent};
-use crate::{Method, SessionError, SessionRequest, Transport, WireError};
+use crate::{
+    BearerRole, Method, RequestPurpose, SessionError, SessionRequest, Transport, WireError,
+};
 
 use super::other_status;
 
@@ -169,6 +171,8 @@ pub(crate) fn registration_token_request(
 ) -> Result<SessionRequest, SessionError> {
     let path = scope_path(call.scope)?;
     Ok(SessionRequest {
+        purpose: RequestPurpose::RegistrationTokenIssue,
+        bearer_role: BearerRole::GithubRestCredential,
         method: Method::Post,
         path,
         query: None,

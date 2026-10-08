@@ -3,15 +3,37 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use velnor_runner_github::{
-    DiscoveryCredentialOutcome, DiscoveryCredentialStep, DiscoveryIntentId, DiscoveryIntentStore,
-    DiscoveryTransport, Method, SessionError, SessionRequest, Transport, TransportFail,
-    issue_repository_discovery_token, read_repository_admin_evidence,
+    BearerRole, DiscoveryCredentialOutcome, DiscoveryCredentialStep, DiscoveryIntentId,
+    DiscoveryIntentStore, DiscoveryTransport, Method, RequestPurpose, SessionError, SessionRequest,
+    Transport, TransportFail, issue_repository_discovery_token, read_repository_admin_evidence,
 };
 
 use super::{BoundedDiscoveryTransport, Origin, actions_base, validate_discovery_request};
 
 fn api_get(path: &str) -> SessionRequest {
     SessionRequest {
+        purpose: RequestPurpose::RepositoryRead,
+        bearer_role: BearerRole::GithubRestCredential,
+        method: Method::Get,
+        path: path.to_owned(),
+        query: None,
+        headers: vec![
+            (
+                "Accept".to_owned(),
+                "application/vnd.github+json".to_owned(),
+            ),
+            ("Authorization".to_owned(), "Bearer host-secret".to_owned()),
+            ("X-GitHub-Api-Version".to_owned(), "2026-03-10".to_owned()),
+            ("User-Agent".to_owned(), "velnor-host".to_owned()),
+        ],
+        body: Vec::new(),
+    }
+}
+
+fn actions_rest_get(path: &str) -> SessionRequest {
+    SessionRequest {
+        purpose: RequestPurpose::ActionsRead,
+        bearer_role: BearerRole::GithubRestCredential,
         method: Method::Get,
         path: path.to_owned(),
         query: None,
@@ -30,6 +52,8 @@ fn api_get(path: &str) -> SessionRequest {
 
 fn actions_get(path: &str, query: &str) -> SessionRequest {
     SessionRequest {
+        purpose: RequestPurpose::ActionsMetadataRead,
+        bearer_role: BearerRole::ActionsAdmin,
         method: Method::Get,
         path: path.to_owned(),
         query: Some(query.to_owned()),
@@ -101,6 +125,8 @@ fn github_routes_are_allowlisted(api: &Origin) {
         validate_discovery_request(
             api,
             &SessionRequest {
+                purpose: RequestPurpose::RegistrationTokenIssue,
+                bearer_role: BearerRole::GithubRestCredential,
                 method: Method::Post,
                 path: "/repos/acme/widget/actions/runners/registration-token".to_owned(),
                 query: None,
@@ -121,6 +147,8 @@ fn github_routes_are_allowlisted(api: &Origin) {
         validate_discovery_request(
             api,
             &SessionRequest {
+                purpose: RequestPurpose::ActionsAdminExchange,
+                bearer_role: BearerRole::RegistrationToken,
                 method: Method::Post,
                 path: "actions/runner-registration".to_owned(),
                 query: None,

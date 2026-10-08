@@ -2,6 +2,7 @@
 
 mod fork_workflows;
 mod reconciliation;
+mod request;
 pub(crate) mod trust;
 
 pub use fork_workflows::{
@@ -13,11 +14,14 @@ pub use reconciliation::{
     ObservedScaleSetJob, reconcile_observed_scale_set_job, reconcile_observed_scale_set_job_async,
 };
 
+use request::safe_actions_token;
+pub(crate) use request::{actions_request, actions_request_with_purpose};
+
 use serde::Deserialize;
 
 use crate::registration::{AsyncDiscoveryTransport, execute_discovery};
 use crate::session::execute;
-use crate::{Method, SessionError, SessionRequest, Transport, WireError};
+use crate::{RequestPurpose, SessionError, SessionRequest, Transport, WireError};
 
 pub(crate) const API_VERSION: &str = "2026-03-10";
 const ACCEPT: &str = "application/vnd.github+json";
@@ -141,7 +145,11 @@ pub(crate) fn repository_request(
     rest_token: &str,
 ) -> Result<SessionRequest, SessionError> {
     validate_repository(owner, repository, rest_token)?;
-    actions_request(format!("repos/{owner}/{repository}"), rest_token)
+    actions_request_with_purpose(
+        format!("repos/{owner}/{repository}"),
+        rest_token,
+        RequestPurpose::RepositoryRead,
+    )
 }
 
 pub(crate) fn decode_repository(
@@ -303,37 +311,6 @@ fn numeric_id(value: &str) -> Option<i64> {
         return None;
     }
     value.parse::<i64>().ok().filter(|id| *id > 0)
-}
-
-pub(crate) fn actions_request(
-    path: String,
-    actions_token: &str,
-) -> Result<SessionRequest, SessionError> {
-    if !safe_actions_token(actions_token) {
-        return Err(WireError::RegistrationRejected.into());
-    }
-    Ok(SessionRequest {
-        method: Method::Get,
-        path,
-        query: None,
-        headers: vec![
-            ("Accept".to_owned(), ACCEPT.to_owned()),
-            (
-                "Authorization".to_owned(),
-                format!("Bearer {actions_token}"),
-            ),
-            ("X-GitHub-Api-Version".to_owned(), API_VERSION.to_owned()),
-            ("User-Agent".to_owned(), "velnor-host".to_owned()),
-        ],
-        body: Vec::new(),
-    })
-}
-
-fn safe_actions_token(token: &str) -> bool {
-    !token.is_empty()
-        && !token
-            .bytes()
-            .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
 }
 
 pub(crate) fn status_error(status: u16) -> SessionError {

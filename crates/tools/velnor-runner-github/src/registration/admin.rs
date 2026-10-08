@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
 use crate::session::{execute, json_content, user_agent};
-use crate::{Method, SessionError, SessionRequest, Transport, WireError};
+use crate::{
+    BearerRole, Method, RequestPurpose, SessionError, SessionRequest, Transport, WireError,
+};
 
 use super::other_status;
 
@@ -139,6 +141,8 @@ pub(crate) fn admin_request(
     }
     let body = admin_body(call.config_url)?;
     Ok(SessionRequest {
+        purpose: RequestPurpose::ActionsAdminExchange,
+        bearer_role: BearerRole::RegistrationToken,
         method: Method::Post,
         path: "/actions/runner-registration".to_owned(),
         query: None,

@@ -7,7 +7,7 @@ use crate::refresh::{StatusClass, classify_status};
 use crate::{EncodedJit, WireError, jit_path};
 
 use super::error::{SessionError, reject};
-use super::request::{Method, SessionRequest, Transport};
+use super::request::{BearerRole, Method, RequestPurpose, SessionRequest, Transport};
 use super::retry::{API_QUERY, bearer, execute, fresh_gate, json_content, user_agent};
 
 /// JSON body for [`jit`]. `workFolder` is `_work`, relative to the runner root.
@@ -52,6 +52,8 @@ where
     T: Transport + ?Sized,
 {
     let request = SessionRequest {
+        purpose: RequestPurpose::GenerateJitConfig,
+        bearer_role: BearerRole::ActionsAdmin,
         method: Method::Post,
         path: jit_path(scale_set_id),
         query: Some(API_QUERY.to_owned()),

@@ -18,8 +18,8 @@ pub use types::{
 use super::discovery_admin::RepositoryDiscoveryAdmin;
 
 use crate::{
-    AdminConnectionCall, RegistrationScope, RegistrationTokenCall, SessionError, Transport,
-    WireError, admin_connection_once, get_actions_repository, registration_token,
+    AdminConnectionCall, MessageQueueRoute, RegistrationScope, RegistrationTokenCall, SessionError,
+    Transport, WireError, admin_connection_once, get_actions_repository, registration_token,
 };
 
 /// Transport required by repository discovery bootstrap.
@@ -46,6 +46,18 @@ pub trait DiscoveryTransport: Transport {
     ///
     /// Returns a secret-safe failure when the service origin is not allowed.
     fn bind_actions_service_origin(&mut self, url: &str) -> Result<(), SessionError>;
+
+    /// Validate and bind the complete returned `MessageQueueURL` without sending
+    /// a request, then return its relative path and raw query. Implementations
+    /// must treat this as a distinct route role from the Actions Service origin,
+    /// even when the two URLs share a host. The route query is secret-bearing;
+    /// do not log it. The host must enforce origin/provenance policy before
+    /// returning the route.
+    ///
+    /// # Errors
+    ///
+    /// Returns a secret-safe failure when the queue URL or its path/query is invalid.
+    fn bind_message_queue_origin(&mut self, url: &str) -> Result<MessageQueueRoute, SessionError>;
 }
 
 /// Credential-issuance operation that the host must durably journal before

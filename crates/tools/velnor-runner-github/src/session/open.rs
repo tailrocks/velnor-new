@@ -10,14 +10,15 @@ use crate::refresh::{StatusClass, classify_status};
 use crate::{Statistics, WireError};
 
 use super::error::{SessionError, reject};
-use super::request::{Exchange, Method, SessionRequest, Transport};
+use super::request::{BearerRole, Exchange, Method, RequestPurpose, SessionRequest, Transport};
 use super::retry::{API_QUERY, execute, fresh_gate, json_content};
 
 /// Session the service created. The queue token is not in [`Debug`].
 pub struct QueueSession {
     /// Service session id.
     pub session_id: String,
-    /// Message queue path or URL. Poll uses this path.
+    /// Message queue URL returned by Actions. It can contain sensitive routing
+    /// query values; callers must not log or persist it. Poll uses this route.
     pub message_queue_url: String,
     statistics: Option<Statistics>,
     token: String,
@@ -48,7 +49,7 @@ impl fmt::Debug for QueueSession {
         formatter
             .debug_struct("QueueSession")
             .field("session_id", &self.session_id)
-            .field("message_queue_url", &self.message_queue_url)
+            .field("message_queue_url", &"[redacted]")
             .field("statistics", &self.statistics)
             .field("token", &"[redacted]")
             .finish()
@@ -58,6 +59,7 @@ impl fmt::Debug for QueueSession {
 impl Drop for QueueSession {
     fn drop(&mut self) {
         self.token.zeroize();
+        self.message_queue_url.zeroize();
     }
 }
 
@@ -82,6 +84,7 @@ where
     }
     let body = serde_json::to_vec(&Owner { owner_name: owner }).map_err(|_| WireError::Encode)?;
     let request = session_request(
+        RequestPurpose::SessionCreate,
         Method::Post,
         format!("{SCALE_SET_ENDPOINT}/{scale_set_id}/sessions"),
         admin_token,
@@ -109,6 +112,7 @@ where
         return Err(SessionError::Wire(WireError::RegistrationRejected));
     }
     let request = session_request(
+        RequestPurpose::SessionRefresh,
         Method::Patch,
         format!("{SCALE_SET_ENDPOINT}/{scale_set_id}/sessions/{session_id}"),
         admin_token,
@@ -190,12 +194,15 @@ where
 }
 
 fn session_request(
+    purpose: RequestPurpose,
     method: Method,
     path: String,
     admin_token: &str,
     body: Vec<u8>,
 ) -> SessionRequest {
     SessionRequest {
+        purpose,
+        bearer_role: BearerRole::ActionsAdmin,
         method,
         path,
         query: Some(API_QUERY.to_owned()),

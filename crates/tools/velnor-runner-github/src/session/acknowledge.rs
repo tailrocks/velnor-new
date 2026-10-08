@@ -5,8 +5,9 @@ use crate::refresh::StatusClass;
 use crate::{ParsedBatch, may_ack};
 
 use super::error::{SessionError, reject};
-use super::request::{Method, SessionRequest, Transport};
+use super::request::{BearerRole, Method, RequestPurpose, SessionRequest, Transport};
 use super::retry::{attempt, bearer, json_content, user_agent};
+use super::route::MessageQueueRoute;
 
 /// Delete policy for one batch. Keeps [`ack`] under the argument limit.
 #[derive(Debug, Clone, Copy)]
@@ -59,10 +60,61 @@ where
     if scope.sole_unacquired_offer || !may_ack(batch, scope.replay_safe) {
         return Ok(Ack::Suppressed);
     }
+    ack_at_target(
+        transport,
+        message_path(queue_path, batch.message_id),
+        None,
+        scope,
+        gate,
+        refresh,
+    )
+}
+
+/// Queue-session counterpart that preserves the full query of the exact
+/// host-validated `MessageQueueURL` while appending the message id to its path.
+pub(crate) fn ack_with_route<T, R>(
+    transport: &mut T,
+    route: &MessageQueueRoute,
+    batch: &ParsedBatch,
+    scope: &AckScope<'_>,
+    gate: &RefreshGate,
+    refresh: R,
+) -> Result<Ack, SessionError>
+where
+    T: Transport + ?Sized,
+    R: FnMut(&mut T, &mut SessionRequest) -> Result<(), SessionError>,
+{
+    if scope.sole_unacquired_offer || !may_ack(batch, scope.replay_safe) {
+        return Ok(Ack::Suppressed);
+    }
+    ack_at_target(
+        transport,
+        route.acknowledgement_path(batch.message_id),
+        route.query().map(str::to_owned),
+        scope,
+        gate,
+        refresh,
+    )
+}
+
+fn ack_at_target<T, R>(
+    transport: &mut T,
+    path: String,
+    query: Option<String>,
+    scope: &AckScope<'_>,
+    gate: &RefreshGate,
+    refresh: R,
+) -> Result<Ack, SessionError>
+where
+    T: Transport + ?Sized,
+    R: FnMut(&mut T, &mut SessionRequest) -> Result<(), SessionError>,
+{
     let mut request = SessionRequest {
+        purpose: RequestPurpose::MessageAcknowledge,
+        bearer_role: BearerRole::SessionQueue,
         method: Method::Delete,
-        path: message_path(queue_path, batch.message_id),
-        query: None,
+        path,
+        query,
         headers: vec![json_content(), bearer(scope.queue_token)?, user_agent()],
         body: Vec::new(),
     };
