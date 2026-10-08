@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use crate::error::HostError;
 
+mod actions_reconciliation;
 mod auth_intent;
 mod capacity;
 mod cleanup;

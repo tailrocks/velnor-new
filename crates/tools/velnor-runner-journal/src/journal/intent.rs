@@ -203,7 +203,7 @@ impl Journal {
         let conn = self.connection().await?;
         let mut query = conn
             .query(
-                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id, worker_volume, message_id, runner_request_id, requested_workflow_run_id, requested_job_id, runner_name, observed_job_id, observed_workflow_run_id, remote_terminal, effect_state, outer_network_name, outer_network_id, runner_start_state FROM intents ORDER BY id",
+                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id, worker_volume, message_id, runner_request_id, requested_workflow_run_id, requested_job_id, runner_name, observed_job_id, observed_workflow_run_id, remote_terminal, effect_state, outer_network_name, outer_network_id, runner_start_state, observed_actions_attempt, observed_actions_job_id, observed_actions_conclusion FROM intents ORDER BY id",
                 (),
             )
             .await
@@ -289,6 +289,20 @@ async fn insert_live(
 
 fn intent_row(row: &turso::Row) -> Result<IntentRow, HostError> {
     let state_text: String = row.get(3).map_err(|_| HostError::Journal)?;
+    let observed_actions_attempt: Option<i64> = row.get(21).map_err(|_| HostError::Journal)?;
+    let observed_actions_job_id: Option<i64> = row.get(22).map_err(|_| HostError::Journal)?;
+    let observed_actions_conclusion: Option<String> =
+        row.get(23).map_err(|_| HostError::Journal)?;
+    if observed_actions_attempt.is_some_and(|value| value <= 0)
+        || observed_actions_job_id.is_some_and(|value| value <= 0)
+        || observed_actions_attempt.is_some() != observed_actions_job_id.is_some()
+        || observed_actions_conclusion.as_deref().is_some_and(|value| {
+            value.is_empty() || value.len() > 128 || value.chars().any(char::is_control)
+        })
+        || (observed_actions_conclusion.is_some() && observed_actions_job_id.is_none())
+    {
+        return Err(HostError::Journal);
+    }
     Ok(IntentRow {
         id: row.get(0).map_err(|_| HostError::Journal)?,
         kind: row.get(1).map_err(|_| HostError::Journal)?,
@@ -319,6 +333,9 @@ fn intent_row(row: &turso::Row) -> Result<IntentRow, HostError> {
         runner_start_intent: crate::journal::RunnerStartIntent::parse(
             &row.get::<String>(20).map_err(|_| HostError::Journal)?,
         )?,
+        observed_actions_attempt,
+        observed_actions_job_id,
+        observed_actions_conclusion,
     })
 }
 
