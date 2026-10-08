@@ -2,8 +2,9 @@
 
 use std::io;
 use std::path::Path;
-use std::process::{Command, ExitCode};
+use std::process::ExitCode;
 
+use super::{busctl_command, systemctl_command};
 use crate::args::ServiceAction;
 use conditions::read_identity_marker_condition;
 use systemd::{IdentityUnitSnapshot, UnitSnapshot, parse_identity_snapshot, parse_snapshot};
@@ -64,7 +65,7 @@ struct Systemctl;
 
 impl Manager for Systemctl {
     fn systemctl(&mut self, args: &[&str]) -> io::Result<ManagerOutput> {
-        let output = Command::new("systemctl").args(args).output()?;
+        let output = systemctl_command().args(args).output()?;
         Ok(ManagerOutput {
             success: output.status.success(),
             stdout: output.stdout,
@@ -72,7 +73,7 @@ impl Manager for Systemctl {
     }
 
     fn busctl(&mut self, args: &[&str]) -> io::Result<ManagerOutput> {
-        let output = Command::new("busctl").args(args).output()?;
+        let output = busctl_command().args(args).output()?;
         Ok(ManagerOutput {
             success: output.status.success(),
             stdout: output.stdout,
