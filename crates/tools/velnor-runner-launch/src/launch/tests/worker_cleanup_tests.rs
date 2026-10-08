@@ -67,8 +67,8 @@ async fn unresolved_volume_row_keeps_occupancy(label: &str, uncertain: bool) -> 
 }
 
 #[tokio::test]
-async fn completed_worker_exit_recovers_ids_cleans_pair_and_starts_new_generation()
--> Result<(), String> {
+async fn completed_worker_exit_keeps_slot_until_checkpointed_cleanup_exists() -> Result<(), String>
+{
     let (scratch, journal) = open("worker-crash").await?;
     let engine = Engine::new();
     let (row, volume, dind, runner) = create_unbound_pair(&journal, &engine, "m9r73").await?;
@@ -76,11 +76,11 @@ async fn completed_worker_exit_recovers_ids_cleans_pair_and_starts_new_generatio
     let occupied = admission(&engine, &journal, 1, 1, 0, &assigned_wait(9, 1))
         .await
         .map_err(|err| err.to_string())?;
-    assert_eq!(occupied, Admit::Ack { stop: true });
+    assert_eq!(occupied, Admit::Hold);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].docker_id.as_deref(), Some(runner.as_str()));
-    assert_eq!(rows[0].dind_id.as_deref(), Some(dind.as_str()));
+    assert!(rows[0].docker_id.is_none());
+    assert!(rows[0].dind_id.is_none());
     assert_eq!(rows[0].state, IntentState::Done);
     assert!(!rows[0].cleanup_proven);
     assert_eq!(
@@ -94,48 +94,22 @@ async fn completed_worker_exit_recovers_ids_cleans_pair_and_starts_new_generatio
     let admitted = admission(&engine, &journal, 1, 1, 0, &assigned_wait(10, 1))
         .await
         .map_err(|err| err.to_string())?;
-    assert_eq!(admitted, Admit::Start { stop: true });
+    assert_eq!(admitted, Admit::Hold);
     assert_eq!(
         engine.removed().map_err(|err| err.to_string())?,
-        [runner, dind]
+        Vec::<String>::new()
     );
     assert_eq!(
         engine.removed_volumes().map_err(|err| err.to_string())?,
-        [
-            volume.clone(),
-            format!("{volume}-work"),
-            format!("{volume}-docker")
-        ]
+        Vec::<String>::new()
     );
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert!(rows[0].cleanup_proven);
-
-    // A later poll carries a distinct message/request identity. Reusing the
-    // completed offer's subject would be a replay, not a new generation.
-    let (next_row, next_fresh) = journal
-        .begin_launch("m10r74")
-        .await
-        .map_err(|err| err.to_string())?;
-    assert!(next_fresh);
-    assert_ne!(next_row, row);
-    let next_volume =
-        velnor_runner_host::worker::new_worker_volume().map_err(|err| err.to_string())?;
-    assert_ne!(next_volume, volume);
-    journal
-        .bind_worker_volume(next_row, &next_volume)
-        .await
-        .map_err(|err| err.to_string())?;
-    engine
-        .prepare_volumes(&next_volume)
-        .await
-        .map_err(|err| err.to_string())?;
-    assert_eq!(
-        engine
-            .worker_id_for_name(&format!("{next_volume}-runner"), &next_volume, "runner")
-            .await
-            .map_err(|err| err.to_string())?,
-        None
-    );
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, row);
+    assert!(!rows[0].cleanup_proven);
+    assert!(engine.alive(&runner).map_err(|err| err.to_string())?);
+    assert!(engine.alive(&dind).map_err(|err| err.to_string())?);
+    assert_eq!(rows[0].worker_volume.as_deref(), Some(volume.as_str()));
     absent(&scratch.file())
 }
 
@@ -179,7 +153,7 @@ async fn create_unbound_pair(
 }
 
 #[tokio::test]
-async fn independent_journals_never_adopt_or_delete_each_others_workers() -> Result<(), String> {
+async fn independent_journals_never_delete_without_checkpointed_cleanup() -> Result<(), String> {
     let (scratch_a, journal_a) = open("identity-a").await?;
     let (scratch_b, journal_b) = open("identity-b").await?;
     let engine = Engine::new();
@@ -193,42 +167,43 @@ async fn independent_journals_never_adopt_or_delete_each_others_workers() -> Res
         .set_running(&runner_a, false)
         .map_err(|err| err.to_string())?;
 
-    let cleaned = admission(&engine, &journal_a, 1, 1, 0, &assigned_wait(12, 1))
+    let held_a = admission(&engine, &journal_a, 1, 1, 0, &assigned_wait(12, 1))
         .await
         .map_err(|err| err.to_string())?;
-    assert_eq!(cleaned, Admit::Start { stop: true });
+    assert_eq!(held_a, Admit::Hold);
     assert_eq!(
         engine.removed().map_err(|err| err.to_string())?,
-        [runner_a, dind_a]
+        Vec::<String>::new()
     );
     assert!(engine.alive(&runner_b).map_err(|err| err.to_string())?);
     assert!(engine.alive(&dind_b).map_err(|err| err.to_string())?);
+    assert!(engine.alive(&dind_a).map_err(|err| err.to_string())?);
     assert_eq!(
         engine.removed_volumes().map_err(|err| err.to_string())?,
-        [
-            volume_a.clone(),
-            format!("{volume_a}-work"),
-            format!("{volume_a}-docker")
-        ]
+        Vec::<String>::new()
     );
 
     let retained = admission(&engine, &journal_b, 1, 1, 0, &assigned_wait(13, 1))
         .await
         .map_err(|err| err.to_string())?;
-    assert_eq!(retained, Admit::Ack { stop: true });
+    assert_eq!(retained, Admit::Hold);
     let recovered_rows = journal_b.rows().await.map_err(|err| err.to_string())?;
-    assert_eq!(
-        recovered_rows[0].docker_id.as_deref(),
-        Some(runner_b.as_str())
-    );
-    assert_eq!(recovered_rows[0].dind_id.as_deref(), Some(dind_b.as_str()));
+    assert!(recovered_rows[0].docker_id.is_none());
+    assert!(recovered_rows[0].dind_id.is_none());
     assert!(!recovered_rows[0].cleanup_proven);
+    let journal_a_rows = journal_a.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(
+        journal_a_rows[0].worker_volume.as_deref(),
+        Some(volume_a.as_str())
+    );
+    assert!(!journal_a_rows[0].cleanup_proven);
     absent(&scratch_a.file())?;
     absent(&scratch_b.file())
 }
 
 #[tokio::test]
-async fn foreign_container_at_owned_name_is_not_adopted_or_removed() -> Result<(), String> {
+async fn foreign_container_at_owned_name_is_not_adopted_or_removed_without_cleanup_proof()
+-> Result<(), String> {
     let (scratch, journal) = open("foreign-worker-name").await?;
     let engine = Engine::new();
     let (row, fresh) = journal
@@ -254,14 +229,10 @@ async fn foreign_container_at_owned_name_is_not_adopted_or_removed() -> Result<(
         .foreign_named_worker(&volume, "runner", &foreign, false)
         .map_err(|err| err.to_string())?;
 
-    let result = admission(&engine, &journal, 1, 1, 0, &assigned_wait(14, 1)).await;
-    assert_eq!(
-        result,
-        Err(velnor_runner_host::EnsureError::Unexpected {
-            status: 0,
-            step: "docker"
-        })
-    );
+    let result = admission(&engine, &journal, 1, 1, 0, &assigned_wait(14, 1))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(result, Admit::Hold);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert!(rows[0].docker_id.is_none());
     assert!(!rows[0].cleanup_proven);
@@ -269,6 +240,7 @@ async fn foreign_container_at_owned_name_is_not_adopted_or_removed() -> Result<(
         engine.removed().map_err(|err| err.to_string())?,
         Vec::<String>::new()
     );
+    assert!(engine.alive(&foreign).map_err(|err| err.to_string())?);
     absent(&scratch.file())
 }
 

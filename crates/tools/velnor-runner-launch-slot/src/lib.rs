@@ -6,4 +6,4 @@
 
 mod slot;
 
-pub use slot::{busy, holds, occupied, release_exited, running_count};
+pub use slot::{busy, holds, occupied, running_count};

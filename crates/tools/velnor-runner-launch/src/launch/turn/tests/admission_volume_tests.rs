@@ -1,6 +1,4 @@
-//! Admission decisions against worker volume state: uncertain
-//! journals hold without settlement and post-delete absence
-//! failures do not become cleanup proof.
+//! Admission stays held until the physical cleanup proof is durable.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -13,48 +11,10 @@ use tokio::net::{UnixListener, UnixStream};
 use super::super::admission;
 use crate::launch::Admit;
 use crate::launch::harness::{Scratch, assigned_wait};
-use velnor_runner_host::{EnsureError, IntentState, Journal, Outcome};
+use velnor_runner_host::{IntentState, Journal, Outcome};
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 const WORKER: &str = "wtransport";
-
-fn volume_names() -> [(&'static str, &'static str); 4] {
-    [
-        ("wtransport", "socket"),
-        ("wtransport-work", "work"),
-        ("wtransport-externals", "externals"),
-        ("wtransport-docker", "dind-data"),
-    ]
-}
-
-fn volume_json(name: &str, worker: &str, role: &str) -> String {
-    serde_json::json!({
-        "Name": name,
-        "Driver": "local",
-        "Mountpoint": format!("/var/lib/docker/volumes/{name}/_data"),
-        "Labels": {"velnor.worker": worker, "velnor.role": role},
-        "Options": {},
-        "Scope": "local"
-    })
-    .to_string()
-}
-
-fn container_json(id: &str, worker: Option<&str>, role: Option<&str>) -> String {
-    let labels = match (worker, role) {
-        (Some(worker), Some(role)) => serde_json::json!({
-            "velnor.worker": worker,
-            "velnor.volume": worker,
-            "velnor.role": role
-        }),
-        _ => serde_json::json!({}),
-    };
-    serde_json::json!({
-        "Id": id,
-        "HostConfig": {"CgroupnsMode": "private"},
-        "Config": {"Labels": labels}
-    })
-    .to_string()
-}
 
 #[tokio::test]
 async fn uncertain_volume_holds_without_remote_settlement() -> Result<(), String> {
@@ -93,7 +53,7 @@ async fn uncertain_volume_holds_without_remote_settlement() -> Result<(), String
 }
 
 #[tokio::test]
-async fn done_post_delete_non_404_keeps_cleanup_unproven() -> Result<(), String> {
+async fn done_row_without_cleanup_proof_is_held_without_docker_mutation() -> Result<(), String> {
     let scratch = Scratch::new("volume-post-delete").map_err(|error| error.to_string())?;
     let journal = Journal::open(&scratch.file())
         .await
@@ -112,64 +72,24 @@ async fn done_post_delete_non_404_keeps_cleanup_unproven() -> Result<(), String>
         .await
         .map_err(|error| error.to_string())?;
 
-    let stub = DockerStub::open(pair_cleanup_responses())?;
+    let stub = DockerStub::open(Vec::new())?;
     let decision = admission(&stub.docker, &journal, 1, 1, 0, &assigned_wait(1, 1)).await;
     let requests = stub.finish().await?;
 
-    assert_eq!(
-        decision,
-        Err(EnsureError::Unexpected {
-            status: 0,
-            step: "docker"
-        })
-    );
-    assert_eq!(requests.len(), 21);
+    assert_eq!(decision, Ok(Admit::Hold));
+    assert_eq!(requests, Vec::<String>::new());
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Done);
-    assert!(rows[0].docker_id.is_some());
-    assert!(rows[0].dind_id.is_some());
+    assert!(rows[0].docker_id.is_none());
+    assert!(rows[0].dind_id.is_none());
     assert!(!rows[0].cleanup_proven);
     Ok(())
-}
-
-fn pair_cleanup_responses() -> Vec<Response> {
-    let mut responses = vec![
-        http(
-            200,
-            &container_json("runner-id", Some(WORKER), Some("runner")),
-        ),
-        http(200, &container_json("dind-id", Some(WORKER), Some("dind"))),
-        http(200, r#"{"State":{"Running":false}}"#),
-        http(
-            200,
-            &container_json("runner-id", Some(WORKER), Some("runner")),
-        ),
-        http(204, ""),
-        http(404, r#"{"message":"missing"}"#),
-        http(200, &container_json("dind-id", Some(WORKER), Some("dind"))),
-        http(204, ""),
-        http(404, r#"{"message":"missing"}"#),
-    ];
-    for (index, (name, role)) in volume_names().into_iter().enumerate() {
-        responses.push(http(200, &volume_json(name, WORKER, role)));
-        responses.push(http(204, ""));
-        let status = if index == 3 { 500 } else { 404 };
-        responses.push(http(status, r#"{"message":"not absent"}"#));
-    }
-    responses
 }
 
 struct Response {
     status: u16,
     body: String,
-}
-
-fn http(status: u16, body: &str) -> Response {
-    Response {
-        status,
-        body: body.to_owned(),
-    }
 }
 
 struct DockerStub {

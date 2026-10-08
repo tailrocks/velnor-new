@@ -106,7 +106,10 @@ async fn legacy_ambiguous_launch_rows_are_quarantined_before_restart() -> Result
         .find(|row| row.subject == "m100")
         .ok_or_else(|| "completed row disappeared".to_owned())?;
     assert_eq!(completed.state, IntentState::Done);
-    assert!(completed.cleanup_proven);
+    assert!(
+        !completed.cleanup_proven,
+        "a legacy marker has no v7 physical cleanup evidence"
+    );
     let unrelated = rows
         .iter()
         .find(|row| row.subject == "old-acquire")
@@ -114,8 +117,8 @@ async fn legacy_ambiguous_launch_rows_are_quarantined_before_restart() -> Result
     assert_eq!(unrelated.state, IntentState::Failed);
     assert!(unrelated.cleanup_proven);
 
-    assert_eq!(velnor_runner_launch_slot::occupied(&journal).await, Ok(3));
-    for message_id in [96, 98, 99] {
+    assert_eq!(velnor_runner_launch_slot::occupied(&journal).await, Ok(4));
+    for message_id in [96, 98, 99, 100] {
         assert_assignment_is_held(&journal, message_id).await?;
     }
     Ok(())

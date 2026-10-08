@@ -92,6 +92,7 @@ pub(super) fn intent(state: IntentState, kind: &str) -> IntentRow {
     }
 }
 
+mod cleanup_tests;
 mod durability_tests;
 mod lifecycle_tests;
 mod reconcile_tests;

@@ -47,7 +47,7 @@ impl Journal {
         let conn = self.connection().await?;
         let changed = conn
             .execute(
-                "UPDATE intents SET outer_network_name = ?1 WHERE id = ?2 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND effect_state = 'may_have_effect' AND (outer_network_name IS NULL OR outer_network_name = ?1)",
+                "UPDATE intents SET outer_network_name = ?1 WHERE id = ?2 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND effect_state = 'may_have_effect' AND (outer_network_name IS NULL OR outer_network_name = ?1) AND NOT EXISTS (SELECT 1 FROM worker_cleanup_steps WHERE launch_id = ?2 AND step_key = 'outer-network-removal')",
                 (network_name.to_owned(), launch_id),
             )
             .await
@@ -76,7 +76,7 @@ impl Journal {
         let conn = self.connection().await?;
         let changed = conn
             .execute(
-                "UPDATE intents SET outer_network_id = COALESCE(outer_network_id, ?1) WHERE id = ?2 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND effect_state = 'may_have_effect' AND outer_network_name IS NOT NULL AND (outer_network_id IS NULL OR outer_network_id = ?1)",
+                "UPDATE intents SET outer_network_id = COALESCE(outer_network_id, ?1) WHERE id = ?2 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND effect_state = 'may_have_effect' AND outer_network_name IS NOT NULL AND (outer_network_id IS NULL OR outer_network_id = ?1) AND NOT EXISTS (SELECT 1 FROM worker_cleanup_steps WHERE launch_id = ?2 AND step_key = 'outer-network-removal')",
                 (network_id.to_owned(), launch_id),
             )
             .await
@@ -105,7 +105,7 @@ impl Journal {
         let conn = self.connection().await?;
         let changed = conn
             .execute(
-                "UPDATE intents SET runner_start_state = 'may_have_started' WHERE id = ?1 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND effect_state = 'may_have_effect' AND docker_id = ?2 AND runner_start_state IN ('not_requested', 'may_have_started')",
+                "UPDATE intents SET runner_start_state = 'may_have_started' WHERE id = ?1 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND effect_state = 'may_have_effect' AND docker_id = ?2 AND runner_start_state IN ('not_requested', 'may_have_started') AND NOT EXISTS (SELECT 1 FROM worker_cleanup_steps WHERE launch_id = ?1 AND step_key = 'outer-network-removal')",
                 (launch_id, runner_container_id.to_owned()),
             )
             .await

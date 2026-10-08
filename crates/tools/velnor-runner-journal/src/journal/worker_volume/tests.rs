@@ -73,18 +73,18 @@ async fn recovered_worker_ids_are_immutable() -> Result<(), HostError> {
 }
 
 #[tokio::test]
-async fn cleaned_launch_replay_keeps_its_original_row() -> Result<(), HostError> {
+async fn launch_replay_keeps_original_row_until_physical_proof() -> Result<(), HostError> {
     let scratch = Scratch::new()?;
     let journal = Journal::open(&scratch.file()).await?;
     let old = journal.begin("launch", "same-offer").await?;
     journal.finish(old, Outcome::Done).await?;
-    journal.record_cleanup(old).await?;
+    assert!(journal.record_cleanup(old).await.is_err());
 
     let replay = journal.begin("launch", "same-offer").await?;
     assert_eq!(replay, old);
     let rows = Journal::open(&scratch.file()).await?.rows().await?;
     assert_eq!(rows.len(), 1);
-    assert!(rows[0].cleanup_proven);
+    assert!(!rows[0].cleanup_proven);
     assert_eq!(rows[0].state, crate::IntentState::Done);
     Ok(())
 }
