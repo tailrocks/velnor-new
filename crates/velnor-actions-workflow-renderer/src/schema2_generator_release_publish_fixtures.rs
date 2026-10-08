@@ -49,7 +49,7 @@ pub(super) fn write_candidate_records(root: &Path, case: Failure) -> Result<(), 
         fs::write(
             directory.join(product.provenance),
             format!(
-                "{{\"schema\":1,\"version\":\"0.1.3\",\"repository\":\"{REPOSITORY}\",\"commit\":\"{SOURCE_SHA}\",\"target\":\"{}\",\"asset\":\"{}\",\"sha256\":\"{digest}\",\"toolchain\":{{\"rust\":\"1.98.1\",\"mr-boxington\":\"1.21.1\"}}}}\n",
+                "{{\"schema\":1,\"version\":\"0.1.4\",\"repository\":\"{REPOSITORY}\",\"commit\":\"{SOURCE_SHA}\",\"target\":\"{}\",\"asset\":\"{}\",\"sha256\":\"{digest}\",\"toolchain\":{{\"rust\":\"1.98.1\",\"mr-boxington\":\"1.21.1\"}}}}\n",
                 product.target.triple(),
                 product.binary
             ),
@@ -102,9 +102,9 @@ pub(super) fn release_json(
         let size = fs::metadata(&asset)?.len()
             + u64::from(draft && case == Failure::WrongDraftSize && index == 0);
         let url = if draft && case == Failure::WrongDraftUrl && index == 0 {
-            "https://github.com/untrusted/releases/download/v0.1.3/asset".to_owned()
+            "https://github.com/untrusted/releases/download/v0.1.4/asset".to_owned()
         } else {
-            format!("https://github.com/{REPOSITORY}/releases/download/v0.1.3/{name}")
+            format!("https://github.com/{REPOSITORY}/releases/download/v0.1.4/{name}")
         };
         rows.push(format!(
             "{{\"name\":\"{name}\",\"state\":\"uploaded\",\"browser_download_url\":\"{url}\",\"digest\":\"sha256:{digest}\",\"size\":{size}}}"
@@ -119,7 +119,7 @@ pub(super) fn release_json(
     };
     let immutable = !draft && case != Failure::MutablePublished;
     Ok(format!(
-        "{{\"id\":{release_id},\"tag_name\":\"v0.1.3\",\"url\":\"https://api.github.com/repos/{REPOSITORY}/releases/{release_id}\",\"html_url\":\"https://github.com/{REPOSITORY}/releases/tag/v0.1.3\",\"draft\":{draft},\"prerelease\":false,\"immutable\":{immutable},\"assets\":[{}]}}\n",
+        "{{\"id\":{release_id},\"tag_name\":\"v0.1.4\",\"url\":\"https://api.github.com/repos/{REPOSITORY}/releases/{release_id}\",\"html_url\":\"https://github.com/{REPOSITORY}/releases/tag/v0.1.4\",\"draft\":{draft},\"prerelease\":false,\"immutable\":{immutable},\"assets\":[{}]}}\n",
         rows.join(","),
     ))
 }

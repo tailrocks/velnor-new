@@ -108,7 +108,7 @@ fn all_requested_products_share_one_dispatch_only_source_bound_workflow()
         "--source-digest",
         "--signer-digest",
         "release-manifest.json",
-        "velnor-actions-0.1.3-x86_64-apple-darwin",
+        "velnor-actions-0.1.4-x86_64-apple-darwin",
     ] {
         assert!(all.contains(required), "missing {required}");
     }
@@ -166,11 +166,11 @@ fn generator_prepare_uses_the_canonical_inventory_and_manifest_bytes() {
         "--dir \"$temp_dir/linux-assets\"",
         "--dir \"$temp_dir/macos-assets\"",
         "--dir \"$temp_dir/macos-intel-assets\"",
-        "$temp_dir/linux-assets/velnor-actions-0.1.3-x86_64-unknown-linux-gnu.sha256",
-        "$temp_dir/macos-assets/velnor-actions-0.1.3-aarch64-apple-darwin.sha256",
-        "$temp_dir/macos-intel-assets/velnor-actions-0.1.3-x86_64-apple-darwin.sha256",
+        "$temp_dir/linux-assets/velnor-actions-0.1.4-x86_64-unknown-linux-gnu.sha256",
+        "$temp_dir/macos-assets/velnor-actions-0.1.4-aarch64-apple-darwin.sha256",
+        "$temp_dir/macos-intel-assets/velnor-actions-0.1.4-x86_64-apple-darwin.sha256",
         "cmp release-manifest.json manifest-assets/release-manifest.json",
-        "readonly fixed_tag='v0.1.3'",
+        "readonly fixed_tag='v0.1.4'",
         "tag does not resolve to the exact source commit",
     ] {
         assert!(
