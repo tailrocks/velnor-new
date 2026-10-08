@@ -85,6 +85,69 @@ fn lenient_request_valid_envelope_passes_through() {
     let found = lenient_request(&envelope()).expect("valid envelope");
     assert_eq!(found.run_key, "local");
     assert!(found.assembly_errors.is_empty());
+    assert!(found.task_report_outputs.is_none());
+}
+
+fn task_report_outputs() -> serde_json::Value {
+    serde_json::json!({
+        "schema": 1,
+        "origin": "github_com",
+        "run": {
+            "repository_id": "123",
+            "repository": "owner/repository",
+            "run_id": "456",
+            "run_attempt": 2,
+        },
+        "head_sha": "0123456789abcdef",
+        "plan_digest": "abcdef0123456789",
+        "expected_workflow_job_keys": ["task-linux"],
+        "producers": [{
+            "workflow_job_key": "task-linux",
+            "conclusion": "success",
+            "artifact_id": 77,
+            "check_run_id": 88,
+        }],
+    })
+}
+
+#[test]
+fn lenient_request_consumes_typed_report_output_sidecar() {
+    let mut raw = envelope();
+    raw["task_report_outputs"] = task_report_outputs();
+    let found = lenient_request(&raw).expect("valid envelope");
+    let outputs = found.task_report_outputs.expect("typed sidecar");
+    assert!(found.assembly_errors.is_empty());
+    assert_eq!(outputs.producers[0].workflow_job_key, "task-linux");
+    assert_eq!(outputs.producers[0].artifact_id.get(), 77);
+    assert_eq!(outputs.producers[0].check_run_id.get(), 88);
+}
+
+#[test]
+fn lenient_request_malformed_report_output_sidecar_fails_closed() {
+    let mut raw = envelope();
+    let mut outputs = task_report_outputs();
+    outputs["producers"][0]["conclusion"] = serde_json::json!("skipped");
+    raw["task_report_outputs"] = outputs;
+
+    let found = lenient_request(&raw).expect("envelope survives");
+    assert!(found.task_report_outputs.is_none());
+    assert_eq!(
+        found.assembly_errors,
+        vec!["unparsable_task_report_outputs".to_owned()]
+    );
+}
+
+#[test]
+fn lenient_request_present_null_report_output_sidecar_fails_closed() {
+    let mut raw = envelope();
+    raw["task_report_outputs"] = serde_json::Value::Null;
+
+    let found = lenient_request(&raw).expect("envelope survives");
+    assert!(found.task_report_outputs.is_none());
+    assert_eq!(
+        found.assembly_errors,
+        vec!["unparsable_task_report_outputs".to_owned()]
+    );
 }
 
 #[test]
@@ -194,5 +257,49 @@ fn merge_internal_with_planless_request_yields_diagnostic() {
     assert_eq!(
         report["miss_reasons"],
         serde_json::json!(["source_missing"])
+    );
+}
+
+#[test]
+fn merge_internal_with_valid_sidecar_preserves_ordinary_planless_result() {
+    let ordinary = merge_internal_with(&FakeCover, &envelope().to_string()).expect("ordinary");
+    let mut raw = envelope();
+    raw["task_report_outputs"] = task_report_outputs();
+    let with_sidecar = merge_internal_with(&FakeCover, &raw.to_string()).expect("sidecar");
+
+    // This increment carries provider outputs only. It does not make a
+    // comparison or change the existing planless verdict.
+    assert_eq!(with_sidecar, ordinary);
+}
+
+#[test]
+fn merge_internal_with_malformed_sidecar_returns_diagnostic_not_success() {
+    let mut raw = envelope();
+    let mut outputs = task_report_outputs();
+    outputs["producers"][0]["conclusion"] = serde_json::json!("failure");
+    raw["task_report_outputs"] = outputs;
+    let output = merge_internal_with(&FakeCover, &raw.to_string()).expect("diagnostic");
+    let report: serde_json::Value = serde_json::from_str(&output).expect("report JSON");
+
+    assert_eq!(report["status"], "planning_failed");
+    assert!(
+        report["miss_reasons"]
+            .as_array()
+            .is_some_and(|reasons| { reasons.contains(&serde_json::json!("cache_corrupt")) })
+    );
+}
+
+#[test]
+fn merge_internal_with_present_null_sidecar_returns_diagnostic() {
+    let mut raw = envelope();
+    raw["task_report_outputs"] = serde_json::Value::Null;
+    let output = merge_internal_with(&FakeCover, &raw.to_string()).expect("diagnostic");
+    let report: serde_json::Value = serde_json::from_str(&output).expect("report JSON");
+
+    assert_eq!(report["status"], "planning_failed");
+    assert!(
+        report["miss_reasons"]
+            .as_array()
+            .is_some_and(|reasons| { reasons.contains(&serde_json::json!("cache_corrupt")) })
     );
 }
