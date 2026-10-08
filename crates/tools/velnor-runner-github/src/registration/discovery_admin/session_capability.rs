@@ -14,6 +14,7 @@ mod close;
 mod operations;
 mod origin;
 mod types;
+mod unrequested;
 
 pub use types::{
     AcquireUnresolvedReason, PopulationObservationSource, SessionCloseOutcome,
@@ -196,15 +197,6 @@ fn split_repository(full_name: &str) -> Result<(&str, &str), PoolSessionCapabili
         })
         .ok_or(PoolSessionCapabilityError::BindingMismatch)?;
     Ok((owner, repository))
-}
-
-fn valid_queue_path(path: &str) -> bool {
-    path.starts_with('/')
-        && path.len() <= 4096
-        && !path.starts_with("//")
-        && !path
-            .chars()
-            .any(|character| matches!(character, '?' | '#' | '\\') || character.is_control())
 }
 
 #[cfg(test)]

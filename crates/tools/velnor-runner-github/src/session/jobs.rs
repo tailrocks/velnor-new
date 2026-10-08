@@ -6,7 +6,7 @@ use crate::refresh::{RefreshGate, StatusClass};
 use crate::{AcquireOutcome, WireError, acquire_path, classify_acquire};
 
 use super::error::{SessionError, reject};
-use super::request::{Method, SessionRequest, Transport};
+use super::request::{BearerRole, Method, RequestPurpose, SessionRequest, Transport};
 use super::retry::{API_QUERY, Answer, attempt, bearer, json_content, user_agent};
 
 /// Acquire `requested` ids. Partial success keeps only ids the service returned.
@@ -36,6 +36,8 @@ where
 {
     let body = serde_json::to_vec(requested).map_err(|_| WireError::Encode)?;
     let mut request = SessionRequest {
+        purpose: RequestPurpose::AcquireJobs,
+        bearer_role: BearerRole::SessionQueue,
         method: Method::Post,
         path: acquire_path(scale_set_id),
         query: Some(API_QUERY.to_owned()),

@@ -20,10 +20,70 @@ pub enum Method {
     Patch,
 }
 
+/// Semantic class for an outbound request. This is routing metadata, not an
+/// authorization decision; transports must still validate the exact method,
+/// path, query, headers, body, and bound origin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[must_use]
+pub enum RequestPurpose {
+    /// Read the configured repository from GitHub REST.
+    RepositoryRead,
+    /// Read a workflow run, job, or repository Actions policy from GitHub REST.
+    ActionsRead,
+    /// Read private-repository fork-workflow controls from GitHub REST.
+    PrivateForkPolicyRead,
+    /// Issue a runner registration token through GitHub REST.
+    RegistrationTokenIssue,
+    /// Exchange a registration token for Actions Service credentials.
+    ActionsAdminExchange,
+    /// Read runner-group or Scale Set metadata from Actions Service.
+    ActionsMetadataRead,
+    /// Create a Scale Set through Actions Service.
+    ScaleSetCreate,
+    /// Read a runner through Actions Service.
+    RunnerRead,
+    /// Remove a runner through Actions Service.
+    RunnerDelete,
+    /// Create one Scale Set message session.
+    SessionCreate,
+    /// Refresh one existing Scale Set message session.
+    SessionRefresh,
+    /// Poll the session message queue.
+    MessageQueuePoll,
+    /// Acquire Scale Set jobs through Actions Service.
+    AcquireJobs,
+    /// Request a JIT configuration from Actions Service.
+    GenerateJitConfig,
+    /// Acknowledge one exact message on the message queue.
+    MessageAcknowledge,
+    /// Close one exact Scale Set session.
+    SessionClose,
+}
+
+/// Credential audience placed in the request bearer header.
+///
+/// This marker is not itself proof that a credential is valid or authorized.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[must_use]
+pub enum BearerRole {
+    /// Caller-held GitHub REST credential.
+    GithubRestCredential,
+    /// Short-lived registration token used only for the admin exchange.
+    RegistrationToken,
+    /// Actions Service administration credential.
+    ActionsAdmin,
+    /// Session-specific message queue credential.
+    SessionQueue,
+}
+
 /// Outbound call. The body is wiped on drop and hidden from [`Debug`].
 #[derive(Clone, PartialEq, Eq)]
 #[must_use]
 pub struct SessionRequest {
+    /// Semantic operation class (not an authorization decision).
+    pub purpose: RequestPurpose,
+    /// Audience of the one bearer authorization value.
+    pub bearer_role: BearerRole,
     /// Verb.
     pub method: Method,
     /// Path relative to the service. No scheme and no host.
@@ -56,6 +116,15 @@ impl SessionRequest {
             return None;
         }
         Some(token)
+    }
+
+    pub(crate) fn replace_target(&mut self, path: String, query: Option<String>) {
+        self.path.zeroize();
+        if let Some(value) = &mut self.query {
+            value.zeroize();
+        }
+        self.path = path;
+        self.query = query;
     }
 
     /// Whether the request has exactly one bearer header with `token`.
@@ -102,9 +171,11 @@ impl fmt::Debug for SessionRequest {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("SessionRequest")
+            .field("purpose", &self.purpose)
+            .field("bearer_role", &self.bearer_role)
             .field("method", &self.method)
-            .field("path", &self.path)
-            .field("query", &self.query)
+            .field("path", &"[redacted]")
+            .field("query", &self.query.as_ref().map(|_| "[redacted]"))
             .field("headers", &redacted_headers(&self.headers))
             .field("body", &"[redacted]")
             .finish()
@@ -127,6 +198,10 @@ fn redacted_headers(headers: &[(String, String)]) -> Vec<(&str, &str)> {
 impl Drop for SessionRequest {
     fn drop(&mut self) {
         self.body.zeroize();
+        self.path.zeroize();
+        if let Some(query) = &mut self.query {
+            query.zeroize();
+        }
         for (key, value) in &mut self.headers {
             if key.eq_ignore_ascii_case("authorization") {
                 value.zeroize();

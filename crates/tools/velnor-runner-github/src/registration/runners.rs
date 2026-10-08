@@ -4,7 +4,10 @@ use serde::Deserialize;
 
 use crate::paths::{RUNNER_ENDPOINT, query_escape, runner_path};
 use crate::session::{API_QUERY, bearer, execute, json_content, user_agent};
-use crate::{Method, RunnerReference, SessionError, SessionRequest, Transport, WireError};
+use crate::{
+    BearerRole, Method, RequestPurpose, RunnerReference, SessionError, SessionRequest, Transport,
+    WireError,
+};
 
 /// Find one runner by its exact name. Only a valid HTTP 200 response with
 /// `count: 0` and an empty `value` means absence.
@@ -25,6 +28,8 @@ where
         return Err(WireError::RegistrationRejected.into());
     }
     let request = SessionRequest {
+        purpose: RequestPurpose::RunnerRead,
+        bearer_role: BearerRole::ActionsAdmin,
         method: Method::Get,
         path: RUNNER_ENDPOINT.to_owned(),
         query: Some(format!(
@@ -59,6 +64,8 @@ where
         return Err(WireError::RegistrationRejected.into());
     }
     let request = SessionRequest {
+        purpose: RequestPurpose::RunnerDelete,
+        bearer_role: BearerRole::ActionsAdmin,
         method: Method::Delete,
         path: runner_path(runner_id),
         query: Some(API_QUERY.to_owned()),

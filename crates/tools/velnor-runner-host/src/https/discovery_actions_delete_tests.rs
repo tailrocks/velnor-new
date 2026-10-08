@@ -3,19 +3,22 @@ use std::net::{TcpListener, TcpStream};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use velnor_runner_github::{DiscoveryTransport, Method, SessionRequest, Transport};
+use velnor_runner_github::{
+    BearerRole, DiscoveryTransport, Method, RequestPurpose, SessionRequest, Transport,
+};
 
 use super::{BoundedDiscoveryTransport, Origin, validate_discovery_request};
 
 fn actions_delete(path: &str, query: &str) -> SessionRequest {
     SessionRequest {
+        purpose: RequestPurpose::SessionClose,
+        bearer_role: BearerRole::ActionsAdmin,
         method: Method::Delete,
         path: path.to_owned(),
         query: Some(query.to_owned()),
         headers: vec![
             ("Content-Type".to_owned(), "application/json".to_owned()),
             ("Authorization".to_owned(), "Bearer admin-secret".to_owned()),
-            ("User-Agent".to_owned(), "velnor-host".to_owned()),
         ],
         body: Vec::new(),
     }
@@ -148,6 +151,11 @@ fn session_delete_requires_empty_body_and_exact_admin_headers() {
         .headers
         .push(("Accept".to_owned(), "application/json".to_owned()));
     assert!(validate_discovery_request(&actions, &extra_header).is_none());
+    let mut unexpected_user_agent = valid.clone();
+    unexpected_user_agent
+        .headers
+        .push(("User-Agent".to_owned(), "velnor-host".to_owned()));
+    assert!(validate_discovery_request(&actions, &unexpected_user_agent).is_none());
     let mut duplicate_auth = valid.clone();
     duplicate_auth
         .headers
@@ -155,10 +163,16 @@ fn session_delete_requires_empty_body_and_exact_admin_headers() {
     assert!(validate_discovery_request(&actions, &duplicate_auth).is_none());
 
     let get = SessionRequest {
+        purpose: RequestPurpose::ActionsMetadataRead,
+        bearer_role: BearerRole::ActionsAdmin,
         method: Method::Get,
         path: "_apis/runtime/runnergroups".to_owned(),
         query: Some("api-version=6.0-preview".to_owned()),
-        headers: valid.headers.clone(),
+        headers: vec![
+            ("Content-Type".to_owned(), "application/json".to_owned()),
+            ("Authorization".to_owned(), "Bearer admin-secret".to_owned()),
+            ("User-Agent".to_owned(), "velnor-host".to_owned()),
+        ],
         body: Vec::new(),
     };
     assert!(validate_discovery_request(&actions, &get).is_some());
@@ -340,7 +354,7 @@ fn exact_session_delete_is_dispatched_once_to_bound_actions_origin() {
     );
     assert!(observed.headers.admin_bearer);
     assert!(observed.headers.json_content_type);
-    assert!(observed.headers.user_agent);
+    assert!(!observed.headers.user_agent);
     assert!(observed.body.empty);
     assert!(observed.body.no_transfer_encoding);
     assert_eq!(observed.extra_requests, 0);

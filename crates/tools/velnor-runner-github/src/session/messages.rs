@@ -5,8 +5,9 @@ use crate::refresh::{RefreshGate, StatusClass};
 use crate::{Poll, WireError, parse_poll};
 
 use super::error::{SessionError, reject};
-use super::request::{Method, SessionRequest, Transport};
+use super::request::{BearerRole, Method, RequestPurpose, SessionRequest, Transport};
 use super::retry::{accept_preview, attempt, bearer, capacity_pair, poll_query, user_agent};
+use super::route::MessageQueueRoute;
 
 /// Poll the message queue at `queue_path` (no host).
 ///
@@ -36,6 +37,8 @@ where
     R: FnMut(&mut T, &mut SessionRequest) -> Result<(), SessionError>,
 {
     let mut request = SessionRequest {
+        purpose: RequestPurpose::MessageQueuePoll,
+        bearer_role: BearerRole::SessionQueue,
         method: Method::Get,
         path: queue_path.to_owned(),
         query: Some(poll_query(cursor)),
@@ -80,18 +83,49 @@ where
     T: Transport + ?Sized,
     R: FnMut(&mut T, &mut SessionRequest) -> Result<(), SessionError>,
 {
-    let mut request = SessionRequest {
-        method: Method::Get,
-        path: queue_path.to_owned(),
-        query: Some(poll_query(cursor)),
-        headers: vec![
-            accept_preview(),
-            bearer(queue_token)?,
-            user_agent(),
-            capacity_pair(total_capacity),
-        ],
-        body: Vec::new(),
-    };
+    let request = poll_request(
+        queue_path,
+        Some(poll_query(cursor)),
+        total_capacity,
+        queue_token,
+    )?;
+    poll_with_trust_request(transport, request, gate, refresh)
+}
+
+/// Poll a host-validated queue route while preserving its query and applying
+/// the pinned cursor merge semantics.
+pub(crate) fn poll_with_trust_route<T, R>(
+    transport: &mut T,
+    route: &MessageQueueRoute,
+    cursor: i64,
+    total_capacity: u32,
+    queue_token: &str,
+    gate: &RefreshGate,
+    refresh: R,
+) -> Result<PollWithTrust, SessionError>
+where
+    T: Transport + ?Sized,
+    R: FnMut(&mut T, &mut SessionRequest) -> Result<(), SessionError>,
+{
+    let request = poll_request(
+        route.path(),
+        route.poll_query(cursor),
+        total_capacity,
+        queue_token,
+    )?;
+    poll_with_trust_request(transport, request, gate, refresh)
+}
+
+fn poll_with_trust_request<T, R>(
+    transport: &mut T,
+    mut request: SessionRequest,
+    gate: &RefreshGate,
+    refresh: R,
+) -> Result<PollWithTrust, SessionError>
+where
+    T: Transport + ?Sized,
+    R: FnMut(&mut T, &mut SessionRequest) -> Result<(), SessionError>,
+{
     let answer = attempt(transport, &mut request, gate, refresh)?;
     match answer.class {
         StatusClass::EmptyPoll => Ok(PollWithTrust::Empty),
@@ -101,6 +135,28 @@ where
         }
         other => Err(reject(other)),
     }
+}
+
+fn poll_request(
+    queue_path: &str,
+    query: Option<String>,
+    total_capacity: u32,
+    queue_token: &str,
+) -> Result<SessionRequest, SessionError> {
+    Ok(SessionRequest {
+        purpose: RequestPurpose::MessageQueuePoll,
+        bearer_role: BearerRole::SessionQueue,
+        method: Method::Get,
+        path: queue_path.to_owned(),
+        query,
+        headers: vec![
+            accept_preview(),
+            bearer(queue_token)?,
+            user_agent(),
+            capacity_pair(total_capacity),
+        ],
+        body: Vec::new(),
+    })
 }
 
 fn parse_body(status: u16, body: &[u8]) -> Result<Poll, SessionError> {

@@ -1,5 +1,5 @@
 use super::super::{VerifiedPoolSessionAdmin, VerifiedQueueSession};
-use super::acknowledgement_allowed;
+use super::{AckState, acknowledgement_allowed};
 use crate::policy::{PollWithTrust, PoolBinding, PoolRegistrationScope};
 use crate::{
     Ack, AdminConnectionCall, DiscoveryTransport, Exchange, InnerJob, InnerKind, Method,
@@ -11,8 +11,8 @@ use std::time::{Duration, SystemTime};
 
 const ADMIN_RESPONSE: &str =
     r#"{"url":"https://pipelinesghubeus9.actions.githubusercontent.com","token":"admin-canary"}"#;
-const SESSION_RESPONSE: &str = r#"{"sessionId":"session-1","messageQueueUrl":"https://queue.example/messages","messageQueueAccessToken":"queue-canary"}"#;
-const REFRESHED_SESSION_RESPONSE: &str = r#"{"sessionId":"session-1","messageQueueUrl":"https://queue-new.example/_apis/runtime/runnerscalesets/7/sessions/session-1/rotated/messages","messageQueueAccessToken":"replacement-queue-canary"}"#;
+const SESSION_RESPONSE: &str = r#"{"sessionId":"session-1","messageQueueUrl":"https://queue.example/_apis/runtime/runnerscalesets/7/sessions/session-1/messages?tenant=private%2Fid&lastMessageId=old&lastMessageId=duplicate","messageQueueAccessToken":"queue-canary"}"#;
+const REFRESHED_SESSION_RESPONSE: &str = r#"{"sessionId":"session-1","messageQueueUrl":"https://queue-new.example/_apis/runtime/runnerscalesets/7/sessions/session-1/rotated/messages?tenant=private%2Fid&lastMessageId=refresh","messageQueueAccessToken":"replacement-queue-canary"}"#;
 const SESSION_ID: i64 = 7;
 const MESSAGE_PATH: &str = "/_apis/runtime/runnerscalesets/7/sessions/session-1/messages";
 const REFRESHED_MESSAGE_PATH: &str =
@@ -89,6 +89,30 @@ impl DiscoveryTransport for Script {
         self.origin = format!("https://{authority}");
         Ok(())
     }
+
+    fn bind_message_queue_origin(
+        &mut self,
+        url: &str,
+    ) -> Result<crate::MessageQueueRoute, SessionError> {
+        let rest = url
+            .strip_prefix("https://")
+            .ok_or(SessionError::Uncertain)?;
+        let (authority, suffix) = rest.split_once('/').unwrap_or((rest, ""));
+        if authority.is_empty() || authority.contains('@') || authority.contains('?') {
+            return Err(SessionError::Uncertain);
+        }
+        self.origin = format!("https://{authority}");
+        let (path, query) = suffix.split_once('?').unwrap_or((suffix, ""));
+        crate::MessageQueueRoute::from_parts(
+            if path.is_empty() {
+                "/".to_owned()
+            } else {
+                format!("/{path}")
+            },
+            (!query.is_empty()).then(|| query.to_owned()),
+        )
+        .map_err(SessionError::from)
+    }
 }
 
 fn exchange(status: u16, body: &str) -> Exchange {
@@ -122,8 +146,9 @@ fn test_capability_and_session_with_replies(
     )
     .map_err(|_| "admin connection")?;
     let binding = PoolBinding {
-        registration_scope: PoolRegistrationScope::Organization {
-            organization: "ChainArgos".to_owned(),
+        registration_scope: PoolRegistrationScope::Repository {
+            owner: "ChainArgos".to_owned(),
+            repository: "java-monorepo".to_owned(),
         },
         repository_id: 829_618_808,
         repository_full_name: "ChainArgos/java-monorepo".to_owned(),
@@ -146,19 +171,10 @@ fn test_capability_and_session_with_replies(
         expires_at: SystemTime::now() + Duration::from_secs(300),
     };
     let mut session = capability
-        .create_session(&mut script, "velnor-host", |_, _| {
-            Ok(MESSAGE_PATH.to_owned())
-        })
+        .create_session(&mut script, "velnor-host")
         .map_err(|_| "create session")?;
     let polled = capability
-        .poll_with_trust(
-            &mut script,
-            &mut session,
-            0,
-            1,
-            &RefreshGate::new(),
-            |_, _, _| Ok(MESSAGE_PATH.to_owned()),
-        )
+        .poll_with_trust(&mut script, &mut session, 0, 1, &RefreshGate::new())
         .map_err(|_| "poll")?;
     let PollWithTrust::Batch(batch) = polled else {
         return Err("poll batch");
@@ -178,6 +194,11 @@ fn session_capability_acknowledges_only_the_latest_resolved_message_once()
         test_capability_and_session(STARTED_MESSAGE, Ok(exchange(204, "")))?;
     assert_eq!(message_id, 17);
     assert_eq!(script.seen.len(), 3);
+    assert_eq!(script.seen[2].path, MESSAGE_PATH);
+    assert_eq!(
+        script.seen[2].query.as_deref(),
+        Some("tenant=private%2Fid&lastMessageId=old&lastMessageId=duplicate")
+    );
 
     let result = capability
         .acknowledge_resolved_message(
@@ -186,7 +207,6 @@ fn session_capability_acknowledges_only_the_latest_resolved_message_once()
             message_id,
             true,
             &RefreshGate::new(),
-            |_, _, _| Ok(MESSAGE_PATH.to_owned()),
         )
         .map_err(|_| "ack")?;
     assert_eq!(result, Ack::Deleted);
@@ -211,7 +231,6 @@ fn session_capability_acknowledges_only_the_latest_resolved_message_once()
                 message_id,
                 true,
                 &RefreshGate::new(),
-                |_, _, _| Ok(MESSAGE_PATH.to_owned()),
             )
             .is_err()
     );
@@ -234,7 +253,6 @@ fn unresolved_available_offer_keeps_message_held_without_transport() -> Result<(
             message_id,
             true,
             &RefreshGate::new(),
-            |_, _, _| Ok(MESSAGE_PATH.to_owned()),
         )
         .map_err(|_| "suppressed ack")?;
     assert_eq!(result, Ack::Suppressed);
@@ -248,7 +266,6 @@ fn unresolved_available_offer_keeps_message_held_without_transport() -> Result<(
                 message_id,
                 1,
                 &RefreshGate::new(),
-                |_, _, _| Ok(MESSAGE_PATH.to_owned()),
             )
             .is_err()
     );
@@ -267,7 +284,6 @@ fn uncertain_ack_is_not_replayed_or_followed_by_a_poll() -> Result<(), &'static 
             message_id,
             true,
             &RefreshGate::new(),
-            |_, _, _| Ok(MESSAGE_PATH.to_owned()),
         ),
         Err(SessionError::Uncertain)
     );
@@ -280,7 +296,6 @@ fn uncertain_ack_is_not_replayed_or_followed_by_a_poll() -> Result<(), &'static 
                 message_id,
                 true,
                 &RefreshGate::new(),
-                |_, _, _| Ok(MESSAGE_PATH.to_owned()),
             )
             .is_err()
     );
@@ -292,7 +307,6 @@ fn uncertain_ack_is_not_replayed_or_followed_by_a_poll() -> Result<(), &'static 
                 message_id,
                 1,
                 &RefreshGate::new(),
-                |_, _, _| Ok(MESSAGE_PATH.to_owned()),
             )
             .is_err()
     );
@@ -327,7 +341,6 @@ fn population_observation_is_bound_to_session_set_and_exact_poll_message()
                 message_id,
                 true,
                 &RefreshGate::new(),
-                |_, _, _| Ok(MESSAGE_PATH.to_owned()),
             )
             .map_err(|_| "ack after observation")?,
         Ack::Deleted
@@ -336,60 +349,5 @@ fn population_observation_is_bound_to_session_set_and_exact_poll_message()
     Ok(())
 }
 
-#[test]
-fn acknowledgment_requires_every_offer_and_side_effect_to_be_resolved() {
-    let batch = available_batch();
-    let empty = empty_ids();
-    assert!(acknowledgement_allowed(
-        &batch, true, false, &empty, &empty, &empty
-    ));
-
-    assert!(!acknowledgement_allowed(
-        &batch, true, true, &empty, &empty, &empty,
-    ));
-    assert!(!acknowledgement_allowed(
-        &batch,
-        true,
-        false,
-        &BTreeSet::from([23]),
-        &empty,
-        &empty,
-    ));
-    assert!(!acknowledgement_allowed(
-        &batch,
-        true,
-        false,
-        &empty,
-        &BTreeSet::from([23]),
-        &empty,
-    ));
-    assert!(!acknowledgement_allowed(
-        &batch,
-        true,
-        false,
-        &empty,
-        &empty,
-        &BTreeSet::from([23]),
-    ));
-    assert!(!acknowledgement_allowed(
-        &batch, false, false, &empty, &empty, &empty
-    ));
-}
-
-#[test]
-fn acknowledgment_rejects_unsupported_message_and_negative_cursor() {
-    let mut batch = available_batch();
-    batch.jobs[0].kind = InnerKind::Unsupported("unknown".to_owned());
-    let empty = empty_ids();
-    assert!(!acknowledgement_allowed(
-        &batch, true, false, &empty, &empty, &empty
-    ));
-
-    batch.jobs[0].kind = InnerKind::Available;
-    batch.message_id = -1;
-    assert!(!acknowledgement_allowed(
-        &batch, true, false, &empty, &empty, &empty
-    ));
-}
-
 mod refresh;
+mod validation;

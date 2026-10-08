@@ -6,8 +6,8 @@ use std::time::{Duration, Instant};
 
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use velnor_runner_github::{
-    AsyncDiscoveryTransport, DiscoveryExchange, DiscoveryTransport, Exchange, SessionError,
-    SessionRequest, Transport, TransportFail, WireError,
+    AsyncDiscoveryTransport, DiscoveryExchange, DiscoveryTransport, Exchange, MessageQueueRoute,
+    SessionError, SessionRequest, Transport, TransportFail, WireError,
 };
 use zeroize::{Zeroize, Zeroizing};
 
@@ -40,6 +40,18 @@ pub struct BoundedDiscoveryTransport {
 enum Origin {
     GithubApi,
     Actions(String),
+    MessageQueue(QueueOrigin),
+}
+
+struct QueueOrigin {
+    base: String,
+    route: MessageQueueRoute,
+}
+
+impl Drop for QueueOrigin {
+    fn drop(&mut self) {
+        self.base.zeroize();
+    }
 }
 
 impl BoundedDiscoveryTransport {
@@ -71,9 +83,54 @@ impl BoundedDiscoveryTransport {
         Ok(())
     }
 
+    fn bind_message_queue(&mut self, queue_url: &str) -> Result<MessageQueueRoute, SessionError> {
+        self.clear_origin();
+        if queue_url.len() > MAX_REQUEST_BYTES {
+            return Err(WireError::RegistrationRejected.into());
+        }
+        let mut parts = queue_route(queue_url).ok_or(WireError::RegistrationRejected)?;
+        let stored_route =
+            match MessageQueueRoute::from_parts(parts.path.clone(), parts.query.clone()) {
+                Ok(route) => route,
+                Err(error) => {
+                    parts.origin.zeroize();
+                    parts.path.zeroize();
+                    if let Some(query) = &mut parts.query {
+                        query.zeroize();
+                    }
+                    return Err(error.into());
+                }
+            };
+        let route = match MessageQueueRoute::from_parts(
+            std::mem::take(&mut parts.path),
+            parts.query.take(),
+        ) {
+            Ok(route) => route,
+            Err(error) => {
+                parts.origin.zeroize();
+                parts.path.zeroize();
+                if let Some(query) = &mut parts.query {
+                    query.zeroize();
+                }
+                return Err(error.into());
+            }
+        };
+        self.origin = Some(Origin::MessageQueue(QueueOrigin {
+            base: std::mem::take(&mut parts.origin),
+            route: stored_route,
+        }));
+        parts.origin.zeroize();
+        parts.path.zeroize();
+        if let Some(query) = &mut parts.query {
+            query.zeroize();
+        }
+        Ok(route)
+    }
+
     fn clear_origin(&mut self) {
-        if let Some(Origin::Actions(base)) = &mut self.origin {
-            base.zeroize();
+        match &mut self.origin {
+            Some(Origin::Actions(base)) => base.zeroize(),
+            Some(Origin::MessageQueue(_) | Origin::GithubApi) | None => {}
         }
         self.origin = None;
     }
@@ -145,7 +202,7 @@ impl BoundedDiscoveryTransport {
         #[cfg(test)]
         if let Some(test_base) = test_base {
             return match origin {
-                Origin::GithubApi => test_base.to_owned(),
+                Origin::GithubApi | Origin::MessageQueue(_) => test_base.to_owned(),
                 Origin::Actions(service_base) => {
                     let path = service_base
                         .strip_prefix("https://")
@@ -164,6 +221,7 @@ impl BoundedDiscoveryTransport {
         match origin {
             Origin::GithubApi => API_ORIGIN.to_owned(),
             Origin::Actions(base) => base.clone(),
+            Origin::MessageQueue(queue) => queue.base.clone(),
         }
     }
 
@@ -211,6 +269,10 @@ impl DiscoveryTransport for BoundedDiscoveryTransport {
 
     fn bind_actions_service_origin(&mut self, url: &str) -> Result<(), SessionError> {
         self.bind_actions(url)
+    }
+
+    fn bind_message_queue_origin(&mut self, url: &str) -> Result<MessageQueueRoute, SessionError> {
+        self.bind_message_queue(url)
     }
 }
 
@@ -294,10 +356,13 @@ impl AsyncDiscoveryTransport for BoundedDiscoveryTransport {
 
 #[path = "discovery_curl.rs"]
 mod curl;
+#[path = "discovery_queue_origin.rs"]
+mod queue_origin;
 #[path = "discovery_validation.rs"]
 mod validation;
 
 use curl::{perform_curl, perform_curl_until_cancellable_with_permit};
+use queue_origin::queue_route;
 use validation::{actions_base, validate_discovery_request};
 
 #[cfg(test)]
@@ -307,3 +372,6 @@ mod tests;
 #[cfg(test)]
 #[path = "discovery_actions_delete_tests.rs"]
 mod actions_delete_tests;
+#[cfg(test)]
+#[path = "discovery_queue_origin_tests.rs"]
+mod queue_origin_tests;

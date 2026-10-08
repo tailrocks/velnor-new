@@ -20,14 +20,7 @@ fn assigned_population_jit_is_distinct_from_acquire_and_ack_follows_jit() -> Res
 
     assert_eq!(
         capability
-            .acknowledge_resolved_message(
-                &mut script,
-                &mut session,
-                23,
-                true,
-                &RefreshGate::new(),
-                |_, _, _| Ok(QUEUE_PATH.to_owned()),
-            )
+            .acknowledge_resolved_message(&mut script, &mut session, 23, true, &RefreshGate::new(),)
             .map_err(|_| "ack")?,
         Ack::Deleted
     );
@@ -37,9 +30,10 @@ fn assigned_population_jit_is_distinct_from_acquire_and_ack_follows_jit() -> Res
     assert_eq!(bearer(&script.seen[5]), Some("Bearer queue-canary"));
     assert_eq!(script.seen[5].path, format!("{QUEUE_PATH}/23"));
 
+    let mut close_claim = TestCloseClaim::for_session(&session);
     assert_eq!(
         capability
-            .close_session(&mut script, &mut session)
+            .close_session_claimed(&mut script, &mut session, &mut close_claim)
             .map_err(|_| "close")?,
         SessionCloseOutcome::Closed
     );
@@ -117,20 +111,15 @@ fn uncertain_assigned_jit_blocks_retry_ack_poll_and_close() -> Result<(), &'stat
     ));
     assert!(
         capability
-            .acknowledge_resolved_message(
-                &mut script,
-                &mut session,
-                19,
-                true,
-                &RefreshGate::new(),
-                |_, _, _| Ok(QUEUE_PATH.to_owned()),
-            )
+            .acknowledge_resolved_message(&mut script, &mut session, 19, true, &RefreshGate::new(),)
             .is_err()
     );
+    let mut close_claim = TestCloseClaim::for_session(&session);
     assert_eq!(
-        capability.close_session(&mut script, &mut session),
+        capability.close_session_claimed(&mut script, &mut session, &mut close_claim),
         Ok(SessionCloseOutcome::Held)
     );
+    assert!(!close_claim.attempted);
     assert_eq!(script.seen.len(), 4);
     Ok(())
 }

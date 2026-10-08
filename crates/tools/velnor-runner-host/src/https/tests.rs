@@ -1,6 +1,6 @@
 //! Curl argv and URL joins. These tests do not open a socket.
 
-use velnor_runner_github::{Method, SessionRequest};
+use velnor_runner_github::{BearerRole, Method, RequestPurpose, SessionRequest};
 
 use super::{CURL_ARGV, HttpsTransport, join_url};
 use crate::HostError;
@@ -32,6 +32,8 @@ fn join_keeps_the_encoded_query() {
 #[test]
 fn curl_argv_has_no_header() {
     let request = SessionRequest {
+        purpose: RequestPurpose::RegistrationTokenIssue,
+        bearer_role: BearerRole::GithubRestCredential,
         method: Method::Post,
         path: "/repos/o/r/actions/runners/registration-token".to_owned(),
         query: None,

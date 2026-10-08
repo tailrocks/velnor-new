@@ -5,7 +5,10 @@ use std::fmt;
 use serde::Deserialize;
 
 use crate::session::{API_QUERY, bearer, execute, json_content, user_agent};
-use crate::{Method, SessionError, SessionRequest, Transport, WireError, scale_set_path};
+use crate::{
+    BearerRole, Method, RequestPurpose, SessionError, SessionRequest, Transport, WireError,
+    scale_set_path,
+};
 
 use super::{
     CreateLabel, ScaleSetView, accept_scale_set, accept_scale_set_for,
@@ -128,6 +131,8 @@ pub(crate) fn scale_set_name_request(
     call: &ScaleSetByName<'_>,
 ) -> Result<SessionRequest, SessionError> {
     Ok(SessionRequest {
+        purpose: RequestPurpose::ActionsMetadataRead,
+        bearer_role: BearerRole::ActionsAdmin,
         method: Method::Get,
         path: scale_set_path().to_owned(),
         query: Some(name_query(call.runner_group_id, call.name)),
@@ -151,6 +156,8 @@ where
     T: Transport + ?Sized,
 {
     let request = SessionRequest {
+        purpose: RequestPurpose::ActionsMetadataRead,
+        bearer_role: BearerRole::ActionsAdmin,
         method: Method::Get,
         path: format!("{}/{}", scale_set_path(), call.scale_set_id),
         query: Some(API_QUERY.to_owned()),
@@ -186,6 +193,8 @@ where
     validate_create_identity(call)?;
     let body = outgoing_json(call.name, call.labels, call.runner_group_id)?.into_bytes();
     let request = SessionRequest {
+        purpose: RequestPurpose::ScaleSetCreate,
+        bearer_role: BearerRole::ActionsAdmin,
         method: Method::Post,
         path: scale_set_path().to_owned(),
         query: Some(API_QUERY.to_owned()),
