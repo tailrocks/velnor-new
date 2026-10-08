@@ -64,7 +64,7 @@ The archive is 12,127,365 bytes. Its extracted `cargo-nextest` executable is
 mode `0755` with SHA-256
 `53470cfc9b5cbcd96780db2d348700d76af962467503791f1f8a8824d8967e5c`; the
 single-file install tree digest is
-`4a809e6676529b8b06c2cdbdf7191fa638571b88f78638e7753ac4d6e1d27174`.
+`3d65a55f9602c19326ae050d373175a8b778e21cdbc4f82adfe0bd1be30e8c11`.
 An isolated Mise install reported `cargo-nextest 0.9.148 (cd1d6d546
 2026-10-07)`.
 

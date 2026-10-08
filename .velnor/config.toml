@@ -140,7 +140,7 @@ artifacts = [
   { url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.148/cargo-nextest-0.9.148-x86_64-unknown-linux-gnu.tar.gz", sha256 = "223ba936714cc861a9cdedad5a8eb664dfdd69d6fbdf6cea6aa8184f523290dc" },
 ]
 dependency_artifacts = []
-install_tree_sha256 = "4a809e6676529b8b06c2cdbdf7191fa638571b88f78638e7753ac4d6e1d27174"
+install_tree_sha256 = "3d65a55f9602c19326ae050d373175a8b778e21cdbc4f82adfe0bd1be30e8c11"
 [[qualified_tools.platforms.executables]]
 name = "cargo-nextest"
 path = "cargo-nextest"
