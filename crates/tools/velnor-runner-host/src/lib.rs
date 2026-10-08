@@ -12,6 +12,7 @@ mod ipc;
 mod keychain;
 pub mod listen;
 mod plist;
+mod profile_admission;
 mod readiness;
 pub mod scale_set;
 pub mod stage;
@@ -30,6 +31,7 @@ pub use keychain::{
 };
 pub use listen::{SessionCensus, SessionProbe, probe_once, queue_path, session_census};
 pub use plist::{keychain_import_argv, launch_agent_plist};
+pub use profile_admission::{RunnerProfileAdmission, verify_runner_profile_admission};
 pub use readiness::{Readiness, doctor_json, readiness_for_empty, status_json};
 pub use scale_set::{
     EnsureError, EnsuredSet, discover_product_scale_set, ensure_product_scale_set,
