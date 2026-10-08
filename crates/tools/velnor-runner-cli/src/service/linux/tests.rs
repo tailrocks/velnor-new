@@ -143,19 +143,47 @@ fn empty_jobs() -> ManagerOutput {
 #[test]
 fn status_reads_only_systemd_state_and_fails_closed_on_unknown() {
     let stopped =
-        b"LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\n";
+        b"LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\nJob=\n";
     let mut manager = FakeManager::with_outputs([manager_output(true, stopped.to_vec())]);
     assert_eq!(perform(ServiceAction::Status, &mut manager, 0), Ok(()));
+    assert_eq!(
+        super::service_status_line(true, stopped),
+        Ok("controller_service=stopped_or_absent")
+    );
     assert_eq!(
         manager.calls,
         vec![vec![
             "show".to_owned(),
             "--no-pager".to_owned(),
-            "--property=LoadState,ActiveState,SubState,MainPID,ControlPID".to_owned(),
+            "--property=LoadState,ActiveState,SubState,MainPID,ControlPID,Job".to_owned(),
             UNIT.to_owned(),
         ]]
     );
     assert_eq!(manager.busctl_calls, Vec::<Vec<String>>::new());
+
+    let pending = b"LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\nJob=42 /org/freedesktop/systemd1/job/42\n";
+    let mut manager = FakeManager::with_outputs([manager_output(true, pending.to_vec())]);
+    assert_eq!(perform(ServiceAction::Status, &mut manager, 0), Ok(()));
+    assert_eq!(
+        super::service_status_line(true, pending),
+        Ok("controller_service=in_use")
+    );
+    assert_eq!(
+        manager.calls[0][2],
+        "--property=LoadState,ActiveState,SubState,MainPID,ControlPID,Job"
+    );
+
+    let missing_job =
+        b"LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\n";
+    let mut manager = FakeManager::with_outputs([manager_output(true, missing_job.to_vec())]);
+    assert_eq!(
+        perform(ServiceAction::Status, &mut manager, 0),
+        Err(ServiceFault::UnknownState)
+    );
+    assert_eq!(
+        super::service_status_line(true, missing_job),
+        Err(ServiceFault::UnknownState)
+    );
 
     let mut manager = FakeManager::with_outputs([manager_output(false, stopped.to_vec())]);
     assert_eq!(
