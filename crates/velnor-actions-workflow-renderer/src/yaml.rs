@@ -1,7 +1,8 @@
-//! Deterministic YAML emitter: stable order, safe quoting, 2-space indent.
+//! Deterministic YAML emitter: stable order, safe quoting, and 2-space indent.
 //!
-//! Block style only, no anchors, aliases, or tags. Flow sequences are
-//! empty `[]` plus the typed `runs-on` selector. Key order is caller-controlled.
+//! Block style only. Workflow output uses typed scalar anchors only for
+//! repeated step-run strings. Flow sequences are empty `[]` plus the typed
+//! `runs-on` selector. Key order is caller-controlled.
 
 /// Minimal YAML value tree with explicit mapping order.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +30,38 @@ pub enum Yaml {
         /// Comment text, without the leading `#`.
         comment: String,
     },
+    /// Repeated workflow step command emitted with a YAML anchor.
+    AnchoredScalar {
+        /// YAML anchor name.
+        name: AnchorName,
+        /// Anchored scalar value.
+        value: String,
+    },
+    /// Alias to an earlier scalar anchor.
+    Alias(AnchorName),
+}
+
+/// Validated, conservative YAML anchor name.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct AnchorName(String);
+
+impl AnchorName {
+    pub(crate) fn new(value: impl Into<String>) -> Option<Self> {
+        let value = value.into();
+        if !value.is_empty()
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+        {
+            Some(Self(value))
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 impl Yaml {
@@ -62,11 +95,22 @@ impl Yaml {
             | Self::Int(_)
             | Self::Flow(_)
             | Self::Quoted(_)
-            | Self::Annotated { .. } => true,
+            | Self::Annotated { .. }
+            | Self::AnchoredScalar { .. }
+            | Self::Alias(_) => true,
             Self::Seq(items) => items.is_empty(),
             Self::Map(entries) => entries.is_empty(),
         }
     }
+}
+
+#[path = "yaml_share.rs"]
+mod share;
+
+/// Share repeated step-run strings using aliases in an owned workflow tree.
+#[must_use]
+pub(crate) fn share_step_run_scalars(node: Yaml) -> Yaml {
+    share::share_step_run_scalars(node)
 }
 
 /// Render a document with a trailing newline.
@@ -107,6 +151,8 @@ fn emit_node(value: &Yaml, indent: usize, out: &mut String) {
         }
         Yaml::Null
         | Yaml::Str(_)
+        | Yaml::AnchoredScalar { .. }
+        | Yaml::Alias(_)
         | Yaml::Annotated { .. }
         | Yaml::Bool(_)
         | Yaml::Int(_)
@@ -121,6 +167,11 @@ fn emit_map_entry(key: &str, value: &Yaml, indent: usize, out: &mut String) {
     out.push_str(&quote_scalar(key));
     match value {
         Yaml::Null => out.push_str(":\n"),
+        Yaml::Alias(name) => {
+            out.push_str(": *");
+            out.push_str(name.as_str());
+            out.push('\n');
+        }
         inline if inline.is_inline() => {
             out.push_str(": ");
             emit_inline(inline, out);
@@ -164,6 +215,11 @@ fn emit_first_entry(key: &str, value: &Yaml, indent: usize, out: &mut String) {
     out.push_str(&quote_scalar(key));
     match value {
         Yaml::Null => out.push_str(":\n"),
+        Yaml::Alias(name) => {
+            out.push_str(": *");
+            out.push_str(name.as_str());
+            out.push('\n');
+        }
         inline if inline.is_inline() => {
             out.push_str(": ");
             emit_inline(inline, out);
@@ -180,6 +236,16 @@ fn emit_first_entry(key: &str, value: &Yaml, indent: usize, out: &mut String) {
 fn emit_inline(value: &Yaml, out: &mut String) {
     match value {
         Yaml::Str(text) => out.push_str(&quote_scalar(text)),
+        Yaml::AnchoredScalar { name, value } => {
+            out.push('&');
+            out.push_str(name.as_str());
+            out.push(' ');
+            out.push_str(&quote_scalar(value));
+        }
+        Yaml::Alias(name) => {
+            out.push('*');
+            out.push_str(name.as_str());
+        }
         Yaml::Quoted(text) => out.push_str(&quote_double(text)),
         Yaml::Annotated { value, comment } => {
             out.push_str(&quote_scalar(value));

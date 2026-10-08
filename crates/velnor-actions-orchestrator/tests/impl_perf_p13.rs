@@ -130,7 +130,7 @@ fn plan_100_crates_reports_matrix_budget() -> TestResult {
 /// Measured generation stays within the fixed byte cap for 1/10/29/30/40 members.
 ///
 /// The 500,000-byte workflow contract, not a crate-count promise, is the
-/// limit. The 60/100-member fixtures are retained as measured over-cap failures.
+/// limit. Large repeated workflows may fit after deterministic run-scalar sharing.
 #[test]
 fn generate_scales_to_workflow_file_limit_then_fails_closed() -> TestResult {
     for members in [1_usize, 10, 29, 30, 40, 60, 100] {
@@ -145,31 +145,47 @@ fn generate_scales_to_workflow_file_limit_then_fails_closed() -> TestResult {
         };
         let (result, gen_ms) = timed(|| generate(&prep, &opts));
         if members >= 60 {
-            let Err(error) = result else {
-                return Err(std::io::Error::other(format!(
-                    "{members}-member workflow unexpectedly fit the contract"
-                ))
-                .into());
-            };
-            let diagnostic = error.to_string();
-            let actual_bytes = diagnostic
-                .strip_prefix(
-                    "render: invalid workflow: workflow_too_large:.github/workflows/ci.yml:",
-                )
-                .and_then(|detail| detail.strip_suffix(&format!(":{MAX_WORKFLOW_BYTES}")))
-                .ok_or_else(|| format!("unexpected workflow-size diagnostic: {diagnostic}"))?
-                .parse::<usize>()?;
-            assert!(
-                actual_bytes > MAX_WORKFLOW_BYTES,
-                "diagnostic reported {actual_bytes} bytes"
-            );
-            assert!(
-                !target.exists(),
-                "failed preview generation left a partial output tree"
-            );
-            eprintln!(
-                "perf: op=generate crates={members} prepare_ms={prep_ms} generate_ms={gen_ms} failed_closed_bytes={actual_bytes} limit_bytes={MAX_WORKFLOW_BYTES}"
-            );
+            match result {
+                Ok(report) => {
+                    assert!(!report.files_written.is_empty(), "files staged");
+                    let workflow = std::fs::read(target.join(".github/workflows/ci.yml"))?;
+                    assert!(
+                        workflow.len() <= MAX_WORKFLOW_BYTES,
+                        "{members} members generated {} bytes, limit is {MAX_WORKFLOW_BYTES}",
+                        workflow.len()
+                    );
+                    eprintln!(
+                        "perf: op=generate crates={members} prepare_ms={prep_ms} generate_ms={gen_ms} files={} ci_bytes={}",
+                        report.files_written.len(),
+                        workflow.len()
+                    );
+                }
+                Err(error) => {
+                    let diagnostic = error.to_string();
+                    let actual_bytes = diagnostic
+                        .strip_prefix(
+                            "render: invalid workflow: workflow_too_large:.github/workflows/ci.yml:",
+                        )
+                        .and_then(|detail| {
+                            detail.strip_suffix(&format!(":{MAX_WORKFLOW_BYTES}"))
+                        })
+                        .ok_or_else(|| {
+                            format!("unexpected workflow-size diagnostic: {diagnostic}")
+                        })?
+                        .parse::<usize>()?;
+                    assert!(
+                        actual_bytes > MAX_WORKFLOW_BYTES,
+                        "diagnostic reported {actual_bytes} bytes"
+                    );
+                    assert!(
+                        !target.exists(),
+                        "failed preview generation left a partial output tree"
+                    );
+                    eprintln!(
+                        "perf: op=generate crates={members} prepare_ms={prep_ms} generate_ms={gen_ms} failed_closed_bytes={actual_bytes} limit_bytes={MAX_WORKFLOW_BYTES}"
+                    );
+                }
+            }
         } else {
             let report = result?;
             assert!(!report.files_written.is_empty(), "files staged");

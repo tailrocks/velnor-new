@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
 
 use crate::OrchestratorError;
 
@@ -6,6 +6,9 @@ use super::{shellcheck_fail, unquote_run_scalar};
 
 #[path = "validate_shell_yaml_shell.rs"]
 mod shell;
+
+#[path = "validate_shell_yaml_run_anchor.rs"]
+mod run_anchor;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ShellDialect {
@@ -33,6 +36,7 @@ struct WorkflowScan {
     section: WorkflowSection,
     saw_jobs: bool,
     workflow_shell: Option<ShellDialect>,
+    run_anchors: BTreeMap<String, String>,
     current_job: Option<JobScan>,
     jobs: Vec<JobScan>,
 }
@@ -113,14 +117,19 @@ fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
                 return Err(shellcheck_fail("step_name_must_be_first"));
             }
         }
-        let Some((key, value)) = entry else {
+        let Some((key, source_value)) = entry else {
             continue;
+        };
+        let value = if is_step_run_site(&scan, indent, key) {
+            run_anchor::resolve_run_scalar(source_value, &mut scan.run_anchors)?
+        } else {
+            source_value.to_owned()
         };
         if indent == 0 {
             if let Some(job) = scan.current_job.take() {
                 scan.jobs.push(job.finish());
             }
-            scan.section = match (key, value) {
+            scan.section = match (key, value.as_str()) {
                 ("jobs", "") => {
                     scan.saw_jobs = true;
                     WorkflowSection::Jobs
@@ -131,7 +140,7 @@ fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
             continue;
         }
         if scan.section != WorkflowSection::Jobs {
-            scan_workflow_default(&mut scan, indent, key, value)?;
+            scan_workflow_default(&mut scan, indent, key, &value)?;
             continue;
         }
         if indent == 2 && value.is_empty() && !key.starts_with('-') {
@@ -158,8 +167,12 @@ fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
         let Some(job) = scan.current_job.as_mut() else {
             continue;
         };
-        scan_job_line(job, indent, key, value)?;
+        scan_job_line(job, indent, key, &value)?;
     }
+    finish_workflow_scan(scan)
+}
+
+fn finish_workflow_scan(mut scan: WorkflowScan) -> Result<Vec<StagedRun>, OrchestratorError> {
     if let Some(job) = scan.current_job.take() {
         scan.jobs.push(job.finish());
     }
@@ -167,6 +180,16 @@ fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
         return Err(shellcheck_fail("workflow_jobs_missing"));
     }
     collect_runs(scan.jobs, scan.workflow_shell)
+}
+
+fn is_step_run_site(scan: &WorkflowScan, indent: usize, key: &str) -> bool {
+    indent == 8
+        && key == "run"
+        && scan.section == WorkflowSection::Jobs
+        && scan
+            .current_job
+            .as_ref()
+            .is_some_and(|job| job.section == JobSection::Steps && job.current_step.is_some())
 }
 
 fn scan_workflow_default(
