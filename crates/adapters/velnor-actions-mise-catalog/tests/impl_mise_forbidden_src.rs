@@ -31,6 +31,7 @@ fn expected_modules() -> Vec<&'static str> {
         "preflight.rs",
         "requests.rs",
         "steps.rs",
+        "steps_rust_target.rs",
         "toolfiles.rs",
         "toolfiles/lockfile.rs",
         "wrappers.rs",
