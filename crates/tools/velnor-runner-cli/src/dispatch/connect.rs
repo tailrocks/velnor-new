@@ -2,13 +2,14 @@
 
 use std::fmt::Write as _;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use velnor_runner_host::{
-    ConnectPlan, HostConfig, HostError, HostPlatform, MAX_LINUX_DRAIN_TIMEOUT_SECS, connect_plan,
-    discover_product_scale_set, persist_host_config_file, read_host_config_file, read_secret,
-    remove_host_config_file, store_configured_secret, validate_host_config_target,
+    ConnectPlan, EnsureError, HostConfig, HostError, HostPlatform, JobTrustPolicy,
+    MAX_LINUX_DRAIN_TIMEOUT_SECS, connect_plan, discover_product_scale_set,
+    persist_host_config_file, read_host_config_file, read_secret, remove_host_config_file,
+    store_configured_secret, validate_host_config_target,
 };
 
 use crate::service::ControllerServiceState;
@@ -16,12 +17,16 @@ use crate::service::ControllerServiceState;
 mod binding;
 mod format;
 mod platform;
+mod trust_policy;
 
 use self::binding::{BindingAndTrust, validate_binding_and_trust};
 use self::format::{credential_reference, toml_string};
 use self::platform::host_platform;
 #[cfg(test)]
 pub(super) use self::platform::host_platform_for;
+use self::trust_policy::{
+    append_legacy_platform_trust, append_trust_policy, load_linux_trust_policy,
+};
 
 pub(super) struct ConnectRequest<'a> {
     pub(super) config_path: &'a Path,
@@ -34,6 +39,7 @@ pub(super) struct ConnectRequest<'a> {
     pub(super) runner_group_name: Option<&'a str>,
     pub(super) allowed_events: &'a [String],
     pub(super) allowed_workflow_paths: &'a [String],
+    pub(super) trust_policy_file: Option<PathBuf>,
     pub(super) image_profile: Option<&'a str>,
     pub(super) max_jobs: Option<u32>,
     pub(super) drain_timeout_secs: Option<u64>,
@@ -47,12 +53,15 @@ struct ConnectSettings<'a> {
     image_profile: Option<&'a str>,
     max_jobs: u32,
     legacy_macos: bool,
+    trust_policy: Option<JobTrustPolicy>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ConnectError {
     Config,
     Rejected,
+    GroupPolicyUnavailable,
+    TrustPolicy,
     ServiceInUse,
     ServiceStateUnknown,
     Secret(HostError),
@@ -65,6 +74,12 @@ impl std::fmt::Display for ConnectError {
         match self {
             Self::Config => formatter.write_str("invalid host configuration"),
             Self::Rejected => formatter.write_str("connection rejected"),
+            Self::GroupPolicyUnavailable => formatter.write_str(
+                "runner-group workflow policy could not be verified; no new configuration or credential was stored",
+            ),
+            Self::TrustPolicy => formatter.write_str(
+                "Linux requires a valid exact trust-policy JSON file matching the selected repository, events, and workflow paths",
+            ),
             Self::ServiceInUse => {
                 formatter.write_str("controller service is running or transitioning")
             }
@@ -108,7 +123,7 @@ pub(super) fn connect(request: &ConnectRequest<'_>) -> ExitCode {
                 .map_err(|_| ConnectError::Config)?;
             discover_product_scale_set(token, &binding)
                 .map(|_| ())
-                .map_err(|_| ConnectError::Rejected)
+                .map_err(map_discovery_error)
         },
         |config, secret| {
             store_configured_secret(&config.github.credential_ref, secret)
@@ -123,6 +138,13 @@ pub(super) fn connect(request: &ConnectRequest<'_>) -> ExitCode {
             eprintln!("{error}");
             ExitCode::from(1)
         }
+    }
+}
+
+pub(super) fn map_discovery_error(error: EnsureError) -> ConnectError {
+    match error {
+        EnsureError::GroupPolicyUnavailable => ConnectError::GroupPolicyUnavailable,
+        _ => ConnectError::Rejected,
     }
 }
 
@@ -270,12 +292,20 @@ fn connect_settings<'a>(
         && !explicit_binding
         && request.allowed_events.is_empty()
         && request.allowed_workflow_paths.is_empty();
+    let trust_policy = if linux {
+        Some(load_linux_trust_policy(request)?)
+    } else if request.trust_policy_file.is_some() {
+        return Err(ConnectError::TrustPolicy);
+    } else {
+        None
+    };
     Ok(ConnectSettings {
         host_platform,
         group,
         image_profile: image,
         max_jobs: request.max_jobs.unwrap_or(1),
         legacy_macos,
+        trust_policy,
     })
 }
 
@@ -285,18 +315,6 @@ fn render_config(
 ) -> Result<String, ConnectError> {
     let repository = toml_string(request.repo)?;
     let scale_set = toml_string(request.scale_set)?;
-    let events = request
-        .allowed_events
-        .iter()
-        .map(|event| toml_string(event))
-        .collect::<Result<Vec<_>, _>>()?
-        .join(", ");
-    let workflow_paths = request
-        .allowed_workflow_paths
-        .iter()
-        .map(|path| toml_string(path))
-        .collect::<Result<Vec<_>, _>>()?
-        .join(", ");
     let context = toml_string(request.docker_context.unwrap_or(
         if settings.host_platform == "macos" {
             "orbstack"
@@ -320,12 +338,10 @@ fn render_config(
     if let Some(timeout) = request.drain_timeout_secs {
         writeln!(text, "drain_timeout_secs = {timeout}").map_err(|_| ConnectError::Write)?;
     }
-    if !request.allowed_events.is_empty() {
-        write!(
-            text,
-            "[trust]\nallowed_repositories = [{repository}]\nallowed_events = [{events}]\nallowed_workflow_paths = [{workflow_paths}]\nallow_forks = false\n"
-        )
-        .map_err(|_| ConnectError::Write)?;
+    if let Some(policy) = settings.trust_policy.as_ref() {
+        append_trust_policy(&mut text, Some(policy))?;
+    } else {
+        append_legacy_platform_trust(&mut text, request)?;
     }
     write!(
         text,

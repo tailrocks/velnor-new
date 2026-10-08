@@ -57,6 +57,31 @@ pub(super) fn request<'a>(
     events: &'a [String],
     workflow_paths: &'a [String],
 ) -> ConnectRequest<'a> {
+    let trust_policy_path = config_path.with_extension("trust-policy.json");
+    if cfg!(target_os = "linux") {
+        std::fs::write(
+            &trust_policy_path,
+            br#"{
+                "allowed_repositories": ["example/repo"],
+                "allowed_events": ["push", "pull_request"],
+                "allowed_workflow_paths": [".github/workflows/ci.yml"],
+                "allowed_head_branches": ["main"],
+                "workflow_rules": [{
+                    "workflow_ref": "example/repo/.github/workflows/ci.yml@refs/heads/main",
+                    "job_workflow_ref": "example/repo/.github/workflows/ci.yml@refs/heads/main",
+                    "workflow_path": ".github/workflows/ci.yml@refs/heads/main",
+                    "event": "push",
+                    "head_branch": "main",
+                    "referenced_workflows": []
+                }],
+                "allowed_group_workflows": [
+                    "example/repo/.github/workflows/ci.yml@refs/heads/main"
+                ],
+                "allow_forks": false
+            }"#,
+        )
+        .expect("write connect test trust-policy input");
+    }
     ConnectRequest {
         config_path,
         repo: "example/repo",
@@ -68,6 +93,7 @@ pub(super) fn request<'a>(
         runner_group_name: Some("Default"),
         allowed_events: events,
         allowed_workflow_paths: workflow_paths,
+        trust_policy_file: cfg!(target_os = "linux").then_some(trust_policy_path),
         image_profile: target_profile(),
         max_jobs: Some(1),
         drain_timeout_secs: Some(1800),

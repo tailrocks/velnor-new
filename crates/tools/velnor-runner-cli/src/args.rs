@@ -50,6 +50,9 @@ pub struct ConnectArgs {
     /// Linux requires one or more; repeat as needed.
     #[arg(long = "allow-workflow-path", action = clap::ArgAction::Append)]
     pub allowed_workflow_paths: Vec<String>,
+    /// JSON file containing the exact Linux `JobTrustPolicy`. Linux requires this input.
+    #[arg(long, value_name = "PATH")]
+    pub trust_policy_file: Option<PathBuf>,
     /// Immutable supported runner image profile; required on Linux.
     #[arg(long)]
     pub image_profile: Option<String>,
