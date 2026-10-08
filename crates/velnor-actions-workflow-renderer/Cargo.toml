@@ -9,6 +9,9 @@ autotests = false
 [dependencies]
 velnor-actions-contract = { version = "=0.1.0", path = "../velnor-actions-contract" }
 
+[dev-dependencies]
+granit-parser = "=1.0.1"
+
 [lints]
 workspace = true
 

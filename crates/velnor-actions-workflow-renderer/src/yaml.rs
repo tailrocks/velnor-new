@@ -72,8 +72,22 @@ impl Yaml {
 /// Render a document with a trailing newline.
 #[must_use]
 pub fn render_yaml(value: &Yaml) -> String {
+    render_yaml_with_indent(value, 2)
+}
+
+/// Render a compact document with one-space nesting indentation.
+///
+/// YAML permits any positive indentation width. This keeps the same node
+/// order and scalar encoding as [`render_yaml`], while reducing repeated
+/// structural whitespace for workflows near GitHub's file limit.
+#[must_use]
+pub fn render_yaml_compact(value: &Yaml) -> String {
+    render_yaml_with_indent(value, 1)
+}
+
+fn render_yaml_with_indent(value: &Yaml, indent_width: usize) -> String {
     let mut out = String::new();
-    emit_node(value, 0, &mut out);
+    emit_node(value, 0, indent_width, &mut out);
     out
 }
 
@@ -115,7 +129,7 @@ pub fn quote_scalar(value: &str) -> String {
 }
 
 /// Emit a nested node at an indent level.
-fn emit_node(value: &Yaml, indent: usize, out: &mut String) {
+fn emit_node(value: &Yaml, indent: usize, indent_width: usize, out: &mut String) {
     if value.is_inline() {
         emit_inline(value, out);
         out.push('\n');
@@ -124,12 +138,12 @@ fn emit_node(value: &Yaml, indent: usize, out: &mut String) {
     match value {
         Yaml::Seq(items) => {
             for item in items {
-                emit_seq_item(item, indent, out);
+                emit_seq_item(item, indent, indent_width, out);
             }
         }
         Yaml::Map(entries) => {
             for (key, child) in entries {
-                emit_map_entry(key, child, indent, out);
+                emit_map_entry(key, child, indent, indent_width, out);
             }
         }
         Yaml::Null
@@ -143,7 +157,7 @@ fn emit_node(value: &Yaml, indent: usize, out: &mut String) {
 }
 
 /// Emit one mapping entry.
-fn emit_map_entry(key: &str, value: &Yaml, indent: usize, out: &mut String) {
+fn emit_map_entry(key: &str, value: &Yaml, indent: usize, indent_width: usize, out: &mut String) {
     push_indent(indent, out);
     out.push_str(&quote_scalar(key));
     match value {
@@ -155,27 +169,27 @@ fn emit_map_entry(key: &str, value: &Yaml, indent: usize, out: &mut String) {
         }
         nested => {
             out.push_str(":\n");
-            emit_node(nested, indent + 1, out);
+            emit_node(nested, indent + indent_width, indent_width, out);
         }
     }
 }
 
 /// Emit one sequence item.
-fn emit_seq_item(item: &Yaml, indent: usize, out: &mut String) {
+fn emit_seq_item(item: &Yaml, indent: usize, indent_width: usize, out: &mut String) {
     push_indent(indent, out);
     match item {
         Yaml::Map(entries) if !entries.is_empty() => {
             if let Some(((first_key, first_value), rest)) = entries.split_first() {
                 out.push_str("- ");
-                emit_first_entry(first_key, first_value, indent, out);
+                emit_first_entry(first_key, first_value, indent, indent_width, out);
                 for (key, child) in rest {
-                    emit_map_entry(key, child, indent + 1, out);
+                    emit_map_entry(key, child, indent + 2, indent_width, out);
                 }
             }
         }
         Yaml::Seq(items) if !items.is_empty() => {
             out.push_str("-\n");
-            emit_node(item, indent + 1, out);
+            emit_node(item, indent + 2, indent_width, out);
         }
         Yaml::Null => out.push_str("-\n"),
         inline => {
@@ -187,7 +201,7 @@ fn emit_seq_item(item: &Yaml, indent: usize, out: &mut String) {
 }
 
 /// Emit the first mapping entry of a sequence item after `- `.
-fn emit_first_entry(key: &str, value: &Yaml, indent: usize, out: &mut String) {
+fn emit_first_entry(key: &str, value: &Yaml, indent: usize, indent_width: usize, out: &mut String) {
     out.push_str(&quote_scalar(key));
     match value {
         Yaml::Null => out.push_str(":\n"),
@@ -198,7 +212,7 @@ fn emit_first_entry(key: &str, value: &Yaml, indent: usize, out: &mut String) {
         }
         nested => {
             out.push_str(":\n");
-            emit_node(nested, indent + 2, out);
+            emit_node(nested, indent + 2 + indent_width, indent_width, out);
         }
     }
 }
@@ -234,10 +248,10 @@ fn emit_flow(items: &[String], out: &mut String) {
     out.push(']');
 }
 
-/// Push 2-space indentation.
+/// Push the requested number of indentation spaces.
 fn push_indent(indent: usize, out: &mut String) {
     for _ in 0..indent {
-        out.push_str("  ");
+        out.push(' ');
     }
 }
 
@@ -347,4 +361,98 @@ fn quote_double(value: &str) -> String {
     }
     out.push('"');
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error;
+
+    use super::{Yaml, render_yaml, render_yaml_compact};
+
+    #[test]
+    fn compact_render_preserves_multiline_run_scalar_and_structure() {
+        let document = Yaml::Map(vec![(
+            "jobs".to_owned(),
+            Yaml::Map(vec![(
+                "build".to_owned(),
+                Yaml::Map(vec![(
+                    "steps".to_owned(),
+                    Yaml::Seq(vec![Yaml::Map(vec![
+                        ("name".to_owned(), Yaml::str("compile")),
+                        ("run".to_owned(), Yaml::str("echo first\necho second")),
+                    ])]),
+                )]),
+            )]),
+        )]);
+
+        let regular = render_yaml(&document);
+        let compact = render_yaml_compact(&document);
+        assert!(compact.len() < regular.len());
+        assert!(regular.contains("run: \"echo first\\necho second\"\n"));
+        assert!(compact.contains("run: \"echo first\\necho second\"\n"));
+        assert!(compact.contains("jobs:\n build:\n  steps:\n   - name: compile\n     run:"));
+    }
+
+    #[test]
+    fn compact_render_keeps_scalar_quoting_and_map_order() {
+        let document = Yaml::Map(vec![
+            ("on".to_owned(), Yaml::str("push")),
+            ("timeout-minutes".to_owned(), Yaml::Int(5)),
+            (
+                "runs-on".to_owned(),
+                Yaml::Flow(vec!["ubuntu-latest".to_owned()]),
+            ),
+        ]);
+
+        assert_eq!(
+            render_yaml_compact(&document),
+            "\"on\": push\ntimeout-minutes: 5\nruns-on: [ubuntu-latest]\n"
+        );
+    }
+
+    #[test]
+    fn compact_workflow_matches_canonical_yaml_event_stream() -> Result<(), Box<dyn Error>> {
+        let document = Yaml::Map(vec![(
+            "jobs".to_owned(),
+            Yaml::Map(vec![(
+                "build".to_owned(),
+                Yaml::Map(vec![(
+                    "steps".to_owned(),
+                    Yaml::Seq(vec![Yaml::Map(vec![
+                        ("name".to_owned(), Yaml::str("compile")),
+                        ("run".to_owned(), Yaml::str("echo first\necho second")),
+                        (
+                            "env".to_owned(),
+                            Yaml::Map(vec![("MODE".to_owned(), Yaml::str("safe"))]),
+                        ),
+                        (
+                            "with".to_owned(),
+                            Yaml::Map(vec![(
+                                "args".to_owned(),
+                                Yaml::Seq(vec![Yaml::str("one"), Yaml::str("two")]),
+                            )]),
+                        ),
+                    ])]),
+                )]),
+            )]),
+        )]);
+        let canonical = render_yaml(&document);
+        let compact = render_yaml_compact(&document);
+        let canonical_events = yaml_events(&canonical)?;
+        let compact_events = yaml_events(&compact)?;
+
+        assert_eq!(compact_events, canonical_events);
+        assert!(
+            compact_events
+                .iter()
+                .any(|event| { event.contains("echo first\\necho second") })
+        );
+        Ok(())
+    }
+
+    fn yaml_events(source: &str) -> Result<Vec<String>, granit_parser::ScanError> {
+        granit_parser::Parser::new_from_str(source)
+            .map(|result| result.map(|(event, _span)| format!("{event:?}")))
+            .collect()
+    }
 }

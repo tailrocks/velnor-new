@@ -18,7 +18,7 @@ use velnor_actions_contract::{
 
 use crate::{
     RenderError, cache_p08, closure, commands, document, final_steps, guard, marker, matrix, msrv,
-    preseed_closure, steps, support, workflow_policy, yaml::render_yaml,
+    preseed_closure, steps, support, workflow_policy,
 };
 
 pub use crate::matrix::{
@@ -361,8 +361,8 @@ fn render_merged(
     matrix::attach_crate_job_caps(&mut document, &caps)?;
     matrix::insert_publish_step_id(&mut document)?;
     let document = crate::yaml::quote_run_values_in_yaml(document);
-    let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
-    crate::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;
+    let text =
+        crate::workflow_size::render_workflow(WORKFLOW_PATH, &ctx.generator_version, &document)?;
     steps::scan_for_private_subcommands(&text)?;
     let mut files = shared.files;
     if crate::tool_seed::any_job_has_seed(&jobs) {

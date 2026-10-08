@@ -22,7 +22,7 @@ use crate::{
     RenderError, guard, marker,
     render::RenderedFile,
     steps::{self, action_step, shell_step},
-    yaml::{Yaml, render_yaml},
+    yaml::Yaml,
 };
 
 /// Display name of the freshness workflow.
@@ -100,8 +100,11 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
     )?;
     let document = freshness_document(spec, &checkout, &probe)?;
     let document = crate::yaml::quote_run_values_in_yaml(document);
-    let text = marker::with_marker(&spec.generator_version, &render_yaml(&document))?;
-    crate::workflow_size::check_workflow_size(FRESHNESS_WORKFLOW_PATH, &text)?;
+    let text = crate::workflow_size::render_workflow(
+        FRESHNESS_WORKFLOW_PATH,
+        &spec.generator_version,
+        &document,
+    )?;
     steps::scan_for_private_subcommands(&text)?;
     Ok(RenderedFile {
         path: FRESHNESS_WORKFLOW_PATH.to_owned(),

@@ -1,6 +1,10 @@
 //! Byte limit for every generated GitHub Actions workflow document.
 
 use crate::RenderError;
+use crate::{
+    marker,
+    yaml::{self, Yaml},
+};
 use std::path::Path;
 
 /// Maximum rendered workflow size, including the marker; decimal 500 KB.
@@ -9,6 +13,24 @@ use std::path::Path;
 /// 500,000-byte cap so every accepted workflow stays within that published
 /// limit.
 pub const MAX_WORKFLOW_BYTES: usize = 500_000;
+
+/// Render a marked workflow, retrying with compact indentation only when the
+/// canonical document exceeds the cap. The final bytes always pass the same
+/// fail-closed size check used by tree assembly.
+pub(crate) fn render_workflow(
+    path: &str,
+    version: &str,
+    document: &Yaml,
+) -> Result<String, RenderError> {
+    let canonical = marker::with_marker(version, &yaml::render_yaml(document))?;
+    let rendered = if canonical.len() > MAX_WORKFLOW_BYTES {
+        marker::with_marker(version, &yaml::render_yaml_compact(document))?
+    } else {
+        canonical
+    };
+    check_workflow_size(path, &rendered)?;
+    Ok(rendered)
+}
 
 /// Reject an oversized generated workflow after its marker has been added.
 ///
@@ -36,7 +58,7 @@ fn is_workflow_path(path: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{MAX_WORKFLOW_BYTES, check_workflow_size};
-    use crate::RenderError;
+    use crate::{RenderError, yaml::Yaml};
 
     fn marked_workflow_with_byte_size(size: usize) -> Result<String, RenderError> {
         let mut workflow = crate::marker::with_marker("0.1.0", "")?;
@@ -92,5 +114,63 @@ mod tests {
             .expect_err("case-insensitive workflow extensions must be limited");
         assert!(matches!(error, RenderError::InvalidWorkflow(problem)
             if problem == "workflow_too_large:.github/workflows/ci.YML:500001:500000"));
+    }
+
+    #[test]
+    fn marked_workflow_uses_compact_fallback_and_preserves_run_value() -> Result<(), RenderError> {
+        let run = "echo preserved\ncommand";
+        let steps = Yaml::Seq(
+            (0..18_000)
+                .map(|index| {
+                    Yaml::Map(vec![
+                        ("name".to_owned(), Yaml::str("x")),
+                        (
+                            "run".to_owned(),
+                            Yaml::str(if index == 0 { run } else { "x" }),
+                        ),
+                    ])
+                })
+                .collect(),
+        );
+        let nested = Yaml::Map(vec![(
+            "jobs".to_owned(),
+            Yaml::Map(vec![(
+                "build".to_owned(),
+                Yaml::Map(vec![("steps".to_owned(), steps)]),
+            )]),
+        )]);
+        let canonical = crate::marker::with_marker("0.1.0", &crate::yaml::render_yaml(&nested))?;
+        let compact =
+            crate::marker::with_marker("0.1.0", &crate::yaml::render_yaml_compact(&nested))?;
+        assert!(canonical.len() > MAX_WORKFLOW_BYTES);
+        assert!(
+            compact.len() <= MAX_WORKFLOW_BYTES,
+            "canonical {}, compact {}",
+            canonical.len(),
+            compact.len()
+        );
+        let workflow = super::render_workflow(".github/workflows/ci.yml", "0.1.0", &nested)?;
+
+        assert_eq!(workflow, compact);
+        assert!(workflow.contains("run: \"echo preserved\\ncommand\""));
+        Ok(())
+    }
+
+    #[test]
+    fn marked_workflow_accepts_exact_boundary_and_fails_closed_over_it() -> Result<(), RenderError>
+    {
+        let empty = crate::marker::with_marker("0.1.0", &crate::yaml::render_yaml(&Yaml::str("")))?;
+        let exact_value = "x".repeat(MAX_WORKFLOW_BYTES - empty.len() + 2);
+        let exact =
+            super::render_workflow(".github/workflows/ci.yml", "0.1.0", &Yaml::str(exact_value))?;
+        assert_eq!(exact.len(), MAX_WORKFLOW_BYTES);
+
+        let over_value = "x".repeat(MAX_WORKFLOW_BYTES - empty.len() + 3);
+        let error =
+            super::render_workflow(".github/workflows/ci.yml", "0.1.0", &Yaml::str(over_value))
+                .expect_err("uncompressible oversized scalar must be rejected");
+        assert!(matches!(error, RenderError::InvalidWorkflow(problem)
+            if problem.starts_with("workflow_too_large:.github/workflows/ci.yml:")));
+        Ok(())
     }
 }
