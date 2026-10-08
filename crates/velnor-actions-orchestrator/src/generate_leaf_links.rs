@@ -72,9 +72,9 @@ mod tests {
         assert!(emitted_leaf_symlink_only(&root, &rel));
 
         let root = scratch("ancestor_link").expect("scratch");
-        let real = root.join("real-dir");
-        std::fs::create_dir_all(&real).expect("real");
-        std::os::unix::fs::symlink(&real, root.join(".github")).expect("ancestor link");
+        let backing = root.join("backing-dir");
+        std::fs::create_dir_all(&backing).expect("backing");
+        std::os::unix::fs::symlink(&backing, root.join(".github")).expect("ancestor link");
         let rel = guard::validate_tree_path(".github/CLAUDE.md").expect("rel");
         let err = check_no_symlink_or_emitted_leaf(&root, &rel).expect_err("ancestor fails");
         assert!(err.to_string().contains("symlink_prefix"), "{err}");
