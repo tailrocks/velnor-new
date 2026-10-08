@@ -6,7 +6,9 @@
 
 use serde::Serialize;
 
-use crate::canonical::{StackExtension, canonical_json_bytes, digest_b3, validate_digest};
+use crate::canonical::{
+    StackExtension, canonical_json_bytes, digest_b3, normalize_posix_path, validate_digest,
+};
 use crate::errors::ContractError;
 
 /// Cache-key schema id, always `v1`.
@@ -71,6 +73,12 @@ pub fn validate_semantic_text(field: &'static str, value: &str) -> Result<(), Co
     {
         return Err(ContractError::identity(field, "non_semantic_input"));
     }
+    Ok(())
+}
+
+fn validate_project_root(value: &str) -> Result<(), ContractError> {
+    validate_semantic_text("project_root", value)?;
+    let _normalized = normalize_posix_path(value)?;
     Ok(())
 }
 
@@ -150,7 +158,7 @@ pub fn workspace_id(inputs: &WorkspaceInputs) -> Result<String, ContractError> {
     validate_digest(&inputs.repository_id)?;
     validate_digest(&inputs.inventory_digest)?;
     validate_semantic_text("stack_id", &inputs.stack_id)?;
-    validate_semantic_text("project_root", &inputs.project_root)?;
+    validate_project_root(&inputs.project_root)?;
     Ok(digest_b3(&canonical_json_bytes(inputs)?))
 }
 
@@ -267,7 +275,7 @@ impl CacheIdentity {
             return Err(ContractError::identity("schema_id", "must_be_v1"));
         }
         validate_semantic_text("stack_id", &self.stack_id)?;
-        validate_semantic_text("project_root", &self.project_root)?;
+        validate_project_root(&self.project_root)?;
         validate_semantic_text("component_id", &self.component_id)?;
         for value in [
             self.repository_id.as_str(),
