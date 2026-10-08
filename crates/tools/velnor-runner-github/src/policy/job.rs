@@ -47,6 +47,8 @@ pub fn verify_job_offer(
     JobTrustEvidence::Verified(Box::new(VerifiedJobTrust {
         message_id,
         request_id: identity.request_id,
+        source_session_id: batch.source_session_id().map(ToOwned::to_owned),
+        source_scale_set_id: batch.source_scale_set_id(),
         scale_set_job_id: message.job_id.clone(),
         workflow_run_id: run.id,
         repository_full_name: policy.repository_full_name.to_owned(),

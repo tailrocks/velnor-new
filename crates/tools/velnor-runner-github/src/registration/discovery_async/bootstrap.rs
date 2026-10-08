@@ -176,7 +176,7 @@ where
         })
         .map_err(uncertain_issued_credential);
     let connection = record_discovery_outcome_async(intent, intent_id, result).await?;
-    Ok(RepositoryDiscoveryAdmin::new(connection))
+    RepositoryDiscoveryAdmin::new(connection, repository_id, repository_full_name)
 }
 
 /// Issue exactly one organization-scoped registration token for bounded

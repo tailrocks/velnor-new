@@ -33,16 +33,19 @@ pub use paths::{
 pub use poll::{InnerJob, InnerKind, ParsedBatch, Poll, Statistics, may_ack, parse_poll};
 pub use refresh::{RefreshGate, StatusClass, classify_status};
 pub use registration::{
-    ActionsServiceRouteLookup, ActionsServiceScaleSetRoute, AdminConnection, AdminConnectionCall,
-    AsyncDiscoveryIntentStore, AsyncDiscoveryTransport, AsyncScopedDiscoveryIntentStore,
-    CreateLabel, DiscoveryCredentialOutcome, DiscoveryCredentialStep, DiscoveryExchange,
-    DiscoveryIntentId, DiscoveryIntentStore, DiscoveryStoreFuture, DiscoveryTransport, Label,
-    OrganizationAdminEvidence, OrganizationDiscoveryAdmin, OrganizationDiscoveryToken,
-    RegistrationScope, RegistrationToken, RegistrationTokenCall, RepositoryAdminEvidence,
-    RepositoryDiscoveryAdmin, RepositoryDiscoveryToken, RunnerGroup, ScaleSetById, ScaleSetByName,
-    ScaleSetCreate, ScaleSetFound, ScaleSetView, accept_scale_set, accept_scale_set_for,
-    admin_connection, admin_connection_once, admin_token_is_fresh, create_body,
-    create_runner_scale_set, enterprise_registration_token_path,
+    AcquireUnresolvedReason, ActionsServiceRouteLookup, ActionsServiceScaleSetRoute,
+    AdminConnection, AdminConnectionCall, AsyncDiscoveryIntentStore, AsyncDiscoveryTransport,
+    AsyncScopedDiscoveryIntentStore, CreateLabel, DiscoveryCredentialOutcome,
+    DiscoveryCredentialStep, DiscoveryExchange, DiscoveryIntentId, DiscoveryIntentStore,
+    DiscoveryStoreFuture, DiscoveryTransport, Label, OrganizationAdminEvidence,
+    OrganizationDiscoveryAdmin, OrganizationDiscoveryToken, PoolSessionCapabilityError,
+    PopulationObservationSource, RegistrationScope, RegistrationToken, RegistrationTokenCall,
+    RepositoryAdminEvidence, RepositoryDiscoveryAdmin, RepositoryDiscoveryToken, RunnerGroup,
+    ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetFound, ScaleSetView, SessionCloseOutcome,
+    SessionPopulationObservation, VerifiedAcquireOutcome, VerifiedAcquiredJob,
+    VerifiedAssignedDemand, VerifiedPoolSessionAdmin, VerifiedQueueSession, accept_scale_set,
+    accept_scale_set_for, admin_connection, admin_connection_once, admin_token_is_fresh,
+    create_body, create_runner_scale_set, enterprise_registration_token_path,
     exchange_organization_discovery_admin_once_async, exchange_repository_discovery_admin_once,
     exchange_repository_discovery_admin_once_async, get_runner_by_name, get_runner_scale_set,
     get_runner_scale_set_by_id, http_create_body, http_create_body_for,
@@ -64,6 +67,6 @@ pub use runner_group_policy::{
 pub use secret::EncodedJit;
 pub use session::{
     Ack, AckScope, Exchange, Method, QueueSession, SessionError, SessionRequest, Transport, ack,
-    acquire, create_session, delete_session, jit, jit_request, poll, refresh_if_current,
-    refresh_queue_request, refresh_session, reopen_session,
+    acquire, create_session, delete_session, jit, jit_request, poll, poll_with_trust,
+    refresh_if_current, refresh_queue_request, refresh_session, reopen_session,
 };
