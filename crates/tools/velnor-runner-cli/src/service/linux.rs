@@ -4,7 +4,6 @@ use std::io;
 use std::path::Path;
 use std::process::ExitCode;
 
-use super::{busctl_command, systemctl_command};
 use crate::args::ServiceAction;
 use conditions::read_identity_marker_condition;
 use systemd::{IdentityUnitSnapshot, UnitSnapshot, parse_identity_snapshot, parse_snapshot};
@@ -15,6 +14,8 @@ use velnor_runner_host::read_host_config_file;
 mod conditions;
 mod contract;
 mod preflight;
+mod process;
+mod stop;
 mod stopped;
 mod systemd;
 
@@ -24,6 +25,7 @@ use contract::{
 };
 #[cfg(test)]
 use contract::{preflight_argv, start_argv, stop_argv};
+use process::Systemctl;
 
 const UNIT: &str = "velnor-host.service";
 const IDENTITY_UNIT: &str = "velnor-host-identity-check.service";
@@ -64,26 +66,6 @@ trait Manager {
     fn busctl(&mut self, args: &[&str]) -> io::Result<ManagerOutput>;
 }
 
-struct Systemctl;
-
-impl Manager for Systemctl {
-    fn systemctl(&mut self, args: &[&str]) -> io::Result<ManagerOutput> {
-        let output = systemctl_command().args(args).output()?;
-        Ok(ManagerOutput {
-            success: output.status.success(),
-            stdout: output.stdout,
-        })
-    }
-
-    fn busctl(&mut self, args: &[&str]) -> io::Result<ManagerOutput> {
-        let output = busctl_command().args(args).output()?;
-        Ok(ManagerOutput {
-            success: output.status.success(),
-            stdout: output.stdout,
-        })
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ServiceFault {
     Manager,
@@ -95,6 +77,8 @@ enum ServiceFault {
     StartFailed,
     ServiceEnvironmentUnavailable,
     DrainUnavailable,
+    DrainDeadline,
+    StopCoordinatorRequired,
     StopNotVerified,
     PendingJob,
     PackageOwned,
@@ -119,7 +103,11 @@ impl ServiceFault {
                 "systemd did not prove the exact packaged service environment"
             }
             Self::DrainUnavailable => {
-                "direct service stop is unavailable; use drain --wait and a package-aware manager stop"
+                "service-user drain proof failed; systemd stop was not requested"
+            }
+            Self::DrainDeadline => "service-user drain or stop deadline elapsed; stop is unproven",
+            Self::StopCoordinatorRequired => {
+                "service stop requires the proof-backed Linux stop coordinator"
             }
             Self::StopNotVerified => "systemd did not prove a successful completed service stop",
             Self::PendingJob => "velnor-host.service still has a pending systemd job",
@@ -131,7 +119,7 @@ impl ServiceFault {
 
 pub(super) fn service(action: ServiceAction, config_path: &Path, state_path: &Path) -> ExitCode {
     if matches!(action, ServiceAction::Status) {
-        let mut manager = Systemctl;
+        let mut manager = Systemctl::default();
         return match perform(action, &mut manager, 0) {
             Ok(()) => ExitCode::SUCCESS,
             Err(fault) => {
@@ -148,7 +136,10 @@ pub(super) fn service(action: ServiceAction, config_path: &Path, state_path: &Pa
         eprintln!("{}", ServiceFault::InvalidConfig.message());
         return ExitCode::from(1);
     }
-    let mut manager = Systemctl;
+    if matches!(action, ServiceAction::Stop) {
+        return stop::stop_for_config(config_path, state_path);
+    }
+    let mut manager = Systemctl::default();
     if matches!(action, ServiceAction::Preflight) {
         return match preflight::verify_loaded_unit_for_config(
             &mut manager,
@@ -191,7 +182,7 @@ fn perform(
         ServiceAction::Preflight => preflight::verify_loaded_unit(manager, drain_timeout_secs),
         ServiceAction::Install | ServiceAction::Uninstall => Err(ServiceFault::PackageOwned),
         ServiceAction::Start => start(manager, drain_timeout_secs),
-        ServiceAction::Stop => Err(ServiceFault::DrainUnavailable),
+        ServiceAction::Stop => Err(ServiceFault::StopCoordinatorRequired),
         ServiceAction::VerifyStopped => stopped::verify_stopped(manager, drain_timeout_secs),
     }
 }
@@ -373,7 +364,13 @@ fn manager_call_output(
     manager: &mut impl Manager,
     args: &[&str],
 ) -> Result<ManagerOutput, ServiceFault> {
-    manager.systemctl(args).map_err(|_| ServiceFault::Manager)
+    manager.systemctl(args).map_err(|error| {
+        if error.kind() == io::ErrorKind::TimedOut {
+            ServiceFault::DrainDeadline
+        } else {
+            ServiceFault::Manager
+        }
+    })
 }
 
 #[cfg(test)]
