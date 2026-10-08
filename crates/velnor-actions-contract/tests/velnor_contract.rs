@@ -7,6 +7,8 @@ mod impl_adapter_wire_contract;
 mod impl_alint_negative;
 #[path = "impl_contract.rs"]
 mod impl_contract;
+#[path = "impl_contract_binary_release.rs"]
+mod impl_contract_binary_release;
 #[path = "impl_contract_conclusions.rs"]
 mod impl_contract_conclusions;
 #[path = "impl_contract_ids.rs"]

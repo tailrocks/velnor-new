@@ -1,5 +1,6 @@
 08d4bafeb93696552aa8cf7aa654d82cba87f09acbb1a6ebf6f8f1e6d01a8c2a  ./.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./.github/CLAUDE.md
+952c78c7e8f944dc89ae7733a76f912e2c6b7f7e6013bb2bad00ae85e5ceed3a  ./.github/PULL_REQUEST_TEMPLATE.md
 5669cab4602b6fee74a16d2dbd53d0abbd8484f236bb4089d8dbbd72b360fea9  ./.github/actionlint.yaml
 620e5cc5b6d41e655ac7c25d9fcaa844b22c3529657d374e31e55d66828c1407  ./.github/actions/generator-release-attest-linux/action.yml
 5e7c33e0a70b2ef1355f113089a8b528dfa734404c0dc14242c28eb626624ebd  ./.github/actions/generator-release-attest-macos-intel/action.yml

@@ -2,6 +2,9 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
+#[path = "../../test_support/git_fixture.rs"]
+pub(crate) mod git_fixture;
+
 pub(crate) fn mock_trust_commands(script: &str, root: &Path) -> String {
     let bin = root.join("trust-mocks");
     fs::create_dir_all(&bin).expect("mock directory");

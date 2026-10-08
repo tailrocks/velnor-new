@@ -70,11 +70,12 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 14. [Implementation plan](implementation-plan.md) defines the ordered work packages and merge gates.
 15. [Release contract](release-contract.md) defines consumer release-plz preparation, validation, protected publishing, and reconciliation.
 16. [Release config schema](release-config-schema.md) defines the exact `[stacks.rust.release]` fields, defaults, and validation errors.
-17. [Release coverage](release-coverage.md) maps release behaviors to their tests and snapshots.
-18. [OpenTofu contract](opentofu-contract.md) defines the native `tofu` stack extension, tracked in `../reviews/opentofu-evidence.md`.
-19. [Rust dependency policy](rust-dependency-policy.md) defines dependency narrowness, the initial crate set, and deny/machete supply-chain gates (companion to the quality contract §7).
-20. [Rust test policy](rust-test-policy.md) defines test layout, integration entry points, doctest separation, fixture independence, and snapshot review (companion to the quality contract §4).
-21. [Rust verification contract](rust-verification-contract.md) defines the required focused task templates, workflow verification, and risk-triggered checks (binding extension of the quality contract §9).
-20. [macOS Scale Set runner](macos-scaleset-runner.md) is the active runner specification. It supersedes conflicting deferred roadmap clauses.
+17. [Generic Rust binary-release contract](binary-release-contract.md) defines trusted scheduled GitHub Releases separately from crates.io release-plz.
+18. [Release coverage](release-coverage.md) maps release behaviors to their tests and snapshots.
+19. [OpenTofu contract](opentofu-contract.md) defines the native `tofu` stack extension, tracked in `../reviews/opentofu-evidence.md`.
+20. [Rust dependency policy](rust-dependency-policy.md) defines dependency narrowness, the initial crate set, and deny/machete supply-chain gates (companion to the quality contract §7).
+21. [Rust test policy](rust-test-policy.md) defines test layout, integration entry points, doctest separation, fixture independence, and snapshot review (companion to the quality contract §4).
+22. [Rust verification contract](rust-verification-contract.md) defines the required focused task templates, workflow verification, and risk-triggered checks (binding extension of the quality contract §9).
+23. [macOS Scale Set runner](macos-scaleset-runner.md) is the active runner specification. It supersedes conflicting deferred roadmap clauses.
 
 The listed documents are intended to be implementable without inventing behavior. If a behavior is not specified, fail with a clear error and add a decision to the spec before implementing it. Do not silently broaden V1.
