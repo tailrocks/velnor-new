@@ -12,6 +12,8 @@ use velnor_actions_workflow_tree::rendered::RenderedFile;
 /// One renderer-owned local composite invocation and its closed input set.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SharedActionCall {
+    /// Canonical renderer-generated local actions that run before the body.
+    pub prelude_uses: Vec<String>,
     /// Canonical workspace-relative action directory.
     pub uses: String,
     /// Inputs with renderer-owned value sources.
@@ -66,11 +68,8 @@ struct SharedLaneParts {
     local_postlude: Vec<Step>,
 }
 
-/// Factor matching hosted/local step lists while preserving job semantics.
-/// Lane headers, outputs, report uploads, and elected cache saves stay outer.
-///
+/// Factor matching provider lanes while keeping headers, outputs, reports, and cache saves outer.
 /// # Errors
-///
 /// Returns an error when a lane pair is incompatible or has an unsafe id.
 pub fn share_lanes(
     jobs: &BTreeMap<String, Job>,
@@ -110,6 +109,7 @@ pub fn share_lanes(
             ctx,
         )?);
         let call = SharedActionCall {
+            prelude_uses: Vec::new(),
             uses,
             inputs: Vec::new(),
         };
@@ -164,7 +164,6 @@ fn add_provider_admission_file(
     Ok(())
 }
 
-/// Validate the expanded workflow-job and composite-action step scopes.
 fn validate_serialized_scopes(shared: &LaneShare) -> Result<(), RenderError> {
     // Validate each full source job before its common body moves into a
     // composite. Provider restore/admission/use can span the hosted/local

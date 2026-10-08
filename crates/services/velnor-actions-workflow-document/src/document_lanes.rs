@@ -8,7 +8,9 @@ use crate::document_steps::step_to_yaml;
 use crate::lane_share::{SharedActionCall, SharedActionInput};
 use velnor_actions_workflow_jobs::RenderContext;
 use velnor_actions_workflow_steps::RenderError;
-use velnor_actions_workflow_tree::composite::{shared_call, shared_call_named_with_inputs};
+use velnor_actions_workflow_tree::composite::{
+    shared_call, shared_call_named, shared_call_named_with_inputs,
+};
 use velnor_actions_workflow_tree::rendered::RenderedFile;
 use velnor_actions_workflow_tree::yaml::Yaml;
 use velnor_actions_workflow_tree::{marker, yaml::render_yaml};
@@ -113,7 +115,7 @@ fn append_shared_lane_steps(
         rendered,
         "prelude",
     )?;
-    rendered.push(shared_action_call(call)?);
+    rendered.extend(shared_action_steps(call)?);
     crate::lane_share_sections::append_steps(
         id,
         lanes.postludes,
@@ -148,6 +150,16 @@ fn shared_action_call(call: &SharedActionCall) -> Result<Yaml, RenderError> {
         })
         .collect::<Result<Vec<_>, _>>()?;
     shared_call_named_with_inputs(&call.uses, "Run shared steps", inputs)
+}
+
+fn shared_action_steps(call: &SharedActionCall) -> Result<Vec<Yaml>, RenderError> {
+    let mut steps = call
+        .prelude_uses
+        .iter()
+        .map(|uses| shared_call_named(uses, "Prepare Rust task bootstrap"))
+        .collect::<Result<Vec<_>, _>>()?;
+    steps.push(shared_action_call(call)?);
+    Ok(steps)
 }
 
 fn task_composite_file(
@@ -354,3 +366,8 @@ fn step_values(step: &Step) -> Vec<&str> {
 mod task_lanes;
 
 pub(crate) use task_lanes::factor_task_report_jobs;
+
+#[path = "document_static_task_prefixes.rs"]
+mod static_task_prefixes;
+
+pub(crate) use static_task_prefixes::factor_static_task_prefixes;

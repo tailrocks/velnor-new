@@ -22,7 +22,8 @@ pub(crate) fn factor_task_report_jobs(
     ctx: &RenderContext,
 ) -> Result<(), RenderError> {
     factor_paired_report_jobs(source, shared, ctx)?;
-    factor_unpaired_report_jobs(source, shared, ctx)
+    factor_unpaired_report_jobs(source, shared, ctx)?;
+    super::factor_static_task_prefixes(shared, ctx)
 }
 
 fn factor_unpaired_report_jobs(
@@ -99,6 +100,7 @@ fn register_unpaired_report_action(
     shared.calls.insert(
         id.to_owned(),
         SharedActionCall {
+            prelude_uses: Vec::new(),
             uses: format!("./.github/actions/{logical}"),
             inputs,
         },
