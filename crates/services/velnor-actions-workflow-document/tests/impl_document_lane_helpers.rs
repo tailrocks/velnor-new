@@ -79,6 +79,7 @@ pub(crate) fn echo_step(index: usize, payload: &str) -> Step {
 
 pub(crate) fn lane_job(display: &str, runs_on: &str, steps: Vec<Step>) -> Job {
     Job {
+        outputs: Vec::new(),
         display_name: display.to_owned(),
         runs_on: runs_on.to_owned(),
         timeout_minutes: JobTimeout::CRATE,

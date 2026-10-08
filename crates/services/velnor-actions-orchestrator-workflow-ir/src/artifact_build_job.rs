@@ -71,6 +71,7 @@ pub(crate) fn build(
     steps.push(velnor_actions_workflow_steps::steps::artifact_export_step());
     steps.push(velnor_actions_workflow_steps::steps::artifact_build_upload_step()?);
     Ok(Job {
+        outputs: Vec::new(),
         display_name: "Build declared artifact".to_owned(),
         runs_on: VerificationRunner::LinuxX64.runs_on().to_owned(),
         check_runner: None,

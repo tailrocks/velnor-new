@@ -1,5 +1,6 @@
 //! Plan closure: freshness gate, publish upload, anchor, legacy path.
 use velnor_actions_contract_config::WorkflowPolicy;
+use velnor_actions_contract_workflow::JobOutput;
 use velnor_actions_workflow_jobs::{
     CHECK_GENERATED_NAME, DOWNLOAD_PLAN_NAME, FRESHNESS_OUTDIR, PUBLISH_PLAN_NAME,
     download_plan_step, freshness_step, publish_plan_step,
@@ -103,6 +104,11 @@ fn matrix_report_upload_names_derive_from_run_and_leg() -> Result<(), RenderErro
 fn crate_upload_names_derive_from_run_and_job() -> Result<(), RenderError> {
     let step = crate_job_report_upload_step("crate_foo")?;
     assert_eq!(step.name, CRATE_REPORT_UPLOAD_NAME);
+    assert_eq!(step.id, None);
+    assert_eq!(
+        step.role,
+        Some(velnor_actions_contract_workflow::StepRole::MatrixReportUpload)
+    );
     let velnor_actions_contract_workflow::StepKind::Action { uses, with, .. } = &step.kind else {
         panic!("crate upload must be an action step");
     };
@@ -118,6 +124,45 @@ fn crate_upload_names_derive_from_run_and_job() -> Result<(), RenderError> {
     assert_eq!(with["if-no-files-found"].as_str(), "error");
     assert!(crate_job_report_upload_step("").is_err());
     assert!(crate_job_report_upload_step("Has Space").is_err());
+    Ok(())
+}
+
+#[test]
+fn typed_job_output_renders_the_uploaded_report_artifact_id() -> Result<(), RenderError> {
+    let plan = minimal_plan_job()?;
+    let mut upload = crate_job_report_upload_step("rust-demo")?;
+    upload.id = Some(velnor_actions_contract_workflow::StepId::CrateReportUpload);
+    upload.role = Some(velnor_actions_contract_workflow::StepRole::CrateReportUpload);
+    let (task_id, mut task) = job(
+        "rust-demo",
+        "Rust / demo",
+        vec!["plan".to_owned()],
+        vec![upload],
+    );
+    task.outputs = vec![JobOutput::task_report_artifact_id()];
+    let text = render_workflow_ir(
+        &fixture_ir(vec![plan, (task_id, task)]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )?;
+    assert!(text.contains("id: crate-report-upload"), "{text}");
+    assert!(
+        text.contains(
+            "task_report_artifact_id: ${{ steps.crate-report-upload.outputs.artifact-id }}"
+        ),
+        "{text}"
+    );
+    let timeout_at = text.find("timeout-minutes:").expect("job timeout renders");
+    let env_at = text
+        .find("    env:")
+        .expect("legacy job environment renders");
+    let outputs_at = text.find("    outputs:").expect("typed outputs render");
+    let steps_at = text.find("    steps:").expect("job steps render");
+    assert!(
+        timeout_at < env_at && env_at < outputs_at && outputs_at < steps_at,
+        "job output placement must preserve established header/env ordering:\n{text}"
+    );
     Ok(())
 }
 

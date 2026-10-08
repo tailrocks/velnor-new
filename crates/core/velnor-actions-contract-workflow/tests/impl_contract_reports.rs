@@ -203,6 +203,7 @@ fn final_reports_validate() -> Result<(), ContractError> {
 #[test]
 fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
     let job = Job {
+        outputs: Vec::new(),
         display_name: "Plan".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
@@ -384,8 +385,8 @@ fn final_without_plan_is_planning_failed() -> Result<(), ContractError> {
     assert_eq!(report.status, FinalStatus::PlanningFailed);
     assert_eq!(report.report_id, format!("final-{run_key}"));
     assert_eq!(report.plan_id, format!("plan-{run_key}"));
-    assert!(report.expected_report_ids.is_empty());
-    assert!(report.downloaded_artifact_ids.is_empty());
+    assert_eq!(report.expected_report_ids, Vec::<String>::new());
+    assert_eq!(report.downloaded_artifact_ids, Vec::<String>::new());
     assert_eq!(report.required_job_results[0].job_id, "alint");
     assert_eq!(report.counts.selected, 0);
     assert!(FinalReport::without_plan("bogus", Vec::new()).is_err());

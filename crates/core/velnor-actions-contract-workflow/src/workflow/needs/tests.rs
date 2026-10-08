@@ -22,6 +22,7 @@ fn expected_env_emits_sorted_inventory_json() {
 /// Minimal job with the given `needs` for inventory tests.
 fn job_with_needs(needs: &[&str]) -> Job {
     Job {
+        outputs: Vec::new(),
         display_name: "Test".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,

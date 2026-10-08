@@ -287,6 +287,7 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
     )?;
     upload.condition = Some("always()".to_owned());
     Ok(Job {
+        outputs: Vec::new(),
         display_name: ValidatorKind::Alint.display_name().to_owned(),
         runs_on: ctx.runs_on.clone(),
         check_runner: None,
@@ -344,6 +345,7 @@ pub(crate) fn validator_job(
         }
     });
     Ok(Job {
+        outputs: Vec::new(),
         display_name: validator.display_name().to_owned(),
         runs_on: ctx.runs_on.clone(),
         check_runner: None,

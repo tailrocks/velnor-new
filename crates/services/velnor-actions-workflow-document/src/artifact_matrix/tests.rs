@@ -11,6 +11,7 @@ use velnor_actions_workflow_tree::yaml::Yaml;
 
 fn matrix_job(runs_on: &str) -> Job {
     Job {
+        outputs: Vec::new(),
         display_name: "Artifact builds".to_owned(),
         runs_on: runs_on.to_owned(),
         check_runner: None,

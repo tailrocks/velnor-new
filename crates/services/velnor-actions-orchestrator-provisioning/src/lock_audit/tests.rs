@@ -14,6 +14,7 @@ use crate::vectors::CARGO_DENY_VERSION;
 
 fn shell_job(run: Vec<String>) -> Job {
     Job {
+        outputs: Vec::new(),
         check_runner: None,
         display_name: "Plan".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),

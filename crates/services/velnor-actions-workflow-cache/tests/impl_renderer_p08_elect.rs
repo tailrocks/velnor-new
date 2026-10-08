@@ -30,6 +30,7 @@ fn tools_saves(job: &Job) -> Vec<&Step> {
 /// One Mise-setup job over an explicit cache key.
 fn keyed_job(key: &str) -> Result<Job, RenderError> {
     Ok(Job {
+        outputs: Vec::new(),
         display_name: "Keyed".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,
@@ -132,6 +133,7 @@ fn mise_cache_writer_election_separates_hosted_image_families() -> Result<(), Re
 fn mise_cache_writer_election_skips_keyless_and_reruns() -> Result<(), RenderError> {
     let shared = "mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.16-aaaaaaaaaaaaaaaa-${{env.VELNOR_MISE_CACHE_SUFFIX}}";
     let bare = Job {
+        outputs: Vec::new(),
         display_name: "Bare".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,

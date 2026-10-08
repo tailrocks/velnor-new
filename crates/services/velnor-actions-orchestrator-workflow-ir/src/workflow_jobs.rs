@@ -83,6 +83,7 @@ pub fn plan_job(
     steps.push(request_step(PLAN_OPERATION)?);
     steps.push(plan_step());
     Ok(Job {
+        outputs: Vec::new(),
         display_name: "Plan".to_owned(),
         runs_on: label.to_owned(),
         check_runner: None,
@@ -115,6 +116,7 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
             })?;
     lint.role = Some(StepRole::Actionlint);
     Ok(Job {
+        outputs: Vec::new(),
         display_name: LINT_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
         check_runner: None,
@@ -166,6 +168,7 @@ pub fn final_job(
         runs_on: label.to_owned(),
         check_runner: None,
         timeout_minutes: JobTimeout::REQUIRED,
+        outputs: Vec::new(),
         needs,
         condition: Some(FINAL_CONDITION.to_owned()),
         permissions: Some(read_actions_permissions()),

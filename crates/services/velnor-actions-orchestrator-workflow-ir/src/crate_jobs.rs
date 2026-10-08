@@ -19,7 +19,7 @@ use velnor_actions_contract_planning::ProposedTask;
 use velnor_actions_contract_workflow::{
     CrateJob, CrateObligation, Job, JobTimeout, Step, crate_display_name, tofu_display_name,
 };
-use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_cache::cache_steps::CompileDriver as RenderDriver;
 use velnor_actions_workflow_jobs::context::PLAN_JOB_ID;
 
@@ -31,6 +31,7 @@ use velnor_actions_orchestrator_discovery::discover::Discovery;
 use velnor_actions_orchestrator_provisioning::matrix_step::step_name_for;
 
 mod stage;
+mod steps;
 
 #[cfg(test)]
 pub(crate) use stage::needs;
@@ -156,6 +157,7 @@ pub fn build_crate_jobs(
 /// Test-less tasks carry no command and package-less workspace tasks
 /// belong to the plan job, so neither is emitted as an obligation.
 /// Shared with `plan` so its obligation list matches emission exactly.
+#[must_use]
 pub fn is_runnable(task: &ProposedTask) -> bool {
     !task.no_targets
         && !task.identity.unit_id.is_empty()
@@ -260,62 +262,49 @@ fn render_job(
     acquire: Option<&Step>,
     max_parallel_jobs: u32,
 ) -> Result<Job, OrchestratorError> {
-    let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
-    steps.extend(acquire.cloned());
-    steps.push(velnor_actions_orchestrator_provisioning::matrix_step::download_plan_step()?);
-    let needs_validators =
-        velnor_actions_orchestrator_provisioning::matrix_step::crate_needs_generate_validators(
-            policy,
-            &model.package_name,
-        );
-    steps.push(
-        velnor_actions_orchestrator_provisioning::matrix_step::prepare_crate_tools_step(
-            catalog,
-            use_rust,
-            use_nextest,
-            velnor_actions_orchestrator_provisioning::matrix_step::prepare_install_opentofu(
-                policy,
-                &model.package_name,
-                use_opentofu,
-            ),
-            needs_validators,
-        )?,
-    );
-    if use_rust {
-        steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
-    }
-    steps.extend(restore_step_for_crate(
+    let mut steps = steps::render_setup_steps(
         label,
+        policy,
+        model,
         catalog,
         fetch_roots,
         use_rust,
         use_mbx,
+        use_nextest,
+        use_opentofu,
         repo_has_mbx,
+        acquire,
+    )?;
+    steps.extend(obligation_steps(
+        model,
+        catalog,
+        use_opentofu,
+        max_parallel_jobs,
     )?);
-    if use_opentofu {
-        let root = velnor_actions_orchestrator_provisioning::tofu_cache::tofu_root_for_obligations(
-            &model.obligations,
-        )?;
-        steps.extend(velnor_actions_orchestrator_provisioning::tofu_cache::provider_cache_step_for_tofu_root(
-            label, catalog, &root,
-        )?);
-    }
-    if use_mbx {
-        steps.extend(crate::mbx_preflight::steps_for_catalog(catalog)?);
-    }
-    if use_rust {
-        steps.extend(
-            velnor_actions_orchestrator_provisioning::source_prep::fetch_steps_for_crate(
-                catalog,
-                fetch_roots,
-            )?,
-        );
-    }
-    steps.extend(crate::workflow::wire_w1::maybe_task_cache_steps(
-        None,
-        TaskCacheMode::Off,
-        "",
-    )?);
+    steps.push(
+        velnor_actions_orchestrator_provisioning::matrix_step::crate_upload_step(&model.job_id)?,
+    );
+    Ok(Job {
+        outputs: Vec::new(),
+        display_name: model.display_name.clone(),
+        runs_on: label.to_owned(),
+        check_runner: None,
+        timeout_minutes: JobTimeout::CRATE,
+        needs: vec![PLAN_JOB_ID.to_owned()],
+        condition: None,
+        permissions: None,
+        environment: None,
+        steps,
+    })
+}
+
+fn obligation_steps(
+    model: &CrateJob,
+    catalog: &ToolCatalog,
+    use_opentofu: bool,
+    max_parallel_jobs: u32,
+) -> Result<Vec<Step>, OrchestratorError> {
+    let mut steps = Vec::with_capacity(model.obligations.len());
     for (index, obligation) in model.obligations.iter().enumerate() {
         let downstream: Vec<String> = model.obligations[index + 1..]
             .iter()
@@ -333,20 +322,7 @@ fn render_job(
             )?,
         );
     }
-    steps.push(
-        velnor_actions_orchestrator_provisioning::matrix_step::crate_upload_step(&model.job_id)?,
-    );
-    Ok(Job {
-        display_name: model.display_name.clone(),
-        runs_on: label.to_owned(),
-        check_runner: None,
-        timeout_minutes: JobTimeout::CRATE,
-        needs: vec![PLAN_JOB_ID.to_owned()],
-        condition: None,
-        permissions: None,
-        environment: None,
-        steps,
-    })
+    Ok(steps)
 }
 
 /// Restore step for one crate: shared sources, or Cargo-only registry.

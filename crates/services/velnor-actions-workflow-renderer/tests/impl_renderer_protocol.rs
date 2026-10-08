@@ -43,6 +43,7 @@ fn fixture_ir(steps: Vec<velnor_actions_contract_workflow::Step>) -> WorkflowIr 
     jobs.insert(
         "plan".to_owned(),
         Job {
+            outputs: Vec::new(),
             display_name: "Plan".to_owned(),
             runs_on: LABEL.to_owned(),
             check_runner: None,

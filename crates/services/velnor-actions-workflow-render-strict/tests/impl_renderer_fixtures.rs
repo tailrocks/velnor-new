@@ -135,6 +135,7 @@ pub(crate) fn job(id: &str, display: &str, needs: Vec<String>, steps: Vec<Step>)
             runs_on: LABEL.to_owned(),
             check_runner: None,
             timeout_minutes: JobTimeout::CRATE,
+            outputs: Vec::new(),
             needs,
             condition: None,
             permissions: (id == velnor_actions_workflow_jobs::context::FINAL_JOB_ID).then_some(

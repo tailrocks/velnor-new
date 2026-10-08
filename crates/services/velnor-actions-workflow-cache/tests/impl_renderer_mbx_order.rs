@@ -34,6 +34,7 @@ fn typed_mbx_owner_precedes_cargo_source_fetch_independent_of_labels() {
         },
     };
     let job = Job {
+        outputs: Vec::new(),
         display_name: "Demo".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,

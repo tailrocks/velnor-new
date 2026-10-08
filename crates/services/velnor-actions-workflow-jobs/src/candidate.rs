@@ -111,6 +111,7 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
     let artifact = candidate_artifact_name(target.triple())?;
     let candidate_binary = format!("{}/velnor-actions", steps::CANDIDATE_STAGE_DIR);
     Ok(Job {
+        outputs: Vec::new(),
         display_name: "Candidate".to_owned(),
         runs_on: ctx.runs_on.clone(),
         check_runner: None,
@@ -180,6 +181,7 @@ pub(crate) fn release_job(ctx: &RenderContext) -> Result<Job, RenderError> {
         })?;
     let artifact = candidate_artifact_name(target.triple())?;
     Ok(Job {
+        outputs: Vec::new(),
         display_name: super::support::RELEASE_DISPLAY_NAME.to_owned(),
         runs_on: ctx.runs_on.clone(),
         check_runner: None,
