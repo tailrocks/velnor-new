@@ -5,12 +5,13 @@ use std::time::{Duration, Instant};
 use tokio::sync::watch;
 use tokio::time::{Instant as TokioInstant, sleep, timeout_at};
 
+use velnor_runner_github::VerifiedPoolSessionAdmin;
 pub use velnor_runner_github::policy::{
     PolicyGap, PolicyMismatch, PoolAdmissionEvidence, VerifiedPoolPolicy,
 };
 use velnor_runner_github::policy::{
     PoolBindingView, PoolRegistrationScopeView, RunnerImageIdentityView,
-    preflight_organization_pool_admission_async,
+    preflight_pool_admission_with_admin_async,
 };
 use velnor_runner_host::RegistrationScope;
 use velnor_runner_host::{BoundedDiscoveryTransport, ValidatedHostConfigSnapshot};
@@ -18,6 +19,8 @@ use velnor_runner_journal::journal::Journal;
 
 use crate::discovery_intents::JournalDiscoveryIntentStore;
 
+use super::session::observe_cutoff_before_deadline;
+use super::session::{CancelDispatchOnDrop, DeadlineBoundTransport, DispatchFence};
 use super::{
     LinuxAdmissionState, LinuxLaunchContext, LinuxLaunchCredentials, SIGNAL_POLL, deadline_after,
 };
@@ -29,26 +32,92 @@ pub(super) async fn prepare_admission(
     journal: &Journal,
     shutdown: &mut watch::Receiver<Option<Instant>>,
     cutoff: &mut Option<Instant>,
-) -> LinuxAdmissionState {
+) -> AdmissionPreparation {
+    let Some(credentials) = credentials else {
+        return AdmissionPreparation::blocked(LinuxAdmissionState::CredentialsUnavailable);
+    };
+    let expected = match preflight_binding(context) {
+        Ok(expected) => expected,
+        Err(state) => return AdmissionPreparation::blocked(state),
+    };
+    let preflight_deadline = deadline_after(Instant::now(), PREFLIGHT_BUDGET);
+    match observe_cutoff_before_deadline(
+        journal,
+        shutdown,
+        cutoff,
+        context.drain_timeout(),
+        Some(preflight_deadline),
+    )
+    .await
+    {
+        Some(false) => {}
+        Some(true) => {
+            return AdmissionPreparation::blocked(LinuxAdmissionState::ShutdownBeforePreflight);
+        }
+        None => {
+            return AdmissionPreparation::blocked(LinuxAdmissionState::PoolPreflightUnavailable);
+        }
+    }
+    match wait_preflight(
+        context,
+        credentials,
+        journal,
+        shutdown,
+        cutoff,
+        preflight_deadline,
+        &expected,
+    )
+    .await
+    {
+        Some(preflight) => admission_result(&preflight.evidence, preflight.verified_admin),
+        None => AdmissionPreparation::blocked(LinuxAdmissionState::PoolPreflightUnavailable),
+    }
+}
+
+fn preflight_binding(
+    context: &LinuxLaunchContext,
+) -> Result<PoolBindingView<'_>, LinuxAdmissionState> {
     let Some(profile) = context.snapshot.runner_image_profile() else {
-        return LinuxAdmissionState::RunnerProfileUnavailable;
+        return Err(LinuxAdmissionState::RunnerProfileUnavailable);
     };
     if velnor_runner_host::verify_runner_profile_admission().is_err() {
-        return LinuxAdmissionState::RunnerProfileAdmissionUnavailable;
+        return Err(LinuxAdmissionState::RunnerProfileAdmissionUnavailable);
     }
-    let Some(credentials) = credentials else {
-        return LinuxAdmissionState::CredentialsUnavailable;
-    };
-    let Some(expected) = pool_binding_view(&context.snapshot, &profile) else {
-        return LinuxAdmissionState::PoolUnknown(PolicyGap::MissingField);
-    };
+    if context
+        .snapshot
+        .with_job_trust_policy_view(|_| ())
+        .is_none()
+    {
+        return Err(LinuxAdmissionState::PoolUnknown(PolicyGap::MissingField));
+    }
+    pool_binding_view(&context.snapshot, &profile)
+        .ok_or(LinuxAdmissionState::PoolUnknown(PolicyGap::MissingField))
+}
 
+async fn wait_preflight(
+    context: &LinuxLaunchContext,
+    credentials: &LinuxLaunchCredentials,
+    journal: &Journal,
+    shutdown: &mut watch::Receiver<Option<Instant>>,
+    cutoff: &mut Option<Instant>,
+    preflight_deadline: Instant,
+    expected: &PoolBindingView<'_>,
+) -> Option<velnor_runner_github::policy::PoolAdmissionPreflight> {
+    let dispatch = DispatchFence::new();
+    let preflight_dispatch = dispatch.clone();
+    let preflight_shutdown = shutdown.clone();
     let preflight = async {
-        let mut transport = BoundedDiscoveryTransport::new();
+        let _cancel = CancelDispatchOnDrop(preflight_dispatch.clone());
+        let mut transport = DeadlineBoundTransport::new(
+            BoundedDiscoveryTransport::new(),
+            preflight_dispatch.clone(),
+            preflight_shutdown.clone(),
+            Some(preflight_deadline),
+        );
         let mut intents = JournalDiscoveryIntentStore::new(journal);
-        preflight_organization_pool_admission_async(
+        preflight_pool_admission_with_admin_async(
             &mut transport,
-            expected,
+            *expected,
             &credentials.actions_read,
             &credentials.controller,
             &mut intents,
@@ -56,46 +125,96 @@ pub(super) async fn prepare_admission(
         .await
     };
     tokio::pin!(preflight);
-    let now = Instant::now();
-    let Some(preflight_deadline) = now.checked_add(PREFLIGHT_BUDGET) else {
-        return LinuxAdmissionState::PoolPreflightUnavailable;
-    };
     let mut wake = Box::pin(sleep(SIGNAL_POLL));
     loop {
         tokio::select! {
             result = timeout_at(TokioInstant::from_std(preflight_deadline), &mut preflight) => {
-                return match result {
-                    Ok(Ok(PoolAdmissionEvidence::Verified(_))) => LinuxAdmissionState::VerifiedOfferGateClosed,
-                    Ok(Ok(PoolAdmissionEvidence::Unknown(gap))) => LinuxAdmissionState::PoolUnknown(gap),
-                    Ok(Ok(PoolAdmissionEvidence::Rejected(mismatch))) => LinuxAdmissionState::PoolRejected(mismatch),
-                    Ok(Err(_)) | Err(_) => LinuxAdmissionState::PoolPreflightUnavailable,
-                };
+                return match result { Ok(Ok(value)) => Some(value), Ok(Err(_)) | Err(_) => None };
             }
             changed = shutdown.changed() => {
                 let latest = *shutdown.borrow_and_update();
                 if let Some(value) = latest {
                     *cutoff = Some(value);
-                    return LinuxAdmissionState::ShutdownBeforePreflight;
+                    let _ = observe_cutoff_before_deadline(
+                        journal,
+                        shutdown,
+                        cutoff,
+                        context.drain_timeout(),
+                        Some(preflight_deadline),
+                    ).await;
+                    return None;
                 }
                 if changed.is_err() {
                     *cutoff = Some(deadline_after(Instant::now(), context.drain_timeout));
-                    return LinuxAdmissionState::ShutdownBeforePreflight;
+                    let _ = observe_cutoff_before_deadline(
+                        journal,
+                        shutdown,
+                        cutoff,
+                        context.drain_timeout(),
+                        Some(preflight_deadline),
+                    ).await;
+                    return None;
                 }
             }
             () = &mut wake => {
-                match journal.draining().await {
-                    Ok(true) | Err(_) => {
-                        // A drain observed after startup gets one bounded local interval.
-                        // Read failure aborts new work and attempts the durable fence.
-                        *cutoff = Some(deadline_after(Instant::now(), context.drain_timeout));
-                        return LinuxAdmissionState::ShutdownBeforePreflight;
-                    }
-                    Ok(false) => {}
+                if !matches!(observe_cutoff_before_deadline(
+                    journal,
+                    shutdown,
+                    cutoff,
+                    context.drain_timeout(),
+                    Some(preflight_deadline),
+                ).await, Some(false)) || cutoff.is_some() {
+                    return None;
                 }
                 wake.as_mut().reset(tokio::time::Instant::now() + SIGNAL_POLL);
             }
         }
     }
+}
+
+pub(super) struct AdmissionPreparation {
+    pub(super) state: LinuxAdmissionState,
+    pub(super) verified_admin: Option<VerifiedPoolSessionAdmin>,
+}
+
+impl AdmissionPreparation {
+    fn blocked(state: LinuxAdmissionState) -> Self {
+        Self {
+            state,
+            verified_admin: None,
+        }
+    }
+}
+
+fn admission_result(
+    evidence: &PoolAdmissionEvidence,
+    verified_admin: Option<VerifiedPoolSessionAdmin>,
+) -> AdmissionPreparation {
+    match evidence {
+        PoolAdmissionEvidence::Verified(_) => match verified_admin {
+            Some(admin) if repository_session_supported(admin.binding()) => AdmissionPreparation {
+                state: LinuxAdmissionState::VerifiedSessionReady,
+                verified_admin: Some(admin),
+            },
+            Some(_) => {
+                AdmissionPreparation::blocked(LinuxAdmissionState::SessionCloseUnsupportedScope)
+            }
+            None => AdmissionPreparation::blocked(LinuxAdmissionState::PoolPreflightUnavailable),
+        },
+        PoolAdmissionEvidence::Unknown(gap) => {
+            AdmissionPreparation::blocked(LinuxAdmissionState::PoolUnknown(*gap))
+        }
+        PoolAdmissionEvidence::Rejected(mismatch) => {
+            AdmissionPreparation::blocked(LinuxAdmissionState::PoolRejected(*mismatch))
+        }
+    }
+}
+
+fn repository_session_supported(binding: &velnor_runner_github::policy::PoolBinding) -> bool {
+    matches!(
+        binding.registration_scope,
+        velnor_runner_github::policy::PoolRegistrationScope::Repository { .. }
+    )
 }
 
 fn pool_binding_view<'a>(

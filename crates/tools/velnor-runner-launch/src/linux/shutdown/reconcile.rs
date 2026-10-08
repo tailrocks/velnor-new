@@ -165,6 +165,30 @@ async fn cleanup_terminal_rows(
     cleaned
 }
 
+/// Clean only rows backed by actual Completed event identities and the host's
+/// physical cleanup proof. Callers use this after persisting lifecycle events
+/// and before acknowledging their enclosing message.
+pub(in crate::linux) async fn cleanup_terminal_workers(
+    context: &LinuxLaunchContext,
+    journal: &Journal,
+    diagnostics: &DiagnosticsStore,
+    deadline: Instant,
+) -> Result<usize, ()> {
+    if Instant::now() >= deadline {
+        return Err(());
+    }
+    let docker = connect_unix(&context.docker_endpoint).map_err(|_| ())?;
+    let rows = timeout_at(TokioInstant::from_std(deadline), journal.rows())
+        .await
+        .map_err(|_| ())?
+        .map_err(|_| ())?;
+    if Instant::now() >= deadline {
+        return Err(());
+    }
+    let engine = DockerCleanupEngine::new(&docker);
+    Ok(cleanup_terminal_rows(journal, diagnostics, &engine, &rows, deadline).await)
+}
+
 fn grace_seconds(deadline: Instant) -> u32 {
     let remaining = deadline.saturating_duration_since(Instant::now()).as_secs();
     u32::try_from(remaining.min(30)).unwrap_or(u32::MAX)
