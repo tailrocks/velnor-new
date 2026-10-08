@@ -1,5 +1,7 @@
 //! `GET _apis/runtime/runnergroups`. Ids and names only.
 
+use std::collections::HashSet;
+
 use serde::Deserialize;
 
 use crate::session::{API_QUERY, bearer, execute, json_content, user_agent};
@@ -56,7 +58,19 @@ pub(crate) fn groups_request(admin_token: &str) -> Result<SessionRequest, Sessio
 pub(crate) fn decode_groups(body: &[u8]) -> Result<Vec<RunnerGroup>, SessionError> {
     let page: GroupPage = serde_json::from_slice(body).map_err(|_| WireError::Malformed)?;
     let len = i64::try_from(page.value.len()).map_err(|_| WireError::Malformed)?;
-    if page.count != len {
+    if page.count != len || page.count < 0 || page.count > 4096 {
+        return Err(SessionError::from(WireError::Malformed));
+    }
+    let mut seen_ids = HashSet::new();
+    let mut seen_names = HashSet::new();
+    if page.value.iter().any(|item| {
+        item.id <= 0
+            || item.name.is_empty()
+            || item.name.len() > 256
+            || item.name.chars().any(char::is_control)
+            || !seen_ids.insert(item.id)
+            || !seen_names.insert(item.name.to_lowercase())
+    }) {
         return Err(SessionError::from(WireError::Malformed));
     }
     Ok(page

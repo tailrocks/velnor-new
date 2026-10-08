@@ -123,3 +123,138 @@ impl Drop for RepositoryDiscoveryToken {
         self.config_url.zeroize();
     }
 }
+
+/// Organization-scoped registration intent tied to one exact private target
+/// repository. The repository and organization must have the same owner name;
+/// this prevents using one repository's trust configuration to bootstrap a
+/// different organization scope.
+#[must_use]
+pub struct OrganizationAdminEvidence {
+    organization: String,
+    target_repository_id: i64,
+    target_repository_full_name: String,
+}
+
+impl OrganizationAdminEvidence {
+    pub(in crate::registration) fn from_repository(
+        repository: RepositoryAdminEvidence,
+        organization: &str,
+    ) -> Result<Self, crate::SessionError> {
+        let (owner, _) = repository
+            .full_name
+            .split_once('/')
+            .ok_or(crate::WireError::Malformed)?;
+        if !safe_scope_name(organization) || !owner.eq_ignore_ascii_case(organization) {
+            return Err(crate::WireError::RegistrationRejected.into());
+        }
+        Ok(Self {
+            organization: organization.to_owned(),
+            target_repository_id: repository.id,
+            target_repository_full_name: repository.full_name,
+        })
+    }
+
+    /// Exact organization login used for registration scope and config URL.
+    #[must_use]
+    pub fn organization(&self) -> &str {
+        &self.organization
+    }
+
+    /// Immutable target repository ID retained separately from registration scope.
+    #[must_use]
+    pub const fn target_repository_id(&self) -> i64 {
+        self.target_repository_id
+    }
+
+    /// Canonical target repository full name.
+    #[must_use]
+    pub fn target_repository_full_name(&self) -> &str {
+        &self.target_repository_full_name
+    }
+}
+
+impl fmt::Debug for OrganizationAdminEvidence {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("OrganizationAdminEvidence")
+            .field("organization", &self.organization)
+            .field("target_repository_id", &self.target_repository_id)
+            .field(
+                "target_repository_full_name",
+                &self.target_repository_full_name,
+            )
+            .finish()
+    }
+}
+
+/// Organization-scoped registration token for one bounded metadata exchange.
+#[must_use]
+pub struct OrganizationDiscoveryToken {
+    organization: String,
+    target_repository_id: i64,
+    target_repository_full_name: String,
+    config_url: String,
+    registration_token: RegistrationToken,
+}
+
+impl OrganizationDiscoveryToken {
+    pub(in crate::registration) fn new(
+        organization: String,
+        target_repository_id: i64,
+        target_repository_full_name: String,
+        registration_token: RegistrationToken,
+    ) -> Self {
+        let config_url = format!("https://github.com/{organization}");
+        Self {
+            organization,
+            target_repository_id,
+            target_repository_full_name,
+            config_url,
+            registration_token,
+        }
+    }
+
+    pub(in crate::registration) fn organization(&self) -> &str {
+        &self.organization
+    }
+
+    pub(in crate::registration) const fn target_repository_id(&self) -> i64 {
+        self.target_repository_id
+    }
+
+    pub(in crate::registration) fn target_repository_full_name(&self) -> &str {
+        &self.target_repository_full_name
+    }
+
+    pub(in crate::registration) fn config_url(&self) -> &str {
+        &self.config_url
+    }
+
+    pub(in crate::registration) fn registration_token(&self) -> &str {
+        self.registration_token.expose()
+    }
+}
+
+impl fmt::Debug for OrganizationDiscoveryToken {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("OrganizationDiscoveryToken([redacted])")
+    }
+}
+
+impl Drop for OrganizationDiscoveryToken {
+    fn drop(&mut self) {
+        self.organization.zeroize();
+        self.target_repository_full_name.zeroize();
+        self.config_url.zeroize();
+    }
+}
+
+fn safe_scope_name(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 100
+        && value != "."
+        && value != ".."
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+}

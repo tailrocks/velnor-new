@@ -9,9 +9,13 @@ mod intent;
 mod transport;
 
 pub use bootstrap::{
-    exchange_repository_discovery_admin_once_async, issue_repository_discovery_token_async,
+    exchange_organization_discovery_admin_once_async,
+    exchange_repository_discovery_admin_once_async, issue_organization_discovery_token_async,
+    issue_repository_discovery_token_async, organization_admin_evidence,
     read_repository_admin_evidence_async,
 };
-pub use intent::{AsyncDiscoveryIntentStore, DiscoveryStoreFuture};
-pub(in crate::registration) use transport::execute_discovery;
+pub use intent::{
+    AsyncDiscoveryIntentStore, AsyncScopedDiscoveryIntentStore, DiscoveryStoreFuture,
+};
+pub(crate) use transport::execute_discovery;
 pub use transport::{AsyncDiscoveryTransport, DiscoveryExchange};

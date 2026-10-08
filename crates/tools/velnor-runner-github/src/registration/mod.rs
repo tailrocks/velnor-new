@@ -1,6 +1,7 @@
 //! Create and adopt checks. `disableUpdate` is a registration invariant.
 //! HTTP registration calls live beside those checks and inject [`crate::Transport`].
 
+mod actions_service_route;
 mod admin;
 mod discovery;
 mod discovery_admin;
@@ -10,20 +11,26 @@ mod runners;
 mod scale_set;
 mod token;
 
+pub use actions_service_route::ActionsServiceScaleSetRoute;
 pub use admin::{
     AdminConnection, AdminConnectionCall, admin_connection, admin_connection_once,
     admin_token_is_fresh,
 };
 pub use discovery::{
     DiscoveryCredentialOutcome, DiscoveryCredentialStep, DiscoveryIntentId, DiscoveryIntentStore,
-    DiscoveryTransport, RepositoryAdminEvidence, RepositoryDiscoveryToken,
-    exchange_repository_discovery_admin_once, issue_repository_discovery_token,
-    read_repository_admin_evidence,
+    DiscoveryTransport, OrganizationAdminEvidence, OrganizationDiscoveryToken,
+    RepositoryAdminEvidence, RepositoryDiscoveryToken, exchange_repository_discovery_admin_once,
+    issue_repository_discovery_token, read_repository_admin_evidence,
 };
-pub use discovery_admin::RepositoryDiscoveryAdmin;
+pub use discovery_admin::{
+    ActionsServiceRouteLookup, OrganizationDiscoveryAdmin, RepositoryDiscoveryAdmin,
+};
+pub(crate) use discovery_async::execute_discovery;
 pub use discovery_async::{
-    AsyncDiscoveryIntentStore, AsyncDiscoveryTransport, DiscoveryExchange, DiscoveryStoreFuture,
-    exchange_repository_discovery_admin_once_async, issue_repository_discovery_token_async,
+    AsyncDiscoveryIntentStore, AsyncDiscoveryTransport, AsyncScopedDiscoveryIntentStore,
+    DiscoveryExchange, DiscoveryStoreFuture, exchange_organization_discovery_admin_once_async,
+    exchange_repository_discovery_admin_once_async, issue_organization_discovery_token_async,
+    issue_repository_discovery_token_async, organization_admin_evidence,
     read_repository_admin_evidence_async,
 };
 pub use groups::{RunnerGroup, list_runner_groups};

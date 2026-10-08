@@ -1,6 +1,6 @@
 use std::{future::Future, pin::Pin};
 
-use crate::SessionError;
+use crate::{RegistrationScope, SessionError};
 
 use super::super::{DiscoveryCredentialOutcome, DiscoveryCredentialStep, DiscoveryIntentId};
 
@@ -33,4 +33,22 @@ pub trait AsyncDiscoveryIntentStore: Send {
         id: DiscoveryIntentId,
         outcome: DiscoveryCredentialOutcome,
     ) -> DiscoveryStoreFuture<'_, ()>;
+}
+
+/// Scope-aware durable intent support for organization-scoped discovery.
+///
+/// This is separate from the repository-only compatibility interface so a
+/// store that has not learned scope-aware idempotency cannot accidentally
+/// authorize organization credential POSTs. The key must include the exact
+/// scope kind/name, target repository ID, and credential step. The full name
+/// is audit metadata and must not be used instead of the immutable ID.
+pub trait AsyncScopedDiscoveryIntentStore: AsyncDiscoveryIntentStore {
+    /// Persist one scoped credential intent before its matching POST.
+    fn persist_scope_before<'a>(
+        &'a mut self,
+        step: DiscoveryCredentialStep,
+        scope: RegistrationScope<'a>,
+        target_repository_id: i64,
+        target_repository_full_name: &'a str,
+    ) -> DiscoveryStoreFuture<'a, DiscoveryIntentId>;
 }

@@ -3,7 +3,8 @@ mod workflow;
 
 pub use pool::{
     PolicyGap, PolicyMismatch, PoolBinding, PoolBindingView, PoolEvidenceSource,
-    PoolEvidenceSourceStamp, PoolPolicySnapshot,
+    PoolEvidenceSourceStamp, PoolPolicySnapshot, PoolRegistrationScope, PoolRegistrationScopeView,
+    RunnerImageIdentity, RunnerImageIdentityView,
 };
 pub use workflow::{
     ActionsWorkflowTrustRun, JobTrustPolicyView, JobTrustRuleView, ReusableWorkflowEvidence,

@@ -1,3 +1,4 @@
+use crate::registration::AsyncDiscoveryTransport;
 use crate::{SessionError, Transport, WireError};
 
 use super::model::{GroupResponse, RunnerGroupPolicySnapshot, RunnerGroupScope, decode_group_list};
@@ -35,6 +36,58 @@ where
         exact_name,
         actions_token,
     )
+}
+
+/// Async bounded counterpart to [`find_organization_runner_group_policy`].
+/// It reads every fixed-number page, rejects incomplete or duplicate inventory,
+/// and verifies that the detail response still agrees with the listed group.
+/// The result is REST consistency evidence only; it does not itself prove a
+/// Scale Set route.
+///
+/// # Errors
+///
+/// Returns a secret-safe request, status, or decoding error for invalid or
+/// incomplete responses. All requests are fixed-path GETs through the host's
+/// bounded async transport.
+pub async fn find_organization_runner_group_policy_async<T>(
+    transport: &mut T,
+    organization: &str,
+    exact_name: &str,
+    actions_token: &str,
+) -> Result<Option<RunnerGroupPolicySnapshot>, SessionError>
+where
+    T: AsyncDiscoveryTransport + ?Sized,
+{
+    if exact_name.is_empty()
+        || exact_name.len() > 256
+        || exact_name.bytes().any(|byte| byte.is_ascii_control())
+        || actions_token.is_empty()
+    {
+        return Err(WireError::RegistrationRejected.into());
+    }
+    transport.bind_github_api_origin()?;
+    let scope = RunnerGroupScope::Organization(organization.to_owned());
+    let path = group_collection_path(&scope)?;
+    let groups =
+        super::pages::read_pages_async(transport, &path, actions_token, decode_group_list).await?;
+    let inventory_group_count = groups.len();
+    let mut matches = groups.into_iter().filter(|group| group.name == exact_name);
+    let Some(listed) = matches.next() else {
+        return Ok(None);
+    };
+    if matches.next().is_some() {
+        return Err(WireError::Malformed.into());
+    }
+
+    let policy =
+        super::reader::read_group_policy_async(transport, scope, listed.id, actions_token).await?;
+    if !listed_detail_agree(&listed, &policy) {
+        return Err(WireError::Malformed.into());
+    }
+    Ok(Some(RunnerGroupPolicySnapshot {
+        policy,
+        inventory_group_count,
+    }))
 }
 
 /// Find one exact group name in the complete REST inventory for an enterprise.
