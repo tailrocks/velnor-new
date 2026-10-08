@@ -115,10 +115,28 @@ pub(super) fn assert_target_builds(
     assert!(macos_action.contains("*Mach-O*arm64*"), "{macos_action}");
     assert!(macos_action.contains("shasum -a 256"), "{macos_action}");
     let intel = super::super::job_body(body, "build-macos-intel")?;
-    assert!(intel.contains("runs-on: macos-15-intel\n"), "{intel}");
+    assert!(intel.contains("runs-on: macos-15\n"), "{intel}");
     let intel_action = action(actions, "generator-release-build-macos-intel")?;
     assert!(intel_action.contains("*Mach-O*x86_64*"), "{intel_action}");
     assert!(intel_action.contains("shasum -a 256"), "{intel_action}");
+    assert!(
+        intel_action.contains("Prepare Rust target"),
+        "{intel_action}"
+    );
+    assert!(
+        intel_action.contains("1.98.1-aarch64-apple-darwin x86_64-apple-darwin"),
+        "{intel_action}"
+    );
+    assert!(
+        intel_action.contains("--target x86_64-apple-darwin")
+            && intel_action.contains("target/x86_64-apple-darwin/release/velnor-actions"),
+        "{intel_action}"
+    );
+    let intel_qualification = super::super::job_body(body, "qualify-macos-intel")?;
+    assert!(
+        intel_qualification.contains("runs-on: macos-15-intel\n"),
+        "{intel_qualification}"
+    );
     Ok(())
 }
 

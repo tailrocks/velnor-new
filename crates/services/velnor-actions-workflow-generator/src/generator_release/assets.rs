@@ -79,21 +79,54 @@ pub(super) const MACOS_X86_64: ProductAsset = ProductAsset {
 
 pub(super) const ASSETS: [ProductAsset; 3] = [LINUX, MACOS_ARM64, MACOS_X86_64];
 
-/// Build, inspect, and checksum one native candidate before uploading it.
+/// Build, inspect, and checksum one candidate before uploading it.
 pub(super) fn build_steps(
     product: ProductAsset,
+    build_host: ReleaseTarget,
     verify_name: &str,
     verify: &str,
     pins: &crate::generator_release_pins::GeneratorReleasePins,
 ) -> Result<Vec<Yaml>, velnor_actions_workflow_steps::RenderError> {
-    let build = build_script(product.binary, &pins.build_argv)?;
-    Ok(vec![
-        workflow_steps::mise_step(pins.setup_for(product.target))?,
-        workflow_steps::command_step(
-            "Install pinned Rust and MBX",
-            &pins.install_build_tools_argv,
-        )?,
-        workflow_steps::bash_step("Build velnor-actions with MBX", &build),
+    let (build_argv, binary_path, prepare_target) = match (product.target, build_host) {
+        (target, host) if target == host => (
+            pins.build_argv.as_slice(),
+            "target/release/velnor-actions".to_owned(),
+            None,
+        ),
+        (ReleaseTarget::MacosX86_64, ReleaseTarget::MacosArm64) => (
+            pins.macos_x86_64_cross_build_argv.as_slice(),
+            format!(
+                "target/{}/release/velnor-actions",
+                ReleaseTarget::MacosX86_64.triple()
+            ),
+            Some(pins.install_macos_x86_64_target_argv.as_slice()),
+        ),
+        (target, host) => {
+            return Err(velnor_actions_workflow_steps::RenderError::InvalidWorkflow(
+                format!(
+                    "generator_release_unsupported_build_host:{}:{}",
+                    host.triple(),
+                    target.triple()
+                ),
+            ));
+        }
+    };
+    let build = build_script(product.binary, &binary_path, build_argv)?;
+    let build_name = if prepare_target.is_some() {
+        "Cross-build velnor-actions with MBX"
+    } else {
+        "Build velnor-actions with MBX"
+    };
+    let mut steps = vec![workflow_steps::mise_step(pins.setup_for(build_host))?];
+    steps.push(workflow_steps::command_step(
+        "Install pinned Rust and MBX",
+        &pins.install_build_tools_argv,
+    )?);
+    if let Some(argv) = prepare_target {
+        steps.push(workflow_steps::command_step("Prepare Rust target", argv)?);
+    }
+    steps.extend([
+        workflow_steps::bash_step(build_name, &build),
         workflow_steps::bash_step(verify_name, verify),
         workflow_steps::bash_step(
             "Checksum built bytes",
@@ -107,16 +140,18 @@ pub(super) fn build_steps(
             "Package candidate preserving executable mode",
             &archive_script(product),
         ),
-    ])
+    ]);
+    Ok(steps)
 }
 
 /// The build emits the filename recorded in the release manifest.
 fn build_script(
     asset: &str,
+    binary_path: &str,
     build_argv: &[String],
 ) -> Result<String, velnor_actions_workflow_steps::RenderError> {
     Ok(format!(
-        "set -eu\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR {}\ncp target/release/velnor-actions {asset}\ntest -s {asset}",
+        "set -eu\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR {}\ncp {binary_path} {asset}\ntest -s {asset}",
         velnor_actions_workflow_steps::commands::join_argv_for_run(build_argv)?
     ))
 }

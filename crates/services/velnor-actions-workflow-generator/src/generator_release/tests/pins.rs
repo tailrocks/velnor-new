@@ -3,6 +3,51 @@ use velnor_actions_workflow_steps::setup::MiseSetup;
 
 pub(super) const PINNED_MISE_ARGUMENTS: &str = "--no-config --no-env --no-hooks exec gh@2.102.0 --";
 
+fn argv(values: &[&str]) -> Vec<String> {
+    values.iter().map(|value| (*value).to_owned()).collect()
+}
+
+fn macos_x86_64_cross_build_argv() -> Vec<String> {
+    argv(&[
+        "mise",
+        "--no-config",
+        "--no-env",
+        "--no-hooks",
+        "exec",
+        "rust@1.98.1",
+        "mr-boxington@1.21.1",
+        "--",
+        "mbx",
+        "build",
+        "--release",
+        "--locked",
+        "--package",
+        "velnor-actions-cli",
+        "--bin",
+        "velnor-actions",
+        "--target",
+        "x86_64-apple-darwin",
+    ])
+}
+
+fn install_macos_x86_64_target_argv() -> Vec<String> {
+    argv(&[
+        "mise",
+        "--no-config",
+        "--no-env",
+        "--no-hooks",
+        "exec",
+        "rust@1.98.1",
+        "--",
+        "rustup",
+        "target",
+        "add",
+        "--toolchain",
+        "1.98.1-aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+    ])
+}
+
 pub(super) fn test_pins() -> GeneratorReleasePins {
     let setup = MiseSetup {
         uses: format!("jdx/mise-action@{}", "a".repeat(40)),
@@ -27,6 +72,8 @@ pub(super) fn test_pins() -> GeneratorReleasePins {
         .map(str::to_owned)
         .collect(),
         build_argv: vec!["mise".to_owned(), "exec".to_owned()],
+        macos_x86_64_cross_build_argv: macos_x86_64_cross_build_argv(),
+        install_macos_x86_64_target_argv: install_macos_x86_64_target_argv(),
         actionlint_argv: vec!["mise".to_owned(), "exec".to_owned()],
         zizmor_argv: vec!["mise".to_owned(), "exec".to_owned()],
         gh_argv: [

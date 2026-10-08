@@ -60,6 +60,18 @@ fn candidate_steps(jobs: &[(String, Yaml)]) -> Result<&[Yaml], Box<dyn Error>> {
     Ok(steps)
 }
 
+fn named_step<'a>(steps: &'a [Yaml], name: &str) -> Result<&'a Yaml, Box<dyn Error>> {
+    steps
+        .iter()
+        .find(|step| {
+            map_entries(step)
+                .and_then(|fields| map_field(fields, "name"))
+                .and_then(scalar)
+                .is_ok_and(|step_name| step_name == name)
+        })
+        .ok_or_else(|| format!("missing step {name}").into())
+}
+
 #[test]
 fn setup_for_returns_the_target_pinned_setup() {
     let pins = distinct_pins();
@@ -75,6 +87,52 @@ fn setup_for_returns_the_target_pinned_setup() {
         pins.setup_for(ReleaseTarget::MacosX86_64).version,
         "2026.9.20"
     );
+}
+
+#[test]
+fn macos_x86_64_build_cross_compiles_on_arm_and_qualifies_on_intel() -> Result<(), Box<dyn Error>> {
+    let pins = distinct_pins();
+    let release = render(&pins)?;
+    let jobs = workflow_jobs(&release)?;
+    let build = map_entries(map_field(jobs, "build-macos-intel")?)?;
+    assert_eq!(scalar(map_field(build, "runs-on")?)?, "macos-15");
+    let qualify = map_entries(map_field(jobs, "qualify-macos-intel")?)?;
+    assert_eq!(scalar(map_field(qualify, "runs-on")?)?, "macos-15-intel");
+
+    let action = release
+        .actions
+        .iter()
+        .find(|(path, _)| path.ends_with("generator-release-build-macos-intel/action.yml"))
+        .ok_or("missing x86_64 build action")?;
+    let action_fields = map_entries(&action.1)?;
+    let runs = map_entries(map_field(action_fields, "runs")?)?;
+    let steps = sequence(map_field(runs, "steps")?)?;
+    let setup = named_step(steps, "Setup Mise")?;
+    let setup_fields = map_entries(setup)?;
+    assert_eq!(
+        scalar(map_field(setup_fields, "uses")?)?,
+        pins.macos_arm64_setup.uses
+    );
+
+    let prepare = named_step(steps, "Prepare Rust target")?;
+    let prepare_fields = map_entries(prepare)?;
+    assert!(
+        scalar(map_field(prepare_fields, "run")?)?.contains(
+            "rustup target add --toolchain 1.98.1-aarch64-apple-darwin x86_64-apple-darwin"
+        )
+    );
+    let build_step = named_step(steps, "Cross-build velnor-actions with MBX")?;
+    let build_fields = map_entries(build_step)?;
+    let build_run = scalar(map_field(build_fields, "run")?)?;
+    assert!(
+        build_run.contains("--target x86_64-apple-darwin"),
+        "{build_run}"
+    );
+    assert!(
+        build_run.contains("cp target/x86_64-apple-darwin/release/velnor-actions"),
+        "{build_run}"
+    );
+    Ok(())
 }
 
 #[test]
@@ -160,6 +218,52 @@ fn mise_setup(action: char, version: &str, digest: char) -> MiseSetup {
         sha256: digest.to_string().repeat(64),
     }
 }
+
+fn argv(values: &[&str]) -> Vec<String> {
+    values.iter().map(|value| (*value).to_owned()).collect()
+}
+
+fn macos_x86_64_cross_build_argv() -> Vec<String> {
+    argv(&[
+        "mise",
+        "--no-config",
+        "--no-env",
+        "--no-hooks",
+        "exec",
+        "rust@1.98.1",
+        "mr-boxington@1.21.1",
+        "--",
+        "mbx",
+        "build",
+        "--release",
+        "--locked",
+        "--package",
+        "velnor-actions-cli",
+        "--bin",
+        "velnor-actions",
+        "--target",
+        "x86_64-apple-darwin",
+    ])
+}
+
+fn install_macos_x86_64_target_argv() -> Vec<String> {
+    argv(&[
+        "mise",
+        "--no-config",
+        "--no-env",
+        "--no-hooks",
+        "exec",
+        "rust@1.98.1",
+        "--",
+        "rustup",
+        "target",
+        "add",
+        "--toolchain",
+        "1.98.1-aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+    ])
+}
+
 fn test_pins() -> GeneratorReleasePins {
     let setup = MiseSetup {
         uses: format!("jdx/mise-action@{}", "a".repeat(40)),
@@ -184,6 +288,8 @@ fn test_pins() -> GeneratorReleasePins {
         .map(str::to_owned)
         .collect(),
         build_argv: vec!["mise".to_owned(), "exec".to_owned()],
+        macos_x86_64_cross_build_argv: macos_x86_64_cross_build_argv(),
+        install_macos_x86_64_target_argv: install_macos_x86_64_target_argv(),
         actionlint_argv: vec!["mise".to_owned(), "exec".to_owned()],
         zizmor_argv: vec!["mise".to_owned(), "exec".to_owned()],
         gh_argv: [
