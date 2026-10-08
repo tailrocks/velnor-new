@@ -111,11 +111,12 @@ alone never sets that flag.
 
 GitHub does not expose an atomic operation that both compares a tag's object
 SHA and creates a release against that same immutable comparison. The
-publisher therefore reads and validates the remote tag immediately before
-release creation and uses `--verify-tag`; a tag changed or deleted before
-that check fails closed. A concurrent ref change in the small interval
-between the check and the release API call cannot be excluded by the available
-GitHub API. Repositories using this workflow must enforce immutable release
+publisher validates the remote tag and its ancestry, then inventories
+existing releases before calling `gh release create --verify-tag`. A tag
+changed or deleted before validation fails closed. A concurrent ref change
+after validation remains possible during release inventory and creation;
+`--verify-tag` does not atomically compare the tag's object SHA with release
+creation. Repositories using this workflow must enforce immutable release
 tags with a repository ruleset or equivalent policy. Without that policy, the
 remaining tag-move race is a release blocker, not a condition this workflow
 can make atomic.
