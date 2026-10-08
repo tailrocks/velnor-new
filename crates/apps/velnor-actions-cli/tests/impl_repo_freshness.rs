@@ -10,9 +10,9 @@ use std::net::{Shutdown, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
@@ -53,6 +53,8 @@ struct LocalServer {
     responses: Arc<Mutex<std::collections::HashMap<String, TestResponse>>>,
     requests: Arc<Mutex<Vec<String>>>,
     stop: Arc<AtomicBool>,
+    accepted: Arc<std::sync::atomic::AtomicUsize>,
+    slow_routes: Arc<Mutex<std::collections::HashMap<String, (usize, Duration)>>>,
     worker: Option<JoinHandle<()>>,
 }
 
@@ -66,13 +68,25 @@ impl LocalServer {
         let responses = Arc::new(Mutex::new(responses));
         let requests = Arc::new(Mutex::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
+        let accepted = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let slow_routes = Arc::new(Mutex::new(std::collections::HashMap::new()));
         let worker_responses = Arc::clone(&responses);
         let worker_requests = Arc::clone(&requests);
         let worker_stop = Arc::clone(&stop);
+        let worker_accepted = Arc::clone(&accepted);
+        let worker_slow_routes = Arc::clone(&slow_routes);
         let worker = thread::spawn(move || {
-            while !worker_stop.load(Ordering::Relaxed) {
+            while !worker_stop.load(Ordering::Acquire) {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
+                        if stream
+                            .set_read_timeout(Some(Duration::from_millis(250)))
+                            .is_err()
+                        {
+                            let _shutdown = stream.shutdown(Shutdown::Both);
+                            continue;
+                        }
+                        worker_accepted.fetch_add(1, Ordering::Release);
                         if let Some((path, accept_encoding)) = read_request(&mut stream) {
                             if let Ok(mut seen) = worker_requests.lock() {
                                 seen.push(accept_encoding);
@@ -86,7 +100,20 @@ impl LocalServer {
                                     headers: Vec::new(),
                                     body: b"not found".to_vec(),
                                 });
-                            let _response_write = write_response(&mut stream, &response);
+                            let slow = worker_slow_routes
+                                .lock()
+                                .ok()
+                                .and_then(|routes| routes.get(&path).copied());
+                            if let Some((chunk_size, delay)) = slow {
+                                let _response_write = write_response_trickled(
+                                    &mut stream,
+                                    &response,
+                                    chunk_size,
+                                    delay,
+                                );
+                            } else {
+                                let _response_write = write_response(&mut stream, &response);
+                            }
                         }
                         let _shutdown = stream.shutdown(Shutdown::Both);
                     }
@@ -102,6 +129,8 @@ impl LocalServer {
             responses,
             requests,
             stop,
+            accepted,
+            slow_routes,
             worker: Some(worker),
         })
     }
@@ -116,12 +145,28 @@ impl LocalServer {
             .map(|requests| requests.clone())
             .unwrap_or_default()
     }
+
+    fn set_slow_response(&self, route: &str, chunk_size: usize, delay: Duration) {
+        if let Ok(mut routes) = self.slow_routes.lock() {
+            routes.insert(route.to_owned(), (chunk_size.max(1), delay));
+        }
+    }
+
+    fn wait_for_accepts(&self, count: usize) -> Result<(), Box<dyn Error>> {
+        let deadline = Instant::now() + Duration::from_secs(1);
+        while self.accepted.load(Ordering::Acquire) < count {
+            if Instant::now() >= deadline {
+                return Err("local server did not accept the expected connection".into());
+            }
+            thread::sleep(Duration::from_millis(2));
+        }
+        Ok(())
+    }
 }
 
 impl Drop for LocalServer {
     fn drop(&mut self) {
-        self.stop.store(true, Ordering::Relaxed);
-        let _wake_result = TcpStream::connect(self.address);
+        self.stop.store(true, Ordering::Release);
         if let Some(worker) = self.worker.take() {
             let _join_result = worker.join();
         }
@@ -173,6 +218,37 @@ fn write_response(stream: &mut TcpStream, response: &TestResponse) -> std::io::R
     }
     stream.write_all(b"\r\n")?;
     stream.write_all(&response.body)
+}
+
+fn write_response_trickled(
+    stream: &mut TcpStream,
+    response: &TestResponse,
+    chunk_size: usize,
+    delay: Duration,
+) -> std::io::Result<()> {
+    let reason = if response.status == 200 {
+        "OK"
+    } else {
+        "Bad Request"
+    };
+    write!(
+        stream,
+        "HTTP/1.1 {} {}\r\nContent-Length: {}\r\nConnection: close\r\n",
+        response.status,
+        reason,
+        response.body.len()
+    )?;
+    for (key, value) in &response.headers {
+        write!(stream, "{key}: {value}\r\n")?;
+    }
+    stream.write_all(b"\r\n")?;
+    stream.flush()?;
+    for chunk in response.body.chunks(chunk_size.max(1)) {
+        stream.write_all(chunk)?;
+        stream.flush()?;
+        thread::sleep(delay);
+    }
+    Ok(())
 }
 
 fn gzip_bytes(input: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
@@ -441,14 +517,36 @@ fn run_upstream_probe(root: &Path) -> Result<Output, Box<dyn Error>> {
 fn run_fixture(
     special_route: Option<(&str, TestResponse)>,
 ) -> Result<(Output, Vec<String>), Box<dyn Error>> {
+    run_fixture_controlled(special_route, None, None)
+}
+
+fn run_fixture_controlled(
+    special_route: Option<(&str, TestResponse)>,
+    slow_route: Option<(&str, usize, Duration)>,
+    test_timeout: Option<Duration>,
+) -> Result<(Output, Vec<String>), Box<dyn Error>> {
     let root = crate::impl_cli_tmp::fresh_tempdir("freshness-http")?;
     let server = LocalServer::new(std::collections::HashMap::new())?;
     let (_inventory, mut responses) = fixture_inventory(&root, &server)?;
     if let Some((route, response)) = special_route {
         responses.insert(route.to_owned(), response);
     }
+    if let Some((route, chunk_size, delay)) = slow_route {
+        server.set_slow_response(route, chunk_size, delay);
+    }
     if let Ok(mut server_responses) = server.responses.lock() {
         *server_responses = responses;
+    }
+    if let Some(timeout) = test_timeout {
+        let script = root.join("scripts/check-freshness.sh");
+        let contents = std::fs::read_to_string(&script)?;
+        let timeout_seconds = timeout.as_secs_f64();
+        let replacement = format!("FETCH_TIMEOUT = {timeout_seconds:.3}\n");
+        let updated = contents.replacen("FETCH_TIMEOUT = 10.0\n", &replacement, 1);
+        if updated == contents {
+            return Err("fixture could not override the freshness timeout".into());
+        }
+        std::fs::write(script, updated)?;
     }
     let output = run_upstream_probe(&root)?;
     let request_headers = server.accept_encoding_headers();
@@ -907,5 +1005,55 @@ fn upstream_http_enforces_encoded_and_decompressed_caps() -> Result<(), Box<dyn 
         ),
     )))?;
     assert_probe_rejected(&output, "encoded response exceeds 524288 bytes");
+    Ok(())
+}
+
+#[test]
+fn upstream_http_enforces_an_absolute_deadline_for_trickling_bodies() -> Result<(), Box<dyn Error>>
+{
+    let mut body = first_tool_body()?;
+    body.extend(vec![b' '; 64]);
+    let started = Instant::now();
+    let (output, _) = run_fixture_controlled(
+        Some(("/tool/0", response(Vec::new(), body))),
+        Some(("/tool/0", 1, Duration::from_millis(25))),
+        Some(Duration::from_millis(300)),
+    )?;
+    assert_probe_rejected(&output, "absolute fetch deadline exceeded");
+    assert!(
+        started.elapsed() < Duration::from_secs(3),
+        "deadline probe did not return promptly: {:?}",
+        started.elapsed()
+    );
+    Ok(())
+}
+
+#[test]
+fn local_server_drop_is_bounded_after_accept() -> Result<(), Box<dyn Error>> {
+    let server = LocalServer::new(std::collections::HashMap::new())?;
+    let client = TcpStream::connect(server.address)?;
+    server.wait_for_accepts(1)?;
+
+    let (finished, completed) = mpsc::channel();
+    let drop_worker = thread::spawn(move || {
+        let started = Instant::now();
+        drop(server);
+        let _send_result = finished.send(started.elapsed());
+    });
+    match completed.recv_timeout(Duration::from_secs(1)) {
+        Ok(elapsed) => assert!(
+            elapsed < Duration::from_secs(1),
+            "server shutdown took too long: {elapsed:?}"
+        ),
+        Err(error) => {
+            drop(client);
+            let _join_result = drop_worker.join();
+            return Err(format!("server shutdown did not complete: {error}").into());
+        }
+    }
+    drop(client);
+    drop_worker
+        .join()
+        .map_err(|_| "server drop thread panicked")?;
     Ok(())
 }
