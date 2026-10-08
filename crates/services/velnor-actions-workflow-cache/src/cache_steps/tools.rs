@@ -115,7 +115,7 @@ fn rename_step(mut step: Step, name: &str) -> Result<Step, RenderError> {
 // per key (`cache_elect::elect_mise_cache_writers`); the action's built-in
 // save is unreachable with `install: false`. `tools_restore_step` stays
 // unit-test-only (restores are never manual); the `mise-tools-v1` key
-// namespace is retired (saves carry the shared `mise-v1` key).
+// namespace is retired; runtime-identity suffixes are part of the key.
 
 /// Key segments: nonempty alphanumerics plus `.-_`, never `latest`.
 fn is_key_segment(value: &str) -> bool {

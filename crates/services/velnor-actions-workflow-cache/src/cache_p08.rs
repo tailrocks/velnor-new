@@ -26,6 +26,9 @@ pub use artifact::{has_artifact_matrix_markers, require_uncached_setup};
 mod shape;
 use shape::setup_shape_ok;
 
+mod runtime_identity;
+pub use runtime_identity::ensure_setup_p08;
+
 mod seed_key;
 pub(crate) use seed_key::MiseToolsCacheKey;
 
@@ -41,7 +44,12 @@ pub const RUST_CACHE_NAME: &str = "Restore Cargo registry";
 /// Owned Cargo home expression (`env:` spelling).
 pub const CARGO_HOME_EXPR: &str = "${{ runner.temp }}/velnor/cargo";
 /// Mise built-in cache key prefix.
-pub const MISE_KEY_PREFIX: &str = "mise-v1";
+pub const MISE_KEY_PREFIX: &str = "mise-v2-hosted";
+/// Runtime value suffix appended only after the identity probe succeeds.
+pub const MISE_CACHE_SUFFIX_EXPR: &str = "${{env.VELNOR_MISE_CACHE_SUFFIX}}";
+/// Dynamic cache input enabled only for a recognized hosted runtime.
+pub const MISE_CACHE_ENABLED_EXPR: &str =
+    velnor_actions_contract_workflow::workflow::step_identity::MISE_CACHE_ENABLED_EXPR;
 
 /// Digest of sorted tool specs (16 hex chars, no `b3-` prefix).
 #[must_use]
@@ -54,18 +62,20 @@ pub fn tools_digest(specs: &[String]) -> String {
     digest.get(3..19).unwrap_or("0000000000000000").to_owned()
 }
 
-/// Qualified built-in cache key: prefix-target-mise-digest (no job id).
+/// Qualified cache key: prefix-imageOS-target-Mise-digest-runtime suffix.
 ///
 /// # Errors
 ///
 /// Returns [`RenderError::BadCommand`] for unsupported targets,
 /// loose Mise versions, or malformed digests.
 pub fn mise_cache_key_for_tools(
+    image_os: &str,
     target: &str,
     mise_version: &str,
     specs: &[String],
 ) -> Result<String, RenderError> {
-    MiseToolsCacheKey::derive(target, mise_version, specs).map(|key| key.as_str().to_owned())
+    MiseToolsCacheKey::derive(image_os, target, mise_version, specs)
+        .map(|key| key.as_str().to_owned())
 }
 
 /// Union of `mise install`/`exec` specs across a job's shell steps.
@@ -101,7 +111,7 @@ fn specs_in_argv(run: &[String]) -> Vec<String> {
     out
 }
 
-/// Setup step with qualified built-in cache (`cache:true` + `cache_key`).
+/// Setup step with qualified hosted-runtime cache inputs.
 ///
 /// Restore-only: every run restores the tools cache, but no setup ever
 /// saves through the action. The pinned `jdx/mise-action` saves only
@@ -132,7 +142,7 @@ pub fn mise_setup_step_p08(setup: &MiseSetup, cache_key: &str) -> Result<Step, R
             ("sha256".to_owned(), setup.sha256.clone()),
             ("install".to_owned(), "false".to_owned()),
             ("env".to_owned(), "false".to_owned()),
-            ("cache".to_owned(), "true".to_owned()),
+            ("cache".to_owned(), MISE_CACHE_ENABLED_EXPR.to_owned()),
             ("cache_save".to_owned(), "false".to_owned()),
             ("cache_key".to_owned(), cache_key.to_owned()),
         ]),
@@ -170,15 +180,17 @@ fn is_tool_spec(value: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_' | b'+'))
 }
 
-/// True for qualified `mise-v1-<target>-<mise>-<16hex>` keys.
+/// True for qualified `mise-v2-hosted-...-<16hex>-<runtime suffix>` keys.
 pub(crate) fn is_cache_key(value: &str) -> bool {
-    let parts: Vec<&str> = value.split('-').collect();
-    value.starts_with(&format!("{MISE_KEY_PREFIX}-"))
-        && !value.contains(' ')
+    let Some(base) = value.strip_suffix(&format!("-{MISE_CACHE_SUFFIX_EXPR}")) else {
+        return false;
+    };
+    let parts: Vec<&str> = base.split('-').collect();
+    base.starts_with(&format!("{MISE_KEY_PREFIX}-"))
+        && !base.contains(' ')
         && !value.contains('\n')
-        && !value.contains("${{")
-        && !value.contains("latest")
-        && parts.len() >= 4
+        && !base.contains("latest")
+        && parts.len() >= 6
         && parts.last().is_some_and(|digest| {
             digest.len() == 16 && digest.bytes().all(|b| b.is_ascii_hexdigit())
         })
@@ -195,67 +207,6 @@ pub(crate) fn is_cache_key(value: &str) -> bool {
 ///
 /// Returns [`RenderError`] for duplicate/misordered setups, malformed
 /// pins, uninferable tools, or unsupported targets.
-pub fn ensure_setup_p08(
-    job_id: &str,
-    job: &mut Job,
-    setup: &MiseSetup,
-    always: bool,
-    target: &str,
-    checkout_uses: &str,
-) -> Result<(), RenderError> {
-    setup.validate()?;
-    let present: Vec<usize> = job
-        .steps
-        .iter()
-        .enumerate()
-        .filter(|(_, step)| is_setup_step(step))
-        .map(|(index, _)| index)
-        .collect();
-    if present.len() > 1 {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "duplicate_setup_mise:{job_id}"
-        )));
-    }
-    if let Some(&index) = present.first() {
-        let key = expected_job_key(job, setup, always, target)?.ok_or_else(|| {
-            RenderError::InvalidWorkflow(format!("setup_mise_malformed:{job_id}"))
-        })?;
-        upgrade_setup(job_id, job, index, setup, &key)?;
-        let setup_at = crate::tool_seed::insert_before_setup(job, index, checkout_uses, &key)?;
-        check_setup_before_mise(job_id, job, setup_at)?;
-        return Ok(());
-    }
-    if always || job_uses_mise(job) {
-        let Some(key) = expected_job_key(job, setup, always, target)? else {
-            return Ok(());
-        };
-        let at = insert_at(job, checkout_uses).min(job.steps.len());
-        job.steps
-            .insert(at, mise_setup_step_p08(setup, key.as_str())?);
-        let setup_at = crate::tool_seed::insert_before_setup(job, at, checkout_uses, &key)?;
-        check_setup_before_mise(job_id, job, setup_at)?;
-    } else {
-        crate::tool_seed::reject_orphan_seed(job_id, job)?;
-    }
-    Ok(())
-}
-
-fn expected_job_key(
-    job: &Job,
-    setup: &MiseSetup,
-    always: bool,
-    target: &str,
-) -> Result<Option<MiseToolsCacheKey>, RenderError> {
-    let mut specs = infer_job_tools(job);
-    if specs.is_empty() {
-        if !always {
-            return Ok(None);
-        }
-        specs.push("mise@bootstrap".to_owned());
-    }
-    MiseToolsCacheKey::derive(target, &setup.version, &specs).map(Some)
-}
-
 /// Upgrade one present setup to the qualified shape (or validate it).
 fn upgrade_setup(
     job_id: &str,

@@ -20,17 +20,30 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
         CHECKOUT,
     )
     .expect("setup and seed");
-    assert_eq!(rendered_job.steps[1].name, TOOL_SEED_NAME);
-    assert_eq!(rendered_job.steps[1].role, Some(StepRole::ToolSeed));
-    let StepKind::Action { with, .. } = &rendered_job.steps[1].kind else {
+    assert_eq!(
+        rendered_job.steps[1].name,
+        "Resolve hosted Mise cache identity"
+    );
+    let seed_index = rendered_job
+        .steps
+        .iter()
+        .position(|step| step.role == Some(StepRole::ToolSeed))
+        .expect("seed step");
+    assert_eq!(rendered_job.steps[seed_index].name, TOOL_SEED_NAME);
+    let StepKind::Action { with, .. } = &rendered_job.steps[seed_index].kind else {
         panic!("seed must be an action")
     };
     assert_eq!(
         with.get("cache_key").map(String::as_str),
         Some(expected.as_str())
     );
-    assert_eq!(rendered_job.steps[2].name, "Setup Mise");
-    assert_eq!(rendered_job.steps[2].role, Some(StepRole::MiseSetup));
+    let setup_index = rendered_job
+        .steps
+        .iter()
+        .position(|step| step.role == Some(StepRole::MiseSetup))
+        .expect("Mise setup step");
+    assert_eq!(rendered_job.steps[setup_index].name, "Setup Mise");
+    assert_eq!(setup_index, seed_index + 1);
 
     let mut full_history_checkout =
         velnor_actions_workflow_steps::steps::checkout_step(CHECKOUT).expect("checkout");
@@ -47,7 +60,7 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
         CHECKOUT,
     )
     .expect("full-history checkout is an eligible seed owner");
-    assert!(is_tool_seed_step(&deep_job.steps[1]));
+    assert!(deep_job.steps.iter().any(is_tool_seed_step));
 
     let fake = Step {
         name: "Checkout".to_owned(),

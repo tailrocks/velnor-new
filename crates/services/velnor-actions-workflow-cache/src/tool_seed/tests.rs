@@ -17,8 +17,13 @@ fn scratch(name: &str) -> PathBuf {
 }
 
 fn cache_key() -> String {
-    crate::cache_p08::mise_cache_key_for_tools(TARGET, "2026.9.18", &["rust@1.98.1".to_owned()])
-        .expect("cache key")
+    crate::cache_p08::mise_cache_key_for_tools(
+        "ubuntu26",
+        TARGET,
+        "2026.9.18",
+        &["rust@1.98.1".to_owned()],
+    )
+    .expect("cache key")
 }
 
 fn ready_seed(seed: &Path, key: &str) {

@@ -239,13 +239,20 @@ fn strict_restores_builtin_and_saves_on_elected_writer()
         "P08: sole owner saves once: {names:?}"
     );
     assert_eq!(
-        names.iter().position(|s| s == "Restore Velnor tool seed"),
+        names
+            .iter()
+            .position(|s| s == "Resolve hosted Mise cache identity"),
         Some(1),
-        "tool seed after checkout: {names:?}"
+        "runtime identity after checkout: {names:?}"
+    );
+    assert_eq!(
+        names.iter().position(|s| s == "Restore Velnor tool seed"),
+        Some(2),
+        "tool seed after runtime identity: {names:?}"
     );
     assert_eq!(
         names.iter().position(|s| s == "Setup Mise"),
-        Some(2),
+        Some(3),
         "setup after the tool seed: {names:?}"
     );
     assert!(
@@ -264,7 +271,10 @@ fn strict_restores_builtin_and_saves_on_elected_writer()
     assert!(seed.bytes.contains("/opt/velnor/seed"), "{}", seed.bytes);
     assert!(seed.bytes.contains("$SEED_KEY"), "{}", seed.bytes);
     assert!(!seed.bytes.contains("rm "), "{}", seed.bytes);
-    for need in ["cache: \"true\"", "cache_key: mise-v1-"] {
+    for need in [
+        "cache: ${{env.VELNOR_MISE_CACHE_ENABLED}}",
+        "cache_key: mise-v2-hosted-",
+    ] {
         assert!(text.contains(need), "built-in cache {need}:\n{text}");
     }
     Ok(())

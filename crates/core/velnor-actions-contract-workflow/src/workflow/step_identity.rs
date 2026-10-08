@@ -17,6 +17,8 @@ pub const TOFU_PROVIDERS_KEY_PREFIX: &str = "velnor-v1-tofu-providers";
 pub const TOFU_PROVIDERS_KEY_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outputs.cache-key }}";
 /// Composite output expression for the owned provider-cache path.
 pub const TOFU_PROVIDERS_PATH_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outputs.cache-path }}";
+/// Runtime-gated cache input for a Mise setup whose hosted image was verified.
+pub const MISE_CACHE_ENABLED_EXPR: &str = "${{env.VELNOR_MISE_CACHE_ENABLED}}";
 
 /// Stable GitHub Actions id for a step whose outputs have consumers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -280,7 +282,9 @@ fn valid_mise_setup(kind: &StepKind) -> bool {
             && with.get("sha256").is_some_and(|value| !value.is_empty())
             && with.get("install").is_some_and(|value| value == "false")
             && with.get("env").is_some_and(|value| value == "false")
-            && with.get("cache").is_some_and(|value| value == "false" || value == "true")
+            && with.get("cache").is_some_and(|value| {
+                value == "false" || value == "true" || value == MISE_CACHE_ENABLED_EXPR
+            })
             && with.get("cache_save").is_some_and(|value| value == "false" || value == "true"))
 }
 
@@ -334,4 +338,46 @@ fn validate_step_identities(steps: &[Step], scope: &str) -> Result<(), ContractE
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod mise_cache_role_tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    fn setup_step(cache: &str) -> Step {
+        Step {
+            name: "Setup Mise".to_owned(),
+            id: None,
+            role: Some(StepRole::MiseSetup),
+            condition: None,
+            kind: StepKind::Action {
+                uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
+                with: BTreeMap::from([
+                    ("version".to_owned(), "2026.9.18".to_owned()),
+                    ("sha256".to_owned(), "a".repeat(64)),
+                    ("install".to_owned(), "false".to_owned()),
+                    ("env".to_owned(), "false".to_owned()),
+                    ("cache".to_owned(), cache.to_owned()),
+                    ("cache_save".to_owned(), "false".to_owned()),
+                ]),
+                env: BTreeMap::new(),
+            },
+        }
+    }
+
+    #[test]
+    fn mise_setup_role_allows_only_the_exact_dynamic_cache_gate() {
+        assert!(
+            validate_step_identity_scope(&[setup_step(MISE_CACHE_ENABLED_EXPR)], "cache").is_ok()
+        );
+        assert!(validate_step_identity_scope(&[setup_step("false")], "cache").is_ok());
+        assert!(
+            validate_step_identity_scope(
+                &[setup_step("${{github.event_name == 'push'}}")],
+                "cache"
+            )
+            .is_err()
+        );
+    }
 }

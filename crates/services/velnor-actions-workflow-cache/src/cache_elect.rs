@@ -9,6 +9,10 @@ use velnor_actions_contract_workflow::{Job, PLAN_JOB_ID, Step, StepKind, StepRol
 
 use velnor_actions_workflow_steps::{RenderError, setup::MISE_ACTION_NAME};
 
+/// Push-only writer gate plus the successful hosted-runtime identity probe.
+pub const MISE_CACHE_SAVE_CONDITION: &str =
+    "success() && github.event_name == 'push' && env.VELNOR_MISE_CACHE_ENABLED == 'true'";
+
 /// Elect one Mise-cache writer per cache key across jobs.
 ///
 /// Every qualified setup restores read-only (`cache_save: "false"`: the
@@ -214,7 +218,13 @@ fn setup_cache_key(job: &Job) -> Option<String> {
         if !uses.starts_with(&format!("{MISE_ACTION_NAME}@")) {
             return None;
         }
-        with.get("cache_key").cloned()
+        if with.get("cache").map(String::as_str) != Some(crate::cache_p08::MISE_CACHE_ENABLED_EXPR)
+        {
+            return None;
+        }
+        with.get("cache_key")
+            .filter(|key| crate::cache_p08::is_cache_key(key))
+            .cloned()
     })
 }
 
@@ -226,16 +236,37 @@ fn setup_cache_key(job: &Job) -> Option<String> {
 /// restore of the key. Closures and fan-in steps added after the
 /// election install no tools, so the capture stays complete.
 fn append_tools_save(job: &mut Job, key: &str) -> Result<(), RenderError> {
-    if job
+    let saves: Vec<&Step> = job
         .steps
         .iter()
-        .any(|step| step.role == Some(StepRole::ToolsCacheSave))
-    {
+        .filter(|step| step.role == Some(StepRole::ToolsCacheSave))
+        .collect();
+    if saves.len() > 1 {
+        return Err(RenderError::InvalidWorkflow(
+            "mise_cache_save_duplicate".to_owned(),
+        ));
+    }
+    if let Some(save) = saves.first() {
+        let StepKind::Action { uses, with, env } = &save.kind else {
+            return Err(RenderError::InvalidWorkflow(
+                "mise_cache_save_shape".to_owned(),
+            ));
+        };
+        if !uses.starts_with("actions/cache/save@")
+            || !env.is_empty()
+            || with.len() != 2
+            || with.get("key").map(String::as_str) != Some(key)
+            || with.get("path").map(String::as_str) != Some(crate::cache_steps::TOOLS_CACHE_PATH)
+            || save.condition.as_deref() != Some(MISE_CACHE_SAVE_CONDITION)
+        {
+            return Err(RenderError::InvalidWorkflow(
+                "mise_cache_save_mismatch".to_owned(),
+            ));
+        }
         return Ok(());
     }
     let mut save = crate::cache_steps::tools_save_step(key)?;
-    save.condition =
-        Some(velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
+    save.condition = Some(MISE_CACHE_SAVE_CONDITION.to_owned());
     job.steps.push(save);
     Ok(())
 }
