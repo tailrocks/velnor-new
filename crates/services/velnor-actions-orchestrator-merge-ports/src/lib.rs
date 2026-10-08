@@ -18,6 +18,9 @@ pub use changed_work::{changed_keys, member_changed};
 pub use cover_baseline_port::CoverBaselinePort;
 pub use cover_port::CoverPort;
 pub use cover_types::{CoverSinks, Fold, Partition, Signals};
-pub use merge_types::{BaselineManifest, BaselineTaskEntry, CandidateAttestation, MergeRequest};
+pub use merge_types::{
+    BaselineManifest, BaselineTaskEntry, CandidateAttestation, MergeRequest, TaskReportArtifactId,
+    TaskReportCheckRunId, TaskReportOutputFanIn, TaskReportOutputOrigin, TaskReportProducerOutput,
+};
 pub use schema::{SCHEMA, check_schema};
 pub use shard_types::{ResourceLimits, ShardProof, TestIdentity, inventory_digest};

@@ -129,6 +129,7 @@ fn artifact_request(
         candidate_attestation: None,
         artifact_build_context: context,
         artifact_build_observations: observations,
+        task_report_outputs: None,
         plan: None,
         matrix: None,
         matrix_reports: Vec::new(),

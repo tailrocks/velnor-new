@@ -61,6 +61,7 @@ fn request_with(reports: Vec<MatrixReport>) -> MergeRequest {
         candidate_attestation: None,
         artifact_build_context: None,
         artifact_build_observations: Vec::new(),
+        task_report_outputs: None,
         plan: None,
         matrix: None,
         matrix_reports: reports,

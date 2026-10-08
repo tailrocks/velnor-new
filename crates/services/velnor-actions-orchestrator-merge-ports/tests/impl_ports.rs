@@ -1,5 +1,6 @@
 use velnor_actions_orchestrator_merge_ports::{
-    BaselineManifest, MergeRequest, SCHEMA, Signals, TestIdentity, check_schema, inventory_digest,
+    BaselineManifest, MergeRequest, SCHEMA, Signals, TaskReportOutputFanIn, TestIdentity,
+    check_schema, inventory_digest,
 };
 
 #[test]
@@ -85,6 +86,103 @@ fn merge_request_parses_minimal_shape() {
     assert_eq!(request.run_key, "run");
     assert!(request.plan.is_none());
     assert!(request.baseline_manifest.is_none());
+    assert!(request.task_report_outputs.is_none());
+}
+
+#[test]
+fn merge_request_rejects_present_null_report_output_sidecar() {
+    let parsed = serde_json::from_value::<MergeRequest>(serde_json::json!({
+        "schema": 1,
+        "run_key": "run",
+        "matrix_reports": [],
+        "required_job_ids": [],
+        "required_jobs": [],
+        "task_report_outputs": null,
+    }));
+    assert!(parsed.is_err());
+}
+
+fn task_report_outputs() -> serde_json::Value {
+    serde_json::json!({
+        "schema": 1,
+        "origin": "github_com",
+        "run": {
+            "repository_id": "123",
+            "repository": "owner/repository",
+            "run_id": "456",
+            "run_attempt": 2,
+        },
+        "head_sha": "0123456789abcdef",
+        "plan_digest": "abcdef0123456789",
+        "expected_workflow_job_keys": ["task-linux", "task-macos"],
+        "producers": [
+            {
+                "workflow_job_key": "task-linux",
+                "conclusion": "success",
+                "artifact_id": 77,
+                "check_run_id": 88,
+            },
+            {
+                "workflow_job_key": "task-macos",
+                "conclusion": "success",
+                "artifact_id": 77,
+                "check_run_id": 88,
+            },
+        ],
+    })
+}
+
+#[test]
+fn task_report_output_fanin_parses_typed_distinct_id_namespaces() {
+    let parsed: TaskReportOutputFanIn =
+        serde_json::from_value(task_report_outputs()).expect("valid sidecar");
+    assert_eq!(parsed.producers.len(), 2);
+    assert_eq!(parsed.producers[0].artifact_id.get(), 77);
+    assert_eq!(parsed.producers[0].check_run_id.get(), 88);
+    // Repeated numeric values remain available for the later authoritative
+    // provider join; this parser does not guess whether they are duplicates.
+    assert_eq!(parsed.producers[1].artifact_id.get(), 77);
+    assert_eq!(parsed.producers[1].check_run_id.get(), 88);
+}
+
+#[test]
+fn task_report_output_fanin_rejects_invalid_expected_producer_sets() {
+    assert_sidecar_rejected("missing producer", |value| {
+        value["producers"] = serde_json::json!([]);
+    });
+    assert_sidecar_rejected("foreign producer", |value| {
+        value["producers"][1]["workflow_job_key"] = serde_json::json!("other-job");
+    });
+    assert_sidecar_rejected("duplicate expected key", |value| {
+        value["expected_workflow_job_keys"][1] = serde_json::json!("task-linux");
+    });
+    assert_sidecar_rejected("duplicate producer key", |value| {
+        value["producers"][1]["workflow_job_key"] = serde_json::json!("task-linux");
+    });
+    assert_sidecar_rejected("unsuccessful producer", |value| {
+        value["producers"][1]["conclusion"] = serde_json::json!("skipped");
+    });
+    assert_sidecar_rejected("nonpositive artifact id", |value| {
+        value["producers"][0]["artifact_id"] = serde_json::json!(0);
+    });
+    assert_sidecar_rejected("nonpositive check run id", |value| {
+        value["producers"][0]["check_run_id"] = serde_json::json!(-1);
+    });
+    assert_sidecar_rejected("unsupported origin", |value| {
+        value["origin"] = serde_json::json!("github_enterprise");
+    });
+    assert_sidecar_rejected("unknown field", |value| {
+        value["untrusted"] = serde_json::json!(true);
+    });
+}
+
+fn assert_sidecar_rejected(case: &str, mutate: impl FnOnce(&mut serde_json::Value)) {
+    let mut value = task_report_outputs();
+    mutate(&mut value);
+    assert!(
+        serde_json::from_value::<TaskReportOutputFanIn>(value).is_err(),
+        "accepted invalid case: {case}"
+    );
 }
 
 #[test]

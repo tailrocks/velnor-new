@@ -1,9 +1,12 @@
 //! Merge-owned vocabulary shared with cover: request and manifests.
 
-use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
+
+use serde::de::Error as _;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use velnor_actions_contract_workflow::{
-    ArtifactBuildObservation, ArtifactBuildRunContext, MatrixReport, Plan, PlanMatrix,
-    RequiredJobResult, TaskReport, WorkflowEvent,
+    ArtifactBuildObservation, ArtifactBuildRunContext, JobConclusion, MatrixReport, Plan,
+    PlanMatrix, RequiredJobResult, TaskReport, WorkflowEvent,
 };
 
 use super::shard_types::{ResourceLimits, ShardProof};
@@ -30,6 +33,16 @@ pub struct MergeRequest {
     /// Attempt-scoped Actions API and checksum observations for planned outputs.
     #[serde(default)]
     pub artifact_build_observations: Vec<ArtifactBuildObservation>,
+    /// Optional raw report-artifact/check-run output fan-in.
+    ///
+    /// Absence preserves the ordinary schema-1 request shape. Presence is
+    /// parsed strictly but does not itself establish provider comparison.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_present_task_report_outputs"
+    )]
+    pub task_report_outputs: Option<TaskReportOutputFanIn>,
     /// Validated plan; absent when the plan artifact never landed.
     #[serde(default)]
     pub plan: Option<Plan>,
@@ -63,6 +76,213 @@ pub struct MergeRequest {
     /// Sequential-reference obligation set.
     #[serde(default)]
     pub reference_task_ids: Option<Vec<String>>,
+}
+
+/// Deserialize a present sidecar as a value so explicit `null` is malformed.
+fn deserialize_present_task_report_outputs<'de, D>(
+    deserializer: D,
+) -> Result<Option<TaskReportOutputFanIn>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    TaskReportOutputFanIn::deserialize(deserializer).map(Some)
+}
+
+/// Optional public-GitHub report-output fan-in carried beside ordinary
+/// schema-1 evidence. Its producer list is self-contained metadata; callers
+/// must bind its claimed producer census to the actual producer graph before
+/// using it for any provider comparison.
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskReportOutputFanIn {
+    /// Sidecar schema version.
+    pub schema: u32,
+    /// Supported provider origin. GHES is not represented by this type.
+    pub origin: TaskReportOutputOrigin,
+    /// GitHub repository and workflow-run identity.
+    pub run: ArtifactBuildRunContext,
+    /// Source SHA recorded by the plan job.
+    pub head_sha: String,
+    /// Canonical digest recorded for the plan.
+    pub plan_digest: String,
+    /// Claimed producer-key census against which `producers` is validated.
+    /// This value is not trusted graph input until independently bound.
+    pub expected_workflow_job_keys: Vec<String>,
+    /// Raw output values for the expected successful producer jobs.
+    pub producers: Vec<TaskReportProducerOutput>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TaskReportOutputFanInWire {
+    schema: u32,
+    origin: TaskReportOutputOrigin,
+    run: ArtifactBuildRunContext,
+    head_sha: String,
+    plan_digest: String,
+    expected_workflow_job_keys: Vec<String>,
+    producers: Vec<TaskReportProducerOutput>,
+}
+
+impl<'de> Deserialize<'de> for TaskReportOutputFanIn {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let wire = TaskReportOutputFanInWire::deserialize(deserializer)?;
+        let value = Self {
+            schema: wire.schema,
+            origin: wire.origin,
+            run: wire.run,
+            head_sha: wire.head_sha,
+            plan_digest: wire.plan_digest,
+            expected_workflow_job_keys: wire.expected_workflow_job_keys,
+            producers: wire.producers,
+        };
+        value.validate().map_err(D::Error::custom)?;
+        Ok(value)
+    }
+}
+
+impl TaskReportOutputFanIn {
+    /// Parse one sidecar and validate its internal structure through merge.
+    ///
+    /// The claimed producer-key list is checked against the records, never
+    /// inferred from `Plan.matrix.include`. This does not establish graph
+    /// completeness or provider comparison.
+    ///
+    /// # Errors
+    ///
+    /// Returns a serde error when the sidecar is malformed or internally
+    /// inconsistent.
+    pub fn parse_value(value: serde_json::Value) -> Result<Self, serde_json::Error> {
+        serde_json::from_value(value)
+    }
+
+    fn validate(&self) -> Result<(), &'static str> {
+        if self.schema != 1
+            || self.expected_workflow_job_keys.is_empty()
+            || self.producers.is_empty()
+        {
+            return Err("invalid_task_report_outputs");
+        }
+
+        let mut expected = BTreeSet::new();
+        for key in &self.expected_workflow_job_keys {
+            velnor_actions_contract::ids::job_ids::validate_job_id(key)
+                .map_err(|_| "invalid_task_report_outputs")?;
+            if !expected.insert(key.as_str()) {
+                return Err("invalid_task_report_outputs");
+            }
+        }
+
+        let mut observed = BTreeSet::new();
+        for producer in &self.producers {
+            velnor_actions_contract::ids::job_ids::validate_job_id(&producer.workflow_job_key)
+                .map_err(|_| "invalid_task_report_outputs")?;
+            if producer.conclusion != JobConclusion::Success
+                || !expected.contains(producer.workflow_job_key.as_str())
+                || !observed.insert(producer.workflow_job_key.as_str())
+            {
+                return Err("invalid_task_report_outputs");
+            }
+        }
+        if observed != expected {
+            return Err("invalid_task_report_outputs");
+        }
+        Ok(())
+    }
+}
+
+/// Fixed origin for the supported public GitHub.com API.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskReportOutputOrigin {
+    /// GitHub.com Actions API.
+    GithubCom,
+}
+
+/// Report output values emitted by one logical workflow job.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TaskReportProducerOutput {
+    /// Workflow job key, distinct from the REST workflow-job ID.
+    pub workflow_job_key: String,
+    /// Job conclusion; only success is accepted by this sidecar parser.
+    pub conclusion: JobConclusion,
+    /// Upload-artifact ID namespace.
+    pub artifact_id: TaskReportArtifactId,
+    /// Check-run ID namespace; never aliases the REST workflow-job ID.
+    pub check_run_id: TaskReportCheckRunId,
+}
+
+/// Positive numeric upload-artifact ID.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TaskReportArtifactId(i64);
+
+impl TaskReportArtifactId {
+    /// Return the numeric upload-artifact ID.
+    #[must_use]
+    pub const fn get(self) -> i64 {
+        self.0
+    }
+}
+
+impl Serialize for TaskReportArtifactId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_i64(self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for TaskReportArtifactId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = i64::deserialize(deserializer)?;
+        if value > 0 {
+            Ok(Self(value))
+        } else {
+            Err(D::Error::custom("invalid_task_report_outputs"))
+        }
+    }
+}
+
+/// Positive numeric GitHub Check Run ID.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TaskReportCheckRunId(i64);
+
+impl TaskReportCheckRunId {
+    /// Return the numeric Check Run ID.
+    #[must_use]
+    pub const fn get(self) -> i64 {
+        self.0
+    }
+}
+
+impl Serialize for TaskReportCheckRunId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_i64(self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for TaskReportCheckRunId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = i64::deserialize(deserializer)?;
+        if value > 0 {
+            Ok(Self(value))
+        } else {
+            Err(D::Error::custom("invalid_task_report_outputs"))
+        }
+    }
 }
 
 /// Head-bound candidate attestation written by the candidate job.

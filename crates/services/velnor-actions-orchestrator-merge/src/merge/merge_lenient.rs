@@ -19,7 +19,7 @@ use serde::Deserialize;
 use velnor_actions_contract_workflow::{RequiredJobResult, WorkflowEvent};
 
 use super::MergeRequest;
-use velnor_actions_orchestrator_merge_ports::{ResourceLimits, ShardProof};
+use velnor_actions_orchestrator_merge_ports::{ResourceLimits, ShardProof, TaskReportOutputFanIn};
 
 /// `merge-v1` request with staged evidence as untyped values.
 #[derive(Debug, Deserialize)]
@@ -41,6 +41,9 @@ struct LenientRequest {
     /// API job and downloaded-output observations.
     #[serde(default)]
     artifact_build_observations: Vec<serde_json::Value>,
+    /// Optional typed report-output sidecar.
+    #[serde(default, deserialize_with = "deserialize_present_value")]
+    task_report_outputs: Option<serde_json::Value>,
     /// Validated plan; absent when the plan artifact never landed.
     #[serde(default)]
     plan: Option<serde_json::Value>,
@@ -99,6 +102,8 @@ pub fn lenient_request(envelope: &serde_json::Value) -> Option<MergeRequest> {
         "unparsable_artifact_build_observation",
         &mut assembly_errors,
     );
+    let task_report_outputs =
+        parse_task_report_outputs(raw.task_report_outputs, &mut assembly_errors);
     let baseline_manifest = untyped_option(
         raw.baseline_manifest,
         "unparsable_baseline",
@@ -123,6 +128,7 @@ pub fn lenient_request(envelope: &serde_json::Value) -> Option<MergeRequest> {
         candidate_attestation,
         artifact_build_context,
         artifact_build_observations,
+        task_report_outputs,
         plan,
         matrix,
         matrix_reports,
@@ -136,6 +142,28 @@ pub fn lenient_request(envelope: &serde_json::Value) -> Option<MergeRequest> {
         limits: raw.limits,
         reference_task_ids: raw.reference_task_ids,
     })
+}
+
+/// Preserve present `null` so the strict sidecar parser rejects it.
+fn deserialize_present_value<'de, D>(deserializer: D) -> Result<Option<serde_json::Value>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    serde_json::Value::deserialize(deserializer).map(Some)
+}
+
+/// Parse the optional strict fan-in sidecar without changing absent requests.
+fn parse_task_report_outputs(
+    value: Option<serde_json::Value>,
+    errors: &mut Vec<String>,
+) -> Option<TaskReportOutputFanIn> {
+    let value = value?;
+    if let Ok(outputs) = TaskReportOutputFanIn::parse_value(value) {
+        Some(outputs)
+    } else {
+        errors.push("unparsable_task_report_outputs".to_owned());
+        None
+    }
 }
 
 /// Parse one optional staged value; shape failures become an error entry.
