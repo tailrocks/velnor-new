@@ -53,7 +53,6 @@ const IDENTITY_SHOW_PROPERTIES: &str = concat!(
     "LoadState,ExecStart,User,Group,UMask,NoNewPrivileges,ProtectSystem,Type,",
     "RemainAfterExit,Before"
 );
-const SERVICE_STATE_SHOW_PROPERTIES: &str = "LoadState,ActiveState,SubState,MainPID,ControlPID";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ManagerOutput {
@@ -205,16 +204,18 @@ fn service_status(manager: &mut impl Manager) -> Result<(), ServiceFault> {
         &[
             "show",
             "--no-pager",
-            &format!("--property={SERVICE_STATE_SHOW_PROPERTIES}"),
+            &format!("--property={}", super::SERVICE_STATE_PROPERTIES),
             UNIT,
         ],
     )?;
-    let state = super::systemd_service_state(output.success, &output.stdout);
-    let Some(line) = super::controller_service_status_line(state) else {
-        return Err(ServiceFault::UnknownState);
-    };
+    let line = service_status_line(output.success, &output.stdout)?;
     println!("{line}");
     Ok(())
+}
+
+fn service_status_line(success: bool, output: &[u8]) -> Result<&'static str, ServiceFault> {
+    let state = super::systemd_service_state(success, output);
+    super::controller_service_status_line(state).ok_or(ServiceFault::UnknownState)
 }
 
 fn start(manager: &mut impl Manager, drain_timeout_secs: u64) -> Result<(), ServiceFault> {
