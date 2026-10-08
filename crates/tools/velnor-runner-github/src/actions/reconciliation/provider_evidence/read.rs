@@ -79,16 +79,17 @@ pub(super) struct Page<T> {
     pub(super) items: Vec<T>,
 }
 
-pub(super) async fn read_all_pages<T, Item>(
+pub(super) async fn read_all_pages<T, Item, Decode>(
     transport: &mut T,
     path: &str,
     token: &str,
-    decode: fn(&[u8]) -> Result<Page<Item>, SessionError>,
+    decode: Decode,
 ) -> Result<Pages<Item>, SessionError>
 where
     T: AsyncDiscoveryTransport + ?Sized,
+    Decode: Fn(&[u8]) -> Result<Page<Item>, SessionError>,
 {
-    let first = match read_page(transport, path, token, 1, decode).await? {
+    let first = match read_page(transport, path, token, 1, &decode).await? {
         Read::Found(page) => page,
         Read::Missing => return Ok(Pages::Missing),
     };
@@ -103,7 +104,7 @@ where
         let page = if let Some(first) = first_page.take() {
             first
         } else {
-            match read_page(transport, path, token, page_number, decode).await? {
+            match read_page(transport, path, token, page_number, &decode).await? {
                 Read::Found(page) => page,
                 Read::Missing => return Ok(Pages::Missing),
             }
@@ -125,15 +126,16 @@ where
     Ok(Pages::Found(output))
 }
 
-async fn read_page<T, Item>(
+async fn read_page<T, Item, Decode>(
     transport: &mut T,
     path: &str,
     token: &str,
     page: usize,
-    decode: fn(&[u8]) -> Result<Page<Item>, SessionError>,
+    decode: &Decode,
 ) -> Result<Read<Page<Item>>, SessionError>
 where
     T: AsyncDiscoveryTransport + ?Sized,
+    Decode: Fn(&[u8]) -> Result<Page<Item>, SessionError>,
 {
     transport.bind_github_api_origin()?;
     let mut request = actions_request(path.to_owned(), token)?;
@@ -150,6 +152,8 @@ where
 
 pub(super) fn decode_jobs_page(
     body: &[u8],
+    owner: &str,
+    repository: &str,
 ) -> Result<Page<ActionsWorkflowAttemptJobEvidence>, SessionError> {
     let parsed: JobsPageResponse =
         serde_json::from_slice(body).map_err(|_| WireError::Malformed)?;
@@ -161,6 +165,11 @@ pub(super) fn decode_jobs_page(
             let runner_name = normalize_runner_name(job.runner_name)?;
             let runner_group_id = normalize_runner_id(job.runner_group_id)?;
             let runner_group_name = normalize_runner_name(job.runner_group_name)?;
+            let check_run_id = job
+                .check_run_url
+                .as_deref()
+                .map(|url| parse_check_run_url(url, owner, repository))
+                .transpose()?;
             if job.id <= 0
                 || job.run_id <= 0
                 || !valid_text(&job.name)
@@ -186,6 +195,7 @@ pub(super) fn decode_jobs_page(
             }
             Ok(ActionsWorkflowAttemptJobEvidence {
                 id: job.id,
+                check_run_id,
                 run_id: job.run_id,
                 name: job.name,
                 head_sha: job.head_sha,
@@ -222,6 +232,28 @@ fn normalize_runner_name(value: Option<String>) -> Result<Option<String>, Sessio
         Some(value) if valid_text(&value) => Ok(Some(value)),
         Some(_) => Err(WireError::Malformed.into()),
     }
+}
+
+fn parse_check_run_url(url: &str, owner: &str, repository: &str) -> Result<i64, SessionError> {
+    let scoped_path = url
+        .strip_prefix("https://api.github.com/repos/")
+        .ok_or(WireError::Malformed)?;
+    let (url_owner, remainder) = scoped_path.split_once('/').ok_or(WireError::Malformed)?;
+    let (url_repository, check_run_path) = remainder.split_once('/').ok_or(WireError::Malformed)?;
+    if !url_owner.eq_ignore_ascii_case(owner) || !url_repository.eq_ignore_ascii_case(repository) {
+        return Err(WireError::Malformed.into());
+    }
+    let id = check_run_path
+        .strip_prefix("check-runs/")
+        .ok_or(WireError::Malformed)?;
+    if id.is_empty() || id.starts_with('0') || !id.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(WireError::Malformed.into());
+    }
+    let id = id.parse::<i64>().map_err(|_| WireError::Malformed)?;
+    if id <= 0 {
+        return Err(WireError::Malformed.into());
+    }
+    Ok(id)
 }
 
 pub(super) fn decode_artifacts_page(
@@ -301,6 +333,7 @@ struct JobsPageResponse {
 #[derive(Deserialize)]
 struct JobResponse {
     pub(super) id: i64,
+    check_run_url: Option<String>,
     run_id: i64,
     name: String,
     head_sha: String,

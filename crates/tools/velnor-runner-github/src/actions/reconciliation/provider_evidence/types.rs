@@ -85,6 +85,12 @@ pub struct ActionsWorkflowAttemptProviderEvidence {
 pub struct ActionsWorkflowAttemptJobEvidence {
     /// Numeric Actions REST job ID.
     pub id: i64,
+    /// Numeric check run ID parsed from this row's `check_run_url`.
+    ///
+    /// This is independently parsed from the repository-scoped Check Runs
+    /// API URL; it is never inferred from or required to equal the REST job ID.
+    /// Missing provider data remains absent for higher-level fail-closed use.
+    pub check_run_id: Option<i64>,
     /// Parent workflow run ID.
     pub run_id: i64,
     /// Provider job display name, not a logical-job mapping.
