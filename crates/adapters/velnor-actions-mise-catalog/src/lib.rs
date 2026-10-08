@@ -6,6 +6,7 @@ pub mod gh;
 pub mod preflight;
 pub mod requests;
 pub mod steps;
+pub mod steps_rust_target;
 pub mod toolfiles;
 pub mod wrappers;
 
@@ -23,6 +24,7 @@ pub use steps::{
     PREPARE_PINNED_TOOLS_STEP, PREPARE_RUST_COMPONENTS_STEP, PreparePinnedTools,
     PrepareRustComponents, ToolHomes, VERIFY_PREPARED_INPUTS_STEP, VerifyPreparedInputs,
 };
+pub use steps_rust_target::{PREPARE_RUST_TARGET_STEP, PrepareRustTarget};
 pub use toolfiles::{
     DOT_MISE_TOML_FILE, FOREIGN_TOOL_FILES, MISE_ENV_PREFIX, MISE_LOCK_FILE, MISE_TOML_FILE,
     MISSING_RECOMMENDED_INPUT, MiseInspection, MiseSpec, OWNED_SYMBOLS, TOOLING_INPUT_INVALID,

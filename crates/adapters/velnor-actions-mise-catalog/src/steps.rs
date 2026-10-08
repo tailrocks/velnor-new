@@ -202,7 +202,7 @@ const RUST_COMPONENTS: [&str; 2] = ["clippy", "rustfmt"];
 /// The source-policy gate bans bare `"rustup"` spellings; this alias is
 /// the acknowledgement: the only sanctioned direct `rustup` invocation,
 /// fixed argv under Velnor-owned homes (see the type docs).
-const FORBIDDEN_ACKNOWLEDGED_RUSTUP: &str = "rustup";
+pub(super) const FORBIDDEN_ACKNOWLEDGED_RUSTUP: &str = "rustup";
 
 /// Fixed `rustup component add` for the pinned toolchain as one named step.
 ///

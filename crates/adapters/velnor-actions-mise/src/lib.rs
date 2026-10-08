@@ -107,6 +107,10 @@ pub use velnor_actions_mise_catalog::steps::{
     PrepareRustComponents, ToolHomes, VERIFY_PREPARED_INPUTS_STEP, VerifyPreparedInputs,
 };
 
+pub use velnor_actions_mise_catalog::steps_rust_target::{
+    PREPARE_RUST_TARGET_STEP, PrepareRustTarget,
+};
+
 pub use velnor_actions_mise_core::template::TaskTemplate;
 
 pub use velnor_actions_mise_catalog::toolfiles::{

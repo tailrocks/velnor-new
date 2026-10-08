@@ -2,9 +2,9 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 use velnor_actions_mise_catalog::{
-    PREPARE_PINNED_TOOLS_STEP, PREPARE_RUST_COMPONENTS_STEP, PinnedTool, PreparePinnedTools,
-    PrepareRustComponents, ToolCatalog, ToolHomes, VERIFY_PREPARED_INPUTS_STEP,
-    VerifyPreparedInputs,
+    PREPARE_PINNED_TOOLS_STEP, PREPARE_RUST_COMPONENTS_STEP, PREPARE_RUST_TARGET_STEP, PinnedTool,
+    PreparePinnedTools, PrepareRustComponents, PrepareRustTarget, ToolCatalog, ToolHomes,
+    VERIFY_PREPARED_INPUTS_STEP, VerifyPreparedInputs,
 };
 use velnor_actions_mise_core::MiseError;
 
@@ -334,4 +334,56 @@ fn tool_homes_rejects_empty() {
     ));
     let err = ToolHomes::new("", "").expect_err("empty homes must fail");
     assert_eq!(err.to_string(), "invalid_step_input: rustup_home: ");
+}
+
+#[test]
+fn rust_target_step_name_matches_contract() {
+    assert_eq!(PREPARE_RUST_TARGET_STEP, "Prepare Rust target");
+    assert_eq!(PrepareRustTarget::step_name(), PREPARE_RUST_TARGET_STEP);
+}
+
+#[test]
+fn rust_target_argv_pins_host_toolchain_and_target() -> Result<(), String> {
+    let request = PrepareRustTarget::new("aarch64-apple-darwin", "x86_64-apple-darwin")
+        .map_err(|err| err.to_string())?;
+    assert_eq!(request.host(), "aarch64-apple-darwin");
+    assert_eq!(request.target(), "x86_64-apple-darwin");
+    assert_eq!(
+        request.argv(&pinned()),
+        strings(&[
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+            "rust@1.98.1",
+            "--",
+            "rustup",
+            "target",
+            "add",
+            "--toolchain",
+            "1.98.1-aarch64-apple-darwin",
+            "x86_64-apple-darwin",
+        ])
+    );
+    Ok(())
+}
+
+#[test]
+fn rust_target_rejects_unlisted_triples_and_option_values() {
+    for (host, target) in [
+        ("", "x86_64-apple-darwin"),
+        ("--help", "x86_64-apple-darwin"),
+        ("aarch64-apple-darwin", ""),
+        ("aarch64-apple-darwin", "--help"),
+        ("aarch64-apple-darwin", "x86_64-unknown-freebsd"),
+    ] {
+        assert!(
+            matches!(
+                PrepareRustTarget::new(host, target),
+                Err(velnor_actions_mise_core::MiseError::InvalidStepInput { .. })
+            ),
+            "unlisted triple accepted: host={host:?} target={target:?}"
+        );
+    }
 }
