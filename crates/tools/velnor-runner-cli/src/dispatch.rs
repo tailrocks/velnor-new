@@ -63,6 +63,7 @@ fn dispatch(cli: &Cli) -> ExitCode {
             runner_group_name: request.runner_group_name.as_deref(),
             allowed_events: &request.allowed_events,
             allowed_workflow_paths: &request.allowed_workflow_paths,
+            trust_policy_file: request.trust_policy_file.clone(),
             image_profile: request.image_profile.as_deref(),
             max_jobs: request.max_jobs,
             drain_timeout_secs: request.drain_timeout_secs,

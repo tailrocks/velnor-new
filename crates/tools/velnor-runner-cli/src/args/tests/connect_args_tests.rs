@@ -27,6 +27,8 @@ fn connect_requires_explicit_linux_profile_scope_group_and_trust() -> Result<(),
         "pull_request",
         "--allow-workflow-path",
         ".github/workflows/ci.yml",
+        "--trust-policy-file",
+        "/etc/velnor-host/trust-policy.json",
         "--image-profile",
         "ubuntu-24.04-amd64",
         "--max-jobs",
@@ -35,7 +37,13 @@ fn connect_requires_explicit_linux_profile_scope_group_and_trust() -> Result<(),
         "900",
     ])
     .map_err(|error| error.to_string())?;
-    assert!(matches!(cli.command, Command::Connect(_)));
+    let Command::Connect(connect) = cli.command else {
+        return Err("expected connect command".to_owned());
+    };
+    assert_eq!(
+        connect.trust_policy_file.as_deref(),
+        Some(std::path::Path::new("/etc/velnor-host/trust-policy.json"))
+    );
     Ok(())
 }
 
