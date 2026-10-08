@@ -13,8 +13,9 @@ use velnor_actions_contract::{
 };
 use velnor_actions_contract_workflow::{
     CacheLayer, CacheOutcome, CacheResult, ExecuteTaskRef, MatrixEntry, MatrixReport, Plan,
-    TaskReport, TaskStatus,
+    TASK_RUNTIME_RECEIPTS_DIRECTORY, TaskReport, TaskStatus,
 };
+pub use velnor_actions_contract_workflow::{TaskRuntimeIdentity, TaskRuntimeReceipt};
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::{internal, internal_contract};
 
@@ -208,6 +209,41 @@ pub fn write_entry_reports(
     task: &TaskReport,
     matrix: &MatrixReport,
 ) -> Result<(), OrchestratorError> {
+    write_entry_reports_with_runtime_receipt(runner_temp, plan, entry, task, matrix, None)
+}
+
+/// Write schema-1 reports unchanged and an optional separate runtime receipt.
+///
+/// The receipt is stored outside `tasks/`, whose JSON files are parsed as
+/// schema-1 `TaskReport` values by existing readers.
+///
+/// # Errors
+/// Returns a contract error for an unbound receipt and IO errors for writes.
+pub fn write_entry_reports_with_runtime_receipt(
+    runner_temp: &Path,
+    plan: &Plan,
+    entry: &MatrixEntry,
+    task: &TaskReport,
+    matrix: &MatrixReport,
+    receipt: Option<&TaskRuntimeReceipt>,
+) -> Result<(), OrchestratorError> {
+    if let Some(receipt) = receipt {
+        receipt
+            .validate_for_plan_entry(plan, entry)
+            .map_err(internal_contract)?;
+        if receipt.task_report_id != task.task_report_id
+            || receipt.task_id != task.task_id
+            || receipt.task_digest != task.task_digest
+            || receipt.matrix_id != task.matrix_id
+            || receipt.matrix_key != task.matrix_key
+            || !matches!(
+                task.status,
+                TaskStatus::Executed | TaskStatus::Failed | TaskStatus::Cancelled
+            )
+        {
+            return Err(internal("runtime_receipt_task_mismatch"));
+        }
+    }
     let dir = runner_temp
         .join("velnor")
         .join(&plan.run_key)
@@ -229,6 +265,19 @@ pub fn write_entry_reports(
         &task_bytes,
         "report",
     )?;
+    if let Some(receipt) = receipt {
+        let receipt_dir = dir.join(TASK_RUNTIME_RECEIPTS_DIRECTORY);
+        velnor_actions_orchestrator_core::exclusive_write::create_dir_no_symlink(
+            runner_temp,
+            &receipt_dir,
+        )?;
+        let receipt_bytes = canonical_json_bytes(receipt).map_err(internal_contract)?;
+        velnor_actions_orchestrator_core::exclusive_write::write_exclusive(
+            &receipt_dir.join(format!("{}.json", receipt.task_report_id)),
+            &receipt_bytes,
+            "runtime_receipt",
+        )?;
+    }
     Ok(())
 }
 
