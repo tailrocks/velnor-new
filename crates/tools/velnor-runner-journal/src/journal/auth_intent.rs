@@ -12,6 +12,8 @@ const DESTINATION: &str = "https://api.github.com";
 pub enum DiscoveryCredentialStep {
     /// Request a repository registration token.
     RepositoryRegistrationToken,
+    /// Request an organization registration token for bounded metadata reads.
+    OrganizationRegistrationToken,
     /// Exchange that one-shot token for a repository admin connection.
     ActionsAdminExchange,
 }
@@ -20,9 +22,30 @@ impl DiscoveryCredentialStep {
     const fn as_str(self) -> &'static str {
         match self {
             Self::RepositoryRegistrationToken => "repository-registration-token",
+            Self::OrganizationRegistrationToken => "organization-registration-token",
             Self::ActionsAdminExchange => "actions-admin-exchange",
         }
     }
+}
+
+/// Supported registration scope used in a scope-aware discovery intent.
+///
+/// Enterprise registration is intentionally absent: the current host has no
+/// configured enterprise credential route.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiscoveryCredentialScope<'a> {
+    /// Repository registration scope.
+    Repository {
+        /// Exact repository owner.
+        owner: &'a str,
+        /// Exact repository name.
+        repository: &'a str,
+    },
+    /// Organization registration scope.
+    Organization {
+        /// Exact organization login.
+        organization: &'a str,
+    },
 }
 
 /// Outcome of one credential POST after its pre-effect intent was committed.
@@ -55,11 +78,89 @@ impl Journal {
         repository_id: i64,
         canonical_full_name: &str,
     ) -> Result<i64, HostError> {
-        if self.read_only || repository_id <= 0 {
+        if self.read_only
+            || repository_id <= 0
+            || step == DiscoveryCredentialStep::OrganizationRegistrationToken
+        {
             return Err(HostError::Journal);
         }
         let subject = subject(step, repository_id, canonical_full_name)?;
-        let scope = scope_prefix(step, repository_id)?;
+        let scope = repository_scope_prefix(step, repository_id)?;
+        self.insert_pending_intent(scope, subject).await
+    }
+
+    /// Persist a scoped credential POST intent before sending it.
+    ///
+    /// The replay key binds the fixed GitHub destination, exact scope kind and
+    /// name, immutable target repository ID, and operation. The target full
+    /// name remains audit metadata and does not weaken the identity fence.
+    /// Organization registration-token issuance requires organization scope;
+    /// repository-token issuance requires repository scope. Admin exchange is
+    /// supported for either scope.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Journal`] for an unsupported scope/step pairing,
+    /// invalid identity, unresolved prior intent, read-only use, or a database
+    /// failure.
+    pub async fn begin_scoped_discovery_credential_intent(
+        &self,
+        step: DiscoveryCredentialStep,
+        registration_scope: DiscoveryCredentialScope<'_>,
+        target_repository_id: i64,
+        target_repository_full_name: &str,
+    ) -> Result<i64, HostError> {
+        if self.read_only || target_repository_id <= 0 {
+            return Err(HostError::Journal);
+        }
+        let (prefix, audit_scope_kind, audit_scope_name) = match registration_scope {
+            DiscoveryCredentialScope::Repository { owner, repository }
+                if step != DiscoveryCredentialStep::OrganizationRegistrationToken =>
+            {
+                validate_scope_component(owner)?;
+                validate_scope_component(repository)?;
+                // Repository scope is already identified by the immutable
+                // repository ID plus destination and step in the legacy key.
+                // Reuse that exact prefix so intents written through either
+                // API fence each other, and so a rename/transfer cannot create
+                // a fresh key for the same repository.
+                (
+                    repository_scope_prefix(step, target_repository_id)?,
+                    "repository",
+                    format!("{owner}/{repository}"),
+                )
+            }
+            DiscoveryCredentialScope::Organization { organization }
+                if step != DiscoveryCredentialStep::RepositoryRegistrationToken =>
+            {
+                validate_scope_component(organization)?;
+                (
+                    organization_scope_prefix(step, organization, target_repository_id)?,
+                    "organization",
+                    organization.to_owned(),
+                )
+            }
+            _ => return Err(HostError::Journal),
+        };
+        validate_full_name(target_repository_full_name)?;
+        let mut subject = prefix.clone();
+        append_component(&mut subject, audit_scope_kind);
+        append_component(&mut subject, &audit_scope_name.to_ascii_lowercase());
+        append_component(
+            &mut subject,
+            &target_repository_full_name.to_ascii_lowercase(),
+        );
+        self.insert_pending_intent(prefix, subject).await
+    }
+
+    async fn insert_pending_intent(
+        &self,
+        scope: String,
+        subject: String,
+    ) -> Result<i64, HostError> {
+        if self.read_only {
+            return Err(HostError::Journal);
+        }
         let conn = self.connection().await?;
         conn.execute("BEGIN IMMEDIATE", ())
             .await
@@ -171,23 +272,44 @@ fn subject(
     repository_id: i64,
     canonical_full_name: &str,
 ) -> Result<String, HostError> {
-    if canonical_full_name.is_empty()
-        || canonical_full_name.len() > 201
-        || !canonical_full_name.is_ascii()
-        || canonical_full_name.chars().any(char::is_whitespace)
-        || canonical_full_name.chars().any(char::is_control)
-        || canonical_full_name.split('/').count() != 2
-        || canonical_full_name.split('/').any(str::is_empty)
-    {
-        return Err(HostError::Journal);
-    }
+    validate_full_name(canonical_full_name)?;
     let name = canonical_full_name.to_ascii_lowercase();
-    let mut output = scope_prefix(step, repository_id)?;
+    let mut output = repository_scope_prefix(step, repository_id)?;
     append_component(&mut output, &name);
     Ok(output)
 }
 
-fn scope_prefix(step: DiscoveryCredentialStep, repository_id: i64) -> Result<String, HostError> {
+fn validate_full_name(value: &str) -> Result<(), HostError> {
+    if value.is_empty()
+        || value.len() > 201
+        || !value.is_ascii()
+        || value.chars().any(char::is_whitespace)
+        || value.chars().any(char::is_control)
+        || value.split('/').count() != 2
+        || value.split('/').any(str::is_empty)
+    {
+        return Err(HostError::Journal);
+    }
+    Ok(())
+}
+
+fn validate_scope_component(value: &str) -> Result<(), HostError> {
+    if value.is_empty()
+        || value.len() > 100
+        || !value.is_ascii()
+        || value.contains('/')
+        || value.chars().any(char::is_whitespace)
+        || value.chars().any(char::is_control)
+    {
+        return Err(HostError::Journal);
+    }
+    Ok(())
+}
+
+fn repository_scope_prefix(
+    step: DiscoveryCredentialStep,
+    repository_id: i64,
+) -> Result<String, HostError> {
     if repository_id <= 0 {
         return Err(HostError::Journal);
     }
@@ -197,6 +319,28 @@ fn scope_prefix(step: DiscoveryCredentialStep, repository_id: i64) -> Result<Str
         repository_id.to_string(),
     ];
     let mut output = String::from("discovery-v1:");
+    for part in parts {
+        append_component(&mut output, &part);
+    }
+    Ok(output)
+}
+
+fn organization_scope_prefix(
+    step: DiscoveryCredentialStep,
+    organization: &str,
+    target_repository_id: i64,
+) -> Result<String, HostError> {
+    if target_repository_id <= 0 {
+        return Err(HostError::Journal);
+    }
+    let parts = [
+        DESTINATION.to_owned(),
+        step.as_str().to_owned(),
+        "organization".to_owned(),
+        organization.to_ascii_lowercase(),
+        target_repository_id.to_string(),
+    ];
+    let mut output = String::from("discovery-scope-v1:");
     for part in parts {
         append_component(&mut output, &part);
     }
