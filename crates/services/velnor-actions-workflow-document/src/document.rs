@@ -5,15 +5,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::lane_share::{LaneShare, SharedActionCall};
-use velnor_actions_contract_config::config::RunsOn;
+use velnor_actions_contract_config::{ExecutionMode, config::RunsOn};
 use velnor_actions_contract_workflow::{
     Job, Permissions, Step, StepKind, StepRole, Trigger, WorkflowIr,
     workflow::{ir::DispatchInput, permissions::PermissionLevel},
 };
-use velnor_actions_workflow_jobs::{RenderContext, context::FINAL_JOB_ID};
+use velnor_actions_workflow_jobs::RenderContext;
 use velnor_actions_workflow_steps::{RenderError, steps};
 use velnor_actions_workflow_tree::{yaml::Yaml, yaml::string_map_yaml};
 
+mod needs_channel;
 #[cfg(test)]
 mod tests;
 
@@ -28,6 +29,21 @@ pub fn workflow_to_yaml(
     ctx: &RenderContext,
     mbx_jobs: &BTreeSet<String>,
 ) -> Result<Yaml, RenderError> {
+    workflow_to_yaml_with_mode(ir, shared, ctx, mbx_jobs, None)
+}
+
+/// Build the workflow document with the effective typed execution mode.
+///
+/// # Errors
+///
+/// Returns [`RenderError`] for an inconsistent lane share or bad job shape.
+pub fn workflow_to_yaml_with_mode(
+    ir: &WorkflowIr,
+    shared: &LaneShare,
+    ctx: &RenderContext,
+    mbx_jobs: &BTreeSet<String>,
+    execution_mode: Option<ExecutionMode>,
+) -> Result<Yaml, RenderError> {
     let jobs = &shared.jobs;
     if shared.calls.keys().ne(shared.checkouts.keys())
         || shared.calls.keys().ne(shared.env_steps.keys())
@@ -40,7 +56,7 @@ pub fn workflow_to_yaml(
             "shared_lane_checkout_map_mismatch".to_owned(),
         ));
     }
-    let needs_env = needs_channel_envs(jobs)?;
+    let needs_env = needs_channel::needs_channel_envs(jobs, execution_mode)?;
     let lane_steps = lane_steps(shared);
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
@@ -184,28 +200,6 @@ fn triggers_to_yaml(triggers: &Trigger) -> Yaml {
     }
     entries.push(("merge_group".to_owned(), Yaml::Null));
     Yaml::Map(entries)
-}
-
-/// Derive the merge `needs` channel from the gate job's `needs`.
-///
-/// The inventory is exactly what `toJSON(needs)` can observe at
-/// runtime; a lone gate has nothing to conclude over and fails closed
-/// instead of emitting a channel the merge would judge as
-/// `empty_needs`. The `gate_matches` check fails generation closed if
-/// the derivation ever diverges from the gate list again.
-fn needs_channel_envs(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, String)>, RenderError> {
-    if !jobs.contains_key(FINAL_JOB_ID) {
-        return Ok(Vec::new());
-    }
-    let conclusions =
-        velnor_actions_contract_workflow::NeedsConclusions::from_finalized_jobs(FINAL_JOB_ID, jobs)
-            .map_err(RenderError::Contract)?;
-    if !conclusions.gate_matches(jobs) {
-        return Err(RenderError::InvalidWorkflow(
-            "needs_inventory_gate_mismatch".to_owned(),
-        ));
-    }
-    Ok(vec![conclusions.channel_env(), conclusions.expected_env()])
 }
 
 /// Render one typed dispatch input: fixed string type, required, default.
