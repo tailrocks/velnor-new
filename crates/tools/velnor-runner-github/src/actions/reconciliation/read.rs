@@ -1,5 +1,6 @@
 //! Read-only Actions workflow-run and attempt-job endpoints.
 
+use crate::registration::{AsyncDiscoveryTransport, execute_discovery};
 use crate::session::execute;
 use crate::{ActionsJob, ActionsWorkflowRun, SessionError, Transport, WireError};
 use serde::Deserialize;
@@ -33,8 +34,37 @@ where
     if exchange.status != 200 {
         return Err(status_error(exchange.status));
     }
+    decode_workflow_run(&exchange.body).map(Read::Found)
+}
+
+pub(super) async fn read_workflow_run_async<T>(
+    transport: &mut T,
+    owner: &str,
+    repository: &str,
+    run_id: i64,
+    token: &str,
+) -> Result<Read<ActionsWorkflowRun>, SessionError>
+where
+    T: AsyncDiscoveryTransport + ?Sized,
+{
+    transport.bind_github_api_origin()?;
+    let request = actions_request(
+        format!("repos/{owner}/{repository}/actions/runs/{run_id}"),
+        token,
+    )?;
+    let exchange = execute_discovery(transport, request).await?;
+    if exchange.status == 404 {
+        return Ok(Read::Missing);
+    }
+    if exchange.status != 200 {
+        return Err(status_error(exchange.status));
+    }
+    decode_workflow_run(&exchange.body).map(Read::Found)
+}
+
+fn decode_workflow_run(body: &[u8]) -> Result<ActionsWorkflowRun, SessionError> {
     let parsed: super::super::WorkflowRunResponse =
-        serde_json::from_slice(&exchange.body).map_err(|_| WireError::Malformed)?;
+        serde_json::from_slice(body).map_err(|_| WireError::Malformed)?;
     if parsed.id <= 0
         || parsed.run_attempt <= 0
         || parsed.status.is_empty()
@@ -47,7 +77,7 @@ where
         .path
         .filter(|path| !path.is_empty())
         .ok_or(WireError::Malformed)?;
-    Ok(Read::Found(ActionsWorkflowRun {
+    Ok(ActionsWorkflowRun {
         id: parsed.id,
         path,
         run_attempt: parsed.run_attempt,
@@ -56,7 +86,7 @@ where
         event: parsed.event,
         head_sha: parsed.head_sha,
         head_repository_full_name: parsed.head_repository.map(|repo| repo.full_name),
-    }))
+    })
 }
 
 pub(super) fn attempt_page<T>(
@@ -83,12 +113,44 @@ where
     if exchange.status != 200 {
         return Err(status_error(exchange.status));
     }
+    decode_attempt_jobs(&exchange.body).map(Read::Found)
+}
+
+pub(super) async fn attempt_page_async<T>(
+    transport: &mut T,
+    owner: &str,
+    repository: &str,
+    run_id: i64,
+    attempt: u32,
+    page: usize,
+    token: &str,
+) -> Result<Read<AttemptJobs>, SessionError>
+where
+    T: AsyncDiscoveryTransport + ?Sized,
+{
+    transport.bind_github_api_origin()?;
+    let mut request = actions_request(
+        format!("repos/{owner}/{repository}/actions/runs/{run_id}/attempts/{attempt}/jobs"),
+        token,
+    )?;
+    request.query = Some(format!("per_page={PAGE_SIZE}&page={page}"));
+    let exchange = execute_discovery(transport, request).await?;
+    if exchange.status == 404 {
+        return Ok(Read::Missing);
+    }
+    if exchange.status != 200 {
+        return Err(status_error(exchange.status));
+    }
+    decode_attempt_jobs(&exchange.body).map(Read::Found)
+}
+
+fn decode_attempt_jobs(body: &[u8]) -> Result<AttemptJobs, SessionError> {
     let parsed: AttemptJobsResponse =
-        serde_json::from_slice(&exchange.body).map_err(|_| WireError::Malformed)?;
-    Ok(Read::Found(AttemptJobs {
+        serde_json::from_slice(body).map_err(|_| WireError::Malformed)?;
+    Ok(AttemptJobs {
         total_count: parsed.total_count,
         jobs: parsed.jobs.into_iter().map(ActionsJob::from).collect(),
-    }))
+    })
 }
 
 pub(super) struct AttemptJobs {

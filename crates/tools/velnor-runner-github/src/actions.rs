@@ -10,7 +10,7 @@ pub use fork_workflows::{
 };
 pub use reconciliation::{
     ActionsJobReconciliation, ActionsJobReconciliationReason, ActionsJobReconciliationState,
-    ObservedScaleSetJob, reconcile_observed_scale_set_job,
+    ObservedScaleSetJob, reconcile_observed_scale_set_job, reconcile_observed_scale_set_job_async,
 };
 
 use serde::Deserialize;

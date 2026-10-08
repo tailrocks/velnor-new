@@ -1,5 +1,6 @@
 //! Bounded reconciliation using lifecycle-observed runner identity.
 
+mod async_reconciliation;
 mod attempts;
 mod read;
 
@@ -7,6 +8,8 @@ use attempts::{AttemptLookup, RunnerIdentity, locate_observed_job};
 use read::{Read, read_workflow_run};
 
 use crate::{ActionsJob, ActionsWorkflowRun, SessionError, Transport, WireError};
+
+pub use async_reconciliation::reconcile_observed_scale_set_job_async;
 
 use super::validate_repository;
 
