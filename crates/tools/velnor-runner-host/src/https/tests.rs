@@ -1,13 +1,17 @@
 //! Curl argv and URL joins. These tests do not open a socket.
 
 use std::fs;
-use std::path::Path;
+use std::io::{self, Read};
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
 use velnor_runner_github::{BearerRole, Method, RequestPurpose, SessionRequest};
 
 use super::{
-    CURL_ARGV, CurlFail, HttpsTransport, MAX_RESPONSE_BYTES, Scratch, classify_exit, curl_config,
-    join_url, perform_in_scratch, trace_record,
+    BodyReadError, CURL_ARGV, CurlFail, HttpsTransport, MAX_RESPONSE_BYTES, Scratch, classify_exit,
+    curl_config, join_url, perform_in_scratch, read_bounded, run_curl_with_executable,
+    trace_record,
 };
 use crate::HostError;
 
@@ -108,7 +112,6 @@ fn curl_config_uses_shared_response_limit() {
         "https://pipelines.example.test/close",
         &request,
         Path::new("/tmp/body"),
-        Path::new("/tmp/output"),
     )
     .expect("safe synthetic curl configuration");
 
@@ -117,6 +120,27 @@ fn curl_config_uses_shared_response_limit() {
             .lines()
             .any(|line| { line == format!("max-filesize = {MAX_RESPONSE_BYTES}") })
     );
+    assert!(config.lines().any(|line| line == "output = \"-\""));
+}
+
+#[test]
+fn bounded_reader_stops_at_the_limit_plus_one_byte() {
+    struct EndlessReader(usize);
+
+    impl Read for EndlessReader {
+        fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+            self.0 += bytes.len();
+            bytes.fill(b'x');
+            Ok(bytes.len())
+        }
+    }
+
+    let mut reader = EndlessReader(0);
+    assert!(matches!(
+        read_bounded(&mut reader, 1024),
+        Err(BodyReadError::TooLarge)
+    ));
+    assert_eq!(reader.0, 1025);
 }
 
 #[test]
@@ -130,10 +154,7 @@ fn bounded_response_preserves_bytes_and_removes_exact_scratch_directory() {
         "https://pipelines.example.test/session",
         &sample_request(),
         scratch,
-        |_, output| {
-            fs::write(output, &response).map_err(|_| CurlFail::Reset)?;
-            Ok(200)
-        },
+        |_| Ok((200, response.clone())),
     )
     .expect("bounded synthetic exchange");
 
@@ -143,31 +164,69 @@ fn bounded_response_preserves_bytes_and_removes_exact_scratch_directory() {
 }
 
 #[test]
-fn oversized_response_is_rejected_and_scratch_is_removed() {
+fn oversized_unknown_length_stdout_is_bounded_and_child_is_reaped() {
     let parent = tempfile::tempdir().expect("test parent");
+    let pid_file = parent.path().join("curl.pid");
+    let pid_file_text = pid_file.to_string_lossy();
+    assert!(!pid_file_text.contains('\''));
+    let chunk = "x".repeat(8 * 1024);
+    let script = format!(
+        "#!/bin/sh\ncat >/dev/null\nprintf 'synthetic stderr marker' >&2\necho $$ > '{pid_file_text}'\nwhile :; do printf '%s' '{chunk}'; done\n"
+    );
+    let executable = write_executable(parent.path(), "curl-stub", &script);
     let scratch = Scratch::create_in(parent.path()).expect("private scratch");
     let scratch_path = scratch.dir.clone();
-    let oversized = vec![b'x'; MAX_RESPONSE_BYTES + 1];
     let result = perform_in_scratch(
         "https://pipelines.example.test/session",
         &sample_request(),
         scratch,
-        |_, output| {
-            fs::write(output, &oversized).map_err(|_| CurlFail::Reset)?;
-            Ok(200)
+        |config| {
+            assert!(config.lines().any(|line| line == "output = \"-\""));
+            let result = run_curl_with_executable(&executable, config);
+            let entries = fs::read_dir(&scratch_path)
+                .expect("scratch remains available during the exchange")
+                .map(|entry| entry.expect("scratch entry").file_name())
+                .collect::<Vec<_>>();
+            assert_eq!(entries, [std::ffi::OsString::from("body")]);
+            result
         },
     );
 
     assert!(matches!(result, Err(CurlFail::ResponseTooLarge)));
     assert!(!scratch_path.exists());
+    let pid: u32 = fs::read_to_string(&pid_file)
+        .expect("curl stub recorded its pid")
+        .trim()
+        .parse()
+        .expect("curl stub pid is numeric");
+    let still_running = Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .stderr(Stdio::null())
+        .status()
+        .expect("kill utility is available");
+    assert!(!still_running.success(), "oversized curl child was reaped");
 }
 
 #[test]
 fn curl_size_exit_is_not_an_empty_success_or_timeout() {
     assert!(matches!(
-        classify_exit(Some(63), b"200"),
+        classify_exit(Some(63), b"200".to_vec()),
         Err(CurlFail::ResponseTooLarge)
     ));
+}
+
+#[test]
+fn curl_stdout_suffix_preserves_status_and_response_bytes() {
+    let parent = tempfile::tempdir().expect("test parent");
+    let executable = write_executable(
+        parent.path(),
+        "curl-stub",
+        "#!/bin/sh\ncat >/dev/null\nprintf '%s' 'synthetic-body201'\n",
+    );
+    let (status, body) =
+        run_curl_with_executable(&executable, "output = \"-\"").expect("bounded curl response");
+    assert_eq!(status, 201);
+    assert_eq!(body, b"synthetic-body");
 }
 
 #[test]
@@ -179,12 +238,20 @@ fn curl_failure_keeps_primary_classification_and_removes_scratch() {
         "https://pipelines.example.test/session",
         &sample_request(),
         scratch,
-        |_, output| {
-            fs::write(output, b"partial synthetic response").map_err(|_| CurlFail::Reset)?;
-            Err(CurlFail::Timeout)
-        },
+        |_| Err(CurlFail::Timeout),
     );
 
     assert!(matches!(result, Err(CurlFail::Timeout)));
     assert!(!scratch_path.exists());
+}
+
+fn write_executable(parent: &Path, name: &str, contents: &str) -> PathBuf {
+    let path = parent.join(name);
+    fs::write(&path, contents).expect("write synthetic curl executable");
+    let mut permissions = fs::metadata(&path)
+        .expect("synthetic curl metadata")
+        .permissions();
+    permissions.set_mode(0o700);
+    fs::set_permissions(&path, permissions).expect("make synthetic curl executable");
+    path
 }

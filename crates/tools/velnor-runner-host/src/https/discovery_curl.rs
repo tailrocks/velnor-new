@@ -17,6 +17,8 @@ mod process;
 #[path = "discovery_curl_readers.rs"]
 mod readers;
 
+pub(in crate::https) use readers::{BodyReadError, read_bounded};
+
 #[cfg(test)]
 pub(super) fn perform_curl(
     executable: &str,

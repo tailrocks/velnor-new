@@ -4,19 +4,21 @@ mod discovery;
 
 pub use discovery::BoundedDiscoveryTransport;
 
-use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use velnor_runner_github::{Exchange, Method, SessionRequest, Transport, TransportFail};
 use zeroize::Zeroize;
 
 use crate::HostError;
+use discovery::{BodyReadError, read_bounded};
 
 const MAX_RESPONSE_BYTES: usize = 512 * 1024;
+const HTTP_STATUS_BYTES: usize = 3;
 
 /// One Actions or GitHub API origin. The path on each call is relative.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,22 +69,20 @@ enum CurlFail {
 fn perform(base: &str, request: &SessionRequest) -> Result<Exchange, CurlFail> {
     let url = join_url(base, &request.path, request.query.as_deref()).ok_or(CurlFail::Reset)?;
     let scratch = Scratch::create()?;
-    perform_in_scratch(&url, request, scratch, |config, _| run_curl(config))
+    perform_in_scratch(&url, request, scratch, run_curl)
 }
 
 fn perform_in_scratch(
     url: &str,
     request: &SessionRequest,
     scratch: Scratch,
-    run: impl FnOnce(&str, &Path) -> Result<u16, CurlFail>,
+    run: impl FnOnce(&str) -> Result<(u16, Vec<u8>), CurlFail>,
 ) -> Result<Exchange, CurlFail> {
     let result = (|| {
         let body_path = scratch.path("body");
-        let out_path = scratch.path("out");
         write_private(&body_path, &request.body)?;
-        let config = curl_config(url, request, &body_path, &out_path)?;
-        let status = run(&config, &out_path)?;
-        let body = read_output(&out_path)?;
+        let config = curl_config(url, request, &body_path)?;
+        let (status, body) = run(&config)?;
         trace(request, status, &body);
         Ok(Exchange { status, body })
     })();
@@ -112,29 +112,80 @@ fn trace_record(request: &SessionRequest, status: u16, body: &[u8]) -> String {
     )
 }
 
-fn run_curl(config: &str) -> Result<u16, CurlFail> {
-    let mut child = Command::new("curl")
+fn run_curl(config: &str) -> Result<(u16, Vec<u8>), CurlFail> {
+    run_curl_with_executable("curl", config)
+}
+
+fn run_curl_with_executable(
+    executable: impl AsRef<std::ffi::OsStr>,
+    config: &str,
+) -> Result<(u16, Vec<u8>), CurlFail> {
+    let mut child = Command::new(executable)
         .args(CURL_ARGV)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn()
         .map_err(|_| CurlFail::Reset)?;
-    let mut stdin = child.stdin.take().ok_or(CurlFail::Reset)?;
-    stdin
-        .write_all(config.as_bytes())
-        .map_err(|_| CurlFail::Reset)?;
-    drop(stdin);
-    let finished = child.wait_with_output().map_err(|_| CurlFail::Reset)?;
-    classify_exit(finished.status.code(), &finished.stdout)
+    let result = (|| {
+        let mut stdin = child.stdin.take().ok_or(CurlFail::Reset)?;
+        let write_result = stdin.write_all(config.as_bytes());
+        drop(stdin);
+        write_result.map_err(|_| CurlFail::Reset)?;
+
+        let stdout = child.stdout.take().ok_or(CurlFail::Reset)?;
+        let output = match read_bounded(stdout, MAX_RESPONSE_BYTES + HTTP_STATUS_BYTES) {
+            Ok(output) => output,
+            Err(BodyReadError::TooLarge) => return Err(CurlFail::ResponseTooLarge),
+            Err(BodyReadError::Io) => return Err(CurlFail::Reset),
+        };
+        let status = child.wait().map_err(|_| CurlFail::Reset)?.code();
+        classify_exit(status, output)
+    })();
+    if result.is_err() {
+        stop_and_reap(&mut child);
+    }
+    result
 }
 
-fn classify_exit(code: Option<i32>, stdout: &[u8]) -> Result<u16, CurlFail> {
+fn stop_and_reap(child: &mut Child) {
+    drop(child.kill());
+    drop(child.wait());
+}
+
+fn classify_exit(code: Option<i32>, mut stdout: Vec<u8>) -> Result<(u16, Vec<u8>), CurlFail> {
     match code {
-        Some(0) => parse_status(stdout),
-        Some(28) => Err(CurlFail::Timeout),
-        Some(63) => Err(CurlFail::ResponseTooLarge),
-        _ => Err(CurlFail::Reset),
+        Some(0) => {
+            let Some(status_start) = stdout.len().checked_sub(HTTP_STATUS_BYTES) else {
+                stdout.zeroize();
+                return Err(CurlFail::Reset);
+            };
+            let status = match parse_status(&stdout[status_start..]) {
+                Ok(status) => status,
+                Err(error) => {
+                    stdout.zeroize();
+                    return Err(error);
+                }
+            };
+            stdout.truncate(status_start);
+            if stdout.len() > MAX_RESPONSE_BYTES {
+                stdout.zeroize();
+                return Err(CurlFail::ResponseTooLarge);
+            }
+            Ok((status, stdout))
+        }
+        Some(28) => {
+            stdout.zeroize();
+            Err(CurlFail::Timeout)
+        }
+        Some(63) => {
+            stdout.zeroize();
+            Err(CurlFail::ResponseTooLarge)
+        }
+        _ => {
+            stdout.zeroize();
+            Err(CurlFail::Reset)
+        }
     }
 }
 
@@ -150,16 +201,11 @@ fn parse_status(stdout: &[u8]) -> Result<u16, CurlFail> {
 
 pub(crate) const CURL_ARGV: &[&str] = &["--silent", "--show-error", "--config", "-"];
 
-fn curl_config(
-    url: &str,
-    request: &SessionRequest,
-    body: &Path,
-    output: &Path,
-) -> Result<String, CurlFail> {
+fn curl_config(url: &str, request: &SessionRequest, body: &Path) -> Result<String, CurlFail> {
     let mut lines = vec![
         format!("request = \"{}\"", method_name(request.method)),
         quoted("url", url)?,
-        format!("output = \"{}\"", display_path(output)?),
+        "output = \"-\"".to_owned(),
         "write-out = \"%{http_code}\"".to_owned(),
         "max-time = 60".to_owned(),
         format!("max-filesize = {MAX_RESPONSE_BYTES}"),
@@ -236,28 +282,6 @@ fn checked_base(base: &str) -> Result<String, HostError> {
     } else {
         Err(HostError::Endpoint)
     }
-}
-
-fn read_output(path: &Path) -> Result<Vec<u8>, CurlFail> {
-    let file = match File::open(path) {
-        Ok(file) => file,
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(_) => return Err(CurlFail::Reset),
-    };
-    let mut body = Vec::with_capacity(MAX_RESPONSE_BYTES.min(16 * 1024));
-    if file
-        .take((MAX_RESPONSE_BYTES.saturating_add(1)) as u64)
-        .read_to_end(&mut body)
-        .is_err()
-    {
-        body.zeroize();
-        return Err(CurlFail::Reset);
-    }
-    if body.len() > MAX_RESPONSE_BYTES {
-        body.zeroize();
-        return Err(CurlFail::ResponseTooLarge);
-    }
-    Ok(body)
 }
 
 fn write_private(path: &Path, bytes: &[u8]) -> Result<(), CurlFail> {

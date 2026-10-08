@@ -286,6 +286,7 @@ impl AsyncDiscoveryTransport for BoundedDiscoveryTransport {
 
 #[path = "discovery_curl.rs"]
 mod curl;
+pub(in crate::https) use curl::{BodyReadError, read_bounded};
 #[path = "discovery_queue_origin.rs"]
 mod queue_origin;
 #[path = "discovery_validation.rs"]
