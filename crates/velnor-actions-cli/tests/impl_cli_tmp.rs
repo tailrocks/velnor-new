@@ -14,6 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Monotonic counter keeping tempdir names unique within one test binary.
 static COUNTER: AtomicU64 = AtomicU64::new(0);
+const NESTED_CARGO_TARGET: &str = "velnor-cli-nested-cargo";
 
 /// Create a fresh unique directory under the system temp dir.
 pub(crate) fn fresh_tempdir(prefix: &str) -> Result<PathBuf, Box<dyn Error>> {
@@ -28,6 +29,29 @@ pub(crate) fn fresh_tempdir(prefix: &str) -> Result<PathBuf, Box<dyn Error>> {
     ));
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
+}
+
+/// Give nested test-owned Cargo builds a shared target below the outer target.
+/// These builds run while Nextest launches the outer test binary, so they must
+/// not replace its `target/debug` executables.
+pub(crate) fn nested_cargo_target_dir_for(outer_target: &Path) -> PathBuf {
+    outer_target.join(NESTED_CARGO_TARGET)
+}
+
+/// Nested target for scripts that inherit Cargo's active target directory.
+pub(crate) fn nested_cargo_target_dir() -> Result<PathBuf, Box<dyn Error>> {
+    let outer = match std::env::var_os("CARGO_TARGET_DIR") {
+        Some(path) => {
+            let path = PathBuf::from(path);
+            if path.is_absolute() {
+                path
+            } else {
+                std::env::current_dir()?.join(path)
+            }
+        }
+        None => crate::impl_repo_policy::repo_root().join("target"),
+    };
+    Ok(nested_cargo_target_dir_for(&outer))
 }
 
 /// Best-effort tempdir removal; cleanup must never fail a test.
