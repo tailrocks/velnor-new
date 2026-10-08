@@ -3,8 +3,7 @@ use std::process::ExitCode;
 
 use velnor_runner_host::docker_client::{self, DockerVersion};
 use velnor_runner_host::{
-    HostConfig, HostError, HostPlatform, Readiness, doctor_json, load_configured_secret,
-    read_host_config_file, readiness_for_empty,
+    HostConfig, HostError, HostPlatform, load_configured_secret, read_host_config_file,
 };
 
 pub(super) fn print_status(state: &Path, config_path: &Path, json: bool) -> ExitCode {
@@ -155,6 +154,45 @@ pub(super) fn status_observation_with(
     credential_probe: impl FnOnce(&str) -> Result<bool, HostError>,
     docker_probe: impl FnOnce(&str) -> Result<DockerVersion, HostError>,
 ) -> StatusObservation {
+    status_observation_with_probes(
+        config_text,
+        platform,
+        journal,
+        controller_service,
+        credential_probe,
+        Some(docker_probe),
+    )
+}
+
+pub(super) fn doctor_local_observation_with(
+    config_text: Result<Option<String>, HostError>,
+    platform: HostPlatform,
+    journal: JournalObservation,
+    controller_service: crate::service::ControllerServiceState,
+    credential_probe: impl FnOnce(&str) -> Result<bool, HostError>,
+) -> StatusObservation {
+    status_observation_with_probes(
+        config_text,
+        platform,
+        journal,
+        controller_service,
+        credential_probe,
+        None::<fn(&str) -> Result<DockerVersion, HostError>>,
+    )
+}
+
+fn status_observation_with_probes<C, D>(
+    config_text: Result<Option<String>, HostError>,
+    platform: HostPlatform,
+    journal: JournalObservation,
+    controller_service: crate::service::ControllerServiceState,
+    credential_probe: C,
+    docker_probe: Option<D>,
+) -> StatusObservation
+where
+    C: FnOnce(&str) -> Result<bool, HostError>,
+    D: FnOnce(&str) -> Result<DockerVersion, HostError>,
+{
     let mut observation = StatusObservation {
         config: ConfigObservation::Unavailable,
         credential: DependencyObservation::NotChecked,
@@ -183,10 +221,12 @@ pub(super) fn status_observation_with(
         Ok(true) => DependencyObservation::Available,
         Ok(false) | Err(_) => DependencyObservation::Unavailable,
     };
-    observation.docker = match docker_probe(&config.docker.endpoint) {
-        Ok(_) => DependencyObservation::Available,
-        Err(_) => DependencyObservation::Unavailable,
-    };
+    if let Some(docker_probe) = docker_probe {
+        observation.docker = match docker_probe(&config.docker.endpoint) {
+            Ok(_) => DependencyObservation::Available,
+            Err(_) => DependencyObservation::Unavailable,
+        };
+    }
     observation
 }
 
@@ -205,8 +245,7 @@ pub(super) fn journal_file_observation(state: &Path) -> JournalObservation {
 
 pub(super) fn print_doctor(state: &Path, config_path: &Path, probe: bool) -> ExitCode {
     if !probe {
-        println!("{}", doctor_json(observe(state), false));
-        return ExitCode::SUCCESS;
+        return print_local_doctor(state, config_path);
     }
 
     #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -226,6 +265,38 @@ pub(super) fn print_doctor(state: &Path, config_path: &Path, probe: bool) -> Exi
         ExitCode::SUCCESS
     } else {
         ExitCode::from(1)
+    }
+}
+
+fn print_local_doctor(state: &Path, config_path: &Path) -> ExitCode {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        let platform = host_platform();
+        let observation = doctor_local_observation_with(
+            read_host_config_file(config_path, platform),
+            platform,
+            journal_file_observation(state),
+            crate::service::controller_service_state(),
+            |reference| {
+                load_configured_secret(reference)
+                    .map(|secret| credential_is_available(secret.as_slice()))
+            },
+        );
+        println!("{}", doctor_local_document(observation));
+        ExitCode::SUCCESS
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        let _ = (state, config_path);
+        let observation = StatusObservation {
+            config: ConfigObservation::Unavailable,
+            credential: DependencyObservation::NotChecked,
+            docker: DependencyObservation::NotChecked,
+            journal: JournalObservation::Unknown,
+            controller_service: crate::service::ControllerServiceState::Unknown,
+        };
+        println!("{}", doctor_local_document(observation));
+        ExitCode::SUCCESS
     }
 }
 
@@ -257,6 +328,19 @@ pub(super) fn probe_config_text(
     probe(&config.docker.endpoint).map_err(|_| DoctorProbeFailure::Docker)
 }
 
+pub(super) fn doctor_local_document(observation: StatusObservation) -> serde_json::Value {
+    serde_json::json!({
+        "command": "doctor",
+        "probe": false,
+        "config": observation.config.as_str(),
+        "credential": observation.credential.as_str(),
+        "docker": observation.docker.as_str(),
+        "journal": observation.journal.as_str(),
+        "controller_service": controller_service_status(observation.controller_service),
+        "global_readiness": "not_proven",
+    })
+}
+
 pub(super) fn doctor_probe_document(
     result: Result<DockerVersion, DoctorProbeFailure>,
 ) -> serde_json::Value {
@@ -282,8 +366,4 @@ pub(super) fn doctor_probe_document(
             "global_readiness": "not_proven",
         }),
     }
-}
-
-pub(super) fn observe(_state: &Path) -> Readiness {
-    readiness_for_empty()
 }
