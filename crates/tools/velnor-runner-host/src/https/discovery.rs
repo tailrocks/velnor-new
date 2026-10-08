@@ -10,8 +10,9 @@ use velnor_runner_github::{
 };
 use zeroize::{Zeroize, Zeroizing};
 
+use super::MAX_RESPONSE_BYTES;
+
 const API_ORIGIN: &str = "https://api.github.com";
-const MAX_RESPONSE_BYTES: usize = 512 * 1024;
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_HEADER_BYTES: usize = 32 * 1024;
 const REQUEST_DEADLINE: Duration = Duration::from_secs(20);

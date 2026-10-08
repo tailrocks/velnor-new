@@ -4,16 +4,19 @@ mod discovery;
 
 pub use discovery::BoundedDiscoveryTransport;
 
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Write};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use velnor_runner_github::{Exchange, Method, SessionRequest, Transport, TransportFail};
+use zeroize::Zeroize;
 
 use crate::HostError;
+
+const MAX_RESPONSE_BYTES: usize = 512 * 1024;
 
 /// One Actions or GitHub API origin. The path on each call is relative.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,27 +52,41 @@ impl Transport for HttpsTransport {
         match perform(&self.base, request) {
             Ok(exchange) => Ok(exchange),
             Err(CurlFail::Timeout) => Err(TransportFail::Timeout),
-            Err(CurlFail::Reset) => Err(TransportFail::Reset),
+            Err(CurlFail::Reset | CurlFail::ResponseTooLarge) => Err(TransportFail::Reset),
         }
     }
 }
 
+#[derive(Debug)]
 enum CurlFail {
     Timeout,
     Reset,
+    ResponseTooLarge,
 }
 
 fn perform(base: &str, request: &SessionRequest) -> Result<Exchange, CurlFail> {
     let url = join_url(base, &request.path, request.query.as_deref()).ok_or(CurlFail::Reset)?;
     let scratch = Scratch::create()?;
-    let body_path = scratch.path("body");
-    let out_path = scratch.path("out");
-    write_private(&body_path, &request.body)?;
-    let config = curl_config(&url, request, &body_path, &out_path)?;
-    let status = run_curl(&config)?;
-    let body = read_output(&out_path)?;
-    trace(request, status, &body);
-    Ok(Exchange { status, body })
+    perform_in_scratch(&url, request, scratch, |config, _| run_curl(config))
+}
+
+fn perform_in_scratch(
+    url: &str,
+    request: &SessionRequest,
+    scratch: Scratch,
+    run: impl FnOnce(&str, &Path) -> Result<u16, CurlFail>,
+) -> Result<Exchange, CurlFail> {
+    let result = (|| {
+        let body_path = scratch.path("body");
+        let out_path = scratch.path("out");
+        write_private(&body_path, &request.body)?;
+        let config = curl_config(url, request, &body_path, &out_path)?;
+        let status = run(&config, &out_path)?;
+        let body = read_output(&out_path)?;
+        trace(request, status, &body);
+        Ok(Exchange { status, body })
+    })();
+    scratch.finish(result)
 }
 
 fn trace(request: &SessionRequest, status: u16, body: &[u8]) {
@@ -116,6 +133,7 @@ fn classify_exit(code: Option<i32>, stdout: &[u8]) -> Result<u16, CurlFail> {
     match code {
         Some(0) => parse_status(stdout),
         Some(28) => Err(CurlFail::Timeout),
+        Some(63) => Err(CurlFail::ResponseTooLarge),
         _ => Err(CurlFail::Reset),
     }
 }
@@ -144,6 +162,7 @@ fn curl_config(
         format!("output = \"{}\"", display_path(output)?),
         "write-out = \"%{http_code}\"".to_owned(),
         "max-time = 60".to_owned(),
+        format!("max-filesize = {MAX_RESPONSE_BYTES}"),
     ];
     for (name, value) in &request.headers {
         let header = format!("{name}: {value}");
@@ -220,11 +239,25 @@ fn checked_base(base: &str) -> Result<String, HostError> {
 }
 
 fn read_output(path: &Path) -> Result<Vec<u8>, CurlFail> {
-    match fs::read(path) {
-        Ok(bytes) => Ok(bytes),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
-        Err(_) => Err(CurlFail::Reset),
+    let file = match File::open(path) {
+        Ok(file) => file,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(_) => return Err(CurlFail::Reset),
+    };
+    let mut body = Vec::with_capacity(MAX_RESPONSE_BYTES.min(16 * 1024));
+    if file
+        .take((MAX_RESPONSE_BYTES.saturating_add(1)) as u64)
+        .read_to_end(&mut body)
+        .is_err()
+    {
+        body.zeroize();
+        return Err(CurlFail::Reset);
     }
+    if body.len() > MAX_RESPONSE_BYTES {
+        body.zeroize();
+        return Err(CurlFail::ResponseTooLarge);
+    }
+    Ok(body)
 }
 
 fn write_private(path: &Path, bytes: &[u8]) -> Result<(), CurlFail> {
@@ -245,19 +278,39 @@ struct Scratch {
 
 impl Scratch {
     fn create() -> Result<Self, CurlFail> {
+        Self::create_in(&std::env::temp_dir())
+    }
+
+    fn create_in(parent: &Path) -> Result<Self, CurlFail> {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| CurlFail::Reset)?
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("velnor-https-{nanos}"));
+        let dir = parent.join(format!("velnor-https-{nanos}"));
         fs::create_dir(&dir).map_err(|_| CurlFail::Reset)?;
+        let scratch = Self { dir };
         let perms = std::os::unix::fs::PermissionsExt::from_mode(0o700);
-        fs::set_permissions(&dir, perms).map_err(|_| CurlFail::Reset)?;
-        Ok(Self { dir })
+        if fs::set_permissions(&scratch.dir, perms).is_err() {
+            return scratch.finish(Err(CurlFail::Reset));
+        }
+        Ok(scratch)
     }
 
     fn path(&self, name: &str) -> PathBuf {
         self.dir.join(name)
+    }
+
+    fn finish<T>(self, result: Result<T, CurlFail>) -> Result<T, CurlFail> {
+        let cleanup_succeeded = match fs::remove_dir_all(&self.dir) {
+            Ok(()) => true,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+            Err(_) => false,
+        };
+        match result {
+            Err(primary) => Err(primary),
+            Ok(value) if cleanup_succeeded => Ok(value),
+            Ok(_) => Err(CurlFail::Reset),
+        }
     }
 }
 
