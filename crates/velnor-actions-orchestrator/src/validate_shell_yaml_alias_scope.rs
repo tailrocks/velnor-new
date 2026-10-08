@@ -15,7 +15,7 @@ pub(super) fn validate_mapping_value(
         if starts_with_tag_property(value) {
             return Err(shellcheck_fail("run_scalar_tag_unsupported"));
         }
-        if flow_contains_node_property(value) {
+        if flow_value_after_tags(value).is_some_and(flow_contains_node_property) {
             return Err(shellcheck_fail("run_scalar_alias_shape_unsupported"));
         }
         return Ok(());
@@ -23,7 +23,9 @@ pub(super) fn validate_mapping_value(
     if has_node_property(key) || has_node_property(value) {
         return Err(shellcheck_fail("workflow_alias_outside_step_run"));
     }
-    if flow_contains_merge_key(key) || flow_contains_merge_key(value) {
+    if flow_value_after_tags(key).is_some_and(flow_contains_merge_key)
+        || flow_value_after_tags(value).is_some_and(flow_contains_merge_key)
+    {
         return Err(shellcheck_fail("workflow_merge_key_unsupported"));
     }
     Ok(())
@@ -34,7 +36,7 @@ pub(super) fn reject_non_mapping_content(content: &str) -> Result<(), Orchestrat
     if has_node_property(content) {
         return Err(shellcheck_fail("workflow_alias_outside_step_run"));
     }
-    if flow_contains_merge_key(content) {
+    if flow_value_after_tags(content).is_some_and(flow_contains_merge_key) {
         return Err(shellcheck_fail("workflow_merge_key_unsupported"));
     }
     Ok(())
@@ -51,11 +53,19 @@ fn has_node_property(value: &str) -> bool {
         }
         value = skip_tag_property(value).trim_start();
     }
-    flow_contains_node_property(value)
+    flow_value_after_tags(value).is_some_and(flow_contains_node_property)
 }
 
 fn starts_with_tag_property(value: &str) -> bool {
     value.trim_start().starts_with('!')
+}
+
+fn flow_value_after_tags(value: &str) -> Option<&str> {
+    let mut value = value.trim_start();
+    while starts_with_tag_property(value) {
+        value = skip_tag_property(value).trim_start();
+    }
+    value.starts_with(['[', '{']).then_some(value)
 }
 
 fn flow_contains_node_property(value: &str) -> bool {

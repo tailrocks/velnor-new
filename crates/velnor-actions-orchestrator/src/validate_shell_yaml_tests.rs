@@ -219,6 +219,7 @@ fn run_aliases_cannot_cross_workflow_files() -> Result<(), String> {
 fn aliases_outside_executable_run_scalars_fail_closed() {
     let env_alias = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: define\n        run: &r1 echo safe\n      - name: alias in env\n        env:\n          COPY: *r1\n        run: echo safe\n";
     let tagged_env_anchor = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: define\n        run: echo safe\n      - name: tagged anchor in env\n        env:\n          COPY: !!str &outside safe\n        run: echo safe\n";
+    let tagged_flow_anchor = "jobs:\n  job:\n    env: {COPY: !!str &outside safe, COPY2: *outside}\n    runs-on: ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n";
     let runner_anchor = "jobs:\n  job:\n    runs-on: &runner ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n  second:\n    runs-on: *runner\n    steps:\n      - name: second command\n        run: echo safe\n";
     let flow_alias = "jobs:\n  job:\n    runs-on: [!!str &runner ubuntu-26.04, *runner]\n    steps:\n      - name: command\n        run: echo safe\n";
     let alias_key = "jobs:\n  job:\n    *runner: value\n    runs-on: ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n";
@@ -228,6 +229,7 @@ fn aliases_outside_executable_run_scalars_fail_closed() {
     for workflow in [
         env_alias,
         tagged_env_anchor,
+        tagged_flow_anchor,
         runner_anchor,
         flow_alias,
         alias_key,
@@ -246,8 +248,10 @@ fn aliases_outside_executable_run_scalars_fail_closed() {
 
 #[test]
 fn literal_shell_globs_and_comments_are_not_yaml_aliases() -> Result<(), String> {
-    let workflow = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: shell glob\n        run: echo *r1 # &comment\n";
-    assert_eq!(bodies(workflow)?.len(), 1);
+    let workflow = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: shell glob\n        env:\n          PATTERN: path[*]\n        run: echo [*r1] [&r1] # &comment\n";
+    let scanned = bodies(workflow)?;
+    assert_eq!(scanned.len(), 1);
+    assert_eq!(scanned[0].0, "echo [*r1] [&r1] # &comment");
     Ok(())
 }
 
@@ -256,6 +260,7 @@ fn aliases_outside_run_fields_fail_the_complete_staged_validation_chain() -> Res
     for workflow in [
         "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: define\n        run: &r1 echo safe\n      - name: alias in env\n        env:\n          COPY: *r1\n        run: echo safe\n",
         "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: define\n        run: echo safe\n      - name: tagged anchor in env\n        env:\n          COPY: !!str &outside safe\n          COPY2: *outside\n        run: echo safe\n",
+        "jobs:\n  job:\n    env: {COPY: !!str &outside safe, COPY2: *outside}\n    runs-on: ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n",
         "jobs:\n  job:\n    runs-on: &runner ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n  second:\n    runs-on: *runner\n    steps:\n      - name: second command\n        run: echo safe\n",
     ] {
         let error = validate_generated_workflow(workflow)
