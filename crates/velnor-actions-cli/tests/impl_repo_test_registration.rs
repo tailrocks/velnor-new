@@ -50,10 +50,12 @@ fn registered_sources(workspaces: &[WorkspacePlan]) -> Outcome<HashSet<PathBuf>>
 }
 
 fn compiled_test_sources(workspace: &WorkspacePlan) -> Outcome<HashSet<PathBuf>> {
-    let _target_lock =
-        crate::impl_cli_tmp::lock_nested_cargo_target_for(&workspace.target_directory)?;
-    let nested_target =
-        crate::impl_cli_tmp::nested_cargo_target_dir_for(&workspace.target_directory);
+    let _target_lock = crate::impl_cli_tmp::nested_target::lock_nested_cargo_target_for(
+        &workspace.target_directory,
+    )?;
+    let nested_target = crate::impl_cli_tmp::nested_target::nested_cargo_target_dir_for(
+        &workspace.target_directory,
+    );
     let output = cargo_config::cargo_output_at_target(
         &workspace.manifest,
         &[
@@ -283,8 +285,9 @@ fn cargo_targets_register_every_test_bearing_source() -> Outcome<()> {
     let workspaces = cargo_config::workspace_plans(&root)?;
     let (registered, orphans) = registration_audit(&workspaces)?;
     for workspace in &workspaces {
-        let nested_target =
-            crate::impl_cli_tmp::nested_cargo_target_dir_for(&workspace.target_directory);
+        let nested_target = crate::impl_cli_tmp::nested_target::nested_cargo_target_dir_for(
+            &workspace.target_directory,
+        );
         assert!(
             nested_target.join("debug/deps").is_dir(),
             "nested Cargo outputs are missing from {}",

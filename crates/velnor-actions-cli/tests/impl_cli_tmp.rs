@@ -6,16 +6,17 @@ pub(crate) mod git_fixture;
 #[path = "impl_cli_git_isolation.rs"]
 mod isolation_tests;
 
+#[path = "impl_cli_nested_target.rs"]
+pub(crate) mod nested_target;
+
 use std::error::Error;
 use std::fmt::Write as _;
-use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Monotonic counter keeping tempdir names unique within one test binary.
 static COUNTER: AtomicU64 = AtomicU64::new(0);
-const NESTED_CARGO_TARGET: &str = "velnor-cli-nested-cargo";
 
 /// Create a fresh unique directory under the system temp dir.
 pub(crate) fn fresh_tempdir(prefix: &str) -> Result<PathBuf, Box<dyn Error>> {
@@ -30,55 +31,6 @@ pub(crate) fn fresh_tempdir(prefix: &str) -> Result<PathBuf, Box<dyn Error>> {
     ));
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
-}
-
-/// Give nested test-owned Cargo builds a shared target below the outer target.
-/// These builds run while Nextest launches the outer test binary, so they must
-/// not replace its `target/debug` executables.
-pub(crate) fn nested_cargo_target_dir_for(outer_target: &Path) -> PathBuf {
-    outer_target.join(NESTED_CARGO_TARGET)
-}
-
-/// Nested target for scripts that inherit Cargo's active target directory.
-pub(crate) fn nested_cargo_target_dir() -> Result<PathBuf, Box<dyn Error>> {
-    let outer = match std::env::var_os("CARGO_TARGET_DIR") {
-        Some(path) => {
-            let path = PathBuf::from(path);
-            if path.is_absolute() {
-                path
-            } else {
-                std::env::current_dir()?.join(path)
-            }
-        }
-        None => crate::impl_repo_policy::repo_root().join("target"),
-    };
-    std::fs::create_dir_all(&outer)?;
-    Ok(nested_cargo_target_dir_for(&outer.canonicalize()?))
-}
-
-/// Acquire the process-shared lock for nested Cargo writers under `outer`.
-/// The OS releases this advisory lock when the returned file is dropped or
-/// its process exits, so a crashed test cannot strand a stale owner record.
-pub(crate) fn lock_nested_cargo_target_for(outer: &Path) -> Result<File, Box<dyn Error>> {
-    std::fs::create_dir_all(outer)?;
-    let lock_path = outer
-        .canonicalize()?
-        .join(format!("{NESTED_CARGO_TARGET}.lock"));
-    let lock = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(lock_path)?;
-    lock.lock()?;
-    Ok(lock)
-}
-
-/// Acquire the process-shared lock for scripts inheriting this test target.
-pub(crate) fn lock_nested_cargo_target() -> Result<File, Box<dyn Error>> {
-    let nested = nested_cargo_target_dir()?;
-    let outer = nested.parent().ok_or("nested Cargo target has no parent")?;
-    lock_nested_cargo_target_for(outer)
 }
 
 /// Best-effort tempdir removal; cleanup must never fail a test.
@@ -302,111 +254,4 @@ pub(crate) fn plan_stdout(repo: &Path) -> Result<String, Box<dyn Error>> {
         return Err(format!("plan stderr not empty: {:?}", plan.stderr).into());
     }
     Ok(String::from_utf8_lossy(&plan.stdout).into_owned())
-}
-
-#[cfg(test)]
-mod nested_target_lock_tests {
-    use std::error::Error;
-    use std::fs::OpenOptions;
-    use std::path::Path;
-    use std::process::{Child, Command, ExitStatus};
-    use std::time::{Duration, Instant};
-
-    use super::{NESTED_CARGO_TARGET, fresh_tempdir, lock_nested_cargo_target_for};
-
-    type Outcome<T> = Result<T, Box<dyn Error>>;
-
-    #[test]
-    fn nested_target_lock_serializes_processes_and_releases_on_exit() -> Outcome<()> {
-        let outer = fresh_tempdir("nested-lock")?;
-        let lock_path = outer.join(format!("{NESTED_CARGO_TARGET}.lock"));
-        let contender = OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .read(true)
-            .write(true)
-            .open(lock_path)?;
-        let ready = outer.join("child-locked");
-        let mut child = spawn_lock_child(&outer, &ready)?;
-        if let Err(error) = wait_for_lock_child(&mut child, &ready) {
-            let cleanup = terminate_lock_child(&mut child);
-            drop(contender);
-            super::cleanup(&outer);
-            return match cleanup {
-                Ok(_) => Err(error),
-                Err(cleanup_error) => {
-                    Err(format!("{error}; child cleanup failed: {cleanup_error}").into())
-                }
-            };
-        }
-        let blocked_while_child_holds_lock = contender.try_lock().is_err();
-        let child_status = terminate_lock_child(&mut child)?;
-        let released_after_child_exit = contender.try_lock().is_ok();
-        drop(contender);
-        super::cleanup(&outer);
-        assert!(
-            blocked_while_child_holds_lock,
-            "second process acquired held lock"
-        );
-        assert!(
-            !child_status.success(),
-            "lock holder exited before termination"
-        );
-        assert!(
-            released_after_child_exit,
-            "OS did not release lock after process exit"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn nested_target_lock_child_holds_until_killed() -> Outcome<()> {
-        let Some(outer) = std::env::var_os("VELNOR_TEST_NESTED_LOCK_OUTER") else {
-            return Ok(());
-        };
-        let _lock = lock_nested_cargo_target_for(Path::new(&outer))?;
-        let ready = std::env::var_os("VELNOR_TEST_NESTED_LOCK_READY")
-            .ok_or("lock child ready path is missing")?;
-        std::fs::write(ready, b"locked")?;
-        std::thread::park();
-        Ok(())
-    }
-
-    fn spawn_lock_child(outer: &Path, ready: &Path) -> Outcome<Child> {
-        Ok(Command::new(std::env::current_exe()?)
-            .args([
-                "--exact",
-                "impl_cli_tmp::nested_target_lock_tests::nested_target_lock_child_holds_until_killed",
-                "--nocapture",
-            ])
-            .env("VELNOR_TEST_NESTED_LOCK_OUTER", outer)
-            .env("VELNOR_TEST_NESTED_LOCK_READY", ready)
-            .spawn()?)
-    }
-
-    fn terminate_lock_child(child: &mut Child) -> Outcome<ExitStatus> {
-        if let Err(error) = child.kill() {
-            if let Some(status) = child.try_wait()? {
-                return Ok(status);
-            }
-            return Err(error.into());
-        }
-        Ok(child.wait()?)
-    }
-
-    fn wait_for_lock_child(child: &mut Child, ready: &Path) -> Outcome<()> {
-        let deadline = Instant::now() + Duration::from_secs(10);
-        loop {
-            if ready.is_file() {
-                return Ok(());
-            }
-            if let Some(status) = child.try_wait()? {
-                return Err(format!("lock child exited before acquiring lock: {status}").into());
-            }
-            if Instant::now() >= deadline {
-                return Err("lock child did not acquire lock within 10 seconds".into());
-            }
-            std::thread::sleep(Duration::from_millis(10));
-        }
-    }
 }
