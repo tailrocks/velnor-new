@@ -60,6 +60,7 @@ pub use lanes::{
 pub use matrix_entry::MatrixEntry;
 pub use needs::{
     NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV, NeedsConclusions,
+    TASK_REPORT_PRODUCERS_EXPECTED_ENV, TaskReportProducerInventory,
 };
 pub use permissions::{PermissionLevel, Permissions};
 pub use plan::{
