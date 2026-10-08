@@ -1,13 +1,17 @@
 # Release gates: source and external evidence
 
 This record separates checked-in release mechanics from hosted evidence and
-infrastructure. The renderer emits a source-bound, dispatch-only
+infrastructure. The official `v0.1.4` CLI release was published on
+2026-10-08 from main commit `d3590d321e51f7b99bfb0a92c11d3d6eb7af61cd`;
+its signed release manifest lists the Linux x86_64, macOS ARM64, and macOS
+x86_64 assets and their digests. This candidate prepares the next immutable
+CLI version, `v0.1.5`; its hosted qualification and publication remain
+pending. The renderer emits a source-bound, dispatch-only
 `.github/workflows/product-release.yml` coordinator with reusable image,
 binary, and generator modules. The generator module includes candidate
 qualification, a same-run manifest, source-bound attestations, and protected
 publication. Source and local tests do not prove a hosted qualification run,
-an immutable release, or GitHub environment protection. No release was
-published while preparing this change.
+an immutable release for this candidate, or GitHub environment protection.
 
 This release integration checkpoint does not constitute whole-tree source
 acceptance. The merged catalog keeps production MBX at 1.21.1 and retains the
@@ -21,16 +25,15 @@ qualification is established by the release-source checks below.
   pinned Mise + MBX (no Velnor binary), 2 distinct admin approvals, and an
   independent reproducible rebuild (second party, pinned catalog, sha256
   match) recorded in the seed PR (Gap E review). Pre-seed is trust-on-review.
-- BOOT-2.1 (release assets): SOURCE-IMPLEMENTED, HOSTED QUALIFICATION AND
-  PUBLICATION UNVERIFIED, NOT RELEASED. The source-bound workflow builds three
+- BOOT-2.1 (release assets): `v0.1.4` PUBLISHED; `v0.1.5` CANDIDATE NOT YET
+  QUALIFIED. The source-bound workflow builds three
   target binaries, admits each candidate TAR through the checkout-owned native
   guard before parsing, and binds qualification, attestations, and the
-  canonical versioned manifest to the same measured artifact bytes. No
-  successful exact-source hosted run has qualified all three native targets;
-  `check-release`, immutable publication, and the resulting external asset
-  provenance remain unverified. Unblock = complete that hosted qualification
-  and publication, then separately review the published bytes and update
-  consumer provenance.
+  canonical versioned manifest to the same measured artifact bytes. The
+  existing `v0.1.4` release contains all three CLI assets, a versioned manifest,
+  checksums, and provenance. The current `v0.1.5` candidate still needs an
+  exact-source hosted qualification, protected publication, and a separate
+  review of its published bytes before consumer provenance is updated.
 - BOOT-4.7 (protected release job): SOURCE-IMPLEMENTED, INFRASTRUCTURE
   UNVERIFIED. The renderer emits a dispatch-only coordinator and a generator
   publisher with a protected `generator-release` environment, serialized

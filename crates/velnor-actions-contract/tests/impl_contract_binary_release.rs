@@ -79,6 +79,8 @@ fn binary_release_rejects_unsafe_paths_and_names() {
         "PATH",
         "GITHUB_TOKEN",
         "RUSTUP_TOOLCHAIN",
+        "RUSTUP_HOME",
+        "RUSTUP_DIST_SERVER",
     ] {
         let mut config = enabled();
         config.source_commit_env = Some(name.to_owned());
