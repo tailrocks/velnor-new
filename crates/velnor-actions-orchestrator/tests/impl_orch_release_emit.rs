@@ -101,6 +101,7 @@ fn release_disabled_emits_base_tree_only() -> TestResult {
             paths,
             [
                 ".github/AGENTS.md",
+                ".github/CLAUDE.md",
                 ".github/actionlint.yaml",
                 ".github/actions/u26/action.yml",
                 ".github/actions/velnor-tool-seed/action.yml",
