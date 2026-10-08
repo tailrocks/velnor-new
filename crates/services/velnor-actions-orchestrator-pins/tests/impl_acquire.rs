@@ -7,8 +7,12 @@ use velnor_actions_orchestrator_pins::pins::{
 
 /// Fixture manifest matching the workspace version.
 fn manifest_json() -> String {
+    manifest_json_for(&SUPPORTED_TARGETS)
+}
+
+fn manifest_json_for(targets: &[&str]) -> String {
     let version = env!("CARGO_PKG_VERSION");
-    let targets = SUPPORTED_TARGETS
+    let targets = targets
         .iter()
         .map(|target| {
             format!(
@@ -22,6 +26,25 @@ fn manifest_json() -> String {
         "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
         "a".repeat(40)
     )
+}
+
+#[test]
+fn consumer_acquire_accepts_legacy_manifest_for_selected_linux_target() {
+    let targets = [
+        ReleaseTarget::LinuxX86_64.triple(),
+        ReleaseTarget::MacosArm64.triple(),
+    ];
+    let legacy = manifest_json_for(&targets);
+    consumer_acquire_step_with_manifest("ubuntu-26.04", env!("CARGO_PKG_VERSION"), Some(&legacy))
+        .expect("selected Linux asset is present and validated");
+
+    let err = consumer_acquire_step_with_manifest(
+        "macos-26-intel",
+        env!("CARGO_PKG_VERSION"),
+        Some(&legacy),
+    )
+    .expect_err("unavailable selected target fails closed");
+    assert!(err.to_string().contains("missing_target"), "{err}");
 }
 
 #[test]

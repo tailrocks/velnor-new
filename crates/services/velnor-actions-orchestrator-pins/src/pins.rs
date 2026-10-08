@@ -163,7 +163,7 @@ fn consumer_acquire_for_target(
         });
     };
     let manifest = ReleaseManifest::parse_json(json, RELEASE_MANIFEST_FILENAME)?;
-    manifest.validate(RELEASE_MANIFEST_FILENAME)?;
+    manifest.validate_for_targets(RELEASE_MANIFEST_FILENAME, &[target])?;
     if manifest.version != version {
         return Err(OrchestratorError::Contract {
             problem: format!(
