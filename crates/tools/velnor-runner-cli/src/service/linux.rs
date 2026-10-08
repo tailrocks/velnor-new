@@ -43,7 +43,7 @@ const ENVIRONMENT_PROPERTY: &str = "Environment";
 const EXPECTED_ENVIRONMENT_PROPERTY: &str = "as 1 \"PATH=/usr/sbin:/usr/bin:/sbin:/bin\"";
 const SHOW_PROPERTIES: &str = concat!(
     "LoadState,ActiveState,SubState,MainPID,ControlPID,Result,ExecStartPre,ExecStart,ExecStop,",
-    "TimeoutStopUSec,User,Group,SupplementaryGroups,WorkingDirectory,UMask,",
+    "TimeoutStopUSec,TimeoutStopFailureMode,KillSignal,KillMode,User,Group,SupplementaryGroups,WorkingDirectory,UMask,",
     "NoNewPrivileges,ProtectSystem,ReadWritePaths,Requires,After,Type"
 );
 const IDENTITY_SHOW_PROPERTIES: &str = concat!(

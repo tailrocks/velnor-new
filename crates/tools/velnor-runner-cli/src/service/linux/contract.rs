@@ -28,6 +28,9 @@ pub(super) fn verify_package_contract(
             snapshot.timeout_stop,
             StopTimeout::Finite(timeout) if timeout > drain_timeout_usec
         )
+        || snapshot.timeout_stop_failure_mode != "terminate"
+        || snapshot.kill_signal != "15"
+        || snapshot.kill_mode != "mixed"
         || snapshot.user != "velnor"
         || snapshot.group != "velnor"
         || snapshot.supplementary_groups != "docker"
@@ -126,10 +129,8 @@ pub(super) fn preflight_argv() -> Vec<String> {
 }
 
 pub(super) fn stop_argv() -> Vec<String> {
-    [
-        BINARY, "--config", CONFIG, "--state", STATE, "drain", "--wait",
-    ]
-    .into_iter()
-    .map(str::to_owned)
-    .collect()
+    [BINARY, "--config", CONFIG, "--state", STATE, "drain"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
 }

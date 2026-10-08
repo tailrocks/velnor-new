@@ -27,10 +27,16 @@ Environment=PATH=/usr/sbin:/usr/bin:/sbin:/bin
 LoadCredential=github-token:/etc/velnor-host/github-token
 ExecStartPre=/usr/bin/velnor-host --config /etc/velnor-host/host.toml --state /var/lib/velnor-host service preflight
 ExecStart=/usr/bin/velnor-host --config /etc/velnor-host/host.toml --state /var/lib/velnor-host daemon run
-ExecStop=/usr/bin/velnor-host --config /etc/velnor-host/host.toml --state /var/lib/velnor-host drain --wait
+# Persist the admission fence only. systemd then sends SIGTERM to MainPID, whose
+# daemon-owned coordinator performs bounded cleanup; this hook is not quiescence proof.
+ExecStop=/usr/bin/velnor-host --config /etc/velnor-host/host.toml --state /var/lib/velnor-host drain
 Restart=on-failure
 RestartSec=5s
 KillMode=mixed
+# Pin the signal delivered after ExecStop or on stop timeout; the Linux daemon
+# coordinator owns cleanup until its configured monotonic deadline.
+KillSignal=SIGTERM
+TimeoutStopFailureMode=terminate
 # No TimeoutStopSec override is selected before the daemon drain path is measured.
 # ExecStartPre verifies the manager's effective timeout is finite and greater
 # than the positive configured drain_timeout_secs; package activation remains
