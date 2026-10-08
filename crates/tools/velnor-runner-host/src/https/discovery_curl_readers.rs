@@ -4,16 +4,21 @@ use zeroize::Zeroize;
 
 use super::STATUS_MARKER;
 
-pub(super) enum BodyReadError {
+pub(in crate::https) enum BodyReadError {
     TooLarge,
     Io,
 }
 
-pub(super) fn read_bounded(mut reader: impl Read, limit: usize) -> Result<Vec<u8>, BodyReadError> {
+pub(in crate::https) fn read_bounded(
+    mut reader: impl Read,
+    limit: usize,
+) -> Result<Vec<u8>, BodyReadError> {
     let mut body = Vec::with_capacity(limit.min(16 * 1024));
     let mut chunk = [0_u8; 8192];
     loop {
-        let read = match reader.read(&mut chunk) {
+        let remaining = limit.saturating_sub(body.len());
+        let read_limit = remaining.saturating_add(1).min(chunk.len());
+        let read = match reader.read(&mut chunk[..read_limit]) {
             Ok(0) => return Ok(body),
             Ok(read) => read,
             Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
