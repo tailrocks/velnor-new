@@ -1,5 +1,7 @@
 use std::process::ExitCode;
 
+use serde_json::json;
+
 use super::super::{Fail, compare_dir, prove};
 use super::common::{TempDir, observed_pair, scratch, write_trio};
 
@@ -33,5 +35,37 @@ fn hosted_and_scale_set_pair_is_proven() -> Result<(), String> {
         Err(Fail::InvocationMismatch) => Err("unexpected invocation mismatch".to_owned()),
         Err(Fail::ScopeUnavailable) => Err("unexpected missing invocation scope".to_owned()),
         Err(Fail::Closed) => Err("closed before checker".to_owned()),
+    }
+}
+
+#[test]
+fn empty_expected_set_is_not_reported_as_proven() -> Result<(), String> {
+    let dir = TempDir::new("empty-expected")?;
+    for (name, value) in [
+        ("expected.json", json!({ "items": [] })),
+        ("observed.json", json!([])),
+        (
+            "census.json",
+            json!({
+                "complete": true,
+                "omitted_page": false,
+                "success_on_expected_runner": [],
+            }),
+        ),
+    ] {
+        std::fs::write(dir.path().join(name), value.to_string()).map_err(|err| err.to_string())?;
+    }
+    if compare_dir(dir.path()) != ExitCode::from(1) {
+        return Err("empty expected set was reported as proven".to_owned());
+    }
+    match prove(dir.path()) {
+        Err(Fail::Checker(velnor_runner_core::EvidenceError::NotProven("empty_expected_set"))) => {
+            Ok(())
+        }
+        Err(Fail::Checker(err)) => Err(format!("unexpected evidence failure: {err}")),
+        Err(Fail::InvocationMismatch) => Err("unexpected attempt mismatch".to_owned()),
+        Err(Fail::ScopeUnavailable) => Err("unexpected missing invocation scope".to_owned()),
+        Err(Fail::Closed) => Err("empty set rejected before core rule".to_owned()),
+        Ok(_) => Err("empty expected set was proven".to_owned()),
     }
 }

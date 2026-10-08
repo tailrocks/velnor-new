@@ -145,6 +145,9 @@ pub fn verify_complete_results(
     observed: &[VerifiedExecutionReport],
     github: &VerifiedJobCensus,
 ) -> Result<ParityProof, EvidenceError> {
+    if expected.is_empty() {
+        return Err(EvidenceError::NotProven("empty_expected_set"));
+    }
     let indexed = index_reports(expected, observed)?;
     check_census(github)?;
     check_items(expected, &indexed, github)?;

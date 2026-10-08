@@ -212,6 +212,13 @@ fn duplicate_report_is_rejected_before_success() {
 }
 
 #[test]
+fn empty_expected_set_is_not_vacuously_proven() {
+    let expected = ExpectedExecutionSet { items: Vec::new() };
+    let err = verify_complete_results(&expected, &[], &census(&[]));
+    assert_eq!(err, Err(EvidenceError::NotProven("empty_expected_set")));
+}
+
+#[test]
 fn parity_fails_closed() {
     let expected = expected_pair();
     let good = census(&[key("hosted"), key("local")]);
