@@ -236,9 +236,10 @@ unmoved `*_tests.rs`.
 
 ### Step 7 — Reconciliation + merge
 
-- Re-add Velnor-specific adapter-local rules (CLAUDE symlink,
-  AGENTS caps, required-files) as decided in Slice 1 notes;
-  confirm overlap/dangling rules stay dropped.
+- Re-add Velnor-specific adapter-local rules (AGENTS caps,
+  required-files) as decided in Slice 1 notes; the retired
+  `.github/CLAUDE.md` path stays dropped, never re-added.
+  Confirm overlap/dangling rules stay dropped.
 - Full check green: 37/37 native + 0 gaps. Branch CI green.
   Merge `rust-policy-rollout` → `main` (explicit instruction only).
 

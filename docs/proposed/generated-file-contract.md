@@ -10,7 +10,6 @@ preserves other repository-owned entries as specified in §3:
 ```text
 .github/
 ├── AGENTS.md
-├── CLAUDE.md -> AGENTS.md
 ├── actionlint.yaml
 ├── release-plz-bootstrap.toml   # consumer-v1 only, release enabled
 ├── release-plz.toml             # consumer-v1 only, release enabled
@@ -43,7 +42,7 @@ block (least privilege for its role); see [workflow
 |---|---|---|---|
 | .github/actionlint.yaml | velnor-actions-actionlint | velnor-actions-orchestrator | Exact generated path; replaced on generation |
 | .github/AGENTS.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated path; version marker; replaced on generation |
-| .github/CLAUDE.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated symlink to AGENTS.md; replaced on generation |
+| .github/CLAUDE.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Retired: never emitted; stays generator-owned so regeneration deletes stale copies |
 | .github/workflows/** | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Reserved generator-owned namespace; every path is replaced or retired on successful generation |
 | .github/release-plz*.toml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated release-plz config paths; retired when no longer emitted |
 | .github/actions/<logical>/action.yml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated shared action path is owned when its first line has a Velnor generated marker; replaced or retired with dispatch output |
