@@ -3,7 +3,8 @@
 use serde::Deserialize;
 
 use self::validation::{
-    keychain_ref, split_repository, validate_docker, validate_github, validate_trust,
+    keychain_ref, linux_drain_timeout_is_valid, split_repository, validate_docker, validate_github,
+    validate_trust,
 };
 use velnor_runner_journal::HostError;
 
@@ -240,7 +241,7 @@ impl HostConfig {
             let trust = self.trust.as_ref().ok_or(HostError::Config)?;
             if self.github.credential_ref != "systemd-credential:github-token"
                 || trust.allow_forks
-                || self.host.drain_timeout_secs.is_none()
+                || !linux_drain_timeout_is_valid(self.host.drain_timeout_secs)
                 || self.host.max_jobs.is_none()
             {
                 return Err(HostError::Config);
