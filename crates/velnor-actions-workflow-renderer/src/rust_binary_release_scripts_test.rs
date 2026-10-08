@@ -188,6 +188,10 @@ fn publisher_passes_prerelease_flag_only_for_semver_prereleases() -> Result<(), 
         let default_sha = "abcdef0123456789abcdef0123456789abcdef01";
         install_mock_publisher_gh(&bin.join("gh"))?;
         let script = scripts::publish(PACKAGE, BINARY, "gh");
+        assert!(
+            !script.contains("is_prerelease"),
+            "publisher script must not define an is_prerelease variable"
+        );
         let path = format!("{}:{}", bin.display(), std::env::var("PATH")?);
         let output = Command::new("bash")
             .args(["-c", &script])

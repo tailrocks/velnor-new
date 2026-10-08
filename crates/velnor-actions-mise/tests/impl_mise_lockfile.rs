@@ -48,7 +48,7 @@ fn parses_v3_entries_with_platform_checksums() -> Result<(), String> {
 #[test]
 fn parses_quoted_backend_qualified_keys() -> Result<(), String> {
     let text = format!(
-        "[[tools.\"aqua:nextest-rs/nextest/cargo-nextest\"]]\nversion = \"0.9.146\"\n\n[tools.\"aqua:nextest-rs/nextest/cargo-nextest\".\"platforms.linux-x64\"]\nchecksum = \"{}\"\n",
+        "[[tools.\"aqua:nextest-rs/nextest/cargo-nextest\"]]\nversion = \"0.9.148\"\n\n[tools.\"aqua:nextest-rs/nextest/cargo-nextest\".\"platforms.linux-x64\"]\nchecksum = \"{}\"\n",
         checksum(&"c".repeat(64))
     );
     let lock = parse_mise_lockfile(&text)?;
@@ -56,7 +56,7 @@ fn parses_quoted_backend_qualified_keys() -> Result<(), String> {
         .tools
         .get("aqua:nextest-rs/nextest/cargo-nextest")
         .ok_or("qualified entry")?;
-    assert_eq!(entry.version, "0.9.146");
+    assert_eq!(entry.version, "0.9.148");
     assert!(entry.checksums.contains_key("linux-x64"));
     Ok(())
 }

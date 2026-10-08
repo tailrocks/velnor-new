@@ -1,6 +1,60 @@
 use super::*;
 
 #[test]
+fn bounded_prefix_requires_matching_partial_content_and_range() -> Result<(), Box<dyn Error>> {
+    let body = b"[pkg.rust]\nversion = \"1.99.0 (commit 2026-10-01)\"\n";
+    let end = body.len() - 1;
+    let range = format!("bytes=0-{end}");
+    let content_range = format!("bytes 0-{end}/{}", body.len() + 100);
+    let mut valid = mock_response(206, body.to_vec());
+    valid.content_range = Some(content_range.clone());
+    valid.require_range = Some(format!("Range: {range}"));
+    let server = start_server(vec![valid])?;
+    let response =
+        fetch_http_prefix_with_agent(&agent(), &server.url, Duration::from_secs(2), body.len());
+    assert_eq!(server.finish(), 1);
+    let prefix = response?;
+    assert_eq!(prefix.as_bytes(), body);
+    assert_eq!(
+        sniff_latest(
+            "https://static.rust-lang.org/dist/channel-rust-stable.toml",
+            &prefix
+        ),
+        Some("1.99.0".to_owned())
+    );
+
+    let mut ignored = mock_response(200, body.to_vec());
+    ignored.require_range = Some(format!("Range: {range}"));
+    let server = start_server(vec![ignored])?;
+    assert!(
+        fetch_http_prefix_with_agent(&agent(), &server.url, Duration::from_secs(2), body.len(),)
+            .is_err()
+    );
+    assert_eq!(server.finish(), 1);
+
+    let mut mismatched = mock_response(206, body.to_vec());
+    mismatched.content_range = Some(format!("bytes 1-{end}/{}", body.len() + 100));
+    mismatched.require_range = Some(format!("Range: {range}"));
+    let server = start_server(vec![mismatched])?;
+    assert!(
+        fetch_http_prefix_with_agent(&agent(), &server.url, Duration::from_secs(2), body.len(),)
+            .is_err()
+    );
+    assert_eq!(server.finish(), 1);
+
+    let mut short = mock_response(206, body[..end].to_vec());
+    short.content_range = Some(content_range);
+    short.require_range = Some(format!("Range: {range}"));
+    let server = start_server(vec![short])?;
+    assert!(
+        fetch_http_prefix_with_agent(&agent(), &server.url, Duration::from_secs(2), body.len(),)
+            .is_err()
+    );
+    assert_eq!(server.finish(), 1);
+    Ok(())
+}
+
+#[test]
 fn bounded_fetch_accepts_identity_gzip_and_chunked() {
     assert_body(mock_response(200, b"payload".to_vec()), "payload");
     assert_body(
@@ -180,8 +234,8 @@ fn release_formats_parse_json_python_and_structured_rust_toml() {
         ),
         (
             "https://static.rust-lang.org/dist/channel-rust-stable.toml",
-            "[pkg.rust]\nversion = \"1.98.1 (abc 2026-10-01)\"\n",
-            Some("1.98.1"),
+            "[pkg.rust]\nversion = \"1.99.0 (abc 2026-10-01)\"\n",
+            Some("1.99.0"),
         ),
         (source, r#"[{"draft":true,"tag_name":"v3.0.0"}]"#, None),
     ];
@@ -189,13 +243,13 @@ fn release_formats_parse_json_python_and_structured_rust_toml() {
         assert_eq!(sniff_latest(source, body), expected.map(str::to_owned));
     }
     let decoys = [
-        "version = \"1.98.1\"",
-        "[pkg]\nversion = \"1.98.1\"",
-        "[pkg.rust]\nname = \"rust\"\n[other]\nversion = \"1.98.1\"",
-        "# [pkg.rust]\n# version = \"1.98.1\"\n[other]\nname = \"x\"",
-        "decoy = \"[pkg.rust] version = 1.98.1\"",
-        "[pkg.rust]\nversion = 1.98.1",
-        "[pkg.rust]\nversion = \"1.98.1",
+        "version = \"1.99.0\"",
+        "[pkg]\nversion = \"1.99.0\"",
+        "[pkg.rust]\nname = \"rust\"\n[other]\nversion = \"1.99.0\"",
+        "# [pkg.rust]\n# version = \"1.99.0\"\n[other]\nname = \"x\"",
+        "decoy = \"[pkg.rust] version = 1.99.0\"",
+        "[pkg.rust]\nversion = 1.99.0",
+        "[pkg.rust]\nversion = \"1.99.0",
     ];
     assert!(
         decoys

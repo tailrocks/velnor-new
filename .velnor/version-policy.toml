@@ -4,7 +4,7 @@
 # equal the compiled catalog in velnor-actions-mise/src/catalog.rs (checked
 # by `verify_version_policy` during dogfood generate); the [[actions]]
 # mirror MUST equal the action pins in .velnor/freshness-inventory.json
-# (qualified 2026-10-03; checked by scripts/check-freshness.sh).
+# (checked 2026-10-08; checked by scripts/check-freshness.sh).
 # [validation-tools] pins repo-local verification tools activated for
 # manual risk-triggered runs (cargo-mutants; NOT wired into CI).
 # Consumer repositories do not need this file; the generator never
@@ -16,16 +16,16 @@ check_interval_hours = 24
 max_exception_days = 14
 
 [tools]
-mise = "2026.9.18"
+mise = "2026.10.4"
 rust = "1.98.1"
 mr-boxington = "1.21.1"
 gh = "2.102.0"
 actionlint = "1.7.12"
 shellcheck = "0.11.0"
 zizmor = "1.30.1"
-nextest = "0.9.146"
+nextest = "0.9.148"
 opentofu = "1.13.1"
-release-plz = "0.3.169"
+release-plz = "0.3.170"
 
 [github_runner_images.linux_x64]
 default = "ubuntu-26.04"
@@ -33,9 +33,9 @@ supported = ["ubuntu-26.04", "ubuntu-24.04", "ubuntu-22.04"]
 
 [[actions]]
 name = "jdx/mise-action"
-version = "v5.0.0"
-sha = "9149ea85001c7435d5a66bb127d6a1b6227cb0a5"
-reviewed = "2026-09-30"
+version = "v5.1.1"
+sha = "2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca"
+reviewed = "2026-10-08"
 
 [[actions]]
 name = "actions/checkout"

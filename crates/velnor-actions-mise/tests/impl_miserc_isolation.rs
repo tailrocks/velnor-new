@@ -7,7 +7,7 @@ use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 use velnor_actions_mise::command::IsolatedCommand;
 
-const PINNED_MISE: &str = "2026.9.18";
+const PINNED_MISE: &str = "2026.10.4";
 const FIX_SOURCE_REV: &str = "dfe74a90b41603625ee6aabecb42f14a1f5eb0f6";
 const FIX_SOURCE_VERSION: &str = "2026.10.1";
 const BINARY_ENV: &str = "VELNOR_MISE_REGRESSION_BINARY";
@@ -50,7 +50,6 @@ struct Fixture {
 struct MiseBinary {
     path: PathBuf,
     version: String,
-    known_broken_release: bool,
 }
 
 type RawInvocation = (Vec<OsString>, Vec<(OsString, OsString)>);
@@ -148,7 +147,7 @@ impl MiseBinary {
             .ok_or_else(|| "mise --version returned no release identifier".to_owned())?
             .to_owned();
         let source_rev = std::env::var(SOURCE_REV_ENV).ok();
-        let behavior = if let Some(rev) = source_rev {
+        if let Some(rev) = source_rev {
             if !explicit_binary || rev != FIX_SOURCE_REV || version != FIX_SOURCE_VERSION {
                 return Err(format!("unexpected fixed-source identity: {rev} {version}"));
             }
@@ -160,27 +159,21 @@ impl MiseBinary {
                 ));
             }
             eprintln!("mise source={rev} version={version} sha256={sha256}");
-            false
         } else {
             if !explicit_binary && version != PINNED_MISE {
                 return Err(format!(
                     "PATH mise {version} does not match pin {PINNED_MISE}"
                 ));
             }
-            let expected = official_affected_digest(&version)?;
+            let expected = official_release_digest(&version)?;
             if sha256 != expected {
                 return Err(format!(
                     "official mise digest mismatch: {sha256} != {expected}"
                 ));
             }
             eprintln!("mise official_release={version} sha256={sha256}");
-            true
-        };
-        Ok(Self {
-            path,
-            version,
-            known_broken_release: behavior,
-        })
+        }
+        Ok(Self { path, version })
     }
 }
 
@@ -191,13 +184,13 @@ fn find_on_path(program: &str) -> Result<PathBuf, String> {
         .ok_or_else(|| format!("{program} not found on PATH"))
 }
 
-fn official_affected_digest(version: &str) -> Result<&'static str, String> {
+fn official_release_digest(version: &str) -> Result<&'static str, String> {
     match (version, std::env::consts::OS, std::env::consts::ARCH) {
-        ("2026.9.18", "linux", "x86_64") => {
-            Ok("d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4")
+        ("2026.10.4", "linux", "x86_64") => {
+            Ok("2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75")
         }
-        ("2026.9.18", "macos", "aarch64") => {
-            Ok("484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f")
+        ("2026.10.4", "macos", "aarch64") => {
+            Ok("5c530143fc750e8a98c9a36be8d361e5dd953fa0b004d58f7577783f7cf2ac24")
         }
         _ => Err(format!(
             "unqualified mise release/platform: {version} {}/{}",
@@ -290,14 +283,14 @@ fn assert_miserc_error(output: &Output, fixture: &Fixture) -> Result<(), String>
 fn assert_no_config_behavior(
     binary: &MiseBinary,
     output: &Output,
-    fixture: &Fixture,
+    _fixture: &Fixture,
     operation: Operation,
 ) -> Result<(), String> {
-    if binary.known_broken_release {
-        return assert_miserc_error(output, fixture);
-    }
     if !output.status.success() {
-        return Err(format!("fixed source failed: {}", output_text(output)));
+        return Err(format!(
+            "Mise config isolation failed: {}",
+            output_text(output)
+        ));
     }
     let expected = match operation {
         Operation::Version => binary.version.as_str(),
@@ -349,7 +342,7 @@ fn production_invocation() -> Result<RawInvocation, String> {
 }
 
 #[test]
-fn real_mise_miserc_isolation_is_release_classified() -> Result<(), String> {
+fn real_mise_miserc_isolation_handles_the_current_release() -> Result<(), String> {
     let binary = MiseBinary::select()?;
     let (production_args, production_env) = production_invocation()?;
     eprintln!("mise binary path={}", binary.path.display());

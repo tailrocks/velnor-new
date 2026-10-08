@@ -18,8 +18,8 @@ fn sample_def() -> QualifiedTaskDef {
 
 #[test]
 fn qualified_argv_matches_fixed_shape() -> Result<(), String> {
-    // Pins the intended shape only: probe 2026-10-01 shows pinned mise
-    // 2026.9.18 has no `mise run --file` flag, so this argv cannot
+    // Pins the intended shape only: probe 2026-10-08 shows pinned mise
+    // 2026.10.4 has no `mise run --file` flag, so this argv cannot
     // execute until Gate 6 adopts a supported delivery shape (P04-10).
     let argv = qualified_task_run_argv(
         "clippy",

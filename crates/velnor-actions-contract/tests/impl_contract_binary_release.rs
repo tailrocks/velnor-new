@@ -87,6 +87,29 @@ fn binary_release_rejects_unsafe_paths_and_names() {
 }
 
 #[test]
+fn binary_release_blocks_rust_compiler_environment_overrides() {
+    for name in ["RUSTCACHED", "RUSTDOCS"] {
+        let mut config = enabled();
+        config.source_commit_env = Some(name.to_owned());
+        assert_eq!(config.validate(FILE), Ok(()));
+    }
+
+    for name in [
+        "RUSTC",
+        "RUSTDOC",
+        "RUSTFLAGS",
+        "RUSTDOCFLAGS",
+        "RUSTC_WRAPPER",
+        "RUSTC_WORKSPACE_WRAPPER",
+        "RUSTDOC_BOOTSTRAP",
+    ] {
+        let mut config = enabled();
+        config.source_commit_env = Some(name.to_owned());
+        assert!(problem(&config).contains("binary_release.source_commit_env"));
+    }
+}
+
+#[test]
 fn binary_release_rejects_unknown_schema_fields() {
     let text = r#"{"enabled":true,"manifest_path":"Cargo.toml","package":"repo-scan","shell":"echo unsafe"}"#;
     assert!(serde_json::from_str::<RustBinaryReleaseConfig>(text).is_err());

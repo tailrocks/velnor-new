@@ -25,7 +25,7 @@ fn toolchain_env_names_are_exact() {
 fn rustup_toolchain_is_exact_catalog_pin() -> Result<(), String> {
     assert_eq!(ToolCatalog::pinned().rustup_toolchain(), "1.98.1");
     let catalog = ToolCatalog::new(
-        "1.97.0", "1.19.0", "2.101.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.0",
+        "1.97.0", "1.19.0", "2.101.0", "1.7.12", "0.11.0", "1.30.1", "0.9.148", "1.13.0",
     )
     .map_err(|err| err.to_string())?;
     assert_eq!(catalog.rustup_toolchain(), "1.97.0");

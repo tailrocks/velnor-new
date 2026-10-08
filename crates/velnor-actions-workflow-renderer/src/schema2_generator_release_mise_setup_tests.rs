@@ -8,7 +8,7 @@ use velnor_actions_contract::ReleaseTarget;
 #[test]
 fn each_archive_consumer_has_target_pinned_mise_before_extraction() -> Result<(), Box<dyn Error>> {
     let mut pins = super::test_pins();
-    pins.linux_x86_64_setup = mise_setup('a', "2026.9.18", 'b');
+    pins.linux_x86_64_setup = mise_setup('a', "2026.10.4", 'b');
     pins.macos_arm64_setup = mise_setup('c', "2026.9.19", 'd');
     pins.macos_x86_64_setup = mise_setup('e', "2026.9.20", 'f');
     let request = Schema2WorkflowRequest {
@@ -94,6 +94,17 @@ fn assert_setup_step(step: &Yaml, setup: &MiseSetup, job_id: &str) -> Result<(),
         "{job_id}"
     );
     let inputs = super::map_entries(super::map_field(fields, "with")?)?;
+    assert_eq!(
+        inputs.len(),
+        6,
+        "only the six qualified setup inputs are set"
+    );
+    assert!(
+        inputs
+            .iter()
+            .all(|(field, _)| field != "persist_github_token"),
+        "the pinned action defaults token persistence to false"
+    );
     for (field, expected) in [
         ("version", setup.version.as_str()),
         ("sha256", setup.sha256.as_str()),

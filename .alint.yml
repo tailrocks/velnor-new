@@ -6,7 +6,7 @@
 #
 # `extends` pins the five pr-1 R04 bundles (OSS, GitHub Actions, Rust,
 # lockfiles, no-tracked-artifacts), deduped: the review example repeats
-# the GHA bundle. Verified on the pinned alint 0.16.1 (`alint
+# the GHA bundle. Verified on the pinned alint 0.17.0 (`alint
 # validate-config` loads 46 bundled rules; `alint check
 # --fail-on-warning` is green). Re-verify every bundle/level change with
 # the pinned binary: `alint validate-config` plus `alint check`.

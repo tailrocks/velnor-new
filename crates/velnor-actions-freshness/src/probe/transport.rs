@@ -10,6 +10,10 @@ use flate2::read::MultiGzDecoder;
 
 use crate::context::FETCH_CAP;
 
+pub(in crate::probe) mod range;
+
+pub(super) use range::fetch_prefix_text;
+
 const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
 pub(super) const MAX_REDIRECTS: usize = 5;
 static UPSTREAM_AGENT: OnceLock<Result<ureq::Agent, String>> = OnceLock::new();
@@ -32,6 +36,15 @@ pub(super) fn fetch_http_with_agent(
     url: &str,
     timeout: Duration,
 ) -> Result<String, String> {
+    fetch_http_with_agent_mode(agent, url, timeout, None)
+}
+
+fn fetch_http_with_agent_mode(
+    agent: &ureq::Agent,
+    url: &str,
+    timeout: Duration,
+    prefix_len: Option<usize>,
+) -> Result<String, String> {
     let deadline = Instant::now() + timeout;
     let mut current = url.to_owned();
     for redirects in 0..=MAX_REDIRECTS {
@@ -39,11 +52,18 @@ pub(super) fn fetch_http_with_agent(
         if remaining.is_zero() {
             return Err("upstream request exceeded its overall deadline".to_owned());
         }
-        let mut response = agent
+        let mut request = agent
             .get(&current)
             .header("User-Agent", "velnor-freshness-probe")
-            .header("Accept", "application/json")
-            .header("Accept-Encoding", "gzip")
+            .header("Accept", "application/json");
+        if let Some(prefix_len) = prefix_len {
+            request = request
+                .header("Accept-Encoding", "identity")
+                .header("Range", format!("bytes=0-{}", prefix_len - 1));
+        } else {
+            request = request.header("Accept-Encoding", "gzip");
+        }
+        let mut response = request
             .config()
             .timeout_global(Some(remaining))
             .max_redirects(0)
@@ -60,11 +80,23 @@ pub(super) fn fetch_http_with_agent(
         } else {
             None
         };
+        if !status.is_redirection()
+            && let Some(prefix_len) = prefix_len
+        {
+            range::validate_prefix_response(&response, prefix_len)?;
+        }
         let body = response_text(&mut response)?;
         if Instant::now() >= deadline {
             return Err("upstream request exceeded its overall deadline".to_owned());
         }
         if !status.is_redirection() {
+            if prefix_len.is_some_and(|expected| body.len() != expected) {
+                return Err(format!(
+                    "range response body length was {}, expected {} bytes",
+                    body.len(),
+                    prefix_len.unwrap_or_default()
+                ));
+            }
             return Ok(body);
         }
         if redirects == MAX_REDIRECTS {

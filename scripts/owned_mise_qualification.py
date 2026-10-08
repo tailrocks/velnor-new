@@ -56,16 +56,16 @@ for cwd in (work,nested):
 # Build a fake pinned Rust installation. Test native Mise dispatch, not Rust compilation.
 realbin=root/"cargo/bin"
 write(realbin/"cargo",'#!/bin/sh\nprintf "REAL_CARGO:%s:%s\\n" "$MBX_CARGO_SHIM_MODE" "$*"\nif [ "$1" = "fidelity" ]; then shift; pwd; printf "ARG:%s\\n" "$@"; exit 37; fi\n',0o700)
-write(realbin/"rustc",'#!/bin/sh\nprintf "rustc 1.98.1 (fixture)\\n"\n',0o700)
+write(realbin/"rustc",'#!/bin/sh\nprintf "rustc 1.99.0 (fixture)\\n"\n',0o700)
 write(realbin/"rustup",'#!/bin/sh\nexit 0\n',0o700)
-install=root/"data/installs/rust/1.98.1"; install.parent.mkdir(parents=True,exist_ok=True); install.symlink_to(realbin)
+install=root/"data/installs/rust/1.99.0"; install.parent.mkdir(parents=True,exist_ok=True); install.symlink_to(realbin)
 owner=write(root/"owner/bin/mbx",f'#!/bin/sh\ntouch "{root}/owner-executed"\nprintf "OWNED_MBX:%s\\n" "$MBX_CARGO_SHIM_MODE"\nexec cargo "$@"\n',0o700)
 env.update(MISE_NO_CONFIG="1",MISE_OWNED_CARGO_WRAPPER=str(owner),MISE_OWNED_CARGO_WRAPPER_SHA256=hashlib.sha256(owner.read_bytes()).hexdigest())
-exclusive=["exec","rust@1.98.1","--","cargo","check"]
+exclusive=["exec","rust@1.99.0","--","cargo","check"]
 for cwd in (work,nested): run("exclusive-owned-"+cwd.name,exclusive,env,cwd,expected="OWNED_MBX:1\nREAL_CARGO:1:check")
 write(ambient/"mise",(ambient/"cargo").read_text(),0o700)
 run("poison-ambient-mise-authority",exclusive,dict(env,MISE_BIN=str(ambient/"mise")),nested,expected="OWNED_MBX:1\nREAL_CARGO:1:check")
-fidelity=run("native-cwd-argv-exit",["exec","rust@1.98.1","--","cargo","fidelity","has spaces","quote\"literal","Unicode-λ","--flag=literal"],env,nested,want=37)
+fidelity=run("native-cwd-argv-exit",["exec","rust@1.99.0","--","cargo","fidelity","has spaces","quote\"literal","Unicode-λ","--flag=literal"],env,nested,want=37)
 # Expected owner execution and exact nonzero exit belong to this positive fidelity case.
 results[-1]["passed"]=fidelity.returncode==37 and str(nested.resolve())+"\nARG:has spaces\nARG:quote\"literal\nARG:Unicode-λ\nARG:--flag=literal\n" in fidelity.stdout and not results[-1]["sentinel"]
 mutations={"relative-owner":{"MISE_OWNED_CARGO_WRAPPER":"owner/bin/mbx"},"nonliteral-owner":{"MISE_OWNED_CARGO_WRAPPER":"{{env.HOME}}/mbx"},"injection-owner":{"MISE_OWNED_CARGO_WRAPPER":str(owner)+"; touch sentinel"},"missing-owner":{"MISE_OWNED_CARGO_WRAPPER":str(root/"missing/mbx")},"wrong-digest":{"MISE_OWNED_CARGO_WRAPPER_SHA256":"0"*64},"uppercase-digest":{"MISE_OWNED_CARGO_WRAPPER_SHA256":env["MISE_OWNED_CARGO_WRAPPER_SHA256"].upper()},"malformed-digest":{"MISE_OWNED_CARGO_WRAPPER_SHA256":"g"*64},"empty-digest":{"MISE_OWNED_CARGO_WRAPPER_SHA256":""},"empty-owner":{"MISE_OWNED_CARGO_WRAPPER":""},"no-config-disabled":{"MISE_NO_CONFIG":"0"},"no-env-disabled":{"MISE_NO_ENV":"0"},"no-hooks-disabled":{"MISE_NO_HOOKS":"0"}}
@@ -128,7 +128,7 @@ if installed.exists():
     run("native-http-tampered-beforeexec",exclusive,installed_env,nested,want=1)
 else: results.append(dict(case="native-http-owned-dispatch",passed=False,error="missing expected native installation"))
 version=subprocess.run([str(binary),"--version"],env=dict(env,MISE_NO_CONFIG="1"),cwd=root,text=True,capture_output=True)
-report=dict(root=str(root),host=dict(system=platform.system(),machine=platform.machine()),source_commit=a.source_commit,source_diff_sha256=a.source_diff_sha256,upstream_commit=a.upstream_commit,binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),version=version.stdout.strip(),version_is_distinct=version.stdout.strip().split()[0]==a.expected_version and a.expected_version!="2026.10.0",results=results)
+report=dict(root=str(root),host=dict(system=platform.system(),machine=platform.machine()),source_commit=a.source_commit,source_diff_sha256=a.source_diff_sha256,upstream_commit=a.upstream_commit,binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),version=version.stdout.strip(),version_is_distinct=version.stdout.strip().split()[0]==a.expected_version and a.expected_version!="2026.10.4",results=results)
 Path(a.output).write_text(json.dumps(report,indent=2)+"\n")
 print(json.dumps({"output":a.output,"root":str(root),"passed":sum(r["passed"] for r in results),"total":len(results),"failed":[r["case"] for r in results if not r["passed"]]}))
 raise SystemExit(0 if valid_mise_cases(results) and report["version_is_distinct"] else 1)

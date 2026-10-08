@@ -1,6 +1,6 @@
 # Generic Rust binary-release contract
 
-**Status:** Proposed capability, implemented locally on an unmerged branch.
+**Status:** Proposed contract.
 This workflow is separate from `[stacks.rust.release]`, which publishes
 crates.io packages through release-plz.
 

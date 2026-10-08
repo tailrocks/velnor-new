@@ -43,10 +43,11 @@ pub const ALINT_ACTION_SHA: &str = "d93c0283b19dd78afcd8a4b303f1556a7759ba81";
 /// `env`, `cache`, `cache_save`, `cache_key`); its one breaking change
 /// (`minimum_release_age` defaulting to `24h`) applies only when
 /// `version` is unset, and Velnor always pins an explicit `version`.
-/// Source: `https://api.github.com/repos/jdx/mise-action/releases/latest`; checked 2026-09-30.
-pub const MISE_ACTION_VERSION: &str = "v5.0.0";
+/// `persist_github_token` defaults to false; Velnor leaves it unset.
+/// Source: `https://api.github.com/repos/jdx/mise-action/releases/latest`; checked 2026-10-08.
+pub const MISE_ACTION_VERSION: &str = "v5.1.1";
 /// Full commit SHA for [`MISE_ACTION_VERSION`] (tag object type `commit`).
-pub const MISE_ACTION_SHA: &str = "9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
+pub const MISE_ACTION_SHA: &str = "2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca";
 /// Qualified `actions/checkout` release.
 /// Source: `https://api.github.com/repos/actions/checkout/releases/latest`; checked 2026-09-28.
 pub const CHECKOUT_ACTION_VERSION: &str = "v7.0.1";

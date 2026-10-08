@@ -121,7 +121,7 @@ def qualified_files(manifest, artifact):
         "workflow": {"commit": manifest["workflow_commit"], **manifest["workflow"]},
         "artifact": {key: artifact[key] for key in ("name", "archive_sha256", "binary_sha256")},
         "version_banner": manifest["version"], "compiler": {
-            "rustc_vv": f"release: 1.98.1\nhost: {target}", "linker": "fixture linker"},
+            "rustc_vv": f"release: 1.99.0\nhost: {target}", "linker": "fixture linker"},
         "runner": {"image_os": "fixture", "image_version": "1"},
         "recipe": S.recipe(manifest["tool"]), "behavioral_qualification": None}
     candidate_sha = P.sha(Q.receipt_bytes(receipt))
