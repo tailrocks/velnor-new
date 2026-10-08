@@ -15,6 +15,7 @@ pub mod permissions;
 pub mod plan;
 pub mod qualification;
 pub mod report;
+pub mod runtime_receipt;
 pub mod step;
 pub mod step_identity;
 mod step_protocol;
@@ -72,6 +73,9 @@ pub use qualification::{
 pub use report::{
     CacheLayer, CacheOutcome, CacheResult, MatrixReport, MatrixStatus, MatrixTaskEntry,
     NotSelectedReason, TaskReport, TaskStatus, TaskTiming,
+};
+pub use runtime_receipt::{
+    TASK_RUNTIME_RECEIPTS_DIRECTORY, TaskRuntimeIdentity, TaskRuntimeReceipt,
 };
 pub use step::{Step, StepKind};
 pub use step_identity::{StepId, StepRole};

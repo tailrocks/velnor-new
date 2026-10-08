@@ -1,16 +1,19 @@
 //! Public task-report surface: loads, resolution, derivation, writes.
 use std::collections::BTreeMap;
 use tempfile::TempDir;
-use velnor_actions_contract::plan_id_for_run;
+use velnor_actions_contract::{
+    artifact_id_for_crate_job, plan_id_for_run, report_id_for_matrix, task_report_id_for_task,
+};
 use velnor_actions_contract_config::RunnerSelection;
 use velnor_actions_contract_workflow::{
     ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, MatrixStatus, ObligationDecision, Plan,
-    PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, TaskStatus, Trust,
+    PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner,
+    TASK_RUNTIME_RECEIPTS_DIRECTORY, TaskRuntimeIdentity, TaskRuntimeReceipt, TaskStatus, Trust,
     WorkflowEvent,
 };
 use velnor_actions_orchestrator_task_report::task_report::{
     derive_downstream, entry_and_digest, entry_and_digest_for_job, load_plan, terminal_task_report,
-    write_entry_reports,
+    write_entry_reports, write_entry_reports_with_runtime_receipt,
 };
 use velnor_actions_orchestrator_task_report::task_report_aggregate::single_task_aggregate;
 
@@ -229,4 +232,169 @@ fn downstream_follows_execution_order() {
         vec![SECOND.to_owned()]
     );
     assert!(derive_downstream(&plan, SECOND, JOB).is_empty());
+}
+
+#[test]
+fn runtime_receipt_sidecar_binds_plan_entry_without_changing_task_report() {
+    let mut plan = fixture_plan();
+    plan.run_key = "r123-a2".to_owned();
+    plan.plan_id = plan_id_for_run(&plan.run_key).expect("plan id");
+    plan.head = "a".repeat(40);
+    for entry in &mut plan.matrix.include {
+        entry.report_id =
+            report_id_for_matrix(&plan.run_key, &entry.matrix_key).expect("report id");
+        entry.artifact_id =
+            artifact_id_for_crate_job(&plan.run_key, &entry.job_id).expect("artifact name");
+    }
+    plan.validate().expect("remote plan validates");
+    let (entry, digest) = entry_and_digest(&plan, FIRST).expect("entry resolves");
+    let task = terminal_task_report(&plan, entry, digest, 0, Some(1)).expect("task derives");
+    let matrix = single_task_aggregate(&plan, entry, &task).expect("aggregate derives");
+    let runtime = TaskRuntimeIdentity::new(
+        "org/repo".to_owned(),
+        "123".to_owned(),
+        2,
+        plan.head.clone(),
+        "org/repo/.github/workflows/ci.yml@refs/pull/4/merge".to_owned(),
+        JOB.to_owned(),
+        "runner-17".to_owned(),
+    )
+    .expect("runtime identity");
+    let receipt = TaskRuntimeReceipt::derive(&plan, entry, &task.task_report_id, &runtime)
+        .expect("bound receipt");
+    let temp = TempDir::new().expect("temp");
+    write_entry_reports_with_runtime_receipt(
+        temp.path(),
+        &plan,
+        entry,
+        &task,
+        &matrix,
+        Some(&receipt),
+    )
+    .expect("reports and sidecar write");
+    let dir = temp
+        .path()
+        .join("velnor")
+        .join(&plan.run_key)
+        .join(&entry.matrix_key);
+    let task_bytes = std::fs::read(
+        dir.join("tasks")
+            .join(format!("{}.json", task.task_report_id)),
+    )
+    .expect("task report bytes");
+    let task_json: serde_json::Value = serde_json::from_slice(&task_bytes).expect("task json");
+    assert!(task_json.get("runtime_receipt").is_none());
+    let receipt_path = dir
+        .join(TASK_RUNTIME_RECEIPTS_DIRECTORY)
+        .join(format!("{}.json", task.task_report_id));
+    let receipt_bytes = std::fs::read(receipt_path).expect("receipt sidecar");
+    let decoded: TaskRuntimeReceipt = serde_json::from_slice(&receipt_bytes).expect("receipt json");
+    decoded
+        .validate_for_plan_entry(&plan, entry)
+        .expect("receipt remains plan-bound");
+    assert_eq!(decoded.workflow_job_key, entry.job_id);
+    assert_eq!(decoded.report_artifact_name, entry.artifact_id);
+    assert_eq!(decoded.runner_name, "runner-17");
+}
+
+#[test]
+fn runtime_receipt_rejects_foreign_entry_and_orphan_obligation() {
+    let mut plan = fixture_plan();
+    plan.run_key = "r123-a2".to_owned();
+    plan.plan_id = plan_id_for_run(&plan.run_key).expect("plan id");
+    plan.head = "a".repeat(40);
+    for entry in &mut plan.matrix.include {
+        entry.report_id =
+            report_id_for_matrix(&plan.run_key, &entry.matrix_key).expect("report id");
+        entry.artifact_id =
+            artifact_id_for_crate_job(&plan.run_key, &entry.job_id).expect("artifact name");
+    }
+    plan.validate().expect("remote plan validates");
+    let (entry, entry_digest) = entry_and_digest(&plan, FIRST).expect("entry resolves");
+    let report_id = task_report_id_for_task(&plan.run_key, &entry.matrix_key, entry_digest)
+        .expect("task report id");
+    let runtime = TaskRuntimeIdentity::new(
+        "org/repo".to_owned(),
+        "123".to_owned(),
+        2,
+        plan.head.clone(),
+        "org/repo/.github/workflows/ci.yml@refs/heads/main".to_owned(),
+        JOB.to_owned(),
+        "runner-17".to_owned(),
+    )
+    .expect("runtime identity");
+
+    let mut foreign = entry.clone();
+    foreign.job_id = "other_job".to_owned();
+    foreign.artifact_id =
+        artifact_id_for_crate_job(&plan.run_key, &foreign.job_id).expect("foreign artifact");
+    let foreign_runtime = TaskRuntimeIdentity::new(
+        "org/repo".to_owned(),
+        "123".to_owned(),
+        2,
+        plan.head.clone(),
+        "org/repo/.github/workflows/ci.yml@refs/heads/main".to_owned(),
+        foreign.job_id.clone(),
+        "runner-17".to_owned(),
+    )
+    .expect("foreign runtime identity");
+    assert!(TaskRuntimeReceipt::derive(&plan, &foreign, &report_id, &foreign_runtime).is_err());
+
+    let mut forged = TaskRuntimeReceipt::derive(&plan, entry, &report_id, &runtime)
+        .expect("authoritative receipt");
+    forged.plan_job_id = foreign.job_id.clone();
+    forged.report_artifact_name = foreign.artifact_id.clone();
+    forged.workflow_job_key = foreign.job_id.clone();
+    assert!(forged.validate_for_plan_entry(&plan, &foreign).is_err());
+
+    let mut inconsistent = plan.clone();
+    inconsistent
+        .obligations
+        .iter_mut()
+        .find(|obligation| obligation.task_id == FIRST)
+        .expect("matching obligation")
+        .task_digest = digest(99);
+    inconsistent
+        .validate()
+        .expect("structural plan remains valid");
+    assert!(TaskRuntimeReceipt::derive(&inconsistent, entry, &report_id, &runtime).is_err());
+}
+
+#[test]
+fn runtime_receipt_rejects_source_or_workflow_job_mismatch() {
+    let mut plan = fixture_plan();
+    plan.run_key = "r123-a2".to_owned();
+    plan.plan_id = plan_id_for_run(&plan.run_key).expect("plan id");
+    plan.head = "a".repeat(40);
+    for entry in &mut plan.matrix.include {
+        entry.report_id =
+            report_id_for_matrix(&plan.run_key, &entry.matrix_key).expect("report id");
+        entry.artifact_id =
+            artifact_id_for_crate_job(&plan.run_key, &entry.job_id).expect("artifact name");
+    }
+    plan.validate().expect("remote plan validates");
+    let (entry, digest) = entry_and_digest(&plan, FIRST).expect("entry resolves");
+    let task = terminal_task_report(&plan, entry, digest, 0, None).expect("task derives");
+    let wrong_job = TaskRuntimeIdentity::new(
+        "org/repo".to_owned(),
+        "123".to_owned(),
+        2,
+        plan.head.clone(),
+        "org/repo/.github/workflows/ci.yml@refs/heads/main".to_owned(),
+        "other_job".to_owned(),
+        "runner-17".to_owned(),
+    )
+    .expect("syntactically valid runtime identity");
+    assert!(TaskRuntimeReceipt::derive(&plan, entry, &task.task_report_id, &wrong_job).is_err());
+    let wrong_source = TaskRuntimeIdentity::new(
+        "org/repo".to_owned(),
+        "123".to_owned(),
+        2,
+        "b".repeat(40),
+        "org/repo/.github/workflows/ci.yml@refs/heads/main".to_owned(),
+        JOB.to_owned(),
+        "runner-17".to_owned(),
+    )
+    .expect("syntactically valid runtime identity");
+    assert!(TaskRuntimeReceipt::derive(&plan, entry, &task.task_report_id, &wrong_source).is_err());
 }

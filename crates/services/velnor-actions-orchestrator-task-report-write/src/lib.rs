@@ -11,5 +11,7 @@ mod report_write;
 mod task_report;
 mod timing;
 
-pub use report_write::{write_task_report_to, write_task_report_with_key};
+pub use report_write::{
+    write_task_report_to, write_task_report_to_with_runtime, write_task_report_with_key,
+};
 pub use task_report::write_task_report;
