@@ -20,6 +20,10 @@ fn checksum(hex: &str) -> String {
     format!("sha256:{hex}")
 }
 
+/// Exact `ChainArgos/java-monorepo` `mise.lock` snapshot at f052bb0;
+/// source Git blob d383822af39a6fc2bfbf92b56d199edf4e95ce6d.
+const F052_MISE_LOCK: &str = include_str!("fixtures/mise-lock-f052.lock");
+
 /// v3 lock with one fully checksummed tool plus a checksum-less rust.
 fn lock_text() -> String {
     format!(
@@ -43,6 +47,85 @@ fn parses_v3_entries_with_platform_checksums() -> Result<(), String> {
     assert_eq!(rust.version, "1.98.1");
     assert!(rust.checksums.is_empty());
     Ok(())
+}
+
+#[test]
+fn parses_source_lock_provenance_boolean_without_trusting_it_as_a_checksum() -> Result<(), String> {
+    let lock = parse_mise_lockfile(F052_MISE_LOCK)?;
+    let fnox = lock.tools.get("fnox").ok_or("fnox entry")?;
+    assert_eq!(fnox.version, "1.35.1");
+    assert_eq!(
+        fnox.checksums.get("macos-arm64").map(String::as_str),
+        Some("sha256:9b733a2b9e3e893e73131cc3c7d64c8596de4c7210b47f3695ed4011d798a1e6")
+    );
+    assert!(F052_MISE_LOCK.contains(
+        "url = \"https://github.com/jdx/fnox/releases/download/v1.35.1/fnox-aarch64-apple-darwin.tar.gz\""
+    ));
+    assert!(F052_MISE_LOCK.contains("provenance_verified = true"));
+
+    let subject = InstallSubject {
+        display: "fnox@1.35.1".to_owned(),
+        expected_version: "1.35.1".to_owned(),
+        lock_key: "fnox".to_owned(),
+    };
+    assert_eq!(
+        audit_install_coverage(&lock, std::slice::from_ref(&subject), "macos-arm64")[0],
+        InstallCoverage::Verified
+    );
+
+    let without_checksum = F052_MISE_LOCK.replace(
+        "checksum = \"sha256:9b733a2b9e3e893e73131cc3c7d64c8596de4c7210b47f3695ed4011d798a1e6\"\n",
+        "",
+    );
+    assert_ne!(without_checksum, F052_MISE_LOCK);
+    assert!(without_checksum.contains("provenance_verified = true"));
+    let lock_without_checksum = parse_mise_lockfile(&without_checksum)?;
+    let fnox_without_checksum = lock_without_checksum
+        .tools
+        .get("fnox")
+        .ok_or("fnox entry without macOS checksum")?;
+    assert!(!fnox_without_checksum.checksums.contains_key("macos-arm64"));
+    assert!(matches!(
+        audit_install_coverage(
+            &lock_without_checksum,
+            &[subject],
+            "macos-arm64"
+        )
+        .as_slice(),
+        [InstallCoverage::MissingPlatform { locked_platforms }]
+            if !locked_platforms.is_empty() && locked_platforms.iter().all(|platform| platform != "macos-arm64")
+    ));
+    Ok(())
+}
+
+#[test]
+fn malformed_boolean_metadata_and_boolean_checksum_or_url_fail() {
+    assert!(parse_mise_lockfile(
+        "[[tools.x]]\nversion = \"1.0.0\"\n[tools.x.\"platforms.linux-x64\"]\nprovenance_verified = false\n"
+    )
+    .is_ok());
+
+    for value in ["True", "FALSE", "trueish", "falsehood"] {
+        let text = format!(
+            "[[tools.x]]\nversion = \"1.0.0\"\n[tools.x.\"platforms.linux-x64\"]\nprovenance_verified = {value}\n"
+        );
+        assert!(
+            parse_mise_lockfile(&text).is_err(),
+            "invalid TOML boolean must fail: {value:?}"
+        );
+    }
+
+    assert!(parse_mise_lockfile("[[tools.x]]\nversion = true\n").is_err());
+
+    for field in ["checksum", "url"] {
+        let text = format!(
+            "[[tools.x]]\nversion = \"1.0.0\"\n[tools.x.\"platforms.linux-x64\"]\n{field} = true\n"
+        );
+        assert!(
+            parse_mise_lockfile(&text).is_err(),
+            "boolean must not be accepted as {field}"
+        );
+    }
 }
 
 #[test]

@@ -139,8 +139,8 @@ pub fn parse_mise_lockfile(text: &str) -> Result<MiseLockfile, String> {
             continue;
         }
         let (key, value) = split_setting(code, index)?;
-        match (tool.as_ref(), platform.as_ref(), key) {
-            (Some(name), None, "version") => {
+        match (tool.as_ref(), platform.as_ref(), key, value) {
+            (Some(name), None, "version", LockSettingValue::Text(value)) => {
                 let entry = lock
                     .tools
                     .get_mut(name)
@@ -150,7 +150,7 @@ pub fn parse_mise_lockfile(text: &str) -> Result<MiseLockfile, String> {
                 }
                 entry.version = value;
             }
-            (Some(name), Some(platform), "checksum") => {
+            (Some(name), Some(platform), "checksum", LockSettingValue::Text(value)) => {
                 let entry = lock
                     .tools
                     .get_mut(name)
@@ -159,6 +159,10 @@ pub fn parse_mise_lockfile(text: &str) -> Result<MiseLockfile, String> {
                     return Err(line_problem(index, "duplicate_key"));
                 }
                 entry.checksums.insert(platform.clone(), value);
+            }
+            (_, _, "provenance_verified", LockSettingValue::Boolean) => {}
+            (_, _, _, LockSettingValue::Boolean) => {
+                return Err(line_problem(index, "expected_quoted_string"));
             }
             _ => {}
         }
@@ -225,8 +229,16 @@ fn unquote(key: &str, index: usize) -> Result<String, String> {
     Err(line_problem(index, "unterminated_key"))
 }
 
-/// Split one `key = "value"` (or `key = 123`) setting.
-fn split_setting(code: &str, index: usize) -> Result<(&str, String), String> {
+/// Value categories accepted by the lock audit's small TOML reader.
+enum LockSettingValue {
+    /// String, integer, or array value retained as raw text.
+    Text(String),
+    /// A TOML boolean. Only recognized metadata consumes this form.
+    Boolean,
+}
+
+/// Split one key/value setting, including the boolean provenance metadata.
+fn split_setting(code: &str, index: usize) -> Result<(&str, LockSettingValue), String> {
     let (key, value) = code
         .split_once('=')
         .ok_or_else(|| line_problem(index, "expected_key_equals_value"))?;
@@ -235,11 +247,15 @@ fn split_setting(code: &str, index: usize) -> Result<(&str, String), String> {
     let value = trimmed
         .strip_prefix('"')
         .and_then(|rest| rest.strip_suffix('"'))
-        .map(str::to_owned)
+        .map(|value| LockSettingValue::Text(value.to_owned()))
         .or_else(|| {
             let integer = !trimmed.is_empty() && trimmed.bytes().all(|b| b.is_ascii_digit());
             let array = trimmed.starts_with('[') && trimmed.ends_with(']');
-            (integer || array).then(|| trimmed.to_owned())
+            (integer || array).then(|| LockSettingValue::Text(trimmed.to_owned()))
+        })
+        .or(match trimmed {
+            "true" | "false" => Some(LockSettingValue::Boolean),
+            _ => None,
         });
     match (key.is_empty(), value) {
         (false, Some(value)) => Ok((key, value)),
