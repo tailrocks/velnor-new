@@ -24,17 +24,41 @@ fn validate_github_request<'a>(
     path: &'a str,
     request: &'a SessionRequest,
 ) -> Option<ValidatedTarget<'a>> {
-    if request.query.is_some() || !request.body.is_empty() && request.method == Method::Get {
+    if !request.body.is_empty() && request.method == Method::Get {
         return None;
     }
     match request.method {
-        Method::Get if repository_path(path) => headers_are(request, GithubHeaders::RepositoryGet)
-            .then_some(ValidatedTarget { path, query: None }),
-        Method::Post if registration_path(path) && request.body.is_empty() => {
+        Method::Get if request.query.is_none() && repository_path(path) => {
+            headers_are(request, GithubHeaders::RepositoryGet)
+                .then_some(ValidatedTarget { path, query: None })
+        }
+        Method::Get if request.query.is_none() && workflow_run_path(path) => {
+            headers_are(request, GithubHeaders::RepositoryGet)
+                .then_some(ValidatedTarget { path, query: None })
+        }
+        Method::Get
+            if attempt_jobs_path(path)
+                && request
+                    .query
+                    .as_deref()
+                    .is_some_and(valid_attempt_jobs_query) =>
+        {
+            headers_are(request, GithubHeaders::RepositoryGet).then_some(ValidatedTarget {
+                path,
+                query: request.query.as_deref(),
+            })
+        }
+        Method::Post
+            if request.query.is_none() && registration_path(path) && request.body.is_empty() =>
+        {
             headers_are(request, GithubHeaders::RegistrationToken)
                 .then_some(ValidatedTarget { path, query: None })
         }
-        Method::Post if admin_exchange_path(path) && valid_admin_body(path, &request.body) => {
+        Method::Post
+            if request.query.is_none()
+                && admin_exchange_path(path)
+                && valid_admin_body(path, &request.body) =>
+        {
             headers_are(request, GithubHeaders::AdminExchange)
                 .then_some(ValidatedTarget { path, query: None })
         }
@@ -198,6 +222,50 @@ fn repository_path(path: &str) -> bool {
         && parts.next().is_some_and(path_segment)
         && parts.next().is_some_and(path_segment)
         && parts.next().is_none()
+}
+
+fn workflow_run_path(path: &str) -> bool {
+    let mut parts = path.split('/');
+    matches!(parts.next(), Some("repos"))
+        && parts.next().is_some_and(path_segment)
+        && parts.next().is_some_and(path_segment)
+        && matches!(parts.next(), Some("actions"))
+        && matches!(parts.next(), Some("runs"))
+        && parts.next().is_some_and(positive_canonical_u64)
+        && parts.next().is_none()
+}
+
+fn attempt_jobs_path(path: &str) -> bool {
+    let mut parts = path.split('/');
+    matches!(parts.next(), Some("repos"))
+        && parts.next().is_some_and(path_segment)
+        && parts.next().is_some_and(path_segment)
+        && matches!(parts.next(), Some("actions"))
+        && matches!(parts.next(), Some("runs"))
+        && parts.next().is_some_and(positive_canonical_u64)
+        && matches!(parts.next(), Some("attempts"))
+        && parts.next().is_some_and(positive_canonical_u64)
+        && matches!(parts.next(), Some("jobs"))
+        && parts.next().is_none()
+}
+
+fn positive_canonical_u64(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 20
+        && value.bytes().all(|byte| byte.is_ascii_digit())
+        && value
+            .parse::<u64>()
+            .is_ok_and(|number| number > 0 && number.to_string() == value)
+}
+
+fn valid_attempt_jobs_query(query: &str) -> bool {
+    let Some(page) = query.strip_prefix("per_page=100&page=") else {
+        return false;
+    };
+    positive_canonical_u64(page)
+        && page
+            .parse::<u8>()
+            .is_ok_and(|number| (1..=4).contains(&number))
 }
 
 fn registration_path(path: &str) -> bool {
