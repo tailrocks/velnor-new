@@ -12,7 +12,7 @@ fn each_archive_consumer_has_target_pinned_mise_before_extraction() -> Result<()
     pins.macos_arm64_setup = mise_setup('c', "2026.9.19", 'd');
     pins.macos_x86_64_setup = mise_setup('e', "2026.9.20", 'f');
     let request = Schema2WorkflowRequest {
-        version: "0.1.3".to_owned(),
+        version: "0.1.4".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
         workflows: BTreeSet::new(),
