@@ -1,12 +1,13 @@
 use std::collections::BTreeMap;
 
 use super::super::share_lanes;
-use super::{ctx, echo_step, paired, render_jobs, workflow_ir};
+use super::{HOSTED_RUNS, ctx, echo_step, paired, render_jobs, workflow_ir};
 use velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION;
 use velnor_actions_contract_workflow::{Step, StepId, StepKind, StepRole};
 use velnor_actions_workflow_cache::tofu_cache::{
     TOFU_PROVIDER_ADMISSION_USES, tofu_providers_save_step,
 };
+use velnor_actions_workflow_steps::{MiseSetup, RenderError};
 
 const CAP: usize = 500_000;
 const LOGICAL_JOBS: usize = 21;
@@ -16,6 +17,11 @@ fn positions(yaml: &str, needle: &str) -> Vec<usize> {
     yaml.match_indices(needle)
         .map(|(position, _)| position)
         .collect()
+}
+
+fn position(yaml: &str, needle: &str) -> usize {
+    yaml.find(needle)
+        .unwrap_or_else(|| panic!("rendered YAML is missing {needle:?}"))
 }
 
 #[test]
@@ -78,6 +84,173 @@ fn shared_lanes_keep_ci_under_github_file_cap() {
         assert!(file.bytes.contains(&payload), "{}", file.path);
         assert!(file.path.ends_with("/action.yml"), "{}", file.path);
     }
+}
+
+fn insert_p08_setup(jobs: &mut BTreeMap<String, velnor_actions_contract_workflow::Job>) {
+    let setup = MiseSetup {
+        uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
+        version: "2026.9.18".to_owned(),
+        sha256: "a".repeat(64),
+    };
+    let context = ctx();
+    for id in ["rust-0__hosted", "rust-0__local"] {
+        let job = jobs.get_mut(id).expect("paired job");
+        velnor_actions_workflow_cache::cache_p08::ensure_setup_p08(
+            id,
+            job,
+            &setup,
+            true,
+            "x86_64-unknown-linux-gnu",
+            &context.checkout_uses,
+        )
+        .expect("valid P08 setup");
+    }
+}
+
+#[test]
+fn hosted_and_scale_set_cache_setup_stays_in_lane_jobs_before_shared_body() {
+    let mut jobs = paired(&[echo_step(0, "shared-body")]);
+    insert_p08_setup(&mut jobs);
+
+    let shared = share_lanes(&jobs, &ctx()).expect("validated cache preludes share");
+    let names = |id: &str| {
+        shared.prefixes[id]
+            .iter()
+            .map(|step| step.name.as_str())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        names("rust-0__hosted"),
+        [
+            "Resolve hosted Mise cache identity",
+            "Restore Velnor tool seed",
+            "Setup Mise",
+        ]
+    );
+    assert_eq!(names("rust-0__local"), ["Setup Mise"]);
+    assert!(
+        velnor_actions_workflow_cache::cache_p08::is_canonical_hosted_runtime_identity_step(
+            HOSTED_RUNS,
+            &shared.prefixes["rust-0__hosted"][0],
+        )
+    );
+    assert!(
+        !velnor_actions_workflow_cache::cache_p08::is_canonical_hosted_runtime_identity_step(
+            &shared.jobs["rust-0__local"].runs_on,
+            &shared.prefixes["rust-0__hosted"][0],
+        )
+    );
+    let action = shared
+        .files
+        .iter()
+        .find(|file| file.path == ".github/actions/rust-0/action.yml")
+        .expect("shared body action");
+    assert!(action.bytes.contains("shared-body"));
+    assert!(!action.bytes.contains("Resolve hosted Mise cache identity"));
+    assert!(!action.bytes.contains("Restore Velnor tool seed"));
+    assert!(!action.bytes.contains("Setup Mise"));
+
+    let yaml = render_jobs(&workflow_ir(), &shared, &ctx()).expect("workflow renders");
+    let hosted_at = yaml.find("runs-on: ubuntu-26.04").expect("hosted job");
+    let local_at = yaml
+        .find("runs-on: [velnor, ubuntu-26.04-scale-set]")
+        .expect("scale-set job");
+    let hosted = &yaml[hosted_at..local_at];
+    let local = &yaml[local_at..];
+    assert!(
+        position(hosted, "Resolve hosted Mise cache identity")
+            < position(hosted, "Restore Velnor tool seed")
+    );
+    assert!(position(hosted, "Restore Velnor tool seed") < position(hosted, "Setup Mise"));
+    assert!(position(hosted, "Setup Mise") < position(hosted, "uses: ./.github/actions/rust-0"));
+    assert!(position(local, "Setup Mise") < position(local, "uses: ./.github/actions/rust-0"));
+}
+
+#[test]
+fn noncanonical_hosted_runtime_identity_is_not_peeled() {
+    let mut jobs = paired(&[echo_step(0, "shared-body")]);
+    insert_p08_setup(&mut jobs);
+    let hosted = jobs.get_mut("rust-0__hosted").expect("hosted job");
+    let identity = hosted
+        .steps
+        .iter_mut()
+        .find(|step| step.name == "Resolve hosted Mise cache identity")
+        .expect("canonical identity step");
+    let StepKind::Shell { run, .. } = &mut identity.kind else {
+        panic!("identity step is a shell command");
+    };
+    run[2].push_str("; echo unexpected");
+
+    let error = share_lanes(&jobs, &ctx()).expect_err("mutated identity remains in body");
+    assert!(
+        matches!(error, RenderError::InvalidWorkflow(ref problem) if problem == "lane_body_differs:rust-0"),
+        "{error}"
+    );
+}
+
+#[test]
+fn malformed_typed_mise_setup_is_not_peeled() {
+    let mut jobs = paired(&[echo_step(0, "shared-body")]);
+    insert_p08_setup(&mut jobs);
+    let hosted = jobs.get_mut("rust-0__hosted").expect("hosted job");
+    let setup = hosted
+        .steps
+        .iter_mut()
+        .find(|step| step.name == "Setup Mise")
+        .expect("Mise setup");
+    let StepKind::Action { with, .. } = &mut setup.kind else {
+        panic!("Mise setup is an action");
+    };
+    with.insert("unexpected".to_owned(), "true".to_owned());
+
+    let error = share_lanes(&jobs, &ctx()).expect_err("malformed typed setup remains in body");
+    assert!(
+        matches!(error, RenderError::InvalidWorkflow(ref problem) if problem == "lane_body_differs:rust-0"),
+        "{error}"
+    );
+}
+
+#[test]
+fn malformed_typed_tool_seed_is_not_peeled() {
+    let mut jobs = paired(&[echo_step(0, "shared-body")]);
+    insert_p08_setup(&mut jobs);
+    let hosted = jobs.get_mut("rust-0__hosted").expect("hosted job");
+    let seed = hosted
+        .steps
+        .iter_mut()
+        .find(|step| step.name == "Restore Velnor tool seed")
+        .expect("tool seed");
+    let StepKind::Action { with, .. } = &mut seed.kind else {
+        panic!("tool seed is an action");
+    };
+    with.insert("unexpected".to_owned(), "true".to_owned());
+
+    let error = share_lanes(&jobs, &ctx()).expect_err("malformed typed seed remains in body");
+    assert!(
+        matches!(error, RenderError::InvalidWorkflow(ref problem) if problem == "lane_body_differs:rust-0"),
+        "{error}"
+    );
+}
+
+#[test]
+fn cache_setup_prefix_does_not_hide_unrelated_lane_divergence() {
+    let mut jobs = paired(&[echo_step(0, "shared-body")]);
+    insert_p08_setup(&mut jobs);
+    let hosted = jobs.get_mut("rust-0__hosted").expect("hosted job");
+    let body_at = hosted
+        .steps
+        .iter()
+        .position(|step| step.name == "echo 0")
+        .expect("common body");
+    hosted
+        .steps
+        .insert(body_at, echo_step(9, "host-only setup"));
+
+    let error = share_lanes(&jobs, &ctx()).expect_err("unrelated divergence remains rejected");
+    assert!(
+        matches!(error, RenderError::InvalidWorkflow(ref problem) if problem == "lane_body_differs:rust-0"),
+        "{error}"
+    );
 }
 
 #[test]

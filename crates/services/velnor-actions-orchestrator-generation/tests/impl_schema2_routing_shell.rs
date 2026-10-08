@@ -7,17 +7,33 @@ pub(super) fn assert_scale_set_shell_and_same_steps(hosted: &str, local: &str) {
     assert_eq!(tool_lines(hosted), tool_lines(local));
 }
 
+// Cache setup remains lane-scoped; workflow-document tests verify its exact typed steps.
 fn tool_lines(body: &str) -> Vec<&str> {
     let mut in_steps = false;
+    let mut skip_cache_setup = false;
     body.lines()
         .filter(|line| {
             let indent = line.bytes().take_while(|byte| *byte == b' ').count();
             let content = line.trim();
             if indent == 4 {
                 in_steps = content == "steps:";
+                skip_cache_setup = false;
                 return false;
             }
-            in_steps && indent == 8 && (content.starts_with("run:") || content.starts_with("uses:"))
+            if in_steps && indent == 6 && content.starts_with("- name: ") {
+                let name = content.trim_start_matches("- name: ");
+                skip_cache_setup = matches!(
+                    name,
+                    "Resolve hosted Mise cache identity"
+                        | "Restore Velnor tool seed"
+                        | "Setup Mise"
+                );
+                return false;
+            }
+            in_steps
+                && !skip_cache_setup
+                && indent == 8
+                && (content.starts_with("run:") || content.starts_with("uses:"))
         })
         .collect()
 }

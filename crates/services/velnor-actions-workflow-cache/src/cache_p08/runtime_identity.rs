@@ -144,10 +144,15 @@ struct HostedProfile {
 }
 
 fn hosted_profile(runs_on: &str, target: &str) -> Option<HostedProfile> {
+    let profile = hosted_profile_for_label(runs_on)?;
+    (target == profile.target).then_some(profile)
+}
+
+fn hosted_profile_for_label(runs_on: &str) -> Option<HostedProfile> {
     let Ok(RunsOn::Hosted(label)) = RunsOn::parse(runs_on) else {
         return None;
     };
-    let profile = match label.as_str() {
+    Some(match label.as_str() {
         "ubuntu-22.04" => HostedProfile {
             target: "x86_64-unknown-linux-gnu",
             image_os: "ubuntu22",
@@ -179,8 +184,18 @@ fn hosted_profile(runs_on: &str, target: &str) -> Option<HostedProfile> {
             runner_arch: "X64",
         },
         _ => return None,
-    };
-    (target == profile.target).then_some(profile)
+    })
+}
+
+/// Recognize only the exact runtime identity probe generated for this hosted label.
+///
+/// This is a representation check for lane factoring; it does not authorize cache use
+/// or establish that the runtime probe has executed.
+#[must_use]
+pub fn is_canonical_hosted_runtime_identity_step(runs_on: &str, step: &Step) -> bool {
+    hosted_profile_for_label(runs_on).is_some_and(|profile| {
+        runtime_identity_step(profile).is_ok_and(|expected| expected == *step)
+    })
 }
 
 fn ensure_runtime_identity_step(
