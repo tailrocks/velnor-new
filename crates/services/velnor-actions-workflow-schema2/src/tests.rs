@@ -5,7 +5,8 @@ use velnor_actions_contract_config::{RoutingWorkflow, SCALE_SET_NAME, VELNOR_LAB
 use super::render_schema2_workflows;
 use super::workflows::{monitoring, qualification};
 use velnor_actions_workflow_generator::{
-    GeneratorReleasePins, MbxQualificationPins, ProductReleaseFamily, Schema2WorkflowRequest,
+    GeneratorReleasePins, MbxQualificationPins, ProductReleaseFamily, ProductReleasePins,
+    Schema2WorkflowRequest,
 };
 use velnor_actions_workflow_steps::setup::MiseSetup;
 use velnor_actions_workflow_tree::yaml::Yaml;
@@ -31,6 +32,7 @@ fn request() -> Schema2WorkflowRequest {
             rust_version: "1.98.1".to_owned(),
         }),
         generator_release: None,
+        product_release: None,
     }
 }
 
@@ -122,6 +124,33 @@ fn generator_release_pins() -> GeneratorReleasePins {
         .into_iter()
         .map(str::to_owned)
         .collect(),
+        rust_version: "1.98.1".to_owned(),
+        mr_boxington_version: "1.21.1".to_owned(),
+    }
+}
+
+fn product_release_pins() -> ProductReleasePins {
+    let setup = MiseSetup {
+        uses: format!("jdx/mise-action@{}", "c".repeat(40)),
+        version: "2026.9.18".to_owned(),
+        sha256: "d".repeat(64),
+    };
+    ProductReleasePins {
+        linux_x86_64_setup: setup.clone(),
+        macos_arm64_setup: setup.clone(),
+        macos_x86_64_setup: setup,
+        install_gate_tools_argv: vec!["gate".to_owned()],
+        install_build_tools_argv: vec!["build".to_owned()],
+        install_qualify_tools_argv: vec!["qualify".to_owned()],
+        install_runner_build_tools_argv: vec!["runner-build".to_owned()],
+        install_gh_argv: vec!["gh-install".to_owned()],
+        build_argv: vec!["build".to_owned()],
+        intel_build_argv: vec!["intel-build".to_owned()],
+        install_intel_target_argv: vec!["target-add".to_owned()],
+        runner_build_argv: vec!["runner-build".to_owned()],
+        actionlint_argv: vec!["actionlint".to_owned()],
+        zizmor_argv: vec!["zizmor".to_owned()],
+        gh_argv: vec!["gh".to_owned()],
         rust_version: "1.98.1".to_owned(),
         mr_boxington_version: "1.21.1".to_owned(),
     }
@@ -282,6 +311,23 @@ fn typed_family_router_emits_existing_outputs_once() {
             ".github/workflows/macos-binary-release.yml",
         ]
     );
+}
+
+#[test]
+fn staged_product_pins_preserve_current_family_workflow_bytes() {
+    let mut request = request();
+    request.workflows = BTreeSet::from([
+        RoutingWorkflow::ImageRelease,
+        RoutingWorkflow::MacosBinaryRelease,
+        RoutingWorkflow::GeneratorRelease,
+    ]);
+    request.generator_release = Some(generator_release_pins());
+    let existing = render_schema2_workflows(&request).expect("existing families render");
+
+    request.product_release = Some(product_release_pins());
+    let staged = render_schema2_workflows(&request).expect("staged product pins render");
+
+    assert_eq!(staged, existing);
 }
 
 #[test]

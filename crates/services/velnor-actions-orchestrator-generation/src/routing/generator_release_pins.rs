@@ -108,7 +108,7 @@ fn install_macos_x86_64_target_argv(
     strings_of(request.argv(catalog)).map_err(contract_error)
 }
 
-fn install_argv(
+pub(super) fn install_argv(
     tools: &[PinnedTool],
     catalog: &ToolCatalog,
 ) -> Result<Vec<String>, OrchestratorError> {
@@ -116,7 +116,7 @@ fn install_argv(
     strings_of(install.argv(catalog)).map_err(contract_error)
 }
 
-fn exec_argv(
+pub(super) fn exec_argv(
     tools: &[PinnedTool],
     program: &str,
     args: &[&str],

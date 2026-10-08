@@ -14,6 +14,7 @@ use velnor_actions_workflow_schema2::render_schema2_workflows;
 use velnor_actions_workflow_tree::RenderedFile;
 
 mod generator_release_pins;
+mod product_release_pins;
 
 use velnor_actions_orchestrator_core::OrchestratorError;
 use velnor_actions_orchestrator_core::config::{CONFIG_REL, config_error, load_config};
@@ -153,11 +154,25 @@ fn workflow_request(
     } else {
         None
     };
+    let release_requested = [
+        RoutingWorkflow::ImageRelease,
+        RoutingWorkflow::MacosBinaryRelease,
+        RoutingWorkflow::GeneratorRelease,
+    ]
+    .iter()
+    .any(|workflow| execution.workflows.contains(workflow));
+    let generator_pins = release_requested
+        .then(|| generator_release_pins::resolve(config))
+        .transpose()?;
+    let product_release = generator_pins
+        .as_ref()
+        .map(product_release_pins::resolve)
+        .transpose()?;
     let generator_release = execution
         .workflows
         .contains(&RoutingWorkflow::GeneratorRelease)
-        .then(|| generator_release_pins::resolve(config))
-        .transpose()?;
+        .then_some(generator_pins)
+        .flatten();
     Ok(Schema2WorkflowRequest {
         version: version.to_owned(),
         hosted_label: hosted,
@@ -165,5 +180,6 @@ fn workflow_request(
         workflows: execution.workflows.clone(),
         mbx_qualification,
         generator_release,
+        product_release,
     })
 }
