@@ -24,31 +24,100 @@ pub fn task_driver_tools(use_rust: bool, use_opentofu: bool) -> Vec<PinnedTool> 
     tools
 }
 
-/// Velnor-repository suites that shell out to the `generate` validators.
+/// One Velnor suite's canonical package identity.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SuiteName {
+    Orchestrator,
+    Generation,
+    Plan,
+    Cli,
+    Mise,
+}
+
+impl SuiteName {
+    /// Canonical Cargo package name for this suite.
+    const fn package_name(self) -> &'static str {
+        match self {
+            Self::Orchestrator => "velnor-actions-orchestrator",
+            Self::Generation => "velnor-actions-orchestrator-generation",
+            Self::Plan => "velnor-actions-orchestrator-plan",
+            Self::Cli => "velnor-actions-cli",
+            Self::Mise => "velnor-actions-mise",
+        }
+    }
+}
+
+/// An installable tool whose runtime use belongs to a suite.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SuiteTool {
+    GenerateValidators,
+    OpenTofuExecution,
+}
+
+/// Typed suite identity and the tools its executed tests require.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CrateSuite {
+    name: SuiteName,
+    tools: &'static [SuiteTool],
+}
+
+impl CrateSuite {
+    /// Whether this suite owns an execution that requires one installed tool.
+    fn owns(self, tool: SuiteTool) -> bool {
+        self.tools.contains(&tool)
+    }
+
+    /// Canonical Cargo package name for this suite.
+    const fn package_name(self) -> &'static str {
+        self.name.package_name()
+    }
+}
+
+const GENERATE_VALIDATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators];
+const OPENTOFU_EXECUTION_TOOLS: &[SuiteTool] = &[SuiteTool::OpenTofuExecution];
+
+/// Single source of truth for the suites that own externally installed tools.
 ///
-/// The orchestrator suite (hub `generate` cases), the generation and
-/// plan suites (both call full `generate`, which always runs staged
-/// validation), and the CLI suite (parity and the harness spawn
-/// `generate`) execute the trio; every other suite only asserts argv,
-/// never spawns validators.
-///
-/// Membership is enforced behaviorally, not by audit: the
-/// classification test scans every workspace member's suite sources
-/// for trio-execution markers and requires the install decision to
-/// match. A suite that starts spawning validators fails the test
-/// until it joins this list; a listed suite that stops spawning fails
-/// until it leaves.
-const GENERATE_VALIDATOR_SUITES: [&str; 4] = [
-    "velnor-actions-orchestrator",
-    "velnor-actions-orchestrator-generation",
-    "velnor-actions-orchestrator-plan",
-    "velnor-actions-cli",
+/// Suites absent from this table own neither tool in `VelnorRepositoryV1`.
+/// Workspace-wide behavior tests scan every current suite to keep that default
+/// honest as packages and suite implementations change.
+const TOOL_OWNING_SUITES: [CrateSuite; 5] = [
+    CrateSuite {
+        name: SuiteName::Orchestrator,
+        tools: GENERATE_VALIDATOR_TOOLS,
+    },
+    CrateSuite {
+        name: SuiteName::Generation,
+        tools: GENERATE_VALIDATOR_TOOLS,
+    },
+    CrateSuite {
+        name: SuiteName::Plan,
+        tools: GENERATE_VALIDATOR_TOOLS,
+    },
+    CrateSuite {
+        name: SuiteName::Cli,
+        tools: GENERATE_VALIDATOR_TOOLS,
+    },
+    CrateSuite {
+        name: SuiteName::Mise,
+        tools: OPENTOFU_EXECUTION_TOOLS,
+    },
 ];
+
+/// Resolve one tool-owning workspace package to its typed suite record.
+#[must_use]
+fn suite_for_package(package: &str) -> Option<CrateSuite> {
+    TOOL_OWNING_SUITES
+        .iter()
+        .copied()
+        .find(|suite| suite.package_name() == package)
+}
 
 /// Whether one crate job installs the `generate` validators.
 ///
-/// Velnor-policy jobs trim by executed suite: only the suites above
-/// install the trio, the rest install drivers plus Nextest. Consumer
+/// Velnor-policy jobs trim by executed suite: only suites owning
+/// [`SuiteTool::GenerateValidators`] install the trio; the rest install
+/// drivers plus Nextest. Consumer
 /// suites are opaque to the generator, so consumer jobs keep the trio
 /// fail-safe: dropping an install a suite needs fails CI with
 /// `couldn't exec process` (run 36751323928), while an unneeded
@@ -58,29 +127,15 @@ const GENERATE_VALIDATOR_SUITES: [&str; 4] = [
 pub fn crate_needs_generate_validators(policy: WorkflowPolicy, package: &str) -> bool {
     match policy {
         WorkflowPolicy::ConsumerV1 => true,
-        WorkflowPolicy::VelnorRepositoryV1 => GENERATE_VALIDATOR_SUITES.contains(&package),
+        WorkflowPolicy::VelnorRepositoryV1 => suite_for_package(package)
+            .is_some_and(|suite| suite.owns(SuiteTool::GenerateValidators)),
     }
 }
 
-/// Velnor-repository suites that spawn real `tofu` binaries.
-///
-/// Only the mise suite executes `tofu` (the T27 real-binary runs
-/// via `IsolatedCommand::tofu_exec` plus `run_bounded`); the
-/// orchestrator suite only constructs the ctor to assert its env
-/// (zero `run_*` calls), and no other suite touches `tofu_exec` or
-/// `VELNOR_LIVE_TOFU` at all.
-///
-/// Membership is enforced behaviorally, not by audit: the
-/// classification test scans every workspace member's suite sources
-/// for `tofu_exec` plus `run_bounded`/`run_cancellable` in the same
-/// file and requires the install decision to match. Ctor-only and
-/// env-assertion uses never trip the pair, so they stay trimmed.
-const TOFU_EXEC_SUITES: [&str; 1] = ["velnor-actions-mise"];
-
 /// Whether one crate job installs opentofu for its executed suite.
 ///
-/// Velnor-policy jobs install only for the suite above; tofu
-/// obligations select the driver separately (see
+/// Velnor-policy jobs install only for suites owning
+/// [`SuiteTool::OpenTofuExecution`]. Tofu obligations select the driver separately (see
 /// [`prepare_install_opentofu`]). Consumer jobs never install here:
 /// unlike the `generate` validators (fail-safe-true because
 /// consumer suites CAN execute `generate`), consumer suites CANNOT
@@ -90,7 +145,9 @@ const TOFU_EXEC_SUITES: [&str; 1] = ["velnor-actions-mise"];
 pub(crate) fn crate_needs_tofu_install(policy: WorkflowPolicy, package: &str) -> bool {
     match policy {
         WorkflowPolicy::ConsumerV1 => false,
-        WorkflowPolicy::VelnorRepositoryV1 => TOFU_EXEC_SUITES.contains(&package),
+        WorkflowPolicy::VelnorRepositoryV1 => {
+            suite_for_package(package).is_some_and(|suite| suite.owns(SuiteTool::OpenTofuExecution))
+        }
     }
 }
 
@@ -151,4 +208,38 @@ pub fn prepare_crate_tools_step(
             .map_err(OrchestratorError::from)?;
     step.role = Some(StepRole::PreparePinnedTools);
     Ok(step)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SuiteName, SuiteTool, TOOL_OWNING_SUITES, suite_for_package};
+
+    #[test]
+    fn typed_tool_owner_records_resolve_unique_package_names() {
+        for (index, suite) in TOOL_OWNING_SUITES.iter().enumerate() {
+            assert_eq!(
+                suite_for_package(suite.package_name()),
+                Some(*suite),
+                "each typed owner must resolve from its public package key"
+            );
+            assert!(
+                !TOOL_OWNING_SUITES[..index]
+                    .iter()
+                    .any(|previous| previous.package_name() == suite.package_name()),
+                "a package cannot own duplicate typed suite rows"
+            );
+        }
+
+        assert!(suite_for_package("velnor-actions-orchestrator-core").is_none());
+        assert_eq!(
+            suite_for_package(SuiteName::Orchestrator.package_name())
+                .map(|suite| suite.owns(SuiteTool::GenerateValidators)),
+            Some(true)
+        );
+        assert_eq!(
+            suite_for_package(SuiteName::Mise.package_name())
+                .map(|suite| suite.owns(SuiteTool::OpenTofuExecution)),
+            Some(true)
+        );
+    }
 }
