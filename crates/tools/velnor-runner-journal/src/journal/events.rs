@@ -14,8 +14,27 @@ impl Journal {
     /// Returns [`HostError::Journal`] for malformed or conflicting event
     /// identity or when the journal cannot commit the observation.
     pub async fn observe_runner_event(&self, event: &InnerJob) -> Result<bool, HostError> {
+        self.observe_runner_event_with_id(event)
+            .await
+            .map(|launch_id| launch_id.is_some())
+    }
+
+    /// Persist a lifecycle event and return the exact matched launch generation.
+    ///
+    /// This is for callers that need to attach read-only follow-up evidence to
+    /// the generation matched by this same observation. The identity is still
+    /// derived only from the actual `Started` or `Completed` event.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Journal`] for malformed or conflicting event
+    /// identity or when the journal cannot commit the observation.
+    pub async fn observe_runner_event_with_id(
+        &self,
+        event: &InnerJob,
+    ) -> Result<Option<i64>, HostError> {
         let Some(identity) = RunnerEventIdentity::from_event(event)? else {
-            return Ok(false);
+            return Ok(None);
         };
         let conn = self.connection().await?;
         conn.execute("BEGIN IMMEDIATE", ())
@@ -83,7 +102,7 @@ impl<'a> RunnerEventIdentity<'a> {
 async fn persist_runner_event(
     conn: &turso::Connection,
     event: RunnerEventIdentity<'_>,
-) -> Result<bool, HostError> {
+) -> Result<Option<i64>, HostError> {
     let mut rows = conn
         .query(
             "SELECT id, github_runner_id, observed_job_id, observed_workflow_run_id, cleanup_proven FROM intents WHERE kind = 'launch' AND runner_name = ?1 ORDER BY id",
@@ -92,7 +111,7 @@ async fn persist_runner_event(
         .await
         .map_err(|_| HostError::Journal)?;
     let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
-        return Ok(false);
+        return Ok(None);
     };
     let id: i64 = row.get(0).map_err(|_| HostError::Journal)?;
     let old_runner: Option<String> = row.get(1).map_err(|_| HostError::Journal)?;
@@ -113,7 +132,7 @@ async fn persist_runner_event(
         return Err(HostError::Journal);
     }
     if cleanup_proven == 1 {
-        return Ok(false);
+        return Ok(None);
     }
     if old_runner
         .as_deref()
@@ -139,5 +158,5 @@ async fn persist_runner_event(
         .await
         .map_err(|_| HostError::Journal)?;
     one_row(changed)?;
-    Ok(true)
+    Ok(Some(id))
 }

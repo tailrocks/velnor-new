@@ -12,6 +12,7 @@ use velnor_runner_github::{
     Poll, QueueSession, SessionError, SessionRequest, Transport, WireError,
 };
 
+use velnor_runner_host::BoundedDiscoveryTransport;
 use velnor_runner_host::HostError;
 use velnor_runner_host::ensure_product_scale_set;
 use velnor_runner_host::listen::{Link, Secret, admin_link};
@@ -99,11 +100,18 @@ pub async fn launch_once(
     let admin = Secret::new(link.token());
     let (mut session, row) =
         session::open_session(&mut link, set.id, admin.expose(), journal).await?;
+    // Actions REST reconciliation is read-only and uses the configured host
+    // credential in its distinct Actions:read role. It runs only for actual
+    // Started/Completed identities observed by this same session owner.
+    let mut actions_transport = BoundedDiscoveryTransport::new();
+    let mut actions_reconciler =
+        turn::ActionsReconciler::new(owner, repo, pat, &mut actions_transport);
     let driven = turn::poll_and_drive(
         &mut link,
         set.id,
         &mut session,
         admin.expose(),
+        &mut actions_reconciler,
         journal,
         docker,
     )
