@@ -14,6 +14,7 @@ use crate::vcs::VcsInputs;
 
 mod json;
 mod streaming;
+mod task_identity_paths;
 pub use streaming::Blake3Accumulator;
 
 /// A validated `b3-<64 lowercase hex>` digest.
@@ -287,7 +288,8 @@ impl TaskIdentity {
 /// # Errors
 pub fn input_digest(identity: &TaskIdentity) -> Result<String, ContractError> {
     identity.validate()?;
-    Ok(digest_b3(&canonical_json_bytes(identity)?))
+    let normalized = task_identity_paths::normalized(identity)?;
+    Ok(digest_b3(&canonical_json_bytes(&normalized)?))
 }
 
 /// Inputs for the cache `compatibility_id` digest.
