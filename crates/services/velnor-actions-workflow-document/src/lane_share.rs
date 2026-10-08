@@ -1,8 +1,4 @@
-//! One composite action per duplicated verification lane.
-//!
-//! GitHub will not start a workflow file larger than 500 KB. Inlining both
-//! lane step lists crosses that limit, so the steps live in one action and
-//! each lane job keeps its own id, `runs-on`, and `needs`.
+//! Shared composite actions keep duplicated verification lanes under GitHub's workflow-size limit.
 
 use std::collections::BTreeMap;
 
@@ -12,6 +8,22 @@ use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 use velnor_actions_workflow_jobs::RenderContext;
 use velnor_actions_workflow_steps::RenderError;
 use velnor_actions_workflow_tree::rendered::RenderedFile;
+
+/// One renderer-owned local composite invocation and its closed input set.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SharedActionCall {
+    /// Canonical workspace-relative action directory.
+    pub uses: String,
+    /// Inputs with renderer-owned value sources.
+    pub inputs: Vec<SharedActionInput>,
+}
+
+/// Supported local composite inputs; values never come from arbitrary config strings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SharedActionInput {
+    /// Forward the plan's exact covered-task channel to a static task composite.
+    CoveredTasks,
+}
 
 /// CI workflow plus composite actions for duplicated lanes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,8 +39,8 @@ pub struct RenderedWorkflow {
 pub struct LaneShare {
     /// Same jobs, with shared lanes keeping their headers and elected saves.
     pub jobs: BTreeMap<String, Job>,
-    /// Job id to local `uses` path.
-    pub calls: BTreeMap<String, String>,
+    /// Job id to local `uses` path and typed input bindings.
+    pub calls: BTreeMap<String, SharedActionCall>,
     /// Job id to the original checkout step rendered before each shared call.
     pub checkouts: BTreeMap<String, Step>,
     /// Original step lists used to derive job-level environment values.
@@ -54,14 +66,12 @@ struct SharedLaneParts {
     local_postlude: Vec<Step>,
 }
 
-/// Factor `__hosted` / `__local` pairs whose step lists match.
+/// Factor matching hosted/local step lists while preserving job semantics.
+/// Lane headers, outputs, report uploads, and elected cache saves stay outer.
 ///
 /// # Errors
 ///
-/// A pair whose timeout, condition, permissions, environment, or shared
-/// steps differ fails closed. Report uploads, named-check execution identity,
-/// and elected cache saves stay on the lane that owns them. An unsafe logical
-/// id fails closed.
+/// Returns an error when a lane pair is incompatible or has an unsafe id.
 pub fn share_lanes(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
@@ -74,17 +84,7 @@ pub fn share_lanes(
     let mut files = Vec::new();
     let mut next = jobs.clone();
     let mut env_steps = BTreeMap::new();
-    if next.values().any(|job| {
-        job.steps
-            .iter()
-            .any(|step| step.role == Some(StepRole::TofuProvidersRestore))
-    }) {
-        files.push(
-            velnor_actions_workflow_cache::tofu_cache::provider_admission_file(
-                &ctx.generator_version,
-            )?,
-        );
-    }
+    add_provider_admission_file(jobs, ctx, &mut files)?;
     for hosted_id in hosted_ids(jobs) {
         let Some(logical) = logical_id(&hosted_id) else {
             return Err(RenderError::InvalidWorkflow(format!(
@@ -109,8 +109,12 @@ pub fn share_lanes(
             &parts.common,
             ctx,
         )?);
-        calls.insert(hosted_id.clone(), uses.clone());
-        calls.insert(local_id.clone(), uses);
+        let call = SharedActionCall {
+            uses,
+            inputs: Vec::new(),
+        };
+        calls.insert(hosted_id.clone(), call.clone());
+        calls.insert(local_id.clone(), call);
         checkouts.insert(hosted_id.clone(), parts.checkout.clone());
         checkouts.insert(local_id.clone(), parts.checkout);
         prefixes.insert(hosted_id.clone(), parts.hosted_prefix);
@@ -125,7 +129,7 @@ pub fn share_lanes(
         postludes.insert(local_id.clone(), parts.local_postlude);
     }
     crate::lane_share_sections::factor_provider_preludes(&mut preludes, &mut files, ctx)?;
-    let shared = LaneShare {
+    let mut shared = LaneShare {
         jobs: next,
         calls,
         checkouts,
@@ -135,8 +139,29 @@ pub fn share_lanes(
         postludes,
         files,
     };
+    crate::document_lanes::factor_task_report_jobs(jobs, &mut shared, ctx)?;
     validate_serialized_scopes(&shared)?;
     Ok(shared)
+}
+
+fn add_provider_admission_file(
+    jobs: &BTreeMap<String, Job>,
+    ctx: &RenderContext,
+    files: &mut Vec<RenderedFile>,
+) -> Result<(), RenderError> {
+    let restores_providers = jobs.values().any(|job| {
+        job.steps
+            .iter()
+            .any(|step| step.role == Some(StepRole::TofuProvidersRestore))
+    });
+    if restores_providers {
+        files.push(
+            velnor_actions_workflow_cache::tofu_cache::provider_admission_file(
+                &ctx.generator_version,
+            )?,
+        );
+    }
+    Ok(())
 }
 
 /// Validate the expanded workflow-job and composite-action step scopes.
@@ -244,7 +269,7 @@ fn split_shared_steps(
     local_cache_prefix: Vec<Step>,
 ) -> Option<SharedLaneParts> {
     let (prefix, mut hosted_prelude, mut local_prelude, hosted_tail, local_tail) =
-        split_mbx_steps(hosted_steps, local_steps)?;
+        crate::lane_share_sections::split_mbx_steps(hosted_steps, local_steps)?;
     let (hosted_provider_prefix, hosted_tail) =
         crate::lane_share_sections::peel_provider_restore_prefix(hosted_tail);
     let (local_provider_prefix, local_tail) =
@@ -288,49 +313,6 @@ fn split_shared_steps(
         local_postlude,
     })
 }
-fn split_mbx_steps<'a>(
-    hosted_steps: &'a [Step],
-    local_steps: &'a [Step],
-) -> Option<(Vec<Step>, Vec<Step>, Vec<Step>, &'a [Step], &'a [Step])> {
-    let hosted_action = has_mbx_action(hosted_steps);
-    if hosted_action != has_mbx_action(local_steps) {
-        return None;
-    }
-    if !hosted_action {
-        return Some((
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            hosted_steps,
-            local_steps,
-        ));
-    }
-    let hosted_at = crate::lane_share_sections::mbx_prelude_index(hosted_steps)?;
-    let local_at = crate::lane_share_sections::mbx_prelude_index(local_steps)?;
-    let hosted_prefix = &hosted_steps[..hosted_at];
-    let local_prefix = &local_steps[..local_at];
-    if hosted_prefix != local_prefix {
-        return None;
-    }
-    let (hosted_prelude, hosted_tail) =
-        crate::lane_share_sections::peel_mbx_prelude(&hosted_steps[hosted_at..])?;
-    let (local_prelude, local_tail) =
-        crate::lane_share_sections::peel_mbx_prelude(&local_steps[local_at..])?;
-    Some((
-        hosted_prefix.to_vec(),
-        hosted_prelude,
-        local_prelude,
-        hosted_tail,
-        local_tail,
-    ))
-}
-
-fn has_mbx_action(steps: &[Step]) -> bool {
-    steps
-        .iter()
-        .any(velnor_actions_workflow_cache::cache_steps::is_mbx_action)
-}
-
 fn retain_provider_cache_prefixes(
     common_prefix: Vec<Step>,
     hosted_cache_prefix: Vec<Step>,
@@ -358,7 +340,10 @@ fn retain_provider_cache_prefixes(
     )
 }
 
-fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step, &'a [Step])> {
+pub(crate) fn peel_checkout<'a>(
+    steps: &'a [Step],
+    checkout_uses: &str,
+) -> Option<(&'a Step, &'a [Step])> {
     let (checkout, remaining) = steps.split_first()?;
     let is_expected_checkout = checkout.role == Some(StepRole::Checkout)
         && checkout.condition.is_none()
@@ -387,6 +372,28 @@ fn set_steps(jobs: &mut BTreeMap<String, Job>, id: &str, steps: Vec<Step>) {
     if let Some(job) = jobs.get_mut(id) {
         job.steps = steps;
     }
+}
+
+pub(crate) fn task_coverage_id(condition: &str) -> Option<&str> {
+    let id = condition
+        .strip_prefix("!contains(needs.plan.outputs.covered_tasks, ',")?
+        .strip_suffix(",')")?;
+    safe_task_id(id).then_some(id)
+}
+
+fn safe_task_id(id: &str) -> bool {
+    let parts: Vec<_> = id.split('/').collect();
+    let valid_parts = parts.iter().all(|part| {
+        !part.is_empty()
+            && *part != "."
+            && *part != ".."
+            && part.bytes().all(|byte| {
+                byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"._-".contains(&byte)
+            })
+    });
+    valid_parts
+        && ((parts.first() == Some(&"stack") && parts.len() >= 5)
+            || (parts.first() == Some(&"internal") && parts.len() == 3))
 }
 
 #[cfg(test)]
