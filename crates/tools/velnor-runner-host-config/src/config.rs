@@ -8,9 +8,11 @@ use self::validation::{
 use velnor_runner_journal::HostError;
 
 mod scope;
+mod trust;
 mod validation;
 
 pub use scope::{RegistrationScope, RegistrationScopeKind};
+pub use trust::{JobTrustRule, ReusableWorkflowRule};
 
 /// Top-level controller file. Schema 1 accepts legacy macOS fields and
 /// requires the explicit trust, scope, group, and image profile for Linux.
@@ -80,6 +82,13 @@ pub struct JobTrustPolicy {
     /// Bare workflow file paths used by the per-job policy. Full path and ref
     /// identities for the runner-group selector are configured separately.
     pub allowed_workflow_paths: Vec<String>,
+    /// Exact source branches eligible for per-offer trust verification.
+    /// Missing or empty lists leave Linux admission unavailable.
+    #[serde(default)]
+    pub allowed_head_branches: Vec<String>,
+    /// Exact per-offer tuples are never expanded into a cross-product.
+    #[serde(default)]
+    pub workflow_rules: Vec<JobTrustRule>,
     /// Exact runner-group workflow selectors as returned by the Actions API,
     /// for example `owner/repository/.github/workflows/ci.yml@refs/heads/main`.
     /// This is separate from `allowed_workflow_paths`, which contains bare

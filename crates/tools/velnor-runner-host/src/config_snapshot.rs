@@ -4,6 +4,9 @@ use std::path::Path;
 
 use sha2::{Digest, Sha256};
 use velnor_runner_docker_spec::RunnerImageProfile;
+use velnor_runner_github::policy::{
+    JobTrustPolicyView, JobTrustRuleView, ReusableWorkflowRuleView,
+};
 use velnor_runner_host_config::{
     HostConfig, HostPlatform, ScaleSetBinding, read_host_config_bytes,
 };
@@ -55,6 +58,60 @@ impl ValidatedHostConfigSnapshot {
     #[must_use]
     pub const fn platform(&self) -> HostPlatform {
         self.platform
+    }
+
+    /// Build the exact borrowed per-offer trust view from this validated
+    /// snapshot and invoke `use_view` while all backing strings remain owned
+    /// by the snapshot. Missing new rule fields return `None`; no event,
+    /// branch, workflow path, ref, or reusable chain is inferred or expanded
+    /// from the coarse lists.
+    #[must_use]
+    pub fn with_job_trust_policy_view<R>(
+        &self,
+        use_view: impl FnOnce(JobTrustPolicyView<'_>) -> R,
+    ) -> Option<R> {
+        let policy = self.config.trust.as_ref()?;
+        if policy.allowed_head_branches.is_empty() || policy.workflow_rules.is_empty() {
+            return None;
+        }
+
+        let reusable_workflows: Vec<Vec<ReusableWorkflowRuleView<'_>>> = policy
+            .workflow_rules
+            .iter()
+            .map(|rule| {
+                rule.referenced_workflows
+                    .iter()
+                    .map(|workflow| ReusableWorkflowRuleView {
+                        path: &workflow.path,
+                        git_ref: &workflow.git_ref,
+                        sha: &workflow.sha,
+                    })
+                    .collect()
+            })
+            .collect();
+        let workflow_rules: Vec<JobTrustRuleView<'_>> = policy
+            .workflow_rules
+            .iter()
+            .zip(&reusable_workflows)
+            .map(|(rule, referenced_workflows)| JobTrustRuleView {
+                workflow_ref: &rule.workflow_ref,
+                job_workflow_ref: &rule.job_workflow_ref,
+                workflow_path: &rule.workflow_path,
+                event: &rule.event,
+                head_branch: &rule.head_branch,
+                referenced_workflows,
+            })
+            .collect();
+        Some(use_view(JobTrustPolicyView {
+            repository_full_name: &self.config.github.repository,
+            allowed_repositories: &policy.allowed_repositories,
+            allowed_events: &policy.allowed_events,
+            allowed_workflow_paths: &policy.allowed_workflow_paths,
+            allowed_head_branches: &policy.allowed_head_branches,
+            workflow_rules: &workflow_rules,
+            allow_forks: policy.allow_forks,
+            policy_digest: &self.policy_digest,
+        }))
     }
 }
 

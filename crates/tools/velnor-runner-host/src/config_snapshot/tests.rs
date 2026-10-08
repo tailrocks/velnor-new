@@ -1,5 +1,10 @@
 use super::{ValidatedHostConfigSnapshot, snapshot_from_bytes, snapshot_from_optional_bytes};
 use crate::{HostPlatform, RegistrationScope};
+use velnor_runner_github::policy::{
+    JobTrustEvidence, PolicyMismatch, PollWithTrust, get_actions_workflow_trust_run,
+    parse_poll_with_trust, verify_job_offer,
+};
+use velnor_runner_github::{Exchange, Method, SessionRequest, Transport, TransportFail};
 use velnor_runner_host_config::HostConfig;
 use velnor_runner_journal::HostError;
 
@@ -92,5 +97,159 @@ fn snapshot_rejects_wrong_platform_invalid_utf8_and_repository_downgrade() -> Re
             organization: "ChainArgos".to_owned(),
         }
     );
+    Ok(())
+}
+
+const WORKFLOW_RULES: &str = concat!(
+    "allowed_head_branches = [\"main\", \"release\"]\n",
+    "allowed_group_workflows = [\"ChainArgos/java-monorepo/.github/workflows/ci.yml@main\"]\n",
+    "allow_forks = false\n",
+    "[[trust.workflow_rules]]\n",
+    "workflow_ref = \"ChainArgos/java-monorepo/.github/workflows/ci.yml@main\"\n",
+    "job_workflow_ref = \"ChainArgos/java-monorepo/.github/workflows/reuse.yml@refs/tags/v1\"\n",
+    "workflow_path = \".github/workflows/ci.yml@main\"\n",
+    "event = \"push\"\n",
+    "head_branch = \"main\"\n",
+    "[[trust.workflow_rules.referenced_workflows]]\n",
+    "path = \"ChainArgos/java-monorepo/.github/workflows/reuse.yml@v1\"\n",
+    "git_ref = \"refs/tags/v1\"\n",
+    "sha = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n",
+    "[[trust.workflow_rules]]\n",
+    "workflow_ref = \"ChainArgos/java-monorepo/.github/workflows/ci.yml@main\"\n",
+    "job_workflow_ref = \"ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main\"\n",
+    "workflow_path = \".github/workflows/ci.yml@main\"\n",
+    "event = \"pull_request\"\n",
+    "head_branch = \"release\"\n",
+);
+
+fn trusted_snapshot() -> Result<ValidatedHostConfigSnapshot, HostError> {
+    let config = LINUX_CONFIG.replace("allow_forks = false\n", WORKFLOW_RULES);
+    snapshot_from_bytes(config.as_bytes(), HostPlatform::Linux)
+}
+
+struct WorkflowRunTransport {
+    body: Vec<u8>,
+    path_seen: bool,
+}
+
+impl Transport for WorkflowRunTransport {
+    fn exchange(&mut self, request: &SessionRequest) -> Result<Exchange, TransportFail> {
+        assert_eq!(request.method, Method::Get);
+        assert_eq!(
+            request.path,
+            "repos/ChainArgos/java-monorepo/actions/runs/88"
+        );
+        assert_eq!(request.query, None);
+        self.path_seen = true;
+        Ok(Exchange {
+            status: 200,
+            body: self.body.clone(),
+        })
+    }
+}
+
+fn workflow_run(branch: &str) -> WorkflowRunTransport {
+    WorkflowRunTransport {
+        body: serde_json::json!({
+            "id": 88,
+            "run_attempt": 2,
+            "event": "push",
+            "path": ".github/workflows/ci.yml@main",
+            "head_sha": "0123456789abcdef0123456789abcdef01234567",
+            "head_branch": branch,
+            "head_repository": {"full_name": "ChainArgos/java-monorepo"},
+            "referenced_workflows": [{
+                "path": "ChainArgos/java-monorepo/.github/workflows/reuse.yml@v1",
+                "ref": "refs/tags/v1",
+                "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }]
+        })
+        .to_string()
+        .into_bytes(),
+        path_seen: false,
+    }
+}
+
+fn trust_batch() -> velnor_runner_github::policy::ParsedTrustBatch {
+    let inner = serde_json::json!([{
+        "messageType": "JobAvailable",
+        "runnerRequestId": 42,
+        "workflowRunId": 88,
+        "ownerName": "ChainArgos",
+        "repositoryName": "java-monorepo",
+        "eventName": "push",
+        "jobWorkflowRef": "ChainArgos/java-monorepo/.github/workflows/reuse.yml@refs/tags/v1",
+        "requestLabels": ["ubuntu-26.04-scale-set"]
+    }])
+    .to_string();
+    let envelope = serde_json::json!({
+        "messageId": 7,
+        "messageType": "RunnerScaleSetJobMessages",
+        "body": inner
+    })
+    .to_string();
+    let PollWithTrust::Batch(batch) = parse_poll_with_trust(200, &envelope).expect("poll parses")
+    else {
+        panic!("expected a job batch");
+    };
+    batch
+}
+
+#[test]
+fn snapshot_maps_exact_rules_into_composed_message_and_rest_verification() {
+    let snapshot = trusted_snapshot().expect("structured policy snapshot validates");
+    let batch = trust_batch();
+    let mut transport = workflow_run("main");
+    let run = get_actions_workflow_trust_run(
+        &mut transport,
+        "ChainArgos",
+        "java-monorepo",
+        88,
+        "fixture-actions-read",
+    )
+    .expect("workflow run is read through the Actions REST parser");
+    assert!(transport.path_seen);
+
+    let evidence = snapshot
+        .with_job_trust_policy_view(|view| {
+            assert_eq!(view.repository_full_name, "ChainArgos/java-monorepo");
+            assert_eq!(view.allowed_head_branches, ["main", "release"]);
+            assert_eq!(view.workflow_rules.len(), 2);
+            assert_eq!(
+                view.workflow_rules[0].workflow_path,
+                ".github/workflows/ci.yml@main"
+            );
+            assert_eq!(
+                view.workflow_rules[0].referenced_workflows[0].git_ref,
+                "refs/tags/v1"
+            );
+            assert_eq!(view.policy_digest, snapshot.policy_digest());
+            verify_job_offer(&batch, 0, &run, &view)
+        })
+        .expect("complete exact tuple policy produces a view");
+    assert!(matches!(evidence, JobTrustEvidence::Verified(_)));
+
+    let mut transport = workflow_run("release");
+    let wrong_pair = get_actions_workflow_trust_run(
+        &mut transport,
+        "ChainArgos",
+        "java-monorepo",
+        88,
+        "fixture-actions-read",
+    )
+    .expect("workflow run is read through the Actions REST parser");
+    let rejected = snapshot
+        .with_job_trust_policy_view(|view| verify_job_offer(&batch, 0, &wrong_pair, &view))
+        .expect("complete exact tuple policy produces a view");
+    assert_eq!(
+        rejected,
+        JobTrustEvidence::Rejected(PolicyMismatch::WorkflowReferenceMismatch)
+    );
+}
+
+#[test]
+fn missing_structured_policy_returns_no_per_offer_view() -> Result<(), HostError> {
+    let snapshot = snapshot(LINUX_CONFIG.as_bytes())?;
+    assert!(snapshot.with_job_trust_policy_view(|_| ()).is_none());
     Ok(())
 }

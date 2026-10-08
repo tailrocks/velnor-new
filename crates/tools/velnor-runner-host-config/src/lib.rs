@@ -9,7 +9,8 @@ mod config_file;
 
 pub use config::{
     DockerConfig, GithubSection, HostConfig, HostLimits, HostPlatform, JobTrustPolicy,
-    RegistrationScope, RegistrationScopeKind, RunnerConfig, ScaleSetBinding,
+    JobTrustRule, RegistrationScope, RegistrationScopeKind, ReusableWorkflowRule, RunnerConfig,
+    ScaleSetBinding,
 };
 pub use config_file::{
     LINUX_CONFIG_PATH, MAX_HOST_CONFIG_BYTES, assign_owner, linux_service_group_id,
