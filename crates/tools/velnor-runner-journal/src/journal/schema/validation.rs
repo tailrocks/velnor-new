@@ -39,6 +39,11 @@ const CURRENT_COLUMNS: [&str; 22] = [
     "outer_network_id",
     "runner_start_state",
 ];
+const ACTIONS_RECONCILIATION_COLUMNS: [&str; 3] = [
+    "observed_actions_attempt",
+    "observed_actions_job_id",
+    "observed_actions_conclusion",
+];
 
 pub(super) async fn validate_v6_schema(conn: &turso::Connection) -> Result<(), HostError> {
     let columns = read_columns(conn).await?;
@@ -51,9 +56,22 @@ pub(super) async fn validate_v6_schema(conn: &turso::Connection) -> Result<(), H
     validate_controller_schema(conn).await
 }
 
-pub(super) async fn validate_current_schema(conn: &turso::Connection) -> Result<(), HostError> {
+pub(super) async fn validate_v7_schema(conn: &turso::Connection) -> Result<(), HostError> {
     validate_v6_schema(conn).await?;
     validate_cleanup_schema(conn).await
+}
+
+pub(super) async fn validate_current_schema(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_v7_schema(conn).await?;
+    let columns = read_columns(conn).await?;
+    if ACTIONS_RECONCILIATION_COLUMNS
+        .iter()
+        .all(|column| columns.contains(*column))
+    {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
 }
 
 pub(super) async fn validate_cleanup_schema(conn: &turso::Connection) -> Result<(), HostError> {

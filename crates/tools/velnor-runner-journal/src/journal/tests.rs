@@ -84,6 +84,9 @@ pub(super) fn intent(state: IntentState, kind: &str) -> IntentRow {
         runner_name: None,
         observed_job_id: None,
         observed_workflow_run_id: None,
+        observed_actions_attempt: None,
+        observed_actions_job_id: None,
+        observed_actions_conclusion: None,
         remote_terminal: false,
         cleanup_proven: false,
         outer_network_name: None,
@@ -92,6 +95,7 @@ pub(super) fn intent(state: IntentState, kind: &str) -> IntentRow {
     }
 }
 
+mod actions_reconciliation_tests;
 mod cleanup_tests;
 mod durability_tests;
 mod lifecycle_tests;

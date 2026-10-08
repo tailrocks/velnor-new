@@ -2,7 +2,7 @@
 
 use crate::error::HostError;
 
-const JOURNAL_VERSION: i64 = 7;
+const JOURNAL_VERSION: i64 = 8;
 
 mod validation;
 pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError> {
@@ -61,6 +61,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
             migrate_version_six(conn).await
         }
         6 => migrate_version_six(conn).await,
+        7 => migrate_version_seven(conn).await,
         JOURNAL_VERSION => validation::validate_current_schema(conn).await,
         _ => Err(HostError::Journal),
     }
@@ -238,6 +239,30 @@ async fn migrate_version_six(conn: &turso::Connection) -> Result<(), HostError> 
     .map_err(|_| HostError::Journal)?;
     validation::validate_cleanup_schema(conn).await?;
     conn.execute("PRAGMA user_version = 7", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    migrate_version_seven(conn).await
+}
+
+async fn migrate_version_seven(conn: &turso::Connection) -> Result<(), HostError> {
+    validation::validate_v7_schema(conn).await?;
+    let columns = validation::read_columns(conn).await?;
+    for (column, definition) in [
+        ("observed_actions_attempt", "INTEGER"),
+        ("observed_actions_job_id", "INTEGER"),
+        ("observed_actions_conclusion", "TEXT"),
+    ] {
+        if !columns.contains(column) {
+            conn.execute(
+                &format!("ALTER TABLE intents ADD COLUMN {column} {definition}"),
+                (),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        }
+    }
+    validation::validate_current_schema(conn).await?;
+    conn.execute("PRAGMA user_version = 8", ())
         .await
         .map_err(|_| HostError::Journal)?;
     Ok(())

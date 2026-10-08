@@ -37,7 +37,14 @@ pub struct IntentRow {
     pub observed_job_id: Option<String>,
     /// Workflow run id observed from the actual runner lifecycle event.
     pub observed_workflow_run_id: Option<i64>,
-    /// A matching `JobCompleted` event was durably observed.
+    /// Attempt from a unique completed Actions REST job matching the observed runner.
+    pub observed_actions_attempt: Option<i64>,
+    /// Numeric Actions REST job ID, distinct from the opaque Scale Set job ID.
+    pub observed_actions_job_id: Option<i64>,
+    /// REST conclusion, which is not interpreted as workload success here.
+    pub observed_actions_conclusion: Option<String>,
+    /// Correlated remote-terminal evidence was durably observed from a
+    /// `JobCompleted` event or exact completed Actions REST reconciliation.
     pub remote_terminal: bool,
     /// Cleanup of the recorded ids was proven.
     pub cleanup_proven: bool,
