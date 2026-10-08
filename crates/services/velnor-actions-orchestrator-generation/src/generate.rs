@@ -162,18 +162,29 @@ fn render_all(
 ) -> Result<RenderedTree, OrchestratorError> {
     let version = env!("CARGO_PKG_VERSION");
     let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
+    let execution_mode = if prep.config.schema == 2 {
+        dispatch.or(prep
+            .config
+            .execution
+            .as_ref()
+            .and_then(|execution| execution.mode))
+    } else {
+        None
+    };
     let ir = expand_workflow(&prep.workflow.ir, &prep.config, dispatch).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
         }
     })?;
-    let rendered = velnor_actions_workflow_render_strict::render_workflow_ir_strict_shared(
-        &ir,
-        prep.config.workflow.policy,
-        prep.workflow.support.as_ref(),
-        &prep.workflow.context,
-        &mise,
-    )?;
+    let rendered =
+        velnor_actions_workflow_render_strict::render_workflow_ir_strict_shared_with_mode(
+            &ir,
+            prep.config.workflow.policy,
+            prep.workflow.support.as_ref(),
+            &prep.workflow.context,
+            &mise,
+            execution_mode,
+        )?;
     let workflow = rendered.yaml;
     let actionlint = render_actionlint_yaml(&prep.workflow.actionlint)?;
     let actionlint = rehead_actionlint_marker(&actionlint.yaml, version)?;

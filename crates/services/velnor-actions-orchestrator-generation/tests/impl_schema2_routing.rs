@@ -15,6 +15,8 @@ use monitoring_fixture::MONITORING;
 mod monitoring_fixture;
 #[path = "schema2_named_check_lanes_tests.rs"]
 mod named_check_lanes_tests;
+#[path = "schema2_report_producer_inventory.rs"]
+mod report_producer_inventory;
 #[path = "schema2_feature_snapshots.rs"]
 mod schema2_feature_snapshots;
 #[path = "schema2_generator_release_snapshots.rs"]
@@ -48,6 +50,10 @@ fn schema1_omits_scale_set_selector() -> TestResult {
     assert!(
         !joined.contains("runs-on: [velnor"),
         "schema 1 emitted a scale-set selector"
+    );
+    assert!(
+        !joined.contains("VELNOR_TASK_REPORT_PRODUCERS_EXPECTED"),
+        "schema 1 emitted an opt-in report producer inventory"
     );
     assert!(
         !joined.contains("artifact-build"),
