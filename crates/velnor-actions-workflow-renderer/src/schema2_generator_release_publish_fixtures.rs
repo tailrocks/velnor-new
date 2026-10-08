@@ -118,10 +118,115 @@ pub(super) fn release_json(
         123
     };
     let immutable = !draft && case != Failure::MutablePublished;
+    let html_url = if (draft && case == Failure::UntaggedDraftHtmlUrl)
+        || (!draft && case == Failure::WrongPublishedUrl)
+    {
+        "https://github.com/tailrocks/velnor-new/releases/tag/untagged-c155089fcae36e2c5c68"
+    } else {
+        "https://github.com/tailrocks/velnor-new/releases/tag/v0.1.4"
+    };
     Ok(format!(
-        "{{\"id\":{release_id},\"tag_name\":\"v0.1.4\",\"url\":\"https://api.github.com/repos/{REPOSITORY}/releases/{release_id}\",\"html_url\":\"https://github.com/{REPOSITORY}/releases/tag/v0.1.4\",\"draft\":{draft},\"prerelease\":false,\"immutable\":{immutable},\"assets\":[{}]}}\n",
+        "{{\"id\":{release_id},\"tag_name\":\"v0.1.4\",\"target_commitish\":\"{SOURCE_SHA}\",\"url\":\"https://api.github.com/repos/{REPOSITORY}/releases/{release_id}\",\"html_url\":\"{html_url}\",\"draft\":{draft},\"prerelease\":false,\"immutable\":{immutable},\"assets\":[{}]}}\n",
         rows.join(","),
     ))
+}
+
+pub(super) fn assert_draft_metadata_is_only_url_mismatch(
+    root: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let checks = [
+        (".id == $id", true),
+        (".tag_name == $tag", true),
+        (".target_commitish == $source", true),
+        (".url == $api_url", true),
+        (".html_url == $html_url", false),
+        (".draft == true", true),
+        (".prerelease == false", true),
+    ];
+    for (predicate, expected) in checks {
+        let output = Command::new("jq")
+            .args([
+                "-e",
+                "--argjson",
+                "id",
+                "123",
+                "--arg",
+                "tag",
+                "v0.1.4",
+                "--arg",
+                "source",
+                SOURCE_SHA,
+                "--arg",
+                "api_url",
+                "https://api.github.com/repos/tailrocks/velnor-new/releases/123",
+                "--arg",
+                "html_url",
+                "https://github.com/tailrocks/velnor-new/releases/tag/v0.1.4",
+                predicate,
+                "draft-release.json",
+            ])
+            .current_dir(root)
+            .output()?;
+        assert_eq!(
+            output.status.success(),
+            expected,
+            "unexpected result for draft metadata predicate {predicate}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(())
+}
+
+pub(super) fn assert_draft_asset_validation_passes(root: &Path) -> Result<(), Box<dyn Error>> {
+    let script = manifest::publish_script(&super::test_pins())?;
+    let start = script
+        .find("verify_release_assets() {")
+        .ok_or("publisher asset verifier is missing")?;
+    let end = script[start..]
+        .find("\n}\n")
+        .map(|offset| start + offset + 2)
+        .ok_or("publisher asset verifier is unterminated")?;
+    let verifier = &script[start..end];
+    let paths = manifest::release_asset_paths()
+        .split_whitespace()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    for path in &paths {
+        assert!(root.join(path).is_file(), "missing fixture asset {path}");
+    }
+    let names = paths
+        .iter()
+        .map(|path| {
+            path.rsplit('/')
+                .next()
+                .map(str::to_owned)
+                .ok_or("release asset has no basename")
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let array = |values: &[String]| {
+        values
+            .iter()
+            .map(|value| format!("  '{value}'"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let replay = format!(
+        "tag='v0.1.4'\nrelease_asset_paths=(\n{}\n)\nrelease_asset_names=(\n{}\n)\nexpected_release_asset_names=\"$(printf '%s\\n' \"${{release_asset_names[@]}}\" | jq -R . | jq -s .)\"\n{verifier}\nverify_release_assets draft-release.json\n",
+        array(&paths),
+        array(&names)
+    );
+    let output = Command::new("bash")
+        .args(["-euo", "pipefail", "-c", &replay])
+        .current_dir(root)
+        .env("GITHUB_REPOSITORY", REPOSITORY)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "exact draft asset inventory failed independently: {}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
 }
 
 pub(super) fn sha256(path: &Path) -> Result<String, Box<dyn Error>> {
