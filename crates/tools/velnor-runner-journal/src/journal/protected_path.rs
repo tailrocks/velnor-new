@@ -66,6 +66,35 @@ mod unix {
             Ok(protected)
         }
 
+        /// Validate an existing database beneath the exact retained parent without
+        /// creating the database or any SQLite sidecar.
+        pub(crate) fn inspect_existing_for_parent(
+            path: &Path,
+            expected_parent: (u64, u64),
+        ) -> Result<Self, HostError> {
+            let parent = path
+                .parent()
+                .filter(|path| path.is_absolute())
+                .ok_or(HostError::Path)?;
+            let parent_identity = inspect_parent(parent)?;
+            if parent_identity.device != expected_parent.0
+                || parent_identity.inode != expected_parent.1
+            {
+                return Err(HostError::Path);
+            }
+            let owner = parent_identity.owner;
+            validate_sidecars(path, owner)?;
+            let database_identity = inspect_regular_file(path, owner)?;
+            let protected = Self {
+                parent: parent.to_path_buf(),
+                parent_identity,
+                database_identity,
+                owner,
+            };
+            protected.validate(path)?;
+            Ok(protected)
+        }
+
         /// Revalidate path ownership and identities immediately before each Turso open.
         pub(crate) fn validate(&self, path: &Path) -> Result<(), HostError> {
             if path.parent() != Some(self.parent.as_path())
@@ -165,6 +194,13 @@ impl ProtectedJournalPath {
     pub(super) fn prepare_for_parent(
         _path: &std::path::Path,
         _expected_parent: Option<(u64, u64)>,
+    ) -> Result<Self, crate::HostError> {
+        Err(crate::HostError::Path)
+    }
+
+    pub(super) fn inspect_existing_for_parent(
+        _path: &std::path::Path,
+        _expected_parent: (u64, u64),
     ) -> Result<Self, crate::HostError> {
         Err(crate::HostError::Path)
     }
