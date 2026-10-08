@@ -2,51 +2,10 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use super::super::{
-    LinuxDrainSettings, LinuxDrainStatus, disconnect_for_os, drain_for_os,
-    linux_drain_requested_message, linux_drain_unknown_message, linux_drain_with, requested_wait,
-    resume_for_os,
+    LinuxDrainSettings, LinuxDrainStatus, drain_for_os, linux_drain_requested_message,
+    linux_drain_unknown_message, linux_drain_with, resume_for_os,
 };
 use super::disconnect_state_path;
-
-#[test]
-fn disconnect_requires_explicit_drain_and_wait() {
-    let state = disconnect_state_path();
-    assert_eq!(
-        disconnect_for_os(&state, false, false, None, "macos"),
-        ExitCode::from(2)
-    );
-    assert!(!state.exists());
-}
-
-#[test]
-fn macos_disconnect_records_only_the_legacy_marker_and_never_claims_disconnect()
--> Result<(), String> {
-    let state = disconnect_state_path();
-    assert_eq!(
-        disconnect_for_os(&state, true, true, Some(30), "macos"),
-        ExitCode::from(1)
-    );
-    let marker = std::fs::read(state.join("drain")).map_err(|error| error.to_string())?;
-    assert_eq!(marker, b"1");
-    assert_eq!(requested_wait(Some(30)), "the requested 30-second");
-    assert_eq!(
-        velnor_runner_host::disconnect_effects(velnor_runner_host::SetOwnership::Adopted, true),
-        vec![velnor_runner_host::DisconnectEffect::Drain]
-    );
-    std::fs::remove_dir_all(state).map_err(|error| error.to_string())?;
-    Ok(())
-}
-
-#[test]
-fn linux_disconnect_wait_fails_without_remote_or_marker_effects() {
-    let state = disconnect_state_path();
-    assert_eq!(
-        disconnect_for_os(&state, true, true, None, "linux"),
-        ExitCode::from(1)
-    );
-    assert!(!state.exists());
-    assert_eq!(requested_wait(None), "the configured-timeout");
-}
 
 #[test]
 fn linux_drain_fences_before_wait_and_passes_the_same_absolute_deadline() {

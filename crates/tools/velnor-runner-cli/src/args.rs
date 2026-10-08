@@ -128,7 +128,7 @@ pub enum Command {
         #[arg(long, value_name = "DIR")]
         evidence: Option<PathBuf>,
     },
-    /// Drain the controller and disconnect only when set ownership is proven.
+    /// Drain and stop this local controller; retain the remote Scale Set and journal.
     Disconnect {
         /// Drain first.
         #[arg(long, requires = "wait")]
@@ -139,6 +139,9 @@ pub enum Command {
         /// Maximum wait in seconds. Defaults to the configured drain timeout.
         #[arg(long, value_name = "SECONDS", requires = "wait")]
         timeout_secs: Option<u64>,
+        /// Remove only the configured host credential and config after verified local stop.
+        #[arg(long, requires = "wait")]
+        remove_local: bool,
     },
 }
 

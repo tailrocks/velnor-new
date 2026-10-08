@@ -8,17 +8,18 @@ use clap::Parser;
 use crate::args::{Cli, Command, DaemonAction};
 
 mod connect;
+mod disconnect;
 mod drain;
 mod status;
 
-use self::drain::{disconnect, drain, resume};
+use self::disconnect::disconnect;
+use self::drain::{drain, resume};
 use self::status::{print_doctor, print_status};
 
 #[cfg(test)]
 use self::drain::{
-    LinuxDrainSettings, LinuxDrainStatus, disconnect_for_os, drain_for_os,
-    linux_drain_requested_message, linux_drain_unknown_message, linux_drain_with, requested_wait,
-    resume_for_os,
+    LinuxDrainSettings, LinuxDrainStatus, drain_for_os, linux_drain_requested_message,
+    linux_drain_unknown_message, linux_drain_with, resume_for_os,
 };
 #[cfg(test)]
 use self::status::{
@@ -80,7 +81,15 @@ fn dispatch(cli: &Cli) -> ExitCode {
             drain: should_drain,
             wait,
             timeout_secs,
-        } => disconnect(&state, *should_drain, *wait, *timeout_secs),
+            remove_local,
+        } => disconnect(
+            &state,
+            &config,
+            *should_drain,
+            *wait,
+            *timeout_secs,
+            *remove_local,
+        ),
     }
 }
 

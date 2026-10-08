@@ -117,6 +117,18 @@ impl ServiceFault {
     }
 }
 
+pub(crate) fn stop_for_disconnect(
+    config_path: &Path,
+    state_path: &Path,
+    timeout_override: Option<u64>,
+) -> ExitCode {
+    if !package_paths_supported(config_path, state_path) {
+        eprintln!("{}", ServiceFault::InvalidConfig.message());
+        return ExitCode::from(1);
+    }
+    stop::stop_for_disconnect(config_path, state_path, timeout_override)
+}
+
 pub(super) fn service(action: ServiceAction, config_path: &Path, state_path: &Path) -> ExitCode {
     if matches!(action, ServiceAction::Status) {
         let mut manager = Systemctl::default();
