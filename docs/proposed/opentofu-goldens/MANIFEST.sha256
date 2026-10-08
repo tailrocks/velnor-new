@@ -1,11 +1,11 @@
-d84a7d394ba80ffadefb2a9dd3ce855d21e6dd64d49ac447fec2005132c249d8  ./dogfood/dogfood.diff
-705fb192cda51a31cfd0c6c2e47d90fcb5d7e11e6fdf48a2aa92d2be78cf972a  ./dogfood/dogfood.verdict
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/dogfood.diff
+1cc103f316d7707bb7ead8d7a203934bbf0f1251b615eb6056deb22c90d6144f  ./dogfood/dogfood.verdict
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./dogfood/generate.exit
 5b5f54d74cb5db38645d8619cd0083232103bee9c3b1ee49767c09b591376c9d  ./dogfood/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./dogfood/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/plan.stderr.txt
-e727430843c50cd3fd4248dcca78eb301d9c240d4e637d6f0980270fe89fc8b8  ./dogfood/plan.txt
+7af1abaa05790e743421e2548a6664b4955295cbbfe5a848d0c51cd8657e9bfa  ./dogfood/plan.txt
 b877727727f55e5ed15be305bd5ecb5c9cfe0555e28e9f9375d295590551ae9d  ./dogfood/preview/.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./dogfood/preview/.github/CLAUDE.md
 07fd23171380c6bce698d87b733eb52fcd1417db298731b76599d32e67833435  ./dogfood/preview/.github/actionlint.yaml
