@@ -73,6 +73,7 @@ pub(super) struct FakeEngine {
     fail_outer_removal: Arc<Mutex<bool>>,
     fail_dind_stop_before_effect: Arc<Mutex<bool>>,
     lose_dind_stop_response: Arc<Mutex<bool>>,
+    lose_runner_stop_response: Arc<Mutex<bool>>,
     fail_network_removal: Arc<Mutex<bool>>,
     force_runner_stop: Arc<Mutex<bool>>,
     outer_network_present: Arc<Mutex<bool>>,
@@ -100,6 +101,7 @@ impl FakeEngine {
             fail_outer_removal: Arc::new(Mutex::new(false)),
             fail_dind_stop_before_effect: Arc::new(Mutex::new(false)),
             lose_dind_stop_response: Arc::new(Mutex::new(false)),
+            lose_runner_stop_response: Arc::new(Mutex::new(false)),
             fail_network_removal: Arc::new(Mutex::new(false)),
             force_runner_stop: Arc::new(Mutex::new(false)),
             outer_network_present: Arc::new(Mutex::new(false)),
@@ -152,6 +154,12 @@ impl FakeEngine {
         engine
     }
 
+    pub(super) fn running_with_lost_runner_stop_response() -> Self {
+        let engine = Self::running_runner();
+        *engine.lose_runner_stop_response.lock().expect("mutex") = true;
+        engine
+    }
+
     pub(super) fn running_with_volume_failure() -> Self {
         let engine = Self::running();
         *engine.fail_volume_cleanup.lock().expect("mutex") = true;
@@ -185,6 +193,10 @@ impl FakeEngine {
             OuterContainerRole::Runner => !*self.runner_present.lock().expect("mutex"),
             OuterContainerRole::Dind => !*self.dind_present.lock().expect("mutex"),
         }
+    }
+
+    pub(super) fn runner_is_running(&self) -> bool {
+        *self.runner_running.lock().expect("mutex")
     }
 
     pub(super) fn outer_network_is_absent(&self) -> bool {
@@ -239,19 +251,29 @@ impl WorkerCleanupEngine for FakeEngine {
 
     async fn stop_runner(
         &self,
-        _identity: &WorkerGenerationIdentity,
+        identity: &WorkerGenerationIdentity,
         policy: &RunnerStopPolicy,
     ) -> Result<RunnerStopEvidence, HostError> {
         if matches!(policy, RunnerStopPolicy::RequireStopped) {
             return Err(HostError::Docker);
         }
         *self.runner_running.lock().expect("mutex") = false;
-        self.push("stop-runner");
+        self.push(format!("stop-runner-{}", identity.runner_container_id()));
         let forced = *self.force_runner_stop.lock().expect("mutex");
-        Ok(RunnerStopEvidence {
-            stopped: true,
-            forced,
-        })
+        let response_lost = {
+            let mut fail = self.lose_runner_stop_response.lock().expect("mutex");
+            let value = *fail;
+            *fail = false;
+            value
+        };
+        if response_lost {
+            Err(HostError::Docker)
+        } else {
+            Ok(RunnerStopEvidence {
+                stopped: true,
+                forced,
+            })
+        }
     }
 
     async fn stop_dind(
