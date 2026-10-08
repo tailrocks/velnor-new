@@ -4,14 +4,23 @@ use std::path::Path;
 use std::os::unix::fs::PermissionsExt;
 #[cfg(target_os = "linux")]
 use std::sync::atomic::{AtomicUsize, Ordering};
+#[cfg(target_os = "linux")]
+use std::time::{Duration, Instant};
+#[cfg(target_os = "linux")]
+use std::{
+    ffi::OsStr,
+    process::{Command, ExitCode, Stdio},
+    sync::mpsc,
+    thread,
+};
 
 use super::{
     ControllerServiceState, bootout_argv, bootstrap_argv, controller_service_status_line,
-    launchctl_service_state, systemd_service_state, with_logs,
+    journalctl_command, launchctl_service_state, systemd_service_state, with_logs,
 };
 
 #[cfg(target_os = "linux")]
-use super::{busctl_command, systemctl_command};
+use super::{JOURNALCTL_PATH, busctl_command, command_code, journalctl_args, systemctl_command};
 
 #[cfg(target_os = "linux")]
 static NEXT_SYSTEMD_SHIM: AtomicUsize = AtomicUsize::new(0);
@@ -47,6 +56,125 @@ fn linux_systemd_tools_ignore_path_shims() -> Result<(), Box<dyn std::error::Err
 
     std::fs::remove_dir_all(shim_dir)?;
     Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_logs_select_packaged_journalctl_with_exact_unit_arguments() {
+    let command = journalctl_command(false);
+    assert_eq!(command.get_program(), OsStr::new(JOURNALCTL_PATH));
+    assert_eq!(JOURNALCTL_PATH, "/usr/bin/journalctl");
+    assert_eq!(
+        journalctl_args(false),
+        vec!["--unit=velnor-host.service", "--lines=200", "--no-pager",]
+    );
+    assert_eq!(
+        journalctl_command(true).get_args().collect::<Vec<_>>(),
+        journalctl_args(true)
+            .iter()
+            .map(OsStr::new)
+            .collect::<Vec<_>>()
+    );
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_log_follower_streams_output_and_waits_for_injected_child()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scratch = TestDir::new("velnor-log-follow")?;
+    let fake = scratch.path().join("journal-reader");
+    let capture = scratch.path().join("args.txt");
+    let output = scratch.path().join("stream.txt");
+    std::fs::write(
+        &fake,
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$VELNOR_TEST_CAPTURE\"\nprintf 'before-follow\\n'\n/bin/sleep 1\nprintf 'after-follow\\n'\n",
+    )?;
+    let mut permissions = std::fs::metadata(&fake)?.permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&fake, permissions)?;
+
+    let mut command = Command::new(&fake);
+    command
+        .args(journalctl_args(true))
+        .env("VELNOR_TEST_CAPTURE", &capture)
+        .stdout(Stdio::from(std::fs::File::create(&output)?))
+        .stderr(Stdio::null());
+    let (sender, receiver) = mpsc::channel();
+    let follower = thread::spawn(move || {
+        let status = command_code(command);
+        assert!(
+            sender.send(status).is_ok(),
+            "journal follower test receiver went away"
+        );
+    });
+
+    let first = wait_for_output(&output, "before-follow\n", Duration::from_secs(3))?;
+    assert!(!first.contains("after-follow\n"));
+    assert!(
+        receiver.try_recv().is_err(),
+        "follower returned before its child"
+    );
+    let complete = wait_for_output(&output, "after-follow\n", Duration::from_secs(3))?;
+    assert!(complete.contains("before-follow\n"));
+    assert_eq!(
+        receiver.recv_timeout(Duration::from_secs(3))?,
+        ExitCode::SUCCESS
+    );
+    follower
+        .join()
+        .map_err(|_| "journal follower thread panicked")?;
+
+    assert_eq!(
+        std::fs::read_to_string(capture)?
+            .lines()
+            .collect::<Vec<_>>(),
+        journalctl_args(true)
+    );
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn wait_for_output(
+    path: &Path,
+    expected: &str,
+    timeout: Duration,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let contents = std::fs::read_to_string(path).unwrap_or_default();
+        if contents.contains(expected) {
+            return Ok(contents);
+        }
+        if Instant::now() >= deadline {
+            return Err(format!("timed out waiting for streamed output {expected:?}").into());
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[cfg(target_os = "linux")]
+struct TestDir(std::path::PathBuf);
+
+#[cfg(target_os = "linux")]
+impl TestDir {
+    fn new(prefix: &str) -> std::io::Result<Self> {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!("{prefix}-{}-{sequence}", std::process::id()));
+        std::fs::create_dir(&path)?;
+        Ok(Self(path))
+    }
+
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl Drop for TestDir {
+    fn drop(&mut self) {
+        let _removed = std::fs::remove_dir_all(&self.0);
+    }
 }
 
 #[test]

@@ -22,6 +22,8 @@ const LABEL: &str = "com.tailrocks.velnor.host";
 pub(super) const SYSTEMCTL_PATH: &str = "/usr/bin/systemctl";
 #[cfg(target_os = "linux")]
 pub(super) const BUSCTL_PATH: &str = "/usr/bin/busctl";
+#[cfg(target_os = "linux")]
+pub(super) const JOURNALCTL_PATH: &str = "/usr/bin/journalctl";
 
 #[cfg(target_os = "linux")]
 pub(super) fn systemctl_command() -> Command {
@@ -102,7 +104,7 @@ fn service_macos(action: ServiceAction) -> ExitCode {
 pub(crate) fn logs(follow: bool) -> ExitCode {
     #[cfg(target_os = "linux")]
     {
-        command_code("journalctl", &journalctl_args(follow))
+        command_code(journalctl_command(follow))
     }
     #[cfg(target_os = "macos")]
     {
@@ -258,8 +260,15 @@ fn journalctl_args(follow: bool) -> Vec<&'static str> {
 }
 
 #[cfg(target_os = "linux")]
-fn command_code(program: &str, args: &[&str]) -> ExitCode {
-    match Command::new(program).args(args).status() {
+pub(super) fn journalctl_command(follow: bool) -> Command {
+    let mut command = Command::new(JOURNALCTL_PATH);
+    command.args(journalctl_args(follow));
+    command
+}
+
+#[cfg(target_os = "linux")]
+fn command_code(mut command: Command) -> ExitCode {
+    match command.status() {
         Ok(status) if status.success() => ExitCode::SUCCESS,
         _ => ExitCode::from(1),
     }
