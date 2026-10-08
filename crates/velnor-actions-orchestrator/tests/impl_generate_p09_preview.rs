@@ -343,6 +343,28 @@ fn in_place_symlink_target_refused() -> TestResult {
     Ok(())
 }
 
+#[cfg(unix)]
+#[test]
+fn in_place_emitted_leaf_symlink_replaced_by_fresh_file() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    let github = root.join(".github");
+    fs::create_dir_all(github.join("workflows"))?;
+    // Legacy symlink-era entry at an emitted leaf; generation replaces it
+    // with the fresh pointer file instead of refusing.
+    std::os::unix::fs::symlink("AGENTS.md", github.join("CLAUDE.md"))?;
+    let prep = prepare(root)?;
+    let opts = GenerateOptions { output_dir: None };
+    generate(&prep, &opts)?;
+    let claude = github.join("CLAUDE.md");
+    assert!(
+        !fs::symlink_metadata(&claude)?.is_symlink(),
+        "leaf symlink replaced by a regular file"
+    );
+    assert_eq!(fs::read(&claude)?, b"@AGENTS.md\n");
+    Ok(())
+}
+
 #[test]
 fn in_place_file_target_refused() -> TestResult {
     let repo = make_repo(config_with_branch())?;
