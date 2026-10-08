@@ -5,7 +5,8 @@ use std::collections::BTreeMap;
 use velnor_actions_contract_config::WorkflowPolicy;
 use velnor_actions_contract_config::config::{CheckExecutor, EPHEMERAL_CHECK_ADMISSION_CONDITION};
 use velnor_actions_contract_workflow::{
-    Job, JobTimeout, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, Permissions, Step,
+    Job, JobOutput, JobTimeout, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, Permissions,
+    Step,
 };
 use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};
 use velnor_actions_workflow_jobs::context::PLAN_JOB_ID;
@@ -60,7 +61,7 @@ fn check_job(
             problem: format!("check_timeout_out_of_range:{}", check.id),
         })?;
     Ok(Job {
-        outputs: Vec::new(),
+        outputs: vec![JobOutput::task_report_artifact_id()],
         display_name: format!("Check / {}", check.id),
         runs_on: check.runner.label.clone(),
         check_runner: Some(check.runner.clone()),

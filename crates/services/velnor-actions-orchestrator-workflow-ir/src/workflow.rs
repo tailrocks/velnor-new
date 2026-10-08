@@ -11,7 +11,7 @@ use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax}
 use velnor_actions_contract::Stack;
 use velnor_actions_contract_config::{VelnorConfig, VelnorSupportWorkflow, WorkflowPolicy};
 use velnor_actions_contract_workflow::{
-    Concurrency, Job, Permissions, Step, StepKind, StepRole, Trigger, WorkflowIr,
+    Concurrency, Job, JobOutput, Permissions, Step, StepId, StepKind, StepRole, Trigger, WorkflowIr,
 };
 use velnor_actions_mise::{
     PREPARE_RUST_COMPONENTS_STEP, PrepareRustComponents, ToolCatalog, ToolHomes,
@@ -30,6 +30,9 @@ use velnor_actions_orchestrator_core::utf8::{strings_of, strings_of_env};
 use velnor_actions_orchestrator_discovery::discover::Discovery;
 use velnor_actions_orchestrator_pins::pins::consumer_acquire_step;
 
+#[cfg(test)]
+#[path = "workflow/tests.rs"]
+mod tests;
 mod workflow_context;
 mod workflow_support;
 
@@ -169,22 +172,19 @@ pub fn build_workflow(
     crate::verification_tasks::insert_jobs(&mut jobs, &verification_tasks)?;
     insert_gate_jobs(&mut jobs, label, branch, &required_ids, acquire, &catalog)?;
     wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
-    let ir = workflow_ir(config, branch, jobs);
-    let context = workflow_context::render_context(
-        config,
-        label,
-        &version,
-        &catalog,
-        discovery,
-        use_rust,
-        verification_tasks,
-    )?;
-    let actionlint = actionlint_input(config, &version, label);
     Ok(WorkflowPlan {
-        ir,
+        ir: workflow_ir(config, branch, jobs),
         support,
-        context,
-        actionlint,
+        context: workflow_context::render_context(
+            config,
+            label,
+            &version,
+            &catalog,
+            discovery,
+            use_rust,
+            verification_tasks,
+        )?,
+        actionlint: actionlint_input(config, &version, label),
     })
 }
 
@@ -244,6 +244,11 @@ fn insert_gate_jobs(
 fn insert_format_report_steps(plan: &mut Job, reports: Vec<Step>) {
     if reports.is_empty() {
         return;
+    }
+    if reports.iter().any(|step| {
+        step.id == Some(StepId::CrateReportUpload) && step.role == Some(StepRole::CrateReportUpload)
+    }) {
+        plan.outputs = vec![JobOutput::task_report_artifact_id()];
     }
     let at = plan
         .steps
