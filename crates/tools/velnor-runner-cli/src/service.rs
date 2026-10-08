@@ -18,6 +18,21 @@ mod tests;
 #[cfg(any(target_os = "macos", test))]
 const LABEL: &str = "com.tailrocks.velnor.host";
 
+#[cfg(target_os = "linux")]
+pub(super) const SYSTEMCTL_PATH: &str = "/usr/bin/systemctl";
+#[cfg(target_os = "linux")]
+pub(super) const BUSCTL_PATH: &str = "/usr/bin/busctl";
+
+#[cfg(target_os = "linux")]
+pub(super) fn systemctl_command() -> Command {
+    Command::new(SYSTEMCTL_PATH)
+}
+
+#[cfg(target_os = "linux")]
+pub(super) fn busctl_command() -> Command {
+    Command::new(BUSCTL_PATH)
+}
+
 /// Read-only view of whether the platform may still own the controller.
 /// Unknown is never treated as stopped by mutating commands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,7 +133,7 @@ pub(crate) fn logs(follow: bool) -> ExitCode {
 pub(crate) fn controller_service_state() -> ControllerServiceState {
     #[cfg(target_os = "linux")]
     {
-        let output = Command::new("systemctl")
+        let output = systemctl_command()
             .args([
                 "show",
                 "--no-pager",

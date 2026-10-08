@@ -1,9 +1,53 @@
 use std::path::Path;
 
+#[cfg(target_os = "linux")]
+use std::os::unix::fs::PermissionsExt;
+#[cfg(target_os = "linux")]
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use super::{
     ControllerServiceState, bootout_argv, bootstrap_argv, controller_service_status_line,
     launchctl_service_state, systemd_service_state, with_logs,
 };
+
+#[cfg(target_os = "linux")]
+use super::{busctl_command, systemctl_command};
+
+#[cfg(target_os = "linux")]
+static NEXT_SYSTEMD_SHIM: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_systemd_tools_ignore_path_shims() -> Result<(), Box<dyn std::error::Error>> {
+    let shim_dir = std::env::temp_dir().join(format!(
+        "velnor-systemd-tool-path-{}-{}",
+        std::process::id(),
+        NEXT_SYSTEMD_SHIM.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::create_dir(&shim_dir)?;
+    let marker = shim_dir.join("path-shim-used");
+    let script = "#!/bin/sh\n: > \"$VELNOR_SYSTEMD_SHIM_MARKER\"\nexit 0\n";
+    for name in ["systemctl", "busctl"] {
+        let shim = shim_dir.join(name);
+        std::fs::write(&shim, script)?;
+        let mut permissions = std::fs::metadata(&shim)?.permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&shim, permissions)?;
+    }
+
+    for mut command in [systemctl_command(), busctl_command()] {
+        let output = command
+            .arg("--version")
+            .env("PATH", &shim_dir)
+            .env("VELNOR_SYSTEMD_SHIM_MARKER", &marker)
+            .output()?;
+        assert!(output.status.success());
+        assert!(!marker.exists(), "the PATH shim must not be executed");
+    }
+
+    std::fs::remove_dir_all(shim_dir)?;
+    Ok(())
+}
 
 #[test]
 fn controller_service_status_is_distinct_from_readiness() {
