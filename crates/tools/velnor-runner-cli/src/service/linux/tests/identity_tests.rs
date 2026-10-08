@@ -60,7 +60,7 @@ fn start_rejects_an_identity_check_whose_failure_systemd_would_ignore() {
             .iter()
             .any(|call| call.first().is_some_and(|verb| verb == "start"))
     );
-    assert_eq!(manager.busctl_calls.len(), 3);
+    assert_eq!(manager.busctl_calls.len(), 4);
 }
 
 #[test]
@@ -96,5 +96,5 @@ fn start_requires_identity_preflight_to_run_before_the_controller() {
             .iter()
             .any(|call| call.first().is_some_and(|verb| verb == "start"))
     );
-    assert_eq!(manager.busctl_calls.len(), 3);
+    assert_eq!(manager.busctl_calls.len(), 4);
 }

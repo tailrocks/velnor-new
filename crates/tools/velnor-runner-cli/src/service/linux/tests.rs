@@ -2,9 +2,10 @@ use std::collections::VecDeque;
 use std::io;
 
 use super::{
-    EXPECTED_CREDENTIAL_PROPERTY, IDENTITY_OBJECT_PATH, IDENTITY_UNIT, Manager, ManagerOutput,
-    ServiceFault, StopTimeout, UNIT, conditions::condition_output, package_paths_supported,
-    parse_stop_timeout, parse_timespan_usec, perform, preflight_argv, start_argv, stop_argv,
+    ENVIRONMENT_PROPERTY, EXPECTED_CREDENTIAL_PROPERTY, EXPECTED_ENVIRONMENT_PROPERTY,
+    IDENTITY_OBJECT_PATH, IDENTITY_UNIT, Manager, ManagerOutput, ServiceFault, StopTimeout, UNIT,
+    conditions::condition_output, package_paths_supported, parse_stop_timeout, parse_timespan_usec,
+    perform, preflight_argv, start_argv, stop_argv,
 };
 use crate::args::ServiceAction;
 
@@ -14,6 +15,7 @@ const DRAIN_TIMEOUT_SECS: u64 = 10;
 struct FakeManager {
     outputs: VecDeque<ManagerOutput>,
     condition_outputs: VecDeque<ManagerOutput>,
+    environment_outputs: VecDeque<ManagerOutput>,
     calls: Vec<Vec<String>>,
     busctl_calls: Vec<Vec<String>>,
 }
@@ -23,6 +25,7 @@ impl FakeManager {
         Self {
             outputs: outputs.into_iter().collect(),
             condition_outputs: VecDeque::new(),
+            environment_outputs: VecDeque::new(),
             calls: Vec::new(),
             busctl_calls: Vec::new(),
         }
@@ -35,6 +38,7 @@ impl FakeManager {
         Self {
             outputs: outputs.into_iter().collect(),
             condition_outputs: condition_outputs.into_iter().collect(),
+            environment_outputs: VecDeque::new(),
             calls: Vec::new(),
             busctl_calls: Vec::new(),
         }
@@ -58,6 +62,12 @@ impl Manager for FakeManager {
                 .condition_outputs
                 .pop_front()
                 .unwrap_or_else(|| condition_output(true)));
+        }
+        if args.last() == Some(&ENVIRONMENT_PROPERTY) {
+            return Ok(self
+                .environment_outputs
+                .pop_front()
+                .unwrap_or_else(environment_property));
         }
         self.outputs
             .pop_front()
@@ -119,73 +129,15 @@ fn credential_property() -> ManagerOutput {
     )
 }
 
-fn empty_jobs() -> ManagerOutput {
-    manager_output(true, Vec::new())
+fn environment_property() -> ManagerOutput {
+    manager_output(
+        true,
+        format!("{EXPECTED_ENVIRONMENT_PROPERTY}\n").into_bytes(),
+    )
 }
 
-#[test]
-fn start_verifies_the_packaged_unit_and_running_postcondition() {
-    let stopped = unit_snapshot(UnitSnapshot {
-        active_state: "inactive",
-        sub_state: "dead",
-        main_pid: 0,
-        control_pid: 0,
-        result: "success",
-        stop_code: "(null)",
-        stop_status: "0/0",
-        timeout: "30s",
-    });
-    let active = unit_snapshot(UnitSnapshot {
-        active_state: "active",
-        sub_state: "running",
-        main_pid: 42,
-        control_pid: 0,
-        result: "success",
-        stop_code: "(null)",
-        stop_status: "0/0",
-        timeout: "30s",
-    });
-    let mut manager = FakeManager::with_outputs([
-        manager_output(true, stopped),
-        credential_property(),
-        identity_unit_snapshot(),
-        empty_jobs(),
-        manager_output(true, Vec::new()),
-        manager_output(true, active),
-        credential_property(),
-        identity_unit_snapshot(),
-        empty_jobs(),
-    ]);
-
-    assert_eq!(
-        perform(ServiceAction::Start, &mut manager, DRAIN_TIMEOUT_SECS),
-        Ok(())
-    );
-    assert_eq!(
-        manager.calls.get(3),
-        Some(&vec!["start".to_owned(), UNIT.to_owned()])
-    );
-    assert_eq!(manager.busctl_calls.len(), 6);
-    assert_eq!(
-        manager.busctl_calls.first(),
-        Some(&vec![
-            "--system".to_owned(),
-            "--timeout=5".to_owned(),
-            "get-property".to_owned(),
-            "org.freedesktop.systemd1".to_owned(),
-            "/org/freedesktop/systemd1/unit/velnor_2dhost_2eservice".to_owned(),
-            "org.freedesktop.systemd1.Unit".to_owned(),
-            "Conditions".to_owned(),
-        ])
-    );
-    assert_eq!(
-        manager.busctl_calls.get(1).and_then(|args| args.last()),
-        Some(&"LoadCredential".to_owned())
-    );
-    assert!(manager.busctl_calls.iter().any(|args| {
-        args.get(4).is_some_and(|path| path == IDENTITY_OBJECT_PATH)
-            && args.last().is_some_and(|property| property == "Conditions")
-    }));
+fn empty_jobs() -> ManagerOutput {
+    manager_output(true, Vec::new())
 }
 
 #[test]
@@ -400,4 +352,6 @@ const STATE_PATH: &str = "/var/lib/velnor-host";
 mod contract_tests;
 mod credential_tests;
 
+mod environment_tests;
 mod identity_tests;
+mod start_contract_tests;

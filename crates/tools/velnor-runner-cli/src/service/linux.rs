@@ -39,6 +39,8 @@ const SERVICE_INTERFACE: &str = "org.freedesktop.systemd1.Service";
 const CREDENTIAL_PROPERTY: &str = "LoadCredential";
 const EXPECTED_CREDENTIAL_PROPERTY: &str =
     "a(ss) 1 \"github-token\" \"/etc/velnor-host/github-token\"";
+const ENVIRONMENT_PROPERTY: &str = "Environment";
+const EXPECTED_ENVIRONMENT_PROPERTY: &str = "as 1 \"PATH=/usr/sbin:/usr/bin:/sbin:/bin\"";
 const SHOW_PROPERTIES: &str = concat!(
     "LoadState,ActiveState,SubState,MainPID,ControlPID,Result,ExecStartPre,ExecStart,ExecStop,",
     "TimeoutStopUSec,User,Group,SupplementaryGroups,WorkingDirectory,UMask,",
@@ -90,6 +92,7 @@ enum ServiceFault {
     IdentityUnitUnavailable,
     CredentialUnavailable,
     StartFailed,
+    ServiceEnvironmentUnavailable,
     DrainUnavailable,
     PendingJob,
     PackageOwned,
@@ -110,6 +113,9 @@ impl ServiceFault {
                 "systemd did not prove the exact controller credential mapping"
             }
             Self::StartFailed => "velnor-host.service did not reach active/running",
+            Self::ServiceEnvironmentUnavailable => {
+                "systemd did not prove the exact packaged service environment"
+            }
             Self::DrainUnavailable => {
                 "safe service stop is unavailable until drain reconciliation is implemented"
             }
@@ -205,6 +211,7 @@ fn start(manager: &mut impl Manager, drain_timeout_secs: u64) -> Result<(), Serv
     let before = read_snapshot(manager)?;
     verify_package_contract(&before, drain_timeout_secs)?;
     verify_load_credential(manager)?;
+    verify_service_environment(manager)?;
     verify_identity_contract(&read_identity_snapshot(manager)?)?;
     if is_running(&before) {
         if before.result != "success" {
@@ -222,6 +229,7 @@ fn start(manager: &mut impl Manager, drain_timeout_secs: u64) -> Result<(), Serv
     let after = read_snapshot(manager)?;
     verify_package_contract(&after, drain_timeout_secs)?;
     verify_load_credential(manager)?;
+    verify_service_environment(manager)?;
     verify_identity_contract(&read_identity_snapshot(manager)?)?;
     if !is_running(&after) || after.result != "success" {
         return Err(ServiceFault::StartFailed);
@@ -268,6 +276,29 @@ fn verify_load_credential(manager: &mut impl Manager) -> Result<(), ServiceFault
         std::str::from_utf8(&output.stdout).map_err(|_| ServiceFault::CredentialUnavailable)?;
     if value.trim() != EXPECTED_CREDENTIAL_PROPERTY {
         return Err(ServiceFault::CredentialUnavailable);
+    }
+    Ok(())
+}
+
+fn verify_service_environment(manager: &mut impl Manager) -> Result<(), ServiceFault> {
+    let output = manager
+        .busctl(&[
+            "--system",
+            "--timeout=5",
+            "get-property",
+            SYSTEMD_BUS_NAME,
+            UNIT_OBJECT_PATH,
+            SERVICE_INTERFACE,
+            ENVIRONMENT_PROPERTY,
+        ])
+        .map_err(|_| ServiceFault::Manager)?;
+    if !output.success {
+        return Err(ServiceFault::Manager);
+    }
+    let value = std::str::from_utf8(&output.stdout)
+        .map_err(|_| ServiceFault::ServiceEnvironmentUnavailable)?;
+    if value.trim() != EXPECTED_ENVIRONMENT_PROPERTY {
+        return Err(ServiceFault::ServiceEnvironmentUnavailable);
     }
     Ok(())
 }
