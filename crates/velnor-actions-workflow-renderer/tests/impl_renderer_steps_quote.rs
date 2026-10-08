@@ -140,7 +140,7 @@ fn typed_argv_quotes_expansions_before_rendering() -> Result<(), Box<dyn std::er
 #[test]
 fn inline_shell_script_bytes_remain_unchanged_for_the_inner_shell()
 -> Result<(), Box<dyn std::error::Error>> {
-    let script = "mkdir -p \"$RUNNER_TEMP/velnor/bin\" && printf '%s  %s\\n' \"$VELNOR_ASSET_SHA256\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.2\" | shasum -a 256 -c -";
+    let script = "mkdir -p \"$RUNNER_TEMP/velnor/bin\" && printf '%s  %s\\n' \"$VELNOR_ASSET_SHA256\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.3\" | shasum -a 256 -c -";
     let line = join_argv_for_run(&argv(&["sh", "-c", script]))?;
     assert_eq!(line, format!("sh -c '{}'", script.replace('\'', "'\\''")));
     assert_eq!(

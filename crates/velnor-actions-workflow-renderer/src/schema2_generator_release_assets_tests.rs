@@ -32,7 +32,7 @@ fn wrong_checksum_filename_stops_before_candidate_execution() -> Result<(), Box<
     let candidate = directory.join(LINUX.binary);
     fs::write(
         &candidate,
-        "#!/bin/sh\nprintf '%s\\n' executed >> \"$CANDIDATE_EXECUTED\"\nprintf '%s\\n' 'velnor-actions 0.1.2'\n",
+        "#!/bin/sh\nprintf '%s\\n' executed >> \"$CANDIDATE_EXECUTED\"\nprintf '%s\\n' 'velnor-actions 0.1.3'\n",
     )?;
     let mut permissions = fs::metadata(&candidate)?.permissions();
     permissions.set_mode(0o755);
