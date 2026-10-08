@@ -7,7 +7,7 @@ use super::archive;
 use super::workflow_steps::{self, checkout_step, with_permissions};
 use crate::yaml::Yaml;
 
-pub(super) const VERSION: &str = "0.1.3";
+pub(super) const VERSION: &str = "0.1.4";
 pub(super) const REPOSITORY: &str = "tailrocks/velnor-new";
 const CI_WORKFLOW: &str = "ci.yml";
 
@@ -32,9 +32,9 @@ pub(super) struct ProductAsset {
 /// Linux `x86_64` binary.
 pub(super) const LINUX: ProductAsset = ProductAsset {
     target: ReleaseTarget::LinuxX86_64,
-    binary: "velnor-actions-0.1.3-x86_64-unknown-linux-gnu",
-    sidecar: "velnor-actions-0.1.3-x86_64-unknown-linux-gnu.sha256",
-    provenance: "velnor-actions-0.1.3-x86_64-unknown-linux-gnu.provenance.json",
+    binary: "velnor-actions-0.1.4-x86_64-unknown-linux-gnu",
+    sidecar: "velnor-actions-0.1.4-x86_64-unknown-linux-gnu.sha256",
+    provenance: "velnor-actions-0.1.4-x86_64-unknown-linux-gnu.provenance.json",
     archive: "generator-linux-assets.tar",
     workflow_artifact: "generator-linux-assets",
     directory: "linux-assets",
@@ -49,9 +49,9 @@ pub(super) const LINUX: ProductAsset = ProductAsset {
 /// macOS arm64 binary.
 pub(super) const MACOS_ARM64: ProductAsset = ProductAsset {
     target: ReleaseTarget::MacosArm64,
-    binary: "velnor-actions-0.1.3-aarch64-apple-darwin",
-    sidecar: "velnor-actions-0.1.3-aarch64-apple-darwin.sha256",
-    provenance: "velnor-actions-0.1.3-aarch64-apple-darwin.provenance.json",
+    binary: "velnor-actions-0.1.4-aarch64-apple-darwin",
+    sidecar: "velnor-actions-0.1.4-aarch64-apple-darwin.sha256",
+    provenance: "velnor-actions-0.1.4-aarch64-apple-darwin.provenance.json",
     archive: "generator-macos-assets.tar",
     workflow_artifact: "generator-macos-assets",
     directory: "macos-assets",
@@ -66,9 +66,9 @@ pub(super) const MACOS_ARM64: ProductAsset = ProductAsset {
 /// macOS `x86_64` binary.
 pub(super) const MACOS_X86_64: ProductAsset = ProductAsset {
     target: ReleaseTarget::MacosX86_64,
-    binary: "velnor-actions-0.1.3-x86_64-apple-darwin",
-    sidecar: "velnor-actions-0.1.3-x86_64-apple-darwin.sha256",
-    provenance: "velnor-actions-0.1.3-x86_64-apple-darwin.provenance.json",
+    binary: "velnor-actions-0.1.4-x86_64-apple-darwin",
+    sidecar: "velnor-actions-0.1.4-x86_64-apple-darwin.sha256",
+    provenance: "velnor-actions-0.1.4-x86_64-apple-darwin.provenance.json",
     archive: "generator-macos-intel-assets.tar",
     workflow_artifact: "generator-macos-intel-assets",
     directory: "macos-intel-assets",
