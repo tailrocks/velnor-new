@@ -333,6 +333,8 @@ impl DiscoveryIntentStore for RejectIntent {
 #[path = "discovery_test_support.rs"]
 mod support;
 pub(super) use support::{chunked_server, http_response, one_response_server, read_headers};
+#[path = "discovery_actions_read_tests.rs"]
+mod actions_read_tests;
 #[path = "discovery_async_tests.rs"]
 mod async_tests;
 #[path = "discovery_flow_tests.rs"]
