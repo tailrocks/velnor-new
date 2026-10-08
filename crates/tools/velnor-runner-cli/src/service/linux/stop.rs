@@ -123,7 +123,17 @@ fn run_drain_wait(
 pub(super) fn runuser_command(state_path: &Path, timeout_secs: u64) -> Command {
     let mut command = Command::new("/usr/sbin/runuser");
     command.args([
-        "--user", "velnor", "--", BINARY, "--config", CONFIG, "--state",
+        "--user",
+        "velnor",
+        "--group",
+        "velnor",
+        "--supp-group",
+        "docker",
+        "--",
+        BINARY,
+        "--config",
+        CONFIG,
+        "--state",
     ]);
     command
         .arg(state_path)
