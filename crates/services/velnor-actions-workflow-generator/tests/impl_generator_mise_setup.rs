@@ -23,6 +23,7 @@ pub(crate) fn render(pins: &GeneratorReleasePins) -> Result<GeneratorRelease, Bo
         workflows: BTreeSet::new(),
         mbx_qualification: None,
         generator_release: Some(pins.clone()),
+        product_release: None,
     };
     Ok(generator_release(&request)?)
 }

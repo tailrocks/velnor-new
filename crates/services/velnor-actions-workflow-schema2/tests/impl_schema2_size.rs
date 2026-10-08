@@ -30,6 +30,7 @@ fn direct_schema2_renderer_rejects_an_oversized_workflow() -> Result<(), RenderE
             rust_version: "1.98.0".to_owned(),
         }),
         generator_release: None,
+        product_release: None,
     };
     let error =
         render_schema2_workflows(&request).expect_err("direct routing render must enforce the cap");

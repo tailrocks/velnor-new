@@ -10,6 +10,7 @@ use velnor_actions_workflow_steps::RenderError;
 use velnor_actions_workflow_steps::setup::MiseSetup;
 
 use crate::generator_release_pins::GeneratorReleasePins;
+use crate::product_release_pins::ProductReleasePins;
 
 /// Which schema 2 workflows to emit, plus the selectors they use.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,6 +27,8 @@ pub struct Schema2WorkflowRequest {
     pub mbx_qualification: Option<MbxQualificationPins>,
     /// Orchestrator-resolved Mise setup and command vectors for generator release.
     pub generator_release: Option<GeneratorReleasePins>,
+    /// Orchestrator-resolved setup and command vectors for composed product releases.
+    pub product_release: Option<ProductReleasePins>,
 }
 
 /// Exact tools used by the hosted MBX cache qualification.

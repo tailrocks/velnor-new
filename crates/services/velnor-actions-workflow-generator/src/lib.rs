@@ -7,9 +7,11 @@
 
 pub mod generator_release;
 pub mod generator_release_pins;
+pub mod product_release_pins;
 pub mod request;
 
 pub use generator_release_pins::GeneratorReleasePins;
+pub use product_release_pins::ProductReleasePins;
 pub use request::{MbxQualificationPins, Schema2WorkflowRequest};
 pub use velnor_actions_workflow_release::product_release::{
     ProductReleaseFamily, ProductReleaseSpec,
