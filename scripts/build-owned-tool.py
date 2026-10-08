@@ -69,7 +69,7 @@ def workflow_identity():
 
 def compiler_identity(text):
     lines = dict(line.split(": ", 1) for line in text.splitlines() if ": " in line)
-    if lines.get("release") != "1.98.1" or lines.get("host") not in HOSTS:
+    if lines.get("release") != "1.99.0" or lines.get("host") not in HOSTS:
         raise ValueError("unexpected effective compiler or native host")
     return lines["host"]
 

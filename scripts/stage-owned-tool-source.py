@@ -14,7 +14,7 @@ import tempfile
 
 
 UPSTREAM = {
-    "mise": ("jdx/mise", "bc11f90c74eba23bf0d7350efb540e62fb7d9ffd"),
+    "mise": ("jdx/mise", "96cca90d3e55519a47cffa0cb99baa4c3"),
     "mbx": ("jdx/mr-boxington", "a0a44c61ca6aaa8da41d59deeebdfc46fc9d3313"),
     "mbx-action": ("jdx/mr-boxington-action", "1687e54eb349cadf61fa38b5813a77875489e8e6"),
 }

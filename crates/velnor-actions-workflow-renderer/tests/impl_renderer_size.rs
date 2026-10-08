@@ -110,7 +110,7 @@ fn direct_freshness_renderer_rejects_an_oversized_workflow() {
         checkout_uses: "actions/checkout@0123456789abcdef0123456789abcdef01234567".to_owned(),
         mise_setup: MiseSetup {
             uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
-            version: "2026.9.18".to_owned(),
+            version: "2026.10.4".to_owned(),
             sha256: "a".repeat(64),
         },
         rust_version: "1.98.1".to_owned(),
@@ -136,7 +136,7 @@ fn direct_schema2_renderer_rejects_an_oversized_workflow() -> Result<(), RenderE
         mbx_qualification: Some(MbxQualificationPins {
             mise_setup: MiseSetup {
                 uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
-                version: "2026.9.18".to_owned(),
+                version: "2026.10.4".to_owned(),
                 sha256: "a".repeat(64),
             },
             candidate_action_uses:

@@ -1,18 +1,18 @@
 {
   "actions": [
     {
-      "checked_at": "2026-10-05T12:26:50Z",
+      "checked_at": "2026-10-08T16:34:17Z",
       "key": "jdx/mise-action",
       "latest": "v5.1.1",
-      "pinned_sha": "9149ea85001c7435d5a66bb127d6a1b6227cb0a5",
-      "pinned_version": "v5.0.0",
-      "qualified_sha": "9149ea85001c7435d5a66bb127d6a1b6227cb0a5",
-      "qualified_version": "v5.0.0",
+      "pinned_sha": "2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca",
+      "pinned_version": "v5.1.1",
+      "qualified_sha": "2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca",
+      "qualified_version": "v5.1.1",
       "source": "https://api.github.com/repos/jdx/mise-action/releases/latest",
-      "status": "held"
+      "status": "current"
     },
     {
-      "checked_at": "2026-10-07T14:38:41Z",
+      "checked_at": "2026-10-08T16:34:17Z",
       "key": "actions/checkout",
       "latest": "v7.0.1",
       "pinned_sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
@@ -45,7 +45,7 @@
       "status": "held"
     },
     {
-      "checked_at": "2026-10-07T14:38:41Z",
+      "checked_at": "2026-10-08T16:34:17Z",
       "key": "actions/cache/restore",
       "latest": "v6.1.0",
       "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -56,7 +56,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-07T14:38:41Z",
+      "checked_at": "2026-10-08T16:34:17Z",
       "key": "actions/cache/save",
       "latest": "v6.1.0",
       "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -79,7 +79,7 @@
       "latest_sha": "d0825fbaf3cc36ca2609aa38e71046265a1f1e37"
     },
     {
-      "checked_at": "2026-10-07T23:29:48Z",
+      "checked_at": "2026-10-08T16:34:17Z",
       "key": "asamarts/alint",
       "latest": "v0.17.0",
       "pinned_sha": "d93c0283b19dd78afcd8a4b303f1556a7759ba81",
@@ -90,7 +90,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-07T14:38:41Z",
+      "checked_at": "2026-10-08T16:34:17Z",
       "key": "aws-actions/configure-aws-credentials",
       "latest": "v6.3.0",
       "pinned_sha": "e1253824e5c10ff9df46874f81ed3ec929e19cfd",
@@ -102,7 +102,7 @@
     }
   ],
   "check_interval_hours": 24,
-  "checked_at": "2026-10-07T14:38:41Z",
+  "checked_at": "2026-10-08T16:34:17Z",
   "exceptions": [],
   "max_exception_days": 14,
   "runner": {
@@ -114,19 +114,10 @@
       "ubuntu-24.04",
       "ubuntu-22.04"
     ],
-    "checked_at": "2026-10-07T14:38:41Z"
+    "checked_at": "2026-10-08T15:48:32Z"
   },
   "schema": 1,
   "temporary_holds": [
-    {
-      "expires": "2026-10-15",
-      "granted": "2026-10-01",
-      "held_version": "v5.0.0",
-      "issue": "#6",
-      "key": "jdx/mise-action",
-      "owner": "@donbeave",
-      "reason": "upstream moved mid-consolidation; VER-3.2 update set tracked in #6, rust bump needs maintainer qualification decision"
-    },
     {
       "expires": "2026-10-18",
       "granted": "2026-10-04",
@@ -137,15 +128,6 @@
       "reason": "latest stable v1.7.1 resolves to released commit d0825fbaf3cc36ca2609aa38e71046265a1f1e37; the protected-main roundtrip workflow may target that exact SHA only as an unqualified experiment; #29 separately qualifies candidate ec3ebbfbc1fdaffa59d476e87e4f386fdc60d533, which is not that release; retain the qualified v1.6.0 production pin until the exact released source passes cache lifecycle, disk, input, and cleanup qualification"
     },
     {
-      "expires": "2026-10-17",
-      "granted": "2026-10-03",
-      "held_version": "2026.9.18",
-      "issue": "#6",
-      "key": "mise",
-      "owner": "@donbeave",
-      "reason": "probe 2026-10-04T11:28:54Z found latest v2026.10.1 at the recorded release source; keep 2026.9.18 until the #6 update set"
-    },
-    {
       "expires": "2026-10-18",
       "granted": "2026-10-04",
       "held_version": "1.21.1",
@@ -153,15 +135,6 @@
       "key": "mr-boxington",
       "owner": "@donbeave",
       "reason": "latest v1.22.0 resolves to commit 10474d43342ad65df3b02323dd8092d18ab38101; keep the qualified 1.21.1 pin pending #29 current-source cache lifecycle, disk, and input qualification"
-    },
-    {
-      "expires": "2026-10-15",
-      "granted": "2026-10-01",
-      "held_version": "1.98.1",
-      "issue": "#6",
-      "key": "rust",
-      "owner": "@donbeave",
-      "reason": "upstream moved mid-consolidation; VER-3.2 update set tracked in #6, rust bump needs maintainer qualification decision"
     },
     {
       "expires": "2026-10-21",
@@ -180,20 +153,29 @@
       "key": "actions/upload-artifact",
       "owner": "@donbeave",
       "reason": "upstream released a routine patch during v0.1.1 qualification (429-retry handling, no security content); pin held for the release, update tracked with the #6 update set"
+    },
+    {
+      "expires": "2026-10-15",
+      "granted": "2026-10-08",
+      "held_version": "1.98.1",
+      "issue": "#6",
+      "key": "rust",
+      "owner": "@donbeave",
+      "reason": "issue #6 proposes Rust 1.99.0, but this candidate preserves the selected toolchain at the declared workspace MSRV 1.98 until separate compatibility evidence and approval support moving the compiler pin above it"
     }
   ],
   "tools": [
     {
-      "checked_at": "2026-10-05T12:26:50Z",
-      "latest": "v2026.10.3",
+      "checked_at": "2026-10-08T16:34:17Z",
+      "latest": "2026.10.4",
       "name": "mise",
-      "pinned": "2026.9.18",
-      "qualified": "2026.9.18",
+      "pinned": "2026.10.4",
+      "qualified": "2026.10.4",
       "source": "https://api.github.com/repos/jdx/mise/releases/latest",
-      "status": "held"
+      "status": "current"
     },
     {
-      "checked_at": "2026-10-05T12:26:50Z",
+      "checked_at": "2026-10-08T16:34:17Z",
       "latest": "1.99.0",
       "name": "rust",
       "pinned": "1.98.1",
@@ -212,7 +194,7 @@
       "latest_sha": "10474d43342ad65df3b02323dd8092d18ab38101"
     },
     {
-      "checked_at": "2026-10-07T14:38:41Z",
+      "checked_at": "2026-10-08T16:34:17Z",
       "latest": "v2.102.0",
       "name": "gh",
       "pinned": "2.102.0",
@@ -221,7 +203,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-07T14:38:41Z",
+      "checked_at": "2026-10-08T16:34:17Z",
       "latest": "v1.7.12",
       "name": "actionlint",
       "pinned": "1.7.12",
@@ -230,7 +212,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-07T14:38:41Z",
+      "checked_at": "2026-10-08T16:34:17Z",
       "latest": "v0.11.0",
       "name": "shellcheck",
       "pinned": "0.11.0",
@@ -239,7 +221,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-07T14:38:41Z",
+      "checked_at": "2026-10-08T16:34:17Z",
       "latest": "v1.30.1",
       "name": "zizmor",
       "pinned": "1.30.1",
@@ -248,16 +230,16 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-07T14:38:41Z",
-      "latest": "0.9.146",
+      "checked_at": "2026-10-08T16:34:17Z",
+      "latest": "0.9.148",
       "name": "nextest",
-      "pinned": "0.9.146",
-      "qualified": "0.9.146",
+      "pinned": "0.9.148",
+      "qualified": "0.9.148",
       "source": "https://crates.io/api/v1/crates/cargo-nextest",
       "status": "current"
     },
     {
-      "checked_at": "2026-10-07T14:38:41Z",
+      "checked_at": "2026-10-08T16:34:17Z",
       "latest": "v1.13.1",
       "name": "opentofu",
       "pinned": "1.13.1",
@@ -266,11 +248,11 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-07T14:38:41Z",
-      "latest": "0.3.169",
+      "checked_at": "2026-10-08T16:34:17Z",
+      "latest": "0.3.170",
       "name": "release-plz",
-      "pinned": "0.3.169",
-      "qualified": "0.3.169",
+      "pinned": "0.3.170",
+      "qualified": "0.3.170",
       "source": "https://crates.io/api/v1/crates/release-plz",
       "status": "current"
     }

@@ -4,7 +4,7 @@ use crate::setup::MiseSetup;
 pub(super) fn test_pins() -> ProductReleasePins {
     let setup = MiseSetup {
         uses: format!("jdx/mise-action@{}", "a".repeat(40)),
-        version: "2026.9.18".to_owned(),
+        version: "2026.10.4".to_owned(),
         sha256: "b".repeat(64),
     };
     ProductReleasePins {

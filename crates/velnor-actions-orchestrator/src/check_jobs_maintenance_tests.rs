@@ -93,6 +93,8 @@ fn maintenance_check_declares_archive_and_freshness_policy_inputs() -> Result<()
         ".config/nextest.toml",
         ".velnor/version-policy.toml",
         "crates/velnor-actions-freshness/src/inventory.rs",
+        "crates/velnor-actions-freshness/src/inventory/tests.rs",
+        "crates/velnor-actions-freshness/src/probe/transport/range.rs",
         "crates/velnor-actions-freshness/tests/freshness_contract.rs",
         "mise.toml",
     ] {

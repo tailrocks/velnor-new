@@ -30,17 +30,15 @@ pub struct MiseSetup {
     pub sha256: String,
 }
 
-/// Verified extracted binary digests for Mise 2026.9.18.
-/// Official release SHASUMS256.txt matches each downloaded archive and its
-/// corresponding raw binary checksum.
+/// Official raw Linux x64 binary SHA-256 for Mise 2026.10.4.
 pub const MISE_BINARY_SHA256_LINUX_X64: &str =
-    "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4";
-/// Extracted Mise binary SHA-256 for macOS ARM64.
+    "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75";
+/// Official raw macOS ARM64 binary SHA-256 for Mise 2026.10.4.
 pub const MISE_BINARY_SHA256_MACOS_ARM64: &str =
-    "484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f";
-/// Extracted Mise binary SHA-256 for macOS x86-64.
+    "5c530143fc750e8a98c9a36be8d361e5dd953fa0b004d58f7577783f7cf2ac24";
+/// Official raw macOS x86-64 binary SHA-256 for Mise 2026.10.4.
 pub const MISE_BINARY_SHA256_MACOS_X64: &str =
-    "02d8ba561847f996925e361262c0610a24f59fcd9e06ba9ed0b6022e19b317c3";
+    "9f58d924a4d7b47aeb1610cd981beca2125907b2591d805237efbca8aae4308e";
 
 impl MiseSetup {
     /// Resolve a compiled binary pin for one job's target.
@@ -48,7 +46,7 @@ impl MiseSetup {
     /// Unsupported targets or versions have no qualified artifact.
     pub fn for_target(&self, target: &str) -> Result<Self, RenderError> {
         self.validate()?;
-        if self.version != "2026.9.18" {
+        if self.version != "2026.10.4" {
             return Err(RenderError::BadCommand(format!(
                 "mise_setup_unqualified_version:{}",
                 self.version
@@ -98,9 +96,11 @@ impl MiseSetup {
 /// `install: false` keeps project tool files, tasks, and hooks from
 /// running; `env: false` keeps Mise env out of subsequent steps.
 /// Retained for fixtures and as the upgrade input that strict rendering
-/// The explicit V2 tools-cache steps restore and save the owned paths;
-/// this action installs Mise itself and loads no repository environment.
-/// The `with` map is exactly these six keys.
+/// replaces with explicit V2 tools-cache steps for the owned paths. This
+/// action installs Mise itself and loads no repository environment.
+/// The `with` map is exactly these six keys. In the pinned
+/// `jdx/mise-action` v5.1.1, `persist_github_token` defaults to false; leave
+/// it unset so the action's token cannot be carried into later workflow steps.
 /// # Errors
 pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
     setup.validate()?;
@@ -120,7 +120,7 @@ pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// True for catalog version spellings (`2026.9.18`); never `latest`.
+/// True for catalog version spellings (`2026.10.4`); never `latest`.
 fn is_catalog_version(value: &str) -> bool {
     !value.is_empty()
         && value != "latest"

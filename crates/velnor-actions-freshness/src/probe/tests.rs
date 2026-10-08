@@ -1,4 +1,5 @@
 use super::sniff_latest;
+use super::transport::range::fetch_http_prefix_with_agent;
 use super::transport::{
     MAX_REDIRECTS, decode_body, fetch_http_with_agent, fetch_text, resolve_redirect,
 };
@@ -18,6 +19,8 @@ use std::time::{Duration, Instant};
 struct MockResponse {
     status: u16,
     location: Option<String>,
+    content_range: Option<String>,
+    require_range: Option<String>,
     encoding: &'static str,
     chunked: bool,
     body: Vec<u8>,
@@ -53,6 +56,8 @@ fn mock_response(status: u16, body: Vec<u8>) -> MockResponse {
     MockResponse {
         status,
         location: None,
+        content_range: None,
+        require_range: None,
         encoding: "identity",
         chunked: false,
         body,
@@ -64,6 +69,8 @@ fn redirect_response(body: Vec<u8>, encoding: &'static str, chunked: bool) -> Mo
     MockResponse {
         status: 302,
         location: Some("/final".to_owned()),
+        content_range: None,
+        require_range: None,
         encoding,
         chunked,
         body,
@@ -127,33 +134,50 @@ fn write_response(stream: &mut TcpStream, response: MockResponse) -> std::io::Re
             break;
         }
     }
+    let request_text = String::from_utf8_lossy(&request[..request_length]);
+    let range_matches = response.require_range.as_ref().is_none_or(|expected| {
+        request_text
+            .lines()
+            .any(|line| line.eq_ignore_ascii_case(expected))
+    });
+    let status = if range_matches { response.status } else { 416 };
     if !response.delay.is_zero() {
         thread::sleep(response.delay);
     }
-    let reason = if response.status == 200 {
-        "OK"
-    } else {
-        "Found"
+    let reason = match status {
+        200 => "OK",
+        206 => "Partial Content",
+        302 => "Found",
+        416 => "Range Not Satisfiable",
+        _ => "Test Response",
     };
-    write!(stream, "HTTP/1.1 {} {reason}\r\n", response.status)?;
-    if let Some(location) = response.location {
+    write!(stream, "HTTP/1.1 {status} {reason}\r\n")?;
+    if range_matches && let Some(location) = response.location {
         write!(stream, "Location: {location}\r\n")?;
     }
-    if !response.encoding.is_empty() {
+    if range_matches && !response.encoding.is_empty() {
         write!(stream, "Content-Encoding: {}\r\n", response.encoding)?;
     }
-    if response.chunked {
+    if range_matches && let Some(content_range) = response.content_range {
+        write!(stream, "Content-Range: {content_range}\r\n")?;
+    }
+    let body = if range_matches {
+        response.body.as_slice()
+    } else {
+        b"missing expected Range header"
+    };
+    if range_matches && response.chunked {
         stream.write_all(b"Transfer-Encoding: chunked\r\n")?;
     } else {
-        write!(stream, "Content-Length: {}\r\n", response.body.len())?;
+        write!(stream, "Content-Length: {}\r\n", body.len())?;
     }
     stream.write_all(b"Connection: close\r\n\r\n")?;
-    if response.chunked {
-        write!(stream, "{:X}\r\n", response.body.len())?;
-        stream.write_all(&response.body)?;
+    if range_matches && response.chunked {
+        write!(stream, "{:X}\r\n", body.len())?;
+        stream.write_all(body)?;
         stream.write_all(b"\r\n0\r\n\r\n")
     } else {
-        stream.write_all(&response.body)
+        stream.write_all(body)
     }
 }
 

@@ -100,7 +100,7 @@ class QualifierAdmissionTests(unittest.TestCase):
 
     def source_descriptor(self):
         directory = "https://github.com/tailrocks/velnor-new/releases/download/fixture-source"
-        return {"tool": "mise", "version": "2026.10.0-owned-cargo-wrapper",
+        return {"tool": "mise", "version": "2026.10.4-owned-cargo-wrapper",
             "source_commit": "1" * 40, "source_tree": "2" * 40,
             "upstream_base_commit": BASES["mise"][1], "archive_url": directory + "/source.tar",
             "archive_sha256": "4" * 64, "receipt_url": directory + "/source-receipt.json",
@@ -134,7 +134,7 @@ class QualifierAdmissionTests(unittest.TestCase):
     def build_execution_fixture(self, argv, source, environment):
         self.build_commands.append(argv)
         if argv[-2:] == ["rustc", "-vV"]:
-            return f"rustc 1.98.1\nrelease: 1.98.1\nhost: {self.target}"
+            return f"rustc 1.99.0\nrelease: 1.99.0\nhost: {self.target}"
         if argv[-2:] == ["cc", "--version"]:
             return "fixture linker"
         if argv[-1] == "--version":
