@@ -1,9 +1,10 @@
 //! One session loop. A running owned worker keeps the session up.
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, time::Duration};
 
 use velnor_runner_github::{Poll, QueueSession};
 
+use velnor_runner_host::BoundedDiscoveryTransport;
 use velnor_runner_host::listen::{Link, point_at_queue, poll_path, restore_base};
 use velnor_runner_host::scale_set::EnsureError;
 use velnor_runner_host::worker::Started;
@@ -15,18 +16,23 @@ use super::trace;
 use super::{Ready, ack_ready, drive_ready, scale_session};
 use velnor_runner_launch_slot as slot;
 
+const RECONCILIATION_WINDOW: Duration = Duration::from_secs(120);
+const RECONCILIATION_POLL_BUDGET: Duration = Duration::from_secs(30);
+const MAX_RECONCILIATION_POLLS: u8 = 8;
+
 /// Poll until admission stops and no owned launch container is running.
 ///
 /// # Errors
 ///
 /// Returns [`EnsureError`] when one message carries two ids, or a later step fails.
-pub(super) async fn poll_and_drive(
-    link: &mut Link,
+pub(super) async fn poll_and_drive<'turn>(
+    link: &'turn mut Link,
     set_id: i64,
-    session: &mut QueueSession,
-    admin_token: &str,
-    journal: &Journal,
-    docker: &bollard::Docker,
+    session: &'turn mut QueueSession,
+    admin_token: &'turn str,
+    actions_reconciler: &'turn mut ActionsReconciler<'_>,
+    journal: &'turn Journal,
+    docker: &'turn bollard::Docker,
 ) -> Result<PollOutcome, EnsureError> {
     trace::session(session);
     let mut workers = Vec::new();
@@ -48,12 +54,15 @@ pub(super) async fn poll_and_drive(
         set_id,
         session,
         admin_token,
+        actions_reconciler,
         journal,
         docker,
         capacity,
         target,
         last_message_id: 0,
         held_offers: HeldOffers::default(),
+        reconciliation_pending: false,
+        reconciliation: ReconciliationBudget::default(),
     };
     let bound = if target > capacity {
         capacity::poll_bound_wide()
@@ -103,9 +112,24 @@ trait PollHost {
 
     /// Owned containers still running.
     async fn running(&mut self) -> Result<u32, EnsureError>;
+
+    /// Wait before another queue poll.
+    async fn pause(&mut self, duration: Duration) {
+        tokio::time::sleep(duration).await;
+    }
+
+    /// Whether the last held poll still has an actual Started job to reconcile.
+    fn reconciliation_pending(&self) -> bool {
+        false
+    }
+
+    /// Whether another bounded read-only poll is still allowed.
+    fn reconciliation_retry_allowed(&self) -> bool {
+        self.reconciliation_pending()
+    }
 }
 
-impl PollHost for Turn<'_> {
+impl PollHost for Turn<'_, '_> {
     async fn poll(&mut self, workers: &mut Vec<Started>) -> Result<bool, EnsureError> {
         self.drive_poll(workers).await
     }
@@ -113,11 +137,20 @@ impl PollHost for Turn<'_> {
     async fn running(&mut self) -> Result<u32, EnsureError> {
         slot::running_count(self.journal, self.docker).await
     }
+
+    fn reconciliation_pending(&self) -> bool {
+        self.reconciliation_pending
+    }
+
+    fn reconciliation_retry_allowed(&self) -> bool {
+        self.reconciliation
+            .retry_allowed(self.reconciliation_pending, tokio::time::Instant::now())
+    }
 }
 
 /// Keep polling while an owned container runs. An empty session stays open past `bound`.
 async fn until_idle(
-    turn: &mut Turn<'_>,
+    turn: &mut Turn<'_, '_>,
     workers: &mut Vec<Started>,
     bound: usize,
 ) -> Result<(), EnsureError> {
@@ -137,24 +170,118 @@ async fn pump<H: PollHost>(
         }
         let stop = host.poll(workers).await?;
         polls = polls.saturating_add(1);
+        // A pending reconciliation has its own fixed GET budget. A running
+        // worker may keep ordinary lifecycle polling alive, but it cannot
+        // bypass that budget by taking either the Stay or Hold branch.
+        if host.reconciliation_pending()
+            && !host.reconciliation_retry_allowed()
+            && host.running().await? == 0
+        {
+            return Ok(());
+        }
         if !stop {
             // The broker can assign a job only while this session still exists.
             if workers.is_empty() {
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                host.pause(Duration::from_secs(1)).await;
             }
             continue;
         }
         if host.running().await? > 0 {
             missed = 0;
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            host.pause(Duration::from_secs(2)).await;
+            continue;
+        }
+        if host.reconciliation_pending() {
+            // Keep this same session and message open while a bounded REST
+            // lookup is nonterminal. The next poll may redeliver this message;
+            // it must not be ACKed merely to advance the queue cursor. Stop at
+            // the fixed retry window so a failed/unsupported route cannot loop
+            // forever; the caller still retains the unacknowledged offer.
+            if !host.reconciliation_retry_allowed() {
+                return Ok(());
+            }
+            missed = 0;
+            host.pause(Duration::from_secs(2)).await;
             continue;
         }
         missed = missed.saturating_add(1);
         if workers.is_empty() || missed >= 2 {
             return Ok(());
         }
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        host.pause(Duration::from_secs(2)).await;
     }
+}
+
+fn retry_window_open(
+    pending: bool,
+    polls: u8,
+    deadline: Option<tokio::time::Instant>,
+    now: tokio::time::Instant,
+) -> bool {
+    pending && polls < MAX_RECONCILIATION_POLLS && deadline.is_some_and(|deadline| now < deadline)
+}
+
+#[derive(Default)]
+struct ReconciliationBudget {
+    deadline: Option<tokio::time::Instant>,
+    attempts: u8,
+}
+
+impl ReconciliationBudget {
+    fn begin_attempt(&mut self, now: tokio::time::Instant) -> Option<tokio::time::Instant> {
+        let deadline = *self
+            .deadline
+            .get_or_insert_with(|| now + RECONCILIATION_WINDOW);
+        if self.attempts >= MAX_RECONCILIATION_POLLS || now >= deadline {
+            return None;
+        }
+        self.attempts = self.attempts.saturating_add(1);
+        Some(std::cmp::min(deadline, now + RECONCILIATION_POLL_BUDGET))
+    }
+
+    fn retry_allowed(&self, pending: bool, now: tokio::time::Instant) -> bool {
+        retry_window_open(pending, self.attempts, self.deadline, now)
+    }
+
+    fn clear(&mut self) {
+        self.deadline = None;
+        self.attempts = 0;
+    }
+}
+
+async fn persist_and_reconcile_observations(
+    journal: &Journal,
+    polled: &Poll,
+    transport: &mut (impl velnor_runner_github::AsyncDiscoveryTransport + ?Sized),
+    owner: &str,
+    repository: &str,
+    actions_token: &str,
+    budget: &mut ReconciliationBudget,
+) -> Result<bool, EnsureError> {
+    observations::persist_lifecycle_events(journal, polled).await?;
+    if !observations::has_pending_actions_reconciliation(journal).await? {
+        budget.clear();
+        return Ok(false);
+    }
+
+    let Some(deadline) = budget.begin_attempt(tokio::time::Instant::now()) else {
+        // Keep the actual event and unresolved launch durable, but do not send
+        // another Actions request after the cycle or wall-clock budget closes.
+        return Ok(true);
+    };
+    let pending = observations::reconcile_pending_lifecycle(
+        journal,
+        transport,
+        owner,
+        repository,
+        actions_token,
+        deadline,
+    )
+    .await?;
+    if !pending {
+        budget.clear();
+    }
+    Ok(pending)
 }
 
 fn progress_batch(polled: &Poll) -> bool {
@@ -208,20 +335,46 @@ pub async fn admission<E: velnor_runner_host::stage::PairEngine + ?Sized>(
     }))
 }
 
-struct Turn<'a> {
-    link: &'a mut Link,
+struct Turn<'turn, 'context> {
+    link: &'turn mut Link,
     set_id: i64,
-    session: &'a mut QueueSession,
-    admin_token: &'a str,
-    journal: &'a Journal,
-    docker: &'a bollard::Docker,
+    session: &'turn mut QueueSession,
+    admin_token: &'turn str,
+    actions_reconciler: &'turn mut ActionsReconciler<'context>,
+    journal: &'turn Journal,
+    docker: &'turn bollard::Docker,
     capacity: u32,
     target: u32,
     last_message_id: i64,
     held_offers: HeldOffers,
+    reconciliation_pending: bool,
+    reconciliation: ReconciliationBudget,
 }
 
-impl Turn<'_> {
+pub(super) struct ActionsReconciler<'a> {
+    owner: &'a str,
+    repository: &'a str,
+    actions_token: &'a str,
+    transport: &'a mut BoundedDiscoveryTransport,
+}
+
+impl<'a> ActionsReconciler<'a> {
+    pub(super) fn new(
+        owner: &'a str,
+        repository: &'a str,
+        actions_token: &'a str,
+        transport: &'a mut BoundedDiscoveryTransport,
+    ) -> Self {
+        Self {
+            owner,
+            repository,
+            actions_token,
+            transport,
+        }
+    }
+}
+
+impl Turn<'_, '_> {
     async fn drive_poll(&mut self, workers: &mut Vec<Started>) -> Result<bool, EnsureError> {
         let admin = self.link.base().to_owned();
         let polled = poll_path(
@@ -240,7 +393,16 @@ impl Turn<'_> {
             return Err(EnsureError::Endpoint);
         }
         trace::batch(&polled);
-        observations::persist_observed_lifecycle(self.journal, &polled).await?;
+        self.reconciliation_pending = persist_and_reconcile_observations(
+            self.journal,
+            &polled,
+            self.actions_reconciler.transport,
+            self.actions_reconciler.owner,
+            self.actions_reconciler.repository,
+            self.actions_reconciler.actions_token,
+            &mut self.reconciliation,
+        )
+        .await?;
         let started = u32::try_from(workers.len()).unwrap_or(u32::MAX);
         let decision = admission(
             self.docker,
