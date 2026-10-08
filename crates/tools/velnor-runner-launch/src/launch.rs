@@ -12,6 +12,7 @@ use velnor_runner_host::scale_set::EnsureError;
 use velnor_runner_host::worker::Started;
 use velnor_runner_journal::journal::Journal;
 use velnor_runner_journal::reconcile::Reconcile;
+use zeroize::Zeroizing;
 
 mod bind;
 mod capacity;
@@ -186,8 +187,8 @@ async fn scale_session(
     let name = runner_name(&session.session_id);
     steps::scale_unacked(&mut lane, &ctx, journal, &name, |volume, jit, bind| {
         let volume = volume.to_owned();
-        let payload = jit.to_vec();
-        async move { bind::start_bound(docker, &volume, &payload, &bind).await }
+        let payload = Zeroizing::new(jit.to_vec());
+        async move { bind::start_bound(docker, &volume, payload.as_slice(), &bind).await }
     })
     .await
 }

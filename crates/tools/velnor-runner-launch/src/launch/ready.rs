@@ -4,6 +4,7 @@ use velnor_runner_github::{Poll, QueueSession, Transport};
 use velnor_runner_host::{listen::Link, scale_set::EnsureError};
 use velnor_runner_journal::journal::Journal;
 use velnor_runner_launch_slot as slot;
+use zeroize::Zeroizing;
 
 use super::{Drive, DriveOutcome, HostLane, Lane, bind, drive_offer_tracked, steps};
 
@@ -36,8 +37,8 @@ where
     };
     drive_offer_tracked(lane, &ctx, ready.polled, journal, |volume, jit, bind| {
         let volume = volume.to_owned();
-        let payload = jit.to_vec();
-        async move { bind::start_bound(docker, &volume, &payload, &bind).await }
+        let payload = Zeroizing::new(jit.to_vec());
+        async move { bind::start_bound(docker, &volume, payload.as_slice(), &bind).await }
     })
     .await
 }
