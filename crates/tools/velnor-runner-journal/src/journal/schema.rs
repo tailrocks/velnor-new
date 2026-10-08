@@ -2,7 +2,7 @@
 
 use crate::error::HostError;
 
-const JOURNAL_VERSION: i64 = 10;
+const JOURNAL_VERSION: i64 = 11;
 
 mod validation;
 pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError> {
@@ -20,7 +20,11 @@ pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError>
 }
 
 async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError> {
-    match journal_version(conn).await? {
+    let version = journal_version(conn).await?;
+    if version == JOURNAL_VERSION {
+        return validation::validate_current_schema(conn).await;
+    }
+    match version {
         0 => {
             migrate_version_zero(conn).await?;
             migrate_version_one(conn).await?;
@@ -29,7 +33,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
             migrate_version_four(conn).await?;
             migrate_version_five(conn).await?;
             migrate_version_six(conn).await?;
-            migrate_version_nine(conn).await
+            migrate_version_nine(conn).await?;
         }
         1 => {
             migrate_version_one(conn).await?;
@@ -38,7 +42,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
             migrate_version_four(conn).await?;
             migrate_version_five(conn).await?;
             migrate_version_six(conn).await?;
-            migrate_version_nine(conn).await
+            migrate_version_nine(conn).await?;
         }
         2 => {
             migrate_version_two(conn).await?;
@@ -46,43 +50,44 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
             migrate_version_four(conn).await?;
             migrate_version_five(conn).await?;
             migrate_version_six(conn).await?;
-            migrate_version_nine(conn).await
+            migrate_version_nine(conn).await?;
         }
         3 => {
             migrate_version_three(conn).await?;
             migrate_version_four(conn).await?;
             migrate_version_five(conn).await?;
             migrate_version_six(conn).await?;
-            migrate_version_nine(conn).await
+            migrate_version_nine(conn).await?;
         }
         4 => {
             migrate_version_four(conn).await?;
             migrate_version_five(conn).await?;
             migrate_version_six(conn).await?;
-            migrate_version_nine(conn).await
+            migrate_version_nine(conn).await?;
         }
         5 => {
             migrate_version_five(conn).await?;
             migrate_version_six(conn).await?;
-            migrate_version_nine(conn).await
+            migrate_version_nine(conn).await?;
         }
         6 => {
             migrate_version_six(conn).await?;
-            migrate_version_nine(conn).await
+            migrate_version_nine(conn).await?;
         }
         7 => {
             migrate_version_seven(conn).await?;
             migrate_version_eight(conn).await?;
-            migrate_version_nine(conn).await
+            migrate_version_nine(conn).await?;
         }
         8 => {
             migrate_version_eight(conn).await?;
-            migrate_version_nine(conn).await
+            migrate_version_nine(conn).await?;
         }
-        9 => migrate_version_nine(conn).await,
-        JOURNAL_VERSION => validation::validate_current_schema(conn).await,
-        _ => Err(HostError::Journal),
+        9 => migrate_version_nine(conn).await?,
+        10 => {}
+        _ => return Err(HostError::Journal),
     }
+    migrate_version_ten(conn).await
 }
 
 async fn journal_version(conn: &turso::Connection) -> Result<i64, HostError> {
@@ -324,6 +329,20 @@ async fn migrate_version_nine(conn: &turso::Connection) -> Result<(), HostError>
     }
     validation::validate_session_schema(conn).await?;
     conn.execute("PRAGMA user_version = 10", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    validation::validate_v10_schema(conn).await
+}
+
+async fn migrate_version_ten(conn: &turso::Connection) -> Result<(), HostError> {
+    validation::validate_v10_schema(conn).await?;
+    let create_table =
+        validation::POPULATION_TABLE_SQL.replacen("CREATE TABLE", "CREATE TABLE IF NOT EXISTS", 1);
+    conn.execute(&create_table, ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    validation::validate_population_schema(conn).await?;
+    conn.execute("PRAGMA user_version = 11", ())
         .await
         .map_err(|_| HostError::Journal)?;
     validation::validate_current_schema(conn).await

@@ -169,7 +169,7 @@ async fn v7_upgrade_preserves_uncertain_launch_and_adds_empty_rest_evidence() ->
         version_row
             .get::<i64>(0)
             .map_err(|error| error.to_string())?,
-        10
+        11
     );
     drop(version_rows);
     drop(conn);

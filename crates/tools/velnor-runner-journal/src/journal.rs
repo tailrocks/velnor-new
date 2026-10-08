@@ -14,6 +14,7 @@ mod events;
 mod intent;
 mod launch;
 mod lifecycle;
+mod population;
 mod protected_path;
 mod schema;
 mod session;
@@ -33,6 +34,9 @@ pub use cleanup::{
     PostActionDisposition, RunnerStartObservation,
 };
 pub use lifecycle::RunnerStartIntent;
+pub use population::{
+    PopulationSnapshotWrite, ScaleSetPopulationSnapshot, ScaleSetPopulationSource,
+};
 pub use session::{
     ScaleSetSessionClaim, ScaleSetSessionCloseClaim, ScaleSetSessionClosePermit,
     ScaleSetSessionIdentity,

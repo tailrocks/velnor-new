@@ -94,6 +94,16 @@ impl ScaleSetSessionIdentity {
         })
     }
 
+    /// Exact numeric Scale Set ID in this immutable route.
+    #[must_use]
+    pub const fn scale_set_id(&self) -> i64 {
+        self.scale_set_id
+    }
+
+    pub(super) fn subject(&self) -> &str {
+        &self.subject
+    }
+
     fn legacy_target_matches(&self, stored: Option<&str>) -> bool {
         match stored {
             Some(stored) => stored == self.target_repository_full_name,
