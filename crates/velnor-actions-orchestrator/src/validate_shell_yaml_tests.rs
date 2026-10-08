@@ -218,12 +218,22 @@ fn run_aliases_cannot_cross_workflow_files() -> Result<(), String> {
 #[test]
 fn aliases_outside_executable_run_scalars_fail_closed() {
     let env_alias = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: define\n        run: &r1 echo safe\n      - name: alias in env\n        env:\n          COPY: *r1\n        run: echo safe\n";
+    let tagged_env_anchor = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: define\n        run: echo safe\n      - name: tagged anchor in env\n        env:\n          COPY: !!str &outside safe\n        run: echo safe\n";
     let runner_anchor = "jobs:\n  job:\n    runs-on: &runner ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n  second:\n    runs-on: *runner\n    steps:\n      - name: second command\n        run: echo safe\n";
-    let flow_alias = "jobs:\n  job:\n    runs-on: [ubuntu-26.04, *runner]\n    steps:\n      - name: command\n        run: echo safe\n";
+    let flow_alias = "jobs:\n  job:\n    runs-on: [!!str &runner ubuntu-26.04, *runner]\n    steps:\n      - name: command\n        run: echo safe\n";
     let alias_key = "jobs:\n  job:\n    *runner: value\n    runs-on: ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n";
     let merge_key = "jobs:\n  job:\n    <<: {runs-on: ubuntu-26.04}\n    steps:\n      - name: command\n        run: echo safe\n";
+    let flow_merge_key = "jobs:\n  job:\n    env: {<<: {COPY: safe}}\n    runs-on: ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n";
 
-    for workflow in [env_alias, runner_anchor, flow_alias, alias_key, merge_key] {
+    for workflow in [
+        env_alias,
+        tagged_env_anchor,
+        runner_anchor,
+        flow_alias,
+        alias_key,
+        merge_key,
+        flow_merge_key,
+    ] {
         assert!(
             bodies(workflow).is_err_and(|error| {
                 error.contains("workflow_alias_outside_step_run")
@@ -245,6 +255,7 @@ fn literal_shell_globs_and_comments_are_not_yaml_aliases() -> Result<(), String>
 fn aliases_outside_run_fields_fail_the_complete_staged_validation_chain() -> Result<(), String> {
     for workflow in [
         "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: define\n        run: &r1 echo safe\n      - name: alias in env\n        env:\n          COPY: *r1\n        run: echo safe\n",
+        "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: define\n        run: echo safe\n      - name: tagged anchor in env\n        env:\n          COPY: !!str &outside safe\n          COPY2: *outside\n        run: echo safe\n",
         "jobs:\n  job:\n    runs-on: &runner ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n  second:\n    runs-on: *runner\n    steps:\n      - name: second command\n        run: echo safe\n",
     ] {
         let error = validate_generated_workflow(workflow)
@@ -252,6 +263,17 @@ fn aliases_outside_run_fields_fail_the_complete_staged_validation_chain() -> Res
         assert!(error.contains("workflow_alias_outside_step_run"), "{error}");
     }
     Ok(())
+}
+
+#[test]
+fn tagged_run_scalars_fail_closed_before_shell_validation() {
+    let tagged_anchor = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: tagged anchor\n        run: &r1 !!str \"echo $HOME\"\n      - name: alias\n        run: *r1\n";
+    assert!(
+        bodies(tagged_anchor).is_err_and(|error| error.contains("run_scalar_anchor_malformed"))
+    );
+
+    let tagged_alias = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: tagged alias\n        run: !!str *r1\n";
+    assert!(bodies(tagged_alias).is_err_and(|error| error.contains("run_scalar_tag_unsupported")));
 }
 
 #[test]
