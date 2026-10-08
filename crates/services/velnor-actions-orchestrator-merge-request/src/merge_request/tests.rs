@@ -41,3 +41,4 @@ pub(crate) fn staged(plan: &str, files: &[(&str, &str)]) -> tempfile::TempDir {
 mod actual_event_strict_tests;
 mod merge_event_tests;
 mod merge_request_tests;
+mod task_report_outputs;
