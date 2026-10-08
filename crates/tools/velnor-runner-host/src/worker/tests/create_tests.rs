@@ -275,6 +275,7 @@ fn assert_official_dind_projection(
             .map(|mount| (mount.source.as_str(), mount.target.as_str())),
         Some(("volume:worker_a-docker", "/var/lib/docker"))
     );
+    assert_eq!(dind.network_mode.as_deref(), Some("worker_a-outer"));
 }
 
 fn assert_runner_bollard_projection(
@@ -344,6 +345,7 @@ fn assert_dind_bollard_projection(dind: &crate::worker::CreateProjection) -> Res
         .as_ref()
         .ok_or(HostError::Docker)?;
     assert_eq!(dind_host.privileged, Some(true));
+    assert_eq!(dind_host.network_mode.as_deref(), Some("worker_a-outer"));
     assert!(dind_host.group_add.is_none());
     assert!(dind_host.security_opt.is_none());
     assert!(dind_host.port_bindings.is_none());

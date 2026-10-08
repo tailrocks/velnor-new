@@ -8,6 +8,8 @@ use crate::config::HostPlatform;
 use velnor_runner_journal::HostError;
 
 mod atomic;
+mod read;
+mod secure_read;
 
 /// Assign path ownership without dereferencing symlinks.
 ///
@@ -17,6 +19,8 @@ pub use atomic::assign_owner;
 use atomic::{
     FileOwner, FilePolicy, publish_new_file, remove_file_with_policy, validate_owned_directory,
 };
+pub use read::{MAX_HOST_CONFIG_BYTES, read_host_config_bytes};
+pub use secure_read::open_systemd_credential_file;
 
 /// Linux system configuration path installed by the Debian package.
 pub const LINUX_CONFIG_PATH: &str = "/etc/velnor-host/host.toml";
@@ -37,10 +41,10 @@ pub fn read_host_config_file(
     path: &Path,
     platform: HostPlatform,
 ) -> Result<Option<String>, HostError> {
-    match platform {
-        HostPlatform::Linux => read_linux_config(path),
-        HostPlatform::Macos => read_macos_config(path),
-    }
+    read_host_config_bytes(path, platform)?
+        .map(String::from_utf8)
+        .transpose()
+        .map_err(|_| HostError::Config)
 }
 
 /// Atomically create a new host configuration file without replacing an
@@ -134,48 +138,6 @@ pub fn linux_service_group_id() -> Result<u32, HostError> {
     service_identity_from_files(&passwd, &group)
 }
 
-fn read_linux_config(path: &Path) -> Result<Option<String>, HostError> {
-    if path != Path::new(LINUX_CONFIG_PATH) {
-        return Err(HostError::Config);
-    }
-    let group_id = linux_service_group_id()?;
-    validate_linux_directory(Path::new(LINUX_CONFIG_DIR), group_id)?;
-    let metadata = match fs::symlink_metadata(path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(_) => return Err(HostError::Config),
-    };
-    if !metadata.is_file()
-        || metadata.file_type().is_symlink()
-        || !owned_mode(&metadata, 0, group_id, 0o640)
-    {
-        return Err(HostError::Config);
-    }
-    fs::read_to_string(path)
-        .map(Some)
-        .map_err(|_| HostError::Config)
-}
-
-fn read_macos_config(path: &Path) -> Result<Option<String>, HostError> {
-    let parent = path.parent().ok_or(HostError::Config)?;
-    match fs::symlink_metadata(parent) {
-        Ok(directory) if safe_macos_directory(&directory)? => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Ok(_) | Err(_) => return Err(HostError::Config),
-    }
-    let metadata = match fs::symlink_metadata(path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(_) => return Err(HostError::Config),
-    };
-    if !metadata.is_file() || metadata.file_type().is_symlink() || !safe_macos_file(&metadata)? {
-        return Err(HostError::Config);
-    }
-    fs::read_to_string(path)
-        .map(Some)
-        .map_err(|_| HostError::Config)
-}
-
 fn persist_linux_config(path: &Path, text: &str) -> Result<(), HostError> {
     if path != Path::new(LINUX_CONFIG_PATH) || current_uid()? != 0 {
         return Err(HostError::Config);
@@ -265,11 +227,6 @@ pub fn validate_linux_directory(path: &Path, group_id: u32) -> Result<(), HostEr
             mode: 0o750,
         },
     )
-}
-
-fn owned_mode(metadata: &fs::Metadata, uid: u32, gid: u32, mode: u32) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    metadata.uid() == uid && metadata.gid() == gid && metadata.mode() & 0o7777 == mode
 }
 
 fn service_identity_from_files(passwd: &str, group: &str) -> Result<u32, HostError> {

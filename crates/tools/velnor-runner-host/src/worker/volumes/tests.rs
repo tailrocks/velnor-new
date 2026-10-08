@@ -2,8 +2,35 @@
 
 use std::time::Duration;
 
+use crate::HostError;
+
 pub(super) const TIMEOUT: Duration = Duration::from_secs(2);
 pub(super) const WORKER: &str = "wtransport";
+pub(super) const RUNNER_ID: &str = concat!(
+    "0123456789abcdef",
+    "0123456789abcdef",
+    "0123456789abcdef",
+    "0123456789abcdef"
+);
+
+#[test]
+fn public_volume_catalog_matches_the_six_role_worker_layout() {
+    assert_eq!(
+        super::worker_volume_names(WORKER),
+        Ok(vec![
+            "wtransport".to_owned(),
+            "wtransport-work".to_owned(),
+            "wtransport-externals".to_owned(),
+            "wtransport-docker".to_owned(),
+            "wtransport-home".to_owned(),
+            "wtransport-tmp".to_owned(),
+        ])
+    );
+    assert_eq!(
+        super::worker_volume_names("bad/name"),
+        Err(HostError::ForbiddenMount)
+    );
+}
 
 pub(super) fn volume_names() -> [(&'static str, &'static str); 3] {
     [

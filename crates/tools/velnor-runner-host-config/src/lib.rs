@@ -12,7 +12,8 @@ pub use config::{
     RegistrationScope, RegistrationScopeKind, RunnerConfig, ScaleSetBinding,
 };
 pub use config_file::{
-    LINUX_CONFIG_PATH, assign_owner, linux_service_group_id, persist_host_config_file,
+    LINUX_CONFIG_PATH, MAX_HOST_CONFIG_BYTES, assign_owner, linux_service_group_id,
+    open_systemd_credential_file, persist_host_config_file, read_host_config_bytes,
     read_host_config_file, remove_host_config_file, validate_host_config_target,
     validate_linux_directory,
 };

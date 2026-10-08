@@ -108,6 +108,18 @@ fn volume_catalog(worker: &str) -> Result<[WorkerVolume; 6], HostError> {
     ])
 }
 
+/// Return every deterministic Docker volume name owned by one worker.
+///
+/// This is the public read-only catalog used by launch reconciliation. It
+/// derives from the same role table used by provisioning and removal.
+///
+/// # Errors
+///
+/// Returns [`HostError::ForbiddenMount`] when the worker identity is invalid.
+pub fn worker_volume_names(worker: &str) -> Result<Vec<String>, HostError> {
+    volume_catalog(worker).map(|volumes| volumes.into_iter().map(|volume| volume.name).collect())
+}
+
 fn volumes_for_mounts(
     worker: &str,
     mounts: &[PlannedMount],

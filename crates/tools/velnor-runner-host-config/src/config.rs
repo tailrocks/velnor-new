@@ -165,7 +165,9 @@ pub struct HostLimits {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RunnerConfig {
-    /// Supported host image profile, such as `ubuntu-24.04-amd64`.
+    /// Operator-selected runner image profile. Linux accepts only the required
+    /// `ubuntu-26.04-amd64` selector and may remain cleanup-only until that
+    /// profile has an approved immutable image identity.
     pub image_profile: String,
 }
 
@@ -235,11 +237,15 @@ impl HostConfig {
                 return Err(HostError::Config);
             }
             let runner = self.runner.as_ref().ok_or(HostError::Config)?;
-            velnor_runner_docker_spec::resolve_runner_profile(
-                &runner.image_profile,
-                &self.github.scale_set_name,
-            )
-            .map_err(|_| HostError::Config)?;
+            // Keep Linux cleanup/reconciliation configuration readable while
+            // the required Ubuntu 26 profile lacks an approved immutable
+            // image identity. This validates the operator's exact intended
+            // profile; it does not resolve or authorize a runnable image.
+            if runner.image_profile != "ubuntu-26.04-amd64"
+                || self.github.scale_set_name != "ubuntu-26.04-scale-set"
+            {
+                return Err(HostError::Config);
+            }
         } else if !keychain_ref(&self.github.credential_ref) || self.runner.is_some() {
             return Err(HostError::Config);
         }

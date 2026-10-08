@@ -19,6 +19,7 @@ impl Journal {
         let journal = Self {
             path: path.to_path_buf(),
             read_only: true,
+            protected_path: None,
         };
         let _connection = journal.connection().await?;
         Ok(journal)
@@ -35,6 +36,7 @@ impl Journal {
         let journal = Self {
             path: path.to_path_buf(),
             read_only: false,
+            protected_path: None,
         };
         let _connection = journal.connection().await?;
         Ok(journal)

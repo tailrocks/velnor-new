@@ -14,6 +14,7 @@ mod events;
 mod intent;
 mod launch;
 mod lifecycle;
+mod protected_path;
 mod schema;
 mod worker_volume;
 
@@ -94,6 +95,7 @@ pub enum LaunchClaim {
 pub struct Journal {
     path: PathBuf,
     read_only: bool,
+    protected_path: Option<protected_path::ProtectedJournalPath>,
 }
 
 pub(super) async fn outer_network_removal_started(
@@ -129,6 +131,56 @@ impl Journal {
         let journal = Self {
             path: path.to_path_buf(),
             read_only: false,
+            protected_path: None,
+        };
+        journal.bootstrap().await?;
+        Ok(journal)
+    }
+
+    /// Open or create a journal beneath a host-validated protected service directory.
+    ///
+    /// The caller must first validate the parent with the host's trusted-directory
+    /// API. This method rejects unsafe database/sidecar objects before bootstrap,
+    /// creates a missing database with owner-only permissions, and pins the parent
+    /// and database identities for every later path-based Turso connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Path`] for an unsafe/replaced path and
+    /// [`HostError::Journal`] when schema bootstrap fails.
+    pub async fn open_protected(path: &Path) -> Result<Self, HostError> {
+        Self::open_protected_for_parent(path, None).await
+    }
+
+    /// Open a protected journal beneath the exact host-validated directory identity.
+    ///
+    /// `parent_device` and `parent_inode` must come from the same retained
+    /// `ProtectedStateDirectory` capability used to acquire the daemon lock.
+    /// The identity is checked before any database creation or schema bootstrap
+    /// and remains pinned for each subsequent Turso open.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Path`] when the current parent does not match the
+    /// retained identity, and [`HostError::Journal`] when bootstrap fails.
+    pub async fn open_protected_at(
+        path: &Path,
+        parent_device: u64,
+        parent_inode: u64,
+    ) -> Result<Self, HostError> {
+        Self::open_protected_for_parent(path, Some((parent_device, parent_inode))).await
+    }
+
+    async fn open_protected_for_parent(
+        path: &Path,
+        expected_parent: Option<(u64, u64)>,
+    ) -> Result<Self, HostError> {
+        let protected_path =
+            protected_path::ProtectedJournalPath::prepare_for_parent(path, expected_parent)?;
+        let journal = Self {
+            path: path.to_path_buf(),
+            read_only: false,
+            protected_path: Some(protected_path),
         };
         journal.bootstrap().await?;
         Ok(journal)
@@ -140,6 +192,9 @@ impl Journal {
     }
 
     async fn connection(&self) -> Result<turso::Connection, HostError> {
+        if let Some(protected_path) = &self.protected_path {
+            protected_path.validate(&self.path)?;
+        }
         let text = self.path.to_str().ok_or(HostError::Path)?;
         let db = turso::Builder::new_local(text)
             .read_only(self.read_only)

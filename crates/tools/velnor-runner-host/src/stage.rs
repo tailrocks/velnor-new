@@ -5,12 +5,17 @@
 use bollard::Docker;
 
 use crate::HostError;
-use crate::worker::{CreateProjection, dind_create, join_dind_net, runner_create};
-use velnor_runner_docker_spec::{DeleteDecision, RunnerImageProfile, delete_decision, runner_plan};
+use crate::worker::{CreateProjection, WorkerNetworkFailure, WorkerNetworkPlan};
+use velnor_runner_docker_spec::{DeleteDecision, RunnerImageProfile, delete_decision};
 
 mod docker_engine;
+mod preserving;
 mod profile;
+mod sink;
+pub use preserving::{drive_with_profile_and_sink, drive_with_sink};
 pub use profile::{drive_with_profile, start_pair_until_with_profile};
+pub(crate) use sink::Forget;
+pub use sink::{PairSink, PairStartFailure, PairStartPhase, RunnerStartRequirement};
 
 /// Where `start_pair_until` returns. Later steps are not started.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,6 +37,8 @@ pub enum PairStop {
 /// Containers created before a stop. Absent means that step did not run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PartialPair {
+    /// Linux outer bridge id, after create. Absent on the legacy/macOS path.
+    pub outer_network_id: Option<String>,
     /// `DinD` id, after create.
     pub dind_id: Option<String>,
     /// Runner id, after create.
@@ -56,6 +63,13 @@ pub trait PairEngine {
     ) -> Result<(), HostError> {
         self.prepare_volumes(volume).await
     }
+    /// Find or create the exact persisted outer bridge for a Linux generation.
+    async fn ensure_worker_network(
+        &self,
+        _plan: &WorkerNetworkPlan,
+    ) -> Result<String, WorkerNetworkFailure> {
+        Err(WorkerNetworkFailure::new(HostError::Config, None, false))
+    }
     /// Create one container from `spec`. Returns its id.
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError>;
     /// Start container `id`.
@@ -77,42 +91,6 @@ pub trait PairEngine {
     async fn remove_worker_volumes(&self, volume: &str) -> Result<bool, HostError>;
     /// Whether container `id` is running.
     async fn running(&self, id: &str) -> Result<bool, HostError>;
-}
-
-/// Records container ids before the next external start.
-#[expect(
-    async_fn_in_trait,
-    reason = "workspace style is async traits; RPITIT migration is a separate decision"
-)]
-pub trait PairSink {
-    /// Record the worker volume before any container exists.
-    async fn volume(&self, volume: &str) -> Result<(), HostError>;
-    /// Record the dind container id.
-    async fn dind(&self, id: &str) -> Result<(), HostError>;
-    /// Record the runner container id.
-    async fn runner(&self, id: &str) -> Result<(), HostError>;
-}
-
-/// Sink that does not record ids.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct Forget;
-
-#[expect(
-    clippy::unused_async_trait_impl,
-    reason = "sink matches the async trait and does not await"
-)]
-impl PairSink for Forget {
-    async fn volume(&self, _volume: &str) -> Result<(), HostError> {
-        Ok(())
-    }
-
-    async fn dind(&self, _id: &str) -> Result<(), HostError> {
-        Ok(())
-    }
-
-    async fn runner(&self, _id: &str) -> Result<(), HostError> {
-        Ok(())
-    }
 }
 
 /// Create through `stop`, then return. `Jit` matches [`crate::worker::start_pair`].
@@ -144,7 +122,7 @@ pub async fn drive<E: PairEngine, S: PairSink>(
     stop: PairStop,
     sink: &S,
 ) -> Result<PartialPair, HostError> {
-    drive_inner(engine, private_volume, jit, stop, sink, None).await
+    drive_inner(engine, private_volume, jit, stop, sink).await
 }
 
 /// Shared runner/DinD pair lifecycle used by both the legacy and explicit profile paths.
@@ -154,97 +132,14 @@ pub(super) async fn drive_inner<E: PairEngine, S: PairSink>(
     jit: &[u8],
     stop: PairStop,
     sink: &S,
-    profile: Option<&RunnerImageProfile>,
 ) -> Result<PartialPair, HostError> {
-    if jit.is_empty() {
-        return Err(HostError::EmptyJit);
+    match preserving::drive_preserving(engine, private_volume, jit, stop, sink, None).await {
+        Ok(pair) => Ok(pair),
+        Err(failure) => {
+            cleanup_partial(engine, failure.partial()).await;
+            Err(failure.error())
+        }
     }
-    let admission = if profile.is_some() {
-        Some(velnor_runner_apparmor::verify_runner_profile()?)
-    } else {
-        None
-    };
-    drive_inner_admitted(
-        engine,
-        private_volume,
-        jit,
-        stop,
-        sink,
-        profile,
-        admission.as_ref(),
-    )
-    .await
-}
-
-async fn drive_inner_admitted<E: PairEngine, S: PairSink>(
-    engine: &E,
-    private_volume: &str,
-    jit: &[u8],
-    stop: PairStop,
-    sink: &S,
-    profile: Option<&RunnerImageProfile>,
-    admission: Option<&velnor_runner_apparmor::RunnerProfileAdmission>,
-) -> Result<PartialPair, HostError> {
-    if profile.is_some() != admission.is_some() {
-        return Err(HostError::Config);
-    }
-    if jit.is_empty() {
-        return Err(HostError::EmptyJit);
-    }
-    if let Some(profile) = profile {
-        return profile::drive_admitted(
-            engine,
-            private_volume,
-            jit,
-            stop,
-            sink,
-            profile,
-            *admission.ok_or(HostError::Config)?,
-        )
-        .await;
-    }
-    let runner_plan = runner_plan(private_volume)?;
-    let dind = dind_create(private_volume)?;
-    let runner = runner_create(&runner_plan)?;
-    sink.volume(private_volume).await?;
-    engine
-        .prepare_volumes_for_profile(private_volume, profile)
-        .await?;
-    if stop == PairStop::Volumes {
-        return Ok(PartialPair::none());
-    }
-    let dind_id = engine.create(&dind).await?;
-    if let Err(error) = sink.dind(&dind_id).await {
-        return drop_id(engine, &dind_id, error).await;
-    }
-    if stop == PairStop::DindCreated {
-        return Ok(PartialPair::dind(dind_id));
-    }
-    start_or_drop(engine, &dind_id).await?;
-    if stop == PairStop::DindStarted {
-        return Ok(PartialPair::dind(dind_id));
-    }
-    let spec = join_or_drop(engine, runner, &dind_id).await?;
-    let runner_id = match engine.create(&spec).await {
-        Ok(id) => id,
-        Err(error) => drop_id(engine, &dind_id, error).await?,
-    };
-    if let Err(error) = sink.runner(&runner_id).await {
-        return drop_both(engine, &dind_id, &runner_id, error).await;
-    }
-    if stop == PairStop::RunnerCreated {
-        return Ok(PartialPair::both(dind_id, runner_id));
-    }
-    if let Err(error) = engine.start(&runner_id).await {
-        return drop_both(engine, &dind_id, &runner_id, error).await;
-    }
-    if stop == PairStop::RunnerStarted {
-        return Ok(PartialPair::both(dind_id, runner_id));
-    }
-    if let Err(error) = engine.write_jit(&runner_id, jit).await {
-        return drop_both(engine, &dind_id, &runner_id, error).await;
-    }
-    Ok(PartialPair::both(dind_id, runner_id))
 }
 
 #[cfg(test)]
@@ -256,17 +151,20 @@ pub(super) async fn drive_with_profile_for_test<E: PairEngine, S: PairSink>(
     sink: &S,
     profile: &RunnerImageProfile,
 ) -> Result<PartialPair, HostError> {
-    let admission = velnor_runner_apparmor::test_runner_profile_admission();
-    drive_inner_admitted(
-        engine,
-        private_volume,
-        jit,
-        stop,
-        sink,
-        Some(profile),
-        Some(&admission),
-    )
-    .await
+    preserving::drive_profile_for_test(engine, private_volume, jit, stop, sink, profile).await
+}
+
+#[cfg(test)]
+pub(super) async fn drive_with_profile_and_sink_for_test<E: PairEngine, S: PairSink>(
+    engine: &E,
+    private_volume: &str,
+    jit: &[u8],
+    stop: PairStop,
+    sink: &S,
+    profile: &RunnerImageProfile,
+) -> Result<PartialPair, PairStartFailure> {
+    preserving::drive_profile_preserving_for_test(engine, private_volume, jit, stop, sink, profile)
+        .await
 }
 
 /// Inspect `name`, then delete `owned_id` only on [`DeleteDecision::Delete`].
@@ -296,42 +194,19 @@ pub(crate) async fn decide<E: PairEngine + ?Sized>(
     Ok(decision)
 }
 
-async fn start_or_drop<E: PairEngine>(engine: &E, id: &str) -> Result<(), HostError> {
-    if let Err(error) = engine.start(id).await {
-        return drop_id(engine, id, error).await;
+pub(super) async fn cleanup_partial<E: PairEngine>(engine: &E, pair: &PartialPair) {
+    if let Some(runner_id) = pair.runner_id.as_deref() {
+        let _result = decide(engine, runner_id, runner_id).await;
     }
-    Ok(())
-}
-
-async fn join_or_drop<E: PairEngine>(
-    engine: &E,
-    runner: CreateProjection,
-    dind_id: &str,
-) -> Result<CreateProjection, HostError> {
-    match join_dind_net(runner, dind_id) {
-        Ok(spec) => Ok(spec),
-        Err(error) => drop_id(engine, dind_id, error).await,
+    if let Some(dind_id) = pair.dind_id.as_deref() {
+        let _result = decide(engine, dind_id, dind_id).await;
     }
-}
-
-async fn drop_id<E: PairEngine, T>(engine: &E, id: &str, error: HostError) -> Result<T, HostError> {
-    let _kept = decide(engine, id, id).await.err();
-    Err(error)
-}
-
-async fn drop_both<E: PairEngine, T>(
-    engine: &E,
-    dind_id: &str,
-    runner_id: &str,
-    error: HostError,
-) -> Result<T, HostError> {
-    let _runner = decide(engine, runner_id, runner_id).await.err();
-    drop_id(engine, dind_id, error).await
 }
 
 impl PartialPair {
     fn none() -> Self {
         Self {
+            outer_network_id: None,
             dind_id: None,
             runner_id: None,
         }
@@ -339,6 +214,7 @@ impl PartialPair {
 
     fn dind(dind_id: String) -> Self {
         Self {
+            outer_network_id: None,
             dind_id: Some(dind_id),
             runner_id: None,
         }
@@ -346,6 +222,30 @@ impl PartialPair {
 
     fn both(dind_id: String, runner_id: String) -> Self {
         Self {
+            outer_network_id: None,
+            dind_id: Some(dind_id),
+            runner_id: Some(runner_id),
+        }
+    }
+
+    fn network(network_id: String) -> Self {
+        Self {
+            outer_network_id: Some(network_id),
+            ..Self::none()
+        }
+    }
+
+    fn dind_with_network(network_id: String, dind_id: String) -> Self {
+        Self {
+            outer_network_id: Some(network_id),
+            dind_id: Some(dind_id),
+            runner_id: None,
+        }
+    }
+
+    fn both_with_network(network_id: String, dind_id: String, runner_id: String) -> Self {
+        Self {
+            outer_network_id: Some(network_id),
             dind_id: Some(dind_id),
             runner_id: Some(runner_id),
         }

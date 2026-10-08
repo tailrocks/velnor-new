@@ -8,7 +8,7 @@ use crate::HostError;
 use crate::docker_client::docker_deadline;
 use crate::worker::{
     CreateProjection, create_named_volumes, create_only, deliver_jit, dind_create,
-    dind_create_for_profile, remove_worker_volumes, start_id,
+    dind_create_for_profile, ensure_worker_network, remove_worker_volumes, start_id,
 };
 use velnor_runner_docker_spec::{RunnerImageProfile, runner_plan_for_profile};
 
@@ -38,6 +38,13 @@ impl PairEngine for Docker {
             None => dind_create(volume)?.mounts,
         };
         Box::pin(docker_deadline(create_named_volumes(self, volume, &mounts))).await?
+    }
+
+    async fn ensure_worker_network(
+        &self,
+        plan: &crate::worker::WorkerNetworkPlan,
+    ) -> Result<String, crate::worker::WorkerNetworkFailure> {
+        ensure_worker_network(self, plan).await
     }
 
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError> {

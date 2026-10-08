@@ -98,7 +98,7 @@ pub fn connect_unix(socket: &str) -> Result<bollard::Docker, HostError> {
 }
 
 /// Absolute path after an optional `unix://` prefix. `tcp://` never reaches Bollard.
-fn unix_socket_path(socket: &str) -> Result<String, HostError> {
+pub(crate) fn unix_socket_path(socket: &str) -> Result<String, HostError> {
     if scheme_is(socket, "tcp") {
         return Err(HostError::Docker);
     }
