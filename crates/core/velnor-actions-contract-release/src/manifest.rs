@@ -154,14 +154,28 @@ impl ReleaseManifest {
         self.targets.iter().find(|record| record.target == target)
     }
 
-    /// Validate schema, version, repository, and every target record.
+    /// Validate a complete release manifest across every supported target.
     ///
-    /// The repository is pinned to the canonical identity and every
-    /// artifact URL is bound to this exact version and target (X1); a
-    /// shape-only URL here would let a merged manifest redirect the
-    /// Acquire step at attacker infrastructure.
+    /// Release producers must publish the full target set. Consumer callers
+    /// that need one runner target may use [`Self::validate_for_targets`].
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
+        self.validate_for_targets(file, &crate::targets::ReleaseTarget::ALL)
+    }
+
+    /// Validate every present record and require each selected target.
+    ///
+    /// This preserves older manifests for consumers that only select a
+    /// target present in the manifest. Release production still uses
+    /// [`Self::validate`] and requires every currently supported target.
+    /// The repository is pinned to the canonical identity and every
+    /// artifact URL is bound to this exact version and target (X1).
+    /// # Errors
+    pub fn validate_for_targets(
+        &self,
+        file: &str,
+        required_targets: &[crate::targets::ReleaseTarget],
+    ) -> Result<(), ContractError> {
         check_schema(self.schema)?;
         check_semver(&self.version, file, "version")?;
         if self.repository != crate::targets::EXPECTED_REPOSITORY {
@@ -201,7 +215,7 @@ impl ReleaseManifest {
                 ));
             }
         }
-        for target in crate::targets::ReleaseTarget::ALL {
+        for target in required_targets {
             if !seen.contains(target.triple()) {
                 return Err(ContractError::config(
                     file,
