@@ -1,11 +1,16 @@
 //! Generated-tree assembly: marker-checked files in sorted path order.
 //!
 //! [`render_tree`] builds the exact base files (`actionlint.yaml`, `ci.yml`,
-//! `AGENTS.md`, and `CLAUDE.md -> AGENTS.md`); [`render_tree_with_extra`]
-//! adds the validated release family. Rendering the workflow bytes stays in
-//! [`crate::render`]; this module assembles and validates the generated tree.
+//! `AGENTS.md`, and a `CLAUDE.md` regular-file mirror of `AGENTS.md`);
+//! [`render_tree_with_extra`] adds the validated release family. Rendering
+//! the workflow bytes stays in [`crate::render`]; this module assembles and
+//! validates the generated tree.
+//!
+//! `CLAUDE.md` is a regular file, never a symlink: plugin installers reject
+//! packages that contain symlink entries, so generated trees must not emit
+//! any.
 
-use velnor_actions_contract::{AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET};
+use velnor_actions_contract::{AGENTS_MD_PATH, CLAUDE_MD_PATH};
 
 use crate::agents_md;
 use crate::render::{ACTIONLINT_PATH, WORKFLOW_PATH};
@@ -30,8 +35,9 @@ pub struct RenderedSymlink {
 }
 
 /// The generated files and symlinks, sorted by path: the base files
-/// (actionlint config, CI workflow, AGENTS.md, and CLAUDE.md symlink) with release
-/// disabled, plus the release family when release rendering is enabled.
+/// (actionlint config, CI workflow, AGENTS.md, and the CLAUDE.md mirror file)
+/// with release disabled, plus the release family when release rendering is
+/// enabled.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedTree {
     /// Generated files in sorted path order.
@@ -124,6 +130,10 @@ pub fn render_tree_with_extra(
     guard::validate_tree_path(CLAUDE_MD_PATH)?;
 
     let agents_file = agents_md::render_agents_md(version)?;
+    let claude_file = RenderedFile {
+        path: CLAUDE_MD_PATH.to_owned(),
+        bytes: agents_file.bytes.clone(),
+    };
 
     let mut files = vec![
         RenderedFile {
@@ -135,6 +145,7 @@ pub fn render_tree_with_extra(
             bytes: workflow_bytes.to_owned(),
         },
         agents_file,
+        claude_file,
     ];
     for file in extra {
         marker::check_first_line(&file.bytes, version)?;
@@ -162,10 +173,8 @@ pub fn render_tree_with_extra(
         }
     }
 
-    let symlinks = vec![RenderedSymlink {
-        path: CLAUDE_MD_PATH.to_owned(),
-        target: CLAUDE_MD_TARGET.to_owned(),
-    }];
-
-    Ok(RenderedTree { files, symlinks })
+    Ok(RenderedTree {
+        files,
+        symlinks: Vec::new(),
+    })
 }

@@ -15,10 +15,9 @@ pub struct GithubFormat {
 
 /// Generated AGENTS.md instruction path inside the repository.
 pub const AGENTS_MD_PATH: &str = ".github/AGENTS.md";
-/// Generated CLAUDE.md symlink path inside the repository.
+/// Generated CLAUDE.md mirror path inside the repository: a regular file with
+/// bytes identical to [`AGENTS_MD_PATH`], never a symlink.
 pub const CLAUDE_MD_PATH: &str = ".github/CLAUDE.md";
-/// Relative symlink target for sibling CLAUDE.md.
-pub const CLAUDE_MD_TARGET: &str = "AGENTS.md";
 
 /// Every declared `.github` output format (gen §0).
 pub const DECLARED_GITHUB_FORMATS: [GithubFormat; 4] = [

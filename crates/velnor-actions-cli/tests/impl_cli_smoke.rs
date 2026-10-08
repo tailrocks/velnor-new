@@ -315,7 +315,13 @@ fn preview_prints_absolute_paths_and_files() -> Result<(), Box<dyn Error>> {
     assert!(stderr.contains(".github/actionlint.yaml"), "{stderr}");
     assert!(stderr.contains(".github/workflows/ci.yml"), "{stderr}");
     assert!(preview.join(".github/AGENTS.md").is_file());
-    assert!(preview.join(".github/CLAUDE.md").is_symlink());
+    let claude = preview.join(".github/CLAUDE.md");
+    assert!(claude.is_file());
+    assert!(!claude.is_symlink());
+    assert_eq!(
+        std::fs::read(&claude)?,
+        std::fs::read(preview.join(".github/AGENTS.md"))?
+    );
     cleanup(&tmp);
     cleanup(&outer);
     Ok(())

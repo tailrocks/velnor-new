@@ -1,9 +1,10 @@
-//! Golden-tree pins: committed `OpenToFu` goldens keep generated symlinks.
+//! Golden-tree pins: committed `OpenToFu` goldens keep generated mirrors.
 //!
-//! The capture script once used plain `cp -r`, which dereferences symlinks
-//! and materialized every golden CLAUDE.md as a regular file (alint
-//! `claude-is-agents-symlink` failures). This pin fails closed on any
-//! recurrence. Reads repository files only; asserts through content.
+//! Generated `CLAUDE.md` files are regular files with bytes identical to
+//! their sibling `AGENTS.md`, never symlinks: plugin installers reject
+//! packages that contain symlink entries. This pin fails closed on any
+//! symlink recurrence or content drift. Reads repository files only;
+//! asserts through content.
 
 use std::error::Error;
 use std::path::Path;
@@ -11,7 +12,7 @@ use std::path::Path;
 use crate::impl_repo_policy::repo_root;
 
 #[test]
-fn golden_claude_files_are_agents_symlinks() -> Result<(), Box<dyn Error>> {
+fn golden_claude_files_mirror_agents_bytes() -> Result<(), Box<dyn Error>> {
     let cases = repo_root().join("docs/proposed/opentofu-goldens/cases");
     let mut entries: Vec<_> = std::fs::read_dir(&cases)?.collect::<Result<_, _>>()?;
     entries.sort_by_key(std::fs::DirEntry::file_name);
@@ -21,17 +22,25 @@ fn golden_claude_files_are_agents_symlinks() -> Result<(), Box<dyn Error>> {
             continue;
         }
         let name = entry.file_name().to_string_lossy().into_owned();
-        let link = entry.path().join("preview/.github/CLAUDE.md");
-        let meta = std::fs::symlink_metadata(&link)
+        let claude = entry.path().join("preview/.github/CLAUDE.md");
+        let agents = entry.path().join("preview/.github/AGENTS.md");
+        let meta = std::fs::symlink_metadata(&claude)
             .map_err(|_| format!("golden {name} lacks preview/.github/CLAUDE.md"))?;
         assert!(
-            meta.is_symlink(),
-            "golden {name} CLAUDE.md is a regular file: capture dereferenced the symlink",
+            !meta.is_symlink(),
+            "golden {name} CLAUDE.md is a symlink: generator must emit a regular file",
+        );
+        assert!(
+            meta.is_file(),
+            "golden {name} CLAUDE.md is not a regular file",
         );
         assert_eq!(
-            std::fs::read_link(&link)?,
-            Path::new("AGENTS.md"),
-            "golden {name} CLAUDE.md points at the wrong target",
+            std::fs::read(&claude)?,
+            std::fs::read(&agents).map_err(|_| format!(
+                "golden {name} lacks preview/.github/AGENTS.md ({})",
+                Path::new("preview/.github/AGENTS.md").display()
+            ))?,
+            "golden {name} CLAUDE.md bytes differ from AGENTS.md",
         );
         seen += 1;
     }

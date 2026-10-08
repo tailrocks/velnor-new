@@ -9,9 +9,9 @@ use velnor_actions_contract::{
 };
 use velnor_actions_workflow_renderer::{
     ACTIONLINT_PATH, AGENTS_MD_PATH, ALINT_USES, CANDIDATE_JOB_ID, CLAUDE_MD_PATH,
-    CLAUDE_MD_TARGET, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, FORBIDDEN_TOKENS, INTERNAL_OP_ENV,
-    REQUEST_FILE_ENV, RenderContext, RenderError, ValidatorCommand, WORKFLOW_PATH, checkout_step,
-    plan_step, render_tree, render_workflow_ir, with_marker,
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, FORBIDDEN_TOKENS, INTERNAL_OP_ENV, REQUEST_FILE_ENV,
+    RenderContext, RenderError, ValidatorCommand, WORKFLOW_PATH, checkout_step, plan_step,
+    render_tree, render_workflow_ir, with_marker,
 };
 
 const VERSION: &str = "0.1.0";
@@ -119,7 +119,7 @@ fn workflow_render_is_byte_stable() -> Result<(), RenderError> {
 }
 
 #[test]
-fn consumer_tree_has_exactly_two_sorted_paths() -> Result<(), RenderError> {
+fn consumer_tree_has_exactly_four_sorted_paths() -> Result<(), RenderError> {
     let workflow = render_workflow_ir(
         &fixture_ir()?,
         WorkflowPolicy::ConsumerV1,
@@ -127,13 +127,13 @@ fn consumer_tree_has_exactly_two_sorted_paths() -> Result<(), RenderError> {
         &fixture_ctx(),
     )?;
     let tree = render_tree(&workflow, &actionlint_bytes()?, VERSION)?;
-    assert_eq!(tree.files.len(), 3);
-    assert_eq!(tree.symlinks.len(), 1);
+    assert_eq!(tree.files.len(), 4);
+    assert!(tree.symlinks.is_empty());
     assert_eq!(tree.files[0].path, AGENTS_MD_PATH);
-    assert_eq!(tree.files[1].path, ACTIONLINT_PATH);
-    assert_eq!(tree.files[2].path, WORKFLOW_PATH);
-    assert_eq!(tree.symlinks[0].path, CLAUDE_MD_PATH);
-    assert_eq!(tree.symlinks[0].target, CLAUDE_MD_TARGET);
+    assert_eq!(tree.files[1].path, CLAUDE_MD_PATH);
+    assert_eq!(tree.files[2].path, ACTIONLINT_PATH);
+    assert_eq!(tree.files[3].path, WORKFLOW_PATH);
+    assert_eq!(tree.files[1].bytes, tree.files[0].bytes);
     assert_eq!(tree.get(WORKFLOW_PATH), Some(workflow.as_str()));
     assert!(tree.get(".github/other.yml").is_none());
     Ok(())
@@ -171,8 +171,8 @@ fn consumer_tree_has_no_codeowners_merges_verify_and_rejects_candidate() -> Resu
     let text = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, Some(&empty), &ctx)?;
     assert!(!text.contains("CODEOWNERS"));
     let tree = render_tree(&text, &actionlint_bytes()?, VERSION)?;
-    assert_eq!(tree.files.len(), 3);
-    assert_eq!(tree.symlinks.len(), 1);
+    assert_eq!(tree.files.len(), 4);
+    assert!(tree.symlinks.is_empty());
     Ok(())
 }
 
