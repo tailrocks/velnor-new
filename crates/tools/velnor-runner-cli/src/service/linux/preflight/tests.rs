@@ -10,6 +10,7 @@ use super::super::{
 };
 use super::{verify_loaded_unit, verify_loaded_unit_for_config};
 use crate::args::ServiceAction;
+use velnor_runner_host::MAX_LINUX_DRAIN_TIMEOUT_SECS;
 
 #[derive(Default)]
 struct FakeManager {
@@ -94,8 +95,8 @@ fn valid_manager(timeout: &str) -> FakeManager {
 }
 
 #[test]
-fn preflight_accepts_activation_state_when_effective_stop_timeout_exceeds_configured_drain() {
-    let mut manager = valid_manager("31s");
+fn preflight_accepts_activation_state_with_the_pinned_finite_package_stop_budget() {
+    let mut manager = valid_manager("1860s");
 
     assert_eq!(verify_loaded_unit(&mut manager, 30), Ok(()));
     assert_eq!(manager.systemctl_calls.len(), 2);
@@ -136,7 +137,7 @@ fn preflight_rejects_missing_redirected_or_non_singleton_environment_before_iden
         b"as 1 \"PATH=/usr/sbin:/usr/bin:/sbin:/bin\" \"EXTRA=value\"\n".as_slice(),
         b"s \"PATH=/usr/sbin:/usr/bin:/sbin:/bin\"\n".as_slice(),
     ] {
-        let mut manager = valid_manager("31s");
+        let mut manager = valid_manager("1860s");
         manager
             .environment_outputs
             .push_back(output(true, environment.to_vec()));
@@ -155,26 +156,8 @@ fn preflight_rejects_missing_redirected_or_non_singleton_environment_before_iden
 }
 
 #[test]
-fn preflight_rejects_equal_stop_timeout() {
-    let mut manager = valid_manager("30s");
-
-    assert_eq!(
-        verify_loaded_unit(&mut manager, 30),
-        Err(ServiceFault::ServiceContract)
-    );
-    assert_eq!(manager.systemctl_calls.len(), 1);
-    assert_eq!(manager.busctl_calls.len(), 1);
-    assert!(
-        !manager
-            .busctl_calls
-            .iter()
-            .any(|call| call.last().is_some_and(|value| value == "LoadCredential"))
-    );
-}
-
-#[test]
-fn preflight_rejects_shorter_stop_timeout() {
-    let mut manager = valid_manager("29s");
+fn preflight_rejects_unpinned_stop_timeout() {
+    let mut manager = valid_manager("1859s");
 
     assert_eq!(
         verify_loaded_unit(&mut manager, 30),
@@ -209,20 +192,23 @@ fn preflight_rejects_infinite_stop_timeout() {
 }
 
 #[test]
-fn preflight_rejects_zero_configured_drain_without_contacting_systemd() {
-    let mut manager = FakeManager::default();
+fn preflight_rejects_out_of_range_configured_drain_without_contacting_systemd() {
+    for timeout in [0, MAX_LINUX_DRAIN_TIMEOUT_SECS + 1] {
+        let mut manager = FakeManager::default();
 
-    assert_eq!(
-        verify_loaded_unit(&mut manager, 0),
-        Err(ServiceFault::InvalidConfig)
-    );
-    assert_eq!(manager.systemctl_calls.len(), 0);
-    assert_eq!(manager.busctl_calls.len(), 0);
+        assert_eq!(
+            verify_loaded_unit(&mut manager, timeout),
+            Err(ServiceFault::InvalidConfig),
+            "unexpected acceptance for drain timeout {timeout}"
+        );
+        assert_eq!(manager.systemctl_calls.len(), 0);
+        assert_eq!(manager.busctl_calls.len(), 0);
+    }
 }
 
 #[test]
 fn preflight_fails_closed_when_the_loaded_credential_mapping_differs() {
-    let mut manager = valid_manager("31s");
+    let mut manager = valid_manager("1860s");
     manager.busctl_outputs[0] = output(true, b"a(ss) 1 \"other\" \"/tmp/credential\"\n".to_vec());
 
     assert_eq!(
@@ -234,7 +220,7 @@ fn preflight_fails_closed_when_the_loaded_credential_mapping_differs() {
 
 #[test]
 fn preflight_rejects_a_missing_or_redirected_execstartpre_before_credentials() {
-    let source = String::from_utf8_lossy(&loaded_service("31s").stdout).into_owned();
+    let source = String::from_utf8_lossy(&loaded_service("1860s").stdout).into_owned();
     let missing = source.replace("ExecStartPre=", "ExecStartPreBackup=");
     let mut manager = FakeManager {
         systemctl_outputs: [output(true, missing.into_bytes())].into(),
@@ -266,7 +252,7 @@ fn preflight_rejects_a_missing_or_redirected_execstartpre_before_credentials() {
 
 #[test]
 fn service_preflight_dispatch_accepts_the_systemd_activation_phase() {
-    let mut manager = valid_manager("31s");
+    let mut manager = valid_manager("1860s");
 
     assert_eq!(perform(ServiceAction::Preflight, &mut manager, 30), Ok(()));
     assert_eq!(manager.systemctl_calls.len(), 2);

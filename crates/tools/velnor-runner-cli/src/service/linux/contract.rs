@@ -2,18 +2,25 @@
 
 use std::path::Path;
 
-use velnor_runner_host::{HostConfig, HostError, HostPlatform, read_host_config_file};
+use velnor_runner_host::{
+    HostConfig, HostError, HostPlatform, MAX_LINUX_DRAIN_TIMEOUT_SECS, read_host_config_file,
+};
 
 use super::systemd::{IdentityUnitSnapshot, StopTimeout, UnitSnapshot};
 use super::{BINARY, CONFIG, IDENTITY_BINARY, IDENTITY_UNIT, STATE, ServiceFault, UNIT};
+
+const SYSTEMD_STOP_ALLOWANCE_SECS: u64 = 60;
+pub(super) const SYSTEMD_STOP_TIMEOUT_SECS: u64 =
+    MAX_LINUX_DRAIN_TIMEOUT_SECS + SYSTEMD_STOP_ALLOWANCE_SECS;
+pub(super) const SYSTEMD_STOP_TIMEOUT_USEC: u128 = SYSTEMD_STOP_TIMEOUT_SECS as u128 * 1_000_000;
 
 pub(super) fn verify_package_contract(
     snapshot: &UnitSnapshot,
     drain_timeout_secs: u64,
 ) -> Result<(), ServiceFault> {
-    let drain_timeout_usec = u128::from(drain_timeout_secs)
-        .checked_mul(1_000_000)
-        .ok_or(ServiceFault::InvalidConfig)?;
+    if drain_timeout_secs == 0 || drain_timeout_secs > MAX_LINUX_DRAIN_TIMEOUT_SECS {
+        return Err(ServiceFault::InvalidConfig);
+    }
     if snapshot.load_state != "loaded"
         || snapshot.exec_start_pre.path != BINARY
         || snapshot.exec_start_pre.argv != preflight_argv()
@@ -24,10 +31,7 @@ pub(super) fn verify_package_contract(
         || snapshot.exec_stop.path != BINARY
         || snapshot.exec_stop.argv != stop_argv()
         || snapshot.exec_stop.ignore_errors != "no"
-        || !matches!(
-            snapshot.timeout_stop,
-            StopTimeout::Finite(timeout) if timeout > drain_timeout_usec
-        )
+        || snapshot.timeout_stop != StopTimeout::Finite(SYSTEMD_STOP_TIMEOUT_USEC)
         || snapshot.timeout_stop_failure_mode != "terminate"
         || snapshot.kill_signal != "15"
         || snapshot.kill_mode != "mixed"

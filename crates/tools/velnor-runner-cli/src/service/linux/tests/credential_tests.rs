@@ -10,7 +10,7 @@ fn start_rejects_a_missing_or_redirected_systemd_credential_before_start() {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
     for credential in [
         manager_output(true, b"a(ss) 0\n".to_vec()),

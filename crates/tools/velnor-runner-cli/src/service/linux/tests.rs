@@ -175,7 +175,7 @@ fn start_does_not_mutate_a_unit_with_an_unexpected_command() {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
     let altered = String::from_utf8_lossy(&snapshot)
         .replace(
@@ -202,7 +202,7 @@ fn start_requires_the_root_identity_preflight_dependency_and_order() {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
     let altered = String::from_utf8_lossy(&valid).replace(&format!(" {IDENTITY_UNIT}"), "");
     let mut manager = FakeManager::with_outputs([manager_output(true, altered.into_bytes())]);
@@ -224,7 +224,7 @@ fn start_rejects_writable_host_paths_outside_state_directory() {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
     let altered = String::from_utf8_lossy(&valid).replace(
         "ReadWritePaths=/var/lib/velnor-host",
@@ -261,7 +261,7 @@ fn start_rejects_an_unbounded_stop_timeout_before_mutating_the_unit() {
 }
 
 #[test]
-fn start_requires_stop_timeout_to_exceed_the_configured_drain_timeout() {
+fn start_rejects_a_stop_timeout_that_differs_from_the_pinned_package_budget() {
     let equal = unit_snapshot(UnitSnapshot {
         active_state: "inactive",
         sub_state: "dead",
@@ -291,7 +291,7 @@ fn low_level_stop_helper_fails_closed_without_the_coordinator() {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
     let mut manager = FakeManager::with_outputs([manager_output(true, active)]);
 
@@ -355,5 +355,6 @@ mod credential_tests;
 mod environment_tests;
 mod identity_tests;
 mod start_contract_tests;
+mod stop_budget_tests;
 mod stop_tests;
 mod verify_stopped_tests;

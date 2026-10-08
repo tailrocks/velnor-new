@@ -6,12 +6,22 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use velnor_runner_host::{
-    ConnectPlan, HostConfig, HostError, HostPlatform, connect_plan, discover_product_scale_set,
-    persist_host_config_file, read_host_config_file, read_secret, remove_host_config_file,
-    store_configured_secret, validate_host_config_target,
+    ConnectPlan, HostConfig, HostError, HostPlatform, MAX_LINUX_DRAIN_TIMEOUT_SECS, connect_plan,
+    discover_product_scale_set, persist_host_config_file, read_host_config_file, read_secret,
+    remove_host_config_file, store_configured_secret, validate_host_config_target,
 };
 
 use crate::service::ControllerServiceState;
+
+mod binding;
+mod format;
+mod platform;
+
+use self::binding::{BindingAndTrust, validate_binding_and_trust};
+use self::format::{credential_reference, toml_string};
+use self::platform::host_platform;
+#[cfg(test)]
+pub(super) use self::platform::host_platform_for;
 
 pub(super) struct ConnectRequest<'a> {
     pub(super) config_path: &'a Path,
@@ -240,51 +250,17 @@ fn connect_settings<'a>(
         _ => return Err(ConnectError::Config),
     };
     let linux = host_platform == "linux";
-    let group = match (request.runner_group_id, request.runner_group_name) {
-        (Some(id), Some(name))
-            if id > 0 && !name.trim().is_empty() && !name.chars().any(char::is_control) =>
-        {
-            Some((id, name))
-        }
-        (None, None) => None,
-        _ => return Err(ConnectError::Config),
-    };
-    if request
-        .registration_scope
-        .is_some_and(|scope| scope != "repository")
-    {
-        return Err(ConnectError::Config);
-    }
-    let explicit_binding = request.registration_scope.is_some() || group.is_some();
-    if group.is_none()
-        && (request.registration_scope.is_some()
-            || !request.allowed_events.is_empty()
-            || !request.allowed_workflow_paths.is_empty())
-    {
-        return Err(ConnectError::Config);
-    }
     if linux
-        && (request.registration_scope != Some("repository")
-            || group.is_none()
-            || request.allowed_events.is_empty()
-            || request.allowed_workflow_paths.is_empty()
-            || request.max_jobs.is_none())
+        && request
+            .drain_timeout_secs
+            .is_some_and(|timeout| timeout > MAX_LINUX_DRAIN_TIMEOUT_SECS)
     {
         return Err(ConnectError::Config);
     }
-    if request.allowed_events.is_empty() != request.allowed_workflow_paths.is_empty() {
-        return Err(ConnectError::Config);
-    }
-    if request
-        .allowed_workflow_paths
-        .iter()
-        .any(|path| path.is_empty() || path.chars().any(char::is_control))
-    {
-        return Err(ConnectError::Config);
-    }
-    if linux && request.drain_timeout_secs.is_none() {
-        return Err(ConnectError::Config);
-    }
+    let BindingAndTrust {
+        group,
+        explicit_binding,
+    } = validate_binding_and_trust(request, linux)?;
     let image = match (linux, request.image_profile) {
         (true, Some(profile)) => Some(profile),
         (true, None) | (false, Some(_)) => return Err(ConnectError::Config),
@@ -374,28 +350,4 @@ fn append_group(text: &mut String, group: Option<(i64, &str)>) -> Result<(), Con
     )
     .map_err(|_| ConnectError::Write)?;
     Ok(())
-}
-
-fn credential_reference(host_platform: &str) -> &'static str {
-    if host_platform == "linux" {
-        "systemd-credential:github-token"
-    } else {
-        "keychain:com.tailrocks.velnor.host/velnor-host"
-    }
-}
-
-fn toml_string(value: &str) -> Result<String, ConnectError> {
-    serde_json::to_string(value).map_err(|_| ConnectError::Config)
-}
-
-pub(super) fn host_platform_for(target_os: &str) -> Option<HostPlatform> {
-    match target_os {
-        "linux" => Some(HostPlatform::Linux),
-        "macos" => Some(HostPlatform::Macos),
-        _ => None,
-    }
-}
-
-fn host_platform() -> Option<HostPlatform> {
-    host_platform_for(std::env::consts::OS)
 }

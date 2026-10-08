@@ -13,7 +13,7 @@ fn parse_execstartpre_matches_systemctl_output_from_loaded_unit() {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "31s",
+        timeout: "1860s",
     }))
     .expect("ASCII unit fixture");
     let package_preflight = format!(
@@ -43,7 +43,7 @@ fn start_rejects_commands_that_ignore_failures_or_have_incomplete_error_policy()
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
     let source = String::from_utf8_lossy(&valid);
     for command in ["ExecStartPre=", "ExecStart=", "ExecStop="] {
@@ -96,7 +96,7 @@ fn start_rejects_waiting_exec_stop_command() {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
     let source = String::from_utf8_lossy(&valid);
     let stale = source.replacen(" drain ;", " drain --wait ;", 1);
@@ -125,7 +125,7 @@ fn start_rejects_exec_stop_timeout_mode_that_skips_sigterm() {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
     let source = String::from_utf8_lossy(&valid);
     let altered = source.replace(
@@ -152,7 +152,7 @@ fn start_rejects_exec_stop_kill_signal_that_skips_sigterm() {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
     let source = String::from_utf8_lossy(&valid);
     let altered = source.replace("KillSignal=15", "KillSignal=9");
@@ -176,7 +176,7 @@ fn start_rejects_kill_modes_that_can_suppress_or_broaden_signal_delivery() {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
     let source = String::from_utf8_lossy(&valid);
     for kill_mode in ["none", "control-group", "process"] {
@@ -209,7 +209,7 @@ fn start_requires_the_controller_identity_marker_condition() {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
     for condition in [
         manager_output(true, b"a(sbbsi) 0\n".to_vec()),
