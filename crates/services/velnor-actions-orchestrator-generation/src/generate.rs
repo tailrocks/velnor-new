@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use velnor_actions_actionlint::render_actionlint_yaml;
 use velnor_actions_contract_config::ExecutionMode;
 use velnor_actions_contract_workflow::expand_workflow;
-use velnor_actions_workflow_renderer::tree::render_tree_with_extra;
+use velnor_actions_workflow_renderer::render_tree_with_extra_and_preserved_template;
 use velnor_actions_workflow_tree::guard::{self, SafeTreePath};
 use velnor_actions_workflow_tree::marker::rehead_actionlint_marker;
 use velnor_actions_workflow_tree::rendered::RenderedTree;
@@ -27,6 +27,8 @@ pub(crate) mod guards;
 pub use velnor_actions_orchestrator_discovery::tool_snapshot::ToolSnapshot;
 
 use guards::{GenerateOwnership, prepare_preview_dir, same_filesystem};
+
+pub(crate) mod preserved_template;
 
 /// Options for [`generate`].
 #[derive(Debug, Clone, Default)]
@@ -82,21 +84,25 @@ pub fn generate_dispatched(
         &prep.discovery.statuses,
     );
     let tofu_locks = velnor_actions_tofu_core::TofuLockSnapshot::capture(&prep.root, &tofu_roots);
-    let tree = render_staged_tree_with(prep, dispatch)?;
-    let validated_by = validate_staged(&tree)?;
+    let rendered = render_staged_tree_with_snapshot(prep, dispatch)?;
+    let validated_by = validate_staged(&rendered.tree)?;
     tools.verify(&prep.root)?;
     tofu_locks
         .verify(&prep.root)
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     let warnings = match &opts.output_dir {
-        None => replace_in_place(prep, &tree)?,
+        None => replace_in_place(
+            &prep.root,
+            &rendered.tree,
+            rendered.preserved_template.as_deref(),
+        )?,
         Some(dir) => {
-            write_preview(prep, dir, &tree)?;
+            write_preview(prep, dir, &rendered.tree)?;
             Vec::new()
         }
     };
     Ok(GenerateReport {
-        files_written: tree.paths(),
+        files_written: rendered.tree.paths(),
         recommendations: prep.discovery.recommendations.clone(),
         validated_by,
         profiles: profile_provenance(prep),
@@ -149,17 +155,31 @@ pub fn render_staged_tree_with(
     prep: &GenerationPreparation,
     dispatch: Option<ExecutionMode>,
 ) -> Result<RenderedTree, OrchestratorError> {
+    Ok(render_staged_tree_with_snapshot(prep, dispatch)?.tree)
+}
+
+/// Render the tree and retain the exact repository-owned input snapshot used.
+fn render_staged_tree_with_snapshot(
+    prep: &GenerationPreparation,
+    dispatch: Option<ExecutionMode>,
+) -> Result<RenderedGeneration, OrchestratorError> {
     let owned = owned_preparation(prep)?;
-    let tree = render_all(&owned, dispatch)?;
-    check_tree_paths(&tree)?;
-    Ok(tree)
+    let rendered = render_all(&owned, dispatch)?;
+    check_tree_paths(&rendered.tree)?;
+    Ok(rendered)
+}
+
+/// In-memory output and the optional template bytes from which it was rendered.
+struct RenderedGeneration {
+    tree: RenderedTree,
+    preserved_template: Option<String>,
 }
 
 /// Render base files plus release extras into the marker-checked tree, in memory only.
 fn render_all(
     prep: &GenerationPreparation,
     dispatch: Option<ExecutionMode>,
-) -> Result<RenderedTree, OrchestratorError> {
+) -> Result<RenderedGeneration, OrchestratorError> {
     let version = env!("CARGO_PKG_VERSION");
     let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
     let execution_mode = if prep.config.schema == 2 {
@@ -192,8 +212,18 @@ fn render_all(
     extra.extend(crate::freshness_emit::freshness_files(prep)?);
     extra.extend(crate::routing::extra_files(&prep.config, version)?);
     extra.extend(rendered.shared);
-    let tree = render_tree_with_extra(&workflow, &actionlint, &extra, version)?;
-    Ok(tree)
+    let preserved_template = preserved_template::read(&prep.root)?;
+    let tree = render_tree_with_extra_and_preserved_template(
+        &workflow,
+        &actionlint,
+        &extra,
+        preserved_template.as_deref(),
+        version,
+    )?;
+    Ok(RenderedGeneration {
+        tree,
+        preserved_template,
+    })
 }
 
 /// Validate every rendered path lexically plus symlink-prefix probing.
@@ -228,13 +258,14 @@ fn is_symlink(path: &Path) -> bool {
 
 /// Stage under the root, then commit under the ownership lock.
 ///
-/// Nothing before the commit touches old output; success may carry
-/// old-tree-removal warnings.
+/// The preserved-input snapshot is rechecked after staging, immediately
+/// before replacement. The lock coordinates generators, not unrelated writers.
+/// Success may carry old-tree-removal warnings.
 fn replace_in_place(
-    prep: &GenerationPreparation,
+    root: &Path,
     tree: &RenderedTree,
+    preserved_template: Option<&str>,
 ) -> Result<Vec<String>, OrchestratorError> {
-    let root = &prep.root;
     let _ownership = GenerateOwnership::acquire(root)?;
     let target = root.join(".github");
     reject_symlink(&target)?;
@@ -257,6 +288,7 @@ fn replace_in_place(
             problem: "cross_filesystem_staging".to_owned(),
         });
     }
+    preserved_template::ensure_unchanged(root, preserved_template)?;
     swap_directories(root, &target, &staged)
 }
 

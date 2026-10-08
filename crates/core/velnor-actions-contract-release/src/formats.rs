@@ -1,8 +1,7 @@
-//! Declared `.github` output formats (gen §0).
+//! Declared `.github` outputs and preserved repository inputs (gen §0).
 //!
-//! V1 generates exactly two files; future adapters MUST declare additional
-//! formats here before they are supported. Writers consult this registry and
-//! MUST NOT emit undeclared paths.
+//! Generated outputs are declared here before support. The preserved-input
+//! list is separate because those bytes remain repository-owned.
 
 /// One declared generated format: exact path plus owning adapter crate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,6 +18,12 @@ pub const AGENTS_MD_PATH: &str = ".github/AGENTS.md";
 pub const CLAUDE_MD_PATH: &str = ".github/CLAUDE.md";
 /// Relative symlink target for sibling CLAUDE.md.
 pub const CLAUDE_MD_TARGET: &str = "AGENTS.md";
+/// Exact repository-owned GitHub input retained by generation.
+pub const PULL_REQUEST_TEMPLATE_PATH: &str = ".github/PULL_REQUEST_TEMPLATE.md";
+/// Maximum size of a preserved GitHub input (64 KiB).
+pub const MAX_PRESERVED_GITHUB_INPUT_BYTES: u64 = 65_536;
+/// Exact `.github` inputs that generation may carry forward unchanged.
+pub const PRESERVED_GITHUB_INPUTS: [&str; 1] = [PULL_REQUEST_TEMPLATE_PATH];
 
 /// Every declared `.github` output format (gen §0).
 pub const DECLARED_GITHUB_FORMATS: [GithubFormat; 4] = [

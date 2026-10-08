@@ -2,9 +2,12 @@
 //!
 //! [`render_tree`] builds the exact base files (`actionlint.yaml`, `ci.yml`,
 //! `AGENTS.md`, and `CLAUDE.md -> AGENTS.md`); [`render_tree_with_extra`]
-//! adds the validated release family. Rendering the workflow bytes stays in
-//! [`crate::render`]; this module assembles and validates the generated tree.
+//! adds the validated release family. A separate entry point can carry the
+//! single declared repository-owned template into the replacement tree.
 
+use velnor_actions_contract_release::formats::{
+    MAX_PRESERVED_GITHUB_INPUT_BYTES, PRESERVED_GITHUB_INPUTS, PULL_REQUEST_TEMPLATE_PATH,
+};
 use velnor_actions_contract_release::{AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET};
 use velnor_actions_contract_workflow::CI_WORKFLOW_PATH;
 use velnor_actions_workflow_steps::{RenderError, steps};
@@ -43,6 +46,30 @@ pub fn render_tree_with_extra(
     extra: &[RenderedFile],
     version: &str,
 ) -> Result<RenderedTree, RenderError> {
+    render_tree_with_extra_and_preserved_template(
+        workflow_bytes,
+        actionlint_bytes,
+        extra,
+        None,
+        version,
+    )
+}
+
+/// Assemble the generated tree and preserve the exact repository template bytes.
+///
+/// The preserved Markdown input is path-checked and size-capped, but is not
+/// scanned as generated shell/YAML content. It is accepted only at its declared
+/// path; extras cannot claim that path.
+///
+/// # Errors
+/// Returns [`RenderError`] for marker, token, path, size, or collision failures.
+pub fn render_tree_with_extra_and_preserved_template(
+    workflow_bytes: &str,
+    actionlint_bytes: &str,
+    extra: &[RenderedFile],
+    preserved_template: Option<&str>,
+    version: &str,
+) -> Result<RenderedTree, RenderError> {
     marker::check_first_line(workflow_bytes, version)?;
     marker::check_first_line(actionlint_bytes, version)?;
     steps::scan_for_private_subcommands(workflow_bytes)?;
@@ -73,6 +100,7 @@ pub fn render_tree_with_extra(
             || file.path == CI_WORKFLOW_PATH
             || file.path == AGENTS_MD_PATH
             || file.path == CLAUDE_MD_PATH
+            || PRESERVED_GITHUB_INPUTS.contains(&file.path.as_str())
         {
             return Err(RenderError::UnsafePath(format!(
                 "tree_path_collision:{}",
@@ -80,6 +108,21 @@ pub fn render_tree_with_extra(
             )));
         }
         files.push(file.clone());
+    }
+    if let Some(template) = preserved_template {
+        guard::validate_allowlisted_path(PULL_REQUEST_TEMPLATE_PATH, &PRESERVED_GITHUB_INPUTS)?;
+        if u64::try_from(template.len())
+            .map_or(true, |length| length > MAX_PRESERVED_GITHUB_INPUT_BYTES)
+        {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "preserved_file_too_large:{PULL_REQUEST_TEMPLATE_PATH}:{}:{MAX_PRESERVED_GITHUB_INPUT_BYTES}",
+                template.len()
+            )));
+        }
+        files.push(RenderedFile {
+            path: PULL_REQUEST_TEMPLATE_PATH.to_owned(),
+            bytes: template.to_owned(),
+        });
     }
     files.sort_by(|left, right| left.path.cmp(&right.path));
     for file in &files {
