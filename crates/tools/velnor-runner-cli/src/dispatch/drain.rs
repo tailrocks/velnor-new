@@ -233,14 +233,29 @@ pub(super) fn linux_drain_requested_message() -> &'static str {
 }
 
 pub(super) fn linux_drain_unknown_message(reason: DrainUnknown) -> String {
-    let reason = match reason {
-        DrainUnknown::StateDirectoryUnavailable => "state_directory_unavailable",
-        DrainUnknown::JournalUnavailable => "journal_unavailable",
-        DrainUnknown::RuntimeUnavailable => "runtime_unavailable",
-        DrainUnknown::AdmissionNotFenced => "admission_not_fenced",
-        DrainUnknown::OwnershipInventoryUnavailable => "ownership_inventory_unavailable",
+    let (reason, detail) = match reason {
+        DrainUnknown::StateDirectoryUnavailable => (
+            "state_directory_unavailable",
+            "current drain fence state is unavailable; quiescence is not proven",
+        ),
+        DrainUnknown::JournalUnavailable => (
+            "journal_unavailable",
+            "current drain fence state is unavailable; quiescence is not proven",
+        ),
+        DrainUnknown::RuntimeUnavailable => (
+            "runtime_unavailable",
+            "drain request was confirmed; current fence state and quiescence are not proven",
+        ),
+        DrainUnknown::AdmissionNotFenced => (
+            "admission_not_fenced",
+            "drain fence was not observed; quiescence is not proven",
+        ),
+        DrainUnknown::OwnershipInventoryUnavailable => (
+            "ownership_inventory_unavailable",
+            "drain fence was observed; owned-resource quiescence is not proven",
+        ),
     };
-    format!("drain_unknown:{reason}; admission fence state is not proven")
+    format!("drain_unknown:{reason}; {detail}")
 }
 
 pub(super) fn resume(state: &Path, config_path: &Path) -> ExitCode {
