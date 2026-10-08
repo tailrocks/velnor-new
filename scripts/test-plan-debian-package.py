@@ -17,6 +17,17 @@ SPEC.loader.exec_module(package_development)
 
 
 class DebianDevelopmentVersionTests(unittest.TestCase):
+    def test_helper_modules_respect_repository_size_limit(self):
+        modules = [
+            MODULE_PATH,
+            MODULE_PATH.with_name("debian_package_common.py"),
+            MODULE_PATH.with_name("debian_package_artifact.py"),
+            Path(__file__),
+        ]
+        for module_path in modules:
+            with self.subTest(path=module_path.name):
+                self.assertLessEqual(len(module_path.read_text(encoding="utf-8").splitlines()), 400)
+
     def test_first_qualification_sorts_after_v7_and_before_next_release(self):
         version, utc = package_development.compute_version(
             "0.1.2",
@@ -84,21 +95,17 @@ class DebianDevelopmentVersionTests(unittest.TestCase):
         with self.assertRaises(package_development.EvidenceError):
             package_development.normalize_utc("2026-10-08T02:31:53")
 
-    def _provenance_fixture(self, use_manifest_default=False):
-        temporary = tempfile.TemporaryDirectory(prefix="velnor-package-provenance-test-")
-        self.addCleanup(temporary.cleanup)
-        root = Path(temporary.name)
+    @staticmethod
+    def _digest(path):
+        return hashlib.sha256(path.read_bytes()).hexdigest()
 
-        def digest(path):
-            return hashlib.sha256(path.read_bytes()).hexdigest()
-
+    def _fixture_paths_and_commands(self, root, use_manifest_default):
         lock_bytes = b"# isolated Cargo.lock fixture\n"
         archive_path = root / "source.tar"
         with tarfile.open(archive_path, "w") as archive:
             info = tarfile.TarInfo("Cargo.lock")
             info.size = len(lock_bytes)
             archive.addfile(info, io.BytesIO(lock_bytes))
-        lock_hash = hashlib.sha256(lock_bytes).hexdigest()
         version = "0.1.1-1" if use_manifest_default else "0.1.2~dev0001+20261008023153+g66da8c2fac0c-1"
         target = "x86_64-unknown-linux-gnu"
         manifest = str(root / "source/crates/tools/velnor-runner-cli/Cargo.toml")
@@ -112,7 +119,6 @@ class DebianDevelopmentVersionTests(unittest.TestCase):
         cargo_deb_path = root / "tools/cargo-deb"
         cargo_deb_path.parent.mkdir()
         cargo_deb_path.write_bytes(b"test-only pinned tool placeholder")
-
         build_command_file = root / "build.command.txt"
         build_command_file.write_text(
             "env -i PATH=/fake/tools:/usr/bin cargo +1.99.0 build --frozen --release "
@@ -129,77 +135,86 @@ class DebianDevelopmentVersionTests(unittest.TestCase):
         )
         package_log = root / "package.log"
         package_log.write_text("test-only package log placeholder\n", encoding="utf-8")
+        return {
+            "archive_path": archive_path, "lock_bytes": lock_bytes, "version": version,
+            "target": target, "manifest": manifest, "binary_path": binary_path,
+            "build_log": build_log, "package_path": package_path,
+            "cargo_deb_path": cargo_deb_path, "build_command_file": build_command_file,
+            "package_command_file": package_command_file, "package_log": package_log,
+        }
 
-        plan = {
+    def _fixture_plan(self, paths):
+        archive_path = paths["archive_path"]
+        cargo_deb_path = paths["cargo_deb_path"]
+        return {
             "status": "VERSION_PLAN_ONLY_NO_BINARY_OR_DEB",
             "source": {
-                "commit": "a" * 40,
-                "tree": "b" * 40,
+                "commit": "a" * 40, "tree": "b" * 40,
                 "archive_path": str(archive_path),
-                "archive_sha256": digest(archive_path),
-                "cargo_lock_sha256": lock_hash,
+                "archive_sha256": self._digest(archive_path),
+                "cargo_lock_sha256": hashlib.sha256(paths["lock_bytes"]).hexdigest(),
             },
             "package": {
-                "name": "velnor-host",
-                "version": version,
-                "architecture": "amd64",
-                "rust_target": target,
+                "name": "velnor-host", "version": paths["version"],
+                "architecture": "amd64", "rust_target": paths["target"],
                 "cargo_upstream_version_at_source": "0.1.1",
             },
             "cargo_deb": {
                 "binary_path": str(cargo_deb_path),
-                "binary_sha256": digest(cargo_deb_path),
+                "binary_sha256": self._digest(cargo_deb_path),
             },
         }
-        record = {
+
+    def _fixture_record(self, paths, plan):
+        digest = self._digest
+        build_command = paths["build_command_file"]
+        package_command = paths["package_command_file"]
+        build_log = paths["build_log"]
+        cargo_deb = paths["cargo_deb_path"]
+        binary = paths["binary_path"]
+        package = paths["package_path"]
+        return {
             "schema": 1,
             "source": {
-                "commit": plan["source"]["commit"],
-                "tree": plan["source"]["tree"],
+                "commit": plan["source"]["commit"], "tree": plan["source"]["tree"],
                 "archive_sha256": plan["source"]["archive_sha256"],
-                "Cargo_lock_sha256": lock_hash,
+                "Cargo_lock_sha256": plan["source"]["cargo_lock_sha256"],
             },
             "build": {
-                "exit_code": 0,
-                "command_file": str(build_command_file),
-                "command_sha256": digest(build_command_file),
-                "stdout_stderr_log": str(build_log),
-                "stdout_stderr_sha256": digest(build_log),
+                "exit_code": 0, "command_file": str(build_command),
+                "command_sha256": digest(build_command),
+                "stdout_stderr_log": str(build_log), "stdout_stderr_sha256": digest(build_log),
                 "toolchain": {
-                    "cargo": "1.99.0 (fixture)",
-                    "rustc": "1.99.0 (fixture)",
-                    "features": [],
-                    "profile": "release",
-                    "target": target,
+                    "cargo": "1.99.0 (fixture)", "rustc": "1.99.0 (fixture)",
+                    "features": [], "profile": "release", "target": paths["target"],
                 },
-                "binary": {
-                    "path": str(binary_path),
-                    "sha256": digest(binary_path),
-                },
+                "binary": {"path": str(binary), "sha256": digest(binary)},
             },
             "package": {
-                "architecture": "amd64",
-                "command_file": str(package_command_file),
-                "command_sha256": digest(package_command_file),
-                "exit_code": 0,
-                "no_build": True,
-                "no_strip": True,
-                "tool": "cargo-deb 3.8.0",
-                "tool_binary_sha256": digest(cargo_deb_path),
-                "stdout_stderr_log": str(package_log),
-                "stdout_stderr_sha256": digest(package_log),
-                "version": version,
-                "path": str(package_path),
-                "sha256": digest(package_path),
-                "packaged_binary_sha256": digest(binary_path),
+                "architecture": "amd64", "command_file": str(package_command),
+                "command_sha256": digest(package_command), "exit_code": 0,
+                "no_build": True, "no_strip": True, "tool": "cargo-deb 3.8.0",
+                "tool_binary_sha256": digest(cargo_deb),
+                "stdout_stderr_log": str(paths["package_log"]),
+                "stdout_stderr_sha256": digest(paths["package_log"]),
+                "version": paths["version"], "path": str(package),
+                "sha256": digest(package), "packaged_binary_sha256": digest(binary),
             },
         }
+
+    def _provenance_fixture(self, use_manifest_default=False):
+        temporary = tempfile.TemporaryDirectory(prefix="velnor-package-provenance-test-")
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        paths = self._fixture_paths_and_commands(root, use_manifest_default)
+        plan = self._fixture_plan(paths)
+        record = self._fixture_record(paths, plan)
         plan_path = root / "plan.json"
         plan_path.write_text(json.dumps(plan), encoding="utf-8")
         record_path = root / "provenance.json"
         record_path.write_text(json.dumps(record), encoding="utf-8")
         args = SimpleNamespace(plan=plan_path, binary_build_record=record_path, deb=root / "not-read.deb")
-        return root, plan, record, args, cargo_deb_path
+        return root, plan, record, args, paths["cargo_deb_path"]
 
     def test_accepts_complete_provenance_v1_metadata_fixture(self):
         _root, plan, record, _args, cargo_deb_path = self._provenance_fixture()
@@ -268,6 +283,56 @@ class DebianDevelopmentVersionTests(unittest.TestCase):
             lambda record: record["build"].update(exit_code=True),
             "build producer must record integer exit_code 0",
         )
+
+
+    def test_reads_identity_from_real_dpkg_deb_control_fields(self):
+        import subprocess
+
+        with tempfile.TemporaryDirectory(prefix="velnor-package-real-deb-fields-") as temporary:
+            root = Path(temporary)
+            package_root = root / "root"
+            debian = package_root / "DEBIAN"
+            debian.mkdir(parents=True)
+            (debian / "control").write_text(
+                "Package: velnor-host\n"
+                "Version: 0.1.2~dev0001+20261008044546+g4db6db1606e3-1\n"
+                "Architecture: amd64\n"
+                "Maintainer: Test Fixture <fixture@example.invalid>\n"
+                "Description: dpkg-deb control output regression fixture\n",
+                encoding="utf-8",
+            )
+            payload = package_root / "usr/share/fixture"
+            payload.mkdir(parents=True)
+            (payload / "control-reader-test").write_text("fixture-only\n", encoding="utf-8")
+            deb = root / "control-fields.deb"
+            subprocess.run(
+                ["dpkg-deb", "--build", str(package_root), str(deb)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            grouped = subprocess.run(
+                ["dpkg-deb", "--field", str(deb), "Package", "Version", "Architecture"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(
+                grouped.stdout.splitlines(),
+                [
+                    "Package: velnor-host",
+                    "Version: 0.1.2~dev0001+20261008044546+g4db6db1606e3-1",
+                    "Architecture: amd64",
+                ],
+            )
+            self.assertEqual(
+                package_development.read_deb_identity(deb),
+                [
+                    "velnor-host",
+                    "0.1.2~dev0001+20261008044546+g4db6db1606e3-1",
+                    "amd64",
+                ],
+            )
 
 
 if __name__ == "__main__":
