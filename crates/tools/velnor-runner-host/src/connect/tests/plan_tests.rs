@@ -98,6 +98,8 @@ fn changed_capacity_credential_and_trust_are_rejected() -> Result<(), HostError>
         allowed_repositories: vec![current.github.repository.clone()],
         allowed_events: vec!["push".to_owned()],
         allowed_workflow_paths: vec![".github/workflows/ci.yml".to_owned()],
+        allowed_head_branches: Vec::new(),
+        workflow_rules: Vec::new(),
         allowed_group_workflows: Vec::new(),
         allow_forks: false,
     });
