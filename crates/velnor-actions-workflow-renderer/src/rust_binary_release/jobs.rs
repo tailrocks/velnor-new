@@ -42,10 +42,6 @@ pub(super) fn verify_job(
                 "tag".to_owned(),
                 Yaml::str("${{ steps.verify.outputs.tag }}"),
             ),
-            (
-                "resume_release_id".to_owned(),
-                Yaml::str("${{ steps.verify.outputs.resume_release_id }}"),
-            ),
         ]),
     ));
     fields.push((
@@ -195,10 +191,6 @@ pub(super) fn publish_job(
             (
                 "RELEASE_TAG".to_owned(),
                 Yaml::str("${{ needs.verify-source.outputs.tag }}"),
-            ),
-            (
-                "RESUME_RELEASE_ID".to_owned(),
-                Yaml::str("${{ needs.verify-source.outputs.resume_release_id }}"),
             ),
         ]),
     ));

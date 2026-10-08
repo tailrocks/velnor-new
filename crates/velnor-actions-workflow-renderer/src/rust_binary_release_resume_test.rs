@@ -67,20 +67,19 @@ impl ReleaseFixture {
         })
     }
 
-    fn publish(&self, script: &str, resume_id: &str) -> Result<Output, Box<dyn Error>> {
-        run_publish(
-            script,
-            &self.root,
-            &self.bin,
-            &self.state,
-            &self.log,
-            &self.source_sha,
-            &self.tag,
-            resume_id,
-        )
+    fn publish(&self, script: &str) -> Result<Output, Box<dyn Error>> {
+        self.publish_with_duplicate_draft_pages(script, false)
     }
 
-    fn select_draft(&self, script: &str) -> Result<(), Box<dyn Error>> {
+    fn publish_with_duplicate_draft_pages(
+        &self,
+        script: &str,
+        duplicate_draft_pages: bool,
+    ) -> Result<Output, Box<dyn Error>> {
+        run_publish(script, self, duplicate_draft_pages)
+    }
+
+    fn verify_source_with_hidden_draft(&self, script: &str) -> Result<(), Box<dyn Error>> {
         fs::write(&self.output, "")?;
         let output = run_resolver(
             script,
@@ -98,17 +97,17 @@ impl ReleaseFixture {
             outputs.contains(&format!("tag={}\n", self.tag)),
             "{outputs}"
         );
-        assert!(
-            outputs.contains(&format!("resume_release_id={RELEASE_ID}\n")),
-            "{outputs}"
-        );
+        assert!(outputs.contains("should_release=true\n"), "{outputs}");
+        assert!(!outputs.contains("resume_release_id="), "{outputs}");
+        let calls = fs::read_to_string(&self.log)?;
+        assert!(calls.contains("release-list-read:hidden-draft"), "{calls}");
         Ok(())
     }
 
     fn reject_mismatched_assets(&self, script: &str) -> Result<(), Box<dyn Error>> {
         let original = fs::read(&self.state)?;
         rewrite_json(&self.state, ".assets[0].digest = \"sha256:bad-digest\"")?;
-        let output = self.publish(script, RELEASE_ID)?;
+        let output = self.publish(script)?;
         assert!(!output.status.success());
         assert!(stderr(&output).contains("unexpected or mismatched assets"));
         assert_eq!(fs::read_to_string(&self.log)?.matches("upload:").count(), 0);
@@ -118,7 +117,7 @@ impl ReleaseFixture {
 }
 
 #[test]
-fn interrupted_create_draft_is_selected_and_resumed_with_verified_assets()
+fn read_only_verifier_ignores_hidden_draft_and_publisher_finds_later_page_draft_and_resumes_it()
 -> Result<(), Box<dyn Error>> {
     let scratch = Scratch::new()?;
     let fixture = ReleaseFixture::new(&scratch.0)?;
@@ -130,7 +129,7 @@ fn interrupted_create_draft_is_selected_and_resumed_with_verified_assets()
 
     let publish_script = scripts::publish(PACKAGE, BINARY, "gh");
     // The mock leaves a partial draft before failing, modeling interruption or failed cleanup.
-    let first = fixture.publish(&publish_script, "")?;
+    let first = fixture.publish(&publish_script)?;
     assert!(
         !first.status.success(),
         "interrupted create unexpectedly succeeded"
@@ -138,10 +137,22 @@ fn interrupted_create_draft_is_selected_and_resumed_with_verified_assets()
     assert!(stderr(&first).contains("leftover draft will be checked on the next run"));
     assert!(fixture.state.is_file(), "mock create left no draft behind");
     let verify_script = scripts::verify_source(&config(), BINARY, &commands);
-    fixture.select_draft(&verify_script)?;
+    fixture.verify_source_with_hidden_draft(&verify_script)?;
+
+    let duplicate = fixture.publish_with_duplicate_draft_pages(&publish_script, true)?;
+    assert!(!duplicate.status.success());
+    assert!(stderr(&duplicate).contains("multiple releases use the selected tag"));
+    let calls = fs::read_to_string(&fixture.log)?;
+    assert!(
+        calls.contains("release-list-write:duplicate-draft-later-pages"),
+        "{calls}"
+    );
+    assert_eq!(calls.matches("draft-detail:").count(), 0, "{calls}");
+    assert_eq!(calls.matches("upload:").count(), 0, "{calls}");
+
     fixture.reject_mismatched_assets(&publish_script)?;
 
-    let resumed = fixture.publish(&publish_script, RELEASE_ID)?;
+    let resumed = fixture.publish(&publish_script)?;
     assert!(resumed.status.success(), "{}", stderr(&resumed));
     assert_json(
         &fixture.state,
@@ -149,6 +160,28 @@ fn interrupted_create_draft_is_selected_and_resumed_with_verified_assets()
     )?;
     let calls = fs::read_to_string(fixture.log)?;
     assert_eq!(calls.matches("create-left-partial-draft").count(), 1);
+    assert_eq!(
+        calls.matches("release-list-read:hidden-draft").count(),
+        1,
+        "{calls}"
+    );
+    assert_eq!(
+        calls.matches("release-list-write:draft-later-page").count(),
+        2,
+        "{calls}"
+    );
+    assert_eq!(
+        calls
+            .matches("release-list-write:duplicate-draft-later-pages")
+            .count(),
+        1,
+        "{calls}"
+    );
+    assert_eq!(
+        calls.matches(&format!("draft-detail:{RELEASE_ID}")).count(),
+        4,
+        "{calls}"
+    );
     assert_eq!(calls.matches("upload:").count(), 2, "{calls}");
     assert_eq!(calls.matches("patch").count(), 1, "{calls}");
     Ok(())
@@ -254,39 +287,37 @@ fn run_prepare(script: &str, root: &Path) -> Result<Output, Box<dyn Error>> {
         .output()?)
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "publisher inputs are each bound to their workflow environment variable"
-)]
 fn run_publish(
     script: &str,
-    root: &Path,
-    bin: &Path,
-    state: &Path,
-    log: &Path,
-    source_sha: &str,
-    tag: &str,
-    resume_id: &str,
+    fixture: &ReleaseFixture,
+    duplicate_draft_pages: bool,
 ) -> Result<Output, Box<dyn Error>> {
-    let path = format!("{}:{}", bin.display(), std::env::var("PATH")?);
+    let path = format!("{}:{}", fixture.bin.display(), std::env::var("PATH")?);
     Ok(Command::new("bash")
         .args(["-c", script])
-        .current_dir(root)
+        .current_dir(&fixture.root)
         .env("PATH", path)
         .env("GH_TOKEN", "write-test-token")
         .env("GITHUB_REPOSITORY", REPOSITORY)
-        .env("SOURCE_SHA", source_sha)
-        .env("DEFAULT_SHA", source_sha)
-        .env("RELEASE_TAG", tag)
+        .env("SOURCE_SHA", fixture.source_sha.as_str())
+        .env("DEFAULT_SHA", fixture.source_sha.as_str())
+        .env("RELEASE_TAG", fixture.tag.as_str())
         .env("RELEASE_VERSION", "1.0.0")
-        .env("RESUME_RELEASE_ID", resume_id)
         .env("MOCK_REPOSITORY", REPOSITORY)
-        .env("MOCK_SOURCE_SHA", source_sha)
-        .env("MOCK_DEFAULT_SHA", source_sha)
-        .env("MOCK_TAG", tag)
+        .env("MOCK_SOURCE_SHA", fixture.source_sha.as_str())
+        .env("MOCK_DEFAULT_SHA", fixture.source_sha.as_str())
+        .env("MOCK_TAG", fixture.tag.as_str())
         .env("MOCK_RELEASE_ID", RELEASE_ID)
-        .env("MOCK_RELEASE_STATE", state)
-        .env("MOCK_LOG", log)
+        .env("MOCK_RELEASE_STATE", &fixture.state)
+        .env("MOCK_LOG", &fixture.log)
+        .env(
+            "MOCK_DUPLICATE_DRAFT_PAGES",
+            if duplicate_draft_pages {
+                "true"
+            } else {
+                "false"
+            },
+        )
         .output()?)
 }
 

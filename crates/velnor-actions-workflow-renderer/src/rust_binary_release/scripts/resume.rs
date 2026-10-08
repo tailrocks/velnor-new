@@ -1,5 +1,26 @@
 //! Shell block for validating and resuming an existing release draft.
 
+pub(super) const DISCOVER_DRAFT: &str = r#"existing_releases="$(gh_api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100")" || fail 'cannot inventory existing releases with publisher token'
+matching_releases="$(jq -ce --arg tag "$tag" '
+  if type != "array" or (all(.[]; type == "array") | not)
+    or (all(.[][]; type == "object" and (.tag_name | type == "string")
+      and (.id | type == "number" and . == floor and . > 0)
+      and (.draft | type == "boolean")) | not)
+  then error("release inventory shape is invalid")
+  else [.[][] | select(.tag_name == $tag)]
+  end
+' <<<"$existing_releases")" || fail 'existing release inventory is malformed'
+matching_release_count="$(jq -er 'length' <<<"$matching_releases")" || fail 'existing release match count is malformed'
+case "$matching_release_count" in
+  0) resume_release_id='' ;;
+  1)
+    matching_draft="$(jq -er '.[0].draft | select(type == "boolean")' <<<"$matching_releases")" || fail 'existing release draft state is malformed'
+    [[ "$matching_draft" == true ]] || fail 'selected release tag already has a published release'
+    resume_release_id="$(jq -er '.[0].id | select(type == "number" and . == floor and . > 0)' <<<"$matching_releases")" || fail 'existing draft release ID is malformed'
+    ;;
+  *) fail 'multiple releases use the selected tag' ;;
+esac"#;
+
 pub(super) const PUBLISH_RESUME: &str = r#"[[ "$resume_release_id" =~ ^[0-9]+$ ]] || fail 'resume release ID is malformed'
 linux_digest="$(sha256sum "$linux_name" | cut -d ' ' -f 1)" || fail 'cannot hash Linux asset'
 macos_digest="$(sha256sum "$macos_name" | cut -d ' ' -f 1)" || fail 'cannot hash macOS asset'
@@ -43,5 +64,8 @@ release_metadata_matches "$release_json" || fail 'selected draft metadata change
 release_assets_are_complete "$release_json" || fail 'resumed draft assets do not match the expected checksums'
 gh_api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$resume_release_id" -F draft=false >/dev/null || fail 'cannot publish the verified draft'
 published_json="$(gh_api "repos/$GITHUB_REPOSITORY/releases/$resume_release_id")" || fail 'cannot verify the published release'
-jq -e --arg tag "$tag" --argjson prerelease "$is_prerelease" '.tag_name == $tag and .name == $tag and .draft == false and .prerelease == $prerelease' >/dev/null <<<"$published_json" || fail 'published release metadata failed verification'
+jq -e --argjson id "$resume_release_id" --arg tag "$tag" --argjson prerelease "$is_prerelease" \
+  --arg body "Automated binary release for $tag." \
+  '.id == $id and .tag_name == $tag and .name == $tag and .body == $body and .draft == false and .prerelease == $prerelease' \
+  >/dev/null <<<"$published_json" || fail 'published release metadata failed verification'
 release_assets_are_complete "$published_json" || fail 'published release assets failed verification'"#;

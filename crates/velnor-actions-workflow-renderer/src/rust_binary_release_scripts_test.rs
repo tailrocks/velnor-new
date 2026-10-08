@@ -318,13 +318,24 @@ fn install_mock_publisher_gh(path: &Path) -> Result<(), Box<dyn Error>> {
 set -eu
 if [ "$1" = api ]; then
   shift
-  endpoint="${1-}"
+  paginate=false; slurp=false; endpoint=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --paginate) paginate=true; shift ;;
+      --slurp) slurp=true; shift ;;
+      *) endpoint="$1"; shift; break ;;
+    esac
+  done
   case "$endpoint" in
     "repos/$MOCK_REPOSITORY/git/ref/tags/$MOCK_TAG")
       printf '{"ref":"refs/tags/%s","object":{"type":"commit","sha":"%s"}}\n' "$MOCK_TAG" "$MOCK_SOURCE_SHA"
       ;;
     */compare/*)
       printf '{"status":"identical"}\n'
+      ;;
+    "repos/$MOCK_REPOSITORY/releases?per_page=100")
+      [ "$paginate" = true ] && [ "$slurp" = true ] || exit 80
+      printf '[[]]\n'
       ;;
     *) printf 'unexpected gh API endpoint: %s\n' "$endpoint" >&2; exit 81 ;;
   esac

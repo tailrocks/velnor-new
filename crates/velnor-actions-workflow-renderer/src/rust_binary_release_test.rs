@@ -186,14 +186,15 @@ fn renderer_emits_trusted_scheduled_release_and_repo_scan_build_env() {
 }
 
 #[test]
-fn renderer_routes_exact_draft_resume_through_the_publisher() {
+fn renderer_discovers_and_resumes_drafts_only_inside_the_publisher() {
     let yaml = render_rust_binary_release_workflow(&request()).expect("binary workflow");
     for expected in [
-        "resume_release_id=%s",
-        "RESUME_RELEASE_ID: ${{ needs.verify-source.outputs.resume_release_id }}",
+        "cannot inventory existing releases with publisher token",
+        "multiple releases use the selected tag",
+        "release inventory shape is invalid",
         "release_assets_match_expected",
         "release_assets_are_complete",
-        "existing draft cannot be resumed",
+        "selected draft metadata does not match the release",
         "release upload",
         "selected draft has unexpected or mismatched assets",
         "draft=false",
@@ -201,11 +202,25 @@ fn renderer_routes_exact_draft_resume_through_the_publisher() {
         let serialized = expected.replace('\\', "\\\\").replace('"', "\\\"");
         assert!(yaml.contains(&serialized), "missing `{expected}`:\n{yaml}");
     }
+    assert!(
+        !yaml.contains("outputs.resume_release_id"),
+        "draft IDs are not read by the verifier"
+    );
+    let verify_start = yaml.find("verify-source:").expect("source verifier job");
+    let verify_end = yaml.find("build-linux:").expect("Linux build job");
+    let verifier = &yaml[verify_start..verify_end];
+    assert!(verifier.contains("contents: read"));
+    assert!(
+        !verifier.contains("draft"),
+        "read-only job does not inspect drafts"
+    );
     let publish = yaml
         .find("Verify checksums, recheck tag, and publish")
         .expect("publisher step");
     let token = yaml.rfind("GH_TOKEN:").expect("publish token");
     let token_script = &yaml[publish..token];
+    assert!(token_script.contains("--slurp"));
+    assert!(yaml.contains("contents: write"));
     assert!(token_script.contains("release upload"));
     assert!(token_script.contains("draft=false"));
 }
