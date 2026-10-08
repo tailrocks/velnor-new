@@ -3,8 +3,9 @@
 use serde::Deserialize;
 
 use super::{actions_request, status_error, validate_repository};
+use crate::registration::{AsyncDiscoveryTransport, execute_discovery};
 use crate::session::execute;
-use crate::{SessionError, Transport, WireError};
+use crate::{SessionError, SessionRequest, Transport, WireError};
 
 /// Whether private-repository fork pull-request workflows are enabled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,17 +49,59 @@ pub fn get_private_repo_fork_workflow_settings<T>(
 where
     T: Transport + ?Sized,
 {
-    validate_repository(owner, repository, rest_token)?;
-    let request = actions_request(
-        format!("repos/{owner}/{repository}/actions/permissions/fork-pr-workflows-private-repos"),
-        rest_token,
-    )?;
+    let request = fork_workflow_settings_request(owner, repository, rest_token)?;
     let exchange = execute(transport, &request)?;
     if exchange.status != 200 {
         return Err(status_error(exchange.status));
     }
+    decode_fork_workflow_settings(&exchange.body)
+}
+
+/// Asynchronously read the private-repository fork-workflow controls through
+/// the host's bounded discovery worker.
+///
+/// # Errors
+///
+/// Returns an error if the input is invalid, transport or GitHub API access
+/// fails, or a required policy field is absent.
+pub async fn get_private_repo_fork_workflow_settings_async<T>(
+    transport: &mut T,
+    owner: &str,
+    repository: &str,
+    rest_token: &str,
+) -> Result<PrivateRepoForkWorkflowSettings, SessionError>
+where
+    T: AsyncDiscoveryTransport + ?Sized,
+{
+    transport.bind_github_api_origin()?;
+    let request = fork_workflow_settings_request(owner, repository, rest_token)?;
+    let exchange = execute_discovery(transport, request).await?;
+    if exchange.status != 200 {
+        return Err(status_error(exchange.status));
+    }
+    decode_fork_workflow_settings(&exchange.body)
+}
+
+pub(crate) fn fork_workflow_settings_request(
+    owner: &str,
+    repository: &str,
+    rest_token: &str,
+) -> Result<SessionRequest, SessionError> {
+    validate_repository(owner, repository, rest_token)?;
+    actions_request(
+        format!("repos/{owner}/{repository}/actions/permissions/fork-pr-workflows-private-repos"),
+        rest_token,
+    )
+}
+
+pub(crate) fn decode_fork_workflow_settings(
+    body: &[u8],
+) -> Result<PrivateRepoForkWorkflowSettings, SessionError> {
+    if body.len() > 512 * 1024 {
+        return Err(WireError::Malformed.into());
+    }
     let parsed: ForkWorkflowSettingsResponse =
-        serde_json::from_slice(&exchange.body).map_err(|_| WireError::Malformed)?;
+        serde_json::from_slice(body).map_err(|_| WireError::Malformed)?;
     Ok(PrivateRepoForkWorkflowSettings {
         run_workflows_from_fork_pull_requests: if parsed
             .run_workflows_from_fork_pull_requests

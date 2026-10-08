@@ -102,7 +102,7 @@ pub trait AsyncDiscoveryTransport: Send {
     fn exchange_discovery(&mut self, request: SessionRequest) -> DiscoveryExchange;
 }
 
-pub(in crate::registration) async fn execute_discovery<T>(
+pub(crate) async fn execute_discovery<T>(
     transport: &mut T,
     request: SessionRequest,
 ) -> Result<Exchange, SessionError>

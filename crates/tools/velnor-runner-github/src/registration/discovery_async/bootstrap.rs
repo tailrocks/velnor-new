@@ -1,7 +1,8 @@
 use crate::{
     AdminConnectionCall, RegistrationScope, RegistrationTokenCall, SessionError, WireError,
-    actions::{decode_repository, repository_request, status_error},
+    actions::get_actions_repository_async,
     registration::{
+        OrganizationAdminEvidence, OrganizationDiscoveryAdmin, OrganizationDiscoveryToken,
         RepositoryAdminEvidence, RepositoryDiscoveryAdmin, RepositoryDiscoveryToken,
         admin::{admin_request, decode_admin},
         discovery::{
@@ -13,9 +14,25 @@ use crate::{
 
 use super::super::{DiscoveryCredentialOutcome, DiscoveryCredentialStep};
 use super::{
-    intent::AsyncDiscoveryIntentStore,
+    intent::{AsyncDiscoveryIntentStore, AsyncScopedDiscoveryIntentStore},
     transport::{AsyncDiscoveryTransport, execute_discovery},
 };
+
+/// Bind repository-admin evidence to an organization registration scope.
+///
+/// The target repository owner must match the organization login. This does
+/// not issue a token or prove any runner-group policy.
+///
+/// # Errors
+///
+/// Returns a secret-safe registration rejection or malformed-response error
+/// when the organization does not own the repository.
+pub fn organization_admin_evidence(
+    repository: RepositoryAdminEvidence,
+    organization: &str,
+) -> Result<OrganizationAdminEvidence, SessionError> {
+    OrganizationAdminEvidence::from_repository(repository, organization)
+}
 
 /// Read exact repository identity, privacy, and caller-admin facts using one
 /// GitHub REST `GET` on the fixed API origin.
@@ -33,13 +50,8 @@ pub async fn read_repository_admin_evidence_async<T>(
 where
     T: AsyncDiscoveryTransport + ?Sized,
 {
-    transport.bind_github_api_origin()?;
-    let request = repository_request(owner, repository, host_credential)?;
-    let exchange = execute_discovery(transport, request).await?;
-    if exchange.status != 200 {
-        return Err(status_error(exchange.status));
-    }
-    let metadata = decode_repository(&exchange.body, owner, repository)?;
+    let metadata =
+        get_actions_repository_async(transport, owner, repository, host_credential).await?;
     if !metadata.private || metadata.admin != Some(true) {
         return Err(WireError::RegistrationRejected.into());
     }
@@ -165,6 +177,129 @@ where
         .map_err(uncertain_issued_credential);
     let connection = record_discovery_outcome_async(intent, intent_id, result).await?;
     Ok(RepositoryDiscoveryAdmin::new(connection))
+}
+
+/// Issue exactly one organization-scoped registration token for bounded
+/// metadata discovery. The exact target repository remains separate from the
+/// registration scope, and its ID/full name participate in the durable intent.
+///
+/// # Errors
+///
+/// Returns a secret-safe intent, API, or transport error. An ambiguous POST
+/// result is [`SessionError::Uncertain`] and is never retried.
+pub async fn issue_organization_discovery_token_async<T, I>(
+    transport: &mut T,
+    evidence: OrganizationAdminEvidence,
+    host_credential: &str,
+    intent: &mut I,
+) -> Result<OrganizationDiscoveryToken, SessionError>
+where
+    T: AsyncDiscoveryTransport + ?Sized,
+    I: AsyncScopedDiscoveryIntentStore + ?Sized,
+{
+    if !safe_header_credential(host_credential) {
+        return Err(WireError::RegistrationRejected.into());
+    }
+    transport.bind_github_api_origin()?;
+    let scope = RegistrationScope::Organization {
+        org: evidence.organization(),
+    };
+    let request = registration_token_request(&RegistrationTokenCall {
+        scope,
+        pat: host_credential,
+    })?;
+    let intent_id = intent
+        .persist_scope_before(
+            DiscoveryCredentialStep::OrganizationRegistrationToken,
+            scope,
+            evidence.target_repository_id(),
+            evidence.target_repository_full_name(),
+        )
+        .await?;
+    let registration_token = execute_discovery(transport, request)
+        .await
+        .and_then(|exchange| {
+            if exchange.status != 201 {
+                return Err(crate::registration::other_status(exchange.status));
+            }
+            decode_token(&exchange.body)
+        })
+        .and_then(|token| {
+            if safe_header_credential(token.expose()) {
+                Ok(token)
+            } else {
+                Err(SessionError::Uncertain)
+            }
+        })
+        .map_err(uncertain_issued_credential);
+    let registration_token =
+        record_discovery_outcome_async(intent, intent_id, registration_token).await?;
+    Ok(OrganizationDiscoveryToken::new(
+        evidence.organization().to_owned(),
+        evidence.target_repository_id(),
+        evidence.target_repository_full_name().to_owned(),
+        registration_token,
+    ))
+}
+
+/// Exchange one organization registration token exactly once for a read-only
+/// Actions metadata capability. The returned wrapper exposes only same-scope
+/// group and Scale Set GETs; it cannot create or mutate resources.
+///
+/// # Errors
+///
+/// Returns a secret-safe intent, API, or transport error. An ambiguous POST
+/// result is [`SessionError::Uncertain`] and is never retried.
+pub async fn exchange_organization_discovery_admin_once_async<T, I>(
+    transport: &mut T,
+    token: OrganizationDiscoveryToken,
+    intent: &mut I,
+) -> Result<OrganizationDiscoveryAdmin, SessionError>
+where
+    T: AsyncDiscoveryTransport + ?Sized,
+    I: AsyncScopedDiscoveryIntentStore + ?Sized,
+{
+    transport.bind_github_api_origin()?;
+    let organization = token.organization().to_owned();
+    let scope = RegistrationScope::Organization { org: &organization };
+    let request = admin_request(&AdminConnectionCall {
+        config_url: token.config_url(),
+        registration_token: token.registration_token(),
+    })?;
+    let repository_id = token.target_repository_id();
+    let repository_full_name = token.target_repository_full_name().to_owned();
+    drop(token);
+    let intent_id = intent
+        .persist_scope_before(
+            DiscoveryCredentialStep::ActionsAdminExchange,
+            scope,
+            repository_id,
+            &repository_full_name,
+        )
+        .await?;
+    let result = execute_discovery(transport, request)
+        .await
+        .and_then(|exchange| {
+            if !(200..=299).contains(&exchange.status) {
+                return Err(crate::registration::other_status(exchange.status));
+            }
+            decode_admin(&exchange.body)
+        })
+        .and_then(|connection| {
+            if safe_header_credential(connection.expose_token()) {
+                Ok(connection)
+            } else {
+                Err(SessionError::Uncertain)
+            }
+        })
+        .map_err(uncertain_issued_credential);
+    let connection = record_discovery_outcome_async(intent, intent_id, result).await?;
+    Ok(OrganizationDiscoveryAdmin::new(
+        connection,
+        organization,
+        repository_id,
+        repository_full_name,
+    ))
 }
 
 async fn record_discovery_outcome_async<T, I>(

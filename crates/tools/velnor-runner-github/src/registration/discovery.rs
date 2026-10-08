@@ -10,7 +10,10 @@ use std::num::NonZeroU64;
 
 mod types;
 
-pub use types::{RepositoryAdminEvidence, RepositoryDiscoveryToken};
+pub use types::{
+    OrganizationAdminEvidence, OrganizationDiscoveryToken, RepositoryAdminEvidence,
+    RepositoryDiscoveryToken,
+};
 
 use super::discovery_admin::RepositoryDiscoveryAdmin;
 
@@ -51,6 +54,8 @@ pub trait DiscoveryTransport: Transport {
 pub enum DiscoveryCredentialStep {
     /// Repository-scoped registration-token issuance.
     RepositoryRegistrationToken,
+    /// Organization-scoped registration-token issuance for a bounded metadata read.
+    OrganizationRegistrationToken,
     /// One-shot Actions-service admin credential exchange.
     ActionsAdminExchange,
 }

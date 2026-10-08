@@ -6,7 +6,7 @@ pub(crate) mod trust;
 
 pub use fork_workflows::{
     ForkPullRequestWorkflowSetting, PrivateRepoForkWorkflowSettings,
-    get_private_repo_fork_workflow_settings,
+    get_private_repo_fork_workflow_settings, get_private_repo_fork_workflow_settings_async,
 };
 pub use reconciliation::{
     ActionsJobReconciliation, ActionsJobReconciliationReason, ActionsJobReconciliationState,
@@ -15,10 +15,11 @@ pub use reconciliation::{
 
 use serde::Deserialize;
 
+use crate::registration::{AsyncDiscoveryTransport, execute_discovery};
 use crate::session::execute;
 use crate::{Method, SessionError, SessionRequest, Transport, WireError};
 
-const API_VERSION: &str = "2026-03-10";
+pub(crate) const API_VERSION: &str = "2026-03-10";
 const ACCEPT: &str = "application/vnd.github+json";
 
 /// Repository identity and visibility facts from the repository REST endpoint.
@@ -103,6 +104,31 @@ where
 {
     let request = repository_request(owner, repository, rest_token)?;
     let exchange = execute(transport, &request)?;
+    if exchange.status != 200 {
+        return Err(status_error(exchange.status));
+    }
+    decode_repository(&exchange.body, owner, repository)
+}
+
+/// Asynchronously read repository identity and privacy metadata through the
+/// host's bounded discovery worker.
+///
+/// # Errors
+///
+/// Returns an error if the input is invalid, transport or GitHub API access
+/// fails, or the response omits or mismatches required repository facts.
+pub async fn get_actions_repository_async<T>(
+    transport: &mut T,
+    owner: &str,
+    repository: &str,
+    rest_token: &str,
+) -> Result<ActionsRepository, SessionError>
+where
+    T: AsyncDiscoveryTransport + ?Sized,
+{
+    transport.bind_github_api_origin()?;
+    let request = repository_request(owner, repository, rest_token)?;
+    let exchange = execute_discovery(transport, request).await?;
     if exchange.status != 200 {
         return Err(status_error(exchange.status));
     }

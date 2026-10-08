@@ -20,8 +20,9 @@ pub use actions::{
     ActionsJob, ActionsJobReconciliation, ActionsJobReconciliationReason,
     ActionsJobReconciliationState, ActionsRepository, ActionsWorkflowRun,
     ForkPullRequestWorkflowSetting, ObservedScaleSetJob, PrivateRepoForkWorkflowSettings,
-    get_actions_job, get_actions_repository, get_actions_workflow_run,
-    get_private_repo_fork_workflow_settings, reconcile_observed_scale_set_job,
+    get_actions_job, get_actions_repository, get_actions_repository_async,
+    get_actions_workflow_run, get_private_repo_fork_workflow_settings,
+    get_private_repo_fork_workflow_settings_async, reconcile_observed_scale_set_job,
 };
 pub use error::WireError;
 pub use paths::{
@@ -31,28 +32,33 @@ pub use paths::{
 pub use poll::{InnerJob, InnerKind, ParsedBatch, Poll, Statistics, may_ack, parse_poll};
 pub use refresh::{RefreshGate, StatusClass, classify_status};
 pub use registration::{
-    AdminConnection, AdminConnectionCall, AsyncDiscoveryIntentStore, AsyncDiscoveryTransport,
+    ActionsServiceRouteLookup, ActionsServiceScaleSetRoute, AdminConnection, AdminConnectionCall,
+    AsyncDiscoveryIntentStore, AsyncDiscoveryTransport, AsyncScopedDiscoveryIntentStore,
     CreateLabel, DiscoveryCredentialOutcome, DiscoveryCredentialStep, DiscoveryExchange,
     DiscoveryIntentId, DiscoveryIntentStore, DiscoveryStoreFuture, DiscoveryTransport, Label,
+    OrganizationAdminEvidence, OrganizationDiscoveryAdmin, OrganizationDiscoveryToken,
     RegistrationScope, RegistrationToken, RegistrationTokenCall, RepositoryAdminEvidence,
     RepositoryDiscoveryAdmin, RepositoryDiscoveryToken, RunnerGroup, ScaleSetById, ScaleSetByName,
     ScaleSetCreate, ScaleSetFound, ScaleSetView, accept_scale_set, accept_scale_set_for,
     admin_connection, admin_connection_once, admin_token_is_fresh, create_body,
     create_runner_scale_set, enterprise_registration_token_path,
-    exchange_repository_discovery_admin_once, exchange_repository_discovery_admin_once_async,
-    get_runner_by_name, get_runner_scale_set, get_runner_scale_set_by_id, http_create_body,
-    http_create_body_for, issue_repository_discovery_token, issue_repository_discovery_token_async,
-    list_runner_groups, organization_registration_token_path, product_create_labels,
-    product_create_labels_for, read_repository_admin_evidence,
-    read_repository_admin_evidence_async, registration_token, remove_runner,
-    repository_registration_token_path,
+    exchange_organization_discovery_admin_once_async, exchange_repository_discovery_admin_once,
+    exchange_repository_discovery_admin_once_async, get_runner_by_name, get_runner_scale_set,
+    get_runner_scale_set_by_id, http_create_body, http_create_body_for,
+    issue_organization_discovery_token_async, issue_repository_discovery_token,
+    issue_repository_discovery_token_async, list_runner_groups, organization_admin_evidence,
+    organization_registration_token_path, product_create_labels, product_create_labels_for,
+    read_repository_admin_evidence, read_repository_admin_evidence_async, registration_token,
+    remove_runner, repository_registration_token_path,
 };
 pub use runner::RunnerReference;
 pub use runner_group_policy::{
-    ActionsRunnerGroupPolicy, RunnerGroupAccess, RunnerGroupPolicySnapshot, RunnerGroupScope,
-    SelectedOrganization, SelectedRepository, find_enterprise_runner_group_policy,
-    find_organization_runner_group_policy, get_enterprise_runner_group_policy,
-    get_organization_runner_group_policy,
+    ActionsRunnerGroupPolicy, OrganizationRunnerGroupPolicyEvidence, RunnerGroupAccess,
+    RunnerGroupPolicySnapshot, RunnerGroupScope, SelectedOrganization, SelectedRepository,
+    find_enterprise_runner_group_policy, find_organization_runner_group_policy,
+    find_organization_runner_group_policy_async, get_enterprise_runner_group_policy,
+    get_organization_runner_group_policy, read_organization_runner_group_policy_evidence,
+    read_organization_runner_group_policy_evidence_async,
 };
 pub use secret::EncodedJit;
 pub use session::{
