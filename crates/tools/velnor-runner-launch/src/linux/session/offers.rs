@@ -4,6 +4,7 @@ mod assigned;
 mod available;
 mod inventory;
 mod lifecycle;
+mod snapshot;
 mod trust;
 
 use std::time::Instant;
@@ -58,6 +59,19 @@ pub(super) async fn process_batch(mut work: BatchWork<'_>, batch: ParsedTrustBat
     )
     .await;
     if !matches!(current, Some(true)) {
+        return false;
+    }
+    if !snapshot::persist_poll_observation(&mut work, &batch).await {
+        return false;
+    }
+    observe_cutoff(
+        work.context,
+        work.journal,
+        work.shutdown.receiver,
+        work.shutdown.cutoff,
+    )
+    .await;
+    if work.shutdown.cutoff.is_some() {
         return false;
     }
     let kinds = BatchKinds::from(&batch);

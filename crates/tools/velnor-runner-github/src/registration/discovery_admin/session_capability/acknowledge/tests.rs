@@ -52,12 +52,20 @@ struct Script {
 
 impl Script {
     fn with_replies(poll_body: &str, followup: Vec<Result<Exchange, TransportFail>>) -> Self {
+        let mut poll_replies = vec![Ok(exchange(200, poll_body))];
+        poll_replies.extend(followup);
+        Self::with_session_responses(SESSION_RESPONSE, poll_replies)
+    }
+
+    fn with_session_responses(
+        session_response: &str,
+        poll_replies: Vec<Result<Exchange, TransportFail>>,
+    ) -> Self {
         let mut replies = VecDeque::from([
             Ok(exchange(201, ADMIN_RESPONSE)),
-            Ok(exchange(200, SESSION_RESPONSE)),
-            Ok(exchange(200, poll_body)),
+            Ok(exchange(200, session_response)),
         ]);
-        replies.extend(followup);
+        replies.extend(poll_replies);
         Self {
             replies,
             seen: Vec::new(),
@@ -349,5 +357,6 @@ fn population_observation_is_bound_to_session_set_and_exact_poll_message()
     Ok(())
 }
 
+mod population;
 mod refresh;
 mod validation;

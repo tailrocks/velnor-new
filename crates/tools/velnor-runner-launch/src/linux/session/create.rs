@@ -7,7 +7,7 @@ use velnor_runner_github::VerifiedPoolSessionAdmin;
 use velnor_runner_github::policy::PoolRegistrationScope;
 use velnor_runner_host::BoundedDiscoveryTransport;
 use velnor_runner_journal::journal::{
-    Journal, ReplayRoute, ScaleSetSessionClaim, ScaleSetSessionIdentity,
+    Journal, ReplayRoute, ScaleSetPopulationSnapshot, ScaleSetSessionClaim, ScaleSetSessionIdentity,
 };
 
 use crate::linux::{LinuxAdmissionState, LinuxLaunchContext};
@@ -67,6 +67,23 @@ async fn create_verified_session(
     .await;
     if !matches!(recorded, Some(Ok(()))) {
         return Err(LinuxAdmissionState::SessionEffectUncertain);
+    }
+    if let Some(observation) = session.population_observation() {
+        let Ok(snapshot) = ScaleSetPopulationSnapshot::from_observation(intent_id, observation)
+        else {
+            return Err(LinuxAdmissionState::SessionEffectUncertain);
+        };
+        let persisted = cutoff::bounded_persisting(
+            journal,
+            &mut gate,
+            context.drain_timeout(),
+            None,
+            journal.record_scale_set_population_snapshot(&identity, &snapshot),
+        )
+        .await;
+        if !matches!(persisted, Some(Ok(_))) {
+            return Err(LinuxAdmissionState::SessionEffectUncertain);
+        }
     }
     Ok(ActiveSession {
         binding,
