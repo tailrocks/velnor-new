@@ -286,7 +286,10 @@ fn render_job(
         velnor_actions_orchestrator_provisioning::matrix_step::crate_upload_step(&model.job_id)?,
     );
     Ok(Job {
-        outputs: vec![JobOutput::task_report_artifact_id()],
+        outputs: vec![
+            JobOutput::task_report_artifact_id(),
+            JobOutput::task_report_check_run_id(),
+        ],
         display_name: model.display_name.clone(),
         runs_on: label.to_owned(),
         check_runner: None,

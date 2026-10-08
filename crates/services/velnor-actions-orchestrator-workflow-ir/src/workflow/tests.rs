@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use super::*;
 
 #[test]
-fn plan_exposes_report_artifact_only_when_typed_upload_is_inserted() {
+fn plan_exposes_typed_report_outputs_only_when_upload_is_inserted() {
     let mut plan = Job {
         outputs: Vec::new(),
         display_name: "Plan".to_owned(),
@@ -34,7 +34,13 @@ fn plan_exposes_report_artifact_only_when_typed_upload_is_inserted() {
         .expect("typed crate report upload");
     insert_format_report_steps(&mut plan, vec![report, upload]);
 
-    assert_eq!(plan.outputs, [JobOutput::task_report_artifact_id()]);
+    assert_eq!(
+        plan.outputs,
+        [
+            JobOutput::task_report_artifact_id(),
+            JobOutput::task_report_check_run_id(),
+        ]
+    );
     assert_eq!(plan.steps[1].name, "Report Format");
     assert_eq!(plan.steps[2].id, Some(StepId::CrateReportUpload));
 }

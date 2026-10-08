@@ -140,7 +140,10 @@ fn typed_job_output_renders_the_uploaded_report_artifact_id() -> Result<(), Rend
         vec!["plan".to_owned()],
         vec![upload],
     );
-    task.outputs = vec![JobOutput::task_report_artifact_id()];
+    task.outputs = vec![
+        JobOutput::task_report_artifact_id(),
+        JobOutput::task_report_check_run_id(),
+    ];
     let text = render_workflow_ir(
         &fixture_ir(vec![plan, (task_id, task)]),
         WorkflowPolicy::ConsumerV1,
@@ -152,6 +155,10 @@ fn typed_job_output_renders_the_uploaded_report_artifact_id() -> Result<(), Rend
         text.contains(
             "task_report_artifact_id: ${{ steps.crate-report-upload.outputs.artifact-id }}"
         ),
+        "{text}"
+    );
+    assert!(
+        text.contains("task_report_check_run_id: ${{ job.check_run_id }}"),
         "{text}"
     );
     let timeout_at = text.find("timeout-minutes:").expect("job timeout renders");

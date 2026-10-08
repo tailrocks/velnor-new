@@ -114,7 +114,10 @@ fn obligations_upload_one_artifact_per_job() {
     let (job_id, demo, _, _) = two_obligation_job();
     assert_eq!(
         demo.outputs,
-        [velnor_actions_contract_workflow::JobOutput::task_report_artifact_id()]
+        [
+            velnor_actions_contract_workflow::JobOutput::task_report_artifact_id(),
+            velnor_actions_contract_workflow::JobOutput::task_report_check_run_id(),
+        ]
     );
     let uploads: Vec<_> = demo
         .steps

@@ -3,7 +3,10 @@ use super::*;
 fn assert_typed_report_output(job: &velnor_actions_contract_workflow::Job) {
     assert_eq!(
         job.outputs,
-        [velnor_actions_contract_workflow::JobOutput::task_report_artifact_id()]
+        [
+            velnor_actions_contract_workflow::JobOutput::task_report_artifact_id(),
+            velnor_actions_contract_workflow::JobOutput::task_report_check_run_id(),
+        ]
     );
     let upload = job.steps.last().expect("report upload");
     assert_eq!(
