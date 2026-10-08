@@ -1,4 +1,4 @@
-//! Stateful mock GitHub CLI used by the interrupted-release regression.
+//! Stateful mock GitHub CLI used by the existing-release safety regression.
 
 pub(super) const MOCK_GH: &str = r#"#!/bin/sh
 set -eu

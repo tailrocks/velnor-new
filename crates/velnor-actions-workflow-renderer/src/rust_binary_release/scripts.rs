@@ -226,11 +226,29 @@ executable="$(jq -s -er --arg binary '@@BINARY@@' '[.[] | select(.reason == "com
 description="$(file -b "$executable")" || fail 'cannot inspect executable format'
 TARGET_CHECK
 asset="@@BINARY@@-${RELEASE_VERSION}-@@TARGET@@.tar.gz"
-archive_dir="$(mktemp -d "$RUNNER_TEMP/binary-release.XXXXXX")" || fail 'cannot create archive directory'
-cp "$executable" "$archive_dir/@@BINARY@@"
-chmod 755 "$archive_dir/@@BINARY@@"
-tar -czf "dist/$asset" -C "$archive_dir" "@@BINARY@@" || fail 'cannot create binary archive'
-rm -rf "$archive_dir"
+python3 - "$executable" "dist/$asset" "@@BINARY@@" <<'PY' || fail 'cannot create binary archive'
+import gzip
+import os
+import sys
+import tarfile
+
+source, archive, name = sys.argv[1:]
+with open(source, "rb") as executable:
+    member = tarfile.TarInfo(name)
+    member.size = os.fstat(executable.fileno()).st_size
+    member.mode = 0o755
+    member.uid = member.gid = 0
+    member.uname = member.gname = ""
+    member.mtime = 0
+    with open(archive, "wb") as raw_archive:
+        with gzip.GzipFile(
+            filename="", mode="wb", compresslevel=9, fileobj=raw_archive, mtime=0
+        ) as compressed:
+            with tarfile.open(
+                fileobj=compressed, mode="w|", format=tarfile.PAX_FORMAT
+            ) as bundle:
+                bundle.addfile(member, executable)
+PY
 test -s "dist/$asset" || fail 'release archive is empty'
 [[ "$(tar -tzf "dist/$asset")" == '@@BINARY@@' ]] || fail 'release archive has an unexpected file set'"#;
     template
@@ -286,7 +304,6 @@ source_sha="${SOURCE_SHA-}"
 default_sha="${DEFAULT_SHA-}"
 tag="${RELEASE_TAG-}"
 version="${RELEASE_VERSION-}"
-resume_release_id=''
 [[ "$source_sha" =~ ^[0-9a-f]{40}$ && "$default_sha" =~ ^[0-9a-f]{40}$ ]] || fail 'source or default-branch SHA is malformed'
 [[ "$tag" == "@@PACKAGE@@-v$version" ]] || fail 'release tag and version disagree'
 semver_pattern='^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)(-([0-9A-Za-z-]+([.][0-9A-Za-z-]+)*))?([+]([0-9A-Za-z-]+([.][0-9A-Za-z-]+)*))?$'
@@ -333,17 +350,11 @@ comparison="$(gh_api "repos/$GITHUB_REPOSITORY/compare/$source_sha...$default_sh
 comparison_status="$(jq -er '.status' <<<"$comparison")" || fail 'default-branch comparison is malformed'
 [[ "$comparison_status" == ahead || "$comparison_status" == identical ]] || fail 'release source is no longer reachable from captured default branch'
 
-@@DISCOVER_DRAFT@@
-
-if [[ -n "$resume_release_id" ]]; then
-@@RESUME_RELEASE@@
-else
-  @@GH_PREFIX@@ "${release_args[@]}" "$linux_name" "$macos_name" SHA256SUMS || fail 'release creation failed; a leftover draft will be checked on the next run'
-fi"#;
+@@REJECT_EXISTING@@
+@@GH_PREFIX@@ "${release_args[@]}" "$linux_name" "$macos_name" SHA256SUMS || fail 'release creation failed; any leftover draft will be left untouched'"#;
     template
         .replace("@@BINARY@@", binary)
         .replace("@@PACKAGE@@", package)
-        .replace("@@DISCOVER_DRAFT@@", resume::DISCOVER_DRAFT)
-        .replace("@@RESUME_RELEASE@@", resume::PUBLISH_RESUME)
+        .replace("@@REJECT_EXISTING@@", resume::REJECT_EXISTING)
         .replace("@@GH_PREFIX@@", gh_prefix)
 }

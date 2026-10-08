@@ -5,6 +5,9 @@
 //! downloaded bytes.
 
 mod commands;
+#[cfg(test)]
+#[path = "rust_binary_release_deterministic_archive_test.rs"]
+mod deterministic_archive_tests;
 mod jobs;
 #[cfg(test)]
 #[path = "rust_binary_release_prepare_assets_test.rs"]

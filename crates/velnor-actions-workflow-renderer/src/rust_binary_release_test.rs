@@ -39,12 +39,12 @@ fn request() -> RustBinaryReleaseRequest {
         upload_artifact_uses: crate::steps::UPLOAD_ARTIFACT_USES.to_owned(),
         linux_setup: MiseSetup {
             uses: "jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c".to_owned(),
-            version: "2026.9.18".to_owned(),
+            version: "2026.10.4".to_owned(),
             sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned(),
         },
         macos_setup: MiseSetup {
             uses: "jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c".to_owned(),
-            version: "2026.9.18".to_owned(),
+            version: "2026.10.4".to_owned(),
             sha256: MISE_BINARY_SHA256_MACOS_ARM64.to_owned(),
         },
         commands: commands(rust, gh),
@@ -186,22 +186,21 @@ fn renderer_emits_trusted_scheduled_release_and_repo_scan_build_env() {
 }
 
 #[test]
-fn renderer_discovers_and_resumes_drafts_only_inside_the_publisher() {
+fn renderer_rejects_existing_releases_in_the_publisher() {
     let yaml = render_rust_binary_release_workflow(&request()).expect("binary workflow");
     for expected in [
         "cannot inventory existing releases with publisher token",
         "multiple releases use the selected tag",
         "release inventory shape is invalid",
-        "release_assets_match_expected",
-        "release_assets_are_complete",
-        "selected draft metadata does not match the release",
-        "release upload",
-        "selected draft has unexpected or mismatched assets",
-        "draft=false",
+        "selected release tag already has a draft release",
+        "selected release tag already has a published release",
     ] {
         let serialized = expected.replace('\\', "\\\\").replace('"', "\\\"");
         assert!(yaml.contains(&serialized), "missing `{expected}`:\n{yaml}");
     }
+    assert!(!yaml.contains("release upload"));
+    assert!(!yaml.contains("draft=false"));
+    assert!(!yaml.contains("resume_release_id"));
     assert!(
         !yaml.contains("outputs.resume_release_id"),
         "draft IDs are not read by the verifier"
@@ -221,8 +220,8 @@ fn renderer_discovers_and_resumes_drafts_only_inside_the_publisher() {
     let token_script = &yaml[publish..token];
     assert!(token_script.contains("--slurp"));
     assert!(yaml.contains("contents: write"));
-    assert!(token_script.contains("release upload"));
-    assert!(token_script.contains("draft=false"));
+    assert!(!token_script.contains("release upload"));
+    assert!(!token_script.contains("draft=false"));
 }
 
 #[test]

@@ -47,8 +47,9 @@ read-only source gate also checks the API-reported default branch and requires
 the scheduled commit to still equal its current head. A stale queued schedule
 is a no-op and is retried at the next poll.
 
-The source gate inventories `<package>-v*` tags and existing draft or
-published releases. It strictly parses SemVer 2.0.0 and considers tags in
+The source gate inventories `<package>-v*` tags and releases visible to its
+read-only API token. GitHub hides manually staged draft releases from this
+inventory. The resolver strictly parses SemVer 2.0.0 and considers tags in
 descending SemVer precedence. Stable versions outrank prereleases; build
 metadata does not affect precedence, and equal-precedence tags use ascending
 tag name as a deterministic tie-break. Malformed versions, including numeric
@@ -93,12 +94,20 @@ have only `contents: read`; their checkout steps do not persist credentials,
 and the build jobs receive no write token or other release secret. Build
 artifact upload uses the Actions runtime artifact service. Only the publisher
 has `contents: write`, plus `actions: read` for exact artifact downloads.
-Concurrent polls serialize for the default branch. Existing draft or
-published releases are skipped during candidate selection; a release created
-after selection causes `gh release create` to fail rather than overwrite it.
-Release creation validates the SemVer value again and marks versions with a
-prerelease identifier as GitHub prereleases; build metadata alone never sets
-that flag.
+Concurrent polls serialize for the default branch. Published releases and
+drafts visible to the read-only resolver are skipped during candidate
+selection. If a manually staged draft is hidden and belongs to the highest
+eligible tag, the resolver can select that tag. The publisher then detects the
+draft with its write token and fails before mutating it, with an error directing
+maintainers to reconcile or remove the draft. It does not fall through to a
+lower eligible tag in that poll; the hidden draft is a hard blocker until
+maintainers resolve it, and lower tags wait. Any release or draft found at the
+publisher preflight is rejected without mutation. A draft created after that
+preflight is a residual time-of-check-to-time-of-use race; the current workflow
+cannot guarantee that it will detect the draft before submitting the release
+creation request. Release creation validates the SemVer value again and marks
+versions with a prerelease identifier as GitHub prereleases; build metadata
+alone never sets that flag.
 
 GitHub does not expose an atomic operation that both compares a tag's object
 SHA and creates a release against that same immutable comparison. The
