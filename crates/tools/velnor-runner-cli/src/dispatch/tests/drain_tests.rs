@@ -208,3 +208,24 @@ fn macos_resume_clears_the_legacy_marker_without_claiming_admission() -> Result<
     std::fs::remove_dir_all(state).map_err(|error| error.to_string())?;
     Ok(())
 }
+
+#[test]
+fn linux_drain_rejects_timeout_over_configured_limit_before_request() {
+    use velnor_runner_launch::launch::control::{ControlOpenError, DrainRequestOutcome};
+
+    let status = linux_drain_with(
+        &(),
+        Path::new("/state/launch.db"),
+        true,
+        Some(61),
+        &LinuxDrainSettings {
+            docker_endpoint: "unix:///var/run/docker.sock".to_owned(),
+            configured_timeout_secs: 60,
+        },
+        |(), _, _| -> Result<DrainRequestOutcome, ControlOpenError> {
+            panic!("over-configured wait must not request drain")
+        },
+        |(), _, _, _| panic!("over-configured wait must not wait"),
+    );
+    assert_eq!(status, LinuxDrainStatus::InvalidDeadline);
+}

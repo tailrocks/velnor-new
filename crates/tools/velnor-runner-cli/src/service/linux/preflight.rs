@@ -13,21 +13,22 @@ use super::{
     verify_load_credential, verify_package_contract, verify_service_environment,
 };
 use std::path::Path;
-use velnor_runner_host::{HostError, HostPlatform};
+use velnor_runner_host::{HostError, HostPlatform, MAX_LINUX_DRAIN_TIMEOUT_SECS};
 
 use super::contract::configured_drain_timeout_with;
 
 /// Verify effective systemd properties before the daemon can admit work.
 ///
-/// The caller validates the fixed package paths and reads a positive,
-/// Linux-valid config deadline before invoking this helper. `verify_package_contract`
-/// remains the sole home of the finite `TimeoutStopUSec > drain_timeout_secs`
-/// comparison used by both this preflight and the operator's `service start`.
+/// The caller validates the fixed package paths and reads the bounded Linux
+/// drain deadline before invoking this helper. `verify_package_contract` is the
+/// single package contract for the pinned 1860-second systemd stop timeout; the
+/// 60-second allowance above the 1800-second config cap is explicit but not
+/// measured and does not qualify package activation.
 pub(super) fn verify_loaded_unit(
     manager: &mut impl Manager,
     drain_timeout_secs: u64,
 ) -> Result<(), ServiceFault> {
-    if drain_timeout_secs == 0 {
+    if drain_timeout_secs == 0 || drain_timeout_secs > MAX_LINUX_DRAIN_TIMEOUT_SECS {
         return Err(ServiceFault::InvalidConfig);
     }
     let service = read_snapshot(manager)?;

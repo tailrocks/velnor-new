@@ -10,7 +10,7 @@ fn start_requires_the_root_oneshot_identity_preflight_unit() {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
     let mut manager = FakeManager::with_outputs([
         manager_output(true, stopped),
@@ -38,7 +38,7 @@ fn start_rejects_an_identity_check_whose_failure_systemd_would_ignore() {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
     let ignored_failure = String::from_utf8_lossy(&identity_unit_snapshot().stdout)
         .replace("ignore_errors=no", "ignore_errors=yes")
@@ -73,7 +73,7 @@ fn start_requires_identity_preflight_to_run_before_the_controller() {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
     let valid_identity = identity_unit_snapshot();
     let unordered_identity = String::from_utf8_lossy(&valid_identity.stdout)

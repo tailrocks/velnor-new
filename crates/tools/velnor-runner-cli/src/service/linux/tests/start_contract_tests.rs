@@ -10,7 +10,7 @@ fn start_verifies_the_packaged_unit_and_running_postcondition() {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
     let active = unit_snapshot(UnitSnapshot {
         active_state: "active",
@@ -20,7 +20,7 @@ fn start_verifies_the_packaged_unit_and_running_postcondition() {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
     let mut manager = FakeManager::with_outputs([
         manager_output(true, stopped),

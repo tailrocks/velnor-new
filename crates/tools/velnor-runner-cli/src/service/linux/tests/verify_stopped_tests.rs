@@ -9,7 +9,7 @@ fn stopped_unit() -> Vec<u8> {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     })
 }
 
@@ -81,7 +81,7 @@ fn verify_stopped_rejects_running_failed_and_unknown_job_state() {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
     let mut manager = verification_manager(active, empty_jobs());
     assert_eq!(
@@ -130,7 +130,7 @@ fn verify_stopped_rechecks_the_unit_after_ancillary_reads() {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
     let mut manager = verification_manager_with_final(stopped_unit(), active, empty_jobs());
 

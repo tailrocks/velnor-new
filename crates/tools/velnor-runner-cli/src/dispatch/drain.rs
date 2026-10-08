@@ -3,8 +3,8 @@ use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
 use velnor_runner_host::{
-    DisconnectEffect, HostConfig, HostPlatform, SetOwnership, disconnect_effects,
-    read_host_config_file, validate_protected_state_directory,
+    DisconnectEffect, HostConfig, HostPlatform, MAX_LINUX_DRAIN_TIMEOUT_SECS, SetOwnership,
+    disconnect_effects, read_host_config_file, validate_protected_state_directory,
 };
 use velnor_runner_launch::launch::control::DrainUnknown;
 
@@ -147,7 +147,10 @@ where
     W: FnOnce(&S, &Path, &str, Instant) -> velnor_runner_launch::launch::control::DrainOutcome,
 {
     let seconds = timeout_secs.unwrap_or(settings.configured_timeout_secs);
-    let Some(deadline) = (seconds > 0)
+    let valid_timeout = seconds > 0
+        && seconds <= settings.configured_timeout_secs
+        && seconds <= MAX_LINUX_DRAIN_TIMEOUT_SECS;
+    let Some(deadline) = valid_timeout
         .then(|| Instant::now().checked_add(Duration::from_secs(seconds)))
         .flatten()
     else {
@@ -217,7 +220,9 @@ fn report_linux_drain(status: LinuxDrainStatus) -> ExitCode {
             ExitCode::from(1)
         }
         LinuxDrainStatus::InvalidDeadline => {
-            eprintln!("drain timeout must be positive and finite");
+            eprintln!(
+                "drain timeout must be positive, finite, and within the configured Linux bound"
+            );
             ExitCode::from(2)
         }
     }

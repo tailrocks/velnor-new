@@ -32,7 +32,7 @@ fn running_unit() -> Vec<u8> {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     })
 }
 
@@ -45,7 +45,7 @@ fn stopped_unit() -> Vec<u8> {
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     })
 }
 

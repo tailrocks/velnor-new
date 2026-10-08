@@ -37,10 +37,10 @@ KillMode=mixed
 # coordinator owns cleanup until its configured monotonic deadline.
 KillSignal=SIGTERM
 TimeoutStopFailureMode=terminate
-# No TimeoutStopSec override is selected before the daemon drain path is measured.
-# ExecStartPre verifies the manager's effective timeout is finite and greater
-# than the positive configured drain_timeout_secs; package activation remains
-# unavailable until a measured stop bound and real drain/quiescence path pass.
+# The configured drain timeout is capped at 1800s; the unit budget is 1860s.
+# The fixed 60s allowance is a design allowance, not a measured cleanup margin.
+# This unit remains unqualified until an end-to-end stop/drain bound is measured.
+TimeoutStopSec=1860s
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict

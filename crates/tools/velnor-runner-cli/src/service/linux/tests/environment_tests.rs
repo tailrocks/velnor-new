@@ -10,7 +10,7 @@ fn start_requires_exact_singleton_systemd_service_environment_before_mutation() 
         result: "success",
         stop_code: "(null)",
         stop_status: "0/0",
-        timeout: "30s",
+        timeout: "1860s",
     });
 
     for environment in [

@@ -4,7 +4,7 @@ use std::io::Cursor;
 use super::super::connect::{connect_with, connect_with_service_state};
 use super::connect_common::{TempDir, allowed_events, allowed_workflow_paths, file_ops, request};
 use crate::service::ControllerServiceState;
-use velnor_runner_host::HostPlatform;
+use velnor_runner_host::{HostConfig, HostPlatform};
 
 #[test]
 fn linux_connect_requires_workflow_paths_before_reading_or_storing_credential() -> Result<(), String>
@@ -138,4 +138,33 @@ fn failed_credential_store_rolls_back_new_configuration() -> Result<(), String> 
         return Err("failed credential storage left a new config behind".to_owned());
     }
     Ok(())
+}
+
+#[test]
+fn linux_connect_caps_drain_timeout_while_macos_keeps_legacy_range() {
+    use velnor_runner_host::MAX_LINUX_DRAIN_TIMEOUT_SECS;
+
+    let path = std::path::Path::new("/tmp/host.toml");
+    let events = allowed_events();
+    let workflow_paths = allowed_workflow_paths();
+    let mut linux = request(path, &events, &workflow_paths);
+    linux.host_platform = Some("linux");
+    linux.image_profile = Some("ubuntu-26.04-amd64");
+    linux.drain_timeout_secs = Some(MAX_LINUX_DRAIN_TIMEOUT_SECS + 1);
+    assert!(super::super::connect::sample_config_for(&linux, HostPlatform::Linux).is_err());
+
+    let mut macos = request(path, &events, &workflow_paths);
+    macos.host_platform = Some("macos");
+    macos.image_profile = None;
+    macos.drain_timeout_secs = Some(MAX_LINUX_DRAIN_TIMEOUT_SECS + 1);
+    let text = super::super::connect::sample_config_for(&macos, HostPlatform::Macos)
+        .expect("macOS keeps its existing timeout range");
+    let config = HostConfig::parse(&text).expect("generated macOS config parses");
+    config
+        .validate_for_host(HostPlatform::Macos)
+        .expect("the Linux cap does not narrow macOS validation");
+    assert_eq!(
+        config.drain_timeout_secs().expect("timeout is present"),
+        MAX_LINUX_DRAIN_TIMEOUT_SECS + 1
+    );
 }
