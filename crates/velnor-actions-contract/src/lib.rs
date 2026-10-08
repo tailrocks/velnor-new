@@ -82,7 +82,7 @@ pub use extensions::{
 };
 pub use finding::Finding;
 pub use formats::{
-    AGENTS_MD_PATH, DECLARED_GITHUB_FORMATS, RETIRED_GITHUB_PATHS, find_github_format,
+    AGENTS_MD_PATH, CLAUDE_MD_PATH, DECLARED_GITHUB_FORMATS, find_github_format,
     is_declared_github_format,
 };
 pub use freshness::{

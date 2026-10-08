@@ -1,16 +1,16 @@
 //! Generated-tree assembly: marker-checked files in sorted path order.
 //!
 //! [`render_tree`] builds the exact base files (`actionlint.yaml`, `ci.yml`,
-//! and `AGENTS.md`); [`render_tree_with_extra`] adds the validated release
-//! family. Rendering the workflow bytes stays in [`crate::render`]; this
-//! module assembles and validates the generated tree.
+//! `AGENTS.md`, and a `CLAUDE.md` regular-file mirror of `AGENTS.md`);
+//! [`render_tree_with_extra`] adds the validated release family. Rendering
+//! the workflow bytes stays in [`crate::render`]; this module assembles and
+//! validates the generated tree.
 //!
-//! No `CLAUDE.md`: plugin installers reject packages that contain symlink
-//! entries, and a second instruction copy next to `AGENTS.md` carries no
-//! benefit. The retired path stays generator-owned so regeneration deletes
-//! stale copies; generated trees emit no symlinks at all.
+//! `CLAUDE.md` is a regular file, never a symlink: plugin installers reject
+//! packages that contain symlink entries, so generated trees must not emit
+//! any.
 
-use velnor_actions_contract::AGENTS_MD_PATH;
+use velnor_actions_contract::{AGENTS_MD_PATH, CLAUDE_MD_PATH};
 
 use crate::agents_md;
 use crate::render::{ACTIONLINT_PATH, WORKFLOW_PATH};
@@ -35,8 +35,9 @@ pub struct RenderedSymlink {
 }
 
 /// The generated files and symlinks, sorted by path: the base files
-/// (actionlint config, CI workflow, and AGENTS.md) with release disabled,
-/// plus the release family when release rendering is enabled.
+/// (actionlint config, CI workflow, AGENTS.md, and the CLAUDE.md mirror file)
+/// with release disabled, plus the release family when release rendering is
+/// enabled.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedTree {
     /// Generated files in sorted path order.
@@ -126,8 +127,13 @@ pub fn render_tree_with_extra(
     guard::validate_tree_path(ACTIONLINT_PATH)?;
     guard::validate_tree_path(WORKFLOW_PATH)?;
     guard::validate_tree_path(AGENTS_MD_PATH)?;
+    guard::validate_tree_path(CLAUDE_MD_PATH)?;
 
     let agents_file = agents_md::render_agents_md(version)?;
+    let claude_file = RenderedFile {
+        path: CLAUDE_MD_PATH.to_owned(),
+        bytes: agents_file.bytes.clone(),
+    };
 
     let mut files = vec![
         RenderedFile {
@@ -139,12 +145,16 @@ pub fn render_tree_with_extra(
             bytes: workflow_bytes.to_owned(),
         },
         agents_file,
+        claude_file,
     ];
     for file in extra {
         marker::check_first_line(&file.bytes, version)?;
         steps::scan_for_private_subcommands(&file.bytes)?;
         guard::validate_tree_path(&file.path)?;
-        if file.path == ACTIONLINT_PATH || file.path == WORKFLOW_PATH || file.path == AGENTS_MD_PATH
+        if file.path == ACTIONLINT_PATH
+            || file.path == WORKFLOW_PATH
+            || file.path == AGENTS_MD_PATH
+            || file.path == CLAUDE_MD_PATH
         {
             return Err(RenderError::UnsafePath(format!(
                 "tree_path_collision:{}",

@@ -69,48 +69,6 @@ fn replacement_keeps_unmanaged_entries_and_drops_generated_workflows() -> TestRe
 }
 
 #[test]
-#[cfg(unix)]
-fn retired_claude_symlink_is_dropped_by_replacement() -> TestResult {
-    let root = TempDir::new()?;
-    let github = root.path().join(".github");
-    fs::create_dir_all(&github)?;
-    fs::write(github.join("AGENTS.md"), b"instructions\n")?;
-    std::os::unix::fs::symlink("AGENTS.md", github.join("CLAUDE.md"))?;
-    fs::write(github.join("PULL_REQUEST_TEMPLATE.md"), b"custom\n")?;
-    replace(root.path())?;
-    assert!(
-        fs::symlink_metadata(github.join("CLAUDE.md")).is_err(),
-        "retired symlink must not survive replacement"
-    );
-    assert_eq!(
-        fs::read(github.join("PULL_REQUEST_TEMPLATE.md"))?,
-        b"custom\n"
-    );
-    assert!(github.join("workflows/ci.yml").is_file());
-    Ok(())
-}
-
-#[test]
-fn retired_claude_file_is_dropped_by_replacement() -> TestResult {
-    let root = TempDir::new()?;
-    let github = root.path().join(".github");
-    fs::create_dir_all(&github)?;
-    fs::write(github.join("CLAUDE.md"), b"stale copy\n")?;
-    fs::write(github.join("PULL_REQUEST_TEMPLATE.md"), b"custom\n")?;
-    replace(root.path())?;
-    assert!(
-        fs::symlink_metadata(github.join("CLAUDE.md")).is_err(),
-        "retired file must not survive replacement"
-    );
-    assert_eq!(
-        fs::read(github.join("PULL_REQUEST_TEMPLATE.md"))?,
-        b"custom\n"
-    );
-    assert!(github.join("workflows/ci.yml").is_file());
-    Ok(())
-}
-
-#[test]
 fn shared_action_markers_preserve_custom_actions_and_retire_stale_ones() -> TestResult {
     let root = TempDir::new()?;
     let github = root.path().join(".github");

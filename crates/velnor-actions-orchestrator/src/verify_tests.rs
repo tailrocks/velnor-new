@@ -55,6 +55,7 @@ fn verify_vectors_carry_pins_and_payloads() {
         "**/*.{md,markdown}",
         "#**/node_modules/**",
         "#.github/AGENTS.md",
+        "#.github/CLAUDE.md",
     ] {
         assert!(markdownlint.contains(token), "{token}: {markdownlint}");
     }

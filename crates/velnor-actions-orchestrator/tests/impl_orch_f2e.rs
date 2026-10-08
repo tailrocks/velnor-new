@@ -73,6 +73,7 @@ fn plan_and_workflow_ids_agree() -> TestResult {
         report.files_written,
         [
             ".github/AGENTS.md",
+            ".github/CLAUDE.md",
             ".github/actionlint.yaml",
             ".github/actions/u26/action.yml",
             ".github/actions/velnor-tool-seed/action.yml",
@@ -160,7 +161,7 @@ fn malformed_toolchain_recommends_without_writes() -> TestResult {
     assert!(text.contains("tooling_input_invalid"), "{text}");
     assert!(text.contains("rust-toolchain.toml"), "{text}");
     assert!(text.contains("continues with its pinned tools"), "{text}");
-    assert_eq!(report.files_written.len(), 8);
+    assert_eq!(report.files_written.len(), 9);
     for rel in ["mise.toml", "rust-toolchain.toml", ".velnor/config.toml"] {
         assert_eq!(
             before.get(rel).map(|(bytes, _)| bytes),
