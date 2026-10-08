@@ -4,7 +4,9 @@ use std::ffi::{OsStr, OsString};
 
 use velnor_actions_contract_config::VelnorConfig;
 use velnor_actions_contract_release::ReleaseTarget;
-use velnor_actions_mise::{MiseInstall, PinnedTool, PinnedToolExec, ToolCatalog};
+use velnor_actions_mise::{
+    MiseInstall, PinnedTool, PinnedToolExec, PrepareRustTarget, ToolCatalog,
+};
 use velnor_actions_workflow_generator::GeneratorReleasePins;
 
 use velnor_actions_orchestrator_core::OrchestratorError;
@@ -55,6 +57,23 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<GeneratorReleasePins, Orc
             ],
             &catalog,
         )?,
+        macos_x86_64_cross_build_argv: exec_argv(
+            &[PinnedTool::Rust, PinnedTool::MrBoxington],
+            "mbx",
+            &[
+                "build",
+                "--release",
+                "--locked",
+                "--package",
+                "velnor-actions-cli",
+                "--bin",
+                "velnor-actions",
+                "--target",
+                ReleaseTarget::MacosX86_64.triple(),
+            ],
+            &catalog,
+        )?,
+        install_macos_x86_64_target_argv: install_macos_x86_64_target_argv(&catalog)?,
         actionlint_argv: exec_argv(
             &[PinnedTool::Actionlint, PinnedTool::Shellcheck],
             "actionlint",
@@ -76,6 +95,17 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<GeneratorReleasePins, Orc
         rust_version: catalog.version(PinnedTool::Rust).to_owned(),
         mr_boxington_version: catalog.version(PinnedTool::MrBoxington).to_owned(),
     })
+}
+
+fn install_macos_x86_64_target_argv(
+    catalog: &ToolCatalog,
+) -> Result<Vec<String>, OrchestratorError> {
+    let request = PrepareRustTarget::new(
+        ReleaseTarget::MacosArm64.triple(),
+        ReleaseTarget::MacosX86_64.triple(),
+    )
+    .map_err(contract_error)?;
+    strings_of(request.argv(catalog)).map_err(contract_error)
 }
 
 fn install_argv(

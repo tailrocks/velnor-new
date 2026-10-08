@@ -24,6 +24,10 @@ pub struct GeneratorReleasePins {
     pub install_gh_argv: Vec<String>,
     /// Exact pinned `mbx build` argv.
     pub build_argv: Vec<String>,
+    /// Exact pinned `mbx build --target x86_64-apple-darwin` argv.
+    pub macos_x86_64_cross_build_argv: Vec<String>,
+    /// Exact typed Mise argv installing the macOS `x86_64` target on the ARM host toolchain.
+    pub install_macos_x86_64_target_argv: Vec<String>,
     /// Exact pinned actionlint argv.
     pub actionlint_argv: Vec<String>,
     /// Exact pinned zizmor argv.
