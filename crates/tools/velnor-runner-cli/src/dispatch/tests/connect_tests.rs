@@ -3,12 +3,20 @@ use std::io::Cursor;
 
 use clap::CommandFactory;
 
-use super::super::connect::{ConnectRequest, connect_with, sample_config_for};
+use super::super::connect::{ConnectRequest, connect_with, host_platform_for, sample_config_for};
 use super::connect_common::{
     TempDir, allowed_events, allowed_workflow_paths, expected_credential_ref, file_ops, request,
 };
 use crate::args::Cli;
 use velnor_runner_host::{HostConfig, HostPlatform};
+
+#[test]
+fn connect_platform_selector_fails_closed_for_unsupported_targets() {
+    assert_eq!(host_platform_for("linux"), Some(HostPlatform::Linux));
+    assert_eq!(host_platform_for("macos"), Some(HostPlatform::Macos));
+    assert_eq!(host_platform_for("freebsd"), None);
+    assert_eq!(host_platform_for("windows"), None);
+}
 
 #[test]
 fn connect_help_reads_stdin_and_has_no_token_flag() -> Result<(), String> {

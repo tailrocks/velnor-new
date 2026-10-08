@@ -78,7 +78,11 @@ pub(super) struct ConnectFileOps {
 }
 
 pub(super) fn connect(request: &ConnectRequest<'_>) -> ExitCode {
-    if validate_host_config_target(request.config_path, host_platform()).is_err() {
+    let Some(platform) = host_platform() else {
+        eprintln!("connect is unavailable on this host");
+        return ExitCode::from(1);
+    };
+    if validate_host_config_target(request.config_path, platform).is_err() {
         eprintln!("configuration path, service identity, or directory is not ready");
         return ExitCode::from(1);
     }
@@ -124,10 +128,11 @@ where
     V: FnOnce(&str, &HostConfig) -> Result<(), ConnectError>,
     S: FnOnce(&HostConfig, &[u8]) -> Result<(), ConnectError>,
 {
-    let config_text = sample_config(request)?;
+    let actual_host = host_platform().ok_or(ConnectError::Config)?;
+    let config_text = sample_config_for(request, actual_host)?;
     let config = HostConfig::parse(&config_text).map_err(|_| ConnectError::Config)?;
     config
-        .validate_for_host(host_platform())
+        .validate_for_host(actual_host)
         .map_err(|_| ConnectError::Config)?;
     let configuration_exists = check_existing_binding(request.config_path, &config, file_ops)?;
     let secret = read_secret(input).map_err(ConnectError::Secret)?;
@@ -196,19 +201,18 @@ fn installed_file_ops() -> ConnectFileOps {
 }
 
 fn read_installed_config(path: &Path) -> Result<Option<String>, ConnectError> {
-    read_host_config_file(path, host_platform()).map_err(|_| ConnectError::Write)
+    read_host_config_file(path, host_platform().ok_or(ConnectError::Config)?)
+        .map_err(|_| ConnectError::Write)
 }
 
 fn persist_installed_config(path: &Path, text: &str) -> Result<(), ConnectError> {
-    persist_host_config_file(path, text, host_platform()).map_err(|_| ConnectError::Write)
+    persist_host_config_file(path, text, host_platform().ok_or(ConnectError::Config)?)
+        .map_err(|_| ConnectError::Write)
 }
 
 fn remove_installed_config(path: &Path, expected: &str) -> Result<(), ConnectError> {
-    remove_host_config_file(path, expected, host_platform()).map_err(|_| ConnectError::Write)
-}
-
-fn sample_config(request: &ConnectRequest<'_>) -> Result<String, ConnectError> {
-    sample_config_for(request, host_platform())
+    remove_host_config_file(path, expected, host_platform().ok_or(ConnectError::Config)?)
+        .map_err(|_| ConnectError::Write)
 }
 
 pub(super) fn sample_config_for(
@@ -384,17 +388,14 @@ fn toml_string(value: &str) -> Result<String, ConnectError> {
     serde_json::to_string(value).map_err(|_| ConnectError::Config)
 }
 
-const fn host_platform() -> HostPlatform {
-    #[cfg(target_os = "linux")]
-    {
-        HostPlatform::Linux
+pub(super) fn host_platform_for(target_os: &str) -> Option<HostPlatform> {
+    match target_os {
+        "linux" => Some(HostPlatform::Linux),
+        "macos" => Some(HostPlatform::Macos),
+        _ => None,
     }
-    #[cfg(target_os = "macos")]
-    {
-        HostPlatform::Macos
-    }
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-    {
-        HostPlatform::Linux
-    }
+}
+
+fn host_platform() -> Option<HostPlatform> {
+    host_platform_for(std::env::consts::OS)
 }
