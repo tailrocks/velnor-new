@@ -1,5 +1,7 @@
 #!/bin/sh
 set -e
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
 # cargo-deb inserts generated systemd cleanup fragments here. The package
 # does not delete operator configuration, credentials, or state.
 #DEBHELPER#

@@ -22,6 +22,8 @@ Group=velnor
 SupplementaryGroups=docker
 WorkingDirectory=/var/lib/velnor-host
 UMask=0077
+# Keep subprocess lookup on packaged system tools; do not use /usr/local PATH shims.
+Environment=PATH=/usr/sbin:/usr/bin:/sbin:/bin
 LoadCredential=github-token:/etc/velnor-host/github-token
 ExecStartPre=/usr/bin/velnor-host --config /etc/velnor-host/host.toml --state /var/lib/velnor-host service preflight
 ExecStart=/usr/bin/velnor-host --config /etc/velnor-host/host.toml --state /var/lib/velnor-host daemon run

@@ -1,10 +1,15 @@
 #!/bin/sh
 set -eu
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
 
 # Ask the packaged Rust control plane to prove a safe drain and stop.
 # Any nonzero result (including unknown state, deadline, or unavailable API)
 # aborts the dpkg operation before files are replaced or removed. The script
 # never bypasses policy-rc.d with a direct systemctl call.
+# An ExecStop error does not prevent systemd's later kill phase. This hook's
+# successful CLI result is required; it must not be treated as that proof while
+# the Linux drain API remains unavailable.
 case "${1:-}" in
     remove|upgrade|deconfigure|failed-upgrade|abort-upgrade|abort-deconfigure)
         /usr/bin/velnor-host --config /etc/velnor-host/host.toml --state /var/lib/velnor-host service stop
