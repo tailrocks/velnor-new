@@ -15,6 +15,7 @@ use velnor_runner_host::read_host_config_file;
 mod conditions;
 mod contract;
 mod preflight;
+mod stopped;
 mod systemd;
 
 use contract::{
@@ -42,7 +43,7 @@ const EXPECTED_CREDENTIAL_PROPERTY: &str =
 const ENVIRONMENT_PROPERTY: &str = "Environment";
 const EXPECTED_ENVIRONMENT_PROPERTY: &str = "as 1 \"PATH=/usr/sbin:/usr/bin:/sbin:/bin\"";
 const SHOW_PROPERTIES: &str = concat!(
-    "LoadState,ActiveState,SubState,MainPID,ControlPID,Result,ExecStartPre,ExecStart,ExecStop,",
+    "Id,LoadState,ActiveState,SubState,MainPID,ControlPID,Result,Job,ExecStartPre,ExecStart,ExecStop,",
     "TimeoutStopUSec,TimeoutStopFailureMode,KillSignal,KillMode,User,Group,SupplementaryGroups,WorkingDirectory,UMask,",
     "NoNewPrivileges,ProtectSystem,ReadWritePaths,Requires,After,Type"
 );
@@ -94,6 +95,7 @@ enum ServiceFault {
     StartFailed,
     ServiceEnvironmentUnavailable,
     DrainUnavailable,
+    StopNotVerified,
     PendingJob,
     PackageOwned,
     InvalidConfig,
@@ -117,8 +119,9 @@ impl ServiceFault {
                 "systemd did not prove the exact packaged service environment"
             }
             Self::DrainUnavailable => {
-                "safe service stop is unavailable until drain reconciliation is implemented"
+                "direct service stop is unavailable; use drain --wait and a package-aware manager stop"
             }
+            Self::StopNotVerified => "systemd did not prove a successful completed service stop",
             Self::PendingJob => "velnor-host.service still has a pending systemd job",
             Self::PackageOwned => "install and uninstall are managed by the system package",
             Self::InvalidConfig => "Linux host configuration is missing or invalid",
@@ -159,6 +162,9 @@ pub(super) fn service(action: ServiceAction, config_path: &Path, state_path: &Pa
             }
         };
     }
+    if matches!(action, ServiceAction::VerifyStopped) {
+        return stopped::verify_stopped_for_config(config_path);
+    }
     let drain_timeout_secs = match configured_drain_timeout(config_path) {
         Ok(timeout) => timeout,
         Err(fault) => {
@@ -186,6 +192,7 @@ fn perform(
         ServiceAction::Install | ServiceAction::Uninstall => Err(ServiceFault::PackageOwned),
         ServiceAction::Start => start(manager, drain_timeout_secs),
         ServiceAction::Stop => Err(ServiceFault::DrainUnavailable),
+        ServiceAction::VerifyStopped => stopped::verify_stopped(manager, drain_timeout_secs),
     }
 }
 
@@ -304,6 +311,13 @@ fn verify_service_environment(manager: &mut impl Manager) -> Result<(), ServiceF
 }
 
 fn read_snapshot(manager: &mut impl Manager) -> Result<UnitSnapshot, ServiceFault> {
+    let mut snapshot = read_unit_snapshot(manager)?;
+    snapshot.identity_marker_condition_matches =
+        read_identity_marker_condition(manager, UNIT_OBJECT_PATH)?;
+    Ok(snapshot)
+}
+
+fn read_unit_snapshot(manager: &mut impl Manager) -> Result<UnitSnapshot, ServiceFault> {
     let output = manager_call_output(
         manager,
         &[
@@ -316,10 +330,7 @@ fn read_snapshot(manager: &mut impl Manager) -> Result<UnitSnapshot, ServiceFaul
     if !output.success {
         return Err(ServiceFault::UnitUnavailable);
     }
-    let mut snapshot = parse_snapshot(&output.stdout).ok_or(ServiceFault::UnknownState)?;
-    snapshot.identity_marker_condition_matches =
-        read_identity_marker_condition(manager, UNIT_OBJECT_PATH)?;
-    Ok(snapshot)
+    parse_snapshot(&output.stdout).ok_or(ServiceFault::UnknownState)
 }
 
 fn is_running(snapshot: &UnitSnapshot) -> bool {
