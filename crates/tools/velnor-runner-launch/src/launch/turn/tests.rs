@@ -145,6 +145,7 @@ mod admission_volume_tests;
 mod effect_replay;
 #[cfg(all(test, unix))]
 mod legacy_failed;
+mod observations;
 #[cfg(all(test, unix))]
 mod progress_tests;
 mod pump_tests;

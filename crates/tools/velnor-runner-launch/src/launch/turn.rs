@@ -240,6 +240,7 @@ impl Turn<'_> {
             return Err(EnsureError::Endpoint);
         }
         trace::batch(&polled);
+        observations::persist_observed_lifecycle(self.journal, &polled).await?;
         let started = u32::try_from(workers.len()).unwrap_or(u32::MAX);
         let decision = admission(
             self.docker,
@@ -383,6 +384,8 @@ struct StartOutcome {
     stop: bool,
     acknowledged_message_id: Option<i64>,
 }
+
+mod observations;
 
 #[cfg(test)]
 mod tests;
