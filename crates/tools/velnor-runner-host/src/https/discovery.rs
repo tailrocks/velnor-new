@@ -1,8 +1,7 @@
 //! Bounded, origin-pinned transport for the credential-only discovery calls.
 
 use std::sync::{Arc, OnceLock, atomic::AtomicBool};
-use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use velnor_runner_github::{
@@ -136,14 +135,7 @@ impl BoundedDiscoveryTransport {
     }
 
     fn exchange_bounded(&mut self, request: &SessionRequest) -> Result<Exchange, TransportFail> {
-        let url = self.request_url(request)?;
-        perform_curl(
-            &self.curl,
-            url.as_str(),
-            request,
-            self.response_limit,
-            self.request_deadline,
-        )
+        self.exchange_until(request, None, &AtomicBool::new(false))
     }
 
     fn request_url(&self, request: &SessionRequest) -> Result<Zeroizing<String>, TransportFail> {
@@ -287,70 +279,7 @@ impl AsyncDiscoveryTransport for BoundedDiscoveryTransport {
     }
 
     fn exchange_discovery(&mut self, request: SessionRequest) -> DiscoveryExchange {
-        let cancellation = Arc::new(AtomicBool::new(false));
-        let stop_at = Instant::now().checked_add(self.request_deadline);
-        let prepared = self.request_url(&request).and_then(|url| {
-            let stop_at = stop_at.ok_or(TransportFail::Timeout)?;
-            if Instant::now() >= stop_at {
-                return Err(TransportFail::Timeout);
-            }
-            Ok((url, stop_at))
-        });
-        let (url, stop_at) = match prepared {
-            Ok(prepared) => prepared,
-            Err(error) => {
-                return DiscoveryExchange::new(async move { Err(error) }, cancellation);
-            }
-        };
-        let executable = self.curl.clone();
-        let response_limit = self.response_limit;
-        let worker_cancellation = Arc::clone(&cancellation);
-        DiscoveryExchange::new(
-            async move {
-                if worker_cancellation.load(std::sync::atomic::Ordering::Acquire) {
-                    return Err(TransportFail::Reset);
-                }
-                if Instant::now() >= stop_at {
-                    return Err(TransportFail::Timeout);
-                }
-                let permit = try_discovery_worker_permit()?;
-                let (sender, receiver) = tokio::sync::oneshot::channel();
-                let worker = thread::Builder::new()
-                    .name("velnor-discovery-curl".to_owned())
-                    .spawn(move || {
-                        let permit = Arc::new(permit);
-                        let result = perform_curl_until_cancellable_with_permit(
-                            &executable,
-                            url.as_str(),
-                            &request,
-                            response_limit,
-                            stop_at,
-                            &worker_cancellation,
-                            permit,
-                        );
-                        if let Err(mut result) = sender.send(result)
-                            && let Ok(exchange) = &mut result
-                        {
-                            exchange.body.zeroize();
-                        }
-                    })
-                    .map_err(|_| TransportFail::Reset)?;
-                let result = receiver.await.map_err(|_| TransportFail::Reset)?;
-                if worker.join().is_err() {
-                    return Err(TransportFail::Reset);
-                }
-                match result {
-                    Ok(result) if Instant::now() < stop_at => Ok(result),
-                    Ok(result) => {
-                        let mut result = result;
-                        result.body.zeroize();
-                        Err(TransportFail::Timeout)
-                    }
-                    Err(error) => Err(error),
-                }
-            },
-            cancellation,
-        )
+        self.exchange_discovery_until(request, None, Arc::new(AtomicBool::new(false)))
     }
 }
 
@@ -361,9 +290,11 @@ mod queue_origin;
 #[path = "discovery_validation.rs"]
 mod validation;
 
-use curl::{perform_curl, perform_curl_until_cancellable_with_permit};
 use queue_origin::queue_route;
 use validation::{actions_base, validate_discovery_request};
+
+#[path = "discovery_cutoff.rs"]
+mod cutoff;
 
 #[cfg(test)]
 #[path = "discovery_tests.rs"]
@@ -378,3 +309,7 @@ mod actions_provider_tests;
 #[cfg(test)]
 #[path = "discovery_queue_origin_tests.rs"]
 mod queue_origin_tests;
+
+#[cfg(test)]
+#[path = "discovery_deadline_tests.rs"]
+mod deadline_tests;
