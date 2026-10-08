@@ -115,3 +115,4 @@ fn gh_qualification() -> velnor_actions_contract_config::config::QualifiedTool {
 }
 
 mod check_jobs_tests;
+mod consumer_verify_tests;

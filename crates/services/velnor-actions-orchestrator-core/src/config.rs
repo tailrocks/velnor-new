@@ -9,7 +9,8 @@ use velnor_actions_contract_config::config::{
 };
 use velnor_actions_contract_config::{
     ArtifactBuildTask, DiscoveryConfig, DocsLaneConfig, GeneratorValidation, ResourcesConfig,
-    TestShardingConfig, VelnorConfig, VerificationTask, WorkflowConfig, WorkflowPolicy,
+    TestShardingConfig, VelnorConfig, VerificationTask, VerifyConfig, WorkflowConfig,
+    WorkflowPolicy,
 };
 
 use crate::OrchestratorError;
@@ -149,6 +150,9 @@ struct PartialWorkflow {
     /// Explicit bounded artifact build tasks.
     #[serde(default)]
     artifact_tasks: Vec<ArtifactBuildTask>,
+    /// Explicit `ConsumerV1` verification selection.
+    #[serde(default)]
+    verify: VerifyConfig,
 }
 
 /// Resources section with every value optional.
@@ -242,6 +246,7 @@ impl PartialWorkflow {
             runner_label: self.runner_label,
             tasks: self.tasks,
             artifact_tasks: self.artifact_tasks,
+            verify: self.verify,
         }
     }
 }

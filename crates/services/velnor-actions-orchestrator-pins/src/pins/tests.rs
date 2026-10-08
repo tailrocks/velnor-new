@@ -21,6 +21,7 @@ fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> VelnorConfig {
             runner_label: None,
             tasks: Vec::new(),
             artifact_tasks: Vec::new(),
+            verify: velnor_actions_contract_config::config::VerifyConfig::default(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,

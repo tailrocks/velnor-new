@@ -69,8 +69,8 @@ pub use verification::{
     is_valid_verification_task_id,
 };
 pub use workflow::{
-    GeneratorValidation, RunnerSelection, ValidatorKind, VelnorSupportWorkflow, WorkflowConfig,
-    WorkflowPolicy,
+    GeneratorValidation, RunnerSelection, ValidatorKind, VelnorSupportWorkflow, VerifyConfig,
+    WorkflowConfig, WorkflowPolicy,
 };
 
 use serde::{Deserialize, Serialize};

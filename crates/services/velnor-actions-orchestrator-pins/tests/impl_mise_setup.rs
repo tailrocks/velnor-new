@@ -6,7 +6,7 @@ use velnor_actions_actionlint::actions::{MISE_ACTION_SHA, MISE_ACTION_VERSION};
 use velnor_actions_contract_config::config::{ActionPinOverride, ActionsConfig};
 use velnor_actions_contract_config::{
     DiscoveryConfig, GeneratorValidation, ResourcesConfig, StacksConfig, TestShardingConfig,
-    VelnorConfig, VerificationRunner, WorkflowConfig, WorkflowPolicy,
+    VelnorConfig, VerificationRunner, VerifyConfig, WorkflowConfig, WorkflowPolicy,
 };
 use velnor_actions_orchestrator_pins::pins::{resolve_mise_setup, resolve_verification_mise_setup};
 
@@ -25,6 +25,7 @@ fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> VelnorConfig {
             runner_label: None,
             tasks: Vec::new(),
             artifact_tasks: Vec::new(),
+            verify: VerifyConfig::default(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,

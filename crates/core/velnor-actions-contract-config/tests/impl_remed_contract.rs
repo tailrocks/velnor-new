@@ -5,7 +5,7 @@ use velnor_actions_contract::{ContractError, digest_b3, plan_id_for_run, run_key
 use velnor_actions_contract_config::config::ActionsConfig;
 use velnor_actions_contract_config::{
     DiscoveryConfig, ResourcesConfig, RunnerSelection, RustStackConfig, StacksConfig,
-    TestShardingConfig, VelnorConfig, WorkflowConfig, WorkflowPolicy,
+    TestShardingConfig, VelnorConfig, VerifyConfig, WorkflowConfig, WorkflowPolicy,
 };
 use velnor_actions_contract_release::{
     AGENTS_MD_PATH, CLAUDE_MD_PATH, DECLARED_GITHUB_FORMATS, find_github_format,
@@ -31,6 +31,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             runner_label: None,
             tasks: Vec::new(),
             artifact_tasks: Vec::new(),
+            verify: VerifyConfig::default(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,

@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::{ContractError, digest_b3, plan_id_for_run};
 use velnor_actions_contract_config::config::{
     ActionsConfig, DiscoveryConfig, ResourcesConfig, RunnerSelection, StacksConfig,
-    TestShardingConfig, VelnorConfig, WorkflowConfig, WorkflowPolicy,
+    TestShardingConfig, VelnorConfig, VerifyConfig, WorkflowConfig, WorkflowPolicy,
 };
 use velnor_actions_contract_workflow::workflow::{
     ObligationDecision, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage,
@@ -34,6 +34,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             runner_label: None,
             tasks: Vec::new(),
             artifact_tasks: Vec::new(),
+            verify: VerifyConfig::default(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
