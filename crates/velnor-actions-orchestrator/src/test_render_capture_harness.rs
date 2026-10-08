@@ -33,12 +33,12 @@ fn capture_exact_consumer_marked_workflow_before_size_guard()
     );
 
     velnor_actions_workflow_renderer::render::test_render_capture::clear();
-    let rendered = crate::render_staged_tree_with(&preparation, None);
+    let tree = crate::render_staged_tree_with(&preparation, None)?;
+    crate::validate::validate_staged(&tree)?;
     let capture = velnor_actions_workflow_renderer::render::test_render_capture::take()
         .ok_or("render boundary did not record a workflow")?;
     std::fs::write(output.join("canonical.yml"), capture.canonical)?;
     std::fs::write(output.join("selected.yml"), capture.selected)?;
-    let tree = rendered?;
     assert!(tree.get(".github/workflows/ci.yml").is_some());
     Ok(())
 }
