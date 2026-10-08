@@ -133,7 +133,7 @@ fn consumer_tree_has_exactly_four_sorted_paths() -> Result<(), RenderError> {
     assert_eq!(tree.files[1].path, CLAUDE_MD_PATH);
     assert_eq!(tree.files[2].path, ACTIONLINT_PATH);
     assert_eq!(tree.files[3].path, WORKFLOW_PATH);
-    assert_eq!(tree.files[1].bytes, tree.files[0].bytes);
+    assert_eq!(tree.files[1].bytes, "@AGENTS.md\n");
     assert_eq!(tree.get(WORKFLOW_PATH), Some(workflow.as_str()));
     assert!(tree.get(".github/other.yml").is_none());
     Ok(())

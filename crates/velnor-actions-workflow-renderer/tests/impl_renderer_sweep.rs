@@ -313,7 +313,7 @@ fn tree_has_exactly_two_tool_free_files() -> Result<(), RenderError> {
     assert_eq!(tree.files[1].path, ".github/CLAUDE.md");
     assert_eq!(tree.files[2].path, ".github/actionlint.yaml");
     assert_eq!(tree.files[3].path, ".github/workflows/ci.yml");
-    assert_eq!(tree.files[1].bytes, tree.files[0].bytes);
+    assert_eq!(tree.files[1].bytes, "@AGENTS.md\n");
     let agents = &tree.files[0].bytes;
     assert!(agents.contains("complete `.github/workflows/` namespace"));
     assert!(agents.contains(
