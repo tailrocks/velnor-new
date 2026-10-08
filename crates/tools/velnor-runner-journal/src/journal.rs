@@ -19,7 +19,10 @@ mod worker_volume;
 pub use auth_intent::{
     DiscoveryCredentialOutcome, DiscoveryCredentialScope, DiscoveryCredentialStep,
 };
-pub use capacity::{CapacityClaim, LaunchEffectState, ReplayRoute, ScopedLaunchIdentity};
+pub use capacity::{
+    BatchCapacityClaim, BatchOfferClaim, BatchOfferState, CapacityClaim, LaunchEffectState,
+    ReplayRoute, ScopedLaunchIdentity,
+};
 pub use cleanup::{
     CleanupCheckpointIdentity, CleanupChildren, CleanupDiagnostics, CleanupDisposition,
     CleanupStopPolicy, OuterNetworkCleanupState, OuterNetworkRemovalProof, PhysicalCleanupProof,
