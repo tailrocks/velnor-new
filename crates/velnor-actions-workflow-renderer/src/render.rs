@@ -135,7 +135,7 @@ pub struct CandidateSpec {
 
 pub use crate::lane_share::RenderedWorkflow;
 pub use crate::tree::{RenderedFile, RenderedSymlink, RenderedTree};
-pub use velnor_actions_contract::{AGENTS_MD_PATH, CLAUDE_MD_PATH};
+pub use velnor_actions_contract::AGENTS_MD_PATH;
 
 impl RenderContext {
     /// Validate every context scalar before rendering.

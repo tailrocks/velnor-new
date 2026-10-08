@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 use std::{fs, io::Read};
 
 use velnor_actions_contract::{
-    DECLARED_GITHUB_FORMATS, MARKER_PREFIX, OLD_MARKER_PREFIX, is_generated_marker_line,
+    DECLARED_GITHUB_FORMATS, MARKER_PREFIX, OLD_MARKER_PREFIX, RETIRED_GITHUB_PATHS,
+    is_generated_marker_line,
 };
 use velnor_actions_workflow_renderer::release_tree::RELEASE_TREE_PATHS;
 use velnor_actions_workflow_renderer::render::RenderedTree;
@@ -165,13 +166,16 @@ fn copy_repository_content(
     Ok(directories)
 }
 
-/// Keep workflow, declared-format, and release outputs generator-owned.
+/// Keep workflow, declared-format, release, and retired outputs generator-owned.
+/// Retired paths stay owned so the preserve-copy skips them and the swap
+/// deletes stale copies; nothing re-emits them.
 fn generator_owned(relative: &Path) -> bool {
     relative.starts_with("workflows")
         || DECLARED_GITHUB_FORMATS
             .iter()
             .map(|format| format.path)
             .chain(RELEASE_TREE_PATHS.iter().copied())
+            .chain(RETIRED_GITHUB_PATHS.iter().copied())
             .any(|path| {
                 Path::new(path)
                     .strip_prefix(".github")

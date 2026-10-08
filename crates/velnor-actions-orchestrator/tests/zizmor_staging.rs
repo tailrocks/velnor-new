@@ -182,7 +182,6 @@ fn stage(preview: &Path, yaml: &str) -> Result<TempDir, Box<dyn std::error::Erro
     )?;
     for relative in [
         ".github/AGENTS.md",
-        ".github/CLAUDE.md",
         ".github/actions/u26/action.yml",
         ".github/actions/velnor-tool-seed/action.yml",
         ".github/actions/velnor-tools-cache-restore/action.yml",

@@ -79,7 +79,6 @@ fn tofu_cross_checkout_determinism() -> TestResult {
             names,
             [
                 ".github/AGENTS.md",
-                ".github/CLAUDE.md",
                 ".github/actionlint.yaml",
                 ".github/actions/tofu-provider-admission/action.yml",
                 ".github/actions/u26/action.yml",

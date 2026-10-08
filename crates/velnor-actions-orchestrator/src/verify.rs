@@ -208,7 +208,6 @@ fn markdownlint_argv() -> Result<Vec<String>, OrchestratorError> {
             "**/*.{md,markdown}",
             "#**/node_modules/**",
             "#.github/AGENTS.md",
-            "#.github/CLAUDE.md",
         ],
     )
 }

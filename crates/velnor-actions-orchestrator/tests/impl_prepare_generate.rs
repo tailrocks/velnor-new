@@ -56,7 +56,6 @@ fn generate_preview_matches_in_place_and_preserves_repo() -> TestResult {
     assert_eq!(preview_report.files_written, inplace_report.files_written);
     let expected_files = [
         ".github/AGENTS.md",
-        ".github/CLAUDE.md",
         ".github/actionlint.yaml",
         ".github/actions/u26/action.yml",
         ".github/actions/velnor-tool-seed/action.yml",

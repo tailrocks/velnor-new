@@ -3,12 +3,12 @@ use crate::impl_contract_ids::{GROUP, MANIFEST, TASK, sample_entry};
 use std::collections::BTreeMap;
 use velnor_actions_contract::config::ActionsConfig;
 use velnor_actions_contract::{
-    AGENTS_MD_PATH, CLAUDE_MD_PATH, ContractError, DECLARED_GITHUB_FORMATS, DiscoveryConfig,
-    ObligationDecision, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage,
-    PlanRunner, PullRequestCachePolicy, ResourcesConfig, RunnerSelection, RustStackConfig,
-    StacksConfig, TestShardingConfig, Trust, VelnorConfig, WorkflowConfig, WorkflowEvent,
-    WorkflowPolicy, digest_b3, find_github_format, is_declared_github_format, plan_id_for_run,
-    run_key_for_ci,
+    AGENTS_MD_PATH, ContractError, DECLARED_GITHUB_FORMATS, DiscoveryConfig, ObligationDecision,
+    Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner,
+    PullRequestCachePolicy, RETIRED_GITHUB_PATHS, ResourcesConfig, RunnerSelection,
+    RustStackConfig, StacksConfig, TestShardingConfig, Trust, VelnorConfig, WorkflowConfig,
+    WorkflowEvent, WorkflowPolicy, digest_b3, find_github_format, is_declared_github_format,
+    plan_id_for_run, run_key_for_ci,
 };
 
 /// Valid config shared by remediation cases.
@@ -185,20 +185,19 @@ fn arch_required_schema_has_no_default() {
 
 #[test]
 fn gen_declared_github_formats_gate_new_writers() {
-    assert_eq!(DECLARED_GITHUB_FORMATS.len(), 4);
+    assert_eq!(DECLARED_GITHUB_FORMATS.len(), 3);
     let agents = find_github_format(AGENTS_MD_PATH).expect("agents");
     assert_eq!(agents.owner, "velnor-actions-workflow-renderer");
-    let claude = find_github_format(CLAUDE_MD_PATH).expect("claude");
-    assert_eq!(claude.owner, "velnor-actions-workflow-renderer");
     let actionlint = find_github_format(".github/actionlint.yaml").expect("actionlint");
     assert_eq!(actionlint.owner, "velnor-actions-actionlint");
     let workflow = find_github_format(".github/workflows/ci.yml").expect("workflow");
     assert_eq!(workflow.owner, "velnor-actions-workflow-renderer");
     assert!(find_github_format(".github/workflows/other.yml").is_none());
     assert!(is_declared_github_format(AGENTS_MD_PATH));
-    assert!(is_declared_github_format(CLAUDE_MD_PATH));
+    assert!(!is_declared_github_format(".github/CLAUDE.md"));
     assert!(is_declared_github_format(".github/actionlint.yaml"));
     assert!(!is_declared_github_format("mise.toml"));
+    assert!(RETIRED_GITHUB_PATHS.contains(&".github/CLAUDE.md"));
 }
 
 #[test]

@@ -311,16 +311,14 @@ fn preview_prints_absolute_paths_and_files() -> Result<(), Box<dyn Error>> {
         "{stderr}"
     );
     assert!(stderr.contains(".github/AGENTS.md"), "{stderr}");
-    assert!(stderr.contains(".github/CLAUDE.md"), "{stderr}");
+    assert!(!stderr.contains("CLAUDE.md"), "{stderr}");
     assert!(stderr.contains(".github/actionlint.yaml"), "{stderr}");
     assert!(stderr.contains(".github/workflows/ci.yml"), "{stderr}");
     assert!(preview.join(".github/AGENTS.md").is_file());
     let claude = preview.join(".github/CLAUDE.md");
-    assert!(claude.is_file());
-    assert!(!claude.is_symlink());
-    assert_eq!(
-        std::fs::read(&claude)?,
-        std::fs::read(preview.join(".github/AGENTS.md"))?
+    assert!(
+        std::fs::symlink_metadata(&claude).is_err(),
+        "preview still carries retired .github/CLAUDE.md"
     );
     cleanup(&tmp);
     cleanup(&outer);

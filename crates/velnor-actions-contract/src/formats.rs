@@ -1,6 +1,6 @@
 //! Declared `.github` output formats (gen §0).
 //!
-//! V1 generates exactly two files; future adapters MUST declare additional
+//! V1 generates exactly three files; future adapters MUST declare additional
 //! formats here before they are supported. Writers consult this registry and
 //! MUST NOT emit undeclared paths.
 
@@ -15,18 +15,20 @@ pub struct GithubFormat {
 
 /// Generated AGENTS.md instruction path inside the repository.
 pub const AGENTS_MD_PATH: &str = ".github/AGENTS.md";
-/// Generated CLAUDE.md mirror path inside the repository: a regular file with
-/// bytes identical to [`AGENTS_MD_PATH`], never a symlink.
-pub const CLAUDE_MD_PATH: &str = ".github/CLAUDE.md";
+
+/// Retired generator-owned `.github` paths, sorted.
+///
+/// Generation no longer emits these paths but still owns them: the
+/// preserve-copy skips them so the whole-tree swap deletes stale copies
+/// from consumer repositories. `.github/CLAUDE.md` retired because plugin
+/// installers reject symlink entries and a second instruction copy next to
+/// [`AGENTS_MD_PATH`] carries no benefit.
+pub const RETIRED_GITHUB_PATHS: &[&str] = &[".github/CLAUDE.md"];
 
 /// Every declared `.github` output format (gen §0).
-pub const DECLARED_GITHUB_FORMATS: [GithubFormat; 4] = [
+pub const DECLARED_GITHUB_FORMATS: [GithubFormat; 3] = [
     GithubFormat {
         path: AGENTS_MD_PATH,
-        owner: "velnor-actions-workflow-renderer",
-    },
-    GithubFormat {
-        path: CLAUDE_MD_PATH,
         owner: "velnor-actions-workflow-renderer",
     },
     GithubFormat {
