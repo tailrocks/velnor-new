@@ -167,6 +167,10 @@ fn service_user_drain_argv_uses_exact_package_paths_and_bounded_wait() {
         [
             "--user",
             "velnor",
+            "--group",
+            "velnor",
+            "--supp-group",
+            "docker",
             "--",
             "/usr/bin/velnor-host",
             "--config",

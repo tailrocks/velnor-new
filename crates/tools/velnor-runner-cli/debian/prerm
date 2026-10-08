@@ -8,7 +8,9 @@ case "${1:-}" in
         # The state directory belongs to velnor, so prove the durable drain as
         # that account. This command uses one configured monotonic deadline and
         # succeeds only after a complete local quiescence proof.
-        /usr/sbin/runuser -u velnor -- /usr/bin/velnor-host \
+        # Match the unit's private primary group and Docker socket access. These
+        # command-local groups do not change the velnor account's NSS membership.
+        /usr/sbin/runuser --user velnor --group velnor --supp-group docker -- /usr/bin/velnor-host \
             --config /etc/velnor-host/host.toml \
             --state /var/lib/velnor-host drain --wait
 
