@@ -9,12 +9,12 @@ use velnor_actions_contract::{
 };
 use velnor_actions_rust::KIND_DISPLAY_WORDS;
 use velnor_actions_workflow_renderer::action_pins;
-use velnor_actions_workflow_renderer::release_tree::RELEASE_TREE_PATHS;
 use velnor_actions_workflow_renderer::render::{ACTIONLINT_PATH, WORKFLOW_PATH};
 
 use crate::OrchestratorError;
 use crate::finalized::finalized_jobs;
 use crate::generate::render_staged_tree;
+use crate::plan_release_files::release_file_lines;
 use crate::plan_stacks::stacks_section;
 use crate::prepare::GenerationPreparation;
 
@@ -128,22 +128,6 @@ fn pin_lines(out: &mut String, jobs: &BTreeMap<String, Job>) {
     push(out, &format!("  Action pins: {}", pins.len()));
     for pin in &pins {
         push(out, &format!("    - {pin}"));
-    }
-}
-
-/// Release-owned tree paths, exactly what `generate` emits when enabled.
-///
-/// The checked plan entrypoint surfaces config errors from its discarded
-/// render pass first, so an error here means nothing is emitted.
-fn release_file_lines(out: &mut String, prep: &GenerationPreparation) {
-    let enabled = crate::release_emit::enabled_release(prep)
-        .ok()
-        .flatten()
-        .is_some();
-    if enabled {
-        for path in RELEASE_TREE_PATHS {
-            push(out, &format!("  {path}"));
-        }
     }
 }
 

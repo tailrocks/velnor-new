@@ -99,7 +99,7 @@ pub(super) fn assert_success_receipt(root: &Path) -> Result<(), Box<dyn Error>> 
         let digest = super::sha256(&file)?;
         let size = fs::metadata(&file)?.len();
         let url = format!(
-            "https://github.com/{}/releases/download/v0.1.2/{name}",
+            "https://github.com/{}/releases/download/v0.1.3/{name}",
             super::REPOSITORY
         );
         expected_assets.push(format!(
@@ -119,7 +119,7 @@ pub(super) fn assert_success_receipt(root: &Path) -> Result<(), Box<dyn Error>> 
             super::REPOSITORY,
             "--arg",
             "version",
-            "0.1.2",
+            "0.1.3",
             "--arg",
             "source",
             super::SOURCE_SHA,
@@ -134,7 +134,7 @@ pub(super) fn assert_success_receipt(root: &Path) -> Result<(), Box<dyn Error>> 
             "2",
             "--arg",
             "tag",
-            "v0.1.2",
+            "v0.1.3",
             "--arg",
             "manifest_name",
             "release-manifest.json",
