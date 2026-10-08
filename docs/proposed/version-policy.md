@@ -68,7 +68,7 @@ consumer workflow output.
 | Direct and transitive Rust crates | Workspace manifests, `Cargo.lock` | Newest stable graph; major updates included; all changed versions pass the full locked gate |
 | Velnor workflow bootstrap | Consumer output embeds the exact generating release version, immutable target asset URL, and binary SHA-256; Velnor dogfood also checks `.velnor/generator.lock` | Latest qualified stable Velnor release for each supported target |
 | GitHub Actions | Compiled-in Velnor action registry; optional exact overrides in `.velnor/config.toml` | Default record is the latest reviewed stable release; workflow uses immutable full commit SHA |
-| Alint GitHub Action | Compiled-in Velnor action registry; emitted as a full-SHA pin like every other action | `v0.16.1` (`9f9d34ba0eae3888299b9e570f43338b0e7f2cdb`) is the current reviewed default. No tag exception exists; changing the pin requires a reviewed Velnor version-policy update |
+| Alint GitHub Action | Compiled-in Velnor action registry; emitted as a full-SHA pin like every other action | `v0.17.0` (`d93c0283b19dd78afcd8a4b303f1556a7759ba81`) is the current reviewed default. No tag exception exists; changing the pin requires a reviewed Velnor version-policy update |
 | GitHub-hosted OS image | Generated `runs-on` label and recorded runner metadata | Latest stable supported Ubuntu image family after host qualification; exact versioned label is the pin. GitHub may update its image contents in place, so record `ImageOS` and `ImageVersion` as runtime evidence and cache identity, not as immutable pins |
 | Deferred V2/V3 runtime inputs | `.velnor/runner.lock` (created before runner implementation) | Latest qualified Docker Desktop/Engine, official runner, base-image digest, GitHub API version, protocol revision, and runner dependencies including Turso |
 
@@ -109,7 +109,7 @@ uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6 # v1.6.0
 uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-uses: asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb # v0.16.1
+uses: asamarts/alint@d93c0283b19dd78afcd8a4b303f1556a7759ba81 # v0.17.0
 ```
 
 Release records: [mise-action v4.3.0](https://github.com/jdx/mise-action/releases/tag/v4.3.0),
@@ -138,7 +138,7 @@ and its matching stable version. Keys must be exact allowlisted action
 repositories, and the pair must appear in that action's bundled approved-pin
 catalog (latest release plus maintained compatibility pins). The Alint action
 is not a per-project override: Velnor emits exactly
-`asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb` (`# v0.16.1`).
+`asamarts/alint@d93c0283b19dd78afcd8a4b303f1556a7759ba81` (`# v0.17.0`).
 Changing that pin is a Velnor version-policy change,
 not a consumer configuration change. Velnor validates every ordinary pair and
 the action's input/output schema before replacing generated output. Unknown
@@ -173,7 +173,7 @@ Alint runs as a separate job only in Velnor's `velnor-repository-v1` profile,
 using this exact generated step:
 
 ```yaml
-- uses: asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb # v0.16.1
+- uses: asamarts/alint@d93c0283b19dd78afcd8a4b303f1556a7759ba81 # v0.17.0
 ```
 
 It reads `.alint.yml` and enforces only the rules supported and explicitly
