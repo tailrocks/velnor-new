@@ -39,8 +39,8 @@ if [ "$1" = api ]; then
     repos/tailrocks/velnor-new/git/refs)
       test "$2 $3" = '--method POST'
       printf '%s\n' "$GITHUB_SHA" > "$GH_TAG_SOURCE"
-      printf '{"ref":"refs/tags/v0.1.4","object":{"type":"commit","sha":"%s"}}\n' "$GITHUB_SHA" ;;
-    repos/tailrocks/velnor-new/git/ref/tags/v0.1.4)
+      printf '{"ref":"refs/tags/v0.1.5","object":{"type":"commit","sha":"%s"}}\n' "$GITHUB_SHA" ;;
+    repos/tailrocks/velnor-new/git/ref/tags/v0.1.5)
       if [ "$GH_CASE" = TagMovedBeforePublish ]; then
         count=0
         if [ -f "$GH_TAG_READS" ]; then count="$(cat "$GH_TAG_READS")"; fi
@@ -65,7 +65,7 @@ if [ "$1" = api ]; then
   exit 0
 fi
 if [ "$1 $2" = 'release create' ]; then
-  test "$3" = v0.1.4
+  test "$3" = v0.1.5
   printf '%s\n' "$3" > "$GH_CREATE_TAG"
   printf 'draft\n' > "$GH_STATE"
   shift 3
@@ -73,22 +73,22 @@ if [ "$1 $2" = 'release create' ]; then
     case "$1" in
       --repo) test "$2" = tailrocks/velnor-new; shift 2 ;;
       --verify-tag|--latest=false|--draft) shift ;;
-      --title) test "$2" = 'velnor-actions v0.1.4'; shift 2 ;;
-      --notes) test "$2" = "velnor-actions 0.1.4 built from $GITHUB_SHA."; shift 2 ;;
+      --title) test "$2" = 'velnor-actions v0.1.5'; shift 2 ;;
+      --notes) test "$2" = "velnor-actions 0.1.5 built from $GITHUB_SHA."; shift 2 ;;
       *) exit 45 ;;
     esac
   done
   exit 0
 fi
 if [ "$1 $2" = 'release view' ]; then
-  test "$3" = v0.1.4
+  test "$3" = v0.1.5
   test "$4 $5" = '--repo tailrocks/velnor-new'
   test "$6 $7" = '--json databaseId,tagName,isDraft'
-  printf '{"databaseId":123,"tagName":"v0.1.4","isDraft":true}\n'
+  printf '{"databaseId":123,"tagName":"v0.1.5","isDraft":true}\n'
   exit 0
 fi
 if [ "$1 $2" = 'release upload' ]; then
-  test "$3" = v0.1.4
+  test "$3" = v0.1.5
   test "$4 $5" = '--repo tailrocks/velnor-new'
   shift 5
   for path in "$@"; do test -s "$path"; done

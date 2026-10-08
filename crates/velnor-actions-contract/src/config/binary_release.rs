@@ -115,16 +115,10 @@ fn is_env_name(value: &str) -> bool {
                 | "GH_TOKEN"
         )
         && ![
-            "GITHUB_",
-            "RUNNER_",
-            "ACTIONS_",
-            "MISE_",
-            "CARGO_",
-            "RUSTC_",
-            "RUSTDOC_",
+            "GITHUB_", "RUNNER_", "ACTIONS_", "MISE_", "CARGO_", "RUSTC_", "RUSTDOC_", "RUSTUP_",
         ]
-            .iter()
-            .any(|prefix| value.starts_with(prefix))
+        .iter()
+        .any(|prefix| value.starts_with(prefix))
 }
 
 fn default_manifest_path() -> String {
