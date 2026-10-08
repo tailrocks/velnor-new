@@ -193,6 +193,15 @@ fn controller_service_status_is_distinct_from_readiness() {
     );
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_service_status_requests_the_unit_job_property() {
+    assert_eq!(
+        super::SERVICE_STATE_PROPERTIES,
+        "LoadState,ActiveState,SubState,MainPID,ControlPID,Job"
+    );
+}
+
 #[test]
 fn launchctl_uses_the_gui_domain_and_does_not_fork() {
     let plist = Path::new("/Users/example/Library/LaunchAgents/com.tailrocks.velnor.host.plist");
@@ -230,21 +239,20 @@ fn plist_logs_stay_out_of_the_secret_channel() {
 #[test]
 fn systemd_requires_a_complete_positive_stopped_observation() {
     let stopped =
-        b"LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\n";
+        b"LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\nJob=\n";
     assert_eq!(
         systemd_service_state(true, stopped),
         ControllerServiceState::Stopped
     );
 
-    let transitional =
-        b"LoadState=loaded\nActiveState=activating\nSubState=start\nMainPID=0\nControlPID=0\n";
+    let transitional = b"LoadState=loaded\nActiveState=activating\nSubState=start\nMainPID=0\nControlPID=0\nJob=\n";
     assert_eq!(
         systemd_service_state(true, transitional),
         ControllerServiceState::InUse
     );
 
     let active_with_pid =
-        b"LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=12\nControlPID=0\n";
+        b"LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=12\nControlPID=0\nJob=\n";
     assert_eq!(
         systemd_service_state(true, active_with_pid),
         ControllerServiceState::InUse
@@ -252,15 +260,38 @@ fn systemd_requires_a_complete_positive_stopped_observation() {
 }
 
 #[test]
+fn systemd_pending_job_prevents_a_stopped_report() {
+    let pending_start = b"LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\nJob=42 /org/freedesktop/systemd1/job/42\n";
+    assert_eq!(
+        systemd_service_state(true, pending_start),
+        ControllerServiceState::InUse
+    );
+}
+
+#[test]
 fn systemd_query_failures_and_incomplete_states_are_unknown() {
     let stopped =
-        b"LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\n";
+        b"LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\nJob=\n";
     assert_eq!(
         systemd_service_state(false, stopped),
         ControllerServiceState::Unknown
     );
     assert_eq!(
         systemd_service_state(true, b"LoadState=loaded\nActiveState=inactive\n"),
+        ControllerServiceState::Unknown
+    );
+    assert_eq!(
+        systemd_service_state(
+            true,
+            b"LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\n"
+        ),
+        ControllerServiceState::Unknown
+    );
+    assert_eq!(
+        systemd_service_state(
+            true,
+            b"LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\nJob=\nJob=\n"
+        ),
         ControllerServiceState::Unknown
     );
     assert_eq!(
