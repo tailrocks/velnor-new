@@ -77,3 +77,42 @@ fn hook_escape_privileged_declared_keys_never_run() {
         );
     }
 }
+
+#[test]
+fn streaming_timeout_kills_pipe_holding_descendant_after_parent_exit() -> Result<(), String> {
+    let time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!(
+        "velnor-stream-pipe-descendant-{}-{time}",
+        std::process::id()
+    ));
+    std::fs::create_dir(&root).map_err(|error| error.to_string())?;
+    let marker = root.join("descendant-survived");
+    let script = format!(
+        "(sleep 0.35; printf leaked > '{}') & exit 0",
+        marker.display()
+    );
+    let task = IsolatedCommand::direct(
+        "/bin/sh",
+        vec![OsString::from("-c"), OsString::from(script)],
+    );
+    let started = std::time::Instant::now();
+    let error = task
+        .run_stdout_to(1024, Duration::from_millis(100), |_| Ok(()))
+        .expect_err("an inherited pipe must not extend the deadline");
+    assert!(
+        is_cancel_or_timeout(&error),
+        "stream timeout must classify: {error}"
+    );
+    assert!(started.elapsed() < Duration::from_secs(2));
+    std::thread::sleep(Duration::from_millis(400));
+    let survived = marker.exists();
+    std::fs::remove_dir_all(&root).map_err(|error| error.to_string())?;
+    assert!(
+        !survived,
+        "timeout cleanup kills the still-owned process group after parent exit"
+    );
+    Ok(())
+}

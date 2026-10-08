@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use velnor_actions_contract::errors::ContractError;
 use velnor_actions_contract_release::targets::RUNNER_LABEL_CATALOG;
 
-use crate::config::VerificationTask;
+use crate::config::{ArtifactBuildTask, VerificationTask};
 
 /// Workflow section of `.velnor/config.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -27,6 +27,9 @@ pub struct WorkflowConfig {
     /// Sorted, explicit isolated validation jobs.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tasks: Vec<VerificationTask>,
+    /// Sorted build tasks with exact, bounded outputs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub artifact_tasks: Vec<ArtifactBuildTask>,
 }
 
 /// Workflow policy selector.
@@ -186,6 +189,7 @@ impl WorkflowConfig {
             ));
         }
         self.validate_tasks(file)?;
+        self.validate_artifact_tasks(file)?;
         Ok(())
     }
 
@@ -202,6 +206,38 @@ impl WorkflowConfig {
                     "tasks_must_be_sorted_by_id".to_owned()
                 };
                 return Err(ContractError::config(file, "workflow.tasks", problem));
+            }
+            previous = Some(task.id.as_str());
+        }
+        Ok(())
+    }
+
+    /// Validate artifact tasks and prevent overlap with verification jobs.
+    /// # Errors
+    fn validate_artifact_tasks(&self, file: &str) -> Result<(), ContractError> {
+        let verification_ids: std::collections::BTreeSet<&str> =
+            self.tasks.iter().map(|task| task.id.as_str()).collect();
+        let mut previous = None;
+        for task in &self.artifact_tasks {
+            task.validate(file)?;
+            if previous.is_some_and(|id: &str| id >= task.id.as_str()) {
+                let problem = if previous == Some(task.id.as_str()) {
+                    format!("duplicate_artifact_task:{}", task.id)
+                } else {
+                    "artifact_tasks_must_be_sorted_by_id".to_owned()
+                };
+                return Err(ContractError::config(
+                    file,
+                    "workflow.artifact_tasks",
+                    problem,
+                ));
+            }
+            if verification_ids.contains(task.id.as_str()) {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.artifact_tasks",
+                    format!("task_id_overlaps_verification_task:{}", task.id),
+                ));
             }
             previous = Some(task.id.as_str());
         }

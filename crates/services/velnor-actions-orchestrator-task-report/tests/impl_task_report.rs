@@ -100,6 +100,8 @@ fn fixture_plan() -> Plan {
         task_ids: vec![FIRST.to_owned(), SECOND.to_owned()],
         warnings: Vec::new(),
         edges: Vec::new(),
+
+        artifact_tasks: Vec::new(),
     };
     plan.validate().expect("fixture validates");
     plan

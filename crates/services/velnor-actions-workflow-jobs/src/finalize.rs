@@ -58,7 +58,11 @@ pub fn finalize_jobs(
         } else {
             mise.clone()
         };
-        cache_p08::ensure_setup_p08(id, job, &setup, always, target, &ctx.checkout_uses)?;
+        if cache_p08::has_artifact_matrix_markers(job) {
+            cache_p08::require_uncached_setup(id, job, &setup, &ctx.checkout_uses)?;
+        } else {
+            cache_p08::ensure_setup_p08(id, job, &setup, always, target, &ctx.checkout_uses)?;
+        }
         cache_p08::check_no_rust_cache_with_mbx(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;

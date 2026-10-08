@@ -12,6 +12,10 @@ use serde::Serialize;
 use crate::errors::ContractError;
 use crate::vcs::VcsInputs;
 
+mod json;
+mod streaming;
+pub use streaming::Blake3Accumulator;
+
 /// A validated `b3-<64 lowercase hex>` digest.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[serde(try_from = "String")]
@@ -348,7 +352,7 @@ fn write_canonical(value: &serde_json::Value, out: &mut Vec<u8>) {
         serde_json::Value::Bool(true) => out.extend_from_slice(b"true"),
         serde_json::Value::Bool(false) => out.extend_from_slice(b"false"),
         serde_json::Value::Number(num) => out.extend_from_slice(num.to_string().as_bytes()),
-        serde_json::Value::String(text) => write_quoted(text, out),
+        serde_json::Value::String(text) => json::write_quoted(text, out),
         serde_json::Value::Array(items) => {
             out.push(b'[');
             for (index, item) in items.iter().enumerate() {
@@ -367,33 +371,11 @@ fn write_canonical(value: &serde_json::Value, out: &mut Vec<u8>) {
                 if index > 0 {
                     out.push(b',');
                 }
-                write_quoted(key, out);
+                json::write_quoted(key, out);
                 out.push(b':');
                 write_canonical(val, out);
             }
             out.push(b'}');
         }
     }
-}
-
-/// Write a JSON string with minimal escaping (ASCII-safe output).
-fn write_quoted(text: &str, out: &mut Vec<u8>) {
-    out.push(b'"');
-    for ch in text.chars() {
-        match ch {
-            '"' => out.extend_from_slice(b"\\\""),
-            '\\' => out.extend_from_slice(b"\\\\"),
-            '\n' => out.extend_from_slice(b"\\n"),
-            '\r' => out.extend_from_slice(b"\\r"),
-            '\t' => out.extend_from_slice(b"\\t"),
-            c if (c as u32) < 0x20 => {
-                out.extend_from_slice(format!("\\u{:04x}", c as u32).as_bytes());
-            }
-            c => {
-                let mut buf = [0_u8; 4];
-                out.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
-            }
-        }
-    }
-    out.push(b'"');
 }

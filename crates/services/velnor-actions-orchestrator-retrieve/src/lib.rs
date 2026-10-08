@@ -9,5 +9,6 @@
 //! The hub keeps the environment-driven `retrieve_reports`
 //! entrypoint.
 
+pub mod retrieve_artifact_build;
 pub mod retrieve_baseline;
 pub mod retrieve_reports;

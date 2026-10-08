@@ -1,4 +1,7 @@
 //! Final aggregate report.
+use super::artifact_build::{
+    ArtifactBuildExpectation, ArtifactBuildObservation, ArtifactBuildTaskPlan,
+};
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::errors::ContractError;
 use velnor_actions_contract::ids::{
@@ -20,6 +23,15 @@ pub struct FinalReport {
     pub expected_report_ids: Vec<String>,
     /// Every downloaded artifact name (sorted).
     pub downloaded_artifact_ids: Vec<String>,
+    /// Exact plan task/provider/output declarations for build artifacts.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub artifact_build_tasks: Vec<ArtifactBuildTaskPlan>,
+    /// Exact source/plan/run/provider/task identities required for artifact builds.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub artifact_build_expected: Vec<ArtifactBuildExpectation>,
+    /// Actions API observations and downloaded checksum evidence.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub artifact_build_observations: Vec<ArtifactBuildObservation>,
     /// Required non-matrix job results.
     pub required_job_results: Vec<RequiredJobResult>,
     /// Computed final result.
@@ -224,6 +236,9 @@ impl FinalReport {
             plan_id: velnor_actions_contract::ids::plan_id_for_run(run_key)?,
             expected_report_ids: Vec::new(),
             downloaded_artifact_ids: Vec::new(),
+            artifact_build_tasks: Vec::new(),
+            artifact_build_expected: Vec::new(),
+            artifact_build_observations: Vec::new(),
             required_job_results: jobs,
             status: FinalStatus::PlanningFailed,
             counts: FinalCounts {

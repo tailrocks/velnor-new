@@ -108,6 +108,9 @@ fn final_report_miss_reasons_validate() -> Result<(), ContractError> {
             artifact_id_for_matrix(&run_key, &entry.matrix_key)?,
             artifact_id_for_plan(&run_key)?,
         ],
+        artifact_build_tasks: Vec::new(),
+        artifact_build_expected: Vec::new(),
+        artifact_build_observations: Vec::new(),
         required_job_results: vec![RequiredJobResult {
             job_id: "plan".to_owned(),
             conclusion: JobConclusion::Success,

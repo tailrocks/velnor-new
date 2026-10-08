@@ -1,4 +1,5 @@
 //! Integration test entry point; cases live in the sibling files.
+mod impl_artifact_export;
 mod impl_common;
 mod impl_gates_cover;
 mod impl_gates_cover_repository;

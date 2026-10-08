@@ -2,7 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract_workflow::{
-    MatrixReport, Plan, PlanMatrix, RequiredJobResult, TaskReport, WorkflowEvent,
+    ArtifactBuildObservation, ArtifactBuildRunContext, MatrixReport, Plan, PlanMatrix,
+    RequiredJobResult, TaskReport, WorkflowEvent,
 };
 
 use super::shard_types::{ResourceLimits, ShardProof};
@@ -23,6 +24,12 @@ pub struct MergeRequest {
     /// Head-bound candidate attestation; required in candidate mode.
     #[serde(default)]
     pub candidate_attestation: Option<CandidateAttestation>,
+    /// GitHub-owned identity for the current artifact-build run attempt.
+    #[serde(default)]
+    pub artifact_build_context: Option<ArtifactBuildRunContext>,
+    /// Attempt-scoped Actions API and checksum observations for planned outputs.
+    #[serde(default)]
+    pub artifact_build_observations: Vec<ArtifactBuildObservation>,
     /// Validated plan; absent when the plan artifact never landed.
     #[serde(default)]
     pub plan: Option<Plan>,

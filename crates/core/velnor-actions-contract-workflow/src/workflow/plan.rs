@@ -1,4 +1,5 @@
 //! Schema-1 affected plan and generic matrix entries.
+use super::artifact_build::ArtifactBuildTaskPlan;
 use super::baseline::{BaselineProof, PlanBaseline};
 use super::lanes::NamedCheckLaneVariant;
 use super::matrix_entry::MatrixEntry;
@@ -54,6 +55,9 @@ pub struct Plan {
     pub matrix: PlanMatrix,
     /// Every obligation ID (sorted unique).
     pub task_ids: Vec<String>,
+    /// Bounded artifact-producing tasks admitted by this plan.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub artifact_tasks: Vec<ArtifactBuildTaskPlan>,
     /// Plan warnings.
     #[serde(default)]
     pub warnings: Vec<String>,
@@ -188,6 +192,7 @@ impl Plan {
         }
         self.runner.validate()?;
         check_sorted_unique(&self.task_ids, "task_ids")?;
+        self.validate_artifact_tasks()?;
         check_sorted_by(&self.packages, "packages", |pkg| pkg.package_id.as_str())?;
         check_sorted_by(&self.obligations, "obligations", |ob| ob.task_id.as_str())?;
         check_sorted_by(&self.matrix.include, "matrix.include", |entry| {
@@ -215,6 +220,43 @@ impl Plan {
             obligation.validate()?;
         }
         validate_plan_edges(&self.edges, &self.task_ids)?;
+        Ok(())
+    }
+
+    /// Validate planned artifact task identity and output inventory.
+    /// # Errors
+    fn validate_artifact_tasks(&self) -> Result<(), ContractError> {
+        let task_ids: BTreeSet<&str> = self.task_ids.iter().map(String::as_str).collect();
+        let mut previous: Option<&str> = None;
+        for task in &self.artifact_tasks {
+            task.validate()?;
+            if previous.is_some_and(|id| id >= task.task.id.as_str()) {
+                let problem = if previous == Some(task.task.id.as_str()) {
+                    format!("duplicate_artifact_task:{}", task.task.id)
+                } else {
+                    "artifact_tasks_must_be_sorted_by_id".to_owned()
+                };
+                return Err(ContractError::identity("artifact_tasks", problem));
+            }
+            if task_ids.contains(task.task.id.as_str()) {
+                return Err(ContractError::identity(
+                    "artifact_tasks",
+                    format!("task_id_collision:{}", task.task.id),
+                ));
+            }
+            previous = Some(task.task.id.as_str());
+        }
+        if let Some(first) = self.artifact_tasks.first()
+            && self
+                .artifact_tasks
+                .iter()
+                .any(|task| task.providers != first.providers)
+        {
+            return Err(ContractError::identity(
+                "artifact.providers",
+                "provider_scope_mismatch",
+            ));
+        }
         Ok(())
     }
 }

@@ -4,11 +4,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+
+mod artifact_task_plan;
+use artifact_task_plan::artifact_providers;
 use velnor_actions_contract::{canonical_json_bytes, parse_strict_json, plan_id_for_run};
-use velnor_actions_contract_config::{ExecutionMode, RunnerSelection};
+use velnor_actions_contract_config::{ArtifactBuildTask, ExecutionMode, RunnerSelection};
 use velnor_actions_contract_planning::ProposedTask;
 use velnor_actions_contract_workflow::{
-    NamedCheckLane, Plan, PlanBaseline, PlanMatrix, PlanRunner, WorkflowEvent, named_check_lanes,
+    ArtifactBuildProvider, ArtifactBuildTaskPlan, NamedCheckLane, Plan, PlanBaseline, PlanMatrix,
+    PlanRunner, WorkflowEvent, named_check_lanes,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_orchestrator_core::decisions::dedupe_sorted;
@@ -90,6 +94,9 @@ struct PlanRequest {
     /// Exact named-check job identities carried by the generated workflow.
     #[serde(default)]
     named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
+    /// Effective schema-2 routing selected by config or this workflow dispatch.
+    #[serde(default)]
+    execution_mode: Option<ExecutionMode>,
 }
 
 /// `plan-v1` response: schema plus plan and matrix copies.
@@ -136,6 +143,7 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
     let prep = prepare(&root)?;
     let named_check_lanes = resolve_named_check_lanes(&prep, request.named_check_lanes.take())?;
     let catalog = ToolCatalog::pinned();
+    let artifact_providers = artifact_providers(&prep.config, request.execution_mode);
     let mut warnings = Vec::new();
     warnings.extend(
         velnor_actions_orchestrator_discovery::evidence::workspace_drift_warnings(
@@ -163,6 +171,8 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
         prep.runner_selection,
         &catalog,
         &named_check_lanes,
+        &prep.config.workflow.artifact_tasks,
+        &artifact_providers,
         warnings,
     )?;
     let manifest = request.baseline_manifest.and_then(|value| {
@@ -278,6 +288,8 @@ fn build_plan(
     selection: RunnerSelection,
     catalog: &ToolCatalog,
     named_check_lanes: &BTreeMap<String, Vec<NamedCheckLane>>,
+    artifact_tasks: &[ArtifactBuildTask],
+    artifact_providers: &[ArtifactBuildProvider],
     warnings: Vec<String>,
 ) -> Result<Plan, OrchestratorError> {
     let mut obligations = Vec::with_capacity(universe.len());
@@ -349,6 +361,13 @@ fn build_plan(
         obligations,
         matrix: PlanMatrix { include: entries },
         task_ids,
+        artifact_tasks: artifact_tasks
+            .iter()
+            .map(|task| ArtifactBuildTaskPlan {
+                task: task.clone(),
+                providers: artifact_providers.to_vec(),
+            })
+            .collect(),
         warnings,
         edges,
     })

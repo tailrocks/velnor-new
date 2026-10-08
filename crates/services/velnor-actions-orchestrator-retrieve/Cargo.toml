@@ -7,8 +7,10 @@ license.workspace = true
 autotests = false
 
 [dependencies]
+serde = { workspace = true }
 serde_json = { workspace = true }
 velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
 velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
 velnor-actions-mise = { version = "=0.1.1", path = "../../adapters/velnor-actions-mise" }
 velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
@@ -18,6 +20,8 @@ velnor-actions-orchestrator-covered-tasks = { version = "=0.1.1", path = "../vel
 velnor-actions-orchestrator-merge-ports = { version = "=0.1.1", path = "../velnor-actions-orchestrator-merge-ports" }
 velnor-actions-orchestrator-retrieve-retry = { version = "=0.1.1", path = "../velnor-actions-orchestrator-retrieve-retry" }
 velnor-actions-workflow-renderer = { version = "=0.1.1", path = "../velnor-actions-workflow-renderer" }
+rustix = { workspace = true }
+zip = { workspace = true }
 
 [lints]
 workspace = true

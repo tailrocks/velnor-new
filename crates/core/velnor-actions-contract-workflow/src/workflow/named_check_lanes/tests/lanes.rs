@@ -1,5 +1,6 @@
 use super::super::*;
 use super::{config, ir, runner};
+use crate::EXECUTION_MODE_ENV;
 use crate::expand_workflow;
 use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract_config::config::CheckPlatform;
@@ -82,4 +83,18 @@ fn both_emits_coherent_named_check_and_required_proof_lanes() {
     let decoded: BTreeMap<String, Vec<NamedCheckLane>> =
         serde_json::from_str(encoded).expect("typed lane map");
     assert_eq!(decoded, expected);
+    assert_eq!(env[EXECUTION_MODE_ENV], "both");
+}
+
+#[test]
+fn dispatch_mode_is_forwarded_to_the_plan_request_even_without_named_checks() {
+    let source = ir(&[]);
+    let config = config(ExecutionMode::Hosted);
+    let expanded = expand_workflow(&source, &config, Some(ExecutionMode::ScaleSet))
+        .expect("dispatch mode overrides configured mode");
+    let StepKind::Internal { env, .. } = &expanded.jobs["plan"].steps[0].kind else {
+        panic!("plan request");
+    };
+    assert_eq!(env[EXECUTION_MODE_ENV], "scale-set");
+    assert!(!env.contains_key(NAMED_CHECK_LANES_ENV));
 }

@@ -41,10 +41,13 @@ pub(crate) fn mark_dynamic_matrix_output_mode(
     else {
         return Err(matrix_invalid("matrix_plan_step_env_missing"));
     };
-    if env
+    if let Some((_, value)) = env
         .iter()
-        .any(|(name, _)| name == PLAN_MATRIX_OUTPUT_MODE_ENV)
+        .find(|(name, _)| name == PLAN_MATRIX_OUTPUT_MODE_ENV)
     {
+        if value == &Yaml::str(DYNAMIC_MATRIX_OUTPUT_MODE.to_owned()) {
+            return Ok(());
+        }
         return Err(matrix_invalid("matrix_plan_output_mode_conflict"));
     }
     env.push((

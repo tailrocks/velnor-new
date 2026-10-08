@@ -105,6 +105,8 @@ fn marker_plan(marker: &str) -> velnor_actions_contract_workflow::Plan {
         task_ids: vec!["stack/rust/root/clippy/default".to_owned()],
         warnings: Vec::new(),
         edges: Vec::new(),
+
+        artifact_tasks: Vec::new(),
     }
 }
 

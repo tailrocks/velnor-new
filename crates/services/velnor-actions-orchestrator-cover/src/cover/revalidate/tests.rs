@@ -111,6 +111,8 @@ pub(crate) fn plan_for(manifest: &BaselineManifest, base: Option<&str>) -> Plan 
         task_ids: vec!["stack/rust/root/clippy/default".to_owned()],
         warnings: Vec::new(),
         edges: Vec::new(),
+
+        artifact_tasks: Vec::new(),
     }
 }
 pub(crate) fn verdict(

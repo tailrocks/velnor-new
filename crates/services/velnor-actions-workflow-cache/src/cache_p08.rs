@@ -20,6 +20,9 @@ use velnor_actions_contract_workflow::{Job, Step, StepKind, StepRole};
 use crate::cache_p08_detect::detector_words;
 use velnor_actions_workflow_steps::{MiseSetup, RenderError, setup::MISE_ACTION_NAME};
 
+mod artifact;
+pub use artifact::{has_artifact_matrix_markers, require_uncached_setup};
+
 mod shape;
 use shape::setup_shape_ok;
 

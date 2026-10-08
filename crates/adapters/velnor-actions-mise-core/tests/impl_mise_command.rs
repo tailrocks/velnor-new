@@ -1,5 +1,6 @@
 //! Fixed subprocess wrapper cases.
 use std::ffi::{OsStr, OsString};
+use std::time::Duration;
 use velnor_actions_mise_core::command::{
     SPAWN_CANCELLED_MESSAGE, SPAWN_TIMEOUT_MESSAGE_PREFIX, is_cancel_or_timeout,
 };
@@ -142,6 +143,63 @@ fn with_cwd_records_working_directory() -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(unix)]
+#[test]
+fn streaming_child_stdout_is_bounded_and_not_buffered_in_process_output() -> Result<(), String> {
+    let command = IsolatedCommand::direct(
+        "/bin/sh",
+        vec![OsString::from("-c"), OsString::from("printf 'a\\000b'")],
+    );
+    let mut received = Vec::new();
+    let count = command
+        .run_stdout_to(3, Duration::from_secs(2), |chunk| {
+            received.extend_from_slice(chunk);
+            Ok(())
+        })
+        .map_err(|error| error.to_string())?;
+    assert_eq!(count, 3);
+    assert_eq!(received, b"a\0b");
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn streaming_child_stdout_limit_terminates_the_process_group() {
+    let command = IsolatedCommand::direct(
+        "/bin/sh",
+        vec![
+            OsString::from("-c"),
+            OsString::from("printf '0123456789'; sleep 10"),
+        ],
+    );
+    let error = command
+        .run_stdout_to(4, Duration::from_secs(2), |_| Ok(()))
+        .expect_err("oversize stream refused");
+    assert!(
+        error.to_string().contains("stdout_limit_exceeded:4"),
+        "{error}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn streaming_child_stdout_sink_failure_is_not_a_successful_read() {
+    let command = IsolatedCommand::direct(
+        "/bin/sh",
+        vec![
+            OsString::from("-c"),
+            OsString::from("printf payload; sleep 10"),
+        ],
+    );
+    let error = command
+        .run_stdout_to(64, Duration::from_secs(2), |_| Err("disk_full".to_owned()))
+        .expect_err("sink failure terminates child");
+    assert!(
+        error.to_string().contains("stdout_sink_failed:disk_full"),
+        "{error}"
+    );
+}
+
 #[test]
 fn process_output_reports_typed_exit() {
     let ok = ProcessOutput {
@@ -260,4 +318,37 @@ fn custom_task_run_shape_is_plain_mise_run() {
             "{bad:?} must fail closed"
         );
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn streaming_stdout_deadline_is_checked_during_continuous_drain() {
+    let command = IsolatedCommand::direct(
+        "/bin/sh",
+        vec![
+            OsString::from("-c"),
+            OsString::from("/bin/dd if=/dev/zero bs=8192 count=32 2>/dev/null"),
+        ],
+    );
+    let started = std::time::Instant::now();
+    let mut chunks = 0;
+    let error = command
+        .run_stdout_to(512 * 1024, Duration::from_millis(35), |_chunk| {
+            chunks += 1;
+            std::thread::sleep(Duration::from_millis(10));
+            Ok(())
+        })
+        .expect_err("a continuously readable stream cannot outlive its deadline");
+    assert!(
+        chunks > 0,
+        "the producer must reach the sink before timeout"
+    );
+    assert!(
+        error.to_string().contains(SPAWN_TIMEOUT_MESSAGE_PREFIX),
+        "deadline failure must remain typed: {error}"
+    );
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "deadline is checked immediately after the synchronous sink returns"
+    );
 }

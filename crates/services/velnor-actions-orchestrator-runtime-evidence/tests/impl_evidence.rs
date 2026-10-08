@@ -59,6 +59,8 @@ fn plan() -> Plan {
         task_ids: vec![TASK.to_owned()],
         warnings: Vec::new(),
         edges: Vec::new(),
+
+        artifact_tasks: Vec::new(),
     }
 }
 

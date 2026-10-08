@@ -1,9 +1,10 @@
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
 
 use velnor_actions_orchestrator_core::OrchestratorError;
 
 use super::{shellcheck_fail, unquote_run_scalar};
 
+mod run_anchor;
 mod shell;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,6 +33,7 @@ struct WorkflowScan {
     section: WorkflowSection,
     saw_jobs: bool,
     workflow_shell: Option<ShellDialect>,
+    run_anchors: BTreeMap<String, String>,
     current_job: Option<JobScan>,
     jobs: Vec<JobScan>,
 }
@@ -112,14 +114,15 @@ fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
                 return Err(shellcheck_fail("step_name_must_be_first"));
             }
         }
-        let Some((key, value)) = entry else {
+        let Some((key, source_value)) = entry else {
             continue;
         };
+        let value = resolve_emitted_value(&mut scan, key, source_value)?;
         if indent == 0 {
             if let Some(job) = scan.current_job.take() {
                 scan.jobs.push(job.finish());
             }
-            scan.section = match (key, value) {
+            scan.section = match (key, value.as_str()) {
                 ("jobs", "") => {
                     scan.saw_jobs = true;
                     WorkflowSection::Jobs
@@ -130,7 +133,7 @@ fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
             continue;
         }
         if scan.section != WorkflowSection::Jobs {
-            scan_workflow_default(&mut scan, indent, key, value)?;
+            scan_workflow_default(&mut scan, indent, key, &value)?;
             continue;
         }
         if indent == 2 && value.is_empty() && !key.starts_with('-') {
@@ -157,7 +160,7 @@ fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
         let Some(job) = scan.current_job.as_mut() else {
             continue;
         };
-        scan_job_line(job, indent, key, value)?;
+        scan_job_line(job, indent, key, &value)?;
     }
     if let Some(job) = scan.current_job.take() {
         scan.jobs.push(job.finish());
@@ -166,6 +169,18 @@ fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
         return Err(shellcheck_fail("workflow_jobs_missing"));
     }
     collect_runs(scan.jobs, scan.workflow_shell)
+}
+
+fn resolve_emitted_value(
+    scan: &mut WorkflowScan,
+    key: &str,
+    source_value: &str,
+) -> Result<String, OrchestratorError> {
+    if key == "run" {
+        run_anchor::resolve_run_scalar(source_value, &mut scan.run_anchors)
+    } else {
+        Ok(source_value.to_owned())
+    }
 }
 
 fn scan_workflow_default(

@@ -297,6 +297,48 @@ fn report_op_needs_runner_temp_and_run_id() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[test]
+fn artifact_export_op_uses_runner_temp_and_run_id_gate() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("gate-artifact-export")?;
+    let bare = spawn_isolated(&[], &[], &tmp)?;
+    for vars in [
+        vec![("VELNOR_INTERNAL_OP", "export-artifact-v1")],
+        vec![
+            ("VELNOR_INTERNAL_OP", "export-artifact-v1"),
+            ("GITHUB_RUN_ID", "7"),
+        ],
+        vec![
+            ("VELNOR_INTERNAL_OP", "export-artifact-v1"),
+            ("RUNNER_TEMP", tmp.to_str().unwrap_or("/")),
+        ],
+    ] {
+        let gated = spawn_isolated(&[], &vars, &tmp)?;
+        assert_eq!(code(&gated), 2);
+        assert_identical(&bare, &gated);
+    }
+
+    let runner = tmp.to_str().unwrap_or("/").to_owned();
+    let gated = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "export-artifact-v1"),
+            ("RUNNER_TEMP", runner.as_str()),
+            ("GITHUB_RUN_ID", "7"),
+            ("GITHUB_RUN_ATTEMPT", "1"),
+        ],
+        &tmp,
+    )?;
+    assert_eq!(code(&gated), 1);
+    assert!(gated.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&gated.stderr).into_owned();
+    assert!(stderr.contains("internal request failed"), "{stderr}");
+    assert!(!stderr.contains("export-artifact-v1"), "{stderr}");
+    assert!(!stderr.contains("VELNOR_INTERNAL"), "{stderr}");
+    assert!(!tmp.join("velnor").exists());
+    cleanup(&tmp);
+    Ok(())
+}
+
 // NOTE: `write-preseed-manifest-v1` gate coverage lives in
 // `impl_cli_gate_preseed.rs` (alint `rust-max-lines` split).
 

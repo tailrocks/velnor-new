@@ -7,8 +7,8 @@ use super::ir::{Job, WorkflowIr};
 use super::jobs::{PLAN_JOB_ID, REQUIRED_JOB_ID};
 use super::named_check_lanes::add_named_check_lanes;
 pub use super::named_check_lanes::{
-    NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, NAMED_CHECK_LANES_ENV, NamedCheckLane,
-    NamedCheckLaneVariant, named_check_lanes,
+    EXECUTION_MODE_ENV, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV,
+    NAMED_CHECK_LANES_ENV, NamedCheckLane, NamedCheckLaneVariant, named_check_lanes,
 };
 use std::collections::BTreeMap;
 use velnor_actions_contract::errors::ContractError;
@@ -88,6 +88,7 @@ pub fn expand_workflow(
         .as_ref()
         .ok_or_else(|| ContractError::config("config.toml", "execution", "missing_execution"))?;
     check_override_keys(ir, execution)?;
+    let effective_mode = effective_execution_mode(execution, dispatch);
     let check_lanes = named_check_lanes(ir, config, dispatch)?;
     let map = id_map(ir, execution, dispatch)?;
     let mut jobs = std::collections::BTreeMap::new();
@@ -98,8 +99,21 @@ pub fn expand_workflow(
     }
     let mut expanded = ir.clone();
     expanded.jobs = jobs;
-    add_named_check_lanes(&mut expanded, &check_lanes)?;
+    add_named_check_lanes(&mut expanded, &check_lanes, effective_mode)?;
     Ok(expanded)
+}
+
+fn effective_execution_mode(
+    execution: &ExecutionConfig,
+    dispatch: Option<ExecutionMode>,
+) -> ExecutionMode {
+    dispatch.or(execution.mode).unwrap_or_else(|| {
+        if execution.default_profile == execution.scale_set_profile {
+            ExecutionMode::ScaleSet
+        } else {
+            ExecutionMode::Hosted
+        }
+    })
 }
 
 fn check_override_keys(ir: &WorkflowIr, execution: &ExecutionConfig) -> Result<(), ContractError> {

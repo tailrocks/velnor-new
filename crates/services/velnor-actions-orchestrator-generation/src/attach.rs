@@ -70,6 +70,13 @@ pub(crate) fn attach_lock_acquire(
         } else if is_crate_job_id(id) {
             let step = lock_acquire_step(lock, label, &staged)?;
             job.steps.insert(1, step);
+        } else if job
+            .steps
+            .iter()
+            .any(|step| step.role == Some(StepRole::ArtifactBuildExport))
+        {
+            let step = lock_acquire_step(lock, label, &staged)?;
+            job.steps.insert(1.min(job.steps.len()), step);
         }
     }
     Ok(())
@@ -151,7 +158,13 @@ pub(crate) fn attach_preseed(
             .splice(0..0, preseed_consumers(target, &staged)?);
     }
     for (id, job) in &mut workflow.ir.jobs {
-        if is_crate_job_id(id) || job.check_runner.is_some() {
+        if is_crate_job_id(id)
+            || job.check_runner.is_some()
+            || job
+                .steps
+                .iter()
+                .any(|step| step.role == Some(StepRole::ArtifactBuildExport))
+        {
             let at = 1.min(job.steps.len());
             job.steps
                 .splice(at..at, preseed_consumers(target, &staged)?);

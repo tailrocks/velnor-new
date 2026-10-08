@@ -59,6 +59,8 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
         task_ids: vec![TASK.to_owned()],
         warnings: vec![],
         edges: vec![],
+
+        artifact_tasks: Vec::new(),
     };
     plan.validate()?;
     let mut bad = plan.clone();
@@ -169,6 +171,9 @@ fn final_reports_validate() -> Result<(), ContractError> {
             artifact_id_for_matrix(&run_key, &entry.matrix_key)?,
             artifact_id_for_plan(&run_key)?,
         ],
+        artifact_build_tasks: Vec::new(),
+        artifact_build_expected: Vec::new(),
+        artifact_build_observations: Vec::new(),
         required_job_results: vec![RequiredJobResult {
             job_id: "plan".to_owned(),
             conclusion: JobConclusion::Success,

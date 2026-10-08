@@ -14,6 +14,8 @@ pub mod runs_on;
 pub mod steps_plain;
 pub mod workflow_size;
 pub mod yaml;
+mod yaml_emit;
+mod yaml_share;
 
 pub use guard::{SafeTreePath, check_no_symlink, join_within_root, validate_tree_path};
 pub use marker::{

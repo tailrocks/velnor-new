@@ -66,6 +66,47 @@ pub fn write_exclusive_until(
     Ok(())
 }
 
+/// Exclusively create a file and let a bounded producer stream its contents.
+/// A failed producer removes the partial file only when the open handle still
+/// identifies the path it created.
+///
+/// # Errors
+/// Returns the writer's error, or an internal IO/ownership error.
+pub fn write_exclusive_with<T>(
+    path: &Path,
+    context: &str,
+    write: impl FnOnce(&mut fs::File) -> Result<T, OrchestratorError>,
+) -> Result<T, OrchestratorError> {
+    match fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => return Err(internal("symlink_refused")),
+        Ok(_) => return Err(internal(&format!("{context}_exists"))),
+        Err(_) => {}
+    }
+    let mut file = open_exclusive(path, context)?;
+    if !created_identity(&file, path) {
+        return Err(internal("symlink_refused"));
+    }
+    let value = match write(&mut file) {
+        Ok(value) => value,
+        Err(error) => {
+            if created_identity(&file, path) {
+                drop(fs::remove_file(path));
+            }
+            return Err(error);
+        }
+    };
+    if file.flush().is_err() {
+        if created_identity(&file, path) {
+            drop(fs::remove_file(path));
+        }
+        return Err(internal(&format!("{context}_unwritable")));
+    }
+    if !created_identity(&file, path) {
+        return Err(internal("symlink_refused"));
+    }
+    Ok(value)
+}
+
 /// Open one new file relative to its parent dirfd, never following symlinks.
 ///
 /// The parent opens with `O_DIRECTORY|O_NOFOLLOW` and the child creates

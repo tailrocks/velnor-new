@@ -21,6 +21,7 @@ use velnor_actions_orchestrator_core::{OrchestratorError, init_config, resolve_r
 use velnor_actions_orchestrator_generation::generate::{GenerateOptions, generate_dispatched};
 use velnor_actions_orchestrator_generation::prepare::prepare;
 use velnor_actions_orchestrator_generation::routing::parse_dispatch_mode;
+use velnor_actions_orchestrator_internal::artifact_export::materialize_artifact_from_environment;
 use velnor_actions_orchestrator_internal::internal::{
     merge_passed, plan_internal, plan_outputs, publish_final_report, publish_plan_files,
     response_path_for, write_request,
@@ -77,6 +78,10 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::Plan => run_plan_internal(&request.path),
         InternalOp::Merge => run_merge_internal(&request.path),
         InternalOp::Fetch => match retrieve_reports() {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
+        InternalOp::ArtifactExport => match materialize_artifact_from_environment(&request.path) {
             Ok(_) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
         },

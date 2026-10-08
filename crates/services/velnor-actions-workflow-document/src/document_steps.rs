@@ -67,6 +67,25 @@ fn internal_env(
             (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
         ]));
     }
+    if op == steps::ARTIFACT_EXPORT_OPERATION {
+        if actions_read {
+            return Err(RenderError::InvalidWorkflow(
+                "artifact_export_must_not_read_actions_api".to_owned(),
+            ));
+        }
+        if step_env.contains_key(INTERNAL_OP_ENV) || step_env.contains_key(REQUEST_FILE_ENV) {
+            return Err(RenderError::InvalidWorkflow(
+                "artifact_export_internal_env_collision".to_owned(),
+            ));
+        }
+        let mut env = vec![(INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned()))];
+        env.extend(
+            step_env
+                .iter()
+                .map(|(key, value)| (key.clone(), Yaml::str(value.clone()))),
+        );
+        return Ok(Yaml::Map(env));
+    }
     let request = format!("{}/{target}-request.json", ctx.request_dir);
     let mut env = Vec::new();
     if actions_read && op == steps::PLAN_OPERATION && target == steps::PLAN_OPERATION {

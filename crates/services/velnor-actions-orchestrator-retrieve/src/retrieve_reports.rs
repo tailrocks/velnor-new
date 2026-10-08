@@ -71,6 +71,26 @@ pub fn retrieve_reports_to(run_id: u64, run_dir: &Path) -> usize {
         }
     }
     crate::retrieve_baseline::retrieve_baseline_to(&catalog, run_dir, &plan, &repo);
+    let artifact_tasks_present = plan
+        .get("artifact_tasks")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|tasks| !tasks.is_empty());
+    if artifact_tasks_present {
+        let attempt = std::env::var("GITHUB_RUN_ATTEMPT")
+            .ok()
+            .and_then(|value| value.parse::<u32>().ok());
+        let repository_id = std::env::var("GITHUB_REPOSITORY_ID").ok();
+        if let (Some(attempt), Some(repository_id)) = (attempt, repository_id) {
+            retrieved += crate::retrieve_artifact_build::retrieve_artifact_builds_to(
+                run_id,
+                attempt,
+                &repo,
+                &repository_id,
+                run_dir,
+            )
+            .unwrap_or(0);
+        }
+    }
     retrieved
 }
 

@@ -127,6 +127,31 @@ pub fn crate_job_report_upload_step(job_id: &str) -> Result<Step, RenderError> {
     Ok(step)
 }
 
+/// Upload one verified artifact-build result under its exact plan-bound name.
+/// The exporter creates this directory only after validating the source,
+/// plan, provider, run, task, and declared output set.
+/// # Errors
+pub fn artifact_build_upload_step() -> Result<Step, RenderError> {
+    let mut step = action_step(
+        "Upload verified build outputs",
+        UPLOAD_ARTIFACT_USES,
+        BTreeMap::from([
+            ("name".to_owned(), "${{ matrix.artifact_name }}".to_owned()),
+            (
+                "path".to_owned(),
+                "${{ runner.temp }}/velnor/artifact-builds/${{ matrix.artifact_name }}".to_owned(),
+            ),
+            ("if-no-files-found".to_owned(), "error".to_owned()),
+            (
+                "retention-days".to_owned(),
+                ARTIFACT_RETENTION_DAYS.to_string(),
+            ),
+        ]),
+    )?;
+    step.role = Some(StepRole::ArtifactBuildUpload);
+    Ok(step)
+}
+
 /// Baseline-publish upload step display name.
 pub const BASELINE_PUBLISH_UPLOAD_NAME: &str = "Upload baseline";
 /// Step ID of the baseline-publishing internal step.

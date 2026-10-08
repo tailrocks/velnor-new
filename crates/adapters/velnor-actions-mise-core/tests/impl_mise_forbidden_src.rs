@@ -36,6 +36,7 @@ fn expected_modules() -> Vec<&'static str> {
         "command/env.rs",
         "command/output.rs",
         "command/qualified_acquisition.rs",
+        "command/stream_stdout.rs",
         "command/tofu.rs",
         "custom_run.rs",
         "error.rs",

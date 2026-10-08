@@ -1,4 +1,5 @@
 //! Stack-neutral workflow IR, matrix, plan, and report types.
+pub mod artifact_build;
 pub mod artifacts;
 pub mod baseline;
 pub mod cache_ids;
@@ -19,6 +20,18 @@ pub mod step_identity;
 mod step_protocol;
 pub mod timeout;
 pub mod trust;
+pub use artifact_build::{
+    ARTIFACT_BUILD_OBSERVATIONS_FILENAME, ARTIFACT_BUILD_OUTPUTS_DIRECTORY,
+    ARTIFACT_BUILD_RESULT_FILENAME, ARTIFACT_EXPORT_OPERATION, ARTIFACT_HOSTED_MATRIX_OUTPUT,
+    ARTIFACT_MATRIX_MAX_PARALLEL_ENV, ARTIFACT_MATRIX_NEEDS_JOB_ENV, ARTIFACT_MATRIX_PROVIDER_ENV,
+    ARTIFACT_MISE_TASK_ENV, ARTIFACT_NAME_ENV, ARTIFACT_PLAN_DIGEST_ENV, ARTIFACT_PROVIDER_ENV,
+    ARTIFACT_SOURCE_SHA_ENV, ARTIFACT_TASK_ID_ENV, ARTIFACT_VELNOR_MATRIX_OUTPUT,
+    ArtifactBuildExpectation, ArtifactBuildFile, ArtifactBuildIdentity, ArtifactBuildMatrix,
+    ArtifactBuildMatrixEntry, ArtifactBuildObservation, ArtifactBuildProvider, ArtifactBuildResult,
+    ArtifactBuildRunContext, ArtifactBuildTaskPlan, DownloadedArtifactOutput,
+    artifact_matrix_for_provider, artifact_name, canonical_plan_digest, expected_artifact_builds,
+    export_artifact_result, reconcile_artifact_builds,
+};
 pub use artifacts::{
     CANDIDATE_ATTESTATION_FILENAME, CANDIDATE_EVIDENCE_SUBDIR, FINAL_JSON_FILENAME,
     MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, check_matrix_agreement, matrix_json_bytes,
@@ -37,9 +50,9 @@ pub use jobs::{
     tofu_display_name,
 };
 pub use lanes::{
-    HOSTED_SUFFIX, LaneClass, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV,
-    NAMED_CHECK_LANES_ENV, NamedCheckLane, NamedCheckLaneVariant, SCALE_SUFFIX, expand_workflow,
-    lane_class, named_check_lanes,
+    EXECUTION_MODE_ENV, HOSTED_SUFFIX, LaneClass, NAMED_CHECK_JOB_ID_ENV,
+    NAMED_CHECK_LANE_VARIANT_ENV, NAMED_CHECK_LANES_ENV, NamedCheckLane, NamedCheckLaneVariant,
+    SCALE_SUFFIX, expand_workflow, lane_class, named_check_lanes,
 };
 pub use matrix_entry::MatrixEntry;
 pub use needs::{

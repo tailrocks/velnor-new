@@ -10,6 +10,9 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::errors::ContractError;
 use velnor_actions_contract_config::config::{ExecutionMode, VelnorConfig};
 
+/// Env key carrying the effective schema-2 provider routing into `plan-v1`.
+pub const EXECUTION_MODE_ENV: &str = "VELNOR_EXECUTION_MODE";
+
 /// Env key carrying the static named-check output identities into `plan-v1`.
 pub const NAMED_CHECK_LANES_ENV: &str = "VELNOR_NAMED_CHECK_LANES_JSON";
 /// Env key binding a check worker to its exact report-owning job ID.
@@ -95,10 +98,8 @@ pub fn named_check_lanes(
 pub(super) fn add_named_check_lanes(
     ir: &mut WorkflowIr,
     lanes: &BTreeMap<String, Vec<NamedCheckLane>>,
+    mode: ExecutionMode,
 ) -> Result<(), ContractError> {
-    if lanes.is_empty() {
-        return Ok(());
-    }
     let job = ir
         .jobs
         .get_mut(PLAN_JOB_ID)
@@ -121,16 +122,32 @@ pub(super) fn add_named_check_lanes(
             "invalid_plan_request_step",
         ));
     };
-    let value = serde_json::to_string(lanes).map_err(|error| {
-        ContractError::identity("workflow.named_check_lanes", error.to_string())
-    })?;
+    if !lanes.is_empty() {
+        let value = serde_json::to_string(lanes).map_err(|error| {
+            ContractError::identity("workflow.named_check_lanes", error.to_string())
+        })?;
+        if env
+            .insert(NAMED_CHECK_LANES_ENV.to_owned(), value)
+            .is_some()
+        {
+            return Err(ContractError::identity(
+                "workflow.plan.steps.env",
+                "duplicate_named_check_lanes",
+            ));
+        }
+    }
+    let mode = match mode {
+        ExecutionMode::Hosted => "hosted",
+        ExecutionMode::ScaleSet => "scale-set",
+        ExecutionMode::Both => "both",
+    };
     if env
-        .insert(NAMED_CHECK_LANES_ENV.to_owned(), value)
+        .insert(EXECUTION_MODE_ENV.to_owned(), mode.to_owned())
         .is_some()
     {
         return Err(ContractError::identity(
             "workflow.plan.steps.env",
-            "duplicate_named_check_lanes",
+            "duplicate_execution_mode",
         ));
     }
     Ok(())

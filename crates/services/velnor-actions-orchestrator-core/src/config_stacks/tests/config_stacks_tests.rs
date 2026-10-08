@@ -37,6 +37,27 @@ fn workflow_verification_tasks_parse_and_default_empty() {
 }
 
 #[test]
+fn workflow_artifact_tasks_parse_and_default_empty() {
+    let load = load_config;
+    let root = rooted(
+        "schema = 1\n[[workflow.artifact_tasks]]\nid = \"frontend-bundle\"\nmise_task = \"build-frontend\"\nrunner = \"linux-x64\"\ntimeout_minutes = 30\n[[workflow.artifact_tasks.outputs]]\nid = \"bundle\"\npath = \"dist/app.tar\"\nmax_bytes = 16384\n",
+    );
+    let config = load(root.path()).expect("bounded artifact task");
+    let task = config
+        .workflow
+        .artifact_tasks
+        .first()
+        .expect("declared task");
+    assert_eq!(task.id, "frontend-bundle");
+    assert_eq!(task.outputs[0].path, "dist/app.tar");
+    assert_eq!(task.outputs[0].max_bytes, 16_384);
+
+    let root = rooted("schema = 1\n");
+    let config = load(root.path()).expect("minimal existing config");
+    assert_eq!(config.workflow.artifact_tasks, Vec::new());
+}
+
+#[test]
 fn render_unsafe_stack_values_are_rejected() {
     let load = load_config;
     for (body, want) in [

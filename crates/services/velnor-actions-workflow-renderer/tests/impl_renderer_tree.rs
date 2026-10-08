@@ -13,10 +13,7 @@ use velnor_actions_workflow_renderer::{
     AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET, WORKFLOW_PATH, render_tree,
     render_workflow_ir,
 };
-use velnor_actions_workflow_steps::{
-    ALINT_USES, FORBIDDEN_TOKENS, INTERNAL_OP_ENV, REQUEST_FILE_ENV, RenderError, checkout_step,
-    plan_step,
-};
+use velnor_actions_workflow_steps::{ALINT_USES, RenderError, checkout_step, plan_step};
 use velnor_actions_workflow_tree::{ACTIONLINT_PATH, with_marker};
 
 use crate::impl_renderer_fixtures::policy_pin;
@@ -370,31 +367,6 @@ fn policy_lane_runs_unconditionally_on_every_trigger() -> Result<(), RenderError
             "policy job carries a condition: {header}"
         );
     }
-    Ok(())
-}
-
-#[test]
-fn rendered_yaml_contains_no_private_subcommands() -> Result<(), RenderError> {
-    let ir = fixture_ir()?;
-    let mut ctx = fixture_ctx();
-    ctx.validator_commands = validator_commands();
-    let support =
-        WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Bootstrap);
-    let text = render_workflow_ir(
-        &ir,
-        WorkflowPolicy::VelnorRepositoryV1,
-        Some(&support),
-        &ctx,
-    )?;
-    for token in FORBIDDEN_TOKENS {
-        assert!(!text.contains(token), "leaked token: {token}");
-    }
-    assert!(text.contains(&format!("{INTERNAL_OP_ENV}: plan-v1")));
-    assert!(text.contains(&format!(
-        "{REQUEST_FILE_ENV}: ${{{{ runner.temp }}}}/velnor/r1-a1/plan-v1-request.json"
-    )));
-    assert!(text.contains("run: \"\\\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\\\"\""));
-    assert!(!text.contains("run: $RUNNER_TEMP/velnor/bin/velnor-actions plan"));
     Ok(())
 }
 

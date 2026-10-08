@@ -12,6 +12,7 @@
 //! [`CoverBaselinePort`]: velnor_actions_orchestrator_merge_ports::CoverBaselinePort
 //! [`RequestPort`]: velnor_actions_orchestrator_merge_request_ports::RequestPort
 
+pub mod artifact_export;
 pub mod cover_baseline;
 pub mod internal;
 pub mod internal_request;

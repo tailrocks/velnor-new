@@ -90,6 +90,8 @@ fn fixture_plan() -> (Plan, String) {
         task_ids: vec![CLIPPY.to_owned(), TEST.to_owned()],
         warnings: Vec::new(),
         edges: Vec::new(),
+
+        artifact_tasks: Vec::new(),
     };
     plan.validate().expect("fixture validates");
     (plan, clippy_digest)

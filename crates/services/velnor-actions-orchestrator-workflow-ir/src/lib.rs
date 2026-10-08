@@ -7,6 +7,7 @@
 //! ([`publish_job`]), verification-task jobs ([`verification_tasks`]),
 //! and the shared catalog preflight steps ([`mbx_preflight`]).
 
+mod artifact_build_job;
 pub mod crate_job_ids;
 pub mod crate_jobs;
 pub mod mbx_preflight;

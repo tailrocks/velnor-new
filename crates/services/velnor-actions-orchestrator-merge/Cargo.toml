@@ -22,3 +22,6 @@ workspace = true
 [[test]]
 name = "velnor_orchestrator_merge"
 path = "tests/main.rs"
+
+[dev-dependencies]
+velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
