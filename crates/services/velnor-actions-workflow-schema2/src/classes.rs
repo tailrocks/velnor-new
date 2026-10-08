@@ -12,6 +12,7 @@ use velnor_actions_workflow_tree::yaml::Yaml;
 
 mod more;
 mod steps;
+pub(crate) mod topology;
 
 const GITHUB_SCRIPT: &str = "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3";
 const CACHE_USES: &str = "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";

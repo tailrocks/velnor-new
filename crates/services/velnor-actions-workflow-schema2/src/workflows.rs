@@ -133,6 +133,7 @@ pub(crate) fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
             "missing_mbx_qualification_pins".to_owned(),
         ));
     }
+    jobs.extend(classes::topology::jobs(&hosted, &scale));
     Ok(document("Qualification", mode_trigger(), jobs))
 }
 

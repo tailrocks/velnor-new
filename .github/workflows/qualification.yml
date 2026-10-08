@@ -7,7 +7,6 @@ name: Qualification
         type: string
         required: false
         default: both
-        description: "Use topology only after a reviewed official Ubuntu 26 runner profile is admitted."
 permissions:
   contents: read
 jobs:
@@ -79,7 +78,7 @@ jobs:
     timeout-minutes: 20
     services:
       redis:
-        image: docker.io/library/redis@sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2
+        image: redis:7-alpine
         options: "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
         ports:
           - "6379:6379"
@@ -96,7 +95,7 @@ jobs:
         shell: bash -e {0}
     services:
       redis:
-        image: docker.io/library/redis@sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2
+        image: redis:7-alpine
         options: "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
         ports:
           - "6379:6379"
@@ -263,10 +262,10 @@ jobs:
     defaults:
       run:
         shell: sh -e {0}
-    container: docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764
+    container: alpine:3.22
     services:
       redis:
-        image: docker.io/library/redis@sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2
+        image: redis:7-alpine
         options: "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
         ports:
           - "6379:6379"
@@ -282,10 +281,10 @@ jobs:
     defaults:
       run:
         shell: sh -e {0}
-    container: docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764
+    container: alpine:3.22
     services:
       redis:
-        image: docker.io/library/redis@sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2
+        image: redis:7-alpine
         options: "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
         ports:
           - "6379:6379"
@@ -293,115 +292,6 @@ jobs:
       - name: Service DNS
         shell: sh
         run: "i=0; while [ \"$i\" -lt 20 ]; do nc -z -w 1 redis 6379 && exit 0; i=$((i+1)); sleep 1; done; exit 1"
-  topology-runner-host:
-    name: Worker topology / runner host namespace
-    if: inputs.mode == 'topology'
-    runs-on: [velnor, ubuntu-26.04-scale-set]
-    timeout-minutes: 20
-    defaults:
-      run:
-        shell: bash -e {0}
-    services:
-      redis:
-        image: docker.io/library/redis@sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2
-        options: "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
-        ports:
-          - "49327:6379"
-    steps:
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: "false"
-      - name: Check runner-visible socket, workspace, and host-mode service
-        run: |
-          test "${DOCKER_HOST:-}" = "unix:///run/docker/docker.sock"
-          test -S /run/docker/docker.sock
-          test ! -e /var/run/docker.sock
-          docker info >/dev/null
-          marker=".velnor-topology-${GITHUB_RUN_ID}.txt"
-          printf '%s\n' worker-work-volume-ok > "$GITHUB_WORKSPACE/$marker"
-          test -w "$GITHUB_WORKSPACE"
-          test "$(stat -c '%u:%g' "$GITHUB_WORKSPACE")" = "$(id -u):$(id -g)"
-          probe_redis() {
-            local line
-            exec 3<>/dev/tcp/127.0.0.1/49327
-            printf '%s\r\n' '*1' "\$4" 'PING' '' >&3
-            IFS= read -r -t 2 line <&3 || return 1
-            test "${line%$'\r'}" = '+PONG'
-          }
-          ready=0
-          attempts=0
-          while [ "$attempts" -lt 30 ]; do
-            attempts=$((attempts + 1))
-            if probe_redis; then ready=1; break; fi
-            sleep 1
-          done
-          test "$ready" -eq 1
-          printf '%s\n' 'runner-socket-ok' 'runner-workspace-ok' 'host-mode-localhost-ok'
-      - name: Check DIND-visible workspace and read-only externals
-        run: |
-          alpine='docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764'
-          docker pull "$alpine" >/dev/null
-          marker=".velnor-topology-${GITHUB_RUN_ID}.txt"
-          docker run --rm --pull=never --network=none \
-            --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/probe,readonly" \
-            --env "PROBE_MARKER=$marker" --entrypoint /bin/sh "$alpine" -ec \
-            'test "$(cat "/probe/$PROBE_MARKER")" = worker-work-volume-ok'
-          docker run --rm --pull=never --network=none \
-            --mount type=bind,src=/home/runner/externals,dst=/probe,readonly \
-            --entrypoint /bin/sh "$alpine" -ec \
-            'test -d /probe && test -n "$(ls -A /probe)"; if : > /probe/.velnor-external-write-probe 2>/dev/null; then rm -f /probe/.velnor-external-write-probe; exit 72; fi'
-          printf '%s\n' 'dind-workspace-mount-ok' 'externals-read-only-ok'
-  topology-job-container:
-    name: Worker topology / job container and service alias
-    if: inputs.mode == 'topology'
-    needs: topology-runner-host
-    runs-on: [velnor, ubuntu-26.04-scale-set]
-    timeout-minutes: 20
-    defaults:
-      run:
-        shell: sh -e {0}
-    container: docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764
-    services:
-      redis:
-        image: docker.io/library/redis@sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2
-        options: "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
-    steps:
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: "false"
-      - name: Check job-container workspace and service DNS
-        run: |
-          marker="$GITHUB_WORKSPACE/.velnor-container-${GITHUB_RUN_ID}.txt"
-          printf '%s\n' job-container-work-volume-ok > "$marker"
-          test -w "$GITHUB_WORKSPACE"
-          test "$(cat "$marker")" = job-container-work-volume-ok
-          response="$(printf '%s\r\n' '*1' "\$4" 'PING' '' | busybox nc -w 3 redis 6379 | sed -n '1p' | tr -d '\r')"
-          test "$response" = '+PONG'
-          printf '%s\n' 'job-container-workspace-ok' 'service-alias-ok'
-  topology-docker-action:
-    name: Worker topology / external and Docker actions
-    if: inputs.mode == 'topology'
-    needs: topology-job-container
-    runs-on: [velnor, ubuntu-26.04-scale-set]
-    timeout-minutes: 20
-    defaults:
-      run:
-        shell: bash -e {0}
-    steps:
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: "false"
-      - name: Seed Docker-action workspace probe
-        run: |
-          marker=".velnor-topology-${GITHUB_RUN_ID}.txt"
-          printf '%s\n' docker-action-work-volume-ok > "$GITHUB_WORKSPACE/$marker"
-      - name: Local Docker action and workspace mount
-        uses: ./qualification/actions/docker # zizmor: ignore[self-repository]
-        env:
-          VELNOR_TOPOLOGY_MARKER: ".velnor-topology-${{ github.run_id }}.txt"
   outputs-scale-set:
     name: Outputs / Velnor Scale Set
     if: inputs.mode == 'outputs'
@@ -604,7 +494,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Bind workspace file
-        run: "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\" && docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\" && grep -qx bind-ok \"$RUNNER_TEMP/g4-bind-out\""
+        run: "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\" && docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.22 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\" && grep -qx bind-ok \"$RUNNER_TEMP/g4-bind-out\""
   bind-scale-set:
     name: Bind / Velnor Scale Set
     if: inputs.mode == 'bind'
@@ -615,7 +505,7 @@ jobs:
         shell: bash -e {0}
     steps:
       - name: Bind workspace file
-        run: "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\" && docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\" && grep -qx bind-ok \"$RUNNER_TEMP/g4-bind-out\""
+        run: "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\" && docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.22 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\" && grep -qx bind-ok \"$RUNNER_TEMP/g4-bind-out\""
   cancel-service-hosted:
     name: Cancel service / GitHub hosted
     if: inputs.mode == 'cancel-service'
@@ -623,7 +513,7 @@ jobs:
     timeout-minutes: 20
     services:
       redis:
-        image: docker.io/library/redis@sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2
+        image: redis:7-alpine
         options: "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
         ports:
           - "6379:6379"
@@ -640,7 +530,7 @@ jobs:
         shell: bash -e {0}
     services:
       redis:
-        image: docker.io/library/redis@sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2
+        image: redis:7-alpine
         options: "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
         ports:
           - "6379:6379"
@@ -712,7 +602,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Hold host port
-        run: "docker run -d --name g4-hold -p 8080:80 docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
+        run: "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
   ports-b-hosted:
     name: Ports B / GitHub hosted
     if: inputs.mode == 'ports'
@@ -720,7 +610,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Hold host port
-        run: "docker run -d --name g4-hold -p 8080:80 docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
+        run: "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
   ports-a-scale-set:
     name: Ports A / Velnor Scale Set
     if: inputs.mode == 'ports'
@@ -731,7 +621,7 @@ jobs:
         shell: bash -e {0}
     steps:
       - name: Hold host port
-        run: "docker run -d --name g4-hold -p 8080:80 docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
+        run: "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
   ports-b-scale-set:
     name: Ports B / Velnor Scale Set
     if: inputs.mode == 'ports'
@@ -742,7 +632,7 @@ jobs:
         shell: bash -e {0}
     steps:
       - name: Hold host port
-        run: "docker run -d --name g4-hold -p 8080:80 docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
+        run: "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
   pressure-a-hosted:
     name: Pressure A / GitHub hosted
     if: inputs.mode == 'pressure'
@@ -947,3 +837,143 @@ jobs:
         run: "set -eu\nroot=\"$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification\"\nmkdir -p \"$root/src\"\ncat > \"$root/Cargo.toml\" <<'EOF'\n[package]\nname = \"mbx-cache-qualification\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\".\"]\nresolver = \"3\"\n\n[lib]\npath = \"src/lib.rs\"\nEOF\ncat > \"$root/src/lib.rs\" <<'EOF'\npub fn cache_probe() -> u64 { 42 }\nEOF\nmbx build --manifest-path \"$root/Cargo.toml\"\n"
       - name: Require reused compilation
         run: "set -e -o pipefail; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx stats --json | tee \"$RUNNER_TEMP/mbx-reuse-stats.json\"; jq -e '.savings.cached_compilations > 0' \"$RUNNER_TEMP/mbx-reuse-stats.json\""
+  topology-runner-host:
+    name: Worker topology / runner host namespace
+    if: inputs.mode == 'topology'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    services:
+      redis:
+        image: docker.io/library/redis@sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2
+        options: "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+        ports:
+          - "49327:6379"
+    steps:
+      - name: Require Velnor private DinD socket
+        run: "set -euo pipefail\ntest -z \"${DOCKER_CONTEXT:-}\"\ntest \"${DOCKER_HOST:-}\" = \"unix:///run/docker/docker.sock\"\ntest -S /run/docker/docker.sock\ntest ! -e /var/run/docker.sock\ndocker --host unix:///run/docker/docker.sock info >/dev/null"
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Check runner workspace and host-mode service
+        run: "set -euo pipefail\nmarker=\".velnor-topology.txt\"\nprintf '%s\\n' runner-work-volume-ok > \"$GITHUB_WORKSPACE/$marker\"\ntest -w \"$GITHUB_WORKSPACE\"\nprobe_redis() {\n  local response\n  exec 3<>/dev/tcp/127.0.0.1/49327 || return 1\n  printf 'PING\\r\\n' >&3 || return 1\n  IFS= read -r -t 2 response <&3 || return 1\n  exec 3>&-\n  test \"${response%$'\\r'}\" = \"+PONG\"\n}\nready=0\ndeadline=$((SECONDS + 60))\nwhile [ \"$SECONDS\" -lt \"$deadline\" ]; do\n  if probe_redis; then ready=1; break; fi\n  sleep 1\ndone\ntest \"$ready\" -eq 1\nprintf '%s\\n' 'runner-workspace-ok' 'host-mode-localhost-ok'"
+      - name: Check Docker workspace bind
+        run: "set -euo pipefail\nalpine='docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764'\ndocker --host unix:///run/docker/docker.sock pull \"$alpine\" >/dev/null\ndocker --host unix:///run/docker/docker.sock run --rm --pull=never --network=none \\\n  --mount \"type=bind,src=$GITHUB_WORKSPACE,dst=/probe,readonly\" \\\n  --entrypoint /bin/sh \"$alpine\" -ec \\\n  'grep -qx runner-work-volume-ok /probe/.velnor-topology.txt'\nprintf '%s\\n' 'docker-workspace-mount-ok'"
+      - name: Check read-only runner externals
+        run: "set -euo pipefail\ndocker --host unix:///run/docker/docker.sock run --rm --pull=never --network=none \\\n  --mount type=bind,src=/home/runner/externals,dst=/probe,readonly \\\n  --entrypoint /bin/sh docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764 -ec \\\n  'test -d /probe && ls -A /probe | grep -q .; if : > /probe/.velnor-external-write-probe 2>/dev/null; then rm -f /probe/.velnor-external-write-probe; exit 72; fi'\nprintf '%s\\n' 'externals-read-only-ok'"
+  topology-runner-host-hosted:
+    name: Worker topology / runner host namespace / GitHub hosted
+    if: inputs.mode == 'topology'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    services:
+      redis:
+        image: docker.io/library/redis@sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2
+        options: "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+        ports:
+          - "49327:6379"
+    steps:
+      - name: Require GitHub-hosted stock Docker
+        run: "set -euo pipefail\ntest -z \"${DOCKER_CONTEXT:-}\"\ncase \"${DOCKER_HOST:-}\" in\n  \"\"|unix:///var/run/docker.sock) ;;\n  *) printf '%s\\n' 'hosted Docker endpoint is not the stock socket' >&2; exit 1 ;;\nesac\ntest -S /var/run/docker.sock\ndocker --host unix:///var/run/docker.sock info >/dev/null"
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Check runner workspace and host-mode service
+        run: "set -euo pipefail\nmarker=\".velnor-topology.txt\"\nprintf '%s\\n' runner-work-volume-ok > \"$GITHUB_WORKSPACE/$marker\"\ntest -w \"$GITHUB_WORKSPACE\"\nprobe_redis() {\n  local response\n  exec 3<>/dev/tcp/127.0.0.1/49327 || return 1\n  printf 'PING\\r\\n' >&3 || return 1\n  IFS= read -r -t 2 response <&3 || return 1\n  exec 3>&-\n  test \"${response%$'\\r'}\" = \"+PONG\"\n}\nready=0\ndeadline=$((SECONDS + 60))\nwhile [ \"$SECONDS\" -lt \"$deadline\" ]; do\n  if probe_redis; then ready=1; break; fi\n  sleep 1\ndone\ntest \"$ready\" -eq 1\nprintf '%s\\n' 'runner-workspace-ok' 'host-mode-localhost-ok'"
+      - name: Check Docker workspace bind
+        run: "set -euo pipefail\nalpine='docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764'\ndocker --host unix:///var/run/docker.sock pull \"$alpine\" >/dev/null\ndocker --host unix:///var/run/docker.sock run --rm --pull=never --network=none \\\n  --mount \"type=bind,src=$GITHUB_WORKSPACE,dst=/probe,readonly\" \\\n  --entrypoint /bin/sh \"$alpine\" -ec \\\n  'grep -qx runner-work-volume-ok /probe/.velnor-topology.txt'\nprintf '%s\\n' 'docker-workspace-mount-ok'"
+  topology-job-container:
+    name: Worker topology / job container and service alias
+    if: inputs.mode == 'topology'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: sh -e {0}
+    needs:
+      - topology-runner-host
+    container: docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764
+    services:
+      redis:
+        image: docker.io/library/redis@sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2
+        options: "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Check job-container workspace and service DNS
+        run: "set -eu\nmarker=\"$GITHUB_WORKSPACE/.velnor-container.txt\"\nprintf '%s\\n' job-container-work-volume-ok > \"$marker\"\ntest -w \"$GITHUB_WORKSPACE\"\ntest \"$(cat \"$marker\")\" = job-container-work-volume-ok\nresponse=\"$(printf 'PING\\r\\n' | busybox nc -w 3 redis 6379 | sed -n '1p' | tr -d '\\r')\"\ntest \"$response\" = '+PONG'\nprintf '%s\\n' 'job-container-workspace-ok' 'service-alias-ok'"
+  topology-job-container-hosted:
+    name: Worker topology / job container and service alias / GitHub hosted
+    if: inputs.mode == 'topology'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: sh -e {0}
+    needs:
+      - topology-runner-host-hosted
+    container: docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764
+    services:
+      redis:
+        image: docker.io/library/redis@sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2
+        options: "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Check job-container workspace and service DNS
+        run: "set -eu\nmarker=\"$GITHUB_WORKSPACE/.velnor-container.txt\"\nprintf '%s\\n' job-container-work-volume-ok > \"$marker\"\ntest -w \"$GITHUB_WORKSPACE\"\ntest \"$(cat \"$marker\")\" = job-container-work-volume-ok\nresponse=\"$(printf 'PING\\r\\n' | busybox nc -w 3 redis 6379 | sed -n '1p' | tr -d '\\r')\"\ntest \"$response\" = '+PONG'\nprintf '%s\\n' 'job-container-workspace-ok' 'service-alias-ok'"
+  topology-docker-action:
+    name: Worker topology / external and Docker actions
+    if: inputs.mode == 'topology'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    needs:
+      - topology-job-container
+    steps:
+      - name: Require Velnor private DinD socket
+        run: "set -euo pipefail\ntest -z \"${DOCKER_CONTEXT:-}\"\ntest \"${DOCKER_HOST:-}\" = \"unix:///run/docker/docker.sock\"\ntest -S /run/docker/docker.sock\ntest ! -e /var/run/docker.sock\ndocker --host unix:///run/docker/docker.sock info >/dev/null"
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Seed Docker-action workspace probe
+        run: "printf '%s\\n' docker-action-work-volume-ok > \"$GITHUB_WORKSPACE/.velnor-topology.txt\""
+      - name: Local Docker action and workspace mount
+        uses: ./qualification/actions/docker # zizmor: ignore[self-repository]
+        env:
+          VELNOR_TOPOLOGY_MARKER: .velnor-topology.txt
+          DOCKER_HOST: unix:///run/docker/docker.sock
+          DOCKER_CONTEXT: ""
+  topology-docker-action-hosted:
+    name: Worker topology / external and Docker actions / GitHub hosted
+    if: inputs.mode == 'topology'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    needs:
+      - topology-job-container-hosted
+    steps:
+      - name: Require GitHub-hosted stock Docker
+        run: "set -euo pipefail\ntest -z \"${DOCKER_CONTEXT:-}\"\ncase \"${DOCKER_HOST:-}\" in\n  \"\"|unix:///var/run/docker.sock) ;;\n  *) printf '%s\\n' 'hosted Docker endpoint is not the stock socket' >&2; exit 1 ;;\nesac\ntest -S /var/run/docker.sock\ndocker --host unix:///var/run/docker.sock info >/dev/null"
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Seed Docker-action workspace probe
+        run: "printf '%s\\n' docker-action-work-volume-ok > \"$GITHUB_WORKSPACE/.velnor-topology.txt\""
+      - name: Local Docker action and workspace mount
+        uses: ./qualification/actions/docker # zizmor: ignore[self-repository]
+        env:
+          VELNOR_TOPOLOGY_MARKER: .velnor-topology.txt
+          DOCKER_HOST: unix:///var/run/docker.sock
+          DOCKER_CONTEXT: ""

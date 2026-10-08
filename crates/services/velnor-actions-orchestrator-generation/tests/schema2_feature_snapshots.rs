@@ -181,4 +181,5 @@ jobs:
 "#,
     include_str!("fixtures/schema2_class_snapshot.txt"),
     include_str!("fixtures/schema2_class_snapshot_continuation.txt"),
+    include_str!("fixtures/schema2_topology_snapshot.txt"),
 );
