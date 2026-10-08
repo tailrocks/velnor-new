@@ -3,6 +3,7 @@ mod impl_common;
 mod impl_prepare;
 mod impl_routing;
 mod impl_schema2_artifact_build;
+mod impl_schema2_buildx;
 mod impl_schema2_mbx_qualification;
 mod impl_schema2_routing;
 mod impl_schema2_topology;

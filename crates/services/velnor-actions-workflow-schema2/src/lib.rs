@@ -69,6 +69,7 @@ pub const GENERATOR_RELEASE_WORKFLOW: &str = ".github/workflows/generator-releas
 pub const MONITORING_WORKFLOW: &str = ".github/workflows/monitoring.yml";
 
 mod classes;
+mod docker;
 mod features;
 mod mbx_qualification;
 mod release;

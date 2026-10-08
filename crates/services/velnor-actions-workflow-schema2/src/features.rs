@@ -6,6 +6,7 @@
 //! run. `features` still selects every class.
 
 use super::RunnerSpec;
+use super::docker::{docker_endpoint, docker_provider_guard};
 use super::workflows::with_if;
 use velnor_actions_workflow_tree::job_entries::{CHECKOUT_USES, base, finish};
 use velnor_actions_workflow_tree::yaml::Yaml;
@@ -24,7 +25,54 @@ const REDIS_OPTIONS: &str =
 /// The service DNS name is only on the Docker network of a `container:` job.
 const PROBE_LOCAL: &str =
     "timeout 20 bash -c 'until echo >/dev/tcp/127.0.0.1/6379; do sleep 1; done'";
-const BUILDX_RUN: &str = "docker buildx version && printf 'FROM scratch\\n' > Dockerfile && docker buildx build --progress=plain -t velnor-g4:probe .";
+const BUILDX_BUILDKIT_IMAGE: &str = "docker.io/moby/buildkit@sha256:98cc6a3fc46220d00f8224ae483f3274fc874e9be8d7dd1e2e2c5481209228b5";
+const BUILDX_RUN: &str = r#"set -euo pipefail
+endpoint="@@ENDPOINT@@"
+builder="velnor-g4-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"
+work="$RUNNER_TEMP/${builder}"
+cache="$work/cache"
+context="$GITHUB_WORKSPACE/qualification/buildx-context"
+case "$work" in "$RUNNER_TEMP"/velnor-g4-*) ;; *) exit 1 ;; esac
+mkdir "$work"
+test -f "$context/Dockerfile"
+test -f "$context/payload.txt"
+node "$context/cache-hit.mjs" --self-test
+docker --host "$endpoint" buildx create --name "$builder" --driver docker-container --driver-opt "image=@@BUILDKIT_IMAGE@@" "$endpoint" >/dev/null
+docker --host "$endpoint" buildx inspect "$builder" --bootstrap > "$work/inspect.txt"
+awk -v endpoint="$endpoint" '$1 == "Driver:" && $2 == "docker-container" { driver=1 } $1 == "Endpoint:" && $2 == endpoint { route=1 } $1 == "BuildKit:" && $2 == "v0.33.1" { version=1 } END { exit !(driver && route && version) }' "$work/inspect.txt"
+if ! docker --host "$endpoint" buildx build --builder "$builder" --platform linux/amd64 --progress=plain --cache-to "type=local,dest=$cache" --output "type=local,dest=$work/first-result" --file "$context/Dockerfile" "$context" > "$work/first-build.log" 2>&1; then
+  cat "$work/first-build.log"
+  exit 1
+fi
+test -s "$cache/index.json"
+cmp "$context/payload.txt" "$work/first-result/payload.txt"
+docker --host "$endpoint" buildx prune --builder "$builder" --all --force
+if ! docker --host "$endpoint" buildx build --builder "$builder" --platform linux/amd64 --progress=plain --cache-from "type=local,src=$cache" --output "type=local,dest=$work/second-result" --file "$context/Dockerfile" "$context" > "$work/second-build.log" 2>&1; then
+  cat "$work/second-build.log"
+  exit 1
+fi
+if ! node "$context/cache-hit.mjs" "$work/second-build.log"; then
+  cat "$work/second-build.log"
+  printf '%s\n' 'Buildx did not report a hit for the pinned local context' >&2
+  exit 1
+fi
+cmp "$context/payload.txt" "$work/second-result/payload.txt""#;
+const BUILDX_CLEANUP: &str = r#"set -euo pipefail
+endpoint="@@ENDPOINT@@"
+builder="velnor-g4-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"
+work="$RUNNER_TEMP/${builder}"
+case "$work" in "$RUNNER_TEMP"/velnor-g4-*) ;; *) exit 1 ;; esac
+mkdir -p "$work"
+docker --host "$endpoint" buildx ls --format '{{.Name}}' > "$work/builders-before-cleanup"
+if grep -Fxq "$builder" "$work/builders-before-cleanup"; then
+  docker --host "$endpoint" buildx rm "$builder"
+fi
+docker --host "$endpoint" buildx ls --format '{{.Name}}' > "$work/builders-after-cleanup"
+if grep -Fxq "$builder" "$work/builders-after-cleanup"; then
+  printf '%s\n' 'Buildx builder remained after cleanup' >&2
+  exit 1
+fi
+rm -rf "$work""#;
 
 /// Feature jobs. `features` runs every class. A class name runs that class.
 pub(crate) fn feature_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
@@ -137,11 +185,30 @@ fn artifact_job(id: &str, name: &str, runs_on: &RunnerSpec, artifact: &str) -> (
 }
 
 fn buildx_job(id: &str, name: &str, runs_on: &RunnerSpec) -> (String, Yaml) {
+    let (guard_name, guard_script) = docker_provider_guard(runs_on);
+    let endpoint = docker_endpoint(runs_on);
+    let probe = BUILDX_RUN
+        .replace("@@ENDPOINT@@", endpoint)
+        .replace("@@BUILDKIT_IMAGE@@", BUILDX_BUILDKIT_IMAGE);
+    let cleanup = BUILDX_CLEANUP.replace("@@ENDPOINT@@", endpoint);
     finish(
         id,
         lane_base(name, runs_on, 20),
-        vec![run_step("Buildx probe", BUILDX_RUN)],
+        vec![
+            run_step(guard_name, guard_script),
+            checkout_step(),
+            run_step("Buildx pinned context/cache probe", &probe),
+            always_run_step("Remove Buildx builder and local cache", &cleanup),
+        ],
     )
+}
+
+fn always_run_step(name: &str, run: &str) -> Yaml {
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str(name)),
+        ("if".to_owned(), Yaml::str("always()")),
+        ("run".to_owned(), Yaml::str(run)),
+    ])
 }
 
 fn fail_job(id: &str, name: &str, runs_on: &RunnerSpec) -> (String, Yaml) {
