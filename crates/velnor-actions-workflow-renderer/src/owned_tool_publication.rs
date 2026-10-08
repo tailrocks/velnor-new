@@ -5,7 +5,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::{RenderError, RenderedFile, marker, render_yaml, steps};
+use crate::{RenderError, RenderedFile, marker, steps};
 
 #[path = "owned_tool_publication_yaml.rs"]
 mod document;
@@ -150,7 +150,11 @@ pub fn render_owned_publication_files(
     let yaml = document::document(spec);
     Ok(vec![RenderedFile {
         path: ".github/workflows/owned-tools.yml".to_owned(),
-        bytes: marker::with_marker(&spec.generator_version, &render_yaml(&yaml))?,
+        bytes: crate::render::fallback::render_checked_workflow(
+            ".github/workflows/owned-tools.yml",
+            &yaml,
+            &spec.generator_version,
+        )?,
     }])
 }
 
