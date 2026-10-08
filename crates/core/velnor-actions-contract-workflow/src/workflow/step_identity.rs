@@ -30,6 +30,8 @@ pub enum StepId {
     PublishBaseline,
     /// `OpenTofu` provider-cache composite outputs consumed by the save step.
     TofuProviders,
+    /// Per-job report-artifact upload whose numeric ID is exposed to dependents.
+    CrateReportUpload,
 }
 
 impl StepId {
@@ -40,6 +42,7 @@ impl StepId {
             Self::Plan => "plan",
             Self::PublishBaseline => "publish-baseline",
             Self::TofuProviders => "tofu-providers",
+            Self::CrateReportUpload => "crate-report-upload",
         }
     }
 }
@@ -82,6 +85,8 @@ pub enum StepRole {
     PublishPlan,
     /// Upload of a crate or matrix task report artifact.
     MatrixReportUpload,
+    /// Crate/job report upload exposing its action artifact ID.
+    CrateReportUpload,
     /// Verify task matrix context and stage declared task outputs.
     ArtifactBuildExport,
     /// Upload one verified, run-scoped artifact build result.
@@ -161,6 +166,7 @@ impl StepRole {
             }
             Self::PublishPlan
             | Self::MatrixReportUpload
+            | Self::CrateReportUpload
             | Self::ArtifactBuildUpload
             | Self::PublishFinal
             | Self::PreseedUpload => action_has_prefix_for_kind(kind, "actions/upload-artifact@"),
@@ -199,6 +205,7 @@ impl StepRole {
             Self::PlanProducer => Some(StepId::Plan),
             Self::BaselinePublisher => Some(StepId::PublishBaseline),
             Self::TofuProvidersRestore => Some(StepId::TofuProviders),
+            Self::CrateReportUpload => Some(StepId::CrateReportUpload),
             _ => None,
         }
     }
@@ -209,6 +216,7 @@ impl StepRole {
             StepId::Plan => Self::PlanProducer,
             StepId::PublishBaseline => Self::BaselinePublisher,
             StepId::TofuProviders => Self::TofuProvidersRestore,
+            StepId::CrateReportUpload => Self::CrateReportUpload,
         }
     }
 }

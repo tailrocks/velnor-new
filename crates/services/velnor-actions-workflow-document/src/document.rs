@@ -367,5 +367,18 @@ fn append_job_options(
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
     }
+    if !job.outputs.is_empty() {
+        let outputs = job
+            .outputs
+            .iter()
+            .map(|output| {
+                (
+                    output.name.as_str().to_owned(),
+                    Yaml::str(output.expression()),
+                )
+            })
+            .collect();
+        entries.push(("outputs".to_owned(), Yaml::Map(outputs)));
+    }
     Ok(())
 }

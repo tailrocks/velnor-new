@@ -19,6 +19,7 @@ fn setup() -> MiseSetup {
 
 fn mise_job(runs_on: &str) -> Job {
     Job {
+        outputs: Vec::new(),
         display_name: "Cache identity fixture".to_owned(),
         runs_on: runs_on.to_owned(),
         check_runner: None,

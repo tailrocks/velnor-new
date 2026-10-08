@@ -5,6 +5,7 @@ use velnor_actions_contract_config::config::{
 
 fn ephemeral_job(condition: Option<&str>) -> Job {
     Job {
+        outputs: Vec::new(),
         display_name: "Check / native".to_owned(),
         runs_on: "native-scale-set".to_owned(),
         check_runner: Some(CheckRunner {

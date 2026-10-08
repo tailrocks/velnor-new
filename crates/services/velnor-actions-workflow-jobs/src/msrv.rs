@@ -100,6 +100,7 @@ pub fn msrv_job(
 ) -> Result<Job, RenderError> {
     spec.validate()?;
     Ok(Job {
+        outputs: Vec::new(),
         display_name: format!("MSRV {}", spec.package),
         runs_on: label.to_owned(),
         check_runner: None,

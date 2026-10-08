@@ -1,4 +1,5 @@
 //! Stack-neutral GitHub Actions workflow IR.
+use super::job_output::JobOutput;
 use super::jobs::{ScheduleTrigger, is_safe_display_name};
 use super::permissions::{PermissionLevel, Permissions};
 pub use super::step::{Step, StepKind};
@@ -80,6 +81,9 @@ pub struct Job {
     pub check_runner: Option<velnor_actions_contract_config::config::CheckRunner>,
     /// Per-job timeout (required: no job inherits the 6 h default).
     pub timeout_minutes: JobTimeout,
+    /// Typed outputs published to direct dependents through `needs.<job>.outputs`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub outputs: Vec<JobOutput>,
     /// Job dependencies.
     #[serde(default)]
     pub needs: Vec<String>,

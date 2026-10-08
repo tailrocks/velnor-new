@@ -39,6 +39,7 @@ fn ci_triggers() -> Trigger {
 
 fn ci_job() -> Job {
     Job {
+        outputs: Vec::new(),
         display_name: "demo check".to_owned(),
         runs_on: "ubuntu-24.04".to_owned(),
         check_runner: None,

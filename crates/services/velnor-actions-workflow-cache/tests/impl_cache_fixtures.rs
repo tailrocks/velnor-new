@@ -71,6 +71,7 @@ pub(crate) fn job(id: &str, display: &str, needs: Vec<String>, steps: Vec<Step>)
             runs_on: LABEL.to_owned(),
             check_runner: None,
             timeout_minutes: JobTimeout::CRATE,
+            outputs: Vec::new(),
             needs,
             condition: None,
             permissions: (id == CONTRACT_REQUIRED_JOB_ID).then_some(Permissions {

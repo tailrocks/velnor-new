@@ -26,6 +26,7 @@ fn base_job(setup: &MiseSetup) -> Job {
     .expect("derived key");
     let setup_step = mise_setup_step_p08(setup, &key).expect("setup");
     Job {
+        outputs: Vec::new(),
         display_name: "Seed mutation fixture".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,

@@ -67,6 +67,7 @@ fn tools_digest_is_order_stable_short_hex() {
 #[test]
 fn job_tools_inferred_from_install_and_exec() {
     let job = Job {
+        outputs: Vec::new(),
         display_name: "Demo".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,
@@ -110,6 +111,7 @@ fn job_tools_inferred_from_inline_shell_script() {
         && cd \"$RUNNER_TEMP/velnor/cargo-clean\" \
         && mise --no-config exec cargo-deny@0.20.2 -- cargo deny --locked check";
     let job = Job {
+        outputs: Vec::new(),
         display_name: "Cargo Deny".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,
@@ -135,6 +137,7 @@ fn job_tools_inferred_from_quoted_spec() {
     // A drift into quoted specs must still bootstrap instead of
     // silently dropping the setup step.
     let job = Job {
+        outputs: Vec::new(),
         display_name: "Demo".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,
@@ -240,6 +243,7 @@ fn rust_cache_never_stacks_over_mbx() {
         },
     };
     let both = Job {
+        outputs: Vec::new(),
         display_name: "Both".to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,

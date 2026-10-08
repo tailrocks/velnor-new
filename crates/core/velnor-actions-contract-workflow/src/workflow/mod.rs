@@ -6,6 +6,7 @@ pub mod cache_ids;
 pub mod crate_job;
 pub mod execute;
 pub mod ir;
+pub mod job_output;
 pub mod jobs;
 pub mod lanes;
 pub mod matrix_entry;
@@ -43,6 +44,7 @@ pub use cache_ids::EntryCacheIds;
 pub use crate_job::{CrateJob, CrateObligation};
 pub use execute::{ExecuteTaskIds, ExecuteTaskRef};
 pub use ir::{Concurrency, Job, Trigger, WorkflowIr};
+pub use job_output::{JobOutput, JobOutputName, JobOutputSource};
 pub use jobs::{
     CI_WORKFLOW_PATH, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH, PLAN_DISPLAY_NAME,
     PLAN_JOB_ID, REQUIRED_CONDITION, REQUIRED_DISPLAY_NAME, REQUIRED_JOB_ID,

@@ -47,6 +47,7 @@ pub fn baseline_publish_job(
         })?,
     );
     Ok(Job {
+        outputs: Vec::new(),
         check_runner: None,
         display_name: PUBLISH_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),

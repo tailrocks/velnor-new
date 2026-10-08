@@ -76,6 +76,7 @@ fn job(id: &str, check_runner: Option<CheckRunner>, needs: &[&str]) -> Job {
         }]
     };
     Job {
+        outputs: Vec::new(),
         display_name: id.to_owned(),
         runs_on: check_runner
             .as_ref()

@@ -52,6 +52,7 @@ fn checkout_step(uses: &str) -> Step {
 
 fn job(display_name: &str, runs_on: &str, steps: Vec<Step>) -> Job {
     Job {
+        outputs: Vec::new(),
         display_name: display_name.to_owned(),
         runs_on: runs_on.to_owned(),
         timeout_minutes: JobTimeout::CRATE,

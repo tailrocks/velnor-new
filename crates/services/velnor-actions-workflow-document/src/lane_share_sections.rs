@@ -49,7 +49,12 @@ pub(crate) fn peel_lane_specific(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
 }
 
 fn is_lane_specific(step: &Step) -> bool {
-    if is_postlude_step(step) || step.role == Some(StepRole::MatrixReportUpload) {
+    if is_postlude_step(step)
+        || matches!(
+            step.role,
+            Some(StepRole::MatrixReportUpload | StepRole::CrateReportUpload)
+        )
+    {
         return true;
     }
     match &step.kind {

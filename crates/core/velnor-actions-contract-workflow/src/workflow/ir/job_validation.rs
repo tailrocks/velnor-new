@@ -123,6 +123,7 @@ impl Job {
             ));
         }
         super::super::step_identity::validate_step_sequence(&self.steps, id)?;
+        super::super::job_output::validate_job_outputs(&self.outputs, &self.steps, id)?;
         Ok(())
     }
 }
