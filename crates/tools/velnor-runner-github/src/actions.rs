@@ -300,7 +300,7 @@ fn validate_repository(
     Ok(())
 }
 
-fn path_segment(value: &str) -> bool {
+pub(crate) fn path_segment(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 100
         && value != "."

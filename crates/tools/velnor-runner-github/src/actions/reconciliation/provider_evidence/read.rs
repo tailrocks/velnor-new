@@ -1,5 +1,6 @@
 use serde::Deserialize;
 
+use crate::actions::path_segment;
 use crate::registration::{AsyncDiscoveryTransport, execute_discovery};
 use crate::{SessionError, WireError};
 
@@ -168,8 +169,11 @@ pub(super) fn decode_jobs_page(
             let check_run_id = job
                 .check_run_url
                 .as_deref()
-                .map(|url| parse_check_run_url(url, owner, repository))
-                .transpose()?;
+                .map(|url| {
+                    ActionsWorkflowAttemptJobEvidence::parse_check_run_url(url, owner, repository)
+                })
+                .transpose()?
+                .map(std::num::NonZeroI64::get);
             if job.id <= 0
                 || job.run_id <= 0
                 || !valid_text(&job.name)
@@ -234,26 +238,44 @@ fn normalize_runner_name(value: Option<String>) -> Result<Option<String>, Sessio
     }
 }
 
-fn parse_check_run_url(url: &str, owner: &str, repository: &str) -> Result<i64, SessionError> {
-    let scoped_path = url
-        .strip_prefix("https://api.github.com/repos/")
-        .ok_or(WireError::Malformed)?;
-    let (url_owner, remainder) = scoped_path.split_once('/').ok_or(WireError::Malformed)?;
-    let (url_repository, check_run_path) = remainder.split_once('/').ok_or(WireError::Malformed)?;
-    if !url_owner.eq_ignore_ascii_case(owner) || !url_repository.eq_ignore_ascii_case(repository) {
-        return Err(WireError::Malformed.into());
+impl ActionsWorkflowAttemptJobEvidence {
+    /// Parse a canonical public GitHub Check Run URL for the expected repository.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SessionError`] for invalid repository segments, a different
+    /// origin or repository, a noncanonical path or numeric ID, or an
+    /// out-of-range ID.
+    pub fn parse_check_run_url(
+        url: &str,
+        owner: &str,
+        repository: &str,
+    ) -> Result<std::num::NonZeroI64, SessionError> {
+        if !path_segment(owner) || !path_segment(repository) {
+            return Err(WireError::Malformed.into());
+        }
+        let scoped_path = url
+            .strip_prefix("https://api.github.com/repos/")
+            .ok_or(WireError::Malformed)?;
+        let (url_owner, remainder) = scoped_path.split_once('/').ok_or(WireError::Malformed)?;
+        let (url_repository, check_run_path) =
+            remainder.split_once('/').ok_or(WireError::Malformed)?;
+        if !path_segment(url_owner)
+            || !path_segment(url_repository)
+            || !url_owner.eq_ignore_ascii_case(owner)
+            || !url_repository.eq_ignore_ascii_case(repository)
+        {
+            return Err(WireError::Malformed.into());
+        }
+        let id = check_run_path
+            .strip_prefix("check-runs/")
+            .ok_or(WireError::Malformed)?;
+        if id.is_empty() || id.starts_with('0') || !id.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Err(WireError::Malformed.into());
+        }
+        let id = id.parse::<i64>().map_err(|_| WireError::Malformed)?;
+        std::num::NonZeroI64::new(id).ok_or_else(|| WireError::Malformed.into())
     }
-    let id = check_run_path
-        .strip_prefix("check-runs/")
-        .ok_or(WireError::Malformed)?;
-    if id.is_empty() || id.starts_with('0') || !id.bytes().all(|byte| byte.is_ascii_digit()) {
-        return Err(WireError::Malformed.into());
-    }
-    let id = id.parse::<i64>().map_err(|_| WireError::Malformed)?;
-    if id <= 0 {
-        return Err(WireError::Malformed.into());
-    }
-    Ok(id)
 }
 
 pub(super) fn decode_artifacts_page(
