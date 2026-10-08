@@ -23,8 +23,9 @@
 #                                   [--with-advisories]
 #   --root DIR         validate a fixture tree instead of this repository.
 #   --check-upstream   bounded read-only upstream probe: refetch each row's
-#                      latest stable release (10 s timeout and 512 KiB cap
-#                      per request) and fail stale pins and lookup failures.
+#                      latest stable release (10 s timeout and separate
+#                      512 KiB encoded/decompressed response caps) and fail
+#                      stale pins and lookup failures.
 #                      Writes nothing; run by the generated weekly
 #                      `.github/workflows/freshness.yml`, never gating builds.
 #   --with-advisories  run the live `cargo deny check advisories` scan for
@@ -85,7 +86,9 @@ fi
 
 python3 - "$ROOT" "$INV" "$CHECK_UPSTREAM" "$WITH_ADVISORIES" <<'EOF'
 import datetime
+import gzip
 import glob as globmod
+import io
 import json
 import os
 import re
@@ -255,7 +258,7 @@ ACTIONS = "crates/adapters/velnor-actions-actionlint/src/actions.rs"
 TOOLS = "crates/adapters/velnor-actions-actionlint/src/tools.rs"
 CAPABILITIES = "crates/adapters/velnor-actions-actionlint/src/capabilities.rs"
 CONFIG = "crates/adapters/velnor-actions-actionlint/src/config.rs"
-RENDERER = "crates/services/velnor-actions-workflow-renderer/src/render.rs"
+RENDERER = "crates/services/velnor-actions-workflow-steps/src/action_ref.rs"
 
 EXPECTED_TOOLS = {
     "mise": "MISE_VERSION",
@@ -1031,16 +1034,66 @@ else:
 
 # --- Bounded read-only upstream probe (weekly freshness.yml; writes nothing).
 FETCH_TIMEOUT = 10
-FETCH_CAP = 512 * 1024
+FETCH_ENCODED_CAP = 512 * 1024
+FETCH_DECOMPRESSED_CAP = 512 * 1024
+FETCH_CHUNK_SIZE = 64 * 1024
+
+
+def response_encoding(response):
+    values = response.headers.get_all("Content-Encoding", [])
+    encodings = [part.strip().lower() for value in values
+                 for part in value.split(",")]
+    if not encodings:
+        return "identity"
+    if len(encodings) != 1 or encodings[0] not in ("identity", "gzip"):
+        raise ValueError(f"unsupported Content-Encoding {encodings!r}")
+    return encodings[0]
+
+
+def read_bounded(response, cap, label):
+    body = bytearray()
+    while True:
+        remaining = cap + 1 - len(body)
+        chunk = response.read(min(FETCH_CHUNK_SIZE, remaining))
+        if not chunk:
+            return bytes(body)
+        body.extend(chunk)
+        if len(body) > cap:
+            raise ValueError(f"{label} response exceeds {cap} bytes")
+
+
+def decode_gzip(encoded):
+    output = bytearray()
+    with gzip.GzipFile(fileobj=io.BytesIO(encoded), mode="rb") as stream:
+        while True:
+            remaining = FETCH_DECOMPRESSED_CAP + 1 - len(output)
+            chunk = stream.read(min(FETCH_CHUNK_SIZE, remaining))
+            if not chunk:
+                return bytes(output)
+            output.extend(chunk)
+            if len(output) > FETCH_DECOMPRESSED_CAP:
+                raise ValueError(
+                    f"decompressed response exceeds "
+                    f"{FETCH_DECOMPRESSED_CAP} bytes")
 
 
 def fetch_text(url):
     request = urllib.request.Request(
         url, headers={"User-Agent": "velnor-freshness-probe",
-                      "Accept": "application/json"})
+                      "Accept": "application/json",
+                      "Accept-Encoding": "gzip, identity"})
     with urllib.request.urlopen(request, timeout=FETCH_TIMEOUT) as response:
-        return response.read(FETCH_CAP + 1)[:FETCH_CAP + 1].decode(
-            "utf-8", errors="replace")
+        encoding = response_encoding(response)
+        encoded = read_bounded(response, FETCH_ENCODED_CAP, "encoded")
+    if encoding == "gzip":
+        body = decode_gzip(encoded)
+    else:
+        body = encoded
+        if len(body) > FETCH_DECOMPRESSED_CAP:
+            raise ValueError(
+                f"decompressed response exceeds "
+                f"{FETCH_DECOMPRESSED_CAP} bytes")
+    return body.decode("utf-8", errors="replace")
 
 
 def github_tag(payload):
