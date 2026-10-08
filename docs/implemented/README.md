@@ -26,6 +26,14 @@ checks passing; those checks were green at `bdfffb9` (dogfood CI run
 - [Gate 7: parallel test fan-out](gate-7-parallel-fanout.md)
 - [Gate 8: Velnor dogfooding](gate-8-dogfooding.md)
 
+Renderer run-scalar sharing has a candidate record for unmerged PR #112. Focused
+renderer and security checks have passed, while final repository qualification
+remains in progress. This candidate is not recorded as an implemented
+capability; that requires the PR to merge with required checks passing.
+
+- [Renderer run-scalar sharing](workflow-run-scalar-sharing.md) — bounded
+  over-cap workflow compaction and per-use shell validation.
+
 Shared acceptance state: local workspace suite green at `bdfffb9` (1048
 pass/0 fail: 978 integration + 70 src-unit, 21 binaries; clippy clean,
 fmt clean, deny ok; identical in a clean checkout). Latest measured suite:
