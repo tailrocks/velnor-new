@@ -39,7 +39,7 @@ The pre-rollout `.alint.yml` (5 bundle extends + 9 local rules) is
 superseded by the adapter. Overlapping size rules (`rust-max-lines`,
 `lib-main-max-lines`) stay dropped — policy owns them. Velnor-specific
 rules return as adapter-local additions in the reconciliation slice:
-`claude-is-agents-symlink`, `agent-instructions-max-lines`,
+`claude-is-agents-copy`, `agent-instructions-max-lines`,
 `agent-instructions-max-size`, `required-files`, `crates-only`
 (superseded by S4 layout rules — likely dropped),
 `velnor-no-stray-cargo-lock` / `velnor-no-stray-npm-lock` (runner merge
