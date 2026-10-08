@@ -105,9 +105,21 @@ fn check_source(source: &str, file: &str) -> Result<(), ContractError> {
             "mutable_or_malformed_url",
         ));
     };
-    let valid = !rest.is_empty()
-        && !source.contains(' ')
-        && !rest.split('/').any(|seg| seg.is_empty() || seg == "latest");
+    // A canonical release page may have one terminal slash. Interior empty
+    // segments remain malformed; stripping every slash would hide them.
+    let canonical = rest.strip_suffix('/').unwrap_or(rest);
+    let valid = canonical.split_once('/').is_some_and(|(host, path)| {
+        valid_source_host(host)
+            && path.split('/').all(|segment| {
+                !segment.is_empty()
+                    && !matches!(segment, "." | "..")
+                    && !segment.eq_ignore_ascii_case("latest")
+                    && segment.bytes().all(|byte| {
+                        byte.is_ascii_alphanumeric()
+                            || matches!(byte, b'-' | b'_' | b'.' | b'~' | b'+')
+                    })
+            })
+    });
     if valid {
         Ok(())
     } else {
@@ -116,5 +128,72 @@ fn check_source(source: &str, file: &str) -> Result<(), ContractError> {
             "tool.source",
             "mutable_or_malformed_url",
         ))
+    }
+}
+
+/// Closed DNS authority grammar: no credentials, ports, escapes or empty labels.
+fn valid_source_host(host: &str) -> bool {
+    host.len() <= 253
+        && host.contains('.')
+        && host.split('.').all(|label| {
+            !label.is_empty()
+                && label.len() <= 63
+                && label
+                    .as_bytes()
+                    .first()
+                    .is_some_and(u8::is_ascii_alphanumeric)
+                && label
+                    .as_bytes()
+                    .last()
+                    .is_some_and(u8::is_ascii_alphanumeric)
+                && label
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::check_source;
+
+    #[test]
+    fn canonical_versioned_release_urls_allow_one_terminal_slash() {
+        for source in [
+            "https://www.python.org/downloads/release/python-3147/",
+            "https://www.python.org/downloads/release/python-3147",
+            "https://github.com/python/cpython/tree/v3.14.7",
+            "https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu",
+        ] {
+            assert!(check_source(source, "catalog").is_ok(), "{source}");
+        }
+    }
+
+    #[test]
+    fn canonical_source_rejects_ambiguous_and_floating_urls() {
+        for source in [
+            "http://www.python.org/downloads/release/python-3147/",
+            "https://www.python.org/downloads/release/python-3147//",
+            "https://www.python.org/downloads//release/python-3147/",
+            "https://www.python.org/downloads/../release/python-3147/",
+            "https://www.python.org/downloads/./release/python-3147/",
+            "https://www.python.org/downloads/%2e%2e/release/python-3147/",
+            "https://www.python.org/downloads/release/python-3147/?next=x",
+            "https://www.python.org/downloads/release/python-3147/#files",
+            "https://www.python.org/downloads/release/latest/",
+            "https://www.python.org/downloads/release/LATEST/",
+            "https://user@www.python.org/downloads/release/python-3147/",
+            "https://www.python.org:443/downloads/release/python-3147/",
+            "https://www..python.org/downloads/release/python-3147/",
+            "https://www.python.org/downloads\\release/python-3147/",
+            "https://www.python.org/downloads/release/python-3147/\n",
+            "https://www.python.org/",
+        ] {
+            assert!(check_source(source, "catalog").is_err(), "{source:?}");
+        }
+        let oversized_label = format!("https://{}.example/release/v1.2.3", "a".repeat(64));
+        assert!(check_source(&oversized_label, "catalog").is_err());
+        let label = "a".repeat(63);
+        let oversized_host = format!("https://{label}.{label}.{label}.{label}/release/v1.2.3");
+        assert!(check_source(&oversized_host, "catalog").is_err());
     }
 }
