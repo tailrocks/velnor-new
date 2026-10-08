@@ -35,6 +35,12 @@ impl QueueSession {
     pub fn statistics(&self) -> Option<&Statistics> {
         self.statistics.as_ref()
     }
+
+    /// Retire queue credentials and the returned URL after one-shot close.
+    pub(crate) fn retire(&mut self) {
+        self.token.zeroize();
+        self.message_queue_url.zeroize();
+    }
 }
 
 impl fmt::Debug for QueueSession {

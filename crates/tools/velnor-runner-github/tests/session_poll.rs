@@ -1,8 +1,9 @@
 //! Poll driver against a scripted transport.
 
+use velnor_runner_github::policy::{PollWithTrust, WorkflowTrustField};
 use velnor_runner_github::{
     CAPACITY_HEADER, Certainty, Method, ParsedBatch, Poll, RefreshGate, SessionError,
-    TransportFail, WireError, poll,
+    TransportFail, WireError, poll, poll_with_trust,
 };
 
 mod common;
@@ -15,6 +16,7 @@ const NULL_STATS: &str =
 const OMITTED_STATS: &str =
     r#"{"messageId":0,"messageType":"RunnerScaleSetJobMessages","body":"[]"}"#;
 const POPULATED: &str = r#"{"messageId":1,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobAvailable\",\"runnerRequestId\":1}]","statistics":{"totalAvailableJobs":1,"totalAcquiredJobs":0,"totalAssignedJobs":5,"totalRunningJobs":0,"totalRegisteredRunners":0,"totalBusyRunners":0,"totalIdleRunners":0}}"#;
+const TRUSTED_OFFER: &str = r#"{"messageId":23,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobAvailable\",\"runnerRequestId\":41,\"jobWorkflowRef\":\"ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main\"}]"}"#;
 
 fn must_err<T>(result: &Result<T, SessionError>) -> Result<SessionError, &'static str> {
     match result {
@@ -36,6 +38,46 @@ fn poll_preserves_statistics() -> Result<(), &'static str> {
     };
     assert_eq!(stats.assigned_population(), 5);
     assert_eq!(populated.jobs.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn trust_poll_preserves_event_workflow_ref_and_exact_request_context() -> Result<(), &'static str> {
+    let mut script = Script::once(200, TRUSTED_OFFER);
+    let polled = poll_with_trust(
+        &mut script,
+        QUEUE,
+        7,
+        3,
+        TOKEN,
+        &RefreshGate::new(),
+        |_, _| Ok(()),
+    )
+    .map_err(|_| "trust poll")?;
+    let PollWithTrust::Batch(batch) = polled else {
+        return Err("trust batch");
+    };
+    assert_eq!(batch.message_id(), 23);
+    assert_eq!(batch.events().len(), 1);
+    let event = batch.event(0).ok_or("event")?;
+    assert_eq!(event.job().request_id, Some(41));
+    assert_eq!(
+        event.job_workflow_ref(),
+        &WorkflowTrustField::Present(
+            "ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main".to_owned()
+        )
+    );
+    let request = script.seen.first().ok_or("request")?;
+    assert_eq!(request.path, QUEUE);
+    assert_eq!(
+        request.query.as_deref(),
+        Some("api-version=6.0-preview&lastMessageId=7")
+    );
+    assert_eq!(header(request, CAPACITY_HEADER), Some("3"));
+    assert_eq!(
+        header(request, "Authorization"),
+        Some("Bearer queue-token-canary")
+    );
     Ok(())
 }
 

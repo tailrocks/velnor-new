@@ -18,11 +18,27 @@ use super::discovery_async::{AsyncDiscoveryTransport, execute_discovery};
 #[must_use]
 pub struct RepositoryDiscoveryAdmin {
     connection: AdminConnection,
+    repository_id: i64,
+    repository_full_name: String,
 }
 
 impl RepositoryDiscoveryAdmin {
-    pub(super) const fn new(connection: AdminConnection) -> Self {
-        Self { connection }
+    pub(super) fn new(
+        connection: AdminConnection,
+        repository_id: i64,
+        repository_full_name: String,
+    ) -> Result<Self, SessionError> {
+        repository_full_name
+            .split_once('/')
+            .filter(|(owner, repository)| {
+                !owner.is_empty() && !repository.is_empty() && !repository.contains('/')
+            })
+            .ok_or(WireError::Malformed)?;
+        Ok(Self {
+            connection,
+            repository_id,
+            repository_full_name,
+        })
     }
 
     /// Borrow the Actions service URL for host-side strict origin validation.
@@ -144,9 +160,21 @@ impl RepositoryDiscoveryAdmin {
 
 impl fmt::Debug for RepositoryDiscoveryAdmin {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("RepositoryDiscoveryAdmin([redacted])")
+        formatter
+            .debug_struct("RepositoryDiscoveryAdmin")
+            .field("repository_id", &self.repository_id)
+            .field("repository_full_name", &self.repository_full_name)
+            .field("connection", &"[redacted]")
+            .finish_non_exhaustive()
     }
 }
+
+mod session_capability;
+pub use session_capability::{
+    AcquireUnresolvedReason, PoolSessionCapabilityError, PopulationObservationSource,
+    SessionCloseOutcome, SessionPopulationObservation, VerifiedAcquireOutcome, VerifiedAcquiredJob,
+    VerifiedAssignedDemand, VerifiedPoolSessionAdmin, VerifiedQueueSession,
+};
 
 /// Lookup result for an exact group and Scale Set in an organization-scoped
 /// Actions Service connection. Missing objects are distinct, read-only

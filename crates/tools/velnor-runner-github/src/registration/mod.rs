@@ -23,7 +23,10 @@ pub use discovery::{
     issue_repository_discovery_token, read_repository_admin_evidence,
 };
 pub use discovery_admin::{
-    ActionsServiceRouteLookup, OrganizationDiscoveryAdmin, RepositoryDiscoveryAdmin,
+    AcquireUnresolvedReason, ActionsServiceRouteLookup, OrganizationDiscoveryAdmin,
+    PoolSessionCapabilityError, PopulationObservationSource, RepositoryDiscoveryAdmin,
+    SessionCloseOutcome, SessionPopulationObservation, VerifiedAcquireOutcome, VerifiedAcquiredJob,
+    VerifiedAssignedDemand, VerifiedPoolSessionAdmin, VerifiedQueueSession,
 };
 pub(crate) use discovery_async::execute_discovery;
 pub use discovery_async::{

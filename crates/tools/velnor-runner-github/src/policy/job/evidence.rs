@@ -23,6 +23,8 @@ pub enum JobTrustEvidence {
 pub struct VerifiedJobTrust {
     pub(super) message_id: i64,
     pub(super) request_id: i64,
+    pub(super) source_session_id: Option<String>,
+    pub(super) source_scale_set_id: Option<i64>,
     pub(super) scale_set_job_id: Option<String>,
     pub(super) workflow_run_id: i64,
     pub(super) repository_full_name: String,
@@ -36,6 +38,20 @@ pub struct VerifiedJobTrust {
 }
 
 impl VerifiedJobTrust {
+    /// Session that delivered the event when the batch came from the opaque
+    /// verified session driver. Trust checks on standalone parsed fixtures do
+    /// not carry session provenance.
+    #[must_use]
+    pub fn source_session_id(&self) -> Option<&str> {
+        self.source_session_id.as_deref()
+    }
+
+    /// Actions Service Set that delivered the event, when session-bound.
+    #[must_use]
+    pub const fn source_scale_set_id(&self) -> Option<i64> {
+        self.source_scale_set_id
+    }
+
     /// Scale Set delivery identifier, not a job or runner ID.
     #[must_use]
     pub const fn message_id(&self) -> i64 {

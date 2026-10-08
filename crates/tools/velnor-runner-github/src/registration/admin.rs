@@ -58,6 +58,12 @@ impl AdminConnection {
     pub const fn expose_token(&self) -> &str {
         self.token.as_str()
     }
+
+    /// Retire this short-lived control-plane credential after one-shot close.
+    pub(crate) fn retire(&mut self) {
+        self.url.zeroize();
+        self.token.zeroize();
+    }
 }
 
 impl fmt::Debug for AdminConnection {

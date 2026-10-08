@@ -43,6 +43,8 @@ pub struct ParsedTrustBatch {
     message_id: i64,
     statistics: Option<Statistics>,
     events: Vec<ParsedTrustEvent>,
+    source_session_id: Option<String>,
+    source_scale_set_id: Option<i64>,
 }
 
 impl ParsedTrustBatch {
@@ -68,6 +70,31 @@ impl ParsedTrustBatch {
     #[must_use]
     pub fn event(&self, index: usize) -> Option<&ParsedTrustEvent> {
         self.events.get(index)
+    }
+
+    /// Session and Set identity attached by the opaque pool-session driver.
+    /// Ordinary parser callers receive an unbound batch.
+    #[must_use]
+    pub fn source_session_id(&self) -> Option<&str> {
+        self.source_session_id.as_deref()
+    }
+
+    /// Actions Service Set identity attached by the opaque pool-session driver.
+    #[must_use]
+    pub const fn source_scale_set_id(&self) -> Option<i64> {
+        self.source_scale_set_id
+    }
+
+    pub(crate) fn bind_session_context(&mut self, session_id: &str, scale_set_id: i64) -> bool {
+        if session_id.is_empty() || scale_set_id <= 0 {
+            return false;
+        }
+        if self.source_session_id.is_some() || self.source_scale_set_id.is_some() {
+            return false;
+        }
+        self.source_session_id = Some(session_id.to_owned());
+        self.source_scale_set_id = Some(scale_set_id);
+        true
     }
 }
 
@@ -101,6 +128,8 @@ pub fn parse_poll_with_trust(status: u16, body: &str) -> Result<PollWithTrust, W
                 message_id: batch.message_id,
                 statistics: batch.statistics,
                 events,
+                source_session_id: None,
+                source_scale_set_id: None,
             }))
         }
     }

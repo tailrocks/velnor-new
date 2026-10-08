@@ -19,7 +19,7 @@ pub use close::delete_session;
 pub use config::{jit, jit_request};
 pub use error::SessionError;
 pub use jobs::acquire;
-pub use messages::poll;
+pub use messages::{poll, poll_with_trust};
 pub use open::{
     QueueSession, create_session, refresh_if_current, refresh_queue_request, refresh_session,
 };

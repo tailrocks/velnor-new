@@ -21,19 +21,21 @@ fn organization_preflight_keeps_ubuntu24_profile_out_of_admission_without_io() {
         policy_digest: "policy-digest",
     };
 
+    let preflight = block_on_ready(preflight_organization_pool_admission_with_admin_async(
+        &mut transport,
+        expected,
+        "hostcredential",
+        "hostcredential",
+        &mut intents.clone(),
+    ))
+    .expect("profile gate is a typed unknown");
     assert_eq!(
-        block_on_ready(preflight_organization_pool_admission_async(
-            &mut transport,
-            expected,
-            "hostcredential",
-            "hostcredential",
-            &mut intents.clone(),
-        ))
-        .expect("profile gate is a typed unknown"),
+        preflight.evidence,
         PoolAdmissionEvidence::Unknown(
             velnor_runner_github::policy::PolicyGap::RequiredRunnerProfileUnavailable
         )
     );
+    assert!(preflight.verified_admin.is_none());
     assert_eq!(
         transport
             .0
@@ -68,19 +70,21 @@ fn repository_scoped_preflight_stops_before_any_request_or_intent() {
         allowed_group_workflows: &workflows,
         policy_digest: "policy-digest",
     };
+    let preflight = block_on_ready(preflight_pool_admission_with_admin_async(
+        &mut transport,
+        expected,
+        "hostcredential",
+        "hostcredential",
+        &mut intents.clone(),
+    ))
+    .expect("repo scope remains a non-error unknown");
     assert_eq!(
-        block_on_ready(preflight_organization_pool_admission_async(
-            &mut transport,
-            expected,
-            "hostcredential",
-            "hostcredential",
-            &mut intents.clone(),
-        ))
-        .expect("repo scope remains a non-error unknown"),
+        preflight.evidence,
         PoolAdmissionEvidence::Unknown(
             velnor_runner_github::policy::PolicyGap::EffectiveRoutingApplicabilityUnproven
         )
     );
+    assert!(preflight.verified_admin.is_none());
     assert_eq!(
         transport
             .0

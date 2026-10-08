@@ -2,9 +2,10 @@ use std::time::SystemTime;
 
 use crate::{
     ActionsServiceRouteLookup, AsyncDiscoveryTransport, AsyncScopedDiscoveryIntentStore,
-    SessionError, WireError, exchange_organization_discovery_admin_once_async,
-    issue_organization_discovery_token_async, organization_admin_evidence,
-    read_organization_runner_group_policy_evidence_async, read_repository_admin_evidence_async,
+    SessionError, VerifiedPoolSessionAdmin, WireError,
+    exchange_organization_discovery_admin_once_async, issue_organization_discovery_token_async,
+    organization_admin_evidence, read_organization_runner_group_policy_evidence_async,
+    read_repository_admin_evidence_async,
 };
 
 use super::super::types::{PolicyGap, PolicyMismatch, PoolBindingView};
@@ -14,6 +15,67 @@ use super::organization::{
 use super::{
     PoolAdmissionEvidence, read_repository_pool_trust_async, verify_organization_pool_policy,
 };
+
+/// Result of one pool preflight. The session admin is retained only when the
+/// same read-only bootstrap that produced `Verified` also matched the exact
+/// scope, repository, group, Set, profile, and policy digest.
+#[must_use]
+#[derive(Debug)]
+pub struct PoolAdmissionPreflight {
+    /// Policy evidence from the bounded preflight.
+    pub evidence: PoolAdmissionEvidence,
+    /// Capability from that preflight's exact admin exchange. Present only for
+    /// `PoolAdmissionEvidence::Verified`.
+    pub verified_admin: Option<VerifiedPoolSessionAdmin>,
+}
+
+impl PoolAdmissionPreflight {
+    fn without_admin(evidence: PoolAdmissionEvidence) -> Self {
+        Self {
+            evidence,
+            verified_admin: None,
+        }
+    }
+}
+
+/// Scope-aware preflight entrypoint for Linux callers. Organization scope uses
+/// the exact same-scope GET/bootstrap flow below. Repository scope currently
+/// returns `Unknown` without issuing credentials because the supported readers
+/// do not prove effective repository-scoped workflow/event eligibility.
+///
+/// # Errors
+///
+/// Returns secret-safe transport or journal errors. Unknown/rejected policy
+/// outcomes are returned as evidence and do not issue runner-side effects.
+pub async fn preflight_pool_admission_with_admin_async<T, I>(
+    transport: &mut T,
+    expected: PoolBindingView<'_>,
+    actions_read_token: &str,
+    controller_token: &str,
+    intents: &mut I,
+) -> Result<PoolAdmissionPreflight, SessionError>
+where
+    T: AsyncDiscoveryTransport + ?Sized,
+    I: AsyncScopedDiscoveryIntentStore + ?Sized,
+{
+    match expected.registration_scope {
+        super::super::types::PoolRegistrationScopeView::Organization { .. } => {
+            preflight_organization_pool_admission_with_admin_async(
+                transport,
+                expected,
+                actions_read_token,
+                controller_token,
+                intents,
+            )
+            .await
+        }
+        super::super::types::PoolRegistrationScopeView::Repository { .. } => {
+            Ok(PoolAdmissionPreflight::without_admin(
+                PoolAdmissionEvidence::Unknown(PolicyGap::EffectiveRoutingApplicabilityUnproven),
+            ))
+        }
+    }
+}
 
 /// Perform a bounded, read-only organization pool-policy preflight.
 ///
@@ -52,9 +114,40 @@ where
     T: AsyncDiscoveryTransport + ?Sized,
     I: AsyncScopedDiscoveryIntentStore + ?Sized,
 {
+    Ok(preflight_organization_pool_admission_with_admin_async(
+        transport,
+        expected,
+        actions_read_token,
+        controller_token,
+        intents,
+    )
+    .await?
+    .evidence)
+}
+
+/// Perform the same organization preflight while retaining its exact admin
+/// connection only when all observations produce `Verified`. This avoids a
+/// second credential issuance/exchange between policy verification and the
+/// session operation.
+///
+/// # Errors
+///
+/// Returns secret-safe transport or journal errors. Unknown/rejected policy
+/// outcomes are returned as evidence and do not issue runner-side effects.
+pub async fn preflight_organization_pool_admission_with_admin_async<T, I>(
+    transport: &mut T,
+    expected: PoolBindingView<'_>,
+    actions_read_token: &str,
+    controller_token: &str,
+    intents: &mut I,
+) -> Result<PoolAdmissionPreflight, SessionError>
+where
+    T: AsyncDiscoveryTransport + ?Sized,
+    I: AsyncScopedDiscoveryIntentStore + ?Sized,
+{
     let Some(organization) = organization_scope(expected.registration_scope) else {
-        return Ok(PoolAdmissionEvidence::Unknown(
-            PolicyGap::EffectiveRoutingApplicabilityUnproven,
+        return Ok(PoolAdmissionPreflight::without_admin(
+            PoolAdmissionEvidence::Unknown(PolicyGap::EffectiveRoutingApplicabilityUnproven),
         ));
     };
     if let Some(evidence) = validate_preflight_input(
@@ -63,7 +156,7 @@ where
         actions_read_token,
         controller_token,
     ) {
-        return Ok(evidence);
+        return Ok(PoolAdmissionPreflight::without_admin(evidence));
     }
 
     let (owner, repository) = repository_parts(expected.target_repository_full_name)
@@ -75,8 +168,8 @@ where
         .target_repository_id
         .is_some_and(|id| id != repository_admin.repository_id())
     {
-        return Ok(PoolAdmissionEvidence::Rejected(
-            PolicyMismatch::PoolBindingMismatch,
+        return Ok(PoolAdmissionPreflight::without_admin(
+            PoolAdmissionEvidence::Rejected(PolicyMismatch::PoolBindingMismatch),
         ));
     }
     let organization_admin = organization_admin_evidence(repository_admin, organization)?;
@@ -84,7 +177,7 @@ where
     let repository_trust =
         read_repository_pool_trust_async(transport, owner, repository, actions_read_token).await?;
     if let Err(evidence) = validate_repository(&expected, &repository_trust) {
-        return Ok(evidence);
+        return Ok(PoolAdmissionPreflight::without_admin(evidence));
     }
 
     let Some(group_policy) = read_organization_runner_group_policy_evidence_async(
@@ -95,8 +188,8 @@ where
     )
     .await?
     else {
-        return Ok(PoolAdmissionEvidence::Rejected(
-            PolicyMismatch::PoolBindingMismatch,
+        return Ok(PoolAdmissionPreflight::without_admin(
+            PoolAdmissionEvidence::Rejected(PolicyMismatch::PoolBindingMismatch),
         ));
     };
     if let Err(evidence) = validate_group_policy(
@@ -105,10 +198,10 @@ where
         repository_trust.repository_id,
         &group_policy,
     ) {
-        return Ok(evidence);
+        return Ok(PoolAdmissionPreflight::without_admin(evidence));
     }
 
-    let Some(route) = read_existing_route(
+    let Some((route, admin)) = read_existing_route(
         transport,
         organization_admin,
         organization,
@@ -119,18 +212,48 @@ where
     )
     .await?
     else {
-        return Ok(PoolAdmissionEvidence::Rejected(
-            PolicyMismatch::PoolBindingMismatch,
+        return Ok(PoolAdmissionPreflight::without_admin(
+            PoolAdmissionEvidence::Rejected(PolicyMismatch::PoolBindingMismatch),
         ));
     };
 
-    Ok(verify_organization_pool_policy(
+    Ok(finish_preflight(
         &expected,
         &repository_trust,
         &group_policy,
         &route,
-        SystemTime::now(),
+        admin,
     ))
+}
+
+fn finish_preflight(
+    expected: &PoolBindingView<'_>,
+    repository_trust: &super::repository::RepositoryPoolTrustEvidence,
+    group_policy: &crate::OrganizationRunnerGroupPolicyEvidence,
+    route: &crate::ActionsServiceScaleSetRoute,
+    admin: crate::OrganizationDiscoveryAdmin,
+) -> PoolAdmissionPreflight {
+    let evidence = verify_organization_pool_policy(
+        expected,
+        repository_trust,
+        group_policy,
+        route,
+        SystemTime::now(),
+    );
+    match evidence {
+        PoolAdmissionEvidence::Verified(proof) => {
+            match VerifiedPoolSessionAdmin::from_organization_route(admin, route, &proof) {
+                Ok(verified_admin) => PoolAdmissionPreflight {
+                    evidence: PoolAdmissionEvidence::Verified(proof),
+                    verified_admin: Some(verified_admin),
+                },
+                Err(_) => PoolAdmissionPreflight::without_admin(PoolAdmissionEvidence::Rejected(
+                    PolicyMismatch::PoolBindingMismatch,
+                )),
+            }
+        }
+        evidence => PoolAdmissionPreflight::without_admin(evidence),
+    }
 }
 
 fn validate_preflight_input(
@@ -168,7 +291,13 @@ async fn read_existing_route<T, I>(
     scale_set_name: &str,
     controller_token: &str,
     intents: &mut I,
-) -> Result<Option<crate::ActionsServiceScaleSetRoute>, SessionError>
+) -> Result<
+    Option<(
+        crate::ActionsServiceScaleSetRoute,
+        crate::OrganizationDiscoveryAdmin,
+    )>,
+    SessionError,
+>
 where
     T: AsyncDiscoveryTransport + ?Sized,
     I: AsyncScopedDiscoveryIntentStore + ?Sized,
@@ -188,7 +317,7 @@ where
         ActionsServiceRouteLookup::Found(route)
             if route.organization().eq_ignore_ascii_case(organization) =>
         {
-            Ok(Some(route))
+            Ok(Some((route, admin)))
         }
         ActionsServiceRouteLookup::Found(_)
         | ActionsServiceRouteLookup::GroupNotFound

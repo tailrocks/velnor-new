@@ -33,6 +33,24 @@ fn verifies_exact_event_tuple_without_binding_request_to_runner() {
 }
 
 #[test]
+fn session_driver_context_survives_trust_verification() {
+    static NO_REUSABLES: [ReusableWorkflowRuleView<'static>; 0] = [];
+    let rule = valid_rule(&NO_REUSABLES);
+    let policy = policy_view(std::slice::from_ref(&rule));
+    let mut events = batch(17, &[offer(91, Some(TRUSTED_WORKFLOW_REF))]);
+    assert!(events.bind_session_context("session-abc", 3));
+
+    let JobTrustEvidence::Verified(verified) = verify_job_offer(&events, 0, &valid_run(), &policy)
+    else {
+        panic!("expected verified trust tuple");
+    };
+    assert_eq!(verified.source_session_id(), Some("session-abc"));
+    assert_eq!(verified.source_scale_set_id(), Some(3));
+    assert_eq!(verified.message_id(), 17);
+    assert_eq!(verified.runner_request_id(), 91);
+}
+
+#[test]
 fn rest_path_keeps_full_ref_while_coarse_allowlist_remains_bare_path() {
     static NO_REUSABLES: [ReusableWorkflowRuleView<'static>; 0] = [];
     let rule = valid_rule(&NO_REUSABLES);

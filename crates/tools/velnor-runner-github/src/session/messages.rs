@@ -1,5 +1,6 @@
 //! `GET` the message queue. HTTP 202 is empty and is not deleted.
 
+use crate::policy::{PollWithTrust, parse_poll_with_trust};
 use crate::refresh::{RefreshGate, StatusClass};
 use crate::{Poll, WireError, parse_poll};
 
@@ -50,6 +51,54 @@ where
     match answer.class {
         StatusClass::EmptyPoll => Ok(Poll::Empty),
         StatusClass::Ok => parse_body(answer.status, answer.body()),
+        other => Err(reject(other)),
+    }
+}
+
+/// Poll the same queue endpoint while preserving each event's raw
+/// `jobWorkflowRef` beside that event.
+///
+/// Request construction, the cursor/capacity headers, and one-shot 401 refresh
+/// are identical to [`poll`]. The returned trust batch does not authorize any
+/// job effect; callers must evaluate each event against the Actions run and
+/// configured trust policy before Acquire/JIT.
+///
+/// # Errors
+///
+/// Uses the same transport/status errors as [`poll`], plus the pinned trust
+/// envelope decoder rejects malformed or misaligned event metadata.
+pub fn poll_with_trust<T, R>(
+    transport: &mut T,
+    queue_path: &str,
+    cursor: i64,
+    total_capacity: u32,
+    queue_token: &str,
+    gate: &RefreshGate,
+    refresh: R,
+) -> Result<PollWithTrust, SessionError>
+where
+    T: Transport + ?Sized,
+    R: FnMut(&mut T, &mut SessionRequest) -> Result<(), SessionError>,
+{
+    let mut request = SessionRequest {
+        method: Method::Get,
+        path: queue_path.to_owned(),
+        query: Some(poll_query(cursor)),
+        headers: vec![
+            accept_preview(),
+            bearer(queue_token)?,
+            user_agent(),
+            capacity_pair(total_capacity),
+        ],
+        body: Vec::new(),
+    };
+    let answer = attempt(transport, &mut request, gate, refresh)?;
+    match answer.class {
+        StatusClass::EmptyPoll => Ok(PollWithTrust::Empty),
+        StatusClass::Ok => {
+            let text = std::str::from_utf8(answer.body()).map_err(|_| WireError::Malformed)?;
+            parse_poll_with_trust(answer.status, text).map_err(SessionError::from)
+        }
         other => Err(reject(other)),
     }
 }

@@ -14,7 +14,11 @@ use super::types::{
 };
 pub use evidence::{PoolAdmissionEvidence, VerifiedPoolPolicy};
 pub use organization::verify_organization_pool_policy;
-pub use preflight::preflight_organization_pool_admission_async;
+pub use preflight::{
+    PoolAdmissionPreflight, preflight_organization_pool_admission_async,
+    preflight_organization_pool_admission_with_admin_async,
+    preflight_pool_admission_with_admin_async,
+};
 pub use repository::{
     RepositoryPoolTrustEvidence, read_repository_pool_trust, read_repository_pool_trust_async,
 };

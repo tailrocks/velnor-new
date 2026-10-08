@@ -241,10 +241,12 @@ where
     T: DiscoveryTransport + ?Sized,
 {
     transport.bind_github_api_origin()?;
+    let repository_id = token.repository_id;
+    let repository_full_name = token.repository_full_name.clone();
     let intent_id = intent.persist_before(
         DiscoveryCredentialStep::ActionsAdminExchange,
-        token.repository_id,
-        &token.repository_full_name,
+        repository_id,
+        &repository_full_name,
     )?;
     let result = admin_connection_once(
         transport,
@@ -263,7 +265,7 @@ where
     .map_err(uncertain_issued_credential);
     drop(token);
     let connection = record_discovery_outcome(intent, intent_id, result)?;
-    Ok(RepositoryDiscoveryAdmin::new(connection))
+    RepositoryDiscoveryAdmin::new(connection, repository_id, repository_full_name)
 }
 
 fn record_discovery_outcome<T>(

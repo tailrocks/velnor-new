@@ -11,8 +11,10 @@ mod wire;
 
 pub use job::{JobTrustEvidence, VerifiedJobTrust, verify_job_offer};
 pub use pool::{
-    PoolAdmissionEvidence, RepositoryPoolTrustEvidence, VerifiedPoolPolicy,
-    preflight_organization_pool_admission_async, read_repository_pool_trust,
+    PoolAdmissionEvidence, PoolAdmissionPreflight, RepositoryPoolTrustEvidence, VerifiedPoolPolicy,
+    preflight_organization_pool_admission_async,
+    preflight_organization_pool_admission_with_admin_async,
+    preflight_pool_admission_with_admin_async, read_repository_pool_trust,
     read_repository_pool_trust_async, verify_organization_pool_policy, verify_pool_policy,
 };
 pub use types::{

@@ -18,6 +18,8 @@ use std::{
 use velnor_runner_github::policy::{
     PoolAdmissionEvidence, PoolBindingView, PoolRegistrationScopeView, RunnerImageIdentityView,
     preflight_organization_pool_admission_async,
+    preflight_organization_pool_admission_with_admin_async,
+    preflight_pool_admission_with_admin_async,
 };
 use velnor_runner_github::{
     ActionsServiceRouteLookup, AsyncDiscoveryIntentStore, AsyncDiscoveryTransport,
