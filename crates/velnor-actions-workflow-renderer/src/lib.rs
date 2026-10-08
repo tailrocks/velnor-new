@@ -50,6 +50,7 @@ pub mod release_tree;
 pub mod render;
 mod render_cache_files;
 mod runs_on;
+pub mod rust_binary_release;
 pub mod schema2;
 pub mod setup;
 mod step_ids;
@@ -92,6 +93,7 @@ pub use closure::{
 pub use commands::{
     check_no_bare_cargo, join_argv_for_run, quote_run_arg, validate_command_argv, validate_env,
 };
+pub use error::RenderError;
 pub use guard::{SafeTreePath, check_no_symlink, join_within_root, validate_tree_path};
 pub use marker::{
     MARKER_PREFIX, MARKER_SUFFIX, check_first_line, marker_for_version, validate_version,
@@ -143,8 +145,6 @@ pub use verification_jobs::{
 };
 pub use workflow_size::MAX_WORKFLOW_BYTES;
 pub use yaml::{Yaml, quote_scalar, render_yaml};
-
-pub use error::RenderError;
 
 /// Renderer implementation version (typed Gate-2 renderer).
 pub const RENDERER_VERSION: u32 = 2;

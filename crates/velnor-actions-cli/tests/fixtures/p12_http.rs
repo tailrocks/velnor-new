@@ -170,7 +170,7 @@ fn identity_http_response_is_parsed() -> Result<(), Box<dyn Error>> {
         ("p12-http-identity", &[][..]),
         ("p12-http-identity-token", &["identity"]),
     ] {
-        let run = run_http_probe(prefix, encoding, br#"{"tag_name":"v2026.9.16"}"#)?;
+        let run = run_http_probe(prefix, encoding, br#"{"tag_name":"v2026.10.4"}"#)?;
         assert_mise_pass(&run);
     }
     Ok(())
@@ -178,7 +178,7 @@ fn identity_http_response_is_parsed() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn gzip_http_response_is_parsed() -> Result<(), Box<dyn Error>> {
-    let body = gzip_bytes(br#"{"tag_name":"v2026.9.16"}"#)?;
+    let body = gzip_bytes(br#"{"tag_name":"v2026.10.4"}"#)?;
     let run = run_http_probe("p12-http-gzip", &["gzip"], &body)?;
     assert_mise_pass(&run);
     Ok(())
@@ -189,7 +189,7 @@ fn unsupported_content_encoding_fails_closed() -> Result<(), Box<dyn Error>> {
     let run = run_http_probe(
         "p12-http-unsupported",
         &["br"],
-        br#"{"tag_name":"v2026.9.16"}"#,
+        br#"{"tag_name":"v2026.10.4"}"#,
     )?;
     harness::assert_fail(&run, "unsupported Content-Encoding");
     assert!(!mise_probe_passed(&run));
@@ -202,7 +202,7 @@ fn stacked_and_duplicate_content_encodings_fail_closed() -> Result<(), Box<dyn E
         ("p12-http-stacked-encoding", &["gzip, identity"][..]),
         ("p12-http-duplicate-encoding", &["gzip", "gzip"][..]),
     ] {
-        let run = run_http_probe(prefix, encodings, br#"{"tag_name":"v2026.9.16"}"#)?;
+        let run = run_http_probe(prefix, encodings, br#"{"tag_name":"v2026.10.4"}"#)?;
         harness::assert_fail(&run, "unsupported Content-Encoding");
         assert!(!mise_probe_passed(&run));
     }
@@ -211,7 +211,7 @@ fn stacked_and_duplicate_content_encodings_fail_closed() -> Result<(), Box<dyn E
 
 #[test]
 fn malformed_and_truncated_gzip_fail_closed() -> Result<(), Box<dyn Error>> {
-    let mut truncated = gzip_bytes(br#"{"tag_name":"v2026.9.16"}"#)?;
+    let mut truncated = gzip_bytes(br#"{"tag_name":"v2026.10.4"}"#)?;
     truncated.truncate(truncated.len() - 4);
     for (prefix, body) in [
         ("p12-http-malformed", b"not gzip".to_vec()),

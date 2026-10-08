@@ -11,9 +11,9 @@ fn spec() -> FreshnessSpec {
         runs_on: "ubuntu-26.04".to_owned(),
         checkout_uses: CHECKOUT.to_owned(),
         mise_setup: MiseSetup {
-            uses: "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5".to_owned(),
-            version: "2026.9.18".to_owned(),
-            sha256: "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4".to_owned(),
+            uses: "jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca".to_owned(),
+            version: "2026.10.4".to_owned(),
+            sha256: "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75".to_owned(),
         },
         rust_version: "1.98.1".to_owned(),
         generator_version: "0.1.0".to_owned(),
@@ -57,15 +57,15 @@ fn renders_schedule_only_read_only_probe() {
         "bounded probe:\n{yaml}"
     );
     assert!(
-        yaml.contains("uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5"),
+        yaml.contains("uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca"),
         "pinned Mise setup:\n{yaml}"
     );
     assert!(
-        yaml.contains("version: 2026.9.18"),
+        yaml.contains("version: 2026.10.4"),
         "current Mise release pin:\n{yaml}"
     );
     assert!(
-        yaml.contains("sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4"),
+        yaml.contains("sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75"),
         "current Mise binary digest:\n{yaml}"
     );
     assert!(

@@ -271,7 +271,9 @@ pub(crate) fn minor(version: &str) -> String {
 fn rust_version_tracks_toolchain() -> Result<(), Box<dyn Error>> {
     let catalog_src = read("crates/velnor-actions-mise/src/catalog.rs")?;
     let catalog = quoted_value(&catalog_src, "RUST_VERSION")?;
-    let mise = quoted_value(&read("mise.toml")?, "rust = ")?;
+    let policy = quoted_value(&read(".velnor/version-policy.toml")?, "rust = ")?;
+    assert_eq!(catalog, policy, "generator and policy compiler pin drift");
+    assert_eq!(minor(&catalog), "1.98", "generator compiler pin drift");
     for workspace_root in WORKSPACE_ROOTS {
         let path = if workspace_root.is_empty() {
             "Cargo.toml".to_owned()
@@ -279,8 +281,7 @@ fn rust_version_tracks_toolchain() -> Result<(), Box<dyn Error>> {
             format!("{workspace_root}/Cargo.toml")
         };
         let workspace = quoted_value(&read(&path)?, "rust-version")?;
-        assert_eq!(minor(&workspace), minor(&catalog), "{path} catalog drift");
-        assert_eq!(minor(&workspace), minor(&mise), "{path} mise drift");
+        assert_eq!(minor(&workspace), minor(&catalog), "{path} MSRV drift");
     }
     Ok(())
 }

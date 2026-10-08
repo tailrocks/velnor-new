@@ -111,9 +111,16 @@ advance only through reviewed update sets, and the real-root
 `--check-upstream` is the bounded probe that the freshness job runs: one GET per
 row (10 s timeout, independent 512 KiB encoded and decompressed caps, small
 fixed row count). It accepts identity or gzip encoding; unsupported encodings,
-malformed gzip, and either cap overflow fail closed. It parses only
-GitHub-releases tags, `crates.io` `max_version`, and the rust channel manifest's
-`[pkg.rust]` version. It writes nothing. Every probe row
+malformed gzip, and either cap overflow fail closed. For Rust's stable channel
+manifest, the probe uses its advertised byte-range support to request only the
+first 128 KiB with identity encoding. It requires HTTP 206, an exact
+`Content-Range`, and the exact requested body length; the Rust version table
+must be present in that prefix. A server that ignores ranges, returns a
+different range, or moves the version table beyond the prefix fails closed.
+This bounds the live 943,486-byte manifest without increasing the generic
+response cap. The probe parses only GitHub-release tags, `crates.io`
+`max_version`, and the rust channel manifest's `[pkg.rust]` version. It writes
+nothing. Every probe row
 records its source URL and check timestamp; stale pins and lookup
 failures fail as rows — signal for the next update set, not a build
 gate. A `lookup_failed` row is fail-closed signal, never current:

@@ -1,7 +1,7 @@
 //! Typed release config cases (synthetic demo data only).
 use std::collections::BTreeMap;
 use velnor_actions_contract::config::{BootstrapRelease, ReleaseAuthentication, RustReleaseConfig};
-use velnor_actions_contract::{ContractError, canonical_json_str};
+use velnor_actions_contract::{ContractError, RustBinaryReleaseConfig, canonical_json_str};
 
 const FILE: &str = ".velnor/config.toml";
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -248,6 +248,7 @@ fn release_wired_into_stack_validation_with_key_paths() {
         test_runner: None,
         run_ignored: None,
         release: valid_release(),
+        binary_release: RustBinaryReleaseConfig::default(),
     };
     assert_eq!(stack.validate(FILE), Ok(()));
     let mut bad = stack.clone();

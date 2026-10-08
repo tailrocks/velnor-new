@@ -70,8 +70,8 @@ fn decoded_rust_string_escapes_match_compiled_values() -> Result<(), Box<dyn Err
     harness::mutate(
         &fixture.dir,
         CATALOG,
-        "MISE_VERSION: &str = \"2026.9.16\"",
-        "MISE_VERSION: &str = \"2026\\x2e9.16\"",
+        "MISE_VERSION: &str = \"2026.10.4\"",
+        "MISE_VERSION: &str = \"2026\\x2e10.4\"",
     )?;
     harness::mutate(
         &fixture.dir,
@@ -92,7 +92,7 @@ fn duplicate_conditional_and_expression_pins_fail_closed() -> Result<(), Box<dyn
     harness::write(
         &duplicate.dir,
         CATALOG,
-        &format!("{source}\npub const MISE_VERSION: &str = \"2026.9.16\";\n"),
+        &format!("{source}\npub const MISE_VERSION: &str = \"2026.10.4\";\n"),
     )?;
     let run = harness::run_script(&duplicate.dir, &[])?;
     harness::assert_fail(&run, "duplicate const MISE_VERSION");
@@ -124,7 +124,7 @@ fn duplicate_conditional_and_expression_pins_fail_closed() -> Result<(), Box<dyn
     harness::mutate(
         &expression.dir,
         CATALOG,
-        "MISE_VERSION: &str = \"2026.9.16\"",
+        "MISE_VERSION: &str = \"2026.10.4\"",
         "MISE_VERSION: &str = concat!(\"2026\", \".9.16\")",
     )?;
     let run = harness::run_script(&expression.dir, &[])?;
@@ -139,8 +139,8 @@ fn raw_string_literal_matches_compiled_value() -> Result<(), Box<dyn Error>> {
     harness::mutate(
         &fixture.dir,
         CATALOG,
-        "MISE_VERSION: &str = \"2026.9.16\"",
-        "MISE_VERSION: &str = r###\"2026.9.16\"###",
+        "MISE_VERSION: &str = \"2026.10.4\"",
+        "MISE_VERSION: &str = r###\"2026.10.4\"###",
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_clean(&run);
@@ -154,7 +154,7 @@ fn invalid_rust_string_escape_fails_closed() -> Result<(), Box<dyn Error>> {
     harness::mutate(
         &fixture.dir,
         CATALOG,
-        "MISE_VERSION: &str = \"2026.9.16\"",
+        "MISE_VERSION: &str = \"2026.10.4\"",
         "MISE_VERSION: &str = \"2026\\xFF.9.16\"",
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;

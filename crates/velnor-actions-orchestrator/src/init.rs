@@ -137,13 +137,21 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # test_runner = "cargo_test"       # Sticky override: "cargo_test" (default) or "cargo_nextest". Without it, .config/nextest.toml selects Nextest ([profile.ci] when declared, else the documented default profile).
 # Do not put free-form Mise commands in credential-bearing Rust jobs.
 
+# Optional scheduled GitHub Release for one Cargo binary (consumer-v1 only).
+# [stacks.rust.binary_release]
+# enabled = true
+# manifest_path = "Cargo.toml"
+# package = "demo-cli"
+# binary = "demo-cli"                # Omit when the binary target matches the package.
+# source_commit_env = "DEMO_SOURCE_COMMIT" # Optional compile-time source SHA variable.
+
 # Optional repository-relative POSIX globs excluded before detector input.
 # [discovery]
 # exclude = []
 
 # Optional exact action-pin overrides. Omitted names use Velnor's bundled latest pins.
 # [actions.overrides]
-# "jdx/mise-action" = { version = "v5.0.0", sha = "9149ea85001c7435d5a66bb127d6a1b6227cb0a5" }
+# "jdx/mise-action" = { version = "v5.1.1", sha = "2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca" }
 # "actions/checkout" = { version = "v7.0.1", sha = "3d3c42e5aac5ba805825da76410c181273ba90b1" }
 # "actions/cache/restore" = { version = "v6.1.0", sha = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9" }
 # "actions/cache/save" = { version = "v6.1.0", sha = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9" }

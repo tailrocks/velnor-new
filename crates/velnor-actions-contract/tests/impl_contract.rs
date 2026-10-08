@@ -2,8 +2,8 @@
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
     ActionPin, ContractError, GeneratorBinary, GeneratorLock, GeneratorValidation, LockedGenerator,
-    MiseBootstrap, ReleaseManifest, SUPPORTED_TARGETS, TargetRecord, WorkflowPolicy,
-    asset_filename,
+    MiseBootstrap, ReleaseManifest, RustBinaryReleaseConfig, SUPPORTED_TARGETS, TargetRecord,
+    WorkflowPolicy, asset_filename,
 };
 
 #[test]
@@ -50,6 +50,7 @@ fn config_validation_reports_key_paths() {
                 test_runner: None,
                 run_ignored: None,
                 release: RustReleaseConfig::default(),
+                binary_release: RustBinaryReleaseConfig::default(),
             }),
             tofu: None,
         },
@@ -196,6 +197,7 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
                 test_runner: None,
                 run_ignored: None,
                 release: RustReleaseConfig::default(),
+                binary_release: RustBinaryReleaseConfig::default(),
             }),
             tofu: None,
         },

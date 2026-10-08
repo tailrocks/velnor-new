@@ -1,5 +1,18 @@
 # T04 Rust-only golden evidence (Phase A behavior bracket)
 
+## Toolchain refresh (2026-10-08)
+
+The toolchain update tracked by issue #6 refreshed the five checked-in case
+trees from the current Velnor CLI. `scripts/capture-opentofu-goldens.sh capture`
+completed with exit 0; the dogfood preview was byte-identical to the generated
+root `.github` tree. The capture ran with Mise 2026.10.4 and Rust 1.98.1, and
+`MANIFEST.sha256` was regenerated with the case outputs. Mise action v5.1.1 is
+used at reviewed commit `2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca`; this
+current stable release supersedes issue #6's earlier v5.0.1 target.
+
+The 2026-10-05 checkpoint and capture environment below record the earlier
+source state and remain as historical evidence.
+
 ## PR41 + PR46 integration checkpoint (2026-10-05)
 
 After syncing main `2d9bca8` (including the PR71 generator correction and the
@@ -93,9 +106,9 @@ Velnor product and its matching manifest.
 
 ## Capture environment
 
-- `cargo 1.98.1`, `rustc 1.98.1` (pinned `mise.toml`), `--locked` builds.
-- Binary `target/debug/velnor-actions` sha256 `90d43fabd3d78f3d64a2ff35cb71992c700f4c01e6e7866a286473190341c619` (local
-  build; digests embedding the host triple are normalized by harness).
+- `mise 2026.10.4`, `cargo 1.98.1`, `rustc 1.98.1` (`--locked` build).
+- Binary `target/debug/velnor-actions` sha256 `84733ea0ae8b9f3d73acb5ba658906a7cf4e46deaded85b812596629a5e4438f` (local
+  debug build of the captured source; digests embedding the host triple are normalized by harness).
 - Fixture maintenance in this commit: `fixtures/nested/Cargo.lock`
   regenerated (`cargo generate-lockfile --offline`) — the stale lock made
   CLI `plan` fail `preparation_incomplete` before any analysis; no test

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run one local Cargo command with the exact repository Rust pin and a private target.
+# Run one local Cargo command with the Velnor policy Rust pin and a private target.
 set -euo pipefail
 
 usage() {
@@ -59,12 +59,15 @@ read_rust_pin() {
   ' "$1"
 }
 
-MISE_RUST_PIN="$(read_rust_pin "$ROOT/mise.toml")" || fail "mise.toml has no exact Rust pin"
+LOCAL_RUST_PIN="$(read_rust_pin "$ROOT/mise.toml")" || LOCAL_RUST_PIN="<missing>"
 POLICY_RUST_PIN="$(read_rust_pin "$ROOT/.velnor/version-policy.toml")" || fail "version policy has no exact Rust pin"
-if [[ "$MISE_RUST_PIN" != "$POLICY_RUST_PIN" || "$MISE_RUST_PIN" != 1.98.1 ]]; then
-  fail "Rust pins differ or changed from the approved 1.98.1 local recipe"
+if [[ ! "$POLICY_RUST_PIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  fail "version policy Rust pin is not an exact version: $POLICY_RUST_PIN"
 fi
-RUST_VERSION="$MISE_RUST_PIN"
+RUST_VERSION="$POLICY_RUST_PIN"
+if [[ "$LOCAL_RUST_PIN" != "$POLICY_RUST_PIN" ]]; then
+  echo "local-cargo: warning: mise.toml Rust $LOCAL_RUST_PIN differs from Velnor policy Rust $POLICY_RUST_PIN; using policy" >&2
+fi
 
 physical_path() {
   python3 -c 'import os, sys; print(os.path.realpath(os.path.abspath(sys.argv[1])))' "$1"

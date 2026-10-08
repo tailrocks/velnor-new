@@ -7,10 +7,10 @@ fn source() -> ApprovedOwnedSource {
     let base = "https://github.com/tailrocks/velnor-new/releases/download/fixture-owned-source";
     ApprovedOwnedSource {
         tool: "mise".to_owned(),
-        version: "2026.10.0-owned-cargo-wrapper".to_owned(),
+        version: "2026.10.4-owned-cargo-wrapper".to_owned(),
         source_commit: "1".repeat(40),
         source_tree: "2".repeat(40),
-        upstream_base_commit: "bc11f90c74eba23bf0d7350efb540e62fb7d9ffd".to_owned(),
+        upstream_base_commit: "96cca90d3e55519a47cffa0cb99baa4c3d3ecca3".to_owned(),
         archive_url: format!("{base}/source.tar"),
         archive_sha256: "4".repeat(64),
         receipt_url: format!("{base}/source-receipt.json"),
@@ -26,7 +26,7 @@ fn source() -> ApprovedOwnedSource {
 fn admits_complete_owned_source_and_rejects_nonportable_license_aliases() {
     let mut value = source();
     assert!(value.validate().is_ok());
-    value.version = "2026.10.0-velnor.1".to_owned();
+    value.version = "2026.10.4-velnor.1".to_owned();
     assert!(value.validate().is_ok());
     for path in [".Git/config", "LICENSE-λ", "dir//LICENSE", "dir/./LICENSE"] {
         let mut value = source();

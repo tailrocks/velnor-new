@@ -12,6 +12,7 @@ use velnor_actions_contract::{
 };
 use velnor_actions_workflow_renderer::release_tree::RELEASE_TREE_PATHS;
 use velnor_actions_workflow_renderer::render::RenderedTree;
+use velnor_actions_workflow_renderer::rust_binary_release::BINARY_RELEASE_WORKFLOW_PATH;
 
 use crate::OrchestratorError;
 
@@ -172,6 +173,7 @@ fn generator_owned(relative: &Path) -> bool {
             .iter()
             .map(|format| format.path)
             .chain(RELEASE_TREE_PATHS.iter().copied())
+            .chain(std::iter::once(BINARY_RELEASE_WORKFLOW_PATH))
             .any(|path| {
                 Path::new(path)
                     .strip_prefix(".github")

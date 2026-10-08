@@ -1,6 +1,6 @@
 # Velnor
 
-Velnor Actions is proposed as a stack-generic GitHub Actions workflow generator. It scans repositories for every registered stack and plans all detected, supported stacks unless `.velnor/config.toml` excludes them. V1 registers only the Rust/Cargo adapter; TypeScript, Bun, and other stacks can be added later through dedicated adapters. Rust analysis, Mise integration, generic workflow rendering, orchestration, and CLI are separate crates. Gates 0–8 are implemented on branch `docs/velnor-actions-spec` (unmerged; records in `docs/implemented/`, generated tree is 15 jobs in `.github/workflows/ci.yml` plus the scheduled `.github/workflows/freshness.yml` probe).
+Velnor Actions is a stack-generic GitHub Actions workflow generator. It scans repositories for every registered stack and plans all detected, supported stacks unless `.velnor/config.toml` excludes them. V1 registers the Rust/Cargo adapter; TypeScript, Bun, and other stacks can be added later through dedicated adapters. Rust analysis, Mise integration, generic workflow rendering, orchestration, and CLI are separate crates. The V1 implementation and its release records are on `main`; the generated tree includes `.github/workflows/ci.yml` and the scheduled `.github/workflows/freshness.yml` probe.
 
 See the [documentation index](docs/README.md) for the proposed V1 specification, deferred runner roadmap, and implemented status.
 
@@ -22,10 +22,13 @@ prints concise text instead of YAML, and writes no repository files.
 
 ## Local build from a clean checkout
 
-No ambient Cargo, Rust, or MBX is required: `mise.toml` pins every tool
-(Rust 1.98.1, MBX 1.21.1, Nextest 0.9.146) and `mise install` resolves them.
-Historical clean-checkout proof, 2026-10-01 at `34550e8` in a fresh clone with `cargo`/`mbx` absent
-from `PATH`:
+No ambient Cargo, Rust, or MBX is required: `mise.toml` pins the local
+developer tool selection (Rust 1.98.1, MBX 1.21.1, Nextest 0.9.146), and
+`mise install` resolves those versions. Velnor's CI toolchain is owned by
+`.velnor/version-policy.toml` and the compiled catalog; it currently uses
+Rust 1.98.1 and Nextest 0.9.148 while the workspace MSRV remains Rust 1.98.
+Historical clean-checkout proof, 2026-10-01 at `34550e8` in a fresh clone
+with `cargo`/`mbx` absent from `PATH`:
 
 ```sh
 git clone https://github.com/tailrocks/velnor-new.git
@@ -40,10 +43,15 @@ mise exec -- cargo build --locked -p velnor-actions-cli
 diff -r .github /private/tmp/velnor-preview/.github  # no output: preview matches
 ```
 
-Retained tool pins on 2026-10-05: Mise 2026.9.18 under hold #6 and MBX
-1.21.1 under hold #29. The MBX macOS ARM64 binary passed an isolated Rust
-1.98.1 build/test and cache export/import/rebuild fixture; the historical
-output above is unchanged.
+Current Velnor CI tool pins checked on 2026-10-08: Mise 2026.10.4,
+Rust 1.98.1, Nextest 0.9.148, and release-plz 0.3.170. Issue [#6](https://github.com/tailrocks/velnor-new/issues/6)
+proposes Rust 1.99.0, but this update keeps the selected toolchain aligned
+with the declared Rust 1.98 MSRV while a separate compatibility decision is
+pending. `mise.toml` remains a read-only local developer input.
+The workflow pins `jdx/mise-action` v5.1.1 to reviewed commit
+`2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca`; the action's
+`persist_github_token` default is false, and Velnor leaves it unset. This
+supersedes issue #6's earlier v5.0.1 target.
 
 Notes: `plan`/`generate` require the checkout's origin to be
 `tailrocks/velnor-new` (a local-path clone is identity-rejected until its
@@ -62,18 +70,18 @@ asset per supported target plus a manifest with each target's exact asset
 URL and SHA-256 digest; generated consumer workflows download that exact
 asset and verify its digest before invoking it.
 
-No official release exists yet (only the `seed/velnor-actions-0.1.0*`
-bootstrap seed tags — 8 tags, `0.1.0` and `0.1.0-2` through `0.1.0-8`,
-none an official release). Until one does, build
-from source on this branch. Version-bound seed manifests remain accepted
-as review-gated bootstrap inputs on the consumer path until the first
-official release supersedes them. A source build fails consumer-policy
-generation by design (`consumer_requires_release_install`); it never emits
-an unverified download URL or a placeholder digest. Velnor's own
-repository instead uses the reserved `velnor-repository-v1` policy;
-`.velnor/generator.lock` does not exist yet (BOOT-3.4 NEEDS-HUMAN —
-seed creates it), so the lock half of the bootstrap cycle is future
-work, not a present claim.
+The official `v0.1.4` CLI release is published from main commit
+`d3590d321e51f7b99bfb0a92c11d3d6eb7af61cd`, with Linux x86_64, macOS
+ARM64, and macOS x86_64 assets bound by its release manifest. This branch
+prepares `v0.1.5` with the Rust binary-release workflow; consumers can use
+that feature after the new version is published. Version-bound seed
+manifests remain accepted only as review-gated bootstrap inputs for the
+pre-release path. A source build fails consumer-policy generation by
+design (`consumer_requires_release_install`); it never emits an unverified
+download URL or a placeholder digest. Velnor's own repository instead uses
+the reserved `velnor-repository-v1` policy; `.velnor/generator.lock` does
+not exist yet (BOOT-3.4 NEEDS-HUMAN — seed creates it), so the lock half of
+the bootstrap cycle remains future work.
 
 ## Proposed V1 direction
 

@@ -124,7 +124,7 @@ fn coordinator_payload_equals_release_argv_after_separator() {
     assert!(
         argv[..separator]
             .iter()
-            .any(|arg| arg == "release-plz@0.3.169"),
+            .any(|arg| arg == "release-plz@0.3.170"),
         "pinned coordinator before --"
     );
     assert!(
@@ -132,5 +132,5 @@ fn coordinator_payload_equals_release_argv_after_separator() {
         "pinned rust before --"
     );
     assert_eq!(&argv[separator + 1..], request.release_argv().as_slice());
-    assert_eq!(catalog.version(PinnedTool::ReleasePlz), "0.3.169");
+    assert_eq!(catalog.version(PinnedTool::ReleasePlz), "0.3.170");
 }
