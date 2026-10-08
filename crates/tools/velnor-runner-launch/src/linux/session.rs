@@ -3,7 +3,7 @@
 use std::time::{Duration, Instant};
 
 use tokio::sync::watch;
-use tokio::time::{Instant as TokioInstant, sleep, timeout_at};
+use tokio::time::{Instant as TokioInstant, timeout_at};
 use velnor_runner_github::policy::PollWithTrust;
 use velnor_runner_github::policy::PoolBinding;
 use velnor_runner_github::{RefreshGate, SessionCloseOutcome};
@@ -20,9 +20,15 @@ mod create;
 mod cutoff;
 mod deadline_transport;
 mod offers;
+mod poll_retry;
+#[cfg(test)]
+mod poll_retry_tests;
 mod protocol;
 pub(super) use cutoff::{DispatchFence, observe_cutoff_before_deadline};
 pub(super) use deadline_transport::{CancelDispatchOnDrop, DeadlineBoundTransport};
+use poll_retry::{
+    PollAttempt, SessionPollIo, classify_poll_result, poll_until_delivery, wait_before_next_poll,
+};
 pub(in crate::linux::session) use protocol::protocol_call;
 pub(in crate::linux::session) use protocol::{Protocol, protocol_read};
 
@@ -57,9 +63,19 @@ pub(super) async fn drive_session(
     };
     let mut cursor = 0_i64;
     loop {
-        let Some(poll) = poll_once(context, journal, active, cursor, shutdown, cutoff).await else {
-            return;
+        // Advance the cursor only after a delivered batch; uncertain retries
+        // therefore issue the same side-effect-free queue read.
+        let poll = {
+            let mut io = SessionPollIo {
+                context,
+                journal,
+                active,
+                shutdown,
+                cutoff,
+            };
+            poll_until_delivery(&mut io, cursor).await
         };
+        let Some(poll) = poll else { return };
         match poll {
             PollWithTrust::Empty => {
                 if cutoff.is_some()
@@ -68,7 +84,14 @@ pub(super) async fn drive_session(
                 {
                     return;
                 }
-                wait_after_empty_poll(context, journal, shutdown, cutoff).await;
+                let _ = wait_before_next_poll(
+                    journal,
+                    shutdown,
+                    cutoff,
+                    context.drain_timeout(),
+                    SIGNAL_POLL,
+                )
+                .await;
             }
             PollWithTrust::Batch(batch) => {
                 cursor = batch.message_id();
@@ -109,10 +132,10 @@ async fn poll_once(
     cursor: i64,
     shutdown: &mut watch::Receiver<Option<Instant>>,
     cutoff: &mut Option<Instant>,
-) -> Option<PollWithTrust> {
+) -> PollAttempt {
     observe_cutoff(context, journal, shutdown, cutoff).await;
     if cutoff.is_some_and(|deadline| Instant::now() >= deadline) {
-        return None;
+        return PollAttempt::Terminal;
     }
     let max_jobs = context.max_jobs.get();
     let dispatch = DispatchFence::new();
@@ -123,13 +146,14 @@ async fn poll_once(
         *cutoff,
         move |protocol, transport| {
             let gate = RefreshGate::new();
-            protocol.admin.poll_with_trust(
+            let result = protocol.admin.poll_with_trust(
                 transport,
                 &mut protocol.session,
                 cursor,
                 max_jobs,
                 &gate,
-            )
+            );
+            Ok(classify_poll_result(result, &gate))
         },
     );
     let mut phase_gate = ShutdownGate {
@@ -146,31 +170,7 @@ async fn poll_once(
     )
     .await;
     observe_cutoff(context, journal, phase_gate.receiver, phase_gate.cutoff).await;
-    poll.and_then(Result::ok)
-}
-
-async fn wait_after_empty_poll(
-    context: &LinuxLaunchContext,
-    journal: &Journal,
-    shutdown: &mut watch::Receiver<Option<Instant>>,
-    cutoff: &mut Option<Instant>,
-) {
-    let phase_deadline = Instant::now()
-        .checked_add(SIGNAL_POLL)
-        .unwrap_or_else(Instant::now);
-    let mut gate = ShutdownGate {
-        receiver: shutdown,
-        cutoff,
-    };
-    let _ = cutoff::bounded_persisting(
-        journal,
-        &mut gate,
-        context.drain_timeout(),
-        Some(phase_deadline),
-        sleep(SIGNAL_POLL),
-    )
-    .await;
-    observe_cutoff(context, journal, gate.receiver, gate.cutoff).await;
+    poll.and_then(Result::ok).unwrap_or(PollAttempt::Terminal)
 }
 
 async fn close_after_cutoff(
