@@ -1,8 +1,11 @@
-# ChainArgos Linux host example. It cannot start until repository/workflow
-# group access is restricted and capacity and drain timeouts are measured.
-# This pairs only the verified Ubuntu 24.04 profile with its matching set name.
-# Do not start unless that exact set exists and group access is restricted.
-# It cannot serve the existing ChainArgos ubuntu-26.04-scale-set lane.
+# Pending ChainArgos Linux host template for the required Ubuntu 26.04 lane.
+# This deliberately names an unsupported profile/set pair: the current Velnor
+# binary has no compiled Ubuntu 26.04 profile and must reject this file. Do not
+# substitute the Ubuntu 24.04 image or infer a profile from a generic label.
+# Activation requires a reviewed compiled profile bound to immutable official
+# runner and DinD image digests, plus measured capacity/drain settings and the
+# live repository/group/workflow trust checks. No image digest can be supplied
+# through this configuration. The workflow path below remains illustrative.
 # Do not put a PAT, GitHub App key, or JIT data in this file.
 schema = 1
 
@@ -11,18 +14,18 @@ repository = "ChainArgos/java-monorepo"
 registration_scope = "repository"
 runner_group_id = 1
 runner_group_name = "Default"
-scale_set_name = "ubuntu-24.04-scale-set"
+scale_set_name = "ubuntu-26.04-scale-set"
 credential_ref = "systemd-credential:github-token"
 
 [trust]
 allowed_repositories = ["ChainArgos/java-monorepo"]
 allowed_events = ["push", "pull_request"]
-# Illustrative only: verify this exact path against the live workflow before activation.
+# Illustrative only: verify the exact path against the live workflow before activation.
 allowed_workflow_paths = [".github/workflows/ci.yml"]
 allow_forks = false
 
 [runner]
-image_profile = "ubuntu-24.04-amd64"
+image_profile = "ubuntu-26.04-amd64"
 
 [host]
 platform = "linux"
