@@ -166,6 +166,45 @@ fn hosted_and_scale_set_cache_setup_stays_in_lane_jobs_before_shared_body() {
     assert!(position(local, "Setup Mise") < position(local, "uses: ./.github/actions/rust-0"));
 }
 
+fn assert_tofu_provider_scope(shared: &super::super::LaneShare, hosted: &str) {
+    let setup_at = hosted
+        .find("uses: ./.github/actions/tofu-provider-prelude-0")
+        .expect("shared provider prelude call");
+    let restore_at = hosted.find("id: tofu-providers").expect("outer restore id");
+    let composite_at = hosted
+        .find("uses: ./.github/actions/rust-0")
+        .expect("shared lane call");
+    let save_at = hosted
+        .find("name: Save Tofu providers")
+        .expect("elected outer save");
+    assert!(setup_at < restore_at && restore_at < composite_at && composite_at < save_at);
+    assert_eq!(
+        hosted
+            .matches("uses: ./.github/actions/tofu-provider-prelude-0")
+            .count(),
+        LOGICAL_JOBS * 2
+    );
+    assert!(hosted.contains("steps.tofu-providers.outputs.cache-key"));
+    assert!(hosted.contains("steps.tofu-providers.outputs.cache-path"));
+
+    let common = shared
+        .files
+        .iter()
+        .find(|file| file.path == ".github/actions/rust-0/action.yml")
+        .expect("shared provider-use action");
+    assert!(common.bytes.contains("name: Init for validate"));
+    assert!(!common.bytes.contains("id: tofu-providers"));
+    assert!(!common.bytes.contains("tofu-provider-admission"));
+    let provider_prelude = shared
+        .files
+        .iter()
+        .find(|file| file.path == ".github/actions/tofu-provider-prelude-0/action.yml")
+        .expect("shared typed setup prefix");
+    assert!(provider_prelude.bytes.contains("shared-prelude"));
+    assert!(!provider_prelude.bytes.contains("id: tofu-providers"));
+    assert_eq!(hosted.matches("id: tofu-providers").count(), 42);
+}
+
 #[test]
 fn noncanonical_hosted_runtime_identity_is_not_peeled() {
     let mut jobs = paired(&[echo_step(0, "shared-body")]);
@@ -301,40 +340,7 @@ fn paired_tofu_restore_output_owner_stays_in_outer_job_scope() {
 
     let shared = share_lanes(&jobs, &ctx()).expect("paired provider lanes share");
     let hosted = render_jobs(&workflow_ir(), &shared, &ctx()).expect("workflow renders");
-    let setup_at = hosted
-        .find("uses: ./.github/actions/tofu-provider-prelude-0")
-        .expect("shared provider prelude call");
-    let restore_at = hosted.find("id: tofu-providers").expect("outer restore id");
-    let composite_at = hosted
-        .find("uses: ./.github/actions/rust-0")
-        .expect("shared lane call");
-    let save_at = hosted
-        .find("name: Save Tofu providers")
-        .expect("elected outer save");
-    assert!(setup_at < restore_at && restore_at < composite_at && composite_at < save_at);
-    assert_eq!(
-        hosted
-            .matches("uses: ./.github/actions/tofu-provider-prelude-0")
-            .count(),
-        LOGICAL_JOBS * 2
-    );
-    assert!(hosted.contains("steps.tofu-providers.outputs.cache-key"));
-    assert!(hosted.contains("steps.tofu-providers.outputs.cache-path"));
-
-    let common = shared
-        .files
-        .iter()
-        .find(|file| file.path == ".github/actions/rust-0/action.yml")
-        .expect("shared provider-use action");
-    assert!(common.bytes.contains("name: Init for validate"));
-    assert!(!common.bytes.contains("id: tofu-providers"));
-    assert!(!common.bytes.contains("tofu-provider-admission"));
-    let provider_prelude = shared
-        .files
-        .iter()
-        .find(|file| file.path == ".github/actions/tofu-provider-prelude-0/action.yml")
-        .expect("shared typed setup prefix");
-    assert!(provider_prelude.bytes.contains("shared-prelude"));
-    assert!(!provider_prelude.bytes.contains("id: tofu-providers"));
-    assert_eq!(hosted.matches("id: tofu-providers").count(), 42);
+    assert_tofu_provider_scope(&shared, &hosted);
 }
+
+mod static_task_tests;

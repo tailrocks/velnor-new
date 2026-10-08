@@ -16,6 +16,7 @@ use velnor_actions_workflow_jobs::RenderContext;
 use velnor_actions_workflow_steps::{RenderError, steps};
 use velnor_actions_workflow_tree::composite::composite_yaml;
 use velnor_actions_workflow_tree::rendered::RenderedFile;
+use velnor_actions_workflow_tree::yaml::Yaml;
 use velnor_actions_workflow_tree::{marker, yaml::render_yaml};
 
 /// Permit the one documented hosted-to-hosted named-check condition refinement.
@@ -135,6 +136,22 @@ fn is_postlude_step(step: &Step) -> bool {
     )
 }
 
+pub(crate) fn task_factor_error(id: &str, reason: &str) -> RenderError {
+    RenderError::InvalidWorkflow(format!("task_composite_{reason}:{id}"))
+}
+
+pub(crate) fn validate_task_job_id(id: &str) -> Result<(), RenderError> {
+    let valid = id.strip_prefix("rust-").is_some_and(|slug| {
+        !slug.is_empty()
+            && slug
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    });
+    valid
+        .then_some(())
+        .ok_or_else(|| task_factor_error(id, "unsafe_job_id"))
+}
+
 /// Replace repeated pre-restore step sequences with one shared local action.
 ///
 /// The provider restore itself remains in each workflow job because the
@@ -232,4 +249,87 @@ pub(crate) fn composite_file(
         path: format!(".github/actions/{logical}/action.yml"),
         bytes,
     })
+}
+
+type MbxStepSplit<'a> = (Vec<Step>, Vec<Step>, Vec<Step>, &'a [Step], &'a [Step]);
+
+pub(crate) fn split_mbx_steps<'a>(
+    hosted_steps: &'a [Step],
+    local_steps: &'a [Step],
+) -> Option<MbxStepSplit<'a>> {
+    let hosted_action = has_mbx_action(hosted_steps);
+    if hosted_action != has_mbx_action(local_steps) {
+        return None;
+    }
+    if !hosted_action {
+        return Some((
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            hosted_steps,
+            local_steps,
+        ));
+    }
+    let hosted_at = crate::lane_share_sections::mbx_prelude_index(hosted_steps)?;
+    let local_at = crate::lane_share_sections::mbx_prelude_index(local_steps)?;
+    let hosted_prefix = &hosted_steps[..hosted_at];
+    let local_prefix = &local_steps[..local_at];
+    if hosted_prefix != local_prefix {
+        return None;
+    }
+    let (hosted_prelude, hosted_tail) =
+        crate::lane_share_sections::peel_mbx_prelude(&hosted_steps[hosted_at..])?;
+    let (local_prelude, local_tail) =
+        crate::lane_share_sections::peel_mbx_prelude(&local_steps[local_at..])?;
+    Some((
+        hosted_prefix.to_vec(),
+        hosted_prelude,
+        local_prelude,
+        hosted_tail,
+        local_tail,
+    ))
+}
+
+fn has_mbx_action(steps: &[Step]) -> bool {
+    steps
+        .iter()
+        .any(velnor_actions_workflow_cache::cache_steps::is_mbx_action)
+}
+
+pub(crate) fn append_steps(
+    id: &str,
+    source: &BTreeMap<String, Vec<Step>>,
+    ctx: &RenderContext,
+    needs_envs: &[(String, String)],
+    step_context: &crate::document_lanes::JobStepContext<'_>,
+    rendered: &mut Vec<Yaml>,
+    label: &str,
+) -> Result<(), RenderError> {
+    let steps = source
+        .get(id)
+        .ok_or_else(|| RenderError::InvalidWorkflow(format!("shared_lane_missing_{label}:{id}")))?;
+    for step in steps {
+        rendered.push(step_to_yaml(
+            id,
+            step,
+            ctx,
+            needs_envs,
+            false,
+            step_context.job_env,
+            step_context.actions_read,
+        )?);
+    }
+    Ok(())
+}
+
+pub(crate) fn valid_shared_checkout(checkout: &Step, expected_uses: &str) -> bool {
+    checkout.role == Some(StepRole::Checkout)
+        && checkout.condition.is_none()
+        && matches!(
+            &checkout.kind,
+            StepKind::Action { uses, with, env }
+                if uses == expected_uses
+                    && with.get("persist-credentials").map(String::as_str) == Some("false")
+                    && env.is_empty()
+        )
 }
