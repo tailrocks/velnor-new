@@ -19,14 +19,16 @@ fn bootstrap_steps(tool: &str) -> Vec<Step> {
     let context = super::ctx();
     let target = "x86_64-unknown-linux-gnu";
     let mut steps = vec![
-        velnor_actions_workflow_jobs::preseed_download_step().unwrap(),
-        velnor_actions_workflow_jobs::preseed_manifest_verify_step(target).unwrap(),
+        velnor_actions_workflow_jobs::preseed_download_step()
+            .expect("preseed download step is valid"),
+        velnor_actions_workflow_jobs::preseed_manifest_verify_step(target)
+            .expect("preseed manifest verification step is valid"),
         velnor_actions_workflow_jobs::preseed_stage_step(
             PreseedStageSource::DownloadedArtifact,
             &context.staged_binary,
         )
-        .unwrap(),
-        download_plan_step().unwrap(),
+        .expect("preseed stage step is valid"),
+        download_plan_step().expect("plan download step is valid"),
         shell_role(
             "Prepare pinned tools",
             vec!["mise".to_owned(), "install".to_owned(), tool.to_owned()],
@@ -47,14 +49,14 @@ fn bootstrap_steps(tool: &str) -> Vec<Step> {
     ];
     let homes = rust_homes();
     let mbx = mbx_steps_for_driver(MBX_USES, CompileDriver::Mbx, "1.21.1", "1.98.1", homes)
-        .unwrap()
-        .unwrap();
+        .expect("MBX steps are valid")
+        .expect("MBX driver has configured steps");
     steps.extend(mbx);
     steps
 }
 
 fn shell_role(name: &str, run: Vec<String>, env: BTreeMap<String, String>, role: StepRole) -> Step {
-    let mut step = shell_step(name, run, env).unwrap();
+    let mut step = shell_step(name, run, env).expect("shell step is valid");
     step.role = Some(role);
     step
 }
@@ -81,7 +83,7 @@ fn source_restore_step() -> Step {
         &["velnor-sources-restore-".to_owned()],
         &paths,
     )
-    .unwrap();
+    .expect("Cargo source restore action is valid");
     step.name = "Restore Cargo sources".to_owned();
     step.role = Some(StepRole::CargoSourcesRestore);
     step
@@ -210,11 +212,15 @@ fn output_owners_and_non_success_postludes_stay_outer() {
         .collect::<BTreeMap<_, _>>();
     let expected_postludes = shared.postludes.clone();
     let ids = shared.preludes.keys().cloned().collect::<Vec<_>>();
-    shared.preludes.get_mut(&ids[0]).unwrap()[0].id = Some(StepId::Plan);
+    shared
+        .preludes
+        .get_mut(&ids[0])
+        .expect("first task prelude exists")[0]
+        .id = Some(StepId::Plan);
 
     factor_static_task_prefixes(&mut shared, &super::ctx()).expect("unmatched prefix stays outer");
 
-    assert!(shared.files.is_empty());
+    assert_eq!(shared.files, Vec::<RenderedFile>::new());
     for (id, job) in &shared.jobs {
         assert_eq!(
             job.outputs, expected_outputs[id],
@@ -230,14 +236,19 @@ fn output_owners_and_non_success_postludes_stay_outer() {
 fn indexed_workflow_context_inside_prefix_fails_closed() {
     let mut shared = shared_prefixes(1);
     let ids = shared.preludes.keys().cloned().collect::<Vec<_>>();
-    let StepKind::Shell { run, .. } = &mut shared.preludes.get_mut(&ids[0]).unwrap()[4].kind else {
+    let StepKind::Shell { run, .. } = &mut shared
+        .preludes
+        .get_mut(&ids[0])
+        .expect("first task prelude exists")[4]
+        .kind
+    else {
         panic!("Prepare pinned tools must be a shell step");
     };
     run.push("${{ needs['plan'].outputs.covered_tasks }}".to_owned());
 
     factor_static_task_prefixes(&mut shared, &super::ctx()).expect("unsupported scope stays outer");
 
-    assert!(shared.files.is_empty());
+    assert_eq!(shared.files, Vec::<RenderedFile>::new());
     assert_eq!(shared.preludes[&ids[0]].len(), 10);
     assert_eq!(shared.preludes[&ids[1]].len(), 10);
 }
@@ -257,7 +268,7 @@ fn nonterminal_prelude_steps_remain_in_their_original_order() {
 
     factor_static_task_prefixes(&mut shared, &super::ctx()).expect("unsupported shape stays outer");
 
-    assert!(shared.files.is_empty());
+    assert_eq!(shared.files, Vec::<RenderedFile>::new());
     assert!(
         shared
             .calls
