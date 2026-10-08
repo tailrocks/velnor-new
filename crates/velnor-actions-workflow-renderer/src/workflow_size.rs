@@ -26,7 +26,7 @@ pub(crate) fn check_workflow_size(path: &str, bytes: &str) -> Result<(), RenderE
 }
 
 /// True for generated `.yml` or `.yaml` files under GitHub's workflow tree.
-fn is_workflow_path(path: &str) -> bool {
+pub(crate) fn is_workflow_path(path: &str) -> bool {
     path.starts_with(".github/workflows/")
         && Path::new(path).extension().is_some_and(|extension| {
             extension.eq_ignore_ascii_case("yml") || extension.eq_ignore_ascii_case("yaml")

@@ -6,6 +6,9 @@ pub(crate) mod git_fixture;
 #[path = "impl_cli_git_isolation.rs"]
 mod isolation_tests;
 
+#[path = "impl_cli_nested_target.rs"]
+pub(crate) mod nested_target;
+
 use std::error::Error;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -46,12 +49,20 @@ pub(crate) fn spawn(
     env: &[(&str, &str)],
     cwd: &Path,
 ) -> Result<Output, Box<dyn Error>> {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-actions"));
+    let binary = env!("CARGO_BIN_EXE_velnor-actions");
+    let mut command = Command::new(binary);
     command.args(args).current_dir(cwd);
     for (key, value) in env {
         command.env(key, value);
     }
-    Ok(command.output()?)
+    command.output().map_err(|error| {
+        format!(
+            "could not spawn {binary:?} with cwd {} (exists={}): {error}",
+            cwd.display(),
+            cwd.exists()
+        )
+        .into()
+    })
 }
 
 /// Spawn with a scrubbed environment: only `PATH` plus explicit vars survive.
@@ -129,13 +140,35 @@ pub(crate) fn head_sha(dir: &Path) -> Result<String, Box<dyn Error>> {
 
 /// Git-init plus `init` plus branch pinning: a plannable empty repo.
 pub(crate) fn init_repo(dir: &Path) -> Result<(), Box<dyn Error>> {
-    git_init(dir)?;
-    let output = spawn(&["init"], &[], dir)?;
+    git_init(dir).map_err(|error| format!("git init in {}: {error}", dir.display()))?;
+    let output = spawn(&["init"], &[], dir)
+        .map_err(|error| format!("run CLI init in {}: {error}", dir.display()))?;
     if code(&output) != 0 {
-        return Err(format!("init failed with {}", code(&output)).into());
+        return Err(format!(
+            "init in {} failed with {} (stdout={:?}, stderr={:?})",
+            dir.display(),
+            code(&output),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
     }
-    pin_branch(dir)?;
-    install_consumer_manifest(dir)
+    pin_branch(dir).map_err(|error| {
+        format!(
+            "pin branch at {} after init status={} (stdout={:?}, stderr={:?}): {error}",
+            dir.join(".velnor/config.toml").display(),
+            code(&output),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        )
+    })?;
+    install_consumer_manifest(dir).map_err(|error| {
+        format!(
+            "install consumer manifest into {}: {error}",
+            dir.join(".velnor/release-manifest.json").display()
+        )
+        .into()
+    })
 }
 
 /// Install the explicit schema fixture required by positive consumer tests.

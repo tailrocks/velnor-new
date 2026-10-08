@@ -22,7 +22,7 @@ use crate::{
     MiseSetup, RenderError, guard, marker, mise_setup_step,
     render::RenderedFile,
     steps::{self, action_step, shell_step},
-    yaml::{Yaml, render_yaml},
+    yaml::Yaml,
 };
 
 /// Display name of the freshness workflow.
@@ -146,8 +146,11 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
         BTreeMap::new(),
     )?;
     let document = freshness_document(spec, &checkout, &setup_mise, &install_rust, &probe)?;
-    let text = marker::with_marker(&spec.generator_version, &render_yaml(&document))?;
-    crate::workflow_size::check_workflow_size(FRESHNESS_WORKFLOW_PATH, &text)?;
+    let text = crate::render::fallback::render_checked_workflow(
+        FRESHNESS_WORKFLOW_PATH,
+        &document,
+        &spec.generator_version,
+    )?;
     steps::scan_for_private_subcommands(&text)?;
     Ok(RenderedFile {
         path: FRESHNESS_WORKFLOW_PATH.to_owned(),
