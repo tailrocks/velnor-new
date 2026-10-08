@@ -20,7 +20,7 @@ pub(super) fn verify_stopped_for_config(config_path: &Path) -> ExitCode {
             return ExitCode::from(1);
         }
     };
-    let mut manager = Systemctl;
+    let mut manager = Systemctl::default();
     match verify_stopped(&mut manager, timeout) {
         Ok(()) => ExitCode::SUCCESS,
         Err(fault) => {
@@ -30,7 +30,7 @@ pub(super) fn verify_stopped_for_config(config_path: &Path) -> ExitCode {
     }
 }
 
-fn validated_drain_timeout(config_path: &Path) -> Result<u64, ServiceFault> {
+pub(super) fn validated_drain_timeout(config_path: &Path) -> Result<u64, ServiceFault> {
     let snapshot = read_validated_host_config_snapshot(config_path, HostPlatform::Linux)
         .map_err(|_| ServiceFault::InvalidConfig)?
         .ok_or(ServiceFault::InvalidConfig)?;

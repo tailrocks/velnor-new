@@ -282,7 +282,7 @@ fn start_requires_stop_timeout_to_exceed_the_configured_drain_timeout() {
 }
 
 #[test]
-fn direct_service_stop_fails_closed_without_package_manager_orchestration() {
+fn low_level_stop_helper_fails_closed_without_the_coordinator() {
     let active = unit_snapshot(UnitSnapshot {
         active_state: "active",
         sub_state: "running",
@@ -297,7 +297,7 @@ fn direct_service_stop_fails_closed_without_package_manager_orchestration() {
 
     assert_eq!(
         perform(ServiceAction::Stop, &mut manager, DRAIN_TIMEOUT_SECS),
-        Err(ServiceFault::DrainUnavailable)
+        Err(ServiceFault::StopCoordinatorRequired)
     );
     assert_eq!(manager.calls, Vec::<Vec<String>>::new());
 }
@@ -355,4 +355,5 @@ mod credential_tests;
 mod environment_tests;
 mod identity_tests;
 mod start_contract_tests;
+mod stop_tests;
 mod verify_stopped_tests;
