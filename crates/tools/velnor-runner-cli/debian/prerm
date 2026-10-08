@@ -3,26 +3,68 @@ set -eu
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
 export PATH
 
+CONFIG=/etc/velnor-host/host.toml
+STATE=/var/lib/velnor-host
+
+fail() {
+    printf 'velnor-host: refusing package operation: %s\n' "$1" >&2
+    exit 1
+}
+
+require_empty_state() {
+    for item in "$STATE"/* "$STATE"/.[!.]* "$STATE"/..?*; do
+        if [ -e "$item" ] || [ -L "$item" ]; then
+            fail 'unconfigured package has persistent state; configured drain proof is required'
+        fi
+    done
+}
+
+verify_currently_unconfigured_stopped() {
+    /usr/lib/velnor-host/account-check --verify || \
+        fail 'package identity or protected paths are not verified'
+    require_empty_state
+
+    expected_status='state=not_proven
+config=missing
+credential=not_checked
+docker=not_checked
+journal=missing
+controller_service=stopped_or_absent
+global_readiness=not_proven'
+    observed_status=$(/usr/bin/velnor-host \
+        --config "$CONFIG" --state "$STATE" status) || \
+        fail 'cannot verify stopped controller state'
+    [ "$observed_status" = "$expected_status" ] || \
+        fail 'unconfigured package is active or its state is unknown'
+
+    # Recheck the file and state predicates after the manager observation.
+    [ ! -e "$CONFIG" ] && [ ! -L "$CONFIG" ] || \
+        fail 'host configuration appeared during package operation'
+    require_empty_state
+}
+
 case "${1:-}" in
     remove|upgrade|deconfigure|failed-upgrade|abort-upgrade|abort-deconfigure)
-        # The state directory belongs to velnor, so prove the durable drain as
-        # that account. This command uses one configured monotonic deadline and
-        # succeeds only after a complete local quiescence proof.
-        # Match the unit's private primary group and Docker socket access. These
-        # command-local groups do not change the velnor account's NSS membership.
-        /usr/sbin/runuser --user velnor --group velnor --supp-group docker -- /usr/bin/velnor-host \
-            --config /etc/velnor-host/host.toml \
-            --state /var/lib/velnor-host drain --wait
+        if [ ! -e "$CONFIG" ] && [ ! -L "$CONFIG" ]; then
+            # Permit this no-op lifecycle only when current identity, protected
+            # state, config, and service observations meet the unconfigured
+            # predicate. These observations do not prove historical non-use.
+            verify_currently_unconfigured_stopped
+        else
+            # The state directory belongs to velnor, so prove the durable drain
+            # as that account and retain the configured deadline/quiescence gate.
+            /usr/sbin/runuser --user velnor --group velnor --supp-group docker -- /usr/bin/velnor-host \
+                --config "$CONFIG" \
+                --state "$STATE" drain --wait
 
-        # Keep Debian's policy-rc.d decision in control of the manager action.
-        # A zero result alone is not proof that the unit stopped.
-        /usr/bin/deb-systemd-invoke stop velnor-host.service
+            # Keep Debian's policy-rc.d decision in control of the manager action.
+            /usr/bin/deb-systemd-invoke stop velnor-host.service
 
-        # Read-only root-side postcondition; failure aborts before dpkg replaces
-        # or removes package files. No second drain/wait is performed here.
-        /usr/bin/velnor-host \
-            --config /etc/velnor-host/host.toml \
-            --state /var/lib/velnor-host service verify-stopped
+            # Read-only root-side postcondition before dpkg replaces package files.
+            /usr/bin/velnor-host \
+                --config "$CONFIG" \
+                --state "$STATE" service verify-stopped
+        fi
         ;;
 esac
 
