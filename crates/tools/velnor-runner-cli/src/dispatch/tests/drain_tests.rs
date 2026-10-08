@@ -98,23 +98,23 @@ fn linux_drain_unknown_reports_fence_state_accurately() {
 
     assert_eq!(
         linux_drain_unknown_message(DrainUnknown::StateDirectoryUnavailable),
-        "drain_unknown:state_directory_unavailable; admission fence state is not proven"
+        "drain_unknown:state_directory_unavailable; current drain fence state is unavailable; quiescence is not proven"
     );
     assert_eq!(
         linux_drain_unknown_message(DrainUnknown::AdmissionNotFenced),
-        "drain_unknown:admission_not_fenced; admission fence state is not proven"
+        "drain_unknown:admission_not_fenced; drain fence was not observed; quiescence is not proven"
     );
     assert_eq!(
         linux_drain_unknown_message(DrainUnknown::JournalUnavailable),
-        "drain_unknown:journal_unavailable; admission fence state is not proven"
+        "drain_unknown:journal_unavailable; current drain fence state is unavailable; quiescence is not proven"
     );
     assert_eq!(
         linux_drain_unknown_message(DrainUnknown::RuntimeUnavailable),
-        "drain_unknown:runtime_unavailable; admission fence state is not proven"
+        "drain_unknown:runtime_unavailable; drain request was confirmed; current fence state and quiescence are not proven"
     );
     assert_eq!(
         linux_drain_unknown_message(DrainUnknown::OwnershipInventoryUnavailable),
-        "drain_unknown:ownership_inventory_unavailable; admission fence state is not proven"
+        "drain_unknown:ownership_inventory_unavailable; drain fence was observed; owned-resource quiescence is not proven"
     );
 }
 
