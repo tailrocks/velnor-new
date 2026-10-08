@@ -46,17 +46,26 @@ fn drain_wait_accepts_a_bounded_timeout() -> Result<(), String> {
 fn disconnect_requires_drain_and_wait_before_it_can_mutate_state() {
     assert!(Cli::try_parse_from(["velnor-host", "disconnect", "--drain"]).is_err());
     assert!(Cli::try_parse_from(["velnor-host", "disconnect", "--wait"]).is_err());
-    assert!(
-        Cli::try_parse_from([
-            "velnor-host",
-            "disconnect",
-            "--drain",
-            "--wait",
-            "--timeout-secs",
-            "30"
-        ])
-        .is_ok()
-    );
+    assert!(Cli::try_parse_from(["velnor-host", "disconnect", "--remove-local"]).is_err());
+    let cli = Cli::try_parse_from([
+        "velnor-host",
+        "disconnect",
+        "--drain",
+        "--wait",
+        "--timeout-secs",
+        "30",
+        "--remove-local",
+    ])
+    .expect("valid bounded disconnect");
+    assert!(matches!(
+        cli.command,
+        Command::Disconnect {
+            drain: true,
+            wait: true,
+            timeout_secs: Some(30),
+            remove_local: true,
+        }
+    ));
 }
 
 #[test]

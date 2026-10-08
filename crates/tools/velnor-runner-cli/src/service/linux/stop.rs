@@ -9,9 +9,30 @@ use super::{
 };
 
 pub(super) fn stop_for_config(config_path: &Path, state_path: &Path) -> ExitCode {
-    let timeout_secs = match super::stopped::validated_drain_timeout(config_path) {
+    stop_for_config_with_timeout(config_path, state_path, None)
+}
+
+pub(super) fn stop_for_disconnect(
+    config_path: &Path,
+    state_path: &Path,
+    timeout_override: Option<u64>,
+) -> ExitCode {
+    stop_for_config_with_timeout(config_path, state_path, timeout_override)
+}
+
+fn stop_for_config_with_timeout(
+    config_path: &Path,
+    state_path: &Path,
+    timeout_override: Option<u64>,
+) -> ExitCode {
+    let configured_timeout = match super::stopped::validated_drain_timeout(config_path) {
         Ok(timeout) => timeout,
         Err(fault) => return fail(fault),
+    };
+    let timeout_secs = match timeout_override {
+        Some(timeout) if timeout > 0 && timeout <= configured_timeout => timeout,
+        Some(_) => return fail(ServiceFault::InvalidConfig),
+        None => configured_timeout,
     };
     let Some(deadline) = Instant::now().checked_add(Duration::from_secs(timeout_secs)) else {
         return fail(ServiceFault::InvalidConfig);

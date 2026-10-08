@@ -11,7 +11,7 @@ use velnor_runner_host::launch_agent_plist;
 use crate::args::ServiceAction;
 
 #[cfg(target_os = "linux")]
-mod linux;
+pub(crate) mod linux;
 #[cfg(test)]
 mod tests;
 

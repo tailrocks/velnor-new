@@ -3,12 +3,12 @@ use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
 use velnor_runner_host::{
-    DisconnectEffect, HostConfig, HostPlatform, MAX_LINUX_DRAIN_TIMEOUT_SECS, SetOwnership,
-    disconnect_effects, read_host_config_file, validate_protected_state_directory,
+    HostConfig, HostPlatform, MAX_LINUX_DRAIN_TIMEOUT_SECS, read_host_config_file,
+    validate_protected_state_directory,
 };
 use velnor_runner_launch::launch::control::DrainUnknown;
 
-fn write_flag_marker(state: &Path, name: &str) -> bool {
+pub(super) fn write_flag_marker(state: &Path, name: &str) -> bool {
     std::fs::create_dir_all(state).is_ok() && std::fs::write(state.join(name), b"1").is_ok()
 }
 
@@ -303,52 +303,6 @@ fn resume_linux(state: &Path, config_path: &Path) -> ExitCode {
             ExitCode::from(1)
         }
     }
-}
-
-pub(super) fn disconnect(
-    state: &Path,
-    drain: bool,
-    wait: bool,
-    timeout_secs: Option<u64>,
-) -> ExitCode {
-    disconnect_for_os(state, drain, wait, timeout_secs, std::env::consts::OS)
-}
-
-pub(super) fn disconnect_for_os(
-    state: &Path,
-    drain: bool,
-    wait: bool,
-    timeout_secs: Option<u64>,
-    os: &str,
-) -> ExitCode {
-    if !drain || !wait {
-        eprintln!("disconnect requires --drain --wait");
-        return ExitCode::from(2);
-    }
-
-    let effects = disconnect_effects(SetOwnership::Adopted, true);
-    if effects.contains(&DisconnectEffect::DeleteSet) {
-        eprintln!("refusing to delete an adopted set");
-        return ExitCode::from(1);
-    }
-
-    if os == "macos" {
-        if !write_flag_marker(state, "drain") {
-            eprintln!("failed to record the legacy drain marker");
-            return ExitCode::from(1);
-        }
-        eprintln!(
-            "legacy drain marker recorded; {} drain wait, physical quiescence, and remote scale-set disconnection are not proven",
-            requested_wait(timeout_secs)
-        );
-    } else {
-        eprintln!(
-            "{} disconnect is unavailable; {} drain wait and remote scale-set disconnection are not proven",
-            os,
-            requested_wait(timeout_secs)
-        );
-    }
-    ExitCode::from(1)
 }
 
 pub(super) fn requested_wait(timeout_secs: Option<u64>) -> String {
