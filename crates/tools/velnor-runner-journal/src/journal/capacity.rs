@@ -3,6 +3,9 @@
 use std::fmt::{self, Formatter};
 use std::num::NonZeroU32;
 
+mod batch;
+pub use batch::{BatchCapacityClaim, BatchOfferClaim, BatchOfferState};
+
 use crate::error::HostError;
 
 use super::{Journal, one_row};
