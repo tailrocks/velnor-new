@@ -15,9 +15,14 @@ pub struct GithubFormat {
 
 /// Generated AGENTS.md instruction path inside the repository.
 pub const AGENTS_MD_PATH: &str = ".github/AGENTS.md";
-/// Generated CLAUDE.md mirror path inside the repository: a regular file with
-/// bytes identical to [`AGENTS_MD_PATH`], never a symlink.
+/// Generated CLAUDE.md pointer path inside the repository: a regular file
+/// with the single [`CLAUDE_MD_POINTER_BODY`] import line, never a symlink.
 pub const CLAUDE_MD_PATH: &str = ".github/CLAUDE.md";
+/// Exact bytes of every generated `CLAUDE.md`: one `@AGENTS.md` import line
+/// with a trailing newline. Claude resolves the sibling instructions through
+/// the import instead of symlink resolution, which plugin installers and
+/// Windows checkouts cannot carry reliably.
+pub const CLAUDE_MD_POINTER_BODY: &str = "@AGENTS.md\n";
 
 /// Every declared `.github` output format (gen §0).
 pub const DECLARED_GITHUB_FORMATS: [GithubFormat; 4] = [
