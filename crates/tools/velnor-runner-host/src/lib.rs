@@ -3,6 +3,7 @@
 //! Durable intent lives in velnor-runner-journal and is re-exported here.
 
 pub mod assign;
+mod config_snapshot;
 mod connect;
 mod daemon_lock;
 pub mod docker_client;
@@ -19,6 +20,7 @@ pub mod stage;
 pub mod worker;
 
 pub use assign::{Offer, offer};
+pub use config_snapshot::{ValidatedHostConfigSnapshot, read_validated_host_config_snapshot};
 pub use connect::{ConnectPlan, DisconnectEffect, SetOwnership, connect_plan, disconnect_effects};
 pub use daemon_lock::DaemonLock;
 pub use docker_client::connect_unix;
@@ -56,6 +58,9 @@ pub use velnor_runner_journal::{
     occupies, release_permitted,
 };
 pub use worker::{
-    BollardCreate, CreateProjection, Started, bollard_create, dind_create, dind_create_for_profile,
-    runner_create, start_pair, start_pair_with_profile,
+    BollardCreate, CreateProjection, MAX_INVENTORY_OBJECTS_PER_KIND, MAX_INVENTORY_RESPONSE_BYTES,
+    OwnedDockerResource, OwnedDockerResourceKind, ProtectedStateDirectory,
+    ProtectedStateDirectoryIdentity, Started, bollard_create, dind_create, dind_create_for_profile,
+    list_owned_docker_resources_until, runner_create, start_pair, start_pair_with_profile,
+    validate_protected_state_directory, worker_volume_names,
 };

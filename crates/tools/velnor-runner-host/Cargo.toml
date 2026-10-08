@@ -10,8 +10,17 @@ workspace = true
 
 [dependencies]
 bollard = { workspace = true }
+http-body-util = { version = "=0.1.5" }
+hyper = { version = "=1.12.0", features = ["client", "http1"] }
+hyper-util = { version = "=0.1.21", features = ["http1", "client-legacy", "tokio"] }
+hyperlocal = { version = "=0.9.1", default-features = false, features = ["client"] }
+futures-util = { version = "=0.3.34", default-features = false, features = ["std", "async-await"] }
 getrandom = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
+rustix = { workspace = true, features = ["process"] }
+tar = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 zeroize = { workspace = true }
@@ -26,5 +35,6 @@ velnor-runner-journal = { version = "=0.1.1", path = "../velnor-runner-journal" 
 security-framework = { workspace = true }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 velnor-runner-apparmor = { version = "=0.1.1", path = "../velnor-runner-apparmor", features = ["test-support"] }
 velnor-runner-launch = { version = "=0.1.1", path = "../velnor-runner-launch" }

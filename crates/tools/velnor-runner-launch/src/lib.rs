@@ -11,11 +11,7 @@ mod launch_blocking;
 ///
 /// These are direct re-exports so callers share GitHub's opaque proof type;
 /// this crate does not provide a constructor or alternate issuer.
-pub mod linux {
-    pub use velnor_runner_github::policy::{
-        PolicyGap, PolicyMismatch, PoolAdmissionEvidence, VerifiedPoolPolicy,
-    };
-}
+pub mod linux;
 
 pub use launch::control::{
     ControlOpenError, DrainOutcome, DrainRequestOutcome, DrainUnknown, ResumeBlockReason,

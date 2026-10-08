@@ -5,7 +5,7 @@ const LINUX_SAMPLE: &str = concat!(
     "schema = 1\n",
     "[github]\n",
     "repository = \"ChainArgos/java-monorepo\"\n",
-    "scale_set_name = \"ubuntu-24.04-scale-set\"\n",
+    "scale_set_name = \"ubuntu-26.04-scale-set\"\n",
     "credential_ref = \"systemd-credential:github-token\"\n",
     "registration_scope = \"repository\"\n",
     "runner_group_id = 1\n",
@@ -20,7 +20,7 @@ const LINUX_SAMPLE: &str = concat!(
     "allowed_workflow_paths = [\".github/workflows/ci.yml\"]\n",
     "allow_forks = false\n",
     "[runner]\n",
-    "image_profile = \"ubuntu-24.04-amd64\"\n",
+    "image_profile = \"ubuntu-26.04-amd64\"\n",
     "[docker]\n",
     "context = \"system\"\n",
     "platform = \"linux/amd64\"\n",
@@ -44,12 +44,12 @@ fn linux_config_preflight_uses_the_package_path_and_systemd_credential() -> Resu
     .map_err(|error| format!("Linux config failed: {error:?}"))?
     .ok_or("Linux config was treated as missing")?;
     if config.github.credential_ref != "systemd-credential:github-token"
-        || config.github.scale_set_name != "ubuntu-24.04-scale-set"
+        || config.github.scale_set_name != "ubuntu-26.04-scale-set"
         || config
             .runner
             .as_ref()
             .map(|runner| runner.image_profile.as_str())
-            != Some("ubuntu-24.04-amd64")
+            != Some("ubuntu-26.04-amd64")
         || config.docker.platform != "linux/amd64"
         || config
             .job_trust_policy()

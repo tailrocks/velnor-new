@@ -1,10 +1,10 @@
 //! Docker projections for the pinned Linux runner image profile.
 
 use crate::HostError;
-use crate::stage::PairStop;
+use crate::stage::{PairEngine, PairSink, PairStartFailure, PairStop};
 use velnor_runner_docker_spec::{RunnerImageProfile, runner_plan_for_profile};
 
-use super::{CreateProjection, Started, dind_mounts_for_profile, worker_labels};
+use super::{CreateProjection, Started, WorkerNetworkPlan, dind_mounts_for_profile, worker_labels};
 
 /// Private `DinD` create for the pinned official Linux image profile.
 ///
@@ -25,6 +25,7 @@ pub fn dind_create_for_profile(
     let mounts = dind_mounts_for_profile(private_volume)?;
     let mut labels = worker_labels(private_volume, "dind");
     labels.sort_unstable();
+    let network = WorkerNetworkPlan::for_worker(private_volume)?;
     Ok(CreateProjection {
         name: format!("{private_volume}-dind"),
         image: profile.dind_image().to_owned(),
@@ -43,7 +44,7 @@ pub fn dind_create_for_profile(
         group_add: Vec::new(),
         security_opts: Vec::new(),
         open_stdin: false,
-        network_mode: None,
+        network_mode: Some(network.name().to_owned()),
     })
 }
 
@@ -73,4 +74,62 @@ pub async fn start_pair_with_profile(
         dind_id: partial.dind_id.ok_or(HostError::Docker)?,
         runner_id: partial.runner_id.ok_or(HostError::Docker)?,
     })
+}
+
+/// Start the profile-pinned Linux pair through a durable launch sink.
+///
+/// The sink records volume/network/container identities before subsequent
+/// effects and persists runner-start intent immediately before `start`.
+/// Any failure returns exact known resources without eager deletion.
+///
+/// # Errors
+///
+/// Returns the first profile, sink, Docker, or result-invariant failure with
+/// the partial pair retained for journal reconciliation.
+pub async fn start_pair_with_profile_and_sink<E: PairEngine, S: PairSink>(
+    engine: &E,
+    private_volume: &str,
+    jit: &[u8],
+    profile: &RunnerImageProfile,
+    sink: &S,
+) -> Result<Started, PairStartFailure> {
+    let partial = crate::stage::drive_with_profile_and_sink(
+        engine,
+        private_volume,
+        jit,
+        PairStop::Jit,
+        sink,
+        profile,
+    )
+    .await?;
+    let Some(dind_id) = partial.dind_id.clone() else {
+        return Err(PairStartFailure::incomplete_result(partial));
+    };
+    let Some(runner_id) = partial.runner_id.clone() else {
+        return Err(PairStartFailure::incomplete_result(partial));
+    };
+    Ok(Started { dind_id, runner_id })
+}
+
+/// Start the legacy/macOS pair through a durable launch sink.
+///
+/// # Errors
+///
+/// Returns the first sink, Docker, or result-invariant failure. Existing
+/// unjournaled callers retain the old `start_pair` API and behavior.
+pub async fn start_pair_with_sink<E: PairEngine, S: PairSink>(
+    engine: &E,
+    private_volume: &str,
+    jit: &[u8],
+    sink: &S,
+) -> Result<Started, PairStartFailure> {
+    let partial =
+        crate::stage::drive_with_sink(engine, private_volume, jit, PairStop::Jit, sink).await?;
+    let Some(dind_id) = partial.dind_id.clone() else {
+        return Err(PairStartFailure::incomplete_result(partial));
+    };
+    let Some(runner_id) = partial.runner_id.clone() else {
+        return Err(PairStartFailure::incomplete_result(partial));
+    };
+    Ok(Started { dind_id, runner_id })
 }

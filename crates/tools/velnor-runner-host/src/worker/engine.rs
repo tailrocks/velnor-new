@@ -8,7 +8,7 @@ use tokio::io::AsyncWriteExt;
 use crate::HostError;
 use crate::docker_client::docker_deadline;
 
-use super::{CreateProjection, bollard_create};
+use super::{CreateProjection, bollard_create, dind_container_id};
 
 pub(crate) async fn worker_id_for_name(
     docker: &Docker,
@@ -23,7 +23,7 @@ pub(crate) async fn worker_id_for_name(
         Ok(body) => {
             let id = body
                 .id
-                .filter(|id| !id.is_empty())
+                .filter(|id| dind_container_id(id))
                 .ok_or(HostError::Docker)?;
             let host_config = body.host_config.ok_or(HostError::Docker)?;
             if host_config.cgroupns_mode != Some(HostConfigCgroupnsModeEnum::PRIVATE) {
@@ -57,10 +57,10 @@ pub(crate) async fn create_only(
         .create_container(Some(created.options), created.config)
         .await
         .map_err(|_| HostError::Docker)?;
-    if response.id.is_empty() {
-        Err(HostError::Docker)
-    } else {
+    if dind_container_id(&response.id) {
         Ok(response.id)
+    } else {
+        Err(HostError::Docker)
     }
 }
 

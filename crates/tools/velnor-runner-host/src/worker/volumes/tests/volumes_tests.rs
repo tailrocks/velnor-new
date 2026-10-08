@@ -5,7 +5,7 @@ use bollard::Docker;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 
-use super::{WORKER, container_json, volume_json, volume_names};
+use super::{RUNNER_ID, WORKER, container_json, volume_json, volume_names};
 use crate::worker::{create_named_volumes, remove_worker_volumes, worker_id_for_name};
 use crate::{HostError, dind_create, dind_create_for_profile};
 use velnor_runner_docker_spec::{resolve_runner_profile, runner_plan_for_profile};
@@ -164,7 +164,7 @@ fn inspect_json_with_cgroupns(mode: Option<&str>) -> String {
         "velnor.volume": WORKER,
         "velnor.role": "runner"
     });
-    let mut response = serde_json::json!({"Id": "runner-id", "Config": {"Labels": labels}});
+    let mut response = serde_json::json!({"Id": RUNNER_ID, "Config": {"Labels": labels}});
     if let Some(mode) = mode {
         response["HostConfig"] = serde_json::json!({"CgroupnsMode": mode});
     }
@@ -181,7 +181,7 @@ async fn container_identity_requires_private_cgroup_namespace() -> Result<(), St
 
     assert_eq!(
         worker_id_for_name(&stub.docker, "wtransport-runner", WORKER, "runner").await,
-        Ok(Some("runner-id".to_owned()))
+        Ok(Some(RUNNER_ID.to_owned()))
     );
     for _ in 0..2 {
         assert_eq!(
@@ -198,23 +198,23 @@ async fn container_identity_requires_id_and_exact_labels() -> Result<(), String>
     let stub = DockerStub::open(vec![
         http(
             200,
-            &container_json("runner-id", Some(WORKER), Some("runner")),
+            &container_json(RUNNER_ID, Some(WORKER), Some("runner")),
         ),
         http(
             200,
             r#"{"Config":{"Labels":{"velnor.worker":"wtransport","velnor.role":"runner","velnor.volume":"wtransport"}}}"#,
         ),
-        http(200, r#"{"Id":"runner-id"}"#),
+        http(200, &format!(r#"{{"Id":"{RUNNER_ID}"}}"#)),
         http(
             200,
-            &container_json("runner-id", Some("other"), Some("runner")),
+            &container_json(RUNNER_ID, Some("other"), Some("runner")),
         ),
         http(404, r#"{"message":"missing"}"#),
     ])?;
 
     assert_eq!(
         worker_id_for_name(&stub.docker, "wtransport-runner", WORKER, "runner").await,
-        Ok(Some("runner-id".to_owned()))
+        Ok(Some(RUNNER_ID.to_owned()))
     );
     for _ in 0..3 {
         assert_eq!(

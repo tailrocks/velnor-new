@@ -21,7 +21,7 @@ fn linux_config_binds_explicit_scope_group_trust_profile_and_drain() -> Result<(
     assert_eq!(binding.runner_group_name, "Default");
     assert_eq!(
         binding.runner_image_profile.as_deref(),
-        Some("ubuntu-24.04-amd64")
+        Some("ubuntu-26.04-amd64")
     );
     assert!(config.job_trust_policy()?.allows(
         "ChainArgos",
@@ -101,7 +101,7 @@ fn linux_requires_explicit_matching_trust_scope_credentials_and_image() {
             "keychain:com.example/token",
         ),
         LINUX.replace("platform = \"linux\"", "platform = \"macos\""),
-        LINUX.replace("ubuntu-24.04-scale-set", "ubuntu-26.04-scale-set"),
+        LINUX.replace("ubuntu-26.04-scale-set", "ubuntu-24.04-scale-set"),
     ];
     for text in invalid {
         let accepted = HostConfig::parse(&text)
@@ -112,10 +112,15 @@ fn linux_requires_explicit_matching_trust_scope_credentials_and_image() {
 }
 
 #[test]
-fn linux_profile_selector_accepts_dotted_supported_version() -> Result<(), HostError> {
+fn linux_profile_selector_requires_ubuntu_26() -> Result<(), HostError> {
     let config = HostConfig::parse(LINUX)?;
     config.validate_for_host(HostPlatform::Linux)?;
-    assert_eq!(config.github.scale_set_name, "ubuntu-24.04-scale-set");
+    assert_eq!(config.github.scale_set_name, "ubuntu-26.04-scale-set");
+    assert!(
+        HostConfig::parse(&LINUX.replace("ubuntu-26.04-amd64", "ubuntu-24.04-amd64",))
+            .and_then(|config| config.validate_for_host(HostPlatform::Linux))
+            .is_err()
+    );
     Ok(())
 }
 

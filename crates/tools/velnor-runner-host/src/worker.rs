@@ -9,12 +9,38 @@ use velnor_runner_core::runner_work_path;
 use velnor_runner_docker_spec::{ContainerPlan, ImageMount, Mount, audit_plan, runner_plan};
 
 mod bollard;
+mod cleanup;
 mod engine;
+mod inventory;
+mod network;
 mod profile;
 mod volumes;
 pub use self::bollard::{BollardCreate, bollard_create};
+pub use cleanup::{
+    ChildCleanupEvidence, ChildResourceInventory, ChildResourceKind, CleanupDisposition,
+    CleanupLedger, CleanupStep, ContainerObservation, DiagnosticsStore, DockerCleanupEngine,
+    GenerationObservation, ObservedJobIdentity, OuterContainerRole, PostActionDisposition,
+    ProtectedStateDirectory, ProtectedStateDirectoryIdentity, RunnerStopEvidence, RunnerStopPolicy,
+    WorkerCleanupEngine, WorkerGenerationIdentity, WorkerTerminationProof,
+    cleanup_worker_generation, validate_protected_state_directory,
+};
 pub(crate) use engine::{create_only, deliver_jit, start_id, worker_id_for_name};
-pub use profile::{dind_create_for_profile, start_pair_with_profile};
+pub use inventory::{
+    MAX_INVENTORY_OBJECTS_PER_KIND, MAX_INVENTORY_RESPONSE_BYTES, OwnedDockerResource,
+    OwnedDockerResourceKind, list_owned_docker_resources_until,
+};
+pub use network::{
+    OuterNetworkCleanupEngine, OuterNetworkCleanupLedger, OuterNetworkRemovalReceipt,
+    cleanup_provisioning_network,
+};
+pub use network::{
+    WorkerNetworkFailure, WorkerNetworkPlan, ensure_worker_network, remove_worker_network,
+};
+pub use profile::{
+    dind_create_for_profile, start_pair_with_profile, start_pair_with_profile_and_sink,
+    start_pair_with_sink,
+};
+pub use volumes::worker_volume_names;
 pub(crate) use volumes::{create_named_volumes, remove_worker_volumes};
 
 const PLATFORM: &str = "linux/amd64";
@@ -119,9 +145,7 @@ pub fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, HostError
 /// Join `spec` to the private `DinD` network namespace.
 ///
 /// Published service ports and Testcontainers then bind on the runner's localhost.
-/// `dind_id` must be one full 64-character Docker container id. Abbreviated
-/// ids are rejected so Docker cannot resolve an ambiguous prefix to another
-/// worker's network namespace. `host` and other modes are rejected.
+/// `dind_id` must be one Docker container id. `host` and other modes are rejected.
 ///
 /// # Errors
 ///
@@ -137,7 +161,7 @@ pub fn join_dind_net(
     Ok(spec)
 }
 
-fn dind_container_id(id: &str) -> bool {
+pub(crate) fn dind_container_id(id: &str) -> bool {
     id.len() == 64
         && id
             .bytes()

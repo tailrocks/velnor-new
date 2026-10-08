@@ -225,35 +225,14 @@ fn current_uid() -> Result<u32, HostError> {
 }
 
 fn load_systemd_credential(directory: &Path, name: &str) -> Result<Zeroizing<Vec<u8>>, HostError> {
-    use std::fs;
-    use std::os::unix::fs::MetadataExt;
-
-    if name != "github-token" || !directory.is_absolute() {
-        return Err(HostError::Keychain);
-    }
-    let directory_metadata = fs::symlink_metadata(directory).map_err(|_| HostError::Keychain)?;
-    if !directory_metadata.is_dir()
-        || directory_metadata.file_type().is_symlink()
-        || directory_metadata.mode() & 0o077 != 0
-    {
-        return Err(HostError::Keychain);
-    }
     let owner_uid = current_uid()?;
-    if directory_metadata.uid() != owner_uid {
-        return Err(HostError::Keychain);
-    }
-    let path = directory.join(name);
-    let metadata = fs::symlink_metadata(&path).map_err(|_| HostError::Keychain)?;
-    if !metadata.is_file()
-        || metadata.file_type().is_symlink()
-        || metadata.uid() != owner_uid
-        || metadata.mode() & 0o077 != 0
-        || metadata.len() == 0
-        || metadata.len() > MAX_SECRET_LEN as u64
-    {
-        return Err(HostError::Keychain);
-    }
-    let mut file = fs::File::open(path).map_err(|_| HostError::Keychain)?;
+    let mut file = velnor_runner_host_config::open_systemd_credential_file(
+        directory,
+        name,
+        owner_uid,
+        MAX_SECRET_LEN,
+    )
+    .map_err(|_| HostError::Keychain)?;
     read_secret(&mut file).map_err(|_| HostError::Keychain)
 }
 

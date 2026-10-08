@@ -93,16 +93,12 @@ fn target_host() -> &'static str {
 }
 
 fn target_set() -> &'static str {
-    if cfg!(target_os = "linux") {
-        "ubuntu-24.04-scale-set"
-    } else {
-        "ubuntu-26.04-scale-set"
-    }
+    "ubuntu-26.04-scale-set"
 }
 
 fn target_profile() -> Option<&'static str> {
     if cfg!(target_os = "linux") {
-        Some("ubuntu-24.04-amd64")
+        Some("ubuntu-26.04-amd64")
     } else {
         None
     }

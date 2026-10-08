@@ -102,3 +102,5 @@ mod lifecycle_tests;
 mod reconcile_tests;
 mod release_tests;
 mod runner_event_tests;
+
+mod protected_path_tests;
