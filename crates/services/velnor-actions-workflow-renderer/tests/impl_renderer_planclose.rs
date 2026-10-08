@@ -104,10 +104,13 @@ fn matrix_report_upload_names_derive_from_run_and_leg() -> Result<(), RenderErro
 fn crate_upload_names_derive_from_run_and_job() -> Result<(), RenderError> {
     let step = crate_job_report_upload_step("crate_foo")?;
     assert_eq!(step.name, CRATE_REPORT_UPLOAD_NAME);
-    assert_eq!(step.id, None);
+    assert_eq!(
+        step.id,
+        Some(velnor_actions_contract_workflow::StepId::CrateReportUpload)
+    );
     assert_eq!(
         step.role,
-        Some(velnor_actions_contract_workflow::StepRole::MatrixReportUpload)
+        Some(velnor_actions_contract_workflow::StepRole::CrateReportUpload)
     );
     let velnor_actions_contract_workflow::StepKind::Action { uses, with, .. } = &step.kind else {
         panic!("crate upload must be an action step");
@@ -130,9 +133,7 @@ fn crate_upload_names_derive_from_run_and_job() -> Result<(), RenderError> {
 #[test]
 fn typed_job_output_renders_the_uploaded_report_artifact_id() -> Result<(), RenderError> {
     let plan = minimal_plan_job()?;
-    let mut upload = crate_job_report_upload_step("rust-demo")?;
-    upload.id = Some(velnor_actions_contract_workflow::StepId::CrateReportUpload);
-    upload.role = Some(velnor_actions_contract_workflow::StepRole::CrateReportUpload);
+    let upload = crate_job_report_upload_step("rust-demo")?;
     let (task_id, mut task) = job(
         "rust-demo",
         "Rust / demo",

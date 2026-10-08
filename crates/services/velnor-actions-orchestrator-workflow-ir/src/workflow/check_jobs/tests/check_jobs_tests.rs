@@ -1,5 +1,21 @@
 use super::*;
 
+fn assert_typed_report_output(job: &velnor_actions_contract_workflow::Job) {
+    assert_eq!(
+        job.outputs,
+        [velnor_actions_contract_workflow::JobOutput::task_report_artifact_id()]
+    );
+    let upload = job.steps.last().expect("report upload");
+    assert_eq!(
+        upload.id,
+        Some(velnor_actions_contract_workflow::StepId::CrateReportUpload)
+    );
+    assert_eq!(
+        upload.role,
+        Some(velnor_actions_contract_workflow::StepRole::CrateReportUpload)
+    );
+}
+
 #[test]
 fn artifact_task_selection_builds_a_required_linux_matrix_job() {
     let (root, discovery) = fixture(&[]);
@@ -114,6 +130,7 @@ fn mixed_platform_checks_keep_exact_tools_and_unconditional_reports() {
     assert_eq!(jobs[0].1.runs_on, "ubuntu-26.04");
     assert_eq!(jobs[1].1.runs_on, "macos-15");
     for (id, job) in &jobs {
+        assert_typed_report_output(job);
         assert_eq!(job.needs, ["plan"]);
         let execution = job
             .steps

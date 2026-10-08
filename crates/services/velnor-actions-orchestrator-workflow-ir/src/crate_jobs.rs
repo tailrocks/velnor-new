@@ -17,7 +17,8 @@ use velnor_actions_contract::{Stack, matrix_id_for_task_group, matrix_key_for_id
 use velnor_actions_contract_config::{VelnorConfig, WorkflowPolicy};
 use velnor_actions_contract_planning::ProposedTask;
 use velnor_actions_contract_workflow::{
-    CrateJob, CrateObligation, Job, JobTimeout, Step, crate_display_name, tofu_display_name,
+    CrateJob, CrateObligation, Job, JobOutput, JobTimeout, Step, crate_display_name,
+    tofu_display_name,
 };
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_cache::cache_steps::CompileDriver as RenderDriver;
@@ -285,7 +286,7 @@ fn render_job(
         velnor_actions_orchestrator_provisioning::matrix_step::crate_upload_step(&model.job_id)?,
     );
     Ok(Job {
-        outputs: Vec::new(),
+        outputs: vec![JobOutput::task_report_artifact_id()],
         display_name: model.display_name.clone(),
         runs_on: label.to_owned(),
         check_runner: None,

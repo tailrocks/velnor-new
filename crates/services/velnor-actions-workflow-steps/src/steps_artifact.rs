@@ -123,7 +123,8 @@ pub fn crate_job_report_upload_step(job_id: &str) -> Result<Step, RenderError> {
             ),
         ]),
     )?;
-    step.role = Some(StepRole::MatrixReportUpload);
+    step.id = Some(StepId::CrateReportUpload);
+    step.role = Some(StepRole::CrateReportUpload);
     Ok(step)
 }
 

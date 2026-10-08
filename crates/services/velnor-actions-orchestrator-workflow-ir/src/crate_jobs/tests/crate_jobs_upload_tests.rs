@@ -112,6 +112,10 @@ fn obligations_wrap_report_capture() {
 #[test]
 fn obligations_upload_one_artifact_per_job() {
     let (job_id, demo, _, _) = two_obligation_job();
+    assert_eq!(
+        demo.outputs,
+        [velnor_actions_contract_workflow::JobOutput::task_report_artifact_id()]
+    );
     let uploads: Vec<_> = demo
         .steps
         .iter()
@@ -119,6 +123,14 @@ fn obligations_upload_one_artifact_per_job() {
         .collect();
     assert_eq!(uploads.len(), 1, "one upload for two obligations");
     let step = uploads[0];
+    assert_eq!(
+        step.id,
+        Some(velnor_actions_contract_workflow::StepId::CrateReportUpload)
+    );
+    assert_eq!(
+        step.role,
+        Some(velnor_actions_contract_workflow::StepRole::CrateReportUpload)
+    );
     let velnor_actions_contract_workflow::StepKind::Action { uses, with, .. } = &step.kind else {
         panic!("crate upload must be an action step");
     };
