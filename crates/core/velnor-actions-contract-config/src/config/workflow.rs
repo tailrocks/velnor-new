@@ -30,6 +30,60 @@ pub struct WorkflowConfig {
     /// Sorted build tasks with exact, bounded outputs.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub artifact_tasks: Vec<ArtifactBuildTask>,
+    /// Explicit `ConsumerV1` verification jobs.
+    #[serde(default, skip_serializing_if = "VerifyConfig::is_empty")]
+    pub verify: VerifyConfig,
+}
+
+/// Explicit, closed `ConsumerV1` verification selection.
+///
+/// The selector is optional for existing configurations. This source slice
+/// implements only zizmor; other PR98 IDs fail validation until their
+/// production job and Required wiring are implemented.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VerifyConfig {
+    /// Stable PR98 verification job IDs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub jobs: Vec<String>,
+}
+
+impl VerifyConfig {
+    fn is_empty(&self) -> bool {
+        self.jobs.is_empty()
+    }
+
+    fn validate(&self, file: &str, policy: WorkflowPolicy) -> Result<(), ContractError> {
+        if self.jobs.is_empty() {
+            return Ok(());
+        }
+        if policy != WorkflowPolicy::ConsumerV1 {
+            return Err(ContractError::config(
+                file,
+                "workflow.verify",
+                "consumer_policy_required",
+            ));
+        }
+
+        let mut seen = std::collections::BTreeSet::new();
+        for job in &self.jobs {
+            if !seen.insert(job.as_str()) {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.verify.jobs",
+                    format!("duplicate_verify_job:{job}"),
+                ));
+            }
+            if job != "zizmor" {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.verify.jobs",
+                    format!("unsupported_verify_job:{job}"),
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Workflow policy selector.
@@ -188,6 +242,7 @@ impl WorkflowConfig {
                 format!("unsupported_label:{label}"),
             ));
         }
+        self.verify.validate(file, self.policy)?;
         self.validate_tasks(file)?;
         self.validate_artifact_tasks(file)?;
         Ok(())

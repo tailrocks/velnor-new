@@ -56,11 +56,20 @@ pub(super) fn render_context(
                 argv: machete_argv(&machete_dirs)?,
             });
         }
-        validator_commands.extend([ValidatorCommand {
+    }
+    let consumer_zizmor = !velnor
+        && config
+            .workflow
+            .verify
+            .jobs
+            .iter()
+            .any(|job| job == "zizmor");
+    if velnor || consumer_zizmor {
+        validator_commands.push(ValidatorCommand {
             validator: ValidatorKind::Zizmor,
             name: ZIZMOR_STEP_NAME.to_owned(),
             argv: zizmor_argv(catalog)?,
-        }]);
+        });
     }
     let candidate =
         if velnor && config.workflow.generator_validation == GeneratorValidation::Candidate {

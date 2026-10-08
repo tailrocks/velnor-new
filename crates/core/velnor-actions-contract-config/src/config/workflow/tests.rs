@@ -1,4 +1,4 @@
-use super::{GeneratorValidation, WorkflowConfig, WorkflowPolicy};
+use super::{GeneratorValidation, VerifyConfig, WorkflowConfig, WorkflowPolicy};
 use crate::config::{
     ArtifactBuildOutput, ArtifactBuildTask, VerificationRunner, VerificationTask,
     VerificationTaskKind,
@@ -16,7 +16,55 @@ fn named(name: &str) -> WorkflowConfig {
         runner_label: None,
         tasks: Vec::new(),
         artifact_tasks: Vec::new(),
+        verify: VerifyConfig::default(),
     }
+}
+
+#[test]
+fn verify_defaults_away_and_accepts_only_implemented_consumer_jobs() {
+    let mut config = named("CI");
+    assert!(config.validate("config.toml").is_ok());
+    let serialized = serde_json::to_value(&config).expect("serialize default workflow");
+    assert!(serialized.get("verify").is_none());
+
+    config.verify.jobs = vec!["zizmor".to_owned()];
+    assert!(config.validate("config.toml").is_ok());
+
+    config.verify.jobs = vec!["zizmor".to_owned(), "zizmor".to_owned()];
+    let duplicate = config.validate("config.toml").expect_err("duplicate fails");
+    assert!(
+        duplicate
+            .to_string()
+            .contains("duplicate_verify_job:zizmor")
+    );
+
+    for job in [
+        "alint",
+        "markdownlint",
+        "strict-json",
+        "frontmatter-id",
+        "link-check",
+        "native-validators",
+        "unknown",
+    ] {
+        config.verify.jobs = vec![job.to_owned()];
+        let error = config
+            .validate("config.toml")
+            .expect_err("unimplemented job fails");
+        assert!(
+            error
+                .to_string()
+                .contains(&format!("unsupported_verify_job:{job}")),
+            "{error}"
+        );
+    }
+
+    config.policy = WorkflowPolicy::VelnorRepositoryV1;
+    config.verify.jobs = vec!["zizmor".to_owned()];
+    let error = config
+        .validate("config.toml")
+        .expect_err("consumer-only selector rejected on Velnor policy");
+    assert!(error.to_string().contains("consumer_policy_required"));
 }
 
 #[test]

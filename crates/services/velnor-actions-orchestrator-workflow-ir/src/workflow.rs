@@ -9,9 +9,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax};
 use velnor_actions_contract::Stack;
-use velnor_actions_contract_config::{
-    ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowPolicy,
-};
+use velnor_actions_contract_config::{VelnorConfig, VelnorSupportWorkflow, WorkflowPolicy};
 use velnor_actions_contract_workflow::{
     Concurrency, Job, Permissions, Step, StepKind, StepRole, Trigger, WorkflowIr,
 };
@@ -33,6 +31,7 @@ use velnor_actions_orchestrator_discovery::discover::Discovery;
 use velnor_actions_orchestrator_pins::pins::consumer_acquire_step;
 
 mod workflow_context;
+mod workflow_support;
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
 
@@ -53,7 +52,7 @@ pub const REQUEST_DIR: &str = "${{ runner.temp }}/velnor/request";
 pub struct WorkflowPlan {
     /// Stack-neutral workflow IR.
     pub ir: WorkflowIr,
-    /// Support jobs for the Velnor policy, none for consumers.
+    /// Support jobs from Velnor policy or explicit `ConsumerV1` verification.
     pub support: Option<VelnorSupportWorkflow>,
     /// Validated renderer scalars.
     pub context: RenderContext,
@@ -120,7 +119,7 @@ pub fn build_workflow(
     let policy = config.workflow.policy;
     let verification_tasks = crate::verification_tasks::policies(config)?;
     let use_mbx = plan_uses_mbx(discovery);
-    let support = support_workflow(config, discovery);
+    let support = workflow_support::support_workflow(config, discovery);
     let mut jobs = BTreeMap::new();
     let acquire = match policy {
         WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(label, &version, discovery)?),
@@ -206,39 +205,6 @@ fn workflow_ir(config: &VelnorConfig, branch: &str, jobs: BTreeMap<String, Job>)
         },
         jobs,
     }
-}
-
-fn support_workflow(config: &VelnorConfig, discovery: &Discovery) -> Option<VelnorSupportWorkflow> {
-    let policy = config.workflow.policy;
-    let validation = config.workflow.generator_validation;
-    let rust_policy = config
-        .stacks
-        .rust
-        .as_ref()
-        .and_then(|rust| rust.policy.clone());
-    let mut support = match policy {
-        WorkflowPolicy::ConsumerV1 => {
-            if rust_policy.is_none() || !plan_uses_rust(discovery) {
-                return None;
-            }
-            VelnorSupportWorkflow {
-                validators: vec![ValidatorKind::Alint],
-                candidate_validation: false,
-            }
-        }
-        WorkflowPolicy::VelnorRepositoryV1 => policy.support_workflow(validation),
-    };
-    if discovery.workspaces.is_empty() {
-        support
-            .validators
-            .retain(|validator| *validator != ValidatorKind::CargoDeny);
-    }
-    if velnor_actions_orchestrator_provisioning::vectors::machete_crate_dirs(discovery).is_empty() {
-        support
-            .validators
-            .retain(|validator| *validator != ValidatorKind::CargoMachete);
-    }
-    Some(support)
 }
 
 /// Insert the lint, final-gate, and baseline-publish jobs.

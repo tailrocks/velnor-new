@@ -30,8 +30,8 @@ pub use config::{
     ScaleSetSelector, ShardTimingEvidence, StacksConfig, TestShardingConfig, TofuStackConfig,
     Utf8RepoRelDir, VELNOR_LABEL, VERIFICATION_TASK_JOB_PREFIX, ValidatorKind, VelnorConfig,
     VelnorSupportWorkflow, VerificationRunner, VerificationTask, VerificationTaskKind,
-    WorkflowConfig, WorkflowPolicy, check_execution_receipt_upper_bound, is_valid_feature_name,
-    is_valid_mise_task_name, is_valid_rust_target, is_valid_verification_task_id,
-    validate_qualified_tools, validate_shard_changes_need_evidence,
+    VerifyConfig, WorkflowConfig, WorkflowPolicy, check_execution_receipt_upper_bound,
+    is_valid_feature_name, is_valid_mise_task_name, is_valid_rust_target,
+    is_valid_verification_task_id, validate_qualified_tools, validate_shard_changes_need_evidence,
 };
 pub use named_check::{NamedCheckIdentityExtension, validate_named_check_extension};

@@ -8,7 +8,9 @@
 //! both policies; it is never support IR.
 
 // Token-hygiene gate lives beside the policy gates (`#[path]`, no `lib.rs` edit).
+mod guards;
 mod tokens;
+pub(crate) use guards::{check_candidate_invariants, check_final_gate, insert_support_job};
 
 pub(crate) use tokens::check_token_hygiene;
 
@@ -26,10 +28,7 @@ use velnor_actions_workflow_steps::{
 
 use crate::{
     candidate::{candidate_job, release_job},
-    context::{
-        CANDIDATE_JOB_ID, FINAL_CONDITION, FINAL_DISPLAY_NAME, FINAL_JOB_ID, PLAN_JOB_ID,
-        RenderContext, ValidatorCommand,
-    },
+    context::{CANDIDATE_JOB_ID, FINAL_JOB_ID, RenderContext, ValidatorCommand},
 };
 
 /// Always-on workflow-lint job ID, emitted for both policies.
@@ -49,12 +48,11 @@ pub(crate) const RELEASE_REF_CONDITION: &str = "github.ref_protected == true";
 
 /// Policy-aware support merge: one typed job per validator plus candidates.
 ///
-/// Velnor merges the whole repository set; consumers merge exactly the
-/// shared policy lane (Alint) when configured, and reject every other
-/// validator, candidate validation, and Velnor-only job ID. The lint
-/// job is a base IR job, not support IR, so it passes through on both.
-/// The exhaustive `ValidatorKind` match is the whole support set, with
-/// no toolchain-qualification job and no umbrella grouping.
+/// Velnor merges the repository validator set; consumers merge the
+/// shared Alint lane when configured and `ConsumerV1` validators that have
+/// explicit typed commands. Unselected validators, candidate validation,
+/// and Velnor-only job IDs remain rejected. The lint job is base IR, not
+/// support IR, so it passes through on both policies.
 pub(crate) fn merge_support_jobs(
     jobs: &mut BTreeMap<String, Job>,
     support: Option<&VelnorSupportWorkflow>,
@@ -88,7 +86,12 @@ pub(crate) fn merge_support_jobs(
     }
     if policy == WorkflowPolicy::ConsumerV1 {
         for validator in &workflow.validators {
-            if *validator != ValidatorKind::Alint {
+            let selected_command = *validator == ValidatorKind::Zizmor
+                && ctx
+                    .validator_commands
+                    .iter()
+                    .any(|command| command.validator == *validator);
+            if *validator != ValidatorKind::Alint && !selected_command {
                 return Err(RenderError::PolicyRejected {
                     policy: policy_name.to_owned(),
                     problem: format!("forbidden_job:{}", validator.job_id()),
@@ -181,22 +184,6 @@ fn extend_final_needs(
             final_job.needs.push(id);
         }
     }
-}
-
-/// Insert a support job, failing on ID collision with IR jobs.
-pub(crate) fn insert_support_job(
-    jobs: &mut BTreeMap<String, Job>,
-    id: &str,
-    job: Job,
-) -> Result<(), RenderError> {
-    if jobs.contains_key(id) {
-        return Err(RenderError::PolicyRejected {
-            policy: "velnor-repository-v1".to_owned(),
-            problem: format!("job_collision:{id}"),
-        });
-    }
-    jobs.insert(id.to_owned(), job);
-    Ok(())
 }
 
 /// SHA-256 of the `alint-v0.16.1-x86_64-unknown-linux-musl.tar.gz` asset.
@@ -389,68 +376,4 @@ fn find_validator_command(
     found.ok_or_else(|| {
         RenderError::InvalidWorkflow(format!("validator_without_command:{}", validator.job_id()))
     })
-}
-
-/// Candidate never plans: it needs plan, holds no plan step, feeds no task.
-///
-/// Qualification downloads the built artifact; a candidate without a
-/// download step cannot prove the no-rebuild path and is rejected.
-pub(crate) fn check_candidate_invariants(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
-    if let Some(candidate) = jobs.get(CANDIDATE_JOB_ID) {
-        if !candidate.needs.contains(&PLAN_JOB_ID.to_owned()) {
-            return Err(RenderError::InvalidWorkflow(
-                "candidate_must_need_plan".to_owned(),
-            ));
-        }
-        for step in &candidate.steps {
-            if let StepKind::Internal { operation, .. } = &step.kind
-                && operation == steps::PLAN_OPERATION
-            {
-                return Err(RenderError::InvalidWorkflow(
-                    "candidate_must_not_plan".to_owned(),
-                ));
-            }
-        }
-        let downloaded = candidate.steps.iter().any(|step| {
-            matches!(&step.kind, StepKind::Action { uses, .. } if uses == steps::DOWNLOAD_ARTIFACT_USES)
-        });
-        if !downloaded {
-            return Err(RenderError::InvalidWorkflow(
-                "candidate_must_download_artifact".to_owned(),
-            ));
-        }
-    }
-    for (id, job) in jobs {
-        if id.as_str() != FINAL_JOB_ID
-            && id.as_str() != RELEASE_JOB_ID
-            && job.needs.contains(&CANDIDATE_JOB_ID.to_owned())
-        {
-            return Err(RenderError::InvalidWorkflow(
-                "task_must_not_consume_candidate".to_owned(),
-            ));
-        }
-    }
-    Ok(())
-}
-
-/// Final gate keeps the exact required-check name and `always()` condition.
-///
-/// The always-on lint job keeps its exact display name on both policies.
-pub(crate) fn check_final_gate(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
-    if let Some(final_job) = jobs.get(FINAL_JOB_ID) {
-        if final_job.display_name != FINAL_DISPLAY_NAME {
-            return Err(RenderError::InvalidWorkflow("bad_final_name".to_owned()));
-        }
-        if final_job.condition.as_deref() != Some(FINAL_CONDITION) {
-            return Err(RenderError::InvalidWorkflow(
-                "bad_final_condition".to_owned(),
-            ));
-        }
-    }
-    if let Some(lint) = jobs.get(LINT_JOB_ID)
-        && lint.display_name != LINT_DISPLAY_NAME
-    {
-        return Err(RenderError::InvalidWorkflow("bad_lint_name".to_owned()));
-    }
-    Ok(())
 }

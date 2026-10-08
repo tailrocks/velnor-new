@@ -14,7 +14,7 @@ use velnor_actions_contract::{
 };
 use velnor_actions_contract_config::config::{
     ActionsConfig, DiscoveryConfig, ResourcesConfig, RunnerSelection, StacksConfig,
-    TestShardingConfig, VelnorConfig, WorkflowConfig, WorkflowPolicy,
+    TestShardingConfig, VelnorConfig, VerifyConfig, WorkflowConfig, WorkflowPolicy,
 };
 use velnor_actions_contract_workflow::workflow::{
     ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, ObligationDecision, Plan, PlanBaseline,
@@ -113,6 +113,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             runner_label: None,
             tasks: Vec::new(),
             artifact_tasks: Vec::new(),
+            verify: VerifyConfig::default(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,

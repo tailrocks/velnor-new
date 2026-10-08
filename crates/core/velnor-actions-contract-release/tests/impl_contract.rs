@@ -1,7 +1,7 @@
 //! Contract config, manifest, and action override cases.
 use std::collections::BTreeMap;
 use velnor_actions_contract::ContractError;
-use velnor_actions_contract_config::{GeneratorValidation, WorkflowPolicy};
+use velnor_actions_contract_config::{GeneratorValidation, VerifyConfig, WorkflowPolicy};
 use velnor_actions_contract_release::{
     ActionPin, GeneratorBinary, GeneratorLock, LockedGenerator, MiseBootstrap, ReleaseManifest,
     SUPPORTED_TARGETS, TargetRecord, asset_filename,
@@ -28,6 +28,7 @@ fn config_validation_reports_key_paths() {
             runner_label: None,
             tasks: Vec::new(),
             artifact_tasks: Vec::new(),
+            verify: VerifyConfig::default(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -105,6 +106,7 @@ fn runner_label_uses_exact_catalog_match() {
             runner_label: None,
             tasks: Vec::new(),
             artifact_tasks: Vec::new(),
+            verify: VerifyConfig::default(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -158,7 +160,8 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
     use velnor_actions_contract_config::config::RustReleaseConfig;
     use velnor_actions_contract_config::{
         DiscoveryConfig, GeneratorValidation, ResourcesConfig, RustConfiguration, RustStackConfig,
-        StacksConfig, TestShardingConfig, VelnorConfig, WorkflowConfig, WorkflowPolicy,
+        StacksConfig, TestShardingConfig, VelnorConfig, VerifyConfig, WorkflowConfig,
+        WorkflowPolicy,
     };
     let mut config = VelnorConfig {
         checks: Vec::new(),
@@ -173,6 +176,7 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
             runner_label: None,
             tasks: Vec::new(),
             artifact_tasks: Vec::new(),
+            verify: VerifyConfig::default(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,

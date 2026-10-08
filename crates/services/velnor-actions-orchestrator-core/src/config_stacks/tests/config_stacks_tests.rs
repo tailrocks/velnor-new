@@ -37,6 +37,42 @@ fn workflow_verification_tasks_parse_and_default_empty() {
 }
 
 #[test]
+fn workflow_verify_selection_parses_and_defaults_empty() {
+    let load = load_config;
+    let root = rooted("schema = 1\n");
+    let config = load(root.path()).expect("minimal config");
+    assert!(config.workflow.verify.jobs.is_empty());
+
+    let root = rooted("schema = 1\n[workflow.verify]\njobs = [\"zizmor\"]\n");
+    let config = load(root.path()).expect("supported verification selector");
+    assert_eq!(config.workflow.verify.jobs, ["zizmor"]);
+
+    for job in [
+        "markdownlint",
+        "strict-json",
+        "native-validators",
+        "unknown",
+    ] {
+        let body = format!("schema = 1\n[workflow.verify]\njobs = [\"{job}\"]\n");
+        let root = rooted(&body);
+        let error = load(root.path()).expect_err("unimplemented selector fails closed");
+        assert!(
+            error
+                .to_string()
+                .contains(&format!("unsupported_verify_job:{job}")),
+            "{error}"
+        );
+    }
+
+    let root = rooted("schema = 1\n[workflow.verify]\njobs = [\"zizmor\", \"zizmor\"]\n");
+    let error = load(root.path()).expect_err("duplicate selector fails");
+    assert!(
+        error.to_string().contains("duplicate_verify_job:zizmor"),
+        "{error}"
+    );
+}
+
+#[test]
 fn workflow_artifact_tasks_parse_and_default_empty() {
     let load = load_config;
     let root = rooted(
