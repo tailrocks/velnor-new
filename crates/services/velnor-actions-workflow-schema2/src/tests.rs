@@ -4,7 +4,9 @@ use velnor_actions_contract_config::{RoutingWorkflow, SCALE_SET_NAME, VELNOR_LAB
 
 use super::render_schema2_workflows;
 use super::workflows::{monitoring, qualification};
-use velnor_actions_workflow_generator::{MbxQualificationPins, Schema2WorkflowRequest};
+use velnor_actions_workflow_generator::{
+    GeneratorReleasePins, MbxQualificationPins, ProductReleaseFamily, Schema2WorkflowRequest,
+};
 use velnor_actions_workflow_steps::setup::MiseSetup;
 use velnor_actions_workflow_tree::yaml::Yaml;
 
@@ -29,6 +31,50 @@ fn request() -> Schema2WorkflowRequest {
             rust_version: "1.98.1".to_owned(),
         }),
         generator_release: None,
+    }
+}
+
+fn generator_release_pins() -> GeneratorReleasePins {
+    let setup = MiseSetup {
+        uses: format!("jdx/mise-action@{}", "a".repeat(40)),
+        version: "2026.9.18".to_owned(),
+        sha256: "b".repeat(64),
+    };
+    GeneratorReleasePins {
+        linux_x86_64_setup: setup.clone(),
+        macos_arm64_setup: setup.clone(),
+        macos_x86_64_setup: setup,
+        install_gate_tools_argv: vec!["mise".to_owned(), "install".to_owned()],
+        install_build_tools_argv: vec!["mise".to_owned(), "install".to_owned()],
+        install_gh_argv: [
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "install",
+            "gh@2.102.0",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
+        build_argv: vec!["mise".to_owned(), "exec".to_owned()],
+        actionlint_argv: vec!["mise".to_owned(), "exec".to_owned()],
+        zizmor_argv: vec!["mise".to_owned(), "exec".to_owned()],
+        gh_argv: [
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+            "gh@2.102.0",
+            "--",
+            "gh",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
+        rust_version: "1.98.1".to_owned(),
+        mr_boxington_version: "1.21.1".to_owned(),
     }
 }
 
@@ -132,4 +178,100 @@ fn public_hosted_label_rejects_scale_set_tokens_and_unknown_labels() {
         err.to_string()
             .contains("schema2_hosted_runner_not_catalog")
     }));
+}
+
+#[test]
+fn release_routes_build_a_canonical_typed_family_selection() {
+    let mut request = request();
+    request.workflows = BTreeSet::from([
+        RoutingWorkflow::GeneratorRelease,
+        RoutingWorkflow::ImageRelease,
+        RoutingWorkflow::MacosBinaryRelease,
+    ]);
+
+    let spec = request
+        .product_release_spec()
+        .expect("valid release selectors")
+        .expect("release families selected");
+    assert_eq!(
+        spec.families(),
+        &[
+            ProductReleaseFamily::Images,
+            ProductReleaseFamily::Binary,
+            ProductReleaseFamily::Generator,
+        ]
+    );
+}
+
+#[test]
+fn empty_release_selection_keeps_nonrelease_requests_empty() {
+    let mut request = request();
+    request.workflows = BTreeSet::from([RoutingWorkflow::Qualification]);
+
+    assert!(
+        request
+            .product_release_spec()
+            .expect("non-release selection is valid")
+            .is_none()
+    );
+}
+
+#[test]
+fn typed_family_router_emits_existing_outputs_once() {
+    let mut request = request();
+    request.workflows = BTreeSet::from([
+        RoutingWorkflow::ImageRelease,
+        RoutingWorkflow::MacosBinaryRelease,
+    ]);
+
+    let files = render_schema2_workflows(&request).expect("release workflows render");
+    let paths = files.into_iter().map(|file| file.path).collect::<Vec<_>>();
+    assert_eq!(
+        paths,
+        [
+            ".github/workflows/image-release.yml",
+            ".github/workflows/macos-binary-release.yml",
+        ]
+    );
+}
+
+#[test]
+fn typed_generator_route_preserves_missing_pins_failure() {
+    let mut request = request();
+    request.workflows = BTreeSet::from([RoutingWorkflow::GeneratorRelease]);
+
+    assert!(
+        render_schema2_workflows(&request)
+            .is_err_and(|error| { error.to_string().contains("generator_release_pins_missing") })
+    );
+}
+
+#[test]
+fn typed_generator_route_emits_the_existing_workflow_and_actions_once() {
+    let mut request = request();
+    request.workflows = BTreeSet::from([RoutingWorkflow::GeneratorRelease]);
+    request.generator_release = Some(generator_release_pins());
+
+    let paths = render_schema2_workflows(&request)
+        .expect("generator release renders")
+        .into_iter()
+        .map(|file| file.path)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        paths,
+        [
+            ".github/workflows/generator-release.yml",
+            ".github/actions/generator-release-build-linux/action.yml",
+            ".github/actions/generator-release-qualify-linux/action.yml",
+            ".github/actions/generator-release-attest-linux/action.yml",
+            ".github/actions/generator-release-build-macos/action.yml",
+            ".github/actions/generator-release-qualify-macos/action.yml",
+            ".github/actions/generator-release-attest-macos/action.yml",
+            ".github/actions/generator-release-build-macos-intel/action.yml",
+            ".github/actions/generator-release-qualify-macos-intel/action.yml",
+            ".github/actions/generator-release-attest-macos-intel/action.yml",
+            ".github/actions/generator-release-attest-manifest/action.yml",
+            ".github/actions/generator-release-publish/action.yml",
+        ]
+    );
 }

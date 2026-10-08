@@ -72,6 +72,7 @@ mod classes;
 mod docker;
 mod features;
 mod mbx_qualification;
+mod product_release;
 mod release;
 /// Exact-source gates for composed product-release workflows.
 pub mod release_eligibility;

@@ -1,13 +1,9 @@
 //! Schema-2 workflow assembly: qualification, releases, monitoring.
 
-use super::{
-    GENERATOR_RELEASE_WORKFLOW, IMAGE_RELEASE_WORKFLOW, MACOS_BINARY_RELEASE_WORKFLOW,
-    MONITORING_WORKFLOW, QUALIFICATION_WORKFLOW, RunnerSpec,
-};
-use super::{classes, features, mbx_qualification, release};
+use super::{MONITORING_WORKFLOW, QUALIFICATION_WORKFLOW, RunnerSpec};
+use super::{classes, features, mbx_qualification, product_release};
 use velnor_actions_contract_config::RoutingWorkflow;
 use velnor_actions_workflow_generator::Schema2WorkflowRequest;
-use velnor_actions_workflow_generator::generator_release;
 use velnor_actions_workflow_steps::RenderError;
 use velnor_actions_workflow_tree::marker::with_marker;
 use velnor_actions_workflow_tree::rendered::RenderedFile;
@@ -31,36 +27,12 @@ pub fn render_schema2_workflows(
             &qualification(request)?,
         )?);
     }
-    if request.workflows.contains(&RoutingWorkflow::ImageRelease) {
-        files.push(file(
-            IMAGE_RELEASE_WORKFLOW,
-            &request.version,
-            &release::image_release(request)?,
-        )?);
+    let product_files = product_release::render_selected_families(request)?;
+    for (path, body) in product_files.workflows {
+        files.push(file(&path, &request.version, &body)?);
     }
-    if request
-        .workflows
-        .contains(&RoutingWorkflow::MacosBinaryRelease)
-    {
-        files.push(file(
-            MACOS_BINARY_RELEASE_WORKFLOW,
-            &request.version,
-            &release::macos_binary_release(request)?,
-        )?);
-    }
-    if request
-        .workflows
-        .contains(&RoutingWorkflow::GeneratorRelease)
-    {
-        let generated = generator_release::generator_release(request)?;
-        files.push(file(
-            GENERATOR_RELEASE_WORKFLOW,
-            &request.version,
-            &generated.workflow,
-        )?);
-        for (path, action) in generated.actions {
-            files.push(file(&path, &request.version, &action)?);
-        }
+    for (path, action) in product_files.actions {
+        files.push(file(&path, &request.version, &action)?);
     }
     if request.workflows.contains(&RoutingWorkflow::Monitoring) {
         files.push(file(
