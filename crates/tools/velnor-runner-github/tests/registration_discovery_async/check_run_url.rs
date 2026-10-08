@@ -1,4 +1,5 @@
 use super::*;
+use velnor_runner_github::ActionsWorkflowAttemptJobEvidence;
 
 fn job_with_check_run_url(id: i64, url: &str) -> String {
     job(id, RUN_ID, SHA).replace(
@@ -75,4 +76,110 @@ fn foreign_or_malformed_check_run_urls_fail_without_partial_evidence() {
         );
         assert_eq!(transport.0.lock().expect("test lock").requests.len(), 2);
     }
+}
+
+#[test]
+fn public_check_run_parser_rejects_invalid_expected_and_url_segments() {
+    let valid_url = "https://api.github.com/repos/ChainArgos/java-monorepo/check-runs/9";
+    assert_eq!(
+        ActionsWorkflowAttemptJobEvidence::parse_check_run_url(
+            valid_url,
+            "ChainArgos",
+            "java-monorepo",
+        )
+        .map(std::num::NonZeroI64::get)
+        .ok(),
+        Some(9)
+    );
+    let invalid_expected = [
+        ("", "java-monorepo"),
+        (".", "java-monorepo"),
+        ("..", "java-monorepo"),
+        ("Chain Argos", "java-monorepo"),
+        ("ChainArgos", "java/monorepo"),
+        ("ChainArgos", "java-monorepo?query"),
+    ];
+    for (owner, repository) in invalid_expected {
+        assert!(
+            ActionsWorkflowAttemptJobEvidence::parse_check_run_url(valid_url, owner, repository,)
+                .is_err(),
+            "invalid expected repository accepted: {owner:?}/{repository:?}"
+        );
+    }
+    let long_owner = "a".repeat(101);
+    assert!(
+        ActionsWorkflowAttemptJobEvidence::parse_check_run_url(
+            valid_url,
+            &long_owner,
+            "java-monorepo",
+        )
+        .is_err(),
+        "overlong expected owner accepted"
+    );
+
+    let invalid_urls = [
+        "https://api.github.com/repos//java-monorepo/check-runs/9",
+        "https://api.github.com/repos/./java-monorepo/check-runs/9",
+        "https://api.github.com/repos/../java-monorepo/check-runs/9",
+        "https://api.github.com/repos/Chain Argos/java-monorepo/check-runs/9",
+        "https://api.github.com/repos/ChainArgos/java-monorepo?query/check-runs/9",
+    ];
+    for url in invalid_urls {
+        assert!(
+            ActionsWorkflowAttemptJobEvidence::parse_check_run_url(
+                url,
+                "ChainArgos",
+                "java-monorepo",
+            )
+            .is_err(),
+            "invalid URL repository segment accepted: {url}"
+        );
+    }
+    let long_url = format!(
+        "https://api.github.com/repos/{}/java-monorepo/check-runs/9",
+        "a".repeat(101)
+    );
+    assert!(
+        ActionsWorkflowAttemptJobEvidence::parse_check_run_url(
+            &long_url,
+            "ChainArgos",
+            "java-monorepo",
+        )
+        .is_err(),
+        "overlong URL owner accepted"
+    );
+}
+
+#[test]
+fn public_check_run_parser_rejects_matching_invalid_scope_segments() {
+    let invalid_matching_scopes = [
+        ("", "r", "https://api.github.com/repos//r/check-runs/9"),
+        (".", "r", "https://api.github.com/repos/./r/check-runs/9"),
+        ("..", "r", "https://api.github.com/repos/../r/check-runs/9"),
+        (
+            "space owner",
+            "r",
+            "https://api.github.com/repos/space owner/r/check-runs/9",
+        ),
+        (
+            "owner",
+            "r?query",
+            "https://api.github.com/repos/owner/r?query/check-runs/9",
+        ),
+    ];
+    for (owner, repository, url) in invalid_matching_scopes {
+        assert!(
+            ActionsWorkflowAttemptJobEvidence::parse_check_run_url(url, owner, repository,)
+                .is_err(),
+            "matching invalid scope accepted: {owner:?}/{repository:?} in {url}"
+        );
+    }
+
+    let long_owner = "a".repeat(101);
+    let long_url = format!("https://api.github.com/repos/{long_owner}/r/check-runs/9");
+    assert!(
+        ActionsWorkflowAttemptJobEvidence::parse_check_run_url(&long_url, &long_owner, "r",)
+            .is_err(),
+        "matching overlong owner accepted"
+    );
 }
