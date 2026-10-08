@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 use velnor_actions_contract_config::{
     RoutingWorkflow, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL,
 };
+use velnor_actions_workflow_release::product_release::{ProductReleaseFamily, ProductReleaseSpec};
 use velnor_actions_workflow_steps::RenderError;
 use velnor_actions_workflow_steps::setup::MiseSetup;
 
@@ -42,6 +43,35 @@ pub struct MbxQualificationPins {
 }
 
 impl Schema2WorkflowRequest {
+    /// Resolve the selected release routes into the typed product-family API.
+    ///
+    /// This is an adapter over the existing selectors; Schema 1 and
+    /// non-release Schema 2 requests remain unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Invalid product-family selections fail closed.
+    pub fn product_release_spec(&self) -> Result<Option<ProductReleaseSpec>, RenderError> {
+        let families = [
+            (RoutingWorkflow::ImageRelease, ProductReleaseFamily::Images),
+            (
+                RoutingWorkflow::MacosBinaryRelease,
+                ProductReleaseFamily::Binary,
+            ),
+            (
+                RoutingWorkflow::GeneratorRelease,
+                ProductReleaseFamily::Generator,
+            ),
+        ]
+        .into_iter()
+        .filter_map(|(workflow, family)| self.workflows.contains(&workflow).then_some(family))
+        .collect::<Vec<_>>();
+        if families.is_empty() {
+            return Ok(None);
+        }
+        ProductReleaseSpec::new(families).map(Some)
+    }
+
     /// Canonical scale-set selector (`velnor`, then the scale-set name).
     ///
     /// # Errors

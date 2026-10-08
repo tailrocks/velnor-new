@@ -4438,6 +4438,7 @@ version = "0.1.1"
 dependencies = [
  "velnor-actions-contract-config",
  "velnor-actions-contract-release",
+ "velnor-actions-workflow-release",
  "velnor-actions-workflow-steps",
  "velnor-actions-workflow-tree",
 ]
