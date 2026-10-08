@@ -10,6 +10,17 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[test]
+fn release_manifest_version_matches_the_workspace_package_version() {
+    let current_binary = format!("velnor-actions-{}", super::VERSION);
+    assert_eq!(super::VERSION, env!("CARGO_PKG_VERSION"));
+    for asset in super::ASSETS {
+        assert!(asset.binary.starts_with(&current_binary));
+        assert!(asset.sidecar.starts_with(&current_binary));
+        assert!(asset.provenance.starts_with(&current_binary));
+    }
+}
+
 struct Scratch(PathBuf);
 
 impl Drop for Scratch {
@@ -32,7 +43,7 @@ fn wrong_checksum_filename_stops_before_candidate_execution() -> Result<(), Box<
     let candidate = directory.join(LINUX.binary);
     fs::write(
         &candidate,
-        "#!/bin/sh\nprintf '%s\\n' executed >> \"$CANDIDATE_EXECUTED\"\nprintf '%s\\n' 'velnor-actions 0.1.2'\n",
+        "#!/bin/sh\nprintf '%s\\n' executed >> \"$CANDIDATE_EXECUTED\"\nprintf '%s\\n' 'velnor-actions 0.1.3'\n",
     )?;
     let mut permissions = fs::metadata(&candidate)?.permissions();
     permissions.set_mode(0o755);
