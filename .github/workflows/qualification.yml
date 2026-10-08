@@ -145,8 +145,17 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
-      - name: Buildx probe
-        run: docker buildx version && printf 'FROM scratch\n' > Dockerfile && docker buildx build --progress=plain -t velnor-g4:probe .
+      - name: Require GitHub-hosted stock Docker
+        run: "set -euo pipefail\ntest -z \"${DOCKER_CONTEXT:-}\"\ncase \"${DOCKER_HOST:-}\" in\n  \"\"|unix:///var/run/docker.sock) ;;\n  *) printf '%s\\n' 'hosted Docker endpoint is not the stock socket' >&2; exit 1 ;;\nesac\ntest -S /var/run/docker.sock\ndocker --host unix:///var/run/docker.sock info >/dev/null"
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Buildx pinned context/cache probe
+        run: "set -euo pipefail\nendpoint=\"unix:///var/run/docker.sock\"\nbuilder=\"velnor-g4-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}\"\nwork=\"$RUNNER_TEMP/${builder}\"\ncache=\"$work/cache\"\ncontext=\"$GITHUB_WORKSPACE/qualification/buildx-context\"\ncase \"$work\" in \"$RUNNER_TEMP\"/velnor-g4-*) ;; *) exit 1 ;; esac\nmkdir \"$work\"\ntest -f \"$context/Dockerfile\"\ntest -f \"$context/payload.txt\"\nnode \"$context/cache-hit.mjs\" --self-test\ndocker --host \"$endpoint\" buildx create --name \"$builder\" --driver docker-container --driver-opt \"image=docker.io/moby/buildkit@sha256:98cc6a3fc46220d00f8224ae483f3274fc874e9be8d7dd1e2e2c5481209228b5\" \"$endpoint\" >/dev/null\ndocker --host \"$endpoint\" buildx inspect \"$builder\" --bootstrap > \"$work/inspect.txt\"\nawk -v endpoint=\"$endpoint\" '$1 == \"Driver:\" && $2 == \"docker-container\" { driver=1 } $1 == \"Endpoint:\" && $2 == endpoint { route=1 } $1 == \"BuildKit:\" && $2 == \"v0.33.1\" { version=1 } END { exit !(driver && route && version) }' \"$work/inspect.txt\"\nif ! docker --host \"$endpoint\" buildx build --builder \"$builder\" --platform linux/amd64 --progress=plain --cache-to \"type=local,dest=$cache\" --output \"type=local,dest=$work/first-result\" --file \"$context/Dockerfile\" \"$context\" > \"$work/first-build.log\" 2>&1; then\n  cat \"$work/first-build.log\"\n  exit 1\nfi\ntest -s \"$cache/index.json\"\ncmp \"$context/payload.txt\" \"$work/first-result/payload.txt\"\ndocker --host \"$endpoint\" buildx prune --builder \"$builder\" --all --force\nif ! docker --host \"$endpoint\" buildx build --builder \"$builder\" --platform linux/amd64 --progress=plain --cache-from \"type=local,src=$cache\" --output \"type=local,dest=$work/second-result\" --file \"$context/Dockerfile\" \"$context\" > \"$work/second-build.log\" 2>&1; then\n  cat \"$work/second-build.log\"\n  exit 1\nfi\nif ! node \"$context/cache-hit.mjs\" \"$work/second-build.log\"; then\n  cat \"$work/second-build.log\"\n  printf '%s\\n' 'Buildx did not report a hit for the pinned local context' >&2\n  exit 1\nfi\ncmp \"$context/payload.txt\" \"$work/second-result/payload.txt\""
+      - name: Remove Buildx builder and local cache
+        if: always()
+        run: "set -euo pipefail\nendpoint=\"unix:///var/run/docker.sock\"\nbuilder=\"velnor-g4-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}\"\nwork=\"$RUNNER_TEMP/${builder}\"\ncase \"$work\" in \"$RUNNER_TEMP\"/velnor-g4-*) ;; *) exit 1 ;; esac\nmkdir -p \"$work\"\ndocker --host \"$endpoint\" buildx ls --format '{{.Name}}' > \"$work/builders-before-cleanup\"\nif grep -Fxq \"$builder\" \"$work/builders-before-cleanup\"; then\n  docker --host \"$endpoint\" buildx rm \"$builder\"\nfi\ndocker --host \"$endpoint\" buildx ls --format '{{.Name}}' > \"$work/builders-after-cleanup\"\nif grep -Fxq \"$builder\" \"$work/builders-after-cleanup\"; then\n  printf '%s\\n' 'Buildx builder remained after cleanup' >&2\n  exit 1\nfi\nrm -rf \"$work\""
   buildx-scale-set:
     name: Buildx / Velnor Scale Set
     if: inputs.mode == 'features' || inputs.mode == 'buildx'
@@ -156,8 +165,17 @@ jobs:
       run:
         shell: bash -e {0}
     steps:
-      - name: Buildx probe
-        run: docker buildx version && printf 'FROM scratch\n' > Dockerfile && docker buildx build --progress=plain -t velnor-g4:probe .
+      - name: Require Velnor private DinD socket
+        run: "set -euo pipefail\ntest -z \"${DOCKER_CONTEXT:-}\"\ntest \"${DOCKER_HOST:-}\" = \"unix:///run/docker/docker.sock\"\ntest -S /run/docker/docker.sock\ntest ! -e /var/run/docker.sock\ndocker --host unix:///run/docker/docker.sock info >/dev/null"
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Buildx pinned context/cache probe
+        run: "set -euo pipefail\nendpoint=\"unix:///run/docker/docker.sock\"\nbuilder=\"velnor-g4-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}\"\nwork=\"$RUNNER_TEMP/${builder}\"\ncache=\"$work/cache\"\ncontext=\"$GITHUB_WORKSPACE/qualification/buildx-context\"\ncase \"$work\" in \"$RUNNER_TEMP\"/velnor-g4-*) ;; *) exit 1 ;; esac\nmkdir \"$work\"\ntest -f \"$context/Dockerfile\"\ntest -f \"$context/payload.txt\"\nnode \"$context/cache-hit.mjs\" --self-test\ndocker --host \"$endpoint\" buildx create --name \"$builder\" --driver docker-container --driver-opt \"image=docker.io/moby/buildkit@sha256:98cc6a3fc46220d00f8224ae483f3274fc874e9be8d7dd1e2e2c5481209228b5\" \"$endpoint\" >/dev/null\ndocker --host \"$endpoint\" buildx inspect \"$builder\" --bootstrap > \"$work/inspect.txt\"\nawk -v endpoint=\"$endpoint\" '$1 == \"Driver:\" && $2 == \"docker-container\" { driver=1 } $1 == \"Endpoint:\" && $2 == endpoint { route=1 } $1 == \"BuildKit:\" && $2 == \"v0.33.1\" { version=1 } END { exit !(driver && route && version) }' \"$work/inspect.txt\"\nif ! docker --host \"$endpoint\" buildx build --builder \"$builder\" --platform linux/amd64 --progress=plain --cache-to \"type=local,dest=$cache\" --output \"type=local,dest=$work/first-result\" --file \"$context/Dockerfile\" \"$context\" > \"$work/first-build.log\" 2>&1; then\n  cat \"$work/first-build.log\"\n  exit 1\nfi\ntest -s \"$cache/index.json\"\ncmp \"$context/payload.txt\" \"$work/first-result/payload.txt\"\ndocker --host \"$endpoint\" buildx prune --builder \"$builder\" --all --force\nif ! docker --host \"$endpoint\" buildx build --builder \"$builder\" --platform linux/amd64 --progress=plain --cache-from \"type=local,src=$cache\" --output \"type=local,dest=$work/second-result\" --file \"$context/Dockerfile\" \"$context\" > \"$work/second-build.log\" 2>&1; then\n  cat \"$work/second-build.log\"\n  exit 1\nfi\nif ! node \"$context/cache-hit.mjs\" \"$work/second-build.log\"; then\n  cat \"$work/second-build.log\"\n  printf '%s\\n' 'Buildx did not report a hit for the pinned local context' >&2\n  exit 1\nfi\ncmp \"$context/payload.txt\" \"$work/second-result/payload.txt\""
+      - name: Remove Buildx builder and local cache
+        if: always()
+        run: "set -euo pipefail\nendpoint=\"unix:///run/docker/docker.sock\"\nbuilder=\"velnor-g4-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}\"\nwork=\"$RUNNER_TEMP/${builder}\"\ncase \"$work\" in \"$RUNNER_TEMP\"/velnor-g4-*) ;; *) exit 1 ;; esac\nmkdir -p \"$work\"\ndocker --host \"$endpoint\" buildx ls --format '{{.Name}}' > \"$work/builders-before-cleanup\"\nif grep -Fxq \"$builder\" \"$work/builders-before-cleanup\"; then\n  docker --host \"$endpoint\" buildx rm \"$builder\"\nfi\ndocker --host \"$endpoint\" buildx ls --format '{{.Name}}' > \"$work/builders-after-cleanup\"\nif grep -Fxq \"$builder\" \"$work/builders-after-cleanup\"; then\n  printf '%s\\n' 'Buildx builder remained after cleanup' >&2\n  exit 1\nfi\nrm -rf \"$work\""
   expect-fail-hosted:
     name: Expected negative / GitHub hosted
     if: inputs.mode == 'negative'

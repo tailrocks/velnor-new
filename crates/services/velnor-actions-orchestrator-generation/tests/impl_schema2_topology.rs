@@ -308,7 +308,7 @@ fn uses_scale_set_socket(body: &str) -> bool {
         && body.contains(&format!("{SCALE_SET_DOCKER_HOST} info >/dev/null"))
 }
 
-fn shell_context_guard(body: &str) -> Result<String, Box<dyn std::error::Error>> {
+pub(super) fn shell_context_guard(body: &str) -> Result<String, Box<dyn std::error::Error>> {
     if !body.contains(CONTEXT_GUARD) {
         return Err("provider step is missing the Docker context guard".into());
     }

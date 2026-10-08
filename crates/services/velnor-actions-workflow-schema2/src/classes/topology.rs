@@ -4,6 +4,8 @@
 //! the runner's private `DinD` socket. The workload checks stay paired while
 //! each provider's orchestration contract remains explicit.
 
+pub(super) use super::super::docker::docker_endpoint;
+use super::super::docker::docker_provider_guard;
 use super::super::features::{
     checkout_step, lane_base, lane_base_with_container, local_action_step, run_step,
 };
@@ -18,25 +20,6 @@ const ALPINE: &str = "docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffb
 const REDIS: &str = "docker.io/library/redis@sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2";
 const REDIS_OPTIONS: &str =
     "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12";
-const HOSTED_DOCKER_ENDPOINT: &str = "unix:///var/run/docker.sock";
-const SCALE_SET_DOCKER_ENDPOINT: &str = "unix:///run/docker/docker.sock";
-
-const HOSTED_DOCKER: &str = r#"set -euo pipefail
-test -z "${DOCKER_CONTEXT:-}"
-case "${DOCKER_HOST:-}" in
-  ""|unix:///var/run/docker.sock) ;;
-  *) printf '%s\n' 'hosted Docker endpoint is not the stock socket' >&2; exit 1 ;;
-esac
-test -S /var/run/docker.sock
-docker --host unix:///var/run/docker.sock info >/dev/null"#;
-
-const SCALE_SET_DOCKER: &str = r#"set -euo pipefail
-test -z "${DOCKER_CONTEXT:-}"
-test "${DOCKER_HOST:-}" = "unix:///run/docker/docker.sock"
-test -S /run/docker/docker.sock
-test ! -e /var/run/docker.sock
-docker --host unix:///run/docker/docker.sock info >/dev/null"#;
-
 const HOST_WORKSPACE_AND_SERVICE: &str = r#"set -euo pipefail
 marker=".velnor-topology.txt"
 printf '%s\n' runner-work-volume-ok > "$GITHUB_WORKSPACE/$marker"
@@ -215,24 +198,12 @@ fn docker_action(id: &str, name: &str, runner: &RunnerSpec, parent: &str) -> (St
     )
 }
 
-pub(super) fn docker_endpoint(runner: &RunnerSpec) -> &'static str {
-    if runner.lane == RunnerLane::Hosted {
-        HOSTED_DOCKER_ENDPOINT
-    } else {
-        SCALE_SET_DOCKER_ENDPOINT
-    }
-}
-
 fn docker_workspace_probe(runner: &RunnerSpec) -> String {
     DOCKER_WORKSPACE.replace("{endpoint}", docker_endpoint(runner))
 }
 
 pub(super) fn docker_provider_step(runner: &RunnerSpec) -> Yaml {
-    let (name, command) = if runner.lane == RunnerLane::Hosted {
-        ("Require GitHub-hosted stock Docker", HOSTED_DOCKER)
-    } else {
-        ("Require Velnor private DinD socket", SCALE_SET_DOCKER)
-    };
+    let (name, command) = docker_provider_guard(runner);
     run_step(name, command)
 }
 
