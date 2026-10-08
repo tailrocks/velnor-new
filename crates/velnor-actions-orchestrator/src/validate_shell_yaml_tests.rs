@@ -1,4 +1,4 @@
-use super::super::run_shellcheck_bodies;
+use super::super::{run_shellcheck_bodies, workflow};
 use super::{ShellDialect, scan_workflow};
 
 fn bodies(workflow: &str) -> Result<Vec<(String, ShellDialect)>, String> {
@@ -173,9 +173,10 @@ fn run_aliases_reject_forward_duplicate_and_out_of_scope_definitions() {
     assert!(bodies(duplicate).is_err_and(|error| error.contains("duplicate_step_run")));
 
     let outside_scope = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: action\n        uses: example/action@0000000000000000000000000000000000000000\n        with:\n          run: &r1 echo ignored\n      - name: reuse\n        run: *r1\n";
-    assert!(
-        bodies(outside_scope).is_err_and(|error| error.contains("run_scalar_alias_unresolved"))
-    );
+    assert!(bodies(outside_scope).is_err_and(|error| {
+        error.contains("workflow_alias_outside_step_run")
+            || error.contains("run_scalar_alias_unresolved")
+    }));
 }
 
 #[test]
@@ -199,15 +200,62 @@ fn run_aliases_reject_malformed_and_duplicate_definitions() {
 fn run_aliases_cannot_cross_workflow_files() -> Result<(), String> {
     let definition = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: definition\n        run: &r1 echo safe\n";
     let use_in_other_file = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: other workflow\n        run: *r1\n";
-    assert_eq!(bodies(definition)?.len(), 1);
+    let staging = tempfile::tempdir().map_err(|error| error.to_string())?;
+    let first = staging.path().join("first.yml");
+    let second = staging.path().join("second.yml");
+    std::fs::write(&first, definition).map_err(|error| error.to_string())?;
+    std::fs::write(&second, use_in_other_file).map_err(|error| error.to_string())?;
     assert!(
-        bodies(use_in_other_file).is_err_and(|error| error.contains("run_scalar_alias_unresolved"))
+        workflow::staged_runs(
+            staging.path(),
+            &["first.yml".to_owned(), "second.yml".to_owned()]
+        )
+        .is_err_and(|error| error.to_string().contains("run_scalar_alias_unresolved"))
     );
     Ok(())
 }
 
 #[test]
-fn aliased_sc2086_violation_fails_the_real_shellcheck_gates() -> Result<(), String> {
+fn aliases_outside_executable_run_scalars_fail_closed() {
+    let env_alias = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: define\n        run: &r1 echo safe\n      - name: alias in env\n        env:\n          COPY: *r1\n        run: echo safe\n";
+    let runner_anchor = "jobs:\n  job:\n    runs-on: &runner ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n  second:\n    runs-on: *runner\n    steps:\n      - name: second command\n        run: echo safe\n";
+    let flow_alias = "jobs:\n  job:\n    runs-on: [ubuntu-26.04, *runner]\n    steps:\n      - name: command\n        run: echo safe\n";
+    let alias_key = "jobs:\n  job:\n    *runner: value\n    runs-on: ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n";
+    let merge_key = "jobs:\n  job:\n    <<: {runs-on: ubuntu-26.04}\n    steps:\n      - name: command\n        run: echo safe\n";
+
+    for workflow in [env_alias, runner_anchor, flow_alias, alias_key, merge_key] {
+        assert!(
+            bodies(workflow).is_err_and(|error| {
+                error.contains("workflow_alias_outside_step_run")
+                    || error.contains("workflow_merge_key_unsupported")
+            }),
+            "accepted out-of-scope alias or merge key: {workflow}"
+        );
+    }
+}
+
+#[test]
+fn literal_shell_globs_and_comments_are_not_yaml_aliases() -> Result<(), String> {
+    let workflow = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: shell glob\n        run: echo *r1 # &comment\n";
+    assert_eq!(bodies(workflow)?.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn aliases_outside_run_fields_fail_the_complete_staged_validation_chain() -> Result<(), String> {
+    for workflow in [
+        "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: define\n        run: &r1 echo safe\n      - name: alias in env\n        env:\n          COPY: *r1\n        run: echo safe\n",
+        "jobs:\n  job:\n    runs-on: &runner ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n  second:\n    runs-on: *runner\n    steps:\n      - name: second command\n        run: echo safe\n",
+    ] {
+        let error = validate_generated_workflow(workflow)
+            .expect_err("out-of-scope aliases must fail staged validation");
+        assert!(error.contains("workflow_alias_outside_step_run"), "{error}");
+    }
+    Ok(())
+}
+
+#[test]
+fn run_aliases_are_checked_under_each_effective_shell() -> Result<(), String> {
     let staging = tempfile::tempdir().map_err(|error| error.to_string())?;
     let workflow_path = ".github/workflows/ci.yml";
     let full_path = staging.path().join(workflow_path);
@@ -215,7 +263,21 @@ fn aliased_sc2086_violation_fails_the_real_shellcheck_gates() -> Result<(), Stri
         .map_err(|error| error.to_string())?;
     std::fs::write(
         &full_path,
-        "jobs:\n  hosted:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: define unquoted expansion\n        run: &r1 echo $HOME\n  scale:\n    runs-on: [self-hosted, runner]\n    defaults:\n      run:\n        shell: sh\n    steps:\n      - name: alias under sh\n        run: *r1\n",
+        r#"jobs:
+  hosted:
+    runs-on: ubuntu-26.04
+    steps:
+      - name: define bash array
+        run: &r1 "paths=(\"$HOME\"); printf '%s' \"${paths[0]}\""
+  scale:
+    runs-on: [self-hosted, runner]
+    defaults:
+      run:
+        shell: sh
+    steps:
+      - name: alias under sh
+        run: *r1
+"#,
     )
     .map_err(|error| error.to_string())?;
     let error = run_shellcheck_bodies(
@@ -223,7 +285,71 @@ fn aliased_sc2086_violation_fails_the_real_shellcheck_gates() -> Result<(), Stri
         staging.path(),
         &[workflow_path.to_owned()],
     )
-    .expect_err("aliased unquoted expansion must fail the targeted SC2086 pass");
-    assert!(error.to_string().contains("SC2086"));
+    .expect_err("a bash-only run alias must fail at its sh use site");
+    assert!(error.to_string().contains("SC3030"), "{error}");
     Ok(())
+}
+
+#[test]
+fn run_aliases_pass_when_each_use_has_the_bash_shell() -> Result<(), String> {
+    let staging = tempfile::tempdir().map_err(|error| error.to_string())?;
+    let workflow_path = ".github/workflows/ci.yml";
+    let full_path = staging.path().join(workflow_path);
+    std::fs::create_dir_all(full_path.parent().ok_or("workflow has no parent")?)
+        .map_err(|error| error.to_string())?;
+    std::fs::write(
+        &full_path,
+        r#"jobs:
+  hosted:
+    runs-on: ubuntu-26.04
+    steps:
+      - name: define bash array
+        run: &r1 "paths=(\"$HOME\"); printf '%s' \"${paths[0]}\""
+  second-hosted:
+    runs-on: ubuntu-26.04
+    steps:
+      - name: reuse under bash
+        run: *r1
+"#,
+    )
+    .map_err(|error| error.to_string())?;
+    run_shellcheck_bodies(
+        &velnor_actions_mise::ToolCatalog::pinned(),
+        staging.path(),
+        &[workflow_path.to_owned()],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn validate_generated_workflow(body: &str) -> Result<(), String> {
+    use velnor_actions_workflow_renderer::{
+        marker::with_marker,
+        render::{RenderedFile, RenderedTree},
+    };
+
+    let version = env!("CARGO_PKG_VERSION");
+    let actionlint = with_marker(
+        version,
+        "config-variables: []\n\nself-hosted-runner:\n  labels:\n    - ubuntu-26.04\n",
+    )
+    .map_err(|error| error.to_string())?;
+    let workflow_body = format!("on:\n  push:\npermissions:\n  contents: read\n{body}");
+    let workflow = with_marker(version, &workflow_body).map_err(|error| error.to_string())?;
+    let tree = RenderedTree {
+        files: vec![
+            RenderedFile {
+                path: ".github/actionlint.yaml".to_owned(),
+                bytes: actionlint,
+            },
+            RenderedFile {
+                path: ".github/workflows/ci.yml".to_owned(),
+                bytes: workflow,
+            },
+        ],
+        symlinks: Vec::new(),
+    };
+    crate::validate::validate_staged(&tree)
+        .map(|_| ())
+        .map_err(|error| error.to_string())
 }

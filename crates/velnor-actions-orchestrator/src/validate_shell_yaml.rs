@@ -10,6 +10,9 @@ mod shell;
 #[path = "validate_shell_yaml_run_anchor.rs"]
 mod run_anchor;
 
+#[path = "validate_shell_yaml_alias_scope.rs"]
+mod alias_scope;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ShellDialect {
     Bash,
@@ -118,9 +121,12 @@ fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
             }
         }
         let Some((key, source_value)) = entry else {
+            alias_scope::reject_non_mapping_content(content)?;
             continue;
         };
-        let value = if is_step_run_site(&scan, indent, key) {
+        let is_step_run = is_step_run_site(&scan, indent, key);
+        alias_scope::validate_mapping_value(key, source_value, is_step_run)?;
+        let value = if is_step_run {
             run_anchor::resolve_run_scalar(source_value, &mut scan.run_anchors)?
         } else {
             source_value.to_owned()

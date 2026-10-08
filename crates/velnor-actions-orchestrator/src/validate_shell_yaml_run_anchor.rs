@@ -14,7 +14,10 @@ pub(super) fn resolve_run_scalar(
             return Err(shellcheck_fail("run_scalar_anchor_malformed"));
         };
         let scalar = scalar.trim();
-        if !valid_name(name) || scalar.is_empty() || scalar.starts_with(['|', '>']) {
+        if !valid_name(name)
+            || scalar.is_empty()
+            || scalar.starts_with(['|', '>', '[', '{', '&', '*'])
+        {
             return Err(shellcheck_fail("run_scalar_anchor_malformed"));
         }
         if anchors.contains_key(name) {
