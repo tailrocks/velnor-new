@@ -13,3 +13,5 @@ mod impl_remed_cache_b;
 mod impl_remed_contract_b;
 #[path = "impl_shared_fixtures.rs"]
 mod impl_shared_fixtures;
+#[path = "impl_task_identity_paths.rs"]
+mod impl_task_identity_paths;
