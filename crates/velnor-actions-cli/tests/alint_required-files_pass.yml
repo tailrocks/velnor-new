@@ -46,17 +46,19 @@ rules:
   # alint-policy fixture: comments carry no policy weight.
   # alint-policy fixture: comments carry no policy weight.
   # alint-policy fixture: comments carry no policy weight.
-  - id: claude-is-agents-symlink
+  - id: claude-is-agents-pointer
     kind: command
-    paths: "**/AGENTS.md"
+    paths:
+      include: ["**/AGENTS.md"]
+      exclude: [".github/**"]
     command:
       - sh
       - -c
-      - 'dir=$(dirname "$1") && test -L "$dir/CLAUDE.md" && test "$(readlink "$dir/CLAUDE.md")" = AGENTS.md'
-      - alint-claude-link
+      - 'dir=$(dirname "$1") && test -f "$dir/CLAUDE.md" && test ! -L "$dir/CLAUDE.md" && printf "@AGENTS.md\n" | cmp -s - "$dir/CLAUDE.md"'
+      - alint-claude-pointer
       - "{path}"
     level: error
-    message: "Each AGENTS.md must have a sibling CLAUDE.md symlink to AGENTS.md"
+    message: "Each AGENTS.md must have a sibling CLAUDE.md regular file with the @AGENTS.md pointer body"
 
   # alint-policy fixture: comments carry no policy weight.
   - id: agent-instructions-max-lines

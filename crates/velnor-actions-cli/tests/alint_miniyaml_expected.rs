@@ -24,9 +24,12 @@ pub(crate) const EXPECTED: [ExpectedRule; 7] = [
         pairs: &[],
     },
     ExpectedRule {
-        id: "claude-is-agents-symlink",
+        id: "claude-is-agents-pointer",
         kind: "command",
-        paths: &[("paths", &["**/AGENTS.md"])],
+        paths: &[
+            ("paths.include", &["**/AGENTS.md"]),
+            ("paths.exclude", &[".github/**"]),
+        ],
         pairs: &[("command", "{path}")],
     },
     ExpectedRule {

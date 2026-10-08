@@ -34,6 +34,7 @@ mod preview;
 pub use guards::ToolSnapshot;
 
 use guards::{GenerateOwnership, same_filesystem};
+use leaf_links::check_no_symlink_or_emitted_leaf;
 
 /// Options for [`generate`].
 #[derive(Debug, Clone, Default)]
@@ -212,10 +213,9 @@ fn reject_symlink(path: &Path) -> Result<(), OrchestratorError> {
     Ok(())
 }
 
-/// Probe for `check_no_symlink`: true when the prefix is a symlink.
-fn is_symlink(path: &Path) -> bool {
-    std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_symlink())
-}
+/// Symlink-prefix guard with emitted-leaf replacement.
+#[path = "generate_leaf_links.rs"]
+mod leaf_links;
 
 /// Stage under the root, then commit under the ownership lock.
 ///
@@ -237,7 +237,7 @@ fn replace_in_place(
         });
     }
     for rel in check_tree_paths(tree)? {
-        guard::check_no_symlink(root, &rel, is_symlink)?;
+        check_no_symlink_or_emitted_leaf(root, &rel)?;
     }
     let staging = tempfile::tempdir_in(root)
         .map_err(|err| OrchestratorError::io(root.display().to_string(), err.to_string()))?;

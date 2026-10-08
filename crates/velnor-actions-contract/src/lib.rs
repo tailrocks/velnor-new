@@ -82,8 +82,8 @@ pub use extensions::{
 };
 pub use finding::Finding;
 pub use formats::{
-    AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET, DECLARED_GITHUB_FORMATS, find_github_format,
-    is_declared_github_format,
+    AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_POINTER_BODY, DECLARED_GITHUB_FORMATS,
+    find_github_format, is_declared_github_format,
 };
 pub use freshness::{
     FRESHNESS_CLASSES, FreshnessRequirement, RunnerImageEvidence, UNOBSERVED_IMAGE_VALUE,

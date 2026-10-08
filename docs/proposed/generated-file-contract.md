@@ -10,7 +10,7 @@ preserves other repository-owned entries as specified in §3:
 ```text
 .github/
 ├── AGENTS.md
-├── CLAUDE.md -> AGENTS.md
+├── CLAUDE.md                # regular file; single `@AGENTS.md` import line
 ├── actionlint.yaml
 ├── release-plz-bootstrap.toml   # consumer-v1 only, release enabled
 ├── release-plz.toml             # consumer-v1 only, release enabled
@@ -43,7 +43,7 @@ block (least privilege for its role); see [workflow
 |---|---|---|---|
 | .github/actionlint.yaml | velnor-actions-actionlint | velnor-actions-orchestrator | Exact generated path; replaced on generation |
 | .github/AGENTS.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated path; version marker; replaced on generation |
-| .github/CLAUDE.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated symlink to AGENTS.md; replaced on generation |
+| .github/CLAUDE.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated pointer file with the single `@AGENTS.md` import line; replaced on generation |
 | .github/workflows/** | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Reserved generator-owned namespace; every path is replaced or retired on successful generation |
 | .github/release-plz*.toml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated release-plz config paths; retired when no longer emitted |
 | .github/actions/<logical>/action.yml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated shared action path is owned when its first line has a Velnor generated marker; replaced or retired with dispatch output |
@@ -94,7 +94,9 @@ Every generated text file begins with:
 The marker MUST contain the exact Velnor Actions version used to render the
 file. It MUST NOT contain a generation date. The YAML renderer MUST emit the
 marker as a comment before the workflow document and MUST use stable key,
-job, step, matrix, and array ordering.
+job, step, matrix, and array ordering. `.github/CLAUDE.md` is exempt from
+the marker: it carries only the single `@AGENTS.md` import line so Claude
+resolves the sibling instructions without symlink resolution.
 
 Generated workflow shell steps MUST contain fixed argument vectors produced by
 typed adapters. Repository configuration MUST NOT supply shell text, arbitrary
