@@ -64,7 +64,7 @@ pub const CANDIDATE_JOB_ID: &str = "candidate";
 /// Baseline-publish job ID: runs after the final gate passes.
 pub const PUBLISH_JOB_ID: &str = "publish-baseline";
 /// Full-SHA Alint pin for the repository-policy `alint` job.
-pub const ALINT_USES: &str = "asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb";
+pub const ALINT_USES: &str = "asamarts/alint@d93c0283b19dd78afcd8a4b303f1556a7759ba81";
 /// Pinned Alint binary release tag for the step's `version:` input.
 ///
 /// Per the action's `action.yml`, a SHA-pinned `uses:` falls back to
@@ -73,7 +73,7 @@ pub const ALINT_USES: &str = "asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7
 /// release); the renderer cannot depend on that crate, so
 /// `scripts/check-freshness.sh` pins this mirror to the reviewed
 /// `asamarts/alint` inventory row instead of trusting the duplication.
-pub const ALINT_BINARY_VERSION: &str = "v0.16.1";
+pub const ALINT_BINARY_VERSION: &str = "v0.17.0";
 
 /// Caller-supplied validated scalars the IR cannot carry.
 #[derive(Debug, Clone)]

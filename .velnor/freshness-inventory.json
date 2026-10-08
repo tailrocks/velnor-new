@@ -79,15 +79,15 @@
       "latest_sha": "d0825fbaf3cc36ca2609aa38e71046265a1f1e37"
     },
     {
-      "checked_at": "2026-10-05T12:26:50Z",
+      "checked_at": "2026-10-07T23:29:48Z",
       "key": "asamarts/alint",
       "latest": "v0.17.0",
-      "pinned_sha": "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb",
-      "pinned_version": "v0.16.1",
-      "qualified_sha": "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb",
-      "qualified_version": "v0.16.1",
+      "pinned_sha": "d93c0283b19dd78afcd8a4b303f1556a7759ba81",
+      "pinned_version": "v0.17.0",
+      "qualified_sha": "d93c0283b19dd78afcd8a4b303f1556a7759ba81",
+      "qualified_version": "v0.17.0",
       "source": "https://api.github.com/repos/asamarts/alint/releases/latest",
-      "status": "held"
+      "status": "current"
     },
     {
       "checked_at": "2026-10-07T14:38:41Z",
@@ -118,15 +118,6 @@
   },
   "schema": 1,
   "temporary_holds": [
-    {
-      "expires": "2026-10-15",
-      "granted": "2026-10-01",
-      "held_version": "v0.16.1",
-      "issue": "#6",
-      "key": "asamarts/alint",
-      "owner": "@donbeave",
-      "reason": "upstream moved mid-consolidation; VER-3.2 update set tracked in #6, rust bump needs maintainer qualification decision"
-    },
     {
       "expires": "2026-10-15",
       "granted": "2026-10-01",
