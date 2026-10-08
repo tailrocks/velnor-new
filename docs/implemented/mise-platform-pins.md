@@ -1,23 +1,19 @@
 # Mise platform binary pins
 
-Named checks use the repository's qualified Mise `2026.9.18` pin. For a
-typed native check, the generator selects the digest for that runner target;
-the `jdx/mise-action` `sha256` input identifies the installed binary.
+Named checks use the repository's qualified Mise `2026.10.4` pin. For a
+typed native check, the generator selects the SHA-256 for that runner target;
+the `jdx/mise-action` `sha256` input identifies the installed executable.
 
-On 2026-10-05, each official release archive was downloaded and its SHA-256
-matched the release's `SHASUMS256.txt`. The extracted `mise/bin/mise` bytes
-also matched the release checksum for the corresponding raw executable.
+On 2026-10-08, each raw executable was downloaded from the official Mise
+`v2026.10.4` release and its SHA-256 and byte count were measured locally.
+The measured digests match the corresponding entries in the release's
+[`SHASUMS256.txt`](https://github.com/jdx/mise/releases/download/v2026.10.4/SHASUMS256.txt).
 
-| Target | Official archive | Archive SHA-256 | Binary SHA-256 | Binary bytes |
-| --- | --- | --- | --- | ---: |
-| `x86_64-unknown-linux-gnu` | `mise-v2026.9.18-linux-x64.tar.gz` | `4312f8fd72a8d6a869cd2aca7444929e2a0ef6f45d2c6f2866a1eacc5bdc2e84` | `d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4` | 153572880 |
-| `aarch64-apple-darwin` | `mise-v2026.9.18-macos-arm64.tar.gz` | `b3539de1a9823505269481b71d09a9cf86e141c63ebfc6101b3cf561766a83e8` | `484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f` | 122907616 |
-| `x86_64-apple-darwin` | `mise-v2026.9.18-macos-x64.tar.gz` | `e1fd0d0a7c93428cc4eaf61a0bdb26f0a50d4401283458c1182d3dcc6fb9b234` | `02d8ba561847f996925e361262c0610a24f59fcd9e06ba9ed0b6022e19b317c3` | 149027840 |
-
-The release checksum list is [SHASUMS256.txt](https://github.com/jdx/mise/releases/download/v2026.9.18/SHASUMS256.txt).
-The archives are [Linux x86-64](https://github.com/jdx/mise/releases/download/v2026.9.18/mise-v2026.9.18-linux-x64.tar.gz),
-[macOS ARM64](https://github.com/jdx/mise/releases/download/v2026.9.18/mise-v2026.9.18-macos-arm64.tar.gz),
-and [macOS x86-64](https://github.com/jdx/mise/releases/download/v2026.9.18/mise-v2026.9.18-macos-x64.tar.gz).
+| Target | Official raw executable | SHA-256 | Bytes |
+| --- | --- | --- | ---: |
+| `x86_64-unknown-linux-gnu` | [`mise-v2026.10.4-linux-x64`](https://github.com/jdx/mise/releases/download/v2026.10.4/mise-v2026.10.4-linux-x64) | `2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75` | 158829568 |
+| `aarch64-apple-darwin` | [`mise-v2026.10.4-macos-arm64`](https://github.com/jdx/mise/releases/download/v2026.10.4/mise-v2026.10.4-macos-arm64) | `5c530143fc750e8a98c9a36be8d361e5dd953fa0b004d58f7577783f7cf2ac24` | 125641616 |
+| `x86_64-apple-darwin` | [`mise-v2026.10.4-macos-x64`](https://github.com/jdx/mise/releases/download/v2026.10.4/mise-v2026.10.4-macos-x64) | `9f58d924a4d7b47aeb1610cd981beca2125907b2591d805237efbca8aae4308e` | 153265264 |
 
 The measured byte counts are the per-target upper bounds used when projecting
 the selected executable into an owned check home. Unsupported targets fail

@@ -82,6 +82,7 @@ inputs = [
   "crates/velnor-actions-freshness/src/evidence/exceptions.rs",
   "crates/velnor-actions-freshness/src/evidence/freshness.rs",
   "crates/velnor-actions-freshness/src/inventory.rs",
+  "crates/velnor-actions-freshness/src/inventory/tests.rs",
   "crates/velnor-actions-freshness/src/inventory/mirror.rs",
   "crates/velnor-actions-freshness/src/inventory/pins.rs",
   "crates/velnor-actions-freshness/src/lib.rs",
@@ -91,6 +92,7 @@ inputs = [
   "crates/velnor-actions-freshness/src/probe/tests.rs",
   "crates/velnor-actions-freshness/src/probe/tests/http.rs",
   "crates/velnor-actions-freshness/src/probe/transport.rs",
+  "crates/velnor-actions-freshness/src/probe/transport/range.rs",
   "crates/velnor-actions-freshness/src/process.rs",
   "crates/velnor-actions-freshness/src/process/capture.rs",
   "crates/velnor-actions-freshness/src/process/tests.rs",
@@ -129,21 +131,21 @@ executor = "hosted"
 [[qualified_tools]]
 id = "cargo-nextest"
 backend = { kind = "aqua", package = "nextest-rs/nextest/cargo-nextest" }
-version = "0.9.146"
+version = "0.9.148"
 options = { kind = "default" }
 depends_on = ["rust"]
 [[qualified_tools.platforms]]
 platform = "linux_x64"
 artifacts = [
-  { url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.146/cargo-nextest-0.9.146-x86_64-unknown-linux-gnu.tar.gz", sha256 = "682c21b777c333e96fd532e114d3a5a894e0729ab88d94c0a9f20f8419695428" },
+  { url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.148/cargo-nextest-0.9.148-x86_64-unknown-linux-gnu.tar.gz", sha256 = "223ba936714cc861a9cdedad5a8eb664dfdd69d6fbdf6cea6aa8184f523290dc" },
 ]
 dependency_artifacts = []
-install_tree_sha256 = "a00d122ef5a0077254a317b33346cabcbd14e05531e7d29cdae06a07f64940ae"
+install_tree_sha256 = "3d65a55f9602c19326ae050d373175a8b778e21cdbc4f82adfe0bd1be30e8c11"
 [[qualified_tools.platforms.executables]]
 name = "cargo-nextest"
 path = "cargo-nextest"
-sha256 = "aac21fea56e7ae3f45b5b7c606e02d62d4ec5b3578658fefe4a98a5f29c4bf1a"
-probe = { kind = "cargo_nextest_version", expected = "cargo-nextest 0.9.146 (8af696ddc 2026-09-21)" }
+sha256 = "53470cfc9b5cbcd96780db2d348700d76af962467503791f1f8a8824d8967e5c"
+probe = { kind = "cargo_nextest_version", expected = "cargo-nextest 0.9.148 (cd1d6d546 2026-10-07)" }
 
 [[qualified_tools]]
 id = "rust"

@@ -64,7 +64,7 @@ fn policy() -> BuildTaskPolicy {
         runner_label: "macos-26".to_owned(),
         mise_setup: MiseSetup {
             uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
-            version: "2026.9.18".to_owned(),
+            version: "2026.10.4".to_owned(),
             sha256: "a".repeat(64),
         },
         mise_config_sha256: "b".repeat(64),

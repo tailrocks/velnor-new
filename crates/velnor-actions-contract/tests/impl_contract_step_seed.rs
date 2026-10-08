@@ -15,7 +15,7 @@ fn seed_step() -> Step {
             uses: velnor_actions_contract::workflow::step_identity::TOOL_SEED_USES.to_owned(),
             with: BTreeMap::from([(
                 "cache_key".to_owned(),
-                "mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f".to_owned(),
+                "mise-v1-x86_64-unknown-linux-gnu-2026.10.4-75c77caa4018556f".to_owned(),
             )]),
             env: BTreeMap::new(),
         },

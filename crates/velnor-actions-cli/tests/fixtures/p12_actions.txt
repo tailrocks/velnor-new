@@ -1,7 +1,7 @@
 pub const ALINT_ACTION_VERSION: &str = "v0.17.0";
 pub const ALINT_ACTION_SHA: &str = "d93c0283b19dd78afcd8a4b303f1556a7759ba81";
-pub const MISE_ACTION_VERSION: &str = "v4.3.0";
-pub const MISE_ACTION_SHA: &str = "c2a87611a18de5b3828c5652fe268e992400cb5c";
+pub const MISE_ACTION_VERSION: &str = "v5.1.1";
+pub const MISE_ACTION_SHA: &str = "2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca";
 pub const CHECKOUT_ACTION_VERSION: &str = "v7.0.1";
 pub const CHECKOUT_ACTION_SHA: &str = "3d3c42e5aac5ba805825da76410c181273ba90b1";
 pub const DOWNLOAD_ARTIFACT_ACTION_VERSION: &str = "v8.0.1";

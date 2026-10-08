@@ -207,8 +207,8 @@ fn dispatch_render_context(staged: String) -> RenderContext {
 fn dispatch_mise() -> MiseSetup {
     MiseSetup {
         uses: format!("jdx/mise-action@{}", "d".repeat(40)),
-        version: "2026.9.18".to_owned(),
-        sha256: "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4".to_owned(),
+        version: "2026.10.4".to_owned(),
+        sha256: "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75".to_owned(),
     }
 }
 

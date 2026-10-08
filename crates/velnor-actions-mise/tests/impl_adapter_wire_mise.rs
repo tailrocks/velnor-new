@@ -119,12 +119,12 @@ fn catalog_identities_validate() {
         RUST_VERSION
     );
     let custom = ToolCatalog::new(
-        "1.98.1", "1.19.0", "2.101.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.0",
+        "1.98.1", "1.19.0", "2.101.0", "1.7.12", "0.11.0", "1.30.1", "0.9.148", "1.13.0",
     );
     assert!(custom.is_ok());
     assert!(
         ToolCatalog::new(
-            "latest", "1.19.0", "2.101.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.0"
+            "latest", "1.19.0", "2.101.0", "1.7.12", "0.11.0", "1.30.1", "0.9.148", "1.13.0"
         )
         .is_err()
     );
@@ -199,7 +199,7 @@ fn archive_identity_binds_platform_and_config() {
         profile: "test",
         toolchain_id: &toolchain,
         runtime: "glibc",
-        test_runner: "0.9.146",
+        test_runner: "0.9.148",
         format: "tar.zst",
         platform_id: &platform,
         config_digest: &config,
