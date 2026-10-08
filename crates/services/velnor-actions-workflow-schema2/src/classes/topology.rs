@@ -4,8 +4,8 @@
 //! the runner's private `DinD` socket. The workload checks stay paired while
 //! each provider's orchestration contract remains explicit.
 
-pub(super) use super::super::docker::docker_endpoint;
 use super::super::docker::docker_provider_guard;
+pub(super) use super::super::docker::{docker_endpoint, docker_socket_path};
 use super::super::features::{
     checkout_step, lane_base, lane_base_with_container, local_action_step, run_step,
 };
@@ -17,7 +17,8 @@ use velnor_actions_workflow_tree::yaml::Yaml;
 
 const MODE: &str = "inputs.mode == 'topology'";
 const ALPINE: &str = "docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764";
-const REDIS: &str = "docker.io/library/redis@sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2";
+pub(super) const REDIS: &str = "docker.io/library/redis@sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2";
+pub(super) const TESTCONTAINERS_RYUK: &str = "docker.io/testcontainers/ryuk@sha256:f0456560ea5b4acdbed0da0efc33b5f9dd6bc1e59f2337106826dcb5b0b0e981";
 const REDIS_OPTIONS: &str =
     "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12";
 const HOST_WORKSPACE_AND_SERVICE: &str = r#"set -euo pipefail
