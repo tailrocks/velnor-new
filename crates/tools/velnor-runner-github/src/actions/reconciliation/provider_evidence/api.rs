@@ -217,7 +217,11 @@ where
     let path = format!(
         "repos/{owner}/{repository}/actions/runs/{workflow_run_id}/attempts/{attempt}/jobs"
     );
-    let jobs = match read_all_pages(transport, &path, token, decode_jobs_page).await? {
+    let jobs = match read_all_pages(transport, &path, token, |body| {
+        decode_jobs_page(body, owner, repository)
+    })
+    .await?
+    {
         Pages::Found(jobs) => jobs,
         Pages::Missing => {
             return Ok(ValidatedRows::Unavailable(

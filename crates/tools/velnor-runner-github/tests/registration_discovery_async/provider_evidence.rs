@@ -6,6 +6,8 @@ use velnor_runner_github::{
     BearerRole, RequestPurpose, read_actions_workflow_attempt_provider_evidence_async,
 };
 
+mod check_run_url;
+
 const OWNER: &str = "ChainArgos";
 const REPOSITORY: &str = "java-monorepo";
 const TOKEN: &str = "actions-read-canary";
