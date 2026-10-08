@@ -328,3 +328,6 @@ fn ver_runner_image_evidence_and_family_change() {
     assert!(runner_family_changed("ubuntu-24.04", "ubuntu-26.04"));
     assert!(runner_family_changed("ubuntu-26.04", "ubuntu-24.04-arm"));
 }
+
+#[path = "impl_remed_policy/tool_identity.rs"]
+mod tool_identity;
