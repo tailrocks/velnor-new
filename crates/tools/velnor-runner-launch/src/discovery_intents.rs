@@ -1,11 +1,13 @@
 //! Journal-backed intents for one-shot GitHub discovery credentials.
 
 use velnor_runner_github::{
-    AsyncDiscoveryIntentStore, DiscoveryCredentialOutcome as GithubOutcome,
-    DiscoveryCredentialStep as GithubStep, DiscoveryIntentId, DiscoveryStoreFuture, SessionError,
+    AsyncDiscoveryIntentStore, AsyncScopedDiscoveryIntentStore,
+    DiscoveryCredentialOutcome as GithubOutcome, DiscoveryCredentialStep as GithubStep,
+    DiscoveryIntentId, DiscoveryStoreFuture, RegistrationScope, SessionError,
 };
 use velnor_runner_journal::journal::{
-    DiscoveryCredentialOutcome as JournalOutcome, DiscoveryCredentialStep as JournalStep, Journal,
+    DiscoveryCredentialOutcome as JournalOutcome, DiscoveryCredentialScope as JournalScope,
+    DiscoveryCredentialStep as JournalStep, Journal,
 };
 
 /// Durable adapter used before the two repository-discovery credential POSTs.
@@ -34,6 +36,9 @@ impl AsyncDiscoveryIntentStore for JournalDiscoveryIntentStore {
         repository_id: i64,
         full_name: &'a str,
     ) -> DiscoveryStoreFuture<'a, DiscoveryIntentId> {
+        if step == GithubStep::OrganizationRegistrationToken {
+            return Box::pin(async { Err(SessionError::Uncertain) });
+        }
         let journal = self.journal.clone();
         let full_name = full_name.to_owned();
         let step = journal_step(step);
@@ -64,10 +69,54 @@ impl AsyncDiscoveryIntentStore for JournalDiscoveryIntentStore {
     }
 }
 
+impl AsyncScopedDiscoveryIntentStore for JournalDiscoveryIntentStore {
+    fn persist_scope_before<'a>(
+        &'a mut self,
+        step: GithubStep,
+        scope: RegistrationScope<'a>,
+        target_repository_id: i64,
+        target_repository_full_name: &'a str,
+    ) -> DiscoveryStoreFuture<'a, DiscoveryIntentId> {
+        let Ok(scope) = journal_scope(scope) else {
+            return Box::pin(async { Err(SessionError::Uncertain) });
+        };
+        let journal = self.journal.clone();
+        let step = journal_step(step);
+        let full_name = target_repository_full_name.to_owned();
+        Box::pin(async move {
+            let row = journal
+                .begin_scoped_discovery_credential_intent(
+                    step,
+                    scope,
+                    target_repository_id,
+                    &full_name,
+                )
+                .await
+                .map_err(|_| SessionError::Uncertain)?;
+            let stable_id = u64::try_from(row).map_err(|_| SessionError::Uncertain)?;
+            DiscoveryIntentId::new(stable_id).ok_or(SessionError::Uncertain)
+        })
+    }
+}
+
 const fn journal_step(step: GithubStep) -> JournalStep {
     match step {
         GithubStep::RepositoryRegistrationToken => JournalStep::RepositoryRegistrationToken,
+        GithubStep::OrganizationRegistrationToken => JournalStep::OrganizationRegistrationToken,
         GithubStep::ActionsAdminExchange => JournalStep::ActionsAdminExchange,
+    }
+}
+
+fn journal_scope(scope: RegistrationScope<'_>) -> Result<JournalScope<'_>, ()> {
+    match scope {
+        RegistrationScope::Repository { owner, repo } => Ok(JournalScope::Repository {
+            owner,
+            repository: repo,
+        }),
+        RegistrationScope::Organization { org } => {
+            Ok(JournalScope::Organization { organization: org })
+        }
+        RegistrationScope::Enterprise { .. } => Err(()),
     }
 }
 

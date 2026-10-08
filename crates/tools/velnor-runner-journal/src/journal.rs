@@ -16,7 +16,9 @@ mod lifecycle;
 mod schema;
 mod worker_volume;
 
-pub use auth_intent::{DiscoveryCredentialOutcome, DiscoveryCredentialStep};
+pub use auth_intent::{
+    DiscoveryCredentialOutcome, DiscoveryCredentialScope, DiscoveryCredentialStep,
+};
 pub use capacity::{CapacityClaim, LaunchEffectState, ReplayRoute, ScopedLaunchIdentity};
 pub use cleanup::{
     CleanupCheckpointIdentity, CleanupChildren, CleanupDiagnostics, CleanupDisposition,
