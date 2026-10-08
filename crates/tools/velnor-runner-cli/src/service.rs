@@ -14,7 +14,6 @@ use crate::args::ServiceAction;
 pub(crate) mod linux;
 #[cfg(test)]
 mod tests;
-
 #[cfg(any(target_os = "macos", test))]
 const LABEL: &str = "com.tailrocks.velnor.host";
 
@@ -24,6 +23,8 @@ pub(super) const SYSTEMCTL_PATH: &str = "/usr/bin/systemctl";
 pub(super) const BUSCTL_PATH: &str = "/usr/bin/busctl";
 #[cfg(target_os = "linux")]
 pub(super) const JOURNALCTL_PATH: &str = "/usr/bin/journalctl";
+#[cfg(target_os = "linux")]
+const SERVICE_STATE_PROPERTIES: &str = "LoadState,ActiveState,SubState,MainPID,ControlPID,Job";
 
 #[cfg(target_os = "linux")]
 pub(super) fn systemctl_command() -> Command {
@@ -139,7 +140,7 @@ pub(crate) fn controller_service_state() -> ControllerServiceState {
             .args([
                 "show",
                 "--no-pager",
-                "--property=LoadState,ActiveState,SubState,MainPID,ControlPID",
+                &format!("--property={SERVICE_STATE_PROPERTIES}"),
                 "velnor-host.service",
             ])
             .output();
@@ -176,6 +177,7 @@ fn systemd_service_state(success: bool, output: &[u8]) -> ControllerServiceState
     let mut sub = None;
     let mut main_pid = None;
     let mut control_pid = None;
+    let mut job = None;
     for line in output.lines() {
         let Some((key, value)) = line.split_once('=') else {
             return ControllerServiceState::Unknown;
@@ -186,14 +188,15 @@ fn systemd_service_state(success: bool, output: &[u8]) -> ControllerServiceState
             "SubState" => &mut sub,
             "MainPID" => &mut main_pid,
             "ControlPID" => &mut control_pid,
+            "Job" => &mut job,
             _ => continue,
         };
         if target.replace(value).is_some() {
             return ControllerServiceState::Unknown;
         }
     }
-    let (Some(load), Some(active), Some(sub), Some(main_pid), Some(control_pid)) =
-        (load, active, sub, main_pid, control_pid)
+    let (Some(load), Some(active), Some(sub), Some(main_pid), Some(control_pid), Some(job)) =
+        (load, active, sub, main_pid, control_pid, job)
     else {
         return ControllerServiceState::Unknown;
     };
@@ -201,7 +204,7 @@ fn systemd_service_state(success: bool, output: &[u8]) -> ControllerServiceState
     else {
         return ControllerServiceState::Unknown;
     };
-    if main_pid != 0 || control_pid != 0 {
+    if main_pid != 0 || control_pid != 0 || !job.is_empty() {
         return ControllerServiceState::InUse;
     }
     match (load, active, sub) {
