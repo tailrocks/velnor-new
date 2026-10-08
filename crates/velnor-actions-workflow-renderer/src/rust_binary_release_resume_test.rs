@@ -6,6 +6,7 @@ use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::{RenderedCommands, scripts};
+use crate::tool_seed_test_support::git_fixture;
 use velnor_actions_contract::RustBinaryReleaseConfig;
 
 #[path = "rust_binary_release_resume_mock.rs"]
@@ -176,7 +177,7 @@ fn create_tagged_repository(root: &Path) -> Result<String, Box<dyn Error>> {
 }
 
 fn git(root: &Path, args: &[&str]) -> Result<Output, Box<dyn Error>> {
-    let output = Command::new("git").args(args).current_dir(root).output()?;
+    let output = git_fixture::command(root)?.args(args).output()?;
     if !output.status.success() {
         return Err(format!("git failed: {}", stderr(&output)).into());
     }
@@ -253,7 +254,10 @@ fn run_prepare(script: &str, root: &Path) -> Result<Output, Box<dyn Error>> {
         .output()?)
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "publisher inputs are each bound to their workflow environment variable"
+)]
 fn run_publish(
     script: &str,
     root: &Path,
@@ -286,7 +290,10 @@ fn run_publish(
         .output()?)
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "resolver inputs are each bound to their workflow environment variable"
+)]
 fn run_resolver(
     script: &str,
     repository: &Path,
