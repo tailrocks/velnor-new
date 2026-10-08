@@ -44,6 +44,8 @@ pub enum DrainOutcome {
 /// Reason a drain wait cannot establish quiescence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DrainUnknown {
+    /// The retained service state-directory capability could not be inspected.
+    StateDirectoryUnavailable,
     /// The existing journal could not be opened or read.
     JournalUnavailable,
     /// The blocking wrapper could not safely create or use its Tokio runtime.
@@ -196,7 +198,7 @@ pub fn resume_blocking(
     })
 }
 
-fn blocking_runtime() -> Result<Runtime, ControlOpenError> {
+pub(super) fn blocking_runtime() -> Result<Runtime, ControlOpenError> {
     if Handle::try_current().is_ok() {
         return Err(ControlOpenError::RuntimeUnavailable);
     }
