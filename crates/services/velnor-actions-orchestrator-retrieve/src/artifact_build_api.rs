@@ -1,9 +1,11 @@
 //! Bounded Actions API inventory for artifact-build jobs and outputs.
 
 use std::ffi::OsString;
+use std::num::NonZeroI64;
 use std::path::Path;
 
 use serde::Deserialize;
+use velnor_actions_contract::ids::CheckRunId;
 use velnor_actions_contract::parse_strict_json;
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_orchestrator_cover::cover::shard::BaselineLookup;
@@ -20,12 +22,46 @@ pub(super) struct ApiJob {
     pub status: String,
     pub conclusion: Option<String>,
     pub name: String,
+    /// Provider URL for the Check Run linked to this job; absence remains distinct from invalid data.
+    #[serde(default)]
+    pub check_run_url: Option<String>,
+    /// Strictly parsed positive Check Run ID, populated against the requested repository.
+    #[serde(skip)]
+    pub check_run_id: Option<NonZeroI64>,
     pub runner_id: Option<u64>,
     pub runner_name: Option<String>,
     pub runner_group_id: Option<u64>,
     pub runner_group_name: Option<String>,
     #[serde(default)]
     pub labels: Vec<String>,
+}
+
+impl ApiJob {
+    /// Parse a present Check Run URL and retain its ID against the expected repository.
+    ///
+    /// Absence remains `None` for legacy jobs. A present malformed or
+    /// cross-repository URL is an error, never an absent identity.
+    pub(super) fn bind_check_run_id(
+        &mut self,
+        expected_repository: &str,
+    ) -> Result<(), &'static str> {
+        self.check_run_id = None;
+        let Some(url) = self.check_run_url.as_deref() else {
+            return Ok(());
+        };
+        let repository =
+            velnor_actions_orchestrator_core::origin::validate_repository_slug(expected_repository)
+                .ok_or("actions_api_bad_repository")?;
+        let (owner, repository) = repository
+            .split_once('/')
+            .ok_or("actions_api_bad_repository")?;
+        self.check_run_id = Some(
+            CheckRunId::parse_api_url(url, owner, repository)
+                .map(CheckRunId::get)
+                .map_err(|_| "actions_api_check_run_url_invalid")?,
+        );
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -69,10 +105,13 @@ pub(super) fn list_jobs(
             let endpoint = format!(
                 "repos/{repo}/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page={PER_PAGE}&page={page}"
             );
-            let query = "{total_count, jobs: [.jobs[] | {id, run_id, head_sha, status, conclusion, name, runner_id, runner_name, runner_group_id, runner_group_name, labels}]}";
+            let query = "{total_count, jobs: [.jobs[] | {id, run_id, head_sha, status, conclusion, name, check_run_url, runner_id, runner_name, runner_group_id, runner_group_name, labels}]}";
             let text = BaselineLookup::run(catalog, root, api_args(&endpoint, query))
                 .map_err(|_| "actions_api_request_failed")?;
-            let page = parse_page::<JobsPage>(&text)?;
+            let mut page = parse_page::<JobsPage>(&text)?;
+            for job in &mut page.jobs {
+                job.bind_check_run_id(repo)?;
+            }
             Ok((page.total_count, page.jobs))
         },
         |job: &ApiJob| job.id,

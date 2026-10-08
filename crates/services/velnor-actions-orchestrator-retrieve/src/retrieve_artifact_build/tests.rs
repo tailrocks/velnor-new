@@ -68,6 +68,8 @@ fn api_job(expected: &ArtifactBuildExpectation) -> ApiJob {
             .identity
             .provider
             .workflow_job_name(&expected.identity.task_id),
+        check_run_url: None,
+        check_run_id: None,
         runner_id: None,
         runner_name: None,
         runner_group_id: None,

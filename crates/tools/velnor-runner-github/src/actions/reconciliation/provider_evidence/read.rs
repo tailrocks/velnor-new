@@ -1,6 +1,6 @@
 use serde::Deserialize;
+use velnor_actions_contract::ids::CheckRunId;
 
-use crate::actions::path_segment;
 use crate::registration::{AsyncDiscoveryTransport, execute_discovery};
 use crate::{SessionError, WireError};
 
@@ -251,30 +251,9 @@ impl ActionsWorkflowAttemptJobEvidence {
         owner: &str,
         repository: &str,
     ) -> Result<std::num::NonZeroI64, SessionError> {
-        if !path_segment(owner) || !path_segment(repository) {
-            return Err(WireError::Malformed.into());
-        }
-        let scoped_path = url
-            .strip_prefix("https://api.github.com/repos/")
-            .ok_or(WireError::Malformed)?;
-        let (url_owner, remainder) = scoped_path.split_once('/').ok_or(WireError::Malformed)?;
-        let (url_repository, check_run_path) =
-            remainder.split_once('/').ok_or(WireError::Malformed)?;
-        if !path_segment(url_owner)
-            || !path_segment(url_repository)
-            || !url_owner.eq_ignore_ascii_case(owner)
-            || !url_repository.eq_ignore_ascii_case(repository)
-        {
-            return Err(WireError::Malformed.into());
-        }
-        let id = check_run_path
-            .strip_prefix("check-runs/")
-            .ok_or(WireError::Malformed)?;
-        if id.is_empty() || id.starts_with('0') || !id.bytes().all(|byte| byte.is_ascii_digit()) {
-            return Err(WireError::Malformed.into());
-        }
-        let id = id.parse::<i64>().map_err(|_| WireError::Malformed)?;
-        std::num::NonZeroI64::new(id).ok_or_else(|| WireError::Malformed.into())
+        CheckRunId::parse_api_url(url, owner, repository)
+            .map(CheckRunId::get)
+            .map_err(|_| WireError::Malformed.into())
     }
 }
 
