@@ -90,8 +90,8 @@ fn print_controller_service_status(state: ControllerServiceState) -> ExitCode {
 fn service_macos(action: ServiceAction) -> ExitCode {
     match action {
         ServiceAction::Status => print_controller_service_status(controller_service_state()),
-        ServiceAction::Preflight => {
-            eprintln!("service preflight is available only on Linux");
+        ServiceAction::Preflight | ServiceAction::VerifyStopped => {
+            eprintln!("service preflight and verify-stopped are available only on Linux");
             ExitCode::from(1)
         }
         ServiceAction::Install => install(),

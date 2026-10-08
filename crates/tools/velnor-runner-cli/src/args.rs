@@ -103,7 +103,7 @@ pub enum Command {
     Resume,
     /// Host service lifecycle (`systemd` on Linux, `LaunchAgent` on macOS).
     Service {
-        /// install, start, stop, uninstall, or read the service-manager state.
+        /// install, start, stop, uninstall, verify-stopped, or read manager state.
         #[command(subcommand)]
         action: ServiceAction,
     },
@@ -153,8 +153,10 @@ pub enum ServiceAction {
     Install,
     /// Start the installed service; durable drain remains set until `resume`.
     Start,
-    /// Drain and stop the service.
+    /// Stop the service after an external drain proof.
     Stop,
+    /// Verify a successful, completed systemd stop without mutating the service.
+    VerifyStopped,
     /// Remove the plist.
     Uninstall,
 }

@@ -85,4 +85,33 @@ fn service_preflight_is_an_explicit_action() -> Result<(), String> {
     Ok(())
 }
 
+#[test]
+fn service_verify_stopped_is_an_explicit_read_only_action() -> Result<(), String> {
+    let cli = Cli::try_parse_from([
+        "velnor-host",
+        "--config",
+        "/etc/velnor-host/host.toml",
+        "--state",
+        "/var/lib/velnor-host",
+        "service",
+        "verify-stopped",
+    ])
+    .map_err(|error| error.to_string())?;
+    assert_eq!(
+        cli.config.as_deref(),
+        Some(std::path::Path::new("/etc/velnor-host/host.toml"))
+    );
+    assert_eq!(
+        cli.state.as_deref(),
+        Some(std::path::Path::new("/var/lib/velnor-host"))
+    );
+    assert!(matches!(
+        cli.command,
+        Command::Service {
+            action: ServiceAction::VerifyStopped
+        }
+    ));
+    Ok(())
+}
+
 mod connect_args_tests;

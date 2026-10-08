@@ -2,12 +2,14 @@
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct UnitSnapshot {
+    pub(super) id: Option<String>,
     pub(super) load_state: String,
     pub(super) active_state: String,
     pub(super) sub_state: String,
     pub(super) main_pid: u32,
     pub(super) control_pid: u32,
     pub(super) result: String,
+    pub(super) job: Option<String>,
     pub(super) exec_start_pre: ExecInvocation,
     pub(super) exec_start: ExecInvocation,
     pub(super) exec_stop: ExecInvocation,
@@ -59,12 +61,14 @@ pub(super) enum StopTimeout {
 
 #[derive(Default)]
 struct SnapshotFields<'a> {
+    id: Option<&'a str>,
     load_state: Option<&'a str>,
     active_state: Option<&'a str>,
     sub_state: Option<&'a str>,
     main_pid: Option<u32>,
     control_pid: Option<u32>,
     result: Option<&'a str>,
+    job: Option<&'a str>,
     exec_start_pre: Option<ExecInvocation>,
     exec_start: Option<ExecInvocation>,
     exec_stop: Option<ExecInvocation>,
@@ -92,12 +96,14 @@ pub(super) fn parse_snapshot(output: &[u8]) -> Option<UnitSnapshot> {
         parse_snapshot_line(&mut fields, line)?;
     }
     Some(UnitSnapshot {
+        id: fields.id.map(str::to_owned),
         load_state: fields.load_state?.to_owned(),
         active_state: fields.active_state?.to_owned(),
         sub_state: fields.sub_state?.to_owned(),
         main_pid: fields.main_pid?,
         control_pid: fields.control_pid?,
         result: fields.result?.to_owned(),
+        job: fields.job.map(str::to_owned),
         exec_start_pre: fields.exec_start_pre?,
         exec_start: fields.exec_start?,
         exec_stop: fields.exec_stop?,
@@ -123,12 +129,14 @@ pub(super) fn parse_snapshot(output: &[u8]) -> Option<UnitSnapshot> {
 fn parse_snapshot_line<'a>(fields: &mut SnapshotFields<'a>, line: &'a str) -> Option<()> {
     let (key, value) = line.split_once('=')?;
     match key {
+        "Id" => set_once(&mut fields.id, value)?,
         "LoadState" => set_once(&mut fields.load_state, value)?,
         "ActiveState" => set_once(&mut fields.active_state, value)?,
         "SubState" => set_once(&mut fields.sub_state, value)?,
         "MainPID" => set_once(&mut fields.main_pid, value.parse::<u32>().ok()?)?,
         "ControlPID" => set_once(&mut fields.control_pid, value.parse::<u32>().ok()?)?,
         "Result" => set_once(&mut fields.result, value)?,
+        "Job" => set_once(&mut fields.job, value)?,
         "ExecStartPre" => set_once(&mut fields.exec_start_pre, parse_exec_invocation(value)?)?,
         "ExecStart" => set_once(&mut fields.exec_start, parse_exec_invocation(value)?)?,
         "ExecStop" => set_once(&mut fields.exec_stop, parse_exec_invocation(value)?)?,

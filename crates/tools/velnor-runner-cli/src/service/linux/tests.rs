@@ -110,7 +110,7 @@ fn unit_snapshot(snapshot: UnitSnapshot<'_>) -> Vec<u8> {
     let stop = stop_argv().join(" ");
     let identity_unit = IDENTITY_UNIT;
     format!(
-        "LoadState=loaded\nActiveState={active_state}\nSubState={sub_state}\nMainPID={main_pid}\nControlPID={control_pid}\nResult={result}\nExecStartPre={{ path=/usr/bin/velnor-host ; argv[]={preflight} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }}\nExecStart={{ path=/usr/bin/velnor-host ; argv[]={start} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid={main_pid} ; code=(null) ; status=0/0 }}\nExecStop={{ path=/usr/bin/velnor-host ; argv[]={stop} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code={stop_code} ; status={stop_status} }}\nTimeoutStopUSec={timeout}\nTimeoutStopFailureMode=terminate\nKillSignal=15\nKillMode=mixed\nUser=velnor\nGroup=velnor\nSupplementaryGroups=docker\nWorkingDirectory=/var/lib/velnor-host\nUMask=0077\nNoNewPrivileges=yes\nProtectSystem=strict\nReadWritePaths=/var/lib/velnor-host\nRequires=docker.service {identity_unit}\nAfter=network-online.target docker.service {identity_unit}\nType=simple\n"
+        "Id=velnor-host.service\nLoadState=loaded\nActiveState={active_state}\nSubState={sub_state}\nMainPID={main_pid}\nControlPID={control_pid}\nResult={result}\nJob=\nExecStartPre={{ path=/usr/bin/velnor-host ; argv[]={preflight} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }}\nExecStart={{ path=/usr/bin/velnor-host ; argv[]={start} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid={main_pid} ; code=(null) ; status=0/0 }}\nExecStop={{ path=/usr/bin/velnor-host ; argv[]={stop} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code={stop_code} ; status={stop_status} }}\nTimeoutStopUSec={timeout}\nTimeoutStopFailureMode=terminate\nKillSignal=15\nKillMode=mixed\nUser=velnor\nGroup=velnor\nSupplementaryGroups=docker\nWorkingDirectory=/var/lib/velnor-host\nUMask=0077\nNoNewPrivileges=yes\nProtectSystem=strict\nReadWritePaths=/var/lib/velnor-host\nRequires=docker.service {identity_unit}\nAfter=network-online.target docker.service {identity_unit}\nType=simple\n"
     )
     .into_bytes()
 }
@@ -282,7 +282,7 @@ fn start_requires_stop_timeout_to_exceed_the_configured_drain_timeout() {
 }
 
 #[test]
-fn stop_does_not_mutate_until_authoritative_drain_is_available() {
+fn direct_service_stop_fails_closed_without_package_manager_orchestration() {
     let active = unit_snapshot(UnitSnapshot {
         active_state: "active",
         sub_state: "running",
@@ -355,3 +355,4 @@ mod credential_tests;
 mod environment_tests;
 mod identity_tests;
 mod start_contract_tests;
+mod verify_stopped_tests;
