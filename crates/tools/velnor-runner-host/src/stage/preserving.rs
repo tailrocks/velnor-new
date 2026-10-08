@@ -49,6 +49,16 @@ pub async fn drive_with_profile_and_sink<E: PairEngine, S: PairSink>(
     sink: &S,
     profile: &RunnerImageProfile,
 ) -> Result<PartialPair, PairStartFailure> {
+    if jit.is_empty() {
+        return Err(failure(
+            HostError::EmptyJit,
+            PartialPair::none(),
+            PairStartPhase::Preflight,
+            false,
+        ));
+    }
+    velnor_runner_docker_spec::validate_linux_admission_profile(*profile)
+        .map_err(|error| failure(error, PartialPair::none(), PairStartPhase::Preflight, false))?;
     drive_preserving(engine, private_volume, jit, stop, sink, Some(profile)).await
 }
 

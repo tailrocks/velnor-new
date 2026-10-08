@@ -4,7 +4,10 @@ use velnor_runner_core::runner_work_path;
 use velnor_runner_journal::HostError;
 
 mod profile;
-pub use profile::{RunnerImageProfile, resolve_runner_profile, runner_plan_for_profile};
+pub use profile::{
+    RunnerImageProfile, resolve_linux_admission_profile, resolve_runner_profile,
+    runner_plan_for_profile, validate_linux_admission_profile,
+};
 
 /// One mount. `source` is `volume:<name>` or a bind path.
 #[derive(Debug, Clone, PartialEq, Eq)]

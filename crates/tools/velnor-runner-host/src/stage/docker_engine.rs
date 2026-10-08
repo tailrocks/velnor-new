@@ -31,6 +31,7 @@ impl PairEngine for Docker {
     ) -> Result<(), HostError> {
         let mounts = match profile {
             Some(profile) => {
+                velnor_runner_docker_spec::validate_linux_admission_profile(*profile)?;
                 let mut mounts = runner_plan_for_profile(volume, profile)?.mounts;
                 mounts.extend(dind_create_for_profile(volume, profile)?.mounts);
                 mounts
