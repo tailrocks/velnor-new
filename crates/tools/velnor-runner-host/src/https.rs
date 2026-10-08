@@ -68,31 +68,31 @@ fn perform(base: &str, request: &SessionRequest) -> Result<Exchange, CurlFail> {
     let config = curl_config(&url, request, &body_path, &out_path)?;
     let status = run_curl(&config)?;
     let body = read_output(&out_path)?;
-    trace(base, request, status, &body);
+    trace(request, status, &body);
     Ok(Exchange { status, body })
 }
 
-fn trace(base: &str, request: &SessionRequest, status: u16, body: &[u8]) {
+fn trace(request: &SessionRequest, status: u16, body: &[u8]) {
     if std::env::var_os("VELNOR_HTTPS_TRACE").is_none() {
         return;
     }
-    let host = base.split('/').nth(2).unwrap_or("");
+    eprintln!("{}", trace_record(request, status, body));
+}
+
+fn trace_record(request: &SessionRequest, status: u16, body: &[u8]) -> String {
     let verb = method_name(request.method);
-    eprintln!(
-        "trace host={host} verb={verb} path={} status={status} bytes={}",
-        request.path,
+    let class = match status {
+        100..=199 => "informational",
+        200..=299 => "success",
+        300..=399 => "redirect",
+        400..=499 => "client_error",
+        500..=599 => "server_error",
+        _ => "invalid_status",
+    };
+    format!(
+        "trace verb={verb} status={status} class={class} bytes={}",
         body.len()
-    );
-    if status < 400 {
-        return;
-    }
-    let text = String::from_utf8_lossy(body);
-    if text.contains("eyJ") {
-        eprintln!("trace body=redacted");
-        return;
-    }
-    let clipped: String = text.chars().take(240).collect();
-    eprintln!("trace body={clipped}");
+    )
 }
 
 fn run_curl(config: &str) -> Result<u16, CurlFail> {
