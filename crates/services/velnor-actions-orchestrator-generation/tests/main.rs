@@ -1,6 +1,7 @@
 //! Integration test entry point; cases live in the sibling files.
 mod impl_common;
 mod impl_prepare;
+mod impl_preserved_template;
 mod impl_routing;
 mod impl_schema2_artifact_build;
 mod impl_schema2_buildx;

@@ -11,7 +11,9 @@ pub use render::{
     MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV, MatrixSource, PLAN_ID_OUTPUT,
     PLAN_STEP_ID, RUN_KEY_OUTPUT, WORKFLOW_PATH, render_workflow_ir,
 };
-pub use tree::{render_tree, render_tree_with_extra};
+pub use tree::{
+    render_tree, render_tree_with_extra, render_tree_with_extra_and_preserved_template,
+};
 
 /// Renderer implementation version (typed Gate-2 renderer).
 pub const RENDERER_VERSION: u32 = 2;

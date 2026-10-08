@@ -46,3 +46,5 @@ fn rollback_failure_preserved() {
         b"old: true\n"
     );
 }
+
+mod preserved_template;

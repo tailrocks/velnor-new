@@ -1,14 +1,15 @@
 ---
 title: "Velnor Actions generated-file contract"
-description: "Status: Proposed specification. The orchestrator coordinates writes; named adapters own each generated format. No generated-file behavior is"
+description: "Proposed contract for generated and preserved GitHub files."
 ---
 
-**Status:** Proposed specification. The orchestrator coordinates writes; named
-adapters own each generated format. No generated-file behavior is implemented.
+**Status:** Proposed specification. The orchestrator coordinates writes and
+named adapters own each generated format. The current generator implements the
+listed outputs and the optional template-preservation behavior below.
 
 
 
-Velnor V1 generate writes one complete tree:
+Velnor V1 generate writes one complete `.github` tree:
 
 ```text
 .github/
@@ -22,6 +23,12 @@ Velnor V1 generate writes one complete tree:
     ├── velnor-qualification.yml  # velnor-repository-v1 only
     └── release.yml               # velnor-repository-v1, or consumer-v1 with release enabled
 ```
+
+When present, the repository-owned `.github/PULL_REQUEST_TEMPLATE.md` is
+preserved byte-for-byte in that tree. It is optional, limited to 64 KiB, and
+is the only `.github` input retained by generation; absence stays absence.
+Generation rejects an unsafe path, symlink, non-file, oversized file, or
+invalid UTF-8 before replacing any output.
 
 The qualification workflow is emitted only for
 `workflow.policy = "velnor-repository-v1"`; `consumer-v1` MUST NOT emit
@@ -50,6 +57,11 @@ block (least privilege for its role); see [workflow
 | .github/workflows/** | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated workflows; replaced with the complete .github tree |
 | .github/release-plz*.toml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated effective release-plz configs (consumer-v1, release enabled); replaced with the complete .github tree |
 | mise.toml, mise.lock, rust-toolchain.toml | None | None | Repository-owned read-only inputs; never create or modify |
+
+`.github/PULL_REQUEST_TEMPLATE.md` is not a generated format in this table:
+it is an optional repository-owned input carried unchanged through complete
+tree replacement. It has no generated marker and is not scanned as workflow
+shell content.
 
 Velnor V1 MUST NOT create .mise/tasks files or any other generated task
 directory. Mise remains the tool and command execution authority, but the

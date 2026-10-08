@@ -12,6 +12,7 @@ mod impl_renderer_mbx_action;
 mod impl_renderer_mbx_gc_policy;
 mod impl_renderer_mbx_native_owner;
 mod impl_renderer_planclose;
+mod impl_renderer_preserved_template;
 mod impl_renderer_protocol;
 mod impl_renderer_size;
 mod impl_renderer_steps_quote;
