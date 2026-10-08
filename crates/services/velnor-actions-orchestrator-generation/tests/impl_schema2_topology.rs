@@ -118,7 +118,12 @@ fn topology_stages_are_paired_and_use_provider_specific_docker() -> TestResult {
 #[test]
 fn docker_context_override_is_rejected_by_both_provider_guards() -> TestResult {
     let yaml = render_qualification()?;
-    for id in ["topology-runner-host", "topology-runner-host-hosted"] {
+    for id in [
+        "topology-runner-host",
+        "topology-runner-host-hosted",
+        "compose-scale-set",
+        "compose-hosted",
+    ] {
         let body = job_body(&yaml, id)?;
         let guard = shell_context_guard(body)?;
         let rejected = Command::new("bash")
@@ -136,6 +141,85 @@ fn docker_context_override_is_rejected_by_both_provider_guards() -> TestResult {
             .env_remove("DOCKER_CONTEXT")
             .status()?;
         assert!(accepted.success(), "{id} rejected the normal context state");
+    }
+    Ok(())
+}
+
+#[test]
+fn compose_case_is_paired_pinned_and_cleans_up_after_failure() -> TestResult {
+    let yaml = render_qualification()?;
+    let hosted = job_body(&yaml, "compose-hosted")?;
+    let scale = job_body(&yaml, "compose-scale-set")?;
+    let compose_file = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .join("qualification/compose/stack.yml");
+    let compose = std::fs::read_to_string(compose_file)?;
+
+    assert!(hosted.contains("runs-on: ubuntu-26.04"), "{hosted}");
+    assert!(
+        scale.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"),
+        "{scale}"
+    );
+    assert!(compose.contains(ALPINE), "{compose}");
+    assert!(compose.contains(REDIS), "{compose}");
+    assert_eq!(compose.matches("    image:").count(), 2, "{compose}");
+    assert!(!compose.contains("redis:7-alpine"), "{compose}");
+    assert!(!compose.contains("alpine:3.22"), "{compose}");
+
+    for (id, body, endpoint, provider_step, forbidden_endpoint) in [
+        (
+            "hosted",
+            hosted,
+            "unix:///var/run/docker.sock",
+            "Require GitHub-hosted stock Docker",
+            "unix:///run/docker/docker.sock",
+        ),
+        (
+            "scale-set",
+            scale,
+            "unix:///run/docker/docker.sock",
+            "Require Velnor private DinD socket",
+            "unix:///var/run/docker.sock",
+        ),
+    ] {
+        let provider = body
+            .find(provider_step)
+            .ok_or_else(|| format!("{id}: missing provider guard"))?;
+        let up = body
+            .find("Start compose")
+            .ok_or_else(|| format!("{id}: missing compose start"))?;
+        let proof = body
+            .find("Prove both services")
+            .ok_or_else(|| format!("{id}: missing compose proof"))?;
+        let cleanup = body
+            .find("Remove compose")
+            .ok_or_else(|| format!("{id}: missing compose cleanup"))?;
+        assert!(
+            provider < up && up < proof && proof < cleanup,
+            "{id}: {body}"
+        );
+        assert!(
+            body.contains(&format!("docker --host {endpoint} compose")),
+            "{id}: {body}"
+        );
+        let cleanup_step = &body[cleanup..];
+        assert!(
+            cleanup_step.contains("if: always()"),
+            "{id}: {cleanup_step}"
+        );
+        assert!(
+            cleanup_step.contains(&format!("docker --host {endpoint} compose --project-name")),
+            "{id}: {cleanup_step}"
+        );
+        assert!(
+            cleanup_step.contains("down --volumes"),
+            "{id}: {cleanup_step}"
+        );
+        assert!(!body.contains(forbidden_endpoint), "{id}: {body}");
+        assert!(
+            !body.contains("docker compose -f"),
+            "{id}: unpinned client endpoint: {body}"
+        );
     }
     Ok(())
 }
