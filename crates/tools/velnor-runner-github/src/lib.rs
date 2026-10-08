@@ -23,6 +23,7 @@ pub use actions::{
     get_actions_job, get_actions_repository, get_actions_repository_async,
     get_actions_workflow_run, get_private_repo_fork_workflow_settings,
     get_private_repo_fork_workflow_settings_async, reconcile_observed_scale_set_job,
+    reconcile_observed_scale_set_job_async,
 };
 pub use error::WireError;
 pub use paths::{

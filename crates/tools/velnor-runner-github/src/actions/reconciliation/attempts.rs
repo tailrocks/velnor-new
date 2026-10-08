@@ -2,9 +2,10 @@
 
 use std::collections::HashSet;
 
+use crate::registration::AsyncDiscoveryTransport;
 use crate::{ActionsJob, SessionError, Transport};
 
-use super::read::{AttemptJobs, Read, attempt_page};
+use super::read::{AttemptJobs, Read, attempt_page, attempt_page_async};
 use super::{ActionsJobReconciliationReason as Reason, MAX_PAGES_PER_ATTEMPT, PAGE_SIZE};
 
 #[derive(Clone, Copy)]
@@ -89,6 +90,74 @@ where
     Ok(finish_matches(matches, partial_identity_match))
 }
 
+pub(super) async fn locate_observed_job_async<T>(
+    transport: &mut T,
+    owner: &str,
+    repository: &str,
+    run_id: i64,
+    runner: RunnerIdentity<'_>,
+    latest_attempt: u32,
+    token: &str,
+) -> Result<AttemptLookup, SessionError>
+where
+    T: AsyncDiscoveryTransport + ?Sized,
+{
+    let mut matches = Vec::new();
+    let mut partial_identity_match = false;
+    for attempt in 1..=latest_attempt {
+        let Read::Found(first_page) =
+            attempt_page_async(transport, owner, repository, run_id, attempt, 1, token).await?
+        else {
+            return Ok(AttemptLookup::NotFound);
+        };
+        let total_count = first_page.total_count;
+        let pages = total_count.div_ceil(PAGE_SIZE).max(1);
+        if pages > MAX_PAGES_PER_ATTEMPT {
+            return Ok(AttemptLookup::Unknown(Reason::PaginationLimitExceeded));
+        }
+        let query = AttemptQuery {
+            owner,
+            repository,
+            run_id,
+            attempt,
+            token,
+        };
+        let mut seen_job_ids = HashSet::with_capacity(total_count);
+        let mut page_one = Some(first_page);
+        for page_number in 1..=pages {
+            let Read::Found(page) =
+                read_page_async(transport, &query, page_number, &mut page_one).await?
+            else {
+                return Ok(AttemptLookup::NotFound);
+            };
+            if page.total_count != total_count || page.jobs.len() > PAGE_SIZE {
+                return Ok(AttemptLookup::Unknown(Reason::IncompleteAttemptPage));
+            }
+            let expected_count = total_count
+                .saturating_sub((page_number - 1) * PAGE_SIZE)
+                .min(PAGE_SIZE);
+            if page.jobs.len() != expected_count {
+                return Ok(AttemptLookup::Unknown(Reason::IncompleteAttemptPage));
+            }
+            if let Some(finding) = collect_jobs(
+                page.jobs,
+                run_id,
+                &runner,
+                attempt,
+                &mut matches,
+                &mut partial_identity_match,
+                &mut seen_job_ids,
+            ) {
+                return Ok(finding);
+            }
+        }
+        if seen_job_ids.len() != total_count {
+            return Ok(AttemptLookup::Unknown(Reason::IncompleteAttemptPage));
+        }
+    }
+    Ok(finish_matches(matches, partial_identity_match))
+}
+
 struct AttemptQuery<'a> {
     owner: &'a str,
     repository: &'a str,
@@ -118,6 +187,30 @@ where
         page,
         query.token,
     )
+}
+
+async fn read_page_async<T>(
+    transport: &mut T,
+    query: &AttemptQuery<'_>,
+    page: usize,
+    first_page: &mut Option<AttemptJobs>,
+) -> Result<Read<AttemptJobs>, SessionError>
+where
+    T: AsyncDiscoveryTransport + ?Sized,
+{
+    if let Some(first) = first_page.take() {
+        return Ok(Read::Found(first));
+    }
+    attempt_page_async(
+        transport,
+        query.owner,
+        query.repository,
+        query.run_id,
+        query.attempt,
+        page,
+        query.token,
+    )
+    .await
 }
 
 fn collect_jobs(
