@@ -85,7 +85,7 @@ impl CrateJob {
         let mut seen = BTreeSet::new();
         for obligation in &self.obligations {
             obligation.validate(&self.job_id)?;
-            if !seen.insert(obligation.task_id.clone()) {
+            if seen.contains(&obligation.task_id) {
                 return Err(ContractError::identity(
                     "crate_job.obligations",
                     format!("duplicate_task:{}", obligation.task_id),
@@ -99,6 +99,7 @@ impl CrateJob {
                     ));
                 }
             }
+            seen.insert(obligation.task_id.clone());
         }
         Ok(())
     }
