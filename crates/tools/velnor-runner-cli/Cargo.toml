@@ -42,7 +42,7 @@ not prove that behavior. The controller's host Docker access is host-privileged;
 Docker-group membership grants root-level host control. Job containers share
 the host kernel and are not VM-equivalent isolation.
 """
-depends = ["$auto", "ca-certificates", "systemd (>= 247)"]
+depends = ["$auto", "ca-certificates", "curl", "mawk", "systemd (>= 247)"]
 section = "admin"
 priority = "optional"
 profile = "release"
