@@ -106,3 +106,5 @@ mod runner_event_tests;
 mod protected_path_tests;
 #[cfg(unix)]
 mod protected_readonly_tests;
+mod scale_set_session_close_tests;
+mod scale_set_session_tests;

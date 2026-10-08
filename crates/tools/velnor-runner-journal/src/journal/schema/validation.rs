@@ -61,7 +61,7 @@ pub(super) async fn validate_v7_schema(conn: &turso::Connection) -> Result<(), H
     validate_cleanup_schema(conn).await
 }
 
-pub(super) async fn validate_current_schema(conn: &turso::Connection) -> Result<(), HostError> {
+pub(super) async fn validate_v8_schema(conn: &turso::Connection) -> Result<(), HostError> {
     validate_v7_schema(conn).await?;
     let columns = read_columns(conn).await?;
     if ACTIONS_RECONCILIATION_COLUMNS
@@ -72,6 +72,72 @@ pub(super) async fn validate_current_schema(conn: &turso::Connection) -> Result<
     } else {
         Err(HostError::Journal)
     }
+}
+
+pub(super) async fn validate_current_schema(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_v8_schema(conn).await?;
+    validate_session_schema(conn).await
+}
+
+pub(super) async fn validate_v9_session_schema(conn: &turso::Connection) -> Result<(), HostError> {
+    let columns = read_session_columns(conn).await?;
+    if ["intent_id", "session_id", "state"]
+        .iter()
+        .all(|column| columns.contains(*column))
+    {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
+}
+
+pub(super) async fn validate_session_schema(conn: &turso::Connection) -> Result<(), HostError> {
+    let columns = read_session_columns(conn).await?;
+    if ![
+        "intent_id",
+        "session_id",
+        "state",
+        "target_repository_full_name",
+        "close_attempted",
+    ]
+    .iter()
+    .all(|column| columns.contains(*column))
+    {
+        return Err(HostError::Journal);
+    }
+    let mut rows = conn
+        .query(
+            "SELECT COUNT(*) FROM scale_set_sessions WHERE close_attempted NOT IN (0, 1) OR (close_attempted = 1 AND session_id IS NULL)",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let invalid = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?
+        .get::<i64>(0)
+        .map_err(|_| HostError::Journal)?;
+    if invalid == 0 {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
+}
+
+pub(super) async fn read_session_columns(
+    conn: &turso::Connection,
+) -> Result<HashSet<String>, HostError> {
+    let mut columns = HashSet::new();
+    let mut rows = conn
+        .query("PRAGMA table_info(scale_set_sessions)", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
+        columns.insert(row.get::<String>(1).map_err(|_| HostError::Journal)?);
+    }
+    Ok(columns)
 }
 
 pub(super) async fn validate_cleanup_schema(conn: &turso::Connection) -> Result<(), HostError> {

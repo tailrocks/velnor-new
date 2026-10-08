@@ -11,6 +11,7 @@ mod reopen;
 mod request;
 mod retry;
 
+pub(crate) use close::{delete_session_async, safe_path_segment};
 pub(crate) use error::reject;
 pub(crate) use retry::{API_QUERY, bearer, execute, fail_exchange, json_content, user_agent};
 

@@ -340,7 +340,7 @@ async fn reserve_in_transaction(
     Ok(CapacityClaim::New(conn.last_insert_rowid()))
 }
 
-fn validate_text(value: &str, maximum: usize) -> Result<(), HostError> {
+pub(super) fn validate_text(value: &str, maximum: usize) -> Result<(), HostError> {
     if value.is_empty() || value.len() > maximum || value.chars().any(char::is_control) {
         Err(HostError::Journal)
     } else {
@@ -348,7 +348,7 @@ fn validate_text(value: &str, maximum: usize) -> Result<(), HostError> {
     }
 }
 
-fn append_component(output: &mut String, value: &str) {
+pub(super) fn append_component(output: &mut String, value: &str) {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     output.push_str(&value.len().to_string());
     output.push('=');

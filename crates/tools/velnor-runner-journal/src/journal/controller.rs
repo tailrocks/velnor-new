@@ -134,7 +134,7 @@ impl Journal {
         let conn = self.connection().await?;
         let mut rows = conn
             .query(
-                "SELECT (SELECT draining FROM controller_state WHERE id = 1), (SELECT COUNT(*) FROM intents WHERE kind = 'launch' AND cleanup_proven = 0 AND NOT (state = 'failed' AND effect_state = 'definite_no_effect')), (SELECT COUNT(*) FROM intents WHERE kind != 'launch' AND CASE WHEN cleanup_proven = 1 THEN 0 WHEN kind = 'discovery-credential' THEN state IN ('pending', 'uncertain') WHEN state = 'failed' AND effect_state = 'definite_no_effect' THEN 0 ELSE 1 END = 1)",
+                "SELECT (SELECT draining FROM controller_state WHERE id = 1), (SELECT COUNT(*) FROM intents WHERE kind = 'launch' AND cleanup_proven = 0 AND NOT (state = 'failed' AND effect_state = 'definite_no_effect')), (SELECT COUNT(*) FROM intents WHERE kind != 'launch' AND CASE WHEN cleanup_proven = 1 THEN 0 WHEN kind = 'discovery-credential' THEN state IN ('pending', 'uncertain') WHEN kind = 'scale-set-session' THEN NOT (state = 'done' AND EXISTS (SELECT 1 FROM scale_set_sessions WHERE intent_id = intents.id AND state = 'closed')) AND NOT (state = 'failed' AND effect_state = 'definite_no_effect') WHEN state = 'failed' AND effect_state = 'definite_no_effect' THEN 0 ELSE 1 END = 1)",
                 (),
             )
             .await

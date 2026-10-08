@@ -16,6 +16,7 @@ mod launch;
 mod lifecycle;
 mod protected_path;
 mod schema;
+mod session;
 mod worker_volume;
 
 pub use auth_intent::{
@@ -32,6 +33,10 @@ pub use cleanup::{
     PostActionDisposition, RunnerStartObservation,
 };
 pub use lifecycle::RunnerStartIntent;
+pub use session::{
+    ScaleSetSessionClaim, ScaleSetSessionCloseClaim, ScaleSetSessionClosePermit,
+    ScaleSetSessionIdentity,
+};
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

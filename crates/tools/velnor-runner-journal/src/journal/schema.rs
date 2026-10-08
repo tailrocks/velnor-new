@@ -2,7 +2,7 @@
 
 use crate::error::HostError;
 
-const JOURNAL_VERSION: i64 = 8;
+const JOURNAL_VERSION: i64 = 10;
 
 mod validation;
 pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError> {
@@ -28,7 +28,8 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
             migrate_version_three(conn).await?;
             migrate_version_four(conn).await?;
             migrate_version_five(conn).await?;
-            migrate_version_six(conn).await
+            migrate_version_six(conn).await?;
+            migrate_version_nine(conn).await
         }
         1 => {
             migrate_version_one(conn).await?;
@@ -36,32 +37,49 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
             migrate_version_three(conn).await?;
             migrate_version_four(conn).await?;
             migrate_version_five(conn).await?;
-            migrate_version_six(conn).await
+            migrate_version_six(conn).await?;
+            migrate_version_nine(conn).await
         }
         2 => {
             migrate_version_two(conn).await?;
             migrate_version_three(conn).await?;
             migrate_version_four(conn).await?;
             migrate_version_five(conn).await?;
-            migrate_version_six(conn).await
+            migrate_version_six(conn).await?;
+            migrate_version_nine(conn).await
         }
         3 => {
             migrate_version_three(conn).await?;
             migrate_version_four(conn).await?;
             migrate_version_five(conn).await?;
-            migrate_version_six(conn).await
+            migrate_version_six(conn).await?;
+            migrate_version_nine(conn).await
         }
         4 => {
             migrate_version_four(conn).await?;
             migrate_version_five(conn).await?;
-            migrate_version_six(conn).await
+            migrate_version_six(conn).await?;
+            migrate_version_nine(conn).await
         }
         5 => {
             migrate_version_five(conn).await?;
-            migrate_version_six(conn).await
+            migrate_version_six(conn).await?;
+            migrate_version_nine(conn).await
         }
-        6 => migrate_version_six(conn).await,
-        7 => migrate_version_seven(conn).await,
+        6 => {
+            migrate_version_six(conn).await?;
+            migrate_version_nine(conn).await
+        }
+        7 => {
+            migrate_version_seven(conn).await?;
+            migrate_version_eight(conn).await?;
+            migrate_version_nine(conn).await
+        }
+        8 => {
+            migrate_version_eight(conn).await?;
+            migrate_version_nine(conn).await
+        }
+        9 => migrate_version_nine(conn).await,
         JOURNAL_VERSION => validation::validate_current_schema(conn).await,
         _ => Err(HostError::Journal),
     }
@@ -241,7 +259,8 @@ async fn migrate_version_six(conn: &turso::Connection) -> Result<(), HostError> 
     conn.execute("PRAGMA user_version = 7", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    migrate_version_seven(conn).await
+    migrate_version_seven(conn).await?;
+    migrate_version_eight(conn).await
 }
 
 async fn migrate_version_seven(conn: &turso::Connection) -> Result<(), HostError> {
@@ -261,11 +280,53 @@ async fn migrate_version_seven(conn: &turso::Connection) -> Result<(), HostError
             .map_err(|_| HostError::Journal)?;
         }
     }
-    validation::validate_current_schema(conn).await?;
+    validation::validate_v8_schema(conn).await?;
     conn.execute("PRAGMA user_version = 8", ())
         .await
         .map_err(|_| HostError::Journal)?;
     Ok(())
+}
+
+async fn migrate_version_eight(conn: &turso::Connection) -> Result<(), HostError> {
+    validation::validate_v8_schema(conn).await?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS scale_set_sessions (intent_id INTEGER PRIMARY KEY CHECK (intent_id > 0), session_id TEXT UNIQUE, state TEXT NOT NULL CHECK (state IN ('creating', 'open', 'closed'))) ",
+        (),
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
+    validation::validate_v9_session_schema(conn).await?;
+    conn.execute("PRAGMA user_version = 9", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
+async fn migrate_version_nine(conn: &turso::Connection) -> Result<(), HostError> {
+    validation::validate_v8_schema(conn).await?;
+    validation::validate_v9_session_schema(conn).await?;
+    let columns = validation::read_session_columns(conn).await?;
+    if !columns.contains("target_repository_full_name") {
+        conn.execute(
+            "ALTER TABLE scale_set_sessions ADD COLUMN target_repository_full_name TEXT",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    }
+    if !columns.contains("close_attempted") {
+        conn.execute(
+            "ALTER TABLE scale_set_sessions ADD COLUMN close_attempted INTEGER NOT NULL DEFAULT 0 CHECK (close_attempted IN (0, 1))",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    }
+    validation::validate_session_schema(conn).await?;
+    conn.execute("PRAGMA user_version = 10", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    validation::validate_current_schema(conn).await
 }
 
 async fn ensure_legacy_columns(conn: &turso::Connection) -> Result<(), HostError> {

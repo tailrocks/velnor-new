@@ -170,10 +170,15 @@ impl fmt::Debug for RepositoryDiscoveryAdmin {
 }
 
 mod session_capability;
+mod session_cleanup;
 pub use session_capability::{
     AcquireUnresolvedReason, PoolSessionCapabilityError, PopulationObservationSource,
     SessionCloseOutcome, SessionPopulationObservation, VerifiedAcquireOutcome, VerifiedAcquiredJob,
     VerifiedAssignedDemand, VerifiedPoolSessionAdmin, VerifiedQueueSession,
+};
+pub use session_cleanup::{
+    RepositorySessionCleanupBinding, RepositorySessionCleanupExpectation,
+    RepositorySessionCleanupOutcome, RepositorySessionCleanupRoute, RepositorySessionCloseClaim,
 };
 
 /// Lookup result for an exact group and Scale Set in an organization-scoped
