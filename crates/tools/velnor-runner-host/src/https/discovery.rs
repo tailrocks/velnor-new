@@ -373,5 +373,8 @@ mod tests;
 #[path = "discovery_actions_delete_tests.rs"]
 mod actions_delete_tests;
 #[cfg(test)]
+#[path = "discovery_actions_provider_tests.rs"]
+mod actions_provider_tests;
+#[cfg(test)]
 #[path = "discovery_queue_origin_tests.rs"]
 mod queue_origin_tests;
