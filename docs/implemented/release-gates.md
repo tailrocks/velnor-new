@@ -71,12 +71,15 @@ qualification is established by the release-source checks below.
   update set, record timestamp+delta, and run full qualification. No updater
   binary exists and none is planned for V1 — this is the mechanical maximum.
 - VER-3.7 (merge-after-qual): SOURCE CHECKS AND BRANCH PROTECTION VERIFIED.
-  The live `protect-main` ruleset requires the `Required` status check, and
-  the current main SHA `536ffbb79ce54faf73eda608b4004cf03fd20802` passed all
-  21 checks in [run `37833052713`](https://github.com/tailrocks/velnor-new/actions/runs/37833052713).
-  The release gate checks the exact-source main CI run and its `Required` job
-  before building and repeats that check before publication. Refresh this
-  evidence against current main before a new release.
+  The live `protect-main` ruleset requires the strict `Required` status check.
+  Main merge SHA `993050b379ed1b190315d0c2aaa272fd76080c9b` passed all 21
+  jobs, including `Required` job 113580987515, in
+  [run `37854363776`](https://github.com/tailrocks/velnor-new/actions/runs/37854363776)
+  after PR #113 merged. This verifies the publication-source integration's
+  main CI, not hosted release qualification or publication. The release gate
+  checks the exact-source main CI run and its `Required` job before building
+  and repeats that check before publication. Refresh this evidence if main
+  advances before a new release.
 - VER-4.4 (refresh Velnor-owned locks only): procedure defined; refresh of
   `Cargo.lock`/policy/generator/runner locks is a maintainer action, tool
   files get recommendations only. Residual NEEDS-HUMAN: same as VER-3.3 —
