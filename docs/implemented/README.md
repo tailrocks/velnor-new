@@ -72,6 +72,9 @@ current on every change to the process they describe.
 
 - [Requirements-to-evidence map](requirements-evidence.md) (every
   MUST/MUST NOT + acceptance criterion → owning crate, files, tests, gate)
+- [Generator publication qualification](generator-publication-qualification.md)
+  (draft release replay, exact-source targeting, and bounded live evidence;
+  branch candidate pending independent review)
 - [Performance acceptance](performance.md) (measured timings + budget
   verdicts, including the explicitly unpassed small-fixture budget)
 - [P08 cache measurements](cache-measurements.md) (R11/R12 sequential-run

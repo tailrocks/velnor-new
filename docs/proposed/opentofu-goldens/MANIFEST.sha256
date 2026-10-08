@@ -17,7 +17,7 @@ b29628f323e250edb35aad1fc25601bb4554951c2b2f033c43fc12324f5cec75  ./dogfood/prev
 e358f18ed627e3450110e4a1873ff7d7c6428acc5506713376d15d728e96bbcb  ./dogfood/preview/.github/actions/generator-release-build-linux/action.yml
 acf4e61eff90e2ac231d3aad62eb0d33c1c09141bc46a1536e0a168157816e56  ./dogfood/preview/.github/actions/generator-release-build-macos-intel/action.yml
 70d57f666c4223df2901e87ec111c3328aba0804137017edbe7fce3c9084b493  ./dogfood/preview/.github/actions/generator-release-build-macos/action.yml
-02d765643735dba3e9b8b52c482afe3977601d58d0282ce15faa57d9095fc465  ./dogfood/preview/.github/actions/generator-release-publish/action.yml
+04429fd25a82bb031d32beb5b7512f844a5a4e94b52b7a454b7dec1121f7e1ef  ./dogfood/preview/.github/actions/generator-release-publish/action.yml
 c3a19f52e832086b7bb4544fa1c46c458a35206cc06ac41e9fdc0193f74ac206  ./dogfood/preview/.github/actions/generator-release-qualify-linux/action.yml
 c385836b6f56891770bee7cdaf77ce5c1e0fce3ad6a094c08fa92833d025c2a2  ./dogfood/preview/.github/actions/generator-release-qualify-macos-intel/action.yml
 5b1d537c3f02e1de3dec199c70f1b827f43f8facd51cd20be3b2c1d4441b6d30  ./dogfood/preview/.github/actions/generator-release-qualify-macos/action.yml
@@ -33,7 +33,7 @@ d9ffcb0548d859247b80c14fffef98d7869010ee78c197301c19f0ca3273d733  ./dogfood/prev
 ab67537342bd8e71e79571ee5a21075d080f9457141d5d39f1dded347cbf3c93  ./dogfood/preview/.github/workflows/product-release-images.yml
 7ba5ef75f5ca8cda0535b4dfdd099f729b0ed409740bfbd2209862b832a22677  ./dogfood/preview/.github/workflows/product-release.yml
 29251bfff6cf88f4eeac38fa91b74860f7eba7ef8c587a7640ca2747231f4da4  ./dogfood/preview/.github/workflows/qualification.yml
-bbc59884bac87a9321f43c028775f5bd638fa88d30b95df2e82de1d47d353ae9  ./dogfood/tree.sha256
+a202cff4c9ea94d2c5ce2d9f2b43f94bb60970f4ece189e8f6df7ec181053b33  ./dogfood/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./empty-suite/generate.exit
 1977162141446024bbf507d001ae5d013cd78cd1b5ae9a7e65d44c3503ffc709  ./empty-suite/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/generate.stdout.txt
