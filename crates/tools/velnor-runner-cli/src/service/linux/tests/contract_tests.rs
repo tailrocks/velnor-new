@@ -87,6 +87,119 @@ fn start_rejects_commands_that_ignore_failures_or_have_incomplete_error_policy()
 }
 
 #[test]
+fn start_rejects_waiting_exec_stop_command() {
+    let valid = unit_snapshot(UnitSnapshot {
+        active_state: "inactive",
+        sub_state: "dead",
+        main_pid: 0,
+        control_pid: 0,
+        result: "success",
+        stop_code: "(null)",
+        stop_status: "0/0",
+        timeout: "30s",
+    });
+    let source = String::from_utf8_lossy(&valid);
+    let stale = source.replacen(" drain ;", " drain --wait ;", 1);
+    assert_ne!(stale, source);
+
+    let mut manager = FakeManager::with_outputs([manager_output(true, stale.into_bytes())]);
+    assert_eq!(
+        perform(ServiceAction::Start, &mut manager, DRAIN_TIMEOUT_SECS),
+        Err(ServiceFault::ServiceContract)
+    );
+    assert_eq!(manager.calls.len(), 1);
+    assert_eq!(manager.busctl_calls.len(), 1);
+    assert_eq!(
+        manager.busctl_calls[0].last().map(String::as_str),
+        Some("Conditions")
+    );
+}
+
+#[test]
+fn start_rejects_exec_stop_timeout_mode_that_skips_sigterm() {
+    let valid = unit_snapshot(UnitSnapshot {
+        active_state: "inactive",
+        sub_state: "dead",
+        main_pid: 0,
+        control_pid: 0,
+        result: "success",
+        stop_code: "(null)",
+        stop_status: "0/0",
+        timeout: "30s",
+    });
+    let source = String::from_utf8_lossy(&valid);
+    let altered = source.replace(
+        "TimeoutStopFailureMode=terminate",
+        "TimeoutStopFailureMode=abort",
+    );
+    assert_ne!(altered, source);
+
+    let mut manager = FakeManager::with_outputs([manager_output(true, altered.into_bytes())]);
+    assert_eq!(
+        perform(ServiceAction::Start, &mut manager, DRAIN_TIMEOUT_SECS),
+        Err(ServiceFault::ServiceContract)
+    );
+    assert_eq!(manager.calls.len(), 1);
+}
+
+#[test]
+fn start_rejects_exec_stop_kill_signal_that_skips_sigterm() {
+    let valid = unit_snapshot(UnitSnapshot {
+        active_state: "inactive",
+        sub_state: "dead",
+        main_pid: 0,
+        control_pid: 0,
+        result: "success",
+        stop_code: "(null)",
+        stop_status: "0/0",
+        timeout: "30s",
+    });
+    let source = String::from_utf8_lossy(&valid);
+    let altered = source.replace("KillSignal=15", "KillSignal=9");
+    assert_ne!(altered, source);
+
+    let mut manager = FakeManager::with_outputs([manager_output(true, altered.into_bytes())]);
+    assert_eq!(
+        perform(ServiceAction::Start, &mut manager, DRAIN_TIMEOUT_SECS),
+        Err(ServiceFault::ServiceContract)
+    );
+    assert_eq!(manager.calls.len(), 1);
+}
+
+#[test]
+fn start_rejects_kill_modes_that_can_suppress_or_broaden_signal_delivery() {
+    let valid = unit_snapshot(UnitSnapshot {
+        active_state: "inactive",
+        sub_state: "dead",
+        main_pid: 0,
+        control_pid: 0,
+        result: "success",
+        stop_code: "(null)",
+        stop_status: "0/0",
+        timeout: "30s",
+    });
+    let source = String::from_utf8_lossy(&valid);
+    for kill_mode in ["none", "control-group", "process"] {
+        let altered = source.replace("KillMode=mixed", &format!("KillMode={kill_mode}"));
+        assert_ne!(altered, source);
+        let mut manager = FakeManager::with_outputs([manager_output(true, altered.into_bytes())]);
+        assert_eq!(
+            perform(ServiceAction::Start, &mut manager, DRAIN_TIMEOUT_SECS),
+            Err(ServiceFault::ServiceContract)
+        );
+        assert_eq!(manager.calls.len(), 1);
+    }
+
+    let missing = source.replace("KillMode=mixed\n", "");
+    let mut manager = FakeManager::with_outputs([manager_output(true, missing.into_bytes())]);
+    assert_eq!(
+        perform(ServiceAction::Start, &mut manager, DRAIN_TIMEOUT_SECS),
+        Err(ServiceFault::UnknownState)
+    );
+    assert_eq!(manager.calls.len(), 1);
+}
+
+#[test]
 fn start_requires_the_controller_identity_marker_condition() {
     let valid = unit_snapshot(UnitSnapshot {
         active_state: "inactive",

@@ -13,6 +13,9 @@ pub(super) struct UnitSnapshot {
     pub(super) exec_stop: ExecInvocation,
     pub(super) identity_marker_condition_matches: bool,
     pub(super) timeout_stop: StopTimeout,
+    pub(super) timeout_stop_failure_mode: String,
+    pub(super) kill_signal: String,
+    pub(super) kill_mode: String,
     pub(super) user: String,
     pub(super) group: String,
     pub(super) supplementary_groups: String,
@@ -54,80 +57,99 @@ pub(super) enum StopTimeout {
     Infinite,
 }
 
+#[derive(Default)]
+struct SnapshotFields<'a> {
+    load_state: Option<&'a str>,
+    active_state: Option<&'a str>,
+    sub_state: Option<&'a str>,
+    main_pid: Option<u32>,
+    control_pid: Option<u32>,
+    result: Option<&'a str>,
+    exec_start_pre: Option<ExecInvocation>,
+    exec_start: Option<ExecInvocation>,
+    exec_stop: Option<ExecInvocation>,
+    timeout_stop: Option<StopTimeout>,
+    timeout_stop_failure_mode: Option<&'a str>,
+    kill_signal: Option<&'a str>,
+    kill_mode: Option<&'a str>,
+    user: Option<&'a str>,
+    group: Option<&'a str>,
+    supplementary_groups: Option<&'a str>,
+    working_directory: Option<&'a str>,
+    umask: Option<&'a str>,
+    no_new_privileges: Option<&'a str>,
+    protect_system: Option<&'a str>,
+    read_write_paths: Option<Vec<String>>,
+    requires: Option<Vec<String>>,
+    after: Option<Vec<String>>,
+    unit_type: Option<&'a str>,
+}
+
 pub(super) fn parse_snapshot(output: &[u8]) -> Option<UnitSnapshot> {
     let text = std::str::from_utf8(output).ok()?;
-    let mut load_state = None;
-    let mut active_state = None;
-    let mut sub_state = None;
-    let mut main_pid = None;
-    let mut control_pid = None;
-    let mut result = None;
-    let mut exec_start_pre = None;
-    let mut exec_start = None;
-    let mut exec_stop = None;
-    let mut timeout_stop = None;
-    let mut user = None;
-    let mut group = None;
-    let mut supplementary_groups = None;
-    let mut working_directory = None;
-    let mut umask = None;
-    let mut no_new_privileges = None;
-    let mut protect_system = None;
-    let mut read_write_paths = None;
-    let mut requires = None;
-    let mut after = None;
-    let mut unit_type = None;
+    let mut fields = SnapshotFields::default();
     for line in text.lines() {
-        let (key, value) = line.split_once('=')?;
-        match key {
-            "LoadState" => set_once(&mut load_state, value)?,
-            "ActiveState" => set_once(&mut active_state, value)?,
-            "SubState" => set_once(&mut sub_state, value)?,
-            "MainPID" => set_once(&mut main_pid, value.parse::<u32>().ok()?)?,
-            "ControlPID" => set_once(&mut control_pid, value.parse::<u32>().ok()?)?,
-            "Result" => set_once(&mut result, value)?,
-            "ExecStartPre" => set_once(&mut exec_start_pre, parse_exec_invocation(value)?)?,
-            "ExecStart" => set_once(&mut exec_start, parse_exec_invocation(value)?)?,
-            "ExecStop" => set_once(&mut exec_stop, parse_exec_invocation(value)?)?,
-            "TimeoutStopUSec" => set_once(&mut timeout_stop, parse_stop_timeout(value)?)?,
-            "User" => set_once(&mut user, value)?,
-            "Group" => set_once(&mut group, value)?,
-            "SupplementaryGroups" => set_once(&mut supplementary_groups, value)?,
-            "WorkingDirectory" => set_once(&mut working_directory, value)?,
-            "UMask" => set_once(&mut umask, value)?,
-            "NoNewPrivileges" => set_once(&mut no_new_privileges, value)?,
-            "ProtectSystem" => set_once(&mut protect_system, value)?,
-            "ReadWritePaths" => set_once(&mut read_write_paths, words(value))?,
-            "Requires" => set_once(&mut requires, words(value))?,
-            "After" => set_once(&mut after, words(value))?,
-            "Type" => set_once(&mut unit_type, value)?,
-            _ => return None,
-        }
+        parse_snapshot_line(&mut fields, line)?;
     }
     Some(UnitSnapshot {
-        load_state: load_state?.to_owned(),
-        active_state: active_state?.to_owned(),
-        sub_state: sub_state?.to_owned(),
-        main_pid: main_pid?,
-        control_pid: control_pid?,
-        result: result?.to_owned(),
-        exec_start_pre: exec_start_pre?,
-        exec_start: exec_start?,
-        exec_stop: exec_stop?,
+        load_state: fields.load_state?.to_owned(),
+        active_state: fields.active_state?.to_owned(),
+        sub_state: fields.sub_state?.to_owned(),
+        main_pid: fields.main_pid?,
+        control_pid: fields.control_pid?,
+        result: fields.result?.to_owned(),
+        exec_start_pre: fields.exec_start_pre?,
+        exec_start: fields.exec_start?,
+        exec_stop: fields.exec_stop?,
         identity_marker_condition_matches: false,
-        timeout_stop: timeout_stop?,
-        user: user?.to_owned(),
-        group: group?.to_owned(),
-        supplementary_groups: supplementary_groups?.to_owned(),
-        working_directory: working_directory?.to_owned(),
-        umask: umask?.to_owned(),
-        no_new_privileges: no_new_privileges?.to_owned(),
-        protect_system: protect_system?.to_owned(),
-        read_write_paths: read_write_paths?,
-        requires: requires?,
-        after: after?,
-        unit_type: unit_type?.to_owned(),
+        timeout_stop: fields.timeout_stop?,
+        timeout_stop_failure_mode: fields.timeout_stop_failure_mode?.to_owned(),
+        kill_signal: fields.kill_signal?.to_owned(),
+        kill_mode: fields.kill_mode?.to_owned(),
+        user: fields.user?.to_owned(),
+        group: fields.group?.to_owned(),
+        supplementary_groups: fields.supplementary_groups?.to_owned(),
+        working_directory: fields.working_directory?.to_owned(),
+        umask: fields.umask?.to_owned(),
+        no_new_privileges: fields.no_new_privileges?.to_owned(),
+        protect_system: fields.protect_system?.to_owned(),
+        read_write_paths: fields.read_write_paths?,
+        requires: fields.requires?,
+        after: fields.after?,
+        unit_type: fields.unit_type?.to_owned(),
     })
+}
+
+fn parse_snapshot_line<'a>(fields: &mut SnapshotFields<'a>, line: &'a str) -> Option<()> {
+    let (key, value) = line.split_once('=')?;
+    match key {
+        "LoadState" => set_once(&mut fields.load_state, value)?,
+        "ActiveState" => set_once(&mut fields.active_state, value)?,
+        "SubState" => set_once(&mut fields.sub_state, value)?,
+        "MainPID" => set_once(&mut fields.main_pid, value.parse::<u32>().ok()?)?,
+        "ControlPID" => set_once(&mut fields.control_pid, value.parse::<u32>().ok()?)?,
+        "Result" => set_once(&mut fields.result, value)?,
+        "ExecStartPre" => set_once(&mut fields.exec_start_pre, parse_exec_invocation(value)?)?,
+        "ExecStart" => set_once(&mut fields.exec_start, parse_exec_invocation(value)?)?,
+        "ExecStop" => set_once(&mut fields.exec_stop, parse_exec_invocation(value)?)?,
+        "TimeoutStopUSec" => set_once(&mut fields.timeout_stop, parse_stop_timeout(value)?)?,
+        "TimeoutStopFailureMode" => set_once(&mut fields.timeout_stop_failure_mode, value)?,
+        "KillSignal" => set_once(&mut fields.kill_signal, value)?,
+        "KillMode" => set_once(&mut fields.kill_mode, value)?,
+        "User" => set_once(&mut fields.user, value)?,
+        "Group" => set_once(&mut fields.group, value)?,
+        "SupplementaryGroups" => set_once(&mut fields.supplementary_groups, value)?,
+        "WorkingDirectory" => set_once(&mut fields.working_directory, value)?,
+        "UMask" => set_once(&mut fields.umask, value)?,
+        "NoNewPrivileges" => set_once(&mut fields.no_new_privileges, value)?,
+        "ProtectSystem" => set_once(&mut fields.protect_system, value)?,
+        "ReadWritePaths" => set_once(&mut fields.read_write_paths, words(value))?,
+        "Requires" => set_once(&mut fields.requires, words(value))?,
+        "After" => set_once(&mut fields.after, words(value))?,
+        "Type" => set_once(&mut fields.unit_type, value)?,
+        _ => return None,
+    }
+    Some(())
 }
 
 pub(super) fn parse_identity_snapshot(output: &[u8]) -> Option<IdentityUnitSnapshot> {

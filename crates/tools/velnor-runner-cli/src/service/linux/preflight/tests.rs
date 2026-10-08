@@ -64,11 +64,11 @@ fn environment_property() -> ManagerOutput {
 fn loaded_service(timeout: &str) -> ManagerOutput {
     let start = "/usr/bin/velnor-host --config /etc/velnor-host/host.toml --state /var/lib/velnor-host daemon run";
     let preflight = "/usr/bin/velnor-host --config /etc/velnor-host/host.toml --state /var/lib/velnor-host service preflight";
-    let stop = "/usr/bin/velnor-host --config /etc/velnor-host/host.toml --state /var/lib/velnor-host drain --wait";
+    let stop = "/usr/bin/velnor-host --config /etc/velnor-host/host.toml --state /var/lib/velnor-host drain";
     output(
         true,
         format!(
-            "LoadState=loaded\nActiveState=activating\nSubState=start-pre\nMainPID=0\nControlPID=71\nResult=success\nExecStartPre={{ path=/usr/bin/velnor-host ; argv[]={preflight} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }}\nExecStart={{ path=/usr/bin/velnor-host ; argv[]={start} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }}\nExecStop={{ path=/usr/bin/velnor-host ; argv[]={stop} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }}\nTimeoutStopUSec={timeout}\nUser=velnor\nGroup=velnor\nSupplementaryGroups=docker\nWorkingDirectory=/var/lib/velnor-host\nUMask=0077\nNoNewPrivileges=yes\nProtectSystem=strict\nReadWritePaths=/var/lib/velnor-host\nRequires=docker.service velnor-host-identity-check.service\nAfter=network-online.target docker.service velnor-host-identity-check.service\nType=simple\n"
+            "LoadState=loaded\nActiveState=activating\nSubState=start-pre\nMainPID=0\nControlPID=71\nResult=success\nExecStartPre={{ path=/usr/bin/velnor-host ; argv[]={preflight} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }}\nExecStart={{ path=/usr/bin/velnor-host ; argv[]={start} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }}\nExecStop={{ path=/usr/bin/velnor-host ; argv[]={stop} ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }}\nTimeoutStopUSec={timeout}\nTimeoutStopFailureMode=terminate\nKillSignal=15\nKillMode=mixed\nUser=velnor\nGroup=velnor\nSupplementaryGroups=docker\nWorkingDirectory=/var/lib/velnor-host\nUMask=0077\nNoNewPrivileges=yes\nProtectSystem=strict\nReadWritePaths=/var/lib/velnor-host\nRequires=docker.service velnor-host-identity-check.service\nAfter=network-online.target docker.service velnor-host-identity-check.service\nType=simple\n"
         )
         .into_bytes(),
     )
