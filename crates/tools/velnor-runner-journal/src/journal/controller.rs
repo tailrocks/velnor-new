@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::error::HostError;
 
-use super::Journal;
+use super::{DrainSnapshot, Journal};
 
 impl Journal {
     /// Open an existing journal without running schema bootstrap or permitting writes.
@@ -20,6 +20,61 @@ impl Journal {
             path: path.to_path_buf(),
             read_only: true,
             protected_path: None,
+        };
+        let _connection = journal.connection().await?;
+        Ok(journal)
+    }
+
+    /// Open an existing journal read-only beneath the exact retained host
+    /// state-directory identity. This does not create a database, bootstrap or
+    /// migrate the schema, or create sidecars.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Path`] when the parent, database, or sidecars are
+    /// unsafe or no longer match the retained identity, and [`HostError::Journal`]
+    /// when the existing journal cannot be opened read-only.
+    pub async fn open_readonly_protected_at(
+        path: &Path,
+        parent_device: u64,
+        parent_inode: u64,
+    ) -> Result<Self, HostError> {
+        let protected_path =
+            super::protected_path::ProtectedJournalPath::inspect_existing_for_parent(
+                path,
+                (parent_device, parent_inode),
+            )?;
+        let journal = Self {
+            path: path.to_path_buf(),
+            read_only: true,
+            protected_path: Some(protected_path),
+        };
+        let _connection = journal.connection().await?;
+        Ok(journal)
+    }
+
+    /// Open an existing journal for controller mutations under the exact
+    /// retained parent identity, without schema bootstrap or migration.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Path`] when the parent, database, or sidecars are
+    /// unsafe or no longer match the retained identity, and
+    /// [`HostError::Journal`] when the existing journal cannot be opened.
+    pub async fn open_existing_protected_at(
+        path: &Path,
+        parent_device: u64,
+        parent_inode: u64,
+    ) -> Result<Self, HostError> {
+        let protected_path =
+            super::protected_path::ProtectedJournalPath::inspect_existing_for_parent(
+                path,
+                (parent_device, parent_inode),
+            )?;
+        let journal = Self {
+            path: path.to_path_buf(),
+            read_only: false,
+            protected_path: Some(protected_path),
         };
         let _connection = journal.connection().await?;
         Ok(journal)
@@ -63,6 +118,41 @@ impl Journal {
             1 => Ok(true),
             _ => Err(HostError::Journal),
         }
+    }
+
+    /// Read the drain fence and bounded aggregate occupancy in one SQL snapshot.
+    ///
+    /// Occupancy follows `velnor_runner_launch_slot::holds`; unresolved intent
+    /// counting follows the Linux shutdown summary's journal predicate. This is
+    /// a local journal view only and does not prove Docker ownership is empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Journal`] for an absent or malformed controller row,
+    /// corrupt counts, or database failure.
+    pub async fn drain_snapshot(&self) -> Result<DrainSnapshot, HostError> {
+        let conn = self.connection().await?;
+        let mut rows = conn
+            .query(
+                "SELECT (SELECT draining FROM controller_state WHERE id = 1), (SELECT COUNT(*) FROM intents WHERE kind = 'launch' AND cleanup_proven = 0 AND NOT (state = 'failed' AND effect_state = 'definite_no_effect')), (SELECT COUNT(*) FROM intents WHERE kind != 'launch' AND CASE WHEN cleanup_proven = 1 THEN 0 WHEN kind = 'discovery-credential' THEN state IN ('pending', 'uncertain') WHEN state = 'failed' AND effect_state = 'definite_no_effect' THEN 0 ELSE 1 END = 1)",
+                (),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let row = rows.next().await.map_err(|_| HostError::Journal)?;
+        let row = row.ok_or(HostError::Journal)?;
+        let draining = match row.get::<i64>(0).map_err(|_| HostError::Journal)? {
+            0 => false,
+            1 => true,
+            _ => return Err(HostError::Journal),
+        };
+        let occupied_launches = nonnegative_count(row.get(1).map_err(|_| HostError::Journal)?)?;
+        let unresolved_intents = nonnegative_count(row.get(2).map_err(|_| HostError::Journal)?)?;
+        Ok(DrainSnapshot {
+            draining,
+            occupied_launches,
+            unresolved_intents,
+        })
     }
 
     /// Persist host-wide drain intent. Repeated requests retain the first timestamp.
@@ -125,6 +215,10 @@ impl Journal {
             .map_err(|_| HostError::Journal)?;
         Ok(())
     }
+}
+
+fn nonnegative_count(value: i64) -> Result<u64, HostError> {
+    u64::try_from(value).map_err(|_| HostError::Journal)
 }
 
 fn existing_regular_file(path: &Path) -> Result<(), HostError> {

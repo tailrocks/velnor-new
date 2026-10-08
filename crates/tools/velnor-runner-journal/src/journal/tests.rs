@@ -104,3 +104,5 @@ mod release_tests;
 mod runner_event_tests;
 
 mod protected_path_tests;
+#[cfg(unix)]
+mod protected_readonly_tests;

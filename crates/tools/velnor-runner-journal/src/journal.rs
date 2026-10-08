@@ -98,6 +98,17 @@ pub struct Journal {
     protected_path: Option<protected_path::ProtectedJournalPath>,
 }
 
+/// Coherent, aggregate journal facts used by a bounded read-only drain observer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DrainSnapshot {
+    /// Whether the durable admission fence is set.
+    pub draining: bool,
+    /// Launch rows that still occupy global capacity.
+    pub occupied_launches: u64,
+    /// Non-launch rows that remain unresolved.
+    pub unresolved_intents: u64,
+}
+
 pub(super) async fn outer_network_removal_started(
     conn: &turso::Connection,
     launch_id: i64,
