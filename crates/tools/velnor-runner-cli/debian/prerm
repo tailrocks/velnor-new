@@ -3,16 +3,24 @@ set -eu
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
 export PATH
 
-# Ask the packaged Rust control plane to prove a safe drain and stop.
-# Any nonzero result (including unknown state, deadline, or unavailable API)
-# aborts the dpkg operation before files are replaced or removed. The script
-# never bypasses policy-rc.d with a direct systemctl call.
-# An ExecStop error does not prevent systemd's later kill phase. This hook's
-# successful CLI result is required; it must not be treated as that proof while
-# the Linux drain API remains unavailable.
 case "${1:-}" in
     remove|upgrade|deconfigure|failed-upgrade|abort-upgrade|abort-deconfigure)
-        /usr/bin/velnor-host --config /etc/velnor-host/host.toml --state /var/lib/velnor-host service stop
+        # The state directory belongs to velnor, so prove the durable drain as
+        # that account. This command uses one configured monotonic deadline and
+        # succeeds only after a complete local quiescence proof.
+        /usr/sbin/runuser -u velnor -- /usr/bin/velnor-host \
+            --config /etc/velnor-host/host.toml \
+            --state /var/lib/velnor-host drain --wait
+
+        # Keep Debian's policy-rc.d decision in control of the manager action.
+        # A zero result alone is not proof that the unit stopped.
+        /usr/bin/deb-systemd-invoke stop velnor-host.service
+
+        # Read-only root-side postcondition; failure aborts before dpkg replaces
+        # or removes package files. No second drain/wait is performed here.
+        /usr/bin/velnor-host \
+            --config /etc/velnor-host/host.toml \
+            --state /var/lib/velnor-host service verify-stopped
         ;;
 esac
 
