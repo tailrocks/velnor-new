@@ -27,7 +27,45 @@ mod shape;
 use shape::setup_shape_ok;
 
 mod runtime_identity;
-pub use runtime_identity::ensure_setup_p08;
+pub use runtime_identity::{ensure_setup_p08, is_canonical_hosted_runtime_identity_step};
+
+/// Recognize only the exact typed tool-seed or Mise cache setup forms.
+///
+/// This is a workflow factoring check, not cache authorization or runtime proof.
+#[must_use]
+pub fn is_canonical_provider_cache_setup_step(step: &Step) -> bool {
+    match step.role {
+        Some(StepRole::ToolSeed) => {
+            step.name == crate::tool_seed::TOOL_SEED_NAME
+                && step.id.is_none()
+                && crate::tool_seed::validate_seed_action(step, None).is_ok()
+        }
+        Some(StepRole::MiseSetup) => is_canonical_mise_setup_step(step),
+        _ => false,
+    }
+}
+
+fn is_canonical_mise_setup_step(step: &Step) -> bool {
+    if step.name != velnor_actions_workflow_steps::setup::SETUP_MISE_NAME || step.id.is_some() {
+        return false;
+    }
+    let StepKind::Action { uses, with, .. } = &step.kind else {
+        return false;
+    };
+    let (Some(version), Some(sha256)) = (with.get("version"), with.get("sha256")) else {
+        return false;
+    };
+    let setup = MiseSetup {
+        uses: uses.clone(),
+        version: version.clone(),
+        sha256: sha256.clone(),
+    };
+    velnor_actions_workflow_steps::setup::mise_setup_step(&setup)
+        .is_ok_and(|expected| expected == *step)
+        || with.get("cache_key").is_some_and(|key| {
+            mise_setup_step_p08(&setup, key).is_ok_and(|expected| expected == *step)
+        })
+}
 
 mod seed_key;
 pub(crate) use seed_key::MiseToolsCacheKey;

@@ -45,7 +45,8 @@ pub struct LaneShare {
 
 struct SharedLaneParts {
     checkout: Step,
-    prefix: Vec<Step>,
+    hosted_prefix: Vec<Step>,
+    local_prefix: Vec<Step>,
     hosted_prelude: Vec<Step>,
     local_prelude: Vec<Step>,
     common: Vec<Step>,
@@ -112,8 +113,8 @@ pub fn share_lanes(
         calls.insert(local_id.clone(), uses);
         checkouts.insert(hosted_id.clone(), parts.checkout.clone());
         checkouts.insert(local_id.clone(), parts.checkout);
-        prefixes.insert(hosted_id.clone(), parts.prefix.clone());
-        prefixes.insert(local_id.clone(), parts.prefix);
+        prefixes.insert(hosted_id.clone(), parts.hosted_prefix);
+        prefixes.insert(local_id.clone(), parts.local_prefix);
         preludes.insert(hosted_id.clone(), parts.hosted_prelude);
         preludes.insert(local_id.clone(), parts.local_prelude);
         env_steps.insert(hosted_id.clone(), hosted.steps.clone());
@@ -205,51 +206,45 @@ fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLa
     if hosted_checkout != local_checkout {
         return None;
     }
-    split_shared_steps(hosted_checkout, hosted_steps, local_steps)
+    let (hosted_cache_prefix, hosted_steps) =
+        peel_mise_cache_setup_prefix(&hosted.runs_on, hosted_steps);
+    let (local_cache_prefix, local_steps) =
+        peel_mise_cache_setup_prefix(&local.runs_on, local_steps);
+    split_shared_steps(
+        hosted_checkout,
+        hosted_steps,
+        local_steps,
+        hosted_cache_prefix,
+        local_cache_prefix,
+    )
+}
+
+fn peel_mise_cache_setup_prefix<'a>(runs_on: &str, steps: &'a [Step]) -> (Vec<Step>, &'a [Step]) {
+    let mut end = 0;
+    for step in steps {
+        let is_typed_setup =
+            velnor_actions_workflow_cache::cache_p08::is_canonical_provider_cache_setup_step(step);
+        let is_hosted_identity =
+            velnor_actions_workflow_cache::cache_p08::is_canonical_hosted_runtime_identity_step(
+                runs_on, step,
+            );
+        if !is_typed_setup && !is_hosted_identity {
+            break;
+        }
+        end += 1;
+    }
+    (steps[..end].to_vec(), &steps[end..])
 }
 
 fn split_shared_steps(
     checkout: &Step,
     hosted_steps: &[Step],
     local_steps: &[Step],
+    hosted_cache_prefix: Vec<Step>,
+    local_cache_prefix: Vec<Step>,
 ) -> Option<SharedLaneParts> {
-    let hosted_action = hosted_steps
-        .iter()
-        .any(velnor_actions_workflow_cache::cache_steps::is_mbx_action);
-    let local_action = local_steps
-        .iter()
-        .any(velnor_actions_workflow_cache::cache_steps::is_mbx_action);
-    if hosted_action != local_action {
-        return None;
-    }
-    let (prefix, hosted_prelude, local_prelude, hosted_tail, local_tail) = if hosted_action {
-        let hosted_at = crate::lane_share_sections::mbx_prelude_index(hosted_steps)?;
-        let local_at = crate::lane_share_sections::mbx_prelude_index(local_steps)?;
-        let hosted_prefix = &hosted_steps[..hosted_at];
-        let local_prefix = &local_steps[..local_at];
-        if hosted_prefix != local_prefix {
-            return None;
-        }
-        let (hosted_prelude, hosted_tail) =
-            crate::lane_share_sections::peel_mbx_prelude(&hosted_steps[hosted_at..])?;
-        let (local_prelude, local_tail) =
-            crate::lane_share_sections::peel_mbx_prelude(&local_steps[local_at..])?;
-        (
-            hosted_prefix.to_vec(),
-            hosted_prelude,
-            local_prelude,
-            hosted_tail,
-            local_tail,
-        )
-    } else {
-        (
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            hosted_steps,
-            local_steps,
-        )
-    };
+    let (prefix, mut hosted_prelude, mut local_prelude, hosted_tail, local_tail) =
+        split_mbx_steps(hosted_steps, local_steps)?;
     let (hosted_provider_prefix, hosted_tail) =
         crate::lane_share_sections::peel_provider_restore_prefix(hosted_tail);
     let (local_provider_prefix, local_tail) =
@@ -257,8 +252,6 @@ fn split_shared_steps(
     if hosted_provider_prefix != local_provider_prefix {
         return None;
     }
-    let mut hosted_prelude = hosted_prelude;
-    let mut local_prelude = local_prelude;
     hosted_prelude.extend(hosted_provider_prefix);
     local_prelude.extend(local_provider_prefix);
     let (hosted_common, hosted_cache_postlude) =
@@ -273,9 +266,21 @@ fn split_shared_steps(
     hosted_postlude.extend(hosted_cache_postlude);
     let mut local_postlude = local_lane_specific;
     local_postlude.extend(local_cache_postlude);
-    (hosted_common == local_common).then_some(SharedLaneParts {
+    if hosted_common != local_common {
+        return None;
+    }
+    let (hosted_prefix, local_prefix, hosted_prelude, local_prelude) =
+        retain_provider_cache_prefixes(
+            prefix,
+            hosted_cache_prefix,
+            local_cache_prefix,
+            hosted_prelude,
+            local_prelude,
+        );
+    Some(SharedLaneParts {
         checkout: checkout.clone(),
-        prefix,
+        hosted_prefix,
+        local_prefix,
         hosted_prelude,
         local_prelude,
         common: hosted_common,
@@ -283,6 +288,76 @@ fn split_shared_steps(
         local_postlude,
     })
 }
+fn split_mbx_steps<'a>(
+    hosted_steps: &'a [Step],
+    local_steps: &'a [Step],
+) -> Option<(Vec<Step>, Vec<Step>, Vec<Step>, &'a [Step], &'a [Step])> {
+    let hosted_action = has_mbx_action(hosted_steps);
+    if hosted_action != has_mbx_action(local_steps) {
+        return None;
+    }
+    if !hosted_action {
+        return Some((
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            hosted_steps,
+            local_steps,
+        ));
+    }
+    let hosted_at = crate::lane_share_sections::mbx_prelude_index(hosted_steps)?;
+    let local_at = crate::lane_share_sections::mbx_prelude_index(local_steps)?;
+    let hosted_prefix = &hosted_steps[..hosted_at];
+    let local_prefix = &local_steps[..local_at];
+    if hosted_prefix != local_prefix {
+        return None;
+    }
+    let (hosted_prelude, hosted_tail) =
+        crate::lane_share_sections::peel_mbx_prelude(&hosted_steps[hosted_at..])?;
+    let (local_prelude, local_tail) =
+        crate::lane_share_sections::peel_mbx_prelude(&local_steps[local_at..])?;
+    Some((
+        hosted_prefix.to_vec(),
+        hosted_prelude,
+        local_prelude,
+        hosted_tail,
+        local_tail,
+    ))
+}
+
+fn has_mbx_action(steps: &[Step]) -> bool {
+    steps
+        .iter()
+        .any(velnor_actions_workflow_cache::cache_steps::is_mbx_action)
+}
+
+fn retain_provider_cache_prefixes(
+    common_prefix: Vec<Step>,
+    hosted_cache_prefix: Vec<Step>,
+    local_cache_prefix: Vec<Step>,
+    hosted_prelude: Vec<Step>,
+    local_prelude: Vec<Step>,
+) -> (Vec<Step>, Vec<Step>, Vec<Step>, Vec<Step>) {
+    if hosted_cache_prefix.is_empty() && local_cache_prefix.is_empty() {
+        return (
+            common_prefix.clone(),
+            common_prefix,
+            hosted_prelude,
+            local_prelude,
+        );
+    }
+    let mut hosted_prelude_with_common = common_prefix.clone();
+    hosted_prelude_with_common.extend(hosted_prelude);
+    let mut local_prelude_with_common = common_prefix;
+    local_prelude_with_common.extend(local_prelude);
+    (
+        hosted_cache_prefix,
+        local_cache_prefix,
+        hosted_prelude_with_common,
+        local_prelude_with_common,
+    )
+}
+
 fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step, &'a [Step])> {
     let (checkout, remaining) = steps.split_first()?;
     let is_expected_checkout = checkout.role == Some(StepRole::Checkout)
