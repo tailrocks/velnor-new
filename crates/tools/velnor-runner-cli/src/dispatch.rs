@@ -405,11 +405,16 @@ fn write_flag_marker(state: &Path, name: &str) -> bool {
 
 fn remove_flag(state: &Path, name: &str) -> ExitCode {
     let path = state.join(name);
-    if path.exists() && std::fs::remove_file(path).is_err() {
-        return ExitCode::from(1);
+    match std::fs::remove_file(path) {
+        Ok(()) => eprintln!("legacy {name} marker removed; macOS admission state is not proven"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            eprintln!("legacy {name} marker absent; macOS admission state is not proven");
+        }
+        Err(_) => {
+            eprintln!("failed to remove legacy {name} marker; macOS admission state is not proven");
+        }
     }
-    println!("ready_for_admission");
-    ExitCode::SUCCESS
+    ExitCode::from(1)
 }
 
 fn drain(state: &Path, config_path: &Path, wait: bool, timeout_secs: Option<u64>) -> ExitCode {
@@ -431,12 +436,15 @@ fn drain_for_os(
                 return ExitCode::from(1);
             }
             if wait {
-                eprintln!("legacy drain marker recorded; macOS drain wait is not proven");
-                ExitCode::from(1)
+                eprintln!(
+                    "legacy drain marker recorded; active-daemon enforcement, drain wait, and quiescence are not proven"
+                );
             } else {
-                println!("draining");
-                ExitCode::SUCCESS
+                eprintln!(
+                    "legacy drain marker recorded; active-daemon enforcement and quiescence are not proven"
+                );
             }
+            ExitCode::from(1)
         }
         _ => {
             eprintln!("drain is unavailable on this platform");

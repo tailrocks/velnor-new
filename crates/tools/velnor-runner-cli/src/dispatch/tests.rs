@@ -244,11 +244,11 @@ fn linux_drain_rejects_zero_timeout_before_request() {
 }
 
 #[test]
-fn macos_drain_keeps_the_legacy_marker_backend() -> Result<(), String> {
+fn macos_drain_keeps_the_legacy_marker_but_does_not_claim_enforcement() -> Result<(), String> {
     let state = disconnect_state_path();
     assert_eq!(
         drain_for_os(&state, Path::new("/unused"), false, None, "macos"),
-        ExitCode::SUCCESS
+        ExitCode::from(1)
     );
     assert_eq!(
         std::fs::read(state.join("drain")).map_err(|error| error.to_string())?,
@@ -259,13 +259,13 @@ fn macos_drain_keeps_the_legacy_marker_backend() -> Result<(), String> {
 }
 
 #[test]
-fn macos_resume_keeps_the_legacy_marker_backend() -> Result<(), String> {
+fn macos_resume_clears_the_legacy_marker_without_claiming_admission() -> Result<(), String> {
     let state = disconnect_state_path();
     std::fs::create_dir_all(&state).map_err(|error| error.to_string())?;
     std::fs::write(state.join("drain"), b"1").map_err(|error| error.to_string())?;
     assert_eq!(
         resume_for_os(&state, Path::new("/unused"), "macos"),
-        ExitCode::SUCCESS
+        ExitCode::from(1)
     );
     assert!(!state.join("drain").exists());
     std::fs::remove_dir_all(state).map_err(|error| error.to_string())?;
