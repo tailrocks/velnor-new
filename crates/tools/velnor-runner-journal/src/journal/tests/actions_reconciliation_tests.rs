@@ -125,7 +125,7 @@ async fn concurrent_conflicting_rest_completions_are_first_writer_cas() -> Resul
 #[tokio::test]
 async fn v7_upgrade_preserves_uncertain_launch_and_adds_empty_rest_evidence() -> Result<(), String>
 {
-    let scratch = Scratch::new("journal-v7-to-v8").map_err(|error| error.to_string())?;
+    let scratch = Scratch::new("journal-v7-to-v10").map_err(|error| error.to_string())?;
     let path = scratch.file();
     let journal = Journal::open(&path)
         .await
@@ -169,7 +169,7 @@ async fn v7_upgrade_preserves_uncertain_launch_and_adds_empty_rest_evidence() ->
         version_row
             .get::<i64>(0)
             .map_err(|error| error.to_string())?,
-        8
+        10
     );
     drop(version_rows);
     drop(conn);

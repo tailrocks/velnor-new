@@ -25,6 +25,8 @@ pub use discovery::{
 pub use discovery_admin::{
     AcquireUnresolvedReason, ActionsServiceRouteLookup, OrganizationDiscoveryAdmin,
     PoolSessionCapabilityError, PopulationObservationSource, RepositoryDiscoveryAdmin,
+    RepositorySessionCleanupBinding, RepositorySessionCleanupExpectation,
+    RepositorySessionCleanupOutcome, RepositorySessionCleanupRoute, RepositorySessionCloseClaim,
     SessionCloseOutcome, SessionPopulationObservation, VerifiedAcquireOutcome, VerifiedAcquiredJob,
     VerifiedAssignedDemand, VerifiedPoolSessionAdmin, VerifiedQueueSession,
 };

@@ -253,6 +253,8 @@ fn private_admin_repo() -> &'static str {
 
 #[path = "registration_discovery_async/bootstrap.rs"]
 mod bootstrap;
+#[path = "registration_discovery_async/cleanup.rs"]
+mod cleanup;
 #[path = "registration_discovery_async/lifecycle.rs"]
 mod lifecycle;
 #[path = "registration_discovery_async/preflight.rs"]
