@@ -1,0 +1,60 @@
+---
+title: "PR #97 Linux Scale Set rollout evidence"
+description: "Review snapshot for Velnor PR #97. Records published source and artifact checks separately from outstanding host, trust, runner-image, and end-to-end qualification gates."
+---
+
+This page is a review snapshot, not a completion claim. Raw logs, job pages, API responses, package files, and checksums remain in the external evidence bundle under `.goal-evidence/velnor-pr97-2026-10-07/`.
+
+## Identity and published source
+
+- Velnor PR [#97](https://github.com/tailrocks/velnor-new/pull/97) is open and draft. At the 2026-10-08 refresh, its base is `main` at `bb7fa33626a19aaf72f79aa646989ca02ee460e8` and its live head is [`6da3be5a608ee875117a137168afb7c9847b9081`](https://github.com/tailrocks/velnor-new/commit/6da3be5a608ee875117a137168afb7c9847b9081) on `rust-policy-rollout`.
+- Published first-parent increments are [`d77b1139ffdab96a99d40bf054d1f9ba6f8f5a4b`](https://github.com/tailrocks/velnor-new/commit/d77b1139ffdab96a99d40bf054d1f9ba6f8f5a4b), [`08b38b7fdec8a14cd2e9809b70ac76d3746750a5`](https://github.com/tailrocks/velnor-new/commit/08b38b7fdec8a14cd2e9809b70ac76d3746750a5), and [`6da3be5a608ee875117a137168afb7c9847b9081`](https://github.com/tailrocks/velnor-new/commit/6da3be5a608ee875117a137168afb7c9847b9081). Their publication receipts record the focused changes and checks described below.
+- The Linux binary and `.deb` listed below are from [`4db6db1606e34a28a919a6adca4ea97fc68b8389`](https://github.com/tailrocks/velnor-new/commit/4db6db1606e34a28a919a6adca4ea97fc68b8389), an ancestor of the live head. They are not builds of `6da3be5`.
+- The ChainArgos snapshot is read-only evidence. No ChainArgos source or workflow change was committed to Velnor.
+
+## Gate status
+
+| Gate | Status | Evidence and limit |
+|---|---|---|
+| Published Velnor source increments | PASS | d77, 08b38, and 6da are remote-verified on PR #97. d77 records its existing strict Clippy baseline failures without claiming a pass; 08b38 and 6da record their focused formatting, test, and Clippy checks. These are source checks, not runtime qualification. |
+| 4db6 binary and deb artifact provenance inspection | PASS | PASS is limited to exact-source build provenance and package-content inspection; it does not mean deployment-ready. The amd64 binary and developmental `.deb` were built and inspected against source 4db6. Binary SHA-256 is `d7f5ef5193cc1ddb0b92cf6ae6d5319e79c8968089ea05a28ad2477644fb8772`; `.deb` SHA-256 is `e5e1251582c94bb2ab99d4ca0b8402c70554bbb6ddc405523ebb28c92da4ec89`. Binary reports `velnor-host 0.1.1`; Debian control metadata says `0.1.2~dev0001+20261008044546+g4db6db1606e3-1`. No maintainer script ran and the package was not installed. |
+| Legacy runtime cleanup | PASS | The old Velnor package, service/runtime state, and owned Docker references were removed under an exact ownership process. The receipt says no replacement package or service is installed. |
+| Linux service lifecycle, drain, upgrade, rollback | NOT_RUN | Package/source inspection reports `drain --wait` returns `Unknown(OwnershipInventoryUnavailable)` and service stop returns `DrainUnavailable`; these are artifact-inspection conclusions, not an installed or live systemd test. The inspection also warns that systemd proceeds to its kill phase after the failing `ExecStop`, so this artifact is not safe for installation, activation, upgrade, or removal. No install, start, upgrade, rollback, or service-health pass is claimed. |
+| Existing ChainArgos Scale Set recovery | BLOCKED_EXTERNAL | The repository-scoped Set 3 read at 04:06:48Z reports offline, with no available/acquired/running/idle capacity. Four jobs in run #1943 remain queued and unassigned in the captured snapshot. Their root cause is NOT_ESTABLISHED. |
+| Ubuntu 26.04 official unmodified runner container | BLOCKED_EXTERNAL | The read-only GHCR audit examined 75 tags and found no qualifying Ubuntu 26.04 runner image. Current `latest`/`2.338.0` amd64 and arm64 configs report `ImageOS=ubuntu24`; Ubuntu 24.04 is not an allowed fallback. The GitHub-hosted Ubuntu 26.04 VM label does not identify a container image. |
+| Repository trust and Set 3 group binding | NOT_RUN | A private, selected-repository, workflow-restricted group is only a read-only proposal. Set 3 `runnerGroupId=1` is an Actions Service identity; no mapping to an organization REST group ID is proven. Effective repository-scope policy applicability is Unknown, and the proposed cross-scope Set 3 update is unverified. No group or Set mutation was made. |
+| Persistent controller credential | BLOCKED_EXTERNAL | The bounded read used the existing GitHub CLI OAuth credential. CLI metadata does not disclose its issuer/owner or expiry; it is not an unattended service credential. Short-lived registration/admin credentials were not persisted. |
+| Production AppArmor identity and official runner launch | NOT_RUN | No approved production policy hash/readback or Ubuntu 26 official Runner execution exists. Syntax checks and synthetic probes do not establish admission. |
+| Paired hosted and Velnor Scale Set workflow qualification | NOT_RUN | No Velnor Scale Set job completed. The current consumer workflow configuration selects hosted and Scale Set profiles, but that is configuration evidence only. No consumer change was published. |
+| Current PR checks | FAIL | The live `gh pr checks 97` query at `2026-10-08T05:20:24Z` reported DCO `fail`. Resolve the check before treating the PR as merge-ready. No all-checks-pass claim is made. |
+
+## ChainArgos snapshot
+
+The exact repository-scoped Actions Service read completed at `2026-10-08T04:06:51Z`. It returned group `Default` (ID 1) and Set 3 `ubuntu-26.04-scale-set`, labels `[velnor, ubuntu-26.04-scale-set]`, status `offline`, and aggregate statistics registered 5,629, assigned 4, busy 4, available/acquired/idle/running 0. Those aggregate fields are not mapped to individual jobs.
+
+The captured [run #1943](https://github.com/ChainArgos/java-monorepo/actions/runs/37408987813), attempt 1 on `26ff1fb75659a3a7152fec9341f635d39c086e25`, had 42 jobs: 22 succeeded, 16 cancelled, and 4 queued. The four queued Velnor jobs requested `[velnor, ubuntu-26.04-scale-set]`; each had runner ID 0, blank runner/group names, and zero steps. [Run #1944](https://github.com/ChainArgos/java-monorepo/actions/runs/37410688094) is terminal-cancelled; its 20 Velnor jobs were cancelled, `Required` failed, and `Publish baseline` was skipped. Neither run establishes recovery.
+
+The read-only group proposal selects only private repository ID `829618808`, disables public repositories, and restricts workflow access to `ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main`. The repository runner-group policy API is organization-scoped, while Set 3 was discovered through the repository-scoped Actions Service route; no supported ID crosswalk or effective-policy applicability proof currently joins those routes. Do not infer that the internal `runnerGroupId` and REST group IDs are interchangeable. Workflow-path access does not itself restrict event names. No `pull_request` or `merge_group` admission is claimed. The proposal keeps the existing Set 3 and changes only its group binding if supported identity and API readback are proven; it does not mutate `Default` or the shared `velnor-trusted` group.
+
+## Evidence references
+
+Paths are relative to `.goal-evidence/velnor-pr97-2026-10-07/`. SHA-256 values identify the separate evidence files; raw logs and API responses are not embedded here.
+
+| Evidence | Record and SHA-256 |
+|---|---|
+| 4db6 source archive manifest | `p0/linux-e917-publish-transaction-20261008T044351Z/source-archive-manifest.json` — `e71b3167e608caef4e6ae08fe54b32afb7e7aca6f0fc2e907b9f4b0b28f8cdc8` |
+| 4db6 binary build receipt | `package-linux-4db6-developmental/binary-build-record.json` — `0748010aa56db7fceffb44a21b7b35ba9ef78099c09e85f930edc259630676d0` |
+| 4db6 package files | `.deb`: `package-linux-4db6-developmental/output-4db6/velnor-host_0.1.2~dev0001+20261008044546+g4db6db1606e3-1_amd64.deb` — `e5e1251582c94bb2ab99d4ca0b8402c70554bbb6ddc405523ebb28c92da4ec89`; binary `package-linux-4db6-developmental/target/x86_64-unknown-linux-gnu/release/velnor-host` — `d7f5ef5193cc1ddb0b92cf6ae6d5319e79c8968089ea05a28ad2477644fb8772`
+| 4db6 package provenance and inspection | `package-linux-4db6-developmental/provenance.json` — `d398342fdadb4c15c66dc105e5204867a1d32703137008054bdf8ffe4f3d5d14`; `package-linux-4db6-developmental/package-inspection.json` — `54661260d77e78daf3cc77a885c7ccdb23503348cc334edf3e724cd7b544bf0e` |
+| d77 publication | `p0/artifact-pipeline-4db6-publication-20261008T0503Z/PUBLICATION-RECEIPT.json` — `8334292c2bd96d5e05ad3b75439f2559af03cb225d85e64e9b37c8e04af7db43`; source manifest — `3cb517583cc3a5778af1769e5248b4a6452a15da21ddee8a3741816e9669b12f` |
+| 08b38 publication | `p0/journal-drain-snapshot-d77-publication-20261008T0509Z/PUBLICATION-RECEIPT.json` — `5c520c245d4e5f6efc83ac322e6befecd7de001a22415e14703341a7f6e41bf2`; source manifest — `e642c367bd640cd9767afe06160a8e8862e8a3dde0b3190009a4126de91a83cc` |
+| 6da publication | `p0/host-trust-v2-08b38-publication-20261008T0510Z/PUBLICATION-RECEIPT.json` — `32823920a350ecbf3dd5b2ce43f115fce831d7d97c25250da1cfa4d0035ba6c0`; source manifest — `c54c1c19125142f35abea035ce224cd7751402e6f6e28198f6eebba07395e76c` |
+| Set 3 read | `actions/scaleset-admin-read-20261008T040648Z/record.json` — `398c439052b19e2a4f565d5a476299c35c52eadaf5a0afda28d5a4ebd2a355ac` |
+| ChainArgos run/job snapshot | `actions/live-observer-20261008T0406Z/record-v2.json` — `b954476d90e0b3090f1b6ba6129e8a04b01812544d06978d9f5d952b8ef9bce1`; jobs — `67acfe139d684c2779f9ed8d9a20959d6e8c5d4dd9e85513d1d42ebddd0d9336` |
+| Group proposal | `host/runner-group-binding-proposal-v2-20261008T0501Z/proposal.json` — `d08496b756017911dcfe0bdb723bccc5b69c576a2555f294ef8b1f8cdb3510e9` |
+| Official runner image audit | `host/official-ubuntu26-container-availability-20261008T0410Z/registry-source-audit-v4.json` — `5d27c5ae5a1170c24fdaa1a6c6976a067e414592cc66b4200bd2945beec68a8a` |
+| Legacy cleanup | `host/host-old-velnor-cleanup-final.json` — `73592e830e2354b98e693cffe50c958ca8987fcef50f8a539425372cc97fb7a3` |
+
+## Review and publication boundary
+
+This proposed page targets `docs/content/docs/reviews/pr-97-linux-scaleset-rollout.mdx`. It is an external patch and has not been applied or published; P0 owns any later staging/publication transaction. No active lint owner was reachable during this preparation, so no lint-owner review or acknowledgement is claimed. The source publication receipts record their own focused reviews; those reviews do not approve this page or establish runtime qualification.
