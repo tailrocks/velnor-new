@@ -1,3 +1,7 @@
+use super::super::status::{
+    ConfigObservation, DependencyObservation, JournalObservation, doctor_local_document,
+    doctor_local_observation_with,
+};
 use crate::args::Cli;
 use clap::Parser;
 
@@ -39,6 +43,80 @@ const LEGACY_MAC_PROBE_CONFIG: &str = concat!(
     "platform = \"linux/amd64\"\n",
     "endpoint = \"unix:///var/run/docker.sock\"\n",
 );
+
+#[test]
+fn doctor_without_probe_reports_local_observations_without_claiming_readiness() {
+    use crate::service::ControllerServiceState;
+    use velnor_runner_host::HostPlatform;
+
+    let observation = doctor_local_observation_with(
+        Ok(Some(LINUX_PROBE_CONFIG.to_owned())),
+        HostPlatform::Linux,
+        JournalObservation::PresentUnverified,
+        ControllerServiceState::InUse,
+        |reference| {
+            assert_eq!(reference, "systemd-credential:github-token");
+            Ok(true)
+        },
+    );
+    let document = doctor_local_document(observation);
+
+    assert_eq!(observation.config, ConfigObservation::Valid);
+    assert_eq!(observation.credential, DependencyObservation::Available);
+    assert_eq!(observation.docker, DependencyObservation::NotChecked);
+    assert_eq!(document["command"], "doctor");
+    assert!(!document["probe"].as_bool().expect("boolean probe flag"));
+    assert_eq!(document["journal"], "present_unverified");
+    assert_eq!(document["controller_service"], "in_use");
+    assert_eq!(document["global_readiness"], "not_proven");
+    assert!(!document.to_string().contains("github-token"));
+}
+
+#[test]
+fn doctor_without_probe_rejects_invalid_config_before_credential_access() {
+    use crate::service::ControllerServiceState;
+    use velnor_runner_host::HostPlatform;
+
+    let credential_probed = std::cell::Cell::new(false);
+    let observation = doctor_local_observation_with(
+        Ok(Some("schema = 99\n".to_owned())),
+        HostPlatform::Linux,
+        JournalObservation::Missing,
+        ControllerServiceState::Unknown,
+        |_| {
+            credential_probed.set(true);
+            Ok(true)
+        },
+    );
+
+    assert_eq!(observation.config, ConfigObservation::Invalid);
+    assert_eq!(observation.credential, DependencyObservation::NotChecked);
+    assert_eq!(observation.docker, DependencyObservation::NotChecked);
+    assert!(!credential_probed.get());
+    let document = doctor_local_document(observation);
+    assert_eq!(document["global_readiness"], "not_proven");
+}
+
+#[test]
+fn doctor_without_probe_preserves_legacy_macos_config_validation() {
+    use crate::service::ControllerServiceState;
+    use velnor_runner_host::HostPlatform;
+
+    let observation = doctor_local_observation_with(
+        Ok(Some(LEGACY_MAC_PROBE_CONFIG.to_owned())),
+        HostPlatform::Macos,
+        JournalObservation::Missing,
+        ControllerServiceState::Stopped,
+        |reference| {
+            assert_eq!(reference, "keychain:com.tailrocks.velnor.host/velnor-host");
+            Ok(true)
+        },
+    );
+
+    assert_eq!(observation.config, ConfigObservation::Valid);
+    assert_eq!(observation.credential, DependencyObservation::Available);
+    assert_eq!(observation.docker, DependencyObservation::NotChecked);
+}
 
 #[test]
 fn doctor_probe_uses_the_validated_configured_endpoint_and_never_claims_global_ready() {
