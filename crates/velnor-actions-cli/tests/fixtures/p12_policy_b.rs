@@ -203,7 +203,7 @@ fn blessed_standing_exception_passes() -> Result<(), Box<dyn Error>> {
         &fixture.dir,
         INVENTORY,
         "\"exceptions\":[]",
-        &format!("\"exceptions\":[{}]", blessed("v0.16.1")),
+        &format!("\"exceptions\":[{}]", blessed("v0.17.0")),
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_clean(&run);
@@ -231,7 +231,7 @@ fn blessed_standing_wrong_tag_fails() -> Result<(), Box<dyn Error>> {
 fn blessed_standing_missing_attribution_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-blessed-attr")?;
     let partial = "{\"key\":\"asamarts/alint\",\"kind\":\"mutable-tag\",\
-        \"tag\":\"v0.16.1\",\"expires\":null}";
+        \"tag\":\"v0.17.0\",\"expires\":null}";
     harness::mutate(
         &fixture.dir,
         INVENTORY,

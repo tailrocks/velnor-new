@@ -1,5 +1,5 @@
-pub const ALINT_ACTION_VERSION: &str = "v0.16.1";
-pub const ALINT_ACTION_SHA: &str = "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb";
+pub const ALINT_ACTION_VERSION: &str = "v0.17.0";
+pub const ALINT_ACTION_SHA: &str = "d93c0283b19dd78afcd8a4b303f1556a7759ba81";
 pub const MISE_ACTION_VERSION: &str = "v4.3.0";
 pub const MISE_ACTION_SHA: &str = "c2a87611a18de5b3828c5652fe268e992400cb5c";
 pub const CHECKOUT_ACTION_VERSION: &str = "v7.0.1";

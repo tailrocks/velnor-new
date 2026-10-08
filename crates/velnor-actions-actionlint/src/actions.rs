@@ -32,10 +32,10 @@ pub const AWS_CREDENTIALS_ACTION_VERSION: &str = "v6.3.0";
 pub const AWS_CREDENTIALS_ACTION_SHA: &str = "e1253824e5c10ff9df46874f81ed3ec929e19cfd";
 
 /// Qualified `asamarts/alint` release.
-/// Source: `https://api.github.com/repos/asamarts/alint/releases/latest`; checked 2026-09-28.
-pub const ALINT_ACTION_VERSION: &str = "v0.16.1";
-/// Full commit SHA for [`ALINT_ACTION_VERSION`] (verified upstream tag `v0.16.1`, 2026-09-04).
-pub const ALINT_ACTION_SHA: &str = "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb";
+/// Source: `https://api.github.com/repos/asamarts/alint/releases/latest`; checked 2026-10-07.
+pub const ALINT_ACTION_VERSION: &str = "v0.17.0";
+/// Full commit SHA for [`ALINT_ACTION_VERSION`] (verified upstream tag `v0.17.0`, 2026-10-07).
+pub const ALINT_ACTION_SHA: &str = "d93c0283b19dd78afcd8a4b303f1556a7759ba81";
 
 /// Qualified `jdx/mise-action` release.
 ///
