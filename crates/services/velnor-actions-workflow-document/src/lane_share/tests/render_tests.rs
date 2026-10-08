@@ -343,4 +343,5 @@ fn paired_tofu_restore_output_owner_stays_in_outer_job_scope() {
     assert_tofu_provider_scope(&shared, &hosted);
 }
 
+mod static_prefix_tests;
 mod static_task_tests;
