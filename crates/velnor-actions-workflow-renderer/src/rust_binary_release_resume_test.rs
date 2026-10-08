@@ -104,27 +104,71 @@ impl ReleaseFixture {
         Ok(())
     }
 
-    fn reject_mismatched_assets(&self, script: &str) -> Result<(), Box<dyn Error>> {
-        let original = fs::read(&self.state)?;
-        rewrite_json(&self.state, ".assets[0].digest = \"sha256:bad-digest\"")?;
+    fn reject_existing_draft(&self, script: &str) -> Result<(), Box<dyn Error>> {
+        let original_state = fs::read(&self.state)?;
+        let original_log = fs::read_to_string(&self.log)?;
         let output = self.publish(script)?;
         assert!(!output.status.success());
-        assert!(stderr(&output).contains("unexpected or mismatched assets"));
-        assert_eq!(fs::read_to_string(&self.log)?.matches("upload:").count(), 0);
-        fs::write(&self.state, original)?;
+        assert!(stderr(&output).contains("already has a draft release"));
+        assert!(stderr(&output).contains("reconcile or remove it manually"));
+        assert_eq!(fs::read(&self.state)?, original_state);
+        let calls = fs::read_to_string(&self.log)?;
+        for operation in [
+            "draft-detail:",
+            "upload:",
+            "patch\n",
+            "create-left-partial-draft",
+        ] {
+            assert_eq!(
+                calls.matches(operation).count(),
+                original_log.matches(operation).count(),
+                "existing draft operation {operation:?} changed: {calls}"
+            );
+        }
+        Ok(())
+    }
+
+    fn add_higher_version_tag(&mut self) -> Result<(), Box<dyn Error>> {
+        const VERSION: &str = "2.0.0";
+        fs::write(
+            self.repository.join("Cargo.toml"),
+            format!("[package]\nname='{PACKAGE}'\nversion='{VERSION}'\n"),
+        )?;
+        git(&self.repository, &["add", "Cargo.toml"])?;
+        git(
+            &self.repository,
+            &["commit", "--quiet", "-m", "higher release source"],
+        )?;
+        self.source_sha = String::from_utf8(git(&self.repository, &["rev-parse", "HEAD"])?.stdout)?
+            .trim()
+            .to_owned();
+        self.tag = format!("{PACKAGE}-v{VERSION}");
+        git(&self.repository, &["tag", &self.tag])?;
+        Ok(())
+    }
+
+    fn seed_matching_manual_draft(&self) -> Result<(), Box<dyn Error>> {
+        fs::write(
+            &self.state,
+            format!(
+                r#"{{"id":987,"tag_name":"{tag}","name":"{tag}","target_commitish":"{source_sha}","draft":true,"prerelease":false,"body":"Automated binary release for {tag}.","assets":[]}}"#,
+                tag = self.tag,
+                source_sha = self.source_sha,
+            ),
+        )?;
         Ok(())
     }
 }
 
 #[test]
-fn read_only_verifier_ignores_hidden_draft_and_publisher_finds_later_page_draft_and_resumes_it()
+fn publisher_rejects_existing_drafts_even_when_assets_are_empty_or_foreign()
 -> Result<(), Box<dyn Error>> {
     let scratch = Scratch::new()?;
     let fixture = ReleaseFixture::new(&scratch.0)?;
     let commands = mock_commands();
     let prep_script = scripts::prepare_assets(PACKAGE, BINARY);
-    prepare_archives(&scratch.0)?;
-    let prepared = run_prepare(&prep_script, &scratch.0)?;
+    prepare_archives(&scratch.0, "1.0.0")?;
+    let prepared = run_prepare(&prep_script, &scratch.0, "1.0.0")?;
     assert!(prepared.status.success(), "{}", stderr(&prepared));
 
     let publish_script = scripts::publish(PACKAGE, BINARY, "gh");
@@ -134,7 +178,7 @@ fn read_only_verifier_ignores_hidden_draft_and_publisher_finds_later_page_draft_
         !first.status.success(),
         "interrupted create unexpectedly succeeded"
     );
-    assert!(stderr(&first).contains("leftover draft will be checked on the next run"));
+    assert!(stderr(&first).contains("leftover draft will be left untouched"));
     assert!(fixture.state.is_file(), "mock create left no draft behind");
     let verify_script = scripts::verify_source(&config(), BINARY, &commands);
     fixture.verify_source_with_hidden_draft(&verify_script)?;
@@ -150,14 +194,23 @@ fn read_only_verifier_ignores_hidden_draft_and_publisher_finds_later_page_draft_
     assert_eq!(calls.matches("draft-detail:").count(), 0, "{calls}");
     assert_eq!(calls.matches("upload:").count(), 0, "{calls}");
 
-    fixture.reject_mismatched_assets(&publish_script)?;
+    // A manual draft can match the generated tag/title/body while having no
+    // assets. It must not be treated as an interrupted workflow-owned release.
+    rewrite_json(&fixture.state, ".assets = []")?;
+    assert_json(&fixture.state, ".draft == true and (.assets | length) == 0")?;
+    fixture.reject_existing_draft(&publish_script)?;
 
-    let resumed = fixture.publish(&publish_script)?;
-    assert!(resumed.status.success(), "{}", stderr(&resumed));
+    // The same rule applies when the matching draft contains foreign assets.
+    rewrite_json(
+        &fixture.state,
+        ".assets = [{\"name\":\"notes.txt\",\"digest\":\"sha256:foreign\",\"size\":7}]",
+    )?;
     assert_json(
         &fixture.state,
-        ".draft == false and (.assets | length) == 3",
+        ".draft == true and ([.assets[].name] == [\"notes.txt\"]) ",
     )?;
+    fixture.reject_existing_draft(&publish_script)?;
+
     let calls = fs::read_to_string(fixture.log)?;
     assert_eq!(calls.matches("create-left-partial-draft").count(), 1);
     assert_eq!(
@@ -179,11 +232,76 @@ fn read_only_verifier_ignores_hidden_draft_and_publisher_finds_later_page_draft_
     );
     assert_eq!(
         calls.matches(&format!("draft-detail:{RELEASE_ID}")).count(),
-        4,
-        "{calls}"
+        0
     );
-    assert_eq!(calls.matches("upload:").count(), 2, "{calls}");
-    assert_eq!(calls.matches("patch").count(), 1, "{calls}");
+    assert_eq!(calls.matches("upload:").count(), 0);
+    assert_eq!(calls.matches("patch").count(), 0);
+    Ok(())
+}
+
+#[test]
+fn hidden_higher_priority_draft_blocks_lower_eligible_tag_until_reconciled()
+-> Result<(), Box<dyn Error>> {
+    let scratch = Scratch::new()?;
+    let mut fixture = ReleaseFixture::new(&scratch.0)?;
+    let lower_tag = fixture.tag.clone();
+    fixture.add_higher_version_tag()?;
+    let higher_tag = fixture.tag.clone();
+    let higher_version = "2.0.0";
+
+    let prep_script = scripts::prepare_assets(PACKAGE, BINARY);
+    prepare_archives(&scratch.0, higher_version)?;
+    let prepared = run_prepare(&prep_script, &scratch.0, higher_version)?;
+    assert!(prepared.status.success(), "{}", stderr(&prepared));
+    fixture.seed_matching_manual_draft()?;
+
+    let commands = mock_commands();
+    let verify_script = scripts::verify_source(&config(), BINARY, &commands);
+    fixture.verify_source_with_hidden_draft(&verify_script)?;
+    let selected = fs::read_to_string(&fixture.output)?;
+    assert!(
+        selected.contains(&format!("tag={higher_tag}\n")),
+        "{selected}"
+    );
+    assert!(
+        !selected.contains(&format!("tag={lower_tag}\n")),
+        "{selected}"
+    );
+
+    let publish_script = scripts::publish(PACKAGE, BINARY, "gh");
+    fixture.reject_existing_draft(&publish_script)?;
+    let state = fs::read_to_string(&fixture.state)?;
+    assert!(state.contains(&format!(r#""tag_name":"{higher_tag}""#)));
+    assert!(state.contains(r#""assets":[]"#));
+
+    // Once maintainers resolve the higher release as published, the read-only
+    // resolver can see it and select the still-eligible lower tag.
+    rewrite_json(&fixture.state, ".draft = false")?;
+    fs::write(&fixture.output, "")?;
+    let lower_selection = run_resolver(
+        &verify_script,
+        &fixture.repository,
+        &fixture.root,
+        &fixture.bin,
+        &fixture.output,
+        &fixture.source_sha,
+        &fixture.state,
+        &fixture.log,
+    )?;
+    assert!(
+        lower_selection.status.success(),
+        "{}",
+        stderr(&lower_selection)
+    );
+    let selected = fs::read_to_string(&fixture.output)?;
+    assert!(
+        selected.contains(&format!("tag={lower_tag}\n")),
+        "{selected}"
+    );
+    assert!(
+        !selected.contains(&format!("tag={higher_tag}\n")),
+        "{selected}"
+    );
     Ok(())
 }
 
@@ -217,7 +335,7 @@ fn git(root: &Path, args: &[&str]) -> Result<Output, Box<dyn Error>> {
     Ok(output)
 }
 
-fn prepare_archives(root: &Path) -> Result<(), Box<dyn Error>> {
+fn prepare_archives(root: &Path, version: &str) -> Result<(), Box<dyn Error>> {
     for (directory, target) in [
         ("incoming-linux", "x86_64-unknown-linux-gnu"),
         ("incoming-macos", "aarch64-apple-darwin"),
@@ -229,7 +347,7 @@ fn prepare_archives(root: &Path) -> Result<(), Box<dyn Error>> {
         let binary = source.join(BINARY);
         fs::write(&binary, b"test binary")?;
         fs::set_permissions(&binary, fs::Permissions::from_mode(0o755))?;
-        let archive = incoming.join(format!("{BINARY}-1.0.0-{target}.tar.gz"));
+        let archive = incoming.join(format!("{BINARY}-{version}-{target}.tar.gz"));
         let status = Command::new("tar")
             .args(["-czf"])
             .arg(archive)
@@ -266,7 +384,7 @@ fn config() -> RustBinaryReleaseConfig {
 fn mock_commands() -> RenderedCommands {
     RenderedCommands {
         install_rust: String::new(),
-        metadata: "printf '%s\\n' '{\"packages\":[{\"name\":\"demo-package\",\"version\":\"1.0.0\",\"targets\":[{\"name\":\"demo-binary\",\"kind\":[\"bin\"]}]}]}'".to_owned(),
+        metadata: r#"python3 -c 'import json; line=[x for x in open("Cargo.toml") if x.startswith("version=")][0]; version=line.split(chr(61))[1].strip().strip(chr(39)); print(json.dumps({"packages":[{"name":"demo-package","version":version,"targets":[{"name":"demo-binary","kind":["bin"]}]}]}))'"#.to_owned(),
         rustc_version: String::new(),
         rust_version: String::new(),
         build_linux: String::new(),
@@ -276,13 +394,13 @@ fn mock_commands() -> RenderedCommands {
     }
 }
 
-fn run_prepare(script: &str, root: &Path) -> Result<Output, Box<dyn Error>> {
+fn run_prepare(script: &str, root: &Path, version: &str) -> Result<Output, Box<dyn Error>> {
     Ok(Command::new("bash")
         .args(["-c", script])
         .current_dir(root)
         .env("SOURCE_SHA", "0123456789012345678901234567890123456789")
-        .env("RELEASE_TAG", format!("{PACKAGE}-v1.0.0"))
-        .env("RELEASE_VERSION", "1.0.0")
+        .env("RELEASE_TAG", format!("{PACKAGE}-v{version}"))
+        .env("RELEASE_VERSION", version)
         .env_remove("GH_TOKEN")
         .output()?)
 }
@@ -293,6 +411,11 @@ fn run_publish(
     duplicate_draft_pages: bool,
 ) -> Result<Output, Box<dyn Error>> {
     let path = format!("{}:{}", fixture.bin.display(), std::env::var("PATH")?);
+    let version_prefix = format!("{PACKAGE}-v");
+    let version = fixture
+        .tag
+        .strip_prefix(&version_prefix)
+        .ok_or("fixture release tag has the wrong prefix")?;
     Ok(Command::new("bash")
         .args(["-c", script])
         .current_dir(&fixture.root)
@@ -302,7 +425,7 @@ fn run_publish(
         .env("SOURCE_SHA", fixture.source_sha.as_str())
         .env("DEFAULT_SHA", fixture.source_sha.as_str())
         .env("RELEASE_TAG", fixture.tag.as_str())
-        .env("RELEASE_VERSION", "1.0.0")
+        .env("RELEASE_VERSION", version)
         .env("MOCK_REPOSITORY", REPOSITORY)
         .env("MOCK_SOURCE_SHA", fixture.source_sha.as_str())
         .env("MOCK_DEFAULT_SHA", fixture.source_sha.as_str())
