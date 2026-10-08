@@ -18,12 +18,11 @@
 # inheritance predicates in `crates/velnor-actions-cli/tests/fixtures/`).
 #
 # Schema: alint config model (`version` + `rules`, each rule with
-# id/kind/level). The top-level `command` rule is trusted and checks only
-# each AGENTS.md's sibling CLAUDE.md mirror file, which Alint has no native
-# byte-equality rule to express. Its `pair` rule checks existence only;
-# the command below checks the regular-file type and identical bytes on the
-# CI Linux runner. Generated trees must not emit symlinks: plugin
-# installers reject packages that contain symlink entries.
+# id/kind/level). The retired `.github/CLAUDE.md` path uses the native
+# `file_absent` rule: the generator no longer emits it (plugin installers
+# reject symlink entries, and a second instruction copy next to AGENTS.md
+# carries no benefit), regeneration deletes stale copies, and the rule
+# fails closed on any recurrence.
 # Validate with the pinned alint binary: `alint validate-config`.
 # The 80-line function/method limit (§5, "using Clippy accounting") is NOT
 # expressed here — alint ships no function-level rule kind. It is enforced
@@ -69,25 +68,14 @@ rules:
     level: error
     message: "Repo-shape file is missing (rust-quality-contract §1)"
 
-  # Run against each real AGENTS.md and check its sibling. `pair` only checks
-  # partner existence and cannot enforce file type or byte equality; this
-  # trusted command requires a regular (non-symlink) file with bytes
-  # identical to AGENTS.md. `.github/` is generated output owned by the
-  # pinned generator and verified byte-exact by the generation-diff job,
-  # so it stays out of this maintained-file rule.
-  - id: claude-is-agents-copy
-    kind: command
+  # The generator retired `.github/CLAUDE.md` (see the policy header);
+  # this native absence rule fails closed on any recurrence, file or link.
+  - id: no-github-claude-md
+    kind: file_absent
     paths:
-      include: ["**/AGENTS.md"]
-      exclude: [".github/**"]
-    command:
-      - sh
-      - -c
-      - 'dir=$(dirname "$1") && test -f "$dir/CLAUDE.md" && test ! -L "$dir/CLAUDE.md" && cmp -s "$dir/CLAUDE.md" "$1"'
-      - alint-claude-mirror
-      - "{path}"
+      include: [".github/CLAUDE.md"]
     level: error
-    message: "Each AGENTS.md must have a sibling CLAUDE.md regular file with identical bytes"
+    message: ".github/CLAUDE.md is retired; AGENTS.md is the single instruction file"
 
   # Keep instruction files concise so they fit in agent context by default.
   - id: agent-instructions-max-lines
