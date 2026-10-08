@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod product_release;
 pub mod release_checkout_gates;
 pub mod release_config;
 pub mod release_gates;
