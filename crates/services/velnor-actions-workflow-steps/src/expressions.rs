@@ -57,6 +57,9 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// and run IDs (never in env).
 const ENV_EXPRESSIONS: &[&str] = &[
     "runner.temp",
+    "runner.environment",
+    "runner.os",
+    "runner.arch",
     "github.ref_name",
     "github.event_name",
     "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read'",
@@ -82,6 +85,8 @@ const WITH_EXPRESSIONS: &[&str] = &[
     "steps.publish-baseline.outputs.artifact_name",
     "steps.tofu-providers.outputs.cache-key",
     "steps.tofu-providers.outputs.cache-path",
+    "env.VELNOR_MISE_CACHE_ENABLED",
+    "env.VELNOR_MISE_CACHE_SUFFIX",
 ];
 
 /// True for a `matrix.*` field reference (both layers allow the family).

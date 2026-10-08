@@ -17,8 +17,13 @@ fn setup_config() -> MiseSetup {
 }
 
 fn base_job(setup: &MiseSetup) -> Job {
-    let key = mise_cache_key_for_tools(TARGET, &setup.version, &["rust@1.98.1".to_owned()])
-        .expect("derived key");
+    let key = mise_cache_key_for_tools(
+        "ubuntu26",
+        TARGET,
+        &setup.version,
+        &["rust@1.98.1".to_owned()],
+    )
+    .expect("derived key");
     let setup_step = mise_setup_step_p08(setup, &key).expect("setup");
     Job {
         display_name: "Seed mutation fixture".to_owned(),

@@ -1,8 +1,8 @@
 //! P08 writer-election cases: one Mise-cache saver per cache key.
 
 use std::collections::BTreeMap;
-use velnor_actions_contract_workflow::workflow::ir::CACHE_SAVE_CONDITION;
 use velnor_actions_contract_workflow::{Job, JobTimeout, Step, StepKind, StepRole};
+use velnor_actions_workflow_cache::cache_elect::MISE_CACHE_SAVE_CONDITION;
 use velnor_actions_workflow_cache::cache_p08::{elect_mise_cache_writers, mise_setup_step_p08};
 use velnor_actions_workflow_cache::cache_steps::{TOOLS_CACHE_PATH, TOOLS_SAVE_USES};
 use velnor_actions_workflow_steps::RenderError;
@@ -44,8 +44,8 @@ fn keyed_job(key: &str) -> Result<Job, RenderError> {
 
 #[test]
 fn mise_cache_writer_election_prefers_plan_then_lowest_id() -> Result<(), RenderError> {
-    let shared = "mise-v1-x86_64-unknown-linux-gnu-2026.9.16-aaaaaaaaaaaaaaaa";
-    let unique = "mise-v1-x86_64-unknown-linux-gnu-2026.9.16-bbbbbbbbbbbbbbbb";
+    let shared = "mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.16-aaaaaaaaaaaaaaaa-${{env.VELNOR_MISE_CACHE_SUFFIX}}";
+    let unique = "mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.16-bbbbbbbbbbbbbbbb-${{env.VELNOR_MISE_CACHE_SUFFIX}}";
     let mut jobs = BTreeMap::from([
         ("plan".to_owned(), keyed_job(shared)?),
         ("rust-b".to_owned(), keyed_job(shared)?),
@@ -70,7 +70,7 @@ fn mise_cache_writer_election_prefers_plan_then_lowest_id() -> Result<(), Render
         Some(shared),
         "lowest id wins without plan"
     );
-    assert!(tools_saves(&jobs["rust-b"]).is_empty());
+    assert_eq!(tools_saves(&jobs["rust-b"]).len(), 0);
     Ok(())
 }
 
@@ -88,7 +88,7 @@ fn saved_key(job: &Job) -> Option<&str> {
 
 #[test]
 fn mise_cache_writer_election_saves_restore_only_and_push_gated() -> Result<(), RenderError> {
-    let shared = "mise-v1-x86_64-unknown-linux-gnu-2026.9.16-aaaaaaaaaaaaaaaa";
+    let shared = "mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.16-aaaaaaaaaaaaaaaa-${{env.VELNOR_MISE_CACHE_SUFFIX}}";
     let mut jobs = BTreeMap::from([
         ("plan".to_owned(), keyed_job(shared)?),
         ("rust-b".to_owned(), keyed_job(shared)?),
@@ -104,7 +104,7 @@ fn mise_cache_writer_election_saves_restore_only_and_push_gated() -> Result<(), 
     let saves = tools_saves(&jobs["plan"]);
     assert_eq!(saves.len(), 1, "winner saves once");
     let save = saves[0];
-    assert_eq!(save.condition.as_deref(), Some(CACHE_SAVE_CONDITION));
+    assert_eq!(save.condition.as_deref(), Some(MISE_CACHE_SAVE_CONDITION));
     let StepKind::Action { uses, with, .. } = &save.kind else {
         panic!("save must be an action step");
     };
@@ -115,8 +115,22 @@ fn mise_cache_writer_election_saves_restore_only_and_push_gated() -> Result<(), 
 }
 
 #[test]
+fn mise_cache_writer_election_separates_hosted_image_families() -> Result<(), RenderError> {
+    let ubuntu = "mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.16-aaaaaaaaaaaaaaaa-${{env.VELNOR_MISE_CACHE_SUFFIX}}";
+    let macos = "mise-v2-hosted-macos15-aarch64-apple-darwin-2026.9.16-aaaaaaaaaaaaaaaa-${{env.VELNOR_MISE_CACHE_SUFFIX}}";
+    let mut jobs = BTreeMap::from([
+        ("linux".to_owned(), keyed_job(ubuntu)?),
+        ("macos".to_owned(), keyed_job(macos)?),
+    ]);
+    elect_mise_cache_writers(&mut jobs)?;
+    assert_eq!(saved_key(&jobs["linux"]), Some(ubuntu));
+    assert_eq!(saved_key(&jobs["macos"]), Some(macos));
+    Ok(())
+}
+
+#[test]
 fn mise_cache_writer_election_skips_keyless_and_reruns() -> Result<(), RenderError> {
-    let shared = "mise-v1-x86_64-unknown-linux-gnu-2026.9.16-aaaaaaaaaaaaaaaa";
+    let shared = "mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.16-aaaaaaaaaaaaaaaa-${{env.VELNOR_MISE_CACHE_SUFFIX}}";
     let bare = Job {
         display_name: "Bare".to_owned(),
         runs_on: LABEL.to_owned(),
@@ -145,7 +159,7 @@ fn mise_cache_writer_election_skips_keyless_and_reruns() -> Result<(), RenderErr
 
 #[test]
 fn mise_cache_writer_election_leaves_foreign_setups_untouched() -> Result<(), RenderError> {
-    let shared = "mise-v1-x86_64-unknown-linux-gnu-2026.9.16-aaaaaaaaaaaaaaaa";
+    let shared = "mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.16-aaaaaaaaaaaaaaaa-${{env.VELNOR_MISE_CACHE_SUFFIX}}";
     let mut foreign = keyed_job(shared)?;
     for step in &mut foreign.steps {
         if let StepKind::Action { with, .. } = &mut step.kind {

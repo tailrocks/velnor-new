@@ -24,6 +24,7 @@ fn strict_plan_job_gets_full_prelude_in_order() -> Result<(), RenderError> {
         step_names(&text, "plan"),
         [
             "Checkout",
+            "Resolve hosted Mise cache identity",
             "Restore Velnor tool seed",
             SETUP_MISE_NAME,
             ACQUIRE_NAME,

@@ -36,7 +36,8 @@ pub(super) fn setup_shape_ok(
 }
 
 fn qualified_cache_shape(with: &std::collections::BTreeMap<String, String>) -> bool {
-    with.get("cache").is_some_and(|v| v == "true")
+    with.get("cache")
+        .is_some_and(|v| v == super::MISE_CACHE_ENABLED_EXPR)
         && with.get("cache_save").is_some_and(|v| v == "false")
         && with.contains_key("cache_key")
 }

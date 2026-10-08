@@ -86,9 +86,9 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
         format!("sha256: {MISE_SHA256}"),
         "install: \"false\"".to_owned(),
         "env: \"false\"".to_owned(),
-        "cache: \"true\"".to_owned(),
+        "cache: ${{env.VELNOR_MISE_CACHE_ENABLED}}".to_owned(),
         "cache_save: \"false\"".to_owned(),
-        "cache_key: mise-v1-".to_owned(),
+        "cache_key: mise-v2-hosted-".to_owned(),
     ] {
         assert!(text.contains(&line), "missing {line}:\n{text}");
     }
@@ -98,8 +98,9 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
     );
     for line in [
         "- name: Save Mise tools".to_owned(),
-        "key: mise-v1-".to_owned(),
-        "if: success() && github.event_name == 'push'".to_owned(),
+        "key: mise-v2-hosted-".to_owned(),
+        "if: success() && github.event_name == 'push' && env.VELNOR_MISE_CACHE_ENABLED == 'true'"
+            .to_owned(),
     ] {
         assert!(text.contains(&line), "sole owner saves {line}:\n{text}");
     }
@@ -240,7 +241,7 @@ fn strict_mixed_platform_checks_use_native_setup_and_keep_global_runner() -> Res
     let text = strict(&ir, &fixture_ctx())?;
     assert!(text.contains("runs-on: macos-15"));
     assert!(text.contains(MISE_BINARY_SHA256_MACOS_ARM64));
-    assert!(text.contains("mise-v1-aarch64-apple-darwin-"));
+    assert!(text.contains("mise-v2-hosted-macos15-aarch64-apple-darwin-"));
     check.0 = "actionlint".to_owned();
     assert!(strict(&fixture_ir(vec![check.clone()]), &fixture_ctx()).is_err());
     check.0 = "check-native".to_owned();
@@ -254,6 +255,7 @@ fn qualified_linux_setup_cannot_bypass_macos_artifact_selection() -> Result<(), 
     use velnor_actions_contract_config::config::{CheckExecutor, CheckPlatform, CheckRunner};
     use velnor_actions_workflow_cache::cache_p08::{mise_cache_key_for_tools, mise_setup_step_p08};
     let key = mise_cache_key_for_tools(
+        "ubuntu26",
         "x86_64-unknown-linux-gnu",
         MISE_VERSION,
         &["node@22.0.0".to_owned()],
@@ -358,7 +360,7 @@ fn native_check_without_catalog_tools_still_bootstraps_mise() -> Result<(), Rend
     let names = step_names(&text, "check-native");
     assert!(names.iter().any(|name| name == SETUP_MISE_NAME));
     assert!(text.contains(MISE_BINARY_SHA256_MACOS_ARM64));
-    assert!(text.contains("mise-v1-aarch64-apple-darwin-"));
+    assert!(text.contains("mise-v2-hosted-macos15-aarch64-apple-darwin-"));
     assert!(!text.contains("rust@"));
     assert!(!text.contains("Prepare Rust components"));
     assert!(

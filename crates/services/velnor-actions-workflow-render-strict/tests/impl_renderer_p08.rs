@@ -14,24 +14,43 @@ use super::impl_renderer_fixtures::*;
 fn builtin_key_shares_same_tools_without_job_id() {
     let a = ["rust@1.98.1".to_owned(), "mr-boxington@1.19.0".to_owned()];
     let b = ["mr-boxington@1.19.0".to_owned(), "rust@1.98.1".to_owned()];
-    let one = mise_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", &a).expect("key");
-    let two = mise_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", &b).expect("key");
+    let one = mise_cache_key_for_tools("ubuntu26", "x86_64-unknown-linux-gnu", "2026.9.16", &a)
+        .expect("key");
+    let two = mise_cache_key_for_tools("ubuntu26", "x86_64-unknown-linux-gnu", "2026.9.16", &b)
+        .expect("key");
     assert_eq!(one, two, "tool order must not fork keys");
     assert!(!one.contains("plan") && !one.contains("rust-"), "{one}");
     assert!(
-        one.starts_with("mise-v1-x86_64-unknown-linux-gnu-2026.9.16-"),
+        one.starts_with("mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.16-"),
         "{one}"
     );
     let other = mise_cache_key_for_tools(
+        "ubuntu26",
         "x86_64-unknown-linux-gnu",
         "2026.9.16",
         &["actionlint@1.7.12".to_owned()],
     )
     .expect("other");
     assert_ne!(one, other, "distinct tools need distinct keys");
-    assert!(mise_cache_key_for_tools("x86_64-unknown-linux-gnu", "latest", &a).is_err());
-    assert!(mise_cache_key_for_tools("riscv-none", "2026.9.16", &a).is_err());
-    assert!(mise_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", &[]).is_err());
+    assert!(
+        mise_cache_key_for_tools("ubuntu26", "x86_64-unknown-linux-gnu", "latest", &a).is_err()
+    );
+    assert!(mise_cache_key_for_tools("ubuntu26", "riscv-none", "2026.9.16", &a).is_err());
+    assert!(
+        mise_cache_key_for_tools("ubuntu26", "x86_64-unknown-linux-gnu", "2026.9.16", &[]).is_err()
+    );
+    assert!(
+        mise_cache_key_for_tools(
+            "ubuntu24-unverified",
+            "x86_64-unknown-linux-gnu",
+            "2026.9.16",
+            &a
+        )
+        .is_err()
+    );
+    assert!(
+        mise_cache_key_for_tools("macos15", "x86_64-unknown-linux-gnu", "2026.9.16", &a).is_err()
+    );
 }
 
 #[test]
@@ -143,6 +162,7 @@ fn job_tools_inferred_from_quoted_spec() {
 #[test]
 fn setup_p08_enables_builtin_cache_with_key() {
     let key = mise_cache_key_for_tools(
+        "ubuntu26",
         "x86_64-unknown-linux-gnu",
         "2026.9.16",
         &["rust@1.98.1".to_owned()],
@@ -152,7 +172,10 @@ fn setup_p08_enables_builtin_cache_with_key() {
     let StepKind::Action { with, .. } = &step.kind else {
         panic!("setup must be an action step");
     };
-    assert_eq!(with.get("cache").map(String::as_str), Some("true"));
+    assert_eq!(
+        with.get("cache").map(String::as_str),
+        Some("${{env.VELNOR_MISE_CACHE_ENABLED}}")
+    );
     assert_eq!(
         with.get("cache_save").map(String::as_str),
         Some("false"),
