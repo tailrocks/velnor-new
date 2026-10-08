@@ -11,7 +11,11 @@ pub use fork_workflows::{
 };
 pub use reconciliation::{
     ActionsJobReconciliation, ActionsJobReconciliationReason, ActionsJobReconciliationState,
-    ObservedScaleSetJob, reconcile_observed_scale_set_job, reconcile_observed_scale_set_job_async,
+    ActionsWorkflowAttemptEvidenceGap, ActionsWorkflowAttemptJobEvidence,
+    ActionsWorkflowAttemptProviderEvidence, ActionsWorkflowAttemptProviderRead,
+    ActionsWorkflowRunArtifactEvidence, ObservedScaleSetJob,
+    read_actions_workflow_attempt_provider_evidence_async, reconcile_observed_scale_set_job,
+    reconcile_observed_scale_set_job_async,
 };
 
 use request::safe_actions_token;

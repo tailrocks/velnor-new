@@ -259,6 +259,8 @@ mod cleanup;
 mod lifecycle;
 #[path = "registration_discovery_async/preflight.rs"]
 mod preflight;
+#[path = "registration_discovery_async/provider_evidence.rs"]
+mod provider_evidence;
 #[path = "registration_discovery_async/reconciliation.rs"]
 mod reconciliation;
 #[path = "registration_discovery_async/routes.rs"]

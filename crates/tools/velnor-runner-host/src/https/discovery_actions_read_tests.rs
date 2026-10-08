@@ -14,12 +14,14 @@ use super::{
 };
 
 #[test]
-fn only_exact_workflow_run_and_attempt_jobs_routes_are_allowlisted() {
+fn only_exact_workflow_run_attempt_and_artifact_routes_are_allowlisted() {
     let api = Origin::GithubApi;
     for path in [
         "repos/acme/widget/actions/runs/1",
         "repos/ChainArgos/java-monorepo/actions/runs/88",
         "repos/acme/widget/actions/runs/18446744073709551615",
+        "repos/ChainArgos/java-monorepo/actions/runs/88/attempts/1",
+        "repos/ChainArgos/java-monorepo/actions/runs/88/attempts/8",
     ] {
         assert!(
             validate_discovery_request(&api, &actions_rest_get(path)).is_some(),
@@ -27,14 +29,18 @@ fn only_exact_workflow_run_and_attempt_jobs_routes_are_allowlisted() {
         );
     }
 
-    for page in 1..=4 {
-        let mut request =
-            actions_rest_get("repos/ChainArgos/java-monorepo/actions/runs/88/attempts/2/jobs");
-        request.query = Some(format!("per_page=100&page={page}"));
-        assert!(
-            validate_discovery_request(&api, &request).is_some(),
-            "page {page}"
-        );
+    for path in [
+        "repos/ChainArgos/java-monorepo/actions/runs/88/attempts/2/jobs",
+        "repos/ChainArgos/java-monorepo/actions/runs/88/artifacts",
+    ] {
+        for page in 1..=4 {
+            let mut request = actions_rest_get(path);
+            request.query = Some(format!("per_page=100&page={page}"));
+            assert!(
+                validate_discovery_request(&api, &request).is_some(),
+                "{path} page {page}"
+            );
+        }
     }
 }
 
@@ -43,83 +49,108 @@ fn invalid_actions_paths_queries_methods_headers_and_origins_stay_rejected() {
     let api = Origin::GithubApi;
     let actions =
         Origin::Actions("https://pipelinesghubeus13.actions.githubusercontent.com".to_owned());
+    invalid_actions_paths_are_rejected(&api);
+    invalid_actions_page_queries_are_rejected(&api);
+    invalid_actions_request_shapes_are_rejected(&api, &actions);
+}
+
+fn invalid_actions_paths_are_rejected(api: &Origin) {
     for path in [
         "repos/acme/widget/actions/runs/0",
         "repos/acme/widget/actions/runs/01",
         "repos/acme/widget/actions/runs/+1",
         "repos/acme/widget/actions/runs/18446744073709551616",
         "repos/acme/widget/actions/runs/88/jobs",
-        "repos/acme/widget/actions/runs/88/attempts/1",
         "repos/acme/widget/actions/runs/88/attempts/0/jobs",
         "repos/acme/widget/actions/runs/88/attempts/01/jobs",
         "repos/acme/widget/actions/runs/88/attempts/18446744073709551616/jobs",
         "repos/acme/widget/actions/runs/88/attempts/1/jobs/extra",
         "repos/acme/widget/actions/runs/88/attempts/1/jobs/",
         "repos/acme/widget/actions/runs/88/attempts/1/jobs",
+        "repos/acme/widget/actions/runs/88/attempts/0",
+        "repos/acme/widget/actions/runs/88/attempts/01",
+        "repos/acme/widget/actions/runs/88/attempts/18446744073709551616",
+        "repos/acme/widget/actions/runs/88/attempts/1/extra",
+        "repos/acme/widget/actions/runs/88/attempts/1/",
+        "repos/acme/widget/actions/runs/88/artifacts/extra",
+        "repos/acme/widget/actions/runs/88/artifacts/",
         "repos/acme/widget/actions/runs//attempts/1/jobs",
         "orgs/acme/actions/runs/88",
     ] {
         assert!(
-            validate_discovery_request(&api, &actions_rest_get(path)).is_none(),
+            validate_discovery_request(api, &actions_rest_get(path)).is_none(),
             "unexpectedly accepted {path}"
         );
     }
+}
 
-    for query in [
-        "per_page=100&page=0",
-        "per_page=100&page=01",
-        "per_page=100&page=5",
-        "per_page=100&page=255",
-        "per_page=100&page=1&x=y",
-        "per_page=100&page=1&page=2",
-        "page=1&per_page=100",
-        "per_page=50&page=1",
-        "per_page=100&page=%31",
-        "per_page=100&page=",
+fn invalid_actions_page_queries_are_rejected(api: &Origin) {
+    for path in [
+        "repos/acme/widget/actions/runs/88/attempts/1/jobs",
+        "repos/acme/widget/actions/runs/88/artifacts",
     ] {
-        let mut request = actions_rest_get("repos/acme/widget/actions/runs/88/attempts/1/jobs");
-        request.query = Some(query.to_owned());
-        assert!(
-            validate_discovery_request(&api, &request).is_none(),
-            "unexpectedly accepted query {query}"
-        );
+        for query in [
+            "per_page=100&page=0",
+            "per_page=100&page=01",
+            "per_page=100&page=5",
+            "per_page=100&page=255",
+            "per_page=100&page=1&x=y",
+            "per_page=100&page=1&page=2",
+            "page=1&per_page=100",
+            "per_page=50&page=1",
+            "per_page=100&page=%31",
+            "per_page=100&page=",
+        ] {
+            let mut request = actions_rest_get(path);
+            request.query = Some(query.to_owned());
+            assert!(
+                validate_discovery_request(api, &request).is_none(),
+                "unexpectedly accepted {path}?{query}"
+            );
+        }
     }
+}
 
+fn invalid_actions_request_shapes_are_rejected(api: &Origin, actions: &Origin) {
     let mut run_query = actions_rest_get("repos/acme/widget/actions/runs/88");
     run_query.query = Some("per_page=100&page=1".to_owned());
-    assert!(validate_discovery_request(&api, &run_query).is_none());
+    assert!(validate_discovery_request(api, &run_query).is_none());
+
+    let mut attempt_query = actions_rest_get("repos/acme/widget/actions/runs/88/attempts/2");
+    attempt_query.query = Some("per_page=100&page=1".to_owned());
+    assert!(validate_discovery_request(api, &attempt_query).is_none());
 
     let mut repository_query = api_get("repos/acme/widget");
     repository_query.query = Some("page=1".to_owned());
-    assert!(validate_discovery_request(&api, &repository_query).is_none());
+    assert!(validate_discovery_request(api, &repository_query).is_none());
 
     let mut post = actions_rest_get("repos/acme/widget/actions/runs/88");
     post.method = Method::Post;
-    assert!(validate_discovery_request(&api, &post).is_none());
+    assert!(validate_discovery_request(api, &post).is_none());
 
     let mut body = actions_rest_get("repos/acme/widget/actions/runs/88");
     body.body = b"{}".to_vec();
-    assert!(validate_discovery_request(&api, &body).is_none());
+    assert!(validate_discovery_request(api, &body).is_none());
 
     let mut bad_headers = actions_rest_get("repos/acme/widget/actions/runs/88");
     bad_headers.headers[0].1 = "application/json".to_owned();
-    assert!(validate_discovery_request(&api, &bad_headers).is_none());
+    assert!(validate_discovery_request(api, &bad_headers).is_none());
     bad_headers.headers[0].1 = "application/vnd.github+json".to_owned();
     bad_headers
         .headers
         .push(("Accept".to_owned(), "application/json".to_owned()));
-    assert!(validate_discovery_request(&api, &bad_headers).is_none());
+    assert!(validate_discovery_request(api, &bad_headers).is_none());
 
     assert!(
         validate_discovery_request(
-            &actions,
+            actions,
             &actions_rest_get("repos/acme/widget/actions/runs/88")
         )
         .is_none()
     );
     assert!(
         validate_discovery_request(
-            &api,
+            api,
             &actions_get("_apis/runtime/runnergroups", "api-version=6.0-preview")
         )
         .is_none()
@@ -138,6 +169,16 @@ fn exact_actions_read_requests_dispatch_through_bounded_transport() {
             "repos/ChainArgos/java-monorepo/actions/runs/88/attempts/2/jobs",
             Some("per_page=100&page=3"),
             "/repos/ChainArgos/java-monorepo/actions/runs/88/attempts/2/jobs?per_page=100&page=3",
+        ),
+        (
+            "repos/ChainArgos/java-monorepo/actions/runs/88/attempts/2",
+            None,
+            "/repos/ChainArgos/java-monorepo/actions/runs/88/attempts/2",
+        ),
+        (
+            "repos/ChainArgos/java-monorepo/actions/runs/88/artifacts",
+            Some("per_page=100&page=4"),
+            "/repos/ChainArgos/java-monorepo/actions/runs/88/artifacts?per_page=100&page=4",
         ),
     ] {
         let (base, server) = super::support::response_server(b"{}");

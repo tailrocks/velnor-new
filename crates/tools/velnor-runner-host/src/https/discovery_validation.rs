@@ -57,16 +57,16 @@ fn validate_github_request<'a>(
             headers_are(request, GithubHeaders::RepositoryGet)
                 .then_some(ValidatedTarget { path, query: None })
         }
-        Method::Get if request.query.is_none() && workflow_run_path(path) => {
+        Method::Get if request.query.is_none() && identity::workflow_run_read_path(path) => {
             headers_are(request, GithubHeaders::RepositoryGet)
                 .then_some(ValidatedTarget { path, query: None })
         }
         Method::Get
-            if attempt_jobs_path(path)
+            if identity::workflow_run_page_path(path)
                 && request
                     .query
                     .as_deref()
-                    .is_some_and(valid_attempt_jobs_query) =>
+                    .is_some_and(valid_actions_page_query) =>
         {
             headers_are(request, GithubHeaders::RepositoryGet).then_some(ValidatedTarget {
                 path,
@@ -263,7 +263,7 @@ fn positive_canonical_u64(value: &str) -> bool {
             .is_ok_and(|number| number > 0 && number.to_string() == value)
 }
 
-fn valid_attempt_jobs_query(query: &str) -> bool {
+fn valid_actions_page_query(query: &str) -> bool {
     let Some(page) = query.strip_prefix("per_page=100&page=") else {
         return false;
     };

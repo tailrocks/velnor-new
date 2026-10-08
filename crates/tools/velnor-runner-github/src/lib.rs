@@ -18,11 +18,14 @@ pub mod session;
 pub use acquire::{AcquireOutcome, Certainty, TransportFail, classify_acquire, effect_certainty};
 pub use actions::{
     ActionsJob, ActionsJobReconciliation, ActionsJobReconciliationReason,
-    ActionsJobReconciliationState, ActionsRepository, ActionsWorkflowRun,
+    ActionsJobReconciliationState, ActionsRepository, ActionsWorkflowAttemptEvidenceGap,
+    ActionsWorkflowAttemptJobEvidence, ActionsWorkflowAttemptProviderEvidence,
+    ActionsWorkflowAttemptProviderRead, ActionsWorkflowRun, ActionsWorkflowRunArtifactEvidence,
     ForkPullRequestWorkflowSetting, ObservedScaleSetJob, PrivateRepoForkWorkflowSettings,
     get_actions_job, get_actions_repository, get_actions_repository_async,
     get_actions_workflow_run, get_private_repo_fork_workflow_settings,
-    get_private_repo_fork_workflow_settings_async, reconcile_observed_scale_set_job,
+    get_private_repo_fork_workflow_settings_async,
+    read_actions_workflow_attempt_provider_evidence_async, reconcile_observed_scale_set_job,
     reconcile_observed_scale_set_job_async,
 };
 pub use error::WireError;
