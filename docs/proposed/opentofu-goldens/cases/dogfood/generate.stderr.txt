@@ -1,7 +1,6 @@
 Preview: <preview>
 Repository: <repo>
 .github/AGENTS.md
-.github/CLAUDE.md
 .github/actionlint.yaml
 .github/actions/generator-release-attest-linux/action.yml
 .github/actions/generator-release-attest-macos-intel/action.yml
