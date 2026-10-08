@@ -1,12 +1,12 @@
 services:
   api:
-    image: alpine:3.22
+    image: docker.io/library/alpine@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764
     command: ["sleep", "120"]
     depends_on:
       db:
         condition: service_healthy
   db:
-    image: redis:7-alpine
+    image: docker.io/library/redis@sha256:ca0acbb137c1dc3339c8b147a58fd6f42775d4599327b50e7b116c23de501af2
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
