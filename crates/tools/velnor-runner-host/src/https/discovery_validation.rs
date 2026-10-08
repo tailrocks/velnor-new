@@ -1,9 +1,20 @@
 use super::Origin;
 use velnor_runner_github::{Method, SessionRequest};
 
+#[path = "discovery_actions_delete_validation.rs"]
+mod actions_delete_validation;
+
 pub(super) struct ValidatedTarget<'a> {
     pub(super) path: &'a str,
     pub(super) query: Option<&'a str>,
+}
+
+fn validated_target<'a>(
+    path: &'a str,
+    query: Option<&'a str>,
+    allowed: bool,
+) -> Option<ValidatedTarget<'a>> {
+    allowed.then_some(ValidatedTarget { path, query })
 }
 
 pub(super) fn validate_discovery_request<'a>(
@@ -73,23 +84,28 @@ fn validate_actions_request<'a>(
     if !request.body.is_empty() {
         return None;
     }
+    let admin_headers = ActionsHeaders::AdminJsonBearer;
     match (request.method, path, request.query.as_deref()) {
-        (Method::Get, "_apis/runtime/runnergroups", Some("api-version=6.0-preview"))
-            if headers_are(request, ActionsHeaders::Get) =>
-        {
-            Some(ValidatedTarget {
+        (Method::Get, "_apis/runtime/runnergroups", Some("api-version=6.0-preview")) => {
+            validated_target(
                 path,
-                query: request.query.as_deref(),
-            })
+                request.query.as_deref(),
+                headers_are(request, admin_headers),
+            )
         }
-        (Method::Get, "_apis/runtime/runnerscalesets", Some(query))
-            if headers_are(request, ActionsHeaders::Get) && valid_scale_set_query(query) =>
-        {
-            Some(ValidatedTarget {
-                path,
-                query: request.query.as_deref(),
-            })
-        }
+        (Method::Get, "_apis/runtime/runnerscalesets", Some(query)) => validated_target(
+            path,
+            request.query.as_deref(),
+            headers_are(request, admin_headers)
+                && actions_delete_validation::valid_scale_set_query(query),
+        ),
+        (Method::Delete, path, Some(query)) => validated_target(
+            path,
+            request.query.as_deref(),
+            query == "api-version=6.0-preview"
+                && actions_delete_validation::session_delete_path(path)
+                && headers_are(request, admin_headers),
+        ),
         _ => None,
     }
 }
@@ -103,7 +119,7 @@ enum GithubHeaders {
 
 #[derive(Clone, Copy)]
 enum ActionsHeaders {
-    Get,
+    AdminJsonBearer,
 }
 
 fn headers_are(request: &SessionRequest, kind: impl HeaderKind) -> bool {
@@ -192,7 +208,7 @@ impl HeaderKind for ActionsHeaders {
         agent: Option<&str>,
     ) -> bool {
         match self {
-            Self::Get => {
+            Self::AdminJsonBearer => {
                 auth_scheme(auth, "Bearer")
                     && content == Some("application/json")
                     && accept.is_none()
@@ -310,21 +326,6 @@ fn valid_admin_body(_path: &str, body: &[u8]) -> bool {
         && parts.next().is_some_and(path_segment)
         && parts.next().is_none()
         && body.len() <= 2048
-}
-
-fn valid_scale_set_query(query: &str) -> bool {
-    let Some(rest) = query.strip_prefix("api-version=6.0-preview&name=") else {
-        return false;
-    };
-    let Some((name, id)) = rest.split_once("&runnerGroupId=") else {
-        return false;
-    };
-    matches!(name, "ubuntu-24.04-scale-set" | "ubuntu-26.04-scale-set")
-        && !id.is_empty()
-        && id.bytes().all(|byte| byte.is_ascii_digit())
-        && id
-            .parse::<i64>()
-            .is_ok_and(|value| value > 0 && value.to_string() == id)
 }
 
 pub(super) fn actions_base(value: &str) -> Option<String> {

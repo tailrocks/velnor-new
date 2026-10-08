@@ -303,3 +303,7 @@ use validation::{actions_base, validate_discovery_request};
 #[cfg(test)]
 #[path = "discovery_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "discovery_actions_delete_tests.rs"]
+mod actions_delete_tests;
