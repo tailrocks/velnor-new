@@ -4,6 +4,8 @@ use super::{RunnerLane, RunnerSpec};
 
 const HOSTED_DOCKER_ENDPOINT: &str = "unix:///var/run/docker.sock";
 const SCALE_SET_DOCKER_ENDPOINT: &str = "unix:///run/docker/docker.sock";
+const HOSTED_DOCKER_SOCKET: &str = "/var/run/docker.sock";
+const SCALE_SET_DOCKER_SOCKET: &str = "/run/docker/docker.sock";
 
 const HOSTED_DOCKER_GUARD: &str = r#"set -euo pipefail
 test -z "${DOCKER_CONTEXT:-}"
@@ -26,6 +28,14 @@ pub(super) fn docker_endpoint(runner: &RunnerSpec) -> &'static str {
         HOSTED_DOCKER_ENDPOINT
     } else {
         SCALE_SET_DOCKER_ENDPOINT
+    }
+}
+
+pub(super) fn docker_socket_path(runner: &RunnerSpec) -> &'static str {
+    if runner.lane == RunnerLane::Hosted {
+        HOSTED_DOCKER_SOCKET
+    } else {
+        SCALE_SET_DOCKER_SOCKET
     }
 }
 
