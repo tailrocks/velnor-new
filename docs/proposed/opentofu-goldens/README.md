@@ -94,7 +94,7 @@ Velnor product and its matching manifest.
 ## Capture environment
 
 - `cargo 1.98.1`, `rustc 1.98.1` (pinned `mise.toml`), `--locked` builds.
-- Binary `target/debug/velnor-actions` sha256 `90d43fabd3d78f3d64a2ff35cb71992c700f4c01e6e7866a286473190341c619` (local
+- Binary `target/debug/velnor-actions` sha256 `9e01e49df2bfa8f9e00b8013f38ea51ee459a838aee70bd8a07e06575115a11e` (local
   build; digests embedding the host triple are normalized by harness).
 - Fixture maintenance in this commit: `fixtures/nested/Cargo.lock`
   regenerated (`cargo generate-lockfile --offline`) — the stale lock made
