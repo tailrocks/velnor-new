@@ -6,8 +6,8 @@ use velnor_actions_contract::cachekey::{
     restore_prefix, toolchain_id, workspace_id,
 };
 use velnor_actions_contract::{
-    ContractError, canonical_json_str, digest_b3, input_digest, is_secret_env_name,
-    parse_strict_json, run_key_for_ci, task_report_id_for_task,
+    ContractError, canonical_json_bytes, canonical_json_str, digest_b3, input_digest,
+    is_secret_env_name, parse_strict_json, run_key_for_ci, task_report_id_for_task,
 };
 use velnor_actions_contract_workflow::{
     CacheLayer, CacheOutcome, CacheResult, EntryCacheIds, TaskReport, TaskStatus, Trust,
@@ -89,6 +89,36 @@ fn cache_identity_validates_exact_twelve_fields() {
     let mut bad = good;
     bad.project_root = "/abs".to_owned();
     assert!(bad.validate().is_err());
+    let mut traversal = CacheIdentity {
+        project_root: "a/../b".to_owned(),
+        ..bad
+    };
+    assert_eq!(
+        traversal.validate().expect_err("parent traversal"),
+        ContractError::identity("path", "parent_traversal")
+    );
+    traversal.project_root = ".".to_owned();
+    assert_eq!(traversal.validate(), Ok(()));
+}
+
+#[test]
+fn workspace_project_root_rejects_traversal_and_keeps_canonical_digest() -> Result<(), ContractError>
+{
+    let mut workspace = WorkspaceInputs {
+        repository_id: digest_b3(b"repo"),
+        stack_id: "rust".to_owned(),
+        project_root: ".".to_owned(),
+        inventory_digest: digest_b3(b"inventory"),
+    };
+    let prior_canonical_digest = digest_b3(&canonical_json_bytes(&workspace)?);
+    assert_eq!(workspace_id(&workspace)?, prior_canonical_digest);
+
+    workspace.project_root = "a/../b".to_owned();
+    assert_eq!(
+        workspace_id(&workspace).expect_err("parent traversal"),
+        ContractError::identity("path", "parent_traversal")
+    );
+    Ok(())
 }
 
 #[test]
