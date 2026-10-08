@@ -1,6 +1,7 @@
 use super::super::{HostConfig, HostPlatform, RegistrationScope};
 use super::LINUX;
 use crate::HostError;
+use crate::MAX_LINUX_DRAIN_TIMEOUT_SECS;
 
 #[test]
 fn linux_config_binds_explicit_scope_group_trust_profile_and_drain() -> Result<(), HostError> {
@@ -30,6 +31,59 @@ fn linux_config_binds_explicit_scope_group_trust_profile_and_drain() -> Result<(
         Some("ChainArgos/java-monorepo"),
         ".github/workflows/ci.yml",
     ));
+    Ok(())
+}
+
+#[test]
+fn linux_drain_timeout_uses_the_shared_positive_cap() -> Result<(), HostError> {
+    assert_eq!(MAX_LINUX_DRAIN_TIMEOUT_SECS, 1800);
+
+    for seconds in [1, MAX_LINUX_DRAIN_TIMEOUT_SECS] {
+        let text = LINUX.replace(
+            "drain_timeout_secs = 1800",
+            &format!("drain_timeout_secs = {seconds}"),
+        );
+        let config = HostConfig::parse(&text)?;
+        config.validate_for_host(HostPlatform::Linux)?;
+        assert_eq!(config.drain_timeout_secs()?, seconds);
+    }
+
+    let over_limit = LINUX.replace(
+        "drain_timeout_secs = 1800",
+        &format!("drain_timeout_secs = {}", MAX_LINUX_DRAIN_TIMEOUT_SECS + 1),
+    );
+    let config = HostConfig::parse(&over_limit)?;
+    assert!(config.validate_for_host(HostPlatform::Linux).is_err());
+    Ok(())
+}
+
+#[test]
+fn legacy_macos_drain_timeout_remains_outside_the_linux_cap() -> Result<(), HostError> {
+    let text = concat!(
+        "schema = 1\n",
+        "[github]\n",
+        "repository = \"tailrocks/velnor-new\"\n",
+        "scale_set_name = \"ubuntu-26.04-scale-set\"\n",
+        "credential_ref = \"keychain:com.tailrocks.velnor.host/velnor-host\"\n",
+        "[host]\n",
+        "[docker]\n",
+        "context = \"orbstack\"\n",
+        "platform = \"linux/amd64\"\n",
+        "endpoint = \"unix:///var/run/docker.sock\"\n",
+    )
+    .replace(
+        "[host]\n",
+        &format!(
+            "[host]\ndrain_timeout_secs = {}\n",
+            MAX_LINUX_DRAIN_TIMEOUT_SECS + 1
+        ),
+    );
+    let config = HostConfig::parse(&text)?;
+    config.validate_for_host(HostPlatform::Macos)?;
+    assert_eq!(
+        config.drain_timeout_secs()?,
+        MAX_LINUX_DRAIN_TIMEOUT_SECS + 1
+    );
     Ok(())
 }
 

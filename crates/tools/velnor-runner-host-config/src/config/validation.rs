@@ -3,6 +3,10 @@
 use super::{DockerConfig, GithubSection, JobTrustPolicy, JobTrustRule, ReusableWorkflowRule};
 use velnor_runner_journal::HostError;
 
+pub(super) fn linux_drain_timeout_is_valid(seconds: Option<u64>) -> bool {
+    seconds.is_some_and(|seconds| (1..=crate::MAX_LINUX_DRAIN_TIMEOUT_SECS).contains(&seconds))
+}
+
 pub(super) fn validate_github(github: &GithubSection) -> Result<(), HostError> {
     let scope_ok = match (
         github.registration_scope,

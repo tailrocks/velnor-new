@@ -7,6 +7,9 @@
 mod config;
 mod config_file;
 
+/// Maximum configured Linux drain deadline in seconds.
+pub const MAX_LINUX_DRAIN_TIMEOUT_SECS: u64 = 1800;
+
 pub use config::{
     DockerConfig, GithubSection, HostConfig, HostLimits, HostPlatform, JobTrustPolicy,
     JobTrustRule, RegistrationScope, RegistrationScopeKind, ReusableWorkflowRule, RunnerConfig,
