@@ -7,6 +7,7 @@ use crate::error::HostError;
 
 mod auth_intent;
 mod capacity;
+mod cleanup;
 mod controller;
 mod events;
 mod intent;
@@ -17,6 +18,11 @@ mod worker_volume;
 
 pub use auth_intent::{DiscoveryCredentialOutcome, DiscoveryCredentialStep};
 pub use capacity::{CapacityClaim, LaunchEffectState, ReplayRoute, ScopedLaunchIdentity};
+pub use cleanup::{
+    CleanupCheckpointIdentity, CleanupChildren, CleanupDiagnostics, CleanupDisposition,
+    CleanupStopPolicy, OuterNetworkCleanupState, OuterNetworkRemovalProof, PhysicalCleanupProof,
+    PostActionDisposition, RunnerStartObservation,
+};
 pub use lifecycle::RunnerStartIntent;
 
 /// Durable intent row.
@@ -82,6 +88,29 @@ pub enum LaunchClaim {
 pub struct Journal {
     path: PathBuf,
     read_only: bool,
+}
+
+pub(super) async fn outer_network_removal_started(
+    conn: &turso::Connection,
+    launch_id: i64,
+) -> Result<bool, HostError> {
+    let mut rows = conn
+        .query(
+            "SELECT EXISTS (SELECT 1 FROM worker_cleanup_steps WHERE launch_id = ?1 AND step_key = 'outer-network-removal')",
+            [launch_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let row = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?;
+    match row.get::<i64>(0).map_err(|_| HostError::Journal)? {
+        0 => Ok(false),
+        1 => Ok(true),
+        _ => Err(HostError::Journal),
+    }
 }
 
 impl Journal {

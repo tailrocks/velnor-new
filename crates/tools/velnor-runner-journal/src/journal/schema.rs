@@ -1,46 +1,10 @@
 //! Versioned journal initialization and conservative legacy-row migration.
 
-use std::collections::HashSet;
-
 use crate::error::HostError;
 
-const JOURNAL_VERSION: i64 = 6;
-const BASE_COLUMNS: [&str; 9] = [
-    "id",
-    "kind",
-    "subject",
-    "state",
-    "docker_id",
-    "github_runner_id",
-    "cleanup_proven",
-    "dind_id",
-    "worker_volume",
-];
-const CURRENT_COLUMNS: [&str; 22] = [
-    "id",
-    "kind",
-    "subject",
-    "state",
-    "docker_id",
-    "github_runner_id",
-    "cleanup_proven",
-    "dind_id",
-    "worker_volume",
-    "message_id",
-    "runner_request_id",
-    "requested_workflow_run_id",
-    "requested_job_id",
-    "runner_name",
-    "observed_job_id",
-    "observed_workflow_run_id",
-    "remote_terminal",
-    "replay_key_version",
-    "effect_state",
-    "outer_network_name",
-    "outer_network_id",
-    "runner_start_state",
-];
+const JOURNAL_VERSION: i64 = 7;
 
+mod validation;
 pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError> {
     conn.execute("BEGIN IMMEDIATE", ())
         .await
@@ -63,32 +27,41 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
             migrate_version_two(conn).await?;
             migrate_version_three(conn).await?;
             migrate_version_four(conn).await?;
-            migrate_version_five(conn).await
+            migrate_version_five(conn).await?;
+            migrate_version_six(conn).await
         }
         1 => {
             migrate_version_one(conn).await?;
             migrate_version_two(conn).await?;
             migrate_version_three(conn).await?;
             migrate_version_four(conn).await?;
-            migrate_version_five(conn).await
+            migrate_version_five(conn).await?;
+            migrate_version_six(conn).await
         }
         2 => {
             migrate_version_two(conn).await?;
             migrate_version_three(conn).await?;
             migrate_version_four(conn).await?;
-            migrate_version_five(conn).await
+            migrate_version_five(conn).await?;
+            migrate_version_six(conn).await
         }
         3 => {
             migrate_version_three(conn).await?;
             migrate_version_four(conn).await?;
-            migrate_version_five(conn).await
+            migrate_version_five(conn).await?;
+            migrate_version_six(conn).await
         }
         4 => {
             migrate_version_four(conn).await?;
-            migrate_version_five(conn).await
+            migrate_version_five(conn).await?;
+            migrate_version_six(conn).await
         }
-        5 => migrate_version_five(conn).await,
-        JOURNAL_VERSION => validate_current_schema(conn).await,
+        5 => {
+            migrate_version_five(conn).await?;
+            migrate_version_six(conn).await
+        }
+        6 => migrate_version_six(conn).await,
+        JOURNAL_VERSION => validation::validate_current_schema(conn).await,
         _ => Err(HostError::Journal),
     }
 }
@@ -114,7 +87,7 @@ async fn migrate_version_zero(conn: &turso::Connection) -> Result<(), HostError>
     .await
     .map_err(|_| HostError::Journal)?;
     ensure_legacy_columns(conn).await?;
-    validate_intent_schema(conn).await?;
+    validation::validate_intent_schema(conn).await?;
     conn.execute(
         "UPDATE intents SET state = CASE WHEN state = 'failed' THEN 'uncertain' ELSE state END, cleanup_proven = 0 WHERE kind = 'launch' AND state IN ('failed', 'pending', 'uncertain')",
         (),
@@ -140,7 +113,7 @@ async fn migrate_version_one(conn: &turso::Connection) -> Result<(), HostError> 
     )
     .await
     .map_err(|_| HostError::Journal)?;
-    validate_intent_schema(conn).await?;
+    validation::validate_intent_schema(conn).await?;
     conn.execute("PRAGMA user_version = 2", ())
         .await
         .map_err(|_| HostError::Journal)?;
@@ -148,7 +121,7 @@ async fn migrate_version_one(conn: &turso::Connection) -> Result<(), HostError> 
 }
 
 async fn migrate_version_two(conn: &turso::Connection) -> Result<(), HostError> {
-    let columns = read_columns(conn).await?;
+    let columns = validation::read_columns(conn).await?;
     for (column, definition) in [
         ("message_id", "INTEGER"),
         ("runner_request_id", "INTEGER"),
@@ -168,7 +141,7 @@ async fn migrate_version_two(conn: &turso::Connection) -> Result<(), HostError> 
             .map_err(|_| HostError::Journal)?;
         }
     }
-    validate_v3_schema(conn).await?;
+    validation::validate_v3_schema(conn).await?;
     conn.execute("PRAGMA user_version = 3", ())
         .await
         .map_err(|_| HostError::Journal)?;
@@ -176,7 +149,7 @@ async fn migrate_version_two(conn: &turso::Connection) -> Result<(), HostError> 
 }
 
 async fn migrate_version_three(conn: &turso::Connection) -> Result<(), HostError> {
-    let columns = read_columns(conn).await?;
+    let columns = validation::read_columns(conn).await?;
     if !columns.contains("replay_key_version") {
         conn.execute(
             "ALTER TABLE intents ADD COLUMN replay_key_version INTEGER NOT NULL DEFAULT 0 CHECK (replay_key_version IN (0, 1))",
@@ -185,7 +158,7 @@ async fn migrate_version_three(conn: &turso::Connection) -> Result<(), HostError
         .await
         .map_err(|_| HostError::Journal)?;
     }
-    validate_v4_schema(conn).await?;
+    validation::validate_v4_schema(conn).await?;
     conn.execute("PRAGMA user_version = 4", ())
         .await
         .map_err(|_| HostError::Journal)?;
@@ -193,7 +166,7 @@ async fn migrate_version_three(conn: &turso::Connection) -> Result<(), HostError
 }
 
 async fn migrate_version_four(conn: &turso::Connection) -> Result<(), HostError> {
-    let columns = read_columns(conn).await?;
+    let columns = validation::read_columns(conn).await?;
     if !columns.contains("effect_state") {
         conn.execute(
             "ALTER TABLE intents ADD COLUMN effect_state TEXT NOT NULL DEFAULT 'unknown' CHECK (effect_state IN ('unknown', 'not_started', 'may_have_effect', 'definite_no_effect'))",
@@ -202,7 +175,7 @@ async fn migrate_version_four(conn: &turso::Connection) -> Result<(), HostError>
         .await
         .map_err(|_| HostError::Journal)?;
     }
-    validate_v5_schema(conn).await?;
+    validation::validate_v5_schema(conn).await?;
     conn.execute("PRAGMA user_version = 5", ())
         .await
         .map_err(|_| HostError::Journal)?;
@@ -210,7 +183,7 @@ async fn migrate_version_four(conn: &turso::Connection) -> Result<(), HostError>
 }
 
 async fn migrate_version_five(conn: &turso::Connection) -> Result<(), HostError> {
-    let columns = read_columns(conn).await?;
+    let columns = validation::read_columns(conn).await?;
     for (column, definition) in [
         ("outer_network_name", "TEXT"),
         ("outer_network_id", "TEXT"),
@@ -228,15 +201,50 @@ async fn migrate_version_five(conn: &turso::Connection) -> Result<(), HostError>
             .map_err(|_| HostError::Journal)?;
         }
     }
-    validate_current_schema(conn).await?;
+    validation::validate_v6_schema(conn).await?;
     conn.execute("PRAGMA user_version = 6", ())
         .await
         .map_err(|_| HostError::Journal)?;
     Ok(())
 }
 
+async fn migrate_version_six(conn: &turso::Connection) -> Result<(), HostError> {
+    validation::validate_v6_schema(conn).await?;
+    // The pre-v7 marker recorded no exact resource, diagnostics, or ownership
+    // evidence. It cannot survive as proof that a launch reservation is free.
+    conn.execute(
+        "UPDATE intents SET cleanup_proven = 0 WHERE kind = 'launch'",
+        (),
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS worker_cleanup (launch_id INTEGER PRIMARY KEY CHECK (launch_id > 0), post_action_disposition TEXT NOT NULL CHECK (post_action_disposition IN ('completed', 'not_run', 'interrupted', 'unknown')), post_action_reason_class TEXT, stop_policy TEXT NOT NULL CHECK (stop_policy IN ('require_stopped', 'stop_at_deadline')), stop_grace_seconds INTEGER, stop_reason_class TEXT, children_drained INTEGER NOT NULL DEFAULT 0 CHECK (children_drained IN (0, 1)), diagnostics_recorded INTEGER NOT NULL DEFAULT 0 CHECK (diagnostics_recorded IN (0, 1)), diagnostics_relative_path TEXT, diagnostics_sha256 TEXT, diagnostics_bytes INTEGER, diagnostics_redacted INTEGER, diagnostics_retained INTEGER, diagnostics_source_absent INTEGER, complete INTEGER NOT NULL DEFAULT 0 CHECK (complete IN (0, 1)), outer_network_name TEXT, outer_network_id TEXT, runner_start_observation TEXT CHECK (runner_start_observation IS NULL OR runner_start_observation IN ('never_started', 'may_have_started')), cleanup_disposition TEXT, cleanup_reason_class TEXT, cleanup_resources TEXT, observed_attempt INTEGER, observed_actions_job_id INTEGER, observed_runner_name TEXT)",
+        (),
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS worker_cleanup_steps (launch_id INTEGER NOT NULL CHECK (launch_id > 0), step_key TEXT NOT NULL, completed INTEGER NOT NULL CHECK (completed IN (0, 1)), PRIMARY KEY (launch_id, step_key))",
+        (),
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS worker_cleanup_resources (launch_id INTEGER NOT NULL CHECK (launch_id > 0), resource_kind TEXT NOT NULL CHECK (resource_kind IN ('container', 'network')), resource_id TEXT NOT NULL, PRIMARY KEY (launch_id, resource_kind, resource_id))",
+        (),
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
+    validation::validate_cleanup_schema(conn).await?;
+    conn.execute("PRAGMA user_version = 7", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
 async fn ensure_legacy_columns(conn: &turso::Connection) -> Result<(), HostError> {
-    let columns = read_columns(conn).await?;
+    let columns = validation::read_columns(conn).await?;
     for (column, definition) in [("dind_id", "TEXT"), ("worker_volume", "TEXT")] {
         if !columns.contains(column) {
             conn.execute(
@@ -248,96 +256,4 @@ async fn ensure_legacy_columns(conn: &turso::Connection) -> Result<(), HostError
         }
     }
     Ok(())
-}
-
-async fn validate_current_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    let columns = read_columns(conn).await?;
-    if !CURRENT_COLUMNS
-        .iter()
-        .all(|column| columns.contains(*column))
-    {
-        return Err(HostError::Journal);
-    }
-    validate_controller_schema(conn).await
-}
-
-async fn validate_v4_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    let columns = read_columns(conn).await?;
-    if !CURRENT_COLUMNS
-        .iter()
-        .take(18)
-        .all(|column| columns.contains(*column))
-    {
-        return Err(HostError::Journal);
-    }
-    validate_controller_schema(conn).await
-}
-
-async fn validate_v5_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    let columns = read_columns(conn).await?;
-    if !CURRENT_COLUMNS
-        .iter()
-        .take(19)
-        .all(|column| columns.contains(*column))
-    {
-        return Err(HostError::Journal);
-    }
-    validate_controller_schema(conn).await
-}
-
-async fn validate_v3_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    let columns = read_columns(conn).await?;
-    if !CURRENT_COLUMNS
-        .iter()
-        .take(17)
-        .all(|column| columns.contains(*column))
-    {
-        return Err(HostError::Journal);
-    }
-    validate_controller_schema(conn).await
-}
-
-async fn validate_intent_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    let columns = read_columns(conn).await?;
-    if BASE_COLUMNS.iter().all(|column| columns.contains(*column)) {
-        Ok(())
-    } else {
-        Err(HostError::Journal)
-    }
-}
-
-async fn validate_controller_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    let columns = read_controller_columns(conn).await?;
-    if ["id", "draining", "drain_requested_at_ms"]
-        .iter()
-        .all(|column| columns.contains(*column))
-    {
-        Ok(())
-    } else {
-        Err(HostError::Journal)
-    }
-}
-
-async fn read_columns(conn: &turso::Connection) -> Result<HashSet<String>, HostError> {
-    let mut columns = HashSet::new();
-    let mut rows = conn
-        .query("PRAGMA table_info(intents)", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
-        columns.insert(row.get::<String>(1).map_err(|_| HostError::Journal)?);
-    }
-    Ok(columns)
-}
-
-async fn read_controller_columns(conn: &turso::Connection) -> Result<HashSet<String>, HostError> {
-    let mut columns = HashSet::new();
-    let mut rows = conn
-        .query("PRAGMA table_info(controller_state)", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
-        columns.insert(row.get::<String>(1).map_err(|_| HostError::Journal)?);
-    }
-    Ok(columns)
 }

@@ -67,16 +67,13 @@ async fn only_correlated_remote_completion_resolves_a_launch() -> Result<(), Str
             .map_err(|error| error.to_string())?
     );
     assert!(journal.rows().await.map_err(|error| error.to_string())?[0].remote_terminal);
-    journal
-        .record_cleanup(id)
-        .await
-        .map_err(|error| error.to_string())?;
+    assert!(journal.record_cleanup(id).await.is_err());
     assert_eq!(
         journal
             .begin_launch_if_accepting("m7r19")
             .await
             .map_err(|error| error.to_string())?,
-        LaunchClaim::Resolved(id)
+        LaunchClaim::Existing(id)
     );
     Ok(())
 }
@@ -105,10 +102,7 @@ async fn late_event_cannot_terminalize_a_reused_runner_generation() -> Result<()
         .observe_runner_event(&old_completed)
         .await
         .map_err(|error| error.to_string())?;
-    journal
-        .record_cleanup(old_id)
-        .await
-        .map_err(|error| error.to_string())?;
+    assert!(journal.record_cleanup(old_id).await.is_err());
 
     let (new_id, _) = journal
         .begin_launch("new-generation")

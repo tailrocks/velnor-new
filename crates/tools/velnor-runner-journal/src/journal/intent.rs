@@ -118,7 +118,7 @@ impl Journal {
         let conn = self.connection().await?;
         let changed = conn
             .execute(
-                "UPDATE intents SET docker_id = COALESCE(docker_id, ?1), github_runner_id = COALESCE(github_runner_id, ?2) WHERE id = ?3 AND (?1 IS NULL OR docker_id IS NULL OR docker_id = ?1) AND (?2 IS NULL OR github_runner_id IS NULL OR github_runner_id = ?2)",
+                "UPDATE intents SET docker_id = COALESCE(docker_id, ?1), github_runner_id = COALESCE(github_runner_id, ?2) WHERE id = ?3 AND (?1 IS NULL OR docker_id IS NULL OR docker_id = ?1) AND (?2 IS NULL OR github_runner_id IS NULL OR github_runner_id = ?2) AND NOT EXISTS (SELECT 1 FROM worker_cleanup_steps WHERE launch_id = ?3 AND step_key = 'outer-network-removal')",
                 (
                     docker_id.map(str::to_owned),
                     github_runner_id.map(str::to_owned),
@@ -129,7 +129,9 @@ impl Journal {
             .map_err(|_| HostError::Journal)?;
         match changed {
             1 => Ok(()),
-            0 => same_bind_ids(&conn, id, docker_id, github_runner_id).await,
+            0 if !super::outer_network_removal_started(&conn, id).await? => {
+                same_bind_ids(&conn, id, docker_id, github_runner_id).await
+            }
             _ => Err(HostError::Journal),
         }
     }
@@ -153,7 +155,7 @@ impl Journal {
         let conn = self.connection().await?;
         let changed = conn
             .execute(
-                "UPDATE intents SET docker_id = COALESCE(docker_id, ?1), dind_id = COALESCE(dind_id, ?2) WHERE id = ?3 AND (?1 IS NULL OR docker_id IS NULL OR docker_id = ?1) AND (?2 IS NULL OR dind_id IS NULL OR dind_id = ?2)",
+                "UPDATE intents SET docker_id = COALESCE(docker_id, ?1), dind_id = COALESCE(dind_id, ?2) WHERE id = ?3 AND (?1 IS NULL OR docker_id IS NULL OR docker_id = ?1) AND (?2 IS NULL OR dind_id IS NULL OR dind_id = ?2) AND NOT EXISTS (SELECT 1 FROM worker_cleanup_steps WHERE launch_id = ?3 AND step_key = 'outer-network-removal')",
                 (
                     runner_id.map(str::to_owned),
                     dind_id.map(str::to_owned),
@@ -164,12 +166,18 @@ impl Journal {
             .map_err(|_| HostError::Journal)?;
         match changed {
             1 => Ok(()),
-            0 => same_ids(&conn, id, runner_id, dind_id).await,
+            0 if !super::outer_network_removal_started(&conn, id).await? => {
+                same_ids(&conn, id, runner_id, dind_id).await
+            }
             _ => Err(HostError::Journal),
         }
     }
 
-    /// Record that cleanup of this row's ids is proven.
+    /// Mark a non-launch intent cleaned after its operation-specific cleanup.
+    ///
+    /// Launch generations require [`Journal::record_physical_cleanup`]; this
+    /// legacy marker carries no container, diagnostics, or ownership proof and
+    /// therefore cannot release a launch reservation.
     ///
     /// # Errors
     ///
@@ -177,7 +185,10 @@ impl Journal {
     pub async fn record_cleanup(&self, id: i64) -> Result<(), HostError> {
         let conn = self.connection().await?;
         let changed = conn
-            .execute("UPDATE intents SET cleanup_proven = 1 WHERE id = ?1", [id])
+            .execute(
+                "UPDATE intents SET cleanup_proven = 1 WHERE id = ?1 AND kind NOT IN ('launch', 'discovery-credential')",
+                [id],
+            )
             .await
             .map_err(|_| HostError::Journal)?;
         one_row(changed)

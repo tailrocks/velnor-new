@@ -20,12 +20,15 @@ impl Journal {
         let conn = self.connection().await?;
         let changed = conn
             .execute(
-                "UPDATE intents SET worker_volume = ?1 WHERE id = ?2 AND (worker_volume IS NULL OR worker_volume = ?1)",
+                "UPDATE intents SET worker_volume = ?1 WHERE id = ?2 AND (worker_volume IS NULL OR worker_volume = ?1) AND NOT EXISTS (SELECT 1 FROM worker_cleanup_steps WHERE launch_id = ?2 AND step_key = 'outer-network-removal')",
                 (volume.to_owned(), id),
             )
             .await
             .map_err(|_| HostError::Journal)?;
-        if changed == 1 || same_volume(&conn, id, volume).await? {
+        if changed == 1
+            || (!super::outer_network_removal_started(&conn, id).await?
+                && same_volume(&conn, id, volume).await?)
+        {
             Ok(())
         } else {
             Err(HostError::Journal)

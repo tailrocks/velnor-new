@@ -1,4 +1,4 @@
-//! Exited runners free one slot. The next assigned job is minted in this session.
+//! Capacity remains held until cleanup writes the required physical proof.
 
 use std::sync::Arc;
 
@@ -9,7 +9,7 @@ use velnor_runner_host::stage::{PairStop, drive};
 use velnor_runner_host::{EnsureError, HostError, IntentState, Outcome, Started};
 
 #[tokio::test]
-async fn capacity_two_mints_when_one_runner_exits() -> Result<(), String> {
+async fn capacity_two_holds_when_one_runner_exits_without_cleanup_proof() -> Result<(), String> {
     let (scratch, journal) = open("backfill-a").await?;
     let engine = Engine::new();
     let runner_a = hex(1);
@@ -39,44 +39,25 @@ async fn capacity_two_mints_when_one_runner_exits() -> Result<(), String> {
     let decision = admission(&engine, &journal, 2, 2, 2, &assigned_wait(9, 2))
         .await
         .map_err(|err| err.to_string())?;
-    assert_eq!(decision, Admit::Start { stop: true });
+    assert_eq!(decision, Admit::Hold);
     assert_eq!(
         engine.removed().map_err(|err| err.to_string())?,
-        vec![runner_a, dind_a]
+        Vec::<String>::new()
     );
+    assert!(engine.alive(&runner_a).map_err(|err| err.to_string())?);
+    assert!(engine.alive(&dind_a).map_err(|err| err.to_string())?);
     assert!(engine.alive(&dind_b).map_err(|err| err.to_string())?);
     assert!(engine.alive(&runner_b).map_err(|err| err.to_string())?);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     let proven = rows.iter().filter(|row| row.cleanup_proven).count();
-    assert_eq!(proven, 1);
-    let mut calls = script();
-    let minted = drive_offer(
-        &mut calls,
-        &ctx(),
-        &assigned_wait(9, 2),
-        &journal,
-        |_name, _jit, _bind| async {
-            Ok(Started {
-                dind_id: hex(6),
-                runner_id: hex(5),
-            })
-        },
-    )
-    .await
-    .map_err(|err| err.to_string())?;
-    let minted = minted.ok_or_else(|| "missing worker".to_owned())?;
-    assert_eq!(minted.runner_id, hex(5));
-    assert_eq!(calls.calls, ["jit", "ack"]);
-    assert!(engine.alive(&dind_b).map_err(|err| err.to_string())?);
-    let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert_eq!(rows.len(), 3);
-    assert_eq!(rows[2].docker_id.as_deref(), Some(hex(5).as_str()));
-    assert_eq!(rows[2].dind_id.as_deref(), Some(hex(6).as_str()));
+    assert_eq!(proven, 0);
+    assert_eq!(rows.len(), 2);
+    assert_eq!(velnor_runner_launch_slot::occupied(&journal).await, Ok(2));
     absent(&scratch.file())
 }
 
 #[tokio::test]
-async fn gone_runner_without_dind_frees_the_slot() -> Result<(), String> {
+async fn gone_runner_without_dind_keeps_the_slot_until_proof() -> Result<(), String> {
     let (scratch, journal) = open("backfill-e").await?;
     let engine = Engine::new();
     let gone = hex(31);
@@ -113,19 +94,23 @@ async fn gone_runner_without_dind_frees_the_slot() -> Result<(), String> {
     let decision = admission(&engine, &journal, 2, 2, 0, &assigned_wait(9, 2))
         .await
         .map_err(|err| err.to_string())?;
-    assert_eq!(decision, Admit::Start { stop: false });
+    assert_eq!(decision, Admit::Hold);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert_eq!(rows.iter().filter(|row| row.cleanup_proven).count(), 1);
+    assert_eq!(rows.iter().filter(|row| row.cleanup_proven).count(), 0);
     assert!(
         rows.iter()
             .any(|row| { row.docker_id.as_deref() == Some(live.as_str()) && !row.cleanup_proven })
     );
     assert!(engine.alive(&live).map_err(|err| err.to_string())?);
+    assert_eq!(
+        engine.removed().map_err(|err| err.to_string())?,
+        Vec::<String>::new()
+    );
     absent(&scratch.file())
 }
 
 #[tokio::test]
-async fn capacity_one_mints_after_the_pair_is_removed() -> Result<(), String> {
+async fn capacity_one_does_not_delete_before_cleanup_checkpoints() -> Result<(), String> {
     let (scratch, journal) = open("backfill-b").await?;
     let engine = Engine::new();
     let runner = hex(11);
@@ -143,30 +128,16 @@ async fn capacity_one_mints_after_the_pair_is_removed() -> Result<(), String> {
     let decision = admission(&engine, &journal, 1, 1, 1, &assigned_wait(2, 1))
         .await
         .map_err(|err| err.to_string())?;
-    assert_eq!(decision, Admit::Start { stop: true });
+    assert_eq!(decision, Admit::Hold);
     assert_eq!(
         engine.removed().map_err(|err| err.to_string())?,
-        vec![runner, dind]
+        Vec::<String>::new()
     );
+    assert!(engine.alive(&runner).map_err(|err| err.to_string())?);
+    assert!(engine.alive(&dind).map_err(|err| err.to_string())?);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert!(rows[0].cleanup_proven);
-    let mut calls = script();
-    let minted = drive_offer(
-        &mut calls,
-        &ctx(),
-        &assigned_wait(2, 1),
-        &journal,
-        |_name, _jit, _bind| async {
-            Ok(Started {
-                dind_id: hex(14),
-                runner_id: hex(13),
-            })
-        },
-    )
-    .await
-    .map_err(|err| err.to_string())?;
-    assert!(minted.is_some());
-    assert_eq!(calls.calls, ["jit", "ack"]);
+    assert!(!rows[0].cleanup_proven);
+    assert_eq!(velnor_runner_launch_slot::occupied(&journal).await, Ok(1));
     absent(&scratch.file())
 }
 

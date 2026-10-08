@@ -191,10 +191,10 @@ impl Journal {
     /// [`Journal::finish`] and keeps the capacity permit occupied.
     ///
     /// Scoped reservations transition from `not_started`; legacy reservations
-    /// may transition from `unknown`. Repeated calls are idempotent. The write
-    /// is committed before the caller may dispatch Acquire, JIT, registration,
-    /// or Docker work.
-    ///
+    /// may transition from `unknown`. Repeated calls are idempotent. The update
+    /// also requires the durable drain gate to remain open. If drain wins the
+    /// database serialization race, this fails without authorizing the effect;
+    /// if the marker wins, the operation is in flight for drain reconciliation.
     /// # Errors
     ///
     /// Returns [`HostError::Journal`] unless this is a pending launch row with
@@ -206,7 +206,7 @@ impl Journal {
         let conn = self.connection().await?;
         let changed = conn
             .execute(
-                "UPDATE intents SET effect_state = 'may_have_effect' WHERE id = ?1 AND kind = 'launch' AND state = 'pending' AND ((replay_key_version = 1 AND effect_state IN ('not_started', 'may_have_effect')) OR (replay_key_version = 0 AND effect_state IN ('unknown', 'may_have_effect'))) ",
+                "UPDATE intents SET effect_state = 'may_have_effect' WHERE id = ?1 AND kind = 'launch' AND state = 'pending' AND ((replay_key_version = 1 AND effect_state IN ('not_started', 'may_have_effect')) OR (replay_key_version = 0 AND effect_state IN ('unknown', 'may_have_effect'))) AND EXISTS (SELECT 1 FROM controller_state WHERE id = 1 AND draining = 0) AND NOT EXISTS (SELECT 1 FROM worker_cleanup_steps WHERE launch_id = ?1 AND step_key = 'outer-network-removal')",
                 [id],
             )
             .await
@@ -308,7 +308,7 @@ async fn reserve_in_transaction(
 
     let mut rows = conn
         .query(
-            "SELECT COUNT(*) FROM intents WHERE kind = 'launch' AND NOT (replay_key_version = 1 AND state = 'failed' AND effect_state = 'definite_no_effect' AND docker_id IS NULL AND github_runner_id IS NULL AND dind_id IS NULL AND worker_volume IS NULL AND observed_job_id IS NULL AND observed_workflow_run_id IS NULL AND remote_terminal = 0)",
+            "SELECT COUNT(*) FROM intents WHERE kind = 'launch' AND cleanup_proven = 0 AND NOT (replay_key_version = 1 AND state = 'failed' AND effect_state = 'definite_no_effect' AND docker_id IS NULL AND github_runner_id IS NULL AND dind_id IS NULL AND worker_volume IS NULL AND observed_job_id IS NULL AND observed_workflow_run_id IS NULL AND remote_terminal = 0)",
             (),
         )
         .await

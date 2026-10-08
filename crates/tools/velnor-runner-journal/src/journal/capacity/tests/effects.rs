@@ -4,7 +4,7 @@ use std::num::NonZeroU32;
 use std::path::Path;
 
 use super::admission::identity;
-use crate::journal::{CapacityClaim, Journal};
+use crate::journal::{CapacityClaim, Journal, LaunchEffectState};
 use crate::{HostError, IntentState, Outcome};
 
 use crate::journal::tests::Scratch;
@@ -137,6 +137,74 @@ async fn effect_intent_survives_failure_and_cannot_be_reclassified_as_no_effect(
             occupied: 1,
             maximum,
         }
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn durable_drain_fences_effect_intents_before_each_dispatch() -> Result<(), String> {
+    assert_drain_blocks_effects(false).await?;
+    assert_drain_blocks_effects(true).await?;
+    Ok(())
+}
+
+async fn assert_drain_blocks_effects(after_first_effect: bool) -> Result<(), String> {
+    let label = if after_first_effect {
+        "capacity-drain-between-effects"
+    } else {
+        "capacity-drain-before-effect"
+    };
+    let scratch = Scratch::new(label).map_err(|error| error.to_string())?;
+    let path = scratch.file();
+    let journal = Journal::open(&path)
+        .await
+        .map_err(|error| error.to_string())?;
+    let launch = identity("https://api.github.com", "one", "session", 11, 101)
+        .map_err(|error| error.to_string())?;
+    let next = identity("https://api.github.com", "one", "session", 12, 102)
+        .map_err(|error| error.to_string())?;
+    let maximum = NonZeroU32::new(2).ok_or("nonzero capacity")?;
+    let CapacityClaim::New(launch_id) = journal
+        .reserve_launch_if_accepting(&launch, maximum)
+        .await
+        .map_err(|error| error.to_string())?
+    else {
+        return Err("reservation before drain was not new".to_owned());
+    };
+
+    if after_first_effect {
+        journal
+            .record_launch_effect_intent(launch_id)
+            .await
+            .map_err(|error| error.to_string())?;
+    }
+    journal
+        .request_drain()
+        .await
+        .map_err(|error| error.to_string())?;
+    assert_eq!(
+        journal.record_launch_effect_intent(launch_id).await,
+        Err(HostError::Journal)
+    );
+    let expected = if after_first_effect {
+        LaunchEffectState::MayHaveEffect
+    } else {
+        LaunchEffectState::NotStarted
+    };
+    assert_eq!(journal.launch_effect_state(launch_id).await, Ok(expected));
+    drop(journal);
+
+    let reopened = Journal::open(&path)
+        .await
+        .map_err(|error| error.to_string())?;
+    assert_eq!(
+        reopened.record_launch_effect_intent(launch_id).await,
+        Err(HostError::Journal)
+    );
+    assert_eq!(reopened.launch_effect_state(launch_id).await, Ok(expected));
+    assert_eq!(
+        reopened.reserve_launch_if_accepting(&next, maximum).await,
+        Ok(CapacityClaim::Draining)
     );
     Ok(())
 }

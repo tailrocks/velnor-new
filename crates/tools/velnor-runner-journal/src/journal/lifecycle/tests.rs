@@ -94,6 +94,8 @@ async fn private_network_intent_survives_reopen_and_conflicts() -> Result<(), St
     Ok(())
 }
 
+mod removal_fence;
+
 #[tokio::test]
 async fn runner_start_intent_survives_reopen_and_requires_exact_id() -> Result<(), String> {
     let scratch =

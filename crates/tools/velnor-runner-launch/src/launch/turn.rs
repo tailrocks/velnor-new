@@ -31,7 +31,6 @@ pub(super) async fn poll_and_drive(
     trace::session(session);
     let mut workers = Vec::new();
     let capacity = capacity::job_capacity();
-    slot::release_exited(journal, docker).await?;
     let population = session
         .statistics()
         .map_or(0, velnor_runner_github::Statistics::assigned_population);
@@ -176,7 +175,7 @@ fn assigned_in(polled: &Poll) -> u32 {
     u32::try_from(raw.max(0)).unwrap_or(u32::MAX)
 }
 
-/// Decide one poll: start, hold, ack, or stop. Releases exited rows first.
+/// Decide one poll: start, hold, ack, or stop. Cleanup must be proven separately.
 ///
 /// # Errors
 ///
@@ -190,7 +189,6 @@ pub async fn admission<E: velnor_runner_host::stage::PairEngine + ?Sized>(
     started: u32,
     polled: &Poll,
 ) -> Result<Admit, EnsureError> {
-    slot::release_exited(journal, engine).await?;
     let idle = steps::idle(polled);
     let occupied = slot::occupied(journal).await?;
     let running = if capacity::needs_running(idle) {
