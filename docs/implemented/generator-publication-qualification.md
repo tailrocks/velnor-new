@@ -102,6 +102,48 @@ The focused test source and realistic sanitized API/CLI fixtures are
 `schema2_generator_release_manifest_publish.rs`. The fixture tests do not
 change release versions.
 
+## Pull-request run 37849214858 and correction
+
+The initial CI run for pull request 113 used head
+`bfe3b6bf2f5e647e29744249b6ac5710767a28bd` and finished with the `Required`
+job failing at **Merge reports**; baseline publication was skipped. Job
+113558432958 (`Rust / velnor-actions-workflow-renderer`) failed only in
+Clippy: the new `all_requested_products_share_one_dispatch_only_source_bound_workflow`
+test was 82/80 lines, and its two calls to `prepare_release_json` added
+needless references to `expected`. The test now puts publisher-string checks
+in a small helper and passes `expected` directly.
+
+Job 113558433065 (`Rust / velnor-actions-cli`) failed in
+`impl_cli_release_manifest::check_release_rejects_invalid_candidate_manifests`,
+which runs the golden collector from a spaced relative path. The dogfood
+preview still contained the old generated
+`.github/actions/generator-release-publish/action.yml` (SHA-256
+`02d765643735dba3e9b8b52c482afe3977601d58d0282ce15faa57d9095fc465`), while
+the current CLI emitted the publication change (SHA-256
+`04429fd25a82bb031d32beb5b7512f844a5a4e94b52b7a454b7dec1121f7e1ef`). The
+full-tree check therefore rejected the stale dogfood preview and its tree
+hash.
+
+The dogfood files were refreshed with the documented CLI capture command,
+`scripts/capture-opentofu-goldens.sh capture`, using the pinned Rust 1.98.1
+toolchain. It captured all five cases, reported the dogfood tree as
+`identical`, and changed only the dogfood generated publisher action and
+`cases/dogfood/tree.sha256`; the collector also regenerated
+`MANIFEST.sha256` to index those bytes. The checked-in root `.github` output
+was not hand edited.
+
+On macOS 27 arm64 with Rust 1.98.1, the exact hosted renderer Clippy command
+passes. The complete renderer package run reported 172 library tests and 340
+renderer integration tests passed, with zero ignored in either suite; doc
+tests ran zero tests. The formerly failing spaced-relative CLI test also
+passes (1 passed). A full `cargo test --locked -p velnor-actions-cli` run
+reported 287 passed and 2 failed, with zero ignored: the existing P12 tests
+`p12_manifest::stranded_lock_package_fails` and
+`p12_policy_b::non_object_entries_fail` did not find their expected fixture
+diagnostics. Those two failures are pending same-baseline reproduction and
+have not been waived or attributed to this change. Hosted checks for the
+corrected head are pending.
+
 The generated publisher output was refreshed through the supported CLI, with
 no hand edits:
 

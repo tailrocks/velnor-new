@@ -88,6 +88,32 @@ fn all_requested_products_share_one_dispatch_only_source_bound_workflow()
     ] {
         assert!(rendered.contains(required), "missing {required}");
     }
+    assert_generator_publisher_metadata_surface(&all);
+    assert!(!rendered.contains("schedule:"));
+    assert!(!rendered.contains("push:"));
+    assert!(rendered.contains("workflow_dispatch) ;;"));
+    assert!(!rendered.contains("push|schedule|workflow_dispatch"));
+    assert!(!all.contains("image-release.yml"));
+    assert!(!all.contains("macos-binary-release.yml"));
+    assert!(!all.contains("generator-release.yml"));
+    assert!(!all.contains("velnor-actions-0.1.0"));
+    assert_eq!(product.family_workflows.len(), 3);
+    for (path, workflow) in &product.family_workflows {
+        assert!(path.starts_with(".github/workflows/product-release-"));
+        let body = render_yaml(workflow);
+        assert!(body.contains("workflow_call:"), "{path}: {body}");
+        assert!(!body.contains("workflow_dispatch:"), "{path}: {body}");
+    }
+    assert_eq!(
+        super::super::generator_release::publication_asset_paths().len(),
+        20
+    );
+    assert!(all.contains("--pattern '"));
+    assert!(all.contains("ref: ${{ inputs.source_sha }}"));
+    Ok(())
+}
+
+fn assert_generator_publisher_metadata_surface(all: &str) {
     for required in [
         "build-images:",
         "build-binary:",
@@ -122,28 +148,6 @@ fn all_requested_products_share_one_dispatch_only_source_bound_workflow()
     ] {
         assert!(all.contains(required), "missing {required}");
     }
-    assert!(!rendered.contains("schedule:"));
-    assert!(!rendered.contains("push:"));
-    assert!(rendered.contains("workflow_dispatch) ;;"));
-    assert!(!rendered.contains("push|schedule|workflow_dispatch"));
-    assert!(!all.contains("image-release.yml"));
-    assert!(!all.contains("macos-binary-release.yml"));
-    assert!(!all.contains("generator-release.yml"));
-    assert!(!all.contains("velnor-actions-0.1.0"));
-    assert_eq!(product.family_workflows.len(), 3);
-    for (path, workflow) in &product.family_workflows {
-        assert!(path.starts_with(".github/workflows/product-release-"));
-        let body = render_yaml(workflow);
-        assert!(body.contains("workflow_call:"), "{path}: {body}");
-        assert!(!body.contains("workflow_dispatch:"), "{path}: {body}");
-    }
-    assert_eq!(
-        super::super::generator_release::publication_asset_paths().len(),
-        20
-    );
-    assert!(all.contains("--pattern '"));
-    assert!(all.contains("ref: ${{ inputs.source_sha }}"));
-    Ok(())
 }
 
 #[test]
@@ -200,8 +204,8 @@ fn generator_prepare_rerun_requires_source_target_and_exact_source_tag()
     let expected = extract_prepare_expected_assets(&generator)?;
     let predicate = extract_prepare_metadata_predicate(&generator)?;
     let tag_function = extract_prepare_tag_function(&generator)?;
-    let canonical = prepare_release_json(&expected, "0123456789abcdef0123456789abcdef01234567");
-    let old_release = prepare_release_json(&expected, "main");
+    let canonical = prepare_release_json(expected, "0123456789abcdef0123456789abcdef01234567");
+    let old_release = prepare_release_json(expected, "main");
 
     assert!(run_prepare_metadata_predicate(
         predicate, expected, &canonical
