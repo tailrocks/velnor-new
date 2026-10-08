@@ -304,7 +304,7 @@ pub fn attach_plan_outputs(document: &mut Yaml) -> Result<(), RenderError> {
 }
 
 /// Insert a job key directly before its `steps` entry.
-fn insert_job_key(
+pub(crate) fn insert_job_key(
     jobs: &mut [(String, Yaml)],
     id: &str,
     key: &str,
@@ -328,7 +328,7 @@ fn insert_job_key(
 }
 
 /// Require the planner's typed output id before wiring job outputs.
-fn require_plan_step_id(
+pub(crate) fn require_plan_step_id(
     jobs: &mut [(String, Yaml)],
     id: &str,
     output: &str,
@@ -342,7 +342,7 @@ fn require_plan_step_id(
 }
 
 /// Check for one explicitly declared step id in a serialized job.
-fn has_step_id(jobs: &[(String, Yaml)], id: &str, step_id: &str) -> bool {
+pub(crate) fn has_step_id(jobs: &[(String, Yaml)], id: &str, step_id: &str) -> bool {
     let steps = jobs
         .iter()
         .find_map(|(name, job)| (name == id).then_some(job))

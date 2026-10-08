@@ -112,6 +112,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             max_parallel_jobs: 2,
             runner_label: None,
             tasks: Vec::new(),
+            artifact_tasks: Vec::new(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -177,5 +178,7 @@ pub(crate) fn sample_plan(run_key: &str) -> Result<Plan, ContractError> {
         task_ids: vec![TASK.to_owned()],
         warnings: vec![],
         edges: vec![],
+
+        artifact_tasks: Vec::new(),
     })
 }

@@ -153,6 +153,13 @@ pub fn build_workflow(
         acquire.as_ref(),
     )?;
     let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
+    if let Some(job) =
+        crate::artifact_build_job::from_config(config, CHECKOUT_USES, acquire.clone())?
+    {
+        let id = crate::artifact_build_job::ARTIFACT_BUILD_JOB_ID.to_owned();
+        required_ids.push(crate::artifact_build_job::ARTIFACT_BUILD_JOB_ID.to_owned());
+        jobs.insert(id, job);
+    }
     for (id, job) in built.jobs {
         jobs.insert(id, job);
     }

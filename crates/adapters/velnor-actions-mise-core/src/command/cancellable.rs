@@ -168,7 +168,6 @@ fn poll_child(
     let mut stderr = Some(stderr);
     let mut out = Vec::with_capacity(cap.min(64 * 1024));
     let mut err = Vec::with_capacity(cap.min(64 * 1024));
-    let mut status = None;
     loop {
         if cancel.is_cancelled() {
             return Err(super::SPAWN_CANCELLED_MESSAGE.to_owned());
@@ -181,32 +180,45 @@ fn poll_child(
         }
         poll_pipe(&mut stdout, &mut out, cap, "stdout")?;
         poll_pipe(&mut stderr, &mut err, cap, "stderr")?;
-        status = child
-            .try_wait()
-            .map_err(|error| error.to_string())?
-            .or(status);
-        if let (Some(status), None, None) = (status, stdout.as_ref(), stderr.as_ref()) {
-            return Ok(ProcessOutput {
-                stdout: out,
-                stderr: err,
-                code: status.code(),
-                signal: super::output::signal_of(status),
-                success: status.success(),
-            });
+        if stdout.is_none() && stderr.is_none() {
+            if cancel.is_cancelled() {
+                return Err(super::SPAWN_CANCELLED_MESSAGE.to_owned());
+            }
+            let Ok(remaining) = deadline.remaining() else {
+                return Err(timeout_message.to_owned());
+            };
+            if remaining.is_zero() {
+                return Err(timeout_message.to_owned());
+            }
+            if let Some(status) = child.try_wait().map_err(|error| error.to_string())? {
+                if cancel.is_cancelled() {
+                    return Err(super::SPAWN_CANCELLED_MESSAGE.to_owned());
+                }
+                deadline
+                    .remaining()
+                    .map_err(|_| timeout_message.to_owned())?;
+                return Ok(ProcessOutput {
+                    stdout: out,
+                    stderr: err,
+                    code: status.code(),
+                    signal: super::output::signal_of(status),
+                    success: status.success(),
+                });
+            }
         }
         std::thread::sleep(Duration::from_millis(5).min(remaining));
     }
 }
 
 #[cfg(unix)]
-fn set_nonblocking<Fd: std::os::fd::AsFd>(fd: Fd) -> Result<(), String> {
+pub(super) fn set_nonblocking<Fd: std::os::fd::AsFd>(fd: Fd) -> Result<(), String> {
     let flags = rustix::fs::fcntl_getfl(&fd).map_err(|error| error.to_string())?;
     rustix::fs::fcntl_setfl(fd, flags | rustix::fs::OFlags::NONBLOCK)
         .map_err(|error| error.to_string())
 }
 
 #[cfg(unix)]
-fn poll_pipe<Fd: std::os::fd::AsFd>(
+pub(super) fn poll_pipe<Fd: std::os::fd::AsFd>(
     pipe: &mut Option<Fd>,
     output: &mut Vec<u8>,
     cap: usize,
@@ -239,7 +251,7 @@ fn poll_pipe<Fd: std::os::fd::AsFd>(
 }
 
 #[cfg(unix)]
-fn cleanup_context(primary: &str, cleanup: Result<(), String>) -> String {
+pub(super) fn cleanup_context(primary: &str, cleanup: Result<(), String>) -> String {
     match cleanup {
         Ok(()) => primary.to_owned(),
         Err(problem) => {
@@ -253,45 +265,73 @@ fn cleanup_context(primary: &str, cleanup: Result<(), String>) -> String {
 }
 
 #[cfg(unix)]
-fn terminate_group(child: &mut Child) -> Result<(), String> {
+pub(super) fn terminate_group(child: &mut Child) -> Result<(), String> {
+    terminate_group_with(child, |pid| {
+        rustix::process::kill_process_group(pid, rustix::process::Signal::KILL)
+    })
+}
+
+#[cfg(unix)]
+fn terminate_group_with(
+    child: &mut Child,
+    mut signal_group: impl FnMut(rustix::process::Pid) -> Result<(), rustix::io::Errno>,
+) -> Result<(), String> {
     let mut failures = Vec::new();
-    match i32::try_from(child.id())
-        .ok()
-        .and_then(rustix::process::Pid::from_raw)
-    {
-        Some(pid) => {
-            match rustix::process::kill_process_group(pid, rustix::process::Signal::KILL) {
-                Ok(()) | Err(rustix::io::Errno::SRCH) => {}
-                Err(error) => failures.push(format!("kill_group:{error}")),
-            }
-        }
-        None => failures.push("kill_group:invalid_child_id".to_owned()),
-    }
-    match child.try_wait() {
-        Ok(Some(_)) => {}
+    let leader_pid = match unreaped_child_pid(child) {
+        Ok(Some(pid)) => Some(pid),
         Ok(None) => {
-            if let Err(error) = child.kill()
-                && error.kind() != std::io::ErrorKind::InvalidInput
-            {
-                failures.push(format!("kill_child:{error}"));
-            }
+            failures.push("kill_group:leader_identity_unavailable".to_owned());
+            None
         }
         Err(error) => {
             failures.push(format!("check_child:{error}"));
-            if let Err(kill_error) = child.kill()
-                && kill_error.kind() != std::io::ErrorKind::InvalidInput
-            {
-                failures.push(format!("kill_child:{kill_error}"));
-            }
+            None
         }
-    }
-    if let Err(error) = reap_child(child) {
-        failures.push(format!("reap_child:{error}"));
+    };
+    if let Some(pid) = leader_pid {
+        match signal_group(pid) {
+            Ok(()) | Err(rustix::io::Errno::SRCH) => {}
+            Err(error) => failures.push(format!("kill_group:{error}")),
+        }
+        match child.try_wait() {
+            Ok(Some(_)) => {}
+            Ok(None) => {
+                if let Err(error) = child.kill()
+                    && error.kind() != std::io::ErrorKind::InvalidInput
+                {
+                    failures.push(format!("kill_child:{error}"));
+                }
+            }
+            Err(error) => failures.push(format!("check_child:{error}")),
+        }
+        if let Err(error) = reap_child(child) {
+            failures.push(format!("reap_child:{error}"));
+        }
     }
     if failures.is_empty() {
         Ok(())
     } else {
         Err(failures.join(","))
+    }
+}
+
+#[cfg(unix)]
+fn unreaped_child_pid(child: &Child) -> Result<Option<rustix::process::Pid>, String> {
+    let Some(pid) = i32::try_from(child.id())
+        .ok()
+        .and_then(rustix::process::Pid::from_raw)
+    else {
+        return Err("invalid_child_id".to_owned());
+    };
+    match rustix::process::waitid(
+        rustix::process::WaitId::Pid(pid),
+        rustix::process::WaitIdOptions::EXITED
+            | rustix::process::WaitIdOptions::NOHANG
+            | rustix::process::WaitIdOptions::NOWAIT,
+    ) {
+        Ok(_) => Ok(Some(pid)),
+        Err(rustix::io::Errno::CHILD) => Ok(None),
+        Err(error) => Err(error.to_string()),
     }
 }
 
@@ -309,5 +349,31 @@ fn reap_child(child: &mut Child) -> Result<(), String> {
             Ok(None) => return Err("cleanup_deadline_exhausted".to_owned()),
             Err(error) => return Err(error.to_string()),
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::terminate_group_with;
+    use std::process::Command;
+
+    #[test]
+    fn cleanup_never_signals_a_reaped_leader_pid() {
+        let mut child = Command::new("/bin/sh")
+            .args(["-c", "exit 0"])
+            .spawn()
+            .expect("spawn child");
+        child.wait().expect("reap child");
+        let mut signaled = false;
+        let result = terminate_group_with(&mut child, |_| {
+            signaled = true;
+            Ok(())
+        });
+        assert!(!signaled, "a reaped PID is never a process-group target");
+        assert!(
+            result
+                .expect_err("cleanup cannot certify a reaped leader's group")
+                .contains("leader_identity_unavailable")
+        );
     }
 }

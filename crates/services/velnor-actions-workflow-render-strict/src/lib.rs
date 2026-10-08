@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract_config::{VelnorSupportWorkflow, WorkflowPolicy};
 use velnor_actions_contract_workflow::{CI_WORKFLOW_PATH, Job, WorkflowIr};
-use velnor_actions_workflow_document::{document, matrix};
+use velnor_actions_workflow_document::{artifact_matrix, document, matrix};
 use velnor_actions_workflow_jobs::{RenderContext, finalize::finalize_jobs};
 use velnor_actions_workflow_steps::{RenderError, setup::MiseSetup, steps};
 use velnor_actions_workflow_tree::{marker, yaml::render_yaml};
@@ -68,10 +68,16 @@ pub fn render_merged(
 ) -> Result<RenderedWorkflow, RenderError> {
     let matrix = matrix::task_matrix_of(jobs)?;
     let caps = matrix::crate_job_caps(jobs)?;
+    let artifact_matrices = artifact_matrix::artifact_matrix_directives(jobs)?;
     let jobs = if matrix.is_some() || !caps.is_empty() {
         matrix::scrub_matrix_marker(jobs)
     } else {
         jobs.clone()
+    };
+    let jobs = if artifact_matrices.is_empty() {
+        jobs
+    } else {
+        artifact_matrix::scrub_artifact_matrix_markers(&jobs)
     };
     let mbx_jobs = velnor_actions_workflow_cache::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
     let shared = velnor_actions_workflow_document::lane_share::share_lanes(&jobs, ctx)?;
@@ -81,8 +87,10 @@ pub fn render_merged(
     } else {
         matrix::attach_plan_outputs(&mut document)?;
     }
+    artifact_matrix::attach_artifact_matrices(&mut document, &artifact_matrices)?;
     matrix::attach_crate_job_caps(&mut document, &caps)?;
     let document = velnor_actions_workflow_tree::yaml::quote_run_values_in_yaml(document);
+    let document = velnor_actions_workflow_tree::yaml::share_repeated_run_scalars(document);
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
     velnor_actions_workflow_tree::workflow_size::check_workflow_size(CI_WORKFLOW_PATH, &text)?;
     steps::scan_for_private_subcommands(&text)?;

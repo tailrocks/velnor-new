@@ -1,6 +1,10 @@
 use std::fs;
 
-use super::{MAX_REPO_FILE_BYTES, RepoRead, read_event_file, read_repo_file};
+use super::{
+    MAX_REPO_FILE_BYTES, RepoRead, read_event_file, read_repo_file,
+    stream::{open_repo_parent, stream_repo_file_from_parent},
+    stream_repo_file,
+};
 
 #[test]
 fn repo_read_round_trip_and_absent() {
@@ -82,5 +86,107 @@ fn event_symlink_fails_closed() {
     assert!(
         err.to_string().contains("unreadable_event_payload"),
         "{err}"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn streamed_repo_file_refuses_an_intermediate_symlink() {
+    let root = tempfile::TempDir::new().expect("temp root");
+    let outside = tempfile::TempDir::new().expect("outside root");
+    std::fs::write(outside.path().join("image.tar"), b"outside").expect("outside output");
+    std::os::unix::fs::symlink(outside.path(), root.path().join("dist")).expect("parent link");
+
+    let mut streamed = false;
+    let error = stream_repo_file(root.path(), "dist/image.tar", 64, |_| {
+        streamed = true;
+        Ok(())
+    })
+    .expect_err("intermediate symlink refused");
+    let detail = error.to_string();
+    assert!(
+        detail.contains("symlink_refused") || detail.contains("not_a_directory"),
+        "{error}"
+    );
+    assert!(!streamed, "bytes must not be read through the symlink");
+}
+
+#[test]
+#[cfg(unix)]
+fn streamed_repo_file_stays_on_pinned_parent_after_path_replacement() {
+    let root = tempfile::TempDir::new().expect("temp root");
+    let outside = tempfile::TempDir::new().expect("outside root");
+    let original = root.path().join("dist");
+    std::fs::create_dir(&original).expect("parent");
+    std::fs::write(original.join("image.tar"), b"pinned original").expect("original output");
+    std::fs::write(outside.path().join("image.tar"), b"outside replacement").expect("outside");
+
+    let pinned = open_repo_parent(root.path(), "dist/image.tar").expect("pinned parent");
+    std::fs::rename(&original, root.path().join("dist-moved")).expect("rename parent");
+    std::os::unix::fs::symlink(outside.path(), &original).expect("replace parent with symlink");
+
+    let mut observed = Vec::new();
+    stream_repo_file_from_parent(&pinned, 64, &mut |chunk| {
+        observed.extend_from_slice(chunk);
+        Ok(())
+    })
+    .expect("read pinned directory handle");
+    assert_eq!(observed, b"pinned original");
+}
+
+#[test]
+#[cfg(unix)]
+fn streamed_repo_file_opens_a_replaced_fifo_nonblocking_then_rejects_it() {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let root = tempfile::TempDir::new().expect("temp root");
+    let parent = root.path().join("dist");
+    std::fs::create_dir(&parent).expect("parent");
+    let parent_fd = rustix::fs::open(
+        &parent,
+        rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::DIRECTORY | rustix::fs::OFlags::CLOEXEC,
+        rustix::fs::Mode::empty(),
+    )
+    .expect("open parent");
+    rustix::fs::mkfifoat(
+        &parent_fd,
+        "image.tar",
+        rustix::fs::Mode::RUSR | rustix::fs::Mode::WUSR,
+    )
+    .expect("create fifo");
+    let root_path = root.path().to_path_buf();
+    let (sender, receiver) = mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let result = stream_repo_file(&root_path, "dist/image.tar", 64, |_| Ok(()));
+        let text = result.expect_err("fifo is not a regular file").to_string();
+        let _ = sender.send(text);
+    });
+    let outcome = match receiver.recv_timeout(Duration::from_secs(1)) {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            // If a regression blocks on open, connect a writer so the test can
+            // join cleanly before reporting that the nonblocking guarantee failed.
+            let _writer = std::fs::OpenOptions::new()
+                .write(true)
+                .open(parent.join("image.tar"))
+                .expect("unblock a regressed blocking open");
+            worker.join().expect("worker thread");
+            panic!("FIFO open did not return nonblocking: {error}");
+        }
+    };
+    worker.join().expect("worker thread");
+    assert!(outcome.contains("not_a_file"), "{outcome}");
+}
+
+#[test]
+#[cfg(unix)]
+fn streamed_repo_file_rejects_traversal_before_opening_components() {
+    let root = tempfile::TempDir::new().expect("temp root");
+    let error = stream_repo_file(root.path(), "../outside", 64, |_| Ok(()))
+        .expect_err("traversal rejected");
+    assert!(
+        error.to_string().contains("unsafe_relative_path"),
+        "{error}"
     );
 }

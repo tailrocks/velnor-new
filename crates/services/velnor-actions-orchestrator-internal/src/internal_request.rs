@@ -6,7 +6,10 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use velnor_actions_contract::canonical_json_bytes;
-use velnor_actions_contract_workflow::{NAMED_CHECK_LANES_ENV, NamedCheckLane, WorkflowEvent};
+use velnor_actions_contract_config::ExecutionMode;
+use velnor_actions_contract_workflow::{
+    EXECUTION_MODE_ENV, NAMED_CHECK_LANES_ENV, NamedCheckLane, WorkflowEvent,
+};
 
 use crate::internal::{MERGE_OP, PLAN_OP, SCHEMA};
 use velnor_actions_orchestrator_core::OrchestratorError;
@@ -44,6 +47,16 @@ struct EventRequest {
     /// expands checks across execution lanes.
     #[serde(skip_serializing_if = "Option::is_none")]
     named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
+    /// Effective schema-2 provider mode selected while rendering this workflow.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    execution_mode: Option<ExecutionMode>,
+}
+
+/// Optional routing values passed from the rendered workflow to the planner.
+#[derive(Debug, Default)]
+struct LaneSelection {
+    named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
+    execution_mode: Option<ExecutionMode>,
 }
 
 /// Materialize the canonical request file from the GitHub environment.
@@ -87,6 +100,10 @@ pub fn write_request() -> Result<PathBuf, OrchestratorError> {
             serde_json::from_str(&value).map_err(|_| internal("malformed_named_check_lanes"))
         })
         .transpose()?;
+    let execution_mode = env::var(EXECUTION_MODE_ENV)
+        .ok()
+        .map(|value| ExecutionMode::parse(&value).map_err(internal_contract))
+        .transpose()?;
     write_request_parts_with_lanes(
         &path,
         &event_name,
@@ -94,7 +111,10 @@ pub fn write_request() -> Result<PathBuf, OrchestratorError> {
         sha.as_deref(),
         repository.as_deref(),
         &anchor,
-        named_check_lanes,
+        LaneSelection {
+            named_check_lanes,
+            execution_mode,
+        },
     )
 }
 
@@ -128,7 +148,7 @@ pub fn write_request_parts(
         github_sha,
         repository,
         anchor,
-        None,
+        LaneSelection::default(),
     )
 }
 
@@ -139,7 +159,7 @@ fn write_request_parts_with_lanes(
     github_sha: Option<&str>,
     repository: Option<&str>,
     anchor: &Path,
-    named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
+    lane_selection: LaneSelection,
 ) -> Result<PathBuf, OrchestratorError> {
     let path = request_path.to_path_buf();
     let op = request_op(&path)?;
@@ -170,7 +190,8 @@ fn write_request_parts_with_lanes(
         repository: repository
             .filter(|slug| !slug.is_empty())
             .map(str::to_owned),
-        named_check_lanes,
+        named_check_lanes: lane_selection.named_check_lanes,
+        execution_mode: lane_selection.execution_mode,
     };
     let bytes = canonical_json_bytes(&request).map_err(internal_contract)?;
     if let Some(parent) = path.parent() {

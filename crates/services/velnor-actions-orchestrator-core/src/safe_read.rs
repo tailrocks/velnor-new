@@ -1,22 +1,20 @@
 //! Symlink-rejecting, root-constrained, size-capped file reads (X6).
 //!
-//! Config, manifest, and event-payload reads all funnel through here.
-//! Symlinks reject without reading (even at live targets), repo files
-//! canonicalize-and-constrain under the repository root, and every read
-//! stops one byte past the bound so oversize files error instead of
-//! exhausting memory. Absent files report [`RepoRead::Absent`]; every
-//! other failure is an error, never silently masked as absent.
+//! Config, manifest, event-payload, and artifact-output reads share bounded
+//! helpers here. Small plan-time reads canonicalize and constrain paths under
+//! the repository root, reject symlinks, and stop one byte past the bound.
+//! Absent files report [`RepoRead::Absent`]; every other failure is an error,
+//! never silently masked as absent.
 //!
-//! Reads are handle-pinned: the final open uses `O_NOFOLLOW`, the open
-//! handle must `fstat` as a regular file, and bytes flow only through
-//! that handle, so a final-component swap after any pre-check fails
-//! the open instead of diverting the read (W6a-G2). Accepted residual:
-//! a parent component swapped between containment resolution and the
-//! open can divert the open itself; plan-time, same-user only, and the
-//! read still matches exactly what was opened.
+//! Small plan-time readers pin the final regular-file handle but retain a
+//! same-user parent-component replacement residual during pathname resolution.
+//! The runtime [`stream_repo_file`] path uses a descriptor-relative walk, keeps
+//! opened directories alive, and opens the leaf with `O_NOFOLLOW|O_NONBLOCK`
+//! before checking that it is a regular file.
 
 use std::fs;
 use std::io::Read;
+use std::os::fd::OwnedFd;
 use std::path::Path;
 
 use velnor_actions_tofu_core::{FileCache, PinnedOutcome};
@@ -198,6 +196,20 @@ fn read_capped_bytes_until(
     max_bytes: u64,
     deadline: Option<velnor_actions_mise::CheckDeadline>,
 ) -> Result<Vec<u8>, OrchestratorError> {
+    let mut bytes = Vec::new();
+    stream_capped_file(path, max_bytes, deadline, &mut |chunk| {
+        bytes.extend_from_slice(chunk);
+        Ok(())
+    })?;
+    Ok(bytes)
+}
+
+fn stream_capped_file(
+    path: &Path,
+    max_bytes: u64,
+    deadline: Option<velnor_actions_mise::CheckDeadline>,
+    on_chunk: &mut impl FnMut(&[u8]) -> Result<(), OrchestratorError>,
+) -> Result<u64, OrchestratorError> {
     let fd = rustix::fs::open(
         path,
         rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::CLOEXEC,
@@ -210,6 +222,16 @@ fn read_capped_bytes_until(
             unreadable(path, std::io::Error::from(err).to_string())
         }
     })?;
+    stream_open_file(fd, path, max_bytes, deadline, on_chunk)
+}
+
+fn stream_open_file(
+    fd: OwnedFd,
+    path: &Path,
+    max_bytes: u64,
+    deadline: Option<velnor_actions_mise::CheckDeadline>,
+    on_chunk: &mut impl FnMut(&[u8]) -> Result<(), OrchestratorError>,
+) -> Result<u64, OrchestratorError> {
     let filetype = rustix::fs::fstat(&fd)
         .map(|stat| rustix::fs::FileType::from_raw_mode(stat.st_mode))
         .map_err(|err| unreadable(path, std::io::Error::from(err).to_string()))?;
@@ -217,13 +239,11 @@ fn read_capped_bytes_until(
         return Err(unreadable(path, "not_a_file"));
     }
     let mut file = fs::File::from(fd);
-    let mut bytes = Vec::new();
     let mut buffer = vec![0_u8; 64 * 1024].into_boxed_slice();
+    let mut total = 0_u64;
     loop {
         check_deadline(deadline)?;
-        let remaining = max_bytes
-            .saturating_add(1)
-            .saturating_sub(u64::try_from(bytes.len()).unwrap_or(u64::MAX));
+        let remaining = max_bytes.saturating_add(1).saturating_sub(total);
         if remaining == 0 {
             return Err(unreadable(path, "oversize"));
         }
@@ -235,12 +255,19 @@ fn read_capped_bytes_until(
         if count == 0 {
             break;
         }
-        bytes.extend_from_slice(&buffer[..count]);
-        if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > max_bytes {
+        let count_u64 = u64::try_from(count).unwrap_or(u64::MAX);
+        let next = total.saturating_add(count_u64);
+        if next > max_bytes {
+            let allowed = usize::try_from(max_bytes.saturating_sub(total)).unwrap_or(usize::MAX);
+            if allowed > 0 {
+                on_chunk(&buffer[..allowed])?;
+            }
             return Err(unreadable(path, "oversize"));
         }
+        on_chunk(&buffer[..count])?;
+        total = next;
     }
-    Ok(bytes)
+    Ok(total)
 }
 
 fn check_deadline(
@@ -255,16 +282,19 @@ fn check_deadline(
 }
 
 /// Build an IO error for one path.
-fn unreadable(path: &Path, problem: impl Into<String>) -> OrchestratorError {
+pub(super) fn unreadable(path: &Path, problem: impl Into<String>) -> OrchestratorError {
     OrchestratorError::io(path.display().to_string(), problem)
 }
 
 /// Build an unsafe-path error for one path.
-fn unsafe_path(path: &Path, reason: &str) -> OrchestratorError {
+pub(super) fn unsafe_path(path: &Path, reason: &str) -> OrchestratorError {
     OrchestratorError::UnsafePath {
         path: path.display().to_string(),
         reason: reason.to_owned(),
     }
 }
+mod stream;
+pub use stream::stream_repo_file;
+
 #[cfg(test)]
 mod tests;

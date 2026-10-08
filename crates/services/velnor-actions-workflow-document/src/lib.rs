@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod artifact_matrix;
 pub mod document;
 pub mod document_lanes;
 pub mod document_steps;

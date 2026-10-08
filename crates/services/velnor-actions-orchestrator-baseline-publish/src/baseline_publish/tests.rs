@@ -116,6 +116,8 @@ fn fixture_plan(head: &str, run_key: &str) -> Plan {
         task_ids: vec![clippy.to_owned(), test.to_owned()],
         warnings: Vec::new(),
         edges: Vec::new(),
+
+        artifact_tasks: Vec::new(),
     };
     plan.validate().expect("fixture validates");
     plan

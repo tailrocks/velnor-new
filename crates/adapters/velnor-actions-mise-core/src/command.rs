@@ -5,6 +5,7 @@ mod check;
 mod env;
 mod output;
 mod qualified_acquisition;
+mod stream_stdout;
 mod tofu;
 pub use check::resolve_program as resolve_check_program;
 

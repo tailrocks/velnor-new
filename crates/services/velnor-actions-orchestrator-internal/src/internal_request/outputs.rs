@@ -3,8 +3,9 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use velnor_actions_contract::{canonical_json_bytes, canonical_json_str};
 use velnor_actions_contract_workflow::{
-    FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, matrix_json_bytes,
-    plan_json_bytes,
+    ARTIFACT_HOSTED_MATRIX_OUTPUT, ARTIFACT_VELNOR_MATRIX_OUTPUT, ArtifactBuildProvider,
+    FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME,
+    artifact_matrix_for_provider, matrix_json_bytes, plan_json_bytes,
 };
 
 use crate::internal::{PlanResponse, check_schema};
@@ -24,6 +25,10 @@ pub struct PlanOutputs {
     pub run_key: String,
     /// Comma-wrapped covered task IDs (empty when none covered).
     pub covered_tasks: String,
+    /// Provider-specific artifact matrix when hosted builds are selected.
+    pub artifact_hosted_matrix: Option<String>,
+    /// Provider-specific artifact matrix when Scale Set builds are selected.
+    pub artifact_velnor_matrix: Option<String>,
     /// Aggregate UTF-16 byte size of values promoted by this output mode.
     pub job_outputs_utf16_bytes: usize,
 }
@@ -39,6 +44,14 @@ pub fn plan_outputs(
     let response: PlanResponse =
         serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
     check_schema(response.schema)?;
+    response.plan.validate().map_err(internal_contract)?;
+    if !response.plan.artifact_tasks.is_empty() && mode != PlanOutputMode::DynamicMatrix {
+        return Err(internal("artifact_build_requires_dynamic_outputs"));
+    }
+    let artifact_hosted_matrix =
+        artifact_matrix_if_selected(&response.plan, ArtifactBuildProvider::GithubHosted)?;
+    let artifact_velnor_matrix =
+        artifact_matrix_if_selected(&response.plan, ArtifactBuildProvider::VelnorScaleSet)?;
     let mut outputs = PlanOutputs {
         matrix: canonical_json_str(&response.matrix).map_err(internal_contract)?,
         plan_id: response.plan.plan_id.clone(),
@@ -48,11 +61,17 @@ pub fn plan_outputs(
                 &response.plan,
             )
             .encode(),
+        artifact_hosted_matrix,
+        artifact_velnor_matrix,
         job_outputs_utf16_bytes: 0,
     };
     outputs.job_outputs_utf16_bytes = check_plan_outputs(
         mode,
-        response.matrix.include.len(),
+        response
+            .matrix
+            .include
+            .len()
+            .max(response.plan.artifact_tasks.len()),
         &outputs.promoted_job_outputs(mode),
     )?;
     Ok(outputs)
@@ -62,7 +81,7 @@ impl PlanOutputs {
     /// Required named outputs written by the plan step, in stable order.
     #[must_use]
     pub fn step_outputs(&self) -> Vec<(&'static str, &str)> {
-        vec![
+        let mut outputs: Vec<(&'static str, &str)> = vec![
             ("matrix", &self.matrix),
             ("plan_id", &self.plan_id),
             ("run_key", &self.run_key),
@@ -70,7 +89,14 @@ impl PlanOutputs {
                 velnor_actions_orchestrator_covered_tasks::covered_tasks::COVERED_TASKS_OUTPUT,
                 &self.covered_tasks,
             ),
-        ]
+        ];
+        if let Some(matrix) = self.artifact_hosted_matrix.as_deref() {
+            outputs.push((ARTIFACT_HOSTED_MATRIX_OUTPUT, matrix));
+        }
+        if let Some(matrix) = self.artifact_velnor_matrix.as_deref() {
+            outputs.push((ARTIFACT_VELNOR_MATRIX_OUTPUT, matrix));
+        }
+        outputs
     }
 
     /// Output records promoted to job outputs by this workflow path.
@@ -86,6 +112,20 @@ impl PlanOutputs {
             PlanOutputMode::DynamicMatrix => self.step_outputs(),
         }
     }
+}
+
+fn artifact_matrix_if_selected(
+    plan: &velnor_actions_contract_workflow::Plan,
+    provider: ArtifactBuildProvider,
+) -> Result<Option<String>, OrchestratorError> {
+    let selected = plan
+        .artifact_tasks
+        .first()
+        .is_some_and(|task| task.providers.contains(&provider));
+    selected
+        .then(|| artifact_matrix_for_provider(plan, provider))
+        .transpose()
+        .map_err(internal_contract)
 }
 
 /// Publish `plan.json` + `matrix.json` for the plan artifact.

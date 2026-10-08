@@ -93,6 +93,8 @@ fn fixture_plan(event: WorkflowEvent) -> Plan {
         task_ids: vec![TASK.to_owned()],
         warnings: Vec::new(),
         edges: Vec::new(),
+
+        artifact_tasks: Vec::new(),
     };
     plan.validate().expect("fixture validates");
     plan

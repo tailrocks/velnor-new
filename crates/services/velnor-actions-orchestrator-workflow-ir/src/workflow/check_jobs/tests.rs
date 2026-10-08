@@ -4,7 +4,7 @@ use super::*;
 use velnor_actions_contract_config::config::{
     CheckPlatform, CheckRunner, MiseCheck, QualifiedTool,
 };
-use velnor_actions_contract_workflow::StepKind;
+use velnor_actions_contract_workflow::{ARTIFACT_MATRIX_PROVIDER_ENV, StepKind};
 use velnor_actions_mise::PinnedTool;
 
 fn check(id: &str, runner: CheckRunner) -> MiseCheck {

@@ -11,12 +11,13 @@ use crate::{RenderError, commands};
 pub use crate::action_ref::validate_uses;
 pub use crate::steps_artifact::{
     ARTIFACT_NAME_OUTPUT, BASELINE_PUBLISH_UPLOAD_NAME, BASELINE_RETENTION_DAYS, PUBLISH_STEP_ID,
-    baseline_publish_upload_step, crate_job_report_upload_step, download_artifact_step,
-    matrix_report_upload_step, upload_artifact_step, upload_diagnostics_step,
+    artifact_build_upload_step, baseline_publish_upload_step, crate_job_report_upload_step,
+    download_artifact_step, matrix_report_upload_step, upload_artifact_step,
+    upload_diagnostics_step,
 };
 pub use crate::steps_internal::split_internal_operation;
 pub use crate::steps_internal::{
-    internal_step, merge_step, plan_step, publish_step, write_request_step,
+    artifact_export_step, internal_step, merge_step, plan_step, publish_step, write_request_step,
 };
 
 /// Env key selecting the staged-binary internal operation.
@@ -33,6 +34,9 @@ pub const MERGE_OPERATION: &str = "merge-v1";
 pub const PUBLISH_OPERATION: &str = "publish-baseline-v1";
 /// Matrix-report fetch operation name.
 pub const FETCH_OPERATION: &str = "fetch-reports-v1";
+/// Verify and capture one plan-declared artifact build output.
+pub const ARTIFACT_EXPORT_OPERATION: &str =
+    velnor_actions_contract_workflow::ARTIFACT_EXPORT_OPERATION;
 /// Write-request operation name.
 pub const WRITE_REQUEST_OPERATION: &str = "write-request-v1";
 /// Required prefix of the digest-verified staged binary path.

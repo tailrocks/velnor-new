@@ -53,6 +53,8 @@ fn plan_with(obligations: Vec<PlanObligation>) -> Plan {
         task_ids,
         warnings: Vec::new(),
         edges: Vec::new(),
+
+        artifact_tasks: Vec::new(),
     }
 }
 

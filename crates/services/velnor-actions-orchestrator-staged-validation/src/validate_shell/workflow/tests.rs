@@ -109,6 +109,114 @@ fn nested_run_values_are_not_confused_with_steps() -> Result<(), String> {
 }
 
 #[test]
+fn repeated_run_scalar_aliases_preserve_decoded_command_and_shell() -> Result<(), String> {
+    let workflow = concat!(
+        "jobs:\n",
+        "  hosted:\n",
+        "    runs-on: ubuntu-24.04\n",
+        "    steps:\n",
+        "      - name: first\n",
+        "        run: &velnor_run_1 \"printf '%s\\\\n' \\\"${{ github.sha }}\\\"\"\n",
+        "      - name: second\n",
+        "        run: *velnor_run_1\n",
+    );
+    let runs = bodies(workflow)?;
+    assert_eq!(
+        runs,
+        [
+            (
+                "printf '%s\\n' \"${{ github.sha }}\"".to_owned(),
+                ShellDialect::Bash,
+            ),
+            (
+                "printf '%s\\n' \"${{ github.sha }}\"".to_owned(),
+                ShellDialect::Bash,
+            ),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn run_alias_preserves_newlines_while_each_step_keeps_its_shell_context() -> Result<(), String> {
+    let workflow = concat!(
+        "jobs:\n",
+        "  hosted:\n",
+        "    runs-on: ubuntu-24.04\n",
+        "    steps:\n",
+        "      - name: bash command\n",
+        "        run: &velnor_run_1 \"echo first\\necho \\\"${{ github.sha }}\\\"\"\n",
+        "        shell: bash\n",
+        "      - name: sh command\n",
+        "        run: *velnor_run_1\n",
+        "        shell: sh\n",
+    );
+    assert_eq!(
+        bodies(workflow)?,
+        [
+            (
+                "echo first\necho \"${{ github.sha }}\"".to_owned(),
+                ShellDialect::Bash,
+            ),
+            (
+                "echo first\necho \"${{ github.sha }}\"".to_owned(),
+                ShellDialect::Sh,
+            ),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn run_alias_can_reference_a_run_scalar_from_action_input_without_linting_input()
+-> Result<(), String> {
+    let workflow = concat!(
+        "jobs:\n",
+        "  hosted:\n",
+        "    runs-on: ubuntu-24.04\n",
+        "    steps:\n",
+        "      - name: action\n",
+        "        uses: example/action@0000000000000000000000000000000000000000\n",
+        "        with:\n",
+        "          run: &velnor_run_1 \"action-input\"\n",
+        "      - name: command\n",
+        "        run: *velnor_run_1\n",
+    );
+    assert_eq!(
+        bodies(workflow)?,
+        [("action-input".to_owned(), ShellDialect::Bash)]
+    );
+    Ok(())
+}
+
+#[test]
+fn malformed_duplicate_and_unresolved_run_anchors_fail_closed() {
+    for (workflow, expected) in [
+        (
+            "jobs:\n  hosted:\n    runs-on: ubuntu-24.04\n    steps:\n      - name: command\n        run: *missing\n",
+            "run_scalar_alias_unresolved",
+        ),
+        (
+            "jobs:\n  hosted:\n    runs-on: ubuntu-24.04\n    steps:\n      - name: first\n        run: &same echo first\n      - name: second\n        run: &same echo second\n",
+            "run_scalar_anchor_duplicate",
+        ),
+        (
+            "jobs:\n  hosted:\n    runs-on: ubuntu-24.04\n    steps:\n      - name: command\n        run: &bad\n",
+            "run_scalar_anchor_malformed",
+        ),
+        (
+            "jobs:\n  hosted:\n    runs-on: ubuntu-24.04\n    steps:\n      - name: command\n        run: *bad.name\n",
+            "run_scalar_alias_malformed",
+        ),
+    ] {
+        assert!(
+            bodies(workflow).is_err_and(|err| err.contains(expected)),
+            "expected {expected} for workflow:\n{workflow}"
+        );
+    }
+}
+
+#[test]
 fn harmless_shellcheck_directives_remain_supported() -> Result<(), String> {
     for directive in ["# shellcheck disable=SC2086", "#shellcheck disable=SC2086"] {
         let workflow = format!(

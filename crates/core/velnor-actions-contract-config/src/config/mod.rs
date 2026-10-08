@@ -3,6 +3,7 @@
 //! Unknown fields are rejected; validation reports file, key path, problem.
 
 mod actions;
+mod artifact_build;
 mod check_receipt_budget;
 mod discovery;
 mod docs_lane;
@@ -20,6 +21,7 @@ mod verification;
 mod workflow;
 
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
+pub use artifact_build::{ArtifactBuildOutput, ArtifactBuildTask};
 pub use check_receipt_budget::{
     MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES, MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
     MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES, MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,

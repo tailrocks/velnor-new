@@ -59,6 +59,8 @@ fn request_with(reports: Vec<MatrixReport>) -> MergeRequest {
         run_key: "local".to_owned(),
         actual_event: None,
         candidate_attestation: None,
+        artifact_build_context: None,
+        artifact_build_observations: Vec::new(),
         plan: None,
         matrix: None,
         matrix_reports: reports,

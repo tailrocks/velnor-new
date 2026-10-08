@@ -80,6 +80,10 @@ pub enum StepRole {
     PublishPlan,
     /// Upload of a crate or matrix task report artifact.
     MatrixReportUpload,
+    /// Verify task matrix context and stage declared task outputs.
+    ArtifactBuildExport,
+    /// Upload one verified, run-scoped artifact build result.
+    ArtifactBuildUpload,
     /// Download of a candidate attestation artifact.
     AttestationDownload,
     /// Fetch of exact matrix report artifacts.
@@ -148,12 +152,14 @@ impl StepRole {
             Self::TofuProviderUse => super::step_protocol::valid_provider_use(kind),
             Self::PlanProducer => internal_operation(kind, "plan-v1"),
             Self::BaselinePublisher => internal_operation(kind, "publish-baseline-v1"),
+            Self::ArtifactBuildExport => internal_operation(kind, "export-artifact-v1"),
             Self::FetchReports => internal_operation(kind, "fetch-reports-v1"),
             Self::DownloadPlan | Self::AttestationDownload | Self::PreseedDownload => {
                 action_has_prefix_for_kind(kind, "actions/download-artifact@")
             }
             Self::PublishPlan
             | Self::MatrixReportUpload
+            | Self::ArtifactBuildUpload
             | Self::PublishFinal
             | Self::PreseedUpload => action_has_prefix_for_kind(kind, "actions/upload-artifact@"),
             Self::ToolsCacheSave | Self::CargoSourcesSave => {

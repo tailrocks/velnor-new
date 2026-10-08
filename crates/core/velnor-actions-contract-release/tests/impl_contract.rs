@@ -27,6 +27,7 @@ fn config_validation_reports_key_paths() {
             max_parallel_jobs: 2,
             runner_label: None,
             tasks: Vec::new(),
+            artifact_tasks: Vec::new(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -103,6 +104,7 @@ fn runner_label_uses_exact_catalog_match() {
             max_parallel_jobs: 2,
             runner_label: None,
             tasks: Vec::new(),
+            artifact_tasks: Vec::new(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -170,6 +172,7 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
             max_parallel_jobs: 2,
             runner_label: None,
             tasks: Vec::new(),
+            artifact_tasks: Vec::new(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,

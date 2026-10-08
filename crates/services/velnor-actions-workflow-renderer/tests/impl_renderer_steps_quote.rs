@@ -266,8 +266,11 @@ fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
         "quoted shell run missing:\n{first}"
     );
     assert!(
-        first.contains("run: \"\\\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\\\"\""),
-        "quoted internal run missing:\n{first}"
+        first.lines().any(|line| {
+            line.trim_start().starts_with("run:")
+                && line.contains("\\\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\\\"")
+        }),
+        "quoted internal run missing from direct or anchored run scalar:\n{first}"
     );
     for line in first.lines() {
         if line.trim_start().starts_with("run:") {

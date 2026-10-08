@@ -1,6 +1,68 @@
 use super::*;
 
 #[test]
+fn artifact_task_selection_builds_a_required_linux_matrix_job() {
+    let (root, discovery) = fixture(&[]);
+    std::fs::create_dir(root.path().join(".velnor")).expect("config directory");
+    std::fs::write(
+        root.path().join(".velnor/config.toml"),
+        concat!(
+            "schema = 1\n",
+            "[workflow]\n",
+            "policy = 'velnor-repository-v1'\n",
+            "[[workflow.artifact_tasks]]\n",
+            "id = 'frontend-bundle'\n",
+            "mise_task = 'build-frontend'\n",
+            "runner = 'linux-x64'\n",
+            "timeout_minutes = 30\n",
+            "[[workflow.artifact_tasks.outputs]]\n",
+            "id = 'bundle'\n",
+            "path = 'dist/app.tar'\n",
+            "max_bytes = 16384\n",
+        ),
+    )
+    .expect("config");
+    let config = velnor_actions_orchestrator_core::config::load_config(root.path())
+        .expect("declared artifact task parses");
+
+    let workflow =
+        crate::workflow::build_workflow(&config, "main", "ubuntu-26.04", &discovery, &[])
+            .expect("artifact task job is typed and rendered");
+    let artifact = &workflow.ir.jobs[crate::artifact_build_job::ARTIFACT_BUILD_JOB_ID];
+    assert!(
+        artifact.runs_on == "ubuntu-26.04",
+        "artifact builds are limited to the supported Linux x64 executor"
+    );
+    assert_eq!(artifact.needs, ["plan"]);
+    assert!(
+        workflow.ir.jobs["required"]
+            .needs
+            .iter()
+            .any(|id| id == crate::artifact_build_job::ARTIFACT_BUILD_JOB_ID)
+    );
+    let task = artifact
+        .steps
+        .iter()
+        .find(|step| step.name == "Run declared artifact task")
+        .expect("dynamic task command");
+    let StepKind::Shell { run, env } = &task.kind else {
+        panic!("artifact task is a shell step")
+    };
+    assert_eq!(
+        run.last().map(String::as_str),
+        Some("$VELNOR_ARTIFACT_MISE_TASK")
+    );
+    assert_eq!(
+        env.get("VELNOR_ARTIFACT_MISE_TASK").map(String::as_str),
+        Some("${{ matrix.mise_task }}")
+    );
+    assert_eq!(
+        env.get(ARTIFACT_MATRIX_PROVIDER_ENV).map(String::as_str),
+        Some("provider")
+    );
+}
+
+#[test]
 fn no_cargo_checks_gate_required_without_becoming_rust_jobs() {
     let (root, discovery) = fixture(&[check("ffi", hosted("macos-15", CheckPlatform::MacosArm64))]);
     std::fs::create_dir(root.path().join(".velnor")).expect("config directory");

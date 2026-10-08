@@ -176,6 +176,9 @@ fn build_final(
         plan_id: plan.plan_id.clone(),
         expected_report_ids: entries.into_keys().map(str::to_owned).collect(),
         downloaded_artifact_ids: downloaded,
+        artifact_build_tasks: plan.artifact_tasks.clone(),
+        artifact_build_expected: expected_artifact_builds(plan, request),
+        artifact_build_observations: request.artifact_build_observations.clone(),
         required_job_results: reported_job_results(request),
         status,
         counts: FinalCounts {
@@ -195,6 +198,20 @@ fn build_final(
         },
         miss_reasons: miss_reasons.into_iter().collect(),
     })
+}
+
+fn expected_artifact_builds(
+    plan: &Plan,
+    request: &MergeRequest,
+) -> Vec<velnor_actions_contract_workflow::ArtifactBuildExpectation> {
+    let Some(context) = request.artifact_build_context.as_ref() else {
+        return Vec::new();
+    };
+    let Some(first) = plan.artifact_tasks.first() else {
+        return Vec::new();
+    };
+    velnor_actions_contract_workflow::expected_artifact_builds(plan, context, &first.providers)
+        .unwrap_or_default()
 }
 
 /// Validate final-fold inputs before collecting obligation evidence.

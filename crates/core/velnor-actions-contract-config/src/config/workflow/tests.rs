@@ -1,5 +1,8 @@
 use super::{GeneratorValidation, WorkflowConfig, WorkflowPolicy};
-use crate::config::{VerificationRunner, VerificationTask, VerificationTaskKind};
+use crate::config::{
+    ArtifactBuildOutput, ArtifactBuildTask, VerificationRunner, VerificationTask,
+    VerificationTaskKind,
+};
 use velnor_actions_contract_release::targets::RUNNER_LABEL_CATALOG;
 
 /// Workflow config carrying `name`, all else default.
@@ -12,6 +15,7 @@ fn named(name: &str) -> WorkflowConfig {
         max_parallel_jobs: 2,
         runner_label: None,
         tasks: Vec::new(),
+        artifact_tasks: Vec::new(),
     }
 }
 
@@ -70,4 +74,34 @@ fn workflow_tasks_require_sorted_unique_safe_ids() {
         .validate("config.toml")
         .expect_err("reserved ID fails");
     assert!(error.to_string().contains("bad_verification_task_id"));
+}
+
+#[test]
+fn artifact_task_ids_cannot_collide_with_verification_tasks() {
+    let mut config = named("CI");
+    config.tasks = vec![VerificationTask {
+        id: "native-check".to_owned(),
+        kind: VerificationTaskKind::Verification,
+        mise_task: "verify-native".to_owned(),
+        runner: VerificationRunner::LinuxX64,
+        timeout_minutes: 15,
+    }];
+    config.artifact_tasks = vec![ArtifactBuildTask {
+        id: "native-check".to_owned(),
+        mise_task: "build-native".to_owned(),
+        runner: VerificationRunner::LinuxX64,
+        timeout_minutes: 30,
+        outputs: vec![ArtifactBuildOutput {
+            id: "bundle".to_owned(),
+            path: "dist/bundle.tar".to_owned(),
+            max_bytes: 1024,
+        }],
+    }];
+    assert!(
+        config
+            .validate("config.toml")
+            .expect_err("overlapping logical IDs fail")
+            .to_string()
+            .contains("task_id_overlaps_verification_task:native-check")
+    );
 }

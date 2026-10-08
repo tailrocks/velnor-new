@@ -27,14 +27,17 @@
 //! report instead of dying in request assembly.
 
 // Needs-channel parsing lives beside assembly so `lib.rs` stays untouched.
+mod artifact_build_context;
 mod needs_channel;
 mod staged_reports;
 
 use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{canonical_json_str, parse_strict_json};
+use velnor_actions_contract_workflow::ARTIFACT_BUILD_OBSERVATIONS_FILENAME;
 use velnor_actions_contract_workflow::NEEDS_EXPECTED_ENV;
 
+use self::artifact_build_context::{has_artifact_build_tasks, read_artifact_build_context};
 use self::needs_channel::{NEEDS_ENV, parse_needs};
 pub use self::staged_reports::{MAX_STAGED_REPORT_BYTES, read_staged_reports};
 use velnor_actions_orchestrator_core::OrchestratorError;
@@ -119,7 +122,30 @@ pub fn assemble_with_needs(
     let baseline = read_json(run_dir, "baseline.json", "baseline", false, &mut errors);
     let (inventory, jobs) = parse_needs(needs, expected, &mut errors);
     let attestation = read_attestation(run_dir, &inventory, &mut errors);
-    let request = serde_json::json!({
+    let artifact_build_required = has_artifact_build_tasks(&plan);
+    let artifact_build_context = if artifact_build_required {
+        read_artifact_build_context(&plan, run_key, &mut errors)
+    } else {
+        None
+    };
+    let artifact_build_observations = if artifact_build_required {
+        let value = read_json(
+            run_dir,
+            ARTIFACT_BUILD_OBSERVATIONS_FILENAME,
+            "artifact_build_observations",
+            true,
+            &mut errors,
+        );
+        if let serde_json::Value::Array(items) = value {
+            items
+        } else {
+            errors.push("artifact_build_observations_not_array".to_owned());
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
+    let mut request = serde_json::json!({
         "schema": 1,
         "run_key": run_key,
         "actual_event": actual_event,
@@ -134,6 +160,15 @@ pub fn assemble_with_needs(
         "assembly_errors": errors,
         "baseline_manifest": baseline,
     });
+    if artifact_build_required {
+        request["artifact_build_context"] = match artifact_build_context {
+            Some(context) => serde_json::to_value(context)
+                .map_err(|_| internal("artifact_build_context_encode"))?,
+            None => serde_json::Value::Null,
+        };
+        request["artifact_build_observations"] =
+            serde_json::Value::Array(artifact_build_observations);
+    }
     canonical_json_str(&request).map_err(internal_contract)
 }
 

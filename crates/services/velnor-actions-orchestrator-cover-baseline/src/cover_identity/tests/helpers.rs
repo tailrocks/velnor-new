@@ -50,6 +50,8 @@ pub(super) fn plan_with(task_ids: &[&str]) -> Plan {
         task_ids: task_ids.iter().map(|id| (*id).to_owned()).collect(),
         warnings: Vec::new(),
         edges: Vec::new(),
+
+        artifact_tasks: Vec::new(),
     }
 }
 /// Discovery with one plain proposal per task ID, all unchanged.

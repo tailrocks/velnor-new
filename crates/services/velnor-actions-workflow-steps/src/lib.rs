@@ -26,12 +26,13 @@ pub use commands::{
 };
 pub use setup::{MISE_ACTION_NAME, MiseSetup, SETUP_MISE_NAME, mise_setup_step};
 pub use steps::{
-    ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, BASELINE_PUBLISH_UPLOAD_NAME,
-    CRATE_REPORT_UPLOAD_NAME, DENY_STEP_NAME, FORBIDDEN_TOKENS, INTERNAL_OP_ENV, MACHETE_STEP_NAME,
-    MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION, PLAN_OPERATION, PUBLISH_OPERATION, PUBLISH_STEP_ID,
-    RELEASE_COMMIT_ENV, REQUEST_DIR_PREFIX, REQUEST_FILE_ENV, RUN_KEY_EXPR, STAGED_BINARY_PREFIX,
-    WRITE_PRESEED_MANIFEST_OPERATION, WRITE_REQUEST_OPERATION, acquire_velnor_step, action_step,
-    action_step_with_env, ambient_shell_step, baseline_publish_upload_step, checkout_step,
+    ACQUIRE_NAME, ARTIFACT_EXPORT_OPERATION, ASSET_SHA_ENV, ASSET_URL_ENV,
+    BASELINE_PUBLISH_UPLOAD_NAME, CRATE_REPORT_UPLOAD_NAME, DENY_STEP_NAME, FORBIDDEN_TOKENS,
+    INTERNAL_OP_ENV, MACHETE_STEP_NAME, MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION, PLAN_OPERATION,
+    PUBLISH_OPERATION, PUBLISH_STEP_ID, RELEASE_COMMIT_ENV, REQUEST_DIR_PREFIX, REQUEST_FILE_ENV,
+    RUN_KEY_EXPR, STAGED_BINARY_PREFIX, WRITE_PRESEED_MANIFEST_OPERATION, WRITE_REQUEST_OPERATION,
+    acquire_velnor_step, action_step, action_step_with_env, ambient_shell_step,
+    artifact_build_upload_step, artifact_export_step, baseline_publish_upload_step, checkout_step,
     crate_job_report_upload_step, internal_step, lane_cargo_target_env, matrix_report_upload_step,
     merge_step, plan_step, publish_step, scan_for_private_subcommands, shell_step, validate_uses,
     write_request_step,

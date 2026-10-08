@@ -34,12 +34,24 @@ fn schema1_omits_scale_set_selector() -> TestResult {
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let joined = join_files(&tree);
     assert!(
+        joined.contains("runs-on: ubuntu-26.04"),
+        "schema 1 default hosted jobs must use the supported Ubuntu 26 profile"
+    );
+    assert!(
+        !joined.contains("ubuntu-24.04"),
+        "schema 1 emitted an Ubuntu 24 selector"
+    );
+    assert!(
         !joined.contains("ubuntu-26.04-scale-set"),
         "schema 1 emitted a scale-set label"
     );
     assert!(
         !joined.contains("runs-on: [velnor"),
         "schema 1 emitted a scale-set selector"
+    );
+    assert!(
+        !joined.contains("artifact-build"),
+        "schema 1 emitted a schema-2 artifact task lane"
     );
     Ok(())
 }

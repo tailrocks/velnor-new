@@ -16,7 +16,8 @@
 use std::collections::BTreeSet;
 
 use velnor_actions_contract_workflow::{
-    FinalReport, JobConclusion, ObligationDecision, Plan, RequiredJobResult,
+    ArtifactBuildProvider, FinalReport, JobConclusion, ObligationDecision, Plan, RequiredJobResult,
+    reconcile_artifact_builds,
 };
 
 use super::MergeRequest;
@@ -37,9 +38,85 @@ pub fn check_required_evidence(
 ) {
     check_job_inventory(request, signals, miss_reasons);
     check_obligation_proofs(plan, signals, miss_reasons);
+    check_artifact_builds(plan, request, signals, miss_reasons);
     if !request.assembly_errors.is_empty() {
         signals.planning_failed = true;
         miss_reasons.extend(assembly_tokens(&request.assembly_errors));
+    }
+}
+
+/// Reconcile every planned output against the exact provider/task job and artifact inventory.
+fn check_artifact_builds(
+    plan: &Plan,
+    request: &MergeRequest,
+    signals: &mut Signals,
+    miss_reasons: &mut BTreeSet<String>,
+) {
+    if plan.artifact_tasks.is_empty() {
+        if request.artifact_build_context.is_some()
+            || !request.artifact_build_observations.is_empty()
+        {
+            signals.planning_failed = true;
+            miss_reasons.insert("cache_corrupt".to_owned());
+        }
+        return;
+    }
+    let Some(context) = request.artifact_build_context.as_ref() else {
+        signals.planning_failed = true;
+        miss_reasons.insert("source_missing".to_owned());
+        return;
+    };
+    let Some(first) = plan.artifact_tasks.first() else {
+        signals.planning_failed = true;
+        miss_reasons.insert("cache_corrupt".to_owned());
+        return;
+    };
+    let expected = first
+        .providers
+        .len()
+        .saturating_mul(plan.artifact_tasks.len());
+    if request.artifact_build_observations.len() != expected {
+        signals.planning_failed = true;
+        miss_reasons.insert("no_entry".to_owned());
+        return;
+    }
+    let mut all_success = true;
+    for observation in &request.artifact_build_observations {
+        if observation.api_job_status != "completed" {
+            signals.not_run = true;
+            all_success = false;
+            continue;
+        }
+        match observation.conclusion {
+            JobConclusion::Success => {}
+            JobConclusion::Failure => {
+                signals.failed = true;
+                all_success = false;
+            }
+            JobConclusion::Cancelled => {
+                signals.cancelled = true;
+                all_success = false;
+            }
+            JobConclusion::Skipped | JobConclusion::Neutral | JobConclusion::Missing => {
+                signals.not_run = true;
+                all_success = false;
+            }
+        }
+    }
+    if !all_success {
+        return;
+    }
+    let providers: Vec<ArtifactBuildProvider> = first.providers.clone();
+    if reconcile_artifact_builds(
+        plan,
+        context,
+        &providers,
+        &request.artifact_build_observations,
+    )
+    .is_err()
+    {
+        signals.planning_failed = true;
+        miss_reasons.insert("cache_corrupt".to_owned());
     }
 }
 

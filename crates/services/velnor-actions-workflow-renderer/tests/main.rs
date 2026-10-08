@@ -21,5 +21,6 @@ mod impl_renderer_token_hygiene;
 mod impl_renderer_token_hygiene_env;
 mod impl_renderer_token_prelude;
 mod impl_renderer_tree;
+mod impl_renderer_tree_anchors;
 mod impl_renderer_tree_policy;
 mod impl_renderer_tree_rejections;

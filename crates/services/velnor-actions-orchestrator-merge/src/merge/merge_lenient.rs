@@ -35,6 +35,12 @@ struct LenientRequest {
     /// Head-bound candidate attestation; required in candidate mode.
     #[serde(default)]
     candidate_attestation: Option<serde_json::Value>,
+    /// GitHub-owned identity for the artifact-build attempt.
+    #[serde(default)]
+    artifact_build_context: Option<serde_json::Value>,
+    /// API job and downloaded-output observations.
+    #[serde(default)]
+    artifact_build_observations: Vec<serde_json::Value>,
     /// Validated plan; absent when the plan artifact never landed.
     #[serde(default)]
     plan: Option<serde_json::Value>,
@@ -83,6 +89,16 @@ pub fn lenient_request(envelope: &serde_json::Value) -> Option<MergeRequest> {
         "unparsable_candidate_attestation",
         &mut assembly_errors,
     );
+    let artifact_build_context = untyped_option(
+        raw.artifact_build_context,
+        "unparsable_artifact_build_context",
+        &mut assembly_errors,
+    );
+    let artifact_build_observations = untyped_list(
+        raw.artifact_build_observations,
+        "unparsable_artifact_build_observation",
+        &mut assembly_errors,
+    );
     let baseline_manifest = untyped_option(
         raw.baseline_manifest,
         "unparsable_baseline",
@@ -105,6 +121,8 @@ pub fn lenient_request(envelope: &serde_json::Value) -> Option<MergeRequest> {
         run_key: raw.run_key,
         actual_event: raw.actual_event,
         candidate_attestation,
+        artifact_build_context,
+        artifact_build_observations,
         plan,
         matrix,
         matrix_reports,
