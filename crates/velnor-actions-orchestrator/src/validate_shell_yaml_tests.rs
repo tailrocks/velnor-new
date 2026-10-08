@@ -256,7 +256,7 @@ fn literal_shell_globs_and_comments_are_not_yaml_aliases() -> Result<(), String>
 }
 
 #[test]
-fn aliases_outside_run_fields_fail_the_complete_staged_validation_chain() -> Result<(), String> {
+fn aliases_outside_run_fields_fail_the_complete_staged_validation_chain() {
     for workflow in [
         "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: define\n        run: &r1 echo safe\n      - name: alias in env\n        env:\n          COPY: *r1\n        run: echo safe\n",
         "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: define\n        run: echo safe\n      - name: tagged anchor in env\n        env:\n          COPY: !!str &outside safe\n          COPY2: *outside\n        run: echo safe\n",
@@ -267,7 +267,6 @@ fn aliases_outside_run_fields_fail_the_complete_staged_validation_chain() -> Res
             .expect_err("out-of-scope aliases must fail staged validation");
         assert!(error.contains("workflow_alias_outside_step_run"), "{error}");
     }
-    Ok(())
 }
 
 #[test]

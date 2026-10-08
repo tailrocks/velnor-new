@@ -207,7 +207,7 @@ fn skip_tag_property(value: &str) -> &str {
 
 fn consume_tag_property(characters: &mut std::iter::Peekable<std::str::Chars<'_>>) {
     if characters.peek() == Some(&'<') {
-        while let Some(character) = characters.next() {
+        for character in characters.by_ref() {
             if character == '>' {
                 break;
             }
