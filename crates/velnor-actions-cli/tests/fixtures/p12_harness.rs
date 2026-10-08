@@ -95,6 +95,7 @@ pub(crate) fn mutate(dir: &Path, rel: &str, old: &str, new: &str) -> Result<(), 
 
 /// Run `check-freshness.sh --root dir` plus `extra` args.
 pub(crate) fn run_script(dir: &Path, extra: &[&str]) -> Result<Run, Box<dyn Error>> {
+    let _target_lock = crate::impl_cli_tmp::lock_nested_cargo_target()?;
     let script = crate::impl_repo_policy::repo_root().join("scripts/check-freshness.sh");
     let mut command = Command::new("bash");
     command.arg(script).arg("--root").arg(dir).args(extra).env(
@@ -111,6 +112,7 @@ pub(crate) fn run_script(dir: &Path, extra: &[&str]) -> Result<Run, Box<dyn Erro
 
 #[test]
 fn relative_root_is_resolved_before_the_script_changes_directory() -> Result<(), Box<dyn Error>> {
+    let _target_lock = crate::impl_cli_tmp::lock_nested_cargo_target()?;
     let fixture = passing("p12-relative-root")?;
     let caller_dir = fixture.dir.parent().ok_or("fixture parent missing")?;
     let relative_root = fixture.dir.file_name().ok_or("fixture name missing")?;
