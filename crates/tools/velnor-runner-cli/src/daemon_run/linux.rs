@@ -77,12 +77,12 @@ async fn run_with_coordinator(
         eprintln!("host credential unavailable; Linux daemon remains cleanup-only");
     }
 
-    let outcome = run_linux_daemon(
+    let outcome = Box::pin(run_linux_daemon(
         context,
         credentials,
         protected_state,
         signal_adapter.receiver(),
-    )
+    ))
     .await;
     drop(signal_adapter);
 

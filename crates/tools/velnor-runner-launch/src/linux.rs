@@ -13,7 +13,10 @@ use velnor_runner_host::{HostPlatform, ValidatedHostConfigSnapshot};
 use velnor_runner_journal::journal::Journal;
 
 mod admission;
+mod capacity;
+mod session;
 mod shutdown;
+mod worker;
 pub use admission::{PolicyGap, PolicyMismatch, PoolAdmissionEvidence, VerifiedPoolPolicy};
 #[cfg(test)]
 #[path = "linux/tests.rs"]
@@ -36,8 +39,14 @@ pub enum LinuxAdmissionState {
     PoolUnknown(admission::PolicyGap),
     /// The source reports a mismatch with the immutable configured policy.
     PoolRejected(admission::PolicyMismatch),
-    /// Pool policy passed, but fenced population and per-offer trust are not wired.
-    VerifiedOfferGateClosed,
+    /// A same-scope verified policy and session capability are available.
+    VerifiedSessionReady,
+    /// The verified capability has no repository-scoped durable close permit.
+    SessionCloseUnsupportedScope,
+    /// Session creation or a later protocol effect may have occurred.
+    SessionEffectUncertain,
+    /// A prior durable singleton session prevents another session create.
+    ExistingSessionHeld,
     /// A shutdown request arrived before the admission preflight could finish.
     ShutdownBeforePreflight,
 }
@@ -231,32 +240,21 @@ pub async fn run_linux_daemon(
 ) -> Result<LinuxDaemonOutcome, LinuxDaemonError> {
     let (journal, diagnostics) =
         open_runtime_state(&context.state_directory, &protected_state).await?;
-    let mut cutoff = *shutdown.borrow_and_update();
-    let was_draining = journal
-        .draining()
-        .await
-        .map_err(|_| LinuxDaemonError::JournalUnavailable)?;
-    if was_draining && cutoff.is_none() {
-        cutoff = Some(Instant::now());
-    }
-
-    let admission = if cutoff.is_some() || was_draining {
-        LinuxAdmissionState::ShutdownBeforePreflight
-    } else {
-        admission::prepare_admission(
+    let mut startup =
+        prepare_daemon(&context, &journal, credentials.as_ref(), &mut shutdown).await?;
+    if startup.cutoff.is_none() {
+        Box::pin(drive_or_wait(
             &context,
-            credentials.as_ref(),
             &journal,
+            &diagnostics,
+            credentials.as_ref(),
+            &mut startup,
             &mut shutdown,
-            &mut cutoff,
-        )
-        .await
-    };
-
-    if cutoff.is_none() {
-        cutoff =
-            Some(shutdown::wait_for_shutdown(&journal, &mut shutdown, context.drain_timeout).await);
+        ))
+        .await;
     }
+    let admission = startup.admission;
+    let cutoff = startup.cutoff;
     let deadline = cutoff.unwrap_or_else(Instant::now);
     if !shutdown::confirm_drain(&journal, deadline).await {
         return Ok(shutdown::unresolved_outcome(
@@ -269,7 +267,84 @@ pub async fn run_linux_daemon(
         )
         .await);
     }
+    if let Some(active) = startup.active_session.as_mut() {
+        session::close_if_quiescent(&context, &journal, active, deadline).await;
+    }
     shutdown::reconcile_shutdown(&context, &journal, &diagnostics, admission, deadline).await
+}
+
+struct DaemonStartup {
+    cutoff: Option<Instant>,
+    admission: LinuxAdmissionState,
+    active_session: Option<session::ActiveSession>,
+}
+
+async fn prepare_daemon(
+    context: &LinuxLaunchContext,
+    journal: &Journal,
+    credentials: Option<&LinuxLaunchCredentials>,
+    shutdown: &mut watch::Receiver<Option<Instant>>,
+) -> Result<DaemonStartup, LinuxDaemonError> {
+    let mut cutoff = *shutdown.borrow_and_update();
+    let was_draining =
+        shutdown::read_startup_drain(journal, shutdown, &mut cutoff, context.drain_timeout)
+            .await
+            .unwrap_or(true);
+    if was_draining && cutoff.is_none() {
+        cutoff = Some(Instant::now());
+    }
+    let preparation = if cutoff.is_some() || was_draining {
+        admission::AdmissionPreparation {
+            state: LinuxAdmissionState::ShutdownBeforePreflight,
+            verified_admin: None,
+        }
+    } else {
+        admission::prepare_admission(context, credentials, journal, shutdown, &mut cutoff).await
+    };
+    let (active_session, creation_state) = session::create_session_if_verified(
+        context,
+        journal,
+        preparation.verified_admin,
+        shutdown,
+        &mut cutoff,
+    )
+    .await;
+    let admission = creation_state.unwrap_or(preparation.state);
+    Ok(DaemonStartup {
+        cutoff,
+        admission,
+        active_session,
+    })
+}
+
+async fn drive_or_wait(
+    context: &LinuxLaunchContext,
+    journal: &Journal,
+    diagnostics: &DiagnosticsStore,
+    credentials: Option<&LinuxLaunchCredentials>,
+    startup: &mut DaemonStartup,
+    shutdown: &mut watch::Receiver<Option<Instant>>,
+) {
+    if let Some(active) = startup.active_session.as_mut() {
+        let Some(credentials) = credentials else {
+            startup.admission = LinuxAdmissionState::CredentialsUnavailable;
+            startup.cutoff = Some(deadline_after(Instant::now(), context.drain_timeout));
+            return;
+        };
+        Box::pin(session::drive_session(
+            context,
+            journal,
+            diagnostics,
+            active,
+            credentials,
+            shutdown,
+            &mut startup.cutoff,
+        ))
+        .await;
+    } else {
+        startup.cutoff =
+            Some(shutdown::wait_for_shutdown(journal, shutdown, context.drain_timeout).await);
+    }
 }
 
 async fn open_runtime_state(
