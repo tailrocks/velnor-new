@@ -22,8 +22,9 @@ pub use auth_intent::{
     DiscoveryCredentialOutcome, DiscoveryCredentialScope, DiscoveryCredentialStep,
 };
 pub use capacity::{
-    BatchCapacityClaim, BatchOfferClaim, BatchOfferState, CapacityClaim, LaunchEffectState,
-    ReplayRoute, ScopedLaunchIdentity,
+    AssignedPopulationObservation, BatchCapacityClaim, BatchOfferClaim, BatchOfferState,
+    CapacityClaim, LaunchEffectState, ReplayRoute, ScopedAssignedLaunchIdentity,
+    ScopedLaunchIdentity,
 };
 pub use cleanup::{
     CleanupCheckpointIdentity, CleanupChildren, CleanupDiagnostics, CleanupDisposition,

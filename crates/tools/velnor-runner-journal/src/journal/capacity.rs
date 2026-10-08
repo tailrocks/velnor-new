@@ -3,7 +3,9 @@
 use std::fmt::{self, Formatter};
 use std::num::NonZeroU32;
 
+mod assigned;
 mod batch;
+pub use assigned::{AssignedPopulationObservation, ScopedAssignedLaunchIdentity};
 pub use batch::{BatchCapacityClaim, BatchOfferClaim, BatchOfferState};
 
 use crate::error::HostError;
