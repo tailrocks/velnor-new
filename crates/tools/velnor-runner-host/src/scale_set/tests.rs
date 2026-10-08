@@ -76,15 +76,14 @@ fn group_resolution_requires_one_exact_id_and_name_match() {
 }
 
 #[test]
-fn linux_binding_is_rejected_when_scope_policy_evidence_is_missing() {
+fn ubuntu24_profile_is_rejected_before_any_registration_transport() {
     let mut linux = binding();
     linux.scale_set_name = "ubuntu-24.04-scale-set".to_owned();
     linux.runner_image_profile = Some("ubuntu-24.04-amd64".to_owned());
 
-    assert!(validate_binding("credential", &linux).is_ok());
     assert_eq!(
-        require_group_policy_evidence(&linux),
-        Err(EnsureError::GroupPolicyUnavailable)
+        validate_binding("credential", &linux),
+        Err(EnsureError::Rejected)
     );
     assert_eq!(require_group_policy_evidence(&binding()), Ok(()));
 }
@@ -95,10 +94,9 @@ fn organization_binding_stays_fenced_without_matching_scope_proof() {
     organization.scope = RegistrationScope::Organization {
         organization: "ChainArgos".to_owned(),
     };
-    organization.scale_set_name = "ubuntu-24.04-scale-set".to_owned();
-    organization.runner_image_profile = Some("ubuntu-24.04-amd64".to_owned());
+    organization.scale_set_name = "ubuntu-26.04-scale-set".to_owned();
+    organization.runner_image_profile = None;
 
-    assert!(validate_binding("credential", &organization).is_ok());
     assert_eq!(
         require_group_policy_evidence(&organization),
         Err(EnsureError::GroupPolicyUnavailable)

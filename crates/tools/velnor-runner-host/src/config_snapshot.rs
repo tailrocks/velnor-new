@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use sha2::{Digest, Sha256};
-use velnor_runner_docker_spec::RunnerImageProfile;
+use velnor_runner_docker_spec::{RunnerImageProfile, resolve_linux_admission_profile};
 use velnor_runner_github::policy::{
     JobTrustPolicyView, JobTrustRuleView, ReusableWorkflowRuleView,
 };
@@ -159,10 +159,17 @@ fn snapshot_from_bytes(
     let config = HostConfig::parse(text)?;
     config.validate_for_host(platform)?;
     let binding = config.scale_set_binding()?;
-    // HostConfig validates Linux to the exact required Ubuntu 26 selector.
-    // No corresponding immutable RunnerImageProfile is currently approved,
-    // so retain the binding but expose no runnable profile to start callers.
-    let runner_image_profile = None;
+    // Only a source-pinned, evidence-reviewed Ubuntu 26 profile can cross the
+    // admission boundary. Current builds intentionally have no such pin, so a
+    // valid cleanup configuration retains its binding but no runnable image.
+    let runner_image_profile = if platform == HostPlatform::Linux {
+        binding
+            .runner_image_profile
+            .as_deref()
+            .and_then(|key| resolve_linux_admission_profile(key, &binding.scale_set_name).ok())
+    } else {
+        None
+    };
     Ok(ValidatedHostConfigSnapshot {
         config,
         policy_digest,

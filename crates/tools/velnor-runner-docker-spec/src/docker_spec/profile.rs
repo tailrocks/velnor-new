@@ -7,6 +7,9 @@ use velnor_runner_journal::HostError;
 
 use super::{ContainerPlan, Mount, RUNNER_PLATFORM, private_volume_name};
 
+mod admission;
+pub use admission::resolve_linux_admission_profile;
+
 const EXTERNALS_TARGET: &str = "/home/runner/externals";
 const OFFICIAL_SOCKET_TARGET: &str = "/run/docker";
 const RUNNER_HOME_TARGET: &str = "/home/runner";
@@ -14,10 +17,12 @@ const APPARMOR_RUNNER: &str = "apparmor=velnor-runner";
 const OFFICIAL_RUNNER_IMAGE: &str = "ghcr.io/actions/actions-runner@sha256:660f7b9d1e0007274f7c867e220b3c382137ef5a30d8e501a025ad50dbd5fb9d";
 const OFFICIAL_DIND_IMAGE: &str = "docker.io/library/docker@sha256:dcac6f16dc25ddec91e2d467605775b95a035ab884b94cb4c2cc7cbef6fd726d";
 
-/// One immutable runner/DinD image pair accepted by the Linux backend.
+/// Immutable runner/DinD image-pair metadata.
 ///
 /// Fields are private so configuration can select a profile key but cannot inject
-/// an arbitrary image, digest, architecture, UID, or security option.
+/// an arbitrary image, digest, architecture, UID, or security option. A value
+/// from this type is runnable only if the separate Linux admission validator
+/// matches it to an approved source-controlled Ubuntu 26 pin.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RunnerImageProfile {
     key: &'static str,
@@ -45,6 +50,8 @@ pub struct RunnerImageProfile {
     dind_socket_group: &'static str,
     dind_socket_gid: u32,
 }
+
+pub use admission::validate_linux_admission_profile;
 
 impl RunnerImageProfile {
     /// Stable configuration key.
@@ -248,12 +255,13 @@ fn official_runner_bootstrap(profile: &RunnerImageProfile) -> String {
     )
 }
 
-/// Resolve the only currently reviewed official Linux image profile.
+/// Resolve the legacy pinned profile record used by existing plan fixtures.
 ///
-/// The public registry metadata audit found the current official runner image is
-/// Ubuntu 24.04; it did not find an Ubuntu 26.04 image. This resolver deliberately
-/// refuses to map the existing 26.04 selector to the 24.04 image. The runner is
-/// requalified at least every 30 days from the upstream release publication time.
+/// This compatibility resolver does not confer Linux launch admission. The
+/// returned Ubuntu 24 record is rejected by [`validate_linux_admission_profile`]
+/// and cannot be used by production profile-start entry points. Production
+/// callers use [`resolve_linux_admission_profile`], which accepts only a
+/// source-pinned Ubuntu 26 profile. No such pin is currently compiled.
 ///
 /// # Errors
 ///
@@ -291,9 +299,10 @@ pub fn runner_plan_for_profile(
     private_volume: &str,
     profile: &RunnerImageProfile,
 ) -> Result<ContainerPlan, HostError> {
-    profile.ensure_fresh(SystemTime::now())?;
-    if *profile != RUNNER_PROFILE {
-        return Err(HostError::Config);
+    if *profile == RUNNER_PROFILE {
+        profile.ensure_fresh(SystemTime::now())?;
+    } else {
+        validate_linux_admission_profile(*profile)?;
     }
     if !private_volume_name(private_volume) {
         return Err(HostError::ForbiddenMount);

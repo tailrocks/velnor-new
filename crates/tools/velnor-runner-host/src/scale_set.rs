@@ -214,9 +214,11 @@ fn validate_binding(pat: &str, binding: &ScaleSetBinding) -> Result<(), EnsureEr
     }
     match binding.runner_image_profile.as_deref() {
         Some(profile) => {
-            let _profile =
-                velnor_runner_docker_spec::resolve_runner_profile(profile, &binding.scale_set_name)
-                    .map_err(|_| EnsureError::Rejected)?;
+            let _profile = velnor_runner_docker_spec::resolve_linux_admission_profile(
+                profile,
+                &binding.scale_set_name,
+            )
+            .map_err(|_| EnsureError::Rejected)?;
         }
         None if matches!(&binding.scope, RegistrationScope::Repository { .. })
             && binding.scale_set_name == "ubuntu-26.04-scale-set" => {}

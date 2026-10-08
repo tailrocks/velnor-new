@@ -8,7 +8,7 @@ use crate::worker::WorkerNetworkPlan;
 use velnor_runner_docker_spec::resolve_runner_profile;
 
 #[tokio::test]
-async fn profile_path_fails_closed_before_side_effects_without_approved_policy() {
+async fn legacy_ubuntu24_profile_cannot_enter_the_linux_start_path() {
     let Ok(profile) = resolve_runner_profile("ubuntu-24.04-amd64", "ubuntu-24.04-scale-set") else {
         panic!("the pinned image profile must resolve for this test");
     };
