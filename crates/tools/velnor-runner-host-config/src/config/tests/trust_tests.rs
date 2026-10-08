@@ -76,6 +76,68 @@ fn trust_policy_rejects_duplicate_and_wildcard_entries() {
 }
 
 #[test]
+fn exact_group_workflow_selectors_are_separate_and_repository_bound() -> Result<(), HostError> {
+    let valid = LINUX.replace(
+        "allowed_workflow_paths = [\".github/workflows/ci.yml\"]",
+        "allowed_workflow_paths = [\".github/workflows/ci.yml\"]\nallowed_group_workflows = [\"ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main\"]",
+    );
+    let parsed = HostConfig::parse(&valid)?;
+    assert_eq!(
+        parsed.job_trust_policy()?.allowed_group_workflows,
+        ["ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main"]
+    );
+    let separate_group_selector = valid.replace(
+        "ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main",
+        "ChainArgos/java-monorepo/.github/workflows/reusable.yml@refs/heads/release",
+    );
+    assert!(HostConfig::parse(&separate_group_selector).is_ok());
+    let yaml_group_selector = valid.replace(
+        "ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main",
+        "ChainArgos/java-monorepo/.github/workflows/ci.yaml@refs/heads/main",
+    );
+    assert!(HostConfig::parse(&yaml_group_selector).is_ok());
+
+    let invalid = [
+        valid.replace(
+            "allowed_group_workflows = [\"ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main\"]",
+            "allowed_group_workflows = [\"ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main\", \"ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main\"]",
+        ),
+        valid.replace(
+            "ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main",
+            "other/java-monorepo/.github/workflows/ci.yml@refs/heads/main",
+        ),
+        valid.replace(
+            "ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main",
+            "ChainArgos/java-monorepo/.github/workflows/ci.yml",
+        ),
+        valid.replace(
+            "ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main",
+            "ChainArgos/java-monorepo/.github/workflows/../ci.yml@refs/heads/main",
+        ),
+        valid.replace(
+            "ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main",
+            "ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/*",
+        ),
+        valid.replace(
+            "ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main",
+            "ChainArgos/java-monorepo/.github/workflows/.yml@refs/heads/main",
+        ),
+        valid.replace(
+            "ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main",
+            "ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main@other",
+        ),
+        valid.replace(
+            "ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main",
+            "ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/main]",
+        ),
+    ];
+    for text in invalid {
+        assert!(HostConfig::parse(&text).is_err());
+    }
+    Ok(())
+}
+
+#[test]
 fn runner_group_name_rejects_control_characters() {
     let text = LINUX.replace(
         "runner_group_name = \"Default\"",
@@ -90,6 +152,7 @@ fn trust_struct_remains_secret_free() {
         allowed_repositories: vec!["ChainArgos/java-monorepo".to_owned()],
         allowed_events: vec!["push".to_owned()],
         allowed_workflow_paths: vec![".github/workflows/ci.yml".to_owned()],
+        allowed_group_workflows: Vec::new(),
         allow_forks: false,
     };
     assert!(!format!("{policy:?}").contains("token"));

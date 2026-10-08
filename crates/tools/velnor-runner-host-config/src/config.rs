@@ -77,8 +77,15 @@ pub struct JobTrustPolicy {
     pub allowed_repositories: Vec<String>,
     /// Exact GitHub event names accepted by this controller.
     pub allowed_events: Vec<String>,
-    /// Exact workflow paths from the GitHub Actions run API.
+    /// Bare workflow file paths used by the per-job policy. Full path and ref
+    /// identities for the runner-group selector are configured separately.
     pub allowed_workflow_paths: Vec<String>,
+    /// Exact runner-group workflow selectors as returned by the Actions API,
+    /// for example `owner/repository/.github/workflows/ci.yml@refs/heads/main`.
+    /// This is separate from `allowed_workflow_paths`, which contains bare
+    /// file paths and cannot establish a ref or group-level selector.
+    #[serde(default)]
+    pub allowed_group_workflows: Vec<String>,
     /// Must remain false for the privileged per-job `DinD` host.
     pub allow_forks: bool,
 }

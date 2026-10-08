@@ -48,8 +48,13 @@ pub(super) fn validate_trust(
             .allowed_workflow_paths
             .iter()
             .any(|path| !workflow_path_ok(path))
+        || policy
+            .allowed_group_workflows
+            .iter()
+            .any(|workflow| !group_workflow_ok(workflow, config_repository))
         || has_duplicates(&policy.allowed_events)
         || has_duplicates(&policy.allowed_workflow_paths)
+        || has_duplicates(&policy.allowed_group_workflows)
     {
         return Err(HostError::Config);
     }
@@ -99,6 +104,57 @@ fn workflow_path_ok(path: &str) -> bool {
                     .split('/')
                     .all(|segment| segment != "." && segment != ".." && safe_segment(segment))
         })
+}
+
+fn group_workflow_ok(workflow: &str, repository: &str) -> bool {
+    let Some(identity) = workflow
+        .strip_prefix(repository)
+        .and_then(|value| value.strip_prefix('/'))
+    else {
+        return false;
+    };
+    let Some((file_path, reference)) = identity.split_once('@') else {
+        return false;
+    };
+    if reference.is_empty()
+        || reference.contains('@')
+        || reference.starts_with('/')
+        || reference.ends_with('/')
+        || reference.ends_with('.')
+        || reference.contains("..")
+        || reference.contains("//")
+        || reference.bytes().any(|byte| {
+            byte.is_ascii_control()
+                || byte.is_ascii_whitespace()
+                || matches!(byte, b'~' | b'^' | b':' | b'?' | b'*' | b'[' | b'\\' | b']')
+        })
+    {
+        return false;
+    }
+    let Some(workflow_file) = file_path.strip_prefix(".github/workflows/") else {
+        return false;
+    };
+    if workflow_file.is_empty()
+        || workflow_file
+            .split('/')
+            .any(|component| component.is_empty() || component == "." || component == "..")
+        || workflow_file.bytes().any(|byte| {
+            byte.is_ascii_control()
+                || byte.is_ascii_whitespace()
+                || matches!(byte, b'?' | b'*' | b'[' | b'\\' | b']' | b'@')
+        })
+    {
+        return false;
+    }
+    workflow_file
+        .rsplit('/')
+        .next()
+        .and_then(|file_name| {
+            file_name
+                .strip_suffix(".yaml")
+                .or_else(|| file_name.strip_suffix(".yml"))
+        })
+        .is_some_and(|stem| !stem.is_empty())
 }
 
 fn event_name_ok(event: &str) -> bool {
