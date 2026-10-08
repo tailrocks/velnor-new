@@ -45,7 +45,7 @@ rules:
   # alint-policy fixture: comments carry no policy weight.
   # alint-policy fixture: comments carry no policy weight.
   # alint-policy fixture: comments carry no policy weight.
-  - id: claude-is-agents-copy
+  - id: claude-is-agents-pointer
     kind: command
     paths:
       include: ["**/AGENTS.md"]
@@ -53,11 +53,11 @@ rules:
     command:
       - sh
       - -c
-      - 'dir=$(dirname "$1") && test -f "$dir/CLAUDE.md" && test ! -L "$dir/CLAUDE.md" && cmp -s "$dir/CLAUDE.md" "$1"'
-      - alint-claude-mirror
+      - 'dir=$(dirname "$1") && test -f "$dir/CLAUDE.md" && test ! -L "$dir/CLAUDE.md" && printf "@AGENTS.md\n" | cmp -s - "$dir/CLAUDE.md"'
+      - alint-claude-pointer
       - "{path}"
     level: error
-    message: "Each AGENTS.md must have a sibling CLAUDE.md regular file with identical bytes"
+    message: "Each AGENTS.md must have a sibling CLAUDE.md regular file with the @AGENTS.md pointer body"
 
   # alint-policy fixture: comments carry no policy weight.
   # pass focus: agent-instructions-max-lines (prose must not affect verdict)

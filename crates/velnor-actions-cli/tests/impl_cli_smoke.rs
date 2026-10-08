@@ -318,10 +318,7 @@ fn preview_prints_absolute_paths_and_files() -> Result<(), Box<dyn Error>> {
     let claude = preview.join(".github/CLAUDE.md");
     assert!(claude.is_file());
     assert!(!claude.is_symlink());
-    assert_eq!(
-        std::fs::read(&claude)?,
-        std::fs::read(preview.join(".github/AGENTS.md"))?
-    );
+    assert_eq!(std::fs::read(&claude)?, b"@AGENTS.md\n");
     cleanup(&tmp);
     cleanup(&outer);
     Ok(())

@@ -21,9 +21,9 @@
 #
 # Schema: alint config model (`version` + `rules`, each rule with
 # id/kind/level). The top-level `command` rule is trusted and checks only
-# each AGENTS.md's sibling CLAUDE.md mirror file, which Alint has no native
-# byte-equality rule to express. Its `pair` rule checks existence only;
-# the command below checks the regular-file type and identical bytes on the
+# each AGENTS.md's sibling CLAUDE.md pointer file, which Alint has no native
+# exact-content rule to express. Its `pair` rule checks existence only;
+# the command below checks the regular-file type and exact pointer body on
 # CI Linux runner. Generated trees must not emit symlinks: plugin
 # installers reject packages that contain symlink entries.
 # Validate with the pinned alint binary: `alint validate-config`.
@@ -71,12 +71,12 @@ rules:
     message: "Repo-shape file is missing (rust-quality-contract §1)"
 
   # Run against each real AGENTS.md and check its sibling. `pair` only checks
-  # partner existence and cannot enforce file type or byte equality; this
-  # trusted command requires a regular (non-symlink) file with bytes
-  # identical to AGENTS.md. `.github/` is generated output owned by the
+  # partner existence and cannot enforce file type or exact content; this
+  # trusted command requires a regular (non-symlink) file with the single
+  # `@AGENTS.md` import line. `.github/` is generated output owned by the
   # pinned generator and verified byte-exact by the generation-diff job,
   # so it stays out of this maintained-file rule.
-  - id: claude-is-agents-copy
+  - id: claude-is-agents-pointer
     kind: command
     paths:
       include: ["**/AGENTS.md"]
@@ -84,11 +84,11 @@ rules:
     command:
       - sh
       - -c
-      - 'dir=$(dirname "$1") && test -f "$dir/CLAUDE.md" && test ! -L "$dir/CLAUDE.md" && cmp -s "$dir/CLAUDE.md" "$1"'
-      - alint-claude-mirror
+      - 'dir=$(dirname "$1") && test -f "$dir/CLAUDE.md" && test ! -L "$dir/CLAUDE.md" && printf "@AGENTS.md\n" | cmp -s - "$dir/CLAUDE.md"'
+      - alint-claude-pointer
       - "{path}"
     level: error
-    message: "Each AGENTS.md must have a sibling CLAUDE.md regular file with identical bytes"
+    message: "Each AGENTS.md must have a sibling CLAUDE.md regular file with the @AGENTS.md pointer body"
 
   # Keep instruction files concise so they fit in agent context by default.
   - id: agent-instructions-max-lines
