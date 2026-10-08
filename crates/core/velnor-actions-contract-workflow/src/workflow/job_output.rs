@@ -1,4 +1,4 @@
-//! Typed job outputs bound to one validated step identity.
+//! Typed job outputs bound to one validated workflow source.
 
 use super::{
     step::Step,
@@ -13,6 +13,8 @@ use velnor_actions_contract::errors::ContractError;
 pub enum JobOutputName {
     /// Numeric ID emitted by the pinned task-report artifact upload.
     TaskReportArtifactId,
+    /// Numeric ID exposed by the current GitHub Actions job context.
+    TaskReportCheckRunId,
 }
 
 impl JobOutputName {
@@ -21,6 +23,7 @@ impl JobOutputName {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::TaskReportArtifactId => "task_report_artifact_id",
+            Self::TaskReportCheckRunId => "task_report_check_run_id",
         }
     }
 }
@@ -43,22 +46,39 @@ impl StepOutputName {
     }
 }
 
-/// One job output whose value comes from a typed step output.
+/// One job output whose value comes from a typed step or job-context source.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JobOutput {
     /// Job-level output name available through direct dependents' `needs`.
     pub name: JobOutputName,
-    /// Exact step and action output that produces this value.
+    /// Exact typed source that produces this value.
     pub source: JobOutputSource,
 }
 
 /// Typed source of one job output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct JobOutputSource {
-    /// Stable workflow step identity.
-    pub step: StepId,
-    /// Output key declared by that step's action contract.
-    pub output: StepOutputName,
+#[serde(untagged)]
+pub enum JobOutputSource {
+    /// Exact output of a stable workflow step identity.
+    Step {
+        /// Stable workflow step identity.
+        step: StepId,
+        /// Output key declared by that step's action contract.
+        output: StepOutputName,
+    },
+    /// Exact field of the GitHub Actions `job` context.
+    JobContext {
+        /// Supported job-context output field.
+        context: JobOutputContext,
+    },
+}
+
+/// Supported GitHub Actions job-context output fields.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum JobOutputContext {
+    /// `job.check_run_id`, available on github.com-hosted Actions.
+    CheckRunId,
 }
 
 impl JobOutput {
@@ -67,9 +87,20 @@ impl JobOutput {
     pub const fn task_report_artifact_id() -> Self {
         Self {
             name: JobOutputName::TaskReportArtifactId,
-            source: JobOutputSource {
+            source: JobOutputSource::Step {
                 step: StepId::CrateReportUpload,
                 output: StepOutputName::ArtifactId,
+            },
+        }
+    }
+
+    /// Expose the current job's GitHub Check Run ID to direct dependents.
+    #[must_use]
+    pub const fn task_report_check_run_id() -> Self {
+        Self {
+            name: JobOutputName::TaskReportCheckRunId,
+            source: JobOutputSource::JobContext {
+                context: JobOutputContext::CheckRunId,
             },
         }
     }
@@ -77,11 +108,18 @@ impl JobOutput {
     /// Render the one validated source expression used in workflow YAML.
     #[must_use]
     pub fn expression(&self) -> String {
-        format!(
-            "${{{{ steps.{}.outputs.{} }}}}",
-            self.source.step.as_str(),
-            self.source.output.as_str()
-        )
+        match self.source {
+            JobOutputSource::Step { step, output } => {
+                format!(
+                    "${{{{ steps.{}.outputs.{} }}}}",
+                    step.as_str(),
+                    output.as_str()
+                )
+            }
+            JobOutputSource::JobContext {
+                context: JobOutputContext::CheckRunId,
+            } => "${{ job.check_run_id }}".to_owned(),
+        }
     }
 }
 
@@ -101,15 +139,32 @@ pub(crate) fn validate_job_outputs(
     if report_uploads.is_empty() && outputs.is_empty() {
         return Ok(());
     }
-    if report_uploads.len() != 1 || outputs.len() != 1 {
+    if report_uploads.len() != 1 || outputs.is_empty() || outputs.len() > 2 {
         return Err(invalid(job_id, "report_output_count"));
     }
-    let expected = JobOutput::task_report_artifact_id();
-    if outputs[0] != expected {
+    let artifact_outputs: Vec<&JobOutput> = outputs
+        .iter()
+        .filter(|output| output.name == JobOutputName::TaskReportArtifactId)
+        .collect();
+    let check_run_outputs: Vec<&JobOutput> = outputs
+        .iter()
+        .filter(|output| output.name == JobOutputName::TaskReportCheckRunId)
+        .collect();
+    if artifact_outputs.len() != 1 || check_run_outputs.len() > 1 {
+        return Err(invalid(job_id, "report_output_count"));
+    }
+    let expected_artifact = JobOutput::task_report_artifact_id();
+    if artifact_outputs[0] != &expected_artifact {
         return Err(invalid(job_id, "report_output_source_mismatch"));
     }
+    if check_run_outputs
+        .first()
+        .is_some_and(|output| **output != JobOutput::task_report_check_run_id())
+    {
+        return Err(invalid(job_id, "report_check_run_output_source_mismatch"));
+    }
     let source_exists = steps.iter().any(|step| {
-        step.id == Some(expected.source.step) && step.role == Some(StepRole::CrateReportUpload)
+        step.id == Some(StepId::CrateReportUpload) && step.role == Some(StepRole::CrateReportUpload)
     });
     if !source_exists {
         return Err(invalid(job_id, "report_output_step_missing"));
@@ -175,6 +230,38 @@ mod tests {
     }
 
     #[test]
+    fn check_run_output_is_a_typed_job_context_source() {
+        let output = JobOutput::task_report_check_run_id();
+        assert_eq!(output.name.as_str(), "task_report_check_run_id");
+        assert_eq!(output.expression(), "${{ job.check_run_id }}");
+        assert_eq!(
+            serde_json::to_value(output).expect("typed output serializes"),
+            serde_json::json!({
+                "name": "task_report_check_run_id",
+                "source": { "context": "check_run_id" }
+            })
+        );
+    }
+
+    #[test]
+    fn legacy_artifact_only_output_shape_still_deserializes_and_validates() {
+        let legacy = serde_json::json!({
+            "name": "task_report_artifact_id",
+            "source": {
+                "step": "crate-report-upload",
+                "output": "artifact-id"
+            }
+        });
+        let output: JobOutput =
+            serde_json::from_value(legacy.clone()).expect("legacy output deserializes");
+        assert_eq!(
+            serde_json::to_value(&output).expect("legacy output serializes"),
+            legacy
+        );
+        assert!(validate_job_outputs(&[output], &[report_upload()], "legacy-task").is_ok());
+    }
+
+    #[test]
     fn job_output_requires_one_matching_upload_step() {
         let output = JobOutput::task_report_artifact_id();
         let step = report_upload();
@@ -186,9 +273,42 @@ mod tests {
             )
             .is_ok()
         );
+        let check_run = JobOutput::task_report_check_run_id();
+        assert!(
+            validate_job_outputs(
+                &[output.clone(), check_run.clone()],
+                std::slice::from_ref(&step),
+                "rust-demo"
+            )
+            .is_ok()
+        );
         assert!(validate_job_outputs(&[], &[], "lint").is_ok());
         assert!(validate_job_outputs(std::slice::from_ref(&output), &[], "rust-demo").is_err());
+        assert!(
+            validate_job_outputs(
+                std::slice::from_ref(&check_run),
+                &[step.clone()],
+                "rust-demo"
+            )
+            .is_err()
+        );
         assert!(validate_job_outputs(&[], std::slice::from_ref(&step), "rust-demo").is_err());
+        assert!(
+            validate_job_outputs(
+                &[output.clone(), output.clone()],
+                &[step.clone()],
+                "rust-demo"
+            )
+            .is_err()
+        );
+        assert!(
+            validate_job_outputs(
+                &[check_run.clone(), check_run],
+                &[step.clone()],
+                "rust-demo"
+            )
+            .is_err()
+        );
         assert!(
             validate_job_outputs(
                 std::slice::from_ref(&output),
@@ -199,7 +319,26 @@ mod tests {
         );
 
         let mut wrong_source = output;
-        wrong_source.source.step = StepId::Plan;
+        wrong_source.source = JobOutputSource::Step {
+            step: StepId::Plan,
+            output: StepOutputName::ArtifactId,
+        };
         assert!(validate_job_outputs(&[wrong_source], &[step], "rust-demo").is_err());
+
+        let wrong_context = JobOutput {
+            name: JobOutputName::TaskReportCheckRunId,
+            source: JobOutputSource::Step {
+                step: StepId::CrateReportUpload,
+                output: StepOutputName::ArtifactId,
+            },
+        };
+        assert!(
+            validate_job_outputs(
+                &[JobOutput::task_report_artifact_id(), wrong_context],
+                &[report_upload()],
+                "rust-demo"
+            )
+            .is_err()
+        );
     }
 }

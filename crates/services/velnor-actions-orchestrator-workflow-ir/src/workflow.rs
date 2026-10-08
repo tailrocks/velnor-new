@@ -248,7 +248,10 @@ fn insert_format_report_steps(plan: &mut Job, reports: Vec<Step>) {
     if reports.iter().any(|step| {
         step.id == Some(StepId::CrateReportUpload) && step.role == Some(StepRole::CrateReportUpload)
     }) {
-        plan.outputs = vec![JobOutput::task_report_artifact_id()];
+        plan.outputs = vec![
+            JobOutput::task_report_artifact_id(),
+            JobOutput::task_report_check_run_id(),
+        ];
     }
     let at = plan
         .steps

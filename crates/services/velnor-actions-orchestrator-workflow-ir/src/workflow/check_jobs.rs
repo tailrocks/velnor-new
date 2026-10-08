@@ -61,7 +61,10 @@ fn check_job(
             problem: format!("check_timeout_out_of_range:{}", check.id),
         })?;
     Ok(Job {
-        outputs: vec![JobOutput::task_report_artifact_id()],
+        outputs: vec![
+            JobOutput::task_report_artifact_id(),
+            JobOutput::task_report_check_run_id(),
+        ],
         display_name: format!("Check / {}", check.id),
         runs_on: check.runner.label.clone(),
         check_runner: Some(check.runner.clone()),
