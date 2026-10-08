@@ -56,8 +56,8 @@ fn elected_save_stays_on_the_winner_job() {
 fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
     let setup = crate::setup::MiseSetup {
         uses: "jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca".to_owned(),
-        version: "2026.10.4".to_owned(),
-        sha256: "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75".to_owned(),
+        version: "2026.10.5".to_owned(),
+        sha256: "8a223b5f8ca71100220a3e5bef259614c348e7b1d80e6b15c2a9c9aa3affe5e4".to_owned(),
     };
     let setup_step = crate::setup::mise_setup_step(&setup).expect("cache-disabled setup");
     let mut jobs = paired(&[setup_step, echo_step(0, "same tool work")]);
@@ -122,8 +122,8 @@ fn tools_cache_prelude(
 ) -> Result<Vec<velnor_actions_contract::Step>, crate::RenderError> {
     let setup = crate::setup::MiseSetup {
         uses: "jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca".to_owned(),
-        version: "2026.10.4".to_owned(),
-        sha256: "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75".to_owned(),
+        version: "2026.10.5".to_owned(),
+        sha256: "8a223b5f8ca71100220a3e5bef259614c348e7b1d80e6b15c2a9c9aa3affe5e4".to_owned(),
     };
     let specs = ["actionlint@1.7.12".to_owned()];
     let payload = crate::cache_p08::ToolsCachePayload::new(crate::cache_p08::ToolsCacheInputs {

@@ -22,6 +22,6 @@ fn policy_drift_fails_mirror_check() {
     assert_ne!(text, drifted);
     let err = verify_version_policy(&drifted, &ToolCatalog::pinned());
     assert!(err.is_err_and(|err| err.to_string().contains("tool:rust")));
-    let missing = text.replace("mise = \"2026.10.4\"\n", "");
+    let missing = text.replace("mise = \"2026.10.5\"\n", "");
     assert!(verify_version_policy(&missing, &ToolCatalog::pinned()).is_err());
 }
