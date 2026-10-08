@@ -41,7 +41,8 @@ fn assert_lane_shells(document: &Yaml, minimum_per_lane: usize) {
     };
     let mut hosted = 0;
     let mut scale_set = 0;
-    let mut containers = 0;
+    let mut hosted_containers = 0;
+    let mut scale_set_containers = 0;
     for (id, job) in jobs {
         let Yaml::Map(fields) = job else {
             panic!("job {id} is not a mapping");
@@ -51,9 +52,6 @@ fn assert_lane_shells(document: &Yaml, minimum_per_lane: usize) {
         };
         let defaults = fields.iter().find(|(key, _)| key == "defaults");
         let has_container = fields.iter().any(|(key, _)| key == "container");
-        if has_container {
-            containers += 1;
-        }
         let expected_shell = if has_container {
             velnor_actions_workflow_tree::runs_on::CONTAINER_RUN_SHELL
         } else {
@@ -67,6 +65,9 @@ fn assert_lane_shells(document: &Yaml, minimum_per_lane: usize) {
                     "{id}"
                 );
                 scale_set += 1;
+                if has_container {
+                    scale_set_containers += 1;
+                }
                 assert_eq!(
                     defaults.map(|(_, value)| value),
                     Some(&Yaml::Map(vec![(
@@ -79,6 +80,7 @@ fn assert_lane_shells(document: &Yaml, minimum_per_lane: usize) {
             Yaml::Str(label) if label == "ubuntu-26.04" => {
                 hosted += 1;
                 if has_container {
+                    hosted_containers += 1;
                     assert_eq!(
                         defaults.map(|(_, value)| value),
                         Some(&Yaml::Map(vec![(
@@ -102,10 +104,8 @@ fn assert_lane_shells(document: &Yaml, minimum_per_lane: usize) {
     assert!(scale_set >= minimum_per_lane, "missing scale-set jobs");
     assert!(hosted >= minimum_per_lane, "missing hosted jobs");
     if minimum_per_lane == 2 {
-        assert_eq!(
-            containers, 2,
-            "container qualification must cover both lanes"
-        );
+        assert!(hosted_containers > 0, "missing hosted container job");
+        assert!(scale_set_containers > 0, "missing scale-set container job");
     }
 }
 

@@ -215,7 +215,7 @@ fn docker_action(id: &str, name: &str, runner: &RunnerSpec, parent: &str) -> (St
     )
 }
 
-fn docker_endpoint(runner: &RunnerSpec) -> &'static str {
+pub(super) fn docker_endpoint(runner: &RunnerSpec) -> &'static str {
     if runner.lane == RunnerLane::Hosted {
         HOSTED_DOCKER_ENDPOINT
     } else {
@@ -227,7 +227,7 @@ fn docker_workspace_probe(runner: &RunnerSpec) -> String {
     DOCKER_WORKSPACE.replace("{endpoint}", docker_endpoint(runner))
 }
 
-fn docker_provider_step(runner: &RunnerSpec) -> Yaml {
+pub(super) fn docker_provider_step(runner: &RunnerSpec) -> Yaml {
     let (name, command) = if runner.lane == RunnerLane::Hosted {
         ("Require GitHub-hosted stock Docker", HOSTED_DOCKER)
     } else {

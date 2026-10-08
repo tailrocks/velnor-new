@@ -3,13 +3,14 @@
 
 use super::super::features::{checkout_step, gated, lane_base, redis_service, run_step};
 use super::steps::uses_with;
+use super::topology::{docker_endpoint, docker_provider_step};
 use super::{Extras, RunnerSpec, both};
 use velnor_actions_workflow_tree::job_entries::{CHECKOUT_USES, finish};
 use velnor_actions_workflow_tree::yaml::Yaml;
 
-const COMPOSE_UP: &str = "docker compose -f qualification/compose/stack.yml up -d --wait";
-const COMPOSE_PROOF: &str = "docker compose -f qualification/compose/stack.yml ps --services --status running > \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx api \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx db \"$RUNNER_TEMP/g4-compose-ps\"";
-const COMPOSE_DOWN: &str = "docker compose -f qualification/compose/stack.yml down --volumes";
+const COMPOSE_UP: &str = "docker --host {endpoint} compose --project-name \"velnor-g4-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}\" -f qualification/compose/stack.yml up -d --wait";
+const COMPOSE_PROOF: &str = "docker --host {endpoint} compose --project-name \"velnor-g4-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}\" -f qualification/compose/stack.yml ps --services --status running > \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx api \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx db \"$RUNNER_TEMP/g4-compose-ps\"";
+const COMPOSE_DOWN: &str = "docker --host {endpoint} compose --project-name \"velnor-g4-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}\" -f qualification/compose/stack.yml down --volumes";
 const BIND_RUN: &str = "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\" && docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.22 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\" && grep -qx bind-ok \"$RUNNER_TEMP/g4-bind-out\"";
 const SERVICE_PROBE: &str = "i=0; while [ \"$i\" -lt 30 ]; do nc -z -w 1 127.0.0.1 6379 && break; i=$((i+1)); sleep 1; done; nc -z -w 1 127.0.0.1 6379 && echo service-up && sleep 900";
 const TC_RUN: &str =
@@ -52,14 +53,7 @@ fn secret_steps() -> Vec<Yaml> {
 
 fn paired(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     let mut out = Vec::new();
-    out.extend(both(
-        "compose",
-        "Compose",
-        hosted,
-        scale,
-        compose_steps(),
-        Extras::default(),
-    ));
+    out.extend(compose_jobs(hosted, scale));
     out.extend(both(
         "bind",
         "Bind",
@@ -210,14 +204,52 @@ fn service_extras() -> Extras {
     }
 }
 
-fn compose_steps() -> Vec<Yaml> {
+fn compose_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     vec![
+        gated(
+            finish(
+                "compose-hosted",
+                lane_base("Compose / GitHub hosted", hosted, 20),
+                compose_steps_for(hosted),
+            ),
+            "inputs.mode == 'compose'",
+        ),
+        gated(
+            finish(
+                "compose-scale-set",
+                lane_base("Compose / Velnor Scale Set", scale, 20),
+                compose_steps_for(scale),
+            ),
+            "inputs.mode == 'compose'",
+        ),
+    ]
+}
+
+fn compose_steps_for(runner: &RunnerSpec) -> Vec<Yaml> {
+    let endpoint = docker_endpoint(runner);
+    vec![
+        docker_provider_step(runner),
         checkout_step(),
-        run_step("Start compose", COMPOSE_UP),
-        run_step("Prove both services", COMPOSE_PROOF),
-        run_step("Remove compose", COMPOSE_DOWN),
+        run_step("Start compose", &compose_command(COMPOSE_UP, endpoint)),
+        run_step(
+            "Prove both services",
+            &compose_command(COMPOSE_PROOF, endpoint),
+        ),
+        always_run_step("Remove compose", &compose_command(COMPOSE_DOWN, endpoint)),
         run_step("Record compose", "echo compose-ok"),
     ]
+}
+
+fn compose_command(command: &str, endpoint: &str) -> String {
+    command.replace("{endpoint}", endpoint)
+}
+
+fn always_run_step(name: &str, run: &str) -> Yaml {
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str(name)),
+        ("if".to_owned(), Yaml::str("always()")),
+        ("run".to_owned(), Yaml::str(run)),
+    ])
 }
 
 fn bind_steps() -> Vec<Yaml> {

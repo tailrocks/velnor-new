@@ -275,16 +275,19 @@
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
+      - name: Require GitHub-hosted stock Docker
+        run: "set -euo pipefail\ntest -z \"${DOCKER_CONTEXT:-}\"\ncase \"${DOCKER_HOST:-}\" in\n  \"\"|unix:///var/run/docker.sock) ;;\n  *) printf '%s\\n' 'hosted Docker endpoint is not the stock socket' >&2; exit 1 ;;\nesac\ntest -S /var/run/docker.sock\ndocker --host unix:///var/run/docker.sock info >/dev/null"
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
       - name: Start compose
-        run: docker compose -f qualification/compose/stack.yml up -d --wait
+        run: "docker --host unix:///var/run/docker.sock compose --project-name \"velnor-g4-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}\" -f qualification/compose/stack.yml up -d --wait"
       - name: Prove both services
-        run: "docker compose -f qualification/compose/stack.yml ps --services --status running > \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx api \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx db \"$RUNNER_TEMP/g4-compose-ps\""
+        run: "docker --host unix:///var/run/docker.sock compose --project-name \"velnor-g4-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}\" -f qualification/compose/stack.yml ps --services --status running > \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx api \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx db \"$RUNNER_TEMP/g4-compose-ps\""
       - name: Remove compose
-        run: docker compose -f qualification/compose/stack.yml down --volumes
+        if: always()
+        run: "docker --host unix:///var/run/docker.sock compose --project-name \"velnor-g4-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}\" -f qualification/compose/stack.yml down --volumes"
       - name: Record compose
         run: echo compose-ok
   compose-scale-set:
@@ -296,16 +299,19 @@
       run:
         shell: bash -e {0}
     steps:
+      - name: Require Velnor private DinD socket
+        run: "set -euo pipefail\ntest -z \"${DOCKER_CONTEXT:-}\"\ntest \"${DOCKER_HOST:-}\" = \"unix:///run/docker/docker.sock\"\ntest -S /run/docker/docker.sock\ntest ! -e /var/run/docker.sock\ndocker --host unix:///run/docker/docker.sock info >/dev/null"
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
       - name: Start compose
-        run: docker compose -f qualification/compose/stack.yml up -d --wait
+        run: "docker --host unix:///run/docker/docker.sock compose --project-name \"velnor-g4-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}\" -f qualification/compose/stack.yml up -d --wait"
       - name: Prove both services
-        run: "docker compose -f qualification/compose/stack.yml ps --services --status running > \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx api \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx db \"$RUNNER_TEMP/g4-compose-ps\""
+        run: "docker --host unix:///run/docker/docker.sock compose --project-name \"velnor-g4-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}\" -f qualification/compose/stack.yml ps --services --status running > \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx api \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx db \"$RUNNER_TEMP/g4-compose-ps\""
       - name: Remove compose
-        run: docker compose -f qualification/compose/stack.yml down --volumes
+        if: always()
+        run: "docker --host unix:///run/docker/docker.sock compose --project-name \"velnor-g4-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}\" -f qualification/compose/stack.yml down --volumes"
       - name: Record compose
         run: echo compose-ok
   bind-hosted:
