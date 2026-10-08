@@ -17,6 +17,7 @@ mod process;
 #[path = "discovery_curl_readers.rs"]
 mod readers;
 
+#[cfg(test)]
 pub(super) fn perform_curl(
     executable: &str,
     url: &str,
@@ -58,6 +59,7 @@ pub(super) fn perform_curl_cancellable(
     )
 }
 
+#[cfg(test)]
 fn perform_curl_cancellable_with_permit(
     executable: &str,
     url: &str,
