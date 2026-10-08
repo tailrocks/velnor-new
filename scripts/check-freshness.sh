@@ -23,8 +23,8 @@
 #                                   [--with-advisories]
 #   --root DIR         validate a fixture tree instead of this repository.
 #   --check-upstream   bounded read-only upstream probe: refetch each row's
-#                      latest stable release (10 s timeout and separate
-#                      512 KiB encoded/decompressed response caps) and fail
+#                      latest stable release (10 s absolute fetch deadline,
+#                      with separate 512 KiB encoded/decompressed caps) and fail
 #                      stale pins and lookup failures.
 #                      Writes nothing; run by the generated weekly
 #                      `.github/workflows/freshness.yml`, never gating builds.
@@ -95,8 +95,8 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import tomllib
-import urllib.request
 
 root, inv_path = sys.argv[1], sys.argv[2]
 check_upstream = sys.argv[3] == "1"
@@ -1033,33 +1033,10 @@ else:
              "runs for every Cargo workspace in CI; --with-advisories runs it here")
 
 # --- Bounded read-only upstream probe (weekly freshness.yml; writes nothing).
-FETCH_TIMEOUT = 10
+FETCH_TIMEOUT = 10.0
 FETCH_ENCODED_CAP = 512 * 1024
 FETCH_DECOMPRESSED_CAP = 512 * 1024
 FETCH_CHUNK_SIZE = 64 * 1024
-
-
-def response_encoding(response):
-    values = response.headers.get_all("Content-Encoding", [])
-    encodings = [part.strip().lower() for value in values
-                 for part in value.split(",")]
-    if not encodings:
-        return "identity"
-    if len(encodings) != 1 or encodings[0] not in ("identity", "gzip"):
-        raise ValueError(f"unsupported Content-Encoding {encodings!r}")
-    return encodings[0]
-
-
-def read_bounded(response, cap, label):
-    body = bytearray()
-    while True:
-        remaining = cap + 1 - len(body)
-        chunk = response.read(min(FETCH_CHUNK_SIZE, remaining))
-        if not chunk:
-            return bytes(body)
-        body.extend(chunk)
-        if len(body) > cap:
-            raise ValueError(f"{label} response exceeds {cap} bytes")
 
 
 def decode_gzip(encoded):
@@ -1077,14 +1054,71 @@ def decode_gzip(encoded):
                     f"{FETCH_DECOMPRESSED_CAP} bytes")
 
 
+FETCH_WORKER = r"""
+import sys
+import urllib.request
+
+url = sys.argv[1]
+timeout = float(sys.argv[2])
+encoded_cap = int(sys.argv[3])
+request = urllib.request.Request(
+    url, headers={"User-Agent": "velnor-freshness-probe",
+                  "Accept": "application/json",
+                  "Accept-Encoding": "gzip, identity"})
+try:
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        values = response.headers.get_all("Content-Encoding", [])
+        encodings = [part.strip().lower() for value in values
+                     for part in value.split(",")]
+        if not encodings:
+            encoding = "identity"
+        elif len(encodings) == 1 and encodings[0] in ("identity", "gzip"):
+            encoding = encodings[0]
+        else:
+            raise ValueError(f"unsupported Content-Encoding {encodings!r}")
+        encoded = response.read(encoded_cap + 1)
+        if len(encoded) > encoded_cap:
+            raise ValueError(
+                f"encoded response exceeds {encoded_cap} bytes")
+    sys.stdout.buffer.write(encoding.encode("ascii") + b"\n" + encoded)
+except Exception as err:
+    print(f"{type(err).__name__}: {err}", file=sys.stderr)
+    sys.exit(1)
+"""
+
+
+def fetch_encoded(url, deadline):
+    process = subprocess.Popen(
+        [sys.executable, "-c", FETCH_WORKER, url, str(FETCH_TIMEOUT),
+         str(FETCH_ENCODED_CAP)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        process.kill()
+        process.communicate()
+        raise ValueError(
+            f"absolute fetch deadline exceeded after {FETCH_TIMEOUT:g}s")
+    try:
+        stdout, stderr = process.communicate(timeout=remaining)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.communicate()
+        raise ValueError(
+            f"absolute fetch deadline exceeded after {FETCH_TIMEOUT:g}s")
+    if process.returncode != 0:
+        detail = stderr.decode("utf-8", errors="replace").strip()
+        raise ValueError(detail or "HTTP worker failed")
+    try:
+        encoding, encoded = stdout.split(b"\n", 1)
+        encoding = encoding.decode("ascii")
+    except (ValueError, UnicodeDecodeError) as err:
+        raise ValueError("HTTP worker returned malformed data") from err
+    return encoding, encoded
+
+
 def fetch_text(url):
-    request = urllib.request.Request(
-        url, headers={"User-Agent": "velnor-freshness-probe",
-                      "Accept": "application/json",
-                      "Accept-Encoding": "gzip, identity"})
-    with urllib.request.urlopen(request, timeout=FETCH_TIMEOUT) as response:
-        encoding = response_encoding(response)
-        encoded = read_bounded(response, FETCH_ENCODED_CAP, "encoded")
+    deadline = time.monotonic() + FETCH_TIMEOUT
+    encoding, encoded = fetch_encoded(url, deadline)
     if encoding == "gzip":
         body = decode_gzip(encoded)
     else:
@@ -1093,6 +1127,9 @@ def fetch_text(url):
             raise ValueError(
                 f"decompressed response exceeds "
                 f"{FETCH_DECOMPRESSED_CAP} bytes")
+    if time.monotonic() > deadline:
+        raise ValueError(
+            f"absolute fetch deadline exceeded after {FETCH_TIMEOUT:g}s")
     return body.decode("utf-8", errors="replace")
 
 
