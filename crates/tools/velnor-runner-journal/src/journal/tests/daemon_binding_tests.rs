@@ -279,6 +279,12 @@ async fn set_v11_schema(path: &std::path::Path) -> Result<(), String> {
     conn.execute("DROP TABLE linux_launch_daemon_bindings", ())
         .await
         .map_err(|error| error.to_string())?;
+    conn.execute("DROP TABLE linux_launch_daemon_adoptions", ())
+        .await
+        .map_err(|error| error.to_string())?;
+    conn.execute("DROP TABLE linux_launch_started_observations", ())
+        .await
+        .map_err(|error| error.to_string())?;
     conn.execute("PRAGMA user_version = 11", ())
         .await
         .map_err(|error| error.to_string())?;

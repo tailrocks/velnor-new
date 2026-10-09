@@ -2,8 +2,10 @@
 
 mod assigned;
 mod available;
+mod cleanup;
 mod inventory;
 mod lifecycle;
+mod recovery;
 mod snapshot;
 mod trust;
 
@@ -18,6 +20,8 @@ use velnor_runner_journal::journal::Journal;
 use super::{ActiveSession, ShutdownGate, cutoff, observe_cutoff, protocol_call};
 use crate::linux::{LinuxLaunchContext, LinuxLaunchCredentials};
 
+pub(super) use recovery::RecoveryBudget;
+
 pub(super) struct BatchWork<'a> {
     pub(super) context: &'a LinuxLaunchContext,
     pub(super) journal: &'a Journal,
@@ -25,7 +29,36 @@ pub(super) struct BatchWork<'a> {
     pub(super) docker: &'a bollard::Docker,
     pub(super) active: &'a ActiveSession,
     pub(super) credentials: &'a LinuxLaunchCredentials,
+    pub(super) recovery_budget: &'a mut RecoveryBudget,
     pub(super) shutdown: ShutdownGate<'a>,
+}
+
+pub(super) async fn recover_after_empty(mut work: BatchWork<'_>) -> bool {
+    observe_cutoff(
+        work.context,
+        work.journal,
+        work.shutdown.receiver,
+        work.shutdown.cutoff,
+    )
+    .await;
+    if work.shutdown.cutoff.is_some() {
+        return false;
+    }
+    let Some(completed) = recovery::recover_pending(&mut work).await else {
+        return false;
+    };
+    if completed.is_empty() {
+        return true;
+    }
+    Box::pin(cleanup::cleanup_completed(
+        work.context,
+        work.journal,
+        work.diagnostics,
+        &work.active.docker_binding,
+        &mut work.shutdown,
+        &completed,
+    ))
+    .await
 }
 
 pub(super) async fn require_before_pair_start(
@@ -90,11 +123,15 @@ pub(super) async fn process_batch(mut work: BatchWork<'_>, batch: ParsedTrustBat
         work.shutdown.cutoff,
     )
     .await;
-    let Some(Some(completed)) = persisted else {
+    let Some(Some(mut completed)) = persisted else {
         return false;
     };
+    let Some(recovered) = recovery::recover_pending(&mut work).await else {
+        return false;
+    };
+    completed.extend(recovered);
     if !completed.is_empty()
-        && !Box::pin(cleanup_completed(
+        && !Box::pin(cleanup::cleanup_completed(
             work.context,
             work.journal,
             work.diagnostics,
@@ -343,52 +380,4 @@ async fn batch_is_current(active: &ActiveSession, batch: &ParsedTrustBatch) -> b
     })
     .await;
     matches!(session_id, Ok(id) if batch.source_session_id() == Some(id.as_str()))
-}
-
-async fn cleanup_completed(
-    context: &LinuxLaunchContext,
-    journal: &Journal,
-    diagnostics: &DiagnosticsStore,
-    docker_binding: &velnor_runner_host::DockerDaemonBinding,
-    shutdown: &mut ShutdownGate<'_>,
-    completed: &[i64],
-) -> bool {
-    let local_deadline = Instant::now()
-        .checked_add(context.drain_timeout())
-        .unwrap_or_else(Instant::now);
-    let deadline = shutdown
-        .cutoff
-        .map_or(local_deadline, |cutoff| cutoff.min(local_deadline));
-    let cleanup = Box::pin(cutoff::bounded_persisting(
-        journal,
-        shutdown,
-        context.drain_timeout(),
-        Some(local_deadline),
-        super::super::shutdown::cleanup_terminal_workers(
-            journal,
-            diagnostics,
-            docker_binding,
-            deadline,
-        ),
-    ))
-    .await;
-    if !matches!(cleanup, Some(Ok(_))) {
-        return false;
-    }
-    let rows = cutoff::bounded_persisting(
-        journal,
-        shutdown,
-        context.drain_timeout(),
-        Some(local_deadline),
-        journal.rows(),
-    )
-    .await;
-    let Some(Ok(rows)) = rows else {
-        return false;
-    };
-    completed.iter().all(|id| {
-        rows.iter()
-            .find(|row| row.id == *id)
-            .is_some_and(|row| row.cleanup_proven)
-    })
 }

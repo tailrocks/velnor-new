@@ -10,6 +10,7 @@ mod auth_intent;
 mod capacity;
 mod cleanup;
 mod controller;
+mod daemon_adoption;
 mod daemon_binding;
 mod events;
 mod intent;
@@ -34,6 +35,7 @@ pub use cleanup::{
     CleanupStopPolicy, OuterNetworkCleanupState, OuterNetworkRemovalProof, PhysicalCleanupProof,
     PostActionDisposition, RunnerStartObservation,
 };
+pub use daemon_adoption::LegacyLaunchAdoption;
 pub use daemon_binding::JournalDockerDaemonBinding;
 pub use lifecycle::RunnerStartIntent;
 pub use population::{

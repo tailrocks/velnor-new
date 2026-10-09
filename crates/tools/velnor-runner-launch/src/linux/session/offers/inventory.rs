@@ -72,7 +72,10 @@ async fn held_rows_bound_to(
     TokioInstant::now() < deadline
 }
 
-fn inventory_matches_rows(resources: &[OwnedDockerResource], rows: &[IntentRow]) -> bool {
+pub(super) fn inventory_matches_rows(
+    resources: &[OwnedDockerResource],
+    rows: &[IntentRow],
+) -> bool {
     if resources.iter().any(|resource| {
         let mut matching = rows.iter().filter(|row| {
             row.kind == "launch"

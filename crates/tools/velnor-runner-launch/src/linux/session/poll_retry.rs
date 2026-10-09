@@ -125,7 +125,7 @@ pub(super) fn classify_poll_result(
     }
 }
 
-pub(super) async fn wait_before_next_poll(
+pub(in crate::linux::session) async fn wait_before_next_poll(
     journal: &Journal,
     shutdown: &mut watch::Receiver<Option<Instant>>,
     cutoff: &mut Option<Instant>,

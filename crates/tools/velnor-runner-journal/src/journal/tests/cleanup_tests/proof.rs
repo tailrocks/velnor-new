@@ -24,6 +24,10 @@ pub(super) struct TestProof {
     child_networks: Vec<String>,
     absent_volumes: Vec<String>,
     post_actions: PostActionDisposition,
+    observed_runner_id: i64,
+    observed_job_id: String,
+    observed_attempt: Option<i64>,
+    observed_actions_job_id: Option<i64>,
 }
 
 impl TestProof {
@@ -45,7 +49,25 @@ impl TestProof {
             child_networks: vec![CHILD_NETWORK_ID.to_owned()],
             absent_volumes,
             post_actions,
+            observed_runner_id: 99,
+            observed_job_id: "observed-job".to_owned(),
+            observed_attempt: None,
+            observed_actions_job_id: None,
         }
+    }
+
+    pub(super) fn with_observed_actions(
+        mut self,
+        runner_id: i64,
+        scale_set_job_id: &str,
+        attempt: i64,
+        actions_job_id: i64,
+    ) -> Self {
+        self.observed_runner_id = runner_id;
+        self.observed_job_id = scale_set_job_id.to_owned();
+        self.observed_attempt = Some(attempt);
+        self.observed_actions_job_id = Some(actions_job_id);
+        self
     }
 
     pub(super) fn identity(&self) -> CleanupCheckpointIdentity {
@@ -58,10 +80,10 @@ impl TestProof {
             outer_network_name: Some(self.network_name.clone()),
             outer_network_id: Some(OUTER_NETWORK_ID.to_owned()),
             observed_workflow_run_id: Some(45),
-            observed_attempt: None,
-            observed_job_id: Some("observed-job".to_owned()),
-            observed_actions_job_id: None,
-            observed_runner_id: Some(99),
+            observed_attempt: self.observed_attempt,
+            observed_job_id: Some(self.observed_job_id.clone()),
+            observed_actions_job_id: self.observed_actions_job_id,
+            observed_runner_id: Some(self.observed_runner_id),
             observed_runner_name: Some(self.runner_name.clone()),
         }
     }
@@ -107,16 +129,16 @@ impl PhysicalCleanupProof for TestProof {
         Some(45)
     }
     fn observed_attempt(&self) -> Option<i64> {
-        None
+        self.observed_attempt
     }
     fn observed_job_id(&self) -> Option<&str> {
-        Some("observed-job")
+        Some(&self.observed_job_id)
     }
     fn observed_actions_job_id(&self) -> Option<i64> {
-        None
+        self.observed_actions_job_id
     }
     fn observed_runner_id(&self) -> Option<i64> {
-        Some(99)
+        Some(self.observed_runner_id)
     }
     fn observed_runner_name(&self) -> Option<&str> {
         Some(&self.runner_name)

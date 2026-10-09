@@ -79,6 +79,71 @@ async fn only_correlated_remote_completion_resolves_a_launch() -> Result<(), Str
 }
 
 #[tokio::test]
+async fn started_identity_and_marker_roll_back_as_one_event() -> Result<(), String> {
+    let scratch = Scratch::new("started-event-atomic").map_err(|error| error.to_string())?;
+    let path = scratch.file();
+    let journal = Journal::open(&path)
+        .await
+        .map_err(|error| error.to_string())?;
+    let (launch_id, created) = journal
+        .begin_launch("started-event-atomic")
+        .await
+        .map_err(|error| error.to_string())?;
+    assert!(created);
+    journal
+        .bind_launch_identity(launch_id, None, None, None, None, "v-atomic")
+        .await
+        .map_err(|error| error.to_string())?;
+    journal
+        .finish(launch_id, Outcome::Done)
+        .await
+        .map_err(|error| error.to_string())?;
+
+    let database = turso::Builder::new_local(
+        path.to_str()
+            .ok_or_else(|| "journal path was not UTF-8".to_owned())?,
+    )
+    .build()
+    .await
+    .map_err(|error| error.to_string())?;
+    let conn = database.connect().map_err(|error| error.to_string())?;
+    conn.execute("DROP TABLE linux_launch_started_observations", ())
+        .await
+        .map_err(|error| error.to_string())?;
+    drop(conn);
+    drop(database);
+
+    assert!(matches!(
+        journal
+            .observe_runner_event(&runner_event(InnerKind::Started, "v-atomic", 88, "job", 45))
+            .await,
+        Err(HostError::Journal)
+    ));
+    let row = journal
+        .rows()
+        .await
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .find(|row| row.id == launch_id)
+        .ok_or_else(|| "launch row disappeared after failed event transaction".to_owned())?;
+    assert_eq!(row.github_runner_id, None);
+    assert_eq!(row.observed_job_id, None);
+    assert_eq!(row.observed_workflow_run_id, None);
+    assert!(!row.remote_terminal);
+    assert!(!row.cleanup_proven);
+    assert_eq!(
+        journal
+            .drain_snapshot()
+            .await
+            .map_err(|error| error.to_string())?
+            .occupied_launches,
+        1,
+        "a failed Started marker write must not release the launch slot"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn late_event_cannot_terminalize_a_reused_runner_generation() -> Result<(), String> {
     let scratch = Scratch::new("runner-generation-reuse").map_err(|error| error.to_string())?;
     let journal = Journal::open(&scratch.file())

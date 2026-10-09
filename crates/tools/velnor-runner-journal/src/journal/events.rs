@@ -56,6 +56,7 @@ struct RunnerEventIdentity<'a> {
     runner_id: String,
     job_id: &'a str,
     workflow_run_id: i64,
+    started: bool,
     completed: bool,
 }
 
@@ -94,6 +95,7 @@ impl<'a> RunnerEventIdentity<'a> {
             runner_id: runner_id.to_string(),
             job_id,
             workflow_run_id,
+            started: matches!(&event.kind, InnerKind::Started),
             completed,
         }))
     }
@@ -158,5 +160,18 @@ async fn persist_runner_event(
         .await
         .map_err(|_| HostError::Journal)?;
     one_row(changed)?;
+    if event.started {
+        let observed_at_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|_| HostError::Journal)?
+            .as_millis();
+        let observed_at_ms = i64::try_from(observed_at_ms).map_err(|_| HostError::Journal)?;
+        conn.execute(
+            "INSERT INTO linux_launch_started_observations (launch_id, observed_at_ms) VALUES (?1, ?2) ON CONFLICT (launch_id) DO NOTHING",
+            (id, observed_at_ms),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    }
     Ok(Some(id))
 }

@@ -7,6 +7,8 @@ use crate::reconcile::IntentRow;
 
 use super::{IntentState, Journal, Outcome, live_id, one_row, token_rejected};
 
+pub(super) const INTENT_COLUMNS: &str = "id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id, worker_volume, message_id, runner_request_id, requested_workflow_run_id, requested_job_id, runner_name, observed_job_id, observed_workflow_run_id, remote_terminal, effect_state, outer_network_name, outer_network_id, runner_start_state, observed_actions_attempt, observed_actions_job_id, observed_actions_conclusion";
+
 impl Journal {
     /// Insert a pending intent and commit before returning.
     ///
@@ -203,7 +205,7 @@ impl Journal {
         let conn = self.connection().await?;
         let mut query = conn
             .query(
-                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id, worker_volume, message_id, runner_request_id, requested_workflow_run_id, requested_job_id, runner_name, observed_job_id, observed_workflow_run_id, remote_terminal, effect_state, outer_network_name, outer_network_id, runner_start_state, observed_actions_attempt, observed_actions_job_id, observed_actions_conclusion FROM intents ORDER BY id",
+                &format!("SELECT {INTENT_COLUMNS} FROM intents ORDER BY id"),
                 (),
             )
             .await
@@ -287,7 +289,7 @@ async fn insert_live(
     Ok(conn.last_insert_rowid())
 }
 
-fn intent_row(row: &turso::Row) -> Result<IntentRow, HostError> {
+pub(super) fn intent_row(row: &turso::Row) -> Result<IntentRow, HostError> {
     let state_text: String = row.get(3).map_err(|_| HostError::Journal)?;
     let observed_actions_attempt: Option<i64> = row.get(21).map_err(|_| HostError::Journal)?;
     let observed_actions_job_id: Option<i64> = row.get(22).map_err(|_| HostError::Journal)?;
@@ -337,6 +339,28 @@ fn intent_row(row: &turso::Row) -> Result<IntentRow, HostError> {
         observed_actions_job_id,
         observed_actions_conclusion,
     })
+}
+
+pub(super) async fn read_intent_row(
+    conn: &turso::Connection,
+    id: i64,
+) -> Result<IntentRow, HostError> {
+    let mut rows = conn
+        .query(
+            &format!("SELECT {INTENT_COLUMNS} FROM intents WHERE id = ?1"),
+            [id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let row = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?;
+    if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
+        return Err(HostError::Journal);
+    }
+    intent_row(&row)
 }
 
 async fn same_ids(
