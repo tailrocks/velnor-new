@@ -12,6 +12,8 @@ mod cover_port;
 mod cover_types;
 mod merge_types;
 mod schema;
+mod scoped_compare;
+mod scoped_compare_join;
 mod shard_types;
 
 pub use changed_work::{changed_keys, member_changed};
@@ -23,4 +25,10 @@ pub use merge_types::{
     TaskReportCheckRunId, TaskReportOutputFanIn, TaskReportOutputOrigin, TaskReportProducerOutput,
 };
 pub use schema::{SCHEMA, check_schema};
+pub use scoped_compare::{
+    ActionsAttemptArtifactView, ActionsAttemptJobView, CompleteActionsAttemptView,
+    ScopedCompareError, ScopedCompareLane, ScopedCompareLaneBinding, ScopedCompareRequest,
+    ScopedCompareResult,
+};
+pub use scoped_compare_join::bind_scoped_compare;
 pub use shard_types::{ResourceLimits, ShardProof, TestIdentity, inventory_digest};
