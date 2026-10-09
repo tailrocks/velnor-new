@@ -31,3 +31,5 @@ mod impl_mise_surface;
 mod impl_mise_tofu_exec;
 #[path = "impl_mise_tofu_t27_realbin.rs"]
 mod impl_mise_tofu_t27_realbin;
+#[path = "impl_miserc_isolation.rs"]
+mod impl_miserc_isolation;
