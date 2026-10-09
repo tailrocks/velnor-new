@@ -271,7 +271,7 @@ fn unparseable_body_is_lookup_failure_never_current() -> Result<(), Box<dyn Erro
 #[test]
 fn stale_evidence_names_source_and_timestamp() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-stale")?;
-    let today = harness::days_iso(0)?;
+    let today = &fixture.checked_at;
     let old = harness::days_iso(-30)?;
     harness::mutate(
         &fixture.dir,

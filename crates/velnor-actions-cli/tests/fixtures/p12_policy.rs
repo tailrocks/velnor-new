@@ -163,7 +163,7 @@ fn stale_recorded_latest_fails() -> Result<(), Box<dyn Error>> {
 #[test]
 fn stale_evidence_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-evidence")?;
-    let today = harness::days_iso(0)?;
+    let today = &fixture.checked_at;
     let old = harness::days_iso(-30)?;
     harness::mutate(
         &fixture.dir,
