@@ -4,6 +4,8 @@ use super::super::types::RunnerImageIdentityView;
 
 const SHA256_PREFIX: &str = "sha256:";
 const REQUIRED_ADMISSION_PROFILE: &str = "ubuntu-26.04-amd64";
+const REQUIRED_SCALE_SET_NAME: &str = "ubuntu-26.04-scale-set";
+const REQUIRED_RUNNER_OS: &str = "ubuntu26";
 
 pub(super) fn has_required_admission_profile(
     image: &RunnerImageIdentityView<'_>,
@@ -20,9 +22,9 @@ pub(super) fn validate_image_profile(
     let runner_deadline = parse_utc_second(image.runner_requalify_by)?;
     let release_at = parse_utc_second(image.runner_release_published_at)?;
     if !safe_text(image.profile)
-        || image.profile != "ubuntu-24.04-amd64"
+        || image.profile != REQUIRED_ADMISSION_PROFILE
         || !safe_text(image.scale_set_name)
-        || expected_scale_set_name != "ubuntu-24.04-scale-set"
+        || expected_scale_set_name != REQUIRED_SCALE_SET_NAME
         || image.scale_set_name != expected_scale_set_name
         || image.platform != "linux/amd64"
         || !image_reference_matches(
@@ -33,7 +35,7 @@ pub(super) fn validate_image_profile(
         || !sha256_digest(image.runner_manifest_digest)
         || !sha256_digest(image.runner_index_digest)
         || !sha256_digest(image.runner_config_digest)
-        || image.runner_os != "ubuntu24"
+        || image.runner_os != REQUIRED_RUNNER_OS
         || !safe_text(image.runner_release_version)
         || !safe_text(image.runner_release_published_at)
         || !safe_text(image.runner_requalify_by)
@@ -143,73 +145,97 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
 mod tests {
     use std::time::{Duration, UNIX_EPOCH};
 
-    use super::{parse_utc_second, validate_image_profile};
+    use super::{
+        REQUIRED_ADMISSION_PROFILE, REQUIRED_RUNNER_OS, REQUIRED_SCALE_SET_NAME,
+        has_required_admission_profile, parse_utc_second, validate_image_profile,
+    };
     use crate::policy::RunnerImageIdentityView;
 
     const DIGEST: &str = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     fn image(deadline: &'static str) -> RunnerImageIdentityView<'static> {
+        // Synthetic policy fields only; these digests are not a published or
+        // production-admitted runner image.
         RunnerImageIdentityView {
-            profile: "ubuntu-24.04-amd64",
-            scale_set_name: "ubuntu-24.04-scale-set",
+            profile: REQUIRED_ADMISSION_PROFILE,
+            scale_set_name: REQUIRED_SCALE_SET_NAME,
             platform: "linux/amd64",
             runner_image: "ghcr.io/actions/actions-runner@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             runner_manifest_digest: DIGEST,
             runner_index_digest: DIGEST,
             runner_config_digest: DIGEST,
-            runner_os: "ubuntu24",
-            runner_release_version: "2.338.0",
-            runner_release_published_at: "2026-10-06T13:55:11Z",
+            runner_os: REQUIRED_RUNNER_OS,
+            runner_release_version: "999.0.0",
+            runner_release_published_at: "2098-10-06T13:55:11Z",
             runner_requalify_by: deadline,
             dind_image: "docker.io/library/docker@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             dind_manifest_digest: DIGEST,
             dind_index_digest: DIGEST,
             dind_config_digest: DIGEST,
-            dind_version: "29.8.2",
+            dind_version: "999.0.0",
             dind_source: "docker-library/docker@0123456789abcdef0123456789abcdef01234567",
             dind_entrypoint_sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         }
     }
 
     #[test]
-    fn parses_and_enforces_the_exact_rfc3339_profile_deadline() {
-        let deadline = parse_utc_second("2026-11-05T13:55:11Z").expect("fixed UTC timestamp");
+    fn exact_ubuntu26_profile_uses_the_rfc3339_requalification_deadline() {
+        let deadline = parse_utc_second("2099-11-05T13:55:11Z").expect("fixed UTC timestamp");
         assert_eq!(
             deadline.duration_since(UNIX_EPOCH).expect("after epoch"),
-            Duration::from_secs(1_793_886_911)
+            Duration::from_secs(4_097_570_111)
         );
-        let now = parse_utc_second("2026-10-08T00:00:00Z").expect("fixed UTC timestamp");
+        let now = parse_utc_second("2099-10-08T00:00:00Z").expect("fixed UTC timestamp");
         assert_eq!(
-            validate_image_profile(&image("2026-11-05T13:55:11Z"), "ubuntu-24.04-scale-set"),
+            validate_image_profile(&image("2099-11-05T13:55:11Z"), REQUIRED_SCALE_SET_NAME),
             Some(deadline)
         );
+        assert!(has_required_admission_profile(
+            &image("2099-11-05T13:55:11Z"),
+            REQUIRED_SCALE_SET_NAME,
+        ));
         assert!(now < deadline);
     }
 
     #[test]
     fn rejects_malformed_or_mismatched_image_profiles() {
         assert_eq!(
-            validate_image_profile(&image("2026-11-05"), "ubuntu-24.04-scale-set"),
+            validate_image_profile(&image("2099-11-05"), REQUIRED_SCALE_SET_NAME),
             None
         );
         assert_eq!(
-            validate_image_profile(&image("2026-11-05T13:55:11Z"), "ubuntu-26.04-scale-set"),
+            validate_image_profile(&image("2099-11-05T13:55:11Z"), "ubuntu-24.04-scale-set"),
             None
         );
-        let invalid_runner_ref = RunnerImageIdentityView {
-            runner_image: "ghcr.io/actions/actions-runner@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef?mirror=untrusted",
+        let legacy_ubuntu24 = RunnerImageIdentityView {
+            profile: "ubuntu-24.04-amd64",
+            scale_set_name: "ubuntu-24.04-scale-set",
+            runner_os: "ubuntu24",
+            runner_release_published_at: "2026-10-06T13:55:11Z",
             ..image("2026-11-05T13:55:11Z")
         };
         assert_eq!(
-            validate_image_profile(&invalid_runner_ref, "ubuntu-24.04-scale-set"),
+            validate_image_profile(&legacy_ubuntu24, REQUIRED_SCALE_SET_NAME),
+            None
+        );
+        assert!(!has_required_admission_profile(
+            &legacy_ubuntu24,
+            "ubuntu-24.04-scale-set",
+        ));
+        let invalid_runner_ref = RunnerImageIdentityView {
+            runner_image: "ghcr.io/actions/actions-runner@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef?mirror=untrusted",
+            ..image("2099-11-05T13:55:11Z")
+        };
+        assert_eq!(
+            validate_image_profile(&invalid_runner_ref, REQUIRED_SCALE_SET_NAME),
             None
         );
         let invalid_dind_ref = RunnerImageIdentityView {
             dind_image: "docker.io/library/docker@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef/extra",
-            ..image("2026-11-05T13:55:11Z")
+            ..image("2099-11-05T13:55:11Z")
         };
         assert_eq!(
-            validate_image_profile(&invalid_dind_ref, "ubuntu-24.04-scale-set"),
+            validate_image_profile(&invalid_dind_ref, REQUIRED_SCALE_SET_NAME),
             None
         );
         assert_eq!(parse_utc_second("2026-02-29T00:00:00Z"), None);

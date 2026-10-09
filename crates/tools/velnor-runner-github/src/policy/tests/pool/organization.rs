@@ -58,6 +58,31 @@ fn test_image() -> RunnerImageIdentityView<'static> {
     }
 }
 
+fn synthetic_ubuntu26_policy_image() -> RunnerImageIdentityView<'static> {
+    const DIGEST: &str = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    // Synthetic policy shape only; no real or production-admitted image pin.
+    RunnerImageIdentityView {
+        profile: "ubuntu-26.04-amd64",
+        scale_set_name: "ubuntu-26.04-scale-set",
+        platform: "linux/amd64",
+        runner_image: "ghcr.io/actions/actions-runner@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        runner_manifest_digest: DIGEST,
+        runner_index_digest: DIGEST,
+        runner_config_digest: DIGEST,
+        runner_os: "ubuntu26",
+        runner_release_version: "999.0.0",
+        runner_release_published_at: "2098-10-06T13:55:11Z",
+        runner_requalify_by: "2099-11-05T13:55:11Z",
+        dind_image: "docker.io/library/docker@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        dind_manifest_digest: DIGEST,
+        dind_index_digest: DIGEST,
+        dind_config_digest: DIGEST,
+        dind_version: "999.0.0",
+        dind_source: "docker-library/docker@0123456789abcdef0123456789abcdef01234567",
+        dind_entrypoint_sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    }
+}
+
 fn organization_evidence(
     expected: &PoolBindingView<'_>,
     now: SystemTime,
@@ -139,6 +164,25 @@ fn ubuntu24_profile_never_issues_ubuntu26_admission() {
         result,
         PoolAdmissionEvidence::Unknown(PolicyGap::RequiredRunnerProfileUnavailable)
     );
+}
+
+#[test]
+fn synthetic_ubuntu26_identity_passes_policy_validation_only() {
+    let now = SystemTime::now();
+    let base = organization_binding_view();
+    let expected = PoolBindingView {
+        scale_set_name: "ubuntu-26.04-scale-set",
+        runner_image: Some(synthetic_ubuntu26_policy_image()),
+        ..base
+    };
+    let (repository, group, route) = organization_evidence(&expected, now);
+
+    // This exercises only the GitHub policy layer. Production Linux launch
+    // still fails closed because docker-spec has no compiled Ubuntu 26 pin.
+    assert!(matches!(
+        verify_organization_pool_policy(&expected, &repository, &group, &route, now),
+        PoolAdmissionEvidence::Verified(_)
+    ));
 }
 
 #[test]
