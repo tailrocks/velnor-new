@@ -13,7 +13,8 @@ impl Journal {
     /// # Errors
     ///
     /// Returns [`HostError::Journal`] when the path is missing, not a regular file,
-    /// a symlink, or cannot be opened read-only.
+    /// a symlink, or cannot be opened read-only, or
+    /// [`HostError::UnsupportedJournalVersion`] for a future schema.
     pub async fn open_readonly(path: &Path) -> Result<Self, HostError> {
         existing_regular_file(path)?;
         let journal = Self {
@@ -21,7 +22,7 @@ impl Journal {
             read_only: true,
             protected_path: None,
         };
-        let _connection = journal.connection().await?;
+        validate_existing_version(&journal).await?;
         Ok(journal)
     }
 
@@ -32,8 +33,9 @@ impl Journal {
     /// # Errors
     ///
     /// Returns [`HostError::Path`] when the parent, database, or sidecars are
-    /// unsafe or no longer match the retained identity, and [`HostError::Journal`]
-    /// when the existing journal cannot be opened read-only.
+    /// unsafe or no longer match the retained identity, [`HostError::Journal`]
+    /// when the existing journal cannot be opened read-only, or
+    /// [`HostError::UnsupportedJournalVersion`] for a future schema.
     pub async fn open_readonly_protected_at(
         path: &Path,
         parent_device: u64,
@@ -49,7 +51,7 @@ impl Journal {
             read_only: true,
             protected_path: Some(protected_path),
         };
-        let _connection = journal.connection().await?;
+        validate_existing_version(&journal).await?;
         Ok(journal)
     }
 
@@ -60,7 +62,8 @@ impl Journal {
     ///
     /// Returns [`HostError::Path`] when the parent, database, or sidecars are
     /// unsafe or no longer match the retained identity, and
-    /// [`HostError::Journal`] when the existing journal cannot be opened.
+    /// [`HostError::Journal`] when the existing journal cannot be opened, or
+    /// [`HostError::UnsupportedJournalVersion`] for a future schema.
     pub async fn open_existing_protected_at(
         path: &Path,
         parent_device: u64,
@@ -76,7 +79,7 @@ impl Journal {
             read_only: false,
             protected_path: Some(protected_path),
         };
-        let _connection = journal.connection().await?;
+        validate_existing_version(&journal).await?;
         Ok(journal)
     }
 
@@ -85,7 +88,8 @@ impl Journal {
     /// # Errors
     ///
     /// Returns [`HostError::Journal`] when the path is missing, not a regular file,
-    /// a symlink, or cannot be opened.
+    /// a symlink, or cannot be opened, or
+    /// [`HostError::UnsupportedJournalVersion`] for a future schema.
     pub async fn open_existing(path: &Path) -> Result<Self, HostError> {
         existing_regular_file(path)?;
         let journal = Self {
@@ -93,7 +97,7 @@ impl Journal {
             read_only: false,
             protected_path: None,
         };
-        let _connection = journal.connection().await?;
+        validate_existing_version(&journal).await?;
         Ok(journal)
     }
 
@@ -215,6 +219,11 @@ impl Journal {
             .map_err(|_| HostError::Journal)?;
         Ok(())
     }
+}
+
+async fn validate_existing_version(journal: &Journal) -> Result<(), HostError> {
+    let conn = journal.connection().await?;
+    super::schema::validate_existing_version(&conn).await
 }
 
 fn nonnegative_count(value: i64) -> Result<u64, HostError> {
