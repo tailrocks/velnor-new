@@ -131,8 +131,9 @@ fn generator_scrub_keeps_planned_platform_triples() {
     let sha = "a".repeat(64);
     let digest = format!("b3-{}", "b".repeat(64));
     let head = "c".repeat(40);
+    let version = env!("CARGO_PKG_VERSION");
     let response = format!(
-        "{{\"plan\":{{\"head\":\"{head}\",\"generator\":{{\"version\":\"0.1.5\",\
+        "{{\"plan\":{{\"head\":\"{head}\",\"generator\":{{\"version\":\"{version}\",\
          \"target\":\"x86_64-unknown-linux-gnu\",\"sha256\":\"{sha}\"}},\
          \"obligations\":[{{\"input_digest\":\"{digest}\"}}],\
          \"matrix\":{{\"include\":[{{\"input_digest\":\"{digest}\",\
@@ -144,6 +145,7 @@ fn generator_scrub_keeps_planned_platform_triples() {
     )
     .expect("utf8");
     assert!(out.contains(r#""target":"<target>""#), "{out}");
+    assert!(out.contains(&format!(r#""version":"{version}""#)), "{out}");
     assert!(out.contains("<generator-sha>"), "{out}");
     assert!(!out.contains(&sha), "{out}");
     assert!(

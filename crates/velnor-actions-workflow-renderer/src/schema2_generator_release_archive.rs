@@ -38,9 +38,9 @@ mod tests {
     use std::sync::OnceLock;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    const BINARY: &str = "velnor-actions-0.1.5-x86_64-unknown-linux-gnu";
-    const CHECKSUM: &str = "velnor-actions-0.1.5-x86_64-unknown-linux-gnu.sha256";
-    const PROVENANCE: &str = "velnor-actions-0.1.5-x86_64-unknown-linux-gnu.provenance.json";
+    const BINARY: &str = "velnor-actions-0.1.6-x86_64-unknown-linux-gnu";
+    const CHECKSUM: &str = "velnor-actions-0.1.6-x86_64-unknown-linux-gnu.sha256";
+    const PROVENANCE: &str = "velnor-actions-0.1.6-x86_64-unknown-linux-gnu.provenance.json";
     const ARCHIVE_FIXTURE: &str = r#"
 import io
 import os
@@ -306,7 +306,7 @@ elif case == "archive-oversized":
             assert_eq!(child.wait()?.success(), accepted, "row: {row:?}");
         }
         let command = sidecar_digest_command(CHECKSUM, BINARY);
-        assert!(command.contains("expected='velnor-actions-0.1.5"));
+        assert!(command.contains("expected='velnor-actions-0.1.6"));
         Ok(())
     }
 }

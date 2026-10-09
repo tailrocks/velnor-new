@@ -1,6 +1,6 @@
 use super::{
-    LINUX, MACOS_ARM64, MACOS_X86_64, ProductAsset, build_steps, qualification_script,
-    verify_provenance_in_directory,
+    ASSETS, LINUX, MACOS_ARM64, MACOS_X86_64, ProductAsset, VERSION, build_steps,
+    qualification_script, verify_provenance_in_directory,
 };
 
 use crate::schema2::git_fixture;
@@ -24,6 +24,20 @@ const INSTALL_ARGS: &[&str] = &[
     "rust@1.98.1",
     "mr-boxington@1.21.1",
 ];
+
+#[test]
+fn every_release_asset_matches_the_workspace_version() {
+    assert_eq!(VERSION, env!("CARGO_PKG_VERSION"));
+    let prefix = format!("velnor-actions-{VERSION}-");
+    for asset in ASSETS {
+        assert!(asset.binary.starts_with(&prefix), "{}", asset.binary);
+        assert_eq!(asset.sidecar, format!("{}.sha256", asset.binary));
+        assert_eq!(
+            asset.provenance,
+            format!("{}.provenance.json", asset.binary)
+        );
+    }
+}
 
 struct Scratch(PathBuf);
 
@@ -223,7 +237,9 @@ fn wrong_checksum_filename_stops_before_candidate_execution() -> Result<(), Box<
     let candidate = directory.join(LINUX.binary);
     fs::write(
         &candidate,
-        "#!/bin/sh\nprintf '%s\\n' executed >> \"$CANDIDATE_EXECUTED\"\nprintf '%s\\n' 'velnor-actions 0.1.5'\n",
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' executed >> \"$CANDIDATE_EXECUTED\"\nprintf '%s\\n' 'velnor-actions {VERSION}'\n"
+        ),
     )?;
     let mut permissions = fs::metadata(&candidate)?.permissions();
     permissions.set_mode(0o755);
