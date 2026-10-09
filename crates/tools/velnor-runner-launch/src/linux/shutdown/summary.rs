@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use tokio::time::{Instant as TokioInstant, timeout_at};
 
-use velnor_runner_host::worker::OwnedDockerResource;
+use velnor_runner_host::{DockerDaemonBinding, worker::OwnedDockerResource};
 use velnor_runner_journal::journal::{IntentState, Journal, LaunchEffectState};
 use velnor_runner_launch_slot::holds;
 
@@ -15,9 +15,9 @@ pub(crate) struct RowCounts {
 }
 
 pub(super) async fn shutdown_summary(
-    context: &super::super::LinuxLaunchContext,
     journal: &Journal,
     admission: LinuxAdmissionState,
+    docker_binding: &DockerDaemonBinding,
     deadline: Instant,
     cleaned: usize,
     previous_resources: usize,
@@ -46,8 +46,8 @@ pub(super) async fn shutdown_summary(
     };
     let Ok(Ok(resources)) = timeout_at(
         tokio_deadline,
-        velnor_runner_host::worker::list_owned_docker_resources_until(
-            &context.docker_endpoint,
+        velnor_runner_host::worker::list_owned_docker_resources_bound_until(
+            docker_binding,
             tokio_deadline,
         ),
     )

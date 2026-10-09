@@ -4,11 +4,13 @@ use std::time::Instant;
 
 use tokio::time::{Instant as TokioInstant, timeout_at};
 use velnor_runner_host::worker::{
-    OwnedDockerResource, OwnedDockerResourceKind, list_owned_docker_resources_until,
+    OwnedDockerResource, OwnedDockerResourceKind, list_owned_docker_resources_bound_until,
     worker_volume_names,
 };
 use velnor_runner_host::{IntentRow, IntentState};
-use velnor_runner_journal::journal::{Journal, LaunchEffectState, RunnerStartIntent};
+use velnor_runner_journal::journal::{
+    Journal, JournalDockerDaemonBinding, LaunchEffectState, RunnerStartIntent,
+};
 use velnor_runner_launch_slot::holds;
 
 use crate::linux::{LinuxLaunchContext, session::ActiveSession};
@@ -24,17 +26,20 @@ pub(super) async fn free_slots(
         return None;
     }
     let tokio_deadline = TokioInstant::from_std(deadline);
-    let inventory = timeout_at(
-        tokio_deadline,
-        list_owned_docker_resources_until(&context.docker_endpoint, tokio_deadline),
-    )
-    .await
-    .ok()?
-    .ok()?;
     let rows = timeout_at(tokio_deadline, journal.rows())
         .await
         .ok()?
         .ok()?;
+    if !held_rows_bound_to(journal, &rows, &active.journal_binding, tokio_deadline).await {
+        return None;
+    }
+    let inventory = timeout_at(
+        tokio_deadline,
+        list_owned_docker_resources_bound_until(&active.docker_binding, tokio_deadline),
+    )
+    .await
+    .ok()?
+    .ok()?;
     if Instant::now() >= deadline
         || !non_launch_rows_resolved(&rows, active.intent_id)
         || !inventory_matches_rows(&inventory, &rows)
@@ -47,6 +52,24 @@ pub(super) async fn free_slots(
         .count();
     let maximum = usize::try_from(context.max_jobs().get()).ok()?;
     u32::try_from(maximum.saturating_sub(occupied)).ok()
+}
+
+async fn held_rows_bound_to(
+    journal: &Journal,
+    rows: &[IntentRow],
+    expected: &JournalDockerDaemonBinding,
+    deadline: TokioInstant,
+) -> bool {
+    for row in rows {
+        if row.kind != "launch" || !holds(row) {
+            continue;
+        }
+        let result = timeout_at(deadline, journal.launch_daemon_binding(row.id)).await;
+        if !matches!(result, Ok(Ok(Some(binding))) if &binding == expected) {
+            return false;
+        }
+    }
+    TokioInstant::now() < deadline
 }
 
 fn inventory_matches_rows(resources: &[OwnedDockerResource], rows: &[IntentRow]) -> bool {

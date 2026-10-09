@@ -133,6 +133,7 @@ async fn run_offer(runtime: &mut AvailableRuntime<'_>, trust: VerifiedJobTrust) 
             runtime.work.journal,
             runtime.route,
             &runtime.session_id,
+            &runtime.work.active.journal_binding,
             &trust,
             runtime.maximum,
         ),
