@@ -188,6 +188,49 @@ fn rejects_missing_pending_and_failed_latest_runs() -> Result<(), Box<dyn Error>
 }
 
 #[test]
+fn rejects_newer_failed_run_over_older_success_across_pages() -> Result<(), Box<dyn Error>> {
+    let mut scenario = Scenario::valid();
+    scenario.runs = pages(&[
+        vec![ci_run(
+            41,
+            11,
+            1,
+            SOURCE_TOKEN,
+            DEFAULT_BRANCH,
+            "push",
+            ("completed", "success"),
+        )],
+        vec![ci_run(
+            42,
+            12,
+            1,
+            SOURCE_TOKEN,
+            DEFAULT_BRANCH,
+            "push",
+            ("completed", "failure"),
+        )],
+    ]);
+    scenario.jobs = job_pages(&[vec![required_job(
+        41,
+        1,
+        SOURCE_TOKEN,
+        DEFAULT_BRANCH,
+        "completed",
+        "success",
+    )]]);
+
+    let result = execute(&scenario)?;
+    assert_rejected(&result);
+    assert!(
+        result
+            .stderr
+            .contains("latest exact-source CI run did not succeed")
+    );
+    assert!(!result.calls.contains("/attempts/"));
+    Ok(())
+}
+
+#[test]
 fn rejects_duplicate_mismatched_or_failed_required_jobs() -> Result<(), Box<dyn Error>> {
     let bad_jobs = [
         job_pages(&[]),
