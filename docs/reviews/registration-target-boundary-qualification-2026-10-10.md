@@ -51,7 +51,7 @@ after one `NotFound` observation:
 
 ```text
 observer=2 iteration=247159 writer_phase=rewrite_5_in_progress
-path=/private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmp2CVLpH/.github
+path=/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmp2CVLpH/.github
 kind=NotFound raw_errno=Some(2)
 ```
 
