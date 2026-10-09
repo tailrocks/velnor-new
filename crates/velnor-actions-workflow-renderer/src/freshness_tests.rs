@@ -12,8 +12,8 @@ fn spec() -> FreshnessSpec {
         checkout_uses: CHECKOUT.to_owned(),
         mise_setup: MiseSetup {
             uses: "jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca".to_owned(),
-            version: "2026.10.4".to_owned(),
-            sha256: "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75".to_owned(),
+            version: "2026.10.5".to_owned(),
+            sha256: "8a223b5f8ca71100220a3e5bef259614c348e7b1d80e6b15c2a9c9aa3affe5e4".to_owned(),
         },
         rust_version: "1.98.1".to_owned(),
         generator_version: "0.1.0".to_owned(),
@@ -61,11 +61,11 @@ fn renders_schedule_only_read_only_probe() {
         "pinned Mise setup:\n{yaml}"
     );
     assert!(
-        yaml.contains("version: 2026.10.4"),
+        yaml.contains("version: 2026.10.5"),
         "current Mise release pin:\n{yaml}"
     );
     assert!(
-        yaml.contains("sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75"),
+        yaml.contains("sha256: 8a223b5f8ca71100220a3e5bef259614c348e7b1d80e6b15c2a9c9aa3affe5e4"),
         "current Mise binary digest:\n{yaml}"
     );
     assert!(

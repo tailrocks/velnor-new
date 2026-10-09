@@ -97,7 +97,7 @@ fn verify_step(
         }
     };
     let run = format!(
-        "set -euo pipefail\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nversion=\"$(mise --version)\"\ncase \"$version\" in \"mise $MISE_VERSION \"*) ;; *) echo \"unexpected Mise version: $version\" >&2; exit 1 ;; esac\nbinary=\"$(command -v mise)\"\nactual=\"$({digest} \"$binary\" | awk '{{print $1}}')\"\ntest \"$actual\" = \"$MISE_SHA256\""
+        "set -euo pipefail\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nversion=\"$(mise --version)\"\ncase \"$version\" in \"$MISE_VERSION \"*) ;; *) echo \"unexpected Mise version: $version\" >&2; exit 1 ;; esac\nbinary=\"$(command -v mise)\"\nactual=\"$({digest} \"$binary\" | awk '{{print $1}}')\"\ntest \"$actual\" = \"$MISE_SHA256\""
     );
     Ok(Yaml::Map(vec![
         (

@@ -102,7 +102,7 @@
     }
   ],
   "check_interval_hours": 24,
-  "checked_at": "2026-10-08T16:34:17Z",
+  "checked_at": "2026-10-08T21:21:02Z",
   "exceptions": [],
   "max_exception_days": 14,
   "runner": {
@@ -166,11 +166,11 @@
   ],
   "tools": [
     {
-      "checked_at": "2026-10-08T16:34:17Z",
-      "latest": "2026.10.4",
+      "checked_at": "2026-10-08T21:21:02Z",
+      "latest": "2026.10.5",
       "name": "mise",
-      "pinned": "2026.10.4",
-      "qualified": "2026.10.4",
+      "pinned": "2026.10.5",
+      "qualified": "2026.10.5",
       "source": "https://api.github.com/repos/jdx/mise/releases/latest",
       "status": "current"
     },

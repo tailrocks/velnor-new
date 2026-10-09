@@ -19,7 +19,7 @@ const CHECKOUT: &str = "actions/checkout@0123456789abcdef0123456789abcdef0123456
 fn mise_setup() -> MiseSetup {
     MiseSetup {
         uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
-        version: "2026.10.4".to_owned(),
+        version: "2026.10.5".to_owned(),
         sha256: "a".repeat(64),
     }
 }

@@ -112,7 +112,7 @@ pub fn infer_job_tools(job: &Job) -> Vec<String> {
     specs.into_iter().collect()
 }
 
-/// True for catalog version spellings (`2026.10.4`); never `latest`.
+/// True for catalog version spellings (`2026.10.5`); never `latest`.
 pub(crate) fn is_catalog_version(value: &str) -> bool {
     !value.is_empty()
         && value != "latest"

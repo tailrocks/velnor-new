@@ -96,7 +96,7 @@ shift
 
 case "$command_name" in
   version)
-    printf '2026.10.4\n'
+    printf '2026.10.5\n'
     ;;
   install)
     [[ "${1:-}" == rust@1.98.1 ]]

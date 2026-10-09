@@ -12,7 +12,7 @@ fn verify_local_toolchain_specs_come_from_policy_when_local_mise_pins_differ() {
     assert!(specs.contains(&"rust@1.98.1".to_owned()));
     assert!(specs.contains(&"mr-boxington@1.21.1".to_owned()));
     assert!(specs.contains(&"aqua:nextest-rs/nextest/cargo-nextest@0.9.148".to_owned()));
-    assert_eq!(policy_mise_version(&root), Ok("2026.10.4".to_owned()));
+    assert_eq!(policy_mise_version(&root), Ok("2026.10.5".to_owned()));
     let check_freshness = fs::read_to_string(root.join("scripts/check-freshness.sh"));
     assert!(
         check_freshness.is_ok(),

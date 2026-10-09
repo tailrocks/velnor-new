@@ -30,7 +30,7 @@ fn runtime_key() -> String {
 fn tools_payload() -> crate::cache_p08::ToolsCachePayload {
     let mise = crate::MiseSetup {
         uses: SETUP_USES.to_owned(),
-        version: "2026.10.4".to_owned(),
+        version: "2026.10.5".to_owned(),
         sha256: "a".repeat(64),
     };
     crate::cache_p08::ToolsCachePayload::new(crate::cache_p08::ToolsCacheInputs {
