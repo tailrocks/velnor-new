@@ -10,6 +10,7 @@ use crate::args::{Cli, Command, DaemonAction};
 mod connect;
 mod disconnect;
 mod drain;
+mod readiness;
 mod status;
 
 use self::disconnect::disconnect;

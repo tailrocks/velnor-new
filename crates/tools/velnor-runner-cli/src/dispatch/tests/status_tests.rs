@@ -60,7 +60,72 @@ fn status_reports_real_local_observations_without_claiming_global_readiness() {
     assert_eq!(document["journal"], "present_unverified");
     assert_eq!(document["controller_service"], "in_use");
     assert_eq!(document["global_readiness"], "not_proven");
+    assert_eq!(document["readiness"]["controller_runtime"], "unknown");
+    assert_eq!(document["readiness"]["work_admission"], "not_proven");
+    assert_eq!(
+        document["readiness"]["work_admission_reasons"],
+        serde_json::json!([
+            "image_profile_admission_not_proven",
+            "apparmor_policy_admission_not_proven",
+            "durable_controller_observation_unavailable"
+        ])
+    );
     assert!(!observation.json().contains("token"));
+}
+
+#[test]
+fn local_status_evidence_never_promotes_linux_work_admission() {
+    let observation = status_observation_with(
+        Ok(Some(LINUX_STATUS_CONFIG.to_owned())),
+        velnor_runner_host::HostPlatform::Linux,
+        JournalObservation::PresentUnverified,
+        crate::service::ControllerServiceState::InUse,
+        |_| Ok(true),
+        |_| {
+            Ok(velnor_runner_host::docker_client::DockerVersion {
+                server_version: "29.8.2".to_owned(),
+                api_version: Some("1.53".to_owned()),
+                os: Some("linux".to_owned()),
+                architecture: Some("amd64".to_owned()),
+            })
+        },
+    );
+
+    let document: serde_json::Value =
+        serde_json::from_str(&observation.json()).expect("valid status JSON");
+    assert_eq!(document["credential"], "available");
+    assert_eq!(document["docker"], "available");
+    assert_eq!(document["controller_service"], "in_use");
+    assert_eq!(document["readiness"]["work_admission"], "not_proven");
+}
+
+#[test]
+fn legacy_macos_status_shape_does_not_gain_linux_readiness_fields() {
+    const MAC_CONFIG: &str = concat!(
+        "schema = 1\n",
+        "[github]\n",
+        "repository = \"tailrocks/velnor-new\"\n",
+        "scale_set_name = \"ubuntu-26.04-scale-set\"\n",
+        "credential_ref = \"keychain:com.tailrocks.velnor.host/velnor-host\"\n",
+        "[host]\n",
+        "[docker]\n",
+        "context = \"orbstack\"\n",
+        "platform = \"linux/amd64\"\n",
+        "endpoint = \"unix:///var/run/docker.sock\"\n",
+    );
+    let observation = status_observation_with(
+        Ok(Some(MAC_CONFIG.to_owned())),
+        velnor_runner_host::HostPlatform::Macos,
+        JournalObservation::Missing,
+        crate::service::ControllerServiceState::Stopped,
+        |_| Ok(true),
+        |_| Err(velnor_runner_host::HostError::Docker),
+    );
+    let document: serde_json::Value =
+        serde_json::from_str(&observation.json()).expect("valid status JSON");
+
+    assert!(document.get("readiness").is_none());
+    assert!(!observation.lines().contains("work_admission"));
 }
 
 #[test]
@@ -89,7 +154,7 @@ fn status_does_not_probe_credentials_or_docker_without_valid_config() {
     assert!(!docker_probed.get());
     assert_eq!(
         observation.lines(),
-        "state=not_proven\nconfig=invalid\ncredential=not_checked\ndocker=not_checked\njournal=missing\ncontroller_service=unknown\nglobal_readiness=not_proven"
+        "state=not_proven\nconfig=invalid\ncredential=not_checked\ndocker=not_checked\njournal=missing\ncontroller_service=unknown\nglobal_readiness=not_proven\ncontroller_runtime=unknown\nwork_admission=not_proven\nwork_admission_reasons=image_profile_admission_not_proven,apparmor_policy_admission_not_proven,durable_controller_observation_unavailable"
     );
 }
 
