@@ -16,6 +16,7 @@ fn request(pins: ProductReleasePins) -> Result<Schema2WorkflowRequest, crate::Re
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
         workflows: BTreeSet::new(),
         mbx_qualification: None,
+        mise_pin_qualification: None,
         product_release: Some(pins),
     })
 }

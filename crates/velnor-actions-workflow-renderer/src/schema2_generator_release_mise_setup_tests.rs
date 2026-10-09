@@ -17,6 +17,7 @@ fn each_archive_consumer_has_target_pinned_mise_before_extraction() -> Result<()
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
         workflows: BTreeSet::new(),
         mbx_qualification: None,
+        mise_pin_qualification: None,
         product_release: Some(pins.clone()),
     };
     let release = super::super::super::generator_release(&request)?;

@@ -1,6 +1,6 @@
 //! Runner selection and shell defaults for schema 2 workflows.
 
-use velnor_actions_contract::config::is_hosted_catalog;
+use velnor_actions_contract::{ReleaseTarget, config::is_hosted_catalog};
 
 use crate::RenderError;
 use crate::yaml::Yaml;
@@ -29,6 +29,31 @@ impl RunnerSpec {
         })
     }
 
+    /// Hosted runner selected by a native release target.
+    ///
+    /// Qualification may use the typed release-target catalog for macOS
+    /// x64 even though that runner is not a configurable CI label.
+    pub(super) fn hosted_release_target(
+        label: &str,
+        target: ReleaseTarget,
+    ) -> Result<Self, RenderError> {
+        let allowed_pair = matches!(
+            (label, target),
+            ("ubuntu-26.04", ReleaseTarget::LinuxX86_64)
+                | ("macos-15-intel", ReleaseTarget::MacosX86_64)
+        );
+        if !allowed_pair || ReleaseTarget::for_runner_label(label) != Some(target) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "schema2_hosted_runner_target_mismatch:{label}:{}",
+                target.triple()
+            )));
+        }
+        Ok(Self {
+            runs_on: Yaml::str(label),
+            lane: RunnerLane::Hosted,
+        })
+    }
+
     pub(super) fn scale_set(runs_on: Yaml) -> Self {
         Self {
             runs_on,
@@ -48,3 +73,7 @@ impl RunnerSpec {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "schema2_runner_spec_tests.rs"]
+mod tests;
