@@ -141,7 +141,7 @@ async fn reserve_batch_in_transaction(
     Ok(BatchCapacityClaim::Offers(offers))
 }
 
-async fn existing_offer(
+pub(super) async fn existing_offer(
     conn: &turso::Connection,
     subject: &str,
 ) -> Result<Option<BatchOfferState>, HostError> {
@@ -200,7 +200,7 @@ async fn existing_offer(
     Ok(Some(state))
 }
 
-async fn insert_offer(
+pub(super) async fn insert_offer(
     conn: &turso::Connection,
     subject: &str,
     message_id: i64,
