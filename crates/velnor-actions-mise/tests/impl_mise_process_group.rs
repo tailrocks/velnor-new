@@ -8,15 +8,8 @@ use velnor_actions_mise::command::{IsolatedCommand, is_cancel_or_timeout, is_res
 
 #[test]
 fn successful_parent_cannot_leave_a_pipe_holding_descendant_running() -> Result<(), String> {
-    let time = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|error| error.to_string())?
-        .as_nanos();
-    let root = std::env::temp_dir().join(format!(
-        "velnor-pipe-descendant-{}-{time}",
-        std::process::id()
-    ));
-    std::fs::create_dir(&root).map_err(|error| error.to_string())?;
+    let root = crate::test_temp_dir::unique_temp_dir("velnor-pipe-descendant")
+        .map_err(|error| error.to_string())?;
     let marker = root.join("descendant-survived");
     let script = format!(
         "(sleep 0.35; printf leaked > '{}') & exit 0",

@@ -7,13 +7,8 @@ struct TestDirectory(PathBuf);
 
 impl TestDirectory {
     fn new() -> Self {
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        let path =
-            std::env::temp_dir().join(format!("velnor-check-read-{}-{stamp}", std::process::id()));
-        std::fs::create_dir(&path).expect("temp directory");
+        let path = crate::test_temp_dir::unique_temp_dir("velnor-check-read")
+            .expect("temporary directory reservation");
         Self(path)
     }
 }

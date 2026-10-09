@@ -31,11 +31,14 @@ Refactor-behavior corpus consumed by
 target/SHA). Regenerate only at a known-good commit with
 `VELNOR_UPDATE_GOLDENS=1`.
 
-Consumer-generation harnesses explicitly install
-`consumer-release-manifest.json` into temporary repositories. It is a
-deterministic schema fixture with placeholder digest/commit values, not a
-release record or qualification evidence. Missing manifests are tested as
-an error by the actual CLI.
+Consumer-generation positive tests build a current-version manifest at test
+runtime and install it only in disposable repositories. Its canonical asset
+URL shape satisfies the schema; target digests are computed from deterministic
+mock payloads and its source marker is synthetic. It is not publication or
+qualification evidence. The checked-in `consumer-release-manifest.json` stays
+at v0.1.4 as a schema placeholder for direct schema tests; its values do not
+describe a published release. Missing manifests are tested as an error by the
+actual CLI.
 
 | Case | Intent |
 |---|---|
@@ -60,8 +63,7 @@ every generic tree-walker (cargo-machete scan, mise-action
 `**` cache-key glob in run 36753845572), so hazards must
 never rest in the tree.
 
-Consumer-generation harnesses install the checked-in
-`consumer-release-manifest.json` into temporary ConsumerV1 repositories.
-Its placeholder commit and digests prove canonical schema serialization
-only; they are not a release record or qualification evidence. The actual
+Consumer-generation harnesses use the runtime-synthetic current-version
+manifest described above in temporary ConsumerV1 repositories. Direct schema
+tests continue to read the unchanged v0.1.4 placeholder fixture. The actual
 CLI suite separately verifies that a missing manifest is rejected.

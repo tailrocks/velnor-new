@@ -16,14 +16,7 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> TestResult<Self> {
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "qualified-tool-probe-{}-{stamp}",
-            std::process::id()
-        ));
-        std::fs::create_dir(&root)?;
+        let root = crate::test_temp_dir::unique_temp_dir("qualified-tool-probe")?;
         let root = root.canonicalize()?;
         let homes = QualifiedProbeHomes {
             home: root.clone(),

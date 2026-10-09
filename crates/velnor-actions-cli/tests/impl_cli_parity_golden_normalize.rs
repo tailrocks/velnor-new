@@ -132,7 +132,7 @@ fn generator_scrub_keeps_planned_platform_triples() {
     let digest = format!("b3-{}", "b".repeat(64));
     let head = "c".repeat(40);
     let response = format!(
-        "{{\"plan\":{{\"head\":\"{head}\",\"generator\":{{\"version\":\"0.1.4\",\
+        "{{\"plan\":{{\"head\":\"{head}\",\"generator\":{{\"version\":\"0.1.5\",\
          \"target\":\"x86_64-unknown-linux-gnu\",\"sha256\":\"{sha}\"}},\
          \"obligations\":[{{\"input_digest\":\"{digest}\"}}],\
          \"matrix\":{{\"include\":[{{\"input_digest\":\"{digest}\",\

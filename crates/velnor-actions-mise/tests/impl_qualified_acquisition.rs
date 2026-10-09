@@ -70,12 +70,7 @@ fn tool(id: &str, rust: bool) -> QualifiedTool {
 }
 
 fn fixture(tools: Vec<QualifiedTool>) -> Result<mise::QualifiedCheck, Box<dyn std::error::Error>> {
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_nanos();
-    let source =
-        std::env::temp_dir().join(format!("velnor-acquisition-{}-{stamp}", std::process::id()));
-    std::fs::create_dir(&source)?;
+    let source = crate::test_temp_dir::unique_temp_dir("velnor-acquisition")?;
     std::fs::write(source.join("mise.toml"), "[tasks.check]\nrun='true'\n")?;
     let row = MiseCheck {
         id: "check".into(),

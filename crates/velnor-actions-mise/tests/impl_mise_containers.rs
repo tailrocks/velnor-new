@@ -3,8 +3,6 @@
 // These tests do not qualify actual Docker bytes, an installation, or a live daemon.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::SystemTime;
 use velnor_actions_contract::config::{
     CheckExecutor, CheckPlatform, CheckRunner, ContainerPlatform, DaemonIdentityPolicy,
     HostContainerProfile, HostDockerCli, HostDockerDaemon,
@@ -16,7 +14,6 @@ use velnor_actions_mise::checks::{
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
 const CONTEXT: &str = "fixture";
-static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
 const CLI_VERSION: &str = "27.4.1";
 const CLI_BUILD: &str = "build-1";
 const DAEMON_VERSION: &str = "27.4.1";
@@ -42,15 +39,8 @@ struct Fixture {
 impl Fixture {
     fn new() -> TestResult<Self> {
         use std::os::unix::fs::MetadataExt;
-        let stamp = SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_nanos();
-        let base = Path::new("/tmp").join(format!(
-            "velnor-mise-container-{}-{stamp}-{}",
-            std::process::id(),
-            NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir(&base)?;
+        let base =
+            crate::test_temp_dir::unique_temp_dir_in(Path::new("/tmp"), "velnor-mise-container")?;
         let root = base.canonicalize()?;
         let home = root.join("home");
         let docker_config = home.join("docker-config");

@@ -26,14 +26,27 @@ checks passing; those checks were green at `bdfffb9` (dogfood CI run
 - [Gate 7: parallel test fan-out](gate-7-parallel-fanout.md)
 - [Gate 8: Velnor dogfooding](gate-8-dogfooding.md)
 
-Renderer run-scalar sharing has a candidate record for unmerged PR #112. The
-source change passed full local repository verification and the hosted required
-checks at `d9e4427`; release/adoption qualification with the official 0.1.5
-artifacts remains pending. This candidate is not recorded as implemented until
-the PR merges with its required checks passing.
+Renderer run-scalar sharing was merged to main by PR #112 at
+`82a3b5931d431b85579435a99cf981bc6f248a65`. Exact-main CI run
+[37866554995](https://github.com/tailrocks/velnor-new/actions/runs/37866554995)
+passed Required (job `113620547782`); source qualification remains tied to
+`d9e4427`. Release and adoption qualification with official v0.1.5 artifacts
+remains pending.
 
 - [Renderer run-scalar sharing](workflow-run-scalar-sharing.md) — bounded
   over-cap workflow compaction and per-use shell validation.
+
+Product version preparation has a candidate record for open draft PR #116 at
+current head `ade9b0736fa227ec166a2606d75765c32919e40a`. Hosted Plan run
+`37868872201`, observed `2026-10-09 01:20:11 UTC`, had Plan succeed while
+other checks remained in progress and Required had not been emitted. Full
+local verification remains pending. The record does not claim an accepted
+implementation or a completed release; it becomes implemented only after the
+PR merges with its required checks passing.
+
+- [Product version preparation for v0.1.5](product-version-preparation-v0.1.5.md)
+  — candidate source and generated-output evidence; release and adoption
+  remain pending.
 
 Shared acceptance state: local workspace suite green at `bdfffb9` (1048
 pass/0 fail: 978 integration + 70 src-unit, 21 binaries; clippy clean,

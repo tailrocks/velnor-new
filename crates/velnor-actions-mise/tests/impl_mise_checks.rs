@@ -8,12 +8,7 @@ type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 struct Fixture(PathBuf);
 impl Fixture {
     fn new(source: &str) -> TestResult<Self> {
-        let time = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_nanos();
-        let root =
-            std::env::temp_dir().join(format!("velnor-check-test-{}-{time}", std::process::id()));
-        std::fs::create_dir(&root)?;
+        let root = crate::test_temp_dir::unique_temp_dir("velnor-check-test")?;
         let fixture = Self(root);
         std::fs::write(fixture.0.join("mise.toml"), source)?;
         Ok(fixture)

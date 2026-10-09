@@ -112,7 +112,7 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
             format!("{SOURCE_SHA}\n")
         );
         let calls = fs::read_to_string(scratch.0.join("gh-calls"))?;
-        assert!(calls.contains("release view v0.1.4"), "{calls}");
+        assert!(calls.contains("release view v0.1.5"), "{calls}");
         assert!(
             calls.contains("api repos/tailrocks/velnor-new/releases/123"),
             "{calls}"
@@ -127,12 +127,13 @@ fn create_candidate_manifest(root: &Path, case: Failure) -> Result<(), Box<dyn E
     let manifest_status = Command::new("bash")
         .args([
             "scripts/generator-release/create-release-manifest.sh",
-            "0.1.4",
+            "0.1.5",
             REPOSITORY,
             "1.98.1",
             "1.21.1",
         ])
         .current_dir(root)
+        .env("PATH", test_path_with_sbin()?)
         .env("GITHUB_REPOSITORY", REPOSITORY)
         .env("GITHUB_SHA", SOURCE_SHA)
         .status()?;
@@ -235,7 +236,7 @@ fn assert_publish_result(
             | Failure::TagMovedBeforePublish
     );
     if create_is_expected {
-        assert_eq!(fs::read_to_string(root.join("created-tag"))?, "v0.1.4\n");
+        assert_eq!(fs::read_to_string(root.join("created-tag"))?, "v0.1.5\n");
         assert_eq!(
             fs::read_to_string(root.join("asset-args"))?,
             expected_asset_args()
@@ -277,9 +278,7 @@ fn install_mock_gh(root: &Path) -> Result<(), Box<dyn Error>> {
 
 fn path_with_mock_gh(root: &Path) -> Result<std::ffi::OsString, Box<dyn Error>> {
     let mut paths = vec![root.join("mock-bin")];
-    paths.extend(std::env::split_paths(
-        &std::env::var_os("PATH").ok_or("missing PATH")?,
-    ));
+    paths.extend(std::env::split_paths(&test_path_with_sbin()?));
     Ok(std::env::join_paths(paths)?)
 }
 
@@ -305,7 +304,8 @@ mod cli_tests;
 #[path = "schema2_generator_release_publish_fixtures.rs"]
 mod publish_fixtures;
 use publish_fixtures::{
-    copy_release_helpers, release_json, sha256, write_attestation_files, write_candidate_records,
+    copy_release_helpers, release_json, sha256, test_path_with_sbin, write_attestation_files,
+    write_candidate_records,
 };
 
 #[path = "schema2_generator_release_fake_commands.rs"]

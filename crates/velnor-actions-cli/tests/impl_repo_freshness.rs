@@ -255,11 +255,13 @@ fn ver37_merge_after_qual() -> Result<(), Box<dyn Error>> {
     let gates = read("docs/implemented/release-gates.md")?;
     assert!(
         gates.contains("VER-3.7"),
-        "protection residual must be recorded"
+        "merge-after-qualification status must be recorded"
     );
     assert!(
-        gates.contains("branch protection"),
-        "residual must name branch protection"
+        gates
+            .to_ascii_lowercase()
+            .contains("branch protection verified"),
+        "merge-after-qualification evidence must name verified branch protection"
     );
     Ok(())
 }

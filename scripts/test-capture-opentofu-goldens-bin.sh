@@ -319,9 +319,13 @@ expect_rejected directory-bin 'explicit CLI binary must be a regular executable 
   check "$WORK/not a binary directory"
 
 FAILING_BIN="$WORK/executable but failing"
-cat >"$FAILING_BIN" <<'FAILING'
+cat >"$FAILING_BIN" <<FAILING
 #!/bin/sh
-printf invoked >"$VELNOR_TEST_FAILING_BIN_MARKER"
+printf invoked >"\$VELNOR_TEST_FAILING_BIN_MARKER"
+if [ "\${1-}" = "--version" ]; then
+  printf '%s\n' 'velnor-actions $CLI_VERSION'
+  exit 0
+fi
 exit 57
 FAILING
 chmod u+x "$FAILING_BIN"
