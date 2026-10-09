@@ -50,12 +50,8 @@ fn registered_sources(workspaces: &[WorkspacePlan]) -> Outcome<HashSet<PathBuf>>
 }
 
 fn compiled_test_sources(workspace: &WorkspacePlan) -> Outcome<HashSet<PathBuf>> {
-    let _target_lock = crate::impl_cli_tmp::nested_target::lock_nested_cargo_target_for(
-        &workspace.target_directory,
-    )?;
-    let nested_target = crate::impl_cli_tmp::nested_target::nested_cargo_target_dir_for(
-        &workspace.target_directory,
-    );
+    let _target_lock = crate::impl_cli_tmp::nested_target::lock_nested_cargo_target()?;
+    let nested_target = crate::impl_cli_tmp::nested_target::nested_cargo_target_dir()?;
     let output = cargo_config::cargo_output_at_target(
         &workspace.manifest,
         &[
@@ -284,16 +280,25 @@ fn cargo_targets_register_every_test_bearing_source() -> Outcome<()> {
     let root = repo_root().canonicalize()?;
     let workspaces = cargo_config::workspace_plans(&root)?;
     let (registered, orphans) = registration_audit(&workspaces)?;
-    for workspace in &workspaces {
-        let nested_target = crate::impl_cli_tmp::nested_target::nested_cargo_target_dir_for(
-            &workspace.target_directory,
-        );
-        assert!(
-            nested_target.join("debug/deps").is_dir(),
-            "nested Cargo outputs are missing from {}",
-            nested_target.display()
-        );
-    }
+    let nested_target = crate::impl_cli_tmp::nested_target::nested_cargo_target_dir()?;
+    assert!(
+        nested_target.join("debug/deps").is_dir(),
+        "nested Cargo outputs are missing from {}",
+        nested_target.display()
+    );
+    let runner_root = root.join("crates/velnor-runner").canonicalize()?;
+    assert!(
+        registered.contains(
+            &runner_root
+                .join("crates/velnor-runner-core/tests/invariants.rs")
+                .canonicalize()?
+        ),
+        "runner workspace integration test source was not registered"
+    );
+    assert!(
+        !runner_root.join("target").exists(),
+        "runner registration must use the active shared Cargo target instead of creating a nested workspace target"
+    );
     for expected in [
         "crates/velnor-actions-orchestrator/tests/impl_generator_seed.rs",
         "crates/velnor-actions-tofu/tests/impl_tofu_t27_select.rs",
