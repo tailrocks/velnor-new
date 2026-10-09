@@ -1,4 +1,4 @@
-use super::{ArtifactBuildOutput, ArtifactBuildTask};
+use super::{ArtifactBuildOutput, ArtifactBuildTask, validate_output_inventory};
 use crate::config::VerificationRunner;
 
 fn output(id: &str, path: &str, max_bytes: u64) -> ArtifactBuildOutput {
@@ -84,5 +84,16 @@ fn artifact_builds_are_linux_only_and_require_sorted_unique_ids() {
             .expect_err("unsorted inventory fails")
             .to_string()
             .contains("artifact_outputs_must_be_sorted_by_id")
+    );
+}
+
+#[test]
+fn shared_inventory_validator_preserves_caller_field_path() {
+    let invalid = output("bundle", "dist/../secret", 16_384);
+    assert!(
+        validate_output_inventory(&[invalid], "config.toml", "workflow.tasks.outputs")
+            .expect_err("unsafe path fails")
+            .to_string()
+            .contains("workflow.tasks.outputs.path")
     );
 }

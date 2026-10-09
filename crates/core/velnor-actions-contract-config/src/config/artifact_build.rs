@@ -65,39 +65,7 @@ impl ArtifactBuildTask {
                 format!("bad_timeout:{}", self.timeout_minutes),
             ));
         }
-        if self.outputs.is_empty() {
-            return Err(ContractError::config(
-                file,
-                "workflow.artifact_tasks.outputs",
-                "empty_output_inventory",
-            ));
-        }
-        let mut previous: Option<&str> = None;
-        let mut paths = std::collections::BTreeSet::new();
-        for output in &self.outputs {
-            output.validate(file)?;
-            if previous.is_some_and(|value| value >= output.id.as_str()) {
-                let issue = if previous == Some(output.id.as_str()) {
-                    format!("duplicate_artifact_output:{}", output.id)
-                } else {
-                    "artifact_outputs_must_be_sorted_by_id".to_owned()
-                };
-                return Err(ContractError::config(
-                    file,
-                    "workflow.artifact_tasks.outputs",
-                    issue,
-                ));
-            }
-            if !paths.insert(output.path.as_str()) {
-                return Err(ContractError::config(
-                    file,
-                    "workflow.artifact_tasks.outputs.path",
-                    format!("duplicate_artifact_output_path:{}", output.path),
-                ));
-            }
-            previous = Some(output.id.as_str());
-        }
-        Ok(())
+        validate_output_inventory(&self.outputs, file, "workflow.artifact_tasks.outputs")
     }
 }
 
@@ -105,29 +73,66 @@ impl ArtifactBuildOutput {
     /// Validate one output identity, source, and required size ceiling.
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
+        self.validate_at(file, "workflow.artifact_tasks.outputs")
+    }
+
+    fn validate_at(&self, file: &str, field: &str) -> Result<(), ContractError> {
         if !is_valid_verification_task_id(&self.id) {
             return Err(ContractError::config(
                 file,
-                "workflow.artifact_tasks.outputs.id",
+                format!("{field}.id"),
                 format!("bad_artifact_output_id:{}", self.id),
             ));
         }
         if self.max_bytes == 0 {
             return Err(ContractError::config(
                 file,
-                "workflow.artifact_tasks.outputs.max_bytes",
+                format!("{field}.max_bytes"),
                 "must_be_positive",
             ));
         }
         if !safe_output_path(&self.path) {
             return Err(ContractError::config(
                 file,
-                "workflow.artifact_tasks.outputs.path",
+                format!("{field}.path"),
                 "unsafe_artifact_path",
             ));
         }
         Ok(())
     }
+}
+
+/// Validate one nonempty, sorted, unambiguous output inventory.
+pub(super) fn validate_output_inventory(
+    outputs: &[ArtifactBuildOutput],
+    file: &str,
+    field: &str,
+) -> Result<(), ContractError> {
+    if outputs.is_empty() {
+        return Err(ContractError::config(file, field, "empty_output_inventory"));
+    }
+    let mut previous: Option<&str> = None;
+    let mut paths = std::collections::BTreeSet::new();
+    for output in outputs {
+        output.validate_at(file, field)?;
+        if previous.is_some_and(|value| value >= output.id.as_str()) {
+            let issue = if previous == Some(output.id.as_str()) {
+                format!("duplicate_artifact_output:{}", output.id)
+            } else {
+                "artifact_outputs_must_be_sorted_by_id".to_owned()
+            };
+            return Err(ContractError::config(file, field, issue));
+        }
+        if !paths.insert(output.path.as_str()) {
+            return Err(ContractError::config(
+                file,
+                format!("{field}.path"),
+                format!("duplicate_artifact_output_path:{}", output.path),
+            ));
+        }
+        previous = Some(output.id.as_str());
+    }
+    Ok(())
 }
 
 fn safe_output_path(path: &str) -> bool {
