@@ -49,6 +49,8 @@ pub const OUTPUT_CAPTURE_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 /// Default run deadline in seconds; past this the child is killed.
 pub const RUN_TIMEOUT_SECS: u64 = 600;
 
+const GIT_OPTIONAL_LOCKS_ENV: &str = "GIT_OPTIONAL_LOCKS";
+
 /// Whether a subcommand is inside the Velnor mise allowlist.
 #[must_use]
 pub fn is_allowed_mise_subcommand(subcommand: &str) -> bool {
@@ -102,11 +104,16 @@ impl IsolatedCommand {
     /// Direct program invocation without the mise wrapper.
     #[must_use]
     pub fn direct(program: &str, args: Vec<OsString>) -> Self {
+        let extra_env = if program == "git" {
+            vec![(OsString::from(GIT_OPTIONAL_LOCKS_ENV), OsString::from("0"))]
+        } else {
+            Vec::new()
+        };
         Self {
             program: OsString::from(program),
             args,
             cwd: None,
-            extra_env: Vec::new(),
+            extra_env,
             policy: EnvPolicy::Discovery,
         }
     }
@@ -149,7 +156,11 @@ impl IsolatedCommand {
     pub fn with_env(mut self, extra: &[(OsString, OsString)]) -> Result<Self, MiseError> {
         for pair in extra {
             let key = pair.0.to_string_lossy();
-            if is_reserved_env_key(&key) {
+            if is_reserved_env_key(&key)
+                || (self.policy == EnvPolicy::Discovery
+                    && self.program == OsStr::new("git")
+                    && key == GIT_OPTIONAL_LOCKS_ENV)
+            {
                 return Err(MiseError::InvalidStepInput {
                     field: key.into_owned(),
                     value: "reserved_env_key".to_owned(),
