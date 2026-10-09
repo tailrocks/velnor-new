@@ -108,7 +108,7 @@ pub(super) fn build_steps(
     let build = build_script(product.binary, build_argv, &target_dir)?;
     let mut steps = vec![
         workflow_steps::mise_step(pins.setup_for(build_host))?,
-        workflow_steps::command_step(
+        workflow_steps::mise_install_step(
             "Install pinned Rust and MBX",
             &pins.install_build_tools_argv,
         )?,

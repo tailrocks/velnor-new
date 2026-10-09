@@ -1,4 +1,4 @@
-use super::{gh_function, gh_function_with_timeout};
+use super::{Yaml, gh_function, gh_function_with_timeout};
 use std::error::Error;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -121,6 +121,66 @@ fn bounded_gh_function_terminates_a_hung_request() -> Result<(), Box<dyn Error>>
     assert!(
         started.elapsed() >= std::time::Duration::from_secs(1),
         "hung request returned before its one-second budget"
+    );
+    Ok(())
+}
+
+#[test]
+fn mise_install_requires_the_scoped_workflow_token_before_invocation() -> Result<(), Box<dyn Error>>
+{
+    let step = super::mise_install_step(
+        "Install pinned Rust and MBX",
+        &[
+            "mise".to_owned(),
+            "--no-config".to_owned(),
+            "--no-env".to_owned(),
+            "--no-hooks".to_owned(),
+            "install".to_owned(),
+            "mr-boxington@1.21.1".to_owned(),
+        ],
+    )?;
+    let Yaml::Map(fields) = step else {
+        return Err("Mise install must render a step mapping".into());
+    };
+    let field = |name: &str| {
+        fields
+            .iter()
+            .find_map(|(key, value)| (key == name).then_some(value))
+    };
+    let Yaml::Map(env) = field("env").ok_or("Mise install has no step environment")? else {
+        return Err("Mise install environment must be a mapping".into());
+    };
+    assert_eq!(
+        env,
+        &[("GITHUB_TOKEN".to_owned(), Yaml::str("${{ github.token }}"))]
+    );
+    let Yaml::Str(run) = field("run").ok_or("Mise install has no command")? else {
+        return Err("Mise install command must be a string".into());
+    };
+    assert!(
+        run.starts_with("set -eu\n: \"${GITHUB_TOKEN:?missing workflow token}\"\n"),
+        "token guard must precede the install command"
+    );
+    assert!(run.contains("mise --no-config --no-env --no-hooks install mr-boxington@1.21.1"));
+
+    let scratch = Scratch::new()?;
+    let mock_bin = scratch.0.join("mock-bin");
+    fs::create_dir(&mock_bin)?;
+    let invoked = scratch.0.join("mise-invoked");
+    write_executable(
+        &mock_bin.join("mise"),
+        &format!("#!/bin/sh\n: > '{}'\n", invoked.display()),
+    )?;
+    let output = Command::new("bash")
+        .args(["-c", run])
+        .env("PATH", path_with(&mock_bin)?)
+        .env("GITHUB_TOKEN", "")
+        .output()?;
+    assert!(!output.status.success(), "empty token unexpectedly passed");
+    assert!(!invoked.exists(), "Mise ran without its workflow token");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("missing workflow token"),
+        "missing-token failure must be explicit without printing credentials"
     );
     Ok(())
 }

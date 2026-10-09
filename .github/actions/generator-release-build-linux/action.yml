@@ -14,8 +14,10 @@ runs:
         cache: "false"
         cache_save: "false"
     - name: Install pinned Rust and MBX
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
       shell: bash
-      run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.1
+      run: "set -eu\n: \"${GITHUB_TOKEN:?missing workflow token}\"\nmise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.1"
     - name: Build velnor-actions with MBX
       shell: bash
       run: "set -eu\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions\ncp target/release/velnor-actions velnor-actions-0.1.5-x86_64-unknown-linux-gnu\ntest -s velnor-actions-0.1.5-x86_64-unknown-linux-gnu"

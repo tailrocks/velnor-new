@@ -13,8 +13,10 @@ runs:
         cache: "false"
         cache_save: "false"
     - name: Install pinned Rust and MBX
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
       shell: bash
-      run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.1
+      run: "set -eu\n: \"${GITHUB_TOKEN:?missing workflow token}\"\nmise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.1"
     - name: Install x86_64-apple-darwin Rust target
       shell: bash
       run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup target add --toolchain 1.98.1-aarch64-apple-darwin x86_64-apple-darwin
