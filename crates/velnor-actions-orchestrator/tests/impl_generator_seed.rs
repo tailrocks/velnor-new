@@ -10,6 +10,8 @@ use std::process::{Command, Output};
 use velnor_actions_contract::ReleaseTarget;
 use velnor_actions_orchestrator::acquire_script_argv;
 
+use crate::impl_common::test_path_with_sbin;
+
 #[test]
 fn generator_seed_hit_skips_curl_and_a_bad_hash_does_not_copy()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -78,7 +80,10 @@ fn generator_seed_hit_skips_curl_and_a_bad_hash_does_not_copy()
 fn file_sha256(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     // Ubuntu keeps sha256sum in /usr/bin. macOS coreutils can put it in /sbin.
     // The acquire script also resolves sha256sum from PATH.
-    let output = Command::new("sha256sum").arg(path).output()?;
+    let output = Command::new("sha256sum")
+        .arg(path)
+        .env("PATH", test_path_with_sbin()?)
+        .output()?;
     if !output.status.success() {
         return Err(format!("sha256sum:{output:?}").into());
     }
