@@ -211,3 +211,107 @@ commit's trailers.
 This records an observed trailer-order discrepancy. Its cause is unproven;
 no rewrite was attempted, and the immutable merge commit remains unchanged.
 The merge does not change the separate v0.1.5 publication status above.
+
+## v0.1.6 candidate atomic-observer failure
+
+PR #122 is a draft version candidate at source head
+`7690dea7ddb39130f2a2dde679ce07582300aae4`, based on main
+`2edc5cad367f098fd295e5edd09e5f1fd79a9acb`. Its version-owned outputs target
+v0.1.6. This section records a local qualification failure and a bounded
+diagnostic; it does not qualify the candidate or establish release acceptance.
+
+The exact `./scripts/verify-local.sh` run on that head failed in
+`cargo test --locked -p velnor-actions-orchestrator`. The integration binary
+reported 728 passed, 1 failed, 0 ignored. The failure was
+`impl_generate_p09_atomic::atomic_commit_never_exposes_missing_tree`: observer
+1's `symlink_metadata` of
+`/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpungynC/.github` returned
+`NotFound` / raw errno 2 at iteration 55,380, while the sampled writer phase
+was `rewrite_3_in_progress`. Subsequent parent and target metadata probes
+succeeded. They ran after the original error and therefore do not establish
+continuous target visibility. The preserved log is
+`/private/tmp/velnor-gap-probe/historical-atomic-verify-local-7690-failure-20261009.log`,
+SHA-256 `f3501bb1b8c5120e97aa51d2009ce715980e074dbd9c3b4b6adade4ed9b82e03`.
+
+An earlier harness description called its cross-parent child-stage cell
+`ProductTempDir`; that label was inaccurate. In the actual integration test,
+`make_repo()` provides the repository `TempDir`, root permissions are present,
+and `stage_in_place` selects that staging `TempDir` root itself. The existing
+`.github` and staged root are sibling entries under the repository root; the
+exchange is same-parent. The earlier child-stage cell had different topology,
+and its same-parent comparison did not model the production `TempDir` drop
+after `remove_dir_all`. Neither earlier standalone cell attributed the
+historical lookup error. No source behavior or assertion changed for this
+diagnostic.
+
+The bounded replay used a disposable worktree rooted at commit `7690dea7`.
+Its temporary writer trace used a 64-entry thread-local buffer for 56
+phase/operation records over eight rewrites. The original observer success
+loop remained unchanged. Formatting and trace-file output occurred only after
+the scoped test threads joined. For the exchange record, target and staged
+device/inode metadata was sampled before the exchange, and only when capture
+was enabled; no metadata lookup, formatting, or global mutex was added between
+exchange and old-tree removal. The `TempDir` drop stayed after the swap result,
+matching the production lifecycle. The recorded monotonic timestamps share
+the observer's original `Instant`; they are diagnostic timing only and do not
+prove uninterrupted pathname visibility.
+
+With Rust/Cargo 1.98.1, `CARGO_HOME=/tmp/velnor-110-cargo-home`,
+`CARGO_TARGET_DIR=/private/tmp/velnor-atomic-prod-7690-target`, and Cargo
+offline, the one isolated run used:
+
+```sh
+cargo test --locked --offline -p velnor-actions-orchestrator --test velnor_orchestrator \
+  impl_generate_p09_atomic::atomic_commit_never_exposes_missing_tree -- --exact --test-threads=1
+```
+
+It passed 1 test, with 728 filtered out, in 2.49 seconds. The next and only
+default-concurrency comparison ran the same integration test target, rebuilt
+only for post-join trace formatting, without a test filter or
+`--test-threads` override:
+
+```sh
+cargo test --locked --offline -p velnor-actions-orchestrator --test velnor_orchestrator
+```
+
+It passed 729 tests, 0 failed, in 25.08 seconds. Neither replay recorded an
+observer metadata error. The reconstructed source trees for the runs are
+`fbbd1b65bf9555eade96aaebfc02fd8aad0d96ca` (isolated) and
+`3b62d4cbd12c59ff525b11d85aa8cc75338550af` (concurrent), both based on the
+same 7690 commit. Between those runs, only post-join trace rendering changed:
+the isolated output used derived `AtomicDiagnosticIdentity` debug formatting;
+the concurrent output printed the same fields individually and added Debug
+derives to silence warnings. The writer and observer windows were unchanged.
+The second test binary SHA-256 was
+`d7d4f9f7df97a528695faace3b0a6103d4684771a5e0134a2c1884c85fe70690`. The
+first binary hash was not saved before Cargo replaced that target with the
+format-only build, so no binary hash is claimed for the isolated run.
+
+Trace and command-output artifacts are retained under
+`/private/tmp/velnor-gap-probe/`:
+
+| Run | Artifact | SHA-256 |
+|---|---|---|
+| Isolated | `atomic-minimal-isolated-20261009.log` | `08937e87e979275cf8d0016706fa58417b4d8d827d82a62817cc624aa123f243` |
+| Isolated | `atomic-minimal-isolated-20261009.stdout` | `c9ab6ec32aa23a4733479625be88f06aaf0ddb4baed233e11fa1c82a362751f9` |
+| Concurrent | `atomic-minimal-integration-20261009.log` | `4d6e34891391d9638515fecfde2f821d4a0f914d05daa562e2555158ac0b82c5` |
+| Concurrent | `atomic-minimal-integration-20261009.stdout` | `32fa04ddbe65c3043808469349132a9192e9e083731ea21d1a689cce31076e5c` |
+
+An earlier replay with global locking, extra metadata probes, and per-event
+formatting passed the integration binary but was more intrusive and is
+excluded from this comparison. The earlier four-cell native harness is also
+not treated as a production-flow reproduction. No additional replay was run.
+
+The only syscall-tracing attempt in this session was
+`/usr/sbin/dtrace -ln 'syscall::lstat*:entry'`. It returned
+`dtrace: DTrace requires additional privileges` for the current unprivileged
+UID 501 session. No syscall or VFS trace was captured. This is a limitation of
+this session's tracing capability, not evidence that macOS/APFS cannot be
+traced or that the kernel caused the error.
+
+The historical `NotFound` remains a real failed assertion and its production
+cause is unproven. The two minimized non-reproductions neither clear that
+failure nor establish a namespace gap, a rename error, or an old-tree cleanup
+race. PR #122's local qualification therefore remains blocked; the v0.1.5
+tag and draft remain occupied, and no release acceptance, publication, or
+consumer adoption is claimed.
