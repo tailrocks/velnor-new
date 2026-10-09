@@ -52,6 +52,9 @@ fn publisher_observes_one_release_id_before_and_after_publication() {
     assert!(script.contains("repos/$GITHUB_REPOSITORY/releases/$release_id"));
     assert!(!script.contains("releases/tags/$tag"));
     assert!(script.contains("browser_download_url == $url"));
+    assert!(script.contains("verify_release_assets \"$release_response\" 'false'"));
+    assert!(script.contains("verify_release_assets \"$release_response\" 'true'"));
+    assert!(script.contains(".target_commitish == $source"));
     assert!(script.contains("$matches[0].size == $size"));
     assert!(script.contains("$matches[0].digest == $digest"));
     assert!(script.contains(".immutable == true"));

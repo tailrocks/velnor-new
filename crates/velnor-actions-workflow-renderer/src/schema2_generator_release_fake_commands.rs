@@ -81,8 +81,8 @@ if [ "$1 $2" = 'release create' ]; then
     esac
   done
   test "$target_seen" = true
-  if [ "$GH_CASE" = UntaggedDraftHtmlUrl ]; then
-    printf 'https://github.com/tailrocks/velnor-new/releases/tag/untagged-c155089fcae36e2c5c68\n'
+  if [ "$GH_CASE" = UntaggedDraftUrls ]; then
+    printf 'https://github.com/tailrocks/velnor-new/releases/tag/untagged-6899c9b4aa4e941dadba\n'
   fi
   exit 0
 fi

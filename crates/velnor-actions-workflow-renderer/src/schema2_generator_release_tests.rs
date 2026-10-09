@@ -43,13 +43,20 @@ enum Failure {
     TransientTag,
     TagMovedBeforePublish,
     WrongDraftReleaseId,
+    WrongDraftRepository,
+    WrongDraftApiPath,
+    WrongDraftTag,
+    WrongDraftSource,
     WrongDraftDigest,
-    WrongDraftUrl,
-    UntaggedDraftHtmlUrl,
     WrongDraftSize,
     WrongDraftInventory,
+    UnknownDraftAsset,
+    WrongDraftAssetName,
+    WrongDraftAssetState,
+    UntaggedDraftUrls,
     ChangedReleaseId,
     WrongPublishedDigest,
+    WrongPublishedAssetUrl,
     WrongPublishedUrl,
     MutablePublished,
 }
@@ -67,13 +74,20 @@ fn complete_publish_script_uses_parent_tag_and_checks_all_assets() -> Result<(),
         Failure::TransientTag,
         Failure::TagMovedBeforePublish,
         Failure::WrongDraftReleaseId,
+        Failure::WrongDraftRepository,
+        Failure::WrongDraftApiPath,
+        Failure::WrongDraftTag,
+        Failure::WrongDraftSource,
         Failure::WrongDraftDigest,
-        Failure::WrongDraftUrl,
-        Failure::UntaggedDraftHtmlUrl,
         Failure::WrongDraftSize,
         Failure::WrongDraftInventory,
+        Failure::UnknownDraftAsset,
+        Failure::WrongDraftAssetName,
+        Failure::WrongDraftAssetState,
+        Failure::UntaggedDraftUrls,
         Failure::ChangedReleaseId,
         Failure::WrongPublishedDigest,
+        Failure::WrongPublishedAssetUrl,
         Failure::WrongPublishedUrl,
         Failure::MutablePublished,
     ] {
@@ -98,10 +112,10 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
     let gh_function = super::workflow_steps::gh_function(&test_pins().gh_argv)?;
     let output = run_publish_command(&scratch.0, case, &script, &gh_function)?;
     assert_publish_result(&scratch.0, case, &output)?;
-    if case == Failure::UntaggedDraftHtmlUrl {
+    if case == Failure::UntaggedDraftUrls {
         assert!(
             String::from_utf8_lossy(&output.stdout).contains(
-                "https://github.com/tailrocks/velnor-new/releases/tag/untagged-c155089fcae36e2c5c68"
+                "https://github.com/tailrocks/velnor-new/releases/tag/untagged-6899c9b4aa4e941dadba"
             ),
             "mock release creation did not return the observed draft URL: {}",
             String::from_utf8_lossy(&output.stdout)
@@ -120,6 +134,11 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
         );
         assert!(calls.contains("--method PATCH -F draft=false"), "{calls}");
         assert!(scratch.0.join("patch-log").is_file());
+        let draft = fs::read_to_string(scratch.0.join("draft-release.json"))?;
+        assert!(
+            draft.contains("/releases/download/untagged-6899c9b4aa4e941dadba/"),
+            "mock draft asset URLs must match the observed response"
+        );
     }
     cli_tests::assert_pinned_publish_calls(&scratch.0, case)
 }
@@ -211,7 +230,7 @@ fn assert_publish_result(
     case: Failure,
     output: &std::process::Output,
 ) -> Result<(), Box<dyn Error>> {
-    let should_succeed = matches!(case, Failure::None | Failure::UntaggedDraftHtmlUrl);
+    let should_succeed = matches!(case, Failure::None | Failure::UntaggedDraftUrls);
     let calls = fs::read_to_string(root.join("gh-calls")).unwrap_or_default();
     let mise_calls = fs::read_to_string(root.join("mise-calls")).unwrap_or_default();
     assert_eq!(
@@ -225,13 +244,20 @@ fn assert_publish_result(
         case,
         Failure::None
             | Failure::WrongDraftReleaseId
+            | Failure::WrongDraftRepository
+            | Failure::WrongDraftApiPath
+            | Failure::WrongDraftTag
+            | Failure::WrongDraftSource
             | Failure::WrongDraftDigest
-            | Failure::WrongDraftUrl
-            | Failure::UntaggedDraftHtmlUrl
             | Failure::WrongDraftSize
             | Failure::WrongDraftInventory
+            | Failure::UnknownDraftAsset
+            | Failure::WrongDraftAssetName
+            | Failure::WrongDraftAssetState
+            | Failure::UntaggedDraftUrls
             | Failure::ChangedReleaseId
             | Failure::WrongPublishedDigest
+            | Failure::WrongPublishedAssetUrl
             | Failure::WrongPublishedUrl
             | Failure::MutablePublished
             | Failure::TagMovedBeforePublish
@@ -270,7 +296,30 @@ fn assert_publish_result(
         );
         assert!(!root.join("release-accepted").exists());
     }
+    if is_draft_validation_failure(case) {
+        assert!(
+            !root.join("patch-log").exists() && !calls.contains("--method PATCH"),
+            "draft binding failure must stop before publication: {calls}"
+        );
+    }
     Ok(())
+}
+
+fn is_draft_validation_failure(case: Failure) -> bool {
+    matches!(
+        case,
+        Failure::WrongDraftReleaseId
+            | Failure::WrongDraftRepository
+            | Failure::WrongDraftApiPath
+            | Failure::WrongDraftTag
+            | Failure::WrongDraftSource
+            | Failure::WrongDraftDigest
+            | Failure::WrongDraftSize
+            | Failure::WrongDraftInventory
+            | Failure::UnknownDraftAsset
+            | Failure::WrongDraftAssetName
+            | Failure::WrongDraftAssetState
+    )
 }
 
 fn install_mock_gh(root: &Path) -> Result<(), Box<dyn Error>> {
