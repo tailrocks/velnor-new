@@ -329,3 +329,59 @@
         run: "set -eu\nroot=\"$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification\"\nmkdir -p \"$root/src\"\ncat > \"$root/Cargo.toml\" <<'EOF'\n[package]\nname = \"mbx-cache-qualification\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\".\"]\nresolver = \"3\"\n\n[lib]\npath = \"src/lib.rs\"\nEOF\ncat > \"$root/src/lib.rs\" <<'EOF'\npub fn cache_probe() -> u64 { 42 }\nEOF\nmbx build --manifest-path \"$root/Cargo.toml\"\n"
       - name: Require reused compilation
         run: "set -e -o pipefail; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx stats --json | tee \"$RUNNER_TEMP/mbx-reuse-stats.json\"; jq -e '.savings.cached_compilations > 0' \"$RUNNER_TEMP/mbx-reuse-stats.json\""
+  mise-pin-linux-x64:
+    name: Mise pin / hosted / Linux x64
+    if: inputs.mode == 'mise-pin'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out selected ref
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: "false"
+      - name: Setup Mise
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
+        with:
+          cache: "false"
+          cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: 8a223b5f8ca71100220a3e5bef259614c348e7b1d80e6b15c2a9c9aa3affe5e4
+          version: 2026.10.5
+      - name: Verify selected ref, version, and binary digest
+        shell: bash
+        env:
+          MISE_VERSION: 2026.10.5
+          MISE_SHA256: 8a223b5f8ca71100220a3e5bef259614c348e7b1d80e6b15c2a9c9aa3affe5e4
+        run: "set -euo pipefail\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nversion=\"$(mise --version)\"\ncase \"$version\" in \"mise $MISE_VERSION \"*) ;; *) echo \"unexpected Mise version: $version\" >&2; exit 1 ;; esac\nbinary=\"$(command -v mise)\"\nactual=\"$(sha256sum \"$binary\" | awk '{print $1}')\"\ntest \"$actual\" = \"$MISE_SHA256\""
+  mise-pin-macos-x64:
+    name: Mise pin / hosted / macOS x64
+    if: inputs.mode == 'mise-pin'
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out selected ref
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: "false"
+      - name: Setup Mise
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
+        with:
+          cache: "false"
+          cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: 204c7d64e8b0b62c0a95847ab6442bf23bf88247d52967e99c5cad53f56eaa0c
+          version: 2026.10.5
+      - name: Verify selected ref, version, and binary digest
+        shell: bash
+        env:
+          MISE_VERSION: 2026.10.5
+          MISE_SHA256: 204c7d64e8b0b62c0a95847ab6442bf23bf88247d52967e99c5cad53f56eaa0c
+        run: "set -euo pipefail\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nversion=\"$(mise --version)\"\ncase \"$version\" in \"mise $MISE_VERSION \"*) ;; *) echo \"unexpected Mise version: $version\" >&2; exit 1 ;; esac\nbinary=\"$(command -v mise)\"\nactual=\"$(shasum -a 256 \"$binary\" | awk '{print $1}')\"\ntest \"$actual\" = \"$MISE_SHA256\""
