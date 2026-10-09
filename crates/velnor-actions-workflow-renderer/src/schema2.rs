@@ -41,6 +41,8 @@ mod features;
 mod generator_release;
 #[path = "schema2_mbx_qualification.rs"]
 mod mbx_qualification;
+#[path = "schema2_mise_pin_qualification.rs"]
+mod mise_pin_qualification;
 #[path = "schema2_product_release.rs"]
 mod product_release;
 #[path = "schema2_product_release_family.rs"]
@@ -85,6 +87,8 @@ pub struct Schema2WorkflowRequest {
     pub workflows: BTreeSet<RoutingWorkflow>,
     /// Pinned tool inputs, required only when qualification is emitted.
     pub mbx_qualification: Option<MbxQualificationPins>,
+    /// Latest Mise release inputs, required only when qualification is emitted.
+    pub mise_pin_qualification: Option<MisePinQualificationPins>,
     /// Orchestrator-resolved Mise setup and command vectors for product releases.
     pub product_release: Option<ProductReleasePins>,
 }
@@ -155,6 +159,15 @@ pub struct MbxQualificationPins {
     pub mbx_version: String,
     /// Exact Rust toolchain version used by the qualification lane.
     pub rust_version: String,
+}
+
+/// Exact Mise release pins for the hosted Linux and macOS x64 qualification.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MisePinQualificationPins {
+    /// Linux x86-64 release asset verification pins.
+    pub linux_x86_64_setup: MiseSetup,
+    /// macOS x86-64 release asset verification pins.
+    pub macos_x86_64_setup: MiseSetup,
 }
 
 impl Schema2WorkflowRequest {
@@ -270,6 +283,13 @@ fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> 
     } else if request.workflows.contains(&RoutingWorkflow::Qualification) {
         return Err(RenderError::InvalidWorkflow(
             "missing_mbx_qualification_pins".to_owned(),
+        ));
+    }
+    if let Some(pins) = &request.mise_pin_qualification {
+        jobs.extend(mise_pin_qualification::jobs(pins)?);
+    } else if request.workflows.contains(&RoutingWorkflow::Qualification) {
+        return Err(RenderError::InvalidWorkflow(
+            "missing_mise_pin_qualification_pins".to_owned(),
         ));
     }
     Ok(document("Qualification", mode_trigger(), jobs))

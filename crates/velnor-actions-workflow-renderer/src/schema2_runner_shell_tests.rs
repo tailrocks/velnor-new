@@ -3,8 +3,8 @@ use std::collections::BTreeSet;
 use velnor_actions_contract::{RoutingWorkflow, SCALE_SET_NAME, VELNOR_LABEL};
 
 use super::{
-    MbxQualificationPins, Schema2WorkflowRequest, monitoring, qualification,
-    render_schema2_workflows,
+    MbxQualificationPins, MisePinQualificationPins, Schema2WorkflowRequest, monitoring,
+    qualification, render_schema2_workflows,
 };
 use crate::setup::MiseSetup;
 use crate::yaml::Yaml;
@@ -28,6 +28,18 @@ fn request() -> Schema2WorkflowRequest {
             ),
             mbx_version: "1.0.0".to_owned(),
             rust_version: "1.98.1".to_owned(),
+        }),
+        mise_pin_qualification: Some(MisePinQualificationPins {
+            linux_x86_64_setup: MiseSetup {
+                uses: format!("jdx/mise-action@{}", "a".repeat(40)),
+                version: "2026.10.5".to_owned(),
+                sha256: "b".repeat(64),
+            },
+            macos_x86_64_setup: MiseSetup {
+                uses: format!("jdx/mise-action@{}", "a".repeat(40)),
+                version: "2026.10.5".to_owned(),
+                sha256: "c".repeat(64),
+            },
         }),
         product_release: None,
     }
@@ -77,7 +89,7 @@ fn assert_lane_shells(document: &Yaml, minimum_per_lane: usize) {
                     "scale-set job {id} must declare its shell"
                 );
             }
-            Yaml::Str(label) if label == "ubuntu-26.04" => {
+            Yaml::Str(label) if label == "ubuntu-26.04" || label == "macos-15-intel" => {
                 hosted += 1;
                 if has_container {
                     assert_eq!(

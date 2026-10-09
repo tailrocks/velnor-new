@@ -23,6 +23,7 @@ fn product(families: &[RoutingWorkflow]) -> Result<ProductRelease, Box<dyn Error
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
         workflows: BTreeSet::from_iter(families.iter().copied()),
         mbx_qualification: None,
+        mise_pin_qualification: None,
         product_release: Some(test_pins()),
     };
     render(&request)?.ok_or_else(|| "release workflow was not rendered".into())
@@ -53,6 +54,7 @@ fn empty_release_request_emits_no_workflow() -> Result<(), Box<dyn Error>> {
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
         workflows: BTreeSet::new(),
         mbx_qualification: None,
+        mise_pin_qualification: None,
         product_release: None,
     };
     assert!(render(&request)?.is_none());

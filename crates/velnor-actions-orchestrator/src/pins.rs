@@ -31,6 +31,9 @@ use velnor_actions_workflow_renderer::setup::{
 #[path = "pins_consumer_binary_release.rs"]
 mod consumer_binary_release;
 pub(super) use consumer_binary_release::resolve_mise_setup_for_consumer_binary_release;
+#[path = "pins_mise_pin_qualification.rs"]
+mod mise_pin_qualification;
+pub(super) use mise_pin_qualification::resolve as resolve_mise_pin_qualification;
 
 /// Resolve typed Mise setup pins: overrides plus the compiled catalog.
 ///
@@ -380,6 +383,9 @@ mod tests;
 #[path = "pins_tests_b.rs"]
 mod tests_b;
 
+#[cfg(test)]
+#[path = "pins_mise_pin_qualification_tests.rs"]
+mod mise_pin_qualification_tests;
 #[cfg(test)]
 #[path = "pins_manifest_tests.rs"]
 mod pins_manifest_tests;
