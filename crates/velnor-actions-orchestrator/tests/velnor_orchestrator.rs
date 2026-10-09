@@ -23,6 +23,7 @@ mod impl_gates_cover_repository;
 mod impl_gates_shard;
 mod impl_gates_shard_tokens;
 mod impl_gen_gates;
+mod impl_generate_p09_atomic;
 mod impl_generate_p09_concurrent;
 mod impl_generate_p09_leaf_links;
 mod impl_generate_p09_preview;
