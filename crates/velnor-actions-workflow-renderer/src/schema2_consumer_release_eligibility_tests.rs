@@ -1,16 +1,14 @@
 use super::{ReleaseEligibilityContext, consumer_script};
 
-fn context() -> ReleaseEligibilityContext {
-    ReleaseEligibilityContext {
-        repository: "example/repo-scan".to_owned(),
-        default_branch: "stable".to_owned(),
-        workflow_path: ".github/workflows/binary-release.yml".to_owned(),
-    }
-}
+#[path = "schema2_consumer_release_eligibility_behavior_tests.rs"]
+mod behavior;
+#[path = "schema2_consumer_release_eligibility_test_support.rs"]
+mod support;
 
 #[test]
-fn generic_consumer_gate_binds_repository_branch_and_workflow_authority() {
-    let script = consumer_script(&context(), &["gh".to_owned()], false).expect("valid context");
+fn consumer_gate_binds_repository_branch_and_workflow_authority() {
+    let script =
+        consumer_script(&support::context(), &["gh".to_owned()], false).expect("valid context");
     assert!(script.contains("repository='example/repo-scan'"));
     assert!(script.contains("default_branch='stable'"));
     assert!(script.contains("refs/heads/$default_branch"));
@@ -22,11 +20,11 @@ fn generic_consumer_gate_binds_repository_branch_and_workflow_authority() {
 #[test]
 fn consumer_gate_rejects_unsafe_identity_and_workflow_paths() {
     for repository in ["example", "example/repo;scan", "example/repo/extra"] {
-        let mut invalid = context();
+        let mut invalid = support::context();
         invalid.repository = repository.to_owned();
         assert!(consumer_script(&invalid, &["gh".to_owned()], false).is_err());
     }
-    let mut invalid = context();
+    let mut invalid: ReleaseEligibilityContext = support::context();
     invalid.workflow_path = ".github/workflows/other.yml".to_owned();
     assert!(consumer_script(&invalid, &["gh".to_owned()], false).is_err());
 }
