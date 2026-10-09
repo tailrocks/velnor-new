@@ -34,7 +34,7 @@ pub(super) fn publish_script(pins: &ProductReleasePins) -> Result<String, Render
         ci_check.clone(),
         create_source_tag_script(),
         format!(
-            "gh release create \"$tag\" --repo \"$GITHUB_REPOSITORY\" --verify-tag --title \"velnor-actions $tag\" --latest=false --draft --notes \"velnor-actions {VERSION} built from $GITHUB_SHA.\""
+            "gh release create \"$tag\" --repo \"$GITHUB_REPOSITORY\" --verify-tag --target \"$GITHUB_SHA\" --title \"velnor-actions $tag\" --latest=false --draft --notes \"velnor-actions {VERSION} built from $GITHUB_SHA.\""
         ),
         release_id_script(),
         format!("gh release upload \"$tag\" --repo \"$GITHUB_REPOSITORY\" \\\n{upload}"),
@@ -109,7 +109,7 @@ pub(super) fn published_release_verify_script() -> String {
 fn release_api_helpers() -> String {
     r#"verify_release_metadata() {
   local response="$1" expected_draft="$2"
-  jq -e --argjson release_id "$release_id" --arg tag "$tag" --arg api_url "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/$release_id" --arg html_url "https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag" --argjson expected_draft "$expected_draft" '.id == $release_id and .tag_name == $tag and .url == $api_url and .html_url == $html_url and .draft == $expected_draft and .prerelease == false and (if $expected_draft then true else .immutable == true end)' "$response" > /dev/null
+  jq -e --argjson release_id "$release_id" --arg tag "$tag" --arg api_url "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/$release_id" --arg html_url "https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag" --argjson expected_draft "$expected_draft" '.id == $release_id and .tag_name == $tag and .url == $api_url and (if $expected_draft then true else .html_url == $html_url end) and .draft == $expected_draft and .prerelease == false and (if $expected_draft then true else .immutable == true end)' "$response" > /dev/null
 }
 
 verify_release_assets() {

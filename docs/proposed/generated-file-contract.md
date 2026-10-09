@@ -15,6 +15,7 @@ preserves other repository-owned entries as specified in §3:
 ├── release-plz-bootstrap.toml   # consumer-v1 only, release enabled
 ├── release-plz.toml             # consumer-v1 only, release enabled
 └── workflows/
+    ├── binary-release.yml         # consumer-v1 only, Rust binary release enabled
     ├── ci.yml
     ├── velnor-qualification.yml  # velnor-repository-v1 only
     └── release.yml               # velnor-repository-v1, or consumer-v1 with release enabled
@@ -38,6 +39,13 @@ block (least privilege for its role); see [workflow
 > `.github/release-plz-bootstrap.toml` when
 > `[stacks.rust.release].enabled = true`, and MUST emit none of them
 > otherwise.
+
+The consumer binary workflow is emitted only when
+`[stacks.rust.binary_release].enabled = true`; it is a separately generated,
+single-package workflow described in [binary release
+contract](binary-release-contract.md). With the option absent or disabled,
+`binary-release.yml` is not emitted and any prior generated copy is retired on
+successful generation.
 
 | Output | Produces format | Write coordinator | Ownership rule |
 |---|---|---|---|

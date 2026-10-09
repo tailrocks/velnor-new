@@ -8,7 +8,7 @@ use velnor_actions_contract::{TOFU_APPLY_WORKFLOW_PATH, TofuApplyConfig};
 
 use crate::{
     MiseSetup, RenderError, guard, marker, render::RenderedFile, steps,
-    tofu_apply_document::tofu_apply_document, yaml::render_yaml,
+    tofu_apply_document::tofu_apply_document,
 };
 
 /// Generated workflow display name.
@@ -89,8 +89,11 @@ impl TofuApplySpec {
 pub fn render_tofu_apply_workflow(spec: &TofuApplySpec) -> Result<RenderedFile, RenderError> {
     spec.validate()?;
     let document = tofu_apply_document(spec)?;
-    let text = marker::with_marker(&spec.generator_version, &render_yaml(&document))?;
-    crate::workflow_size::check_workflow_size(TOFU_APPLY_WORKFLOW_PATH, &text)?;
+    let text = crate::render::fallback::render_checked_workflow(
+        TOFU_APPLY_WORKFLOW_PATH,
+        &document,
+        &spec.generator_version,
+    )?;
     steps::scan_for_private_subcommands(&text)?;
     Ok(RenderedFile {
         path: TOFU_APPLY_WORKFLOW_PATH.to_owned(),

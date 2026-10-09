@@ -204,13 +204,18 @@ fn snapshot(dir: &Path) -> Result<Snapshot, Box<dyn Error>> {
 
 /// Initialized repo whose config is `body` plus hostile sibling files.
 fn garbage_repo(prefix: &str, rng: &mut Rng, body: &[u8]) -> Result<PathBuf, Box<dyn Error>> {
-    let repo = tmp::fresh_tempdir(prefix)?;
-    tmp::init_repo(&repo)?;
-    std::fs::write(repo.join(".velnor/config.toml"), body)?;
+    let repo = tmp::fresh_tempdir(prefix)
+        .map_err(|error| format!("create {prefix} fixture directory: {error}"))?;
+    tmp::init_repo(&repo).map_err(|error| format!("initialize {}: {error}", repo.display()))?;
+    let config = repo.join(".velnor/config.toml");
+    std::fs::write(&config, body)
+        .map_err(|error| format!("write generated config {}: {error}", config.display()))?;
     for _ in 0..rng.below(4) {
         let name = gen_filename(rng);
         let len = rng.below(200);
-        std::fs::write(repo.join(name), rng.bytes(len))?;
+        let path = repo.join(name);
+        std::fs::write(&path, rng.bytes(len))
+            .map_err(|error| format!("write hostile sibling {}: {error}", path.display()))?;
     }
     Ok(repo)
 }
@@ -271,8 +276,10 @@ fn property_plan_never_panics_on_arbitrary_config() -> Result<(), Box<dyn Error>
     let mut rng = Rng::new(0x5043_4647_3132_3801);
     for index in 0..96 {
         let body = gen_config(&mut rng);
-        let repo = garbage_repo("p12-prop-cfg", &mut rng, body.as_bytes())?;
-        let output = tmp::spawn(&["plan"], &[], &repo)?;
+        let repo = garbage_repo("p12-prop-cfg", &mut rng, body.as_bytes())
+            .map_err(|error| format!("seed config case {index}, body={body:?}: {error}"))?;
+        let output = tmp::spawn(&["plan"], &[], &repo)
+            .map_err(|error| format!("plan config case {index} in {}: {error}", repo.display()))?;
         assert_graceful(&format!("seed cfg case {index}: {body:?}"), &output);
         tmp::cleanup(&repo);
     }

@@ -3,61 +3,19 @@
 
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::config::is_hosted_catalog;
 use velnor_actions_contract::{
     ReleaseTarget, RoutingWorkflow, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL,
 };
 
 use crate::RenderError;
-use crate::marker::with_marker;
 use crate::render::RenderedFile;
 use crate::runs_on::runs_on_yaml;
 use crate::setup::MiseSetup;
-use crate::yaml::{Yaml, render_yaml};
+use crate::yaml::Yaml;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum RunnerLane {
-    Hosted,
-    ScaleSet,
-}
-
-pub(super) struct RunnerSpec {
-    pub(super) runs_on: Yaml,
-    lane: RunnerLane,
-}
-
-impl RunnerSpec {
-    fn hosted(label: &str) -> Result<Self, RenderError> {
-        if !is_hosted_catalog(label) {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "schema2_hosted_runner_not_catalog:{label}"
-            )));
-        }
-        Ok(Self {
-            runs_on: Yaml::str(label),
-            lane: RunnerLane::Hosted,
-        })
-    }
-
-    fn scale_set(runs_on: Yaml) -> Self {
-        Self {
-            runs_on,
-            lane: RunnerLane::ScaleSet,
-        }
-    }
-
-    pub(super) fn push_default_shell(&self, fields: &mut Vec<(String, Yaml)>, has_container: bool) {
-        if has_container {
-            fields.push(crate::runs_on::run_shell_defaults_field(
-                crate::runs_on::CONTAINER_RUN_SHELL,
-            ));
-        } else if self.lane == RunnerLane::ScaleSet {
-            fields.push(crate::runs_on::run_shell_defaults_field(
-                crate::runs_on::SCALE_SET_RUN_SHELL,
-            ));
-        }
-    }
-}
+#[cfg(test)]
+#[path = "../../test_support/git_fixture.rs"]
+pub(crate) mod git_fixture;
 
 /// Qualification workflow path.
 pub const QUALIFICATION_WORKFLOW: &str = ".github/workflows/qualification.yml";
@@ -68,6 +26,15 @@ pub const MONITORING_WORKFLOW: &str = ".github/workflows/monitoring.yml";
 
 #[path = "schema2_classes.rs"]
 mod classes;
+#[path = "schema2_runner_spec.rs"]
+mod runner_spec;
+use runner_spec::RunnerSpec;
+#[path = "schema2_consumer_binary_release.rs"]
+mod consumer_binary_release;
+#[path = "schema2_consumer_binary_release_scripts.rs"]
+mod consumer_binary_release_scripts;
+#[path = "schema2_consumer_release_eligibility.rs"]
+mod consumer_release_eligibility;
 #[path = "schema2_features.rs"]
 mod features;
 #[path = "schema2_generator_release.rs"]
@@ -83,6 +50,19 @@ mod release;
 /// Exact-source gates for composed product-release workflows.
 #[path = "schema2_release_eligibility.rs"]
 pub mod release_eligibility;
+
+/// Render the generic one-package consumer binary release workflow.
+///
+/// # Errors
+///
+/// Returns render errors for invalid identities, pins, or commands.
+pub fn render_consumer_binary_release(
+    spec: &consumer_binary_release::ConsumerBinaryReleaseSpec,
+) -> Result<RenderedFile, RenderError> {
+    consumer_binary_release::render_consumer_binary_release(spec)
+}
+
+pub use consumer_binary_release::ConsumerBinaryReleaseSpec;
 
 #[cfg(test)]
 #[path = "schema2_runner_shell_tests.rs"]
@@ -233,8 +213,7 @@ pub fn render_schema2_workflows(
 }
 
 fn file(path: &str, version: &str, body: &Yaml) -> Result<RenderedFile, RenderError> {
-    let bytes = with_marker(version, &render_yaml(body))?;
-    crate::workflow_size::check_workflow_size(path, &bytes)?;
+    let bytes = crate::render::fallback::render_checked_workflow(path, body, version)?;
     Ok(RenderedFile {
         path: path.to_owned(),
         bytes,

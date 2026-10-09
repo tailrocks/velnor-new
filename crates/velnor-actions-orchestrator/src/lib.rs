@@ -5,6 +5,7 @@ mod api;
 mod attach;
 mod baseline_artifact_listing;
 mod baseline_publish;
+mod binary_release_emit;
 mod build_task_tools;
 mod build_tasks;
 mod check_evidence;
@@ -104,6 +105,10 @@ mod workflow;
 mod workflow_jobs;
 mod workflow_jobs_cache;
 mod workflow_task_jobs;
+
+#[cfg(all(feature = "test-render-capture", test))]
+#[path = "test_render_capture_harness.rs"]
+mod test_render_capture_harness;
 
 pub use api::*;
 

@@ -69,6 +69,11 @@ pub const FORBIDDEN_TOKENS: &[&str] = &["__internal", "velnor-actions __", "veln
 /// Pinned `actions/upload-artifact` ref (v7.0.1, qualified 2026-09-28).
 pub const UPLOAD_ARTIFACT_USES: &str =
     "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+/// Pinned `actions/checkout` ref (v7.0.1, qualified 2026-09-28).
+pub const CHECKOUT_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
+/// Pinned build-provenance attestation action (v4.2.2).
+pub const ATTEST_BUILD_PROVENANCE_USES: &str =
+    "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
 /// Retention for every rendered `upload-artifact` step, in days.
 ///
 /// Run-scoped evidence reproducible by rerun; bounded well under the

@@ -68,16 +68,22 @@ if [ "$1 $2" = 'release create' ]; then
   test "$3" = v0.1.4
   printf '%s\n' "$3" > "$GH_CREATE_TAG"
   printf 'draft\n' > "$GH_STATE"
+  target_seen=false
   shift 3
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --repo) test "$2" = tailrocks/velnor-new; shift 2 ;;
+      --target) test "$2" = "$GITHUB_SHA"; target_seen=true; shift 2 ;;
       --verify-tag|--latest=false|--draft) shift ;;
       --title) test "$2" = 'velnor-actions v0.1.4'; shift 2 ;;
       --notes) test "$2" = "velnor-actions 0.1.4 built from $GITHUB_SHA."; shift 2 ;;
       *) exit 45 ;;
     esac
   done
+  test "$target_seen" = true
+  if [ "$GH_CASE" = UntaggedDraftHtmlUrl ]; then
+    printf 'https://github.com/tailrocks/velnor-new/releases/tag/untagged-c155089fcae36e2c5c68\n'
+  fi
   exit 0
 fi
 if [ "$1 $2" = 'release view' ]; then

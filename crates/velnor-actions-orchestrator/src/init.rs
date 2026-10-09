@@ -137,6 +137,13 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # test_runner = "cargo_test"       # Sticky override: "cargo_test" (default) or "cargo_nextest". Without it, .config/nextest.toml selects Nextest ([profile.ci] when declared, else the documented default profile).
 # Do not put free-form Mise commands in credential-bearing Rust jobs.
 
+# Optional single-package native binary release workflow (consumer-v1 only).
+# [stacks.rust.binary_release]
+# enabled = true
+# manifest_path = "Cargo.toml"      # Workspace-root manifest with a tracked Cargo.lock.
+# package = "repo-scan"             # Exact package discovered in this workspace.
+# bin = "repo-scan"                 # One binary target without required-features.
+
 # Optional repository-relative POSIX globs excluded before detector input.
 # [discovery]
 # exclude = []
