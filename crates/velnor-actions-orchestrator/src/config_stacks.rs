@@ -5,7 +5,7 @@
 //! stack-focused load tests.
 
 use serde::Deserialize;
-use velnor_actions_contract::config::RustReleaseConfig;
+use velnor_actions_contract::config::{RustBinaryReleaseConfig, RustReleaseConfig};
 use velnor_actions_contract::{
     DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
     TofuStackConfig, Utf8RepoRelDir,
@@ -41,6 +41,8 @@ pub(crate) struct PartialRustStack {
     run_ignored: Option<String>,
     /// Rust release policy; disabled by default.
     release: Option<RustReleaseConfig>,
+    /// Single-package binary release policy; disabled by default.
+    binary_release: Option<RustBinaryReleaseConfig>,
 }
 
 /// Tofu stack section: `roots` required when the table is present.
@@ -62,6 +64,7 @@ impl PartialStacks {
                 test_runner: stack.test_runner,
                 run_ignored: stack.run_ignored,
                 release: stack.release.unwrap_or_default(),
+                binary_release: stack.binary_release.unwrap_or_default(),
             }
         });
         let tofu = self
@@ -120,6 +123,17 @@ mod tests {
         let config = load(root.path()).expect("rust config");
         let rust = config.stacks.rust.expect("rust stack");
         assert!(!rust.release.enabled);
+        assert!(!rust.binary_release.enabled);
+        assert_eq!(rust.binary_release.manifest_path, "Cargo.toml");
+
+        let root = rooted(
+            "schema = 1\n[workflow]\npolicy = \"consumer-v1\"\n[stacks.rust.binary_release]\nenabled = true\npackage = \"repo-scan\"\nbin = \"repo-scan\"\n",
+        );
+        let config = load(root.path()).expect("consumer binary release config");
+        let rust = config.stacks.rust.expect("rust stack");
+        assert!(rust.binary_release.enabled);
+        assert_eq!(rust.binary_release.package, "repo-scan");
+        assert_eq!(rust.binary_release.bin, "repo-scan");
     }
 
     #[test]

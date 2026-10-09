@@ -1,4 +1,5 @@
 //! Stack selection and per-stack options.
+use super::binary_release::RustBinaryReleaseConfig;
 use super::release::RustReleaseConfig;
 use super::tofu::TofuStackConfig;
 use crate::discover::Stack;
@@ -61,6 +62,9 @@ pub struct RustStackConfig {
     /// Rust release policy (`[stacks.rust.release]`); disabled by default.
     #[serde(default)]
     pub release: RustReleaseConfig,
+    /// Single-package binary release policy; disabled by default.
+    #[serde(default)]
+    pub binary_release: RustBinaryReleaseConfig,
 }
 
 /// Documented default: one `default` configuration variant list.
@@ -127,6 +131,7 @@ impl RustStackConfig {
             test_runner: None,
             run_ignored: None,
             release: RustReleaseConfig::default(),
+            binary_release: RustBinaryReleaseConfig::default(),
         }
     }
 }
@@ -235,6 +240,7 @@ impl RustStackConfig {
             ));
         }
         self.release.validate(file)?;
+        self.binary_release.validate(file)?;
         Ok(())
     }
 }

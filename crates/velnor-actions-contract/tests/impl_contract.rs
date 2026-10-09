@@ -9,7 +9,7 @@ use velnor_actions_contract::{
 #[test]
 fn config_validation_reports_key_paths() {
     use velnor_actions_contract::config::ActionsConfig;
-    use velnor_actions_contract::config::RustReleaseConfig;
+    use velnor_actions_contract::config::{RustBinaryReleaseConfig, RustReleaseConfig};
     use velnor_actions_contract::{
         DiscoveryConfig, PullRequestCachePolicy, ResourcesConfig, RustConfiguration,
         RustStackConfig, StacksConfig, TestShardingConfig, VelnorConfig, WorkflowConfig,
@@ -50,6 +50,7 @@ fn config_validation_reports_key_paths() {
                 test_runner: None,
                 run_ignored: None,
                 release: RustReleaseConfig::default(),
+                binary_release: RustBinaryReleaseConfig::default(),
             }),
             tofu: None,
         },
@@ -154,7 +155,7 @@ fn runner_label_uses_exact_catalog_match() {
 #[test]
 fn uppercase_rust_config_name_rejected_with_key_path() {
     use velnor_actions_contract::config::ActionsConfig;
-    use velnor_actions_contract::config::RustReleaseConfig;
+    use velnor_actions_contract::config::{RustBinaryReleaseConfig, RustReleaseConfig};
     use velnor_actions_contract::{
         ContractError, DiscoveryConfig, GeneratorValidation, PullRequestCachePolicy,
         ResourcesConfig, RustConfiguration, RustStackConfig, StacksConfig, TestShardingConfig,
@@ -196,6 +197,7 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
                 test_runner: None,
                 run_ignored: None,
                 release: RustReleaseConfig::default(),
+                binary_release: RustBinaryReleaseConfig::default(),
             }),
             tofu: None,
         },

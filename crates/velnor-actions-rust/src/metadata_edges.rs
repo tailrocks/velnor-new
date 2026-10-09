@@ -106,7 +106,7 @@ pub(crate) struct RawTarget {
     pub(crate) test: bool,
     #[serde(default)]
     pub(crate) doctest: bool,
-    #[serde(default)]
+    #[serde(rename = "required-features", default)]
     pub(crate) required_features: Vec<String>,
 }
 

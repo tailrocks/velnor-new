@@ -1,7 +1,6 @@
 use super::{LINUX, qualification_script, verify_provenance_in_directory};
 
-#[path = "../../test_support/git_fixture.rs"]
-mod git_fixture;
+use crate::schema2::git_fixture;
 
 use std::error::Error;
 use std::fs;

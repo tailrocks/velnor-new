@@ -9,7 +9,7 @@
 use crate::RenderError;
 use crate::commands::join_argv_for_run;
 use crate::runs_on::runs_on_yaml;
-use crate::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
+use crate::steps::{ATTEST_BUILD_PROVENANCE_USES, DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
 use crate::yaml::Yaml;
 
 use super::features::{CHECKOUT_USES, base, finish, identified_publish_step, run_step};
@@ -19,8 +19,6 @@ use velnor_actions_contract::ReleaseTarget;
 /// GitHub-hosted macOS label. The binary is native; it is not built on Ubuntu.
 const MACOS_RUNS_ON: &str = "macos-15";
 /// `actions/attest-build-provenance` tag `v4.2.2` (commit, not a floating tag).
-const ATTEST_USES: &str =
-    "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
 const ASSET_DIR: &str = "assets";
 const CHECKSUMS: &str = "SHA256SUMS";
 const RUNNER_TAR: &str = "velnor-runner-linux-amd64.tar";
@@ -290,7 +288,7 @@ fn download_step(artifact: &str) -> Yaml {
 fn attest_step(subjects: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Attest built artifacts")),
-        ("uses".to_owned(), Yaml::str(ATTEST_USES)),
+        ("uses".to_owned(), Yaml::str(ATTEST_BUILD_PROVENANCE_USES)),
         (
             "with".to_owned(),
             Yaml::Map(vec![("subject-path".to_owned(), Yaml::str(subjects))]),
