@@ -97,9 +97,10 @@ exited 1 at its integration stage. It ran 2,019 of 3,648 tests: 2,018 passed,
 one failed, and two were skipped; Nextest reports that the remaining 1,629
 tests were not run after the failure. The failed test was
 `impl_generate_p09_atomic::atomic_commit_never_exposes_missing_tree`. Its
-strict `.github` metadata observer recorded two `NotFound` errors with raw
-errno 2 during `rewrite_4_in_progress`; it recorded zero other metadata
-errors. The post-error probes found the parent and `.github` target present,
+strict `.github` metadata observer counted two `NotFound` errors and zero
+other metadata errors. The captured `FIRST_METADATA_ERROR` event at
+`rewrite_4_in_progress` recorded raw errno 2. The post-error probes found the
+parent and `.github` target present,
 which does not establish why the earlier lookups failed. The cause remains
 unresolved. The standalone Nextest pass and this later `verify-local` failure
 are separate results; the pass does not clear the failure. PR #126 therefore
