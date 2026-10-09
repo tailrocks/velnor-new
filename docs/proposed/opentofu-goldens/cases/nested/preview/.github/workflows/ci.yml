@@ -79,9 +79,9 @@ jobs:
     timeout-minutes: 20
     env:
       RUSTUP_TOOLCHAIN: 1.98.1
-      VELNOR_ASSET_SHA256: efbfc6b838a582b1b7885093780779297273fb5d5e4e2d9bc74cbcd26963347a
+      VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.5/velnor-actions-0.1.5-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: efd7355278d411cb805d717634b94be96dff19df
+      VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     outputs:
       covered_tasks: ${{ steps.plan.outputs.covered_tasks }}
       qualification_campaign: ${{ steps.plan.outputs.qualification_campaign }}
@@ -176,9 +176,9 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     env:
-      VELNOR_ASSET_SHA256: efbfc6b838a582b1b7885093780779297273fb5d5e4e2d9bc74cbcd26963347a
+      VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.5/velnor-actions-0.1.5-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: efd7355278d411cb805d717634b94be96dff19df
+      VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     needs:
       - required
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -215,9 +215,9 @@ jobs:
     timeout-minutes: 10
     env:
       RUSTUP_TOOLCHAIN: 1.98.1
-      VELNOR_ASSET_SHA256: efbfc6b838a582b1b7885093780779297273fb5d5e4e2d9bc74cbcd26963347a
+      VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.5/velnor-actions-0.1.5-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: efd7355278d411cb805d717634b94be96dff19df
+      VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     permissions:
       contents: read
       actions: read
@@ -284,9 +284,9 @@ jobs:
     timeout-minutes: 30
     env:
       RUSTUP_TOOLCHAIN: 1.98.1
-      VELNOR_ASSET_SHA256: efbfc6b838a582b1b7885093780779297273fb5d5e4e2d9bc74cbcd26963347a
+      VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.5/velnor-actions-0.1.5-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: efd7355278d411cb805d717634b94be96dff19df
+      VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     needs:
       - plan
     steps:
@@ -405,9 +405,9 @@ jobs:
     timeout-minutes: 30
     env:
       RUSTUP_TOOLCHAIN: 1.98.1
-      VELNOR_ASSET_SHA256: efbfc6b838a582b1b7885093780779297273fb5d5e4e2d9bc74cbcd26963347a
+      VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.5/velnor-actions-0.1.5-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: efd7355278d411cb805d717634b94be96dff19df
+      VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     needs:
       - plan
     steps:

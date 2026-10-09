@@ -131,6 +131,24 @@ write_test_manifest() {
      ]}' >"$manifest"
 }
 
+expect_release_check_match() {
+  local status=0 log="$WORK/release-check.log" after
+  GITHUB_SHA="$SOURCE_SHA" GITHUB_REPOSITORY=tailrocks/velnor-new \
+    PATH="$STUB_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
+    VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
+    "$SCRIPT" check-release "$CLI_BIN" "$WORK/valid manifest.json" \
+      "$(test_file_sha256 "$WORK/valid manifest.json")" >"$log" 2>&1 || status=$?
+  if [ "$status" -ne 0 ] || ! grep -Fq 'ALL RELEASE FIXTURE GOLDENS AND DOGFOOD PARITY MATCH' "$log"; then
+    cat "$log" >&2
+    echo "FAIL: valid candidate did not match release fixture goldens (exit $status)" >&2
+    exit 1
+  fi
+  if [ -e "$MARKER" ]; then echo "FAIL: release qualification invoked cargo build" >&2; exit 1; fi
+  after="$(golden_fingerprint)" || exit 2
+  if [ "$after" != "$BEFORE" ]; then echo "FAIL: successful release check changed goldens" >&2; exit 1; fi
+  echo "passed positive release candidate fixture oracle"
+}
+
 expect_release_rejected() {
   local label="$1" expected="$2" manifest="$3" digest="$4" source="$5"
   local status=0 log="$WORK/$label.log"
@@ -228,6 +246,7 @@ expect_release_rejected malformed-manifest 'candidate manifest is malformed JSON
 
 write_test_manifest "$WORK/valid manifest.json" "$SOURCE_SHA" \
   "$TEST_LINUX_SHA" "$TEST_ARM_SHA" "$TEST_INTEL_SHA"
+expect_release_check_match
 ln -s "$WORK/valid manifest.json" "$WORK/symlink manifest.json"
 expect_release_rejected symlink-manifest 'candidate manifest must be a regular non-symlink file' \
   "$WORK/symlink manifest.json" "$(test_file_sha256 "$WORK/valid manifest.json")" "$SOURCE_SHA"
