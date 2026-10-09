@@ -130,7 +130,7 @@ pub(crate) fn stop_for_disconnect(
 
 pub(super) fn service(action: ServiceAction, config_path: &Path, state_path: &Path) -> ExitCode {
     if matches!(action, ServiceAction::Status) {
-        let mut manager = Systemctl::default();
+        let mut manager = Systemctl::bounded_until(super::status_query_deadline());
         return match perform(action, &mut manager, 0) {
             Ok(()) => ExitCode::SUCCESS,
             Err(fault) => {
@@ -183,6 +183,13 @@ pub(super) fn service(action: ServiceAction, config_path: &Path, state_path: &Pa
     }
 }
 
+pub(super) fn controller_service_state() -> super::ControllerServiceState {
+    service_state_output(&mut Systemctl::bounded_until(super::status_query_deadline()))
+        .map_or(super::ControllerServiceState::Unknown, |output| {
+            super::systemd_service_state(output.success, &output.stdout)
+        })
+}
+
 fn perform(
     action: ServiceAction,
     manager: &mut impl Manager,
@@ -199,18 +206,19 @@ fn perform(
 }
 
 fn service_status(manager: &mut impl Manager) -> Result<(), ServiceFault> {
-    let output = manager_call_output(
-        manager,
-        &[
-            "show",
-            "--no-pager",
-            &format!("--property={}", super::SERVICE_STATE_PROPERTIES),
-            UNIT,
-        ],
-    )?;
-    let line = service_status_line(output.success, &output.stdout)?;
-    println!("{line}");
+    let output = service_state_output(manager)?;
+    println!("{}", service_status_line(output.success, &output.stdout)?);
     Ok(())
+}
+
+fn service_state_output(manager: &mut impl Manager) -> Result<ManagerOutput, ServiceFault> {
+    let property = format!("--property={}", super::SERVICE_STATE_PROPERTIES);
+    manager
+        .systemctl(&["show", "--no-pager", &property, UNIT])
+        .map_err(|error| match error.kind() {
+            io::ErrorKind::TimedOut => ServiceFault::UnknownState,
+            _ => ServiceFault::Manager,
+        })
 }
 
 fn service_status_line(success: bool, output: &[u8]) -> Result<&'static str, ServiceFault> {

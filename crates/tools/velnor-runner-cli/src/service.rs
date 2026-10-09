@@ -4,6 +4,8 @@ use std::path::Path;
 #[cfg(target_os = "macos")]
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
+#[cfg(target_os = "linux")]
+use std::time::{Duration, Instant};
 
 #[cfg(target_os = "macos")]
 use velnor_runner_host::launch_agent_plist;
@@ -25,6 +27,13 @@ pub(super) const BUSCTL_PATH: &str = "/usr/bin/busctl";
 pub(super) const JOURNALCTL_PATH: &str = "/usr/bin/journalctl";
 #[cfg(target_os = "linux")]
 const SERVICE_STATE_PROPERTIES: &str = "LoadState,ActiveState,SubState,MainPID,ControlPID,Job";
+#[cfg(target_os = "linux")]
+const STATUS_QUERY_TIMEOUT: Duration = Duration::from_secs(5);
+
+#[cfg(target_os = "linux")]
+pub(super) fn status_query_deadline() -> Instant {
+    Instant::now() + STATUS_QUERY_TIMEOUT
+}
 
 #[cfg(target_os = "linux")]
 pub(super) fn systemctl_command() -> Command {
@@ -136,18 +145,7 @@ pub(crate) fn logs(follow: bool) -> ExitCode {
 pub(crate) fn controller_service_state() -> ControllerServiceState {
     #[cfg(target_os = "linux")]
     {
-        let output = systemctl_command()
-            .args([
-                "show",
-                "--no-pager",
-                &format!("--property={SERVICE_STATE_PROPERTIES}"),
-                "velnor-host.service",
-            ])
-            .output();
-        match output {
-            Ok(output) => systemd_service_state(output.status.success(), &output.stdout),
-            Err(_) => ControllerServiceState::Unknown,
-        }
+        linux::controller_service_state()
     }
     #[cfg(target_os = "macos")]
     {
