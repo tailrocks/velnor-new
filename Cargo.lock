@@ -4549,7 +4549,9 @@ dependencies = [
  "security-framework",
  "serde_json",
  "tokio",
+ "velnor-actions-orchestrator-merge-ports",
  "velnor-runner-core",
+ "velnor-runner-github",
  "velnor-runner-host",
  "velnor-runner-launch",
 ]

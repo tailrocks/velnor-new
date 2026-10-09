@@ -13,6 +13,17 @@ use velnor_runner_core::{
     ParityProof, VerifiedExecutionReport, VerifiedJobCensus, verify_complete_results,
 };
 
+mod actions_attempt;
+
+pub use actions_attempt::{
+    ActionsAttemptAdapterError, ActionsAttemptAdapterOutcome, BoundedActionsAttemptArtifact,
+    BoundedActionsAttemptJob, BoundedActionsAttemptView, adapt_actions_attempt_read,
+};
+
+#[cfg(test)]
+#[path = "compare/actions_attempt_tests.rs"]
+mod actions_attempt_tests;
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Fail {
     Closed,
