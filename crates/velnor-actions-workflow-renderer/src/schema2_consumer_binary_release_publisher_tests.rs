@@ -33,14 +33,30 @@ fn run_publish_scenario(scenario: &str) {
     let log = workspace.scratch.path().join("gh.log");
     fs::write(&log, "").expect("create command log");
     let check_count = workspace.scratch.path().join("eligibility.count");
+    let poll_settings = workspace
+        .scratch
+        .path()
+        .join("eligibility-poll-settings.log");
+    fs::write(&poll_settings, "").expect("create poll settings log");
     let eligibility = eligibility_script();
     let identity = scripts::identity("cat \"$METADATA_FILE\"");
     let publish = scripts::publish(&eligibility, &identity, "aarch64-apple-darwin", ASSET);
     let output = workspace.scratch.path().join("publish.out");
-    let env = publisher_environment(&workspace, scenario, &output, &log, &check_count);
+    let env = publisher_environment(
+        &workspace,
+        scenario,
+        &output,
+        &log,
+        &check_count,
+        &poll_settings,
+    );
     let result = run_script(&publish, &env, Some(&bin_dir));
     let log = fs::read_to_string(&log).expect("read command log");
     assert_publisher_result(scenario, &result, &log);
+    if scenario == "success" {
+        let settings = fs::read_to_string(&poll_settings).expect("read poll settings");
+        assert_eq!(settings.lines().collect::<Vec<_>>(), ["1:0", "1:0"]);
+    }
 }
 
 fn write_assets(workspace: &Workspace) {
@@ -67,6 +83,7 @@ fn publisher_environment(
     output: &Path,
     log: &Path,
     check_count: &Path,
+    poll_settings: &Path,
 ) -> Vec<(String, String)> {
     let mut env = workspace.env(output);
     env.extend([
@@ -100,6 +117,10 @@ fn publisher_environment(
         (
             "ELIGIBILITY_COUNT".to_owned(),
             check_count.display().to_string(),
+        ),
+        (
+            "POLL_SETTINGS".to_owned(),
+            poll_settings.display().to_string(),
         ),
         (
             "IMMUTABLE_ENABLED".to_owned(),
@@ -201,6 +222,9 @@ fn assert_publisher_result(scenario: &str, result: &std::process::Output, log: &
 fn eligibility_script() -> String {
     r#"release_eligibility() {
   local count=0 attempt="$EXPECTED_CI_ATTEMPT"
+  if [[ -n "${VELNOR_RELEASE_CI_POLL_LIMIT+x}" ]]; then
+    printf '%s:%s\n' "$VELNOR_RELEASE_CI_POLL_LIMIT" "$VELNOR_RELEASE_CI_POLL_SECONDS" >> "$POLL_SETTINGS"
+  fi
   [[ ! -f "$ELIGIBILITY_COUNT" ]] || read -r count < "$ELIGIBILITY_COUNT"
   count=$((count + 1))
   printf '%s\n' "$count" > "$ELIGIBILITY_COUNT"

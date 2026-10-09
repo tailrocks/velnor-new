@@ -113,14 +113,19 @@ fn renders_four_isolated_jobs_bound_to_exact_package_and_source() {
     );
     assert!(yaml.contains("contents: write"));
     assert!(yaml.contains("attestations: write"));
-    assert!(yaml.contains("actions: write"));
+    assert!(!yaml.contains("actions: write"));
     let build_start = yaml.find("  build-binary:").expect("build job");
     let attest_start = yaml.find("  attest-binary:").expect("attest job");
     let publish_start = yaml.find("  publish-binary:").expect("publish job");
+    let eligibility_start = yaml
+        .find("  release-eligibility:")
+        .expect("eligibility job");
+    let eligibility_job = &yaml[eligibility_start..build_start];
     let build_job = &yaml[build_start..attest_start];
     let attest_job = &yaml[attest_start..publish_start];
     let publish_job = &yaml[publish_start..];
-    assert!(build_job.contains("actions: write"));
+    assert!(eligibility_job.contains("timeout-minutes: 75"));
+    assert!(!build_job.contains("actions: write"));
     assert!(build_job.contains("contents: read"));
     assert!(!build_job.contains("contents: write"));
     assert!(!build_job.contains("id-token: write"));
@@ -128,6 +133,7 @@ fn renders_four_isolated_jobs_bound_to_exact_package_and_source() {
     assert!(attest_job.contains("attestations: write"));
     assert!(!attest_job.contains("contents: write"));
     assert!(publish_job.contains("contents: write"));
+    assert!(publish_job.contains("timeout-minutes: 75"));
     assert!(publish_job.contains("actions: read"));
     assert!(publish_job.contains("attestations: read"));
     assert!(!publish_job.contains("id-token: write"));

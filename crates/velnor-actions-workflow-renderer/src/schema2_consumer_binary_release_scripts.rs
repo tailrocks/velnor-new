@@ -111,7 +111,7 @@ recheck_eligibility() {
   : > "$output"
   GITHUB_OUTPUT="$output"
   export GITHUB_OUTPUT
-  release_eligibility
+  VELNOR_RELEASE_CI_POLL_LIMIT=1 VELNOR_RELEASE_CI_POLL_SECONDS=0 release_eligibility
   test "$(sed -n 's/^source_sha=//p' "$output")" = "$EXPECTED_SOURCE_SHA" || { echo 'source changed before publication' >&2; exit 1; }
   test "$(sed -n 's/^workflow_authority_sha=//p' "$output")" = "$EXPECTED_AUTHORITY_SHA" || { echo 'workflow authority changed before publication' >&2; exit 1; }
   test "$(sed -n 's/^ci_run_id=//p' "$output")" = "$EXPECTED_CI_RUN_ID" || { echo 'latest Required CI run changed before publication' >&2; exit 1; }

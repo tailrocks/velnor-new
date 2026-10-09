@@ -190,7 +190,7 @@ fn eligibility_job(
     let mut fields = base(
         "Check source and Required CI",
         Yaml::str("ubuntu-26.04"),
-        20,
+        75,
     );
     fields.push((
         "permissions".to_owned(),
@@ -247,7 +247,7 @@ fn build_job(
     fields.push(("needs".to_owned(), needs(&["release-eligibility"])));
     fields.push((
         "permissions".to_owned(),
-        permissions(&[("actions", "write"), ("contents", "read")]),
+        permissions(&[("contents", "read")]),
     ));
     let run = scripts::build(identity, target_add, build);
     let mut steps = vec![

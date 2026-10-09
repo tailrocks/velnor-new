@@ -47,8 +47,11 @@ job requires the live repository default branch, workflow ref, workflow
 authority SHA, event SHA, and checked-out SHA to agree. It waits for the
 latest successful push run of `.github/workflows/ci.yml` on that exact source
 and verifies exactly one successful `Required` job in the same run attempt.
-The publish job repeats the gate and requires the run ID and attempt to match
-the eligibility outputs.
+The eligibility wait is bounded by 240 15-second polls and its job allows 75
+minutes. The publish job's initial gate can wait for CI; its rechecks before
+tag and release mutations make one poll and fail closed if the latest run
+changed while publication was in progress. The publish job also allows 75
+minutes for its initial wait and publication steps.
 
 Build, attestation, and publish are separate jobs because GitHub's
 `id-token: write` applies to every step in its job. Build can upload a

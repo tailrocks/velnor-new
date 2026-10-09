@@ -141,7 +141,7 @@ fn publish_fields() -> Vec<(String, Yaml)> {
     let mut fields = base(
         "Publish immutable Cargo version",
         Yaml::str("ubuntu-26.04"),
-        30,
+        75,
     );
     fields.push((
         "needs".to_owned(),
