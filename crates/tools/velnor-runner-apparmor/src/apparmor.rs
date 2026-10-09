@@ -9,7 +9,7 @@ use std::{fs, path::Path};
 
 use velnor_runner_journal::HostError;
 
-const PROFILE_NAMES: [&str; 3] = ["velnor-runner", "velnor-worker", "velnor-job"];
+const PROFILE_NAMES: [&str; 1] = ["velnor-runner"];
 const PROFILE_LIST: &str = "/sys/kernel/security/apparmor/profiles";
 const PROFILE_POLICY_ROOT: &str = "/sys/kernel/security/apparmor/policy/profiles";
 
@@ -52,8 +52,8 @@ struct ProfileRecord {
 /// this binary. `AppArmor`'s profile directories are numbered and mangled, so
 /// match each entry by its authoritative `name` file before reading its
 /// `raw_sha256`. The kernel hash is for the exact compiled policy bytes, not a
-/// hash of a mutable source file. All three profiles must share that identity
-/// and be in enforce mode.
+/// hash of a mutable source file. Every attached Velnor profile must share that
+/// identity and be in enforce mode.
 pub fn verify_runner_profile() -> Result<RunnerProfileAdmission, HostError> {
     let expected = approved_policy_sha256().map_err(|_| HostError::Config)?;
     let profiles = fs::read_to_string(PROFILE_LIST).map_err(|_| HostError::Config)?;
