@@ -111,7 +111,7 @@ pub(crate) fn without_ambient_ci_env(test: &str, inner: impl FnOnce() -> TestRes
 /// Snapshot map shortcut.
 pub(crate) type Snapshot = BTreeMap<String, (Vec<u8>, SystemTime)>;
 
-/// Runtime-synthetic current-version manifest for disposable ConsumerV1 tests.
+/// Runtime-synthetic current-version manifest for disposable `ConsumerV1` tests.
 ///
 /// The canonical asset URL shape satisfies the contract, but the source marker
 /// and per-target digests come from deterministic test payloads. This manifest
@@ -137,11 +137,14 @@ pub(crate) fn fixture_manifest_json() -> String {
 }
 
 fn synthetic_sha256(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<Vec<_>>()
-        .join("")
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let digest = Sha256::digest(bytes);
+    let mut encoded = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+        encoded.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    encoded
 }
 
 /// Install the deterministic schema-only manifest in a positive fixture.

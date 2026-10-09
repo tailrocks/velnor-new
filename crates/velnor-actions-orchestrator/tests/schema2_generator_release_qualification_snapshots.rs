@@ -102,18 +102,7 @@ fn assert_release_fixture_generation_requirements() -> Result<(), Box<dyn std::e
         fixture_check.contains(r#"stage_candidate_manifest "$repo" "$case""#),
         "{fixture_check}"
     );
-    assert!(
-        fixture_check.contains("write_synthetic_consumer_manifest()")
-            && fixture_check.contains("synthetic-consumer-inputs")
-            && fixture_check.contains(r#"file_sha256 "$payload""#)
-            && fixture_check.contains(r#""$BIN" --version"#)
-            && fixture_check.contains("write_synthetic_consumer_manifest \"$repo\""),
-        "positive fixtures install only a current-version runtime-synthetic input: {fixture_check}"
-    );
-    assert!(
-        !fixture_check.contains(r#"cp "$ROOT/fixtures/consumer-release-manifest.json""#),
-        "positive fixture capture must not relabel the static schema placeholder: {fixture_check}"
-    );
+    assert_synthetic_consumer_manifest_input(fixture_check);
     assert!(
         fixture_check.contains("capture_release_dogfood"),
         "{fixture_check}"
@@ -167,6 +156,21 @@ fn assert_release_fixture_generation_requirements() -> Result<(), Box<dyn std::e
     );
     assert_dogfood_cargo_warmup(qualification_helpers)?;
     Ok(())
+}
+
+fn assert_synthetic_consumer_manifest_input(fixture_check: &str) {
+    assert!(
+        fixture_check.contains("write_synthetic_consumer_manifest()")
+            && fixture_check.contains("synthetic-consumer-inputs")
+            && fixture_check.contains(r#"file_sha256 "$payload""#)
+            && fixture_check.contains(r#""$BIN" --version"#)
+            && fixture_check.contains("write_synthetic_consumer_manifest \"$repo\""),
+        "positive fixtures install only a current-version runtime-synthetic input: {fixture_check}"
+    );
+    assert!(
+        !fixture_check.contains(r#"cp "$ROOT/fixtures/consumer-release-manifest.json""#),
+        "positive fixture capture must not relabel the static schema placeholder: {fixture_check}"
+    );
 }
 
 fn assert_dogfood_cargo_warmup(
