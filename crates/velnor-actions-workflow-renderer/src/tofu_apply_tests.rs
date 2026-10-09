@@ -37,7 +37,7 @@ fn spec() -> TofuApplySpec {
         checkout_uses: CHECKOUT.to_owned(),
         mise_setup: MiseSetup {
             uses: MISE.to_owned(),
-            version: "2026.10.4".to_owned(),
+            version: "2026.10.6".to_owned(),
             sha256: crate::setup::MISE_BINARY_SHA256_LINUX_X64.to_owned(),
         },
         opentofu_version: "1.13.1".to_owned(),

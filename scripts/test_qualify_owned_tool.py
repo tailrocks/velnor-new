@@ -100,7 +100,7 @@ class QualifierAdmissionTests(unittest.TestCase):
 
     def source_descriptor(self):
         directory = "https://github.com/tailrocks/velnor-new/releases/download/fixture-source"
-        return {"tool": "mise", "version": "2026.10.4-owned-cargo-wrapper",
+        return {"tool": "mise", "version": "2026.10.6-owned-cargo-wrapper",
             "source_commit": "1" * 40, "source_tree": "2" * 40,
             "upstream_base_commit": BASES["mise"][1], "archive_url": directory + "/source.tar",
             "archive_sha256": "4" * 64, "receipt_url": directory + "/source-receipt.json",

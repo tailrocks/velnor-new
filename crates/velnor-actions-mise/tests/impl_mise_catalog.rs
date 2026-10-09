@@ -9,7 +9,7 @@ use velnor_actions_mise::{
 
 #[test]
 fn pinned_catalog_matches_qualified_versions() {
-    assert_eq!(MISE_VERSION, "2026.10.4");
+    assert_eq!(MISE_VERSION, "2026.10.6");
     let catalog = ToolCatalog::pinned();
     assert_eq!(catalog.version(PinnedTool::Rust), "1.98.1");
     assert_eq!(catalog.version(PinnedTool::MrBoxington), "1.21.1");
@@ -85,7 +85,7 @@ fn tool_names_roundtrip_and_reject_aliases() {
 
 #[test]
 fn exact_version_validation_accepts_only_pins() {
-    for version in ["1.98.1", "2026.10.4", "0.11.0", "10.20.30"] {
+    for version in ["1.98.1", "2026.10.6", "0.11.0", "10.20.30"] {
         assert!(
             validate_exact_version("rust", version).is_ok(),
             "version must be accepted: {version}"
