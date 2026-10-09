@@ -50,12 +50,8 @@ fn registered_sources(workspaces: &[WorkspacePlan]) -> Outcome<HashSet<PathBuf>>
 }
 
 fn compiled_test_sources(workspace: &WorkspacePlan) -> Outcome<HashSet<PathBuf>> {
-    let _target_lock = crate::impl_cli_tmp::nested_target::lock_nested_cargo_target_for(
-        &workspace.target_directory,
-    )?;
-    let nested_target = crate::impl_cli_tmp::nested_target::nested_cargo_target_dir_for(
-        &workspace.target_directory,
-    );
+    let _target_lock = crate::impl_cli_tmp::nested_target::lock_nested_cargo_target()?;
+    let nested_target = crate::impl_cli_tmp::nested_target::nested_cargo_target_dir()?;
     let output = cargo_config::cargo_output_at_target(
         &workspace.manifest,
         &[
@@ -283,17 +279,29 @@ pub(super) fn relative_paths(root: &Path, paths: &[PathBuf]) -> Outcome<Vec<Stri
 fn cargo_targets_register_every_test_bearing_source() -> Outcome<()> {
     let root = repo_root().canonicalize()?;
     let workspaces = cargo_config::workspace_plans(&root)?;
+    let runner_root = root.join("crates/velnor-runner").canonicalize()?;
+    let misplaced_target = runner_root.join("target/velnor-cli-nested-cargo");
+    let misplaced_target_existed = path_exists(&misplaced_target)?;
     let (registered, orphans) = registration_audit(&workspaces)?;
-    for workspace in &workspaces {
-        let nested_target = crate::impl_cli_tmp::nested_target::nested_cargo_target_dir_for(
-            &workspace.target_directory,
-        );
-        assert!(
-            nested_target.join("debug/deps").is_dir(),
-            "nested Cargo outputs are missing from {}",
-            nested_target.display()
-        );
-    }
+    let nested_target = crate::impl_cli_tmp::nested_target::nested_cargo_target_dir()?;
+    assert!(
+        nested_target.join("debug/deps").is_dir(),
+        "nested Cargo outputs are missing from {}",
+        nested_target.display()
+    );
+    assert!(
+        registered.contains(
+            &runner_root
+                .join("crates/velnor-runner-core/tests/invariants.rs")
+                .canonicalize()?
+        ),
+        "runner workspace integration test source was not registered"
+    );
+    assert_eq!(
+        path_exists(&misplaced_target)?,
+        misplaced_target_existed,
+        "runner registration changed a nested workspace target instead of using the active shared Cargo target"
+    );
     for expected in [
         "crates/velnor-actions-orchestrator/tests/impl_generator_seed.rs",
         "crates/velnor-actions-tofu/tests/impl_tofu_t27_select.rs",
@@ -310,4 +318,12 @@ fn cargo_targets_register_every_test_bearing_source() -> Outcome<()> {
         relative_paths(&root, &orphans)?
     );
     Ok(())
+}
+
+fn path_exists(path: &Path) -> Outcome<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
 }
