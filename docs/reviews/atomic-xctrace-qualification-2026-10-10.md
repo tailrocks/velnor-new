@@ -71,14 +71,64 @@ DTrace attempt was separately rejected for requiring additional privileges;
 that result does not negate this successful xctrace capture or establish that
 all tracing methods are unavailable.
 
-No second atomic test capture was run. The historical `NotFound` remains
-unresolved; PR #122 has no release qualification or acceptance from this
-trace, and no publication or consumer adoption is claimed.
+## Output-retaining follow-up
 
-If a further capture is separately authorized, preserve the exact runtime
-binary and record its pinned `PATH`, environment, and working directory before
-launch. Installed xctrace help documents `--target-stdout <name>` but has no
-target-stderr option. A transparent launcher can `exec` the same binary and
-arguments with stderr redirected to stdout, while xctrace saves target stdout
-to a file; record that launcher and redirection as part of the capture method.
-This was not done for the capture above and is not a test result.
+A second, separately authorized invocation used the same source and test with
+`--target-stdout` and a transparent `exec "$@" 2>&1` launcher. It is a
+different diagnostic run, not a qualification rerun or release acceptance.
+
+- Source/head/tree, test, and binary SHA-256 are identical to the first
+  capture above. The test filter listed exactly one test.
+- The command and declared environment are recorded in
+  `/private/tmp/velnor-atomic-pr122-87f-output-retention-20261010/command.txt`
+  (SHA-256 `36193e6fef6c8e21214853e42d05ea29dd5fcd87a1a2ef9a50a6fea4431838d1`)
+  and `runtime-context.txt` (SHA-256
+  `de3937c1b59bef1e281f248adbcdf954f1d8c63d9b5e5d8a690ab1fb03d54a25`).
+  The launcher hash is `bcb8f7faee496ed3ac4936b429167f7d267ea76a2782565203159664437edd04`.
+- The target output is retained at
+  `/private/tmp/velnor-atomic-pr122-87f-output-retention-20261010/target-combined.log`
+  (SHA-256 `a7314c3967b2511881bac13bcc54fb47d381907312ffb0a8a80835d479cb7d5d`).
+  It reports one test started, then a `Validation` error: `mise` could not
+  resolve `zizmor@1.30.1`, fell back to `PATH`, and could not execute
+  `zizmor`. The launch did not forward `MISE_DATA_DIR`, and its `PATH` omitted
+  the ordinary pinned Zizmor install directory.
+  The test result was 0 passed, 1 failed, and 728 filtered out. The test's
+  initial `make_repo`/`prepare`/`generate` setup runs before the writer and
+  observer threads, so this follow-up failed before the atomic observer.
+- That launch used Rust 1.98.1, Mise 2026.10.4, Actionlint 1.7.12, and
+  ShellCheck 0.11.0. Its recorded `PATH` omitted the ordinary pinned Zizmor
+  install directory, and the command did not forward `MISE_DATA_DIR`; the
+  output therefore records a validator-resolution failure in that launch
+  context. A later
+  read-only preflight using
+  `MISE_DATA_DIR=/tmp/velnor-110-mise-data-run2` and
+  `MISE_AUTO_INSTALL=false` successfully resolved the ordinary
+  `zizmor@1.30.1` selector. This classifies the follow-up's setup failure; it
+  does not retroactively classify the first capture, whose target output was
+  not retained.
+- Before the current-head qualification batch, an isolated tool preflight
+  verified Rust/Cargo/Clippy 1.98.1, MBX 1.21.1, Nextest 0.9.148, Mise
+  2026.10.4, Actionlint 1.7.12, ShellCheck 0.11.0, Zizmor 1.30.1, cargo-deny
+  0.20.2, and Alint 0.17.0. Exact paths, environment, command resolution,
+  versions, and no-config/no-env/no-hooks Mise selector checks are recorded in
+  `/private/tmp/velnor-atomic-pr122-87f-output-retention-20261010/gate-preflight.log`
+  (SHA-256 `d9786a744e5898ff085955df9e44ea17806e7510b3646fc5b8ded9454b9d3570`).
+  Nextest 0.9.148 was installed from its pinned Aqua selector into the
+  isolated Mise data directory at
+  `/tmp/velnor-110-mise-data-run2/installs/aqua-nextest-rs-nextest-cargo-nextest/0.9.148/cargo-nextest`;
+  no repository files changed.
+- xctrace's wrapper returned 54 while its target returned 101. The exported
+  TOC SHA-256 is
+  `c977f6edaa1d8e38b748b0182aa0e744297976b8c354c5b27a96f80d71f9ba82`;
+  the filtered `VnodeToPaths` export SHA-256 is
+  `2bd79840b1d0b450e7b860324142f459b1a3b4c103aeb09efbb2abd9a3f124eb`.
+  The export associates the target PID with the exact test binary after the
+  shell's `exec`; it does not change the pre-observer failure classification.
+
+Independent review of the objective and contracts found no explicit
+acceptance requirement to identify the kernel stage that produced the earlier
+`NotFound`. That stage remains a diagnostic unknown, not a separate release
+gate. The original failure is still preserved as evidence; the follow-up
+neither reproduces nor clears it. PR #122's current-head full qualification is
+tracked separately from these diagnostic captures. No publication or consumer
+adoption is claimed.
