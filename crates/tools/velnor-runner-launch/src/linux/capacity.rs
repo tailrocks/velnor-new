@@ -4,14 +4,16 @@ use std::future::Future;
 use std::num::NonZeroU32;
 
 use velnor_runner_github::EncodedJit;
-use velnor_runner_github::policy::VerifiedJobTrust;
 use velnor_runner_host::{
     HostError, RunnerImageProfile, stage::PairEngine, worker::new_worker_volume,
 };
 use velnor_runner_journal::journal::{
     AssignedPopulationObservation, BoundCapacityClaim, Journal, JournalDockerDaemonBinding,
-    ReplayRoute, ScopedAssignedLaunchIdentity, ScopedLaunchIdentity,
+    ReplayRoute, ScopedAssignedLaunchIdentity,
 };
+
+#[cfg(test)]
+use velnor_runner_journal::journal::ScopedLaunchIdentity;
 
 use super::worker::start_worker_pair;
 
@@ -67,30 +69,10 @@ pub(super) struct AvailableLaunchIdentity<'a> {
     pub(super) job: Option<&'a str>,
 }
 
-/// Reserve an Available offer before Acquire, JIT, or Docker effects.
-pub(super) async fn reserve_available(
-    journal: &Journal,
-    route: ReplayRoute<'_>,
-    session_id: &str,
-    binding: &JournalDockerDaemonBinding,
-    trust: &VerifiedJobTrust,
-    maximum: NonZeroU32,
-) -> Result<(ReserveOutcome, Option<ReservedLaunch>), HostError> {
-    reserve_available_identity(
-        journal,
-        route,
-        session_id,
-        binding,
-        trust.message_id(),
-        trust.runner_request_id(),
-        maximum,
-    )
-    .await
-}
-
 /// Reserve the journal key extracted from a verified offer. This lower-level
 /// function is private to the Linux coordinator; production callers must only
 /// pass identities taken from a non-forgeable GitHub `VerifiedJobTrust`.
+#[cfg(test)]
 async fn reserve_available_identity(
     journal: &Journal,
     route: ReplayRoute<'_>,
@@ -275,7 +257,7 @@ where
     .await
 }
 
-fn reserved(id: i64) -> ReservedLaunch {
+pub(super) fn reserved(id: i64) -> ReservedLaunch {
     ReservedLaunch {
         id,
         runner_name: format!("v{id:x}"),

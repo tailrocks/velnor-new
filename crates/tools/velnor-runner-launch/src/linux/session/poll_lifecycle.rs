@@ -1,5 +1,6 @@
 //! Empty-poll recovery and delivered-batch progression for a Linux session.
 
+use std::future::Future;
 use std::time::Instant;
 
 use tokio::sync::watch;
@@ -66,8 +67,8 @@ pub(super) async fn process_empty_poll(work: RecoveryPollWork<'_>) -> bool {
 pub(super) async fn process_delivered_batch(
     work: RecoveryPollWork<'_>,
     batch: ParsedTrustBatch,
-) -> bool {
-    if !Box::pin(offers::process_batch(
+) -> offers::BatchOutcome {
+    let outcome = Box::pin(offers::process_batch(
         offers::BatchWork {
             context: work.context,
             journal: work.journal,
@@ -83,16 +84,39 @@ pub(super) async fn process_delivered_batch(
         },
         batch,
     ))
-    .await
-    {
-        return false;
-    }
-    !(work.cutoff.is_some()
-        && close_after_cutoff(
+    .await;
+    finish_delivered_batch(outcome, work.cutoff.is_some(), || async {
+        close_after_cutoff(
             work.journal,
             work.diagnostics,
             work.active,
             work.cutoff.as_ref(),
         )
-        .await)
+        .await
+    })
+    .await
+}
+
+/// Apply the production post-message close rule after its processing result.
+/// Held or stopped outcomes never reach a session close operation.
+pub(super) async fn finish_delivered_batch<C, Fut>(
+    outcome: offers::BatchOutcome,
+    cutoff_pending: bool,
+    close: C,
+) -> offers::BatchOutcome
+where
+    C: FnOnce() -> Fut,
+    Fut: Future<Output = bool>,
+{
+    match outcome {
+        offers::BatchOutcome::AvailableOffersHeld | offers::BatchOutcome::Stopped => {
+            return outcome;
+        }
+        offers::BatchOutcome::Advanced => {}
+    }
+    if cutoff_pending && close().await {
+        offers::BatchOutcome::Stopped
+    } else {
+        offers::BatchOutcome::Advanced
+    }
 }

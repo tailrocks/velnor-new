@@ -10,10 +10,25 @@ use super::shutdown::{
     RowCounts, cleanup_identity, outcome_with_counts, retained_cutoff, row_counts,
     summarize_complete_snapshot, summarize_snapshot_before_deadline,
 };
-use super::{LinuxAdmissionState, LinuxDaemonOutcome, LinuxLaunchCredentials, LinuxShutdownGap};
+use super::{
+    LinuxAdmissionState, LinuxDaemonOutcome, LinuxLaunchCredentials, LinuxShutdownGap,
+    shutdown_gap_after_session,
+};
 
 #[path = "tests/protected_state.rs"]
 mod protected_state;
+
+#[test]
+fn held_available_message_becomes_a_typed_unresolved_daemon_gap() {
+    assert_eq!(
+        shutdown_gap_after_session(super::session::SessionDriveOutcome::AvailableOffersHeld),
+        Some(LinuxShutdownGap::AvailableOffersHeld)
+    );
+    assert_eq!(
+        shutdown_gap_after_session(super::session::SessionDriveOutcome::Stopped),
+        None
+    );
+}
 
 #[test]
 fn shutdown_counts_keep_uncertain_launches_sessions_and_auth_steps() {
