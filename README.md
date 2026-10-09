@@ -70,18 +70,23 @@ asset per supported target plus a manifest with each target's exact asset
 URL and SHA-256 digest; generated consumer workflows download that exact
 asset and verify its digest before invoking it.
 
-No official release exists yet (only the `seed/velnor-actions-0.1.0*`
-bootstrap seed tags — 8 tags, `0.1.0` and `0.1.0-2` through `0.1.0-8`,
-none an official release). Until one does, build
-from source on this branch. Version-bound seed manifests remain accepted
-as review-gated bootstrap inputs on the consumer path until the first
-official release supersedes them. A source build fails consumer-policy
-generation by design (`consumer_requires_release_install`); it never emits
-an unverified download URL or a placeholder digest. Velnor's own
-repository instead uses the reserved `velnor-repository-v1` policy;
+The [`v0.1.4` release](https://github.com/tailrocks/velnor-new/releases/tag/v0.1.4)
+is published with binary assets for Linux x86_64, macOS arm64, and macOS
+x86_64. Its source run passed all three target qualification and attestation
+jobs, but the publisher job exited 1 after checksum verification and an
+untagged-release URL was emitted; the historical log does not establish which
+final predicate failed. See
+[`release-gates.md`](docs/implemented/release-gates.md) before treating the
+published release as proof of the complete protected release path. Consumer
+repositories must commit a byte-identical copy of the selected published
+manifest at `.velnor/release-manifest.json` after reviewing its version,
+source commit, asset URLs, and digests. A source build still fails
+consumer-policy generation by design (`consumer_requires_release_install`);
+it never emits an unverified download URL or a placeholder digest. Velnor's
+own repository instead uses the reserved `velnor-repository-v1` policy;
 `.velnor/generator.lock` does not exist yet (BOOT-3.4 NEEDS-HUMAN —
-seed creates it), so the lock half of the bootstrap cycle is future
-work, not a present claim.
+seed creates it), so the lock half of the bootstrap cycle is future work,
+not a present claim.
 
 ## Proposed V1 direction
 

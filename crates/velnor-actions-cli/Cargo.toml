@@ -11,8 +11,8 @@ name = "velnor-actions"
 path = "src/main.rs"
 
 [dependencies]
-velnor-actions-orchestrator = { version = "=0.1.4", path = "../velnor-actions-orchestrator" }
-velnor-actions-freshness = { version = "=0.1.4", path = "../velnor-actions-freshness" }
+velnor-actions-orchestrator = { version = "=0.1.5", path = "../velnor-actions-orchestrator" }
+velnor-actions-freshness = { version = "=0.1.5", path = "../velnor-actions-freshness" }
 clap = { version = "=4.6.7", features = ["derive"] }
 
 [lints]
@@ -24,6 +24,7 @@ path = "tests/velnor_cli.rs"
 
 [dev-dependencies]
 proc-macro2 = "=1.0.107"
+sha2 = "=0.11.0"
 serde_json = { workspace = true }
 syn = { version = "=3.0.6", features = ["full", "visit"] }
 unicode-general-category = "=1.1.0"

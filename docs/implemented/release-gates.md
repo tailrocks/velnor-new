@@ -10,7 +10,9 @@ an immutable release, or GitHub environment protection. As of 2026-10-08,
 Velnor v0.1.4 has been published as an immutable GitHub release. That
 publication is distinct from the qualification and seed gates below; it does
 not establish their required approvals, reproducible rebuild, or
-current-source hosted qualification.
+current-source hosted qualification. The v0.1.4 source workflow run described
+below did not produce the generator publisher's acceptance receipt. No v0.1.5
+publication or consumer adoption is established here.
 
 This release integration checkpoint does not constitute whole-tree source
 acceptance. The merged catalog keeps production MBX at 1.21.1 and retains the
@@ -24,24 +26,47 @@ qualification is established by the release-source checks below.
   pinned Mise + MBX (no Velnor binary), 2 distinct admin approvals, and an
   independent reproducible rebuild (second party, pinned catalog, sha256
   match) recorded in the seed PR (Gap E review). Pre-seed is trust-on-review.
-- BOOT-2.1 (release assets): v0.1.4 IS PUBLISHED AND IMMUTABLE; CURRENT-SOURCE
-  HOSTED QUALIFICATION IS UNVERIFIED. The source-bound workflow builds three
-  target binaries, admits each candidate TAR through the checkout-owned native
-  guard before parsing, and binds qualification, attestations, and the
-  canonical versioned manifest to the same measured artifact bytes. The
-  existence of v0.1.4 does not prove a successful exact-source run qualifying
-  all three targets or close BOOT-4.2. The available source checks do not
-  establish the provenance of the published bytes or the separate seed
-  approvals and independent rebuild. Unblock = record exact-source hosted
-  qualification and review the published bytes and consumer provenance.
-- BOOT-4.7 (protected release job): SOURCE-IMPLEMENTED, INFRASTRUCTURE
-  UNVERIFIED. The renderer emits a dispatch-only coordinator and a generator
-  publisher with a protected `generator-release` environment, serialized
-  publication, source/CI rechecks, immutable-tag preflight, and
-  digest/attestation verification. Unblock = verify the repository's actual
-  environment rules and branch protections, complete a qualified hosted run,
-  and land the bootstrap-lock update in a SEPARATE reviewed change while
-  ordinary CI keeps using the previous seed.
+- BOOT-2.1 (release assets): SOURCE-IMPLEMENTED; V0.1.4 IS PUBLISHED AND
+  IMMUTABLE; CURRENT-SOURCE HOSTED QUALIFICATION AND V0.1.5 PUBLICATION
+  UNVERIFIED. The source-bound workflow builds three target binaries, admits
+  each candidate TAR through the checkout-owned native guard before parsing,
+  and binds qualification, attestations, and the canonical versioned manifest
+  to the same measured artifact bytes. The v0.1.4 release is present with all
+  three target assets and a manifest whose GitHub asset digest is
+  `sha256:d6f7788e50e0c6168c36d122d910476ac6772cd4603352ef2319a88b888fc076`.
+  Its existence does not prove a successful exact-source run qualifying all
+  three targets, establish the provenance of those published bytes, or close
+  BOOT-4.2's seed approvals and reproducible rebuild.
+
+  Run [`37730166493`](https://github.com/tailrocks/velnor-new/actions/runs/37730166493)
+  used source `d3590d321e51f7b99bfb0a92c11d3d6eb7af61cd`. The Linux,
+  macOS arm64, and macOS x86_64 qualification and attestation jobs succeeded.
+  The `publish-generator` job verified candidate checksums, emitted an
+  untagged-release URL, and exited 1; its final logged acceptance-artifact
+  step was skipped. The historical log does not establish which predicate
+  caused the job to exit or show that final acceptance was reached. The same
+  coordinator run also failed the runner-image build, a separate branch outside
+  the generator DAG; record that image result and the overall coordinator
+  conclusion separately from generator acceptance. The published v0.1.4
+  inventory does not turn this failed run into publisher acceptance evidence.
+  A sanitized replay of the publisher command sequence
+  isolates the draft-metadata `html_url` check and no subsequent PATCH, but
+  that replay is not historical-run evidence. Unblock = for the renderer-size
+  fix's exact current-main SHA, pass release eligibility and the protected
+  generator build, qualification, attestation, and publication gates, then
+  produce the generator acceptance receipt. Separately review the published
+  manifest bytes for consumer adoption. Report the independent image-job result
+  and overall coordinator conclusion separately from generator acceptance.
+- BOOT-4.7 (protected release job): SOURCE-IMPLEMENTED, PROTECTION VERIFIED,
+  GENERATOR PUBLISH ACCEPTANCE INCOMPLETE. The live `generator-release`
+  environment requires a reviewer and permits deployments only from protected
+  branches. The active `protect-main` ruleset requires `Required`. Run
+  `37730166493` still failed before producing the publisher acceptance artifact;
+  its runner-image failure is a separate coordinator branch. Unblock = produce
+  the acceptance receipt from the protected generator path for the qualified
+  fix, then land any bootstrap-lock update in a SEPARATE reviewed change while
+  ordinary CI keeps using its previous bootstrap. Report the overall
+  coordinator conclusion separately from generator acceptance.
 - BOOT-3.4 (mise-bootstrap equality): half done (`.mise-version` ==
   `MISE_VERSION` const). Unblock = seed creates `.velnor/generator.lock`
   with the same exact Mise release + SHA-256; the equality check then
@@ -59,17 +84,25 @@ qualification is established by the release-source checks below.
 - VER-2.18 (stale default blocks release): SOURCE-IMPLEMENTED, HOSTED RUN
   UNVERIFIED. The publisher's source gate calls
   `scripts/check-freshness.sh`, which rejects stale, missing, mismatched, or
-  expired holds. Unblock = a successful exact-source protected workflow run.
+  expired holds. Unblock = a successful exact-source protected generator
+  publisher run after exact-main `Required` CI eligibility.
 - VER-3.2 / VER-3.3 (update machinery): procedure + Renovate proposals +
   script gates exist. Residual NEEDS-HUMAN: a maintainer MUST assemble each
   update set, record timestamp+delta, and run full qualification. No updater
   binary exists and none is planned for V1 — this is the mechanical maximum.
-- VER-3.7 (merge-after-qual): SOURCE CHECKS EXIST; BRANCH PROTECTION
-  UNVERIFIED. The release gate checks the exact-source main CI run and its
-  `Required` job before building and repeats that check before publication.
-  Unblock = verify that repository branch protection requires the intended
-  CI qualification checks for merge; generated workflow source alone cannot
-  establish that setting.
+- VER-3.7 (merge-after-qual): SOURCE CHECKS EXIST; branch protection verified
+  by a live ruleset read showing `protect-main` requires `Required`. Main merge SHA
+  `993050b379ed1b190315d0c2aaa272fd76080c9b` passed all 21 jobs, including
+  `Required` job `113580987515`, in
+  [run `37854363776`](https://github.com/tailrocks/velnor-new/actions/runs/37854363776)
+  after PR #113 merged. This is historical main-CI evidence for that
+  publication-source integration, not hosted release qualification or
+  publication. Main has since advanced to `2e9152b4c422025628d7b58e736ad0f4a5b2b0ed`;
+  this record does not assert that merge's CI result. The release gate checks
+  exact-source main CI and its `Required` job before building and repeats that
+  check before publication. Recheck branch protection and refresh exact-main
+  CI evidence before a new release; generated workflow source alone cannot
+  establish repository settings.
 - VER-4.4 (refresh Velnor-owned locks only): procedure defined; refresh of
   `Cargo.lock`/policy/generator/runner locks is a maintainer action, tool
   files get recommendations only. Residual NEEDS-HUMAN: same as VER-3.3 —

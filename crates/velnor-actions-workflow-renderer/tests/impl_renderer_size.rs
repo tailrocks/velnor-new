@@ -5,6 +5,7 @@ use velnor_actions_contract::{RoutingWorkflow, ScheduleTrigger, WorkflowPolicy};
 use velnor_actions_workflow_renderer::freshness::{FreshnessSpec, render_freshness_workflow};
 use velnor_actions_workflow_renderer::release_tree::render_release_workflow;
 use velnor_actions_workflow_renderer::schema2::MbxQualificationPins;
+use velnor_actions_workflow_renderer::schema2::MisePinQualificationPins;
 use velnor_actions_workflow_renderer::schema2::Schema2WorkflowRequest;
 use velnor_actions_workflow_renderer::setup::MiseSetup;
 use velnor_actions_workflow_renderer::{
@@ -143,6 +144,18 @@ fn direct_schema2_renderer_rejects_an_oversized_workflow() -> Result<(), RenderE
                 "jdx/mr-boxington-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
             mbx_version: large_mbx_version,
             rust_version: "1.98.0".to_owned(),
+        }),
+        mise_pin_qualification: Some(MisePinQualificationPins {
+            linux_x86_64_setup: MiseSetup {
+                uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
+                version: "2026.10.5".to_owned(),
+                sha256: "b".repeat(64),
+            },
+            macos_x86_64_setup: MiseSetup {
+                uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
+                version: "2026.10.5".to_owned(),
+                sha256: "c".repeat(64),
+            },
         }),
         product_release: None,
     };

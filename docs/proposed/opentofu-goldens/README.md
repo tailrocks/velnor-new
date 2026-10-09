@@ -10,6 +10,27 @@ root `.github` tree. The capture ran with Mise 2026.10.5 and Rust 1.98.1, and
 used at reviewed commit `2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca`; this
 current stable release supersedes issue #6's earlier v5.0.1 target.
 
+## Product version prep (2026-10-09)
+
+The product version owners and generated outputs are prepared from 0.1.4 to
+0.1.5. Supported CLI generation refreshed the root `.github` tree;
+`scripts/capture-opentofu-goldens.sh capture` and the follow-up `check` both
+passed with Cargo/Rust 1.98.1 under Mise 2026.10.4. The four scratch cases and
+dogfood match their captured bytes, and the dogfood preview is identical to
+the root `.github` tree. The CLI parity golden update and check each passed
+four tests.
+
+Positive ConsumerV1 scratch cases receive a runtime-synthetic manifest whose
+version comes from the tested CLI, whose target digests are computed from
+deterministic mock payload files, and whose source marker is synthetic. The
+canonical URL shape is present only to satisfy the manifest schema. These
+values are not published assets, source-bound candidate evidence, native
+qualification, or a release record. The checked-in
+`fixtures/consumer-release-manifest.json` stays unchanged at 0.1.4 as a schema
+placeholder for direct schema tests. Candidate qualification continues to
+stage and verify the exact supplied candidate manifest and binary through its
+separate `check-release` path.
+
 The 2026-10-05 checkpoint and capture environment below record the earlier
 source state and remain as historical evidence.
 
@@ -80,13 +101,14 @@ route are absent. The dogfood tree is byte-equal to the checked-in `.github` tre
 This is generated-source evidence only; it does not claim a hosted cache hit or
 persistent-cache round trip.
 
-The four consumer fixtures receive the checked-in
-`fixtures/consumer-release-manifest.json` in their scratch repositories.
-Its placeholder commit and target digests only exercise the canonical
-three-target schema. They are not a source-bound candidate manifest, native
-qualification, or release evidence. The dogfood producer repo stays on its
-VelnorRepositoryV1 path and receives no consumer manifest. The actual CLI
-parity suite also removes the fixture and verifies that `plan` fails closed.
+The four consumer fixtures receive a runtime-synthetic current-version
+manifest in their scratch repositories. It uses deterministic mock payload
+digests and a synthetic source marker solely to exercise positive
+ConsumerV1 generation; generated workflow bytes are the actual CLI output for
+that test input. These captures are not publication or qualification
+evidence. The dogfood producer repo stays on its VelnorRepositoryV1 path and
+receives no consumer manifest. The actual CLI parity suite also removes the
+manifest and verifies that `plan` fails closed.
 
 Historical pre-V2 producer capture: the checked-in workflow was regenerated from the reviewed source with
 the locked release candidate (`mbx build --release --locked --package

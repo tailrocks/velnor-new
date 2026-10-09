@@ -35,3 +35,28 @@ runtime configs select no Java shorthand and enable none of the affected
 experimental features. The repository uses the root `mise.toml` and pinned
 `mise exec` / `mise install` invocations; no configuration migration was
 needed for the qualified runtime paths.
+## Pre-merge hosted qualification
+
+The generated `qualification.yml` workflow has a `mise-pin` mode for checking
+a candidate Mise release before changing the repository's adopted runtime pin.
+The mode checks out the selected ref at the dispatch event's exact `github.sha`,
+then verifies the Mise version and executable SHA-256 on GitHub-hosted Linux
+x64 (`ubuntu-26.04`) and macOS x64 (`macos-15-intel`). It is read-only and does
+not publish Velnor or generator artifacts.
+
+Dispatch the candidate ref after it contains the generated qualification mode:
+
+```sh
+gh workflow run qualification.yml \
+  --repo tailrocks/velnor-new \
+  --ref <candidate-ref> \
+  --field mode=mise-pin
+```
+
+Confirm that both hosted jobs pass for the dispatch SHA. A successful run
+qualifies that candidate executable on those two hosted targets; it does not
+change `.velnor/version-policy.toml` or the named-check pins above. Keep the
+current pin record unchanged until the separate pin update is reviewed and
+merged. The candidate version and platform digests are compiled into the
+generator, so update them and regenerate the workflow when qualifying a later
+Mise release.

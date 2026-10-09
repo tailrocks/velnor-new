@@ -4,6 +4,10 @@
 //! discovery allowlist, and read-only task-cache helpers. Must not own Cargo
 //! metadata parsing, Rust graph rules, `rust-toolchain.toml`, or GitHub YAML.
 
+#[cfg(test)]
+#[path = "../../test_support/temp_dir.rs"]
+mod test_temp_dir;
+
 pub mod build;
 pub mod cache;
 pub mod cache_sources;

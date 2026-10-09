@@ -82,6 +82,8 @@ fn candidate_job_verifies_manifest_before_running_binary() -> Result<(), RenderE
 fn candidate_verify_script_checks_live_manifest() -> Result<(), RenderError> {
     use std::process::Command;
     let script = candidate_manifest_verify_script("x86_64-unknown-linux-gnu");
+    let path = crate::required_tool_path::with_required_tool_path(&[])
+        .map_err(|error| RenderError::InvalidWorkflow(format!("test_path:{error}")))?;
     let root = std::env::temp_dir().join(format!("velnor-verify-{}", std::process::id()));
     let dir = root.join("velnor/candidate");
     std::fs::create_dir_all(&dir)
@@ -99,6 +101,7 @@ fn candidate_verify_script_checks_live_manifest() -> Result<(), RenderError> {
             .expect("chmod");
         Command::new("sh")
             .args(["-c", &script])
+            .env("PATH", &path)
             .env("RUNNER_TEMP", &root)
             .env("GITHUB_SHA", "f".repeat(40))
             .status()
