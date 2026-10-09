@@ -50,6 +50,11 @@ pub(super) fn load_configured() -> Result<Zeroizing<Vec<u8>>, HostError> {
     load_systemd_credential(Path::new(&directory), "github-token")
 }
 
+pub(super) fn load_actions_read_token() -> Result<Zeroizing<Vec<u8>>, HostError> {
+    let directory = std::env::var_os("CREDENTIALS_DIRECTORY").ok_or(HostError::Keychain)?;
+    load_systemd_credential(Path::new(&directory), super::ACTIONS_READ_TOKEN_NAME)
+}
+
 #[derive(Clone, Copy)]
 pub(super) struct SecretFilePolicy {
     directory_uid: u32,
@@ -253,6 +258,13 @@ pub(super) fn test_remove(path: &Path, policy: &SecretFilePolicy) -> Result<(), 
 #[cfg(test)]
 pub(super) fn test_load(directory: &Path, name: &str) -> Result<Zeroizing<Vec<u8>>, HostError> {
     load_systemd_credential(directory, name)
+}
+
+#[cfg(test)]
+pub(super) fn test_load_actions_read_token(
+    directory: &Path,
+) -> Result<Zeroizing<Vec<u8>>, HostError> {
+    load_systemd_credential(directory, super::ACTIONS_READ_TOKEN_NAME)
 }
 
 #[cfg(test)]
