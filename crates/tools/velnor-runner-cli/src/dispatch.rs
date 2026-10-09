@@ -77,7 +77,14 @@ fn dispatch(cli: &Cli) -> ExitCode {
             run_id,
             attempt,
             evidence,
-        } => compare_command(repo, *run_id, *attempt, evidence.as_deref()),
+            scoped_evidence,
+        } => compare_command(
+            repo,
+            *run_id,
+            *attempt,
+            evidence.as_deref(),
+            scoped_evidence.as_deref(),
+        ),
         Command::Disconnect {
             drain: should_drain,
             wait,
@@ -151,10 +158,14 @@ fn compare_command(
     run_id: u64,
     attempt: u64,
     evidence: Option<&Path>,
+    scoped_evidence: Option<&Path>,
 ) -> ExitCode {
-    match evidence {
-        Some(path) => crate::compare::compare_dir_for(path, repository, run_id, attempt),
-        None => not_proven(),
+    match (evidence, scoped_evidence) {
+        (Some(path), None) => crate::compare::compare_dir_for(path, repository, run_id, attempt),
+        (None, Some(path)) => {
+            crate::compare::compare_scoped_file_for(path, repository, run_id, attempt)
+        }
+        _ => not_proven(),
     }
 }
 

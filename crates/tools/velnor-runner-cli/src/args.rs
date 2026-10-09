@@ -128,8 +128,11 @@ pub enum Command {
         #[arg(long)]
         attempt: u64,
         /// Directory of expected, observed, and census JSON. Current records omit repository/run ID, so scoped comparison remains `NOT_PROVEN`.
-        #[arg(long, value_name = "DIR")]
+        #[arg(long, value_name = "DIR", conflicts_with = "scoped_evidence")]
         evidence: Option<PathBuf>,
+        /// Versioned offline scope-binding input. A successful result is `BOUND_ONLY`, not a parity or runner-placement proof.
+        #[arg(long, value_name = "FILE", conflicts_with = "evidence")]
+        scoped_evidence: Option<PathBuf>,
     },
     /// Drain and stop this local controller; retain the remote Scale Set and journal.
     Disconnect {

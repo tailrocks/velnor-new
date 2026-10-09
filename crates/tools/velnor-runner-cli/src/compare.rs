@@ -14,11 +14,14 @@ use velnor_runner_core::{
 };
 
 mod actions_attempt;
+mod scoped;
 
 pub use actions_attempt::{
     ActionsAttemptAdapterError, ActionsAttemptAdapterOutcome, BoundedActionsAttemptArtifact,
     BoundedActionsAttemptJob, BoundedActionsAttemptView, adapt_actions_attempt_read,
 };
+
+pub(crate) use scoped::compare_scoped_file_for;
 
 #[cfg(test)]
 #[path = "compare/actions_attempt_tests.rs"]
