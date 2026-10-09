@@ -116,6 +116,26 @@ pub fn build_workflow(
     discovery: &Discovery,
     fetch_roots: &[String],
 ) -> Result<WorkflowPlan, OrchestratorError> {
+    build_workflow_with_local_helper_build(config, branch, label, discovery, false, fetch_roots)
+}
+
+/// Build workflow input when the Velnor plan may build its helper locally.
+///
+/// The explicit source-build fact adds Rust to the plan's prepared tools
+/// before the MBX preflight; the compatibility entry point above retains
+/// the discovery-only behavior for direct workflow consumers.
+///
+/// # Errors
+///
+/// Returns contract, render-context, or tool-request errors.
+pub fn build_workflow_with_local_helper_build(
+    config: &VelnorConfig,
+    branch: &str,
+    label: &str,
+    discovery: &Discovery,
+    local_helper_build: bool,
+    fetch_roots: &[String],
+) -> Result<WorkflowPlan, OrchestratorError> {
     wire_w1::vet_step_syntax(StepSyntax::JobMatrix)?;
     let catalog = ToolCatalog::pinned();
     let version = env!("CARGO_PKG_VERSION").to_owned();
@@ -131,7 +151,8 @@ pub fn build_workflow(
     };
     let use_nextest = plan_uses_nextest(discovery);
     let use_opentofu = plan_uses_opentofu(discovery);
-    let use_rust = plan_uses_rust(discovery);
+    let use_rust = plan_uses_rust(discovery)
+        || (policy == WorkflowPolicy::VelnorRepositoryV1 && local_helper_build);
     let mut plan = build_plan_job(
         label,
         acquire.clone(),

@@ -12,8 +12,9 @@ use velnor_actions_orchestrator_core::config::load_config;
 use velnor_actions_orchestrator_core::decisions::runner_image_evidence;
 use velnor_actions_orchestrator_discovery::discover::{Discovery, discover};
 use velnor_actions_orchestrator_provisioning::source_prep::lockful_roots;
+use velnor_actions_orchestrator_staged_validation::validate::verify_velnor_repository_files;
 use velnor_actions_orchestrator_workflow_ir::workflow::{
-    DEFAULT_RUNNER_LABEL, WorkflowPlan, build_workflow,
+    DEFAULT_RUNNER_LABEL, WorkflowPlan, build_workflow_with_local_helper_build,
 };
 
 /// Canonical repository identity allowed the Velnor-repository policy.
@@ -36,6 +37,9 @@ pub struct GenerationPreparation {
     pub discovery: Discovery,
     /// Workflow IR plus renderer inputs.
     pub workflow: WorkflowPlan,
+    /// Whether the Velnor plan will build its helper locally from source.
+    /// This also determines whether Rust must be prepared before MBX checks.
+    pub local_helper_build: bool,
     /// Runner-image evidence for the label: explicitly unobserved at
     /// generation time; observed provisioner facts bind later (VER-4.2).
     pub runner_image: RunnerImageEvidence,
@@ -62,14 +66,17 @@ pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> 
     let config = load_config(&canonical)?;
     let default_branch = resolve_default_branch(&canonical, &config)?;
     check_velnor_identity(&canonical, &config)?;
+    let local_helper_build = config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1
+        && verify_velnor_repository_files(&canonical)?.is_none();
     let mut discovery = discover(&canonical, &config)?;
     let fetch_roots = lockful_roots(&canonical, &discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
-    let workflow = build_workflow(
+    let workflow = build_workflow_with_local_helper_build(
         &config,
         &default_branch,
         &runner_label,
         &discovery,
+        local_helper_build,
         &fetch_roots,
     )?;
     let runner_image = runner_image_evidence();
@@ -93,6 +100,7 @@ pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> 
         runner_selection,
         discovery,
         workflow,
+        local_helper_build,
         runner_image,
         lock_audit_blocking: audit.blocking,
     })
