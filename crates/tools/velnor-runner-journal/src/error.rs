@@ -15,6 +15,14 @@ pub enum HostError {
     /// Journal read or write failed.
     #[error("journal")]
     Journal,
+    /// The journal was written by a newer schema than this binary supports.
+    #[error("unsupported journal schema version {found}; this binary supports through {supported}")]
+    UnsupportedJournalVersion {
+        /// Version found in the journal header.
+        found: i64,
+        /// Latest version this binary supports.
+        supported: i64,
+    },
     /// Runner container plan violated the mount policy.
     #[error("forbidden mount")]
     ForbiddenMount,

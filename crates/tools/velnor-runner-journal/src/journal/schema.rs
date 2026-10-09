@@ -21,6 +21,9 @@ pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError>
 
 async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError> {
     let version = journal_version(conn).await?;
+    if version > JOURNAL_VERSION {
+        return Err(unsupported_journal_version(version));
+    }
     if version == JOURNAL_VERSION {
         return validation::validate_current_schema(conn).await;
     }
@@ -88,6 +91,27 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
         _ => return Err(HostError::Journal),
     }
     migrate_version_ten(conn).await
+}
+
+/// Reject future schemas before an existing-only open returns a journal handle.
+/// Older versions remain available to existing-only operations as before; the
+/// bootstrap path is responsible for their migration.
+pub(super) async fn validate_existing_version(conn: &turso::Connection) -> Result<(), HostError> {
+    let version = journal_version(conn).await?;
+    if version < 0 {
+        return Err(HostError::Journal);
+    }
+    if version > JOURNAL_VERSION {
+        return Err(unsupported_journal_version(version));
+    }
+    Ok(())
+}
+
+fn unsupported_journal_version(found: i64) -> HostError {
+    HostError::UnsupportedJournalVersion {
+        found,
+        supported: JOURNAL_VERSION,
+    }
 }
 
 async fn journal_version(conn: &turso::Connection) -> Result<i64, HostError> {
