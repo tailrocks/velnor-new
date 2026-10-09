@@ -75,6 +75,50 @@ pub(super) fn release_json(
     case: Failure,
     draft: bool,
 ) -> Result<String, Box<dyn Error>> {
+    let rows = release_asset_rows(root, case, draft)?;
+    let release_id = if (draft && case == Failure::WrongDraftReleaseId)
+        || (!draft && case == Failure::ChangedReleaseId)
+    {
+        124
+    } else {
+        123
+    };
+    let immutable = !draft && case != Failure::MutablePublished;
+    let html_url = if (draft && case == Failure::UntaggedDraftUrls)
+        || (!draft && case == Failure::WrongPublishedUrl)
+    {
+        "https://github.com/tailrocks/velnor-new/releases/tag/untagged-6899c9b4aa4e941dadba"
+    } else {
+        "https://github.com/tailrocks/velnor-new/releases/tag/v0.1.5"
+    };
+    let tag_name = if draft && case == Failure::WrongDraftTag {
+        "v0.1.4"
+    } else {
+        "v0.1.5"
+    };
+    let source = if draft && case == Failure::WrongDraftSource {
+        "1111111111111111111111111111111111111111"
+    } else {
+        SOURCE_SHA
+    };
+    let api_url = if draft && case == Failure::WrongDraftRepository {
+        format!("https://api.github.com/repos/untrusted/velnor-new/releases/{release_id}")
+    } else if draft && case == Failure::WrongDraftApiPath {
+        format!("https://api.github.com/repos/{REPOSITORY}/releases/tags/v0.1.5")
+    } else {
+        format!("https://api.github.com/repos/{REPOSITORY}/releases/{release_id}")
+    };
+    Ok(format!(
+        "{{\"id\":{release_id},\"tag_name\":\"{tag_name}\",\"target_commitish\":\"{source}\",\"url\":\"{api_url}\",\"html_url\":\"{html_url}\",\"draft\":{draft},\"prerelease\":false,\"immutable\":{immutable},\"assets\":[{}]}}\n",
+        rows.join(","),
+    ))
+}
+
+fn release_asset_rows(
+    root: &Path,
+    case: Failure,
+    draft: bool,
+) -> Result<Vec<String>, Box<dyn Error>> {
     let mut rows = Vec::new();
     for (index, path) in manifest::release_asset_paths()
         .split_whitespace()
@@ -130,42 +174,7 @@ pub(super) fn release_json(
             "{\"name\":\"unknown-asset\",\"state\":\"uploaded\",\"browser_download_url\":\"https://github.com/tailrocks/velnor-new/releases/download/untagged-6899c9b4aa4e941dadba/unknown-asset\",\"digest\":\"sha256:0000000000000000000000000000000000000000000000000000000000000000\",\"size\":0}".to_owned(),
         );
     }
-    let release_id = if (draft && case == Failure::WrongDraftReleaseId)
-        || (!draft && case == Failure::ChangedReleaseId)
-    {
-        124
-    } else {
-        123
-    };
-    let immutable = !draft && case != Failure::MutablePublished;
-    let html_url = if (draft && case == Failure::UntaggedDraftUrls)
-        || (!draft && case == Failure::WrongPublishedUrl)
-    {
-        "https://github.com/tailrocks/velnor-new/releases/tag/untagged-6899c9b4aa4e941dadba"
-    } else {
-        "https://github.com/tailrocks/velnor-new/releases/tag/v0.1.5"
-    };
-    let tag_name = if draft && case == Failure::WrongDraftTag {
-        "v0.1.4"
-    } else {
-        "v0.1.5"
-    };
-    let source = if draft && case == Failure::WrongDraftSource {
-        "1111111111111111111111111111111111111111"
-    } else {
-        SOURCE_SHA
-    };
-    let api_url = if draft && case == Failure::WrongDraftRepository {
-        format!("https://api.github.com/repos/untrusted/velnor-new/releases/{release_id}")
-    } else if draft && case == Failure::WrongDraftApiPath {
-        format!("https://api.github.com/repos/{REPOSITORY}/releases/tags/v0.1.5")
-    } else {
-        format!("https://api.github.com/repos/{REPOSITORY}/releases/{release_id}")
-    };
-    Ok(format!(
-        "{{\"id\":{release_id},\"tag_name\":\"{tag_name}\",\"target_commitish\":\"{source}\",\"url\":\"{api_url}\",\"html_url\":\"{html_url}\",\"draft\":{draft},\"prerelease\":false,\"immutable\":{immutable},\"assets\":[{}]}}\n",
-        rows.join(","),
-    ))
+    Ok(rows)
 }
 
 pub(super) fn assert_draft_metadata_is_only_url_mismatch(
