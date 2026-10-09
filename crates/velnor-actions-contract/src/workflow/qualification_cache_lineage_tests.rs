@@ -4,7 +4,7 @@ use super::*;
 fn receipt_artifact_name_is_stable() {
     assert_eq!(
         QUALIFICATION_CACHE_RECEIPT_ARTIFACT,
-        "velnor-qualification-cache-receipt-v1"
+        "velnor-qualification-cache-receipt-v2"
     );
     assert_eq!(
         QUALIFICATION_CACHE_RECEIPT_FILENAME,

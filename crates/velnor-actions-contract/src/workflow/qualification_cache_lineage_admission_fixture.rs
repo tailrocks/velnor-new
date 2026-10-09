@@ -25,6 +25,7 @@ type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 pub(super) struct BuiltNode {
     pub(super) value: serde_json::Value,
     pub(super) artifact: QualificationCacheArtifact,
+    pub(super) document: QualificationCacheReceiptArtifactDocument,
     pub(super) receipt: QualificationCacheReceipt,
 }
 
@@ -57,7 +58,7 @@ pub(super) fn completed_node(
     let metadata = run_metadata(plan)?;
     let receipt = completed_receipt(plan, previous_admission.as_ref(), previous, source_delta)?;
     let document = QualificationCacheReceiptArtifactDocument {
-        schema: 1,
+        schema: 2,
         producer,
         receipt: receipt.clone(),
     };
@@ -66,13 +67,14 @@ pub(super) fn completed_node(
     let value = serde_json::json!({
         "metadata": metadata,
         "artifact": artifact.clone(),
-        "producer": document.producer,
-        "receipt": document.receipt,
+        "producer": document.producer.clone(),
+        "receipt": document.receipt.clone(),
         "previous": previous.map(|node| node.value.clone()),
     });
     Ok(BuiltNode {
         value,
         artifact,
+        document,
         receipt,
     })
 }
@@ -94,7 +96,7 @@ fn completed_receipt(
         .collect::<TestResult<Vec<_>>>()?;
     let predecessor = previous.map(receipt_link).transpose()?;
     Ok(QualificationCacheReceipt {
-        schema: 1,
+        schema: 2,
         plan_id: plan.plan_id.clone(),
         run: run_ref(context),
         campaign: context.campaign.clone(),
@@ -115,7 +117,6 @@ fn lane_receipt(
 ) -> TestResult<QualificationCacheLaneReceipt> {
     let layers = [
         QualificationCacheLayer::MbxObjects,
-        QualificationCacheLayer::MbxBundle,
         QualificationCacheLayer::CargoSources,
         QualificationCacheLayer::MiseTools,
         QualificationCacheLayer::TofuProviders,

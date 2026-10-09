@@ -63,7 +63,7 @@ impl QualificationCacheDirective {
             (None, None)
         };
         Ok(Some(Self {
-            schema: 1,
+            schema: 2,
             campaign: context.campaign.clone(),
             phase: context.phase,
             plan_id: plan.plan_id.clone(),
@@ -193,10 +193,9 @@ fn lane_directive(
     entry: &crate::workflow::MatrixEntry,
     admission: Option<&QualificationCacheAdmission>,
 ) -> Result<QualificationCacheLaneDirective, ContractError> {
-    let mut layers = Vec::with_capacity(6);
+    let mut layers = Vec::with_capacity(5);
     for layer in [
         QualificationCacheLayer::MbxObjects,
-        QualificationCacheLayer::MbxBundle,
         QualificationCacheLayer::CargoSources,
         QualificationCacheLayer::MiseTools,
         QualificationCacheLayer::TofuProviders,
