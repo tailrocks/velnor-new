@@ -4,6 +4,8 @@ use std::collections::HashSet;
 
 use crate::error::HostError;
 
+pub(super) mod daemon_binding;
+
 const BASE_COLUMNS: [&str; 9] = [
     "id",
     "kind",
@@ -77,6 +79,11 @@ pub(super) async fn validate_v8_schema(conn: &turso::Connection) -> Result<(), H
 }
 
 pub(super) async fn validate_current_schema(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_v11_schema(conn).await?;
+    daemon_binding::validate_schema(conn).await
+}
+
+pub(super) async fn validate_v11_schema(conn: &turso::Connection) -> Result<(), HostError> {
     validate_v10_schema(conn).await?;
     validate_population_schema(conn).await
 }

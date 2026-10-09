@@ -5,8 +5,10 @@ use std::num::NonZeroU32;
 
 mod assigned;
 mod batch;
+mod daemon_binding;
 pub use assigned::{AssignedPopulationObservation, ScopedAssignedLaunchIdentity};
 pub use batch::{BatchCapacityClaim, BatchOfferClaim, BatchOfferState};
+pub use daemon_binding::BoundCapacityClaim;
 
 use crate::error::HostError;
 
@@ -293,6 +295,31 @@ async fn reserve_in_transaction(
         return Ok(CapacityClaim::Existing(id));
     }
 
+    match capacity_admission(conn, maximum).await? {
+        CapacityAdmission::Draining => return Ok(CapacityClaim::Draining),
+        CapacityAdmission::Open { occupied, free: 0 } => {
+            return Ok(CapacityClaim::CapacityFull { occupied, maximum });
+        }
+        CapacityAdmission::Open { .. } => {}
+    }
+
+    conn.execute(
+        "INSERT INTO intents (kind, subject, state, replay_key_version, effect_state, runner_start_state) VALUES ('launch', ?1, 'pending', 1, 'not_started', 'not_requested')",
+        [identity.subject.as_str()],
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
+    Ok(CapacityClaim::New(conn.last_insert_rowid()))
+}
+
+/// One shared drain/global-occupancy gate for every launch reservation path.
+///
+/// Callers invoke this only after exact replay lookup, inside their existing
+/// immediate transaction, so replay remains available during drain.
+pub(super) async fn capacity_admission(
+    conn: &turso::Connection,
+    maximum: NonZeroU32,
+) -> Result<CapacityAdmission, HostError> {
     let mut rows = conn
         .query("SELECT draining FROM controller_state WHERE id = 1", ())
         .await
@@ -306,7 +333,7 @@ async fn reserve_in_transaction(
         .map_err(|_| HostError::Journal)?;
     drop(rows);
     match draining {
-        1 => return Ok(CapacityClaim::Draining),
+        1 => return Ok(CapacityAdmission::Draining),
         0 => {}
         _ => return Err(HostError::Journal),
     }
@@ -327,17 +354,14 @@ async fn reserve_in_transaction(
         .map_err(|_| HostError::Journal)?;
     drop(rows);
     let occupied = u64::try_from(occupied).map_err(|_| HostError::Journal)?;
-    if occupied >= u64::from(maximum.get()) {
-        return Ok(CapacityClaim::CapacityFull { occupied, maximum });
-    }
+    let free = u64::from(maximum.get()).saturating_sub(occupied);
+    Ok(CapacityAdmission::Open { occupied, free })
+}
 
-    conn.execute(
-        "INSERT INTO intents (kind, subject, state, replay_key_version, effect_state, runner_start_state) VALUES ('launch', ?1, 'pending', 1, 'not_started', 'not_requested')",
-        [identity.subject.as_str()],
-    )
-    .await
-    .map_err(|_| HostError::Journal)?;
-    Ok(CapacityClaim::New(conn.last_insert_rowid()))
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum CapacityAdmission {
+    Draining,
+    Open { occupied: u64, free: u64 },
 }
 
 pub(super) fn validate_text(value: &str, maximum: usize) -> Result<(), HostError> {

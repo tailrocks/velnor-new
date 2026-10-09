@@ -197,7 +197,7 @@ async fn v9_open_session_migrates_and_remains_close_claimable() -> Result<(), St
 }
 
 #[tokio::test]
-async fn v8_current_published_schema_upgrades_to_v11() -> Result<(), String> {
+async fn v8_current_published_schema_upgrades_to_v12() -> Result<(), String> {
     let scratch = Scratch::new("session-v8-migration").map_err(|error| error.to_string())?;
     let path = scratch.file();
     let journal = Journal::open(&path)
@@ -225,6 +225,9 @@ async fn v8_current_published_schema_upgrades_to_v11() -> Result<(), String> {
     .map_err(|error| error.to_string())?;
     let conn = database.connect().map_err(|error| error.to_string())?;
     conn.execute("DROP TABLE scale_set_sessions", ())
+        .await
+        .map_err(|error| error.to_string())?;
+    conn.execute("DROP TABLE linux_launch_daemon_bindings", ())
         .await
         .map_err(|error| error.to_string())?;
     conn.execute("PRAGMA user_version = 8", ())
@@ -265,7 +268,7 @@ async fn unsupported_newer_schema_is_not_rewritten_or_downgraded() -> Result<(),
     .await
     .map_err(|error| error.to_string())?;
     let conn = database.connect().map_err(|error| error.to_string())?;
-    conn.execute("PRAGMA user_version = 12", ())
+    conn.execute("PRAGMA user_version = 13", ())
         .await
         .map_err(|error| error.to_string())?;
     drop(conn);
@@ -291,7 +294,7 @@ async fn unsupported_newer_schema_is_not_rewritten_or_downgraded() -> Result<(),
         .ok_or_else(|| "user_version returned no row".to_owned())?
         .get::<i64>(0)
         .map_err(|error| error.to_string())?;
-    assert_eq!(version, 12, "opening a newer schema must not rewind it");
+    assert_eq!(version, 13, "opening a newer schema must not rewind it");
     Ok(())
 }
 
@@ -308,6 +311,9 @@ async fn install_v9_session_table(
     .await
     .map_err(|error| error.to_string())?;
     let conn = database.connect().map_err(|error| error.to_string())?;
+    conn.execute("DROP TABLE linux_launch_daemon_bindings", ())
+        .await
+        .map_err(|error| error.to_string())?;
     conn.execute("DROP TABLE scale_set_sessions", ())
         .await
         .map_err(|error| error.to_string())?;

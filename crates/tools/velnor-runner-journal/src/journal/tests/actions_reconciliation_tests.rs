@@ -169,7 +169,7 @@ async fn v7_upgrade_preserves_uncertain_launch_and_adds_empty_rest_evidence() ->
         version_row
             .get::<i64>(0)
             .map_err(|error| error.to_string())?,
-        11
+        12
     );
     drop(version_rows);
     drop(conn);
@@ -305,6 +305,9 @@ async fn seed_v7_schema_without_rest_columns(path: &Path) -> Result<(), String> 
     .await
     .map_err(|error| error.to_string())?;
     let conn = database.connect().map_err(|error| error.to_string())?;
+    conn.execute("DROP TABLE linux_launch_daemon_bindings", ())
+        .await
+        .map_err(|error| error.to_string())?;
     for column in [
         "observed_actions_conclusion",
         "observed_actions_job_id",

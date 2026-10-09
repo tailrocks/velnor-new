@@ -2,8 +2,9 @@
 
 use crate::error::HostError;
 
-const JOURNAL_VERSION: i64 = 11;
+const JOURNAL_VERSION: i64 = 12;
 
+mod daemon_binding;
 mod validation;
 pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError> {
     conn.execute("BEGIN IMMEDIATE", ())
@@ -87,10 +88,16 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
             migrate_version_nine(conn).await?;
         }
         9 => migrate_version_nine(conn).await?,
-        10 => {}
+        10 | 11 => {}
         _ => return Err(HostError::Journal),
     }
-    migrate_version_ten(conn).await
+    if version <= 10 {
+        migrate_version_ten(conn).await?;
+    }
+    if version <= 11 {
+        daemon_binding::migrate_version_eleven(conn).await?;
+    }
+    Ok(())
 }
 
 /// Reject future schemas before an existing-only open returns a journal handle.
@@ -369,7 +376,7 @@ async fn migrate_version_ten(conn: &turso::Connection) -> Result<(), HostError> 
     conn.execute("PRAGMA user_version = 11", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    validation::validate_current_schema(conn).await
+    validation::validate_v11_schema(conn).await
 }
 
 async fn ensure_legacy_columns(conn: &turso::Connection) -> Result<(), HostError> {

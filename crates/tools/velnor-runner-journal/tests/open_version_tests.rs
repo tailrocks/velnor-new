@@ -82,27 +82,27 @@ async fn scalar(path: &Path, sql: &str) -> Result<i64, String> {
         .map_err(|error| error.to_string())
 }
 
-async fn set_future_v12_shape(path: &Path) -> Result<(), String> {
+async fn set_future_v13_shape(path: &Path) -> Result<(), String> {
     execute(
         path,
         "CREATE TABLE launch_daemon_bindings (intent_id INTEGER PRIMARY KEY, endpoint TEXT NOT NULL, engine_id TEXT NOT NULL)",
     )
     .await?;
-    execute(path, "PRAGMA user_version = 12").await
+    execute(path, "PRAGMA user_version = 13").await
 }
 
-fn unsupported_v12(result: &Result<Journal, HostError>) -> bool {
+fn unsupported_v13(result: &Result<Journal, HostError>) -> bool {
     matches!(
         result,
         Err(HostError::UnsupportedJournalVersion {
-            found: 12,
-            supported: 11
+            found: 13,
+            supported: 12
         })
     )
 }
 
 #[tokio::test]
-async fn v11_existing_open_modes_still_work() -> Result<(), String> {
+async fn v12_existing_open_modes_still_work() -> Result<(), String> {
     let dir = scratch("current")?;
     let path = dir.join("journal.db");
     let journal = Journal::open(&path)
@@ -162,7 +162,7 @@ async fn v11_existing_open_modes_still_work() -> Result<(), String> {
 }
 
 #[tokio::test]
-async fn future_v12_opens_refuse_before_existing_only_reads_or_writes() -> Result<(), String> {
+async fn future_v13_opens_refuse_before_existing_only_reads_or_writes() -> Result<(), String> {
     let dir = scratch("future")?;
     let path = dir.join("journal.db");
     let journal = Journal::open(&path)
@@ -173,23 +173,23 @@ async fn future_v12_opens_refuse_before_existing_only_reads_or_writes() -> Resul
         .await
         .map_err(|error| error.to_string())?;
     drop(journal);
-    set_future_v12_shape(&path).await?;
+    set_future_v13_shape(&path).await?;
     let before = snapshot_files(&dir)?;
     let (device, inode) = parent_identity(&path)?;
 
-    assert!(unsupported_v12(&Journal::open_readonly(&path).await));
-    assert!(unsupported_v12(&Journal::open_existing(&path).await));
-    assert!(unsupported_v12(
+    assert!(unsupported_v13(&Journal::open_readonly(&path).await));
+    assert!(unsupported_v13(&Journal::open_existing(&path).await));
+    assert!(unsupported_v13(
         &Journal::open_readonly_protected_at(&path, device, inode).await
     ));
-    assert!(unsupported_v12(
+    assert!(unsupported_v13(
         &Journal::open_existing_protected_at(&path, device, inode).await
     ));
     assert_eq!(snapshot_files(&dir)?, before);
-    assert!(unsupported_v12(&Journal::open(&path).await));
+    assert!(unsupported_v13(&Journal::open(&path).await));
     assert_eq!(snapshot_files(&dir)?, before);
 
-    assert_eq!(scalar(&path, "PRAGMA user_version").await?, 12);
+    assert_eq!(scalar(&path, "PRAGMA user_version").await?, 13);
     assert_eq!(scalar(&path, "SELECT COUNT(*) FROM intents").await?, 1);
     assert_eq!(
         scalar(&path, "SELECT COUNT(*) FROM launch_daemon_bindings").await?,
@@ -216,6 +216,7 @@ async fn v10_existing_open_remains_available_for_the_existing_migration_path() -
         .map_err(|error| error.to_string())?;
     drop(journal);
     execute(&path, "DROP TABLE scale_set_population_observations").await?;
+    execute(&path, "DROP TABLE linux_launch_daemon_bindings").await?;
     execute(&path, "PRAGMA user_version = 10").await?;
 
     let existing = Journal::open_existing(&path)
@@ -228,7 +229,7 @@ async fn v10_existing_open_remains_available_for_the_existing_migration_path() -
         .await
         .map_err(|error| error.to_string())?;
     assert_eq!(migrated.rows().await.map_err(|e| e.to_string())?.len(), 1);
-    assert_eq!(scalar(&path, "PRAGMA user_version").await?, 11);
+    assert_eq!(scalar(&path, "PRAGMA user_version").await?, 12);
     Ok(())
 }
 
