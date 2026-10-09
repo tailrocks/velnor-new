@@ -10,6 +10,7 @@ mod auth_intent;
 mod capacity;
 mod cleanup;
 mod controller;
+mod daemon_binding;
 mod events;
 mod intent;
 mod launch;
@@ -25,14 +26,15 @@ pub use auth_intent::{
 };
 pub use capacity::{
     AssignedPopulationObservation, BatchCapacityClaim, BatchOfferClaim, BatchOfferState,
-    CapacityClaim, LaunchEffectState, ReplayRoute, ScopedAssignedLaunchIdentity,
-    ScopedLaunchIdentity,
+    BoundCapacityClaim, CapacityClaim, LaunchEffectState, ReplayRoute,
+    ScopedAssignedLaunchIdentity, ScopedLaunchIdentity,
 };
 pub use cleanup::{
     CleanupCheckpointIdentity, CleanupChildren, CleanupDiagnostics, CleanupDisposition,
     CleanupStopPolicy, OuterNetworkCleanupState, OuterNetworkRemovalProof, PhysicalCleanupProof,
     PostActionDisposition, RunnerStartObservation,
 };
+pub use daemon_binding::JournalDockerDaemonBinding;
 pub use lifecycle::RunnerStartIntent;
 pub use population::{
     PopulationSnapshotWrite, ScaleSetPopulationSnapshot, ScaleSetPopulationSource,

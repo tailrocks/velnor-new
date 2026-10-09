@@ -151,6 +151,14 @@ impl ScopedAssignedLaunchIdentity {
             message_id,
         })
     }
+
+    pub(super) fn reservation_parts(&self) -> (&str, &str, Option<i64>) {
+        (
+            self.stable_prefix.as_str(),
+            self.subject.as_str(),
+            self.message_id,
+        )
+    }
 }
 
 impl Journal {
@@ -195,12 +203,12 @@ async fn reserve_assigned_in_transaction(
     if let Some(id) = existing_assigned_slot(conn, identity).await? {
         return Ok(CapacityClaim::Existing(id));
     }
-    if drain_requested(conn).await? {
-        return Ok(CapacityClaim::Draining);
-    }
-    let occupied = occupied_launches(conn).await?;
-    if occupied >= u64::from(maximum.get()) {
-        return Ok(CapacityClaim::CapacityFull { occupied, maximum });
+    match super::capacity_admission(conn, maximum).await? {
+        super::CapacityAdmission::Draining => return Ok(CapacityClaim::Draining),
+        super::CapacityAdmission::Open { occupied, free: 0 } => {
+            return Ok(CapacityClaim::CapacityFull { occupied, maximum });
+        }
+        super::CapacityAdmission::Open { .. } => {}
     }
     conn.execute(
         "INSERT INTO intents (kind, subject, state, replay_key_version, effect_state, runner_start_state, message_id) VALUES ('launch', ?1, 'pending', 1, 'not_started', 'not_requested', ?2)",
@@ -232,43 +240,6 @@ async fn existing_assigned_slot(
         return Err(HostError::Journal);
     }
     Ok(first)
-}
-
-async fn drain_requested(conn: &turso::Connection) -> Result<bool, HostError> {
-    let mut rows = conn
-        .query("SELECT draining FROM controller_state WHERE id = 1", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let value = rows
-        .next()
-        .await
-        .map_err(|_| HostError::Journal)?
-        .ok_or(HostError::Journal)?
-        .get::<i64>(0)
-        .map_err(|_| HostError::Journal)?;
-    match value {
-        0 => Ok(false),
-        1 => Ok(true),
-        _ => Err(HostError::Journal),
-    }
-}
-
-async fn occupied_launches(conn: &turso::Connection) -> Result<u64, HostError> {
-    let mut rows = conn
-        .query(
-            "SELECT COUNT(*) FROM intents WHERE kind = 'launch' AND cleanup_proven = 0 AND NOT (replay_key_version = 1 AND state = 'failed' AND effect_state = 'definite_no_effect' AND docker_id IS NULL AND github_runner_id IS NULL AND dind_id IS NULL AND worker_volume IS NULL AND observed_job_id IS NULL AND observed_workflow_run_id IS NULL AND remote_terminal = 0)",
-            (),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let count = rows
-        .next()
-        .await
-        .map_err(|_| HostError::Journal)?
-        .ok_or(HostError::Journal)?
-        .get::<i64>(0)
-        .map_err(|_| HostError::Journal)?;
-    u64::try_from(count).map_err(|_| HostError::Journal)
 }
 
 fn validate_route(

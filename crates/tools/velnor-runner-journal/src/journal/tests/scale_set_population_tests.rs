@@ -262,6 +262,9 @@ async fn v10_migration_adds_snapshot_table_without_releasing_open_session() -> R
     conn.execute("DROP TABLE scale_set_population_observations", ())
         .await
         .map_err(|error| error.to_string())?;
+    conn.execute("DROP TABLE linux_launch_daemon_bindings", ())
+        .await
+        .map_err(|error| error.to_string())?;
     conn.execute("PRAGMA user_version = 10", ())
         .await
         .map_err(|error| error.to_string())?;
@@ -290,8 +293,8 @@ async fn v10_migration_adds_snapshot_table_without_releasing_open_session() -> R
 }
 
 #[tokio::test]
-async fn malformed_v11_population_schema_is_rejected_without_rewrite() -> Result<(), String> {
-    let scratch = Scratch::new("population-v11-malformed").map_err(|error| error.to_string())?;
+async fn malformed_v12_population_schema_is_rejected_without_rewrite() -> Result<(), String> {
+    let scratch = Scratch::new("population-v12-malformed").map_err(|error| error.to_string())?;
     let path = scratch.file();
     let journal = Journal::open(&path)
         .await
@@ -338,7 +341,7 @@ async fn malformed_v11_population_schema_is_rejected_without_rewrite() -> Result
         .get::<i64>(0)
         .map_err(|error| error.to_string())?;
     assert_eq!(
-        version, 11,
+        version, 12,
         "the current version is not silently downgraded"
     );
     Ok(())

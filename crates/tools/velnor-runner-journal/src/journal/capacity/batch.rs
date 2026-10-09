@@ -114,10 +114,10 @@ async fn reserve_batch_in_transaction(
     maximum_new: usize,
     maximum: NonZeroU32,
 ) -> Result<BatchCapacityClaim, HostError> {
-    if drain_requested(conn).await? {
-        return Ok(BatchCapacityClaim::Draining);
-    }
-    let mut free = u64::from(maximum.get()).saturating_sub(occupied_launch_count(conn).await?);
+    let mut free = match super::capacity_admission(conn, maximum).await? {
+        super::CapacityAdmission::Draining => return Ok(BatchCapacityClaim::Draining),
+        super::CapacityAdmission::Open { free, .. } => free,
+    };
     let mut new_count = 0usize;
     let mut offers = Vec::with_capacity(request_ids.len());
     for request_id in request_ids {
@@ -139,43 +139,6 @@ async fn reserve_batch_in_transaction(
         });
     }
     Ok(BatchCapacityClaim::Offers(offers))
-}
-
-async fn drain_requested(conn: &turso::Connection) -> Result<bool, HostError> {
-    let mut rows = conn
-        .query("SELECT draining FROM controller_state WHERE id = 1", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let value = rows
-        .next()
-        .await
-        .map_err(|_| HostError::Journal)?
-        .ok_or(HostError::Journal)?
-        .get::<i64>(0)
-        .map_err(|_| HostError::Journal)?;
-    match value {
-        0 => Ok(false),
-        1 => Ok(true),
-        _ => Err(HostError::Journal),
-    }
-}
-
-async fn occupied_launch_count(conn: &turso::Connection) -> Result<u64, HostError> {
-    let mut rows = conn
-        .query(
-            "SELECT COUNT(*) FROM intents WHERE kind = 'launch' AND cleanup_proven = 0 AND NOT (replay_key_version = 1 AND state = 'failed' AND effect_state = 'definite_no_effect' AND docker_id IS NULL AND github_runner_id IS NULL AND dind_id IS NULL AND worker_volume IS NULL AND observed_job_id IS NULL AND observed_workflow_run_id IS NULL AND remote_terminal = 0)",
-            (),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let occupied = rows
-        .next()
-        .await
-        .map_err(|_| HostError::Journal)?
-        .ok_or(HostError::Journal)?
-        .get::<i64>(0)
-        .map_err(|_| HostError::Journal)?;
-    u64::try_from(occupied).map_err(|_| HostError::Journal)
 }
 
 async fn existing_offer(
