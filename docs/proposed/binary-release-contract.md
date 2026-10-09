@@ -35,7 +35,7 @@ build uses `cargo build --release --locked`
 with the same manifest, package, binary, and target. The workflow compares the
 runtime version and tag again before publication. Its receipt records the
 repository, source SHA, package, Cargo version, binary, target, and tag.
-Each consumer workflow pins Mise 2026.10.5 for its Linux eligibility/publish
+Each consumer workflow pins Mise 2026.10.6 for its Linux eligibility/publish
 jobs and Apple Silicon build job using the verified platform checksums. This
 consumer pin does not update Velnor's own generator, bootstrap, or release
 runtime pins.
