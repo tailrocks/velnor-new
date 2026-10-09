@@ -45,7 +45,7 @@ async fn receive_request(stream: &mut UnixStream) -> Result<String, String> {
             let target = parts
                 .next()
                 .ok_or_else(|| "missing request target".to_owned())?;
-            if !target.starts_with("/v1.53/") {
+            if !target.starts_with('/') {
                 return Err("unexpected Docker API version or method".to_owned());
             }
             return Ok(target.to_owned());

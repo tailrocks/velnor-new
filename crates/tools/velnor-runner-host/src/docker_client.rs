@@ -1,12 +1,16 @@
 //! Unix-socket Docker client. The configured path is the only endpoint.
 
+use std::fmt;
 use std::future::Future;
 
 use bollard::errors::Error as DockerError;
 use std::time::Duration;
+use tokio::time::Instant;
 
 use crate::HostError;
 use crate::scale_set::EnsureError;
+
+pub(crate) mod daemon_guard;
 
 /// Deadline for one request to the selected Docker engine.
 pub(crate) const DOCKER_OPERATION_TIMEOUT: Duration = Duration::from_secs(10);
@@ -22,6 +26,77 @@ pub struct DockerVersion {
     pub os: Option<String>,
     /// Server architecture when supplied by the server.
     pub architecture: Option<String>,
+}
+
+/// Opaque identity binding for one configured Docker Unix endpoint.
+///
+/// The daemon ID is copied byte-for-byte from Docker's read-only `/info` response.
+/// Its format is deliberately not interpreted. Debug output redacts both fields.
+#[derive(Clone, PartialEq, Eq)]
+pub struct DockerDaemonBinding {
+    endpoint: String,
+    engine_id: String,
+}
+
+impl fmt::Debug for DockerDaemonBinding {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("DockerDaemonBinding")
+            .field("endpoint", &"<redacted>")
+            .field("engine_id", &"<redacted>")
+            .finish()
+    }
+}
+
+impl DockerDaemonBinding {
+    /// The normalized absolute socket path selected for this daemon.
+    #[must_use]
+    pub fn endpoint(&self) -> &str {
+        &self.endpoint
+    }
+
+    /// The exact opaque ID returned by the Docker Engine's `/info` endpoint.
+    #[must_use]
+    pub fn engine_id(&self) -> &str {
+        &self.engine_id
+    }
+}
+
+/// Observe the Docker daemon identity before a Linux launch reservation or effect.
+///
+/// This is one bounded, read-only `/info` request. Its result is an observation,
+/// not a cryptographic attestation or a cleanup proof. Later requests must use
+/// [`connect_unix_bound`] or the bound inventory API to compare the same ID on
+/// the connection that carries each request.
+///
+/// # Errors
+///
+/// Returns [`HostError::Docker`] when the endpoint, deadline, response, or
+/// reported daemon ID is invalid or unavailable.
+pub async fn observe_docker_daemon_binding_until(
+    endpoint: &str,
+    deadline: Instant,
+) -> Result<DockerDaemonBinding, HostError> {
+    let endpoint = unix_socket_path(endpoint)?;
+    let engine_id = daemon_guard::observe_engine_id(&endpoint, deadline).await?;
+    Ok(DockerDaemonBinding {
+        endpoint,
+        engine_id,
+    })
+}
+
+/// Connect a Bollard client whose every HTTP request is bound to the observed daemon.
+///
+/// For every operation, the transport opens one socket, checks `/info`, then sends
+/// the original request on that same HTTP/1 connection. It never reconnects or
+/// retries. The legacy [`connect_unix`] constructor remains available for callers
+/// that do not use daemon-incarnation state.
+///
+/// # Errors
+///
+/// Returns [`HostError::Docker`] when the binding or transport cannot be used.
+pub fn connect_unix_bound(binding: &DockerDaemonBinding) -> Result<bollard::Docker, HostError> {
+    daemon_guard::connect_bound(binding)
 }
 
 /// Probe the configured Docker endpoint with only a bounded GET `/version`.
