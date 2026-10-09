@@ -46,7 +46,7 @@ def archive(entries):
 
 
 def fixture(tool="mise"):
-    return {"tool": tool, "version": "2026.10.4-owned-cargo-wrapper" if tool == "mise" else "1.21.1-velnor.1",
+    return {"tool": tool, "version": "2026.10.6-owned-cargo-wrapper" if tool == "mise" else "1.21.1-velnor.1",
             "source_commit": "1" * 40, "source_tree": "2" * 40,
             "upstream_base_commit": source.BASES[tool][1],
             "archive_url": "https://github.com/tailrocks/velnor-new/releases/download/owned-source/source.tar",
@@ -59,6 +59,8 @@ def fixture(tool="mise"):
 
 class SourceTests(unittest.TestCase):
     def test_all_official_bootstrap_rows_have_complete_native_authority(self):
+        self.assertGreaterEqual(source.MAX_BOOTSTRAP_DOWNLOAD, 161_267_824)
+        self.assertGreaterEqual(source.MAX_BOOTSTRAP_EXECUTABLE_BYTES, 140_066_264)
         for tool in ("mise", "mbx"):
             assets = source.official_assets(tool)
             self.assertEqual(set(assets), set(source.HOSTS))

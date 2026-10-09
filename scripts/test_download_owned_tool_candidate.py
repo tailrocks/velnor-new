@@ -42,7 +42,7 @@ def zip_data(contents):
 
 def fixture():
     base = "https://github.com/tailrocks/velnor-new/releases/download/source-stage"
-    approved = {"tool": "mise", "version": "2026.10.4-owned-cargo-wrapper",
+    approved = {"tool": "mise", "version": "2026.10.6-owned-cargo-wrapper",
                 "source_commit": "1" * 40, "source_tree": "2" * 40,
                 "upstream_base_commit": source.BASES["mise"][1],
                 "archive_url": base + "/source.tar", "archive_sha256": "a" * 64,
