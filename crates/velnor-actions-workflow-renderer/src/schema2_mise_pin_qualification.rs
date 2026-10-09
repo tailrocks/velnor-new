@@ -86,19 +86,7 @@ fn verify_step(
     target: ReleaseTarget,
     setup: &crate::setup::MiseSetup,
 ) -> Result<Yaml, RenderError> {
-    let digest = match target {
-        ReleaseTarget::LinuxX86_64 => "sha256sum",
-        ReleaseTarget::MacosX86_64 => "shasum -a 256",
-        ReleaseTarget::MacosArm64 => {
-            return Err(RenderError::BadCommand(format!(
-                "mise_pin_qualification_unsupported_target:{}",
-                target.triple()
-            )));
-        }
-    };
-    let run = format!(
-        "set -euo pipefail\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nversion=\"$(mise --version)\"\ncase \"$version\" in \"mise $MISE_VERSION \"*) ;; *) echo \"unexpected Mise version: $version\" >&2; exit 1 ;; esac\nbinary=\"$(command -v mise)\"\nactual=\"$({digest} \"$binary\" | awk '{{print $1}}')\"\ntest \"$actual\" = \"$MISE_SHA256\""
-    );
+    let run = verification_script(target)?;
     Ok(Yaml::Map(vec![
         (
             "name".to_owned(),
@@ -114,6 +102,23 @@ fn verify_step(
         ),
         ("run".to_owned(), Yaml::str(run)),
     ]))
+}
+
+fn verification_script(target: ReleaseTarget) -> Result<String, RenderError> {
+    let (platform, digest) = match target {
+        ReleaseTarget::LinuxX86_64 => ("linux-x64", "sha256sum"),
+        ReleaseTarget::MacosX86_64 => ("macos-x64", "shasum -a 256"),
+        ReleaseTarget::MacosArm64 => {
+            return Err(RenderError::BadCommand(format!(
+                "mise_pin_qualification_unsupported_target:{}",
+                target.triple()
+            )));
+        }
+    };
+    let run = format!(
+        "set -euo pipefail\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nversion=\"$(mise --version)\"\ncase \"$version\" in \"$MISE_VERSION {platform} (\"[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\")\") ;; *) echo \"unexpected Mise version: $version\" >&2; exit 1 ;; esac\nbinary=\"$(command -v mise)\"\nactual=\"$({digest} \"$binary\" | awk '{{print $1}}')\"\ntest \"$actual\" = \"$MISE_SHA256\""
+    );
+    Ok(run)
 }
 
 fn mapping(pairs: &[(&str, &str)]) -> Yaml {
