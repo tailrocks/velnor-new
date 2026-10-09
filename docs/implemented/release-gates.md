@@ -6,9 +6,8 @@ infrastructure. The renderer emits a source-bound, dispatch-only
 binary, and generator modules. The generator module includes candidate
 qualification, a same-run manifest, source-bound attestations, and protected
 publication. Source and local tests alone do not prove the hosted path. As of
-2026-10-09, `v0.1.4` is published, but its source workflow run failed the final
-publisher job; the release exists without a successful end-to-end publisher
-acceptance result.
+2026-10-09, `v0.1.4` is published, but its source workflow run did not produce
+the generator publisher's acceptance receipt.
 
 This release integration checkpoint does not constitute whole-tree source
 acceptance. The merged catalog keeps production MBX at 1.21.1 and retains the
@@ -30,24 +29,32 @@ qualification is established by the release-source checks below.
   The `publish-generator` job verified candidate checksums, emitted an
   untagged-release URL, and exited 1; its final logged acceptance-artifact
   step was skipped. The historical log does not establish which predicate
-  caused the job to exit. The same coordinator run also failed the runner-image
-  build. The public [`v0.1.4` release](https://github.com/tailrocks/velnor-new/releases/tag/v0.1.4)
+  caused the job to exit or show that final acceptance was reached. The same
+  coordinator run also failed the runner-image build, a separate branch outside
+  the generator DAG; record that image result and the overall coordinator
+  conclusion separately from generator acceptance. The public
+  [`v0.1.4` release](https://github.com/tailrocks/velnor-new/releases/tag/v0.1.4)
   is now present with all three target assets and a manifest whose GitHub
   asset digest is `sha256:d6f7788e50e0c6168c36d122d910476ac6772cd4603352ef2319a88b888fc076`;
-  that inventory does not turn the failed run into successful publisher
-  acceptance evidence. A sanitized replay of the publisher command sequence
+  that inventory does not turn the failed run into publisher acceptance
+  evidence. A sanitized replay of the publisher command sequence
   isolates the draft-metadata `html_url` check and no subsequent PATCH, but
-  that replay is not historical-run evidence. Unblock = complete a successful
-  protected release run for the renderer-size fix's exact main SHA, then
-  separately review the published manifest bytes for consumer adoption.
+  that replay is not historical-run evidence. Unblock = for the renderer-size
+  fix's exact current-main SHA, pass release eligibility and the protected
+  generator build, qualification, attestation, and publication gates, then
+  produce the generator acceptance receipt. Separately review the published
+  manifest bytes for consumer adoption; report the image-job result and overall
+  coordinator conclusion alongside the generator result.
 - BOOT-4.7 (protected release job): SOURCE-IMPLEMENTED, REPOSITORY
-  PROTECTION VERIFIED, END-TO-END PUBLISH ACCEPTANCE INCOMPLETE. The live
+  PROTECTION VERIFIED, GENERATOR PUBLISH ACCEPTANCE INCOMPLETE. The live
   `generator-release` environment requires a reviewer and permits deployments
   only from protected branches. The active `protect-main` ruleset requires
   `Required`; the hosted run above still failed before producing the required
-  publisher acceptance artifact. Unblock = pass a protected release run for
-  the qualified fix, then land any bootstrap-lock update in a SEPARATE
-  reviewed change while ordinary CI keeps using its previous bootstrap.
+  publisher acceptance artifact. Unblock = produce the acceptance receipt from
+  the protected generator path for the qualified fix, then land any
+  bootstrap-lock update in a SEPARATE reviewed change while ordinary CI keeps
+  using its previous bootstrap. The overall coordinator conclusion is reported
+  separately from generator acceptance.
 - BOOT-3.4 (mise-bootstrap equality): half done (`.mise-version` ==
   `MISE_VERSION` const). Unblock = seed creates `.velnor/generator.lock`
   with the same exact Mise release + SHA-256; the equality check then
@@ -65,7 +72,8 @@ qualification is established by the release-source checks below.
 - VER-2.18 (stale default blocks release): SOURCE-IMPLEMENTED, HOSTED RUN
   UNVERIFIED. The publisher's source gate calls
   `scripts/check-freshness.sh`, which rejects stale, missing, mismatched, or
-  expired holds. Unblock = a successful exact-source protected workflow run.
+  expired holds. Unblock = a successful exact-source protected generator
+  publisher run after exact-main `Required` CI eligibility.
 - VER-3.2 / VER-3.3 (update machinery): procedure + Renovate proposals +
   script gates exist. Residual NEEDS-HUMAN: a maintainer MUST assemble each
   update set, record timestamp+delta, and run full qualification. No updater

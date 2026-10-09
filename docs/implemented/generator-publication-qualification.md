@@ -5,6 +5,9 @@
   `537f90e297cae61eb9df65b70d2039cdace3dc5e` received independent Ready
   review and a passing required check. The protected v0.1.5 release and
   consumer adoption have not been run.
+- Dispatch state: v0.1.5 dispatch and its actual hosted outcome remain
+  pending; no v0.1.5 release dispatch, publication, or consumer adoption has
+  been performed.
 - Specification: [bootstrap and release contract](../proposed/bootstrap-and-release-contract.md),
   §2.1; [release gates](release-gates.md), BOOT-2.1 and BOOT-4.7.
 - Landed by: [PR #113](https://github.com/tailrocks/velnor-new/pull/113),
@@ -15,8 +18,9 @@
   releases; draft creation explicitly targets the exact source SHA. The
   generator prepare gate still checks both `target_commitish == source SHA`
   and the tag's resolved commit independently.
-- Acceptance evidence: see the focused replay and rerun cases below. No live
-  release dispatch, tag creation, or publication was performed.
+- Acceptance evidence: the focused replay and rerun cases below qualify the
+  source fix only. No v0.1.5 dispatch, tag creation, or publication was
+  performed; historical run 37730166493 is described below.
 - Deviations: none.
 - Follow-up: protected hosted v0.1.5 qualification/publication and a separately
   reviewed consumer adoption remain outstanding.
@@ -174,18 +178,50 @@ No other `.github` workflow, action, version reference, or lockfile changed.
 
 The supported entry point is the dispatch-only `.github/workflows/product-release.yml`
 coordinator, which invokes the reusable `.github/workflows/product-release-generator.yml`
-module. The generator path must pass the exact-source default-branch `Required`
-CI gate, build and qualify Linux x86_64, macOS arm64, and macOS x86_64 assets,
-assemble the same-run manifest, verify source/workflow-bound attestations,
-recheck source and CI immediately before publication, and publish in the
-serialized protected `generator-release` environment. The publisher job has
-`actions: write` and `contents: write`. Read-only GitHub settings inspection on
-2026-10-08 confirmed that the active `protect-main` ruleset requires the strict
-`Required` check, pull requests with resolved review threads, squash merges,
-and linear history; the protected `generator-release` environment requires
-reviewer `donbeave` for protected branches. These settings do not establish a
-successful hosted release. No live dispatch or publication was used for this
-qualification.
+module. Release eligibility requires the dispatch SHA to be the exact current
+`main` tip and its exact-source main CI run and `Required` job to succeed; see
+[`release-eligibility`](../../.github/workflows/product-release.yml#L11) and its
+main/`Required` checks at
+[`product-release.yml`](../../.github/workflows/product-release.yml#L51).
+The image and generator branches both depend on that eligibility job, while
+`release-generator` depends on eligibility and `prepare-generator`; it does not
+depend on `release-images` or its outcome. A runner-image job failure is
+therefore outside the generator DAG and must be reported separately.
+
+Generator publication acceptance requires the existing gates as a whole:
+build and qualify Linux x86_64, macOS arm64, and macOS x86_64 assets; assemble
+the same-run manifest; verify source- and workflow-bound attestations for all
+three assets and the manifest; recheck source and CI immediately before
+publication; and publish through the serialized protected
+`generator-release` environment. The `publish-generator` job is conditioned on
+successful attestations and uploads
+`generator-release-accepted-${{ github.sha }}` with the verified manifest and
+acceptance receipt only after the publisher completes; the job has
+`actions: write` and `contents: write`. The receipt binds the source commit,
+workflow-authority SHA, run and attempt, published tag and release ID, and the
+verified manifest identity. Acceptance is recorded by that generator receipt,
+not by the overall coordinator conclusion. Report the image-job outcome and
+overall coordinator conclusion separately; a failed image branch does not
+negate a valid generator receipt.
+
+The `prepare-generator` consumer path checks a previously published release's
+exact tag and source, immutable metadata, expected asset inventory and GitHub
+asset metadata, then verifies the downloaded manifest and asset attestations
+against the exact bytes, source digest, `refs/heads/main`, generator workflow
+path, and signer digest. It binds the caller's source and workflow authority
+to the same exact `main` SHA and performs these checks directly; it does not
+require the overall coordinator conclusion.
+See the existing-release checks in
+[`prepare-generator`](../../.github/workflows/product-release.yml#L161) and the
+protected generator publication job at
+[`product-release-generator.yml`](../../.github/workflows/product-release-generator.yml#L455).
+
+Read-only GitHub settings inspection on 2026-10-08 confirmed that the active
+`protect-main` ruleset requires the strict `Required` check, pull requests with
+resolved review threads, squash merges, and linear history; the protected
+`generator-release` environment requires reviewer `donbeave` for protected
+branches. These settings do not establish hosted generator acceptance. No
+live dispatch or publication was used for this qualification.
 
 Read-only release inventory checked at 2026-10-08 22:39 UTC found immutable
 `v0.1.4` (20 assets, ID 406452151), `v0.1.2`, `v0.1.1`, and `v0.1.0`.
