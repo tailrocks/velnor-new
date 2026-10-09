@@ -1,7 +1,7 @@
 {
   "actions": [
     {
-      "checked_at": "2026-10-08T16:34:17Z",
+      "checked_at": "2026-10-09T22:40:38Z",
       "key": "jdx/mise-action",
       "latest": "v5.1.1",
       "pinned_sha": "2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca",
@@ -12,7 +12,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-08T16:34:17Z",
+      "checked_at": "2026-10-09T22:40:38Z",
       "key": "actions/checkout",
       "latest": "v7.0.1",
       "pinned_sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
@@ -23,7 +23,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-07T14:38:41Z",
+      "checked_at": "2026-10-09T22:40:38Z",
       "key": "actions/download-artifact",
       "latest": "v8.0.2",
       "pinned_sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
@@ -34,7 +34,7 @@
       "status": "held"
     },
     {
-      "checked_at": "2026-10-07T14:38:41Z",
+      "checked_at": "2026-10-09T22:40:38Z",
       "key": "actions/upload-artifact",
       "latest": "v7.0.2",
       "pinned_sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -45,7 +45,7 @@
       "status": "held"
     },
     {
-      "checked_at": "2026-10-08T16:34:17Z",
+      "checked_at": "2026-10-09T22:40:38Z",
       "key": "actions/cache/restore",
       "latest": "v6.1.0",
       "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -56,7 +56,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-08T16:34:17Z",
+      "checked_at": "2026-10-09T22:40:38Z",
       "key": "actions/cache/save",
       "latest": "v6.1.0",
       "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -67,7 +67,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-05T12:26:50Z",
+      "checked_at": "2026-10-09T22:40:38Z",
       "key": "jdx/mr-boxington-action",
       "latest": "v1.7.1",
       "pinned_sha": "1687e54eb349cadf61fa38b5813a77875489e8e6",
@@ -79,7 +79,7 @@
       "latest_sha": "d0825fbaf3cc36ca2609aa38e71046265a1f1e37"
     },
     {
-      "checked_at": "2026-10-08T16:34:17Z",
+      "checked_at": "2026-10-09T22:40:38Z",
       "key": "asamarts/alint",
       "latest": "v0.17.0",
       "pinned_sha": "d93c0283b19dd78afcd8a4b303f1556a7759ba81",
@@ -90,7 +90,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-08T16:34:17Z",
+      "checked_at": "2026-10-09T22:40:38Z",
       "key": "aws-actions/configure-aws-credentials",
       "latest": "v6.3.0",
       "pinned_sha": "e1253824e5c10ff9df46874f81ed3ec929e19cfd",
@@ -102,7 +102,7 @@
     }
   ],
   "check_interval_hours": 24,
-  "checked_at": "2026-10-08T16:34:17Z",
+  "checked_at": "2026-10-09T22:40:38Z",
   "exceptions": [],
   "max_exception_days": 14,
   "runner": {
@@ -114,7 +114,7 @@
       "ubuntu-24.04",
       "ubuntu-22.04"
     ],
-    "checked_at": "2026-10-08T15:48:32Z"
+    "checked_at": "2026-10-09T22:01:23Z"
   },
   "schema": 1,
   "temporary_holds": [
@@ -125,7 +125,7 @@
       "issue": "#29",
       "key": "jdx/mr-boxington-action",
       "owner": "@donbeave",
-      "reason": "latest stable v1.7.1 resolves to released commit d0825fbaf3cc36ca2609aa38e71046265a1f1e37; the protected-main roundtrip workflow may target that exact SHA only as an unqualified experiment; #29 separately qualifies candidate ec3ebbfbc1fdaffa59d476e87e4f386fdc60d533, which is not that release; retain the qualified v1.6.0 production pin until the exact released source passes cache lifecycle, disk, input, and cleanup qualification"
+      "reason": "latest v1.7.1 resolves to commit d0825fbaf3cc36ca2609aa38e71046265a1f1e37. PR #29 closed unmerged and is historical context; it did not qualify this exact current action source for protected-main cache lifecycle behavior. Keep the qualified v1.6.0 pin until the current source passes qualification."
     },
     {
       "expires": "2026-10-18",
@@ -134,7 +134,7 @@
       "issue": "#29",
       "key": "mr-boxington",
       "owner": "@donbeave",
-      "reason": "latest v1.22.0 resolves to commit 10474d43342ad65df3b02323dd8092d18ab38101; keep the qualified 1.21.1 pin pending #29 current-source cache lifecycle, disk, and input qualification"
+      "reason": "latest v1.23.0 resolves to commit fb614644ff98c8ee3a3f28a6d31b3ba0af37b17f. PR #29 closed unmerged and is historical context; it did not qualify this exact current source for protected-main cache lifecycle, disk, and input behavior. Keep the qualified 1.21.1 pin until that source passes current-source qualification."
     },
     {
       "expires": "2026-10-21",
@@ -166,16 +166,16 @@
   ],
   "tools": [
     {
-      "checked_at": "2026-10-09T17:16:51Z",
+      "checked_at": "2026-10-09T22:40:38Z",
       "latest": "2026.10.6",
       "name": "mise",
       "pinned": "2026.10.6",
-      "qualified": "2026.10.4",
+      "qualified": "2026.10.6",
       "source": "https://api.github.com/repos/jdx/mise/releases/latest",
-      "status": "pending-qualification"
+      "status": "current"
     },
     {
-      "checked_at": "2026-10-08T16:34:17Z",
+      "checked_at": "2026-10-09T22:40:38Z",
       "latest": "1.99.0",
       "name": "rust",
       "pinned": "1.98.1",
@@ -184,17 +184,17 @@
       "status": "held"
     },
     {
-      "checked_at": "2026-10-05T12:26:50Z",
-      "latest": "v1.22.0",
+      "checked_at": "2026-10-09T22:40:38Z",
+      "latest": "v1.23.0",
       "name": "mr-boxington",
       "pinned": "1.21.1",
       "qualified": "1.21.1",
       "source": "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
       "status": "held",
-      "latest_sha": "10474d43342ad65df3b02323dd8092d18ab38101"
+      "latest_sha": "fb614644ff98c8ee3a3f28a6d31b3ba0af37b17f"
     },
     {
-      "checked_at": "2026-10-08T16:34:17Z",
+      "checked_at": "2026-10-09T22:40:38Z",
       "latest": "v2.102.0",
       "name": "gh",
       "pinned": "2.102.0",
@@ -203,7 +203,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-08T16:34:17Z",
+      "checked_at": "2026-10-09T22:40:38Z",
       "latest": "v1.7.12",
       "name": "actionlint",
       "pinned": "1.7.12",
@@ -212,7 +212,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-08T16:34:17Z",
+      "checked_at": "2026-10-09T22:40:38Z",
       "latest": "v0.11.0",
       "name": "shellcheck",
       "pinned": "0.11.0",
@@ -221,7 +221,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-08T16:34:17Z",
+      "checked_at": "2026-10-09T22:40:38Z",
       "latest": "v1.30.1",
       "name": "zizmor",
       "pinned": "1.30.1",
@@ -230,7 +230,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-08T16:34:17Z",
+      "checked_at": "2026-10-09T22:40:38Z",
       "latest": "0.9.148",
       "name": "nextest",
       "pinned": "0.9.148",
@@ -239,7 +239,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-08T16:34:17Z",
+      "checked_at": "2026-10-09T22:40:38Z",
       "latest": "v1.13.1",
       "name": "opentofu",
       "pinned": "1.13.1",
@@ -248,7 +248,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-08T16:34:17Z",
+      "checked_at": "2026-10-09T22:40:38Z",
       "latest": "0.3.170",
       "name": "release-plz",
       "pinned": "0.3.170",

@@ -1,9 +1,13 @@
 # Mise platform binary pins
 
-Named checks use the repository's adopted Mise `2026.10.6` pin. Hosted
-qualification is pending; the freshness inventory records that state. For a
-typed native check, the generator selects the SHA-256 for that runner target;
-the `jdx/mise-action` `sha256` input identifies the installed executable.
+Named checks use the repository's adopted Mise `2026.10.6` pin. The exact
+candidate source was qualified on GitHub-hosted Linux x64 and macOS x64 in
+Qualification run [37995746931](https://github.com/tailrocks/velnor-new/actions/runs/37995746931)
+at source commit `bbf2cb2df8380b173a0629d07cb862f4870588f8`. This evidence is
+limited to those two hosted targets; it does not qualify the generator release
+or the Velnor runner-image families. For a typed native check, the generator
+selects the SHA-256 for that runner target; the `jdx/mise-action` `sha256`
+input identifies the installed executable.
 
 On 2026-10-09, each raw executable was downloaded from the official Mise
 `v2026.10.6` release and its SHA-256 and byte count were measured locally.
@@ -20,28 +24,21 @@ The measured byte counts are the per-target upper bounds used when projecting
 the selected executable into an owned check home. Unsupported targets fail
 generation; platform-specific digests and byte limits stay paired.
 
-## Pre-merge hosted qualification
+## Hosted qualification on 2026-10-09
 
-The generated `qualification.yml` workflow has a `mise-pin` mode for checking
-a candidate Mise release before changing the repository's adopted runtime pin.
-The mode checks out the selected ref at the dispatch event's exact `github.sha`,
-then verifies the Mise version and executable SHA-256 on GitHub-hosted Linux
-x64 (`ubuntu-26.04`) and macOS x64 (`macos-15-intel`). It is read-only and does
-not publish Velnor or generator artifacts.
+The generated `qualification.yml` workflow's `mise-pin` mode checked out the
+dispatch SHA and verified the version and executable SHA-256 on each hosted
+target. Both required jobs succeeded for the exact source above:
 
-Dispatch the candidate ref after it contains the generated qualification mode:
+| Target | Runner label | Job | Result |
+| --- | --- | --- | --- |
+| Linux x64 | `ubuntu-26.04` | [114041252080](https://github.com/tailrocks/velnor-new/actions/runs/37995746931/job/114041252080) | Passed |
+| macOS x64 | `macos-15-intel` | [114041252169](https://github.com/tailrocks/velnor-new/actions/runs/37995746931/job/114041252169) | Passed |
 
-```sh
-gh workflow run qualification.yml \
-  --repo tailrocks/velnor-new \
-  --ref <candidate-ref> \
-  --field mode=mise-pin
-```
-
-Confirm that both hosted jobs pass for the dispatch SHA before merging this
-pin update. A successful run qualifies the candidate executable on those two
-hosted targets. The inventory keeps `qualified` at the prior release and uses
-`pending-qualification` until that evidence exists; the freshness gate will
-remain red during this candidate state. The candidate version and platform
-digests are compiled into the generator, so update them and regenerate the
-workflow when adopting a later Mise release.
+The workflow run completed successfully at `2026-10-09T21:50:11Z`. The
+inventory records Mise `2026.10.6` as current and qualified on this evidence.
+The run checks executable identity on these two targets only; it does not
+publish Velnor, qualify the generator's release assets, or establish
+qualification for Ubuntu `24.04` or `22.04` runner families. The candidate
+version and platform digests are compiled into the generator, so update them
+and regenerate the workflow when adopting a later Mise release.
