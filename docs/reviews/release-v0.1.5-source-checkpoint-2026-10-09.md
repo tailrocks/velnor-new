@@ -2,8 +2,15 @@
 
 **Status:** The candidate-output binding fix is integrated on main. Official
 v0.1.5 publication and consumer adoption remain pending. This checkpoint
-records source, review, and CI evidence; it is not a release manifest,
-publication receipt, artifact digest, or publication acceptance.
+records source, review, CI, integration, and release-metadata evidence; it is
+not a release manifest, publication receipt, artifact digest, or publication
+acceptance.
+
+At the `2026-10-09T10:10Z` read-only API recheck, release `407717552` still
+reported `draft=true` and `published_at=null`; tag `v0.1.5` still pointed to
+`f1041f322c54cd7edfdef06afd307799eeaa801a`, with 20 uploaded asset metadata
+records. This publication status is separate from the later PR #121 source
+integration recorded below.
 
 ## Gate 8 marker false pass
 
@@ -171,3 +178,36 @@ recorded as observed; this checkpoint does not rewrite it.
 Official v0.1.5 publication and adoption still require the release gates and
 fresh accepted publication evidence in
 [`release-gates.md`](../implemented/release-gates.md).
+
+## PR #121 integration and trailer-order observation
+
+[PR #121](https://github.com/tailrocks/velnor-new/pull/121) was squash-merged
+at `2026-10-09T10:04:21Z`. The guarded command used was:
+
+```sh
+gh pr merge 121 --repo tailrocks/velnor-new --squash \
+  --match-head-commit 26fb6a56d8a9acc1e3efc2ceedb76a92112add8d
+```
+
+It used `--repo`, `--squash`, and `--match-head-commit`; no custom subject or
+body was supplied. The original PR body contains no commit trailers. The
+repository reports squash settings `PR_TITLE` for the commit title and
+`PR_BODY` for the commit message.
+
+The source commit
+[`26fb6a56d8a9acc1e3efc2ceedb76a92112add8d`](https://github.com/tailrocks/velnor-new/commit/26fb6a56d8a9acc1e3efc2ceedb76a92112add8d)
+has tree `2628929c0279f6a5357a6527f359ef8f4be0c89e` and trailers ordered as
+`Co-authored-by: Codex <codex@openai.com>` followed by
+`Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>`. The resulting squash
+commit
+[`72dd1c002309b88164929b4f7dedfd79f5100ccd`](https://github.com/tailrocks/velnor-new/commit/72dd1c002309b88164929b4f7dedfd79f5100ccd)
+has that same tree and sole parent
+`2a1d60547cd7c6b7646c655652c9c9ed28db6b69`. GitHub resolves its author
+account `donbeave` to Alexey Zhokhov. Its message orders
+`Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>` before
+`Co-authored-by: Codex <codex@openai.com>`, the reverse of the source
+commit's trailers.
+
+This records an observed trailer-order discrepancy. Its cause is unproven;
+no rewrite was attempted, and the immutable merge commit remains unchanged.
+The merge does not change the separate v0.1.5 publication status above.
