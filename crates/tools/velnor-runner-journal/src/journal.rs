@@ -27,8 +27,8 @@ pub use auth_intent::{
 };
 pub use capacity::{
     AssignedPopulationObservation, AtomicBatchCapacityClaim, BatchCapacityClaim, BatchOfferClaim,
-    BatchOfferState, BoundCapacityClaim, CapacityClaim, LaunchEffectState, ReplayRoute,
-    ScopedAssignedLaunchIdentity, ScopedLaunchIdentity,
+    BatchOfferState, BoundBatchCapacityClaim, BoundCapacityClaim, CapacityClaim, LaunchEffectState,
+    ReplayRoute, ScopedAssignedLaunchIdentity, ScopedLaunchIdentity,
 };
 pub use cleanup::{
     CleanupCheckpointIdentity, CleanupChildren, CleanupDiagnostics, CleanupDisposition,

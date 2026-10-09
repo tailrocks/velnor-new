@@ -10,7 +10,7 @@ mod daemon_binding;
 pub use all_or_none::AtomicBatchCapacityClaim;
 pub use assigned::{AssignedPopulationObservation, ScopedAssignedLaunchIdentity};
 pub use batch::{BatchCapacityClaim, BatchOfferClaim, BatchOfferState};
-pub use daemon_binding::BoundCapacityClaim;
+pub use daemon_binding::{BoundBatchCapacityClaim, BoundCapacityClaim};
 
 use crate::error::HostError;
 
