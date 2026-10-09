@@ -32,28 +32,35 @@ pub(crate) fn owned_preparation(
 ) -> Result<GenerationPreparation, OrchestratorError> {
     let mut owned = prep.clone();
     if prep.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1 {
-        if let Some(lock) =
+        let lock =
             velnor_actions_orchestrator_staged_validation::validate::verify_velnor_repository_files(
                 &prep.root,
-            )?
-        {
-            attach_lock_acquire(
+            )?;
+        match (prep.local_helper_build, lock) {
+            (false, Some(lock)) => attach_lock_acquire(
                 &mut owned.workflow.ir,
                 &lock,
                 &prep.runner_label,
                 env!("CARGO_PKG_VERSION"),
-            )?;
-        } else {
-            let fetch_roots = velnor_actions_orchestrator_provisioning::source_prep::lockful_roots(
-                &prep.root,
-                &prep.discovery.workspaces,
-            );
-            attach_preseed(
-                &mut owned.workflow,
-                &prep.runner_label,
-                env!("CARGO_PKG_VERSION"),
-                &fetch_roots,
-            )?;
+            )?,
+            (true, None) => {
+                let fetch_roots =
+                    velnor_actions_orchestrator_provisioning::source_prep::lockful_roots(
+                        &prep.root,
+                        &prep.discovery.workspaces,
+                    );
+                attach_preseed(
+                    &mut owned.workflow,
+                    &prep.runner_label,
+                    env!("CARGO_PKG_VERSION"),
+                    &fetch_roots,
+                )?;
+            }
+            _ => {
+                return Err(OrchestratorError::Contract {
+                    problem: "generator_lock_presence_changed_after_prepare".to_owned(),
+                });
+            }
         }
         bind_verification_staging(&mut owned.workflow)?;
     }
