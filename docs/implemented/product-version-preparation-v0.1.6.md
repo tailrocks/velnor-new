@@ -1,11 +1,11 @@
 # Product version preparation for v0.1.6
 
 - State: version-owned source and generated outputs are prepared on
-  `fix/release-0.1.6-qualified-generator`. The task branch is stacked on merge
-  commit `f21e00dd619c0637ae19e3e3c703ae105d17ca8d`, whose parents include the
-  version checkpoint and PR #120 source head `2a1d60547cd7c6b7646c655652c9c9ed28db6b69`.
-  An actual integrated-main forward merge remains pending. This record does
-  not qualify or publish a release.
+  `fix/release-0.1.6-qualified-generator`, forward-merged with integrated
+  `origin/main` at `2edc5cad367f098fd295e5edd09e5f1fd79a9acb`. Supported
+  generation, OpenTofu capture/check, parity capture/check, and focused release
+  tests pass against that merged source. This record does not qualify or
+  publish a release.
 - Version decision: refreshed tags and GitHub release metadata on 2026-10-09
   show tags `v0.1.0` through `v0.1.5`; `v0.1.5` remains allocated to its
   existing tag and draft release. The next unused product version is `0.1.6`.
@@ -18,18 +18,17 @@
   `fixtures/consumer-release-manifest.json` remains at `0.1.4`, as do
   `.velnor/version-policy.toml` and `.velnor/freshness-inventory.json`.
   No official release manifest was created.
-- Supported `.github` generation used:
+- Supported `.github` generation was repeated after the main merge:
 
   ```text
-  cargo run --locked --offline -p velnor-actions-cli -- generate --output-dir /private/tmp/velnor-version-0.1.6-preview-20261009
+  cargo run --locked --offline -p velnor-actions-cli -- generate --output-dir /private/tmp/velnor-version-0.1.6-post-main-20261009
   cargo run --locked --offline -p velnor-actions-cli -- generate
   ```
 
-  The generated preview and the in-place `.github` tree were byte-identical.
-  The CLI listed 26 generated paths; 25 changed: `.github/AGENTS.md`,
-  `.github/actionlint.yaml`, 15 action YAMLs, the tool-cache identity script,
-  and seven workflow YAMLs. `.github/CLAUDE.md` was generated and remained
-  byte-identical.
+  Both commands ran with Mise 2026.10.4 and Rust/Cargo 1.98.1. The generated
+  preview and in-place `.github` tree were byte-identical. The CLI listed 26
+  generated paths; replay after the merge introduced no further `.github`
+  differences from the prior prepared checkpoint.
 - The 13 version-owned snapshots were captured from those exact CLI outputs:
   the 11 `generator-release-*` local action bodies and the
   `product-release.yml` and `product-release-generator.yml` workflow bodies.
@@ -45,8 +44,10 @@
   Both commands passed for nested, mbx-nextest, empty-suite, minimal-cargo,
   and dogfood. Dogfood reports `tree identical`; the capture refreshed the
   five case trees and their measured `tree.sha256` and `MANIFEST.sha256` data.
-  Logs: `/private/tmp/velnor-version-0.1.6-opentofu-capture.log` and
-  `/private/tmp/velnor-version-0.1.6-opentofu-check.log`.
+  The commands used `MISE_DATA_DIR=/tmp/velnor-110-mise-data-run2`,
+  `CARGO_HOME=/tmp/velnor-110-cargo-home`, and the pinned Rust tool PATH.
+  Logs: `/private/tmp/velnor-version-0.1.6-post-main-opentofu-capture.log`
+  and `/private/tmp/velnor-version-0.1.6-post-main-opentofu-check.log`.
 - The documented CLI parity golden capture and compare each passed four tests:
 
   ```text
@@ -54,10 +55,11 @@
   cargo test --locked --offline -p velnor-actions-cli --test velnor_cli parity_
   ```
 
-  Focused release renderer tests passed 204 with one ignored; the orchestrator
-  `schema2` snapshot/routing tests passed 20 with 709 filtered out. Formatting,
-  the full workspace gates, and `verify-local.sh` have not been rerun on this
-  stacked base.
+  Focused release renderer tests passed 204 with one ignored; orchestrator
+  `schema2` snapshot/routing tests passed 20 with 709 filtered out; the merged
+  atomic-generation regression passed 1 with 728 filtered out. Full workspace
+  gates and `verify-local.sh` remain pending.
 - No v0.1.6 tag, release, draft, publication, or qualification was created or
-  claimed. After PR #120 integrates into main, forward-merge that exact main
-  head and repeat the required qualification from integrated source.
+  claimed. The current task branch remains a preparation checkpoint and does
+  not replace the required final qualification from the accepted integrated
+  source.

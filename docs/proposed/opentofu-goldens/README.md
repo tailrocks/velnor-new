@@ -37,10 +37,11 @@ historical schema fixture for direct schema tests.
 
 ## Product version prep v0.1.6 (2026-10-09)
 
-From the isolated `fix/release-0.1.6-qualified-generator` branch, the
-supported `velnor-actions generate` command refreshed the root `.github`
-outputs. Its exact preview and in-place tree matched. The five case captures
-were then regenerated and checked using the same source-built 0.1.6 CLI:
+From `fix/release-0.1.6-qualified-generator`, the source was forward-merged
+with integrated `origin/main` at `2edc5cad367f098fd295e5edd09e5f1fd79a9acb`.
+The supported `velnor-actions generate` command was replayed against that
+merged source; its exact preview and in-place tree matched. The five case
+captures were then regenerated and checked using the same source-built 0.1.6 CLI:
 `scripts/capture-opentofu-goldens.sh capture` and `check` both completed with
 all five cases matching; dogfood reported `tree identical`. The CLI parity
 golden capture and compare each passed four tests.
@@ -52,8 +53,8 @@ oracle; the capture script validates and stages exact candidate inputs before
 comparison. Tree and manifest indexes are measured hashes of the captured
 bytes. The historical `fixtures/consumer-release-manifest.json` remains at
 0.1.4. This is source-generation evidence only, not release qualification or
-publication evidence; the version branch remains stacked pending an
-integrated-main forward merge.
+publication evidence. Full workspace gates and final qualification remain
+pending.
 
 The 2026-10-05 checkpoint and capture environment below record the earlier
 source state and remain as historical evidence.
