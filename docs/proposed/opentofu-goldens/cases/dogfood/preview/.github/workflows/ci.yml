@@ -68,7 +68,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 4288d258e5af87b6bf0dad97b1fc9c9f68e4b0245d64250fe46ed76b1d6e349e
+          d: e370bd368b58262d774e5f0c13ab43e7fbafaf445dd1ad4263c70221ad2a15a4
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -81,8 +81,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Prepare pinned tools
         run: mise --no-config --no-env --no-hooks install actionlint@1.7.12 shellcheck@0.11.0
       - name: Run actionlint
@@ -123,7 +123,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 5061f62deed967ab53bfd81244466450fa918c43c789f85d9e63c1933b45d496
+          d: 4d529bb1b58229159e3baa6d5e2ad741d7c027a14ea38875454f7da51930011b
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -136,8 +136,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Run cargo-deny
         run: "sh -c '{ mise --no-config --no-env --no-hooks install cargo-deny@0.20.2 && unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; } && mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" --config \"$GITHUB_WORKSPACE/deny.toml\" check && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" --config \"$GITHUB_WORKSPACE/crates/velnor-runner/deny.toml\" check'"
       - name: Save Mise tools
@@ -159,7 +159,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 623d73980929032f753aa3e88e58b1f414699c1607e9006eef11731f4dbb0c55
+          d: 5057d975805e3ed25179ce40bf1f99d03be261a810b4eb1e5686f91891e7fb87
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -172,8 +172,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Prepare pinned tools
         run: mise --no-config --no-env --no-hooks install 'http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2'
       - name: Run cargo-machete
@@ -205,8 +205,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -265,7 +265,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 5bc3b6778a9c23223c8631ba74be415ff005292572135cf60b49ed6321014d37
+          d: 7cf19404372c4b72198eaaa60c307785d371e9979752fd9664991ba14da57f82
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -278,8 +278,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -492,8 +492,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -561,7 +561,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: b849729c9e4e4303a1bffbe4013168bee29a7b7fe82398527cb83566c71cbb52
+          d: 150390c8a871ddb46c7d5b59d542f6074f5911581c239627b6226ae8d6a94fc2
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -574,8 +574,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -748,7 +748,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 748b56865369c9fe98ab04982c3fab1327afd72d59790fd021682bd5787f7b07
+          d: aec70c3c874328d00513c9c5f40ca7e0fea3f9e7560311e35dd87969cf5a0681
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -761,8 +761,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -925,7 +925,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: b849729c9e4e4303a1bffbe4013168bee29a7b7fe82398527cb83566c71cbb52
+          d: 150390c8a871ddb46c7d5b59d542f6074f5911581c239627b6226ae8d6a94fc2
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -938,8 +938,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -1106,7 +1106,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 77dac51d4453d060f43973c75e5e311418cb97f68fb088e84eb43de9aaf8745e
+          d: ca80c4a695e9b0c68b3f783f7e9b79f6b6b6eef3a1702c6410bd82f4eee6ffd7
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -1119,8 +1119,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -1293,7 +1293,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 748b56865369c9fe98ab04982c3fab1327afd72d59790fd021682bd5787f7b07
+          d: aec70c3c874328d00513c9c5f40ca7e0fea3f9e7560311e35dd87969cf5a0681
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -1306,8 +1306,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -1474,7 +1474,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: b849729c9e4e4303a1bffbe4013168bee29a7b7fe82398527cb83566c71cbb52
+          d: 150390c8a871ddb46c7d5b59d542f6074f5911581c239627b6226ae8d6a94fc2
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -1487,8 +1487,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -1655,7 +1655,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: b849729c9e4e4303a1bffbe4013168bee29a7b7fe82398527cb83566c71cbb52
+          d: 150390c8a871ddb46c7d5b59d542f6074f5911581c239627b6226ae8d6a94fc2
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -1668,8 +1668,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -1836,7 +1836,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: b849729c9e4e4303a1bffbe4013168bee29a7b7fe82398527cb83566c71cbb52
+          d: 150390c8a871ddb46c7d5b59d542f6074f5911581c239627b6226ae8d6a94fc2
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -1849,8 +1849,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -2017,7 +2017,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: b849729c9e4e4303a1bffbe4013168bee29a7b7fe82398527cb83566c71cbb52
+          d: 150390c8a871ddb46c7d5b59d542f6074f5911581c239627b6226ae8d6a94fc2
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -2030,8 +2030,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -2198,7 +2198,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: b849729c9e4e4303a1bffbe4013168bee29a7b7fe82398527cb83566c71cbb52
+          d: 150390c8a871ddb46c7d5b59d542f6074f5911581c239627b6226ae8d6a94fc2
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -2211,8 +2211,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -2379,7 +2379,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: b849729c9e4e4303a1bffbe4013168bee29a7b7fe82398527cb83566c71cbb52
+          d: 150390c8a871ddb46c7d5b59d542f6074f5911581c239627b6226ae8d6a94fc2
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -2392,8 +2392,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -2560,7 +2560,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: b849729c9e4e4303a1bffbe4013168bee29a7b7fe82398527cb83566c71cbb52
+          d: 150390c8a871ddb46c7d5b59d542f6074f5911581c239627b6226ae8d6a94fc2
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -2573,8 +2573,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Download helper (pre-seed trust-on-review)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -2735,7 +2735,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 29ef8e2fcc765efdd69f8b180cd76ae1b5146dfa7e786ef8da1b4f130f10de38
+          d: 912b24e292af6349f93443d510543b8dcc55285d8ec48b661fab545652658501
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -2748,8 +2748,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75
-          version: 2026.10.4
+          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.6
       - name: Prepare pinned tools
         run: mise --no-config --no-env --no-hooks install zizmor@1.30.1
       - name: Run zizmor
