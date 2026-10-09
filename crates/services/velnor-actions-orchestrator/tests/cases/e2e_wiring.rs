@@ -284,6 +284,79 @@ fn emitted_yaml_wires_helpers_velnor_policy() -> TestResult {
 }
 
 #[test]
+fn emitted_yaml_scopes_machete_to_discovered_root_crate() -> TestResult {
+    without_ambient_identity(
+        "emitted_yaml_scopes_machete_to_discovered_root_crate",
+        || {
+            let repo = make_velnor_repo()?;
+            write_lock(&repo)?;
+            let prep = prepare(repo.path())?;
+            let tree = render_staged_tree(&prep)?;
+            let yaml = tree
+                .get(WORKFLOW_PATH)
+                .ok_or("missing workflow in staged tree")?;
+            let jobs = parse_jobs(yaml);
+            let machete = jobs
+                .iter()
+                .find(|job| job.id == "cargo-machete")
+                .ok_or("nonempty Velnor fixture must emit cargo-machete")?;
+            let step = machete
+                .steps
+                .iter()
+                .find(|step| step.name == "Run cargo-machete")
+                .ok_or("cargo-machete has its named step")?;
+            assert!(
+                step.body.contains("cargo machete ."),
+                "root package is the exact nonempty scan scope:\n{}",
+                step.body
+            );
+            assert!(
+                !step.body.contains("cargo machete . crates/"),
+                "no undiscovered package directory is appended:\n{}",
+                step.body
+            );
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn emitted_yaml_omits_machete_for_empty_velnor_discovery() -> TestResult {
+    without_ambient_identity(
+        "emitted_yaml_omits_machete_for_empty_velnor_discovery",
+        || {
+            let repo = make_velnor_repo()?;
+            write_lock(&repo)?;
+            std::fs::remove_file(repo.path().join("Cargo.toml"))?;
+            std::fs::remove_dir_all(repo.path().join("src"))?;
+
+            let prep = prepare(repo.path())?;
+            assert_eq!(prep.discovery.workspaces.len(), 0, "no Rust workspaces");
+            assert_eq!(prep.discovery.proposals.len(), 0, "no detected work");
+            let tree = render_staged_tree(&prep)?;
+            let yaml = tree
+                .get(WORKFLOW_PATH)
+                .ok_or("missing workflow in staged tree")?;
+            let jobs = parse_jobs(yaml);
+            assert_ne!(jobs.len(), 0, "workflow retains its standard jobs");
+            assert!(
+                jobs.iter().all(|job| job.id != "cargo-machete"),
+                "empty Velnor discovery must not emit a cargo-machete job:\n{yaml}"
+            );
+            assert!(
+                !yaml.contains("cargo-machete"),
+                "empty Velnor discovery must not emit the validator command:\n{yaml}"
+            );
+            assert!(
+                jobs.iter().any(|job| job.id == "zizmor"),
+                "empty discovery retains the independent repository policy job:\n{yaml}"
+            );
+            Ok(())
+        },
+    )
+}
+
+#[test]
 fn emitted_yaml_wires_helpers_consumer() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let prep = prepare(repo.path())?;
