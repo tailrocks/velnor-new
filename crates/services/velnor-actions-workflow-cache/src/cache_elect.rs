@@ -37,6 +37,8 @@ pub fn elect_mise_cache_writers(jobs: &mut BTreeMap<String, Job>) -> Result<(), 
             by_key.entry(key).or_default().push(id.clone());
         }
     }
+
+    let mut winner_by_key = BTreeMap::new();
     for (key, owners) in &by_key {
         let winner = owners
             .iter()
@@ -44,9 +46,57 @@ pub fn elect_mise_cache_writers(jobs: &mut BTreeMap<String, Job>) -> Result<(), 
             .or_else(|| owners.iter().min())
             .map(String::as_str)
             .unwrap_or_default();
-        if let Some(job) = jobs.get_mut(winner) {
-            append_tools_save(job, key)?;
+        winner_by_key.insert(key.clone(), winner.to_owned());
+    }
+
+    // Validate every pre-existing save before constructing or appending any
+    // elected save. Jobs enter this function as typed IR, so an orphan or
+    // losing-writer save must fail closed rather than survive beside the
+    // deterministic winner.
+    for (id, job) in jobs.iter() {
+        if !has_tools_save(job) {
+            continue;
         }
+        let Some(key) = setup_cache_key(job) else {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "mise_cache_save_orphan:{id}"
+            )));
+        };
+        let Some(winner) = winner_by_key.get(&key) else {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "mise_cache_save_orphan:{id}"
+            )));
+        };
+        if winner != id {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "mise_cache_save_not_elected:{id}"
+            )));
+        }
+        validate_existing_tools_save(job, &key)?;
+    }
+
+    // Build all new save steps before mutating any job, so a failed election
+    // leaves the caller's IR unchanged.
+    let mut planned = Vec::new();
+    for (key, winner) in &winner_by_key {
+        let Some(job) = jobs.get(winner) else {
+            return Err(RenderError::InvalidWorkflow(
+                "mise_cache_winner_missing".to_owned(),
+            ));
+        };
+        if !has_tools_save(job) {
+            let mut save = crate::cache_steps::tools_save_step(key)?;
+            save.condition = Some(MISE_CACHE_SAVE_CONDITION.to_owned());
+            planned.push((winner.clone(), save));
+        }
+    }
+    for (id, save) in planned {
+        let Some(job) = jobs.get_mut(&id) else {
+            return Err(RenderError::InvalidWorkflow(
+                "mise_cache_winner_missing".to_owned(),
+            ));
+        };
+        job.steps.push(save);
     }
     Ok(())
 }
@@ -228,14 +278,8 @@ fn setup_cache_key(job: &Job) -> Option<String> {
     })
 }
 
-/// Append the push-gated tools save over `key` to one writer job.
-///
-/// Mirrors `Save Cargo sources`: the trusted save gate keeps PR runs
-/// read-only, and the step archives the default mise data dir the
-/// built-in restore reads, so a push-seeded entry warms every later
-/// restore of the key. Closures and fan-in steps added after the
-/// election install no tools, so the capture stays complete.
-fn append_tools_save(job: &mut Job, key: &str) -> Result<(), RenderError> {
+/// True when one job already carries a correctly bound tools-cache save.
+fn validate_existing_tools_save(job: &Job, key: &str) -> Result<bool, RenderError> {
     let saves: Vec<&Step> = job
         .steps
         .iter()
@@ -263,10 +307,14 @@ fn append_tools_save(job: &mut Job, key: &str) -> Result<(), RenderError> {
                 "mise_cache_save_mismatch".to_owned(),
             ));
         }
-        return Ok(());
+        return Ok(true);
     }
-    let mut save = crate::cache_steps::tools_save_step(key)?;
-    save.condition = Some(MISE_CACHE_SAVE_CONDITION.to_owned());
-    job.steps.push(save);
-    Ok(())
+    Ok(false)
+}
+
+/// True when one job already carries a typed tools-cache save.
+fn has_tools_save(job: &Job) -> bool {
+    job.steps
+        .iter()
+        .any(|step| step.role == Some(StepRole::ToolsCacheSave))
 }
