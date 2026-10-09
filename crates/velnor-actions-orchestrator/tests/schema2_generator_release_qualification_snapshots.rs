@@ -113,6 +113,7 @@ fn assert_release_fixture_generation_requirements() -> Result<(), Box<dyn std::e
     );
     let qualification_helpers =
         include_str!("../../../scripts/generator-release/qualification-goldens.sh");
+    assert_candidate_output_binding_validation(qualification_helpers)?;
     assert!(
         qualification_helpers.contains(r#"stage_candidate_manifest "$repo" dogfood"#),
         "{qualification_helpers}"
@@ -155,6 +156,32 @@ fn assert_release_fixture_generation_requirements() -> Result<(), Box<dyn std::e
         "{qualification_helpers}"
     );
     assert_dogfood_cargo_warmup(qualification_helpers)?;
+    Ok(())
+}
+
+fn assert_candidate_output_binding_validation(
+    qualification_helpers: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let release_case = qualification_helpers
+        .find("capture_release_case()")
+        .ok_or("release candidate case capture must exist")?;
+    let capture_window = &qualification_helpers[release_case..];
+    let raw_binding_check = capture_window
+        .find("validate_candidate_output_bindings")
+        .ok_or("raw candidate output bindings must be validated")?;
+    let normalization = capture_window
+        .find("normalize_candidate_digests")
+        .ok_or("candidate output normalization must exist")?;
+    assert!(
+        raw_binding_check < normalization,
+        "raw candidate output bindings must be validated before normalization"
+    );
+    assert!(
+        qualification_helpers.contains("target = targets.get(url)")
+            && qualification_helpers.contains("if digest != expected_digest")
+            && qualification_helpers.contains("if source != commit"),
+        "every generated ConsumerV1 binding must match its candidate manifest target, digest, and source"
+    );
     Ok(())
 }
 
