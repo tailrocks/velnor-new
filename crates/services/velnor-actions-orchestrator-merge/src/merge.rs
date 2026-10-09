@@ -207,10 +207,11 @@ fn expected_artifact_builds(
     let Some(context) = request.artifact_build_context.as_ref() else {
         return Vec::new();
     };
-    let Some(first) = plan.artifact_tasks.first() else {
+    if plan.artifact_tasks.is_empty() {
         return Vec::new();
-    };
-    velnor_actions_contract_workflow::expected_artifact_builds(plan, context, &first.providers)
+    }
+    let providers = velnor_actions_contract_workflow::artifact_plan_providers(plan);
+    velnor_actions_contract_workflow::expected_artifact_builds(plan, context, &providers)
         .unwrap_or_default()
 }
 

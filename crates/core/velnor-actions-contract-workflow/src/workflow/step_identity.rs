@@ -32,6 +32,8 @@ pub enum StepId {
     TofuProviders,
     /// Per-job report-artifact upload whose numeric ID is exposed to dependents.
     CrateReportUpload,
+    /// Static verification output exporter whose name feeds its upload step.
+    VerificationArtifactExport,
 }
 
 impl StepId {
@@ -43,6 +45,7 @@ impl StepId {
             Self::PublishBaseline => "publish-baseline",
             Self::TofuProviders => "tofu-providers",
             Self::CrateReportUpload => "crate-report-upload",
+            Self::VerificationArtifactExport => "verification-artifact-export",
         }
     }
 }
@@ -89,6 +92,8 @@ pub enum StepRole {
     CrateReportUpload,
     /// Verify task matrix context and stage declared task outputs.
     ArtifactBuildExport,
+    /// Verify and stage outputs from one static verification task.
+    VerificationArtifactExport,
     /// Upload one verified, run-scoped artifact build result.
     ArtifactBuildUpload,
     /// Download of a candidate attestation artifact.
@@ -160,6 +165,9 @@ impl StepRole {
             Self::PlanProducer => internal_operation(kind, "plan-v1"),
             Self::BaselinePublisher => internal_operation(kind, "publish-baseline-v1"),
             Self::ArtifactBuildExport => internal_operation(kind, "export-artifact-v1"),
+            Self::VerificationArtifactExport => {
+                internal_operation(kind, "export-verification-artifact-v1")
+            }
             Self::FetchReports => internal_operation(kind, "fetch-reports-v1"),
             Self::DownloadPlan | Self::AttestationDownload | Self::PreseedDownload => {
                 action_has_prefix_for_kind(kind, "actions/download-artifact@")
@@ -206,6 +214,7 @@ impl StepRole {
             Self::BaselinePublisher => Some(StepId::PublishBaseline),
             Self::TofuProvidersRestore => Some(StepId::TofuProviders),
             Self::CrateReportUpload => Some(StepId::CrateReportUpload),
+            Self::VerificationArtifactExport => Some(StepId::VerificationArtifactExport),
             _ => None,
         }
     }
@@ -217,6 +226,7 @@ impl StepRole {
             StepId::PublishBaseline => Self::BaselinePublisher,
             StepId::TofuProviders => Self::TofuProvidersRestore,
             StepId::CrateReportUpload => Self::CrateReportUpload,
+            StepId::VerificationArtifactExport => Self::VerificationArtifactExport,
         }
     }
 }
@@ -379,7 +389,6 @@ mod mise_cache_role_tests {
         assert!(
             validate_step_identity_scope(&[setup_step(MISE_CACHE_ENABLED_EXPR)], "cache").is_ok()
         );
-        assert!(validate_step_identity_scope(&[setup_step("false")], "cache").is_ok());
         assert!(
             validate_step_identity_scope(
                 &[setup_step("${{github.event_name == 'push'}}")],

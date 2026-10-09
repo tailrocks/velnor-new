@@ -1,5 +1,7 @@
 //! Closed declarations for isolated, credential-free verification jobs.
 
+use super::ArtifactBuildOutput;
+use super::artifact_build::validate_output_inventory;
 use super::mise::is_valid_mise_task_name;
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::errors::ContractError;
@@ -21,6 +23,10 @@ pub struct VerificationTask {
     pub runner: VerificationRunner,
     /// Required per-job timeout in minutes.
     pub timeout_minutes: u16,
+    /// Optional, bounded repository files to capture from the task.
+    /// An empty inventory is equivalent to an omitted field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub outputs: Vec<ArtifactBuildOutput>,
 }
 
 /// Closed verification-only task kind.
@@ -89,6 +95,16 @@ impl VerificationTask {
                 "workflow.tasks.timeout_minutes",
                 format!("bad_timeout:{}", self.timeout_minutes),
             ));
+        }
+        if !self.outputs.is_empty() {
+            if self.runner != VerificationRunner::LinuxX64 {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.tasks.runner",
+                    "artifact_build_requires_linux_x64",
+                ));
+            }
+            validate_output_inventory(&self.outputs, file, "workflow.tasks.outputs")?;
         }
         Ok(())
     }

@@ -13,6 +13,7 @@ fn policy(id: &str, runner: VerificationRunner) -> VerificationTaskPolicy {
             mise_task: format!("lint-{id}"),
             runner,
             timeout_minutes: 10,
+            outputs: Vec::new(),
         },
         runner_label: runner.runs_on().to_owned(),
         scale_set_token: Some("scale-set:velnor+ubuntu-26.04-scale-set".to_owned()),
@@ -21,7 +22,9 @@ fn policy(id: &str, runner: VerificationRunner) -> VerificationTaskPolicy {
             version: "2026.9.18".to_owned(),
             sha256: "a".repeat(64),
         },
+        staging_steps: Vec::new(),
     }
 }
 
+mod outputs;
 mod tasks;

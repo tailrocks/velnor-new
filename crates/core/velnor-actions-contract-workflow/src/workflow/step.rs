@@ -118,6 +118,9 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         StepId::CrateReportUpload => {
             matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/upload-artifact@"))
         }
+        StepId::VerificationArtifactExport => {
+            matches!(kind, StepKind::Internal { operation, .. } if operation == "export-verification-artifact-v1")
+        }
     };
     if valid {
         Ok(())

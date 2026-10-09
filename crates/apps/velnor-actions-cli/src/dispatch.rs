@@ -36,6 +36,7 @@ use velnor_actions_orchestrator_task_report_write::write_task_report;
 use crate::args::{Cli, Command};
 use crate::dispatch_gate::{InternalOp, InternalRequest, gate_request};
 use crate::dispatch_publish::run_publish_internal;
+use crate::dispatch_verification_artifact::run_verification_artifact_internal;
 
 /// Environment variable carrying the `$GITHUB_OUTPUT` path. Never printed.
 const GITHUB_OUTPUT_ENV: &str = "GITHUB_OUTPUT";
@@ -85,6 +86,7 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             Ok(_) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
         },
+        InternalOp::VerificationArtifactExport => run_verification_artifact_internal(&request.path),
         InternalOp::Report => match write_task_report() {
             Ok(_) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),

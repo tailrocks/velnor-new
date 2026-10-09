@@ -18,7 +18,7 @@ use velnor_actions_contract_config::ArtifactBuildTask;
 use velnor_actions_contract_workflow::{
     ARTIFACT_BUILD_OBSERVATIONS_FILENAME, ArtifactBuildExpectation, ArtifactBuildIdentity,
     ArtifactBuildObservation, ArtifactBuildProvider, ArtifactBuildRunContext, JobConclusion, Plan,
-    expected_artifact_builds,
+    artifact_plan_providers, expected_artifact_builds,
 };
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 use velnor_actions_orchestrator_core::exclusive_write::write_exclusive;
@@ -28,14 +28,11 @@ use crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES;
 
 /// Retrieve artifact-build observations for the current workflow attempt.
 ///
-/// The jobs API is scoped to the exact attempt. Artifact records are selected
-/// by plan-derived, attempt-specific names and then cross-checked against the
-/// run, repository, and source SHA before exact-name download. Any incomplete
-/// API listing aborts without writing a receipt; a missing task/artifact stays
-/// in the receipt so the final Required gate rejects it explicitly.
+/// Fetch attempt-scoped jobs and plan-derived artifact names; verify run,
+/// repository, and source SHA before download. Incomplete listings abort
+/// without a receipt; missing task/artifact remains explicit for Required.
 /// # Errors
-/// Returns an error when the plan, Actions API inventory, artifact names, or
-/// bounded download cannot be validated.
+/// Returns an error for an invalid plan, API inventory, artifact name, or bounded download.
 pub fn retrieve_artifact_builds_to(
     run_id: u64,
     attempt: u32,
@@ -69,7 +66,7 @@ pub fn retrieve_artifact_builds_to(
     let mut downloaded = 0usize;
     for expectation in &expected {
         let task = task_for_identity(&plan, &expectation.identity)?;
-        let job = unique_job(&jobs, &expectation.identity);
+        let job = unique_job(&jobs, expectation);
         let artifact_name = expected_build_artifact_name(&expectation.identity)?;
         let artifact = unique_artifact(&artifacts, &artifact_name);
         let mut observation = observation_for(expectation, job, artifact);
@@ -127,11 +124,7 @@ fn validate_api_inventory(
 ) -> Result<(), &'static str> {
     let expected_jobs: std::collections::BTreeSet<String> = expected
         .iter()
-        .map(|item| {
-            item.identity
-                .provider
-                .workflow_job_name(&item.identity.task_id)
-        })
+        .map(ArtifactBuildExpectation::expected_workflow_job_name)
         .collect();
     let expected_artifacts: std::collections::BTreeSet<String> = expected
         .iter()
@@ -143,7 +136,7 @@ fn validate_api_inventory(
     let mut seen_jobs = std::collections::BTreeSet::new();
     for job in jobs
         .iter()
-        .filter(|job| job.name.starts_with("Build artifact "))
+        .filter(|job| job.name.starts_with("Build artifact ") || expected_jobs.contains(&job.name))
     {
         if !expected_jobs.contains(&job.name) || !seen_jobs.insert(job.name.as_str()) {
             return Err("artifact_api_unexpected_or_duplicate_job");
@@ -172,15 +165,11 @@ fn read_typed_plan(run_dir: &Path) -> Result<Plan, &'static str> {
 }
 
 fn providers_for_plan(plan: &Plan) -> Result<Vec<ArtifactBuildProvider>, &'static str> {
-    let first = plan.artifact_tasks.first().ok_or("artifact_plan_empty")?;
-    if plan
-        .artifact_tasks
-        .iter()
-        .any(|item| item.providers != first.providers)
-    {
-        return Err("artifact_provider_inventory_mismatch");
+    let providers = artifact_plan_providers(plan);
+    if providers.is_empty() {
+        return Err("artifact_plan_empty");
     }
-    Ok(first.providers.clone())
+    Ok(providers)
 }
 
 fn task_for_identity<'a>(
@@ -194,9 +183,13 @@ fn task_for_identity<'a>(
         .ok_or("artifact_task_missing_from_plan")
 }
 
-fn unique_job<'a>(jobs: &'a [ApiJob], identity: &ArtifactBuildIdentity) -> Option<&'a ApiJob> {
-    let expected_name = identity.provider.workflow_job_name(&identity.task_id);
-    let mut matches = jobs.iter().filter(|job| job.name == expected_name);
+fn unique_job<'a>(
+    jobs: &'a [ApiJob],
+    expectation: &ArtifactBuildExpectation,
+) -> Option<&'a ApiJob> {
+    let mut matches = jobs
+        .iter()
+        .filter(|job| job.name == expectation.expected_workflow_job_name());
     let first = matches.next()?;
     matches.next().is_none().then_some(first)
 }

@@ -1,7 +1,8 @@
 use super::{
-    ArtifactBuildIdentity, ArtifactBuildMatrix, ArtifactBuildObservation, ArtifactBuildProvider,
-    ArtifactBuildResult, ArtifactBuildRunContext, ArtifactBuildTaskPlan, DownloadedArtifactOutput,
-    artifact_matrix_for_provider, artifact_name, expected_artifact_builds, export_artifact_result,
+    ArtifactBuildExpectation, ArtifactBuildIdentity, ArtifactBuildMatrix, ArtifactBuildObservation,
+    ArtifactBuildProducer, ArtifactBuildProvider, ArtifactBuildResult, ArtifactBuildRunContext,
+    ArtifactBuildTaskPlan, DownloadedArtifactOutput, artifact_matrix_for_provider, artifact_name,
+    artifact_plan_providers, expected_artifact_builds, export_artifact_result,
     reconcile_artifact_builds,
 };
 use crate::workflow::{
@@ -73,6 +74,7 @@ fn plan() -> Plan {
         task_ids: vec![],
         artifact_tasks: vec![ArtifactBuildTaskPlan {
             task: task(),
+            producer: super::ArtifactBuildProducer::MatrixBuild,
             providers: vec![
                 ArtifactBuildProvider::GithubHosted,
                 ArtifactBuildProvider::VelnorScaleSet,
@@ -81,6 +83,19 @@ fn plan() -> Plan {
         warnings: vec![],
         edges: vec![],
     }
+}
+
+fn mixed_plan() -> Plan {
+    let mut plan = plan();
+    let mut static_task = task();
+    static_task.id = "verify-output".to_owned();
+    static_task.mise_task = "write-verification-output".to_owned();
+    plan.artifact_tasks.push(ArtifactBuildTaskPlan {
+        task: static_task,
+        producer: ArtifactBuildProducer::VerificationTask,
+        providers: vec![ArtifactBuildProvider::GithubHosted],
+    });
+    plan
 }
 
 fn observation(

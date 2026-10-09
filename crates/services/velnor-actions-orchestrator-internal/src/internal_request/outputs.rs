@@ -3,9 +3,9 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use velnor_actions_contract::{canonical_json_bytes, canonical_json_str};
 use velnor_actions_contract_workflow::{
-    ARTIFACT_HOSTED_MATRIX_OUTPUT, ARTIFACT_VELNOR_MATRIX_OUTPUT, ArtifactBuildProvider,
-    FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME,
-    artifact_matrix_for_provider, matrix_json_bytes, plan_json_bytes,
+    ARTIFACT_HOSTED_MATRIX_OUTPUT, ARTIFACT_VELNOR_MATRIX_OUTPUT, ArtifactBuildProducer,
+    ArtifactBuildProvider, FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME,
+    PLAN_JSON_FILENAME, artifact_matrix_for_provider, matrix_json_bytes, plan_json_bytes,
 };
 
 use crate::internal::{PlanResponse, check_schema};
@@ -45,7 +45,13 @@ pub fn plan_outputs(
         serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
     check_schema(response.schema)?;
     response.plan.validate().map_err(internal_contract)?;
-    if !response.plan.artifact_tasks.is_empty() && mode != PlanOutputMode::DynamicMatrix {
+    if response
+        .plan
+        .artifact_tasks
+        .iter()
+        .any(|task| task.producer == ArtifactBuildProducer::MatrixBuild)
+        && mode != PlanOutputMode::DynamicMatrix
+    {
         return Err(internal("artifact_build_requires_dynamic_outputs"));
     }
     let artifact_hosted_matrix =
@@ -67,11 +73,14 @@ pub fn plan_outputs(
     };
     outputs.job_outputs_utf16_bytes = check_plan_outputs(
         mode,
-        response
-            .matrix
-            .include
-            .len()
-            .max(response.plan.artifact_tasks.len()),
+        response.matrix.include.len().max(
+            response
+                .plan
+                .artifact_tasks
+                .iter()
+                .filter(|task| task.producer == ArtifactBuildProducer::MatrixBuild)
+                .count(),
+        ),
         &outputs.promoted_job_outputs(mode),
     )?;
     Ok(outputs)
@@ -118,10 +127,9 @@ fn artifact_matrix_if_selected(
     plan: &velnor_actions_contract_workflow::Plan,
     provider: ArtifactBuildProvider,
 ) -> Result<Option<String>, OrchestratorError> {
-    let selected = plan
-        .artifact_tasks
-        .first()
-        .is_some_and(|task| task.providers.contains(&provider));
+    let selected = plan.artifact_tasks.iter().any(|task| {
+        task.producer == ArtifactBuildProducer::MatrixBuild && task.providers.contains(&provider)
+    });
     selected
         .then(|| artifact_matrix_for_provider(plan, provider))
         .transpose()

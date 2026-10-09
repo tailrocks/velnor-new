@@ -29,9 +29,10 @@ pub use artifact_build::{
     ARTIFACT_MISE_TASK_ENV, ARTIFACT_NAME_ENV, ARTIFACT_PLAN_DIGEST_ENV, ARTIFACT_PROVIDER_ENV,
     ARTIFACT_SOURCE_SHA_ENV, ARTIFACT_TASK_ID_ENV, ARTIFACT_VELNOR_MATRIX_OUTPUT,
     ArtifactBuildExpectation, ArtifactBuildFile, ArtifactBuildIdentity, ArtifactBuildMatrix,
-    ArtifactBuildMatrixEntry, ArtifactBuildObservation, ArtifactBuildProvider, ArtifactBuildResult,
-    ArtifactBuildRunContext, ArtifactBuildTaskPlan, DownloadedArtifactOutput,
-    artifact_matrix_for_provider, artifact_name, canonical_plan_digest, expected_artifact_builds,
+    ArtifactBuildMatrixEntry, ArtifactBuildObservation, ArtifactBuildProducer,
+    ArtifactBuildProvider, ArtifactBuildResult, ArtifactBuildRunContext, ArtifactBuildTaskPlan,
+    DownloadedArtifactOutput, VERIFICATION_ARTIFACT_EXPORT_OPERATION, artifact_matrix_for_provider,
+    artifact_name, artifact_plan_providers, canonical_plan_digest, expected_artifact_builds,
     export_artifact_result, reconcile_artifact_builds,
 };
 pub use artifacts::{
@@ -55,7 +56,7 @@ pub use jobs::{
 pub use lanes::{
     EXECUTION_MODE_ENV, HOSTED_SUFFIX, LaneClass, NAMED_CHECK_JOB_ID_ENV,
     NAMED_CHECK_LANE_VARIANT_ENV, NAMED_CHECK_LANES_ENV, NamedCheckLane, NamedCheckLaneVariant,
-    SCALE_SUFFIX, expand_workflow, lane_class, named_check_lanes,
+    SCALE_SUFFIX, expand_workflow, lane_class, named_check_lanes, verification_job_mode,
 };
 pub use matrix_entry::MatrixEntry;
 pub use needs::{

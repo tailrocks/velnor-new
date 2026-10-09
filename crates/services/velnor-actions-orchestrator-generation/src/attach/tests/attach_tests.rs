@@ -114,6 +114,60 @@ fn lock_acquire_inserts_digest_verified_stage() {
 }
 
 #[test]
+fn lock_acquire_stages_verification_output_task_on_ubuntu_26() {
+    use velnor_actions_contract_release::{GeneratorBinary, LockedGenerator, MiseBootstrap};
+    let lock = GeneratorLock {
+        schema: 1,
+        generator: LockedGenerator {
+            binary: "velnor-actions".to_owned(),
+            version: "0.1.0".to_owned(),
+            commit: "ab".repeat(20),
+            binaries: vec![GeneratorBinary {
+                target: "x86_64-unknown-linux-gnu".to_owned(),
+                artifact: "https://example.invalid/r".to_owned(),
+                sha256: "a".repeat(64),
+            }],
+        },
+        mise_bootstrap: MiseBootstrap {
+            version: "2026.9.18".to_owned(),
+            artifact: "https://example.invalid/m".to_owned(),
+            sha256: "b".repeat(64),
+        },
+        actions: Vec::new(),
+    };
+    let catalog = ToolCatalog::pinned();
+    let mut ir = bare_ir(BTreeMap::from([
+        (
+            "plan".to_owned(),
+            plan_job(
+                "ubuntu-26.04",
+                None,
+                &catalog,
+                true,
+                false,
+                false,
+                false,
+                &[],
+            )
+            .expect("plan job"),
+        ),
+        (
+            "required".to_owned(),
+            final_job("ubuntu-26.04", &[], None, &catalog).expect("final job"),
+        ),
+        (
+            "task-frontend".to_owned(),
+            verification_output_job("ubuntu-26.04"),
+        ),
+    ]));
+
+    attach_lock_acquire(&mut ir, &lock, "ubuntu-26.04", "0.1.0").expect("attach lock");
+    let acquire = &ir.jobs["task-frontend"].steps[1];
+    assert_eq!(acquire.name, "Acquire Velnor");
+    assert_eq!(acquire.role, Some(StepRole::AcquireVelnor));
+}
+
+#[test]
 fn lock_acquire_records_source_commit() {
     use velnor_actions_contract_release::{GeneratorBinary, LockedGenerator, MiseBootstrap};
     use velnor_actions_contract_workflow::StepKind;
@@ -253,6 +307,43 @@ fn preseed_attach_builds_once_and_sets_mode() {
     );
     assert_preseed_consumers(&plan);
     assert!(attach_preseed(&mut plan, "ubuntu-26.04-arm", "0.1.0", &[]).is_err());
+}
+
+#[test]
+fn preseed_stages_verification_output_task_before_export() {
+    use velnor_actions_workflow_jobs::{
+        PRESEED_DOWNLOAD_NAME, PRESEED_STAGE_NAME, PRESEED_VERIFY_MANIFEST_NAME,
+    };
+    let mut plan = preseed_fixture(false, &[]);
+    plan.ir.jobs.insert(
+        "task-frontend".to_owned(),
+        verification_output_job("ubuntu-26.04"),
+    );
+
+    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0", &[]).expect("attach pre-seed");
+    let names = plan.ir.jobs["task-frontend"]
+        .steps
+        .iter()
+        .map(|step| step.name.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        &names[..4],
+        [
+            "Checkout",
+            PRESEED_DOWNLOAD_NAME,
+            PRESEED_VERIFY_MANIFEST_NAME,
+            PRESEED_STAGE_NAME,
+        ]
+    );
+    assert_eq!(names.last(), Some(&"Capture declared verification outputs"));
+}
+
+fn verification_output_job(label: &str) -> Job {
+    let mut job = legacy_task_job();
+    job.runs_on = label.to_owned();
+    job.steps
+        .push(velnor_actions_workflow_steps::steps::verification_artifact_export_step("frontend"));
+    job
 }
 
 /// Download, verify, then stage exactly once; never rebuild.

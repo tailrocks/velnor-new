@@ -6,13 +6,13 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 mod artifact_task_plan;
-use artifact_task_plan::artifact_providers;
+use artifact_task_plan::planned_artifact_tasks_for_config;
 use velnor_actions_contract::{canonical_json_bytes, parse_strict_json, plan_id_for_run};
-use velnor_actions_contract_config::{ArtifactBuildTask, ExecutionMode, RunnerSelection};
+use velnor_actions_contract_config::{ExecutionMode, RunnerSelection};
 use velnor_actions_contract_planning::ProposedTask;
 use velnor_actions_contract_workflow::{
-    ArtifactBuildProvider, ArtifactBuildTaskPlan, NamedCheckLane, Plan, PlanBaseline, PlanMatrix,
-    PlanRunner, WorkflowEvent, named_check_lanes,
+    ArtifactBuildTaskPlan, NamedCheckLane, Plan, PlanBaseline, PlanMatrix, PlanRunner,
+    WorkflowEvent, named_check_lanes,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_orchestrator_core::decisions::dedupe_sorted;
@@ -143,7 +143,9 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
     let prep = prepare(&root)?;
     let named_check_lanes = resolve_named_check_lanes(&prep, request.named_check_lanes.take())?;
     let catalog = ToolCatalog::pinned();
-    let artifact_providers = artifact_providers(&prep.config, request.execution_mode);
+    let planned_artifacts =
+        planned_artifact_tasks_for_config(&prep.config, request.execution_mode, &prep.workflow.ir)
+            .map_err(internal_contract)?;
     let mut warnings = Vec::new();
     warnings.extend(
         velnor_actions_orchestrator_discovery::evidence::workspace_drift_warnings(
@@ -171,18 +173,10 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
         prep.runner_selection,
         &catalog,
         &named_check_lanes,
-        &prep.config.workflow.artifact_tasks,
-        &artifact_providers,
+        planned_artifacts,
         warnings,
     )?;
-    let manifest = request.baseline_manifest.and_then(|value| {
-        serde_json::from_value::<BaselineManifest>(value)
-            .inspect_err(|_| {
-                plan.warnings
-                    .push("baseline_miss:malformed_manifest".to_owned());
-            })
-            .ok()
-    });
+    let manifest = parse_baseline_manifest(&mut request, &mut plan);
     apply_baseline(
         &mut plan,
         request.event,
@@ -202,6 +196,17 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
     let response = plan_response(plan, manifest);
     serde_json::to_string(&response).map_err(|err| OrchestratorError::Internal {
         problem: format!("response_encode:{err}"),
+    })
+}
+
+fn parse_baseline_manifest(request: &mut PlanRequest, plan: &mut Plan) -> Option<BaselineManifest> {
+    request.baseline_manifest.take().and_then(|value| {
+        serde_json::from_value::<BaselineManifest>(value)
+            .inspect_err(|_| {
+                plan.warnings
+                    .push("baseline_miss:malformed_manifest".to_owned());
+            })
+            .ok()
     })
 }
 
@@ -288,8 +293,7 @@ fn build_plan(
     selection: RunnerSelection,
     catalog: &ToolCatalog,
     named_check_lanes: &BTreeMap<String, Vec<NamedCheckLane>>,
-    artifact_tasks: &[ArtifactBuildTask],
-    artifact_providers: &[ArtifactBuildProvider],
+    artifact_tasks: Vec<ArtifactBuildTaskPlan>,
     warnings: Vec<String>,
 ) -> Result<Plan, OrchestratorError> {
     let mut obligations = Vec::with_capacity(universe.len());
@@ -361,13 +365,7 @@ fn build_plan(
         obligations,
         matrix: PlanMatrix { include: entries },
         task_ids,
-        artifact_tasks: artifact_tasks
-            .iter()
-            .map(|task| ArtifactBuildTaskPlan {
-                task: task.clone(),
-                providers: artifact_providers.to_vec(),
-            })
-            .collect(),
+        artifact_tasks,
         warnings,
         edges,
     })

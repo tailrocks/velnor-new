@@ -9,6 +9,7 @@ use velnor_actions_contract_workflow::{
     HOSTED_SUFFIX, Job, JobTimeout, PermissionLevel, Permissions, SCALE_SUFFIX, Step,
 };
 
+use crate::context::PLAN_JOB_ID;
 use velnor_actions_workflow_steps::{MiseSetup, RenderError, mise_setup_step, shell_step, steps};
 
 #[cfg(test)]
@@ -25,6 +26,10 @@ pub struct VerificationTaskPolicy {
     pub scale_set_token: Option<String>,
     /// Mise setup action with the binary digest for this runner target.
     pub mise_setup: MiseSetup,
+    /// Typed helper-staging steps attached before output collection.
+    /// Empty-output tasks keep this empty. Velnor policy fills this from
+    /// its lock or pre-seed attach before final job validation.
+    pub staging_steps: Vec<Step>,
 }
 
 /// Step installing the repo's locked task tool closure.
@@ -60,6 +65,7 @@ pub fn build_verification_task_job(
 ) -> Result<Job, RenderError> {
     validate_policy(policy)?;
     let timeout = JobTimeout::new(policy.task.timeout_minutes).map_err(RenderError::Contract)?;
+    let needs_plan = !policy.task.outputs.is_empty();
     let steps = verification_steps(policy, checkout_uses)?;
     Ok(Job {
         outputs: Vec::new(),
@@ -67,7 +73,11 @@ pub fn build_verification_task_job(
         runs_on: policy.runner_label.clone(),
         check_runner: None,
         timeout_minutes: timeout,
-        needs: Vec::new(),
+        needs: if needs_plan {
+            vec![PLAN_JOB_ID.to_owned()]
+        } else {
+            Vec::new()
+        },
         condition: None,
         permissions: Some(verification_permissions()),
         environment: None,
@@ -87,6 +97,12 @@ pub(crate) fn validate_verification_jobs(
     let mut job_ids = Vec::with_capacity(policies.len());
     for policy in policies {
         validate_policy(policy)?;
+        if !policy.task.outputs.is_empty() && policy.staging_steps.is_empty() {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "verification_task_staging_missing:{}",
+                policy.task.id
+            )));
+        }
         if last_id.is_some_and(|previous: &str| previous >= policy.task.id.as_str())
             || !ids.insert(policy.task.id.as_str())
         {
@@ -243,8 +259,12 @@ fn verification_steps(
     policy: &VerificationTaskPolicy,
     checkout_uses: &str,
 ) -> Result<Vec<Step>, RenderError> {
-    Ok(vec![
-        steps::checkout_step(checkout_uses)?,
+    let mut task_steps = vec![steps::checkout_step(checkout_uses)?];
+    task_steps.extend(policy.staging_steps.iter().cloned());
+    if !policy.task.outputs.is_empty() {
+        task_steps.push(crate::closure::download_plan_step()?);
+    }
+    task_steps.extend([
         mise_setup_step(&policy.mise_setup)?,
         shell_step(
             INSTALL_VERIFICATION_TOOLS_NAME,
@@ -264,7 +284,12 @@ fn verification_steps(
             ],
             BTreeMap::new(),
         )?,
-    ])
+    ]);
+    if !policy.task.outputs.is_empty() {
+        task_steps.push(steps::verification_artifact_export_step(&policy.task.id));
+        task_steps.push(steps::verification_artifact_upload_step()?);
+    }
+    Ok(task_steps)
 }
 
 /// Validate the task schema and runner-to-platform binding.

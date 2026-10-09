@@ -52,6 +52,7 @@ fn artifact_plan() -> Plan {
         task_ids: Vec::new(),
         artifact_tasks: vec![ArtifactBuildTaskPlan {
             task,
+            producer: velnor_actions_contract_workflow::ArtifactBuildProducer::MatrixBuild,
             providers: vec![
                 ArtifactBuildProvider::GithubHosted,
                 ArtifactBuildProvider::VelnorScaleSet,
@@ -245,4 +246,71 @@ fn required_artifact_build_gate_rejects_missing_and_skipped_lanes() {
     check_required_evidence(&plan, &request, &mut signals, &mut reasons);
     assert!(signals.not_run);
     assert!(!signals.planning_failed);
+}
+
+#[test]
+fn required_reconciles_mixed_task_scopes_and_rejects_one_missing_provider() {
+    let mut plan = artifact_plan();
+    let both = [
+        ArtifactBuildProvider::GithubHosted,
+        ArtifactBuildProvider::VelnorScaleSet,
+    ];
+    for (id, providers) in [
+        ("verify-both", both.to_vec()),
+        ("verify-hosted", vec![ArtifactBuildProvider::GithubHosted]),
+        ("verify-scale", vec![ArtifactBuildProvider::VelnorScaleSet]),
+    ] {
+        let mut task = plan.artifact_tasks[0].task.clone();
+        task.id = id.to_owned();
+        task.mise_task = format!("build-{id}");
+        plan.artifact_tasks.push(ArtifactBuildTaskPlan {
+            task,
+            producer: velnor_actions_contract_workflow::ArtifactBuildProducer::VerificationTask,
+            providers,
+        });
+    }
+    plan.validate().expect("mixed per-task provider scopes");
+    let providers = artifact_plan_providers(&plan);
+    let expected = expected_artifact_builds(&plan, &artifact_context(), &providers)
+        .expect("complete expected inventory");
+    assert_eq!(expected.len(), 6);
+    let observations = expected
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let task = &plan
+                .artifact_tasks
+                .iter()
+                .find(|task| task.task.id == item.identity.task_id)
+                .expect("task in plan")
+                .task;
+            let mut observation = artifact_observation(task, item.identity.clone());
+            observation.api_job_name = item.expected_workflow_job_name();
+            observation.api_job_id = Some(index as u64 + 1);
+            observation.api_artifact_id = Some(index as u64 + 101);
+            observation
+        })
+        .collect::<Vec<_>>();
+    let request = artifact_request(Some(artifact_context()), observations.clone());
+    let mut signals = Signals::default();
+    let mut reasons = BTreeSet::new();
+    check_required_evidence(&plan, &request, &mut signals, &mut reasons);
+    assert!(!signals.planning_failed);
+    assert!(reasons.is_empty());
+
+    let mut missing = observations;
+    let missing_index = expected
+        .iter()
+        .position(|item| {
+            item.identity.task_id == "verify-scale"
+                && item.identity.provider == ArtifactBuildProvider::VelnorScaleSet
+        })
+        .expect("Scale Set task lane");
+    missing.remove(missing_index);
+    let request = artifact_request(Some(artifact_context()), missing);
+    let mut signals = Signals::default();
+    let mut reasons = BTreeSet::new();
+    check_required_evidence(&plan, &request, &mut signals, &mut reasons);
+    assert!(signals.planning_failed);
+    assert!(reasons.contains("no_entry"));
 }

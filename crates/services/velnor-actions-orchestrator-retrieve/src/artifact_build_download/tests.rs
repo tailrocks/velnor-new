@@ -33,6 +33,8 @@ fn expectation(task: &ArtifactBuildTask) -> ArtifactBuildExpectation {
     };
     ArtifactBuildExpectation {
         identity,
+        workflow_job_name: "Build artifact github_hosted / bundle".to_owned(),
+        producer: velnor_actions_contract_workflow::ArtifactBuildProducer::MatrixBuild,
         outputs: task.outputs.clone(),
     }
 }

@@ -77,6 +77,13 @@ pub(crate) fn attach_lock_acquire(
         {
             let step = lock_acquire_step(lock, label, &staged)?;
             job.steps.insert(1.min(job.steps.len()), step);
+        } else if job
+            .steps
+            .iter()
+            .any(|step| step.role == Some(StepRole::VerificationArtifactExport))
+        {
+            let step = lock_acquire_step(lock, &job.runs_on, &staged)?;
+            job.steps.insert(1.min(job.steps.len()), step);
         }
     }
     Ok(())
@@ -158,13 +165,26 @@ pub(crate) fn attach_preseed(
             .splice(0..0, preseed_consumers(target, &staged)?);
     }
     for (id, job) in &mut workflow.ir.jobs {
+        let verification_export = job
+            .steps
+            .iter()
+            .any(|step| step.role == Some(StepRole::VerificationArtifactExport));
         if is_crate_job_id(id)
             || job.check_runner.is_some()
             || job
                 .steps
                 .iter()
                 .any(|step| step.role == Some(StepRole::ArtifactBuildExport))
+            || verification_export
         {
+            if verification_export
+                && ReleaseTarget::for_runner_label(&job.runs_on).map(ReleaseTarget::triple)
+                    != Some(target)
+            {
+                return Err(OrchestratorError::Contract {
+                    problem: format!("mixed_platform_preseed_requires_release_lock:{id}"),
+                });
+            }
             let at = 1.min(job.steps.len());
             job.steps
                 .splice(at..at, preseed_consumers(target, &staged)?);

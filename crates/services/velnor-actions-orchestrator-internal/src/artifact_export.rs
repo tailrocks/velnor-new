@@ -7,14 +7,18 @@ use velnor_actions_contract::canonical::{Blake3Accumulator, canonical_json_bytes
 use velnor_actions_contract::{parse_strict_json, validate_run_key};
 use velnor_actions_contract_config::ArtifactBuildTask;
 use velnor_actions_contract_workflow::{
-    ArtifactBuildFile, ArtifactBuildIdentity, ArtifactBuildProvider, ArtifactBuildResult,
-    ArtifactBuildRunContext, Plan, artifact_name, canonical_plan_digest, expected_artifact_builds,
+    ArtifactBuildFile, ArtifactBuildIdentity, ArtifactBuildProducer, ArtifactBuildProvider,
+    ArtifactBuildResult, ArtifactBuildRunContext, Plan, artifact_name, artifact_plan_providers,
+    canonical_plan_digest, expected_artifact_builds,
 };
 use velnor_actions_orchestrator_core::exclusive_write::{
     create_dir_no_symlink, write_exclusive, write_exclusive_with,
 };
 use velnor_actions_orchestrator_core::safe_read::stream_repo_file;
 use velnor_actions_orchestrator_core::{OrchestratorError, internal, internal_contract};
+
+mod verification;
+pub use verification::materialize_verification_artifact_from_environment;
 
 /// Runtime values emitted by the plan matrix and GitHub's immutable job context.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,6 +53,8 @@ pub struct ArtifactExportInvocation {
     pub mise_task: String,
     /// Exact artifact name from the plan-produced matrix.
     pub artifact_name: String,
+    /// Producer identity fixed by the internal operation, not caller input.
+    pub producer: ArtifactBuildProducer,
 }
 
 /// Result manifest filename included in every build artifact.
@@ -192,18 +198,18 @@ pub fn materialize_planned_artifact(
         run_id: invocation.run_id,
         run_attempt: invocation.run_attempt,
     };
-    let providers = plan
-        .artifact_tasks
-        .first()
-        .map(|task| task.providers.as_slice())
-        .ok_or_else(|| internal("artifact_plan_has_no_tasks"))?;
+    let providers = artifact_plan_providers(&plan);
+    if providers.is_empty() {
+        return Err(internal("artifact_plan_has_no_tasks"));
+    }
     let expected =
-        expected_artifact_builds(&plan, &context, providers).map_err(internal_contract)?;
+        expected_artifact_builds(&plan, &context, &providers).map_err(internal_contract)?;
     let identity = expected
         .into_iter()
         .find(|item| {
             item.identity.provider == invocation.provider
                 && item.identity.task_id == invocation.task_id
+                && item.producer == invocation.producer
         })
         .map(|item| item.identity)
         .ok_or_else(|| internal("artifact_task_not_in_plan"))?;
@@ -269,20 +275,21 @@ pub fn materialize_artifact_from_environment(
         task_id: required_env(velnor_actions_contract_workflow::ARTIFACT_TASK_ID_ENV)?,
         mise_task: required_env(velnor_actions_contract_workflow::ARTIFACT_MISE_TASK_ENV)?,
         artifact_name: required_env(velnor_actions_contract_workflow::ARTIFACT_NAME_ENV)?,
+        producer: ArtifactBuildProducer::MatrixBuild,
     };
     let repository_root = std::env::current_dir()
         .map_err(|error| OrchestratorError::io("current_dir", error.to_string()))?;
     materialize_planned_artifact(&repository_root, &runner_temp, &plan_text, invocation)
 }
 
-fn required_env(key: &str) -> Result<String, OrchestratorError> {
+pub(super) fn required_env(key: &str) -> Result<String, OrchestratorError> {
     std::env::var(key)
         .ok()
         .filter(|value| !value.is_empty())
         .ok_or_else(|| internal(&format!("missing_artifact_env:{key}")))
 }
 
-fn required_path(key: &str) -> Result<PathBuf, OrchestratorError> {
+pub(super) fn required_path(key: &str) -> Result<PathBuf, OrchestratorError> {
     std::env::var_os(key)
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)

@@ -9,7 +9,8 @@ use crate::{
     RenderError,
     steps::{
         ARTIFACT_EXPORT_OPERATION, FETCH_OPERATION, MERGE_OPERATION, PLAN_OPERATION,
-        PUBLISH_OPERATION, WRITE_REQUEST_OPERATION, scan_for_private_subcommands,
+        PUBLISH_OPERATION, VERIFICATION_ARTIFACT_EXPORT_OPERATION, WRITE_REQUEST_OPERATION,
+        scan_for_private_subcommands,
     },
 };
 
@@ -26,6 +27,7 @@ pub fn split_internal_operation(operation: &str) -> Result<(&str, &str), RenderE
         || operation == FETCH_OPERATION
         || operation == PUBLISH_OPERATION
         || operation == ARTIFACT_EXPORT_OPERATION
+        || operation == VERIFICATION_ARTIFACT_EXPORT_OPERATION
     {
         return Ok((operation, operation));
     }
@@ -173,6 +175,26 @@ pub fn artifact_export_step() -> Step {
                     "${{ matrix.artifact_name }}".to_owned(),
                 ),
             ]),
+        },
+    }
+}
+
+/// Fixed exporter for outputs from an existing verification job.
+#[must_use]
+pub fn verification_artifact_export_step(task_id: &str) -> Step {
+    use std::collections::BTreeMap;
+
+    use velnor_actions_contract_workflow::ARTIFACT_TASK_ID_ENV;
+    use velnor_actions_contract_workflow::{StepId, StepKind, StepRole};
+
+    Step {
+        name: "Capture declared verification outputs".to_owned(),
+        id: Some(StepId::VerificationArtifactExport),
+        role: Some(StepRole::VerificationArtifactExport),
+        condition: None,
+        kind: StepKind::Internal {
+            operation: VERIFICATION_ARTIFACT_EXPORT_OPERATION.to_owned(),
+            env: BTreeMap::from([(ARTIFACT_TASK_ID_ENV.to_owned(), task_id.to_owned())]),
         },
     }
 }
