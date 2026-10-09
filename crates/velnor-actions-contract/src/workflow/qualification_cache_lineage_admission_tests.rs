@@ -76,6 +76,117 @@ fn complete_cold_warm_third_useful_delta_and_control_admission_paths() -> TestRe
     Ok(())
 }
 
+#[test]
+fn native_mbx_receipt_and_directive_use_the_object_layer_only() -> TestResult {
+    let mut plan = qualification_plan(QualificationPhase::Cold, 705, SOURCE_A, None)?;
+    plan.matrix.include[0].adapter_metadata["compile_driver"] = serde_json::json!("mbx");
+    plan.validate()?;
+    let node = completed_node(&plan, None, None)?;
+    let layers = &node.receipt.lanes[0].layers;
+    let objects = layers
+        .iter()
+        .find(|layer| layer.layer == QualificationCacheLayer::MbxObjects)
+        .ok_or_else(|| std::io::Error::other("native MBX object receipt missing"))?;
+    assert_eq!(layers.len(), 5);
+    assert!(objects.active && objects.state_digest.is_some());
+    assert!(objects.runtime_identity.is_some());
+    assert_eq!(node.document.schema, 2);
+    assert_eq!(node.receipt.schema, 2);
+
+    let entry = &plan.matrix.include[0];
+    let directive = QualificationCacheDirective::for_plan(&plan, None)?
+        .ok_or_else(|| std::io::Error::other("native MBX directive missing"))?;
+    let serialized = serde_json::to_value(&directive)?;
+    let emitted_layers = serialized["lanes"][0]["layers"]
+        .as_array()
+        .ok_or_else(|| std::io::Error::other("directive layers are not an array"))?;
+    assert_eq!(directive.schema, 2);
+    assert_eq!(emitted_layers.len(), 5);
+    assert!(
+        emitted_layers
+            .iter()
+            .any(|layer| layer["layer"] == "mbx_objects")
+    );
+    assert!(!serialized.to_string().contains("mbx_bundle"));
+    let native = directive
+        .layer(&entry.matrix_key, QualificationCacheLayer::MbxObjects)
+        .ok_or_else(|| std::io::Error::other("native MBX directive layer missing"))?;
+    let keys = directive.bind_runtime(
+        &plan,
+        None,
+        &entry.matrix_key,
+        QualificationCacheLayer::MbxObjects,
+        &super::directive_tests::runtime_identity(&native.runtime),
+    )?;
+    assert!(keys.restore.is_some() && keys.save_key.is_some());
+
+    let mut legacy = serialized;
+    legacy["schema"] = serde_json::json!(1);
+    let legacy: QualificationCacheDirective = serde_json::from_value(legacy)?;
+    assert!(
+        legacy
+            .bind_runtime(
+                &plan,
+                None,
+                &entry.matrix_key,
+                QualificationCacheLayer::MbxObjects,
+                &super::directive_tests::runtime_identity(&native.runtime),
+            )
+            .is_err()
+    );
+    Ok(())
+}
+
+#[test]
+fn legacy_receipt_versions_and_artifact_identity_are_rejected() -> TestResult {
+    let plan = qualification_plan(QualificationPhase::Cold, 706, SOURCE_A, None)?;
+    let node = completed_node(&plan, None, None)?;
+    let mut old_receipt = node.value.clone();
+    old_receipt["receipt"]["schema"] = serde_json::json!(1);
+    assert!(rejects_admission(&old_receipt, &plan, None));
+
+    let mut old_artifact = node.value.clone();
+    old_artifact["artifact"]["name"] = serde_json::json!("velnor-qualification-cache-receipt-v1");
+    assert!(rejects_admission(&old_artifact, &plan, None));
+
+    let metadata: crate::workflow::QualificationCacheRunMetadata =
+        serde_json::from_value(node.value["metadata"].clone())?;
+    let mut old_document = node.document.clone();
+    old_document.schema = 1;
+    assert!(
+        old_document
+            .to_bounded_json(&plan, &metadata, None)
+            .is_err()
+    );
+    Ok(())
+}
+
+#[test]
+fn receipt_admission_rejects_missing_extra_and_retired_layers() -> TestResult {
+    let plan = qualification_plan(QualificationPhase::Cold, 707, SOURCE_A, None)?;
+    let node = completed_node(&plan, None, None)?;
+
+    let mut missing = node.value.clone();
+    missing["receipt"]["lanes"][0]["layers"]
+        .as_array_mut()
+        .ok_or_else(|| std::io::Error::other("receipt layers are not an array"))?
+        .pop();
+    assert!(rejects_admission(&missing, &plan, None));
+
+    let mut extra = node.value.clone();
+    let extra_layer = extra["receipt"]["lanes"][0]["layers"][0].clone();
+    extra["receipt"]["lanes"][0]["layers"]
+        .as_array_mut()
+        .ok_or_else(|| std::io::Error::other("receipt layers are not an array"))?
+        .push(extra_layer);
+    assert!(rejects_admission(&extra, &plan, None));
+
+    let mut retired = node.value.clone();
+    retired["receipt"]["lanes"][0]["layers"][0]["layer"] = serde_json::json!("mbx_bundle");
+    assert!(rejects_admission(&retired, &plan, None));
+    Ok(())
+}
+
 fn assert_warm_successor_is_selected(
     cold: &BuiltNode,
     warm: &BuiltNode,
@@ -86,10 +197,10 @@ fn assert_warm_successor_is_selected(
     let cold_layers = &cold.receipt.lanes[0].layers;
     let warm_layers = &warm.receipt.lanes[0].layers;
     let third_layers = &third.receipt.lanes[0].layers;
-    let cold_sources = &cold_layers[2];
-    let cold_tools = &cold_layers[3];
-    let warm_sources = &warm_layers[2];
-    let warm_tools = &warm_layers[3];
+    let cold_sources = &cold_layers[1];
+    let cold_tools = &cold_layers[2];
+    let warm_sources = &warm_layers[1];
+    let warm_tools = &warm_layers[2];
     assert_ne!(cold_sources.state_digest, warm_sources.state_digest);
     assert_eq!(
         warm_sources.save.action,
@@ -123,10 +234,10 @@ fn assert_warm_successor_is_selected(
         Some(QualificationCacheSlot::K1)
     );
     assert_eq!(
-        third_layers[2].restore.matched_cache,
+        third_layers[1].restore.matched_cache,
         warm_sources.save.after
     );
-    assert_eq!(third_layers[3].restore.matched_cache, cold_tools.save.after);
+    assert_eq!(third_layers[2].restore.matched_cache, cold_tools.save.after);
     Ok(())
 }
 
@@ -190,7 +301,7 @@ fn full_admission_rejects_mutated_artifact_link_runtime_and_layer_state() -> Tes
     assert!(rejects_admission(&wrong_link, &useful_plan, Some(&delta)));
 
     let mut wrong_runtime = third.value.clone();
-    wrong_runtime["receipt"]["lanes"][0]["layers"][2]["runtime_identity"]["platform"]["image_version"] =
+    wrong_runtime["receipt"]["lanes"][0]["layers"][1]["runtime_identity"]["platform"]["image_version"] =
         serde_json::json!("27.04");
     assert!(rejects_admission(
         &wrong_runtime,
@@ -199,7 +310,7 @@ fn full_admission_rejects_mutated_artifact_link_runtime_and_layer_state() -> Tes
     ));
 
     let mut wrong_state = third.value.clone();
-    wrong_state["receipt"]["lanes"][0]["layers"][2]["state_digest"] =
+    wrong_state["receipt"]["lanes"][0]["layers"][1]["state_digest"] =
         serde_json::json!(digest_b3(b"forged third cargo state"));
     assert!(rejects_admission(&wrong_state, &useful_plan, Some(&delta)));
 

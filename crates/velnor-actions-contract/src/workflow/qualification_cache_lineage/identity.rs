@@ -22,8 +22,6 @@ pub const MAX_QUALIFICATION_CACHE_LANES: usize = 256;
 pub enum QualificationCacheLayer {
     /// MBX action-owned object store.
     MbxObjects,
-    /// Separately archived MBX bundle transport.
-    MbxBundle,
     /// Shared Cargo registry and Git sources archive.
     CargoSources,
     /// V2 Mise tools archive.
@@ -40,7 +38,6 @@ impl QualificationCacheLayer {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::MbxObjects => "mbx_objects",
-            Self::MbxBundle => "mbx_bundle",
             Self::CargoSources => "cargo_sources",
             Self::MiseTools => "mise_tools",
             Self::TofuProviders => "tofu_providers",

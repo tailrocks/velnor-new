@@ -293,11 +293,21 @@ fn plan_outputs_bind_qualification_phase_and_cache_policy() -> TestResult {
     );
     let directives: serde_json::Value =
         serde_json::from_str(&outputs.qualification_cache_directives)?;
+    assert_eq!(directives["schema"], 2);
     assert_eq!(directives["phase"], "cold");
-    assert!(
-        directives["lanes"]
+    let lanes = directives["lanes"]
+        .as_array()
+        .ok_or("qualification cache lanes are not an array")?;
+    assert!(!lanes.is_empty());
+    assert!(lanes.iter().all(|lane| {
+        lane["layers"]
             .as_array()
-            .is_some_and(|lanes| !lanes.is_empty())
+            .is_some_and(|layers| layers.len() == 5)
+    }));
+    assert!(
+        !outputs
+            .qualification_cache_directives
+            .contains("mbx_bundle")
     );
     let promoted = outputs.promoted_job_outputs(PlanOutputMode::Static);
     let expected_bytes = promoted

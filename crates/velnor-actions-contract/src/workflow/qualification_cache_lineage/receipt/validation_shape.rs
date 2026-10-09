@@ -111,7 +111,7 @@ pub(in crate::workflow::qualification_cache_lineage::receipt) fn validate_metada
 pub(in crate::workflow::qualification_cache_lineage::receipt) fn validate_receipt_shape(
     receipt: &QualificationCacheReceipt,
 ) -> Result<(), ContractError> {
-    if receipt.schema != 1
+    if receipt.schema != 2
         || receipt.lanes.len() > MAX_QUALIFICATION_CACHE_LANES
         || receipt.lanes.is_empty()
     {

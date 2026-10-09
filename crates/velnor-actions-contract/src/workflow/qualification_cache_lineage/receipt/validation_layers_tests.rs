@@ -141,7 +141,7 @@ fn node(phase: QualificationPhase, lanes: Vec<QualificationCacheLaneReceipt>) ->
             run,
         },
         receipt: QualificationCacheReceipt {
-            schema: 1,
+            schema: 2,
             plan_id: "plan-r12-a1".to_owned(),
             run,
             campaign: "campaign".to_owned(),
