@@ -8,16 +8,21 @@ use std::sync::Arc;
 
 use velnor_runner_github::policy::VerifiedJobTrust;
 use velnor_runner_host::RunnerImageProfile;
-use velnor_runner_journal::journal::{Journal, ReplayRoute};
+use velnor_runner_journal::journal::{
+    BoundBatchCapacityClaim, BoundCapacityClaim, Journal, JournalDockerDaemonBinding, ReplayRoute,
+    ScopedLaunchIdentity,
+};
 
 use crate::linux::LinuxLaunchContext;
 use crate::linux::capacity::{
-    AvailableLaunchIdentity, LaunchEffectOutcome, ReserveOutcome, reserve_available,
+    AvailableLaunchIdentity, LaunchEffectOutcome, ReservedLaunch, reserved,
 };
 
-use super::super::{
-    ActiveSession, ShutdownGate, cutoff, observe_cutoff, protocol_call, protocol_read,
-};
+use super::super::{ActiveSession, ShutdownGate, cutoff, observe_cutoff, protocol_read};
+
+#[cfg(test)]
+#[path = "available/ack_reservation_tests.rs"]
+mod ack_reservation_tests;
 
 pub(super) struct AvailableWork<'a> {
     pub(super) context: &'a LinuxLaunchContext,
@@ -37,34 +42,84 @@ struct AvailableRuntime<'a> {
 
 enum OfferOutcome {
     Started,
-    CapacityFull,
     NotDispatched,
     Held,
 }
 
-/// Process each verified offer once; unsubmitted excess offers are explicitly
-/// left unrequested so the message can advance after selected work is durable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum AvailableBatchOutcome {
+    Ready,
+    Held,
+}
+
+/// Reserve the complete verified Available set before any queue or Docker effect.
+/// A non-new row, insufficient capacity, or any uncertainty holds the whole
+/// message so the caller cannot delete it or move to another poll.
 pub(super) async fn process_all(
-    mut work: AvailableWork<'_>,
+    work: AvailableWork<'_>,
     offers: Vec<VerifiedJobTrust>,
     free_slots: u32,
-) -> bool {
-    if !unique_request_ids(&offers) {
-        return false;
+) -> AvailableBatchOutcome {
+    if offers.is_empty()
+        || !unique_request_ids(&offers)
+        || usize::try_from(free_slots).unwrap_or(usize::MAX) < offers.len()
+    {
+        return AvailableBatchOutcome::Held;
     }
-    let selected_count = usize::try_from(free_slots)
-        .unwrap_or(usize::MAX)
-        .min(offers.len());
-    let (selected, deferred) = split_offers(offers, selected_count);
-    for trust in deferred {
-        if !leave_unrequested(&mut work, trust).await {
-            return false;
-        }
-    }
-    let Some(runtime) = available_runtime(work).await else {
-        return false;
+    let Some(mut runtime) = available_runtime(work).await else {
+        return AvailableBatchOutcome::Held;
     };
-    Box::pin(process_selected(runtime, selected)).await
+    let message_id = offers[0].message_id();
+    if offers.iter().any(|offer| offer.message_id() != message_id) {
+        return AvailableBatchOutcome::Held;
+    }
+    let request_ids = offers
+        .iter()
+        .map(VerifiedJobTrust::runner_request_id)
+        .collect::<Vec<_>>();
+    let reservation = cutoff::bounded_persisting(
+        runtime.work.journal,
+        &mut runtime.work.shutdown,
+        runtime.work.context.drain_timeout(),
+        None,
+        reserve_offer_batch(
+            runtime.work.journal,
+            runtime.route,
+            &runtime.session_id,
+            message_id,
+            &request_ids,
+            &runtime.work.active.journal_binding,
+            runtime.maximum,
+        ),
+    )
+    .await;
+    observe_cutoff(
+        runtime.work.context,
+        runtime.work.journal,
+        runtime.work.shutdown.receiver,
+        runtime.work.shutdown.cutoff,
+    )
+    .await;
+    let Some(Ok(claims)) = reservation else {
+        return AvailableBatchOutcome::Held;
+    };
+    let launches = match new_batch_launches(&claims) {
+        Ok(launches) => launches,
+        Err(fresh_ids) => {
+            release_unstarted(&mut runtime.work, &fresh_ids).await;
+            return AvailableBatchOutcome::Held;
+        }
+    };
+    if runtime.work.shutdown.cutoff.is_some() {
+        let ids = launches.iter().map(|launch| launch.id).collect::<Vec<_>>();
+        release_unstarted(&mut runtime.work, &ids).await;
+        return AvailableBatchOutcome::Held;
+    }
+    if process_selected(runtime, launches, offers).await {
+        AvailableBatchOutcome::Ready
+    } else {
+        AvailableBatchOutcome::Held
+    }
 }
 
 async fn available_runtime(mut work: AvailableWork<'_>) -> Option<AvailableRuntime<'_>> {
@@ -94,10 +149,11 @@ async fn available_runtime(mut work: AvailableWork<'_>) -> Option<AvailableRunti
 
 async fn process_selected(
     mut runtime: AvailableRuntime<'_>,
+    launches: Vec<ReservedLaunch>,
     selected: Vec<VerifiedJobTrust>,
 ) -> bool {
-    let mut capacity_full = false;
-    for trust in selected {
+    let mut remaining = launches.into_iter().zip(selected).peekable();
+    while let Some((launch, trust)) = remaining.next() {
         observe_cutoff(
             runtime.work.context,
             runtime.work.journal,
@@ -106,78 +162,22 @@ async fn process_selected(
         )
         .await;
         if runtime.work.shutdown.cutoff.is_some() {
+            let ids = std::iter::once(launch.id)
+                .chain(remaining.map(|(launch, _)| launch.id))
+                .collect::<Vec<_>>();
+            release_unstarted(&mut runtime.work, &ids).await;
             return false;
         }
-        if capacity_full {
-            if !leave_unrequested(&mut runtime.work, trust).await {
+        match Box::pin(start_reserved_offer(&mut runtime, launch, trust)).await {
+            OfferOutcome::Started => {}
+            OfferOutcome::NotDispatched | OfferOutcome::Held => {
+                let ids = remaining.map(|(launch, _)| launch.id).collect::<Vec<_>>();
+                release_unstarted(&mut runtime.work, &ids).await;
                 return false;
             }
-            continue;
-        }
-        match Box::pin(run_offer(&mut runtime, trust)).await {
-            OfferOutcome::Started => {}
-            OfferOutcome::CapacityFull => capacity_full = true,
-            OfferOutcome::NotDispatched | OfferOutcome::Held => return false,
         }
     }
     true
-}
-
-async fn run_offer(runtime: &mut AvailableRuntime<'_>, trust: VerifiedJobTrust) -> OfferOutcome {
-    let reservation = cutoff::bounded_persisting(
-        runtime.work.journal,
-        &mut runtime.work.shutdown,
-        runtime.work.context.drain_timeout(),
-        None,
-        reserve_available(
-            runtime.work.journal,
-            runtime.route,
-            &runtime.session_id,
-            &runtime.work.active.journal_binding,
-            &trust,
-            runtime.maximum,
-        ),
-    )
-    .await;
-    observe_cutoff(
-        runtime.work.context,
-        runtime.work.journal,
-        runtime.work.shutdown.receiver,
-        runtime.work.shutdown.cutoff,
-    )
-    .await;
-    let Some(Ok((state, launch))) = reservation else {
-        return OfferOutcome::Held;
-    };
-    match state {
-        ReserveOutcome::CapacityFull => {
-            return if leave_unrequested(&mut runtime.work, trust).await {
-                OfferOutcome::CapacityFull
-            } else {
-                OfferOutcome::Held
-            };
-        }
-        ReserveOutcome::Reserved => {}
-        ReserveOutcome::Draining | ReserveOutcome::Existing => return OfferOutcome::Held,
-    }
-    let Some(launch) = launch else {
-        return OfferOutcome::Held;
-    };
-    if runtime.work.shutdown.cutoff.is_some() {
-        let recorded = cutoff::bounded_persisting(
-            runtime.work.journal,
-            &mut runtime.work.shutdown,
-            runtime.work.context.drain_timeout(),
-            None,
-            runtime.work.journal.record_launch_no_effect(launch.id),
-        )
-        .await;
-        return match recorded {
-            Some(Ok(())) => OfferOutcome::NotDispatched,
-            Some(Err(_)) | None => OfferOutcome::Held,
-        };
-    }
-    Box::pin(start_reserved_offer(runtime, launch, trust)).await
 }
 
 async fn start_reserved_offer(
@@ -249,48 +249,28 @@ async fn start_reserved_offer(
     ))
     .await;
     observe_cutoff(context, journal, shutdown.receiver, shutdown.cutoff).await;
-    if matches!(outcome, Some(Ok(LaunchEffectOutcome::Done))) {
-        OfferOutcome::Started
-    } else {
-        OfferOutcome::Held
+    match outcome {
+        Some(Ok(LaunchEffectOutcome::Done)) => OfferOutcome::Started,
+        Some(Ok(LaunchEffectOutcome::NotDispatched)) => OfferOutcome::NotDispatched,
+        Some(Ok(LaunchEffectOutcome::Uncertain) | Err(_)) | None => OfferOutcome::Held,
     }
 }
 
-async fn leave_unrequested(work: &mut AvailableWork<'_>, trust: VerifiedJobTrust) -> bool {
-    observe_cutoff(
-        work.context,
-        work.journal,
-        work.shutdown.receiver,
-        work.shutdown.cutoff,
-    )
-    .await;
-    if work.shutdown.cutoff.is_some() {
-        return false;
-    }
-    let dispatch = cutoff::DispatchFence::new();
-    let call = protocol_call(
-        work.active.protocol.clone(),
-        dispatch.clone(),
-        work.shutdown.receiver.clone(),
-        *work.shutdown.cutoff,
-        move |protocol, _transport| {
-            protocol
-                .admin
-                .leave_unrequested_available(&mut protocol.session, &trust)
-        },
-    );
-    matches!(
-        cutoff::bounded_protocol(
+async fn release_unstarted(work: &mut AvailableWork<'_>, launch_ids: &[i64]) -> bool {
+    for launch_id in launch_ids {
+        let release = cutoff::bounded_persisting(
             work.journal,
             &mut work.shutdown,
             work.context.drain_timeout(),
             None,
-            dispatch,
-            call,
+            work.journal.record_launch_no_effect(*launch_id),
         )
-        .await,
-        Some(Ok(()))
-    )
+        .await;
+        if !matches!(release, Some(Ok(()))) {
+            return false;
+        }
+    }
+    true
 }
 
 fn unique_request_ids(offers: &[VerifiedJobTrust]) -> bool {
@@ -300,20 +280,39 @@ fn unique_request_ids(offers: &[VerifiedJobTrust]) -> bool {
         .all(|offer| seen.insert(offer.runner_request_id()))
 }
 
-fn split_offers(
-    offers: Vec<VerifiedJobTrust>,
-    selected_count: usize,
-) -> (Vec<VerifiedJobTrust>, Vec<VerifiedJobTrust>) {
-    let mut selected = Vec::with_capacity(selected_count);
-    let mut deferred = Vec::with_capacity(offers.len().saturating_sub(selected_count));
-    for (index, offer) in offers.into_iter().enumerate() {
-        if index < selected_count {
-            selected.push(offer);
-        } else {
-            deferred.push(offer);
-        }
+async fn reserve_offer_batch(
+    journal: &Journal,
+    route: ReplayRoute<'_>,
+    session_id: &str,
+    message_id: i64,
+    request_ids: &[i64],
+    binding: &JournalDockerDaemonBinding,
+    maximum: NonZeroU32,
+) -> Result<BoundBatchCapacityClaim, velnor_runner_host::HostError> {
+    let identities = request_ids
+        .iter()
+        .map(|request_id| ScopedLaunchIdentity::new(route, session_id, message_id, *request_id))
+        .collect::<Result<Vec<_>, _>>()?;
+    journal
+        .reserve_linux_launch_batch_all_or_none_if_accepting(&identities, binding, maximum)
+        .await
+}
+
+fn new_batch_launches(claims: &BoundBatchCapacityClaim) -> Result<Vec<ReservedLaunch>, Vec<i64>> {
+    let BoundBatchCapacityClaim::Offers(claims) = claims else {
+        return Err(Vec::new());
+    };
+    let fresh_ids = claims
+        .iter()
+        .filter_map(|claim| match claim {
+            BoundCapacityClaim::New(id) => Some(*id),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    if fresh_ids.len() != claims.len() || claims.is_empty() {
+        return Err(fresh_ids);
     }
-    (selected, deferred)
+    Ok(fresh_ids.into_iter().map(reserved).collect())
 }
 
 pub(super) fn session_route(active: &ActiveSession) -> Option<ReplayRoute<'_>> {

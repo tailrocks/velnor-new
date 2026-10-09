@@ -1,7 +1,9 @@
 //! One-message coordination with durable effects before queue acknowledgement.
 
+mod ack;
 mod assigned;
 mod available;
+mod batch_lifecycle;
 mod cleanup;
 mod inventory;
 mod lifecycle;
@@ -20,6 +22,9 @@ use velnor_runner_journal::journal::Journal;
 use super::{ActiveSession, ShutdownGate, cutoff, observe_cutoff, protocol_call};
 use crate::linux::{LinuxLaunchContext, LinuxLaunchCredentials};
 
+pub(super) use ack::BatchOutcome;
+use ack::{BatchPipeline, KindOutcome, run_batch_pipeline};
+use batch_lifecycle::persist_and_clean_lifecycle;
 pub(super) use recovery::RecoveryBudget;
 
 pub(super) struct BatchWork<'a> {
@@ -75,84 +80,60 @@ pub(super) async fn require_before_pair_start(
     }
 }
 
-pub(super) async fn process_batch(mut work: BatchWork<'_>, batch: ParsedTrustBatch) -> bool {
-    let current = cutoff::bounded_persisting(
-        work.journal,
-        &mut work.shutdown,
-        work.context.drain_timeout(),
-        None,
-        batch_is_current(work.active, &batch),
-    )
-    .await;
-    observe_cutoff(
-        work.context,
-        work.journal,
-        work.shutdown.receiver,
-        work.shutdown.cutoff,
-    )
-    .await;
-    if !matches!(current, Some(true)) {
-        return false;
-    }
-    if !snapshot::persist_poll_observation(&mut work, &batch).await {
-        return false;
-    }
-    observe_cutoff(
-        work.context,
-        work.journal,
-        work.shutdown.receiver,
-        work.shutdown.cutoff,
-    )
-    .await;
-    if work.shutdown.cutoff.is_some() {
-        return false;
-    }
-    let kinds = BatchKinds::from(&batch);
-    let persisted = cutoff::bounded_persisting(
-        work.journal,
-        &mut work.shutdown,
-        work.context.drain_timeout(),
-        None,
-        lifecycle::persist_events(work.journal, &batch),
-    )
-    .await;
-    observe_cutoff(
-        work.context,
-        work.journal,
-        work.shutdown.receiver,
-        work.shutdown.cutoff,
-    )
-    .await;
-    let Some(Some(mut completed)) = persisted else {
-        return false;
+pub(super) async fn process_batch(work: BatchWork<'_>, batch: ParsedTrustBatch) -> BatchOutcome {
+    let mut pipeline = ProductionBatchPipeline {
+        work,
+        batch,
+        kinds: None,
+        free_slots: None,
     };
-    let Some(recovered) = recovery::recover_pending(&mut work).await else {
-        return false;
-    };
-    completed.extend(recovered);
-    if !completed.is_empty()
-        && !Box::pin(cleanup::cleanup_completed(
-            work.context,
-            work.journal,
-            work.diagnostics,
-            &work.active.docker_binding,
-            &mut work.shutdown,
-            &completed,
-        ))
-        .await
-    {
-        return false;
+    run_batch_pipeline(&mut pipeline).await
+}
+
+struct ProductionBatchPipeline<'a> {
+    work: BatchWork<'a>,
+    batch: ParsedTrustBatch,
+    kinds: Option<BatchKinds>,
+    free_slots: Option<u32>,
+}
+
+impl BatchPipeline for ProductionBatchPipeline<'_> {
+    fn message_id(&self) -> i64 {
+        self.batch.message_id()
     }
-    if work.shutdown.cutoff.is_some() || kinds.unsupported || (kinds.available && kinds.assigned) {
-        return false;
+
+    fn has_available_offers(&self) -> bool {
+        BatchKinds::from(&self.batch).available
     }
-    let Some(free_slots) = current_free_slots(&mut work).await else {
-        return false;
-    };
-    if !Box::pin(process_kind(&mut work, &batch, &kinds, free_slots)).await {
-        return false;
+
+    async fn persist_and_clean_lifecycle(&mut self) -> bool {
+        let Some(kinds) = persist_and_clean_lifecycle(&mut self.work, &self.batch).await else {
+            return false;
+        };
+        if self.work.shutdown.cutoff.is_some()
+            || kinds.unsupported
+            || (kinds.available && kinds.assigned)
+        {
+            return false;
+        }
+        let Some(free_slots) = current_free_slots(&mut self.work).await else {
+            return false;
+        };
+        self.kinds = Some(kinds);
+        self.free_slots = Some(free_slots);
+        true
     }
-    acknowledge_batch(work, batch.message_id()).await
+
+    async fn process_offers(&mut self) -> KindOutcome {
+        let (Some(kinds), Some(free_slots)) = (&self.kinds, self.free_slots) else {
+            return KindOutcome::Stopped;
+        };
+        Box::pin(process_kind(&mut self.work, &self.batch, kinds, free_slots)).await
+    }
+
+    async fn acknowledge_message(&mut self, message_id: i64) -> bool {
+        acknowledge_batch(&mut self.work, message_id).await
+    }
 }
 
 async fn current_free_slots(work: &mut BatchWork<'_>) -> Option<u32> {
@@ -172,13 +153,23 @@ async fn process_kind(
     batch: &ParsedTrustBatch,
     kinds: &BatchKinds,
     free_slots: u32,
-) -> bool {
+) -> KindOutcome {
     if kinds.available {
-        Box::pin(process_available(work, batch, free_slots)).await
+        match Box::pin(process_available(work, batch, free_slots)).await {
+            available::AvailableBatchOutcome::Ready => KindOutcome::Ready,
+            available::AvailableBatchOutcome::Held if work.shutdown.cutoff.is_some() => {
+                KindOutcome::Stopped
+            }
+            available::AvailableBatchOutcome::Held => KindOutcome::AvailableOffersHeld,
+        }
     } else if kinds.assigned {
-        Box::pin(process_assigned(work, batch, free_slots)).await
+        if Box::pin(process_assigned(work, batch, free_slots)).await {
+            KindOutcome::Ready
+        } else {
+            KindOutcome::Stopped
+        }
     } else {
-        true
+        KindOutcome::Ready
     }
 }
 
@@ -186,7 +177,7 @@ async fn process_available(
     work: &mut BatchWork<'_>,
     batch: &ParsedTrustBatch,
     free_slots: u32,
-) -> bool {
+) -> available::AvailableBatchOutcome {
     observe_cutoff(
         work.context,
         work.journal,
@@ -195,7 +186,7 @@ async fn process_available(
     )
     .await;
     if work.shutdown.cutoff.is_some() {
-        return false;
+        return available::AvailableBatchOutcome::Held;
     }
     let stop_cutoff = *work.shutdown.cutoff;
     let trust_shutdown = work.shutdown.receiver.clone();
@@ -221,10 +212,10 @@ async fn process_available(
     )
     .await;
     let Some(Some(offers)) = offers else {
-        return false;
+        return available::AvailableBatchOutcome::Held;
     };
     if work.shutdown.cutoff.is_some() {
-        return false;
+        return available::AvailableBatchOutcome::Held;
     }
     Box::pin(available::process_all(
         available::AvailableWork {
@@ -299,7 +290,7 @@ async fn process_assigned(
     .await
 }
 
-async fn acknowledge_batch(mut work: BatchWork<'_>, message_id: i64) -> bool {
+async fn acknowledge_batch(work: &mut BatchWork<'_>, message_id: i64) -> bool {
     observe_cutoff(
         work.context,
         work.journal,

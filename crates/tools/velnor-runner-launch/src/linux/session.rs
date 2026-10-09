@@ -16,6 +16,9 @@ use velnor_runner_launch_slot::holds;
 
 use super::{LinuxLaunchContext, LinuxLaunchCredentials, deadline_after};
 
+#[cfg(test)]
+#[path = "session/ack_guard_tests.rs"]
+mod ack_guard_tests;
 mod create;
 mod cutoff;
 mod deadline_transport;
@@ -46,6 +49,12 @@ pub(super) struct ShutdownGate<'a> {
     pub(super) cutoff: &'a mut Option<Instant>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum SessionDriveOutcome {
+    Stopped,
+    AvailableOffersHeld,
+}
+
 pub(in crate::linux) use create::create_session_if_verified;
 
 pub(super) async fn drive_session(
@@ -56,12 +65,12 @@ pub(super) async fn drive_session(
     credentials: &LinuxLaunchCredentials,
     shutdown: &mut watch::Receiver<Option<Instant>>,
     cutoff: &mut Option<Instant>,
-) {
+) -> SessionDriveOutcome {
     if context.snapshot.runner_image_profile().is_none() {
-        return;
+        return SessionDriveOutcome::Stopped;
     }
     let Ok(docker) = velnor_runner_host::connect_unix_bound(&active.docker_binding) else {
-        return;
+        return SessionDriveOutcome::Stopped;
     };
     let mut cursor = 0_i64;
     let mut recovery_budget = offers::RecoveryBudget::default();
@@ -78,7 +87,9 @@ pub(super) async fn drive_session(
             };
             poll_until_delivery(&mut io, cursor).await
         };
-        let Some(poll) = poll else { return };
+        let Some(poll) = poll else {
+            return SessionDriveOutcome::Stopped;
+        };
         match poll {
             PollWithTrust::Empty => {
                 if !process_empty_poll(RecoveryPollWork {
@@ -94,12 +105,12 @@ pub(super) async fn drive_session(
                 })
                 .await
                 {
-                    return;
+                    return SessionDriveOutcome::Stopped;
                 }
             }
             PollWithTrust::Batch(batch) => {
                 cursor = batch.message_id();
-                if !process_delivered_batch(
+                let batch_outcome = process_delivered_batch(
                     RecoveryPollWork {
                         context,
                         journal,
@@ -113,12 +124,20 @@ pub(super) async fn drive_session(
                     },
                     batch,
                 )
-                .await
-                {
-                    return;
+                .await;
+                if let Some(outcome) = session_stop_after_batch(batch_outcome) {
+                    return outcome;
                 }
             }
         }
+    }
+}
+
+fn session_stop_after_batch(outcome: offers::BatchOutcome) -> Option<SessionDriveOutcome> {
+    match outcome {
+        offers::BatchOutcome::Advanced => None,
+        offers::BatchOutcome::Stopped => Some(SessionDriveOutcome::Stopped),
+        offers::BatchOutcome::AvailableOffersHeld => Some(SessionDriveOutcome::AvailableOffersHeld),
     }
 }
 
