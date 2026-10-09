@@ -48,6 +48,8 @@ fn preseed_manifest_verify_pins_target_and_digest() -> Result<(), RenderError> {
 fn preseed_verify_script_rejects_tampered_payload() -> Result<(), RenderError> {
     use std::process::Command;
     let script = preseed_manifest_verify_script(TARGET);
+    let path = crate::required_tool_path::with_required_tool_path(&[])
+        .map_err(|error| RenderError::InvalidWorkflow(format!("test_path:{error}")))?;
     let root = std::env::temp_dir().join(format!("velnor-preseed-verify-{}", std::process::id()));
     let dir = root.join("velnor/preseed");
     std::fs::create_dir_all(&dir)
@@ -65,6 +67,7 @@ fn preseed_verify_script_rejects_tampered_payload() -> Result<(), RenderError> {
         // below proves inherited shell state is never parsed.
         Command::new("sh")
             .args(["-c", &script])
+            .env("PATH", &path)
             .env("RUNNER_TEMP", &root)
             .env("GITHUB_SHA", "f".repeat(40))
             .env(
@@ -90,6 +93,7 @@ fn preseed_verify_script_rejects_tampered_payload() -> Result<(), RenderError> {
         // empty file and the fallback would parse this ambient line).
         Command::new("sh")
             .args(["-c", &script])
+            .env("PATH", &path)
             .env("RUNNER_TEMP", &root)
             .env("GITHUB_SHA", "f".repeat(40))
             .env(

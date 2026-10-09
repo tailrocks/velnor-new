@@ -12,7 +12,7 @@ use std::process::Command as StdCommand;
 
 use tempfile::TempDir;
 
-use crate::impl_common::TestResult;
+use crate::impl_common::{TestResult, test_path_with_sbin};
 
 /// Marker proving the child already carries writer env.
 const CHILD_ENV: &str = "VELNOR_TEST_PRESEED_CHILD";
@@ -36,9 +36,11 @@ fn fresh_binary_manifest_passes_shell_verifier() -> TestResult {
     let out = root.join("out").display().to_string();
     let target = "x86_64-unknown-linux-gnu";
     let commit = "c".repeat(40);
+    let test_path = test_path_with_sbin()?;
     let output = StdCommand::new(std::env::current_exe()?)
         .arg(TEST_PATH)
         .env(CHILD_ENV, "1")
+        .env("PATH", &test_path)
         .env("RUNNER_TEMP", &runner)
         .env("GITHUB_SHA", &commit)
         .env("VELNOR_PRESEED_BINARY", binary.display().to_string())
@@ -66,6 +68,7 @@ fn fresh_binary_manifest_passes_shell_verifier() -> TestResult {
     let run = || {
         StdCommand::new("sh")
             .args(["-c", &script])
+            .env("PATH", &test_path)
             .env("RUNNER_TEMP", &runner)
             .env("GITHUB_SHA", &commit)
             .status()

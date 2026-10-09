@@ -1,4 +1,5 @@
 use super::manifest;
+use super::required_tool_path::with_required_tool_path;
 use crate::schema2::product_release_test_pins::test_pins;
 use std::error::Error;
 use std::fs;
@@ -112,7 +113,7 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
             format!("{SOURCE_SHA}\n")
         );
         let calls = fs::read_to_string(scratch.0.join("gh-calls"))?;
-        assert!(calls.contains("release view v0.1.4"), "{calls}");
+        assert!(calls.contains("release view v0.1.5"), "{calls}");
         assert!(
             calls.contains("api repos/tailrocks/velnor-new/releases/123"),
             "{calls}"
@@ -127,12 +128,13 @@ fn create_candidate_manifest(root: &Path, case: Failure) -> Result<(), Box<dyn E
     let manifest_status = Command::new("bash")
         .args([
             "scripts/generator-release/create-release-manifest.sh",
-            "0.1.4",
+            "0.1.5",
             REPOSITORY,
             "1.98.1",
             "1.21.1",
         ])
         .current_dir(root)
+        .env("PATH", with_required_tool_path(&[])?)
         .env("GITHUB_REPOSITORY", REPOSITORY)
         .env("GITHUB_SHA", SOURCE_SHA)
         .status()?;
@@ -235,7 +237,7 @@ fn assert_publish_result(
             | Failure::TagMovedBeforePublish
     );
     if create_is_expected {
-        assert_eq!(fs::read_to_string(root.join("created-tag"))?, "v0.1.4\n");
+        assert_eq!(fs::read_to_string(root.join("created-tag"))?, "v0.1.5\n");
         assert_eq!(
             fs::read_to_string(root.join("asset-args"))?,
             expected_asset_args()
@@ -276,11 +278,7 @@ fn install_mock_gh(root: &Path) -> Result<(), Box<dyn Error>> {
 }
 
 fn path_with_mock_gh(root: &Path) -> Result<std::ffi::OsString, Box<dyn Error>> {
-    let mut paths = vec![root.join("mock-bin")];
-    paths.extend(std::env::split_paths(
-        &std::env::var_os("PATH").ok_or("missing PATH")?,
-    ));
-    Ok(std::env::join_paths(paths)?)
+    Ok(with_required_tool_path(&[root.join("mock-bin")])?)
 }
 
 fn preflight_mode(case: Failure) -> &'static str {

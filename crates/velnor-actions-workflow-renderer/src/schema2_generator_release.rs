@@ -1,6 +1,6 @@
 //! Generator release for all supported Linux and macOS `velnor-actions` assets.
 //!
-//! The next immutable release is `v0.1.4`. Attest jobs never receive
+//! The next immutable release is `v0.1.5`. Attest jobs never receive
 //! `contents: write`. Only publish does.
 
 use super::{ProductReleasePins, Schema2WorkflowRequest};
@@ -343,6 +343,10 @@ fn document(jobs: Vec<(String, Yaml)>) -> Yaml {
         ("jobs".to_owned(), Yaml::Map(jobs)),
     ])
 }
+
+#[cfg(test)]
+#[path = "../../test_support/required_tool_path.rs"]
+mod required_tool_path;
 
 #[cfg(test)]
 #[path = "schema2_generator_release_tests.rs"]

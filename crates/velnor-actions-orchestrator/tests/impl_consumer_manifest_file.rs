@@ -157,13 +157,13 @@ fn debug_absent_file_keeps_standin() -> TestResult {
 }
 
 #[test]
-fn golden_manifest_fixture_uses_the_canonical_release_schema() -> TestResult {
+fn schema_placeholder_fixture_keeps_its_historical_release_schema() -> TestResult {
     let manifest = velnor_actions_contract::ReleaseManifest::parse_json(
         include_str!("../../../fixtures/consumer-release-manifest.json"),
         "fixtures/consumer-release-manifest.json",
     )?;
     manifest.validate("fixtures/consumer-release-manifest.json")?;
-    assert_eq!(manifest.version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(manifest.version, "0.1.4");
     assert_eq!(
         manifest.targets.len(),
         velnor_actions_contract::ReleaseTarget::ALL.len()

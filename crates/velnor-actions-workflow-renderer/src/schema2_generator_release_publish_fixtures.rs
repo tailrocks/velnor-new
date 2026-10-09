@@ -1,6 +1,7 @@
 //! Publish-script fixture writers shared by release integration tests.
 
 use super::super::assets;
+use super::super::required_tool_path::with_required_tool_path;
 use super::{Failure, REPOSITORY, SOURCE_SHA, manifest};
 use std::error::Error;
 use std::fs;
@@ -49,7 +50,7 @@ pub(super) fn write_candidate_records(root: &Path, case: Failure) -> Result<(), 
         fs::write(
             directory.join(product.provenance),
             format!(
-                "{{\"schema\":1,\"version\":\"0.1.4\",\"repository\":\"{REPOSITORY}\",\"commit\":\"{SOURCE_SHA}\",\"target\":\"{}\",\"asset\":\"{}\",\"sha256\":\"{digest}\",\"toolchain\":{{\"rust\":\"1.98.1\",\"mr-boxington\":\"1.21.1\"}}}}\n",
+                "{{\"schema\":1,\"version\":\"0.1.5\",\"repository\":\"{REPOSITORY}\",\"commit\":\"{SOURCE_SHA}\",\"target\":\"{}\",\"asset\":\"{}\",\"sha256\":\"{digest}\",\"toolchain\":{{\"rust\":\"1.98.1\",\"mr-boxington\":\"1.21.1\"}}}}\n",
                 product.target.triple(),
                 product.binary
             ),
@@ -102,9 +103,9 @@ pub(super) fn release_json(
         let size = fs::metadata(&asset)?.len()
             + u64::from(draft && case == Failure::WrongDraftSize && index == 0);
         let url = if draft && case == Failure::WrongDraftUrl && index == 0 {
-            "https://github.com/untrusted/releases/download/v0.1.4/asset".to_owned()
+            "https://github.com/untrusted/releases/download/v0.1.5/asset".to_owned()
         } else {
-            format!("https://github.com/{REPOSITORY}/releases/download/v0.1.4/{name}")
+            format!("https://github.com/{REPOSITORY}/releases/download/v0.1.5/{name}")
         };
         rows.push(format!(
             "{{\"name\":\"{name}\",\"state\":\"uploaded\",\"browser_download_url\":\"{url}\",\"digest\":\"sha256:{digest}\",\"size\":{size}}}"
@@ -123,10 +124,10 @@ pub(super) fn release_json(
     {
         "https://github.com/tailrocks/velnor-new/releases/tag/untagged-c155089fcae36e2c5c68"
     } else {
-        "https://github.com/tailrocks/velnor-new/releases/tag/v0.1.4"
+        "https://github.com/tailrocks/velnor-new/releases/tag/v0.1.5"
     };
     Ok(format!(
-        "{{\"id\":{release_id},\"tag_name\":\"v0.1.4\",\"target_commitish\":\"{SOURCE_SHA}\",\"url\":\"https://api.github.com/repos/{REPOSITORY}/releases/{release_id}\",\"html_url\":\"{html_url}\",\"draft\":{draft},\"prerelease\":false,\"immutable\":{immutable},\"assets\":[{}]}}\n",
+        "{{\"id\":{release_id},\"tag_name\":\"v0.1.5\",\"target_commitish\":\"{SOURCE_SHA}\",\"url\":\"https://api.github.com/repos/{REPOSITORY}/releases/{release_id}\",\"html_url\":\"{html_url}\",\"draft\":{draft},\"prerelease\":false,\"immutable\":{immutable},\"assets\":[{}]}}\n",
         rows.join(","),
     ))
 }
@@ -152,7 +153,7 @@ pub(super) fn assert_draft_metadata_is_only_url_mismatch(
                 "123",
                 "--arg",
                 "tag",
-                "v0.1.4",
+                "v0.1.5",
                 "--arg",
                 "source",
                 SOURCE_SHA,
@@ -161,11 +162,12 @@ pub(super) fn assert_draft_metadata_is_only_url_mismatch(
                 "https://api.github.com/repos/tailrocks/velnor-new/releases/123",
                 "--arg",
                 "html_url",
-                "https://github.com/tailrocks/velnor-new/releases/tag/v0.1.4",
+                "https://github.com/tailrocks/velnor-new/releases/tag/v0.1.5",
                 predicate,
                 "draft-release.json",
             ])
             .current_dir(root)
+            .env("PATH", with_required_tool_path(&[])?)
             .output()?;
         assert_eq!(
             output.status.success(),
@@ -211,13 +213,14 @@ pub(super) fn assert_draft_asset_validation_passes(root: &Path) -> Result<(), Bo
             .join("\n")
     };
     let replay = format!(
-        "tag='v0.1.4'\nrelease_asset_paths=(\n{}\n)\nrelease_asset_names=(\n{}\n)\nexpected_release_asset_names=\"$(printf '%s\\n' \"${{release_asset_names[@]}}\" | jq -R . | jq -s .)\"\n{verifier}\nverify_release_assets draft-release.json\n",
+        "tag='v0.1.5'\nrelease_asset_paths=(\n{}\n)\nrelease_asset_names=(\n{}\n)\nexpected_release_asset_names=\"$(printf '%s\\n' \"${{release_asset_names[@]}}\" | jq -R . | jq -s .)\"\n{verifier}\nverify_release_assets draft-release.json\n",
         array(&paths),
         array(&names)
     );
     let output = Command::new("bash")
         .args(["-euo", "pipefail", "-c", &replay])
         .current_dir(root)
+        .env("PATH", with_required_tool_path(&[])?)
         .env("GITHUB_REPOSITORY", REPOSITORY)
         .output()?;
     assert!(
@@ -230,7 +233,10 @@ pub(super) fn assert_draft_asset_validation_passes(root: &Path) -> Result<(), Bo
 }
 
 pub(super) fn sha256(path: &Path) -> Result<String, Box<dyn Error>> {
-    let output = Command::new("sha256sum").arg(path).output()?;
+    let output = Command::new("sha256sum")
+        .arg(path)
+        .env("PATH", with_required_tool_path(&[])?)
+        .output()?;
     if !output.status.success() {
         return Err(format!("sha256sum failed for {}", path.display()).into());
     }
