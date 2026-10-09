@@ -14,6 +14,8 @@ import urllib.request
 
 
 MAX_DOWNLOAD = 128 * 1024 * 1024
+MAX_BOOTSTRAP_DOWNLOAD = 192 * 1024 * 1024
+MAX_BOOTSTRAP_EXECUTABLE_BYTES = 192 * 1024 * 1024
 MAX_SOURCE = 512 * 1024 * 1024
 MAX_FILES = 30000
 HOSTS = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu",
@@ -23,7 +25,7 @@ FIELDS = {"tool", "version", "source_commit", "source_tree", "upstream_base_comm
           "patch_url", "patch_sha256", "lockfile_sha256", "license_files"}
 OWNED_VERSION_PATTERN = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-(?:owned-[a-z0-9]+(?:-[a-z0-9]+)*|velnor\.[1-9][0-9]*)"
 PORTABLE_LICENSE_PATTERN = r"[A-Za-z0-9._/-]+"
-BASES = {"mise": ("jdx/mise", "96cca90d3e55519a47cffa0cb99baa4c3d3ecca3"),
+BASES = {"mise": ("jdx/mise", "6be3cbdc639a66c03651479428e4c5f60b00485f"),
          "mbx": ("jdx/mr-boxington", "a0a44c61ca6aaa8da41d59deeebdfc46fc9d3313")}
 BOOTSTRAP = ["rust@1.99.0"]
 PREFIX = ["--no-config", "--no-env", "--no-hooks", "exec", *BOOTSTRAP, "--"]
@@ -35,17 +37,17 @@ BUILD = {
             "--bin", "mbx", "--features", "owned-cache-transport"],
 }
 ABI = {"mise": "mise-owned-cargo-wrapper-v1", "mbx": None}
-OFFICIAL_MISE_VERSION = "2026.10.4"
-OFFICIAL_MISE_SOURCE_COMMIT = "96cca90d3e55519a47cffa0cb99baa4c3d3ecca3"
-OFFICIAL_MISE_SOURCE_TREE = "92dda3fb668211ebaa2cf4edd832a184526ee918"
-OFFICIAL_MISE_BASE = "https://github.com/jdx/mise/releases/download/v2026.10.4/mise-v2026.10.4-"
+OFFICIAL_MISE_VERSION = "2026.10.6"
+OFFICIAL_MISE_SOURCE_COMMIT = "6be3cbdc639a66c03651479428e4c5f60b00485f"
+OFFICIAL_MISE_SOURCE_TREE = "fb96c2f0fde04045796887b1b80ad80b3824d258"
+OFFICIAL_MISE_BASE = "https://github.com/jdx/mise/releases/download/v2026.10.6/mise-v2026.10.6-"
 OFFICIAL_MISE_PINS = {
-    "linux-x64": ("standalone", "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75",
-                  "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75"),
-    "linux-arm64.tar.gz": ("tar.gz", "8760841cdbf964ecf9902a50c94716c77185a99af7f8eb55c9c51ec73ecd8880",
-                           "9013ce1d7d9bbbf65254cda178562f5450c474a705907c18b77e6b678bb10041"),
-    "macos-arm64.tar.gz": ("tar.gz", "744ae45f9b7c2a443adfa61df48397930e88b13c541834b7bd22ca31d4dfcfcd",
-                           "5c530143fc750e8a98c9a36be8d361e5dd953fa0b004d58f7577783f7cf2ac24"),
+    "linux-x64": ("standalone", "3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366",
+                  "3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366"),
+    "linux-arm64.tar.gz": ("tar.gz", "60f0e34ea2088e822797393ed3d3b50d58dd9b45687006b31ac66ef68e99a2f4",
+                           "5f3187febbe9ff98e4c78b3596c7bbfde0e3ef8e4b1820494d03efd499de7b6e"),
+    "macos-arm64.tar.gz": ("tar.gz", "6c6a0b26b15b7dabec9fe61a56f53e1bf5dfa5246da9f59fa8028eef2ec238cb",
+                           "bbcea7b0f844d026424a4c8335357a15a2f5c9e9132c9408de990d9be6f26101"),
 }
 OFFICIAL_MISE_HOSTS = {"x86_64-unknown-linux-gnu": "linux-x64",
                       "aarch64-unknown-linux-gnu": "linux-arm64.tar.gz",
@@ -86,7 +88,7 @@ def digest(data):
 
 
 def recipe(tool):
-    return {"schema": 1, "bootstrap_mise": {"version": "2026.10.4", "assets": official_assets("mise")},
+    return {"schema": 1, "bootstrap_mise": {"version": OFFICIAL_MISE_VERSION, "assets": official_assets("mise")},
             "bootstrap_mbx": {"version": "1.21.1", "assets": official_assets("mbx")},
             "argv": PREFIX + BUILD[tool], "behavior_abi": ABI[tool],
             "source_admission": "git-tree-lock-license-base-patch-v1"}
@@ -207,10 +209,10 @@ class HttpsRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(request, fp, code, msg, headers, newurl)
 
 
-def fetch(url, sha):
+def fetch(url, sha, max_bytes=MAX_DOWNLOAD):
     with urllib.request.build_opener(HttpsRedirect()).open(url, timeout=120) as response:
-        data = response.read(MAX_DOWNLOAD + 1)
-    if len(data) > MAX_DOWNLOAD or digest(data) != sha:
+        data = response.read(max_bytes + 1)
+    if len(data) > max_bytes or digest(data) != sha:
         raise ValueError("source download size or SHA256 mismatch")
     return data
 

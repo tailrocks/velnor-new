@@ -6,12 +6,12 @@ fn pins() -> MisePinQualificationPins {
     MisePinQualificationPins {
         linux_x86_64_setup: MiseSetup {
             uses: format!("jdx/mise-action@{}", "a".repeat(40)),
-            version: "2026.10.5".to_owned(),
+            version: "2026.10.6".to_owned(),
             sha256: "b".repeat(64),
         },
         macos_x86_64_setup: MiseSetup {
             uses: format!("jdx/mise-action@{}", "a".repeat(40)),
-            version: "2026.10.5".to_owned(),
+            version: "2026.10.6".to_owned(),
             sha256: "c".repeat(64),
         },
     }
@@ -31,7 +31,7 @@ fn jobs_are_opt_in_exact_ref_read_only_and_no_publication() {
         assert!(rendered.contains("permissions:\n  contents: read"), "{id}");
         assert!(rendered.contains("ref: ${{ github.sha }}"), "{id}");
         assert!(rendered.contains("persist-credentials: \"false\""), "{id}");
-        assert!(rendered.contains("version: 2026.10.5"), "{id}");
+        assert!(rendered.contains("version: 2026.10.6"), "{id}");
         assert!(rendered.contains("install: \"false\""), "{id}");
         assert!(rendered.contains("env: \"false\""), "{id}");
         assert!(rendered.contains("cache: \"false\""), "{id}");
@@ -58,7 +58,7 @@ fn jobs_are_opt_in_exact_ref_read_only_and_no_publication() {
 #[test]
 fn mismatched_candidate_versions_fail_closed() {
     let mut pins = pins();
-    pins.macos_x86_64_setup.version = "2026.10.6".to_owned();
+    pins.macos_x86_64_setup.version = "2026.10.5".to_owned();
     assert!(jobs(&pins).is_err_and(|error| {
         error
             .to_string()
