@@ -25,6 +25,8 @@ pub(crate) struct Run {
 pub(crate) struct Fixture {
     /// Root directory of the fixture tree.
     pub(crate) dir: PathBuf,
+    /// Exact inventory timestamp written when the fixture was built.
+    pub(crate) checked_at: String,
 }
 
 /// Days since the Unix epoch, plus `offset`, as `YYYY-MM-DD`.
@@ -229,7 +231,8 @@ pub(crate) fn passing(prefix: &str) -> Result<Fixture, Box<dyn Error>> {
     ] {
         write(&dir, rel, body)?;
     }
-    let inventory = include_str!("p12_inventory.json").replace("{CHECKED}", &days_iso(0)?);
+    let checked_at = timestamp_iso(0)?;
+    let inventory = include_str!("p12_inventory.json").replace("{CHECKED}", &checked_at);
     write(&dir, ".velnor/freshness-inventory.json", &inventory)?;
     write(&dir, "deny.toml", "[advisories]\nignore = []\n")?;
     write(
@@ -237,7 +240,7 @@ pub(crate) fn passing(prefix: &str) -> Result<Fixture, Box<dyn Error>> {
         ".cargo/mutants.toml",
         "# pinned: cargo-mutants = \"27.1.0\"\nexamine_globs = [\n    \"crates/aaa/Cargo.toml\",\n]\n",
     )?;
-    Ok(Fixture { dir })
+    Ok(Fixture { dir, checked_at })
 }
 
 /// Add an excluded nested workspace with a dependency unique to its lock.

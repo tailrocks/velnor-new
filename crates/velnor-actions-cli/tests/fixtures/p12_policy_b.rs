@@ -82,7 +82,7 @@ fn extra_tool_row_fails() -> Result<(), Box<dyn Error>> {
 #[test]
 fn future_evidence_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-future-evidence")?;
-    let today = harness::days_iso(0)?;
+    let today = &fixture.checked_at;
     let tomorrow = harness::days_iso(1)?;
     harness::mutate(
         &fixture.dir,
@@ -98,9 +98,9 @@ fn future_evidence_fails() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn inventory_and_row_timestamps_reject_non_string_values() -> Result<(), Box<dyn Error>> {
-    let top_anchor = format!("\"checked_at\":\"{}\"", harness::days_iso(0)?);
     for invalid in ["123", "{}", "null"] {
         let fixture = harness::passing(&format!("p12-top-timestamp-{invalid}"))?;
+        let top_anchor = format!("\"checked_at\":\"{}\"", fixture.checked_at);
         harness::mutate(
             &fixture.dir,
             INVENTORY,
@@ -165,7 +165,7 @@ fn present_non_array_exception_collections_fail_shape() -> Result<(), Box<dyn Er
 #[test]
 fn future_clock_timestamp_inside_skew_grace_passes() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-future-clock-grace")?;
-    let today = harness::days_iso(0)?;
+    let today = &fixture.checked_at;
     let future = harness::timestamp_iso(5 * 60)?;
     harness::mutate(
         &fixture.dir,
@@ -182,7 +182,7 @@ fn future_clock_timestamp_inside_skew_grace_passes() -> Result<(), Box<dyn Error
 #[test]
 fn future_clock_timestamp_outside_skew_grace_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-future-clock-outside-grace")?;
-    let today = harness::days_iso(0)?;
+    let today = &fixture.checked_at;
     let future = harness::timestamp_iso(7 * 60)?;
     harness::mutate(
         &fixture.dir,
