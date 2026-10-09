@@ -279,6 +279,9 @@ pub(super) fn relative_paths(root: &Path, paths: &[PathBuf]) -> Outcome<Vec<Stri
 fn cargo_targets_register_every_test_bearing_source() -> Outcome<()> {
     let root = repo_root().canonicalize()?;
     let workspaces = cargo_config::workspace_plans(&root)?;
+    let runner_root = root.join("crates/velnor-runner").canonicalize()?;
+    let misplaced_target = runner_root.join("target/velnor-cli-nested-cargo");
+    let misplaced_target_existed = path_exists(&misplaced_target)?;
     let (registered, orphans) = registration_audit(&workspaces)?;
     let nested_target = crate::impl_cli_tmp::nested_target::nested_cargo_target_dir()?;
     assert!(
@@ -286,7 +289,6 @@ fn cargo_targets_register_every_test_bearing_source() -> Outcome<()> {
         "nested Cargo outputs are missing from {}",
         nested_target.display()
     );
-    let runner_root = root.join("crates/velnor-runner").canonicalize()?;
     assert!(
         registered.contains(
             &runner_root
@@ -295,9 +297,10 @@ fn cargo_targets_register_every_test_bearing_source() -> Outcome<()> {
         ),
         "runner workspace integration test source was not registered"
     );
-    assert!(
-        !runner_root.join("target").exists(),
-        "runner registration must use the active shared Cargo target instead of creating a nested workspace target"
+    assert_eq!(
+        path_exists(&misplaced_target)?,
+        misplaced_target_existed,
+        "runner registration changed a nested workspace target instead of using the active shared Cargo target"
     );
     for expected in [
         "crates/velnor-actions-orchestrator/tests/impl_generator_seed.rs",
@@ -315,4 +318,12 @@ fn cargo_targets_register_every_test_bearing_source() -> Outcome<()> {
         relative_paths(&root, &orphans)?
     );
     Ok(())
+}
+
+fn path_exists(path: &Path) -> Outcome<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
 }
