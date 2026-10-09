@@ -25,6 +25,8 @@ pub(crate) struct Run {
 pub(crate) struct Fixture {
     /// Root directory of the fixture tree.
     pub(crate) dir: PathBuf,
+    /// Exact inventory timestamp written when the fixture was built.
+    pub(crate) checked_at: String,
 }
 
 /// Days since the Unix epoch, plus `offset`, as `YYYY-MM-DD`.
@@ -95,9 +97,13 @@ pub(crate) fn mutate(dir: &Path, rel: &str, old: &str, new: &str) -> Result<(), 
 
 /// Run `check-freshness.sh --root dir` plus `extra` args.
 pub(crate) fn run_script(dir: &Path, extra: &[&str]) -> Result<Run, Box<dyn Error>> {
+    let _target_lock = crate::impl_cli_tmp::nested_target::lock_nested_cargo_target()?;
     let script = crate::impl_repo_policy::repo_root().join("scripts/check-freshness.sh");
     let mut command = Command::new("bash");
-    command.arg(script).arg("--root").arg(dir).args(extra);
+    command.arg(script).arg("--root").arg(dir).args(extra).env(
+        "CARGO_TARGET_DIR",
+        crate::impl_cli_tmp::nested_target::nested_cargo_target_dir()?,
+    );
     let output = command.output()?;
     Ok(Run {
         code: output.status.code().unwrap_or(-1),
@@ -108,6 +114,7 @@ pub(crate) fn run_script(dir: &Path, extra: &[&str]) -> Result<Run, Box<dyn Erro
 
 #[test]
 fn relative_root_is_resolved_before_the_script_changes_directory() -> Result<(), Box<dyn Error>> {
+    let _target_lock = crate::impl_cli_tmp::nested_target::lock_nested_cargo_target()?;
     let fixture = passing("p12-relative-root")?;
     let caller_dir = fixture.dir.parent().ok_or("fixture parent missing")?;
     let relative_root = fixture.dir.file_name().ok_or("fixture name missing")?;
@@ -116,6 +123,10 @@ fn relative_root_is_resolved_before_the_script_changes_directory() -> Result<(),
         .arg(script)
         .arg("--root")
         .arg(relative_root)
+        .env(
+            "CARGO_TARGET_DIR",
+            crate::impl_cli_tmp::nested_target::nested_cargo_target_dir()?,
+        )
         .env("CDPATH", caller_dir)
         .current_dir(caller_dir)
         .output()?;
@@ -125,6 +136,21 @@ fn relative_root_is_resolved_before_the_script_changes_directory() -> Result<(),
         stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
     };
     assert_clean(&run);
+    cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
+fn script_builds_cli_in_shared_nested_target() -> Result<(), Box<dyn Error>> {
+    let fixture = passing("p12-nested-target")?;
+    let nested_target = crate::impl_cli_tmp::nested_target::nested_cargo_target_dir()?;
+    let run = run_script(&fixture.dir, &[])?;
+    assert_clean(&run);
+    assert!(
+        nested_target.join("debug/velnor-actions").is_file(),
+        "check-freshness Cargo output was not written under {}",
+        nested_target.display()
+    );
     cleanup(&fixture);
     Ok(())
 }
@@ -205,7 +231,8 @@ pub(crate) fn passing(prefix: &str) -> Result<Fixture, Box<dyn Error>> {
     ] {
         write(&dir, rel, body)?;
     }
-    let inventory = include_str!("p12_inventory.json").replace("{CHECKED}", &days_iso(0)?);
+    let checked_at = timestamp_iso(0)?;
+    let inventory = include_str!("p12_inventory.json").replace("{CHECKED}", &checked_at);
     write(&dir, ".velnor/freshness-inventory.json", &inventory)?;
     write(&dir, "deny.toml", "[advisories]\nignore = []\n")?;
     write(
@@ -213,7 +240,7 @@ pub(crate) fn passing(prefix: &str) -> Result<Fixture, Box<dyn Error>> {
         ".cargo/mutants.toml",
         "# pinned: cargo-mutants = \"27.1.0\"\nexamine_globs = [\n    \"crates/aaa/Cargo.toml\",\n]\n",
     )?;
-    Ok(Fixture { dir })
+    Ok(Fixture { dir, checked_at })
 }
 
 /// Add an excluded nested workspace with a dependency unique to its lock.

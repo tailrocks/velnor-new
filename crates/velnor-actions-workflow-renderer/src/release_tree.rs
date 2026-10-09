@@ -15,7 +15,7 @@ use crate::{
     release_spec::ReleaseTriggers,
     render::RenderedFile,
     steps,
-    yaml::{Yaml, render_yaml},
+    yaml::Yaml,
 };
 
 /// Generated release workflow path inside the repository.
@@ -93,8 +93,11 @@ pub fn render_release_workflow(
     };
     check_release_jobs(spec, &binding)?;
     let document = release_document(spec)?;
-    let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
-    crate::workflow_size::check_workflow_size(RELEASE_WORKFLOW_PATH, &text)?;
+    let text = crate::render::fallback::render_checked_workflow(
+        RELEASE_WORKFLOW_PATH,
+        &document,
+        &ctx.generator_version,
+    )?;
     steps::scan_for_private_subcommands(&text)?;
     Ok(text)
 }

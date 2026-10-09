@@ -6,6 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 autotests = false
 
+[features]
+test-render-capture = []
+
 [dependencies]
 velnor-actions-contract = { version = "=0.1.4", path = "../velnor-actions-contract" }
 

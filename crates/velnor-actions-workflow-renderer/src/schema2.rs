@@ -8,11 +8,10 @@ use velnor_actions_contract::{
 };
 
 use crate::RenderError;
-use crate::marker::with_marker;
 use crate::render::RenderedFile;
 use crate::runs_on::runs_on_yaml;
 use crate::setup::MiseSetup;
-use crate::yaml::{Yaml, render_yaml};
+use crate::yaml::Yaml;
 
 #[cfg(test)]
 #[path = "../../test_support/git_fixture.rs"]
@@ -214,8 +213,7 @@ pub fn render_schema2_workflows(
 }
 
 fn file(path: &str, version: &str, body: &Yaml) -> Result<RenderedFile, RenderError> {
-    let bytes = with_marker(version, &render_yaml(body))?;
-    crate::workflow_size::check_workflow_size(path, &bytes)?;
+    let bytes = crate::render::fallback::render_checked_workflow(path, body, version)?;
     Ok(RenderedFile {
         path: path.to_owned(),
         bytes,
