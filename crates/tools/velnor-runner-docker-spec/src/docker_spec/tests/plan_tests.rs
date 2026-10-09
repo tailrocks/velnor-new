@@ -187,7 +187,6 @@ fn official_runner_plan_keeps_jit_payload_out_of_docker_configuration() -> Resul
             "/home/runner/config.sh",
         ]
     );
-    assert_eq!(plan.security_opts, ["apparmor=velnor-runner".to_owned()]);
     assert_eq!(plan.group_add, ["2375".to_owned()]);
     let bootstrap = &plan.cmd[2];
     assert!(bootstrap.contains("[ \"$ready\" -eq 1 ]"));
@@ -231,5 +230,13 @@ fn official_runner_plan_keeps_jit_payload_out_of_docker_configuration() -> Resul
     let mut escaping_mount = runner_plan_for_profile("worker_a", &profile)?;
     escaping_mount.image_mounts[0].subpath = "home/runner/../../etc".to_owned();
     assert_eq!(audit_plan(&escaping_mount), Err(HostError::ForbiddenMount));
+    Ok(())
+}
+
+#[test]
+fn official_runner_plan_attaches_only_its_reviewed_apparmor_profile() -> Result<(), HostError> {
+    let profile = resolve_runner_profile("ubuntu-24.04-amd64", "ubuntu-24.04-scale-set")?;
+    let plan = runner_plan_for_profile("worker_a", &profile)?;
+    assert_eq!(plan.security_opts, ["apparmor=velnor-runner".to_owned()]);
     Ok(())
 }

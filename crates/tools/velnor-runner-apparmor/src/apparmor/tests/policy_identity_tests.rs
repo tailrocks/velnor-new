@@ -13,7 +13,7 @@ fn admission_requires_an_approved_identity() {
 fn wrong_policy_hash_fails_closed() {
     let wrong = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
     let mut records = matching_records();
-    records[2].raw_sha256 = Some(wrong.to_owned());
+    records[0].raw_sha256 = Some(wrong.to_owned());
     assert_eq!(
         verify_observed_profiles(POLICY_SHA256, Some(&enforcing_profiles()), Some(&records)),
         Err(AdmissionFailure::WrongHash)
@@ -30,28 +30,16 @@ fn malformed_or_unavailable_policy_hash_fails_closed() {
         verify_observed_profiles(
             POLICY_SHA256,
             Some(&enforcing_profiles()),
-            Some(&[
-                ProfileRecord {
-                    directory: "velnor-runner.1".to_owned(),
-                    name: Some("velnor-runner".to_owned()),
-                    raw_sha256: Some(String::new()),
-                },
-                ProfileRecord {
-                    directory: "velnor-worker.2".to_owned(),
-                    name: Some("velnor-worker".to_owned()),
-                    raw_sha256: Some(POLICY_SHA256.to_owned()),
-                },
-                ProfileRecord {
-                    directory: "velnor-job.3".to_owned(),
-                    name: Some("velnor-job".to_owned()),
-                    raw_sha256: Some(POLICY_SHA256.to_owned()),
-                },
-            ]),
+            Some(&[ProfileRecord {
+                directory: "velnor-runner.1".to_owned(),
+                name: Some("velnor-runner".to_owned()),
+                raw_sha256: Some(String::new()),
+            },]),
         ),
         Err(AdmissionFailure::MalformedHash)
     );
     let mut unreadable = matching_records();
-    unreadable[1].raw_sha256 = None;
+    unreadable[0].raw_sha256 = None;
     assert_eq!(
         verify_observed_profiles(
             POLICY_SHA256,
@@ -77,8 +65,8 @@ fn missing_duplicate_and_unknown_policy_hashes_fail_closed() {
 
     let mut duplicate = matching_records();
     duplicate.push(ProfileRecord {
-        directory: "velnor-job.999".to_owned(),
-        name: Some("velnor-job".to_owned()),
+        directory: "velnor-runner.999".to_owned(),
+        name: Some("velnor-runner".to_owned()),
         raw_sha256: Some(POLICY_SHA256.to_owned()),
     });
     assert_eq!(
@@ -88,8 +76,8 @@ fn missing_duplicate_and_unknown_policy_hashes_fail_closed() {
 
     let mut unknown = matching_records();
     unknown.push(ProfileRecord {
-        directory: "velnor-job..extra.1".to_owned(),
-        name: Some("velnor-job//extra".to_owned()),
+        directory: "velnor-other.1".to_owned(),
+        name: Some("velnor-other".to_owned()),
         raw_sha256: Some(POLICY_SHA256.to_owned()),
     });
     assert_eq!(
@@ -133,7 +121,7 @@ fn mismatched_or_unqualified_profile_directory_fails_closed() {
     );
 
     let mut unnumbered = matching_records();
-    unnumbered[1].directory = "velnor-worker".to_owned();
+    unnumbered[0].directory = "velnor-runner".to_owned();
     assert_eq!(
         verify_observed_profiles(
             POLICY_SHA256,
@@ -154,7 +142,7 @@ fn mismatched_and_unknown_authoritative_names_fail_closed() {
             Some(&enforcing_profiles()),
             Some(&mismatched),
         ),
-        Err(AdmissionFailure::MismatchedDirectory)
+        Err(AdmissionFailure::UnknownProfile)
     );
 
     let mut unknown = matching_records();

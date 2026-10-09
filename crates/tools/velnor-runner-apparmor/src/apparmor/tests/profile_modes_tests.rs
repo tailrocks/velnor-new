@@ -7,9 +7,9 @@ fn missing_profile_fails_closed() {
         verify_observed_profiles(POLICY_SHA256, Some(""), Some(&matching_records())),
         Err(AdmissionFailure::Missing)
     );
-    let profiles = "velnor-runner (enforce)\nvelnor-worker (enforce)\n";
+    let profiles = "velnor-runner (enforce)\n";
     assert_eq!(
-        verify_observed_profiles(POLICY_SHA256, Some(profiles), Some(&matching_records()),),
+        verify_observed_profiles(POLICY_SHA256, Some(profiles), Some(&[]),),
         Err(AdmissionFailure::Missing)
     );
 }
@@ -17,7 +17,7 @@ fn missing_profile_fails_closed() {
 #[test]
 fn complain_profile_fails_closed() {
     let profiles =
-        enforcing_profiles().replace("velnor-worker (enforce)", "velnor-worker (complain)");
+        enforcing_profiles().replace("velnor-runner (enforce)", "velnor-runner (complain)");
     assert_eq!(
         verify_observed_profiles(POLICY_SHA256, Some(&profiles), Some(&matching_records())),
         Err(AdmissionFailure::NotEnforcing)
@@ -61,7 +61,7 @@ fn unknown_and_child_profiles_fail_closed() {
         verify_observed_profiles(
             POLICY_SHA256,
             Some(&format!(
-                "{}velnor-worker//unexpected (enforce)\n",
+                "{}velnor-runner//unexpected (enforce)\n",
                 enforcing_profiles()
             )),
             Some(&matching_records()),
