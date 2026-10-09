@@ -3,11 +3,13 @@
 use std::time::Instant;
 
 use tokio::sync::watch;
+use tokio::time::{Instant as TokioInstant, timeout_at};
 use velnor_runner_github::VerifiedPoolSessionAdmin;
 use velnor_runner_github::policy::PoolRegistrationScope;
-use velnor_runner_host::BoundedDiscoveryTransport;
+use velnor_runner_host::{BoundedDiscoveryTransport, observe_docker_daemon_binding_until};
 use velnor_runner_journal::journal::{
-    Journal, ReplayRoute, ScaleSetPopulationSnapshot, ScaleSetSessionClaim, ScaleSetSessionIdentity,
+    Journal, JournalDockerDaemonBinding, ReplayRoute, ScaleSetPopulationSnapshot,
+    ScaleSetSessionClaim, ScaleSetSessionIdentity,
 };
 
 use crate::linux::{LinuxAdmissionState, LinuxLaunchContext};
@@ -53,6 +55,25 @@ async fn create_verified_session(
     if gate.cutoff.is_some() {
         return Err(LinuxAdmissionState::ShutdownBeforePreflight);
     }
+    let docker_deadline = Instant::now()
+        .checked_add(context.drain_timeout())
+        .unwrap_or_else(Instant::now);
+    let docker_deadline = TokioInstant::from_std(docker_deadline);
+    let docker_binding = timeout_at(
+        docker_deadline,
+        observe_docker_daemon_binding_until(&context.docker_endpoint, docker_deadline),
+    )
+    .await
+    .ok()
+    .and_then(Result::ok)
+    .ok_or(LinuxAdmissionState::DockerEngineUnavailable)?;
+    let journal_binding =
+        JournalDockerDaemonBinding::new(docker_binding.endpoint(), docker_binding.engine_id())
+            .map_err(|_| LinuxAdmissionState::DockerEngineUnavailable)?;
+    observe_cutoff(context, journal, gate.receiver, gate.cutoff).await;
+    if gate.cutoff.is_some() {
+        return Err(LinuxAdmissionState::ShutdownBeforePreflight);
+    }
     let (identity, intent_id) =
         reserve_session_intent(context, journal, &binding, &owner, &repository, &mut gate).await?;
     let (admin, session) = dispatch_create(context, journal, admin, &owner, &mut gate).await?;
@@ -87,6 +108,8 @@ async fn create_verified_session(
     }
     Ok(ActiveSession {
         binding,
+        docker_binding,
+        journal_binding,
         identity,
         intent_id,
         protocol: std::sync::Arc::new(std::sync::Mutex::new(Protocol {

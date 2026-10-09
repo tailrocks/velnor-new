@@ -35,6 +35,8 @@ pub enum LinuxAdmissionState {
     CredentialsUnavailable,
     /// A bounded preflight timed out or its transport/storage returned an error.
     PoolPreflightUnavailable,
+    /// The configured Docker endpoint did not yield a bounded logical Engine identity.
+    DockerEngineUnavailable,
     /// The source reports incomplete but non-contradictory policy evidence.
     PoolUnknown(admission::PolicyGap),
     /// The source reports a mismatch with the immutable configured policy.
@@ -268,7 +270,7 @@ pub async fn run_linux_daemon(
         .await);
     }
     if let Some(active) = startup.active_session.as_mut() {
-        session::close_if_quiescent(&context, &journal, active, deadline).await;
+        session::close_if_quiescent(&journal, active, deadline).await;
     }
     shutdown::reconcile_shutdown(&context, &journal, &diagnostics, admission, deadline).await
 }

@@ -7,8 +7,8 @@ use tokio::time::{Instant as TokioInstant, timeout_at};
 use velnor_runner_github::policy::PollWithTrust;
 use velnor_runner_github::policy::PoolBinding;
 use velnor_runner_github::{RefreshGate, SessionCloseOutcome};
-use velnor_runner_host::connect_unix;
-use velnor_runner_host::worker::{DiagnosticsStore, list_owned_docker_resources_until};
+use velnor_runner_host::DockerDaemonBinding;
+use velnor_runner_host::worker::{DiagnosticsStore, list_owned_docker_resources_bound_until};
 use velnor_runner_journal::journal::{
     IntentState, Journal, LaunchEffectState, ScaleSetSessionCloseClaim, ScaleSetSessionIdentity,
 };
@@ -34,6 +34,8 @@ pub(in crate::linux::session) use protocol::{Protocol, protocol_read};
 
 pub(super) struct ActiveSession {
     binding: PoolBinding,
+    docker_binding: DockerDaemonBinding,
+    journal_binding: velnor_runner_journal::journal::JournalDockerDaemonBinding,
     identity: ScaleSetSessionIdentity,
     intent_id: i64,
     protocol: std::sync::Arc<std::sync::Mutex<Protocol>>,
@@ -58,7 +60,7 @@ pub(super) async fn drive_session(
     if context.snapshot.runner_image_profile().is_none() {
         return;
     }
-    let Ok(docker) = connect_unix(&context.docker_endpoint) else {
+    let Ok(docker) = velnor_runner_host::connect_unix_bound(&active.docker_binding) else {
         return;
     };
     let mut cursor = 0_i64;
@@ -79,8 +81,7 @@ pub(super) async fn drive_session(
         match poll {
             PollWithTrust::Empty => {
                 if cutoff.is_some()
-                    && close_after_cutoff(context, journal, diagnostics, active, cutoff.as_ref())
-                        .await
+                    && close_after_cutoff(journal, diagnostics, active, cutoff.as_ref()).await
                 {
                     return;
                 }
@@ -115,8 +116,7 @@ pub(super) async fn drive_session(
                     return;
                 }
                 if cutoff.is_some()
-                    && close_after_cutoff(context, journal, diagnostics, active, cutoff.as_ref())
-                        .await
+                    && close_after_cutoff(journal, diagnostics, active, cutoff.as_ref()).await
                 {
                     return;
                 }
@@ -174,24 +174,27 @@ async fn poll_once(
 }
 
 async fn close_after_cutoff(
-    context: &LinuxLaunchContext,
     journal: &Journal,
     diagnostics: &DiagnosticsStore,
     active: &mut ActiveSession,
     cutoff: Option<&Instant>,
 ) -> bool {
     let deadline = cutoff.copied().unwrap_or_else(Instant::now);
-    if super::shutdown::cleanup_terminal_workers(context, journal, diagnostics, deadline)
-        .await
-        .is_err()
+    if super::shutdown::cleanup_terminal_workers(
+        journal,
+        diagnostics,
+        &active.docker_binding,
+        deadline,
+    )
+    .await
+    .is_err()
     {
         return false;
     }
-    close_if_quiescent(context, journal, active, deadline).await
+    close_if_quiescent(journal, active, deadline).await
 }
 
 pub(super) async fn close_if_quiescent(
-    context: &LinuxLaunchContext,
     journal: &Journal,
     active: &mut ActiveSession,
     deadline: Instant,
@@ -217,7 +220,7 @@ pub(super) async fn close_if_quiescent(
         return false;
     }
     let Ok(resources) =
-        list_owned_docker_resources_until(&context.docker_endpoint, tokio_deadline).await
+        list_owned_docker_resources_bound_until(&active.docker_binding, tokio_deadline).await
     else {
         return false;
     };

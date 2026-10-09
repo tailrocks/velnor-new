@@ -1,12 +1,82 @@
 use std::collections::BTreeMap;
+use std::num::NonZeroU32;
+use std::time::Duration;
 
+use tokio::time::Instant as TokioInstant;
 use velnor_runner_host::worker::{OwnedDockerResource, OwnedDockerResourceKind};
 use velnor_runner_host::{IntentRow, IntentState};
-use velnor_runner_journal::journal::{LaunchEffectState, RunnerStartIntent};
+use velnor_runner_journal::journal::{
+    BoundCapacityClaim, CapacityClaim, Journal, JournalDockerDaemonBinding, LaunchEffectState,
+    ReplayRoute, RunnerStartIntent, ScopedLaunchIdentity,
+};
 
-use super::inventory_matches_rows;
+use super::{held_rows_bound_to, inventory_matches_rows};
+use crate::launch::harness::Scratch;
 
 const WORKER: &str = "worker-a";
+
+fn route() -> ReplayRoute<'static> {
+    ReplayRoute {
+        destination: "https://api.github.com",
+        registration_scope: "repository",
+        owner: "acme",
+        repository: "widget",
+        runner_group_id: 7,
+        runner_group_name: "private",
+        scale_set_id: 9,
+        scale_set_name: "ubuntu-26.04-scale-set",
+    }
+}
+
+#[tokio::test]
+async fn launch_inventory_requires_every_held_row_to_match_the_observed_engine()
+-> Result<(), String> {
+    let scratch =
+        Scratch::new("linux-inventory-engine-binding").map_err(|error| error.to_string())?;
+    let journal = Journal::open(&scratch.file())
+        .await
+        .map_err(|error| error.to_string())?;
+    let expected = JournalDockerDaemonBinding::new("/run/docker.sock", "engine-a")
+        .map_err(|error| error.to_string())?;
+    let replacement = JournalDockerDaemonBinding::new("/run/docker.sock", "engine-b")
+        .map_err(|error| error.to_string())?;
+    let identity =
+        ScopedLaunchIdentity::new(route(), "session", 1, 2).map_err(|error| error.to_string())?;
+    let BoundCapacityClaim::New(bound_id) = journal
+        .reserve_linux_launch_if_accepting(
+            &identity,
+            &expected,
+            NonZeroU32::new(3).ok_or("nonzero maximum")?,
+        )
+        .await
+        .map_err(|error| error.to_string())?
+    else {
+        return Err("bound launch was not reserved".to_owned());
+    };
+    let rows = journal.rows().await.map_err(|error| error.to_string())?;
+    let deadline = TokioInstant::now() + Duration::from_secs(1);
+    assert!(held_rows_bound_to(&journal, &rows, &expected, deadline).await);
+    assert!(!held_rows_bound_to(&journal, &rows, &replacement, deadline).await);
+
+    let legacy_identity = ScopedLaunchIdentity::new(route(), "legacy-session", 3, 4)
+        .map_err(|error| error.to_string())?;
+    let CapacityClaim::New(legacy_id) = journal
+        .reserve_launch_if_accepting(
+            &legacy_identity,
+            NonZeroU32::new(3).ok_or("nonzero maximum")?,
+        )
+        .await
+        .map_err(|error| error.to_string())?
+    else {
+        return Err("legacy fixture was not reserved".to_owned());
+    };
+    assert_ne!(bound_id, legacy_id);
+    let rows = journal.rows().await.map_err(|error| error.to_string())?;
+    assert!(!held_rows_bound_to(&journal, &rows, &expected, deadline).await);
+    drop(journal);
+    drop(scratch);
+    Ok(())
+}
 
 #[test]
 fn complete_held_generation_matches_only_exact_owned_resources() {

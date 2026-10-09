@@ -2,12 +2,14 @@ use std::time::Instant;
 
 use tokio::time::{Instant as TokioInstant, timeout_at};
 
-use velnor_runner_host::connect_unix;
 use velnor_runner_host::worker::{
     DiagnosticsStore, DockerCleanupEngine, PostActionDisposition, RunnerStopPolicy,
     cleanup_worker_generation,
 };
-use velnor_runner_journal::journal::Journal;
+use velnor_runner_host::{
+    DockerDaemonBinding, connect_unix_bound, observe_docker_daemon_binding_until,
+};
+use velnor_runner_journal::journal::{Journal, JournalDockerDaemonBinding};
 
 use super::super::{LinuxAdmissionState, LinuxDaemonError, LinuxDaemonOutcome, LinuxLaunchContext};
 use super::identity::cleanup_identity;
@@ -16,6 +18,8 @@ use crate::linux::LinuxShutdownGap;
 
 struct CleanupInputs {
     docker: bollard::Docker,
+    docker_binding: DockerDaemonBinding,
+    journal_binding: JournalDockerDaemonBinding,
     rows: Vec<velnor_runner_host::IntentRow>,
     resource_count: usize,
 }
@@ -32,12 +36,19 @@ pub(crate) async fn reconcile_shutdown(
         Err(outcome) => return Ok(outcome),
     };
     let engine = DockerCleanupEngine::new(&inputs.docker);
-    let cleaned =
-        cleanup_terminal_rows(journal, diagnostics, &engine, &inputs.rows, deadline).await;
+    let cleaned = cleanup_terminal_rows(
+        journal,
+        diagnostics,
+        &engine,
+        &inputs.journal_binding,
+        &inputs.rows,
+        deadline,
+    )
+    .await;
     shutdown_summary(
-        context,
         journal,
         admission,
+        &inputs.docker_binding,
         deadline,
         cleaned,
         inputs.resource_count,
@@ -61,7 +72,9 @@ async fn prepare_cleanup(
         .await);
     }
     let tokio_deadline = TokioInstant::from_std(deadline);
-    let Ok(docker) = connect_unix(&context.docker_endpoint) else {
+    let Ok((docker_binding, journal_binding, docker, resource_count)) =
+        prepare_cleanup_docker(context, tokio_deadline).await
+    else {
         return Err(fail_cleanup(
             journal,
             admission,
@@ -69,18 +82,6 @@ async fn prepare_cleanup(
             deadline,
         )
         .await);
-    };
-    let resource_count = match read_inventory(context, tokio_deadline).await {
-        Ok(resources) => resources.len(),
-        Err(()) => {
-            return Err(fail_cleanup(
-                journal,
-                admission,
-                LinuxShutdownGap::DockerInventoryUnavailable,
-                deadline,
-            )
-            .await);
-        }
     };
     let Ok(Ok(rows)) = timeout_at(tokio_deadline, journal.rows()).await else {
         return Err(outcome_with_counts(
@@ -94,9 +95,38 @@ async fn prepare_cleanup(
     };
     Ok(CleanupInputs {
         docker,
+        docker_binding,
+        journal_binding,
         rows,
         resource_count,
     })
+}
+
+async fn prepare_cleanup_docker(
+    context: &LinuxLaunchContext,
+    deadline: TokioInstant,
+) -> Result<
+    (
+        DockerDaemonBinding,
+        JournalDockerDaemonBinding,
+        bollard::Docker,
+        usize,
+    ),
+    (),
+> {
+    let docker_binding = timeout_at(
+        deadline,
+        observe_docker_daemon_binding_until(&context.docker_endpoint, deadline),
+    )
+    .await
+    .map_err(|_| ())?
+    .map_err(|_| ())?;
+    let journal_binding =
+        JournalDockerDaemonBinding::new(docker_binding.endpoint(), docker_binding.engine_id())
+            .map_err(|_| ())?;
+    let docker = connect_unix_bound(&docker_binding).map_err(|_| ())?;
+    let resource_count = read_inventory(&docker_binding, deadline).await?.len();
+    Ok((docker_binding, journal_binding, docker, resource_count))
 }
 
 async fn fail_cleanup(
@@ -109,15 +139,12 @@ async fn fail_cleanup(
 }
 
 async fn read_inventory(
-    context: &LinuxLaunchContext,
+    binding: &DockerDaemonBinding,
     deadline: TokioInstant,
 ) -> Result<Vec<velnor_runner_host::worker::OwnedDockerResource>, ()> {
     match timeout_at(
         deadline,
-        velnor_runner_host::worker::list_owned_docker_resources_until(
-            &context.docker_endpoint,
-            deadline,
-        ),
+        velnor_runner_host::worker::list_owned_docker_resources_bound_until(binding, deadline),
     )
     .await
     {
@@ -130,6 +157,7 @@ async fn cleanup_terminal_rows(
     journal: &Journal,
     diagnostics: &DiagnosticsStore,
     engine: &DockerCleanupEngine<'_>,
+    binding: &JournalDockerDaemonBinding,
     rows: &[velnor_runner_host::IntentRow],
     deadline: Instant,
 ) -> usize {
@@ -142,6 +170,12 @@ async fn cleanup_terminal_rows(
         let Some(identity) = cleanup_identity(row) else {
             continue;
         };
+        if !matches!(
+            timeout_at(tokio_deadline, journal.launch_daemon_binding(row.id)).await,
+            Ok(Ok(Some(current))) if &current == binding
+        ) {
+            continue;
+        }
         let grace = grace_seconds(deadline);
         if grace == 0 {
             break;
@@ -169,15 +203,18 @@ async fn cleanup_terminal_rows(
 /// physical cleanup proof. Callers use this after persisting lifecycle events
 /// and before acknowledging their enclosing message.
 pub(in crate::linux) async fn cleanup_terminal_workers(
-    context: &LinuxLaunchContext,
     journal: &Journal,
     diagnostics: &DiagnosticsStore,
+    docker_binding: &DockerDaemonBinding,
     deadline: Instant,
 ) -> Result<usize, ()> {
     if Instant::now() >= deadline {
         return Err(());
     }
-    let docker = connect_unix(&context.docker_endpoint).map_err(|_| ())?;
+    let journal_binding =
+        JournalDockerDaemonBinding::new(docker_binding.endpoint(), docker_binding.engine_id())
+            .map_err(|_| ())?;
+    let docker = connect_unix_bound(docker_binding).map_err(|_| ())?;
     let rows = timeout_at(TokioInstant::from_std(deadline), journal.rows())
         .await
         .map_err(|_| ())?
@@ -186,7 +223,15 @@ pub(in crate::linux) async fn cleanup_terminal_workers(
         return Err(());
     }
     let engine = DockerCleanupEngine::new(&docker);
-    Ok(cleanup_terminal_rows(journal, diagnostics, &engine, &rows, deadline).await)
+    Ok(cleanup_terminal_rows(
+        journal,
+        diagnostics,
+        &engine,
+        &journal_binding,
+        &rows,
+        deadline,
+    )
+    .await)
 }
 
 fn grace_seconds(deadline: Instant) -> u32 {

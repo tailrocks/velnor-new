@@ -201,7 +201,12 @@ async fn run_demand_slot(
         &mut runtime.shutdown,
         runtime.context.drain_timeout(),
         None,
-        reserve_assigned_identity(runtime.journal, identity, runtime.maximum),
+        reserve_assigned_identity(
+            runtime.journal,
+            identity,
+            &runtime.active.journal_binding,
+            runtime.maximum,
+        ),
     )
     .await;
     observe_cutoff(

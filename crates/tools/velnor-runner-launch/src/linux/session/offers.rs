@@ -98,6 +98,7 @@ pub(super) async fn process_batch(mut work: BatchWork<'_>, batch: ParsedTrustBat
             work.context,
             work.journal,
             work.diagnostics,
+            &work.active.docker_binding,
             &mut work.shutdown,
             &completed,
         ))
@@ -348,6 +349,7 @@ async fn cleanup_completed(
     context: &LinuxLaunchContext,
     journal: &Journal,
     diagnostics: &DiagnosticsStore,
+    docker_binding: &velnor_runner_host::DockerDaemonBinding,
     shutdown: &mut ShutdownGate<'_>,
     completed: &[i64],
 ) -> bool {
@@ -362,7 +364,12 @@ async fn cleanup_completed(
         shutdown,
         context.drain_timeout(),
         Some(local_deadline),
-        super::super::shutdown::cleanup_terminal_workers(context, journal, diagnostics, deadline),
+        super::super::shutdown::cleanup_terminal_workers(
+            journal,
+            diagnostics,
+            docker_binding,
+            deadline,
+        ),
     ))
     .await;
     if !matches!(cleanup, Some(Ok(_))) {

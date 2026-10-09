@@ -9,8 +9,8 @@ use velnor_runner_host::{
     HostError, RunnerImageProfile, stage::PairEngine, worker::new_worker_volume,
 };
 use velnor_runner_journal::journal::{
-    AssignedPopulationObservation, CapacityClaim, Journal, ReplayRoute,
-    ScopedAssignedLaunchIdentity, ScopedLaunchIdentity,
+    AssignedPopulationObservation, BoundCapacityClaim, Journal, JournalDockerDaemonBinding,
+    ReplayRoute, ScopedAssignedLaunchIdentity, ScopedLaunchIdentity,
 };
 
 use super::worker::start_worker_pair;
@@ -72,6 +72,7 @@ pub(super) async fn reserve_available(
     journal: &Journal,
     route: ReplayRoute<'_>,
     session_id: &str,
+    binding: &JournalDockerDaemonBinding,
     trust: &VerifiedJobTrust,
     maximum: NonZeroU32,
 ) -> Result<(ReserveOutcome, Option<ReservedLaunch>), HostError> {
@@ -79,6 +80,7 @@ pub(super) async fn reserve_available(
         journal,
         route,
         session_id,
+        binding,
         trust.message_id(),
         trust.runner_request_id(),
         maximum,
@@ -93,19 +95,22 @@ async fn reserve_available_identity(
     journal: &Journal,
     route: ReplayRoute<'_>,
     session_id: &str,
+    binding: &JournalDockerDaemonBinding,
     message_id: i64,
     request_id: i64,
     maximum: NonZeroU32,
 ) -> Result<(ReserveOutcome, Option<ReservedLaunch>), HostError> {
     let identity = ScopedLaunchIdentity::new(route, session_id, message_id, request_id)?;
     match journal
-        .reserve_launch_if_accepting(&identity, maximum)
+        .reserve_linux_launch_if_accepting(&identity, binding, maximum)
         .await?
     {
-        CapacityClaim::New(id) => Ok((ReserveOutcome::Reserved, Some(reserved(id)))),
-        CapacityClaim::Existing(_) => Ok((ReserveOutcome::Existing, None)),
-        CapacityClaim::Draining => Ok((ReserveOutcome::Draining, None)),
-        CapacityClaim::CapacityFull { .. } => Ok((ReserveOutcome::CapacityFull, None)),
+        BoundCapacityClaim::New(id) => Ok((ReserveOutcome::Reserved, Some(reserved(id)))),
+        BoundCapacityClaim::Existing(_)
+        | BoundCapacityClaim::ExistingUnbound(_)
+        | BoundCapacityClaim::ExistingBindingChanged(_) => Ok((ReserveOutcome::Existing, None)),
+        BoundCapacityClaim::Draining => Ok((ReserveOutcome::Draining, None)),
+        BoundCapacityClaim::CapacityFull { .. } => Ok((ReserveOutcome::CapacityFull, None)),
     }
 }
 
@@ -114,6 +119,7 @@ async fn reserve_available_identity(
 pub(super) async fn reserve_assigned_identity(
     journal: &Journal,
     identity: AssignedSlotIdentity<'_>,
+    binding: &JournalDockerDaemonBinding,
     maximum: NonZeroU32,
 ) -> Result<(ReserveOutcome, Option<ReservedLaunch>), HostError> {
     let observation = AssignedPopulationObservation::new(
@@ -131,13 +137,15 @@ pub(super) async fn reserve_assigned_identity(
         identity.ordinal,
     )?;
     match journal
-        .reserve_assigned_launch_if_accepting(&identity, maximum)
+        .reserve_linux_assigned_launch_if_accepting(&identity, binding, maximum)
         .await?
     {
-        CapacityClaim::New(id) => Ok((ReserveOutcome::Reserved, Some(reserved(id)))),
-        CapacityClaim::Existing(_) => Ok((ReserveOutcome::Existing, None)),
-        CapacityClaim::Draining => Ok((ReserveOutcome::Draining, None)),
-        CapacityClaim::CapacityFull { .. } => Ok((ReserveOutcome::CapacityFull, None)),
+        BoundCapacityClaim::New(id) => Ok((ReserveOutcome::Reserved, Some(reserved(id)))),
+        BoundCapacityClaim::Existing(_)
+        | BoundCapacityClaim::ExistingUnbound(_)
+        | BoundCapacityClaim::ExistingBindingChanged(_) => Ok((ReserveOutcome::Existing, None)),
+        BoundCapacityClaim::Draining => Ok((ReserveOutcome::Draining, None)),
+        BoundCapacityClaim::CapacityFull { .. } => Ok((ReserveOutcome::CapacityFull, None)),
     }
 }
 
