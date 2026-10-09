@@ -95,7 +95,7 @@ pub fn open_systemd_credential_file(
     owner_uid: u32,
     max_size: usize,
 ) -> Result<File, HostError> {
-    if name != "github-token" || max_size == 0 {
+    if !matches!(name, "github-token" | "actions-read-token") || max_size == 0 {
         return Err(HostError::Config);
     }
     let directory_fd = open_trusted_directory(

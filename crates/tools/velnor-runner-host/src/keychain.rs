@@ -16,6 +16,12 @@ const MACOS_CREDENTIAL_REF: &str = "keychain:com.tailrocks.velnor.host/velnor-ho
 const MACOS_CREDENTIAL_SERVICE: &str = "com.tailrocks.velnor.host";
 #[cfg(target_os = "macos")]
 const MACOS_CREDENTIAL_ACCOUNT: &str = "velnor-host";
+#[cfg(target_os = "linux")]
+const ACTIONS_READ_TOKEN_NAME: &str = "actions-read-token";
+#[cfg(target_os = "macos")]
+const MACOS_ACTIONS_READ_TOKEN_SERVICE: &str = "com.tailrocks.velnor.host";
+#[cfg(target_os = "macos")]
+const MACOS_ACTIONS_READ_TOKEN_ACCOUNT: &str = "actions-read-token";
 
 /// Read a token from `reader`. The returned buffer is wiped on drop.
 ///
@@ -131,6 +137,34 @@ pub fn load_configured_secret(reference: &str) -> Result<Zeroizing<Vec<u8>>, Hos
     }
     let _ = reference;
     Err(HostError::Keychain)
+}
+
+/// Load the dedicated read-only GitHub Actions REST credential.
+///
+/// Linux reads only systemd's `CREDENTIALS_DIRECTORY/actions-read-token`;
+/// macOS reads only the fixed Velnor Keychain item. This role is separate
+/// from the controller's configured registration credential.
+///
+/// # Errors
+///
+/// Returns [`HostError::Keychain`] when the dedicated credential is absent,
+/// malformed, or fails the selected host backend's ownership checks.
+pub fn load_actions_read_token() -> Result<Zeroizing<Vec<u8>>, HostError> {
+    #[cfg(target_os = "linux")]
+    {
+        return linux::load_actions_read_token();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        return load_secret(
+            MACOS_ACTIONS_READ_TOKEN_SERVICE,
+            MACOS_ACTIONS_READ_TOKEN_ACCOUNT,
+        );
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        Err(HostError::Keychain)
+    }
 }
 
 #[cfg(target_os = "macos")]

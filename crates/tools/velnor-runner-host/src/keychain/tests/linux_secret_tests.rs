@@ -20,6 +20,20 @@ fn systemd_credential_requires_private_owned_directory_and_file() -> Result<(), 
     if super::super::linux::test_load(directory.path(), "other-token").is_ok() {
         return Err(HostError::Keychain);
     }
+
+    let actions_token = directory.path().join("actions-read-token");
+    std::fs::write(&actions_token, b"read-only-canary\n").map_err(|_| HostError::Keychain)?;
+    std::fs::set_permissions(&actions_token, std::fs::Permissions::from_mode(0o600))
+        .map_err(|_| HostError::Keychain)?;
+    let actions_loaded = super::super::linux::test_load_actions_read_token(directory.path())?;
+    if actions_loaded.as_slice() != b"read-only-canary\n" {
+        return Err(HostError::Keychain);
+    }
+    if super::super::linux::test_load(directory.path(), "../actions-read-token").is_ok()
+        || super::super::linux::test_load(directory.path(), "other-token").is_ok()
+    {
+        return Err(HostError::Keychain);
+    }
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644))
         .map_err(|_| HostError::Keychain)?;
     if super::super::linux::test_load(directory.path(), "github-token").is_ok() {
@@ -44,6 +58,38 @@ fn systemd_credential_rejects_symlinked_token() -> Result<(), HostError> {
         .map_err(|_| HostError::Keychain)?;
 
     assert!(super::super::linux::test_load(directory.path(), "github-token").is_err());
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn actions_read_credential_rejects_symlink_and_oversized_file() -> Result<(), HostError> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = TestDir::new()?;
+    std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700))
+        .map_err(|_| HostError::Keychain)?;
+    let target = directory.path().join("target-token");
+    std::fs::write(&target, b"canary-token").map_err(|_| HostError::Keychain)?;
+    std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o600))
+        .map_err(|_| HostError::Keychain)?;
+    std::os::unix::fs::symlink(&target, directory.path().join("actions-read-token"))
+        .map_err(|_| HostError::Keychain)?;
+    assert!(super::super::linux::test_load_actions_read_token(directory.path()).is_err());
+
+    std::fs::remove_file(directory.path().join("actions-read-token"))
+        .map_err(|_| HostError::Keychain)?;
+    std::fs::write(
+        directory.path().join("actions-read-token"),
+        vec![b'x'; 4097],
+    )
+    .map_err(|_| HostError::Keychain)?;
+    std::fs::set_permissions(
+        directory.path().join("actions-read-token"),
+        std::fs::Permissions::from_mode(0o600),
+    )
+    .map_err(|_| HostError::Keychain)?;
+    assert!(super::super::linux::test_load_actions_read_token(directory.path()).is_err());
     Ok(())
 }
 

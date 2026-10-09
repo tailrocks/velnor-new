@@ -30,8 +30,8 @@ pub use guest::guest_slots;
 pub use https::{BoundedDiscoveryTransport, HttpsTransport};
 pub use ipc::{MAX_FRAME, SOCKET_DIR_MODE, decode_frame, encode_frame};
 pub use keychain::{
-    import_secret, load_configured_secret, load_secret, read_secret, remove_configured_secret,
-    store_configured_secret,
+    import_secret, load_actions_read_token, load_configured_secret, load_secret, read_secret,
+    remove_configured_secret, store_configured_secret,
 };
 pub use listen::{SessionCensus, SessionProbe, probe_once, queue_path, session_census};
 pub use plist::{keychain_import_argv, launch_agent_plist};

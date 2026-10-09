@@ -180,6 +180,26 @@ fn credential_file_helper_returns_the_checked_regular_descriptor() -> Result<(),
         super::super::open_systemd_credential_file(directory.path(), "../github-token", uid, 4096,)
             .is_err()
     );
+    assert!(
+        super::super::open_systemd_credential_file(directory.path(), "other-token", uid, 4096,)
+            .is_err()
+    );
+
+    let actions_token = directory.path().join("actions-read-token");
+    fs::write(&actions_token, b"read-only-canary").map_err(|_| HostError::Config)?;
+    fs::set_permissions(&actions_token, fs::Permissions::from_mode(0o600))
+        .map_err(|_| HostError::Config)?;
+    let mut actions_file = super::super::open_systemd_credential_file(
+        directory.path(),
+        "actions-read-token",
+        uid,
+        4096,
+    )?;
+    let mut actions_contents = String::new();
+    actions_file
+        .read_to_string(&mut actions_contents)
+        .map_err(|_| HostError::Config)?;
+    assert_eq!(actions_contents, "read-only-canary");
     Ok(())
 }
 
