@@ -3,6 +3,7 @@
 //! Unknown fields are rejected; validation reports file, key path, problem.
 
 mod actions;
+mod binary_release;
 mod build_task;
 mod check_receipt_budget;
 mod discovery;
@@ -22,6 +23,7 @@ mod workflow;
 mod workflow_task;
 
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
+pub use binary_release::{CONSUMER_BINARY_TARGET, RustBinaryReleaseConfig};
 pub use build_task::{BuildTask, BuildTaskRunner, is_valid_build_tool_key};
 pub use check_receipt_budget::{
     MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES, MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
@@ -125,6 +127,19 @@ impl VelnorConfig {
         self.resources.validate(file)?;
         self.test_sharding.validate(file)?;
         self.stacks.validate(file)?;
+        if self.workflow.policy != WorkflowPolicy::ConsumerV1
+            && self
+                .stacks
+                .rust
+                .as_ref()
+                .is_some_and(|rust| rust.binary_release.enabled)
+        {
+            return Err(ContractError::config(
+                file,
+                "stacks.rust.binary_release.enabled",
+                "binary_release_requires_consumer_policy",
+            ));
+        }
         if let Some(apply) = &self.workflow.tofu_apply {
             let roots = self.stacks.tofu.as_ref().ok_or_else(|| {
                 ContractError::config(

@@ -5,6 +5,7 @@ mod api;
 mod attach;
 mod baseline_artifact_listing;
 mod baseline_publish;
+mod binary_release_emit;
 mod build_task_tools;
 mod build_tasks;
 mod check_evidence;

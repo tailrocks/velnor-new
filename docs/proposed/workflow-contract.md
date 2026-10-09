@@ -162,7 +162,7 @@ permissions:
 All other permissions MUST be absent or `none`. Release publication uses a
 separate workflow with explicit permissions; fork pull requests receive no write access. `[stacks.rust.release]`
 adds `release.yml` (see [release contract](release-contract.md)) with per-job permissions that MUST NOT weaken
-this default.
+this default. `[stacks.rust.binary_release]` adds the optional `binary-release.yml` workflow; see the [binary release contract](binary-release-contract.md), which specifies per-job least privilege.
 
 The workflow concurrency group MUST be:
 
