@@ -14,21 +14,21 @@ use velnor_runner_journal::journal::{
 };
 use velnor_runner_launch_slot::holds;
 
-use super::{LinuxLaunchContext, LinuxLaunchCredentials, SIGNAL_POLL, deadline_after};
+use super::{LinuxLaunchContext, LinuxLaunchCredentials, deadline_after};
 
 mod create;
 mod cutoff;
 mod deadline_transport;
 mod offers;
+mod poll_lifecycle;
 mod poll_retry;
 #[cfg(test)]
 mod poll_retry_tests;
 mod protocol;
 pub(super) use cutoff::{DispatchFence, observe_cutoff_before_deadline};
 pub(super) use deadline_transport::{CancelDispatchOnDrop, DeadlineBoundTransport};
-use poll_retry::{
-    PollAttempt, SessionPollIo, classify_poll_result, poll_until_delivery, wait_before_next_poll,
-};
+use poll_lifecycle::{RecoveryPollWork, process_delivered_batch, process_empty_poll};
+use poll_retry::{PollAttempt, SessionPollIo, classify_poll_result, poll_until_delivery};
 pub(in crate::linux::session) use protocol::protocol_call;
 pub(in crate::linux::session) use protocol::{Protocol, protocol_read};
 
@@ -64,6 +64,7 @@ pub(super) async fn drive_session(
         return;
     };
     let mut cursor = 0_i64;
+    let mut recovery_budget = offers::RecoveryBudget::default();
     loop {
         // Advance the cursor only after a delivered batch; uncertain retries
         // therefore issue the same side-effect-free queue read.
@@ -80,43 +81,39 @@ pub(super) async fn drive_session(
         let Some(poll) = poll else { return };
         match poll {
             PollWithTrust::Empty => {
-                if cutoff.is_some()
-                    && close_after_cutoff(journal, diagnostics, active, cutoff.as_ref()).await
+                if !process_empty_poll(RecoveryPollWork {
+                    context,
+                    journal,
+                    diagnostics,
+                    docker: &docker,
+                    active,
+                    credentials,
+                    recovery_budget: &mut recovery_budget,
+                    shutdown,
+                    cutoff,
+                })
+                .await
                 {
                     return;
                 }
-                let _ = wait_before_next_poll(
-                    journal,
-                    shutdown,
-                    cutoff,
-                    context.drain_timeout(),
-                    SIGNAL_POLL,
-                )
-                .await;
             }
             PollWithTrust::Batch(batch) => {
                 cursor = batch.message_id();
-                let accepted = Box::pin(offers::process_batch(
-                    offers::BatchWork {
+                if !process_delivered_batch(
+                    RecoveryPollWork {
                         context,
                         journal,
                         diagnostics,
                         docker: &docker,
                         active,
                         credentials,
-                        shutdown: ShutdownGate {
-                            receiver: shutdown,
-                            cutoff,
-                        },
+                        recovery_budget: &mut recovery_budget,
+                        shutdown,
+                        cutoff,
                     },
                     batch,
-                ))
-                .await;
-                if !accepted {
-                    return;
-                }
-                if cutoff.is_some()
-                    && close_after_cutoff(journal, diagnostics, active, cutoff.as_ref()).await
+                )
+                .await
                 {
                     return;
                 }

@@ -95,6 +95,7 @@ pub(super) fn intent(state: IntentState, kind: &str) -> IntentRow {
     }
 }
 
+mod actions_reconciliation_adoption_tests;
 mod actions_reconciliation_tests;
 mod cleanup_tests;
 mod daemon_binding_tests;

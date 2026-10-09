@@ -75,7 +75,7 @@ struct CleanupRow {
 async fn cleanup_row(conn: &turso::Connection, id: i64) -> Result<CleanupRow, HostError> {
     let mut rows = conn
         .query(
-            "SELECT kind, effect_state, runner_name, docker_id, dind_id, worker_volume, outer_network_name, outer_network_id, observed_workflow_run_id, observed_job_id, github_runner_id, cleanup_proven, runner_start_state FROM intents WHERE id = ?1",
+            "SELECT kind, effect_state, runner_name, docker_id, dind_id, worker_volume, outer_network_name, outer_network_id, observed_workflow_run_id, observed_job_id, observed_actions_attempt, observed_actions_job_id, github_runner_id, cleanup_proven, runner_start_state FROM intents WHERE id = ?1",
             [id],
         )
         .await
@@ -86,7 +86,7 @@ async fn cleanup_row(conn: &turso::Connection, id: i64) -> Result<CleanupRow, Ho
         .map_err(|_| HostError::Journal)?
         .ok_or(HostError::Journal)?;
     let runner_id = row
-        .get::<Option<String>>(10)
+        .get::<Option<String>>(12)
         .map_err(|_| HostError::Journal)?
         .map(|value| value.parse::<i64>().map_err(|_| HostError::Journal))
         .transpose()?;
@@ -100,13 +100,13 @@ async fn cleanup_row(conn: &turso::Connection, id: i64) -> Result<CleanupRow, Ho
         outer_network_name: row.get(6).map_err(|_| HostError::Journal)?,
         outer_network_id: row.get(7).map_err(|_| HostError::Journal)?,
         observed_workflow_run_id: row.get(8).map_err(|_| HostError::Journal)?,
-        observed_attempt: None,
+        observed_attempt: row.get(10).map_err(|_| HostError::Journal)?,
         observed_job_id: row.get(9).map_err(|_| HostError::Journal)?,
-        observed_actions_job_id: None,
+        observed_actions_job_id: row.get(11).map_err(|_| HostError::Journal)?,
         observed_runner_id: runner_id,
         observed_runner_name: row.get(2).map_err(|_| HostError::Journal)?,
-        cleanup_proven: read_flag(row.get(11).map_err(|_| HostError::Journal)?)?,
-        runner_start_state: row.get(12).map_err(|_| HostError::Journal)?,
+        cleanup_proven: read_flag(row.get(13).map_err(|_| HostError::Journal)?)?,
+        runner_start_state: row.get(14).map_err(|_| HostError::Journal)?,
     })
 }
 

@@ -20,6 +20,16 @@ async fn completed_rest_evidence_is_identity_cas_durable_and_not_cleanup_proof()
         .await
         .map_err(|error| error.to_string())?;
     let launch_id = started_launch(&journal).await?;
+    assert_eq!(
+        journal
+            .unbound_started_launches()
+            .await
+            .map_err(|error| error.to_string())?
+            .iter()
+            .map(|row| row.id)
+            .collect::<Vec<_>>(),
+        vec![launch_id]
+    );
     let completed = reconciliation(9001, Some("failure"));
     let pending = ActionsJobReconciliation {
         state: ActionsJobReconciliationState::Pending,
@@ -169,7 +179,7 @@ async fn v7_upgrade_preserves_uncertain_launch_and_adds_empty_rest_evidence() ->
         version_row
             .get::<i64>(0)
             .map_err(|error| error.to_string())?,
-        12
+        13
     );
     drop(version_rows);
     drop(conn);
@@ -194,7 +204,19 @@ async fn v7_upgrade_preserves_uncertain_launch_and_adds_empty_rest_evidence() ->
     Ok(())
 }
 
-async fn started_launch(journal: &Journal) -> Result<i64, String> {
+pub(super) async fn started_launch(journal: &Journal) -> Result<i64, String> {
+    let launch_id = prepared_launch(journal).await?;
+    if !journal
+        .observe_runner_event(&lifecycle_event(InnerKind::Started))
+        .await
+        .map_err(|error| error.to_string())?
+    {
+        return Err("started event did not match the test launch".to_owned());
+    }
+    Ok(launch_id)
+}
+
+pub(super) async fn prepared_launch(journal: &Journal) -> Result<i64, String> {
     let (launch_id, created) = journal
         .begin_launch("actions-rest-lifecycle")
         .await
@@ -208,6 +230,18 @@ async fn started_launch(journal: &Journal) -> Result<i64, String> {
         .map_err(|error| error.to_string())?;
     journal
         .record_launch_effect_intent(launch_id)
+        .await
+        .map_err(|error| error.to_string())?;
+    journal
+        .bind_worker_volume(launch_id, "worker-volume-test")
+        .await
+        .map_err(|error| error.to_string())?;
+    journal
+        .record_outer_network_intent(launch_id, "worker-outer-test")
+        .await
+        .map_err(|error| error.to_string())?;
+    journal
+        .bind_outer_network_id(launch_id, &"c".repeat(64))
         .await
         .map_err(|error| error.to_string())?;
     let runner_container = "a".repeat(64);
@@ -228,8 +262,12 @@ async fn started_launch(journal: &Journal) -> Result<i64, String> {
         .finish(launch_id, Outcome::Done)
         .await
         .map_err(|error| error.to_string())?;
-    let started = InnerJob {
-        kind: InnerKind::Started,
+    Ok(launch_id)
+}
+
+pub(super) fn lifecycle_event(kind: InnerKind) -> InnerJob {
+    InnerJob {
+        kind,
         request_id: None,
         job_id: Some("opaque-scale-set-job".to_owned()),
         workflow_run_id: Some(45),
@@ -241,18 +279,13 @@ async fn started_launch(journal: &Journal) -> Result<i64, String> {
         runner_name: Some("runner-v8".to_owned()),
         result: None,
         fields: Vec::new(),
-    };
-    if !journal
-        .observe_runner_event(&started)
-        .await
-        .map_err(|error| error.to_string())?
-    {
-        return Err("started event did not match the test launch".to_owned());
     }
-    Ok(launch_id)
 }
 
-fn reconciliation(actions_job_id: i64, conclusion: Option<&str>) -> ActionsJobReconciliation {
+pub(super) fn reconciliation(
+    actions_job_id: i64,
+    conclusion: Option<&str>,
+) -> ActionsJobReconciliation {
     reconciliation_for_runner_with_conclusion(actions_job_id, 88, conclusion)
 }
 
@@ -306,6 +339,12 @@ async fn seed_v7_schema_without_rest_columns(path: &Path) -> Result<(), String> 
     .map_err(|error| error.to_string())?;
     let conn = database.connect().map_err(|error| error.to_string())?;
     conn.execute("DROP TABLE linux_launch_daemon_bindings", ())
+        .await
+        .map_err(|error| error.to_string())?;
+    conn.execute("DROP TABLE linux_launch_daemon_adoptions", ())
+        .await
+        .map_err(|error| error.to_string())?;
+    conn.execute("DROP TABLE linux_launch_started_observations", ())
         .await
         .map_err(|error| error.to_string())?;
     for column in [

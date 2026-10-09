@@ -13,5 +13,5 @@ pub(super) async fn migrate_version_eleven(conn: &turso::Connection) -> Result<(
     conn.execute("PRAGMA user_version = 12", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    validation::validate_current_schema(conn).await
+    validation::v13::validate_v12_schema(conn).await
 }

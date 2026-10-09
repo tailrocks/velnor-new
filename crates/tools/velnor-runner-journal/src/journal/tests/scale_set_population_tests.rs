@@ -265,6 +265,12 @@ async fn v10_migration_adds_snapshot_table_without_releasing_open_session() -> R
     conn.execute("DROP TABLE linux_launch_daemon_bindings", ())
         .await
         .map_err(|error| error.to_string())?;
+    conn.execute("DROP TABLE linux_launch_daemon_adoptions", ())
+        .await
+        .map_err(|error| error.to_string())?;
+    conn.execute("DROP TABLE linux_launch_started_observations", ())
+        .await
+        .map_err(|error| error.to_string())?;
     conn.execute("PRAGMA user_version = 10", ())
         .await
         .map_err(|error| error.to_string())?;
@@ -311,12 +317,21 @@ async fn malformed_v12_population_schema_is_rejected_without_rewrite() -> Result
     conn.execute("DROP TABLE scale_set_population_observations", ())
         .await
         .map_err(|error| error.to_string())?;
+    conn.execute("DROP TABLE linux_launch_daemon_adoptions", ())
+        .await
+        .map_err(|error| error.to_string())?;
+    conn.execute("DROP TABLE linux_launch_started_observations", ())
+        .await
+        .map_err(|error| error.to_string())?;
     conn.execute(
         "CREATE TABLE scale_set_population_observations (intent_id INTEGER PRIMARY KEY, session_id TEXT NOT NULL, scale_set_id INTEGER NOT NULL, source TEXT NOT NULL, message_id INTEGER, observed_at_ms INTEGER NOT NULL, total_available_jobs INTEGER NOT NULL, total_acquired_jobs INTEGER NOT NULL, total_assigned_jobs INTEGER NOT NULL, total_running_jobs INTEGER NOT NULL, total_registered_runners INTEGER NOT NULL, total_busy_runners INTEGER NOT NULL, total_idle_runners INTEGER NOT NULL)",
         (),
     )
     .await
     .map_err(|error| error.to_string())?;
+    conn.execute("PRAGMA user_version = 12", ())
+        .await
+        .map_err(|error| error.to_string())?;
     drop(conn);
     drop(database);
 

@@ -12,6 +12,7 @@ use crate::journal::{
 
 use super::Scratch;
 
+mod adoption;
 mod proof;
 use proof::{
     CHILD_CONTAINER_ID, CHILD_NETWORK_ID, DIND_ID, OUTER_NETWORK_ID, RUNNER_ID, TestProof,

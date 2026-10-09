@@ -96,6 +96,8 @@ struct GenerationRow {
     outer_network_id: Option<String>,
     observed_workflow_run_id: Option<i64>,
     observed_job_id: Option<String>,
+    observed_attempt: Option<i64>,
+    observed_actions_job_id: Option<i64>,
     remote_terminal: bool,
     runner_start_state: Option<String>,
 }
@@ -106,7 +108,7 @@ async fn generation_row(
 ) -> Result<GenerationRow, HostError> {
     let mut rows = conn
         .query(
-            "SELECT kind, state, effect_state, cleanup_proven, runner_name, worker_volume, docker_id, dind_id, outer_network_name, outer_network_id, observed_workflow_run_id, observed_job_id, github_runner_id, remote_terminal, runner_start_state FROM intents WHERE id = ?1",
+            "SELECT kind, state, effect_state, cleanup_proven, runner_name, worker_volume, docker_id, dind_id, outer_network_name, outer_network_id, observed_workflow_run_id, observed_job_id, github_runner_id, observed_actions_attempt, observed_actions_job_id, remote_terminal, runner_start_state FROM intents WHERE id = ?1",
             [launch_id],
         )
         .await
@@ -135,8 +137,10 @@ async fn generation_row(
         outer_network_id: row.get(9).map_err(|_| HostError::Journal)?,
         observed_workflow_run_id: row.get(10).map_err(|_| HostError::Journal)?,
         observed_job_id: row.get(11).map_err(|_| HostError::Journal)?,
-        remote_terminal: read_flag(row.get(13).map_err(|_| HostError::Journal)?)?,
-        runner_start_state: row.get(14).map_err(|_| HostError::Journal)?,
+        observed_attempt: row.get(13).map_err(|_| HostError::Journal)?,
+        observed_actions_job_id: row.get(14).map_err(|_| HostError::Journal)?,
+        remote_terminal: read_flag(row.get(15).map_err(|_| HostError::Journal)?)?,
+        runner_start_state: row.get(16).map_err(|_| HostError::Journal)?,
     })
 }
 
@@ -162,9 +166,9 @@ fn generation_matches(
         && generation.outer_network_id == identity.outer_network_id
         && generation.observed_workflow_run_id == identity.observed_workflow_run_id
         && generation.observed_job_id == identity.observed_job_id
+        && generation.observed_attempt == identity.observed_attempt
+        && generation.observed_actions_job_id == identity.observed_actions_job_id
         && generation.runner_id == identity.observed_runner_id
-        && identity.observed_attempt.is_none()
-        && identity.observed_actions_job_id.is_none()
         && identity
             .observed_runner_name
             .as_deref()
