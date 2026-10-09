@@ -1,6 +1,8 @@
 use std::path::Path;
 use std::process::ExitCode;
 
+pub(super) use super::readiness::add_linux_readiness;
+use super::readiness::readiness_lines;
 use velnor_runner_host::docker_client::{self, DockerVersion};
 use velnor_runner_host::{
     HostConfig, HostError, HostPlatform, load_configured_secret, read_host_config_file,
@@ -32,6 +34,7 @@ pub(super) fn print_status(state: &Path, config_path: &Path, json: bool) -> Exit
     {
         let _ = (state, config_path);
         let observation = StatusObservation {
+            platform: None,
             config: ConfigObservation::Unavailable,
             credential: DependencyObservation::NotChecked,
             docker: DependencyObservation::NotChecked,
@@ -104,6 +107,7 @@ impl JournalObservation {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct StatusObservation {
+    pub(super) platform: Option<HostPlatform>,
     pub(super) config: ConfigObservation,
     pub(super) credential: DependencyObservation,
     pub(super) docker: DependencyObservation,
@@ -113,7 +117,7 @@ pub(super) struct StatusObservation {
 
 impl StatusObservation {
     pub(super) fn json(self) -> String {
-        serde_json::json!({
+        let mut document = serde_json::json!({
             "command": "status",
             "state": "not_proven",
             "config": self.config.as_str(),
@@ -122,19 +126,22 @@ impl StatusObservation {
             "journal": self.journal.as_str(),
             "controller_service": controller_service_status(self.controller_service),
             "global_readiness": "not_proven",
-        })
-        .to_string()
+        });
+        add_linux_readiness(&mut document, self.platform);
+        document.to_string()
     }
 
     pub(super) fn lines(self) -> String {
-        format!(
+        let mut output = format!(
             "state=not_proven\nconfig={}\ncredential={}\ndocker={}\njournal={}\ncontroller_service={}\nglobal_readiness=not_proven",
             self.config.as_str(),
             self.credential.as_str(),
             self.docker.as_str(),
             self.journal.as_str(),
             controller_service_status(self.controller_service),
-        )
+        );
+        output.push_str(&readiness_lines(self.platform));
+        output
     }
 }
 
@@ -194,6 +201,7 @@ where
     D: FnOnce(&str) -> Result<DockerVersion, HostError>,
 {
     let mut observation = StatusObservation {
+        platform: Some(platform),
         config: ConfigObservation::Unavailable,
         credential: DependencyObservation::NotChecked,
         docker: DependencyObservation::NotChecked,
@@ -260,7 +268,13 @@ pub(super) fn print_doctor(state: &Path, config_path: &Path, probe: bool) -> Exi
     };
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     let result = Err(DoctorProbeFailure::Config);
-    println!("{}", doctor_probe_document(result.clone()));
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    let platform = Some(host_platform());
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    let platform = None;
+    let mut document = doctor_probe_document(result.clone());
+    add_linux_readiness(&mut document, platform);
+    println!("{document}");
     if result.is_ok() {
         ExitCode::SUCCESS
     } else {
@@ -289,6 +303,7 @@ fn print_local_doctor(state: &Path, config_path: &Path) -> ExitCode {
     {
         let _ = (state, config_path);
         let observation = StatusObservation {
+            platform: None,
             config: ConfigObservation::Unavailable,
             credential: DependencyObservation::NotChecked,
             docker: DependencyObservation::NotChecked,
@@ -329,7 +344,7 @@ pub(super) fn probe_config_text(
 }
 
 pub(super) fn doctor_local_document(observation: StatusObservation) -> serde_json::Value {
-    serde_json::json!({
+    let mut document = serde_json::json!({
         "command": "doctor",
         "probe": false,
         "config": observation.config.as_str(),
@@ -338,7 +353,9 @@ pub(super) fn doctor_local_document(observation: StatusObservation) -> serde_jso
         "journal": observation.journal.as_str(),
         "controller_service": controller_service_status(observation.controller_service),
         "global_readiness": "not_proven",
-    })
+    });
+    add_linux_readiness(&mut document, observation.platform);
+    document
 }
 
 pub(super) fn doctor_probe_document(

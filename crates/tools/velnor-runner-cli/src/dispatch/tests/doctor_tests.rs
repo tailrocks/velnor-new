@@ -1,6 +1,6 @@
 use super::super::status::{
-    ConfigObservation, DependencyObservation, JournalObservation, doctor_local_document,
-    doctor_local_observation_with,
+    ConfigObservation, DependencyObservation, JournalObservation, add_linux_readiness,
+    doctor_local_document, doctor_local_observation_with,
 };
 use crate::args::Cli;
 use clap::Parser;
@@ -69,6 +69,12 @@ fn doctor_without_probe_reports_local_observations_without_claiming_readiness() 
     assert_eq!(document["journal"], "present_unverified");
     assert_eq!(document["controller_service"], "in_use");
     assert_eq!(document["global_readiness"], "not_proven");
+    assert_eq!(document["readiness"]["controller_runtime"], "unknown");
+    assert_eq!(document["readiness"]["work_admission"], "not_proven");
+    assert_eq!(
+        document["readiness"]["work_admission_reasons"][2],
+        "durable_controller_observation_unavailable"
+    );
     assert!(!document.to_string().contains("github-token"));
 }
 
@@ -116,6 +122,8 @@ fn doctor_without_probe_preserves_legacy_macos_config_validation() {
     assert_eq!(observation.config, ConfigObservation::Valid);
     assert_eq!(observation.credential, DependencyObservation::Available);
     assert_eq!(observation.docker, DependencyObservation::NotChecked);
+    let document = doctor_local_document(observation);
+    assert!(document.get("readiness").is_none());
 }
 
 #[test]
@@ -188,6 +196,33 @@ fn doctor_probe_reports_docker_errors_without_exposing_endpoint_or_credentials()
     assert!(output.contains("not_proven"));
     assert!(!output.contains("/var/run/docker.sock"));
     assert!(!output.contains("github-token"));
+}
+
+#[test]
+fn doctor_probe_adds_unproven_readiness_reasons_only_on_linux() {
+    use velnor_runner_host::HostPlatform;
+
+    let base = super::super::doctor_probe_document(Err(super::super::DoctorProbeFailure::Config));
+    let mut linux = base.clone();
+    add_linux_readiness(&mut linux, Some(HostPlatform::Linux));
+    assert_eq!(linux["readiness"]["controller_runtime"], "unknown");
+    assert_eq!(linux["readiness"]["work_admission"], "not_proven");
+    assert_eq!(
+        linux["readiness"]["work_admission_reasons"][0],
+        "image_profile_admission_not_proven"
+    );
+    assert_eq!(
+        linux["readiness"]["work_admission_reasons"][1],
+        "apparmor_policy_admission_not_proven"
+    );
+    assert_eq!(
+        linux["readiness"]["work_admission_reasons"][2],
+        "durable_controller_observation_unavailable"
+    );
+
+    let mut macos = base;
+    add_linux_readiness(&mut macos, Some(HostPlatform::Macos));
+    assert!(macos.get("readiness").is_none());
 }
 
 #[test]
