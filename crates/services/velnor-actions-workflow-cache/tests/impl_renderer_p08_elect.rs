@@ -160,6 +160,47 @@ fn mise_cache_writer_election_skips_keyless_and_reruns() -> Result<(), RenderErr
 }
 
 #[test]
+fn mise_cache_writer_rejects_orphan_and_non_elected_saves_before_mutation()
+-> Result<(), RenderError> {
+    let shared = "mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.16-aaaaaaaaaaaaaaaa-${{env.VELNOR_MISE_CACHE_SUFFIX}}";
+
+    let mut seed = BTreeMap::from([("rust-b".to_owned(), keyed_job(shared)?)]);
+    elect_mise_cache_writers(&mut seed)?;
+    let losing = seed
+        .remove("rust-b")
+        .ok_or_else(|| RenderError::InvalidWorkflow("test_loser_missing".to_owned()))?;
+    let mut jobs = BTreeMap::from([
+        ("plan".to_owned(), keyed_job(shared)?),
+        ("rust-b".to_owned(), losing),
+    ]);
+    let before = jobs
+        .iter()
+        .map(|(id, job)| (id.clone(), job.steps.clone()))
+        .collect::<BTreeMap<_, _>>();
+    let error = elect_mise_cache_writers(&mut jobs).expect_err("losing save must fail closed");
+    assert!(format!("{error:?}").contains("mise_cache_save_not_elected"));
+    for (id, steps) in before {
+        assert_eq!(jobs[&id].steps, steps, "failed election mutated {id}");
+    }
+
+    let mut seed = BTreeMap::from([("orphan".to_owned(), keyed_job(shared)?)]);
+    elect_mise_cache_writers(&mut seed)?;
+    let mut orphan = seed
+        .remove("orphan")
+        .ok_or_else(|| RenderError::InvalidWorkflow("test_orphan_missing".to_owned()))?;
+    orphan
+        .steps
+        .retain(|step| step.role != Some(StepRole::MiseSetup));
+    let mut orphan_jobs = BTreeMap::from([("orphan".to_owned(), orphan)]);
+    let before = orphan_jobs["orphan"].steps.clone();
+    let error =
+        elect_mise_cache_writers(&mut orphan_jobs).expect_err("orphan save must fail closed");
+    assert!(format!("{error:?}").contains("mise_cache_save_orphan"));
+    assert_eq!(orphan_jobs["orphan"].steps, before);
+    Ok(())
+}
+
+#[test]
 fn mise_cache_writer_election_leaves_foreign_setups_untouched() -> Result<(), RenderError> {
     let shared = "mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.16-aaaaaaaaaaaaaaaa-${{env.VELNOR_MISE_CACHE_SUFFIX}}";
     let mut foreign = keyed_job(shared)?;
