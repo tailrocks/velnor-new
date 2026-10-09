@@ -1,7 +1,10 @@
+use serde::Deserialize;
+
 /// Why one requested repository/run/attempt did not yield a complete provider
 /// inventory. These outcomes carry no partial rows and cannot be used as a
 /// positive census.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ActionsWorkflowAttemptEvidenceGap {
     /// The requested attempt exceeded the bounded supported range.
     AttemptLimitExceeded,
@@ -43,7 +46,8 @@ pub enum ActionsWorkflowAttemptEvidenceGap {
 /// GitHub's artifact REST metadata has no attempt or job field. This struct
 /// intentionally exposes no `ExecutionKey`, logical-job, plan, or profile
 /// mapping; the provider endpoints do not supply those identities.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ActionsWorkflowAttemptProviderEvidence {
     /// Numeric GitHub repository ID returned by the run response.
     pub repository_id: i64,
@@ -81,7 +85,8 @@ pub struct ActionsWorkflowAttemptProviderEvidence {
 ///
 /// `name` is GitHub's display name. It is not asserted to equal a planner's
 /// logical-job, plan, or profile key.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ActionsWorkflowAttemptJobEvidence {
     /// Numeric Actions REST job ID.
     pub id: i64,
@@ -122,7 +127,8 @@ pub struct ActionsWorkflowAttemptJobEvidence {
 }
 
 /// One artifact row linked by GitHub to a workflow run, not to an attempt/job.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ActionsWorkflowRunArtifactEvidence {
     /// Numeric GitHub artifact ID.
     pub id: i64,

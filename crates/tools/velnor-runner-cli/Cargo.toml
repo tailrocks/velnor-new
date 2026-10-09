@@ -12,7 +12,9 @@ workspace = true
 
 [dependencies]
 clap = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
+velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
 velnor-actions-orchestrator-merge-ports = { version = "=0.1.1", path = "../../services/velnor-actions-orchestrator-merge-ports" }
 velnor-runner-github = { version = "=0.1.1", path = "../velnor-runner-github" }
 velnor-runner-core = { version = "=0.1.1", path = "../velnor-runner-core" }
@@ -25,6 +27,9 @@ tokio = { workspace = true, features = ["signal"] }
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 security-framework = { workspace = true }
+
+[dev-dependencies]
+velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
 
 [lib]
 name = "velnor_runner_cli"
