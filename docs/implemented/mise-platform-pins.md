@@ -18,3 +18,29 @@ The measured digests match the corresponding entries in the release's
 The measured byte counts are the per-target upper bounds used when projecting
 the selected executable into an owned check home. Unsupported targets fail
 generation; platform-specific digests and byte limits stay paired.
+
+## Pre-merge hosted qualification
+
+The generated `qualification.yml` workflow has a `mise-pin` mode for checking
+a candidate Mise release before changing the repository's adopted runtime pin.
+The mode checks out the selected ref at the dispatch event's exact `github.sha`,
+then verifies the Mise version and executable SHA-256 on GitHub-hosted Linux
+x64 (`ubuntu-26.04`) and macOS x64 (`macos-15-intel`). It is read-only and does
+not publish Velnor or generator artifacts.
+
+Dispatch the candidate ref after it contains the generated qualification mode:
+
+```sh
+gh workflow run qualification.yml \
+  --repo tailrocks/velnor-new \
+  --ref <candidate-ref> \
+  --field mode=mise-pin
+```
+
+Confirm that both hosted jobs pass for the dispatch SHA. A successful run
+qualifies that candidate executable on those two hosted targets; it does not
+change `.velnor/version-policy.toml` or the named-check pins above. Keep the
+current pin record unchanged until the separate pin update is reviewed and
+merged. The candidate version and platform digests are compiled into the
+generator, so update them and regenerate the workflow when qualifying a later
+Mise release.
