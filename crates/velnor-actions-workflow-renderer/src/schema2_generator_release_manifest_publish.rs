@@ -20,7 +20,7 @@ pub(super) fn publish_script(pins: &ProductReleasePins) -> Result<String, Render
     let preflight = tag_preflight_script();
     let ci_check = super::super::super::release_eligibility::publisher_script(pins)?;
     let names = asset_names_bash(&paths);
-    let draft_check = verify_release_script("true", "draft-release.json");
+    let draft_check = verify_release_script("true", "draft-release.json", "false");
     let published_check = published_release_verify_script();
     Ok([
         "set -eu".to_owned(),
@@ -90,9 +90,13 @@ fn release_tag_source_script() -> String {
     .to_owned()
 }
 
-fn verify_release_script(expected_draft: &str, response_name: &str) -> String {
+fn verify_release_script(
+    expected_draft: &str,
+    response_name: &str,
+    require_canonical_asset_urls: &str,
+) -> String {
     format!(
-        "release_response=\"$release_tmp/{response_name}\"\ngh api \"repos/$GITHUB_REPOSITORY/releases/$release_id\" > \"$release_response\"\nverify_release_metadata \"$release_response\" '{expected_draft}'\nverify_release_assets \"$release_response\""
+        "release_response=\"$release_tmp/{response_name}\"\ngh api \"repos/$GITHUB_REPOSITORY/releases/$release_id\" > \"$release_response\"\nverify_release_metadata \"$release_response\" '{expected_draft}'\nverify_release_assets \"$release_response\" '{require_canonical_asset_urls}'"
     )
 }
 
@@ -100,7 +104,7 @@ fn verify_release_script(expected_draft: &str, response_name: &str) -> String {
 pub(super) fn published_release_verify_script() -> String {
     [
         "published_release_response=\"$release_tmp/published-release.json\"".to_owned(),
-        verify_release_script("false", "published-release.json"),
+        verify_release_script("false", "published-release.json", "true"),
         "assert_release_tag_source".to_owned(),
     ]
     .join("\n")
@@ -109,11 +113,11 @@ pub(super) fn published_release_verify_script() -> String {
 fn release_api_helpers() -> String {
     r#"verify_release_metadata() {
   local response="$1" expected_draft="$2"
-  jq -e --argjson release_id "$release_id" --arg tag "$tag" --arg api_url "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/$release_id" --arg html_url "https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag" --argjson expected_draft "$expected_draft" '.id == $release_id and .tag_name == $tag and .url == $api_url and (if $expected_draft then true else .html_url == $html_url end) and .draft == $expected_draft and .prerelease == false and (if $expected_draft then true else .immutable == true end)' "$response" > /dev/null
+  jq -e --argjson release_id "$release_id" --arg tag "$tag" --arg source "$GITHUB_SHA" --arg api_url "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/$release_id" --arg html_url "https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag" --argjson expected_draft "$expected_draft" '.id == $release_id and .tag_name == $tag and .target_commitish == $source and .url == $api_url and (if $expected_draft then true else .html_url == $html_url end) and .draft == $expected_draft and .prerelease == false and (if $expected_draft then true else .immutable == true end)' "$response" > /dev/null
 }
 
 verify_release_assets() {
-  local response="$1" path name digest size url
+  local response="$1" require_canonical_url="$2" path name digest size url
   jq -e --argjson expected "$expected_release_asset_names" '(.assets | type) == "array" and all(.assets[]; (.name | type) == "string") and ([.assets[].name] | sort) == ($expected | sort) and ([.assets[].name] | length) == ([.assets[].name] | unique | length)' "$response" > /dev/null
   for path in "${release_asset_paths[@]}"; do
     test -f "$path" && test ! -L "$path" && test -s "$path"
@@ -122,7 +126,11 @@ verify_release_assets() {
     size="$(wc -c < "$path")"
     size="${size//[[:space:]]/}"
     url="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/$name"
-    jq -e --arg name "$name" --arg url "$url" --arg digest "sha256:$digest" --argjson size "$size" '[.assets[] | select(.name == $name)] as $matches | ($matches | length) == 1 and $matches[0].state == "uploaded" and $matches[0].browser_download_url == $url and $matches[0].digest == $digest and $matches[0].size == $size' "$response" > /dev/null
+    if [[ "$require_canonical_url" == true ]]; then
+      jq -e --arg name "$name" --arg url "$url" --arg digest "sha256:$digest" --argjson size "$size" '[.assets[] | select(.name == $name)] as $matches | ($matches | length) == 1 and $matches[0].state == "uploaded" and $matches[0].browser_download_url == $url and $matches[0].digest == $digest and $matches[0].size == $size' "$response" > /dev/null
+    else
+      jq -e --arg name "$name" --arg digest "sha256:$digest" --argjson size "$size" '[.assets[] | select(.name == $name)] as $matches | ($matches | length) == 1 and $matches[0].state == "uploaded" and $matches[0].digest == $digest and $matches[0].size == $size' "$response" > /dev/null
+    fi
   done
 }"#
         .to_owned()

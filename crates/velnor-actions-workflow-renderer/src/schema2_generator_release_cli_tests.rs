@@ -103,10 +103,16 @@ pub(super) fn assert_pinned_publish_calls(
             .count();
         let expected_reads = match case {
             Failure::WrongDraftReleaseId
+            | Failure::WrongDraftRepository
+            | Failure::WrongDraftApiPath
+            | Failure::WrongDraftTag
+            | Failure::WrongDraftSource
             | Failure::WrongDraftDigest
-            | Failure::WrongDraftUrl
             | Failure::WrongDraftSize
             | Failure::WrongDraftInventory
+            | Failure::UnknownDraftAsset
+            | Failure::WrongDraftAssetName
+            | Failure::WrongDraftAssetState
             | Failure::TagMovedBeforePublish => 1,
             _ => 3,
         };
