@@ -1,35 +1,65 @@
 # Generator publication qualification
 
-- State: source fix merged to `main` by PR #113 at
-  `993050b379ed1b190315d0c2aaa272fd76080c9b`. The exact PR head
-  `537f90e297cae61eb9df65b70d2039cdace3dc5e` received independent Ready
-  review and a passing required check. The protected v0.1.5 release and
-  consumer adoption have not been run.
-- Dispatch state: v0.1.5 dispatch and its actual hosted outcome remain
-  pending; no v0.1.5 release dispatch, publication, or consumer adoption has
-  been performed.
+- Snapshot (read-only GitHub observation at 2026-10-09 23:34 UTC): immutable
+  `v0.1.4` (release ID 406452151) is the latest published generator release;
+  its tag resolves to `d3590d321e51f7b99bfb0a92c11d3d6eb7af61cd` and it has 20
+  assets.
+- Hosted `v0.1.5` outcome: product-release run
+  [37904531694](https://github.com/tailrocks/velnor-new/actions/runs/37904531694)
+  was dispatched on `main` at exact source
+  `f1041f322c54cd7edfdef06afd307799eeaa801a`. Exact-source CI run
+  [37902214173](https://github.com/tailrocks/velnor-new/actions/runs/37902214173)
+  and its `Required` job succeeded. The Linux, macOS arm64, and macOS x86_64 builds and qualifications, plus
+  their attestations and the manifest attestation, passed. `publish-generator`
+  then failed at job
+  [113738982913](https://github.com/tailrocks/velnor-new/actions/runs/37904531694/job/113738982913)
+  while checking draft asset download URLs. The publisher did not upload its
+  acceptance artifact. GitHub still reports release ID 407717552 as a draft
+  for tag `v0.1.5`, targeting the exact source above, with 20 assets whose
+  download URLs use the temporary `untagged-6899c9b4aa4e941dadba` path.
+- The same coordinator also had an independent runner-image build failure at
+  job
+  [113735185782](https://github.com/tailrocks/velnor-new/actions/runs/37904531694/job/113735185782),
+  so its overall conclusion is failure. Report that branch separately from
+  generator acceptance: the generator publisher itself failed, and no
+  acceptance receipt was produced.
+- Publisher fix [PR #120](https://github.com/tailrocks/velnor-new/pull/120)
+  merged at `2edc5cad367f098fd295e5edd09e5f1fd79a9acb` on 2026-10-09
+  10:18:46 UTC, after the failed run. It permits temporary draft asset URLs
+  while retaining the draft's release identity, exact source, and complete
+  asset inventory checks; after publication it still requires canonical asset
+  URLs and immutable metadata. No successful official publication after this
+  fix has been observed.
+- The `v0.1.5` tag and draft are occupied and must not be reused, overwritten,
+  moved, or deleted. At the snapshot, both `v0.1.6` tag and release lookups
+  returned 404. PR #122 is still open at head
+  `87f7390abf7272d076f43b7fb75a9218228d14d0` against `main` at
+  `3139334cb79c0b494eb530b1de88ff258af10f21`; it proposes the next version but
+  does not establish release readiness or hosted acceptance.
+- Canonical route and gates: dispatch only
+  [`.github/workflows/product-release.yml`](../../.github/workflows/product-release.yml#L4)
+  on `main`, with `workflow_dispatch: {}` and no inputs. Release eligibility
+  requires the exact current `main` tip and successful same-source CI with the
+  `Required` job. Generator publication runs through the protected
+  `generator-release` environment; its current reviewer gate is recorded below.
 - Specification: [bootstrap and release contract](../proposed/bootstrap-and-release-contract.md),
   §2.1; [release gates](release-gates.md), BOOT-2.1 and BOOT-4.7.
-- Landed by: [PR #113](https://github.com/tailrocks/velnor-new/pull/113),
-  squash merge `993050b379ed1b190315d0c2aaa272fd76080c9b`.
-- Merge date: 2026-10-08 (22:34:50 UTC).
-- Delivered: generator publisher draft handling accepts GitHub's temporary
-  untagged draft URL while preserving the canonical URL check for published
-  releases; draft creation explicitly targets the exact source SHA. The
-  generator prepare gate still checks both `target_commitish == source SHA`
-  and the tag's resolved commit independently.
-- Acceptance evidence: the focused replay and rerun cases below qualify the
-  source fix only. No v0.1.5 dispatch, tag creation, or publication was
-  performed; historical run 37730166493 is described below.
-- Deviations: none.
-- Follow-up: protected hosted v0.1.5 qualification/publication and a separately
-  reviewed consumer adoption remain outstanding.
+- Earlier source change: [PR #113](https://github.com/tailrocks/velnor-new/pull/113)
+  merged as `993050b379ed1b190315d0c2aaa272fd76080c9b` on 2026-10-08
+  22:34:50 UTC. Its focused replay and rerun cases qualify source behavior;
+  they are not hosted publication evidence and did not cover the draft asset
+  URL failure observed in run 37904531694.
+- Follow-up: resolve PR #122's review and main-CI gates, then use a new version
+  through the canonical protected workflow. Consumer adoption remains a
+  separate reviewed change after a successful immutable release.
 
-## Failure evidence and scope
+## Earlier source reproduction and failure evidence
 
-The available log excerpt for product-release run
-[37730166493](https://github.com/tailrocks/velnor-new/actions/runs/37730166493)
-shows the rendered publisher script, checksum output, a draft-creation URL of
+The earlier v0.1.4 product-release dispatch in
+[run 37730166493](https://github.com/tailrocks/velnor-new/actions/runs/37730166493)
+used source `d3590d321e51f7b99bfb0a92c11d3d6eb7af61cd` and also failed in both
+the runner-image and generator-publish branches. Its available log shows the
+rendered publisher script, checksum output, and a draft-creation URL of
 `https://github.com/tailrocks/velnor-new/releases/tag/untagged-c155089fcae36e2c5c68`,
 and an exit status of 1. It has no shell xtrace. Since the script is printed
 before execution, the excerpt does not establish which later commands ran; in
@@ -50,24 +80,26 @@ publisher consequently exits at draft metadata before PATCH. This is a
 reproduced source predicate defect, not proof of the exact failing command in
 run 37730166493.
 
-The source fix exempts the draft `html_url` comparison while the release is a
-draft. It keeps stable ID, tag, API URL, draft, prerelease, exact source-tag,
-and complete asset-inventory checks. Once published, the publisher still
-requires the canonical `/releases/tag/v0.1.4` URL and `immutable == true`; the
-acceptance receipt remains downstream of those checks. A separate negative
-fixture confirms a noncanonical published URL still fails.
+PR #113's source fix exempts the release-page `html_url` comparison while
+the release is a draft. It keeps stable ID, tag, API URL, draft, prerelease,
+exact source-tag, and complete asset-inventory checks. That fixed the earlier
+fixture's release-page predicate but did not cover the separate asset
+`browser_download_url` predicate exposed by the v0.1.5 hosted run above. PR #120
+skips that canonical asset-URL comparison only while a draft; once published,
+the publisher still requires canonical asset URLs and `immutable == true`, and
+the acceptance receipt remains downstream of those checks. Negative fixtures
+continue to reject noncanonical published URLs.
 
 The same source inspection found that generator draft creation omitted
-`--target`, unlike the generic family publisher. The immutable `v0.1.4` API
-object currently reports `target_commitish=main`, while its tag resolves to
-`d3590d321e51f7b99bfb0a92c11d3d6eb7af61cd`. The generator `prepare` gate
-requires `target_commitish` to equal the exact source SHA and separately
-resolves the tag to that SHA. Therefore the current release fails prepare
-revalidation on the mutable target field even though its tag is source-bound.
-This is a later rerun/revalidation issue; the available evidence does not
-show that it caused run 37730166493 to fail. New draft creation now passes
-`--target "$GITHUB_SHA"`, matching the generic publisher and preserving both
-prepare checks.
+`--target`, unlike the generic family publisher. At the current snapshot, the
+published `v0.1.4` API object still reports `target_commitish=main`, while its
+tag resolves to `d3590d321e51f7b99bfb0a92c11d3d6eb7af61cd`. The generator's
+existing-release revalidation requires `target_commitish` to equal the exact
+source SHA and separately resolves the tag to that SHA, so revalidating this
+release against the source-bound metadata predicate would fail on
+`target_commitish`. This is separate from both observed draft-URL failures and
+does not explain either run. New draft creation passes `--target
+"$GITHUB_SHA"`, matching the generic publisher and preserving both checks.
 
 ## Focused verification
 
@@ -81,8 +113,9 @@ that the canonical draft html_url predicate alone is false, exact asset
 verification passes, the source tag matches, GET-by-ID occurs, and PATCH does not.
 ```
 
-After the source change, the same test passes with the untagged draft case
-successfully publishing through the mocked PATCH and receipt checks. The
+After PR #113 changed the release-page predicate, the same test passes
+with the untagged draft case successfully publishing through the mocked PATCH
+and receipt checks. The
 `WrongPublishedUrl` case still fails after publication. The mock CLI rejects
 draft creation unless `--target` names the exact fixture source SHA.
 
@@ -176,10 +209,11 @@ No other `.github` workflow, action, version reference, or lockfile changed.
 
 ## Route and external gates
 
-The supported entry point is the dispatch-only `.github/workflows/product-release.yml`
-coordinator, which invokes the reusable `.github/workflows/product-release-generator.yml`
-module. Release eligibility requires the dispatch SHA to be the exact current
-`main` tip and its exact-source main CI run and `Required` job to succeed; see
+The supported entry point is the `main`-only `.github/workflows/product-release.yml`
+coordinator with `workflow_dispatch: {}` and no inputs; it invokes the reusable
+`.github/workflows/product-release-generator.yml` module. Release eligibility
+requires the dispatch SHA to be the exact current `main` tip and its
+exact-source main CI run and `Required` job to succeed; see
 [`release-eligibility`](../../.github/workflows/product-release.yml#L11) and its
 main/`Required` checks at
 [`product-release.yml`](../../.github/workflows/product-release.yml#L51).
@@ -216,18 +250,20 @@ See the existing-release checks in
 protected generator publication job at
 [`product-release-generator.yml`](../../.github/workflows/product-release-generator.yml#L455).
 
-Read-only GitHub settings inspection on 2026-10-08 confirmed that the active
+Read-only GitHub rules inspection on 2026-10-08 confirmed that the active
 `protect-main` ruleset requires the strict `Required` check, pull requests with
-resolved review threads, squash merges, and linear history; the protected
-`generator-release` environment requires reviewer `donbeave` for protected
-branches. These settings do not establish hosted generator acceptance. No
-live dispatch or publication was used for this qualification.
+resolved review threads, squash merges, and linear history. A read-only check
+of the `generator-release` environment at 2026-10-09 23:34 UTC confirmed its
+required reviewer `donbeave` for protected branches. These settings establish
+the configured approval gate, not hosted generator acceptance; the actual
+hosted outcome is recorded above.
 
-Read-only release inventory checked at 2026-10-08 22:39 UTC found immutable
-`v0.1.4` (20 assets, ID 406452151), `v0.1.2`, `v0.1.1`, and `v0.1.0`.
-Tag `v0.1.3` exists but has no matching release; its commit SHA is
-`33d79403fef47164944d83a5e42313f463679b39`. The `v0.1.5` tag lookup returned
-HTTP 404 and no `v0.1.5` release appeared in the inventory. The next unused
-official version was therefore `v0.1.5` at that check. The separate
-v0.1.5 version-preparation checkpoint was added to
-`fix/release-velnor-0.1.5` afterward.
+The read-only release snapshot at 2026-10-09 23:34 UTC found published,
+immutable `v0.1.4` (20 assets, ID 406452151); its API `target_commitish` is
+`main`, while the tag resolves to `d3590d321e51f7b99bfb0a92c11d3d6eb7af61cd`.
+Tag `v0.1.5` resolves to `f1041f322c54cd7edfdef06afd307799eeaa801a` and is held
+by draft release ID 407717552 (20 assets, `immutable=false`). Its page and
+asset download URLs use the temporary
+[`untagged-6899c9b4aa4e941dadba` draft](https://github.com/tailrocks/velnor-new/releases/tag/untagged-6899c9b4aa4e941dadba)
+path. The `v0.1.6` tag and release lookups returned 404; PR #122 is an open
+version-preparation change, not an official release or qualification result.
