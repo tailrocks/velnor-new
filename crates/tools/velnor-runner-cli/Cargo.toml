@@ -13,6 +13,8 @@ workspace = true
 [dependencies]
 clap = { workspace = true }
 serde_json = { workspace = true }
+velnor-actions-orchestrator-merge-ports = { version = "=0.1.1", path = "../../services/velnor-actions-orchestrator-merge-ports" }
+velnor-runner-github = { version = "=0.1.1", path = "../velnor-runner-github" }
 velnor-runner-core = { version = "=0.1.1", path = "../velnor-runner-core" }
 velnor-runner-host = { version = "=0.1.1", path = "../velnor-runner-host" }
 velnor-runner-launch = { version = "=0.1.1", path = "../velnor-runner-launch" }
