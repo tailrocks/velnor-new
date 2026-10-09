@@ -175,11 +175,7 @@ fn validate_report_and_download(
         .as_ref()
         .ok_or_else(|| ContractError::identity("artifact.result", "missing_result"))?;
     let expected_name = super::artifact_name(&expectation.identity)?;
-    if observation.api_job_name
-        != expectation
-            .identity
-            .provider
-            .workflow_job_name(&expectation.identity.task_id)
+    if observation.api_job_name != expectation.expected_workflow_job_name()
         || observation.api_artifact_name.as_deref() != Some(expected_name.as_str())
     {
         return Err(ContractError::identity(

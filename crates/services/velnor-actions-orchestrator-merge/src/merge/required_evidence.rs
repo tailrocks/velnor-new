@@ -16,8 +16,8 @@
 use std::collections::BTreeSet;
 
 use velnor_actions_contract_workflow::{
-    ArtifactBuildProvider, FinalReport, JobConclusion, ObligationDecision, Plan, RequiredJobResult,
-    reconcile_artifact_builds,
+    FinalReport, JobConclusion, ObligationDecision, Plan, RequiredJobResult,
+    artifact_plan_providers, reconcile_artifact_builds,
 };
 
 use super::MergeRequest;
@@ -66,15 +66,16 @@ fn check_artifact_builds(
         miss_reasons.insert("source_missing".to_owned());
         return;
     };
-    let Some(first) = plan.artifact_tasks.first() else {
+    let providers = artifact_plan_providers(plan);
+    let Some(expected) = plan
+        .artifact_tasks
+        .iter()
+        .try_fold(0_usize, |sum, task| sum.checked_add(task.providers.len()))
+    else {
         signals.planning_failed = true;
         miss_reasons.insert("cache_corrupt".to_owned());
         return;
     };
-    let expected = first
-        .providers
-        .len()
-        .saturating_mul(plan.artifact_tasks.len());
     if request.artifact_build_observations.len() != expected {
         signals.planning_failed = true;
         miss_reasons.insert("no_entry".to_owned());
@@ -106,7 +107,6 @@ fn check_artifact_builds(
     if !all_success {
         return;
     }
-    let providers: Vec<ArtifactBuildProvider> = first.providers.clone();
     if reconcile_artifact_builds(
         plan,
         context,

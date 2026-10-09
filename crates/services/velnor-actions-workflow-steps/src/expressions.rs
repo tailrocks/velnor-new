@@ -83,6 +83,7 @@ const WITH_EXPRESSIONS: &[&str] = &[
     "github.job",
     "github.event_name == 'push'",
     "steps.publish-baseline.outputs.artifact_name",
+    "steps.verification-artifact-export.outputs.artifact_name",
     "steps.tofu-providers.outputs.cache-key",
     "steps.tofu-providers.outputs.cache-path",
     "env.VELNOR_MISE_CACHE_ENABLED",

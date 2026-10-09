@@ -153,6 +153,32 @@ pub fn artifact_build_upload_step() -> Result<Step, RenderError> {
     Ok(step)
 }
 
+/// Upload one plan-verified static verification task output inventory.
+/// The preceding exporter derives the artifact identity from the downloaded
+/// plan and appends its exact name to the typed step output.
+/// # Errors
+pub fn verification_artifact_upload_step() -> Result<Step, RenderError> {
+    let output = "${{ steps.verification-artifact-export.outputs.artifact_name }}";
+    let mut step = action_step(
+        "Upload verified verification outputs",
+        UPLOAD_ARTIFACT_USES,
+        BTreeMap::from([
+            ("name".to_owned(), output.to_owned()),
+            (
+                "path".to_owned(),
+                format!("${{{{ runner.temp }}}}/velnor/artifact-builds/{output}"),
+            ),
+            ("if-no-files-found".to_owned(), "error".to_owned()),
+            (
+                "retention-days".to_owned(),
+                ARTIFACT_RETENTION_DAYS.to_string(),
+            ),
+        ]),
+    )?;
+    step.role = Some(StepRole::ArtifactBuildUpload);
+    Ok(step)
+}
+
 /// Baseline-publish upload step display name.
 pub const BASELINE_PUBLISH_UPLOAD_NAME: &str = "Upload baseline";
 /// Step ID of the baseline-publishing internal step.

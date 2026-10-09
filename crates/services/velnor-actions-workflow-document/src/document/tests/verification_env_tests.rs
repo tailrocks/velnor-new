@@ -34,6 +34,7 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
             mise_task: "desktop-format-check".to_owned(),
             runner: VerificationRunner::MacosArm64,
             timeout_minutes: 10,
+            outputs: Vec::new(),
         },
         runner_label: "macos-15".to_owned(),
         scale_set_token: None,
@@ -42,6 +43,7 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
             version: "2026.9.18".to_owned(),
             sha256: "a".repeat(64),
         },
+        staging_steps: Vec::new(),
     };
     let id = policy.job_id();
     let job = build_verification_task_job(

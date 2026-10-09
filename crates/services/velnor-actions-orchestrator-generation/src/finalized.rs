@@ -9,7 +9,8 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract_config::WorkflowPolicy;
-use velnor_actions_contract_workflow::{Job, expand_workflow};
+use velnor_actions_contract_workflow::{Job, Step, StepRole, expand_workflow};
+use velnor_actions_orchestrator_workflow_ir::workflow::WorkflowPlan;
 use velnor_actions_workflow_jobs::finalize_jobs as finalize_render_jobs;
 
 use crate::attach::{attach_lock_acquire, attach_preseed};
@@ -54,8 +55,60 @@ pub(crate) fn owned_preparation(
                 &fetch_roots,
             )?;
         }
+        bind_verification_staging(&mut owned.workflow)?;
     }
     Ok(owned)
+}
+
+/// Bind each output task to the exact helper-staging prefix attached above.
+fn bind_verification_staging(workflow: &mut WorkflowPlan) -> Result<(), OrchestratorError> {
+    for policy in &mut workflow.context.verification_tasks {
+        if policy.task.outputs.is_empty() {
+            continue;
+        }
+        let id = policy.job_id();
+        let job = workflow
+            .ir
+            .jobs
+            .get(&id)
+            .ok_or_else(|| OrchestratorError::Contract {
+                problem: format!("verification_job_missing:{id}"),
+            })?;
+        if job
+            .steps
+            .first()
+            .is_none_or(|step| step.role != Some(StepRole::Checkout))
+        {
+            return Err(OrchestratorError::Contract {
+                problem: format!("verification_checkout_missing:{id}"),
+            });
+        }
+        let tail = &job.steps[1..];
+        let count = tail
+            .iter()
+            .take_while(|step| is_task_staging_step(step))
+            .count();
+        if count == 0 || tail[count..].iter().any(is_task_staging_step) {
+            return Err(OrchestratorError::Contract {
+                problem: format!("verification_task_staging_missing_or_misordered:{id}"),
+            });
+        }
+        policy.staging_steps = tail[..count].to_vec();
+    }
+    Ok(())
+}
+
+/// Staging roles supplied by Velnor's lock or pre-seed acquisition paths.
+fn is_task_staging_step(step: &Step) -> bool {
+    matches!(
+        step.role,
+        Some(
+            StepRole::AcquireVelnor
+                | StepRole::PreseedDownload
+                | StepRole::PreseedVerifyManifest
+                | StepRole::PreseedStage
+        )
+    )
 }
 
 /// Finalized jobs `generate` writes: attached IR plus merged support,

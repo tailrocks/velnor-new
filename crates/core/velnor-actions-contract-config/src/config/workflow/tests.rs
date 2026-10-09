@@ -104,6 +104,7 @@ fn workflow_tasks_require_sorted_unique_safe_ids() {
         mise_task: format!("check-{id}"),
         runner: VerificationRunner::LinuxX64,
         timeout_minutes: 10,
+        outputs: Vec::new(),
     };
     let mut valid = named("CI");
     valid.tasks = vec![make("native-format"), make("native-lint")];
@@ -133,6 +134,7 @@ fn artifact_task_ids_cannot_collide_with_verification_tasks() {
         mise_task: "verify-native".to_owned(),
         runner: VerificationRunner::LinuxX64,
         timeout_minutes: 15,
+        outputs: Vec::new(),
     }];
     config.artifact_tasks = vec![ArtifactBuildTask {
         id: "native-check".to_owned(),

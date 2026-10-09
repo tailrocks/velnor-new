@@ -168,3 +168,60 @@ fn reconciliation_requires_unique_actions_api_job_and_artifact_identity() {
         .is_err()
     );
 }
+
+#[test]
+fn mixed_matrix_and_static_outputs_reconcile_through_the_same_receipt_contract() {
+    let mut plan = plan();
+    let mut static_task = task();
+    static_task.id = "verification-output".to_owned();
+    static_task.mise_task = "write-verification-output".to_owned();
+    plan.artifact_tasks.push(ArtifactBuildTaskPlan {
+        task: static_task,
+        producer: ArtifactBuildProducer::VerificationTask,
+        providers: vec![
+            ArtifactBuildProvider::GithubHosted,
+            ArtifactBuildProvider::VelnorScaleSet,
+        ],
+    });
+    let providers = [
+        ArtifactBuildProvider::GithubHosted,
+        ArtifactBuildProvider::VelnorScaleSet,
+    ];
+    let expected = expected_artifact_builds(&plan, &run_context(), &providers)
+        .expect("complete producer inventory");
+    let observations = expected
+        .iter()
+        .enumerate()
+        .map(|(index, expectation)| {
+            let task_plan = plan
+                .artifact_tasks
+                .iter()
+                .find(|item| item.task.id == expectation.identity.task_id)
+                .expect("task is in plan");
+            let mut observed = observation(&task_plan.task, expectation.identity.clone());
+            observed.api_job_name = expectation.expected_workflow_job_name();
+            observed.api_job_id = Some(index as u64 + 1);
+            observed.api_artifact_id = Some(index as u64 + 100);
+            observed
+        })
+        .collect::<Vec<_>>();
+    reconcile_artifact_builds(&plan, &run_context(), &providers, &observations)
+        .expect("both producer paths use the same verified results");
+
+    let static_index = expected
+        .iter()
+        .position(|item| item.producer == ArtifactBuildProducer::VerificationTask)
+        .expect("static result exists");
+    let mut missing = observations.clone();
+    missing.remove(static_index);
+    assert!(reconcile_artifact_builds(&plan, &run_context(), &providers, &missing).is_err());
+
+    let mut corrupt = observations;
+    corrupt[static_index]
+        .result
+        .as_mut()
+        .expect("static receipt exists")
+        .outputs[0]
+        .digest = "b3-".to_owned() + &"0".repeat(64);
+    assert!(reconcile_artifact_builds(&plan, &run_context(), &providers, &corrupt).is_err());
+}

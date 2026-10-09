@@ -74,6 +74,7 @@ fn plan() -> Result<Plan, Box<dyn Error>> {
         task_ids: vec![],
         artifact_tasks: vec![ArtifactBuildTaskPlan {
             task: task(1024),
+            producer: velnor_actions_contract_workflow::ArtifactBuildProducer::MatrixBuild,
             providers: vec![
                 ArtifactBuildProvider::GithubHosted,
                 ArtifactBuildProvider::VelnorScaleSet,
@@ -94,15 +95,15 @@ fn invocation(
         run_id: "123456789".to_owned(),
         run_attempt: 2,
     };
-    let identity = velnor_actions_contract_workflow::expected_artifact_builds(
+    let expected = velnor_actions_contract_workflow::expected_artifact_builds(
         plan,
         &context,
         &plan.artifact_tasks[0].providers,
     )?
     .into_iter()
     .find(|expected| expected.identity.provider == provider)
-    .ok_or_else(|| io::Error::other("provider identity missing"))?
-    .identity;
+    .ok_or_else(|| io::Error::other("provider identity missing"))?;
+    let identity = expected.identity.clone();
     let artifact_name = velnor_actions_contract_workflow::artifact_name(&identity)?;
     Ok(ArtifactExportInvocation {
         repository_id: context.repository_id,
@@ -124,6 +125,7 @@ fn invocation(
         task_id: "linux-image".to_owned(),
         mise_task: "ci-build-linux-image".to_owned(),
         artifact_name,
+        producer: expected.producer,
     })
 }
 
@@ -356,3 +358,35 @@ fn plan_bound_export_rejects_mismatched_source_before_staging_outputs() -> TestR
     assert!(!temp.path().join("velnor/artifact-builds").exists());
     Ok(())
 }
+
+#[test]
+fn static_verification_outputs_use_the_same_plan_bound_manifest_and_exporter() -> TestResult {
+    let source = tempfile::tempdir()?;
+    let temp = tempfile::tempdir()?;
+    let contents = b"existing verification task output";
+    setup(source.path(), contents)?;
+    let mut plan = plan()?;
+    plan.artifact_tasks[0].producer =
+        velnor_actions_contract_workflow::ArtifactBuildProducer::VerificationTask;
+    let invocation = invocation(&plan, ArtifactBuildProvider::VelnorScaleSet)?;
+    let artifact = materialize_planned_artifact(
+        source.path(),
+        temp.path(),
+        &canonical_json_str(&plan)?,
+        invocation,
+    )?;
+    assert_eq!(
+        artifact.result.identity.provider,
+        ArtifactBuildProvider::VelnorScaleSet
+    );
+    assert_eq!(
+        artifact.result.identity.workflow_job_id,
+        "task-linux-image__local"
+    );
+    assert_eq!(artifact.result.outputs[0].digest, digest_b3(contents));
+    assert_eq!(artifact.result.outputs[0].path, "dist/image.tar");
+    Ok(())
+}
+
+#[path = "impl_artifact_export/verification_routing.rs"]
+mod verification_routing;

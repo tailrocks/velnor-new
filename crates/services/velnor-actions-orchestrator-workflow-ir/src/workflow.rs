@@ -120,7 +120,8 @@ pub fn build_workflow(
     let catalog = ToolCatalog::pinned();
     let version = env!("CARGO_PKG_VERSION").to_owned();
     let policy = config.workflow.policy;
-    let verification_tasks = crate::verification_tasks::policies(config)?;
+    let verification_tasks =
+        crate::verification_tasks::policies(config, policy, &version, discovery)?;
     let use_mbx = plan_uses_mbx(discovery);
     let support = workflow_support::support_workflow(config, discovery);
     let mut jobs = BTreeMap::new();

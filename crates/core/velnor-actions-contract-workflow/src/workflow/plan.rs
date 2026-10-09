@@ -238,7 +238,7 @@ impl Plan {
                 };
                 return Err(ContractError::identity("artifact_tasks", problem));
             }
-            if task_ids.contains(task.task.id.as_str()) {
+            if task.producer.is_matrix_build() && task_ids.contains(task.task.id.as_str()) {
                 return Err(ContractError::identity(
                     "artifact_tasks",
                     format!("task_id_collision:{}", task.task.id),
@@ -246,12 +246,16 @@ impl Plan {
             }
             previous = Some(task.task.id.as_str());
         }
-        if let Some(first) = self.artifact_tasks.first()
-            && self
-                .artifact_tasks
+        let matrix_providers = self
+            .artifact_tasks
+            .iter()
+            .find(|task| task.producer.is_matrix_build())
+            .map(|task| &task.providers);
+        if matrix_providers.is_some_and(|providers| {
+            self.artifact_tasks
                 .iter()
-                .any(|task| task.providers != first.providers)
-        {
+                .any(|task| task.producer.is_matrix_build() && &task.providers != providers)
+        }) {
             return Err(ContractError::identity(
                 "artifact.providers",
                 "provider_scope_mismatch",

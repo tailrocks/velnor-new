@@ -55,6 +55,7 @@ pub fn artifact_matrix_for_provider(
     let include = plan
         .artifact_tasks
         .iter()
+        .filter(|item| item.producer.is_matrix_build())
         .filter(|item| item.providers.contains(&provider))
         .map(|item| matrix_entry(plan, &plan_digest, provider, item))
         .collect::<Result<Vec<_>, _>>()?;

@@ -4,6 +4,7 @@ use serde::Serialize;
 use velnor_actions_contract::canonical::{canonical_json_bytes, digest_b3, validate_digest};
 use velnor_actions_contract::errors::ContractError;
 use velnor_actions_contract::ids::validate_run_key;
+use velnor_actions_contract_config::VERIFICATION_TASK_JOB_PREFIX;
 
 use super::{ArtifactBuildIdentity, ArtifactBuildProvider, validate_repository_identity};
 
@@ -96,7 +97,10 @@ pub(super) fn validate_identity(identity: &ArtifactBuildIdentity) -> Result<(), 
             "must_be_positive",
         ));
     }
-    let job_id_is_valid = match identity.provider {
+    if !velnor_actions_contract_config::is_valid_verification_task_id(&identity.task_id) {
+        return Err(ContractError::identity("artifact.task_id", "bad_task_id"));
+    }
+    let matrix_job_id_is_valid = match identity.provider {
         ArtifactBuildProvider::GithubHosted => matches!(
             identity.workflow_job_id.as_str(),
             "artifact-build" | "artifact-build__hosted"
@@ -106,14 +110,22 @@ pub(super) fn validate_identity(identity: &ArtifactBuildIdentity) -> Result<(), 
             "artifact-build" | "artifact-build__local"
         ),
     };
-    if !job_id_is_valid {
+    let task_job_id = format!("{VERIFICATION_TASK_JOB_PREFIX}{}", identity.task_id);
+    let task_job_id_is_valid = match identity.provider {
+        ArtifactBuildProvider::GithubHosted => {
+            identity.workflow_job_id == task_job_id
+                || identity.workflow_job_id == format!("{task_job_id}__hosted")
+        }
+        ArtifactBuildProvider::VelnorScaleSet => {
+            identity.workflow_job_id == task_job_id
+                || identity.workflow_job_id == format!("{task_job_id}__local")
+        }
+    };
+    if !matrix_job_id_is_valid && !task_job_id_is_valid {
         return Err(ContractError::identity(
             "artifact.workflow_job_id",
             "job_key_provider_mismatch",
         ));
-    }
-    if !velnor_actions_contract_config::is_valid_verification_task_id(&identity.task_id) {
-        return Err(ContractError::identity("artifact.task_id", "bad_task_id"));
     }
     Ok(())
 }

@@ -8,6 +8,7 @@ mod dispatch;
 mod dispatch_config;
 mod dispatch_gate;
 mod dispatch_publish;
+mod dispatch_verification_artifact;
 
 use std::process::ExitCode;
 

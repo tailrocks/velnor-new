@@ -8,7 +8,9 @@
 use std::env;
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract_workflow::ARTIFACT_EXPORT_OPERATION;
+use velnor_actions_contract_workflow::{
+    ARTIFACT_EXPORT_OPERATION, VERIFICATION_ARTIFACT_EXPORT_OPERATION,
+};
 use velnor_actions_orchestrator_baseline_publish::baseline_publish::PUBLISH_OP;
 use velnor_actions_orchestrator_check_runtime::EXECUTE_CHECK_OP;
 use velnor_actions_orchestrator_core::report_keys::REPORT_OP;
@@ -41,6 +43,8 @@ pub(crate) enum InternalOp {
     Fetch,
     /// Validate and stage a plan-declared artifact build result.
     ArtifactExport,
+    /// Validate and stage a plan-declared verification task output.
+    VerificationArtifactExport,
     /// Task-report production operation.
     Report,
     /// Pre-seed manifest-writing operation.
@@ -71,6 +75,9 @@ pub(crate) fn gate_request() -> Option<InternalRequest> {
         Ok(tag) if tag == MERGE_OP => InternalOp::Merge,
         Ok(tag) if tag == FETCH_OP => InternalOp::Fetch,
         Ok(tag) if tag == ARTIFACT_EXPORT_OPERATION => InternalOp::ArtifactExport,
+        Ok(tag) if tag == VERIFICATION_ARTIFACT_EXPORT_OPERATION => {
+            InternalOp::VerificationArtifactExport
+        }
         Ok(tag) if tag == REPORT_OP => InternalOp::Report,
         Ok(tag) if tag == PRESEED_MANIFEST_OP => InternalOp::PreseedManifest,
         Ok(tag) if tag == PUBLISH_OP => InternalOp::Publish,
@@ -80,6 +87,7 @@ pub(crate) fn gate_request() -> Option<InternalRequest> {
         || op == InternalOp::Report
         || op == InternalOp::ExecuteCheck
         || op == InternalOp::ArtifactExport
+        || op == InternalOp::VerificationArtifactExport
     {
         if env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
             return runner_velnor_dir().map(|path| InternalRequest { op, path });
@@ -112,6 +120,7 @@ pub(crate) fn gate_request() -> Option<InternalRequest> {
         InternalOp::Fetch
         | InternalOp::Report
         | InternalOp::ArtifactExport
+        | InternalOp::VerificationArtifactExport
         | InternalOp::PreseedManifest
         | InternalOp::ExecuteCheck => {}
     }

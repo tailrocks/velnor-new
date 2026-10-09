@@ -18,6 +18,9 @@ use velnor_actions_contract_config::config::{
     VerificationRunner,
 };
 
+mod verification_mode;
+pub use verification_mode::verification_job_mode;
+
 /// Suffix for the hosted copy of a verification job.
 pub const HOSTED_SUFFIX: &str = "__hosted";
 /// Suffix for the scale-set copy of a verification job.
