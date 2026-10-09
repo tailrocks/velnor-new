@@ -1,9 +1,12 @@
 # Freshness and tool qualification evidence — 2026-10-10
 
 This record refreshes the version inventory using observed upstream responses
-and records the exact-host qualification of Mise `2026.10.6`. The source is
-PR #126 head `bbf2cb2df8380b173a0629d07cb862f4870588f8` (tree
-`ebb160d5cbea5d021aac14c269f9e52aee86fda4`), based on main
+and records the exact-host qualification of Mise `2026.10.6`. The hosted
+qualification and upstream probe below are bound to implementation source
+`bbf2cb2df8380b173a0629d07cb862f4870588f8` (tree
+`ebb160d5cbea5d021aac14c269f9e52aee86fda4`). The terminal local gate run is
+bound to PR #126 code/evidence head `3538b248cbd0938ff73f645d87dcf29196a94aa1`
+(tree `83799865fe6abddc6a957f2efd7b3344baa0488b`); both are based on main
 `3139334cb79c0b494eb530b1de88ff258af10f21`. The PR is not merged. This record
 does not claim Velnor `v0.1.6` publication, release qualification, or consumer
 adoption.
@@ -72,14 +75,50 @@ they are not timestamp-only renewals.
 
 ## Local verification status
 
-On the same source before this inventory refresh, five of the six repository
-gate categories passed: formatting, workspace Clippy, workspace Nextest,
-Alint, and Cargo Deny. Nextest reported 3,648 passed, zero failed, and two
-skipped. The freshness gate failed on the prior pending Mise status and stale
-observation timestamps; `scripts/verify-local.sh` therefore exited 1 at
-`repo-policy`. Those pre-update logs are at
+The earlier full batch on implementation source `bbf2cb2` passed five of the
+six standalone gate categories: formatting, workspace Clippy, workspace
+Nextest, Alint, and Cargo Deny. Nextest reported 3,648 passed, zero failed,
+and two skipped. The freshness gate failed on the then-pending Mise status and
+stale observation timestamps; `scripts/verify-local.sh` exited 1 at
+`repo-policy`. Those earlier logs are at
 `/private/tmp/velnor-pr126-gates-bbf2-fixedcontext-20261010/` (`verify_local.log`
 SHA-256 `a2b9b3aca0c16560bb41eefdb2080990926cef3e6faebd9a541b708624e3668c`).
+
+The terminal full gate batch was run on clean code/evidence head
+`3538b248cbd0938ff73f645d87dcf29196a94aa1`, tree
+`83799865fe6abddc6a957f2efd7b3344baa0488b`, using the pinned tools recorded by
+the batch script. All six standalone gate categories passed: formatting,
+workspace Clippy, workspace Nextest (3,648 passed, zero failed, two skipped),
+Alint validation and check, Cargo Deny, and freshness. The standalone Nextest
+log passed `atomic_commit_never_exposes_missing_tree` at test 2,003 of 3,648.
+
+The subsequent `scripts/verify-local.sh` invocation on that same code head
+exited 1 at its integration stage. It ran 2,019 of 3,648 tests: 2,018 passed,
+one failed, and two were skipped; Nextest reports that the remaining 1,629
+tests were not run after the failure. The failed test was
+`impl_generate_p09_atomic::atomic_commit_never_exposes_missing_tree`. Its
+strict `.github` metadata observer recorded two `NotFound` errors with raw
+errno 2 during `rewrite_4_in_progress`; it recorded zero other metadata
+errors. The post-error probes found the parent and `.github` target present,
+which does not establish why the earlier lookups failed. The cause remains
+unresolved. The standalone Nextest pass and this later `verify-local` failure
+are separate results; the pass does not clear the failure. PR #126 therefore
+has no local merge or release clearance.
+
+The final batch receipts are retained at
+`/private/tmp/velnor-pr126-gates-3538-final-20261010/` with the adjacent
+`velnor-pr126-gates-3538-final-20261010-run-gates.sh`. The script SHA-256 is
+`b4f2acc9581f085150b3f87cdff55f7391bbc39c811c0565276fd0de4a7c1105`; the
+standalone results table SHA-256 is
+`b95d8903b9e433f9671019044b9c1556816f24fde8597f5496c1a5ce835ecb92`; the
+standalone Nextest log SHA-256 is
+`9fe6efc8ef7b091d687fda8b375d0571a9e7ff910345d96368c8fc6e8f8b6dea`; the
+terminal `verify-local` summary SHA-256 is
+`2623d0b905331840de7ec878ca7dc986a1975f5203afcc5b43bdcdafa69b7f3c`; and its
+integration log SHA-256 is
+`171d85d53ee51b4c76c827d2d9cc09414e9ee28aa303fc80d30d3bb8dc1fb09f`. An
+older copied `verify-local-stage-logs/verify-local.log` in that directory is
+dated `2026-10-05` and is not part of this terminal batch.
 
 After the inventory and evidence update in the isolated evidence worktree,
 `bash scripts/check-freshness.sh`, `alint validate-config`,
@@ -87,7 +126,5 @@ After the inventory and evidence update in the isolated evidence worktree,
 focused result table is at
 `/private/tmp/velnor-refresh-qualified-tool-evidence-checks-20261010/results.tsv`;
 the offline freshness log SHA-256 is
-`962d4ae15f9e80e9a55fcf00cdb6fa9f691bd06c880709483ec4871f2c61e924`. This is
-not a new full six-gate or `verify-local.sh` result on the updated inventory.
-A clean current atomic-observer test does not erase the separately retained
-historical `NotFound` observation.
+`962d4ae15f9e80e9a55fcf00cdb6fa9f691bd06c880709483ec4871f2c61e924`. Those
+focused checks do not change the terminal full-gate result above.
