@@ -309,6 +309,59 @@ UID 501 session. No syscall or VFS trace was captured. This is a limitation of
 this session's tracing capability, not evidence that macOS/APFS cannot be
 traced or that the kernel caused the error.
 
+## Bounded userspace controls
+
+To test the remaining cleanup-lifecycle hypotheses without privileged tracing,
+two single-test cells ran on disposable source `7690dea7`. The diagnostic-only
+source diff SHA-256 was
+`f37fb01215414f67802993ecce7e4c7ff74c0b68cde2abd3adde07397a5d1fab`; it did
+not alter the repository worktree or production branch. The original absolute
+`symlink_metadata` observer loop and strict zero-error assertion were
+unchanged. An FD-relative, no-follow `.github` lookup was added only after an
+original observer error; neither cell had such an error, so that post-error
+snapshot did not execute.
+
+Both cells opened and held a descriptor to each retired root after exchange,
+recorded its metadata before cleanup, and checked the descriptor again after
+observer threads joined and cleanup had completed. The second check was not
+sampled immediately after each removal. Keeping these descriptors pins the retired directory and is an
+intervention, so clean results cannot rule out a failure that requires the
+un-pinned production lifetime. The immediate cell kept production
+`remove_dir_all` and `TempDir` drop ordering. The deferred cell instead kept
+the actual eight `TempDir` owners alive until all four observer threads joined,
+then dropped them and collected the post-cleanup descriptor metadata. It kept
+the same-parent staging topology, eight rewrites, and four observers. This is
+a diagnostic control, not a product behavior change or a release gate.
+
+Each invocation used Rust/Cargo 1.98.1, `CARGO_HOME=/tmp/velnor-110-cargo-home`,
+`CARGO_TARGET_DIR=/private/tmp/velnor-atomic-prod-7690-target`, Cargo offline,
+and the exact filtered test command:
+
+```sh
+cargo test --locked --offline -p velnor-actions-orchestrator --test velnor_orchestrator \
+  impl_generate_p09_atomic::atomic_commit_never_exposes_missing_tree -- --exact --nocapture
+```
+
+The immediate-cleanup cell set `VELNOR_ATOMIC_DEFER_CLEANUP=0`, passed 1 test
+with 0 failures, 0 ignored, and 728 filtered out in 2.61 seconds. Its trace is
+`/private/tmp/velnor-gap-probe/userspace-immediate-7690.log`, SHA-256
+`00b6f750fa11ab8e8ad078b13d801a02c002c35e2348ff43e28017c18c690c07`. The
+deferred-cleanup cell set `VELNOR_ATOMIC_DEFER_CLEANUP=1`, passed 1 test with 0
+failures, 0 ignored, and 728 filtered out in 2.82 seconds. Its trace is
+`/private/tmp/velnor-gap-probe/userspace-deferred-7690.log`, SHA-256
+`f579851d635e7b2ab84144d49ceaa532b239473993ecb645323df047635b778e`.
+
+Both traces record eight successful exchanges and eight retired-root
+descriptors. All recorded pre- and post-cleanup descriptor metadata calls
+succeeded with errno 0 and the same device/inode per descriptor. The deferred
+trace records all eight TempDir owners being dropped after the observers
+joined. Cargo reported the same test-binary path for both invocations, but its
+binary digest was not saved before the diagnostic target disappeared; no
+binary hash is claimed. These two non-reproductions show that held descriptors
+remain queryable after cleanup in these runs. They do not prove pathname
+continuity, explain the historical `NotFound`, or clear the failed assertion.
+No additional clean replay was run.
+
 The historical `NotFound` remains a real failed assertion and its production
 cause is unproven. The two minimized non-reproductions neither clear that
 failure nor establish a namespace gap, a rename error, or an old-tree cleanup
