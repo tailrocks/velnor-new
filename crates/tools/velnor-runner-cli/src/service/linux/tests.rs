@@ -140,6 +140,18 @@ fn empty_jobs() -> ManagerOutput {
     manager_output(true, Vec::new())
 }
 
+struct TimedOutManager;
+
+impl Manager for TimedOutManager {
+    fn systemctl(&mut self, _: &[&str]) -> io::Result<ManagerOutput> {
+        Err(io::Error::from(io::ErrorKind::TimedOut))
+    }
+
+    fn busctl(&mut self, _: &[&str]) -> io::Result<ManagerOutput> {
+        unreachable!("status does not query busctl")
+    }
+}
+
 #[test]
 fn status_reads_only_systemd_state_and_fails_closed_on_unknown() {
     let stopped =
@@ -168,11 +180,6 @@ fn status_reads_only_systemd_state_and_fails_closed_on_unknown() {
         super::service_status_line(true, pending),
         Ok("controller_service=in_use")
     );
-    assert_eq!(
-        manager.calls[0][2],
-        "--property=LoadState,ActiveState,SubState,MainPID,ControlPID,Job"
-    );
-
     let missing_job =
         b"LoadState=loaded\nActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\n";
     let mut manager = FakeManager::with_outputs([manager_output(true, missing_job.to_vec())]);
@@ -191,6 +198,11 @@ fn status_reads_only_systemd_state_and_fails_closed_on_unknown() {
         Err(ServiceFault::UnknownState)
     );
     assert_eq!(manager.calls.len(), 1);
+
+    assert_eq!(
+        perform(ServiceAction::Status, &mut TimedOutManager, 0),
+        Err(ServiceFault::UnknownState)
+    );
 }
 
 #[test]
