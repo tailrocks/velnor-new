@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use tokio::time::Instant;
 
 use crate::HostError;
+use crate::docker_client::DockerDaemonBinding;
 
 mod response;
 mod transport;
@@ -90,6 +91,33 @@ pub async fn list_owned_docker_resources_until(
     let _inventory_permit = acquire_inventory_slot(deadline).await?;
     ensure_before_deadline(deadline)?;
     let api = BoundedDockerApi::new(endpoint)?;
+    list_inventory_with_api(api, deadline).await
+}
+
+/// Return the complete Docker ownership inventory using a same-connection daemon binding.
+///
+/// Every list GET first validates the bound daemon ID over the exact socket
+/// connection that carries that GET. Linux reconciliation must use this function
+/// rather than the unbound compatibility API above.
+///
+/// # Errors
+///
+/// Returns [`HostError::Docker`] when the daemon binding, transport, response, or
+/// inventory is invalid, incomplete, malformed, ambiguous, too large, or late.
+pub async fn list_owned_docker_resources_bound_until(
+    binding: &DockerDaemonBinding,
+    deadline: Instant,
+) -> Result<Vec<OwnedDockerResource>, HostError> {
+    let _inventory_permit = acquire_inventory_slot(deadline).await?;
+    ensure_before_deadline(deadline)?;
+    let api = BoundedDockerApi::new_bound(binding)?;
+    list_inventory_with_api(api, deadline).await
+}
+
+async fn list_inventory_with_api(
+    api: BoundedDockerApi,
+    deadline: Instant,
+) -> Result<Vec<OwnedDockerResource>, HostError> {
     let mut inventory = InventoryBuilder::default();
     let containers: BoundedVec<InventoryContainer, MAX_INVENTORY_OBJECTS_PER_KIND> =
         api.get_json("/containers/json?all=1", deadline).await?;

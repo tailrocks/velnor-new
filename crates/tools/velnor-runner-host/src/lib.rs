@@ -23,7 +23,9 @@ pub use assign::{Offer, offer};
 pub use config_snapshot::{ValidatedHostConfigSnapshot, read_validated_host_config_snapshot};
 pub use connect::{ConnectPlan, DisconnectEffect, SetOwnership, connect_plan, disconnect_effects};
 pub use daemon_lock::DaemonLock;
-pub use docker_client::connect_unix;
+pub use docker_client::{
+    DockerDaemonBinding, connect_unix, connect_unix_bound, observe_docker_daemon_binding_until,
+};
 pub use guest::guest_slots;
 pub use https::{BoundedDiscoveryTransport, HttpsTransport};
 pub use ipc::{MAX_FRAME, SOCKET_DIR_MODE, decode_frame, encode_frame};
@@ -62,6 +64,6 @@ pub use worker::{
     BollardCreate, CreateProjection, MAX_INVENTORY_OBJECTS_PER_KIND, MAX_INVENTORY_RESPONSE_BYTES,
     OwnedDockerResource, OwnedDockerResourceKind, ProtectedStateDirectory,
     ProtectedStateDirectoryIdentity, Started, bollard_create, dind_create, dind_create_for_profile,
-    list_owned_docker_resources_until, runner_create, start_pair, start_pair_with_profile,
-    validate_protected_state_directory, worker_volume_names,
+    list_owned_docker_resources_bound_until, list_owned_docker_resources_until, runner_create,
+    start_pair, start_pair_with_profile, validate_protected_state_directory, worker_volume_names,
 };

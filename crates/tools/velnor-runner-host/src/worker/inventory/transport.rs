@@ -13,7 +13,7 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio::time::{Instant, timeout_at};
 
 use crate::HostError;
-use crate::docker_client::unix_socket_path;
+use crate::docker_client::{DockerDaemonBinding, daemon_guard::guarded_request, unix_socket_path};
 
 const MAX_HTTP_BUFFER_BYTES: usize = 16 * 1024;
 /// Maximum decoded JSON response bytes retained for any one inventory endpoint.
@@ -22,11 +22,19 @@ pub const MAX_INVENTORY_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
 type RequestBody = Empty<Bytes>;
 type InventoryClient = Client<UnixConnector, RequestBody>;
 
+#[derive(Clone)]
+enum InventoryTransport {
+    Unbound {
+        client: InventoryClient,
+        socket_path: String,
+    },
+    Bound(DockerDaemonBinding),
+}
+
 /// One connection pool for the sequential list calls in one inventory query.
 #[derive(Clone)]
 pub(super) struct BoundedDockerApi {
-    client: InventoryClient,
-    socket_path: String,
+    transport: InventoryTransport,
 }
 
 impl BoundedDockerApi {
@@ -42,8 +50,18 @@ impl BoundedDockerApi {
             .http1_max_buf_size(MAX_HTTP_BUFFER_BYTES)
             .pool_max_idle_per_host(0);
         Ok(Self {
-            client: builder.build::<_, RequestBody>(UnixConnector),
-            socket_path,
+            transport: InventoryTransport::Unbound {
+                client: builder.build::<_, RequestBody>(UnixConnector),
+                socket_path,
+            },
+        })
+    }
+
+    /// Create a list client that guards every request with same-connection daemon identity.
+    pub(super) fn new_bound(binding: &DockerDaemonBinding) -> Result<Self, HostError> {
+        let _validated_endpoint = unix_socket_path(binding.endpoint())?;
+        Ok(Self {
+            transport: InventoryTransport::Bound(binding.clone()),
         })
     }
 
@@ -75,7 +93,14 @@ impl BoundedDockerApi {
             "/v{}.{}{}",
             version.major_version, version.minor_version, route
         );
-        let uri = UnixUri::new(&self.socket_path, &path);
+        let uri: hyper::Uri = match &self.transport {
+            InventoryTransport::Bound(_) => format!("http://localhost{path}")
+                .parse()
+                .map_err(|_| HostError::Docker)?,
+            InventoryTransport::Unbound { socket_path, .. } => {
+                UnixUri::new(socket_path, &path).into()
+            }
+        };
         let request = Request::builder()
             .method(Method::GET)
             .uri(uri)
@@ -84,11 +109,22 @@ impl BoundedDockerApi {
             .map_err(|_| HostError::Docker)?;
 
         let bytes = timeout_at(deadline, async {
-            let response = self
-                .client
-                .request(request)
-                .await
-                .map_err(|_| HostError::Docker)?;
+            let response = match &self.transport {
+                InventoryTransport::Bound(binding) => {
+                    guarded_request(
+                        binding.endpoint(),
+                        binding.engine_id(),
+                        request,
+                        Empty::new,
+                        deadline,
+                    )
+                    .await?
+                }
+                InventoryTransport::Unbound { client, .. } => client
+                    .request(request)
+                    .await
+                    .map_err(|_| HostError::Docker)?,
+            };
             if response.status() != StatusCode::OK
                 || !is_json_content_type(response.headers())
                 || is_unsupported_content_encoding(response.headers())
@@ -280,3 +316,7 @@ fn inventory_slots() -> &'static Arc<Semaphore> {
 #[cfg(test)]
 #[path = "transport/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "transport/bound_tests.rs"]
+mod bound_tests;

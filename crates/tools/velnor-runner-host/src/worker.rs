@@ -27,7 +27,8 @@ pub use cleanup::{
 pub(crate) use engine::{create_only, deliver_jit, start_id, worker_id_for_name};
 pub use inventory::{
     MAX_INVENTORY_OBJECTS_PER_KIND, MAX_INVENTORY_RESPONSE_BYTES, OwnedDockerResource,
-    OwnedDockerResourceKind, list_owned_docker_resources_until,
+    OwnedDockerResourceKind, list_owned_docker_resources_bound_until,
+    list_owned_docker_resources_until,
 };
 pub use network::{
     OuterNetworkCleanupEngine, OuterNetworkCleanupLedger, OuterNetworkRemovalReceipt,
