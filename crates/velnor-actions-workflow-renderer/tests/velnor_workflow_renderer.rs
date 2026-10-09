@@ -1,4 +1,7 @@
 //! Integration test entry point; cases live in the sibling files.
+#[path = "../../test_support/required_tool_path.rs"]
+mod required_tool_path;
+
 #[path = "impl_adapter_wire_renderer.rs"]
 mod impl_adapter_wire_renderer;
 #[path = "impl_renderer_acquire.rs"]

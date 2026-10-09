@@ -1,4 +1,5 @@
 use super::manifest;
+use super::required_tool_path::with_required_tool_path;
 use crate::schema2::product_release_test_pins::test_pins;
 use std::error::Error;
 use std::fs;
@@ -133,7 +134,7 @@ fn create_candidate_manifest(root: &Path, case: Failure) -> Result<(), Box<dyn E
             "1.21.1",
         ])
         .current_dir(root)
-        .env("PATH", test_path_with_sbin()?)
+        .env("PATH", with_required_tool_path(&[])?)
         .env("GITHUB_REPOSITORY", REPOSITORY)
         .env("GITHUB_SHA", SOURCE_SHA)
         .status()?;
@@ -277,9 +278,7 @@ fn install_mock_gh(root: &Path) -> Result<(), Box<dyn Error>> {
 }
 
 fn path_with_mock_gh(root: &Path) -> Result<std::ffi::OsString, Box<dyn Error>> {
-    let mut paths = vec![root.join("mock-bin")];
-    paths.extend(std::env::split_paths(&test_path_with_sbin()?));
-    Ok(std::env::join_paths(paths)?)
+    Ok(with_required_tool_path(&[root.join("mock-bin")])?)
 }
 
 fn preflight_mode(case: Failure) -> &'static str {
@@ -304,8 +303,7 @@ mod cli_tests;
 #[path = "schema2_generator_release_publish_fixtures.rs"]
 mod publish_fixtures;
 use publish_fixtures::{
-    copy_release_helpers, release_json, sha256, test_path_with_sbin, write_attestation_files,
-    write_candidate_records,
+    copy_release_helpers, release_json, sha256, write_attestation_files, write_candidate_records,
 };
 
 #[path = "schema2_generator_release_fake_commands.rs"]

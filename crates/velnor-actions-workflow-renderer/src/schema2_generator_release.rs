@@ -345,5 +345,9 @@ fn document(jobs: Vec<(String, Yaml)>) -> Yaml {
 }
 
 #[cfg(test)]
+#[path = "../../test_support/required_tool_path.rs"]
+mod required_tool_path;
+
+#[cfg(test)]
 #[path = "schema2_generator_release_tests.rs"]
 mod tests;
