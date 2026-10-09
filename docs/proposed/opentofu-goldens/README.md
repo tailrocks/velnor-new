@@ -20,16 +20,20 @@ dogfood match their captured bytes, and the dogfood preview is identical to
 the root `.github` tree. The CLI parity golden update and check each passed
 four tests.
 
-Positive ConsumerV1 scratch cases receive a runtime-synthetic manifest whose
-version comes from the tested CLI, whose target digests are computed from
-deterministic mock payload files, and whose source marker is synthetic. The
-canonical URL shape is present only to satisfy the manifest schema. These
-values are not published assets, source-bound candidate evidence, native
-qualification, or a release record. The checked-in
-`fixtures/consumer-release-manifest.json` stays unchanged at 0.1.4 as a schema
-placeholder for direct schema tests. Candidate qualification continues to
-stage and verify the exact supplied candidate manifest and binary through its
-separate `check-release` path.
+Positive ConsumerV1 scratch cases receive a disposable schema-only manifest
+whose version comes from the tested CLI, whose URLs use the canonical 0.1.5
+release shape, and whose asset digests/source commit use deterministic `a`/`b`
+comparison markers. `check-release` validates and stages the exact supplied
+candidate manifest and binary, then normalizes its dynamic digests and commit
+to those markers for comparison with the generated fixture oracle. The
+markers stay in the private scratch workspace and supplementary golden
+workflows; they are not published asset digests, source-bound candidate
+evidence, native qualification results, or a release record. `tree.sha256`
+and `MANIFEST.sha256` contain real measured hashes of the generated files.
+The markers never enter the real release manifest, generator lock, producer
+`.github`, published assets, or attestation evidence. The checked-in
+`fixtures/consumer-release-manifest.json` stays unchanged at 0.1.4 as a
+historical schema fixture for direct schema tests.
 
 The 2026-10-05 checkpoint and capture environment below record the earlier
 source state and remain as historical evidence.
@@ -101,14 +105,13 @@ route are absent. The dogfood tree is byte-equal to the checked-in `.github` tre
 This is generated-source evidence only; it does not claim a hosted cache hit or
 persistent-cache round trip.
 
-The four consumer fixtures receive a runtime-synthetic current-version
-manifest in their scratch repositories. It uses deterministic mock payload
-digests and a synthetic source marker solely to exercise positive
-ConsumerV1 generation; generated workflow bytes are the actual CLI output for
-that test input. These captures are not publication or qualification
-evidence. The dogfood producer repo stays on its VelnorRepositoryV1 path and
-receives no consumer manifest. The actual CLI parity suite also removes the
-manifest and verifies that `plan` fails closed.
+The four consumer fixtures receive a disposable schema-only current-version
+manifest in their scratch repositories. It uses deterministic comparison
+markers solely to exercise positive ConsumerV1 generation; generated workflow
+bytes are actual CLI output for that input. These captures are not publication
+or qualification evidence. The dogfood producer repo stays on its
+VelnorRepositoryV1 path and receives no consumer manifest. The actual CLI
+parity suite also removes the manifest and verifies that `plan` fails closed.
 
 Historical pre-V2 producer capture: the checked-in workflow was regenerated from the reviewed source with
 the locked release candidate (`mbx build --release --locked --package

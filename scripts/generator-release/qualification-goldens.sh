@@ -180,11 +180,88 @@ capture_release_case() {
     echo "FATAL: release candidate emitted no workflows for $case"
     exit 2
   fi
+  if ! validate_candidate_output_bindings "$preview"; then
+    echo "FATAL: release candidate output bindings do not match candidate manifest for $case" >&2
+    exit 2
+  fi
   if ! normalize_candidate_digests "$preview"; then
     echo "FATAL: could not normalize candidate asset digests for $case"
     exit 2
   fi
   hash_tree "$preview" "$out/tree.sha256"
+}
+
+validate_candidate_output_bindings() {
+  local preview="$1"
+  python3 - "$CANDIDATE_MANIFEST" "$preview/.github" <<'PY'
+import json
+import os
+from pathlib import Path
+import re
+import stat
+import sys
+
+def reject(message):
+    print(f"candidate output binding mismatch: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+try:
+    manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+    root = Path(sys.argv[2])
+    commit = manifest["commit"]
+    targets = {item["artifact"]: (item["target"], item["sha256"])
+               for item in manifest["targets"]}
+except (OSError, UnicodeError, ValueError, KeyError, TypeError) as error:
+    reject(f"cannot read candidate manifest: {error}")
+
+if not isinstance(commit, str) or not root.is_dir() or not targets:
+    reject("candidate manifest or generated workflow tree is incomplete")
+
+field = re.compile(
+    r"^(?P<indent>[ \t]*)(?P<key>VELNOR_ASSET_SHA256|VELNOR_ASSET_URL|"
+    r"VELNOR_RELEASE_COMMIT): (?P<value>\S+)$"
+)
+key = re.compile(r"^[ \t]*VELNOR_(?:ASSET_SHA256|ASSET_URL|RELEASE_COMMIT)\b")
+count = 0
+for base, directories, names in os.walk(root, followlinks=False):
+    directories[:] = sorted(name for name in directories
+                            if not Path(base, name).is_symlink())
+    for name in sorted(names):
+        path = Path(base, name)
+        try:
+            if not stat.S_ISREG(path.lstat().st_mode):
+                continue
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError) as error:
+            reject(f"cannot read generated workflow {path}: {error}")
+        index = 0
+        while index < len(lines):
+            if not key.match(lines[index]):
+                index += 1
+                continue
+            matches = [field.fullmatch(line) for line in lines[index:index + 3]]
+            expected = ["VELNOR_ASSET_SHA256", "VELNOR_ASSET_URL", "VELNOR_RELEASE_COMMIT"]
+            if len(matches) != 3 or any(match is None for match in matches):
+                reject(f"incomplete binding in {path}")
+            if [match.group("key") for match in matches] != expected:
+                reject(f"unpaired binding field in {path}")
+            if len({match.group("indent") for match in matches}) != 1:
+                reject(f"binding fields use different scopes in {path}")
+            digest, url, source = (match.group("value") for match in matches)
+            target = targets.get(url)
+            if target is None:
+                reject(f"unknown release URL in {path}")
+            target_name, expected_digest = target
+            if digest != expected_digest:
+                reject(f"wrong digest for target {target_name} in {path}")
+            if source != commit:
+                reject(f"wrong source commit in {path}")
+            count += 1
+            index += 3
+
+if count == 0:
+    reject("no ConsumerV1 download bindings were emitted")
+PY
 }
 
 normalize_candidate_digests() {

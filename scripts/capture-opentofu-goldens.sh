@@ -88,13 +88,14 @@ copy_tree() {
   cp -RP "$1" "$2"
 }
 
-# Runtime-synthetic current-version input for positive ConsumerV1 scratch
-# repos. Its canonical URL shape satisfies the contract, while digests hash
-# deterministic mock payloads and the source marker is synthetic. Nothing is
-# published or treated as release evidence.
-write_synthetic_consumer_manifest() {
+# Schema-only current-version input for disposable ConsumerV1 scratch repos.
+# Canonical URLs exercise the manifest shape; deterministic markers let the
+# checked-in oracle match check-release after it validates the exact candidate
+# manifest. These values are not release evidence and never leave this scratch
+# repo.
+write_schema_only_consumer_manifest() {
   local repo="$1" manifest="$1/.velnor/release-manifest.json"
-  local version target payload_dir source_file source_digest commit digest targets_json
+  local version target commit digest targets_json
   if [ -e "$manifest" ] || [ -L "$manifest" ]; then
     [ -f "$manifest" ] && [ ! -L "$manifest" ]
     return $?
@@ -107,17 +108,10 @@ write_synthetic_consumer_manifest() {
     || [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     return 1
   fi
-  payload_dir="$WORK/synthetic-consumer-inputs/$(basename "$repo")"
-  mkdir -p "$payload_dir" || return 1
-  source_file="$payload_dir/source-marker"
-  printf 'Velnor synthetic test source marker; version=%s\n' "$version" >"$source_file" || return 1
-  source_digest="$(file_sha256 "$source_file")" || return 1
-  commit="${source_digest:0:40}"
+  commit="$(printf '%040d' 0 | tr '0' 'b')"
+  digest="$(printf '%064d' 0 | tr '0' 'a')"
   targets_json=""
   for target in x86_64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin; do
-    payload="$payload_dir/$target"
-    printf 'Velnor synthetic test payload; version=%s; target=%s\n' "$version" "$target" >"$payload" || return 1
-    digest="$(file_sha256 "$payload")" || return 1
     if [ -n "$targets_json" ]; then targets_json+=","; fi
     targets_json+="{\"target\":\"$target\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v$version/velnor-actions-$version-$target\",\"sha256\":\"$digest\"}"
   done
@@ -189,8 +183,8 @@ setup_case() {
   fi
   if [ "$MODE" = "check-release" ]; then
     stage_candidate_manifest "$repo" "$case"
-  elif ! write_synthetic_consumer_manifest "$repo"; then
-    echo "FATAL: could not prepare runtime-synthetic consumer input for $case"
+  elif ! write_schema_only_consumer_manifest "$repo"; then
+    echo "FATAL: could not prepare schema-only consumer input for $case"
     exit 2
   fi
   (cd "$repo" \
