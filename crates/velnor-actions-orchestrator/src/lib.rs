@@ -105,6 +105,10 @@ mod workflow_jobs;
 mod workflow_jobs_cache;
 mod workflow_task_jobs;
 
+#[cfg(all(feature = "test-render-capture", test))]
+#[path = "test_render_capture_harness.rs"]
+mod test_render_capture_harness;
+
 pub use api::*;
 
 /// Version marker for the orchestrator shell.

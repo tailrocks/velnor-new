@@ -18,8 +18,15 @@ use velnor_actions_contract::{
 
 use crate::{
     RenderError, cache_p08, closure, commands, document, final_steps, guard, marker, matrix, msrv,
-    preseed_closure, steps, support, workflow_policy, yaml::render_yaml,
+    preseed_closure, steps, support, workflow_policy,
 };
+
+#[path = "render_fallback.rs"]
+pub(crate) mod fallback;
+
+#[cfg(feature = "test-render-capture")]
+#[path = "test_render_capture.rs"]
+pub mod test_render_capture;
 
 #[path = "render_action_pins.rs"]
 mod action_pins_impl;
@@ -373,8 +380,7 @@ fn render_merged(
         matrix::attach_plan_outputs(&mut document)?;
     }
     matrix::attach_crate_job_caps(&mut document, &caps)?;
-    let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
-    crate::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;
+    let text = fallback::render_checked_workflow(WORKFLOW_PATH, &document, &ctx.generator_version)?;
     steps::scan_for_private_subcommands(&text)?;
     let shared_files = crate::render_cache_files::with_runtime_identity_files(
         shared.files,

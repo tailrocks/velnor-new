@@ -141,8 +141,16 @@ fn run_http_probe(
         .map_err(|_| std::io::Error::other("HTTP fixture server panicked"));
     harness::cleanup(&fixture);
     let run = run_result?;
-    if server_result?? == 0 {
-        return Err(std::io::Error::other("freshness probe made no HTTP requests").into());
+    let requests = server_result??;
+    if requests == 0 {
+        return Err(std::io::Error::other(format!(
+            "freshness probe {prefix} made no HTTP requests (fixture={}, url={base_url}, exit={}, stdout={:?}, stderr={:?})",
+            fixture.dir.display(),
+            run.code,
+            run.stdout,
+            run.stderr
+        ))
+        .into());
     }
     Ok(run)
 }

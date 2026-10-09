@@ -120,7 +120,6 @@ fn missing_deny_fails() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn every_fail_row_is_nonzero() -> Result<(), Box<dyn Error>> {
-    let today = harness::days_iso(0)?;
     let old = harness::days_iso(-30)?;
     let granted = harness::days_iso(-10)?;
     let expired = harness::days_iso(-1)?;
@@ -128,55 +127,51 @@ fn every_fail_row_is_nonzero() -> Result<(), Box<dyn Error>> {
         "\"temporary_holds\":[{{\"key\":\"gh\",\"held_version\":\"9.9.9\",\"owner\":\"t\",\
          \"issue\":\"#1\",\"reason\":\"r\",\"granted\":\"{granted}\",\"expires\":\"{expired}\"}}]"
     );
-    let ch_today = format!("\"checked_at\":\"{today}\"");
-    let ch_old = format!("\"checked_at\":\"{old}\"");
-    let table: [(&str, &str, &str, &str, &str); 6] = [
+    let table = [
         (
             "t-lock",
             "crates/aaa/Cargo.toml",
-            "serde_json = \"=1.0.100\"",
-            "serde_json = \"1.0.100\"",
+            Some(("serde_json = \"=1.0.100\"", "serde_json = \"1.0.100\"")),
             "lock-staleness",
         ),
         (
             "t-mirror",
             POLICY,
-            "rust = \"1.98.1\"",
-            "rust = \"1.99.0\"",
+            Some(("rust = \"1.98.1\"", "rust = \"1.99.0\"")),
             "policy-mirror",
         ),
         (
             "t-pin",
             CATALOG,
-            "GH_VERSION: &str = \"2.101.0\"",
-            "GH_VERSION: &str = \"9.9.9\"",
+            Some((
+                "GH_VERSION: &str = \"2.101.0\"",
+                "GH_VERSION: &str = \"9.9.9\"",
+            )),
             "local-pin",
         ),
-        (
-            "t-evidence",
-            INVENTORY,
-            &ch_today,
-            &ch_old,
-            "upstream-freshness",
-        ),
+        ("t-evidence", INVENTORY, None, "upstream-freshness"),
         (
             "t-hold",
             INVENTORY,
-            "\"temporary_holds\":[]",
-            &hold,
+            Some(("\"temporary_holds\":[]", &hold)),
             "exception-expiry",
         ),
         (
             "t-deny",
             "deny.toml",
-            "ignore = []",
-            "ignore = [\"RUSTSEC-2026-0001\"]",
+            Some(("ignore = []", "ignore = [\"RUSTSEC-2026-0001\"]")),
             "advisories",
         ),
     ];
-    for (prefix, rel, before, after, check) in table {
+    for (prefix, rel, mutation, check) in table {
         let fixture = harness::passing(prefix)?;
-        harness::mutate(&fixture.dir, rel, before, after)?;
+        if let Some((before, after)) = mutation {
+            harness::mutate(&fixture.dir, rel, before, after)?;
+        } else {
+            let current = format!("\"checked_at\":\"{}\"", fixture.checked_at);
+            let stale = format!("\"checked_at\":\"{old}\"");
+            harness::mutate(&fixture.dir, rel, &current, &stale)?;
+        }
         let run = harness::run_script(&fixture.dir, &[])?;
         let saw_fail = run.stdout.lines().any(|line| {
             line.starts_with("row: ")
