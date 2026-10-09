@@ -9,7 +9,7 @@ use std::{fs, path::Path};
 
 use velnor_runner_journal::HostError;
 
-const PROFILE_NAMES: [&str; 1] = ["velnor-runner"];
+const PROFILE_NAMES: [&str; 3] = ["velnor-runner", "velnor-worker", "velnor-job"];
 const PROFILE_LIST: &str = "/sys/kernel/security/apparmor/profiles";
 const PROFILE_POLICY_ROOT: &str = "/sys/kernel/security/apparmor/policy/profiles";
 
@@ -48,12 +48,15 @@ struct ProfileRecord {
     raw_sha256: Option<String>,
 }
 
-/// Verify every live Velnor process domain against the identity approved in
-/// this binary. `AppArmor`'s profile directories are numbered and mangled, so
-/// match each entry by its authoritative `name` file before reading its
-/// `raw_sha256`. The kernel hash is for the exact compiled policy bytes, not a
-/// hash of a mutable source file. Every attached Velnor profile must share that
-/// identity and be in enforce mode.
+/// Verify the exact runner, worker, and job Velnor process domains against the
+/// identity approved in this binary. `AppArmor`'s profile directories are
+/// numbered and mangled, so match each entry by its authoritative `name` file
+/// before reading its `raw_sha256`. These domains must come from one compiled
+/// policy load set: their kernel `raw_sha256` values must match each other and
+/// the identity approved in this binary. The kernel hash identifies compiled
+/// policy bytes, not mutable policy-source text. Every required profile must
+/// also be in enforce mode; missing, duplicate, or unknown Velnor profiles fail
+/// closed.
 pub fn verify_runner_profile() -> Result<RunnerProfileAdmission, HostError> {
     let expected = approved_policy_sha256().map_err(|_| HostError::Config)?;
     let profiles = fs::read_to_string(PROFILE_LIST).map_err(|_| HostError::Config)?;

@@ -21,6 +21,18 @@ fn wrong_policy_hash_fails_closed() {
 }
 
 #[test]
+fn mixed_profile_policy_hashes_fail_closed() {
+    let second_policy = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+    let mut records = matching_records();
+    assert_eq!(records.len(), 3);
+    records[1].raw_sha256 = Some(second_policy.to_owned());
+    assert_eq!(
+        verify_observed_profiles(POLICY_SHA256, Some(&enforcing_profiles()), Some(&records)),
+        Err(AdmissionFailure::WrongHash)
+    );
+}
+
+#[test]
 fn malformed_or_unavailable_policy_hash_fails_closed() {
     assert_eq!(
         parse_sha256("not-readable"),
@@ -133,7 +145,7 @@ fn mismatched_or_unqualified_profile_directory_fails_closed() {
 }
 
 #[test]
-fn mismatched_and_unknown_authoritative_names_fail_closed() {
+fn mismatched_directory_and_unknown_authoritative_names_fail_closed() {
     let mut mismatched = matching_records();
     mismatched[0].name = Some("velnor-worker".to_owned());
     assert_eq!(
@@ -142,7 +154,7 @@ fn mismatched_and_unknown_authoritative_names_fail_closed() {
             Some(&enforcing_profiles()),
             Some(&mismatched),
         ),
-        Err(AdmissionFailure::UnknownProfile)
+        Err(AdmissionFailure::MismatchedDirectory)
     );
 
     let mut unknown = matching_records();
