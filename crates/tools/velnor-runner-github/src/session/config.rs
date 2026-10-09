@@ -11,8 +11,11 @@ use super::request::{BearerRole, Method, RequestPurpose, SessionRequest, Transpo
 use super::retry::{API_QUERY, bearer, execute, fresh_gate, json_content, user_agent};
 
 /// JSON body for [`jit`]. `workFolder` is `_work`, relative to the runner root.
-/// The work volume is mounted at `/home/runner/_work`, which also holds the
-/// runner's temporary JIT payload before the listener starts.
+/// The host sends the encoded JIT response over Docker's container attach
+/// stdin; the bootstrap forwards it through `ACTIONS_RUNNER_INPUT_JITCONFIG`
+/// before starting `run.sh`. Runner.Listener writes decoded JIT configuration
+/// files beneath `/home/runner`. The separate work volume is mounted at
+/// `/home/runner/_work`.
 ///
 /// # Errors
 ///
