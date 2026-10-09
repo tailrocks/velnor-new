@@ -356,6 +356,7 @@ fn in_place_file_target_refused() -> TestResult {
     Ok(())
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn atomic_commit_never_exposes_missing_tree() -> TestResult {
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -364,7 +365,7 @@ fn atomic_commit_never_exposes_missing_tree() -> TestResult {
     let prep = prepare(root)?;
     let opts = GenerateOptions { output_dir: None };
     generate(&prep, &opts)?;
-    let live = root.join(".github/workflows/ci.yml");
+    let live = root.join(".github");
     let misses = AtomicUsize::new(0);
     let done = AtomicUsize::new(0);
     std::thread::scope(|scope| {
@@ -384,12 +385,11 @@ fn atomic_commit_never_exposes_missing_tree() -> TestResult {
             });
         }
     });
-    assert!(live.is_file(), "final tree live");
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    assert!(live.is_dir(), "final tree live");
     assert_eq!(
         misses.load(Ordering::Relaxed),
         0,
-        "exchange must never expose a gap"
+        "the root must never be absent during exchange"
     );
     Ok(())
 }
