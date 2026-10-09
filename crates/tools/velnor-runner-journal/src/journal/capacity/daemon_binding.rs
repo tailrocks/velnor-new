@@ -1,5 +1,6 @@
 //! Linux launch admission bound atomically to one trusted logical Docker Engine.
 
+use std::collections::BTreeSet;
 use std::num::NonZeroU32;
 
 use crate::error::HostError;
@@ -30,6 +31,30 @@ pub enum BoundCapacityClaim {
     },
 }
 
+/// Atomic result for one batch of scoped, daemon-bound Available identities.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BoundBatchCapacityClaim {
+    /// Row-level claims in the same order as the input identities.
+    ///
+    /// This vector contains only `New`, `Existing`, `ExistingUnbound`, or
+    /// `ExistingBindingChanged` claims; it never authorizes replayed effects.
+    Offers(Vec<BoundCapacityClaim>),
+    /// The durable drain fence prevented any new row in this batch.
+    Draining,
+    /// The remaining global capacity could not fit every new identity.
+    CapacityFull {
+        /// Number of rows that occupied capacity before this batch.
+        occupied: u64,
+        /// Fresh identities required by this batch.
+        required: u64,
+        /// Permits available before this batch.
+        available: u64,
+        /// Configured host-wide maximum.
+        maximum: NonZeroU32,
+    },
+}
+
+#[derive(Clone, Copy)]
 struct BoundReservation<'a> {
     subject: &'a str,
     replay_key: ReplayKey<'a>,
@@ -59,17 +84,46 @@ impl Journal {
         binding: &JournalDockerDaemonBinding,
         maximum: NonZeroU32,
     ) -> Result<BoundCapacityClaim, HostError> {
-        reserve_bound(
-            self,
-            BoundReservation {
-                subject: identity.subject.as_str(),
-                replay_key: ReplayKey::ExactOffer(identity.subject.as_str()),
-                message_id: None,
-            },
-            binding,
-            maximum,
-        )
-        .await
+        reserve_bound(self, offer_reservation(identity), binding, maximum).await
+    }
+
+    /// Atomically reserve every fresh scoped Available identity and bind each
+    /// newly inserted row to the supplied trusted logical Docker Engine.
+    ///
+    /// Replayed rows are returned in input order. Claims describe each row
+    /// independently: an `Offers` result may contain `ExistingUnbound` or
+    /// `ExistingBindingChanged` for old rows alongside newly bound rows. Such a
+    /// result does not mean every offer is bound or launchable, and these claims
+    /// do not authorize replayed effects. If the global capacity gate cannot
+    /// fit all fresh identities, this method inserts none of them.
+    ///
+    /// The all-or-none guarantee applies to fresh reservation rows only. It does
+    /// not establish a durable multi-offer protocol disposition or authorize a
+    /// caller to launch without inspecting every row-level claim.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Journal`] for an empty, oversized, or duplicate
+    /// identity batch, read-only use, or database failure. An ambiguous commit
+    /// must be retried only with this exact identity batch and binding.
+    pub async fn reserve_linux_launch_batch_all_or_none_if_accepting(
+        &self,
+        identities: &[ScopedLaunchIdentity],
+        binding: &JournalDockerDaemonBinding,
+        maximum: NonZeroU32,
+    ) -> Result<BoundBatchCapacityClaim, HostError> {
+        if self.read_only || identities.is_empty() || identities.len() > 50 {
+            return Err(HostError::Journal);
+        }
+        let subjects: BTreeSet<&str> = identities
+            .iter()
+            .map(|identity| identity.subject.as_str())
+            .collect();
+        if subjects.len() != identities.len() {
+            return Err(HostError::Journal);
+        }
+
+        reserve_bound_batch(self, identities, binding, maximum).await
     }
 
     /// Reserve an assigned-demand slot and Engine binding atomically.
@@ -132,8 +186,8 @@ async fn reserve_bound_in_transaction(
     binding: &JournalDockerDaemonBinding,
     maximum: NonZeroU32,
 ) -> Result<BoundCapacityClaim, HostError> {
-    if let Some(launch_id) = existing_launch_id(conn, reservation.replay_key).await? {
-        return existing_binding_claim(conn, launch_id, binding).await;
+    if let Some(claim) = existing_bound_claim(conn, reservation, binding).await? {
+        return Ok(claim);
     }
     match super::capacity_admission(conn, maximum).await? {
         super::CapacityAdmission::Draining => return Ok(BoundCapacityClaim::Draining),
@@ -144,6 +198,98 @@ async fn reserve_bound_in_transaction(
     }
     let launch_id = insert_bound_intent(conn, reservation, binding).await?;
     Ok(BoundCapacityClaim::New(launch_id))
+}
+
+async fn reserve_bound_batch(
+    journal: &Journal,
+    identities: &[ScopedLaunchIdentity],
+    binding: &JournalDockerDaemonBinding,
+    maximum: NonZeroU32,
+) -> Result<BoundBatchCapacityClaim, HostError> {
+    let conn = journal.connection().await?;
+    conn.execute("BEGIN IMMEDIATE", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let result = reserve_bound_batch_in_transaction(&conn, identities, binding, maximum).await;
+    let end = if result.is_ok() {
+        conn.execute("COMMIT", ()).await
+    } else {
+        conn.execute("ROLLBACK", ()).await
+    };
+    end.map_err(|_| HostError::Journal)?;
+    result
+}
+
+async fn reserve_bound_batch_in_transaction(
+    conn: &turso::Connection,
+    identities: &[ScopedLaunchIdentity],
+    binding: &JournalDockerDaemonBinding,
+    maximum: NonZeroU32,
+) -> Result<BoundBatchCapacityClaim, HostError> {
+    let mut claims = vec![None; identities.len()];
+    let mut fresh = Vec::new();
+    for (index, identity) in identities.iter().enumerate() {
+        let reservation = offer_reservation(identity);
+        match existing_bound_claim(conn, reservation, binding).await? {
+            Some(claim) => claims[index] = Some(claim),
+            None => fresh.push(index),
+        }
+    }
+    if fresh.is_empty() {
+        return collect_batch_claims(claims);
+    }
+
+    let (occupied, available) = match super::capacity_admission(conn, maximum).await? {
+        super::CapacityAdmission::Draining => return Ok(BoundBatchCapacityClaim::Draining),
+        super::CapacityAdmission::Open { occupied, free } => (occupied, free),
+    };
+    let required = u64::try_from(fresh.len()).map_err(|_| HostError::Journal)?;
+    if available < required {
+        return Ok(BoundBatchCapacityClaim::CapacityFull {
+            occupied,
+            required,
+            available,
+            maximum,
+        });
+    }
+
+    for index in fresh {
+        let launch_id =
+            insert_bound_intent(conn, offer_reservation(&identities[index]), binding).await?;
+        claims[index] = Some(BoundCapacityClaim::New(launch_id));
+    }
+    collect_batch_claims(claims)
+}
+
+fn collect_batch_claims(
+    claims: Vec<Option<BoundCapacityClaim>>,
+) -> Result<BoundBatchCapacityClaim, HostError> {
+    claims
+        .into_iter()
+        .map(|claim| claim.ok_or(HostError::Journal))
+        .collect::<Result<Vec<_>, _>>()
+        .map(BoundBatchCapacityClaim::Offers)
+}
+
+fn offer_reservation(identity: &ScopedLaunchIdentity) -> BoundReservation<'_> {
+    BoundReservation {
+        subject: identity.subject.as_str(),
+        replay_key: ReplayKey::ExactOffer(identity.subject.as_str()),
+        message_id: None,
+    }
+}
+
+async fn existing_bound_claim(
+    conn: &turso::Connection,
+    reservation: BoundReservation<'_>,
+    binding: &JournalDockerDaemonBinding,
+) -> Result<Option<BoundCapacityClaim>, HostError> {
+    let Some(launch_id) = existing_launch_id(conn, reservation.replay_key).await? else {
+        return Ok(None);
+    };
+    existing_binding_claim(conn, launch_id, binding)
+        .await
+        .map(Some)
 }
 
 async fn existing_launch_id(
