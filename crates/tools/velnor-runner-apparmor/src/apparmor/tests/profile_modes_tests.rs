@@ -2,6 +2,14 @@ use super::super::{AdmissionFailure, verify_observed_profiles};
 use super::{POLICY_SHA256, enforcing_profiles, matching_records};
 
 #[test]
+fn required_profile_set_is_exact() {
+    assert_eq!(
+        super::super::PROFILE_NAMES,
+        ["velnor-runner", "velnor-worker", "velnor-job"]
+    );
+}
+
+#[test]
 fn missing_profile_fails_closed() {
     assert_eq!(
         verify_observed_profiles(POLICY_SHA256, Some(""), Some(&matching_records())),
