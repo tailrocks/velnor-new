@@ -24,4 +24,4 @@ a8c86d6589fbb9bce7dee24d164160e17230e114dedf174fbfc912ac336eca4d  ./.github/work
 d76faaf217775ff13c62bc0ddc82a26db80cf3dbb7747a105025bea4becd3ffc  ./.github/workflows/product-release-generator.yml
 b6ec4c84953f7d87bb45e26845d2993c2eab07c32b869c68e2b40ba0c7fbc042  ./.github/workflows/product-release-images.yml
 58d8acbbbf9f1748b46c82b15579ffbf78462d486c50227a4ad896df94706348  ./.github/workflows/product-release.yml
-6c850ccaf38e10c9752593897665080b65455baa578006dc0d358fc493580d8b  ./.github/workflows/qualification.yml
+0607324d7dc5da68504f932da1eabd5ad487742ecf484bccb3ab9d3a56e8ff87  ./.github/workflows/qualification.yml
