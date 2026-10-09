@@ -15,6 +15,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use sha2::{Digest, Sha256};
+
 /// Monotonic counter keeping tempdir names unique within one test binary.
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -171,14 +173,40 @@ pub(crate) fn init_repo(dir: &Path) -> Result<(), Box<dyn Error>> {
     })
 }
 
-/// Install the explicit schema fixture required by positive consumer tests.
+/// Install a runtime-synthetic current-version manifest in this temp repo.
 ///
-/// Placeholder values in this fixture are not release evidence.
+/// The canonical URL form satisfies the contract; digests hash deterministic
+/// mock payloads and the source marker is synthetic. Nothing is published.
 pub(crate) fn install_consumer_manifest(dir: &Path) -> Result<(), Box<dyn Error>> {
-    let source =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/consumer-release-manifest.json");
-    std::fs::copy(source, dir.join(".velnor/release-manifest.json"))?;
+    let version = env!("CARGO_PKG_VERSION");
+    let targets = [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+    ]
+    .map(|target| {
+        let payload = format!("Velnor synthetic test payload; version={version}; target={target}\n");
+        let digest = synthetic_sha256(payload.as_bytes());
+        format!(
+            "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{digest}\"}}"
+        )
+    })
+    .join(",");
+    let source_marker = synthetic_sha256(b"Velnor synthetic test source marker");
+    let commit = source_marker.chars().take(40).collect::<String>();
+    let manifest = format!(
+        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{commit}\",\"targets\":[{targets}]}}"
+    );
+    std::fs::write(dir.join(".velnor/release-manifest.json"), manifest)?;
     Ok(())
+}
+
+fn synthetic_sha256(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<Vec<_>>()
+        .join("")
 }
 
 /// Pin the push branch so plan works without origin/HEAD.

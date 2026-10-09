@@ -88,10 +88,13 @@ copy_tree() {
   cp -RP "$1" "$2"
 }
 
-# Explicit schema-only input for positive ConsumerV1 fixture repos. It
-# carries placeholder values and is never used as release evidence.
-write_fixture_consumer_manifest() {
+# Runtime-synthetic current-version input for positive ConsumerV1 scratch
+# repos. Its canonical URL shape satisfies the contract, while digests hash
+# deterministic mock payloads and the source marker is synthetic. Nothing is
+# published or treated as release evidence.
+write_synthetic_consumer_manifest() {
   local repo="$1" manifest="$1/.velnor/release-manifest.json"
+  local version target payload_dir source_file source_digest commit digest targets_json
   if [ -e "$manifest" ] || [ -L "$manifest" ]; then
     [ -f "$manifest" ] && [ ! -L "$manifest" ]
     return $?
@@ -100,7 +103,26 @@ write_fixture_consumer_manifest() {
     return 1
   fi
   mkdir -p "$repo/.velnor" || return 1
-  cp "$ROOT/fixtures/consumer-release-manifest.json" "$manifest"
+  if ! version="$("$BIN" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')" \
+    || [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    return 1
+  fi
+  payload_dir="$WORK/synthetic-consumer-inputs/$(basename "$repo")"
+  mkdir -p "$payload_dir" || return 1
+  source_file="$payload_dir/source-marker"
+  printf 'Velnor synthetic test source marker; version=%s\n' "$version" >"$source_file" || return 1
+  source_digest="$(file_sha256 "$source_file")" || return 1
+  commit="${source_digest:0:40}"
+  targets_json=""
+  for target in x86_64-unknown-linux-gnu aarch64-apple-darwin x86_64-apple-darwin; do
+    payload="$payload_dir/$target"
+    printf 'Velnor synthetic test payload; version=%s; target=%s\n' "$version" "$target" >"$payload" || return 1
+    digest="$(file_sha256 "$payload")" || return 1
+    if [ -n "$targets_json" ]; then targets_json+=","; fi
+    targets_json+="{\"target\":\"$target\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v$version/velnor-actions-$version-$target\",\"sha256\":\"$digest\"}"
+  done
+  printf '{"schema":1,"version":"%s","repository":"tailrocks/velnor-new","commit":"%s","targets":[%s]}\n' \
+    "$version" "$commit" "$targets_json" >"$manifest"
 }
 
 # Do not pin checkout-specific paths printed by `generate` in stderr goldens.
@@ -167,8 +189,8 @@ setup_case() {
   fi
   if [ "$MODE" = "check-release" ]; then
     stage_candidate_manifest "$repo" "$case"
-  elif ! write_fixture_consumer_manifest "$repo"; then
-    echo "FATAL: could not prepare explicit consumer schema fixture for $case"
+  elif ! write_synthetic_consumer_manifest "$repo"; then
+    echo "FATAL: could not prepare runtime-synthetic consumer input for $case"
     exit 2
   fi
   (cd "$repo" \

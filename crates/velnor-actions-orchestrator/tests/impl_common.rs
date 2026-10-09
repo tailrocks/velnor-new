@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command as StdCommand;
 use std::time::SystemTime;
 
+use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 use velnor_actions_contract::{MatrixReport, Plan};
 use velnor_actions_orchestrator::{
@@ -110,12 +111,37 @@ pub(crate) fn without_ambient_ci_env(test: &str, inner: impl FnOnce() -> TestRes
 /// Snapshot map shortcut.
 pub(crate) type Snapshot = BTreeMap<String, (Vec<u8>, SystemTime)>;
 
-/// Canonical-schema fixture for positive consumer-generation tests.
+/// Runtime-synthetic current-version manifest for disposable ConsumerV1 tests.
 ///
-/// Its placeholder source and digests are serialization inputs, not
-/// release provenance or qualification evidence.
+/// The canonical asset URL shape satisfies the contract, but the source marker
+/// and per-target digests come from deterministic test payloads. This manifest
+/// is installed only in temporary repositories; it is not release evidence.
 pub(crate) fn fixture_manifest_json() -> String {
-    include_str!("../../../fixtures/consumer-release-manifest.json").to_owned()
+    let version = env!("CARGO_PKG_VERSION");
+    let targets = velnor_actions_contract::SUPPORTED_TARGETS
+        .iter()
+        .map(|target| {
+            let payload = format!("Velnor synthetic test payload; version={version}; target={target}\n");
+            let digest = synthetic_sha256(payload.as_bytes());
+            format!(
+                "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{digest}\"}}"
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    let source_marker = synthetic_sha256(b"Velnor synthetic test source marker");
+    let commit = source_marker.chars().take(40).collect::<String>();
+    format!(
+        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{commit}\",\"targets\":[{targets}]}}"
+    )
+}
+
+fn synthetic_sha256(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<Vec<_>>()
+        .join("")
 }
 
 /// Install the deterministic schema-only manifest in a positive fixture.

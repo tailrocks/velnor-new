@@ -103,11 +103,16 @@ fn assert_release_fixture_generation_requirements() -> Result<(), Box<dyn std::e
         "{fixture_check}"
     );
     assert!(
-        fixture_check.contains("write_fixture_consumer_manifest()")
-            && fixture_check
-                .contains(r#"cp "$ROOT/fixtures/consumer-release-manifest.json" "$manifest""#)
-            && fixture_check.contains("write_fixture_consumer_manifest \"$repo\""),
-        "positive fixtures install an explicit schema input only: {fixture_check}"
+        fixture_check.contains("write_synthetic_consumer_manifest()")
+            && fixture_check.contains("synthetic-consumer-inputs")
+            && fixture_check.contains(r#"file_sha256 "$payload""#)
+            && fixture_check.contains(r#""$BIN" --version"#)
+            && fixture_check.contains("write_synthetic_consumer_manifest \"$repo\""),
+        "positive fixtures install only a current-version runtime-synthetic input: {fixture_check}"
+    );
+    assert!(
+        !fixture_check.contains(r#"cp "$ROOT/fixtures/consumer-release-manifest.json""#),
+        "positive fixture capture must not relabel the static schema placeholder: {fixture_check}"
     );
     assert!(
         fixture_check.contains("capture_release_dogfood"),
