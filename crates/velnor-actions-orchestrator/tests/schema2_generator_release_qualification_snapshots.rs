@@ -102,7 +102,7 @@ fn assert_release_fixture_generation_requirements() -> Result<(), Box<dyn std::e
         fixture_check.contains(r#"stage_candidate_manifest "$repo" "$case""#),
         "{fixture_check}"
     );
-    assert_synthetic_consumer_manifest_input(fixture_check);
+    assert_schema_only_consumer_manifest_input(fixture_check);
     assert!(
         fixture_check.contains("capture_release_dogfood"),
         "{fixture_check}"
@@ -158,14 +158,20 @@ fn assert_release_fixture_generation_requirements() -> Result<(), Box<dyn std::e
     Ok(())
 }
 
-fn assert_synthetic_consumer_manifest_input(fixture_check: &str) {
+fn assert_schema_only_consumer_manifest_input(fixture_check: &str) {
     assert!(
-        fixture_check.contains("write_synthetic_consumer_manifest()")
-            && fixture_check.contains("synthetic-consumer-inputs")
-            && fixture_check.contains(r#"file_sha256 "$payload""#)
-            && fixture_check.contains(r#""$BIN" --version"#)
-            && fixture_check.contains("write_synthetic_consumer_manifest \"$repo\""),
-        "positive fixtures install only a current-version runtime-synthetic input: {fixture_check}"
+        fixture_check.contains("write_schema_only_consumer_manifest()")
+            && fixture_check.contains(r#"version="$("$BIN" --version | awk"#)
+            && fixture_check.contains(
+                "[[ ! \"$version\" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]",
+            )
+            && fixture_check.contains(
+                "https://github.com/tailrocks/velnor-new/releases/download/v$version/velnor-actions-$version-$target",
+            )
+            && fixture_check.contains(r#"commit="$(printf '%040d' 0 | tr '0' 'b')""#)
+            && fixture_check.contains(r#"digest="$(printf '%064d' 0 | tr '0' 'a')""#)
+            && fixture_check.contains("write_schema_only_consumer_manifest \"$repo\""),
+        "positive fixtures use the current-version schema-only marker contract: {fixture_check}"
     );
     assert!(
         !fixture_check.contains(r#"cp "$ROOT/fixtures/consumer-release-manifest.json""#),
