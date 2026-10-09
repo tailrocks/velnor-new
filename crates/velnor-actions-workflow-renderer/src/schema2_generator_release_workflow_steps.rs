@@ -15,6 +15,16 @@ pub(super) fn command_step(name: &str, argv: &[String]) -> Result<Yaml, RenderEr
     Ok(bash_step(name, &join_argv_for_run(argv)?))
 }
 
+pub(super) fn mise_install_step(name: &str, argv: &[String]) -> Result<Yaml, RenderError> {
+    let command = join_argv_for_run(argv)?;
+    let run = format!("set -eu\n: \"${{GITHUB_TOKEN:?missing workflow token}}\"\n{command}");
+    Ok(bash_step_with_env(
+        name,
+        &run,
+        vec![("GITHUB_TOKEN", "${{ github.token }}")],
+    ))
+}
+
 pub(super) fn mise_step(setup: &MiseSetup) -> Result<Yaml, RenderError> {
     setup.validate()?;
     Ok(Yaml::Map(vec![

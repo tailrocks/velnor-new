@@ -103,8 +103,8 @@ installed with `GITHUB_TOKEN`, `MISE_GITHUB_TOKEN`, and `GH_TOKEN` unset;
 `CARGO_REGISTRIES_CRATES_IO_TOKEN` unset; `cargo-deny --version` reported
 `cargo-deny 0.20.2`.
 
-No install token was needed, so the workflow does not add token handling to
-either install.
+The pinned `gh` and `cargo-deny` installs measured above did not need an
+install token; that result applies to those two tool installs.
 
 ## Retired owned-source candidate and retained bootstrap metadata
 

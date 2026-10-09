@@ -8,6 +8,8 @@ use velnor_actions_workflow_renderer::RenderedTree;
 mod action_snapshots;
 #[path = "schema2_generator_release_cross_snapshots.rs"]
 mod cross_snapshots;
+#[path = "schema2_generator_release_mise_install_snapshots.rs"]
+mod mise_install_snapshots;
 #[path = "schema2_generator_release_publication_snapshots.rs"]
 mod publication_snapshots;
 #[path = "schema2_generator_release_qualification_snapshots.rs"]
@@ -125,6 +127,7 @@ fn assert_product(workflows: &[&str], actions: &Actions) -> Result<(), Box<dyn s
     publication_snapshots::assert_pinned_gh_policy(actions);
     cross_snapshots::assert_portable_gh_watchdog(actions);
     publication_snapshots::assert_target_builds(generator, actions)?;
+    mise_install_snapshots::assert_build_mise_token_scope(generator, actions)?;
     cross_snapshots::assert_qualify_install_tools(actions)?;
     publication_snapshots::assert_manifest_job(generator, actions)?;
     publication_snapshots::assert_publish_job(generator, actions)?;
