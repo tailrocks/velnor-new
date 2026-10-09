@@ -15,7 +15,7 @@ const BUILDX: &str = "inputs.mode == 'features' || inputs.mode == 'buildx'";
 const NEGATIVE: &str = "inputs.mode == 'negative'";
 
 /// Pinned `actions/checkout` used by qualification jobs.
-pub(super) const CHECKOUT_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
+pub(super) const CHECKOUT_USES: &str = crate::steps::CHECKOUT_USES;
 const UPLOAD_USES: &str = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
 const REDIS_OPTIONS: &str =
     "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12";

@@ -46,6 +46,30 @@ fn mise_setup_defaults_to_compiled_pins() {
 }
 
 #[test]
+fn consumer_binary_mise_setup_uses_latest_verified_platforms_only() {
+    let config = config_with(BTreeMap::new());
+    for (target, digest) in [
+        (
+            ReleaseTarget::LinuxX86_64,
+            "8a223b5f8ca71100220a3e5bef259614c348e7b1d80e6b15c2a9c9aa3affe5e4",
+        ),
+        (
+            ReleaseTarget::MacosArm64,
+            "41c4028257d30f5f5742c99247c461f417143d6c7301f167a0c185247c8f206e",
+        ),
+    ] {
+        let setup = resolve_mise_setup_for_consumer_binary_release(&config, target)
+            .expect("supported consumer runner");
+        assert_eq!(setup.version, "2026.10.5");
+        assert_eq!(setup.sha256, digest);
+    }
+    assert!(
+        resolve_mise_setup_for_consumer_binary_release(&config, ReleaseTarget::MacosX86_64)
+            .is_err()
+    );
+}
+
+#[test]
 fn mise_setup_accepts_approved_override_only() {
     let approved = BTreeMap::from([(
         MISE_ACTION_KEY.to_owned(),

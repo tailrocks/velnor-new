@@ -8,6 +8,8 @@ use velnor_actions_workflow_renderer::RenderedTree;
 use crate::impl_common::{TestResult, config_with_branch, git, make_repo};
 use monitoring_fixture::MONITORING;
 
+#[path = "impl_schema2_binary_release.rs"]
+mod binary_release_tests;
 #[path = "schema2_monitoring_fixture.rs"]
 mod monitoring_fixture;
 #[path = "schema2_named_check_lanes_tests.rs"]

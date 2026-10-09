@@ -2,14 +2,12 @@
 
 use crate::commands::join_argv_for_run;
 use crate::setup::SETUP_MISE_NAME;
-use crate::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
+use crate::steps::{ATTEST_BUILD_PROVENANCE_USES, DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
 use crate::yaml::Yaml;
 use crate::{MiseSetup, RenderError};
 
 use super::super::features::CHECKOUT_USES;
 
-const ATTEST_USES: &str =
-    "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
 const GH_COMMAND_TIMEOUT_SECONDS: u16 = 60;
 const GH_COMMAND_KILL_AFTER_SECONDS: u16 = 5;
 
@@ -183,7 +181,7 @@ pub(super) fn download_step_by_id(name: &str, artifact_id: &str, path: &str) -> 
 pub(super) fn attest_step(subjects: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Attest built artifacts")),
-        ("uses".to_owned(), Yaml::str(ATTEST_USES)),
+        ("uses".to_owned(), Yaml::str(ATTEST_BUILD_PROVENANCE_USES)),
         (
             "with".to_owned(),
             Yaml::Map(vec![("subject-path".to_owned(), Yaml::str(subjects))]),

@@ -28,6 +28,10 @@ use velnor_actions_workflow_renderer::setup::{
     MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
 };
 
+#[path = "pins_consumer_binary_release.rs"]
+mod consumer_binary_release;
+pub(super) use consumer_binary_release::resolve_mise_setup_for_consumer_binary_release;
+
 /// Resolve typed Mise setup pins: overrides plus the compiled catalog.
 ///
 /// The `uses` ref comes from `[actions.overrides]` when present (approved
