@@ -13,12 +13,7 @@ type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> TestResult<Self> {
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_nanos();
-        let path =
-            std::env::temp_dir().join(format!("mise-fixed-binary-{}-{stamp}", std::process::id()));
-        std::fs::create_dir(&path)?;
+        let path = crate::test_temp_dir::unique_temp_dir("mise-fixed-binary")?;
         Ok(Self(path.canonicalize()?))
     }
 }

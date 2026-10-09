@@ -3,6 +3,7 @@
 use super::super::assets;
 use super::{Failure, REPOSITORY, SOURCE_SHA, manifest};
 use std::error::Error;
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -18,6 +19,16 @@ pub(super) fn copy_release_helpers(root: &Path) -> Result<(), Box<dyn Error>> {
         )?;
     }
     Ok(())
+}
+
+pub(super) fn test_path_with_sbin() -> Result<OsString, Box<dyn Error>> {
+    let current = std::env::var_os("PATH").ok_or("missing PATH")?;
+    let mut paths = std::env::split_paths(&current).collect::<Vec<_>>();
+    let sbin = PathBuf::from("/sbin");
+    if !paths.contains(&sbin) {
+        paths.push(sbin);
+    }
+    Ok(std::env::join_paths(paths)?)
 }
 
 pub(super) fn write_candidate_records(root: &Path, case: Failure) -> Result<(), Box<dyn Error>> {
@@ -166,6 +177,7 @@ pub(super) fn assert_draft_metadata_is_only_url_mismatch(
                 "draft-release.json",
             ])
             .current_dir(root)
+            .env("PATH", test_path_with_sbin()?)
             .output()?;
         assert_eq!(
             output.status.success(),
@@ -218,6 +230,7 @@ pub(super) fn assert_draft_asset_validation_passes(root: &Path) -> Result<(), Bo
     let output = Command::new("bash")
         .args(["-euo", "pipefail", "-c", &replay])
         .current_dir(root)
+        .env("PATH", test_path_with_sbin()?)
         .env("GITHUB_REPOSITORY", REPOSITORY)
         .output()?;
     assert!(
@@ -230,7 +243,10 @@ pub(super) fn assert_draft_asset_validation_passes(root: &Path) -> Result<(), Bo
 }
 
 pub(super) fn sha256(path: &Path) -> Result<String, Box<dyn Error>> {
-    let output = Command::new("sha256sum").arg(path).output()?;
+    let output = Command::new("sha256sum")
+        .arg(path)
+        .env("PATH", test_path_with_sbin()?)
+        .output()?;
     if !output.status.success() {
         return Err(format!("sha256sum failed for {}", path.display()).into());
     }
