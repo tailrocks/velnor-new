@@ -228,5 +228,6 @@ Read-only release inventory checked at 2026-10-08 22:39 UTC found immutable
 Tag `v0.1.3` exists but has no matching release; its commit SHA is
 `33d79403fef47164944d83a5e42313f463679b39`. The `v0.1.5` tag lookup returned
 HTTP 404 and no `v0.1.5` release appeared in the inventory. The next unused
-official version is therefore `v0.1.5`; no version reference was changed in
-this branch.
+official version was therefore `v0.1.5` at that check. The separate
+v0.1.5 version-preparation checkpoint was added to
+`fix/release-velnor-0.1.5` afterward.
