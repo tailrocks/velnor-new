@@ -55,10 +55,13 @@ async fn unresolved_volume_row_keeps_occupancy(label: &str, uncertain: bool) -> 
     );
     assert_eq!(rows[0].worker_volume.as_deref(), Some(volume.as_str()));
     assert!(!rows[0].cleanup_proven);
-    assert_eq!(engine.removed().map_err(|err| err.to_string())?, Vec::new());
+    assert_eq!(
+        engine.removed().map_err(|err| err.to_string())?,
+        [] as [std::string::String; 0]
+    );
     assert_eq!(
         engine.removed_volumes().map_err(|err| err.to_string())?,
-        Vec::new()
+        [] as [std::string::String; 0]
     );
     absent(&scratch.file())
 }

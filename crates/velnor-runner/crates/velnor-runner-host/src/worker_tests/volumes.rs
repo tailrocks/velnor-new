@@ -33,7 +33,7 @@ async fn empty_jit_does_not_create() -> Result<(), String> {
             Err(HostError::EmptyJit)
         );
     }
-    assert_eq!(idle.finish().await?, Vec::new());
+    assert_eq!(idle.finish().await?, [] as [std::string::String; 0]);
     Ok(())
 }
 

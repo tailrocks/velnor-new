@@ -79,7 +79,7 @@ async fn unresolved_acquire_does_not_replay_acquire_or_request_jit() -> Result<(
     .await;
 
     assert_eq!(result, Err(crate::EnsureError::Uncertain));
-    assert_eq!(lane.calls, Vec::new());
+    assert_eq!(lane.calls, [] as [&str; 0]);
     Ok(())
 }
 
@@ -125,7 +125,7 @@ async fn uncertain_jit_does_not_repeat_jit_or_acquire() -> Result<(), String> {
     .await;
 
     assert_eq!(result, Err(crate::EnsureError::Uncertain));
-    assert_eq!(lane.calls, Vec::new());
+    assert_eq!(lane.calls, [] as [&str; 0]);
     Ok(())
 }
 

@@ -77,7 +77,7 @@ async fn idless_uncertain_subject_keeps_its_reservation() -> Result<(), String> 
     )
     .await;
     assert_eq!(result, Err(EnsureError::Uncertain));
-    assert_eq!(script.calls, Vec::new());
+    assert_eq!(script.calls, [] as [&str; 0]);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].id, row);
@@ -117,7 +117,7 @@ async fn partial_uncertain_subject_does_not_mint() -> Result<(), String> {
     )
     .await;
     assert_eq!(error, Err(EnsureError::Uncertain));
-    assert_eq!(script.calls, Vec::new());
+    assert_eq!(script.calls, [] as [&str; 0]);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Uncertain);

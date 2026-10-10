@@ -35,7 +35,7 @@ async fn exact_body_is_idempotent_and_resolves_after_retry() -> Result<(), Strin
             .pending_completion_inbox(10, 4)
             .await
             .map_err(|error| error.to_string())?,
-        Vec::new()
+        [] as [journal::completion::inbox::CompletionInboxEntry; 0]
     );
     let retry = journal
         .pending_completion_inbox(11, 4)
@@ -52,7 +52,7 @@ async fn exact_body_is_idempotent_and_resolves_after_retry() -> Result<(), Strin
             .pending_completion_inbox(11, 4)
             .await
             .map_err(|error| error.to_string())?,
-        Vec::new()
+        [] as [journal::completion::inbox::CompletionInboxEntry; 0]
     );
     Ok(())
 }

@@ -142,7 +142,10 @@ async fn ambiguous_legacy_request_subjects_are_not_guessed() -> Result<(), HostE
         journal.record_runner_completed(9, 51, 801, "v51").await,
         Err(HostError::Journal)
     );
-    assert_eq!(journal.due_completed_launches(0, 10).await?, Vec::new());
+    assert_eq!(
+        journal.due_completed_launches(0, 10).await?,
+        [] as [journal::completion::CompletedLaunch; 0]
+    );
     Ok(())
 }
 
