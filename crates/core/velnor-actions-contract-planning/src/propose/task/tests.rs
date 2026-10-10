@@ -34,7 +34,7 @@ fn proposal() -> ProposedTask {
             features: Vec::new(),
             flags: Vec::new(),
             compile_driver: "cargo".to_owned(),
-            test_runner: "cargo_test".to_owned(),
+            test_runner: "cargo_nextest".to_owned(),
             environment: std::collections::BTreeMap::new(),
             declared_inputs: Vec::new(),
             undeclared_reads: false,

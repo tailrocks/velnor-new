@@ -23,6 +23,11 @@ ignore = []
 compile_driver = "mbx"
 test_runner = "cargo_nextest"
 
+[stacks.rust.policy]
+version = "0.1.3"
+sha256 = "104c0d8b3a827875776358f941aa88f1c5837c1009305076af9380f4e3fcda25"
+profile = "rust-strict-v1"
+
 [[stacks.rust.configurations]]
 name = "default"
 features = ["default"]

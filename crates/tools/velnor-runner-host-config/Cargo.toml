@@ -11,6 +11,6 @@ workspace = true
 [dependencies]
 serde = { workspace = true }
 toml = { workspace = true }
-velnor-runner-docker-spec = { version = "=0.1.1", path = "../velnor-runner-docker-spec" }
-velnor-runner-journal = { version = "=0.1.1", path = "../velnor-runner-journal" }
+velnor-runner-docker-spec = { version = "=0.1.7", path = "../velnor-runner-docker-spec" }
+velnor-runner-journal = { version = "=0.1.7", path = "../velnor-runner-journal" }
 rustix = { workspace = true }

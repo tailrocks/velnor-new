@@ -8,12 +8,12 @@ autotests = false
 
 [dependencies]
 tempfile = { workspace = true }
-velnor-actions-actionlint = { version = "=0.1.1", path = "../../adapters/velnor-actions-actionlint" }
-velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
-velnor-actions-contract-release = { version = "=0.1.1", path = "../../core/velnor-actions-contract-release" }
-velnor-actions-mise = { version = "=0.1.1", path = "../../adapters/velnor-actions-mise" }
-velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
-velnor-actions-workflow-tree = { version = "=0.1.1", path = "../velnor-actions-workflow-tree" }
+velnor-actions-actionlint = { version = "=0.1.7", path = "../../adapters/velnor-actions-actionlint" }
+velnor-actions-contract-config = { version = "=0.1.7", path = "../../core/velnor-actions-contract-config" }
+velnor-actions-contract-release = { version = "=0.1.7", path = "../../core/velnor-actions-contract-release" }
+velnor-actions-mise = { version = "=0.1.7", path = "../../adapters/velnor-actions-mise" }
+velnor-actions-orchestrator-core = { version = "=0.1.7", path = "../velnor-actions-orchestrator-core" }
+velnor-actions-workflow-tree = { version = "=0.1.7", path = "../velnor-actions-workflow-tree" }
 
 [lints]
 workspace = true

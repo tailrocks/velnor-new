@@ -235,7 +235,7 @@ fn size_limits_hold() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn lockfile_committed_and_locked_used() -> Result<(), Box<dyn Error>> {
-    assert!(!read("Cargo.lock")?.trim().is_empty());
+    assert_ne!(read("Cargo.lock")?.trim(), "");
     let tracked = std::process::Command::new("git")
         .arg("ls-files")
         .arg("--error-unmatch")

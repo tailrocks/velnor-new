@@ -3473,7 +3473,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-actionlint"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-contract",
  "velnor-actions-contract-config",
@@ -3482,7 +3482,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-cli"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "clap",
  "proc-macro2",
@@ -3502,7 +3502,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-contract"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "blake3",
  "serde",
@@ -3515,7 +3515,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-contract-config"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -3527,7 +3527,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-contract-planning"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -3538,7 +3538,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-contract-release"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -3548,7 +3548,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-contract-workflow"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -3560,7 +3560,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-mise"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-contract",
  "velnor-actions-contract-config",
@@ -3575,7 +3575,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-mise-cache"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde",
  "velnor-actions-contract",
@@ -3586,7 +3586,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-mise-catalog"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-contract",
  "velnor-actions-contract-config",
@@ -3597,7 +3597,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-mise-core"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "rustix 1.1.5",
  "serde",
@@ -3610,7 +3610,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-mise-nextest"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-contract",
  "velnor-actions-contract-config",
@@ -3621,7 +3621,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-mise-probes"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde",
  "velnor-actions-contract",
@@ -3631,7 +3631,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -3685,7 +3685,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-baseline-publish"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -3707,7 +3707,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-check-acquisition"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "flate2",
  "lzma-rust2",
@@ -3727,7 +3727,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-check-evidence"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -3743,7 +3743,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-check-preparation"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "rustix 1.1.5",
  "serde",
@@ -3760,7 +3760,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-check-runtime"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -3774,7 +3774,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-core"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "rustix 1.1.5",
  "serde",
@@ -3802,7 +3802,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-cover"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -3822,7 +3822,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-cover-baseline"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -3847,7 +3847,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-cover-compat"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde_json",
  "velnor-actions-contract",
@@ -3857,7 +3857,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-covered-tasks"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-contract",
  "velnor-actions-contract-config",
@@ -3867,7 +3867,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-discovery"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -3887,7 +3887,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-external-data"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde",
  "velnor-actions-contract",
@@ -3896,7 +3896,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-generation"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "rustix 1.1.5",
  "serde_json",
@@ -3930,7 +3930,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-graph"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -3954,7 +3954,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-internal"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -3990,7 +3990,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-merge"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -4005,7 +4005,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-merge-ports"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -4020,7 +4020,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-merge-request"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -4035,14 +4035,14 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-merge-request-ports"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-orchestrator-core",
 ]
 
 [[package]]
 name = "velnor-actions-orchestrator-noop-report"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -4057,7 +4057,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-pins"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-actionlint",
  "velnor-actions-contract-config",
@@ -4072,7 +4072,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-plan"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "tempfile",
  "velnor-actions-actionlint",
@@ -4098,7 +4098,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-plan-obligation"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -4120,7 +4120,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-preseed-manifest"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -4135,7 +4135,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-provisioning"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "tempfile",
  "velnor-actions-actionlint",
@@ -4159,7 +4159,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-request-event"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde_json",
  "velnor-actions-contract-workflow",
@@ -4168,7 +4168,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-retrieve"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "rustix 1.1.5",
  "serde",
@@ -4192,7 +4192,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-retrieve-reports"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "tempfile",
  "velnor-actions-orchestrator-core",
@@ -4202,18 +4202,18 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-retrieve-retry"
-version = "0.1.1"
+version = "0.1.7"
 
 [[package]]
 name = "velnor-actions-orchestrator-run-select"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "velnor-actions-orchestrator-runtime-evidence"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -4230,7 +4230,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-runtime-execute"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -4249,7 +4249,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-runtime-plan"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -4265,7 +4265,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-selection"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -4283,7 +4283,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-staged-validation"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "tempfile",
  "velnor-actions-actionlint",
@@ -4296,7 +4296,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-task-report"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -4308,7 +4308,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-task-report-write"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -4331,7 +4331,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator-workflow-ir"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "tempfile",
  "velnor-actions-actionlint",
@@ -4357,11 +4357,11 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-repo-policy"
-version = "0.1.1"
+version = "0.1.7"
 
 [[package]]
 name = "velnor-actions-rust"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -4374,7 +4374,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-rust-core"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -4385,7 +4385,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-tofu"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde_json",
  "velnor-actions-contract",
@@ -4397,7 +4397,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-tofu-core"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "hcl-rs",
  "serde",
@@ -4410,7 +4410,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-workflow-cache"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-contract",
  "velnor-actions-contract-config",
@@ -4422,7 +4422,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-workflow-document"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-contract-config",
  "velnor-actions-contract-workflow",
@@ -4434,7 +4434,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-workflow-generator"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-contract-config",
  "velnor-actions-contract-release",
@@ -4445,7 +4445,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-workflow-jobs"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-contract",
  "velnor-actions-contract-config",
@@ -4458,7 +4458,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-workflow-release"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-contract",
  "velnor-actions-contract-workflow",
@@ -4468,7 +4468,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-workflow-render-strict"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-contract-config",
  "velnor-actions-contract-workflow",
@@ -4481,7 +4481,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-workflow-renderer"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-contract",
  "velnor-actions-contract-config",
@@ -4497,7 +4497,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-workflow-schema2"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-contract-config",
  "velnor-actions-workflow-cache",
@@ -4508,7 +4508,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-workflow-steps"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-contract",
  "velnor-actions-contract-workflow",
@@ -4516,7 +4516,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-workflow-tree"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-contract",
  "velnor-actions-contract-config",
@@ -4527,7 +4527,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-archive-guard"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "flate2",
  "sha2",
@@ -4535,14 +4535,14 @@ dependencies = [
 
 [[package]]
 name = "velnor-runner-apparmor"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-runner-journal",
 ]
 
 [[package]]
 name = "velnor-runner-cli"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "clap",
  "rustix 1.1.5",
@@ -4561,14 +4561,14 @@ dependencies = [
 
 [[package]]
 name = "velnor-runner-core"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "velnor-runner-docker-spec"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-runner-core",
  "velnor-runner-journal",
@@ -4576,7 +4576,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-runner-github"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -4588,7 +4588,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-runner-host"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "bollard",
  "futures-util",
@@ -4618,7 +4618,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-runner-host-config"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "rustix 1.1.5",
  "serde",
@@ -4629,7 +4629,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-runner-journal"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "thiserror",
  "tokio",
@@ -4640,7 +4640,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-runner-launch"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "bollard",
  "serde_json",
@@ -4657,7 +4657,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-runner-launch-slot"
-version = "0.1.1"
+version = "0.1.7"
 dependencies = [
  "velnor-runner-host",
  "velnor-runner-journal",

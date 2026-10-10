@@ -10,9 +10,9 @@ autotests = false
 workspace = true
 
 [dependencies]
-velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
-velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
-velnor-actions-mise-core = { version = "=0.1.1", path = "../velnor-actions-mise-core" }
+velnor-actions-contract = { version = "=0.1.7", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-config = { version = "=0.1.7", path = "../../core/velnor-actions-contract-config" }
+velnor-actions-mise-core = { version = "=0.1.7", path = "../velnor-actions-mise-core" }
 serde = { workspace = true }
 
 [[test]]

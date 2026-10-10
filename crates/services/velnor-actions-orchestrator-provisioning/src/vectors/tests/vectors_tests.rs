@@ -104,7 +104,7 @@ fn group_with_driver(driver: velnor_actions_rust_core::CompileDriver) -> Propose
         no_test_targets: false,
         package_arg: None,
         compile_driver: driver,
-        test_runner: velnor_actions_rust_core::TestRunner::CargoTest,
+        test_runner: velnor_actions_rust_core::TestRunner::CargoNextest,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
@@ -145,7 +145,7 @@ fn task_runner_tools_follow_test_runner() {
     let catalog = ToolCatalog::pinned();
     let nextest = catalog.tool_spec(PinnedTool::Nextest);
     for (runner, want) in [
-        (TestRunner::CargoTest, false),
+        (TestRunner::CargoNextest, false),
         (TestRunner::CargoNextest, true),
     ] {
         let mut task = group_with_driver(CompileDriver::Cargo);

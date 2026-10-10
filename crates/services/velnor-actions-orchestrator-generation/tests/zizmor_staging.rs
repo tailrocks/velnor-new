@@ -136,7 +136,7 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
             output_dir: Some(preview.clone()),
         },
     )?;
-    assert_eq!(report.files_written.len(), 6, "six generated files");
+    assert_eq!(report.files_written.len(), 7, "seven generated files");
     assert!(
         report
             .files_written
@@ -164,6 +164,9 @@ fn stage(preview: &Path, yaml: &str) -> Result<TempDir, Box<dyn std::error::Erro
     let action = ".github/actions/velnor-tool-seed/action.yml";
     fs::create_dir_all(root.join(".github/actions/velnor-tool-seed"))?;
     fs::copy(preview.join(action), root.join(action))?;
+    let task_action = ".github/actions/task-rust-demo/action.yml";
+    fs::create_dir_all(root.join(".github/actions/task-rust-demo"))?;
+    fs::copy(preview.join(task_action), root.join(task_action))?;
     let input = ZizmorConfigInput {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         workflows: vec![
@@ -264,6 +267,7 @@ fn self_repository_ignores(root: &Path) -> Result<usize, Box<dyn std::error::Err
         WORKFLOW_PATH,
         FRESHNESS_WORKFLOW_PATH,
         ".github/actions/velnor-tool-seed/action.yml",
+        ".github/actions/task-rust-demo/action.yml",
     ] {
         let text = fs::read_to_string(root.join(relative))?;
         matched += text.matches("# zizmor: ignore[self-repository]").count();

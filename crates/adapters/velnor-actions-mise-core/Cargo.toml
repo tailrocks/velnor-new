@@ -10,9 +10,9 @@ autotests = false
 workspace = true
 
 [dependencies]
-velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
-velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
-velnor-actions-contract-planning = { version = "=0.1.1", path = "../../core/velnor-actions-contract-planning" }
+velnor-actions-contract = { version = "=0.1.7", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-config = { version = "=0.1.7", path = "../../core/velnor-actions-contract-config" }
+velnor-actions-contract-planning = { version = "=0.1.7", path = "../../core/velnor-actions-contract-planning" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 rustix = { workspace = true, features = ["process"] }
@@ -22,4 +22,4 @@ name = "velnor_mise_core"
 path = "tests/main.rs"
 
 [dev-dependencies]
-velnor-actions-mise-catalog = { version = "=0.1.1", path = "../velnor-actions-mise-catalog" }
+velnor-actions-mise-catalog = { version = "=0.1.7", path = "../velnor-actions-mise-catalog" }

@@ -7,12 +7,12 @@ license.workspace = true
 autotests = false
 
 [dependencies]
-velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
-velnor-actions-workflow-renderer = { version = "=0.1.1", path = "../velnor-actions-workflow-renderer" }
+velnor-actions-contract-workflow = { version = "=0.1.7", path = "../../core/velnor-actions-contract-workflow" }
+velnor-actions-workflow-renderer = { version = "=0.1.7", path = "../velnor-actions-workflow-renderer" }
 
 [dev-dependencies]
-velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
-velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
+velnor-actions-contract = { version = "=0.1.7", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-config = { version = "=0.1.7", path = "../../core/velnor-actions-contract-config" }
 
 [lints]
 workspace = true

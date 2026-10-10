@@ -7,17 +7,17 @@ license.workspace = true
 autotests = false
 
 [dependencies]
-velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
-velnor-actions-contract-release = { version = "=0.1.1", path = "../../core/velnor-actions-contract-release" }
-velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
+velnor-actions-contract = { version = "=0.1.7", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-release = { version = "=0.1.7", path = "../../core/velnor-actions-contract-release" }
+velnor-actions-orchestrator-core = { version = "=0.1.7", path = "../velnor-actions-orchestrator-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
-velnor-actions-workflow-jobs = { version = "=0.1.1", path = "../velnor-actions-workflow-jobs" }
-velnor-actions-workflow-steps = { version = "=0.1.1", path = "../velnor-actions-workflow-steps" }
+velnor-actions-workflow-jobs = { version = "=0.1.7", path = "../velnor-actions-workflow-jobs" }
+velnor-actions-workflow-steps = { version = "=0.1.7", path = "../velnor-actions-workflow-steps" }
 
 [lints]
 workspace = true

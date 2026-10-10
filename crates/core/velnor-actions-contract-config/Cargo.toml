@@ -10,8 +10,8 @@ autotests = false
 workspace = true
 
 [dependencies]
-velnor-actions-contract = { version = "=0.1.1", path = "../velnor-actions-contract" }
-velnor-actions-contract-release = { version = "=0.1.1", path = "../velnor-actions-contract-release" }
+velnor-actions-contract = { version = "=0.1.7", path = "../velnor-actions-contract" }
+velnor-actions-contract-release = { version = "=0.1.7", path = "../velnor-actions-contract-release" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
@@ -20,7 +20,7 @@ name = "velnor_contract_config"
 path = "tests/main.rs"
 
 [dev-dependencies]
-velnor-actions-contract-planning = { version = "=0.1.1", path = "../velnor-actions-contract-planning" }
-velnor-actions-contract-release = { version = "=0.1.1", path = "../velnor-actions-contract-release" }
-velnor-actions-contract-workflow = { version = "=0.1.1", path = "../velnor-actions-contract-workflow" }
+velnor-actions-contract-planning = { version = "=0.1.7", path = "../velnor-actions-contract-planning" }
+velnor-actions-contract-release = { version = "=0.1.7", path = "../velnor-actions-contract-release" }
+velnor-actions-contract-workflow = { version = "=0.1.7", path = "../velnor-actions-contract-workflow" }
 serde_json = { workspace = true }

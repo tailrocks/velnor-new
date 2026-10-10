@@ -145,7 +145,7 @@ fn scan_generated_ci_policy(preview: &Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Require the explicit doctest coverage gap for Rust-bearing previews.
+/// Require the explicit doctest NOT_RUN gap for Rust-bearing previews.
 fn assert_doctest_gap(case: &str, stdout: &[u8]) -> Result<(), Box<dyn Error>> {
     let text = String::from_utf8_lossy(stdout);
     if case == "ignored-stack" {
@@ -156,7 +156,7 @@ fn assert_doctest_gap(case: &str, stdout: &[u8]) -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
     assert!(
-        text.contains("NOT_RUN: doctest coverage is an explicit gap"),
+        text.contains("NOT_RUN: doctest execution is an explicit gap"),
         "{case} lacks the explicit doctest NOT_RUN gap:\n{text}"
     );
     Ok(())

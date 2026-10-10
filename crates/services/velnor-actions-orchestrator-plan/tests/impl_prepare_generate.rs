@@ -57,6 +57,7 @@ fn generate_preview_matches_in_place_and_preserves_repo() -> TestResult {
         ".github/AGENTS.md",
         ".github/CLAUDE.md",
         ".github/actionlint.yaml",
+        ".github/actions/task-rust-demo/action.yml",
         ".github/actions/velnor-tool-seed/action.yml",
         ".github/workflows/ci.yml",
     ];

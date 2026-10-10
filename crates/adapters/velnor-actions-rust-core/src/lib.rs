@@ -35,10 +35,9 @@ pub use metadata::{
 };
 pub use metadata_edges::{DepKind, LocalEdge, SkippedPathEdge, local_edge_pairs};
 pub use profile::{
-    AMBIGUOUS_DRIVER_CODE, AMBIGUOUS_RUNNER_CODE, CompileDriver, NextestProfile,
-    PROFILE_CONFLICT_CODE, ProfileError, ProfileFinding, ProfileInputs, ProfileOutcome,
-    ProfileSource, Recommendation, RustExecutionProfile, TRANSIENT_EVIDENCE_CODE, TestRunner,
-    detect_profile,
+    AMBIGUOUS_DRIVER_CODE, CompileDriver, NextestProfile, PROFILE_CONFLICT_CODE, ProfileError,
+    ProfileFinding, ProfileInputs, ProfileOutcome, ProfileSource, Recommendation,
+    RustExecutionProfile, TRANSIENT_EVIDENCE_CODE, TestRunner, detect_profile,
 };
 pub use release_config::{
     DEFAULT_TAG_PATTERN, EmitOptions, ExistingTag, TagOutcome, TagState, VersionGroup,

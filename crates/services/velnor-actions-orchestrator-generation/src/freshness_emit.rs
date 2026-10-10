@@ -19,6 +19,7 @@ use velnor_actions_orchestrator_workflow_ir::workflow::CHECKOUT_USES;
 ///
 /// Single predicate shared by emission and plan listing, so the two
 /// can never disagree about the file's presence.
+#[must_use]
 pub fn freshness_enabled(prep: &GenerationPreparation) -> bool {
     prep.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1
 }

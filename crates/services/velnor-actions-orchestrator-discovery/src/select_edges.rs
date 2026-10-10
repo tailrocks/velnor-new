@@ -77,6 +77,7 @@ fn filtered_files(
 ///
 /// Converted at the rust boundary via [`local_edge_pairs`]; selection
 /// never sees adapter edge types.
+#[must_use]
 pub fn head_edges(discovery: &Discovery) -> Vec<(String, String)> {
     let mut edges = Vec::new();
     for workspace in &discovery.workspaces {
@@ -92,6 +93,9 @@ pub fn head_edges(discovery: &Discovery) -> Vec<(String, String)> {
 /// removed or renamed edges still select their head consumers. Manifests
 /// added since base are new and contribute nothing; over-cap sets and
 /// fetch or parse failures are errors that broaden via the caller.
+///
+/// # Errors
+/// Returns a message when batch limits, Git access, or manifest parsing fail.
 pub fn base_edges(
     root: &Path,
     base: &str,
@@ -163,6 +167,9 @@ pub(crate) fn base_manifests(
 /// edges bind shard legs to their base task, and resource exclusions come
 /// from the lane assignment. Endpoints outside the selection are dropped:
 /// plan edges must name planned obligations.
+///
+/// # Errors
+/// Returns [`ContractError`] when task identities or graph limits are invalid.
 pub fn plan_task_graph(
     selected: &[&ProposedTask],
     lanes: &BTreeMap<String, u32>,

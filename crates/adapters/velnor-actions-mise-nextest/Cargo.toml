@@ -10,11 +10,11 @@ autotests = false
 workspace = true
 
 [dependencies]
-velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
-velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
-velnor-actions-contract-release = { version = "=0.1.1", path = "../../core/velnor-actions-contract-release" }
-velnor-actions-mise-core = { version = "=0.1.1", path = "../velnor-actions-mise-core" }
-velnor-actions-mise-catalog = { version = "=0.1.1", path = "../velnor-actions-mise-catalog" }
+velnor-actions-contract = { version = "=0.1.7", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-config = { version = "=0.1.7", path = "../../core/velnor-actions-contract-config" }
+velnor-actions-contract-release = { version = "=0.1.7", path = "../../core/velnor-actions-contract-release" }
+velnor-actions-mise-core = { version = "=0.1.7", path = "../velnor-actions-mise-core" }
+velnor-actions-mise-catalog = { version = "=0.1.7", path = "../velnor-actions-mise-catalog" }
 
 [[test]]
 name = "velnor_mise_nextest"

@@ -7,21 +7,21 @@ license.workspace = true
 autotests = false
 
 [dependencies]
-velnor-actions-actionlint = { version = "=0.1.1", path = "../../adapters/velnor-actions-actionlint" }
-velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
-velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
-velnor-actions-contract-planning = { version = "=0.1.1", path = "../../core/velnor-actions-contract-planning" }
-velnor-actions-contract-release = { version = "=0.1.1", path = "../../core/velnor-actions-contract-release" }
-velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
-velnor-actions-mise = { version = "=0.1.1", path = "../../adapters/velnor-actions-mise" }
-velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
-velnor-actions-orchestrator-discovery = { version = "=0.1.1", path = "../velnor-actions-orchestrator-discovery" }
-velnor-actions-rust = { version = "=0.1.1", path = "../../adapters/velnor-actions-rust" }
-velnor-actions-tofu-core = { version = "=0.1.1", path = "../../adapters/velnor-actions-tofu-core" }
-velnor-actions-workflow-cache = { version = "=0.1.1", path = "../velnor-actions-workflow-cache" }
-velnor-actions-workflow-jobs = { version = "=0.1.1", path = "../velnor-actions-workflow-jobs" }
-velnor-actions-workflow-renderer = { version = "=0.1.1", path = "../velnor-actions-workflow-renderer" }
-velnor-actions-workflow-steps = { version = "=0.1.1", path = "../velnor-actions-workflow-steps" }
+velnor-actions-actionlint = { version = "=0.1.7", path = "../../adapters/velnor-actions-actionlint" }
+velnor-actions-contract = { version = "=0.1.7", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-config = { version = "=0.1.7", path = "../../core/velnor-actions-contract-config" }
+velnor-actions-contract-planning = { version = "=0.1.7", path = "../../core/velnor-actions-contract-planning" }
+velnor-actions-contract-release = { version = "=0.1.7", path = "../../core/velnor-actions-contract-release" }
+velnor-actions-contract-workflow = { version = "=0.1.7", path = "../../core/velnor-actions-contract-workflow" }
+velnor-actions-mise = { version = "=0.1.7", path = "../../adapters/velnor-actions-mise" }
+velnor-actions-orchestrator-core = { version = "=0.1.7", path = "../velnor-actions-orchestrator-core" }
+velnor-actions-orchestrator-discovery = { version = "=0.1.7", path = "../velnor-actions-orchestrator-discovery" }
+velnor-actions-rust = { version = "=0.1.7", path = "../../adapters/velnor-actions-rust" }
+velnor-actions-tofu-core = { version = "=0.1.7", path = "../../adapters/velnor-actions-tofu-core" }
+velnor-actions-workflow-cache = { version = "=0.1.7", path = "../velnor-actions-workflow-cache" }
+velnor-actions-workflow-jobs = { version = "=0.1.7", path = "../velnor-actions-workflow-jobs" }
+velnor-actions-workflow-renderer = { version = "=0.1.7", path = "../velnor-actions-workflow-renderer" }
+velnor-actions-workflow-steps = { version = "=0.1.7", path = "../velnor-actions-workflow-steps" }
 
 [lints]
 workspace = true
@@ -32,5 +32,5 @@ path = "tests/main.rs"
 
 [dev-dependencies]
 tempfile = { workspace = true }
-velnor-actions-orchestrator = { version = "=0.1.1", path = "../velnor-actions-orchestrator" }
-velnor-actions-rust-core = { version = "=0.1.1", path = "../../adapters/velnor-actions-rust-core" }
+velnor-actions-orchestrator = { version = "=0.1.7", path = "../velnor-actions-orchestrator" }
+velnor-actions-rust-core = { version = "=0.1.7", path = "../../adapters/velnor-actions-rust-core" }

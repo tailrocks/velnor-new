@@ -3,9 +3,21 @@ use std::error::Error;
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-const BINARY: &str = "velnor-actions-0.1.1-x86_64-unknown-linux-gnu";
-const CHECKSUM: &str = "velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256";
-const PROVENANCE: &str = "velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json";
+const BINARY: &str = concat!(
+    "velnor-actions-",
+    env!("CARGO_PKG_VERSION"),
+    "-x86_64-unknown-linux-gnu"
+);
+const CHECKSUM: &str = concat!(
+    "velnor-actions-",
+    env!("CARGO_PKG_VERSION"),
+    "-x86_64-unknown-linux-gnu.sha256"
+);
+const PROVENANCE: &str = concat!(
+    "velnor-actions-",
+    env!("CARGO_PKG_VERSION"),
+    "-x86_64-unknown-linux-gnu.provenance.json"
+);
 
 mod extract;
 
@@ -66,6 +78,6 @@ fn checksum_sidecar_must_name_the_exact_binary() -> Result<(), Box<dyn Error>> {
         assert_eq!(child.wait()?.success(), accepted, "row: {row:?}");
     }
     let command = sidecar_digest_command(CHECKSUM, BINARY);
-    assert!(command.contains("expected='velnor-actions-0.1.1"));
+    assert!(command.contains("expected='velnor-actions-0.1.7"));
     Ok(())
 }

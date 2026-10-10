@@ -39,6 +39,7 @@ pub struct TofuSelectionUnit {
 const MAX_TOFU_BASE_FILE_BATCH: usize = 512;
 
 /// Normalized configured roots backing selected tofu projects.
+#[must_use]
 pub fn tofu_selected_roots(statuses: &[DetectionStatus]) -> Vec<String> {
     let mut roots: Vec<String> = statuses
         .iter()

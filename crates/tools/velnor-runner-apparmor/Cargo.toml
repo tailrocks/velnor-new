@@ -12,4 +12,4 @@ workspace = true
 test-support = []
 
 [dependencies]
-velnor-runner-journal = { version = "=0.1.1", path = "../velnor-runner-journal" }
+velnor-runner-journal = { version = "=0.1.7", path = "../velnor-runner-journal" }

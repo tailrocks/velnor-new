@@ -10,8 +10,8 @@ autotests = false
 workspace = true
 
 [dependencies]
-velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
-velnor-actions-contract-planning = { version = "=0.1.1", path = "../../core/velnor-actions-contract-planning" }
+velnor-actions-contract = { version = "=0.1.7", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-planning = { version = "=0.1.7", path = "../../core/velnor-actions-contract-planning" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }

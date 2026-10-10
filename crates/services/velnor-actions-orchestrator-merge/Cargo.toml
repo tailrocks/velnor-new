@@ -9,12 +9,12 @@ autotests = false
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
-velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
-velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
-velnor-actions-orchestrator-check-evidence = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-evidence" }
-velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
-velnor-actions-orchestrator-merge-ports = { version = "=0.1.1", path = "../velnor-actions-orchestrator-merge-ports" }
-velnor-actions-workflow-jobs = { version = "=0.1.1", path = "../velnor-actions-workflow-jobs" }
+velnor-actions-contract = { version = "=0.1.7", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-workflow = { version = "=0.1.7", path = "../../core/velnor-actions-contract-workflow" }
+velnor-actions-orchestrator-check-evidence = { version = "=0.1.7", path = "../velnor-actions-orchestrator-check-evidence" }
+velnor-actions-orchestrator-core = { version = "=0.1.7", path = "../velnor-actions-orchestrator-core" }
+velnor-actions-orchestrator-merge-ports = { version = "=0.1.7", path = "../velnor-actions-orchestrator-merge-ports" }
+velnor-actions-workflow-jobs = { version = "=0.1.7", path = "../velnor-actions-workflow-jobs" }
 
 [lints]
 workspace = true
@@ -24,4 +24,4 @@ name = "velnor_orchestrator_merge"
 path = "tests/main.rs"
 
 [dev-dependencies]
-velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
+velnor-actions-contract-config = { version = "=0.1.7", path = "../../core/velnor-actions-contract-config" }

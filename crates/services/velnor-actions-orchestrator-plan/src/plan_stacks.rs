@@ -125,7 +125,7 @@ fn profile_lines(out: &mut String, workspace: &PlannedWorkspace) {
             "  Profile {root}: {} compile driver ({}), {} test runner ({})",
             profile.compile_driver.as_str(),
             profile.driver_source.as_str(),
-            profile.test_runner.as_str(),
+            "cargo nextest",
             profile.runner_source.as_str()
         ),
     );

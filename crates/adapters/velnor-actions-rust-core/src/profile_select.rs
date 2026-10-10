@@ -52,49 +52,16 @@ pub(crate) fn select_driver(
 }
 
 /// Select the test runner: declared wins, else durable, else transient+finding.
-pub(crate) fn select_runner(
-    seen: &Seen,
-    inputs: &ProfileInputs<'_>,
-    findings: &mut Vec<ProfileFinding>,
-) -> Result<(TestRunner, ProfileSource), ProfileError> {
-    if let Some(declared) = inputs.declared_runner {
-        check_runner_conflict(seen, declared)?;
-        return Ok((declared, ProfileSource::Declared));
-    }
-    if !seen.nextest_durable.is_empty() {
-        return Ok((TestRunner::CargoNextest, ProfileSource::Detected));
-    }
-    if !seen.cargo_durable.is_empty() {
-        return Ok((TestRunner::CargoTest, ProfileSource::Detected));
-    }
-    if !seen.nextest_transient.is_empty() {
-        findings.push(transient_finding(
-            "test runner",
-            "test_runner",
-            TestRunner::CargoNextest.as_str(),
-            sorted(seen.nextest_transient.clone()),
-        ));
-        return Ok((TestRunner::CargoNextest, ProfileSource::Detected));
-    }
-    Ok((TestRunner::CargoTest, ProfileSource::Detected))
-}
-
-/// Fail when durable runner evidence contradicts the declared runner.
-fn check_runner_conflict(seen: &Seen, declared: TestRunner) -> Result<(), ProfileError> {
-    let (key, contradicting) = match declared {
-        TestRunner::CargoTest => ("test_runner = \"cargo_test\"", seen.nextest_durable.clone()),
-        TestRunner::CargoNextest => (
-            "test_runner = \"cargo_nextest\"",
-            seen.cargo_durable.clone(),
-        ),
+///
+/// Generated Actions are Nextest-only: all legacy runner evidence is
+/// normalized to the pinned Nextest profile.
+pub(crate) fn select_runner(inputs: &ProfileInputs<'_>) -> (TestRunner, ProfileSource) {
+    let source = if inputs.declared_runner.is_some() {
+        ProfileSource::Declared
+    } else {
+        ProfileSource::Detected
     };
-    if contradicting.is_empty() {
-        return Ok(());
-    }
-    Err(ProfileError::ProfileConflict {
-        declared: key.to_owned(),
-        evidence: sorted(contradicting),
-    })
+    (TestRunner::CargoNextest, source)
 }
 
 /// Sort one evidence bucket.
@@ -126,10 +93,13 @@ or (b) move the invocation to a durable executable task outside .github",
 /// Advisory recommendations for the detected selection.
 pub(crate) fn recommend(inputs: &ProfileInputs<'_>, seen: &Seen) -> Vec<Recommendation> {
     let mut out = Vec::new();
-    if inputs.declared_runner.is_none() && !seen.has_runner() {
+    if inputs.declared_runner.is_none()
+        && seen.nextest_durable.is_empty()
+        && seen.nextest_transient.is_empty()
+    {
         out.push(Recommendation {
             code: NEXTEST_RECOMMENDATION.to_owned(),
-            message: "no explicit test-runner usage; defaulting to `cargo test`".to_owned(),
+            message: "no explicit Nextest usage; generated Actions use `cargo nextest`".to_owned(),
         });
     }
     let declared = inputs.declared_driver.is_some() && inputs.declared_runner.is_some();

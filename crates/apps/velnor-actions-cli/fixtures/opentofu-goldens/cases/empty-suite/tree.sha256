@@ -1,6 +1,6 @@
-ecf9a09d20d9c238717ccacbaa7737c2e3838a86ca690e2696e596d4b8527d19  ./.github/AGENTS.md
-e8b37bd2c2e072053779a49aa8c24e3f07cb382690cab7dc59756b8899b61854  ./.github/actionlint.yaml
-da3fac0eae95176c9c6f106544c24cc0182761d4bb70a6ce25dbe197c90932f9  ./.github/actions/task-rust-empty-suite/action.yml
-6139179ce61ff5097625f4ea76159d97de3ea4275e0aeea4ab0b86e3272c61e8  ./.github/actions/velnor-tool-seed/action.yml
-b8e13177e50d05ce7bc359ae8735da8490cc074e1d60485175a5dce3358f8d5e  ./.github/workflows/ci.yml
+8c3ba32bc949b03ba5d3a608953846cd505cac1ff8548fe35009f274aa408fc9  ./.github/AGENTS.md
+2728a989f50fecabf716252fa39f9cec059e4d89abdc0d2e4a163fe6b5150c26  ./.github/actionlint.yaml
+5768402dc7c18662dc723a5f4a87a6c6786f3f22fa5efb9f12c7b66bdb42dbe2  ./.github/actions/task-rust-empty-suite/action.yml
+212e8bce874ac6afe150d24f6c6189d8dc49b62a5e1274408dae4efa37b21292  ./.github/actions/velnor-tool-seed/action.yml
+6ed2f39b58aba92d97f81634284b5705397eab49e4d593bb1630ec026c4e341f  ./.github/workflows/ci.yml
 link ./.github/CLAUDE.md -> AGENTS.md

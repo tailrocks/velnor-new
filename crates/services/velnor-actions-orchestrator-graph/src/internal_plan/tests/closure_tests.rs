@@ -26,7 +26,7 @@ fn group(declared: Vec<String>, reads: bool) -> ProposedTask {
         no_test_targets: false,
         package_arg: None,
         compile_driver: CompileDriver::Cargo,
-        test_runner: TestRunner::CargoTest,
+        test_runner: TestRunner::CargoNextest,
         declared_inputs: declared,
         undeclared_reads: reads,
         uses_network: false,

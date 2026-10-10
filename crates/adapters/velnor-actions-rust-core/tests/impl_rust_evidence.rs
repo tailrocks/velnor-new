@@ -1,7 +1,7 @@
 //! Profile evidence cases.
 use velnor_actions_rust_core::{
-    CompileDriver, EvidenceFile, NEXTEST_RECOMMENDATION, PERSIST_EVIDENCE, ProfileError,
-    ProfileInputs, TestRunner, detect_profile, evidence_scan_excluded, is_generated_output,
+    CompileDriver, EvidenceFile, NEXTEST_RECOMMENDATION, PERSIST_EVIDENCE, ProfileInputs,
+    TestRunner, detect_profile, evidence_scan_excluded, is_generated_output,
 };
 
 /// Wrap `content` read from `path` as evidence input.
@@ -29,7 +29,7 @@ fn tool_setting_selects_mbx() {
         panic!("tool setting must select a profile");
     };
     assert_eq!(outcome.profile.compile_driver, CompileDriver::Mbx);
-    assert_eq!(outcome.profile.test_runner, TestRunner::CargoTest);
+    assert_eq!(outcome.profile.test_runner, TestRunner::CargoNextest);
     assert_eq!(outcome.profile.evidence.len(), 1);
     assert_eq!(outcome.profile.evidence[0].path, "mise.toml");
     assert_eq!(outcome.profile.evidence[0].line, 2);
@@ -92,8 +92,8 @@ fn executable_invoking_mbx_selects_mbx() {
         panic!("mbx invocation must select a profile");
     };
     assert_eq!(outcome.profile.compile_driver, CompileDriver::Mbx);
-    assert_eq!(outcome.profile.test_runner, TestRunner::CargoTest);
-    assert!(outcome.recommendations.is_empty());
+    assert_eq!(outcome.profile.test_runner, TestRunner::CargoNextest);
+    assert_eq!(codes(&outcome), vec![NEXTEST_RECOMMENDATION]);
 }
 
 #[test]
@@ -128,7 +128,7 @@ fn generated_output_is_never_evidence() {
         panic!("generated output must fall back to defaults");
     };
     assert_eq!(outcome.profile.compile_driver, CompileDriver::Cargo);
-    assert_eq!(outcome.profile.test_runner, TestRunner::CargoTest);
+    assert_eq!(outcome.profile.test_runner, TestRunner::CargoNextest);
     assert!(outcome.profile.evidence.is_empty());
 }
 
@@ -202,20 +202,20 @@ fn nextest_invocation_selects_nextest() {
 }
 
 #[test]
-fn cargo_test_invocation_selects_cargo_test() {
+fn cargo_test_invocation_normalizes_to_nextest() {
     let inputs = ProfileInputs {
         executables: vec![file("scripts/test.sh", "cargo test --package a --locked\n")],
         ..ProfileInputs::default()
     };
     let Ok(outcome) = detect_profile(&inputs) else {
-        panic!("cargo test must select a profile");
+        panic!("cargo test must normalize to Nextest");
     };
-    assert_eq!(outcome.profile.test_runner, TestRunner::CargoTest);
-    assert!(outcome.recommendations.is_empty());
+    assert_eq!(outcome.profile.test_runner, TestRunner::CargoNextest);
+    assert_eq!(codes(&outcome), vec![NEXTEST_RECOMMENDATION]);
 }
 
 #[test]
-fn conflicting_runners_rejected() {
+fn conflicting_runners_normalize_to_nextest() {
     let inputs = ProfileInputs {
         executables: vec![
             file("scripts/a.sh", "cargo test --package a\n"),
@@ -223,21 +223,20 @@ fn conflicting_runners_rejected() {
         ],
         ..ProfileInputs::default()
     };
-    let result = detect_profile(&inputs);
-    let Err(ProfileError::AmbiguousTestRunner { evidence }) = result else {
-        panic!("conflicting runners must fail");
+    let Ok(outcome) = detect_profile(&inputs) else {
+        panic!("conflicting runners must normalize");
     };
-    assert_eq!(evidence.len(), 2);
-    assert!(evidence.windows(2).all(|pair| pair[0] <= pair[1]));
+    assert_eq!(outcome.profile.test_runner, TestRunner::CargoNextest);
+    assert_eq!(outcome.profile.evidence.len(), 2);
 }
 
 #[test]
-fn no_evidence_defaults_with_both_recommendations() {
+fn no_evidence_defaults_with_nextest_recommendation() {
     let Ok(outcome) = detect_profile(&ProfileInputs::default()) else {
         panic!("empty inputs must fall back to defaults");
     };
     assert_eq!(outcome.profile.compile_driver, CompileDriver::Cargo);
-    assert_eq!(outcome.profile.test_runner, TestRunner::CargoTest);
+    assert_eq!(outcome.profile.test_runner, TestRunner::CargoNextest);
     assert_eq!(
         codes(&outcome),
         vec![NEXTEST_RECOMMENDATION, PERSIST_EVIDENCE]
@@ -253,6 +252,6 @@ fn nextest_pin_without_invocation_is_not_evidence() {
     let Ok(outcome) = detect_profile(&inputs) else {
         panic!("nextest pin must fall back to defaults");
     };
-    assert_eq!(outcome.profile.test_runner, TestRunner::CargoTest);
+    assert_eq!(outcome.profile.test_runner, TestRunner::CargoNextest);
     assert!(outcome.profile.evidence.is_empty());
 }

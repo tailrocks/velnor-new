@@ -32,7 +32,7 @@ fn digest_full(
         no_test_targets: false,
         package_arg: None,
         compile_driver: CompileDriver::Cargo,
-        test_runner: TestRunner::CargoTest,
+        test_runner: TestRunner::CargoNextest,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,

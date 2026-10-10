@@ -1,33 +1,92 @@
-Velnor Actions plan 0.1.1
+Velnor Actions plan 0.1.7
 Repository: <repo>
 
 Detected stacks
   Rust: selected
-  Workspace crates: 13
-    - velnor-actions-actionlint (crates/adapters/velnor-actions-actionlint/Cargo.toml) [lib, test; depends on velnor-actions-contract]
-    - velnor-actions-cli (crates/apps/velnor-actions-cli/Cargo.toml) [bin, test; depends on velnor-actions-orchestrator]
-    - velnor-actions-contract (crates/core/velnor-actions-contract/Cargo.toml) [lib, test]
-    - velnor-actions-mise (crates/adapters/velnor-actions-mise/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-tofu]
-    - velnor-actions-orchestrator (crates/services/velnor-actions-orchestrator/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-mise, velnor-actions-rust, velnor-actions-tofu, velnor-actions-workflow-renderer]
-    - velnor-actions-rust (crates/adapters/velnor-actions-rust/Cargo.toml) [lib, test; depends on velnor-actions-contract]
-    - velnor-actions-tofu (crates/adapters/velnor-actions-tofu/Cargo.toml) [lib, test; depends on velnor-actions-contract]
-    - velnor-actions-workflow-renderer (crates/services/velnor-actions-workflow-renderer/Cargo.toml) [lib, test; depends on velnor-actions-contract]
+  Workspace crates: 78
+    - velnor-actions-actionlint (crates/adapters/velnor-actions-actionlint/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-release]
+    - velnor-actions-cli (crates/apps/velnor-actions-cli/Cargo.toml) [bin, test; depends on velnor-actions-contract-workflow, velnor-actions-orchestrator-baseline-publish, velnor-actions-orchestrator-check-runtime, velnor-actions-orchestrator-core, velnor-actions-orchestrator-generation, velnor-actions-orchestrator-internal, velnor-actions-orchestrator-plan, velnor-actions-orchestrator-preseed-manifest, velnor-actions-orchestrator-retrieve-reports, velnor-actions-orchestrator-task-report-write]
+    - velnor-actions-contract (crates/core/velnor-actions-contract/Cargo.toml) [lib, test; depends on velnor-actions-contract-config, velnor-actions-contract-release, velnor-actions-contract-workflow]
+    - velnor-actions-contract-config (crates/core/velnor-actions-contract-config/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-planning, velnor-actions-contract-release, velnor-actions-contract-workflow]
+    - velnor-actions-contract-planning (crates/core/velnor-actions-contract-planning/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-workflow]
+    - velnor-actions-contract-release (crates/core/velnor-actions-contract-release/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config]
+    - velnor-actions-contract-workflow (crates/core/velnor-actions-contract-workflow/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-planning, velnor-actions-contract-release]
+    - velnor-actions-mise (crates/adapters/velnor-actions-mise/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-release, velnor-actions-mise-cache, velnor-actions-mise-catalog, velnor-actions-mise-core, velnor-actions-mise-nextest, velnor-actions-mise-probes, velnor-actions-tofu-core]
+    - velnor-actions-mise-cache (crates/adapters/velnor-actions-mise-cache/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-workflow, velnor-actions-mise-core]
+    - velnor-actions-mise-catalog (crates/adapters/velnor-actions-mise-catalog/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-planning, velnor-actions-contract-release, velnor-actions-mise-core]
+    - velnor-actions-mise-core (crates/adapters/velnor-actions-mise-core/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-planning, velnor-actions-mise-catalog]
+    - velnor-actions-mise-nextest (crates/adapters/velnor-actions-mise-nextest/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-release, velnor-actions-mise-catalog, velnor-actions-mise-core]
+    - velnor-actions-mise-probes (crates/adapters/velnor-actions-mise-probes/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-mise-core]
+    - velnor-actions-orchestrator (crates/services/velnor-actions-orchestrator/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-planning, velnor-actions-contract-release, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator-baseline-publish, velnor-actions-orchestrator-check-runtime, velnor-actions-orchestrator-core, velnor-actions-orchestrator-cover-compat, velnor-actions-orchestrator-covered-tasks, velnor-actions-orchestrator-discovery, velnor-actions-orchestrator-external-data, velnor-actions-orchestrator-generation, velnor-actions-orchestrator-internal, velnor-actions-orchestrator-noop-report, velnor-actions-orchestrator-pins, velnor-actions-orchestrator-plan, velnor-actions-orchestrator-preseed-manifest, velnor-actions-orchestrator-provisioning, velnor-actions-orchestrator-retrieve, velnor-actions-orchestrator-retrieve-reports, velnor-actions-orchestrator-retrieve-retry, velnor-actions-orchestrator-run-select, velnor-actions-orchestrator-runtime-evidence, velnor-actions-orchestrator-runtime-plan, velnor-actions-orchestrator-staged-validation, velnor-actions-orchestrator-task-report-write, velnor-actions-orchestrator-workflow-ir, velnor-actions-rust, velnor-actions-rust-core, velnor-actions-tofu, velnor-actions-tofu-core, velnor-actions-workflow-cache, velnor-actions-workflow-document, velnor-actions-workflow-generator, velnor-actions-workflow-jobs, velnor-actions-workflow-release, velnor-actions-workflow-render-strict, velnor-actions-workflow-renderer, velnor-actions-workflow-schema2, velnor-actions-workflow-steps, velnor-actions-workflow-tree]
+    - velnor-actions-orchestrator-baseline-publish (crates/services/velnor-actions-orchestrator-baseline-publish/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-workflow, velnor-actions-orchestrator-core, velnor-actions-orchestrator-cover-baseline, velnor-actions-orchestrator-cover-compat, velnor-actions-orchestrator-graph, velnor-actions-orchestrator-merge, velnor-actions-orchestrator-merge-ports, velnor-actions-orchestrator-request-event, velnor-actions-orchestrator-retrieve, velnor-actions-orchestrator-task-report, velnor-actions-workflow-renderer]
+    - velnor-actions-orchestrator-check-acquisition (crates/services/velnor-actions-orchestrator-check-acquisition/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-mise, velnor-actions-orchestrator-core]
+    - velnor-actions-orchestrator-check-evidence (crates/services/velnor-actions-orchestrator-check-evidence/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator-check-acquisition, velnor-actions-orchestrator-check-preparation, velnor-actions-orchestrator-core]
+    - velnor-actions-orchestrator-check-preparation (crates/services/velnor-actions-orchestrator-check-preparation/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-mise, velnor-actions-orchestrator-check-acquisition, velnor-actions-orchestrator-core, velnor-actions-workflow-steps]
+    - velnor-actions-orchestrator-check-runtime (crates/services/velnor-actions-orchestrator-check-runtime/Cargo.toml) [lib, test; depends on velnor-actions-contract-config, velnor-actions-contract-workflow, velnor-actions-orchestrator-check-evidence, velnor-actions-orchestrator-core, velnor-actions-orchestrator-retrieve, velnor-actions-orchestrator-runtime-execute]
+    - velnor-actions-orchestrator-core (crates/services/velnor-actions-orchestrator-core/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-planning, velnor-actions-contract-release, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator, velnor-actions-rust, velnor-actions-rust-core, velnor-actions-tofu-core, velnor-actions-workflow-cache, velnor-actions-workflow-document, velnor-actions-workflow-steps, velnor-actions-workflow-tree]
+    - velnor-actions-orchestrator-cover (crates/services/velnor-actions-orchestrator-cover/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator-core, velnor-actions-orchestrator-cover-baseline, velnor-actions-orchestrator-cover-compat, velnor-actions-orchestrator-external-data, velnor-actions-orchestrator-graph, velnor-actions-orchestrator-merge-ports, velnor-actions-orchestrator-run-select, velnor-actions-rust-core]
+    - velnor-actions-orchestrator-cover-baseline (crates/services/velnor-actions-orchestrator-cover-baseline/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-planning, velnor-actions-contract-release, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator-core, velnor-actions-orchestrator-cover-compat, velnor-actions-orchestrator-discovery, velnor-actions-orchestrator-external-data, velnor-actions-orchestrator-graph, velnor-actions-orchestrator-merge, velnor-actions-orchestrator-merge-ports, velnor-actions-orchestrator-provisioning, velnor-actions-rust, velnor-actions-rust-core, velnor-actions-tofu-core]
+    - velnor-actions-orchestrator-cover-compat (crates/services/velnor-actions-orchestrator-cover-compat/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-workflow]
+    - velnor-actions-orchestrator-covered-tasks (crates/services/velnor-actions-orchestrator-covered-tasks/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-workflow, velnor-actions-workflow-renderer]
+    - velnor-actions-orchestrator-discovery (crates/services/velnor-actions-orchestrator-discovery/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-planning, velnor-actions-contract-release, velnor-actions-mise, velnor-actions-orchestrator-core, velnor-actions-rust, velnor-actions-rust-core, velnor-actions-tofu, velnor-actions-tofu-core, velnor-actions-workflow-renderer]
+    - velnor-actions-orchestrator-external-data (crates/services/velnor-actions-orchestrator-external-data/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-orchestrator-core]
+    - velnor-actions-orchestrator-generation (crates/services/velnor-actions-orchestrator-generation/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-release, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator-core, velnor-actions-orchestrator-discovery, velnor-actions-orchestrator-internal, velnor-actions-orchestrator-pins, velnor-actions-orchestrator-provisioning, velnor-actions-orchestrator-staged-validation, velnor-actions-orchestrator-workflow-ir, velnor-actions-rust-core, velnor-actions-tofu-core, velnor-actions-workflow-cache, velnor-actions-workflow-generator, velnor-actions-workflow-jobs, velnor-actions-workflow-release, velnor-actions-workflow-render-strict, velnor-actions-workflow-renderer, velnor-actions-workflow-schema2, velnor-actions-workflow-steps, velnor-actions-workflow-tree]
+    - velnor-actions-orchestrator-graph (crates/services/velnor-actions-orchestrator-graph/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-planning, velnor-actions-contract-release, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator-core, velnor-actions-orchestrator-discovery, velnor-actions-orchestrator-provisioning, velnor-actions-rust, velnor-actions-rust-core, velnor-actions-tofu, velnor-actions-tofu-core, velnor-actions-workflow-document, velnor-actions-workflow-steps]
+    - velnor-actions-orchestrator-internal (crates/services/velnor-actions-orchestrator-internal/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-planning, velnor-actions-contract-release, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator-baseline-publish, velnor-actions-orchestrator-core, velnor-actions-orchestrator-cover, velnor-actions-orchestrator-cover-baseline, velnor-actions-orchestrator-cover-compat, velnor-actions-orchestrator-covered-tasks, velnor-actions-orchestrator-discovery, velnor-actions-orchestrator-generation, velnor-actions-orchestrator-graph, velnor-actions-orchestrator-merge, velnor-actions-orchestrator-merge-ports, velnor-actions-orchestrator-merge-request, velnor-actions-orchestrator-merge-request-ports, velnor-actions-orchestrator-plan, velnor-actions-orchestrator-plan-obligation, velnor-actions-orchestrator-request-event, velnor-actions-orchestrator-selection, velnor-actions-tofu-core, velnor-actions-workflow-jobs, velnor-actions-workflow-renderer, velnor-actions-workflow-steps]
+    - velnor-actions-orchestrator-merge (crates/services/velnor-actions-orchestrator-merge/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-workflow, velnor-actions-orchestrator-check-evidence, velnor-actions-orchestrator-core, velnor-actions-orchestrator-merge-ports, velnor-actions-workflow-jobs]
+    - velnor-actions-orchestrator-merge-ports (crates/services/velnor-actions-orchestrator-merge-ports/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-planning, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator-core, velnor-actions-orchestrator-external-data, velnor-actions-orchestrator-selection]
+    - velnor-actions-orchestrator-merge-request (crates/services/velnor-actions-orchestrator-merge-request/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-workflow, velnor-actions-orchestrator-check-evidence, velnor-actions-orchestrator-core, velnor-actions-orchestrator-merge-request-ports, velnor-actions-orchestrator-request-event, velnor-actions-workflow-jobs]
+    - velnor-actions-orchestrator-merge-request-ports (crates/services/velnor-actions-orchestrator-merge-request-ports/Cargo.toml) [lib, test; depends on velnor-actions-orchestrator-core]
+    - velnor-actions-orchestrator-noop-report (crates/services/velnor-actions-orchestrator-noop-report/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-workflow, velnor-actions-orchestrator-core, velnor-actions-orchestrator-covered-tasks, velnor-actions-orchestrator-provisioning, velnor-actions-orchestrator-task-report]
+    - velnor-actions-orchestrator-pins (crates/services/velnor-actions-orchestrator-pins/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract-config, velnor-actions-contract-release, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator-core, velnor-actions-orchestrator-discovery, velnor-actions-workflow-jobs, velnor-actions-workflow-steps]
+    - velnor-actions-orchestrator-plan (crates/services/velnor-actions-orchestrator-plan/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-planning, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator-core, velnor-actions-orchestrator-discovery, velnor-actions-orchestrator-generation, velnor-actions-orchestrator-provisioning, velnor-actions-orchestrator-workflow-ir, velnor-actions-rust, velnor-actions-rust-core, velnor-actions-tofu-core, velnor-actions-workflow-cache, velnor-actions-workflow-jobs, velnor-actions-workflow-release, velnor-actions-workflow-renderer, velnor-actions-workflow-tree]
+    - velnor-actions-orchestrator-plan-obligation (crates/services/velnor-actions-orchestrator-plan-obligation/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-planning, velnor-actions-contract-release, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator-core, velnor-actions-orchestrator-discovery, velnor-actions-orchestrator-graph, velnor-actions-orchestrator-provisioning, velnor-actions-orchestrator-workflow-ir, velnor-actions-rust, velnor-actions-rust-core, velnor-actions-tofu-core, velnor-actions-workflow-steps]
+    - velnor-actions-orchestrator-preseed-manifest (crates/services/velnor-actions-orchestrator-preseed-manifest/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-release, velnor-actions-orchestrator-core, velnor-actions-workflow-jobs, velnor-actions-workflow-steps]
+    - velnor-actions-orchestrator-provisioning (crates/services/velnor-actions-orchestrator-provisioning/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-planning, velnor-actions-contract-release, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator, velnor-actions-orchestrator-core, velnor-actions-orchestrator-discovery, velnor-actions-rust, velnor-actions-rust-core, velnor-actions-tofu-core, velnor-actions-workflow-cache, velnor-actions-workflow-jobs, velnor-actions-workflow-renderer, velnor-actions-workflow-steps]
+    - velnor-actions-orchestrator-request-event (crates/services/velnor-actions-orchestrator-request-event/Cargo.toml) [lib, test; depends on velnor-actions-contract-workflow, velnor-actions-orchestrator-core]
+    - velnor-actions-orchestrator-retrieve (crates/services/velnor-actions-orchestrator-retrieve/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator-core, velnor-actions-orchestrator-cover, velnor-actions-orchestrator-cover-baseline, velnor-actions-orchestrator-cover-compat, velnor-actions-orchestrator-covered-tasks, velnor-actions-orchestrator-merge-ports, velnor-actions-orchestrator-merge-request, velnor-actions-orchestrator-retrieve-retry, velnor-actions-workflow-renderer]
+    - velnor-actions-orchestrator-retrieve-reports (crates/services/velnor-actions-orchestrator-retrieve-reports/Cargo.toml) [lib, test; depends on velnor-actions-orchestrator-core, velnor-actions-orchestrator-retrieve, velnor-actions-workflow-steps]
+    - velnor-actions-orchestrator-retrieve-retry (crates/services/velnor-actions-orchestrator-retrieve-retry/Cargo.toml) [lib, test]
+    - velnor-actions-orchestrator-run-select (crates/services/velnor-actions-orchestrator-run-select/Cargo.toml) [lib, test]
+    - velnor-actions-orchestrator-runtime-evidence (crates/services/velnor-actions-orchestrator-runtime-evidence/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-planning, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator-check-acquisition, velnor-actions-orchestrator-check-evidence, velnor-actions-orchestrator-check-preparation, velnor-actions-orchestrator-core]
+    - velnor-actions-orchestrator-runtime-execute (crates/services/velnor-actions-orchestrator-runtime-execute/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator-check-evidence, velnor-actions-orchestrator-check-preparation, velnor-actions-orchestrator-core, velnor-actions-orchestrator-runtime-evidence, velnor-actions-orchestrator-runtime-plan, velnor-actions-orchestrator-selection, velnor-actions-orchestrator-task-report]
+    - velnor-actions-orchestrator-runtime-plan (crates/services/velnor-actions-orchestrator-runtime-plan/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-planning, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator-core, velnor-actions-orchestrator-graph, velnor-actions-orchestrator-provisioning]
+    - velnor-actions-orchestrator-selection (crates/services/velnor-actions-orchestrator-selection/Cargo.toml) [lib, test; depends on velnor-actions-contract-config, velnor-actions-contract-planning, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator-core, velnor-actions-orchestrator-discovery, velnor-actions-orchestrator-graph, velnor-actions-orchestrator-provisioning, velnor-actions-rust, velnor-actions-rust-core]
+    - velnor-actions-orchestrator-staged-validation (crates/services/velnor-actions-orchestrator-staged-validation/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract-config, velnor-actions-contract-release, velnor-actions-mise, velnor-actions-orchestrator-core, velnor-actions-workflow-tree]
+    - velnor-actions-orchestrator-task-report (crates/services/velnor-actions-orchestrator-task-report/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-workflow, velnor-actions-orchestrator-core]
+    - velnor-actions-orchestrator-task-report-write (crates/services/velnor-actions-orchestrator-task-report-write/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator-check-acquisition, velnor-actions-orchestrator-check-evidence, velnor-actions-orchestrator-check-preparation, velnor-actions-orchestrator-core, velnor-actions-orchestrator-cover-compat, velnor-actions-orchestrator-covered-tasks, velnor-actions-orchestrator-internal, velnor-actions-orchestrator-merge-request, velnor-actions-orchestrator-noop-report, velnor-actions-orchestrator-retrieve, velnor-actions-orchestrator-task-report]
+    - velnor-actions-orchestrator-workflow-ir (crates/services/velnor-actions-orchestrator-workflow-ir/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-planning, velnor-actions-contract-release, velnor-actions-contract-workflow, velnor-actions-mise, velnor-actions-orchestrator-core, velnor-actions-orchestrator-discovery, velnor-actions-orchestrator-graph, velnor-actions-orchestrator-pins, velnor-actions-orchestrator-provisioning, velnor-actions-rust, velnor-actions-rust-core, velnor-actions-tofu-core, velnor-actions-workflow-cache, velnor-actions-workflow-jobs, velnor-actions-workflow-renderer, velnor-actions-workflow-steps]
+    - velnor-actions-repo-policy (crates/apps/velnor-actions-repo-policy/Cargo.toml) [lib, test]
+    - velnor-actions-rust (crates/adapters/velnor-actions-rust/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-planning, velnor-actions-contract-release, velnor-actions-rust-core]
+    - velnor-actions-rust-core (crates/adapters/velnor-actions-rust-core/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-planning]
+    - velnor-actions-tofu (crates/adapters/velnor-actions-tofu/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-planning, velnor-actions-contract-release, velnor-actions-tofu-core]
+    - velnor-actions-tofu-core (crates/adapters/velnor-actions-tofu-core/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-planning, velnor-actions-contract-release]
+    - velnor-actions-workflow-cache (crates/services/velnor-actions-workflow-cache/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-release, velnor-actions-contract-workflow, velnor-actions-workflow-steps, velnor-actions-workflow-tree]
+    - velnor-actions-workflow-document (crates/services/velnor-actions-workflow-document/Cargo.toml) [lib, test; depends on velnor-actions-contract-config, velnor-actions-contract-workflow, velnor-actions-workflow-cache, velnor-actions-workflow-jobs, velnor-actions-workflow-steps, velnor-actions-workflow-tree]
+    - velnor-actions-workflow-generator (crates/services/velnor-actions-workflow-generator/Cargo.toml) [lib, test; depends on velnor-actions-contract-config, velnor-actions-contract-release, velnor-actions-workflow-release, velnor-actions-workflow-steps, velnor-actions-workflow-tree]
+    - velnor-actions-workflow-jobs (crates/services/velnor-actions-workflow-jobs/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-release, velnor-actions-contract-workflow, velnor-actions-workflow-cache, velnor-actions-workflow-steps, velnor-actions-workflow-tree]
+    - velnor-actions-workflow-release (crates/services/velnor-actions-workflow-release/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-workflow, velnor-actions-workflow-steps, velnor-actions-workflow-tree]
+    - velnor-actions-workflow-render-strict (crates/services/velnor-actions-workflow-render-strict/Cargo.toml) [lib, test; depends on velnor-actions-contract-config, velnor-actions-contract-workflow, velnor-actions-workflow-cache, velnor-actions-workflow-document, velnor-actions-workflow-jobs, velnor-actions-workflow-steps, velnor-actions-workflow-tree]
+    - velnor-actions-workflow-renderer (crates/services/velnor-actions-workflow-renderer/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-release, velnor-actions-contract-workflow, velnor-actions-workflow-cache, velnor-actions-workflow-document, velnor-actions-workflow-jobs, velnor-actions-workflow-render-strict, velnor-actions-workflow-steps, velnor-actions-workflow-tree]
+    - velnor-actions-workflow-schema2 (crates/services/velnor-actions-workflow-schema2/Cargo.toml) [lib, test; depends on velnor-actions-contract-config, velnor-actions-workflow-cache, velnor-actions-workflow-generator, velnor-actions-workflow-steps, velnor-actions-workflow-tree]
+    - velnor-actions-workflow-steps (crates/services/velnor-actions-workflow-steps/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-workflow]
+    - velnor-actions-workflow-tree (crates/services/velnor-actions-workflow-tree/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-contract-config, velnor-actions-contract-release, velnor-actions-contract-workflow, velnor-actions-workflow-steps]
     - velnor-archive-guard (crates/tools/velnor-archive-guard/Cargo.toml) [bin, lib, test]
-    - velnor-runner-cli (crates/velnor-runner/crates/velnor-runner-cli/Cargo.toml) [bin, lib, test; depends on velnor-runner-core, velnor-runner-host]
-    - velnor-runner-core (crates/velnor-runner/crates/velnor-runner-core/Cargo.toml) [lib, test]
-    - velnor-runner-github (crates/velnor-runner/crates/velnor-runner-github/Cargo.toml) [lib, test; depends on velnor-runner-core]
-    - velnor-runner-host (crates/velnor-runner/crates/velnor-runner-host/Cargo.toml) [example, lib; depends on velnor-runner-core, velnor-runner-github]
-  Profile .: mbx compile driver (declared), cargo_nextest test runner (declared)
+    - velnor-runner-apparmor (crates/tools/velnor-runner-apparmor/Cargo.toml) [lib, test; depends on velnor-runner-journal]
+    - velnor-runner-cli (crates/tools/velnor-runner-cli/Cargo.toml) [bin, lib, test; depends on velnor-actions-contract, velnor-actions-contract-workflow, velnor-actions-orchestrator-merge-ports, velnor-runner-core, velnor-runner-github, velnor-runner-host, velnor-runner-launch]
+    - velnor-runner-core (crates/tools/velnor-runner-core/Cargo.toml) [lib, test]
+    - velnor-runner-docker-spec (crates/tools/velnor-runner-docker-spec/Cargo.toml) [lib, test; depends on velnor-runner-core, velnor-runner-journal]
+    - velnor-runner-github (crates/tools/velnor-runner-github/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-runner-core]
+    - velnor-runner-host (crates/tools/velnor-runner-host/Cargo.toml) [example, lib, test; depends on velnor-runner-apparmor, velnor-runner-core, velnor-runner-docker-spec, velnor-runner-github, velnor-runner-host-config, velnor-runner-journal, velnor-runner-launch]
+    - velnor-runner-host-config (crates/tools/velnor-runner-host-config/Cargo.toml) [lib, test; depends on velnor-runner-docker-spec, velnor-runner-journal]
+    - velnor-runner-journal (crates/tools/velnor-runner-journal/Cargo.toml) [lib, test; depends on velnor-runner-core, velnor-runner-github]
+    - velnor-runner-launch (crates/tools/velnor-runner-launch/Cargo.toml) [example, lib, test; depends on velnor-runner-docker-spec, velnor-runner-github, velnor-runner-host, velnor-runner-journal, velnor-runner-launch-slot]
+    - velnor-runner-launch-slot (crates/tools/velnor-runner-launch-slot/Cargo.toml) [lib, test; depends on velnor-runner-host, velnor-runner-journal]
+  Profile .: mbx compile driver (declared), cargo nextest test runner (declared)
   Nextest profile .: ci (.config/nextest.toml)
     evidence .config/nextest.toml:4 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
-    evidence mise.toml:1 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
-  Profile crates/velnor-runner: mbx compile driver (declared), cargo_nextest test runner (declared)
-  Nextest profile crates/velnor-runner: ci (crates/velnor-runner/.config/nextest.toml)
-    evidence .config/nextest.toml:4 [profile.ci] [durable]
-    evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
-    evidence crates/velnor-runner/.config/nextest.toml:3 [profile.ci] [durable]
-    evidence mise.toml:1 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:1 cargo wrapper = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
 
 Workflow to generate
   .github/actionlint.yaml
@@ -37,122 +96,565 @@ Workflow to generate
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - actionlint (5 steps)
-    - alint (2 steps)
-    - cargo-deny (5 steps)
-    - cargo-machete (5 steps)
+    - actionlint (6 steps)
+    - alint (6 steps)
+    - cargo-deny (6 steps)
+    - cargo-machete (6 steps)
     - plan (22 steps)
     - publish-baseline (7 steps)
-    - required (11 steps)
-    - rust-velnor-actions-actionlint (23 steps)
+    - required (12 steps)
+    - rust-velnor-actions-actionlint (22 steps)
     - rust-velnor-actions-cli (21 steps)
-    - rust-velnor-actions-contract (22 steps)
-    - rust-velnor-actions-mise (23 steps)
-    - rust-velnor-actions-orchestrator (22 steps)
-    - rust-velnor-actions-rust (22 steps)
-    - rust-velnor-actions-tofu (22 steps)
-    - rust-velnor-actions-workflow-renderer (22 steps)
-    - rust-velnor-archive-guard (22 steps)
-    - rust-velnor-runner-cli (22 steps)
-    - rust-velnor-runner-core (22 steps)
-    - rust-velnor-runner-github (22 steps)
-    - rust-velnor-runner-host (22 steps)
-    - zizmor (5 steps)
-    - 13 Rust crate jobs
-      Each: Clippy -> build -> run tests -> doctests -> doc build -> format check
+    - rust-velnor-actions-contract (21 steps)
+    - rust-velnor-actions-contract-config (21 steps)
+    - rust-velnor-actions-contract-planning (21 steps)
+    - rust-velnor-actions-contract-release (21 steps)
+    - rust-velnor-actions-contract-workflow (21 steps)
+    - rust-velnor-actions-mise (22 steps)
+    - rust-velnor-actions-mise-cache (21 steps)
+    - rust-velnor-actions-mise-catalog (21 steps)
+    - rust-velnor-actions-mise-core (21 steps)
+    - rust-velnor-actions-mise-nextest (21 steps)
+    - rust-velnor-actions-mise-probes (21 steps)
+    - rust-velnor-actions-orchestrator (21 steps)
+    - rust-velnor-actions-orchestrator-baseline-publish (21 steps)
+    - rust-velnor-actions-orchestrator-check-acquisition (21 steps)
+    - rust-velnor-actions-orchestrator-check-evidence (21 steps)
+    - rust-velnor-actions-orchestrator-check-preparation (21 steps)
+    - rust-velnor-actions-orchestrator-check-runtime (21 steps)
+    - rust-velnor-actions-orchestrator-core (21 steps)
+    - rust-velnor-actions-orchestrator-cover (21 steps)
+    - rust-velnor-actions-orchestrator-cover-baseline (21 steps)
+    - rust-velnor-actions-orchestrator-cover-compat (21 steps)
+    - rust-velnor-actions-orchestrator-covered-tasks (21 steps)
+    - rust-velnor-actions-orchestrator-discovery (21 steps)
+    - rust-velnor-actions-orchestrator-external-data (21 steps)
+    - rust-velnor-actions-orchestrator-generation (21 steps)
+    - rust-velnor-actions-orchestrator-graph (21 steps)
+    - rust-velnor-actions-orchestrator-internal (21 steps)
+    - rust-velnor-actions-orchestrator-merge (21 steps)
+    - rust-velnor-actions-orchestrator-merge-ports (21 steps)
+    - rust-velnor-actions-orchestrator-merge-request (21 steps)
+    - rust-velnor-actions-orchestrator-merge-request-ports (21 steps)
+    - rust-velnor-actions-orchestrator-noop-report (21 steps)
+    - rust-velnor-actions-orchestrator-pins (21 steps)
+    - rust-velnor-actions-orchestrator-plan (21 steps)
+    - rust-velnor-actions-orchestrator-plan-obligation (21 steps)
+    - rust-velnor-actions-orchestrator-preseed-manifest (21 steps)
+    - rust-velnor-actions-orchestrator-provisioning (21 steps)
+    - rust-velnor-actions-orchestrator-request-event (21 steps)
+    - rust-velnor-actions-orchestrator-retrieve (21 steps)
+    - rust-velnor-actions-orchestrator-retrieve-reports (21 steps)
+    - rust-velnor-actions-orchestrator-retrieve-retry (21 steps)
+    - rust-velnor-actions-orchestrator-run-select (21 steps)
+    - rust-velnor-actions-orchestrator-runtime-evidence (21 steps)
+    - rust-velnor-actions-orchestrator-runtime-execute (21 steps)
+    - rust-velnor-actions-orchestrator-runtime-plan (21 steps)
+    - rust-velnor-actions-orchestrator-selection (21 steps)
+    - rust-velnor-actions-orchestrator-staged-validation (21 steps)
+    - rust-velnor-actions-orchestrator-task-report (21 steps)
+    - rust-velnor-actions-orchestrator-task-report-write (21 steps)
+    - rust-velnor-actions-orchestrator-workflow-ir (21 steps)
+    - rust-velnor-actions-repo-policy (21 steps)
+    - rust-velnor-actions-rust (21 steps)
+    - rust-velnor-actions-rust-core (21 steps)
+    - rust-velnor-actions-tofu (21 steps)
+    - rust-velnor-actions-tofu-core (21 steps)
+    - rust-velnor-actions-workflow-cache (21 steps)
+    - rust-velnor-actions-workflow-document (21 steps)
+    - rust-velnor-actions-workflow-generator (21 steps)
+    - rust-velnor-actions-workflow-jobs (21 steps)
+    - rust-velnor-actions-workflow-release (21 steps)
+    - rust-velnor-actions-workflow-render-strict (21 steps)
+    - rust-velnor-actions-workflow-renderer (21 steps)
+    - rust-velnor-actions-workflow-schema2 (21 steps)
+    - rust-velnor-actions-workflow-steps (21 steps)
+    - rust-velnor-actions-workflow-tree (21 steps)
+    - rust-velnor-archive-guard (21 steps)
+    - rust-velnor-runner-apparmor (21 steps)
+    - rust-velnor-runner-cli (21 steps)
+    - rust-velnor-runner-core (21 steps)
+    - rust-velnor-runner-docker-spec (21 steps)
+    - rust-velnor-runner-github (21 steps)
+    - rust-velnor-runner-host (21 steps)
+    - rust-velnor-runner-host-config (21 steps)
+    - rust-velnor-runner-journal (21 steps)
+    - rust-velnor-runner-launch (21 steps)
+    - rust-velnor-runner-launch-slot (21 steps)
+    - zizmor (6 steps)
+    - 78 Rust crate jobs
+      Each: Clippy -> build -> run tests -> doc build -> format check
       Entries:
         - rust-velnor-actions-actionlint
         - rust-velnor-actions-cli
         - rust-velnor-actions-contract
+        - rust-velnor-actions-contract-config
+        - rust-velnor-actions-contract-planning
+        - rust-velnor-actions-contract-release
+        - rust-velnor-actions-contract-workflow
         - rust-velnor-actions-mise
+        - rust-velnor-actions-mise-cache
+        - rust-velnor-actions-mise-catalog
+        - rust-velnor-actions-mise-core
+        - rust-velnor-actions-mise-nextest
+        - rust-velnor-actions-mise-probes
         - rust-velnor-actions-orchestrator
+        - rust-velnor-actions-orchestrator-baseline-publish
+        - rust-velnor-actions-orchestrator-check-acquisition
+        - rust-velnor-actions-orchestrator-check-evidence
+        - rust-velnor-actions-orchestrator-check-preparation
+        - rust-velnor-actions-orchestrator-check-runtime
+        - rust-velnor-actions-orchestrator-core
+        - rust-velnor-actions-orchestrator-cover
+        - rust-velnor-actions-orchestrator-cover-baseline
+        - rust-velnor-actions-orchestrator-cover-compat
+        - rust-velnor-actions-orchestrator-covered-tasks
+        - rust-velnor-actions-orchestrator-discovery
+        - rust-velnor-actions-orchestrator-external-data
+        - rust-velnor-actions-orchestrator-generation
+        - rust-velnor-actions-orchestrator-graph
+        - rust-velnor-actions-orchestrator-internal
+        - rust-velnor-actions-orchestrator-merge
+        - rust-velnor-actions-orchestrator-merge-ports
+        - rust-velnor-actions-orchestrator-merge-request
+        - rust-velnor-actions-orchestrator-merge-request-ports
+        - rust-velnor-actions-orchestrator-noop-report
+        - rust-velnor-actions-orchestrator-pins
+        - rust-velnor-actions-orchestrator-plan
+        - rust-velnor-actions-orchestrator-plan-obligation
+        - rust-velnor-actions-orchestrator-preseed-manifest
+        - rust-velnor-actions-orchestrator-provisioning
+        - rust-velnor-actions-orchestrator-request-event
+        - rust-velnor-actions-orchestrator-retrieve
+        - rust-velnor-actions-orchestrator-retrieve-reports
+        - rust-velnor-actions-orchestrator-retrieve-retry
+        - rust-velnor-actions-orchestrator-run-select
+        - rust-velnor-actions-orchestrator-runtime-evidence
+        - rust-velnor-actions-orchestrator-runtime-execute
+        - rust-velnor-actions-orchestrator-runtime-plan
+        - rust-velnor-actions-orchestrator-selection
+        - rust-velnor-actions-orchestrator-staged-validation
+        - rust-velnor-actions-orchestrator-task-report
+        - rust-velnor-actions-orchestrator-task-report-write
+        - rust-velnor-actions-orchestrator-workflow-ir
+        - rust-velnor-actions-repo-policy
         - rust-velnor-actions-rust
+        - rust-velnor-actions-rust-core
         - rust-velnor-actions-tofu
+        - rust-velnor-actions-tofu-core
+        - rust-velnor-actions-workflow-cache
+        - rust-velnor-actions-workflow-document
+        - rust-velnor-actions-workflow-generator
+        - rust-velnor-actions-workflow-jobs
+        - rust-velnor-actions-workflow-release
+        - rust-velnor-actions-workflow-render-strict
         - rust-velnor-actions-workflow-renderer
+        - rust-velnor-actions-workflow-schema2
+        - rust-velnor-actions-workflow-steps
+        - rust-velnor-actions-workflow-tree
         - rust-velnor-archive-guard
+        - rust-velnor-runner-apparmor
         - rust-velnor-runner-cli
         - rust-velnor-runner-core
+        - rust-velnor-runner-docker-spec
         - rust-velnor-runner-github
         - rust-velnor-runner-host
+        - rust-velnor-runner-host-config
+        - rust-velnor-runner-journal
+        - rust-velnor-runner-launch
+        - rust-velnor-runner-launch-slot
       Obligations:
         - stack/rust/crates/adapters/velnor-actions-actionlint/build/default
         - stack/rust/crates/adapters/velnor-actions-actionlint/clippy/default
         - stack/rust/crates/adapters/velnor-actions-actionlint/doc/default
-        - stack/rust/crates/adapters/velnor-actions-actionlint/doctest/default
         - stack/rust/crates/adapters/velnor-actions-actionlint/fmt/default
         - stack/rust/crates/adapters/velnor-actions-actionlint/nextest/default
+        - stack/rust/crates/adapters/velnor-actions-mise-cache/build/default
+        - stack/rust/crates/adapters/velnor-actions-mise-cache/clippy/default
+        - stack/rust/crates/adapters/velnor-actions-mise-cache/doc/default
+        - stack/rust/crates/adapters/velnor-actions-mise-cache/fmt/default
+        - stack/rust/crates/adapters/velnor-actions-mise-cache/nextest/default
+        - stack/rust/crates/adapters/velnor-actions-mise-catalog/build/default
+        - stack/rust/crates/adapters/velnor-actions-mise-catalog/clippy/default
+        - stack/rust/crates/adapters/velnor-actions-mise-catalog/doc/default
+        - stack/rust/crates/adapters/velnor-actions-mise-catalog/fmt/default
+        - stack/rust/crates/adapters/velnor-actions-mise-catalog/nextest/default
+        - stack/rust/crates/adapters/velnor-actions-mise-core/build/default
+        - stack/rust/crates/adapters/velnor-actions-mise-core/clippy/default
+        - stack/rust/crates/adapters/velnor-actions-mise-core/doc/default
+        - stack/rust/crates/adapters/velnor-actions-mise-core/fmt/default
+        - stack/rust/crates/adapters/velnor-actions-mise-core/nextest/default
+        - stack/rust/crates/adapters/velnor-actions-mise-nextest/build/default
+        - stack/rust/crates/adapters/velnor-actions-mise-nextest/clippy/default
+        - stack/rust/crates/adapters/velnor-actions-mise-nextest/doc/default
+        - stack/rust/crates/adapters/velnor-actions-mise-nextest/fmt/default
+        - stack/rust/crates/adapters/velnor-actions-mise-nextest/nextest/default
+        - stack/rust/crates/adapters/velnor-actions-mise-probes/build/default
+        - stack/rust/crates/adapters/velnor-actions-mise-probes/clippy/default
+        - stack/rust/crates/adapters/velnor-actions-mise-probes/doc/default
+        - stack/rust/crates/adapters/velnor-actions-mise-probes/fmt/default
+        - stack/rust/crates/adapters/velnor-actions-mise-probes/nextest/default
+        - stack/rust/crates/adapters/velnor-actions-mise/build/default
+        - stack/rust/crates/adapters/velnor-actions-mise/clippy/default
+        - stack/rust/crates/adapters/velnor-actions-mise/doc/default
+        - stack/rust/crates/adapters/velnor-actions-mise/fmt/default
+        - stack/rust/crates/adapters/velnor-actions-mise/nextest/default
+        - stack/rust/crates/adapters/velnor-actions-rust-core/build/default
+        - stack/rust/crates/adapters/velnor-actions-rust-core/clippy/default
+        - stack/rust/crates/adapters/velnor-actions-rust-core/doc/default
+        - stack/rust/crates/adapters/velnor-actions-rust-core/fmt/default
+        - stack/rust/crates/adapters/velnor-actions-rust-core/nextest/default
+        - stack/rust/crates/adapters/velnor-actions-rust/build/default
+        - stack/rust/crates/adapters/velnor-actions-rust/clippy/default
+        - stack/rust/crates/adapters/velnor-actions-rust/doc/default
+        - stack/rust/crates/adapters/velnor-actions-rust/fmt/default
+        - stack/rust/crates/adapters/velnor-actions-rust/nextest/default
+        - stack/rust/crates/adapters/velnor-actions-tofu-core/build/default
+        - stack/rust/crates/adapters/velnor-actions-tofu-core/clippy/default
+        - stack/rust/crates/adapters/velnor-actions-tofu-core/doc/default
+        - stack/rust/crates/adapters/velnor-actions-tofu-core/fmt/default
+        - stack/rust/crates/adapters/velnor-actions-tofu-core/nextest/default
+        - stack/rust/crates/adapters/velnor-actions-tofu/build/default
+        - stack/rust/crates/adapters/velnor-actions-tofu/clippy/default
+        - stack/rust/crates/adapters/velnor-actions-tofu/doc/default
+        - stack/rust/crates/adapters/velnor-actions-tofu/fmt/default
+        - stack/rust/crates/adapters/velnor-actions-tofu/nextest/default
         - stack/rust/crates/apps/velnor-actions-cli/build/default
         - stack/rust/crates/apps/velnor-actions-cli/clippy/default
         - stack/rust/crates/apps/velnor-actions-cli/doc/default
         - stack/rust/crates/apps/velnor-actions-cli/fmt/default
         - stack/rust/crates/apps/velnor-actions-cli/nextest/default
+        - stack/rust/crates/apps/velnor-actions-repo-policy/build/default
+        - stack/rust/crates/apps/velnor-actions-repo-policy/clippy/default
+        - stack/rust/crates/apps/velnor-actions-repo-policy/doc/default
+        - stack/rust/crates/apps/velnor-actions-repo-policy/fmt/default
+        - stack/rust/crates/apps/velnor-actions-repo-policy/nextest/default
+        - stack/rust/crates/core/velnor-actions-contract-config/build/default
+        - stack/rust/crates/core/velnor-actions-contract-config/clippy/default
+        - stack/rust/crates/core/velnor-actions-contract-config/doc/default
+        - stack/rust/crates/core/velnor-actions-contract-config/fmt/default
+        - stack/rust/crates/core/velnor-actions-contract-config/nextest/default
+        - stack/rust/crates/core/velnor-actions-contract-planning/build/default
+        - stack/rust/crates/core/velnor-actions-contract-planning/clippy/default
+        - stack/rust/crates/core/velnor-actions-contract-planning/doc/default
+        - stack/rust/crates/core/velnor-actions-contract-planning/fmt/default
+        - stack/rust/crates/core/velnor-actions-contract-planning/nextest/default
+        - stack/rust/crates/core/velnor-actions-contract-release/build/default
+        - stack/rust/crates/core/velnor-actions-contract-release/clippy/default
+        - stack/rust/crates/core/velnor-actions-contract-release/doc/default
+        - stack/rust/crates/core/velnor-actions-contract-release/fmt/default
+        - stack/rust/crates/core/velnor-actions-contract-release/nextest/default
+        - stack/rust/crates/core/velnor-actions-contract-workflow/build/default
+        - stack/rust/crates/core/velnor-actions-contract-workflow/clippy/default
+        - stack/rust/crates/core/velnor-actions-contract-workflow/doc/default
+        - stack/rust/crates/core/velnor-actions-contract-workflow/fmt/default
+        - stack/rust/crates/core/velnor-actions-contract-workflow/nextest/default
         - stack/rust/crates/core/velnor-actions-contract/build/default
         - stack/rust/crates/core/velnor-actions-contract/clippy/default
         - stack/rust/crates/core/velnor-actions-contract/doc/default
-        - stack/rust/crates/core/velnor-actions-contract/doctest/default
         - stack/rust/crates/core/velnor-actions-contract/fmt/default
         - stack/rust/crates/core/velnor-actions-contract/nextest/default
-        - stack/rust/crates/adapters/velnor-actions-mise/build/default
-        - stack/rust/crates/adapters/velnor-actions-mise/clippy/default
-        - stack/rust/crates/adapters/velnor-actions-mise/doc/default
-        - stack/rust/crates/adapters/velnor-actions-mise/doctest/default
-        - stack/rust/crates/adapters/velnor-actions-mise/fmt/default
-        - stack/rust/crates/adapters/velnor-actions-mise/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-baseline-publish/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-baseline-publish/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-baseline-publish/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-baseline-publish/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-baseline-publish/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-acquisition/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-acquisition/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-acquisition/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-acquisition/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-acquisition/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-evidence/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-evidence/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-evidence/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-evidence/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-evidence/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-preparation/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-preparation/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-preparation/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-preparation/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-preparation/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-runtime/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-runtime/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-runtime/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-runtime/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-check-runtime/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-core/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-core/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-core/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-core/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-core/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-cover-baseline/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-cover-baseline/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-cover-baseline/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-cover-baseline/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-cover-baseline/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-cover-compat/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-cover-compat/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-cover-compat/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-cover-compat/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-cover-compat/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-cover/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-cover/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-cover/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-cover/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-cover/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-covered-tasks/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-covered-tasks/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-covered-tasks/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-covered-tasks/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-covered-tasks/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-discovery/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-discovery/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-discovery/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-discovery/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-discovery/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-external-data/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-external-data/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-external-data/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-external-data/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-external-data/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-generation/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-generation/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-generation/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-generation/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-generation/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-graph/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-graph/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-graph/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-graph/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-graph/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-internal/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-internal/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-internal/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-internal/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-internal/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge-ports/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge-ports/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge-ports/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge-ports/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge-ports/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge-request-ports/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge-request-ports/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge-request-ports/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge-request-ports/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge-request-ports/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge-request/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge-request/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge-request/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge-request/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge-request/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-merge/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-noop-report/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-noop-report/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-noop-report/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-noop-report/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-noop-report/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-pins/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-pins/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-pins/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-pins/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-pins/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-plan-obligation/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-plan-obligation/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-plan-obligation/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-plan-obligation/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-plan-obligation/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-plan/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-plan/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-plan/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-plan/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-plan/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-preseed-manifest/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-preseed-manifest/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-preseed-manifest/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-preseed-manifest/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-preseed-manifest/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-provisioning/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-provisioning/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-provisioning/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-provisioning/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-provisioning/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-request-event/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-request-event/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-request-event/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-request-event/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-request-event/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-retrieve-reports/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-retrieve-reports/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-retrieve-reports/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-retrieve-reports/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-retrieve-reports/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-retrieve-retry/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-retrieve-retry/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-retrieve-retry/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-retrieve-retry/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-retrieve-retry/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-retrieve/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-retrieve/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-retrieve/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-retrieve/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-retrieve/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-run-select/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-run-select/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-run-select/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-run-select/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-run-select/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-runtime-evidence/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-runtime-evidence/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-runtime-evidence/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-runtime-evidence/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-runtime-evidence/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-runtime-execute/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-runtime-execute/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-runtime-execute/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-runtime-execute/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-runtime-execute/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-runtime-plan/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-runtime-plan/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-runtime-plan/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-runtime-plan/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-runtime-plan/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-selection/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-selection/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-selection/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-selection/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-selection/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-staged-validation/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-staged-validation/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-staged-validation/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-staged-validation/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-staged-validation/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-task-report-write/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-task-report-write/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-task-report-write/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-task-report-write/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-task-report-write/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-task-report/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-task-report/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-task-report/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-task-report/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-task-report/nextest/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-workflow-ir/build/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-workflow-ir/clippy/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-workflow-ir/doc/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-workflow-ir/fmt/default
+        - stack/rust/crates/services/velnor-actions-orchestrator-workflow-ir/nextest/default
         - stack/rust/crates/services/velnor-actions-orchestrator/build/default
         - stack/rust/crates/services/velnor-actions-orchestrator/clippy/default
         - stack/rust/crates/services/velnor-actions-orchestrator/doc/default
-        - stack/rust/crates/services/velnor-actions-orchestrator/doctest/default
         - stack/rust/crates/services/velnor-actions-orchestrator/fmt/default
         - stack/rust/crates/services/velnor-actions-orchestrator/nextest/default
-        - stack/rust/crates/adapters/velnor-actions-rust/build/default
-        - stack/rust/crates/adapters/velnor-actions-rust/clippy/default
-        - stack/rust/crates/adapters/velnor-actions-rust/doc/default
-        - stack/rust/crates/adapters/velnor-actions-rust/doctest/default
-        - stack/rust/crates/adapters/velnor-actions-rust/fmt/default
-        - stack/rust/crates/adapters/velnor-actions-rust/nextest/default
-        - stack/rust/crates/adapters/velnor-actions-tofu/build/default
-        - stack/rust/crates/adapters/velnor-actions-tofu/clippy/default
-        - stack/rust/crates/adapters/velnor-actions-tofu/doc/default
-        - stack/rust/crates/adapters/velnor-actions-tofu/doctest/default
-        - stack/rust/crates/adapters/velnor-actions-tofu/fmt/default
-        - stack/rust/crates/adapters/velnor-actions-tofu/nextest/default
+        - stack/rust/crates/services/velnor-actions-workflow-cache/build/default
+        - stack/rust/crates/services/velnor-actions-workflow-cache/clippy/default
+        - stack/rust/crates/services/velnor-actions-workflow-cache/doc/default
+        - stack/rust/crates/services/velnor-actions-workflow-cache/fmt/default
+        - stack/rust/crates/services/velnor-actions-workflow-cache/nextest/default
+        - stack/rust/crates/services/velnor-actions-workflow-document/build/default
+        - stack/rust/crates/services/velnor-actions-workflow-document/clippy/default
+        - stack/rust/crates/services/velnor-actions-workflow-document/doc/default
+        - stack/rust/crates/services/velnor-actions-workflow-document/fmt/default
+        - stack/rust/crates/services/velnor-actions-workflow-document/nextest/default
+        - stack/rust/crates/services/velnor-actions-workflow-generator/build/default
+        - stack/rust/crates/services/velnor-actions-workflow-generator/clippy/default
+        - stack/rust/crates/services/velnor-actions-workflow-generator/doc/default
+        - stack/rust/crates/services/velnor-actions-workflow-generator/fmt/default
+        - stack/rust/crates/services/velnor-actions-workflow-generator/nextest/default
+        - stack/rust/crates/services/velnor-actions-workflow-jobs/build/default
+        - stack/rust/crates/services/velnor-actions-workflow-jobs/clippy/default
+        - stack/rust/crates/services/velnor-actions-workflow-jobs/doc/default
+        - stack/rust/crates/services/velnor-actions-workflow-jobs/fmt/default
+        - stack/rust/crates/services/velnor-actions-workflow-jobs/nextest/default
+        - stack/rust/crates/services/velnor-actions-workflow-release/build/default
+        - stack/rust/crates/services/velnor-actions-workflow-release/clippy/default
+        - stack/rust/crates/services/velnor-actions-workflow-release/doc/default
+        - stack/rust/crates/services/velnor-actions-workflow-release/fmt/default
+        - stack/rust/crates/services/velnor-actions-workflow-release/nextest/default
+        - stack/rust/crates/services/velnor-actions-workflow-render-strict/build/default
+        - stack/rust/crates/services/velnor-actions-workflow-render-strict/clippy/default
+        - stack/rust/crates/services/velnor-actions-workflow-render-strict/doc/default
+        - stack/rust/crates/services/velnor-actions-workflow-render-strict/fmt/default
+        - stack/rust/crates/services/velnor-actions-workflow-render-strict/nextest/default
         - stack/rust/crates/services/velnor-actions-workflow-renderer/build/default
         - stack/rust/crates/services/velnor-actions-workflow-renderer/clippy/default
         - stack/rust/crates/services/velnor-actions-workflow-renderer/doc/default
-        - stack/rust/crates/services/velnor-actions-workflow-renderer/doctest/default
         - stack/rust/crates/services/velnor-actions-workflow-renderer/fmt/default
         - stack/rust/crates/services/velnor-actions-workflow-renderer/nextest/default
+        - stack/rust/crates/services/velnor-actions-workflow-schema2/build/default
+        - stack/rust/crates/services/velnor-actions-workflow-schema2/clippy/default
+        - stack/rust/crates/services/velnor-actions-workflow-schema2/doc/default
+        - stack/rust/crates/services/velnor-actions-workflow-schema2/fmt/default
+        - stack/rust/crates/services/velnor-actions-workflow-schema2/nextest/default
+        - stack/rust/crates/services/velnor-actions-workflow-steps/build/default
+        - stack/rust/crates/services/velnor-actions-workflow-steps/clippy/default
+        - stack/rust/crates/services/velnor-actions-workflow-steps/doc/default
+        - stack/rust/crates/services/velnor-actions-workflow-steps/fmt/default
+        - stack/rust/crates/services/velnor-actions-workflow-steps/nextest/default
+        - stack/rust/crates/services/velnor-actions-workflow-tree/build/default
+        - stack/rust/crates/services/velnor-actions-workflow-tree/clippy/default
+        - stack/rust/crates/services/velnor-actions-workflow-tree/doc/default
+        - stack/rust/crates/services/velnor-actions-workflow-tree/fmt/default
+        - stack/rust/crates/services/velnor-actions-workflow-tree/nextest/default
         - stack/rust/crates/tools/velnor-archive-guard/build/default
         - stack/rust/crates/tools/velnor-archive-guard/clippy/default
         - stack/rust/crates/tools/velnor-archive-guard/doc/default
-        - stack/rust/crates/tools/velnor-archive-guard/doctest/default
         - stack/rust/crates/tools/velnor-archive-guard/fmt/default
         - stack/rust/crates/tools/velnor-archive-guard/nextest/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/build/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/clippy/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/doc/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/doctest/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/fmt/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/nextest/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-core/build/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-core/clippy/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-core/doc/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-core/doctest/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-core/fmt/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-core/nextest/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-github/build/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-github/clippy/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-github/doc/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-github/doctest/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-github/fmt/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-github/nextest/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/build/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/clippy/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doc/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default
-  Parallel: 13 independent crate jobs; no matrix fan-out
+        - stack/rust/crates/tools/velnor-runner-apparmor/build/default
+        - stack/rust/crates/tools/velnor-runner-apparmor/clippy/default
+        - stack/rust/crates/tools/velnor-runner-apparmor/doc/default
+        - stack/rust/crates/tools/velnor-runner-apparmor/fmt/default
+        - stack/rust/crates/tools/velnor-runner-apparmor/nextest/default
+        - stack/rust/crates/tools/velnor-runner-cli/build/default
+        - stack/rust/crates/tools/velnor-runner-cli/clippy/default
+        - stack/rust/crates/tools/velnor-runner-cli/doc/default
+        - stack/rust/crates/tools/velnor-runner-cli/fmt/default
+        - stack/rust/crates/tools/velnor-runner-cli/nextest/default
+        - stack/rust/crates/tools/velnor-runner-core/build/default
+        - stack/rust/crates/tools/velnor-runner-core/clippy/default
+        - stack/rust/crates/tools/velnor-runner-core/doc/default
+        - stack/rust/crates/tools/velnor-runner-core/fmt/default
+        - stack/rust/crates/tools/velnor-runner-core/nextest/default
+        - stack/rust/crates/tools/velnor-runner-docker-spec/build/default
+        - stack/rust/crates/tools/velnor-runner-docker-spec/clippy/default
+        - stack/rust/crates/tools/velnor-runner-docker-spec/doc/default
+        - stack/rust/crates/tools/velnor-runner-docker-spec/fmt/default
+        - stack/rust/crates/tools/velnor-runner-docker-spec/nextest/default
+        - stack/rust/crates/tools/velnor-runner-github/build/default
+        - stack/rust/crates/tools/velnor-runner-github/clippy/default
+        - stack/rust/crates/tools/velnor-runner-github/doc/default
+        - stack/rust/crates/tools/velnor-runner-github/fmt/default
+        - stack/rust/crates/tools/velnor-runner-github/nextest/default
+        - stack/rust/crates/tools/velnor-runner-host-config/build/default
+        - stack/rust/crates/tools/velnor-runner-host-config/clippy/default
+        - stack/rust/crates/tools/velnor-runner-host-config/doc/default
+        - stack/rust/crates/tools/velnor-runner-host-config/fmt/default
+        - stack/rust/crates/tools/velnor-runner-host-config/nextest/default
+        - stack/rust/crates/tools/velnor-runner-host/build/default
+        - stack/rust/crates/tools/velnor-runner-host/clippy/default
+        - stack/rust/crates/tools/velnor-runner-host/doc/default
+        - stack/rust/crates/tools/velnor-runner-host/fmt/default
+        - stack/rust/crates/tools/velnor-runner-host/nextest/default
+        - stack/rust/crates/tools/velnor-runner-journal/build/default
+        - stack/rust/crates/tools/velnor-runner-journal/clippy/default
+        - stack/rust/crates/tools/velnor-runner-journal/doc/default
+        - stack/rust/crates/tools/velnor-runner-journal/fmt/default
+        - stack/rust/crates/tools/velnor-runner-journal/nextest/default
+        - stack/rust/crates/tools/velnor-runner-launch-slot/build/default
+        - stack/rust/crates/tools/velnor-runner-launch-slot/clippy/default
+        - stack/rust/crates/tools/velnor-runner-launch-slot/doc/default
+        - stack/rust/crates/tools/velnor-runner-launch-slot/fmt/default
+        - stack/rust/crates/tools/velnor-runner-launch-slot/nextest/default
+        - stack/rust/crates/tools/velnor-runner-launch/build/default
+        - stack/rust/crates/tools/velnor-runner-launch/clippy/default
+        - stack/rust/crates/tools/velnor-runner-launch/doc/default
+        - stack/rust/crates/tools/velnor-runner-launch/fmt/default
+        - stack/rust/crates/tools/velnor-runner-launch/nextest/default
+  Parallel: 78 independent crate jobs; no matrix fan-out
   Critical path: stack/rust/crates/adapters/velnor-actions-actionlint/clippy/default -> stack/rust/crates/adapters/velnor-actions-actionlint/build/default -> stack/rust/crates/adapters/velnor-actions-actionlint/nextest/default (3 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
@@ -166,7 +668,84 @@ Workflow to generate
     - asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb
     - jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
     - jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
-  Ineligible: stack/rust/crates/apps/velnor-actions-cli/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/adapters/velnor-actions-actionlint/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/adapters/velnor-actions-mise-cache/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/adapters/velnor-actions-mise-catalog/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/adapters/velnor-actions-mise-core/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/adapters/velnor-actions-mise-nextest/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/adapters/velnor-actions-mise-probes/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/adapters/velnor-actions-mise/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/adapters/velnor-actions-rust-core/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/adapters/velnor-actions-rust/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/adapters/velnor-actions-tofu-core/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/adapters/velnor-actions-tofu/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/apps/velnor-actions-cli/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/apps/velnor-actions-repo-policy/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/core/velnor-actions-contract-config/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/core/velnor-actions-contract-planning/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/core/velnor-actions-contract-release/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/core/velnor-actions-contract-workflow/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/core/velnor-actions-contract/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-baseline-publish/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-check-acquisition/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-check-evidence/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-check-preparation/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-check-runtime/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-core/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-cover-baseline/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-cover-compat/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-cover/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-covered-tasks/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-discovery/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-external-data/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-generation/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-graph/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-internal/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-merge-ports/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-merge-request-ports/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-merge-request/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-merge/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-noop-report/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-pins/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-plan-obligation/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-plan/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-preseed-manifest/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-provisioning/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-request-event/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-retrieve-reports/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-retrieve-retry/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-retrieve/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-run-select/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-runtime-evidence/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-runtime-execute/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-runtime-plan/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-selection/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-staged-validation/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-task-report-write/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-task-report/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator-workflow-ir/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-orchestrator/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-workflow-cache/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-workflow-document/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-workflow-generator/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-workflow-jobs/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-workflow-release/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-workflow-render-strict/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-workflow-renderer/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-workflow-schema2/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-workflow-steps/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/services/velnor-actions-workflow-tree/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/tools/velnor-archive-guard/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/tools/velnor-runner-apparmor/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/tools/velnor-runner-cli/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/tools/velnor-runner-core/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/tools/velnor-runner-docker-spec/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/tools/velnor-runner-github/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/tools/velnor-runner-host-config/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/tools/velnor-runner-host/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/tools/velnor-runner-journal/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/tools/velnor-runner-launch-slot/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/tools/velnor-runner-launch/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 
 Required-check migration
@@ -179,6 +758,5 @@ Required-check migration
 Recommendations
   mise.lock not found; Velnor will not create or refresh it
   mise.toml is read-only input; Velnor never modifies it
-  rust-toolchain.toml not found; Velnor will not create it
-  shadowed_nextest_config: .config/nextest.toml shadowed by crates/velnor-runner/.config/nextest.toml; profile selected from crates/velnor-runner/.config/nextest.toml
+  rust-toolchain.toml is read-only input; Velnor never modifies it
   tool_install_unverified:8 installs skip verification (no mise.lock): actionlint@1.7.12, cargo-deny@0.20.2, gh@2.102.0, nextest@0.9.146, opentofu@1.13.1, rust@1.98.1, shellcheck@0.11.0, zizmor@1.30.1; install on the CI platform and commit the resulting lock

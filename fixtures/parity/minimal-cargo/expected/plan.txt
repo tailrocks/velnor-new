@@ -1,11 +1,12 @@
-Velnor Actions plan 0.1.1
+Velnor Actions plan 0.1.7
 Repository: <repo>
 
 Detected stacks
   Rust: selected
   Workspace crates: 1
     - minimal-cargo (Cargo.toml) [lib]
-  Profile .: cargo compile driver (detected), cargo_test test runner (detected)
+  Profile .: cargo compile driver (detected), cargo nextest test runner (detected)
+  Nextest profile .: default (no nextest config)
 
 Workflow to generate
   .github/actionlint.yaml
@@ -18,7 +19,7 @@ Workflow to generate
     - plan (12 steps)
     - publish-baseline (5 steps)
     - required (10 steps)
-    - rust-minimal-cargo (14 steps)
+    - rust-minimal-cargo (13 steps)
     - 1 Rust crate job
       Each: Clippy -> build -> run tests -> doc build
       Entries:
@@ -39,7 +40,7 @@ Workflow to generate
     - actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
     - actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
     - jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
-  Ineligible: stack/rust/root/doctest/default NOT_RUN: doctest coverage is an explicit gap; no doctest command emitted
+  Ineligible: stack/rust/root/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 
 Required-check migration
@@ -52,7 +53,7 @@ Required-check migration
 Recommendations
   mise.lock not found; Velnor will not create or refresh it
   mise.toml not found; Velnor will use its pinned tools
-  nextest_recommendation: no explicit test-runner usage; defaulting to `cargo test`
+  nextest_recommendation: no explicit Nextest usage; generated Actions use `cargo nextest`
   persist_evidence: no MBX or Nextest usage detected; to adopt either, add a durable signal
   rust-toolchain.toml not found; Velnor will not create it
   tool_install_unverified:6 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.0, nextest@0.9.146, rust@1.98.1, shellcheck@0.11.0, zizmor@1.30.1; install on the CI platform and commit the resulting lock

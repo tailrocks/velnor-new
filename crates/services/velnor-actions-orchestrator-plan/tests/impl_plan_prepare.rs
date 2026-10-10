@@ -76,6 +76,18 @@ fn workflow_yaml(root: &std::path::Path) -> Result<String, Box<dyn std::error::E
         .ok_or_else(|| std::io::Error::other("missing workflow in staged tree").into())
 }
 
+/// Rendered staged text for one generated support action.
+fn staged_action(
+    root: &std::path::Path,
+    relative: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let prep = prepare(root)?;
+    let tree = render_staged_tree(&prep)?;
+    tree.get(relative)
+        .map(str::to_owned)
+        .ok_or_else(|| std::io::Error::other("missing action in staged tree").into())
+}
+
 /// Install step must carry `mise install` plus every expected exact spec.
 fn check_install_specs(body: &str, specs: &[String]) -> Result<(), String> {
     for need in ["mise ", "--no-config", "--no-env", "--no-hooks", "install"] {
@@ -172,21 +184,28 @@ fn mbx_evidence_keeps_plan_mise_free_and_uses_task_action() -> TestResult {
         task_end += line.len();
     }
     let task = &task_tail[..task_end];
+    let action = staged_action(repo.path(), ".github/actions/task-rust-demo/action.yml")?;
+    assert_eq!(
+        task.matches("uses: ./.github/actions/task-rust-demo")
+            .count(),
+        1,
+        "task job must invoke the pinned shared action once:\n{task}"
+    );
     let version = catalog.version(PinnedTool::MrBoxington);
     assert!(
-        task.matches("uses: jdx/mr-boxington-action@").count() == 1
-            && task.contains(&format!("version: {version}"))
-            && task.contains(MBX_VERSION_CHECK_NAME),
-        "the MBX task has one pinned native action and version guard:\n{task}"
+        action.matches("uses: jdx/mr-boxington-action@").count() == 1
+            && action.contains(&format!("version: {version}"))
+            && action.contains(MBX_VERSION_CHECK_NAME),
+        "the shared MBX task has one pinned native action and version guard:\n{action}"
     );
     assert!(
-        !task.contains(&spec),
-        "MBX is not duplicated through Mise:\n{task}"
+        !action.contains(&spec),
+        "MBX is not duplicated through Mise:\n{action}"
     );
     assert_eq!(
-        task.matches(MBX_RESTORE_NAME).count(),
+        action.matches(MBX_RESTORE_NAME).count(),
         1,
-        "one action-owner step:\n{task}"
+        "one action-owner step:\n{action}"
     );
     Ok(())
 }

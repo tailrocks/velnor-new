@@ -17,7 +17,7 @@ pub(crate) fn distinct_pins() -> GeneratorReleasePins {
 
 pub(crate) fn render(pins: &GeneratorReleasePins) -> Result<GeneratorRelease, Box<dyn Error>> {
     let request = Schema2WorkflowRequest {
-        version: "0.1.1".to_owned(),
+        version: "0.1.7".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
         workflows: BTreeSet::new(),

@@ -24,9 +24,6 @@ pub const TRANSIENT_EVIDENCE_CODE: &str = "transient_evidence_requires_declarati
 /// Error when durable evidence contradicts a declared key.
 pub const PROFILE_CONFLICT_CODE: &str = "profile_conflict";
 
-/// Error when both test runners are explicitly used.
-pub const AMBIGUOUS_RUNNER_CODE: &str = "ambiguous_test_runner";
-
 /// Error when compile-driver signals contradict each other.
 pub const AMBIGUOUS_DRIVER_CODE: &str = "ambiguous_compile_driver";
 
@@ -241,11 +238,6 @@ pub struct ProfileInputs<'a> {
 /// Profile detection failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProfileError {
-    /// Both test runners are explicitly used.
-    AmbiguousTestRunner {
-        /// Conflicting evidence, sorted.
-        evidence: Vec<Evidence>,
-    },
     /// Compile-driver signals contradict each other.
     AmbiguousDriver {
         /// Conflicting evidence, sorted.
@@ -263,9 +255,6 @@ pub enum ProfileError {
 impl fmt::Display for ProfileError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::AmbiguousTestRunner { evidence } => {
-                write!(f, "{AMBIGUOUS_RUNNER_CODE}: {} sightings", evidence.len())
-            }
             Self::AmbiguousDriver { evidence } => {
                 write!(f, "{AMBIGUOUS_DRIVER_CODE}: {} sightings", evidence.len())
             }
@@ -293,10 +282,9 @@ impl std::error::Error for ProfileError {}
 ///
 /// # Errors
 ///
-/// Returns [`ProfileError::AmbiguousTestRunner`] when both test runners are
-/// durably used, [`ProfileError::AmbiguousDriver`] when driver signals
-/// contradict, and [`ProfileError::ProfileConflict`] when durable
-/// evidence contradicts a declared key.
+/// Returns [`ProfileError::AmbiguousDriver`] when driver signals contradict
+/// and [`ProfileError::ProfileConflict`] when durable evidence contradicts a
+/// declared compile driver.
 pub fn detect_profile(inputs: &ProfileInputs<'_>) -> Result<ProfileOutcome, ProfileError> {
     let seen = collect_evidence(
         inputs.tool_config.as_ref(),
@@ -306,18 +294,10 @@ pub fn detect_profile(inputs: &ProfileInputs<'_>) -> Result<ProfileOutcome, Prof
         &inputs.mise_wrappers,
         &inputs.nextest_configs,
     );
-    if !seen.nextest_durable.is_empty() && !seen.cargo_durable.is_empty() {
-        let mut conflicting = seen.nextest_durable.clone();
-        conflicting.extend(seen.cargo_durable.clone());
-        conflicting.sort();
-        return Err(ProfileError::AmbiguousTestRunner {
-            evidence: conflicting,
-        });
-    }
     check_driver_ambiguity(&seen, &inputs.mise_wrappers)?;
     let mut findings = Vec::new();
     let (compile_driver, driver_source) = select_driver(&seen, inputs, &mut findings)?;
-    let (test_runner, runner_source) = select_runner(&seen, inputs, &mut findings)?;
+    let (test_runner, runner_source) = select_runner(inputs);
     let (nextest_profile, nextest_config) = select_nextest_profile(inputs);
     let recommendations = recommend(inputs, &seen);
     let evidence = seen.all_sorted();

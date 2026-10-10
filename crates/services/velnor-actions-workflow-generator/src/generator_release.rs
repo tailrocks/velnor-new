@@ -1,7 +1,7 @@
 //! Generator release for all supported Linux and macOS `velnor-actions` assets.
 //!
-//! The next immutable release is `v0.1.1`. Attest jobs never receive
-//! `contents: write`. Only publish does.
+//! The immutable release assets use the compiled generator version. Attest
+//! jobs never receive `contents: write`. Only publish does.
 
 use crate::{generator_release_pins::GeneratorReleasePins, request::Schema2WorkflowRequest};
 use velnor_actions_contract_release::ReleaseTarget;

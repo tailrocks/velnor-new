@@ -18,7 +18,7 @@ pub(super) fn group() -> TaskGroup {
         no_test_targets: false,
         package_arg: Some("demo".to_owned()),
         compile_driver: CompileDriver::Cargo,
-        test_runner: TestRunner::CargoTest,
+        test_runner: TestRunner::CargoNextest,
         nextest_profile: NextestProfile::Default,
         run_ignored: None,
         declared_inputs: Vec::new(),

@@ -11,16 +11,16 @@ name = "velnor-actions"
 path = "src/main.rs"
 
 [dependencies]
-velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
-velnor-actions-orchestrator-baseline-publish = { version = "=0.1.1", path = "../../services/velnor-actions-orchestrator-baseline-publish" }
-velnor-actions-orchestrator-check-runtime = { version = "=0.1.1", path = "../../services/velnor-actions-orchestrator-check-runtime" }
-velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../../services/velnor-actions-orchestrator-core" }
-velnor-actions-orchestrator-generation = { version = "=0.1.1", path = "../../services/velnor-actions-orchestrator-generation" }
-velnor-actions-orchestrator-internal = { version = "=0.1.1", path = "../../services/velnor-actions-orchestrator-internal" }
-velnor-actions-orchestrator-plan = { version = "=0.1.1", path = "../../services/velnor-actions-orchestrator-plan" }
-velnor-actions-orchestrator-preseed-manifest = { version = "=0.1.1", path = "../../services/velnor-actions-orchestrator-preseed-manifest" }
-velnor-actions-orchestrator-retrieve-reports = { version = "=0.1.1", path = "../../services/velnor-actions-orchestrator-retrieve-reports" }
-velnor-actions-orchestrator-task-report-write = { version = "=0.1.1", path = "../../services/velnor-actions-orchestrator-task-report-write" }
+velnor-actions-contract-workflow = { version = "=0.1.7", path = "../../core/velnor-actions-contract-workflow" }
+velnor-actions-orchestrator-baseline-publish = { version = "=0.1.7", path = "../../services/velnor-actions-orchestrator-baseline-publish" }
+velnor-actions-orchestrator-check-runtime = { version = "=0.1.7", path = "../../services/velnor-actions-orchestrator-check-runtime" }
+velnor-actions-orchestrator-core = { version = "=0.1.7", path = "../../services/velnor-actions-orchestrator-core" }
+velnor-actions-orchestrator-generation = { version = "=0.1.7", path = "../../services/velnor-actions-orchestrator-generation" }
+velnor-actions-orchestrator-internal = { version = "=0.1.7", path = "../../services/velnor-actions-orchestrator-internal" }
+velnor-actions-orchestrator-plan = { version = "=0.1.7", path = "../../services/velnor-actions-orchestrator-plan" }
+velnor-actions-orchestrator-preseed-manifest = { version = "=0.1.7", path = "../../services/velnor-actions-orchestrator-preseed-manifest" }
+velnor-actions-orchestrator-retrieve-reports = { version = "=0.1.7", path = "../../services/velnor-actions-orchestrator-retrieve-reports" }
+velnor-actions-orchestrator-task-report-write = { version = "=0.1.7", path = "../../services/velnor-actions-orchestrator-task-report-write" }
 clap = { workspace = true }
 
 [lints]

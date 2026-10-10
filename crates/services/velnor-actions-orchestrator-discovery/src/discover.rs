@@ -248,6 +248,7 @@ fn derive_all(
 }
 
 /// Workspace-root manifest path for a workspace root.
+#[must_use]
 pub fn workspace_manifest(workspace_root: &str) -> String {
     if workspace_root.is_empty() {
         "Cargo.toml".to_owned()
@@ -257,6 +258,7 @@ pub fn workspace_manifest(workspace_root: &str) -> String {
 }
 
 /// Workspace-root lockfile path for a workspace root.
+#[must_use]
 pub fn workspace_lock(workspace_root: &str) -> String {
     if workspace_root.is_empty() {
         "Cargo.lock".to_owned()

@@ -26,7 +26,7 @@ fn old_marker_output_is_never_evidence() {
         panic!("old-marker output must fall back to defaults");
     };
     assert_eq!(outcome.profile.compile_driver, CompileDriver::Cargo);
-    assert_eq!(outcome.profile.test_runner, TestRunner::CargoTest);
+    assert_eq!(outcome.profile.test_runner, TestRunner::CargoNextest);
     assert!(outcome.profile.evidence.is_empty());
     assert!(outcome.findings.is_empty());
 }
@@ -153,7 +153,7 @@ fn conflicting_declaration_fails_closed() {
 }
 
 #[test]
-fn transient_runner_selection_reports_finding() {
+fn transient_runner_selection_stays_nextest_without_finding() {
     let inputs = ProfileInputs {
         handwritten_workflows: vec![file(
             ".github/workflows/ci.yml",
@@ -162,14 +162,8 @@ fn transient_runner_selection_reports_finding() {
         ..ProfileInputs::default()
     };
     let Ok(outcome) = detect_profile(&inputs) else {
-        panic!("transient runner must select with a finding");
+        panic!("transient runner must normalize");
     };
     assert_eq!(outcome.profile.test_runner, TestRunner::CargoNextest);
-    assert_eq!(outcome.findings.len(), 1);
-    assert_eq!(outcome.findings[0].code, TRANSIENT_EVIDENCE_CODE);
-    assert!(
-        outcome.findings[0]
-            .message
-            .contains("[stacks.rust] test_runner")
-    );
+    assert_eq!(outcome.findings.len(), 0);
 }

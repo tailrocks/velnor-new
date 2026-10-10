@@ -9,10 +9,10 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-velnor-runner-github = { version = "=0.1.1", path = "../velnor-runner-github" }
-velnor-runner-host = { version = "=0.1.1", path = "../velnor-runner-host" }
-velnor-runner-journal = { version = "=0.1.1", path = "../velnor-runner-journal" }
-velnor-runner-launch-slot = { version = "=0.1.1", path = "../velnor-runner-launch-slot" }
+velnor-runner-github = { version = "=0.1.7", path = "../velnor-runner-github" }
+velnor-runner-host = { version = "=0.1.7", path = "../velnor-runner-host" }
+velnor-runner-journal = { version = "=0.1.7", path = "../velnor-runner-journal" }
+velnor-runner-launch-slot = { version = "=0.1.7", path = "../velnor-runner-launch-slot" }
 bollard = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
@@ -21,4 +21,4 @@ zeroize = { workspace = true }
 [dev-dependencies]
 serde_json = { workspace = true }
 turso = { workspace = true }
-velnor-runner-docker-spec = { version = "=0.1.1", path = "../velnor-runner-docker-spec" }
+velnor-runner-docker-spec = { version = "=0.1.7", path = "../velnor-runner-docker-spec" }

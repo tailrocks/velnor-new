@@ -98,7 +98,7 @@ fn wrapper_only_detects_mbx() -> TestResult {
     assert!(
         sighting
             .command_or_setting
-            .contains("wrappers.cargo.command")
+            .contains("cargo wrapper")
     );
     assert!(workspace.findings.is_empty());
     let plan = plan_for(&prep)?;

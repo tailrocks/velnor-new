@@ -13,7 +13,7 @@ fn accepts_release_producer_raw_tar_from_stdin_without_environment() -> Result<(
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout, Vec::<u8>::new());
     Ok(())
 }
 
@@ -38,7 +38,7 @@ fn accepts_cargo_package_gzip_tar_from_stdin_without_environment() -> Result<(),
     let input = gzip(&producer_tar()?)?;
     let output = invoke(&["cargo-package"], &input)?;
     assert!(output.status.success());
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout, Vec::<u8>::new());
     Ok(())
 }
 
@@ -60,7 +60,7 @@ fn rejects_extra_arguments_and_retired_modes() -> Result<(), Box<dyn Error>> {
 fn reports_a_lowercase_source_fingerprint() -> Result<(), Box<dyn Error>> {
     let output = invoke(&["--fingerprint"], &[])?;
     assert!(output.status.success());
-    assert!(output.stderr.is_empty());
+    assert_eq!(output.stderr, Vec::<u8>::new());
     let fingerprint = String::from_utf8(output.stdout)?;
     assert_eq!(fingerprint.len(), 65);
     assert!(fingerprint.ends_with('\n'));

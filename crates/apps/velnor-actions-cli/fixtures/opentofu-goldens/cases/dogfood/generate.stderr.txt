@@ -2,6 +2,7 @@ Preview: <preview>
 Repository: <repo>
 .github/AGENTS.md
 .github/CLAUDE.md
+.github/PULL_REQUEST_TEMPLATE.md
 .github/actionlint.yaml
 .github/actions/generator-release-attest-linux/action.yml
 .github/actions/generator-release-attest-macos-intel/action.yml
@@ -14,6 +15,84 @@ Repository: <repo>
 .github/actions/generator-release-qualify-linux/action.yml
 .github/actions/generator-release-qualify-macos-intel/action.yml
 .github/actions/generator-release-qualify-macos/action.yml
+.github/actions/task-rust-velnor-actions-actionlint/action.yml
+.github/actions/task-rust-velnor-actions-cli/action.yml
+.github/actions/task-rust-velnor-actions-contract-config/action.yml
+.github/actions/task-rust-velnor-actions-contract-planning/action.yml
+.github/actions/task-rust-velnor-actions-contract-release/action.yml
+.github/actions/task-rust-velnor-actions-contract-workflow/action.yml
+.github/actions/task-rust-velnor-actions-contract/action.yml
+.github/actions/task-rust-velnor-actions-mise-cache/action.yml
+.github/actions/task-rust-velnor-actions-mise-catalog/action.yml
+.github/actions/task-rust-velnor-actions-mise-core/action.yml
+.github/actions/task-rust-velnor-actions-mise-nextest/action.yml
+.github/actions/task-rust-velnor-actions-mise-probes/action.yml
+.github/actions/task-rust-velnor-actions-mise/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-baseline-publish/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-check-acquisition/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-check-evidence/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-check-preparation/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-check-runtime/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-core/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-cover-baseline/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-cover-compat/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-cover/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-covered-tasks/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-discovery/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-external-data/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-generation/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-graph/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-internal/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-merge-ports/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-merge-request-ports/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-merge-request/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-merge/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-noop-report/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-pins/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-plan-obligation/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-plan/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-preseed-manifest/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-provisioning/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-request-event/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-retrieve-reports/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-retrieve-retry/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-retrieve/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-run-select/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-runtime-evidence/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-runtime-execute/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-runtime-plan/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-selection/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-staged-validation/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-task-report-write/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-task-report/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator-workflow-ir/action.yml
+.github/actions/task-rust-velnor-actions-orchestrator/action.yml
+.github/actions/task-rust-velnor-actions-repo-policy/action.yml
+.github/actions/task-rust-velnor-actions-rust-core/action.yml
+.github/actions/task-rust-velnor-actions-rust/action.yml
+.github/actions/task-rust-velnor-actions-tofu-core/action.yml
+.github/actions/task-rust-velnor-actions-tofu/action.yml
+.github/actions/task-rust-velnor-actions-workflow-cache/action.yml
+.github/actions/task-rust-velnor-actions-workflow-document/action.yml
+.github/actions/task-rust-velnor-actions-workflow-generator/action.yml
+.github/actions/task-rust-velnor-actions-workflow-jobs/action.yml
+.github/actions/task-rust-velnor-actions-workflow-release/action.yml
+.github/actions/task-rust-velnor-actions-workflow-render-strict/action.yml
+.github/actions/task-rust-velnor-actions-workflow-renderer/action.yml
+.github/actions/task-rust-velnor-actions-workflow-schema2/action.yml
+.github/actions/task-rust-velnor-actions-workflow-steps/action.yml
+.github/actions/task-rust-velnor-actions-workflow-tree/action.yml
+.github/actions/task-rust-velnor-archive-guard/action.yml
+.github/actions/task-rust-velnor-runner-apparmor/action.yml
+.github/actions/task-rust-velnor-runner-cli/action.yml
+.github/actions/task-rust-velnor-runner-core/action.yml
+.github/actions/task-rust-velnor-runner-docker-spec/action.yml
+.github/actions/task-rust-velnor-runner-github/action.yml
+.github/actions/task-rust-velnor-runner-host-config/action.yml
+.github/actions/task-rust-velnor-runner-host/action.yml
+.github/actions/task-rust-velnor-runner-journal/action.yml
+.github/actions/task-rust-velnor-runner-launch-slot/action.yml
+.github/actions/task-rust-velnor-runner-launch/action.yml
 .github/actions/velnor-tool-seed/action.yml
 .github/workflows/ci.yml
 .github/workflows/freshness.yml
@@ -23,6 +102,5 @@ Repository: <repo>
 .github/workflows/qualification.yml
 mise.lock not found; Velnor will not create or refresh it
 mise.toml is read-only input; Velnor never modifies it
-rust-toolchain.toml not found; Velnor will not create it
-shadowed_nextest_config: .config/nextest.toml shadowed by crates/velnor-runner/.config/nextest.toml; profile selected from crates/velnor-runner/.config/nextest.toml
+rust-toolchain.toml is read-only input; Velnor never modifies it
 tool_install_unverified:8 installs skip verification (no mise.lock): actionlint@1.7.12, cargo-deny@0.20.2, gh@2.102.0, nextest@0.9.146, opentofu@1.13.1, rust@1.98.1, shellcheck@0.11.0, zizmor@1.30.1; install on the CI platform and commit the resulting lock

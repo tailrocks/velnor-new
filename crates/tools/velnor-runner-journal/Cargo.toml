@@ -11,8 +11,8 @@ workspace = true
 [dependencies]
 thiserror = { workspace = true }
 turso = { workspace = true }
-velnor-runner-github = { version = "=0.1.1", path = "../velnor-runner-github" }
+velnor-runner-github = { version = "=0.1.7", path = "../velnor-runner-github" }
 
 [dev-dependencies]
 tokio = { workspace = true }
-velnor-runner-core = { version = "=0.1.1", path = "../velnor-runner-core" }
+velnor-runner-core = { version = "=0.1.7", path = "../velnor-runner-core" }

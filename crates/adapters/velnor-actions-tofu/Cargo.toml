@@ -10,9 +10,9 @@ autotests = false
 workspace = true
 
 [dependencies]
-velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
-velnor-actions-contract-planning = { version = "=0.1.1", path = "../../core/velnor-actions-contract-planning" }
-velnor-actions-tofu-core = { version = "=0.1.1", path = "../velnor-actions-tofu-core" }
+velnor-actions-contract = { version = "=0.1.7", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-planning = { version = "=0.1.7", path = "../../core/velnor-actions-contract-planning" }
+velnor-actions-tofu-core = { version = "=0.1.7", path = "../velnor-actions-tofu-core" }
 serde_json = { workspace = true }
 
 [[test]]
@@ -20,5 +20,5 @@ name = "velnor_tofu"
 path = "tests/main.rs"
 
 [dev-dependencies]
-velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
-velnor-actions-contract-release = { version = "=0.1.1", path = "../../core/velnor-actions-contract-release" }
+velnor-actions-contract-config = { version = "=0.1.7", path = "../../core/velnor-actions-contract-config" }
+velnor-actions-contract-release = { version = "=0.1.7", path = "../../core/velnor-actions-contract-release" }

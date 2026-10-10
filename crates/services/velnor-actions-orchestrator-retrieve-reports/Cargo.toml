@@ -7,9 +7,9 @@ license.workspace = true
 autotests = false
 
 [dependencies]
-velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
-velnor-actions-orchestrator-retrieve = { version = "=0.1.1", path = "../velnor-actions-orchestrator-retrieve" }
-velnor-actions-workflow-steps = { version = "=0.1.1", path = "../velnor-actions-workflow-steps" }
+velnor-actions-orchestrator-core = { version = "=0.1.7", path = "../velnor-actions-orchestrator-core" }
+velnor-actions-orchestrator-retrieve = { version = "=0.1.7", path = "../velnor-actions-orchestrator-retrieve" }
+velnor-actions-workflow-steps = { version = "=0.1.7", path = "../velnor-actions-workflow-steps" }
 
 [lints]
 workspace = true

@@ -292,9 +292,9 @@ fn ineligible_lines(out: &mut String, prep: &GenerationPreparation) {
     for task in &prep.discovery.proposals {
         if task.no_targets {
             let reason = if task.task_kind == "doctest" {
-                "NOT_RUN: doctest coverage is an explicit gap; no doctest command emitted"
+                "NOT_RUN: doctest execution is an explicit gap; none emitted"
             } else {
-                "has no test targets; no test command emitted"
+                "has no test targets; no test execution emitted"
             };
             push(
                 out,

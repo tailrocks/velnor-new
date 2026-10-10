@@ -45,7 +45,7 @@ fn validation_pins_shapes_not_spellings() {
         features: vec!["a".to_owned(), "b".to_owned()],
         flags: Vec::new(),
         compile_driver: "cargo".to_owned(),
-        test_runner: "cargo_test".to_owned(),
+        test_runner: "cargo_nextest".to_owned(),
         environment: BTreeMap::new(),
         declared_inputs: Vec::new(),
         undeclared_reads: false,

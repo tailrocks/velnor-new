@@ -9,13 +9,13 @@ autotests = false
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
-velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
-velnor-actions-contract-planning = { version = "=0.1.1", path = "../../core/velnor-actions-contract-planning" }
-velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
-velnor-actions-mise = { version = "=0.1.1", path = "../../adapters/velnor-actions-mise" }
-velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
-velnor-actions-orchestrator-external-data = { version = "=0.1.1", path = "../velnor-actions-orchestrator-external-data" }
-velnor-actions-orchestrator-selection = { version = "=0.1.1", path = "../velnor-actions-orchestrator-selection" }
+velnor-actions-contract = { version = "=0.1.7", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-planning = { version = "=0.1.7", path = "../../core/velnor-actions-contract-planning" }
+velnor-actions-contract-workflow = { version = "=0.1.7", path = "../../core/velnor-actions-contract-workflow" }
+velnor-actions-mise = { version = "=0.1.7", path = "../../adapters/velnor-actions-mise" }
+velnor-actions-orchestrator-core = { version = "=0.1.7", path = "../velnor-actions-orchestrator-core" }
+velnor-actions-orchestrator-external-data = { version = "=0.1.7", path = "../velnor-actions-orchestrator-external-data" }
+velnor-actions-orchestrator-selection = { version = "=0.1.7", path = "../velnor-actions-orchestrator-selection" }
 
 [lints]
 workspace = true

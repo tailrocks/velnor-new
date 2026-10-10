@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.1
+Velnor Actions plan 0.1.7
 Repository: <repo>
 
 Detected stacks
@@ -6,7 +6,7 @@ Detected stacks
   Workspace crates: 2
     - parity-app (crates/app/Cargo.toml) [lib; depends on parity-tool]
     - parity-tool (crates/tool/Cargo.toml) [bin, lib]
-  Profile .: mbx compile driver (declared), cargo_nextest test runner (declared)
+  Profile .: mbx compile driver (declared), cargo nextest test runner (declared)
   Nextest profile .: ci (.config/nextest.toml)
     evidence .config/nextest.toml:1 [profile.ci] [durable]
 
@@ -52,8 +52,8 @@ Workflow to generate
     - actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
     - jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
     - jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
-  Ineligible: stack/rust/crates/app/doctest/default NOT_RUN: doctest coverage is an explicit gap; no doctest command emitted
-  Ineligible: stack/rust/crates/tool/doctest/default NOT_RUN: doctest coverage is an explicit gap; no doctest command emitted
+  Ineligible: stack/rust/crates/app/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
+  Ineligible: stack/rust/crates/tool/doctest/default NOT_RUN: doctest execution is an explicit gap; none emitted
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 
 Required-check migration

@@ -1,6 +1,6 @@
-ecf9a09d20d9c238717ccacbaa7737c2e3838a86ca690e2696e596d4b8527d19  ./.github/AGENTS.md
-e8b37bd2c2e072053779a49aa8c24e3f07cb382690cab7dc59756b8899b61854  ./.github/actionlint.yaml
-766c4e334813484a460cb1545aa0313e4eb2363191bea7aac369c8d5bc63a6e8  ./.github/actions/task-rust-minimal-cargo/action.yml
-6139179ce61ff5097625f4ea76159d97de3ea4275e0aeea4ab0b86e3272c61e8  ./.github/actions/velnor-tool-seed/action.yml
-71efd828be4fb2fd08121d61dbdfcad1a1fc82797972e6b693daf901c4a85ee9  ./.github/workflows/ci.yml
+8c3ba32bc949b03ba5d3a608953846cd505cac1ff8548fe35009f274aa408fc9  ./.github/AGENTS.md
+2728a989f50fecabf716252fa39f9cec059e4d89abdc0d2e4a163fe6b5150c26  ./.github/actionlint.yaml
+9bce159f1853e6c165d7a7a53f20d4b1f2430bc255b2a87e4bd635a0d6f11119  ./.github/actions/task-rust-minimal-cargo/action.yml
+212e8bce874ac6afe150d24f6c6189d8dc49b62a5e1274408dae4efa37b21292  ./.github/actions/velnor-tool-seed/action.yml
+1d05c8a9111b1b72f0e6bfdae27cf73459d857c10cf060f9003b99fa81a61dd0  ./.github/workflows/ci.yml
 link ./.github/CLAUDE.md -> AGENTS.md

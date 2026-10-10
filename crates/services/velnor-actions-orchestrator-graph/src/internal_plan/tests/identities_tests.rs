@@ -21,7 +21,7 @@ fn lanes_follow_responsibility_never_ordinals() {
         TaskKind::Clippy,
         "stack/rust/root/clippy/default",
         CompileDriver::Cargo,
-        TestRunner::CargoTest,
+        TestRunner::CargoNextest,
     );
     assert_eq!(
         lane_id_for(&clippy, &workspace),
@@ -32,7 +32,7 @@ fn lanes_follow_responsibility_never_ordinals() {
         TaskKind::Test,
         "stack/rust/root/test/default",
         CompileDriver::Cargo,
-        TestRunner::CargoTest,
+        TestRunner::CargoNextest,
     );
     assert_ne!(
         lane_id_for(&clippy, &workspace),
@@ -73,7 +73,7 @@ fn toolchains_bind_sorted_specs_driver_runner() {
         TaskKind::Clippy,
         "stack/rust/root/clippy/default",
         CompileDriver::Cargo,
-        TestRunner::CargoTest,
+        TestRunner::CargoNextest,
     );
     let inputs = toolchain_inputs_for(&cargo, &catalog).expect("rust toolchain inputs");
     let mut sorted = inputs.tools.clone();
@@ -92,7 +92,7 @@ fn toolchains_bind_sorted_specs_driver_runner() {
         TaskKind::Clippy,
         "stack/rust/root/clippy/default",
         CompileDriver::Mbx,
-        TestRunner::CargoTest,
+        TestRunner::CargoNextest,
     );
     assert_ne!(
         toolchain_digest_for(&cargo, &catalog).expect("digest"),
@@ -323,7 +323,7 @@ fn ordinary_stack_runner_platform_cannot_expand_with_named_check_catalog() {
         TaskKind::Clippy,
         "stack/rust/root/clippy/default",
         CompileDriver::Cargo,
-        TestRunner::CargoTest,
+        TestRunner::CargoNextest,
     );
     let tofu = tofu_task("validate");
     for task in [rust, tofu] {

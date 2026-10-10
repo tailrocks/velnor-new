@@ -7,17 +7,17 @@ license.workspace = true
 autotests = false
 
 [dependencies]
-velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
-velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
-velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
-velnor-actions-orchestrator-covered-tasks = { version = "=0.1.1", path = "../velnor-actions-orchestrator-covered-tasks" }
-velnor-actions-orchestrator-task-report = { version = "=0.1.1", path = "../velnor-actions-orchestrator-task-report" }
+velnor-actions-contract = { version = "=0.1.7", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-workflow = { version = "=0.1.7", path = "../../core/velnor-actions-contract-workflow" }
+velnor-actions-orchestrator-core = { version = "=0.1.7", path = "../velnor-actions-orchestrator-core" }
+velnor-actions-orchestrator-covered-tasks = { version = "=0.1.7", path = "../velnor-actions-orchestrator-covered-tasks" }
+velnor-actions-orchestrator-task-report = { version = "=0.1.7", path = "../velnor-actions-orchestrator-task-report" }
 
 [dev-dependencies]
 serde_json = { workspace = true }
 tempfile = { workspace = true }
-velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
-velnor-actions-orchestrator-provisioning = { version = "=0.1.1", path = "../velnor-actions-orchestrator-provisioning" }
+velnor-actions-contract-config = { version = "=0.1.7", path = "../../core/velnor-actions-contract-config" }
+velnor-actions-orchestrator-provisioning = { version = "=0.1.7", path = "../velnor-actions-orchestrator-provisioning" }
 
 [lints]
 workspace = true

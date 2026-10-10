@@ -34,7 +34,7 @@ fn two_package_discovery() -> Discovery {
             },
             profile: RustExecutionProfile {
                 compile_driver: CompileDriver::Cargo,
-                test_runner: TestRunner::CargoTest,
+                test_runner: TestRunner::CargoNextest,
                 evidence: Vec::new(),
                 driver_source: ProfileSource::Detected,
                 runner_source: ProfileSource::Detected,

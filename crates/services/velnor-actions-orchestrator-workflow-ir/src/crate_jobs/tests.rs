@@ -40,7 +40,7 @@ pub(super) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> Propose
         no_test_targets: false,
         package_arg: None,
         compile_driver: CompileDriver::Cargo,
-        test_runner: TestRunner::CargoTest,
+        test_runner: TestRunner::CargoNextest,
         nextest_profile: NextestProfile::Default,
         declared_inputs: Vec::new(),
         undeclared_reads: false,

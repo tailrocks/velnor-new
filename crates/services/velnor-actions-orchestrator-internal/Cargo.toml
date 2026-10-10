@@ -9,39 +9,39 @@ autotests = false
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
-velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
-velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
-velnor-actions-contract-planning = { version = "=0.1.1", path = "../../core/velnor-actions-contract-planning" }
-velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
-velnor-actions-mise = { version = "=0.1.1", path = "../../adapters/velnor-actions-mise" }
-velnor-actions-orchestrator-baseline-publish = { version = "=0.1.1", path = "../velnor-actions-orchestrator-baseline-publish" }
-velnor-actions-orchestrator-cover = { version = "=0.1.1", path = "../velnor-actions-orchestrator-cover" }
-velnor-actions-orchestrator-cover-baseline = { version = "=0.1.1", path = "../velnor-actions-orchestrator-cover-baseline" }
-velnor-actions-orchestrator-covered-tasks = { version = "=0.1.1", path = "../velnor-actions-orchestrator-covered-tasks" }
-velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
-velnor-actions-orchestrator-discovery = { version = "=0.1.1", path = "../velnor-actions-orchestrator-discovery" }
-velnor-actions-orchestrator-generation = { version = "=0.1.1", path = "../velnor-actions-orchestrator-generation" }
-velnor-actions-orchestrator-graph = { version = "=0.1.1", path = "../velnor-actions-orchestrator-graph" }
-velnor-actions-orchestrator-merge = { version = "=0.1.1", path = "../velnor-actions-orchestrator-merge" }
-velnor-actions-orchestrator-merge-ports = { version = "=0.1.1", path = "../velnor-actions-orchestrator-merge-ports" }
-velnor-actions-orchestrator-merge-request = { version = "=0.1.1", path = "../velnor-actions-orchestrator-merge-request" }
-velnor-actions-orchestrator-merge-request-ports = { version = "=0.1.1", path = "../velnor-actions-orchestrator-merge-request-ports" }
-velnor-actions-orchestrator-plan = { version = "=0.1.1", path = "../velnor-actions-orchestrator-plan" }
-velnor-actions-orchestrator-plan-obligation = { version = "=0.1.1", path = "../velnor-actions-orchestrator-plan-obligation" }
-velnor-actions-orchestrator-request-event = { version = "=0.1.1", path = "../velnor-actions-orchestrator-request-event" }
-velnor-actions-orchestrator-selection = { version = "=0.1.1", path = "../velnor-actions-orchestrator-selection" }
-velnor-actions-tofu-core = { version = "=0.1.1", path = "../../adapters/velnor-actions-tofu-core" }
-velnor-actions-workflow-renderer = { version = "=0.1.1", path = "../velnor-actions-workflow-renderer" }
+velnor-actions-contract = { version = "=0.1.7", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-config = { version = "=0.1.7", path = "../../core/velnor-actions-contract-config" }
+velnor-actions-contract-planning = { version = "=0.1.7", path = "../../core/velnor-actions-contract-planning" }
+velnor-actions-contract-workflow = { version = "=0.1.7", path = "../../core/velnor-actions-contract-workflow" }
+velnor-actions-mise = { version = "=0.1.7", path = "../../adapters/velnor-actions-mise" }
+velnor-actions-orchestrator-baseline-publish = { version = "=0.1.7", path = "../velnor-actions-orchestrator-baseline-publish" }
+velnor-actions-orchestrator-cover = { version = "=0.1.7", path = "../velnor-actions-orchestrator-cover" }
+velnor-actions-orchestrator-cover-baseline = { version = "=0.1.7", path = "../velnor-actions-orchestrator-cover-baseline" }
+velnor-actions-orchestrator-covered-tasks = { version = "=0.1.7", path = "../velnor-actions-orchestrator-covered-tasks" }
+velnor-actions-orchestrator-core = { version = "=0.1.7", path = "../velnor-actions-orchestrator-core" }
+velnor-actions-orchestrator-discovery = { version = "=0.1.7", path = "../velnor-actions-orchestrator-discovery" }
+velnor-actions-orchestrator-generation = { version = "=0.1.7", path = "../velnor-actions-orchestrator-generation" }
+velnor-actions-orchestrator-graph = { version = "=0.1.7", path = "../velnor-actions-orchestrator-graph" }
+velnor-actions-orchestrator-merge = { version = "=0.1.7", path = "../velnor-actions-orchestrator-merge" }
+velnor-actions-orchestrator-merge-ports = { version = "=0.1.7", path = "../velnor-actions-orchestrator-merge-ports" }
+velnor-actions-orchestrator-merge-request = { version = "=0.1.7", path = "../velnor-actions-orchestrator-merge-request" }
+velnor-actions-orchestrator-merge-request-ports = { version = "=0.1.7", path = "../velnor-actions-orchestrator-merge-request-ports" }
+velnor-actions-orchestrator-plan = { version = "=0.1.7", path = "../velnor-actions-orchestrator-plan" }
+velnor-actions-orchestrator-plan-obligation = { version = "=0.1.7", path = "../velnor-actions-orchestrator-plan-obligation" }
+velnor-actions-orchestrator-request-event = { version = "=0.1.7", path = "../velnor-actions-orchestrator-request-event" }
+velnor-actions-orchestrator-selection = { version = "=0.1.7", path = "../velnor-actions-orchestrator-selection" }
+velnor-actions-tofu-core = { version = "=0.1.7", path = "../../adapters/velnor-actions-tofu-core" }
+velnor-actions-workflow-renderer = { version = "=0.1.7", path = "../velnor-actions-workflow-renderer" }
 
 [lints]
 workspace = true
 
 [dev-dependencies]
 tempfile = { workspace = true }
-velnor-actions-contract-release = { version = "=0.1.1", path = "../../core/velnor-actions-contract-release" }
-velnor-actions-orchestrator-cover-compat = { version = "=0.1.1", path = "../velnor-actions-orchestrator-cover-compat" }
-velnor-actions-workflow-jobs = { version = "=0.1.1", path = "../velnor-actions-workflow-jobs" }
-velnor-actions-workflow-steps = { version = "=0.1.1", path = "../velnor-actions-workflow-steps" }
+velnor-actions-contract-release = { version = "=0.1.7", path = "../../core/velnor-actions-contract-release" }
+velnor-actions-orchestrator-cover-compat = { version = "=0.1.7", path = "../velnor-actions-orchestrator-cover-compat" }
+velnor-actions-workflow-jobs = { version = "=0.1.7", path = "../velnor-actions-workflow-jobs" }
+velnor-actions-workflow-steps = { version = "=0.1.7", path = "../velnor-actions-workflow-steps" }
 
 [[test]]
 name = "velnor_orchestrator_internal"

@@ -53,16 +53,6 @@ mod support {
         pub(crate) fn path(&self) -> &Path {
             &self.path
         }
-
-        /// Write `content` to `relative`, creating parents.
-        pub(crate) fn write(&self, relative: &str, content: &str) -> std::io::Result<PathBuf> {
-            let target = self.path.join(relative);
-            if let Some(parent) = target.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            std::fs::write(&target, content)?;
-            Ok(target)
-        }
     }
 
     impl Drop for TempDir {

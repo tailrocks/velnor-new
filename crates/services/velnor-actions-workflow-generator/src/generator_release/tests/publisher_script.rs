@@ -93,7 +93,7 @@ fn create_candidate_manifest(root: &Path, case: Failure) -> Result<(), Box<dyn E
     let manifest_status = Command::new("bash")
         .args([
             "scripts/generator-release/create-release-manifest.sh",
-            "0.1.1",
+            "0.1.7",
             REPOSITORY,
             "1.98.1",
             "1.21.1",
@@ -189,7 +189,7 @@ fn assert_publish_result(
             | Failure::MutablePublished
     );
     if create_is_expected {
-        assert_eq!(fs::read_to_string(root.join("created-tag"))?, "v0.1.1\n");
+        assert_eq!(fs::read_to_string(root.join("created-tag"))?, "v0.1.7\n");
         assert_eq!(
             fs::read_to_string(root.join("asset-args"))?,
             expected_asset_args()
@@ -255,7 +255,7 @@ fn write_candidate_records(root: &Path, case: Failure) -> Result<(), Box<dyn Err
         fs::write(
             directory.join(product.provenance),
             format!(
-                "{{\"schema\":1,\"version\":\"0.1.1\",\"repository\":\"{REPOSITORY}\",\"commit\":\"{SOURCE_SHA}\",\"target\":\"{}\",\"asset\":\"{}\",\"sha256\":\"{digest}\",\"toolchain\":{{\"rust\":\"1.98.1\",\"mr-boxington\":\"1.21.1\"}}}}\n",
+                "{{\"schema\":1,\"version\":\"0.1.7\",\"repository\":\"{REPOSITORY}\",\"commit\":\"{SOURCE_SHA}\",\"target\":\"{}\",\"asset\":\"{}\",\"sha256\":\"{digest}\",\"toolchain\":{{\"rust\":\"1.98.1\",\"mr-boxington\":\"1.21.1\"}}}}\n",
                 product.target.triple(),
                 product.binary
             ),
@@ -304,9 +304,9 @@ fn release_json(root: &Path, case: Failure, draft: bool) -> Result<String, Box<d
         let size = fs::metadata(&asset)?.len()
             + u64::from(draft && case == Failure::WrongDraftSize && index == 0);
         let url = if draft && case == Failure::WrongDraftUrl && index == 0 {
-            "https://github.com/untrusted/releases/download/v0.1.1/asset".to_owned()
+            "https://github.com/untrusted/releases/download/v0.1.7/asset".to_owned()
         } else {
-            format!("https://github.com/{REPOSITORY}/releases/download/v0.1.1/{name}")
+            format!("https://github.com/{REPOSITORY}/releases/download/v0.1.7/{name}")
         };
         rows.push(format!(
             "{{\"name\":\"{name}\",\"state\":\"uploaded\",\"browser_download_url\":\"{url}\",\"digest\":\"sha256:{digest}\",\"size\":{size}}}"
@@ -321,7 +321,7 @@ fn release_json(root: &Path, case: Failure, draft: bool) -> Result<String, Box<d
     };
     let immutable = !draft && case != Failure::MutablePublished;
     Ok(format!(
-        "{{\"id\":{release_id},\"tag_name\":\"v0.1.1\",\"url\":\"https://api.github.com/repos/{REPOSITORY}/releases/{release_id}\",\"html_url\":\"https://github.com/{REPOSITORY}/releases/tag/v0.1.1\",\"draft\":{draft},\"prerelease\":false,\"immutable\":{immutable},\"assets\":[{}]}}\n",
+        "{{\"id\":{release_id},\"tag_name\":\"v0.1.7\",\"url\":\"https://api.github.com/repos/{REPOSITORY}/releases/{release_id}\",\"html_url\":\"https://github.com/{REPOSITORY}/releases/tag/v0.1.7\",\"draft\":{draft},\"prerelease\":false,\"immutable\":{immutable},\"assets\":[{}]}}\n",
         rows.join(","),
     ))
 }

@@ -65,7 +65,7 @@ pub struct EvidenceFile<'a> {
 
 /// Structurally resolved Mise Cargo wrapper offered as evidence.
 ///
-/// The Mise adapter resolves `wrappers.cargo.command` plus the
+/// The Mise adapter resolves the Cargo wrapper setting plus the
 /// `MBX_CARGO_SHIM_MODE` env value from TOML structure; only the exact
 /// command `mbx` selects MBX, every other command is an explicit
 /// non-MBX wrapper.
@@ -73,7 +73,7 @@ pub struct EvidenceFile<'a> {
 pub struct MiseWrapperInput {
     /// Repository-relative file that supplied the wrapper.
     pub path: String,
-    /// One-based line of the `wrappers.cargo.command` assignment.
+    /// One-based line of the Cargo wrapper assignment.
     pub line: u32,
     /// Exact structural command value.
     pub command: String,
@@ -197,10 +197,10 @@ pub(crate) fn wrapper_sightings(wrappers: &[MiseWrapperInput]) -> (Vec<Evidence>
 fn wrapper_text(input: &MiseWrapperInput) -> String {
     match &input.shim_mode {
         Some(mode) => format!(
-            "wrappers.cargo.command = {:?} (MBX_CARGO_SHIM_MODE = {mode:?})",
+            "cargo wrapper = {:?} (MBX_CARGO_SHIM_MODE = {mode:?})",
             input.command
         ),
-        None => format!("wrappers.cargo.command = {:?}", input.command),
+        None => format!("cargo wrapper = {:?}", input.command),
     }
 }
 
@@ -267,14 +267,6 @@ impl Seen {
             && self.cargo_durable.is_empty()
             && self.cargo_transient.is_empty()
             && self.wrapper_other.is_empty()
-    }
-
-    /// Whether any runner sighting (durable or transient) exists.
-    pub(crate) fn has_runner(&self) -> bool {
-        !self.nextest_durable.is_empty()
-            || !self.nextest_transient.is_empty()
-            || !self.cargo_durable.is_empty()
-            || !self.cargo_transient.is_empty()
     }
 
     /// Every sighting, sorted.

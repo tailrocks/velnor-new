@@ -63,14 +63,14 @@ fn wrapper_only_selects_mbx() {
     };
     assert_eq!(outcome.profile.compile_driver, CompileDriver::Mbx);
     assert_eq!(outcome.profile.driver_source, ProfileSource::Detected);
-    assert_eq!(outcome.profile.test_runner, TestRunner::CargoTest);
+    assert_eq!(outcome.profile.test_runner, TestRunner::CargoNextest);
     assert_eq!(outcome.profile.evidence.len(), 1);
     let sighting = &outcome.profile.evidence[0];
     assert_eq!((sighting.path.as_str(), sighting.line), ("mise.toml", 1));
     assert!(
         sighting
             .command_or_setting
-            .contains("wrappers.cargo.command")
+            .contains("cargo wrapper")
     );
     assert!(sighting.command_or_setting.contains("\"mbx\""));
     assert!(sighting.command_or_setting.contains("MBX_CARGO_SHIM_MODE"));
@@ -177,7 +177,7 @@ fn declared_axes_are_independent() {
     assert_eq!(outcome.profile.runner_source, ProfileSource::Detected);
 
     let runner_only = ProfileInputs {
-        declared_runner: Some(TestRunner::CargoTest),
+        declared_runner: Some(TestRunner::CargoNextest),
         mise_wrappers: vec![mbx_wrapper("mise.toml", 1)],
         ..ProfileInputs::default()
     };
@@ -186,7 +186,7 @@ fn declared_axes_are_independent() {
     };
     assert_eq!(outcome.profile.compile_driver, CompileDriver::Mbx);
     assert_eq!(outcome.profile.driver_source, ProfileSource::Detected);
-    assert_eq!(outcome.profile.test_runner, TestRunner::CargoTest);
+    assert_eq!(outcome.profile.test_runner, TestRunner::CargoNextest);
     assert_eq!(outcome.profile.runner_source, ProfileSource::Declared);
 }
 
@@ -196,7 +196,7 @@ fn no_evidence_defaults_with_profile_fields() {
         panic!("empty inputs must fall back to defaults");
     };
     assert_eq!(outcome.profile.compile_driver, CompileDriver::Cargo);
-    assert_eq!(outcome.profile.test_runner, TestRunner::CargoTest);
+    assert_eq!(outcome.profile.test_runner, TestRunner::CargoNextest);
     assert_eq!(outcome.profile.nextest_profile, NextestProfile::Default);
     assert_eq!(outcome.profile.nextest_config, None);
     assert_eq!(
@@ -206,7 +206,7 @@ fn no_evidence_defaults_with_profile_fields() {
 }
 
 #[test]
-fn nextest_config_conflicts_with_cargo_test_invocation() {
+fn nextest_config_normalizes_with_cargo_test_invocation() {
     let inputs = ProfileInputs {
         nextest_configs: vec![ci_config(".config/nextest.toml", 4)],
         executables: vec![velnor_actions_rust_core::EvidenceFile {
@@ -215,10 +215,11 @@ fn nextest_config_conflicts_with_cargo_test_invocation() {
         }],
         ..ProfileInputs::default()
     };
-    let Err(ProfileError::AmbiguousTestRunner { evidence }) = detect_profile(&inputs) else {
-        panic!("config plus cargo-test invocation must fail");
+    let Ok(outcome) = detect_profile(&inputs) else {
+        panic!("config plus cargo-test invocation must normalize");
     };
-    assert_eq!(evidence.len(), 2);
+    assert_eq!(outcome.profile.test_runner, TestRunner::CargoNextest);
+    assert_eq!(outcome.profile.evidence.len(), 2);
 }
 
 #[test]

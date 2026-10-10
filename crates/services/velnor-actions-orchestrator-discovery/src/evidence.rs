@@ -279,8 +279,9 @@ fn map_driver(declared: DeclaredCompileDriver) -> CompileDriver {
 /// Map a declared config runner to the selection enum.
 fn map_runner(declared: DeclaredTestRunner) -> TestRunner {
     match declared {
-        DeclaredTestRunner::CargoTest => TestRunner::CargoTest,
-        DeclaredTestRunner::CargoNextest => TestRunner::CargoNextest,
+        DeclaredTestRunner::CargoTest | DeclaredTestRunner::CargoNextest => {
+            TestRunner::CargoNextest
+        }
     }
 }
 
@@ -288,6 +289,7 @@ fn map_runner(declared: DeclaredTestRunner) -> TestRunner {
 ///
 /// Each entry names the workspace root plus one finding; `generate` fails
 /// closed on any entry before touching `.github`, while `plan` reports them.
+#[must_use]
 pub fn blocking_findings(workspaces: &[PlannedWorkspace]) -> Vec<String> {
     let mut out = Vec::new();
     for workspace in workspaces {
@@ -321,6 +323,7 @@ fn root_label(root: &str) -> &str {
 /// Compares the committed generated workflow against freshly detected
 /// driver/runner spellings and the configured runner label; drift warns,
 /// never fails.
+#[must_use]
 pub fn workspace_drift_warnings(
     root: &Path,
     workspaces: &[PlannedWorkspace],
