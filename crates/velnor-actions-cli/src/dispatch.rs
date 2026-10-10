@@ -22,10 +22,11 @@ use clap::Parser;
 use velnor_actions_orchestrator::{
     DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, MERGE_OP, OrchestratorError,
     PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PlanOutputMode,
-    REPORT_OP, REQUEST_FILE_ENV, TASK_EXECUTION_RESOLVER_OP, WRITE_REQUEST_OP, execute_check,
-    init_config, merge_internal, merge_passed, plan_internal, plan_outputs, plan_text_checked,
-    prepare, publish_final_report, publish_plan_files, resolve_root, resolve_task_execution,
-    response_path_for, retrieve_reports, write_preseed_manifest, write_request, write_task_report,
+    REPORT_OP, REQUEST_FILE_ENV, RUNTIME_RUNNER_TEMP_ENV, TASK_EXECUTION_RESOLVER_OP,
+    WRITE_REQUEST_OP, execute_check, init_config, merge_internal, merge_passed, plan_internal,
+    plan_outputs, plan_text_checked, prepare, publish_final_report, publish_plan_files,
+    resolve_root, resolve_task_execution, response_path_for, retrieve_reports,
+    write_preseed_manifest, write_request, write_task_report,
 };
 
 use crate::args::{Cli, Command};
