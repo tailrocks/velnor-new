@@ -11,8 +11,6 @@ use tokio::process::{Child, Command};
 use tokio::time::{Instant, timeout_at};
 use velnor_runner_host::{Readiness, controller_readiness};
 
-use crate::dispatch::{KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE};
-
 const INTERNAL_FLAG: &str = "--internal-readiness-scan";
 const MAX_STATUS_BYTES: usize = 64;
 const MAX_STATUS_READ: u64 = 65;
@@ -141,7 +139,7 @@ async fn read_status(child: &mut Child, deadline: Instant) -> Readiness {
 }
 
 fn write_readiness(state: &std::path::Path) -> ExitCode {
-    let readiness = controller_readiness(state, KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
+    let readiness = controller_readiness(state);
     let mut output = std::io::stdout().lock();
     if output.write_all(readiness.as_str().as_bytes()).is_err()
         || output.write_all(b"\n").is_err()

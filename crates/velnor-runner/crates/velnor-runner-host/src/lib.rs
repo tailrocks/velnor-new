@@ -33,7 +33,7 @@ mod work_owner;
 mod worker;
 
 pub use assign::{Offer, offer};
-pub use config::{DockerConfig, GithubSection, HostConfig, HostLimits};
+pub use config::{DockerConfig, GithubSection, HostConfig, HostLimits, KeychainReference};
 pub use connect::{ConnectPlan, DisconnectEffect, SetOwnership, connect_plan, disconnect_effects};
 pub use daemon_lock::DaemonLock;
 pub use docker_client::connect_unix;
