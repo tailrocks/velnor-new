@@ -14,6 +14,9 @@ use velnor_actions_workflow_steps::{RenderError, setup::MiseSetup, steps};
 use velnor_actions_workflow_tree::{marker, yaml::render_yaml};
 
 pub use velnor_actions_workflow_document::lane_share::RenderedWorkflow;
+mod reusable_callee;
+
+pub use reusable_callee::render_reusable_callee;
 
 /// Strict render: setup insertion plus staged-helper and anchor gates.
 ///

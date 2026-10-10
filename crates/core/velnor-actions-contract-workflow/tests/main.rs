@@ -7,6 +7,8 @@ mod impl_contract_conclusions;
 mod impl_contract_release_ir;
 #[path = "impl_contract_reports.rs"]
 mod impl_contract_reports;
+#[path = "impl_contract_reusable_callee.rs"]
+mod impl_contract_reusable_callee;
 #[path = "impl_contract_step_roles.rs"]
 mod impl_contract_step_roles;
 #[path = "impl_contract_step_seed.rs"]

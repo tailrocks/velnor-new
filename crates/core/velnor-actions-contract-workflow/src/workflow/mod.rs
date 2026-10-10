@@ -16,6 +16,7 @@ pub mod permissions;
 pub mod plan;
 pub mod qualification;
 pub mod report;
+pub mod reusable_callee;
 pub mod runtime_receipt;
 pub mod step;
 pub mod step_identity;
@@ -77,6 +78,13 @@ pub use qualification::{
 pub use report::{
     CacheLayer, CacheOutcome, CacheResult, MatrixReport, MatrixStatus, MatrixTaskEntry,
     NotSelectedReason, TaskReport, TaskStatus, TaskTiming,
+};
+pub use reusable_callee::{
+    REUSABLE_CALLEE_EVENT, REUSABLE_CALLEE_GUARD_JOB, REUSABLE_CALLEE_INPUT_TYPE,
+    REUSABLE_CALLEE_INPUTS, REUSABLE_CALLEE_WRITE_JOB, REUSABLE_CALLER_PERMISSIONS,
+    ReusableCalleeContract, ReusableCalleeContractError, ReusableCalleeIdentity,
+    ReusableCalleeIdentityError, ReusableCalleeInput, ReusableCalleePolicy,
+    ReusableCalleePolicyError, schema_value,
 };
 pub use runtime_receipt::{
     TASK_RUNTIME_RECEIPTS_DIRECTORY, TaskRuntimeIdentity, TaskRuntimeReceipt,

@@ -14,9 +14,13 @@ use velnor_actions_workflow_jobs::RenderContext;
 use velnor_actions_workflow_steps::{RenderError, steps};
 use velnor_actions_workflow_tree::{yaml::Yaml, yaml::string_map_yaml};
 
+#[path = "document_reusable_callee.rs"]
+mod document_reusable_callee;
 mod needs_channel;
 #[cfg(test)]
 mod tests;
+
+pub use document_reusable_callee::reusable_callee_document;
 
 /// Build the workflow document: name, on, permissions, concurrency, jobs.
 ///
