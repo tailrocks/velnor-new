@@ -82,11 +82,9 @@ async fn stop_after_claim_schedules_durable_retry_without_starting_http() -> Res
             .await?
             .is_none()
     );
-    assert!(
-        second
-            .due_completed_launches(completion_now()?, 1)
-            .await?
-            .is_empty()
+    assert_eq!(
+        second.due_completed_launches(completion_now()?, 1).await?,
+        Vec::new()
     );
     Ok(())
 }
