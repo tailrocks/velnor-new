@@ -186,7 +186,6 @@ fn failure(problem: &str) -> OrchestratorError {
 
 fn build_task_graph_problem(problem: &str) -> &'static str {
     match problem {
-        "verification_task_graph" | "build_task_task_graph" => "build_task_task_graph",
         "verification_task_graph_bound" => "build_task_task_graph_bound",
         "verification_task_missing" => "build_task_task_missing",
         "verification_task_shape" => "build_task_task_shape",
