@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use crate::cover_identity::generator::sha256_hex;
+use velnor_actions_contract::WorkflowTask;
 use velnor_actions_workflow_renderer::render::test_render_capture::full_tree_capture_guard;
 use velnor_actions_workflow_renderer::tree::RenderedTree;
 
@@ -28,19 +29,38 @@ fn capture_exact_consumer_marked_workflow_before_size_guard()
     }
 
     let preparation = crate::prepare::prepare_for_capture(&root, CAPTURE_CONSUMER_RELEASE_VERSION)?;
-    let execution = preparation
-        .config
-        .execution
-        .as_ref()
-        .ok_or("missing execution config")?;
     assert_eq!(
-        execution.mode,
-        Some(velnor_actions_contract::ExecutionMode::Both)
+        preparation.config.workflow.policy,
+        velnor_actions_contract::WorkflowPolicy::ConsumerV1
     );
-    assert!(
-        execution
-            .workflows
-            .contains(&velnor_actions_contract::RoutingWorkflow::Qualification)
+    let configured_tasks = preparation
+        .config
+        .workflow
+        .tasks
+        .iter()
+        .map(WorkflowTask::id)
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        configured_tasks,
+        BTreeSet::from([
+            "construct-upstream-assets".to_owned(),
+            "native-desktop-ci".to_owned(),
+            "native-swift-format".to_owned(),
+            "native-swiftlint".to_owned(),
+        ]),
+        "capture input must retain all four configured consumer tasks"
+    );
+    let workspace_members = preparation
+        .discovery
+        .workspaces
+        .iter()
+        .flat_map(|workspace| workspace.record.members.iter().map(String::as_str))
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        workspace_members.len(),
+        150,
+        "capture input must retain every Cargo workspace member"
     );
 
     let _capture_guard = full_tree_capture_guard();
@@ -49,6 +69,7 @@ fn capture_exact_consumer_marked_workflow_before_size_guard()
     let capture = capture.ok_or("render boundary did not record a workflow")?;
     let canonical_bytes = capture.canonical.len();
     let selected_bytes = capture.selected.len();
+    assert_required_task_coverage(&capture.selected, &configured_tasks);
     std::fs::write(output.join("canonical.yml"), capture.canonical.as_bytes())?;
     std::fs::write(output.join("selected.yml"), capture.selected.as_bytes())?;
     let mut shared_bytes = 0usize;
@@ -127,6 +148,67 @@ fn capture_exact_consumer_marked_workflow_before_size_guard()
         assert_eq!(tree.get(&file.path), Some(file.bytes.as_str()));
     }
     Ok(())
+}
+
+/// Prove each configured task remains a job and gates the generated Required job.
+fn assert_required_task_coverage(workflow: &str, task_ids: &BTreeSet<String>) {
+    let required_needs = yaml_job_needs(workflow, "required");
+    for task_id in task_ids {
+        let job_id = format!("task-{task_id}");
+        assert!(
+            yaml_has_job(workflow, &job_id),
+            "configured workflow task has no rendered job: {job_id}"
+        );
+        assert!(
+            required_needs.contains(&job_id),
+            "configured workflow task does not gate Required: {job_id}"
+        );
+    }
+}
+
+/// Check the generated YAML's job mapping without introducing a YAML parser dependency.
+fn yaml_has_job(workflow: &str, job_id: &str) -> bool {
+    let expected = format!("  {job_id}:");
+    workflow.lines().any(|line| line == expected.as_str())
+}
+
+/// Read the renderer's block-sequence `needs` for one generated job.
+fn yaml_job_needs(workflow: &str, job_id: &str) -> BTreeSet<String> {
+    let header = format!("  {job_id}:");
+    let lines = workflow.lines().collect::<Vec<_>>();
+    let matching_headers = lines
+        .iter()
+        .enumerate()
+        .filter_map(|(index, line)| (*line == header.as_str()).then_some(index))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        matching_headers.len(),
+        1,
+        "rendered job must occur exactly once: {job_id}"
+    );
+    let mut in_needs = false;
+    let mut needs = BTreeSet::new();
+    for line in lines.iter().skip(matching_headers[0] + 1) {
+        if line.starts_with("  ") && !line.starts_with("    ") {
+            break;
+        }
+        if *line == "    needs:" {
+            assert!(
+                !in_needs,
+                "duplicate needs field for rendered job: {job_id}"
+            );
+            in_needs = true;
+            continue;
+        }
+        if in_needs {
+            let Some(need) = line.strip_prefix("      - ") else {
+                break;
+            };
+            assert!(needs.insert(need.to_owned()), "duplicate need: {need}");
+        }
+    }
+    assert!(in_needs, "rendered job has no needs field: {job_id}");
+    needs
 }
 
 fn write_tree_capture(
