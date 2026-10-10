@@ -147,6 +147,56 @@ fn selected_prebuilt_tools_are_isolated_and_task_tools_are_skipped_at_runtime() 
 }
 
 #[test]
+fn nested_mbx_task_restores_its_declared_working_directory_after_identity_checks() {
+    let mut task = policy("native-mbx", VerificationRunner::LinuxX64);
+    task.task.mise_task = "desktop-format-check".to_owned();
+    task.task.source = VerificationTaskSource {
+        mise_config: "native/mise.toml".to_owned(),
+        working_directory: "native".to_owned(),
+    };
+    task.mise_config_sha256 = Some("a".repeat(64));
+    task.mise_lock_sha256 = Some("b".repeat(64));
+    task.selected_tools = vec![BuildTaskTool {
+        key: "mr-boxington".to_owned(),
+        version: "1.23.0".to_owned(),
+        backend: "packslip:github.com/jdx/mr-boxington".to_owned(),
+        os: vec!["linux".to_owned()],
+        config_options: BTreeMap::new(),
+        lock_options: BTreeMap::new(),
+        artifact: Some(BuildTaskArtifact {
+            checksum: format!("sha256:{}", "c".repeat(64)),
+            url: "https://github.com/jdx/mr-boxington/releases/download/v1.23.0/mbx-x86_64-unknown-linux-gnu.tar.gz".to_owned(),
+            url_api: None,
+            signer: None,
+            provenance: None,
+        }),
+    }];
+
+    let job = build_verification_task_job(&task, CHECKOUT).expect("nested MBX verification job");
+    let velnor_actions_contract::StepKind::Shell { run, .. } = &job.steps[3].kind else {
+        panic!("task run must be a shell step");
+    };
+    let script = run.last().expect("Bash script argument");
+    let declared_cwd = script
+        .find("cd -P \"$workspace_root/native\"; task_working_directory=\"$PWD\"")
+        .expect("task begins in its declared directory");
+    let restore_cwd = script
+        .find("test \"$mbx_path\" = \"$mbx_parent/$mbx_base\"; cd -P \"$task_working_directory\"")
+        .expect("MBX identity check restores the declared directory");
+    let task_run = script
+        .find("mise --no-env --locked --no-hooks run --skip-tools desktop-format-check")
+        .expect("the declared task runs with its tools preinstalled");
+
+    assert!(
+        declared_cwd < restore_cwd && restore_cwd < task_run,
+        "{script}"
+    );
+    assert!(script.contains("export MISE_CEILING_PATHS=\"$workspace_root/.\""));
+    assert!(script.contains("test -f \"$workspace_root/native/mise.toml\""));
+    assert!(script.contains(r#"case "$path" in "$workspace_root/native/mise.toml")"#));
+}
+
+#[test]
 fn verification_rejects_cargo_sources_and_unbound_artifacts() {
     let mut policy = policy("unsafe-lint", VerificationRunner::LinuxX64);
     policy.mise_config_sha256 = Some("a".repeat(64));
