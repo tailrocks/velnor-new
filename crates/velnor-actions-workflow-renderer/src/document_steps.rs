@@ -151,6 +151,7 @@ fn action_step_to_yaml(
         || uses == crate::cache_steps::TOOLS_RESTORE_USES
         || uses == crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
         || crate::action_ref::is_generated_provider_prelude(uses)
+        || crate::action_ref::is_generated_declared_task(uses)
     {
         Yaml::annotated(uses, "zizmor: ignore[self-repository]")
     } else {

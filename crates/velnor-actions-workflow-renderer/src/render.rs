@@ -35,6 +35,9 @@ pub use action_pins_impl::action_pins;
 #[path = "validator_tools.rs"]
 mod validator_tools;
 
+#[path = "task_wrapper.rs"]
+mod task_wrapper;
+
 pub use crate::matrix::{
     COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
     MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
@@ -371,8 +374,11 @@ fn render_merged(
     } else {
         jobs.clone()
     };
+    let (jobs, task_files) =
+        task_wrapper::factor_obligation_steps(&jobs, &ctx.checkout_uses, &ctx.generator_version)?;
     let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
-    let shared = crate::lane_share::share_lanes(&jobs, ctx)?;
+    let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
+    shared.files.extend(task_files);
     let mut document = document::workflow_to_yaml(ir, &shared, ctx, &mbx_jobs)?;
     if let Some((source, max_parallel)) = &matrix {
         matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
