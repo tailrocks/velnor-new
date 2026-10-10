@@ -33,6 +33,14 @@ an active session, a missing or stale guest sample also holds that session and
 blocks job acquisition and worker start; host measurements are never a
 fallback. PSI is diagnostic only and does not gate capacity or admission.
 
+The initial poll header of one is a protocol value, not a worker permit.
+Resource-derived total pair capacity remains separate from that header. If
+static guest CPU or memory totals cannot fit one configured pair, preserve the
+zero-fit result even while the header remains one; deny new acquisition, JIT,
+and worker start until a fresh static calculation can fit a pair and the
+current guest-sample gate passes. This denies new work only: completion intake,
+reconciliation, and exact cleanup for existing rows must remain available.
+
 The migrated D21 load thresholds remain 750 milli-load per guest CPU for
 growth (`<= 750`) and 1150 milli-load per guest CPU for shrink (`> 1150`). The
 memory thresholds remain 8 GiB for growth and 4 GiB for shrink. Disk is a
@@ -196,8 +204,10 @@ and DinD requests; exact aggregate CPU/memory charges for occupied and
 uncertain journal rows; old finite, unlimited, and changed-budget containers;
 exact proof of absent containers; sample freshness and engine/root binding;
 guest low-water and D21 boundaries, including healthy, missing, and saturated
-first samples producing an initial header of exactly one; and shrink without
-killing or releasing existing workers. Probe lifecycle tests must cover every crash boundary and
+first samples producing an initial header of exactly one; a zero-fit static
+capacity retaining that header without acquiring or starting work; and shrink
+without killing or releasing existing workers while completion and cleanup
+remain available. Probe lifecycle tests must cover every crash boundary and
 lost create/start/stop/remove response, including mismatched image, source,
 engine, role, labels, configuration, and duplicate candidate quarantine. An
 isolated integration qualification must use the exact verified image through
