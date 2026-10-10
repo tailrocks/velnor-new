@@ -6,6 +6,11 @@ use super::step_identity::{
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 
+/// Maximum arguments carried by one generated task record.
+pub const MAX_TASK_EXECUTION_ARGV: usize = 512;
+/// Maximum environment pairs carried by one generated task record.
+pub const MAX_TASK_EXECUTION_ENV: usize = 64;
+
 /// Plan output consumed by generated obligation skip conditions.
 pub const TASK_COVERED_OUTPUT: &str = "covered_tasks";
 
@@ -256,7 +261,7 @@ fn validate_kind(kind: &StepKind, job: &str) -> Result<(), ContractError> {
     Ok(())
 }
 
-fn validate_task_execution(
+pub(super) fn validate_task_execution(
     argv: &[String],
     env: &std::collections::BTreeMap<String, String>,
     task_id: &str,
@@ -269,6 +274,8 @@ fn validate_task_execution(
     job: &str,
 ) -> Result<(), ContractError> {
     if argv.len() < 8
+        || argv.len() > MAX_TASK_EXECUTION_ARGV
+        || env.len() > MAX_TASK_EXECUTION_ENV
         || argv[0] != "mise"
         || argv[1..4] != ["--no-config", "--no-env", "--no-hooks"]
         || argv[4] != "exec"
