@@ -257,7 +257,7 @@ fn unpaired_jobs_stay_inline() {
     );
     let shared = share_lanes(&jobs, &ctx()).expect("share");
     assert!(shared.calls.is_empty());
-    assert_eq!(shared.files, [] as [tree::RenderedFile; 0]);
+    assert_eq!(shared.files, [] as [crate::tree::RenderedFile; 0]);
     let kept = shared.jobs.get("actionlint").expect("actionlint");
     assert_eq!(kept.steps.len(), 1);
 }
