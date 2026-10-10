@@ -216,7 +216,7 @@ mod tests {
         ));
         assert_eq!(
             unresolved_inputs(&ext),
-            [] as [identity::identity_closure::UnresolvedInput; 0]
+            [] as [crate::identity::identity_closure::UnresolvedInput; 0]
         );
         let build = group(crate::tasks::TaskKind::Build).identity_extension(&inputs(
             DigestSlot::Known("lock".to_owned()),
@@ -247,7 +247,7 @@ mod tests {
         ));
         assert_eq!(
             unresolved_inputs(&ext),
-            [] as [identity::identity_closure::UnresolvedInput; 0]
+            [] as [crate::identity::identity_closure::UnresolvedInput; 0]
         );
         assert_eq!(ext.lock_digest, None);
         assert_eq!(ext.nextest_digest, None);
