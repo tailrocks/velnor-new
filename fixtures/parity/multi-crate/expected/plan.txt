@@ -17,7 +17,7 @@ Workflow to generate
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - actionlint (6 steps)
+    - actionlint (7 steps)
     - plan (15 steps)
     - publish-baseline (5 steps)
     - required (10 steps)

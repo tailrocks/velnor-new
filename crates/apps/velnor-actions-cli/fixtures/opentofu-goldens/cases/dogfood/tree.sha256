@@ -91,7 +91,7 @@ b6918d8ae9e1a43f62303c97ea6e141c9fcbbf9f73668d13a9c1198f4155cede  ./.github/acti
 859ee2edca239389ef157897cc2adf9e354353b15caf03c7ec1510eaba61c09e  ./.github/actions/task-rust-velnor-runner-launch-slot/action.yml
 424214c9d620af5d0a7e1805266224b38cfd1282afcd7297076d40a0b3373a49  ./.github/actions/task-rust-velnor-runner-launch/action.yml
 212e8bce874ac6afe150d24f6c6189d8dc49b62a5e1274408dae4efa37b21292  ./.github/actions/velnor-tool-seed/action.yml
-4771d70ea957555072f86b59558cf9a6d82ab78527bb8a04729a1395183ec12b  ./.github/workflows/ci.yml
+65fbee25e45392e1d1617a33d513dec082a57e74c79bb8d9dfb41168f29e9868  ./.github/workflows/ci.yml
 440f8f3e9d54c11ee8f8103a658010742768f5cf55a7de829d516346765a0be7  ./.github/workflows/freshness.yml
 07f877194f03648ff688e020a5f95184c62cb950749c6a41789a95c150058451  ./.github/workflows/generator-release.yml
 3984247061d25b72fe22fe2b539374ed1d250079f5eefe85bfe16dcea1d7aa57  ./.github/workflows/image-release.yml

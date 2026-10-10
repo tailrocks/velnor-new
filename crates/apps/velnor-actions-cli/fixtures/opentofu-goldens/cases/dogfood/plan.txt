@@ -96,7 +96,7 @@ Workflow to generate
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - actionlint (6 steps)
+    - actionlint (7 steps)
     - alint (6 steps)
     - cargo-deny (6 steps)
     - cargo-machete (6 steps)

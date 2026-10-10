@@ -1,5 +1,7 @@
 use super::*;
 
+use velnor_actions_mise::{ACTIONLINT_VERSION, SHELLCHECK_VERSION};
+
 #[test]
 fn plan_job_writes_request_before_plan() {
     let catalog = ToolCatalog::pinned();
@@ -48,6 +50,63 @@ fn plan_job_checks_out_full_history_for_archaeology() {
     assert!(
         !with.contains_key("fetch-depth"),
         "lint stays shallow: {with:?}"
+    );
+}
+
+#[test]
+fn actionlint_job_installs_exact_tools_before_pinned_exec() {
+    let catalog = ToolCatalog::pinned();
+    let job = lint_job("ubuntu-26.04", &catalog).expect("lint job");
+    assert_eq!(
+        job.steps
+            .iter()
+            .map(|step| step.name.as_str())
+            .collect::<Vec<_>>(),
+        ["Checkout", PREPARE_PINNED_TOOLS_STEP, "Run actionlint",]
+    );
+    assert_eq!(
+        job.steps[1].role,
+        Some(StepRole::PreparePinnedTools),
+        "installation must be typed, not incidental run text"
+    );
+    let StepKind::Shell { run: install, env } = &job.steps[1].kind else {
+        panic!("lint install must be a shell step");
+    };
+    assert_eq!(
+        install,
+        &vec![
+            "mise".to_owned(),
+            "--no-config".to_owned(),
+            "--no-env".to_owned(),
+            "--no-hooks".to_owned(),
+            "install".to_owned(),
+            format!("actionlint@{ACTIONLINT_VERSION}"),
+            format!("shellcheck@{SHELLCHECK_VERSION}"),
+        ],
+        "cold seed must explicitly install exact validators: {install:?}"
+    );
+    assert_eq!(env.get("MISE_NO_CONFIG").map(String::as_str), Some("1"));
+    assert_eq!(env.get("MISE_AUTO_INSTALL"), None);
+    assert_eq!(env.get("MISE_EXEC_AUTO_INSTALL"), None);
+
+    let StepKind::Shell { run: exec, .. } = &job.steps[2].kind else {
+        panic!("lint execution must be a shell step");
+    };
+    assert_eq!(
+        exec,
+        &vec![
+            "mise".to_owned(),
+            "--no-config".to_owned(),
+            "--no-env".to_owned(),
+            "--no-hooks".to_owned(),
+            "exec".to_owned(),
+            format!("actionlint@{ACTIONLINT_VERSION}"),
+            format!("shellcheck@{SHELLCHECK_VERSION}"),
+            "--".to_owned(),
+            "actionlint".to_owned(),
+            "-color".to_owned(),
+        ],
+        "execution must remain fail-closed and exact: {exec:?}"
     );
 }
 

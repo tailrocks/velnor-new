@@ -97,6 +97,9 @@ pub fn plan_job(
 }
 
 /// Always-on lint job: checkout plus pinned actionlint over the tree.
+///
+/// Cold runners cannot rely on a tool seed: explicit exact installation
+/// precedes the fail-closed pinned execution.
 pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, OrchestratorError> {
     let program = OsString::from("actionlint");
     let exec = PinnedToolExec::new(
@@ -115,6 +118,7 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
                 problem: err.to_string(),
             })?;
     lint.role = Some(StepRole::Actionlint);
+    let install = actionlint_install_step(catalog)?;
     Ok(Job {
         outputs: Vec::new(),
         display_name: LINT_DISPLAY_NAME.to_owned(),
@@ -125,8 +129,33 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![checkout_action()?, lint],
+        steps: vec![checkout_action()?, install, lint],
     })
+}
+
+/// Exact Actionlint/ShellCheck installation for the cold Actionlint job.
+///
+/// The typed request emits both exact catalog selectors with explicit
+/// install semantics. Runtime auto-install remains disabled by the
+/// renderer's fail-closed `mise exec` environment.
+fn actionlint_install_step(catalog: &ToolCatalog) -> Result<Step, OrchestratorError> {
+    let homes = ToolHomes::runner_temp();
+    let prepare =
+        PreparePinnedTools::new(vec![PinnedTool::Actionlint, PinnedTool::Shellcheck], homes)
+            .map_err(|err| OrchestratorError::Contract {
+                problem: err.to_string(),
+            })?;
+    let run = strings_of(prepare.argv(catalog))
+        .map_err(|problem| OrchestratorError::Contract { problem })?;
+    let env = strings_of_env(&prepare.env_without_homes())
+        .map_err(|problem| OrchestratorError::Contract { problem })?;
+    let mut step =
+        velnor_actions_workflow_steps::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
+            .map_err(|err| OrchestratorError::Contract {
+                problem: err.to_string(),
+            })?;
+    step.role = Some(StepRole::PreparePinnedTools);
+    Ok(step)
 }
 
 /// Final gate with the exact required-check name and `always()` condition.
