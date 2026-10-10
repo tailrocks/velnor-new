@@ -134,18 +134,20 @@ fn machete_cold_install_uses_verified_asset_and_preserves_scan_invocation() {
 
 #[test]
 fn mbx_probe_vector_is_byte_exact() {
-    let probe = mbx_probe_argv(&ToolCatalog::pinned()).expect("probe argv");
-    let want = argv_of(&[
+    let catalog = ToolCatalog::pinned();
+    let probe = mbx_probe_argv(&catalog).expect("probe argv");
+    let mut want = argv_of(&[
         "mise",
         "--no-config",
         "--no-env",
         "--no-hooks",
         "exec",
-        "rust@1.98.1",
+        "rust@catalog-pin",
         "--",
         "mbx",
         "--version",
     ]);
+    want[5] = catalog.tool_spec(PinnedTool::Rust);
     assert_eq!(probe, want);
 }
 
@@ -259,14 +261,15 @@ fn zizmor_vector_is_pinned_and_offline() {
 
 #[test]
 fn section4_build_vector_is_byte_exact() {
-    let build = candidate_build_argv(&ToolCatalog::pinned()).expect("build argv");
-    let want = argv_of(&[
+    let catalog = ToolCatalog::pinned();
+    let build = candidate_build_argv(&catalog).expect("build argv");
+    let mut want = argv_of(&[
         "mise",
         "--no-config",
         "--no-env",
         "--no-hooks",
         "exec",
-        "rust@1.98.1",
+        "rust@catalog-pin",
         "--",
         "mbx",
         "build",
@@ -277,6 +280,7 @@ fn section4_build_vector_is_byte_exact() {
         "--bin",
         "velnor-actions",
     ]);
+    want[5] = catalog.tool_spec(PinnedTool::Rust);
     assert_eq!(build, want);
 }
 
