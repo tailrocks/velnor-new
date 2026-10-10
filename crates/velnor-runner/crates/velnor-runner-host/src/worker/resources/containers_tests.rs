@@ -42,7 +42,7 @@ fn inspect_with_labels(labels: HashMap<String, String>) -> ContainerInspectRespo
 
 fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectResponse, HostError> {
     let labels = label_map(&spec.labels)?.ok_or(HostError::Ownership)?;
-    let budget = spec.resource_budget.ok_or(HostError::Config)?;
+    let budget = spec.resource_budget;
     let limits = if spec.privileged {
         budget.dind()
     } else {

@@ -34,8 +34,6 @@ pub(crate) use projection::{identity_labels_match, launch_identity_labels_match}
 pub use resource_budget::ResourceBudget;
 pub(crate) use resource_budget::ResourceBudgetConfig;
 #[cfg(test)]
-pub(crate) use resource_budget::bounded_host_limits;
-#[cfg(test)]
 pub(crate) use resource_budget::test_resource_budget;
 #[cfg(test)]
 mod projection_tests;
@@ -100,9 +98,8 @@ pub struct CreateProjection {
     pub open_stdin: bool,
     /// `container:<id>` joins that container's network namespace. Runner only.
     pub network_mode: Option<String>,
-    /// Validated CPU/memory budget. Identity-only plans may omit it; Docker
-    /// create projection rejects a missing budget.
-    pub(crate) resource_budget: Option<ResourceBudget>,
+    /// Validated CPU and memory budget required by every Docker create.
+    pub(crate) resource_budget: ResourceBudget,
 }
 
 /// One controller-owned host bind in a runner create projection.
@@ -165,7 +162,7 @@ pub fn runner_create(
         privileged: false,
         open_stdin: true,
         network_mode: None,
-        resource_budget: Some(resource_budget),
+        resource_budget,
     })
 }
 
@@ -229,7 +226,7 @@ pub fn dind_create(
         privileged: true,
         open_stdin: false,
         network_mode: None,
-        resource_budget: Some(resource_budget),
+        resource_budget,
     })
 }
 
@@ -264,9 +261,6 @@ pub(crate) fn dind_container_name(private_volume: &str) -> Result<String, HostEr
 pub fn bollard_create(spec: &CreateProjection) -> Result<BollardCreate, HostError> {
     if spec.platform != PLATFORM {
         return Err(HostError::ForbiddenMount);
-    }
-    if spec.resource_budget.is_none() {
-        return Err(HostError::Config);
     }
     let config = ContainerCreateBody {
         image: Some(spec.image.clone()),

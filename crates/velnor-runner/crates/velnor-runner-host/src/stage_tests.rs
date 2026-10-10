@@ -18,7 +18,7 @@ struct Fake {
     ids: Mutex<Vec<String>>,
     names: Mutex<HashMap<String, String>>,
     removed: Mutex<Vec<String>>,
-    budgets: Mutex<Vec<Option<ResourceBudget>>>,
+    budgets: Mutex<Vec<ResourceBudget>>,
     /// Fail the Nth call of this method name. `None` never fails.
     fail_at: Mutex<Option<(&'static str, u8)>>,
     counts: Mutex<HashMap<&'static str, u8>>,
@@ -51,7 +51,7 @@ impl Fake {
             .unwrap_or_default()
     }
 
-    fn budgets(&self) -> Vec<Option<ResourceBudget>> {
+    fn budgets(&self) -> Vec<ResourceBudget> {
         self.budgets
             .lock()
             .map(|guard| guard.clone())
@@ -192,7 +192,7 @@ async fn jit_stop_writes_stdin_after_both_starts() -> Result<(), HostError> {
         engine.events(),
         ["volumes", "create", "start", "create", "start", "jit"]
     );
-    assert_eq!(engine.budgets(), [Some(budget), Some(budget)]);
+    assert_eq!(engine.budgets(), [budget, budget]);
     Ok(())
 }
 

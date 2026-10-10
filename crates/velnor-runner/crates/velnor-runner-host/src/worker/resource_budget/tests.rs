@@ -115,12 +115,6 @@ fn emitted_host_config_serializes_cpu_and_memory_limits() -> Result<(), HostErro
     assert_eq!(serialized["MemorySwap"].as_i64(), Some(6_442_450_944));
     assert_eq!(serialized["CgroupnsMode"].as_str(), Some("private"));
     assert_eq!(serialized["Privileged"].as_bool(), Some(true));
-    let mut unbounded = spec;
-    unbounded.resource_budget = None;
-    assert_eq!(
-        crate::worker::bollard_create(&unbounded),
-        Err(HostError::Config)
-    );
     Ok(())
 }
 

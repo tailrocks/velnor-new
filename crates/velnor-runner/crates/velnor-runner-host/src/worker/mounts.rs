@@ -16,7 +16,7 @@ use crate::docker_spec::Mount;
 use crate::error::HostError;
 
 pub(super) fn host_config(spec: &CreateProjection) -> Result<HostConfig, HostError> {
-    let budget = spec.resource_budget.ok_or(HostError::Config)?;
+    let budget = spec.resource_budget;
     let mut mounts = docker_mounts(&spec.mounts)?.unwrap_or_default();
     mounts.extend(bind_mounts(spec)?);
     let limits = if spec.privileged {

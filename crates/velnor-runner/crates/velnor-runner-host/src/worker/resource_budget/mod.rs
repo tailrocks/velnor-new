@@ -8,8 +8,6 @@ const MILLICORES_PER_CPU: u64 = 1_000;
 const NANO_CPUS_PER_CPU: u64 = 1_000_000_000;
 const NANOS_PER_MILLICORE: u64 = NANO_CPUS_PER_CPU / MILLICORES_PER_CPU;
 const DOCKER_MIN_MEMORY_BYTES: u64 = 6_291_456;
-#[cfg(test)]
-const DOCKER_MIN_MEMORY_BYTES_I64: i64 = 6_291_456;
 
 /// TOML values for the runner and the private `DinD` container.
 ///
@@ -35,21 +33,6 @@ pub(crate) struct DockerResourceLimits {
     pub(crate) nano_cpus: i64,
     /// Docker `HostConfig.memory` in bytes.
     pub(crate) memory_bytes: i64,
-}
-
-/// Check that an inspected Docker `HostConfig` carries finite supported limits.
-#[cfg(test)]
-#[must_use]
-pub(crate) fn bounded_host_limits(
-    nano_cpus: Option<i64>,
-    memory_bytes: Option<i64>,
-    memory_swap_bytes: Option<i64>,
-) -> bool {
-    matches!(
-        (nano_cpus, memory_bytes, memory_swap_bytes),
-        (Some(cpu), Some(memory), Some(swap))
-            if cpu > 0 && memory >= DOCKER_MIN_MEMORY_BYTES_I64 && swap == memory
-    )
 }
 
 /// Limits for one complete job pair, after checked addition.
