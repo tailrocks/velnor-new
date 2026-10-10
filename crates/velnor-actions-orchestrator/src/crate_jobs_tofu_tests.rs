@@ -88,6 +88,7 @@ fn pure_tofu_group_renders_without_rust_setup() {
         &[String::new()],
         None,
         2,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1, "one job per tofu root");
@@ -161,6 +162,7 @@ fn mixed_group_keeps_the_rust_union() {
         &[],
         None,
         2,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1, "shared group renders once");
@@ -233,6 +235,7 @@ fn tofu_root_jobs_stage_lanes_by_max_parallel() {
         &[],
         None,
         2,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 3, "one job per root");
@@ -257,6 +260,7 @@ fn wide_cap_stages_nothing() {
         &[],
         None,
         5,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 2);
@@ -277,6 +281,7 @@ fn rust_jobs_never_stage() {
         &[],
         None,
         1,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 2);
@@ -314,6 +319,7 @@ fn first_tofu_obligation_declares_the_cap() {
         &[],
         None,
         3,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1);
@@ -361,6 +367,7 @@ fn all_tofu_groups_take_tofu_ids_mixed_keep_rust() {
         &[],
         None,
         2,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 2);

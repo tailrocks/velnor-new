@@ -44,6 +44,7 @@ fn id_and_display_prefixes_agree_per_partition() {
         &[],
         None,
         2,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 3, "rust plus tofu plus mixed");

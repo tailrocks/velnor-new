@@ -58,6 +58,7 @@ fn provider_restore_precedes_init_obligation() {
         &[],
         None,
         2,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1, "one job per tofu root");
@@ -99,6 +100,7 @@ fn provider_restore_keys_are_per_root() {
         &[],
         None,
         5,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 2);
@@ -138,6 +140,7 @@ fn rust_jobs_carry_no_provider_restore() {
         &[String::new()],
         None,
         2,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1);
@@ -163,6 +166,7 @@ fn mixed_job_restores_both_sources_and_providers() {
         &[String::new()],
         None,
         2,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1, "shared group renders once");

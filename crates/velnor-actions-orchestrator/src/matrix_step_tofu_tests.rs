@@ -106,8 +106,14 @@ fn tofu_step_names_render_through_tofu_table() {
 #[test]
 fn tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env() {
     use velnor_actions_rust::RUSTDOCFLAGS_ENV;
-    let step =
-        obligation_step(&tofu_obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
+    let step = obligation_step(
+        &tofu_obligation(),
+        &ToolCatalog::pinned(),
+        &[],
+        None,
+        env!("CARGO_PKG_VERSION"),
+    )
+    .expect("step");
     let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
         panic!("obligation must be a shell step");
     };
@@ -123,8 +129,14 @@ fn tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env() {
 
 #[test]
 fn tofu_obligation_step_carries_isolated_cache_dir() {
-    let step =
-        obligation_step(&tofu_obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
+    let step = obligation_step(
+        &tofu_obligation(),
+        &ToolCatalog::pinned(),
+        &[],
+        None,
+        env!("CARGO_PKG_VERSION"),
+    )
+    .expect("step");
     let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
         panic!("obligation must be a shell step");
     };
@@ -151,7 +163,14 @@ fn tofu_obligation_step_carries_isolated_cache_dir() {
 fn stackless_obligation_task_ids_keep_malformed_vocabulary() {
     let mut bad = tofu_obligation();
     bad.task_id = "bogus".to_owned();
-    let err = obligation_step(&bad, &ToolCatalog::pinned(), &[], None).expect_err("must fail");
+    let err = obligation_step(
+        &bad,
+        &ToolCatalog::pinned(),
+        &[],
+        None,
+        env!("CARGO_PKG_VERSION"),
+    )
+    .expect_err("must fail");
     assert!(err.to_string().contains("malformed_task_id"), "{err}");
 }
 
@@ -159,7 +178,13 @@ fn stackless_obligation_task_ids_keep_malformed_vocabulary() {
 fn tofu_obligation_rejects_legacy_root_alias() {
     let mut bad = tofu_obligation();
     bad.task_id = "stack/tofu/root/init/default".to_owned();
-    let err = obligation_step(&bad, &ToolCatalog::pinned(), &[], None)
-        .expect_err("legacy root key must fail closed");
+    let err = obligation_step(
+        &bad,
+        &ToolCatalog::pinned(),
+        &[],
+        None,
+        env!("CARGO_PKG_VERSION"),
+    )
+    .expect_err("legacy root key must fail closed");
     assert!(err.to_string().contains("noncanonical_root_key"), "{err}");
 }

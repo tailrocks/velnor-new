@@ -33,6 +33,25 @@ fn capture_exact_consumer_marked_workflow_before_size_guard()
         preparation.config.workflow.policy,
         velnor_actions_contract::WorkflowPolicy::ConsumerV1
     );
+    let task_helper_versions = preparation
+        .workflow
+        .ir
+        .jobs
+        .values()
+        .flat_map(|job| &job.steps)
+        .filter_map(|step| match &step.kind {
+            velnor_actions_contract::StepKind::TaskExecution {
+                report_helper_version,
+                ..
+            } => Some(report_helper_version.as_str()),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        task_helper_versions,
+        BTreeSet::from([CAPTURE_CONSUMER_RELEASE_VERSION]),
+        "every produced task wrapper must use the same validated consumer helper release"
+    );
     let configured_tasks = preparation
         .config
         .workflow
