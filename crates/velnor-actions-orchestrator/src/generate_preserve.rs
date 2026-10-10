@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 use std::{fs, io::Read};
 
 use velnor_actions_contract::{
-    DECLARED_GITHUB_FORMATS, MARKER_PREFIX, OLD_MARKER_PREFIX, is_generated_marker_line,
+    DECLARED_GITHUB_FORMATS, MARKER_PREFIX, OLD_MARKER_PREFIX, TASK_EXECUTION_MANIFEST_PATH,
+    is_generated_marker_line,
 };
 use velnor_actions_workflow_renderer::release_tree::RELEASE_TREE_PATHS;
 use velnor_actions_workflow_renderer::render::RenderedTree;
@@ -172,6 +173,7 @@ fn generator_owned(relative: &Path) -> bool {
             .iter()
             .map(|format| format.path)
             .chain(RELEASE_TREE_PATHS.iter().copied())
+            .chain(std::iter::once(TASK_EXECUTION_MANIFEST_PATH))
             .any(|path| {
                 Path::new(path)
                     .strip_prefix(".github")
