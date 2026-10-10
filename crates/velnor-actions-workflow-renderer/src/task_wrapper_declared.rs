@@ -2,8 +2,10 @@ use super::{
     ACTION_NAME_PREFIX, BTreeMap, DECLARED_TASK_ACTION_PREFIX, EXECUTION_DIGEST_INPUT,
     GENERATOR_VERSION_ENV, RUNNER_TEMP_EXPRESSION, RUNTIME_RUNNER_TEMP_ENV, RenderError,
     RenderedFile, Shape, Step, StepKind, TASK_EXECUTION_DIGEST_ENV, TaskExecutionRef, Yaml,
-    composite, marker, steps, task_script, toolchain_env,
+    composite, marker, steps, task_script,
 };
+
+use crate::toolchain_env;
 
 pub(super) fn validate_task_fields(
     argv: &[String],
