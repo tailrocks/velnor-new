@@ -98,24 +98,40 @@ impl<'a> NativeArtifactProvider<'a> {
     async fn verified_release(&self) -> Result<Arc<release::VerifiedRelease>, HostError> {
         let cache = VERIFIED_RELEASE.get_or_init(|| tokio::sync::Mutex::new(None));
         let mut guard = cache.lock().await;
-        if let Some(cached) = guard.as_ref()
-            && cached.key == self.key
-        {
-            return Ok(Arc::clone(&cached.release));
+        if let Some(release) = cached_release(guard.as_ref(), &self.key) {
+            return Ok(release);
         }
         let fetched =
             Arc::new(release::fetch_verified(&self.client, self.pat, &self.identity).await?);
-        if fetched.source_sha != self.key.source_sha
-            || fetched.authority_sha != self.key.source_sha
-            || fetched.archive_sha != fetched.manifest.archive_sha256
-        {
-            return Err(HostError::Identity);
-        }
+        validate_fetched_release(&self.key, &fetched)?;
         *guard = Some(CachedRelease {
             key: self.key.clone(),
             release: Arc::clone(&fetched),
         });
         Ok(fetched)
+    }
+}
+
+fn cached_release(
+    cached: Option<&CachedRelease>,
+    requested: &CacheKey,
+) -> Option<Arc<release::VerifiedRelease>> {
+    cached
+        .filter(|cached| &cached.key == requested)
+        .map(|cached| Arc::clone(&cached.release))
+}
+
+fn validate_fetched_release(
+    key: &CacheKey,
+    fetched: &release::VerifiedRelease,
+) -> Result<(), HostError> {
+    if fetched.source_sha != key.source_sha
+        || fetched.authority_sha != key.source_sha
+        || fetched.archive_sha != fetched.manifest.archive_sha256
+    {
+        Err(HostError::Identity)
+    } else {
+        Ok(())
     }
 }
 
@@ -152,26 +168,30 @@ fn image_binding_fingerprint(
 
 #[cfg(test)]
 mod tests {
-    use super::image_binding_fingerprint;
-    use crate::artifact_admission::release::VerifiedRelease;
+    use std::sync::Arc;
+
+    use super::{
+        CacheKey, CachedRelease, NativeArtifactProvider, cached_release,
+        image_binding_fingerprint, validate_fetched_release,
+    };
+    use crate::artifact_admission::{hash, release::VerifiedRelease};
     use crate::error::HostError;
 
-    #[test]
-    fn fingerprint_binds_archive_engine_root_and_runtime_id() -> Result<(), HostError> {
+    fn release(source: &str, authority: &str, archive_sha: &str) -> VerifiedRelease {
         let manifest = crate::artifact_admission::manifest::ProbeManifest {
-            source_commit: "a".repeat(40),
-            workflow_authority_sha: "a".repeat(40),
+            source_commit: source.to_owned(),
+            workflow_authority_sha: authority.to_owned(),
             platform: crate::artifact_admission::manifest::PLATFORM.to_owned(),
             archive_format: crate::artifact_admission::manifest::ARCHIVE_FORMAT.to_owned(),
             oci_index_sha256: "b".repeat(64),
             image_manifest_digest: format!("sha256:{}", "c".repeat(64)),
             config_digest: format!("sha256:{}", "d".repeat(64)),
-            archive_sha256: "e".repeat(64),
+            archive_sha256: archive_sha.to_owned(),
         };
-        let release = VerifiedRelease {
-            source_sha: manifest.source_commit.clone(),
-            authority_sha: manifest.workflow_authority_sha.clone(),
-            archive_sha: manifest.archive_sha256.clone(),
+        VerifiedRelease {
+            source_sha: source.to_owned(),
+            authority_sha: authority.to_owned(),
+            archive_sha: archive_sha.to_owned(),
             archive: Vec::new(),
             manifest,
             archive_identity: crate::artifact_admission::archive::ArchiveIdentity {
@@ -181,7 +201,76 @@ mod tests {
                 config_digest: format!("sha256:{}", "d".repeat(64)),
                 config: bollard::models::ContainerConfig::default(),
             },
+        }
+    }
+
+    #[test]
+    fn provider_factory_uses_only_the_current_compiled_pin_pair() -> Result<(), HostError> {
+        let Some(identity) = crate::compile_identity::compiled_release_identity() else {
+            assert_eq!(
+                NativeArtifactProvider::from_compiled_release_identity("ghp_test-token")
+                    .map(|_| ()),
+                Err(HostError::Identity)
+            );
+            return Ok(());
         };
+        let provider = NativeArtifactProvider::from_compiled_release_identity("ghp_test-token")?;
+        assert_eq!(provider.identity, identity);
+        assert_eq!(provider.key.source_sha, hash::lowercase_hex(identity.source_sha()));
+        assert_eq!(provider.key.helper_sha256, *identity.helper_sha256());
+        assert_eq!(provider.pat, "ghp_test-token");
+        for invalid in ["", "token\nvalue", &"x".repeat(4097)] {
+            assert_eq!(
+                NativeArtifactProvider::from_compiled_release_identity(invalid).map(|_| ()),
+                Err(HostError::Identity)
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cache_requires_both_the_compiled_source_and_helper_digest() {
+        let key = CacheKey {
+            source_sha: "a".repeat(40),
+            helper_sha256: [0x22; 32],
+        };
+        let cached = CachedRelease {
+            key: key.clone(),
+            release: Arc::new(release(&key.source_sha, &key.source_sha, &"b".repeat(64))),
+        };
+        assert!(cached_release(Some(&cached), &key).is_some());
+        let mut wrong_source = key.clone();
+        wrong_source.source_sha = "c".repeat(40);
+        let mut wrong_helper = key.clone();
+        wrong_helper.helper_sha256[0] ^= 1;
+        assert!(cached_release(Some(&cached), &wrong_source).is_none());
+        assert!(cached_release(Some(&cached), &wrong_helper).is_none());
+    }
+
+    #[test]
+    fn fetched_release_must_match_the_compiled_source_and_manifest_archive() {
+        let key = CacheKey {
+            source_sha: "a".repeat(40),
+            helper_sha256: [0x22; 32],
+        };
+        let valid = release(&key.source_sha, &key.source_sha, &"b".repeat(64));
+        assert_eq!(validate_fetched_release(&key, &valid), Ok(()));
+        assert_eq!(
+            validate_fetched_release(&key, &release(&"c".repeat(40), &key.source_sha, &"b".repeat(64))),
+            Err(HostError::Identity)
+        );
+        assert_eq!(
+            validate_fetched_release(&key, &release(&key.source_sha, &"c".repeat(40), &"b".repeat(64))),
+            Err(HostError::Identity)
+        );
+        let mut wrong_archive = release(&key.source_sha, &key.source_sha, &"b".repeat(64));
+        wrong_archive.archive_sha = "c".repeat(64);
+        assert_eq!(validate_fetched_release(&key, &wrong_archive), Err(HostError::Identity));
+    }
+
+    #[test]
+    fn fingerprint_binds_archive_engine_root_and_runtime_id() -> Result<(), HostError> {
+        let release = release(&"a".repeat(40), &"a".repeat(40), &"e".repeat(64));
         let expected = image_binding_fingerprint(&release, "engine", "/data", "sha256:runtime");
         if expected == image_binding_fingerprint(&release, "other", "/data", "sha256:runtime")
             || expected == image_binding_fingerprint(&release, "engine", "/other", "sha256:runtime")
