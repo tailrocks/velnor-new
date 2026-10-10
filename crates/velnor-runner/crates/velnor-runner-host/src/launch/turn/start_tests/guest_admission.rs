@@ -45,7 +45,7 @@ async fn unavailable_guest_sample_blocks_acquire_and_worker_start() -> Result<()
     assert_eq!(workers, [] as [crate::worker::Started; 0]);
     assert_eq!(
         journal.rows().await.map_err(|error| error.to_string())?,
-        [] as [reconcile::IntentRow; 0]
+        [] as [crate::IntentRow; 0]
     );
     absent(&scratch.file())
 }
@@ -183,7 +183,7 @@ async fn no_fit_case(name: &str, guest: GuestTotals, budget: ResourceBudget) -> 
     assert_eq!(workers, [] as [crate::worker::Started; 0]);
     assert_eq!(
         journal.rows().await.map_err(|error| error.to_string())?,
-        [] as [reconcile::IntentRow; 0]
+        [] as [crate::IntentRow; 0]
     );
     absent(&scratch.file())
 }
