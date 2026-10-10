@@ -280,6 +280,27 @@ fn native_build_task_rejects_cargo_source_install_fallback() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn native_build_task_rejects_unsupported_mise_lockfile_versions() -> TestResult {
+    for version in [2, 4] {
+        let repo = make_repo(&config_with_build("hosted"))?;
+        write_native_source_fixture(repo.path())?;
+        let lock_path = repo.path().join("mise.lock");
+        let lock = fs::read_to_string(&lock_path)?.replace(
+            "[tools]",
+            &format!("lockfile_version = {version}\n\n[tools]"),
+        );
+        fs::write(lock_path, lock)?;
+
+        let error = prepare(repo.path()).expect_err("unsupported Mise lock version must fail");
+        assert!(
+            error.to_string().contains("build_task_mise_lock_root"),
+            "{error}"
+        );
+    }
+    Ok(())
+}
+
 /// Synthetic source-bound task/tool fixture for the resolver integration.
 /// Artifact digests and URLs test the lock projection shape only; upstream
 /// provenance is separately reviewed against the repository's real Mise lock.
@@ -362,6 +383,8 @@ run = "cargo xtask desktop verify"
     fs::write(
         root.join("mise.lock"),
         r#"
+lockfile_version = 3
+
 [tools]
 "aqua:nextest-rs/nextest/cargo-nextest" = [{ version = "0.9.140", backend = "aqua:nextest-rs/nextest/cargo-nextest", "platforms.macos-arm64" = { url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.140/cargo-nextest-0.9.140-universal-apple-darwin.tar.gz", checksum = "sha256:58e0a722f9444078fab447783f322acf15a2a771ba785b3fbbe8bacda31c3df9" } }]
 "github:boltffi/boltffi" = [{ version = "0.30.1", backend = "github:boltffi/boltffi", options = { matching_regex = '^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$' }, "platforms.macos-arm64" = { url = "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-darwin-aarch64.tar.gz", checksum = "sha256:ce3a47b5c398cbb9c327098a612b431f30db15d353d62cee4e4637540fa8321a" } }]

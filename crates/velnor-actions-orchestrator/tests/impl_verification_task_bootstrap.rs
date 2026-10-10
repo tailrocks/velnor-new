@@ -48,6 +48,8 @@ tools = { "github:example/linter" = "1.2.3" }
     fs::write(
         root.path().join("mise.lock"),
         r#"
+lockfile_version = 3
+
 [tools]
 "aqua:vendor/tool" = [
   { version = "2.3.4", backend = "aqua:vendor/tool", "platforms.linux-x64" = { url = "https://github.com/vendor/tool/releases/download/v2.3.4/tool-linux-x64.tar.gz", checksum = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }, "platforms.macos-arm64" = { url = "https://github.com/vendor/tool/releases/download/v2.3.4/tool-darwin-arm64.tar.gz", checksum = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" } }
@@ -62,6 +64,32 @@ tools = { "github:example/linter" = "1.2.3" }
     )
     .expect("write project lock with unrelated Cargo entry");
     root
+}
+
+#[test]
+fn verification_task_rejects_unsupported_mise_lockfile_versions() {
+    for version in [2, 4] {
+        let root = tool_root();
+        let lock_path = root.path().join("mise.lock");
+        let lock = fs::read_to_string(&lock_path)
+            .expect("read lock fixture")
+            .replace(
+                "lockfile_version = 3",
+                &format!("lockfile_version = {version}"),
+            );
+        fs::write(lock_path, lock).expect("write unsupported lock version");
+        let checks = check_tool_inputs(root.path());
+
+        let error = resolve_verification_tools(
+            &checks,
+            &verification_task("verify", VerificationRunner::LinuxX64),
+        )
+        .expect_err("unsupported Mise lock version must fail");
+        assert!(
+            error.to_string().contains("verification_mise_lock_root"),
+            "{error}"
+        );
+    }
 }
 
 #[test]
@@ -192,7 +220,7 @@ fn nested_mbx_task_uses_its_declared_config_when_root_has_same_task_name() {
 
 fn mbx_lock(version: &str) -> String {
     format!(
-        "[tools]\n\"mr-boxington\" = [{{ version = \"{version}\", backend = \"packslip:github.com/jdx/mr-boxington\", \"platforms.linux-x64\" = {{ url = \"https://github.com/jdx/mr-boxington/releases/download/v{version}/mbx-x86_64-unknown-linux-gnu.tar.gz\", checksum = \"sha256:{}\" }} }}]\n",
+        "lockfile_version = 3\n\n[tools]\n\"mr-boxington\" = [{{ version = \"{version}\", backend = \"packslip:github.com/jdx/mr-boxington\", \"platforms.linux-x64\" = {{ url = \"https://github.com/jdx/mr-boxington/releases/download/v{version}/mbx-x86_64-unknown-linux-gnu.tar.gz\", checksum = \"sha256:{}\" }} }}]\n",
         "a".repeat(64)
     )
 }

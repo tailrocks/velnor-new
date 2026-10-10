@@ -243,7 +243,7 @@ fn validate_config_shape(config: &NativeMiseConfig) -> Result<(), OrchestratorEr
 }
 
 fn validate_lock_shape(lock: &NativeMiseLock) -> Result<(), OrchestratorError> {
-    if !lock.valid_shape || lock.root_keys.len() != 1 || lock.root_keys[0] != "tools" {
+    if !lock.has_supported_root_shape() {
         return Err(failure("build_task_mise_lock_root"));
     }
     Ok(())

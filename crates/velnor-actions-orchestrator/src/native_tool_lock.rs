@@ -5,8 +5,20 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct NativeMiseLock {
     pub(crate) root_keys: Vec<String>,
+    pub(crate) lockfile_version: Option<i64>,
     pub(crate) tools: BTreeMap<String, NativeLockedTool>,
     pub(crate) valid_shape: bool,
+}
+
+impl NativeMiseLock {
+    /// Whether the lock uses the supported Mise v3 root schema.
+    pub(crate) fn has_supported_root_shape(&self) -> bool {
+        self.valid_shape
+            && self.lockfile_version == Some(3)
+            && self.root_keys.len() == 2
+            && self.root_keys.iter().any(|key| key == "lockfile_version")
+            && self.root_keys.iter().any(|key| key == "tools")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -55,6 +67,9 @@ pub(crate) fn parse_native_mise_lock(value: &toml::Value) -> Option<NativeMiseLo
     let root = value.as_table()?;
     let mut lock = NativeMiseLock {
         root_keys: root.keys().cloned().collect(),
+        lockfile_version: root
+            .get("lockfile_version")
+            .and_then(toml::Value::as_integer),
         valid_shape: true,
         ..NativeMiseLock::default()
     };
