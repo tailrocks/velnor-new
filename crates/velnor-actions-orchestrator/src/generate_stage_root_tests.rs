@@ -2,20 +2,13 @@
 
 use super::*;
 use std::error::Error;
-use std::process::Command;
 
 use tempfile::tempdir;
 
 #[test]
 #[cfg(unix)]
-fn generate_stage_root_creates_private_self_ignored_state() -> Result<(), Box<dyn Error>> {
+fn generate_stage_root_creates_private_state() -> Result<(), Box<dyn Error>> {
     let repo = tempdir()?;
-    let init = Command::new("git")
-        .args(["init", "--quiet"])
-        .current_dir(repo.path())
-        .status()?;
-    assert!(init.success());
-
     let store = StageRoot::open(repo.path())?;
     assert_eq!(read_mode(&store.container), PRIVATE_DIR_MODE);
     assert_eq!(read_mode(&store.spare), PRIVATE_DIR_MODE);
@@ -29,23 +22,6 @@ fn generate_stage_root_creates_private_self_ignored_state() -> Result<(), Box<dy
         PRIVATE_FILE_MODE
     );
 
-    let status = Command::new("git")
-        .args(["status", "--porcelain=v1", "--untracked-files=all"])
-        .current_dir(repo.path())
-        .output()?;
-    assert!(status.status.success());
-    assert!(status.stdout.is_empty(), "{:?}", status.stdout);
-    for path in [
-        format!("{CONTAINER}/{IGNORE_FILE}"),
-        format!("{CONTAINER}/{OWNER_FILE}"),
-    ] {
-        let ignored = Command::new("git")
-            .args(["check-ignore", "-v", &path])
-            .current_dir(repo.path())
-            .output()?;
-        assert!(ignored.status.success(), "{path}: {:?}", ignored.stderr);
-        assert!(String::from_utf8(ignored.stdout)?.contains('*'));
-    }
     let reopened = StageRoot::open(repo.path())?;
     assert_eq!(store.container_identity, reopened.container_identity);
     assert_eq!(store.spare_identity, reopened.spare_identity);

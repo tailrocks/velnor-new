@@ -240,13 +240,13 @@ platforms fail before creating staging state. Linux requires kernel 5.8 or
 newer with `STATX_MNT_ID` reported; Ubuntu 22.04 and newer require a compatible
 running kernel, or generation fails closed before staging. `plan` and preview
 generation do not create or modify it. In-place generation checks that the
-repository, `.github`, staging state, and real output directories remain on one mount,
-including same-device mount boundaries, before staging, before exchange, and
+repository, `.github`, staging state, and real output directories remain on
+one mount, including same-device mount boundaries, before staging, before exchange, and
 before cleanup. Mount topology must remain stable during the operation because
 cleanup uses path-based removal. The mount identity source and cleanup-failure
-behavior are specified in the generated-file contract. In-place generation requires an
-existing `.github` root and every real directory below it to be owned by the
-caller, as specified in the generated-file contract. Velnor MUST not create
+behavior are specified in the generated-file contract. If `.github` exists,
+its root and every real directory below it must be owned by the caller, as
+specified in the generated-file contract. Velnor MUST not create
 `.mise/tasks` or any other generated repository path. Before output replacement
 it MUST verify byte-for-byte that `rust-toolchain.toml`,
 `mise.toml`, and `mise.lock` remain unchanged. `generate --output-dir PATH`
