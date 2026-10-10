@@ -13,6 +13,11 @@ fn strings(items: &[&str]) -> Vec<OsString> {
     items.iter().map(OsString::from).collect()
 }
 
+fn with_pinned_rust(mut argv: Vec<OsString>, catalog: &ToolCatalog) -> Vec<OsString> {
+    argv[5] = OsString::from(catalog.tool_spec(PinnedTool::Rust));
+    argv
+}
+
 #[test]
 fn archive_argv_is_byte_exact_per_driver() -> Result<(), String> {
     assert_eq!(ARCHIVE_FILE, "target/nextest/tests.tar.zst");
@@ -25,32 +30,35 @@ fn archive_argv_is_byte_exact_per_driver() -> Result<(), String> {
     .map_err(|err| err.to_string())?;
     assert_eq!(
         mbx.argv(&pinned()),
-        strings(&[
-            "mise",
-            "--no-config",
-            "--no-env",
-            "--no-hooks",
-            "exec",
-            "rust@1.98.1",
-            "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
-            "--",
-            "mbx",
-            "nextest",
-            "archive",
-            "--package",
-            "demo",
-            "--profile",
-            "ci",
-            "--cargo-profile",
-            "test",
-            "--locked",
-            "--archive-file",
-            "target/nextest/tests.tar.zst",
-            "--features",
-            "a,b",
-            "--target",
-            "x86_64-unknown-linux-gnu",
-        ])
+        with_pinned_rust(
+            strings(&[
+                "mise",
+                "--no-config",
+                "--no-env",
+                "--no-hooks",
+                "exec",
+                "rust@catalog-pin",
+                "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
+                "--",
+                "mbx",
+                "nextest",
+                "archive",
+                "--package",
+                "demo",
+                "--profile",
+                "ci",
+                "--cargo-profile",
+                "test",
+                "--locked",
+                "--archive-file",
+                "target/nextest/tests.tar.zst",
+                "--features",
+                "a,b",
+                "--target",
+                "x86_64-unknown-linux-gnu",
+            ]),
+            &pinned()
+        )
     );
     let cargo = NextestArchive::new(NextestDriver::Cargo, "demo", &[], None)
         .map_err(|err| err.to_string())?;
@@ -79,28 +87,31 @@ fn list_argv_is_byte_exact() -> Result<(), String> {
     let list = NextestList::new(NextestDriver::Mbx, partition);
     assert_eq!(
         list.argv(&pinned()),
-        strings(&[
-            "mise",
-            "--no-config",
-            "--no-env",
-            "--no-hooks",
-            "exec",
-            "rust@1.98.1",
-            "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
-            "--",
-            "mbx",
-            "nextest",
-            "list",
-            "--profile",
-            "ci",
-            "--archive-file",
-            "target/nextest/tests.tar.zst",
-            "--locked",
-            "--message-format",
-            "json",
-            "--partition",
-            "hash:2/4",
-        ])
+        with_pinned_rust(
+            strings(&[
+                "mise",
+                "--no-config",
+                "--no-env",
+                "--no-hooks",
+                "exec",
+                "rust@catalog-pin",
+                "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
+                "--",
+                "mbx",
+                "nextest",
+                "list",
+                "--profile",
+                "ci",
+                "--archive-file",
+                "target/nextest/tests.tar.zst",
+                "--locked",
+                "--message-format",
+                "json",
+                "--partition",
+                "hash:2/4",
+            ]),
+            &pinned()
+        )
     );
     Ok(())
 }
@@ -119,30 +130,33 @@ fn run_argv_is_byte_exact_with_no_tests_fail() -> Result<(), String> {
     let argv = run.argv(&pinned());
     assert_eq!(
         argv,
-        strings(&[
-            "mise",
-            "--no-config",
-            "--no-env",
-            "--no-hooks",
-            "exec",
-            "rust@1.98.1",
-            "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
-            "--",
-            "mbx",
-            "nextest",
-            "run",
-            "--profile",
-            "ci",
-            "--archive-file",
-            "target/nextest/tests.tar.zst",
-            "--extract-to",
-            "$RUNNER_TEMP/velnor/nextest/m-0123456789abcdef/shard-1-of-1",
-            "--locked",
-            "--no-tests",
-            "fail",
-            "--partition",
-            "hash:1/1",
-        ])
+        with_pinned_rust(
+            strings(&[
+                "mise",
+                "--no-config",
+                "--no-env",
+                "--no-hooks",
+                "exec",
+                "rust@catalog-pin",
+                "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
+                "--",
+                "mbx",
+                "nextest",
+                "run",
+                "--profile",
+                "ci",
+                "--archive-file",
+                "target/nextest/tests.tar.zst",
+                "--extract-to",
+                "$RUNNER_TEMP/velnor/nextest/m-0123456789abcdef/shard-1-of-1",
+                "--locked",
+                "--no-tests",
+                "fail",
+                "--partition",
+                "hash:1/1",
+            ]),
+            &pinned()
+        )
     );
     Ok(())
 }
@@ -264,7 +278,7 @@ fn mbx_nextest_commands_use_action_owned_pinned_mbx() -> Result<(), String> {
         archive_command
             .argv()
             .iter()
-            .any(|arg| arg == "rust@1.98.1")
+            .any(|arg| arg == &catalog.tool_spec(PinnedTool::Rust))
     );
     assert!(
         archive_command
