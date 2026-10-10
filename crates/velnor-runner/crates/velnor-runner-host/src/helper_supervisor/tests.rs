@@ -73,15 +73,16 @@ impl Drop for TestScript {
 
 #[tokio::test]
 async fn accepts_only_the_exact_success_response() -> Result<(), HostError> {
-    let helper =
-        TestScript::new("#!/bin/sh\nprintf '%s' '{\"schema\":1,\"result\":\"verified\"}'\n")?;
+    let helper = TestScript::new(
+        "#!/bin/sh\nrequest=$(cat) || exit 1\n[ \"$request\" = '{}' ] || exit 1\nprintf '%s' '{\"schema\":1,\"result\":\"verified\"}'\n",
+    )?;
     run_helper(helper.path(), b"{}".to_vec()).await
 }
 
 #[tokio::test]
 async fn rejects_success_with_extra_response_fields() -> Result<(), HostError> {
     let helper = TestScript::new(
-        "#!/bin/sh\nprintf '%s' '{\"schema\":1,\"result\":\"verified\",\"ok\":true}'\n",
+        "#!/bin/sh\nrequest=$(cat) || exit 1\n[ \"$request\" = '{}' ] || exit 1\nprintf '%s' '{\"schema\":1,\"result\":\"verified\",\"ok\":true}'\n",
     )?;
     assert_eq!(
         run_helper(helper.path(), b"{}".to_vec()).await,
