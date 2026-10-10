@@ -34,6 +34,10 @@ fn task_execution_resolver_requires_runner_gate_and_keeps_stdout_data_only()
         &[
             ("VELNOR_INTERNAL_OP", "resolve-task-execution-v1"),
             ("RUNNER_TEMP", runner_temp.to_str().unwrap_or("/")),
+            (
+                "VELNOR_RUNTIME_RUNNER_TEMP",
+                runner_temp.to_str().unwrap_or("/"),
+            ),
             ("GITHUB_WORKSPACE", workspace.to_str().unwrap_or("/")),
             ("GITHUB_RUN_ID", "12345"),
             ("GITHUB_RUN_ATTEMPT", "1"),
@@ -60,6 +64,35 @@ fn task_execution_resolver_requires_runner_gate_and_keeps_stdout_data_only()
     assert!(
         !stderr.contains(&execution_digest),
         "digest is not diagnostic output"
+    );
+
+    let mismatch = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "resolve-task-execution-v1"),
+            ("RUNNER_TEMP", runner_temp.to_str().unwrap_or("/")),
+            (
+                "VELNOR_RUNTIME_RUNNER_TEMP",
+                workspace.to_str().unwrap_or("/"),
+            ),
+            ("GITHUB_WORKSPACE", workspace.to_str().unwrap_or("/")),
+            ("GITHUB_RUN_ID", "12345"),
+        ],
+        &workspace,
+    )?;
+    assert_eq!(code(&mismatch), 1);
+    assert!(
+        mismatch.stdout.is_empty(),
+        "mismatch emits no partial frame"
+    );
+    let mismatch_stderr = String::from_utf8_lossy(&mismatch.stderr);
+    assert!(
+        mismatch_stderr.contains("runner_temp_binding_mismatch"),
+        "unexpected runner-temp mismatch diagnostic: {mismatch_stderr}"
+    );
+    assert!(
+        !mismatch_stderr.contains(runner_temp.to_str().unwrap_or("/")),
+        "runner path must not appear in diagnostics"
     );
 
     cleanup(&temp);

@@ -218,6 +218,71 @@ fn resolver_emits_the_bound_record_without_altering_plan_data() {
     assert_eq!(fields[5], record.matrix_key);
     assert_eq!(fields[6], record.report_helper_version);
     assert_eq!(fields.last(), Some(&"END"));
+    assert!(fields.iter().all(|field| !field.contains("${{")));
+    let argv_count = fields[9].parse::<usize>().expect("argv count");
+    assert_eq!(
+        &fields[10..10 + argv_count],
+        record.argv.iter().map(String::as_str).collect::<Vec<_>>()
+    );
+    let env_count_position = 10 + argv_count;
+    let env_count = fields[env_count_position]
+        .parse::<usize>()
+        .expect("environment count");
+    let env_start = env_count_position + 1;
+    let resolved_env = fields[env_start..fields.len() - 1]
+        .chunks_exact(2)
+        .map(|pair| (pair[0], pair[1]))
+        .collect::<BTreeMap<_, _>>();
+    assert_eq!(resolved_env.len(), env_count);
+    let runner_temp = fixture
+        .runner_temp
+        .path()
+        .to_str()
+        .expect("UTF-8 runner temp");
+    assert_eq!(
+        resolved_env["MISE_RUSTUP_HOME"],
+        format!("{runner_temp}/velnor/rustup")
+    );
+    assert_eq!(
+        resolved_env["MISE_CARGO_HOME"],
+        format!("{runner_temp}/velnor/cargo")
+    );
+    assert_eq!(resolved_env["RUSTDOCFLAGS"], "-D warnings");
+    assert_eq!(
+        record.execution_digest,
+        record
+            .computed_execution_digest()
+            .expect("original execution digest")
+    );
+}
+
+#[test]
+fn resolver_rejects_unrecognized_template_expression() {
+    let error =
+        resolve_runner_temp_expression("${{ github.workspace }}/velnor/cargo", "/runner/_temp")
+            .expect_err("unknown runtime template is rejected");
+    assert_error(&error, "unsupported_task_execution_expression");
+}
+
+#[test]
+fn resolver_rejects_unclosed_template_expression() {
+    let error = resolve_runner_temp_expression("${{ runner.temp/velnor/cargo", "/runner/_temp")
+        .expect_err("unclosed runtime template is rejected");
+    assert_error(&error, "malformed_task_execution_expression");
+}
+
+#[test]
+fn resolver_requires_runner_temp_to_match_the_generated_action_binding() {
+    let valid = Path::new("/runner/_temp");
+    validate_runner_temp_binding(valid, valid).expect("matching runner temp");
+
+    let error = validate_runner_temp_binding(valid, Path::new("/other/_temp"))
+        .expect_err("mismatched runner context rejected");
+    assert_error(&error, "runner_temp_binding_mismatch");
+
+    let error = validate_runner_temp_binding(valid, Path::new("relative/temp"))
+        .expect_err("relative rendered value rejected");
+    assert_error(&error, "runner_paths_must_be_absolute");
 }
 
 #[test]
