@@ -112,10 +112,10 @@ fn capture_exact_consumer_marked_workflow_before_size_guard()
             file.bytes.len()
         );
     }
-    let tree = capture
-        .tree
-        .as_ref()
-        .ok_or("complete generated tree was not captured before the size guard")?;
+    let tree = capture.tree.as_ref().ok_or_else(|| match &rendered {
+        Err(error) => format!("render failed before full-tree capture: {error}"),
+        Ok(_) => "complete generated tree was not captured before the size guard".to_owned(),
+    })?;
     let tree_bytes = write_tree_capture(tree, &output)?;
     let validation_runtime = output.join("validation-runtime");
     std::fs::create_dir_all(&validation_runtime)?;
