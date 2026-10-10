@@ -109,7 +109,7 @@ fn required_files_fixture_reports_exactly_one_missing() {
     let present: Vec<&str> = owned.iter().map(String::as_str).collect();
     assert_eq!(missing_required(&present), vec!["clippy.toml"]);
     let complete: Vec<&str> = REQUIRED_FILES.to_vec();
-    assert!(missing_required(&complete).is_empty());
+    assert_eq!(missing_required(&complete), [] as [&str; 0]);
 }
 
 #[test]

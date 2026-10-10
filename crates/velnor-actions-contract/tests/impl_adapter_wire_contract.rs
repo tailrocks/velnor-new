@@ -75,7 +75,7 @@ fn plan_carries_edges_through_validate() -> Result<(), ContractError> {
 fn matrix_entry_carries_declared_outputs_and_test_run() -> Result<(), ContractError> {
     let run_key = run_key_for_ci(32, 1);
     let mut entry = sample_entry(&run_key)?;
-    assert!(entry.declared_outputs.is_empty());
+    assert_eq!(entry.declared_outputs, [] as [std::string::String; 0]);
     assert!(entry.test_run.is_empty());
     entry.validate(&run_key)?;
     entry.declared_outputs = vec!["target/report.json".to_owned()];
