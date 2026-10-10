@@ -29,6 +29,25 @@ fn lock_text() -> String {
     )
 }
 
+/// Sanitized CBA `mise.lock` fnox entry with its valid provenance extension.
+fn cba_fnox_lock_text(provenance_verified: &str) -> String {
+    format!(
+        r#"[[tools.fnox]]
+version = "1.35.1"
+backend = "github:jdx/fnox"
+
+[tools.fnox."platforms.macos-arm64"]
+checksum = "{}"
+url = "https://example.invalid/fnox-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.example.invalid/repos/jdx/fnox/releases/assets/1"
+provenance = "github-attestations"
+provenance_verified = {}
+"#,
+        checksum(&"a".repeat(64)),
+        provenance_verified,
+    )
+}
+
 #[test]
 fn parses_v3_entries_with_platform_checksums() -> Result<(), String> {
     let lock = parse_mise_lockfile(&lock_text())?;
@@ -77,6 +96,60 @@ fn structural_garbage_fails_the_parse() {
     }
     assert!(parse_mise_lockfile("").is_ok());
     assert!(parse_mise_lockfile("# only a comment\n").is_ok());
+}
+
+#[test]
+fn ignores_boolean_provenance_extension_and_keeps_modeled_fields_strict() -> Result<(), String> {
+    for value in ["true", "false"] {
+        let lock = parse_mise_lockfile(&cba_fnox_lock_text(value))?;
+        let fnox = lock.tools.get("fnox").ok_or("fnox entry")?;
+        assert_eq!(fnox.version, "1.35.1");
+        assert_eq!(
+            fnox.checksums.get("macos-arm64").map(String::as_str),
+            Some(checksum(&"a".repeat(64)).as_str())
+        );
+    }
+
+    let valid = cba_fnox_lock_text("true");
+    let checksum_setting = format!("checksum = \"{}\"", checksum(&"a".repeat(64)));
+    let malformed = [
+        (
+            "bareword extension",
+            valid.replace("provenance_verified = true", "provenance_verified = yes"),
+        ),
+        (
+            "extension without equals",
+            valid.replace("provenance_verified = true", "provenance_verified true"),
+        ),
+        (
+            "boolean version",
+            valid.replace("version = \"1.35.1\"", "version = true"),
+        ),
+        (
+            "integer version",
+            valid.replace("version = \"1.35.1\"", "version = 123"),
+        ),
+        (
+            "array version",
+            valid.replace("version = \"1.35.1\"", "version = []"),
+        ),
+        (
+            "boolean checksum",
+            valid.replace(&checksum_setting, "checksum = false"),
+        ),
+        (
+            "integer checksum",
+            valid.replace(&checksum_setting, "checksum = 123"),
+        ),
+        (
+            "array checksum",
+            valid.replace(&checksum_setting, "checksum = []"),
+        ),
+    ];
+    for (case, text) in malformed {
+        assert!(parse_mise_lockfile(&text).is_err(), "must reject {case}");
+    }
+    Ok(())
 }
 
 #[test]
