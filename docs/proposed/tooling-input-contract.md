@@ -236,9 +236,11 @@ in-place generation only, it may retain the private, self-ignored
 persistent same-filesystem spare; cleanup removes spare children but keeps the
 container and spare root. This state is not product output. In-place generation
 requires atomic directory exchange and is supported on Linux and macOS; other
-platforms fail before creating staging state. `plan` and preview generation do
-not create or modify it. In-place generation checks that the repository,
-`.github`, staging state, and real output directories remain on one mount,
+platforms fail before creating staging state. Linux requires kernel 5.8 or
+newer with `STATX_MNT_ID` reported; Ubuntu 22.04 and newer require a compatible
+running kernel, or generation fails closed before staging. `plan` and preview
+generation do not create or modify it. In-place generation checks that the
+repository, `.github`, staging state, and real output directories remain on one mount,
 including same-device mount boundaries, before staging, before exchange, and
 before cleanup. Mount topology must remain stable during the operation because
 cleanup uses path-based removal. The mount identity source and cleanup-failure

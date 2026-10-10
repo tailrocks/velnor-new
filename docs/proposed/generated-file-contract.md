@@ -161,7 +161,10 @@ generate MUST render into a staging tree and validate every output before
 publishing. For in-place generation only, the orchestrator may retain the
 private, self-ignored `.github.velnor-stage/` runtime container at the Git root.
 In-place generation requires atomic directory exchange and is supported on
-Linux and macOS; other platforms fail before creating staging state. Preview
+Linux and macOS; other platforms fail before creating staging state. Linux
+requires kernel 5.8 or newer and `statx` reporting `STATX_MNT_ID`. Ubuntu
+22.04 and newer are supported when the running kernel reports this field;
+older kernels or missing mount identity fail closed before staging. Preview
 generation does not use this restriction.
 It contains a root-bound owner record and one persistent same-filesystem spare
 directory; generation clears spare children but never removes or recreates
