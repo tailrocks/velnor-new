@@ -128,11 +128,12 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
             with["task_id"],
             format!("stack/rust/crate-{task_index}/test/default")
         );
-        assert_eq!(with["execution_digest"].len(), 64);
+        assert_eq!(with["execution_digest"].len(), 67);
         assert!(
-            with["execution_digest"]
-                .bytes()
-                .all(|byte| byte.is_ascii_hexdigit())
+            with["execution_digest"].starts_with("b3-")
+                && with["execution_digest"][3..]
+                    .bytes()
+                    .all(|byte| byte.is_ascii_hexdigit())
         );
         assert!(!action_file.bytes.contains(HOSTILE_TASK_ARGUMENT));
         assert!(!action_file.bytes.contains("inputs.argv_"));
@@ -285,38 +286,41 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
     std::fs::create_dir_all(&helper_dir).expect("create fake runner temp");
 
     let helper = helper_dir.join(format!("velnor-actions-{VERSION}"));
+    let task_runner = test_root.join("task-runner");
     let frame_path = test_root.join("frame.bin");
     let call_log = test_root.join("helper-calls.log");
-    let sentinel = test_root.join("shell-injection-ran");
-    let cargo_home = runner_temp.join("velnor/cargo").display().to_string();
-    let payload = format!("$(touch {}; printf injected)", sentinel.display());
-    let expected_execution_digest = "a".repeat(64);
-    let plan_digest = "b".repeat(64);
-    let task_command = format!(
-        "test \"$MISE_CARGO_HOME\" = \"$EXPECTED_HOME\" && test \"$PAYLOAD\" = '{}'",
-        payload
-    );
+    let injection_marker = test_root.join("shell-injection-ran");
+    let task_started_marker = test_root.join("task-started");
+    let payload = format!("$(touch {}; printf injected)", injection_marker.display());
+    let expected_execution_digest = format!("b3-{}", "a".repeat(64));
+    let plan_digest = format!("b3-{}", "b".repeat(64));
+    std::fs::write(
+        &task_runner,
+        b"#!/bin/sh\nprintf '%s' \"$1\"\n: > \"$TASK_STARTED_MARKER\"\n",
+    )
+    .expect("write fixed argv probe");
+    let mut task_permissions = std::fs::metadata(&task_runner)
+        .expect("inspect fixed argv probe")
+        .permissions();
+    task_permissions.set_mode(0o700);
+    std::fs::set_permissions(&task_runner, task_permissions)
+        .expect("make fixed argv probe executable");
     let fields = vec![
         "VELNOR-TASK-EXECUTION-V1".to_owned(),
-        "task/test".to_owned(),
+        "stack/rust/crate-0/test/default".to_owned(),
         expected_execution_digest.clone(),
         plan_digest,
-        "matrix/test".to_owned(),
-        "default".to_owned(),
+        "stack:rust|task:stack/rust/crate-0/test/default".to_owned(),
+        "m-0123456789abcdef".to_owned(),
         VERSION.to_owned(),
         "0".to_owned(),
         String::new(),
-        "3".to_owned(),
-        "sh".to_owned(),
-        "-c".to_owned(),
-        task_command,
-        "3".to_owned(),
-        "EXPECTED_HOME".to_owned(),
-        cargo_home.to_owned(),
-        "MISE_CARGO_HOME".to_owned(),
-        cargo_home.to_owned(),
-        "PAYLOAD".to_owned(),
+        "2".to_owned(),
+        task_runner.display().to_string(),
         payload,
+        "1".to_owned(),
+        "TASK_STARTED_MARKER".to_owned(),
+        task_started_marker.display().to_string(),
         "END".to_owned(),
     ];
     let encode_frame = |fields: &[String]| {
@@ -349,7 +353,7 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
             .env(super::RUNTIME_RUNNER_TEMP_ENV, &runner_temp)
             .env(super::GENERATOR_VERSION_ENV, VERSION)
             .env(super::TASK_EXECUTION_DIGEST_ENV, &expected_execution_digest)
-            .env("VELNOR_TASK_ID", "task/test")
+            .env("VELNOR_TASK_ID", "stack/rust/crate-0/test/default")
             .env("VELNOR_TEST_FRAME", &frame_path)
             .env("VELNOR_TEST_CALL_LOG", &call_log)
             .output()
@@ -362,43 +366,96 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
         String::from_utf8_lossy(&result.stdout),
         String::from_utf8_lossy(&result.stderr)
     );
-    assert!(!sentinel.exists(), "payload is data, never shell source");
+    assert_eq!(
+        result.stdout.as_slice(),
+        fields[11].as_bytes(),
+        "the fixed probe receives the hostile literal as one argv value"
+    );
+    assert!(
+        !injection_marker.exists(),
+        "payload is data, never shell source"
+    );
+    assert!(
+        task_started_marker.exists(),
+        "valid task reached the fixed probe"
+    );
+    std::fs::remove_file(&task_started_marker).expect("clear valid task marker");
 
     let mut bad_count = fields.clone();
     bad_count[9] = "513".to_owned();
     let mut bad_sentinel = fields.clone();
-    bad_sentinel[20] = "NOT-END".to_owned();
+    bad_sentinel[15] = "NOT-END".to_owned();
     let mut wrong_digest = fields.clone();
-    wrong_digest[2] = "c".repeat(64);
+    wrong_digest[2] = format!("b3-{}", "c".repeat(64));
+    let mut malformed_execution_digest = fields.clone();
+    malformed_execution_digest[2] = "not-a-digest".to_owned();
+    let mut malformed_task_digest = fields.clone();
+    malformed_task_digest[3] = "not-a-digest".to_owned();
+    let mut malformed_matrix_id = fields.clone();
+    malformed_matrix_id[4] = "matrix/test".to_owned();
+    let mut malformed_matrix_key = fields.clone();
+    malformed_matrix_key[5] = "not-a-key".to_owned();
     let mut unsupported_expression = fields.clone();
-    unsupported_expression[15] = "${{ github.workspace }}/velnor/cargo".to_owned();
-    let mut unresolved_runner_temp = fields;
-    unresolved_runner_temp[17] = "${{ runner.temp }}/velnor/cargo".to_owned();
+    unsupported_expression[14] = "${{ github.workspace }}/marker".to_owned();
+    let mut unresolved_runner_temp = fields.clone();
+    unresolved_runner_temp[11] = "${{ runner.temp }}/payload".to_owned();
     let mut unresolved_argv = unresolved_runner_temp.clone();
-    unresolved_argv[10] = "${{ runner.temp }}/velnor/sh".to_owned();
+    unresolved_argv[10] = "${{ runner.temp }}/task-runner".to_owned();
     let mut trailing_field = valid_frame.clone();
     trailing_field.extend_from_slice(b"EXTRA\0");
     let mut missing_terminator = valid_frame;
     missing_terminator.pop();
-    for invalid_frame in [
-        encode_frame(&bad_count),
-        encode_frame(&bad_sentinel),
-        encode_frame(&wrong_digest),
-        encode_frame(&unsupported_expression),
-        encode_frame(&unresolved_runner_temp),
-        encode_frame(&unresolved_argv),
-        trailing_field,
-        missing_terminator,
+    for (case, invalid_frame) in [
+        ("bad argv count", encode_frame(&bad_count)),
+        ("bad END sentinel", encode_frame(&bad_sentinel)),
+        ("wrong execution digest", encode_frame(&wrong_digest)),
+        (
+            "malformed execution digest",
+            encode_frame(&malformed_execution_digest),
+        ),
+        (
+            "malformed task digest",
+            encode_frame(&malformed_task_digest),
+        ),
+        ("malformed matrix ID", encode_frame(&malformed_matrix_id)),
+        ("malformed matrix key", encode_frame(&malformed_matrix_key)),
+        (
+            "unsupported expression",
+            encode_frame(&unsupported_expression),
+        ),
+        (
+            "unresolved runner.temp value",
+            encode_frame(&unresolved_runner_temp),
+        ),
+        ("unresolved argv", encode_frame(&unresolved_argv)),
+        ("trailing field", trailing_field),
+        ("missing terminator", missing_terminator),
     ] {
+        if task_started_marker.exists() {
+            std::fs::remove_file(&task_started_marker)
+                .expect("clear task marker before rejection case");
+        }
+        if injection_marker.exists() {
+            std::fs::remove_file(&injection_marker)
+                .expect("clear injection marker before rejection case");
+        }
         std::fs::write(&frame_path, invalid_frame).expect("write invalid frame");
         let rejected = run_script();
         assert_eq!(
             rejected.status.code(),
             Some(125),
-            "malformed frame reached task execution: stderr={}",
+            "{case}: malformed frame was not rejected: stdout={} stderr={}",
+            String::from_utf8_lossy(&rejected.stdout),
             String::from_utf8_lossy(&rejected.stderr)
         );
-        assert!(!sentinel.exists(), "invalid frame ran task shell data");
+        assert!(
+            !task_started_marker.exists(),
+            "{case}: invalid frame reached task execution"
+        );
+        assert!(
+            !injection_marker.exists(),
+            "{case}: invalid frame evaluated hostile argv data"
+        );
     }
     assert_eq!(
         std::fs::read_to_string(&call_log).expect("record helper operations"),
