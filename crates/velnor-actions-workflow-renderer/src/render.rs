@@ -386,6 +386,12 @@ fn render_merged(
         matrix::attach_plan_outputs(&mut document)?;
     }
     matrix::attach_crate_job_caps(&mut document, &caps)?;
+    #[cfg(feature = "test-render-capture")]
+    test_render_capture::record_shared(crate::render_cache_files::with_runtime_identity_files(
+        shared.files.clone(),
+        &jobs,
+        &ctx.generator_version,
+    )?);
     let text = fallback::render_checked_workflow(WORKFLOW_PATH, &document, &ctx.generator_version)?;
     steps::scan_for_private_subcommands(&text)?;
     let shared_files = crate::render_cache_files::with_runtime_identity_files(

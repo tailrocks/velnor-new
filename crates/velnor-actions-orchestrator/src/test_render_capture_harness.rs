@@ -1,6 +1,7 @@
 //! Exact-consumer diagnostic harness. This test is deliberately ignored and
 //! runs only with the private `test-render-capture` feature enabled.
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 #[test]
@@ -36,13 +37,33 @@ fn capture_exact_consumer_marked_workflow_before_size_guard()
     let rendered = crate::render_staged_tree_with(&preparation, None);
     let capture = velnor_actions_workflow_renderer::render::test_render_capture::take();
     let captured = capture.is_some();
-    if let Some(capture) = capture {
+    if let Some(capture) = &capture {
         let canonical_bytes = capture.canonical.len();
         let selected_bytes = capture.selected.len();
-        std::fs::write(output.join("canonical.yml"), capture.canonical)?;
-        std::fs::write(output.join("selected.yml"), capture.selected)?;
+        std::fs::write(output.join("canonical.yml"), capture.canonical.as_bytes())?;
+        std::fs::write(output.join("selected.yml"), capture.selected.as_bytes())?;
+        let shared_root = output.join("shared");
+        let mut shared_bytes = 0usize;
+        let mut shared_paths = BTreeSet::new();
+        for file in &capture.shared {
+            if !shared_paths.insert(&file.path) {
+                return Err(format!("duplicate shared action path: {}", file.path).into());
+            }
+            let safe = velnor_actions_workflow_renderer::guard::validate_tree_path(&file.path)?;
+            let destination = shared_root.join(safe.as_str());
+            let parent = destination.parent().ok_or("shared output has no parent")?;
+            std::fs::create_dir_all(parent)?;
+            std::fs::write(&destination, file.bytes.as_bytes())?;
+            shared_bytes += file.bytes.len();
+            eprintln!(
+                "pre-cap shared file: path={} bytes={}",
+                file.path,
+                file.bytes.len()
+            );
+        }
         eprintln!(
-            "pre-cap capture written: canonical_bytes={canonical_bytes} selected_bytes={selected_bytes}"
+            "pre-cap capture written: canonical_bytes={canonical_bytes} selected_bytes={selected_bytes} shared_files={} shared_bytes={shared_bytes}",
+            capture.shared.len()
         );
     }
     let tree = match rendered {
@@ -63,6 +84,14 @@ fn capture_exact_consumer_marked_workflow_before_size_guard()
     }
     crate::validate::validate_staged(&tree)?;
     assert!(tree.get(".github/workflows/ci.yml").is_some());
+    let capture = capture.expect("capture was checked above");
+    assert_eq!(
+        tree.get(".github/workflows/ci.yml"),
+        Some(capture.selected.as_str())
+    );
+    for file in &capture.shared {
+        assert_eq!(tree.get(&file.path), Some(file.bytes.as_str()));
+    }
     Ok(())
 }
 
