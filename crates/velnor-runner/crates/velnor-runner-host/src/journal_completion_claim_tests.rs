@@ -77,7 +77,7 @@ async fn claims_fence_retries_and_survive_reopen() -> Result<(), HostError> {
     assert_eq!(first.attempt, 1);
     assert_eq!(
         journal.due_completed_launches(100, 10).await?,
-        [] as [journal::completion::CompletedLaunch; 0]
+        [] as [crate::journal::CompletedLaunch; 0]
     );
     assert!(
         journal
@@ -96,7 +96,7 @@ async fn claims_fence_retries_and_survive_reopen() -> Result<(), HostError> {
     );
     assert_eq!(
         journal.due_completed_launches(118, 10).await?,
-        [] as [journal::completion::CompletedLaunch; 0]
+        [] as [crate::journal::CompletedLaunch; 0]
     );
     let due = journal.due_completed_launches(119, 10).await?;
     assert_eq!(due.len(), 1);
