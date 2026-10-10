@@ -23,7 +23,7 @@ hk = [
     for ids in [
         r#"repository_ids = "922514152""#,
         r#"repository_ids = { owner = "jdx" }"#,
-        r#"repository_ids = { repository = 922514152 }"#,
+        r"repository_ids = { repository = 922514152 }",
         r#"repository_ids = { repository = "922514152", future = "reject" }"#,
     ] {
         let row = format!(

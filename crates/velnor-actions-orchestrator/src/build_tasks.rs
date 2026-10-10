@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::BuildTask;
+use velnor_actions_mise::catalog::{MR_BOXINGTON_VERSION, RUST_VERSION};
 use velnor_actions_workflow_renderer::verification_jobs::BuildTaskTool;
 
 use crate::OrchestratorError;
@@ -10,6 +11,9 @@ use crate::native_tool_input::NativeMiseConfig;
 use crate::toolcheck::{ToolInputCheck, ToolParse};
 #[path = "build_task_lock_validation.rs"]
 mod build_task_lock_validation;
+pub(super) use build_task_lock_validation::{
+    source_task_tool_requests, validate_source_lock_subset, validate_source_task_lock_requests,
+};
 
 #[path = "build_task_policy.rs"]
 mod source_policy;
