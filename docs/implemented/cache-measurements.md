@@ -213,17 +213,21 @@ reports `cache-hit=false` even when it imports that run-bound object set. The
 workflow requires the imported-object count and a cached-compilation reuse
 measurement instead of requiring an exact primary-key hit.
 
-Both jobs set `MBX_GC_AUTO=1` and `MBX_SHARE_OUT_DIR=0` for this
-protected-main round-trip probe. The historical production configuration
-measured above used `MBX_GC_AUTO=0` on hosted Linux and the Scale Set local
-backend with a manual bundle. Current repository source instead emits the
-pinned v1.6 native action with `MBX_GC_AUTO=1` and
-`MBX_SHARE_OUT_DIR=0` on both typed production lanes; that source change has
-not established deployed writer/reader parity or qualified production
-behavior. The probe uses a separate candidate action ref, so its result
-does not qualify the production action pin or either typed lane. Dispatch
-once from protected `main` with mode `mbx-cache-roundtrip`; the writer and
-reader run in order at the same SHA.
+Both jobs in the recorded round-trip probe set `MBX_GC_AUTO=1` and
+`MBX_SHARE_OUT_DIR=0`. This is the historical probe configuration recorded in
+`ac3ab6a3d`, not the current native renderer lifecycle. The native MBX
+object lifecycle follows the [cache contract](../proposed/cache-contract.md),
+which assigns MBX object transport and its post step to the pinned action. The
+current native renderer sets `MBX_GC_AUTO=0` while task results are
+active and runs guarded `mbx clean` after the final workspace consumer. The
+historical production measurements above used `MBX_GC_AUTO=0` on hosted Linux
+and a Scale Set local backend with a manual bundle, before the native object
+action route. Neither those measurements nor this `GC_AUTO=1` probe measure
+the current native lifecycle's post-export peak disk use. The probe uses a
+separate candidate action ref, so its result does not qualify the production
+action pin, current lifecycle, or either typed production lane. Dispatch once
+from protected `main` with mode `mbx-cache-roundtrip`; the writer and reader
+run in order at the same SHA.
 
 This is a small end-to-end action and cache round-trip probe. The writer
 samples `df -B1 -P` and `df -i -P` on `$RUNNER_TEMP` after the probe build.
