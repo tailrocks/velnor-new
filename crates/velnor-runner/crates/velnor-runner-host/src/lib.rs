@@ -4,6 +4,7 @@
 //! transaction across that effect.
 
 mod assign;
+mod compile_identity;
 mod config;
 mod connect;
 mod daemon_lock;
