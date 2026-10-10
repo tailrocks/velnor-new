@@ -202,7 +202,7 @@ fn native_sha256(check: &ToolInputCheck) -> Result<String, OrchestratorError> {
 }
 
 fn validate_config_shape(config: &NativeMiseConfig) -> Result<(), OrchestratorError> {
-    let allowed = ["settings", "tasks", "tools", "wrappers"];
+    let allowed = ["min_version", "settings", "tasks", "tools", "wrappers"];
     if config
         .root_keys
         .iter()
@@ -212,6 +212,9 @@ fn validate_config_shape(config: &NativeMiseConfig) -> Result<(), OrchestratorEr
             .all(|key| config.root_keys.iter().any(|actual| actual == key))
     {
         return Err(failure("build_task_mise_config_root"));
+    }
+    if !config.min_version_supported() {
+        return Err(failure("build_task_mise_min_version"));
     }
     let settings = &config.settings;
     if !settings.present

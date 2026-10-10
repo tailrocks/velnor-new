@@ -283,10 +283,12 @@ fn native_build_task_rejects_cargo_source_install_fallback() -> TestResult {
 /// Synthetic source-bound task/tool fixture for the resolver integration.
 /// Artifact digests and URLs test the lock projection shape only; upstream
 /// provenance is separately reviewed against the repository's real Mise lock.
-fn write_native_source_fixture(root: &std::path::Path) -> TestResult {
+pub(crate) fn write_native_source_fixture(root: &std::path::Path) -> TestResult {
     fs::write(
         root.join("mise.toml"),
         r#"
+min_version = "2026.10.7"
+
 [tools]
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.140"
 "github:boltffi/boltffi" = { version = "0.30.1", matching_regex = '^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$' }
@@ -351,7 +353,7 @@ run = "cargo xtask desktop verify"
     fs::create_dir_all(root.join("native"))?;
     fs::write(
         root.join("native/mise.toml"),
-        "[tasks.desktop-ci]\nrun = \"mise run desktop-lint\"\n",
+        "[tasks.desktop-ci]\nrun = \"mise run desktop-lint\"\n\n[tasks.format-check]\nrun = \"echo format-check\"\n",
     )?;
     fs::write(
         root.join("rust-toolchain.toml"),
@@ -372,7 +374,7 @@ xcodegen = [{ version = "2.46.0", backend = "aqua:yonaskolb/XcodeGen", "platform
     Ok(())
 }
 
-fn config_with_build(mode: &str) -> String {
+pub(crate) fn config_with_build(mode: &str) -> String {
     let build = "[[workflow.tasks]]\nid = \"native-desktop\"\nkind = \"build\"\nmise_task = \"desktop-ci\"\nsource = { mise_config = \"native/mise.toml\", working_directory = \"native\" }\ntools = [\"aqua:nextest-rs/nextest/cargo-nextest\", \"github:boltffi/boltffi\", \"mr-boxington\", \"rust\", \"swiftlint\", \"xcodegen\"]\nrunner = \"macos-26-arm64\"\ntimeout_minutes = 120\ncargo_build_jobs = 2\nnextest_test_threads = 2\n";
     config(mode).replace(
         "[[workflow.tasks]]\nid = \"native-format\"",
