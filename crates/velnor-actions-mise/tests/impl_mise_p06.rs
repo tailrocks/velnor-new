@@ -101,7 +101,7 @@ fn wrapper_absent_is_none() {
 fn wrapper_malformed_is_diagnostic() {
     let err = parse_cargo_wrapper("[wrappers\ncommand = \n").expect_err("must fail");
     assert_eq!(err.line, 1);
-    assert!(!err.problem.is_empty());
+    assert_ne!(err.problem, "");
     assert!(err.to_string().contains("wrapper_invalid"));
     let err = parse_cargo_wrapper("[wrappers.cargo]\ncommand = \"mbx\n")
         .expect_err("unterminated string fails");
@@ -165,14 +165,14 @@ fn nextest_ci_subsection_and_dotted_forms() {
 fn nextest_comment_is_not_evidence() {
     let config =
         parse_nextest_config("# [profile.ci]\n# retries = 0\n").expect("comment-only parses");
-    assert!(config.profiles.is_empty());
+    assert_eq!(config.profiles, [] as [String; 0]);
     assert_eq!(config.selected_profile(), "default");
 }
 
 #[test]
 fn nextest_empty_and_malformed() {
     let config = parse_nextest_config("").expect("empty parses");
-    assert!(config.profiles.is_empty());
+    assert_eq!(config.profiles, [] as [String; 0]);
     assert_eq!(config.selected_profile(), "default");
     let err = parse_nextest_config("[profile.ci\nretries = \n").expect_err("must fail");
     assert_eq!(err.line, 1);

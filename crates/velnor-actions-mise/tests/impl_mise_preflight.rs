@@ -12,8 +12,8 @@ fn cargo_proof_pins_exact_toolchain_without_wrapper() -> Result<(), String> {
         .map_err(|err| err.to_string())?;
     assert_eq!(selection.driver(), RouteDriver::Cargo);
     let rust = pinned().tool_spec(PinnedTool::Rust);
-    assert_eq!(selection.identity_specs(), &[rust.clone()]);
-    assert_eq!(selection.probe_specs(), &[rust.clone()]);
+    assert_eq!(selection.identity_specs(), std::slice::from_ref(&rust));
+    assert_eq!(selection.probe_specs(), std::slice::from_ref(&rust));
     let invocation = selection.invocation(&pinned());
     assert_eq!(
         invocation,
@@ -52,7 +52,7 @@ fn mbx_route_separates_action_identity_from_mise_probe() -> Result<(), String> {
     let rust = pinned().tool_spec(PinnedTool::Rust);
     let mbx = pinned().tool_spec(PinnedTool::MrBoxington);
     assert_eq!(selection.identity_specs(), &[rust.clone(), mbx.clone()]);
-    assert_eq!(selection.probe_specs(), &[rust.clone()]);
+    assert_eq!(selection.probe_specs(), std::slice::from_ref(&rust));
     let invocation = selection.invocation(&pinned());
     assert!(
         !invocation
