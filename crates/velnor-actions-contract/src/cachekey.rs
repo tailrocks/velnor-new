@@ -111,7 +111,8 @@ pub struct LaneInputs {
 /// Toolchain identity inputs: exact pins plus selected driver/runner.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolchainInputs {
-    /// Sorted exact `<tool>@<version>` selectors.
+    /// Sorted exact `<tool>@<version>` selectors (Nextest retains its pinned
+    /// `aqua:` registry namespace).
     pub tools: Vec<String>,
     /// Sorted installed component names.
     pub components: Vec<String>,

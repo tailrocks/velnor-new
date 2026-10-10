@@ -14,7 +14,9 @@ use velnor_actions_contract::{
     Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, PrepareRustComponents};
-use velnor_actions_rust::{TaskKind, cargo_payload_env};
+use velnor_actions_rust::{
+    CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner, cargo_payload_env,
+};
 
 /// Obligation fixture for step construction.
 fn obligation() -> CrateObligation {
@@ -169,6 +171,72 @@ fn generated_pinned_obligation_renders_through_shared_declared_task_action() {
         yaml.contains("task_id: stack/rust/demo/clippy/default"),
         "report identity preserved as input:\n{yaml}"
     );
+}
+
+#[test]
+fn actual_nextest_producer_selector_passes_task_execution_contract() {
+    let catalog = ToolCatalog::pinned();
+    let task = velnor_actions_rust::propose_task(&TaskGroup {
+        task_id: "stack/rust/demo/nextest/default".to_owned(),
+        package_id: String::new(),
+        package_name: String::new(),
+        manifest_key: "root".to_owned(),
+        kind: TaskKind::Nextest,
+        configuration: "default".to_owned(),
+        features: Vec::new(),
+        target: "host".to_owned(),
+        gated_by: Vec::new(),
+        depends_on: Vec::new(),
+        target_flags: Vec::new(),
+        no_test_targets: false,
+        package_arg: None,
+        compile_driver: CompileDriver::Mbx,
+        test_runner: TestRunner::CargoNextest,
+        nextest_profile: NextestProfile::Default,
+        run_ignored: None,
+        declared_inputs: Vec::new(),
+        undeclared_reads: false,
+        uses_network: false,
+        uses_clock: false,
+        uses_random: false,
+    })
+    .expect("actual Rust task proposal");
+    let run = crate::vectors::task_argv(&task, &catalog).expect("catalog-backed task argv");
+    let nextest_spec = catalog.tool_spec(PinnedTool::Nextest);
+    assert_eq!(
+        nextest_spec,
+        "aqua:nextest-rs/nextest/cargo-nextest@0.9.148"
+    );
+    assert!(run.contains(&nextest_spec), "producer argv: {run:?}");
+
+    let toolchain_inputs = crate::internal_plan::identities::toolchain_inputs_for(&task, &catalog)
+        .expect("catalog-backed toolchain identity");
+    let toolchain = toolchain_id(&toolchain_inputs).expect("toolchain digest");
+    let task_digest =
+        task_digest_for_execution(&task.task_id, &run, &toolchain).expect("task digest");
+    let matrix_id = velnor_actions_contract::matrix_id_for_task_group("rust", &task.task_id)
+        .expect("matrix identity");
+    let obligation = CrateObligation {
+        task_id: task.task_id.clone(),
+        kind: task.task_kind.clone(),
+        step_name: "Nextest".to_owned(),
+        gated_by: Vec::new(),
+        matrix_key: velnor_actions_contract::matrix_key_for_id(&matrix_id).expect("matrix key"),
+        task_digest,
+        toolchain_inputs,
+        run,
+    };
+    let checkout_uses = format!("actions/checkout@{:040x}", 0);
+    let step = obligation_step(&obligation, &catalog, &[], None).expect("typed task step");
+    let ir = obligation_workflow_ir(&checkout_uses, step);
+    let context = renderer_context(checkout_uses);
+    velnor_actions_workflow_renderer::render_workflow_ir(
+        &ir,
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &context,
+    )
+    .expect("actual producer output passes the TaskExecution contract");
 }
 
 #[test]
