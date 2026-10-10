@@ -5,6 +5,23 @@ fn deadline() -> CheckDeadline {
     CheckDeadline::after(std::time::Duration::from_secs(60)).expect("deadline")
 }
 
+fn set_special_mode(path: &std::path::Path, requested: u32) {
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(requested))
+        .expect("mutate mode");
+    let metadata = std::fs::metadata(path).expect("mode metadata");
+    let observed = metadata.permissions().mode();
+    assert_eq!(
+        observed & 0o7000,
+        requested & 0o7000,
+        "special-mode fixture did not retain requested bits: path={} requested_mode={:04o} observed_mode={:04o} uid={} gid={}",
+        path.display(),
+        requested & 0o7777,
+        observed & 0o7777,
+        std::os::unix::fs::MetadataExt::uid(&metadata),
+        std::os::unix::fs::MetadataExt::gid(&metadata),
+    );
+}
+
 #[test]
 fn wrong_cli_digest_never_executes_or_materializes() {
     let temp = tempfile::TempDir::new().expect("temp");
@@ -74,8 +91,7 @@ fn owned_cli_special_permission_bits_are_rejected() {
     };
     verify_owned_cli(&prepared, Some(deadline())).expect("ordinary owned mode");
     for mode in [0o4_500, 0o2_500, 0o1_500] {
-        std::fs::set_permissions(&docker_program, std::fs::Permissions::from_mode(mode))
-            .expect("mutate mode");
+        set_special_mode(&docker_program, mode);
         assert!(
             verify_owned_cli(&prepared, Some(deadline())).is_err(),
             "{mode:o}"
