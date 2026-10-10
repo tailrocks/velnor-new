@@ -88,6 +88,7 @@ mod select_edges;
 mod select_tofu;
 mod source_cache;
 mod source_prep;
+mod task_execution;
 pub(crate) mod task_report;
 mod task_report_aggregate;
 mod tofu_apply_emit;

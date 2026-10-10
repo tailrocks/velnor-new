@@ -79,12 +79,7 @@ impl TaskExecutionManifestV1 {
     ///
     /// Returns a contract error when the version spelling is invalid.
     pub fn marker_line(&self) -> Result<String, ContractError> {
-        validate_marker_version(&self.generator_version)?;
-        Ok(format!(
-            "{}{version}{MARKER_SUFFIX}",
-            crate::MARKER_PREFIX,
-            version = self.generator_version
-        ))
+        task_execution_manifest_marker_line(&self.generator_version)
     }
 
     /// Validate the schema, bounds, map keys, task contracts, and digests.
@@ -142,6 +137,25 @@ impl TaskExecutionManifestV1 {
             .map_err(|_| ContractError::CanonicalJson("non_utf8_canonical_json".to_owned()))?;
         Ok(format!("{header}\n{body}\n"))
     }
+}
+
+/// Build the exact generated-file marker expected for an independently supplied
+/// renderer version.
+///
+/// The resolver uses this before parsing the manifest body, so the file cannot
+/// nominate its own trusted generator version.
+///
+/// # Errors
+///
+/// Returns a contract error when the version spelling is invalid.
+pub fn task_execution_manifest_marker_line(
+    generator_version: &str,
+) -> Result<String, ContractError> {
+    validate_marker_version(generator_version)?;
+    Ok(format!(
+        "{}{generator_version}{MARKER_SUFFIX}",
+        crate::MARKER_PREFIX
+    ))
 }
 
 impl TaskExecutionManifestEntryV1 {

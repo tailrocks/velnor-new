@@ -52,6 +52,10 @@ pub use super::qualify::qualify_argv_staged;
 pub use super::retrieve_reports::{FETCH_OP, retrieve_reports};
 pub use super::root::resolve_root;
 pub use super::routing::{migrate_config, parse_dispatch_mode};
+pub use super::task_execution::{
+    GENERATOR_VERSION_ENV, TASK_EXECUTION_DIGEST_ENV, TASK_EXECUTION_RESOLVER_OP,
+    resolve_task_execution,
+};
 pub use super::task_report::{REPORT_OP, write_task_report};
 pub use super::toolcheck::{TOOL_INPUT_PATHS, ToolInputCheck, ToolParse, check_tool_inputs};
 pub use super::toolfindings::{
