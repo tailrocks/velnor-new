@@ -6,7 +6,7 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::time::Duration;
 
-use crate::config::HostConfig;
+use crate::config::{HostConfig, KeychainReference};
 use crate::docker_client::{connect_unix, docker_deadline_after};
 use crate::error::HostError;
 use crate::journal::IntentState;
@@ -34,7 +34,7 @@ enum JournalFact {
 
 enum ConfigFact {
     Missing,
-    Valid(HostConfig),
+    Valid(Box<HostConfig>),
     Invalid,
 }
 
@@ -45,7 +45,7 @@ enum ConfigFact {
 /// This partial observer never reports `Ready` without full Docker/GitHub
 /// reconciliation proof.
 #[must_use]
-pub fn controller_readiness(state: &Path, service: &str, account: &str) -> Readiness {
+pub fn controller_readiness(state: &Path) -> Readiness {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_time()
         .enable_io()
@@ -54,18 +54,21 @@ pub fn controller_readiness(state: &Path, service: &str, account: &str) -> Readi
         return Readiness::Degraded;
     };
     let deadline = tokio::time::Instant::now() + READINESS_BUDGET;
-    runtime.block_on(bounded_readiness(
-        assess(state, service, account, deadline),
-        deadline,
-    ))
+    runtime.block_on(bounded_readiness(assess(state, deadline), deadline))
 }
 
-async fn assess(
+async fn assess(state: &Path, deadline: tokio::time::Instant) -> Readiness {
+    assess_with(state, deadline, credential_present).await
+}
+
+async fn assess_with<F>(
     state: &Path,
-    service: &str,
-    account: &str,
     deadline: tokio::time::Instant,
-) -> Readiness {
+    has_credential: F,
+) -> Readiness
+where
+    F: FnOnce(&KeychainReference) -> bool,
+{
     match std::fs::symlink_metadata(state) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             return readiness_for_empty();
@@ -80,10 +83,10 @@ async fn assess(
     }
     let config = match read_config(state) {
         ConfigFact::Missing => return Readiness::WaitingForCredentials,
-        ConfigFact::Valid(config) => config,
+        ConfigFact::Valid(config) => *config,
         ConfigFact::Invalid => return Readiness::Degraded,
     };
-    if !credential_present(service, account) {
+    if !has_credential(&config.github.credential_ref) {
         return Readiness::WaitingForCredentials;
     }
     if !engine_up(&config.docker.endpoint, deadline).await {
@@ -124,13 +127,13 @@ fn read_config(state: &Path) -> ConfigFact {
         .map_err(|_| ())
         .and_then(|text| HostConfig::parse(text).map_err(|_| ()))
     {
-        Ok(config) => ConfigFact::Valid(config),
+        Ok(config) => ConfigFact::Valid(Box::new(config)),
         Err(()) => ConfigFact::Invalid,
     }
 }
 
-fn credential_present(service: &str, account: &str) -> bool {
-    let Ok(secret) = load_secret(service, account) else {
+fn credential_present(reference: &KeychainReference) -> bool {
+    let Ok(secret) = load_secret(reference.service(), reference.account()) else {
         return false;
     };
     let Ok(text) = std::str::from_utf8(secret.as_slice()) else {
