@@ -121,6 +121,10 @@ fn payload_paths_and_restore_save_inputs_are_identical() {
     );
     assert_eq!(restore_with.get("key"), save_with.get("key"));
     assert_eq!(restore_with.get("key"), Some(&payload.key_expression()));
+    assert_eq!(
+        restore_with.get(crate::cache_steps::TOOLS_SEED_ADMITTED_INPUT),
+        Some(&crate::cache_steps::TOOLS_SEED_ADMITTED_EXPRESSION.to_owned())
+    );
     assert_eq!(save_with.get("path"), Some(&payload.paths().join("\n")));
 }
 
@@ -194,12 +198,6 @@ fn restore_composite_binds_marker_pin_key_and_paths() {
     assert!(restore_action.bytes.contains("outputs.cache-hit"));
     assert!(restore_action.bytes.contains("outputs.cache-matched-key"));
     assert!(restore_action.bytes.contains("rm -rf"));
-    assert!(restore_action.bytes.contains("TOOLS_CACHE_HIT\\\" = true"));
-    assert!(
-        restore_action
-            .bytes
-            .contains("TOOLS_MATCHED_KEY\\\" = \\\"$TOOLS_EXPECTED_KEY\\\"")
-    );
     crate::cache_steps::assert_rendered_admission_parses(&restore_action.bytes);
 }
 

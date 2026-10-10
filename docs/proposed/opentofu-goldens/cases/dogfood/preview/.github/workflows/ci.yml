@@ -74,6 +74,7 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
@@ -129,6 +130,7 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
@@ -165,6 +167,7 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
@@ -271,6 +274,7 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
@@ -577,6 +581,7 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
@@ -774,6 +779,7 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
@@ -961,6 +967,7 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
@@ -1152,6 +1159,7 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
@@ -1349,6 +1357,7 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
@@ -1540,6 +1549,7 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
@@ -1731,6 +1741,7 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
@@ -1922,6 +1933,7 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
@@ -2113,6 +2125,7 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
@@ -2304,6 +2317,7 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
@@ -2495,6 +2509,7 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
@@ -2686,6 +2701,7 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
@@ -2871,6 +2887,7 @@ jobs:
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:

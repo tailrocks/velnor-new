@@ -146,6 +146,7 @@ fn seed_step() -> Yaml {
             "name".to_owned(),
             Yaml::str(crate::tool_seed::TOOL_SEED_NAME),
         ),
+        ("id".to_owned(), Yaml::str("seed")),
         (
             "if".to_owned(),
             Yaml::str(cache_p08::TOOLS_CACHE_RESTORE_CONDITION),
@@ -190,6 +191,13 @@ fn output_map() -> Yaml {
     Yaml::Map(vec![
         ("enabled".to_owned(), output("enabled")),
         ("identity".to_owned(), output("identity")),
+        (
+            "seed_admitted".to_owned(),
+            Yaml::Map(vec![(
+                "value".to_owned(),
+                Yaml::str("${{ steps.seed.outputs.seed_admitted }}"),
+            )]),
+        ),
     ])
 }
 
