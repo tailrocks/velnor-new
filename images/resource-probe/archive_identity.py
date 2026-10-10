@@ -18,6 +18,7 @@ ARCHIVE_FORMAT = "buildkit-oci-layout-docker-compat-v1"
 ARCHIVE_NAME = "velnor-resource-probe-linux-amd64.tar"
 IMAGE_TAG = "velnor-resource-probe:linux-amd64"
 IMAGE_USER = "65532:65532"
+WORKING_DIR = "/"
 ENTRYPOINT = ["/velnor/resource-probe"]
 DEFAULT_ENV = ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"]
 SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -337,14 +338,18 @@ def require_image(image, source_sha, identity):
     config_document = identity["config_document"].get("config")
     if type(config_document) is not dict:
         fail("saved image config settings are missing")
-    if config.get("User") != IMAGE_USER or config.get("Entrypoint") != ENTRYPOINT:
-        fail("loaded image user or entrypoint does not match the fixed profile")
+    if (
+        config.get("User") != IMAGE_USER
+        or config.get("WorkingDir") != WORKING_DIR
+        or config.get("Entrypoint") != ENTRYPOINT
+    ):
+        fail("loaded image user, working directory, or entrypoint differs from the fixed profile")
     if config.get("Cmd") not in (None, []) or config.get("Env") != DEFAULT_ENV:
         fail("loaded image command or environment does not match the fixed profile")
     labels = config.get("Labels")
     if type(labels) is not dict or labels.get("org.opencontainers.image.revision") != source_sha:
         fail("loaded image revision label differs from the exact source commit")
-    for key in ("User", "Entrypoint", "Cmd", "Env", "Labels"):
+    for key in ("User", "WorkingDir", "Entrypoint", "Cmd", "Env", "Labels"):
         if config.get(key) != config_document.get(key):
             fail("loaded image config differs from the saved image config")
     descriptor = image.get("Descriptor")

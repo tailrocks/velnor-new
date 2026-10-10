@@ -13,6 +13,7 @@ mod completion;
 mod file_identity;
 mod launch;
 mod read;
+mod resource_probe;
 mod schema;
 mod sql;
 mod transaction;
@@ -25,6 +26,8 @@ pub(crate) use completion::{
     MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN,
 };
 use sql::{one_row, token_rejected};
+
+pub(crate) use resource_probe::{ProbePhase, ProbeRow, ProbeSeed};
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

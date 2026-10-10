@@ -8,6 +8,7 @@ import tarfile
 import tempfile
 import unittest
 
+import archive_identity
 import write_manifest as producer
 
 
@@ -24,15 +25,25 @@ def add_blob(files, data):
     return f"sha256:{digest}"
 
 
-def archive_fixture(platform=None, extra=None, duplicate=False, referrer=False):
+def archive_fixture(
+    platform=None,
+    extra=None,
+    duplicate=False,
+    referrer=False,
+    working_dir=archive_identity.WORKING_DIR,
+    include_working_dir=True,
+):
+    image_config = {
+        "User": producer.IMAGE_USER,
+        "Env": producer.DEFAULT_ENV,
+        "Entrypoint": producer.ENTRYPOINT,
+        "Labels": {"org.opencontainers.image.revision": SOURCE_SHA},
+    }
+    if include_working_dir:
+        image_config["WorkingDir"] = working_dir
     config = {
         "architecture": "amd64",
-        "config": {
-            "User": producer.IMAGE_USER,
-            "Env": producer.DEFAULT_ENV,
-            "Entrypoint": producer.ENTRYPOINT,
-            "Labels": {"org.opencontainers.image.revision": SOURCE_SHA},
-        },
+        "config": image_config,
         "os": "linux",
         "rootfs": {"type": "layers", "diff_ids": []},
     }
@@ -184,6 +195,27 @@ class ArchiveIdentityTests(unittest.TestCase):
             producer.require_image(inspect_shape(identity, "containerd"), SOURCE_SHA, identity)
 
         self.with_archive(archive_fixture({"os": "linux", "architecture": "amd64"}), check)
+
+    def test_requires_working_directory_in_saved_and_loaded_image(self):
+        def reject_saved_profile(path):
+            identity = producer.archive_identity(path)
+            with self.assertRaises(ValueError):
+                producer.require_image(inspect_shape(identity, "classic"), SOURCE_SHA, identity)
+
+        for files in (
+            archive_fixture(working_dir="/tmp"),
+            archive_fixture(include_working_dir=False),
+        ):
+            self.with_archive(files, reject_saved_profile)
+
+        def check_loaded_profile(path):
+            identity = producer.archive_identity(path)
+            image = inspect_shape(identity, "classic")
+            image["Config"]["WorkingDir"] = "/tmp"
+            with self.assertRaises(ValueError):
+                producer.require_image(image, SOURCE_SHA, identity)
+
+        self.with_archive(archive_fixture(), check_loaded_profile)
 
     def test_accepts_only_referrers_bound_to_the_selected_image(self):
         files = archive_fixture(referrer=True)
