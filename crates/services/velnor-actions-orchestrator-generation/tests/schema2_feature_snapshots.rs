@@ -114,7 +114,7 @@ jobs:
       - name: Write proof
         run: echo g4-artifact > g4-proof.txt
       - name: Upload proof
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: g4-proof-hosted
           path: g4-proof.txt
@@ -134,7 +134,7 @@ jobs:
       - name: Write proof
         run: echo g4-artifact > g4-proof.txt
       - name: Upload proof
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: g4-proof-scale-set
           path: g4-proof.txt

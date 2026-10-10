@@ -64,7 +64,7 @@ fn probe_tool_rows() -> Vec<ProbeRow> {
         (
             "https://crates.io/api/v1/crates/cargo-nextest",
             "nextest.json",
-            "{\"crate\": {\"max_version\": \"0.9.146\"}}",
+            "{\"crate\": {\"max_version\": \"0.9.148\"}}",
         ),
         (
             "https://api.github.com/repos/opentofu/opentofu/releases/latest",
@@ -74,7 +74,7 @@ fn probe_tool_rows() -> Vec<ProbeRow> {
         (
             "https://crates.io/api/v1/crates/release-plz",
             "release-plz.json",
-            "{\"crate\": {\"max_version\": \"0.3.169\"}}",
+            "{\"crate\": {\"max_version\": \"0.3.171\"}}",
         ),
     ]
 }

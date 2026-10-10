@@ -34,7 +34,7 @@ fn archive_argv_is_byte_exact_per_driver() -> Result<(), String> {
             "--no-hooks",
             "exec",
             "rust@1.98.1",
-            "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
+            "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
             "--",
             "mbx",
             "nextest",
@@ -61,7 +61,7 @@ fn archive_argv_is_byte_exact_per_driver() -> Result<(), String> {
     assert_eq!(argv[split + 1], OsString::from("cargo"));
     assert!(
         argv.iter()
-            .any(|arg| arg == "aqua:nextest-rs/nextest/cargo-nextest@0.9.146")
+            .any(|arg| arg == "aqua:nextest-rs/nextest/cargo-nextest@0.9.148")
     );
     assert!(
         !argv.iter().any(|arg| arg == "--target"),
@@ -88,7 +88,7 @@ fn list_argv_is_byte_exact() -> Result<(), String> {
             "--no-hooks",
             "exec",
             "rust@1.98.1",
-            "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
+            "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
             "--",
             "mbx",
             "nextest",
@@ -128,7 +128,7 @@ fn run_argv_is_byte_exact_with_no_tests_fail() -> Result<(), String> {
             "--no-hooks",
             "exec",
             "rust@1.98.1",
-            "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
+            "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
             "--",
             "mbx",
             "nextest",

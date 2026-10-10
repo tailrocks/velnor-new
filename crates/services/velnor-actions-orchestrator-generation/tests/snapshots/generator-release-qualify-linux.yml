@@ -23,7 +23,7 @@ runs:
         cache: "false"
         cache_save: "false"
     - name: Download built asset archive
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
       with:
         artifact-ids: ${{ inputs.artifact_id }}
         path: linux-assets
@@ -34,7 +34,7 @@ runs:
       shell: bash
       run: "set -eu\ntest -f linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu\ntest ! -L linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu\ntest -x linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu\ntest -f linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu.sha256\ntest ! -L linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu.sha256\ntest ! -x linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu.sha256\ntest -f linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu.provenance.json\ntest ! -L linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu.provenance.json\ntest ! -x linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu.provenance.json"
     - name: Download canonical same-run candidate manifest
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
       with:
         artifact-ids: ${{ inputs.manifest_artifact_id }}
         path: manifest-assets

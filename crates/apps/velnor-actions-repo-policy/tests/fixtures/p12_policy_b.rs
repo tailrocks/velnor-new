@@ -32,8 +32,8 @@ fn dated(key: &str, granted: &str, expires: &str) -> String {
 #[test]
 fn missing_tool_row_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-missing-tool")?;
-    let row = "{\"name\":\"release-plz\",\"pinned\":\"0.3.169\",\
-        \"qualified\":\"0.3.169\",\
+    let row = "{\"name\":\"release-plz\",\"pinned\":\"0.3.171\",\
+        \"qualified\":\"0.3.171\",\
         \"source\":\"https://crates.io/api/v1/crates/release-plz\",\
         \"status\":\"current\"}";
     harness::mutate(&fixture.dir, INVENTORY, &format!(",{row}"), "")?;

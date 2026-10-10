@@ -18,7 +18,7 @@ fn pinned_catalog_matches_qualified_versions() {
     assert_eq!(catalog.version(PinnedTool::Actionlint), "1.7.12");
     assert_eq!(catalog.version(PinnedTool::Shellcheck), "0.11.0");
     assert_eq!(catalog.version(PinnedTool::Zizmor), "1.30.1");
-    assert_eq!(catalog.version(PinnedTool::Nextest), "0.9.146");
+    assert_eq!(catalog.version(PinnedTool::Nextest), "0.9.148");
     assert_eq!(catalog.version(PinnedTool::Opentofu), "1.13.1");
     assert_eq!(RUST_VERSION, "1.98.1");
     assert_eq!(MR_BOXINGTON_VERSION, "1.21.1");
@@ -26,7 +26,7 @@ fn pinned_catalog_matches_qualified_versions() {
     assert_eq!(ACTIONLINT_VERSION, "1.7.12");
     assert_eq!(SHELLCHECK_VERSION, "0.11.0");
     assert_eq!(ZIZMOR_VERSION, "1.30.1");
-    assert_eq!(NEXTEST_VERSION, "0.9.146");
+    assert_eq!(NEXTEST_VERSION, "0.9.148");
     assert_eq!(OPENTOFU_VERSION, "1.13.1");
 }
 
@@ -50,7 +50,7 @@ fn tool_specs_use_registry_names() {
     assert_eq!(catalog.tool_spec(PinnedTool::Zizmor), "zizmor@1.30.1");
     assert_eq!(
         catalog.tool_spec(PinnedTool::Nextest),
-        "aqua:nextest-rs/nextest/cargo-nextest@0.9.146"
+        "aqua:nextest-rs/nextest/cargo-nextest@0.9.148"
     );
     assert_eq!(catalog.tool_spec(PinnedTool::Opentofu), "opentofu@1.13.1");
     assert_eq!(
@@ -138,18 +138,18 @@ fn tool_file_values_never_become_pins() {
 #[test]
 fn catalog_new_validates_every_slot() {
     let catalog = ToolCatalog::new(
-        "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.1",
+        "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.148", "1.13.1",
     );
     assert!(catalog.is_ok());
     assert!(matches!(
         ToolCatalog::new(
-            "latest", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.1"
+            "latest", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.148", "1.13.1"
         ),
         Err(MiseError::InvalidToolVersion { .. })
     ));
     assert!(matches!(
         ToolCatalog::new(
-            "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "v1.30.1", "0.9.146", "1.13.1"
+            "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "v1.30.1", "0.9.148", "1.13.1"
         ),
         Err(MiseError::InvalidToolVersion { .. })
     ));
@@ -161,7 +161,7 @@ fn catalog_new_validates_every_slot() {
     ));
     assert!(matches!(
         ToolCatalog::new(
-            "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "latest"
+            "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.148", "latest"
         ),
         Err(MiseError::InvalidToolVersion { .. })
     ));
@@ -196,7 +196,7 @@ fn action_mbx_reconcile_matches_pin_only() {
         );
     }
     let moved = ToolCatalog::new(
-        "1.98.1", "1.22.0", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.1",
+        "1.98.1", "1.22.0", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.148", "1.13.1",
     )
     .expect("exact catalog");
     assert!(moved.reconcile_action_mbx("1.22.0").is_ok());
@@ -270,7 +270,7 @@ fn opentofu_digest_follows_qualified_version_only() {
             .is_ok()
     );
     let moved = ToolCatalog::new(
-        "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146", "1.13.0",
+        "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.148", "1.13.0",
     )
     .expect("exact catalog");
     let err = moved

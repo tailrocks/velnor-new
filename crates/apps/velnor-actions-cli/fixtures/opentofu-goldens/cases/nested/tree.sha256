@@ -1,7 +1,7 @@
 8c3ba32bc949b03ba5d3a608953846cd505cac1ff8548fe35009f274aa408fc9  ./.github/AGENTS.md
 2728a989f50fecabf716252fa39f9cec059e4d89abdc0d2e4a163fe6b5150c26  ./.github/actionlint.yaml
-bf827d32f24746f7b25660b081e9dd46b46736e526fc67794535244be50171fb  ./.github/actions/task-rust-a/action.yml
-21f14e52c9f1f54c38d6b2ac0a5b6f5fc7892fabb20c74a49e4f034ee4729eae  ./.github/actions/task-rust-lib/action.yml
+935d4966af3f69734c685c9f875fa15f7c0bbd405905398164d8195d3e5d289b  ./.github/actions/task-rust-a/action.yml
+c705171db6ab2739d42099eda27f6d32b4d8ac8e8d5b7ee5e2e7dd9a329e2cc4  ./.github/actions/task-rust-lib/action.yml
 212e8bce874ac6afe150d24f6c6189d8dc49b62a5e1274408dae4efa37b21292  ./.github/actions/velnor-tool-seed/action.yml
-b7cf30c04a9cc099fc098589f5a5a8b54184a900525a3758a6799c5c1607be1f  ./.github/workflows/ci.yml
+68611b7c3f8fce426ab7b9e7b5f0513ba9ff85562d882e5344407f21825e5589  ./.github/workflows/ci.yml
 link ./.github/CLAUDE.md -> AGENTS.md

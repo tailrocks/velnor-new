@@ -28,7 +28,7 @@ jobs:
       - name: Checksum built bytes
         run: "set -eu\nsha256sum velnor-runner-linux-amd64.tar velnor-dind-linux-amd64.tar > SHA256SUMS"
       - name: Upload image assets
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
           name: image-assets
@@ -48,7 +48,7 @@ jobs:
       - build-images
     steps:
       - name: Download built assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: image-assets
           path: assets
@@ -72,7 +72,7 @@ jobs:
           fetch-depth: "1"
           persist-credentials: "false"
       - name: Download built assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: image-assets
           path: assets
@@ -117,7 +117,7 @@ jobs:
       - name: Checksum built bytes
         run: "set -eu\nshasum -a 256 velnor-host > SHA256SUMS"
       - name: Upload binary asset
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
           name: binary-assets
@@ -137,7 +137,7 @@ jobs:
       - build-binary
     steps:
       - name: Download built assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: binary-assets
           path: assets
@@ -161,7 +161,7 @@ jobs:
           fetch-depth: "1"
           persist-credentials: "false"
       - name: Download built assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: binary-assets
           path: assets

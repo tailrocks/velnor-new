@@ -17,7 +17,7 @@ use velnor_actions_workflow_steps::{RenderError, commands, steps};
 
 /// Forge-token env key every release-plz step carries.
 ///
-/// release-plz 0.3.169 reads `--git-token` from `GIT_TOKEN`, never from
+/// release-plz 0.3.171 reads `--git-token` from `GIT_TOKEN`, never from
 /// `GITHUB_TOKEN`; every phase (including `--dry-run`) requires it.
 pub const GIT_TOKEN_ENV: &str = "GIT_TOKEN";
 /// Exact secret reference bound to [`GIT_TOKEN_ENV`] (env-only, never argv).

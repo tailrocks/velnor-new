@@ -233,7 +233,7 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
         "actionlint = \"1.7.12\"",
         "shellcheck = \"0.11.0\"",
         "zizmor = \"1.30.1\"",
-        "nextest = \"0.9.146\"",
+        "nextest = \"0.9.148\"",
     ] {
         assert!(policy.contains(marker), "policy misses {marker}");
     }

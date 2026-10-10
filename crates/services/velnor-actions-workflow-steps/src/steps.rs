@@ -61,18 +61,18 @@ pub const ASSET_URL_ENV: &str = "VELNOR_ASSET_URL";
 pub const RELEASE_COMMIT_ENV: &str = "VELNOR_RELEASE_COMMIT";
 /// Substrings that must never appear in rendered YAML.
 pub const FORBIDDEN_TOKENS: &[&str] = &["__internal", "velnor-actions __", "velnor-actions run"];
-/// Pinned `actions/upload-artifact` ref (v7.0.1, qualified 2026-09-28).
+/// Pinned `actions/upload-artifact` ref (v7.0.2, qualified 2026-10-10).
 pub const UPLOAD_ARTIFACT_USES: &str =
-    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+    "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9";
 /// Retention for every rendered `upload-artifact` step, in days.
 ///
 /// Run-scoped evidence reproducible by rerun; bounded well under the
 /// 90-day platform default to cap stored bytes. Every constructor
 /// below emits this value as `retention-days`; no site retypes it.
 pub const ARTIFACT_RETENTION_DAYS: u32 = 30;
-/// Pinned `actions/download-artifact` ref (v8.0.1, qualified 2026-09-28).
+/// Pinned `actions/download-artifact` ref (v8.0.2, qualified 2026-10-10).
 pub const DOWNLOAD_ARTIFACT_USES: &str =
-    "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c";
+    "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
 /// Candidate manifest filename inside the uploaded artifact.
 pub const CANDIDATE_MANIFEST_FILE: &str = "candidate-manifest.json";
 /// Directory holding the built candidate binary plus its manifest.

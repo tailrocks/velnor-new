@@ -72,7 +72,7 @@ jobs:
         uses: ./.github/actions/generator-release-build-linux # zizmor: ignore[self-repository]
       - name: Upload Linux assets
         id: upload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
           name: generator-linux-assets
@@ -138,7 +138,7 @@ jobs:
         uses: ./.github/actions/generator-release-build-macos # zizmor: ignore[self-repository]
       - name: Upload macOS assets
         id: upload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
           name: generator-macos-assets
@@ -204,7 +204,7 @@ jobs:
         uses: ./.github/actions/generator-release-build-macos-intel # zizmor: ignore[self-repository]
       - name: Upload macOS x86_64 assets
         id: upload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
           name: generator-macos-intel-assets
@@ -279,7 +279,7 @@ jobs:
           cache: "false"
           cache_save: "false"
       - name: Download exact build artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.build-linux.outputs.artifact_id }}
           path: linux-assets
@@ -293,7 +293,7 @@ jobs:
         shell: bash
         run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-0.1.7-x86_64-unknown-linux-gnu' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu.sha256')\"\njq -e --arg version \"0.1.7\" --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"x86_64-unknown-linux-gnu\" --arg asset \"velnor-actions-0.1.7-x86_64-unknown-linux-gnu\" --arg sha256 \"$digest\" --arg rust '1.98.1' --arg mr_boxington '1.21.1' '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain[\"mr-boxington\"] == $mr_boxington' linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu.provenance.json > /dev/null"
       - name: Download exact build artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.build-macos.outputs.artifact_id }}
           path: macos-assets
@@ -307,7 +307,7 @@ jobs:
         shell: bash
         run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-0.1.7-aarch64-apple-darwin' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin.sha256')\"\njq -e --arg version \"0.1.7\" --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"aarch64-apple-darwin\" --arg asset \"velnor-actions-0.1.7-aarch64-apple-darwin\" --arg sha256 \"$digest\" --arg rust '1.98.1' --arg mr_boxington '1.21.1' '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain[\"mr-boxington\"] == $mr_boxington' macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin.provenance.json > /dev/null"
       - name: Download exact build artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.build-macos-intel.outputs.artifact_id }}
           path: macos-intel-assets
@@ -332,7 +332,7 @@ jobs:
         run: "set -eu\ndigest=\"$(sha256sum 'manifest-assets/release-manifest.json' | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')\"\ntest \"${#digest}\" -eq 64\nprintf 'manifest_sha256=%s\\n' \"$digest\" >> \"$GITHUB_OUTPUT\""
       - name: Upload same-run release manifest
         id: upload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
           name: generator-release-manifest
@@ -401,7 +401,7 @@ jobs:
           manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
       - name: Upload verified immutable release acceptance
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
           name: generator-release-accepted-${{ github.sha }}

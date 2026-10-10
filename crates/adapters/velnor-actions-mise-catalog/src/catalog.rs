@@ -1,6 +1,6 @@
 //! Pinned tool catalog: exact mise tool selectors for every Velnor command.
 //!
-//! Qualified pins (rechecked 2026-09-30); project `mise.toml` selectors
+//! Qualified pins (rechecked 2026-10-10); project `mise.toml` selectors
 //! never alter these pins.
 
 use velnor_actions_contract_release::ToolIdentity;
@@ -49,9 +49,9 @@ pub const SHELLCHECK_VERSION: &str = "0.11.0";
 /// Source: `https://api.github.com/repos/zizmorcore/zizmor/releases/latest`; checked 2026-09-28.
 pub const ZIZMOR_VERSION: &str = "1.30.1";
 /// Qualified cargo-nextest release (`nextest-rs/nextest` tag
-/// `cargo-nextest-0.9.146`, published 2026-09-21).
-/// Source: `https://crates.io/api/v1/crates/cargo-nextest`; checked 2026-09-29.
-pub const NEXTEST_VERSION: &str = "0.9.146";
+/// `cargo-nextest-0.9.148`).
+/// Source: `https://crates.io/api/v1/crates/cargo-nextest`; checked 2026-10-10.
+pub const NEXTEST_VERSION: &str = "0.9.148";
 /// Qualified `OpenTofu` engine release (tag `v1.13.1`).
 /// Source: `https://github.com/opentofu/opentofu/releases/tag/v1.13.1`; checked 2026-10-02.
 /// Install: bare `opentofu@<exact>` via the aqua backend (isolated probe
@@ -72,9 +72,9 @@ pub const OPENTOFU_SHA256_DARWIN_AMD64: &str =
 /// sha256 of `tofu_1.13.1_darwin_arm64.tar.gz` (same `SHA256SUMS`, verified 2026-10-02).
 pub const OPENTOFU_SHA256_DARWIN_ARM64: &str =
     "be78f659f04ef06a9dbd9b3934d46af95d787a3aa38396d459dea395261816a9";
-/// Qualified release-plz coordinator release (tag `release-plz-v0.3.169`).
-/// Source: `https://crates.io/api/v1/crates/release-plz`; checked 2026-09-30.
-pub const RELEASE_PLZ_VERSION: &str = "0.3.169";
+/// Qualified release-plz coordinator release (tag `release-plz-v0.3.171`).
+/// Source: `https://crates.io/api/v1/crates/release-plz`; checked 2026-10-10.
+pub const RELEASE_PLZ_VERSION: &str = "0.3.171";
 
 // Nextest needs its backend-qualified aqua-registry path: no `nextest`
 // shorthand exists, `github:` tags carry a `cargo-nextest-` prefix, and

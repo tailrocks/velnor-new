@@ -32,7 +32,7 @@ runs:
       shell: bash
       run: mise --no-config --no-env --no-hooks install gh@2.102.0
     - name: Download exact release build artifact
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
       with:
         artifact-ids: ${{ inputs.linux_artifact_id }}
         path: linux-assets
@@ -43,7 +43,7 @@ runs:
       shell: bash
       run: "set -eu\ntest -f linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu\ntest ! -L linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu\ntest -x linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu\ntest -f linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu.sha256\ntest ! -L linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu.sha256\ntest ! -x linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu.sha256\ntest -f linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu.provenance.json\ntest ! -L linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu.provenance.json\ntest ! -x linux-assets/velnor-actions-0.1.7-x86_64-unknown-linux-gnu.provenance.json"
     - name: Download exact release build artifact
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
       with:
         artifact-ids: ${{ inputs.macos_arm64_artifact_id }}
         path: macos-assets
@@ -54,7 +54,7 @@ runs:
       shell: bash
       run: "set -eu\ntest -f macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin\ntest ! -L macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin\ntest -x macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin\ntest -f macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin.sha256\ntest ! -L macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin.sha256\ntest ! -x macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin.sha256\ntest -f macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin.provenance.json\ntest ! -L macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin.provenance.json\ntest ! -x macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin.provenance.json"
     - name: Download exact release build artifact
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
       with:
         artifact-ids: ${{ inputs.macos_x86_64_artifact_id }}
         path: macos-intel-assets
@@ -65,7 +65,7 @@ runs:
       shell: bash
       run: "set -eu\ntest -f macos-intel-assets/velnor-actions-0.1.7-x86_64-apple-darwin\ntest ! -L macos-intel-assets/velnor-actions-0.1.7-x86_64-apple-darwin\ntest -x macos-intel-assets/velnor-actions-0.1.7-x86_64-apple-darwin\ntest -f macos-intel-assets/velnor-actions-0.1.7-x86_64-apple-darwin.sha256\ntest ! -L macos-intel-assets/velnor-actions-0.1.7-x86_64-apple-darwin.sha256\ntest ! -x macos-intel-assets/velnor-actions-0.1.7-x86_64-apple-darwin.sha256\ntest -f macos-intel-assets/velnor-actions-0.1.7-x86_64-apple-darwin.provenance.json\ntest ! -L macos-intel-assets/velnor-actions-0.1.7-x86_64-apple-darwin.provenance.json\ntest ! -x macos-intel-assets/velnor-actions-0.1.7-x86_64-apple-darwin.provenance.json"
     - name: Download canonical same-run release manifest
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
       with:
         artifact-ids: ${{ inputs.manifest_artifact_id }}
         path: manifest-assets
@@ -75,22 +75,22 @@ runs:
       shell: bash
       run: "set -eu\nexpected=\"$VELNOR_RELEASE_MANIFEST_SHA256\"\nactual=\"$(sha256sum 'manifest-assets/release-manifest.json' | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')\"\ntest \"${#expected}\" -eq 64\ntest \"$actual\" = \"$expected\""
     - name: Download verified release attestation bundles
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
       with:
         name: generator-linux-assets-attestations
         path: release-attestations
     - name: Download verified release attestation bundles
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
       with:
         name: generator-macos-assets-attestations
         path: release-attestations
     - name: Download verified release attestation bundles
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
       with:
         name: generator-macos-intel-assets-attestations
         path: release-attestations
     - name: Download verified release attestation bundles
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
       with:
         name: generator-release-manifest-attestations
         path: release-attestations

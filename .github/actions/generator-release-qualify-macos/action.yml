@@ -24,7 +24,7 @@ runs:
         cache: "false"
         cache_save: "false"
     - name: Download built asset archive
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
       with:
         artifact-ids: ${{ inputs.artifact_id }}
         path: macos-assets
@@ -35,7 +35,7 @@ runs:
       shell: bash
       run: "set -eu\ntest -f macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin\ntest ! -L macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin\ntest -x macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin\ntest -f macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin.sha256\ntest ! -L macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin.sha256\ntest ! -x macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin.sha256\ntest -f macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin.provenance.json\ntest ! -L macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin.provenance.json\ntest ! -x macos-assets/velnor-actions-0.1.7-aarch64-apple-darwin.provenance.json"
     - name: Download canonical same-run candidate manifest
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
       with:
         artifact-ids: ${{ inputs.manifest_artifact_id }}
         path: manifest-assets

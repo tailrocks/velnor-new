@@ -90,7 +90,7 @@ fn scalar_validators_accept_and_reject() -> Result<(), RenderError> {
     assert!(validate_plan_id("").is_err());
     validate_package_name("velnor-actions-cli")?;
     assert!(validate_package_name("-bad").is_err());
-    validate_package_version("0.3.169")?;
+    validate_package_version("0.3.171")?;
     assert!(validate_package_version("1.2").is_err());
     Ok(())
 }

@@ -18,7 +18,7 @@ const BUILDX: &str = "inputs.mode == 'features' || inputs.mode == 'buildx'";
 const NEGATIVE: &str = "inputs.mode == 'negative'";
 
 /// Pinned `actions/checkout` used by qualification jobs.
-const UPLOAD_USES: &str = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+const UPLOAD_USES: &str = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9";
 const REDIS_OPTIONS: &str =
     "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12";
 /// Host-style steps reach a published service port on localhost.

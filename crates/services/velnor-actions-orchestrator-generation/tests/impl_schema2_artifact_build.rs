@@ -78,7 +78,7 @@ fn artifact_build_tasks_follow_each_execution_mode_and_gate_required() -> TestRe
             "VELNOR_ARTIFACT_SOURCE_SHA: ${{ matrix.source_sha }}",
             "VELNOR_ARTIFACT_PLAN_DIGEST: ${{ matrix.plan_digest }}",
             "Upload verified build outputs",
-            "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+            "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
             "name: ${{ matrix.artifact_name }}",
             "artifact-builds/${{ matrix.artifact_name }}",
             "if-no-files-found: error",

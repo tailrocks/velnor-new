@@ -4,7 +4,7 @@
 # equal the compiled catalog in velnor-actions-mise-catalog/src/catalog.rs (checked
 # by `verify_version_policy` during dogfood generate); the [[actions]]
 # mirror MUST equal the action pins in .velnor/freshness-inventory.json
-# (qualified 2026-10-03; checked by scripts/check-freshness.sh).
+# (qualified 2026-10-10; checked by scripts/check-freshness.sh).
 # [validation-tools] pins repo-local verification tools activated for
 # manual risk-triggered runs (cargo-mutants; NOT wired into CI).
 # Consumer repositories do not need this file; the generator never
@@ -23,9 +23,9 @@ gh = "2.102.0"
 actionlint = "1.7.12"
 shellcheck = "0.11.0"
 zizmor = "1.30.1"
-nextest = "0.9.146"
+nextest = "0.9.148"
 opentofu = "1.13.1"
-release-plz = "0.3.169"
+release-plz = "0.3.171"
 
 [github_runner_images.linux_x64]
 default = "ubuntu-26.04"
@@ -45,15 +45,15 @@ reviewed = "2026-09-28"
 
 [[actions]]
 name = "actions/download-artifact"
-version = "v8.0.1"
-sha = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
-reviewed = "2026-09-28"
+version = "v8.0.2"
+sha = "9000827ccba6bdab643e8b6fd33ac0654aef8333"
+reviewed = "2026-10-10"
 
 [[actions]]
 name = "actions/upload-artifact"
-version = "v7.0.1"
-sha = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
-reviewed = "2026-09-28"
+version = "v7.0.2"
+sha = "cf430e030ddbb5b0abf93d22962f4752f3646cd9"
+reviewed = "2026-10-10"
 
 [[actions]]
 name = "actions/cache/restore"

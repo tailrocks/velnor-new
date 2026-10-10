@@ -46,15 +46,15 @@ pub const CHECKOUT_ACTION_VERSION: &str = "v7.0.1";
 /// Full commit SHA for [`CHECKOUT_ACTION_VERSION`] (`v7` moves with it).
 pub const CHECKOUT_ACTION_SHA: &str = "3d3c42e5aac5ba805825da76410c181273ba90b1";
 /// Qualified `actions/download-artifact` release.
-/// Source: `https://api.github.com/repos/actions/download-artifact/releases/latest`; checked 2026-09-28.
-pub const DOWNLOAD_ARTIFACT_ACTION_VERSION: &str = "v8.0.1";
+/// Source: `https://api.github.com/repos/actions/download-artifact/releases/latest`; checked 2026-10-10.
+pub const DOWNLOAD_ARTIFACT_ACTION_VERSION: &str = "v8.0.2";
 /// Full commit SHA for [`DOWNLOAD_ARTIFACT_ACTION_VERSION`] (`v8` moves with it).
-pub const DOWNLOAD_ARTIFACT_ACTION_SHA: &str = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c";
+pub const DOWNLOAD_ARTIFACT_ACTION_SHA: &str = "9000827ccba6bdab643e8b6fd33ac0654aef8333";
 /// Qualified `actions/upload-artifact` release.
-/// Source: `https://api.github.com/repos/actions/upload-artifact/releases/latest`; checked 2026-09-28.
-pub const UPLOAD_ARTIFACT_ACTION_VERSION: &str = "v7.0.1";
+/// Source: `https://api.github.com/repos/actions/upload-artifact/releases/latest`; checked 2026-10-10.
+pub const UPLOAD_ARTIFACT_ACTION_VERSION: &str = "v7.0.2";
 /// Full commit SHA for [`UPLOAD_ARTIFACT_ACTION_VERSION`] (`v7` moves with it).
-pub const UPLOAD_ARTIFACT_ACTION_SHA: &str = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+pub const UPLOAD_ARTIFACT_ACTION_SHA: &str = "cf430e030ddbb5b0abf93d22962f4752f3646cd9";
 /// Qualified `actions/cache` release (shared by `restore` and `save`).
 /// Source: `https://api.github.com/repos/actions/cache/releases/latest`; checked 2026-09-28.
 pub const CACHE_ACTION_VERSION: &str = "v6.1.0";
