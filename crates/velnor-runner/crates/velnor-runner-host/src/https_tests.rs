@@ -2,7 +2,7 @@
 
 use velnor_runner_github::{Method, SessionRequest};
 
-use super::https::{CURL_ARGV, HttpsTransport, join_url};
+use super::https::{CURL_ARGV, HttpsTransport, join_url, trace_lines};
 use crate::error::HostError;
 
 #[test]
@@ -55,4 +55,51 @@ fn curl_argv_has_no_header() {
     assert!(rendered.contains("[redacted]"));
     assert!(!rendered.contains("secret"));
     assert!(!CURL_ARGV.iter().any(|arg| arg.contains("Authorization")));
+}
+
+#[test]
+fn trace_preserves_success_and_empty_response_metadata() {
+    let request = trace_request();
+    assert_eq!(
+        trace_lines("https://api.github.com", &request, 200, 12),
+        ["trace host=api.github.com verb=GET path=/repos/o/r/actions/runners status=200 bytes=12"]
+    );
+    assert_eq!(
+        trace_lines("https://api.github.com", &request, 204, 0),
+        ["trace host=api.github.com verb=GET path=/repos/o/r/actions/runners status=204 bytes=0"]
+    );
+}
+
+#[test]
+fn trace_omits_non_jwt_and_jwt_error_body_fixtures() {
+    let request = trace_request();
+    let fixtures = [
+        (
+            401,
+            r#"{"message":"invalid credential","access_token":"synthetic-pat-marker-not-a-secret"}"#,
+        ),
+        (
+            503,
+            r#"{"message":"expired credential","id_token":"eyJ_FAKE_HEADER.payload.signature"}"#,
+        ),
+    ];
+    for (status, fixture) in fixtures {
+        let lines = trace_lines("https://api.github.com", &request, status, fixture.len());
+        let trace = lines.join("\n");
+        assert!(trace.contains(&format!("status={status} bytes={}", fixture.len())));
+        assert!(trace.contains("trace body=omitted"));
+        assert!(!trace.contains(fixture));
+        assert!(!trace.contains("synthetic-pat-marker-not-a-secret"));
+        assert!(!trace.contains("eyJ_FAKE_HEADER"));
+    }
+}
+
+fn trace_request() -> SessionRequest {
+    SessionRequest {
+        method: Method::Get,
+        path: "/repos/o/r/actions/runners".to_owned(),
+        query: None,
+        headers: Vec::new(),
+        body: Vec::new(),
+    }
 }
