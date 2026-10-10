@@ -240,7 +240,6 @@ matching_regex = '^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|l
 version = "1.23.0"
 [tools."rust"]
 version = "1.99.0"
-mr_boxington = true
 components = "clippy,rustfmt"
 targets = "aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu"
 [tools."swiftlint"]
@@ -250,9 +249,6 @@ os = ["macos"]
 version = "2.46.0"
 [settings]
 lockfile = true
-[settings.cargo]
-binstall = true
-binstall_only = true
 "#;
 
 /// Synthetic source-bound task/tool fixture for the resolver integration.
