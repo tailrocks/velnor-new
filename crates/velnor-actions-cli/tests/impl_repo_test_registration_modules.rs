@@ -90,13 +90,9 @@ impl<'ast> Visit<'ast> for ModuleCollector {
 pub(super) fn source_closure(
     root: &Path,
     compiler_dependencies: &HashSet<PathBuf>,
-    cargo_target_directory: &Path,
+    cargo_out_dir: Option<&Path>,
 ) -> Outcome<HashSet<PathBuf>> {
-    source_closure_with_evidence(
-        root,
-        Some(compiler_dependencies),
-        Some(cargo_target_directory),
-    )
+    source_closure_with_evidence(root, Some(compiler_dependencies), cargo_out_dir)
 }
 
 pub(super) fn declared_target_source_closure(root: &Path) -> Outcome<HashSet<PathBuf>> {
@@ -106,10 +102,9 @@ pub(super) fn declared_target_source_closure(root: &Path) -> Outcome<HashSet<Pat
 fn source_closure_with_evidence(
     root: &Path,
     compiler_dependencies: Option<&HashSet<PathBuf>>,
-    cargo_target_directory: Option<&Path>,
+    cargo_out_dir: Option<&Path>,
 ) -> Outcome<HashSet<PathBuf>> {
     let root = root.canonicalize()?;
-    let cargo_target_directory = cargo_target_directory.map(Path::canonicalize).transpose()?;
     let source_base = root
         .parent()
         .ok_or("test source has no parent")?
@@ -155,7 +150,7 @@ fn source_closure_with_evidence(
                 &findings,
                 &file,
                 compiler_dependencies,
-                cargo_target_directory.as_deref(),
+                cargo_out_dir,
                 &mut pending,
             )?;
             records.push(SourceRecord { file, findings });
@@ -181,7 +176,7 @@ fn enqueue_source_includes(
     findings: &graph::SourceFindings,
     file: &ModuleFile,
     compiler_dependencies: Option<&HashSet<PathBuf>>,
-    cargo_target_directory: Option<&Path>,
+    cargo_out_dir: Option<&Path>,
     pending: &mut VecDeque<ModuleFile>,
 ) -> Outcome<()> {
     for include in &findings.includes {
@@ -196,10 +191,10 @@ fn enqueue_source_includes(
                 }
                 let dependencies = compiler_dependencies
                     .ok_or("Cargo OUT_DIR include has no compiled artifact evidence")?;
-                let target_directory = cargo_target_directory
-                    .ok_or("Cargo OUT_DIR include has no Cargo target directory")?;
+                let out_dir =
+                    cargo_out_dir.ok_or("Cargo OUT_DIR include has no compiler OUT_DIR binding")?;
                 let generated =
-                    out_dir::resolve_cargo_out_dir_source(suffix, dependencies, target_directory)?;
+                    out_dir::resolve_cargo_out_dir_source(suffix, dependencies, out_dir)?;
                 enqueue_compiled_include(
                     &generated,
                     condition,

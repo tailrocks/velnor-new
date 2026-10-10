@@ -78,7 +78,7 @@ fn compiled_test_sources(workspace: &WorkspacePlan) -> Outcome<HashSet<PathBuf>>
             sources.extend(modules::source_closure(
                 &artifact.source,
                 &artifact.dependencies,
-                &nested_target,
+                artifact.out_dir.as_deref(),
             )?);
         }
     }
@@ -103,6 +103,7 @@ fn compiled_test_sources(workspace: &WorkspacePlan) -> Outcome<HashSet<PathBuf>>
 struct TestArtifact {
     source: PathBuf,
     dependencies: HashSet<PathBuf>,
+    out_dir: Option<PathBuf>,
 }
 
 fn test_artifact(
@@ -140,9 +141,8 @@ fn test_artifact(
         }
         return Ok(None);
     }
-    let dependencies: HashSet<PathBuf> = dep_info::sources(&dep_info, &workspace.root)?
-        .into_iter()
-        .collect();
+    let evidence = dep_info::parse(&dep_info, &workspace.root)?;
+    let dependencies = evidence.prerequisites;
     let source = PathBuf::from(
         message["target"]["src_path"]
             .as_str()
@@ -159,6 +159,7 @@ fn test_artifact(
     Ok(Some(TestArtifact {
         source,
         dependencies,
+        out_dir: evidence.out_dir,
     }))
 }
 

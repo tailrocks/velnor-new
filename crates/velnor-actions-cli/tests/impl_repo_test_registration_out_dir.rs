@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 use std::error::Error;
-use std::ffi::{OsStr, OsString};
+use std::fs;
 use std::path::{Path, PathBuf};
 
 type Outcome<T> = Result<T, Box<dyn Error>>;
@@ -10,39 +10,50 @@ type Outcome<T> = Result<T, Box<dyn Error>>;
 pub(super) fn resolve_cargo_out_dir_source(
     suffix: &Path,
     compiler_dependencies: &HashSet<PathBuf>,
-    cargo_target_directory: &Path,
+    compiler_out_dir: &Path,
 ) -> Outcome<PathBuf> {
     validate_suffix(suffix)?;
-    let target_directory = cargo_target_directory.canonicalize()?;
-    let mut matches = compiler_dependencies
-        .iter()
-        .filter_map(|dependency| {
-            let source = dependency.canonicalize().ok()?;
-            (source
-                .extension()
-                .is_some_and(|extension| extension == "rs")
-                && source.is_file()
-                && cargo_build_out_source(&source, suffix, &target_directory))
-            .then_some(source)
-        })
-        .collect::<Vec<_>>();
-    matches.sort();
-    matches.dedup();
-    match matches.as_slice() {
-        [source] => Ok(source.clone()),
-        [] => Err(format!(
-            "Cargo OUT_DIR include has no matching Rust source in artifact dep-info under {}: {}",
-            target_directory.display(),
-            suffix.display()
+    let out_dir = compiler_out_dir.canonicalize()?;
+    if compiler_out_dir.as_os_str() != out_dir.as_os_str() {
+        return Err(format!(
+            "compiler OUT_DIR is not its exact canonical path: {}",
+            compiler_out_dir.display()
         )
-        .into()),
-        _ => Err(format!(
-            "Cargo OUT_DIR include is ambiguous in artifact dep-info for {}: {} candidates",
-            suffix.display(),
-            matches.len()
-        )
-        .into()),
+        .into());
     }
+    if !out_dir.is_dir() {
+        return Err(format!("compiler OUT_DIR is not a directory: {}", out_dir.display()).into());
+    }
+    let expected = out_dir.join(suffix);
+    let metadata = fs::symlink_metadata(&expected).map_err(|error| {
+        format!(
+            "compiler OUT_DIR source is missing {}: {error}",
+            expected.display()
+        )
+    })?;
+    if !metadata.file_type().is_file() {
+        return Err(format!(
+            "compiler OUT_DIR source is not a regular non-symlink file: {}",
+            expected.display()
+        )
+        .into());
+    }
+    let source = expected.canonicalize()?;
+    if source.as_os_str() != expected.as_os_str() {
+        return Err(format!(
+            "compiler OUT_DIR source resolves outside its exact path: {}",
+            expected.display()
+        )
+        .into());
+    }
+    if !compiler_dependencies.contains(&source) {
+        return Err(format!(
+            "compiler OUT_DIR source is absent from this artifact's dep-info: {}",
+            source.display()
+        )
+        .into());
+    }
+    Ok(source)
 }
 
 fn validate_suffix(suffix: &Path) -> Outcome<()> {
@@ -57,35 +68,6 @@ fn validate_suffix(suffix: &Path) -> Outcome<()> {
         return Err("Cargo OUT_DIR suffix is not a safe relative Rust source path".into());
     }
     Ok(())
-}
-
-fn cargo_build_out_source(source: &Path, suffix: &Path, target: &Path) -> bool {
-    let Ok(relative) = source.strip_prefix(target) else {
-        return false;
-    };
-    let Some(parts) = path_components(relative) else {
-        return false;
-    };
-    let Some(suffix_parts) = path_components(suffix) else {
-        return false;
-    };
-    (1..parts.len()).any(|build| {
-        parts[build] == OsStr::new("build")
-            && (build == 1 || build == 2)
-            && parts[build - 1] == OsStr::new("debug")
-            && parts.get(build + 1).is_some_and(|unit| !unit.is_empty())
-            && parts.get(build + 2) == Some(&OsString::from("out"))
-            && parts.get(build + 3..) == Some(suffix_parts.as_slice())
-    })
-}
-
-fn path_components(path: &Path) -> Option<Vec<OsString>> {
-    path.components()
-        .map(|component| match component {
-            std::path::Component::Normal(part) => Some(part.to_os_string()),
-            _ => None,
-        })
-        .collect()
 }
 
 #[cfg(test)]
@@ -143,30 +125,83 @@ mod tests {
     #[test]
     fn out_dir_resolution_requires_unique_in_scope_dep_info() -> Outcome<()> {
         let scratch = ScratchDir::create()?;
-        let target = scratch.0.join("target");
-        let first = target.join("debug/build/first-123/out/generated.rs");
-        let second = target.join("debug/build/second-456/out/generated.rs");
-        let triple = target.join("aarch64-apple-darwin/debug/build/triple-789/out/generated.rs");
-        let outside = scratch.0.join("generated.rs");
-        for source in [&first, &second, &triple, &outside] {
+        let out_dir = scratch.0.join("compiler cache with spaces/out");
+        let other_out_dir = scratch.0.join("other compiler cache/out");
+        let generated = out_dir.join("nested/generated.rs");
+        let other_generated = other_out_dir.join("nested/generated.rs");
+        let unrelated = scratch.0.join("unrelated/generated.rs");
+        for source in [&generated, &other_generated, &unrelated] {
             fs::create_dir_all(source.parent().ok_or("fixture source has no parent")?)?;
             fs::write(source, "#[test] fn generated() {}\n")?;
         }
-        let suffix = Path::new("generated.rs");
-        assert!(resolve_cargo_out_dir_source(suffix, &HashSet::new(), &target).is_err());
-        let outside_dependency = HashSet::from([outside.canonicalize()?]);
-        assert!(resolve_cargo_out_dir_source(suffix, &outside_dependency, &target).is_err());
-        let ambiguous = HashSet::from([first.canonicalize()?, second.canonicalize()?]);
-        assert!(resolve_cargo_out_dir_source(suffix, &ambiguous, &target).is_err());
-        let unique = HashSet::from([first.canonicalize()?]);
+        let suffix = Path::new("nested/generated.rs");
+        assert!(resolve_cargo_out_dir_source(suffix, &HashSet::new(), &out_dir).is_err());
+        let cross_artifact = HashSet::from([other_generated.canonicalize()?]);
+        assert!(resolve_cargo_out_dir_source(suffix, &cross_artifact, &out_dir).is_err());
+        let unrelated_dependency = HashSet::from([unrelated.canonicalize()?]);
+        assert!(resolve_cargo_out_dir_source(suffix, &unrelated_dependency, &out_dir).is_err());
+        let unique = HashSet::from([generated.canonicalize()?]);
         assert_eq!(
-            resolve_cargo_out_dir_source(suffix, &unique, &target)?,
-            first.canonicalize()?
+            resolve_cargo_out_dir_source(suffix, &unique, &out_dir)?,
+            generated.canonicalize()?
         );
-        let target_specific = HashSet::from([triple.canonicalize()?]);
-        assert_eq!(
-            resolve_cargo_out_dir_source(suffix, &target_specific, &target)?,
-            triple.canonicalize()?
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn out_dir_resolution_rejects_symlinked_generated_source() -> Outcome<()> {
+        use std::os::unix::fs::symlink;
+
+        let scratch = ScratchDir::create()?;
+        let out_dir = scratch.0.join("out");
+        let outside = scratch.0.join("outside.rs");
+        let generated = out_dir.join("generated.rs");
+        fs::create_dir_all(&out_dir)?;
+        fs::write(&outside, "#[test] fn generated() {}\n")?;
+        symlink(&outside, &generated)?;
+        let dependencies = HashSet::from([outside.canonicalize()?]);
+        assert!(
+            resolve_cargo_out_dir_source(Path::new("generated.rs"), &dependencies, &out_dir)
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn out_dir_resolution_rejects_symlinked_out_dir_and_intermediate_path() -> Outcome<()> {
+        use std::os::unix::fs::symlink;
+
+        let scratch = ScratchDir::create()?;
+        let actual_out_dir = scratch.0.join("actual-out");
+        let aliased_out_dir = scratch.0.join("out-alias");
+        let actual_nested = scratch.0.join("actual-nested");
+        let nested_alias = actual_out_dir.join("nested");
+        let generated = actual_nested.join("generated.rs");
+        fs::create_dir_all(&actual_out_dir)?;
+        fs::create_dir_all(&actual_nested)?;
+        fs::write(&generated, "#[test] fn generated() {}\n")?;
+        symlink(&actual_out_dir, &aliased_out_dir)?;
+        symlink(&actual_nested, &nested_alias)?;
+        let dependencies = HashSet::from([generated.canonicalize()?]);
+        assert!(
+            resolve_cargo_out_dir_source(
+                Path::new("nested/generated.rs"),
+                &dependencies,
+                &aliased_out_dir
+            )
+            .is_err(),
+            "accepted a symlinked compiler OUT_DIR"
+        );
+        assert!(
+            resolve_cargo_out_dir_source(
+                Path::new("nested/generated.rs"),
+                &dependencies,
+                &actual_out_dir
+            )
+            .is_err(),
+            "accepted a symlinked intermediate source directory"
         );
         Ok(())
     }
@@ -243,8 +278,15 @@ mod tests {
             }
         }
         let artifact = artifact.ok_or("fixture produced no compiled test artifact")?;
+        let out_dir = artifact
+            .out_dir
+            .as_deref()
+            .ok_or("artifact dep-info omits Cargo OUT_DIR binding")?;
+        assert!(
+            super::super::source_closure(&artifact.source, &artifact.dependencies, None).is_err()
+        );
         let sources =
-            super::super::source_closure(&artifact.source, &artifact.dependencies, &target)?;
+            super::super::source_closure(&artifact.source, &artifact.dependencies, Some(out_dir))?;
         let generated = artifact
             .dependencies
             .iter()
