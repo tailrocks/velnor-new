@@ -56,7 +56,7 @@ pub(super) fn parse_step(step: &Step) -> Result<Option<ParsedTask>, RenderError>
     if crate::commands::join_argv_for_run(&argv)? != command {
         return Ok(None);
     }
-    if argv.len() < 3 || argv[0] != "mise" || argv[1] != "exec" {
+    if !has_fixed_mise_exec_prefix(&argv) {
         return Ok(None);
     }
     crate::commands::validate_command_argv(&argv)?;
@@ -121,6 +121,23 @@ fn safe_helper_path(helper: &str) -> bool {
                 && version
                     .split('.')
                     .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+        })
+}
+
+fn has_fixed_mise_exec_prefix(argv: &[String]) -> bool {
+    if argv.len() < 8
+        || argv[0] != "mise"
+        || argv[1..4] != ["--no-config", "--no-env", "--no-hooks"]
+        || argv[4] != "exec"
+    {
+        return false;
+    }
+    argv[5..]
+        .iter()
+        .position(|arg| arg == "--")
+        .is_some_and(|relative| {
+            let separator = relative + 5;
+            separator > 5 && separator + 1 < argv.len()
         })
 }
 

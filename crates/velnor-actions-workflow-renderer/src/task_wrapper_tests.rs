@@ -84,7 +84,7 @@ fn one_typed_action_serves_all_150_obligation_jobs_without_dropping_headers() {
         };
         assert_eq!(uses, "./.github/actions/declared-task-0");
         assert!(env.is_empty(), "task env crosses through declared inputs");
-        assert_eq!(with["argv_5"], format!("crate-{index}"));
+        assert_eq!(with["argv_10"], format!("crate-{index}"));
         assert_eq!(with["env_VELNOR_TASK_ID"], format!("task/{index}"));
         assert!(!with.contains_key("env_GITHUB_TOKEN"));
     }
@@ -98,7 +98,14 @@ fn dynamic_shell_expansion_and_typed_tofu_role_stay_unfactored() {
     };
     let command = crate::commands::join_argv_for_run(&[
         "mise".to_owned(),
+        "--no-config".to_owned(),
+        "--no-env".to_owned(),
+        "--no-hooks".to_owned(),
         "exec".to_owned(),
+        "rust@1.99.0".to_owned(),
+        "--".to_owned(),
+        "cargo".to_owned(),
+        "test".to_owned(),
         "--tool=$HOME".to_owned(),
     ])
     .expect("valid dynamic shell fixture");
@@ -151,8 +158,13 @@ fn obligation_step(index: usize, condition: &str) -> Step {
     env.extend(toolchain_env::credential_scrub());
     let argv = vec![
         "mise".to_owned(),
+        "--no-config".to_owned(),
+        "--no-env".to_owned(),
+        "--no-hooks".to_owned(),
         "exec".to_owned(),
-        "--tool=cargo".to_owned(),
+        "rust@1.99.0".to_owned(),
+        "--".to_owned(),
+        "cargo".to_owned(),
         "test".to_owned(),
         "-p".to_owned(),
         format!("crate-{index}"),
