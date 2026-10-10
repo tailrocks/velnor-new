@@ -1,4 +1,9 @@
-use super::*;
+use super::{
+    ACTION_NAME_PREFIX, BTreeMap, DECLARED_TASK_ACTION_PREFIX, EXECUTION_DIGEST_INPUT,
+    GENERATOR_VERSION_ENV, RUNNER_TEMP_EXPRESSION, RUNTIME_RUNNER_TEMP_ENV, RenderError,
+    RenderedFile, Shape, Step, StepKind, TASK_EXECUTION_DIGEST_ENV, TaskExecutionRef, Yaml,
+    composite, marker, steps, task_script, toolchain_env,
+};
 
 pub(super) fn validate_task_fields(
     argv: &[String],
@@ -52,12 +57,12 @@ pub(super) fn declared_task_call(
     action_id: usize,
     task: &TaskExecutionRef<'_>,
     original: &Step,
-) -> Result<Step, RenderError> {
+) -> Step {
     let with = BTreeMap::from([(
         EXECUTION_DIGEST_INPUT.to_owned(),
         task.execution_digest.clone(),
     )]);
-    Ok(Step {
+    Step {
         name: original.name.clone(),
         id: original.id,
         role: original.role,
@@ -67,7 +72,7 @@ pub(super) fn declared_task_call(
             with,
             env: BTreeMap::new(),
         },
-    })
+    }
 }
 
 /// Task manifests currently carry only the exact GitHub expression

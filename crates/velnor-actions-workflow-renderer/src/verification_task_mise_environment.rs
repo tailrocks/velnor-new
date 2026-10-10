@@ -1,4 +1,4 @@
-use super::*;
+use super::VerificationTaskPolicy;
 
 pub(super) fn base_environment(root: &str) -> Vec<String> {
     vec![
