@@ -1,4 +1,4 @@
-**Status:** Proposed implementation specification. No task execution behavior is implemented.
+**Status:** Proposed end-to-end workflow specification. The current task-execution manifest and resolver boundary is described below; generated-workflow acceptance remains pending.
 
 # Velnor Actions V1 Rust workflow-task execution contract
 
@@ -9,6 +9,59 @@ the local command. This is the Rust adapter's execution extension. Future stack 
 their own workflow steps; the orchestrator handles typed task definitions
 without assuming Cargo, Clippy, MBX, or Nextest. Internal task identities are
 used in plans and reports only. Velnor V1 does not generate Mise task files.
+
+## Current manifest and resolver boundary
+
+This section records the implemented data contract for generated task
+execution. It does not claim that the surrounding workflow proposal or hosted
+qualification has passed acceptance.
+
+The renderer writes canonical JSON to
+`.github/velnor/task-execution-manifest-v1.json`. The file starts with the
+standard generated-file marker containing the renderer version, followed by
+one canonical JSON object and a final newline. The resolver receives the
+expected renderer version independently and checks the exact marker before
+parsing the body.
+
+The object has schema `1` and a `tasks` map keyed by stable task ID. Each
+record carries `task_id`, the existing planner `task_digest`, canonical
+`toolchain_inputs`, fixed `argv`, sorted `env`, `matrix_id`, `matrix_key`,
+optional `matrix_max_parallel`, `report_helper_version`, and
+`execution_digest`. The full BLAKE3 execution digest is computed over
+canonical JSON containing every record field except itself. The full digest
+is the only resolver selector. The resolver requires exactly one matching
+record, derives `task_id` from that record, and then checks the planner's
+executable decision, task digest, matrix ID, and matrix key. The plan digest
+and execution digest remain separate bindings.
+
+Unknown fields, duplicate JSON keys, noncanonical JSON, mismatched map keys,
+invalid records, stale renderer markers, and digest mismatches fail closed.
+The repository-contained reader enforces symlink and size checks. The
+manifest limit is 8 MiB and 4,096 records.
+
+The manifest digest binds the original typed record, including literal
+`${{ runner.temp }}` expressions. Only after manifest and plan checks pass,
+the resolver replaces that exact expression in argv and environment values
+with the runner's absolute `RUNNER_TEMP`. Its statically supplied
+`VELNOR_RUNTIME_RUNNER_TEMP` must equal `RUNNER_TEMP`; other, malformed, or
+unresolved expressions are rejected. The private operation
+`resolve-task-execution-v1` receives the full digest through
+`VELNOR_TASK_EXECUTION_DIGEST` and the independently selected renderer
+version through `VELNOR_GENERATOR_VERSION`. It reads the workspace manifest
+and staged plan, emits one data frame, and never spawns the selected command.
+
+The NUL-framed data protocol has fixed field order: magic
+`VELNOR-TASK-EXECUTION-V1`; task ID; full execution digest; plan task digest;
+matrix ID; matrix key; report-helper version; matrix-cap-present flag; cap or
+empty field; argv count and argv fields; environment count and sorted key/value
+pairs; then `END`. Every field is NUL-terminated, including `END`; embedded
+NULs and trailing or truncated fields are invalid. The frame is at most 1 MiB,
+with at most 512 argv elements and 64 environment entries. The generated
+wrapper checks the report-helper version, validates complete frame
+consumption, reconstructs arrays without shell evaluation, then executes the
+argv directly with the validated environment. The workflow action input is
+the full `digest`; task ID stays in the manifest and plan-coverage condition,
+not as a second selector.
 
 Each matrix job MUST expose these named steps. A step MAY be a validated no-op, but it MUST write a
 report explaining why.
