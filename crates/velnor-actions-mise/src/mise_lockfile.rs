@@ -141,6 +141,7 @@ pub fn parse_mise_lockfile(text: &str) -> Result<MiseLockfile, String> {
         let (key, value) = split_setting(code, index)?;
         match (tool.as_ref(), platform.as_ref(), key) {
             (Some(name), None, "version") => {
+                let value = expect_quoted_string(value, index)?;
                 let entry = lock
                     .tools
                     .get_mut(name)
@@ -151,6 +152,7 @@ pub fn parse_mise_lockfile(text: &str) -> Result<MiseLockfile, String> {
                 entry.version = value;
             }
             (Some(name), Some(platform), "checksum") => {
+                let value = expect_quoted_string(value, index)?;
                 let entry = lock
                     .tools
                     .get_mut(name)
@@ -173,6 +175,14 @@ enum Header {
     /// `[tools.<key>."platforms.<platform>"]` checksums.
     Platform(String, String),
     /// Anything else (ignored for forward compatibility).
+    Other,
+}
+
+/// Parsed value shape for one lock setting.
+enum SettingValue {
+    /// Quoted strings are the only valid values for modeled lock fields.
+    Quoted(String),
+    /// Supported non-string TOML scalar/array values are ignored on extension keys.
     Other,
 }
 
@@ -225,25 +235,35 @@ fn unquote(key: &str, index: usize) -> Result<String, String> {
     Err(line_problem(index, "unterminated_key"))
 }
 
-/// Split one `key = "value"` (or `key = 123`) setting.
-fn split_setting(code: &str, index: usize) -> Result<(&str, String), String> {
+/// Split one supported TOML setting while preserving its value shape.
+fn split_setting(code: &str, index: usize) -> Result<(&str, SettingValue), String> {
     let (key, value) = code
         .split_once('=')
         .ok_or_else(|| line_problem(index, "expected_key_equals_value"))?;
     let key = key.trim();
     let trimmed = value.trim();
-    let value = trimmed
+    let value = if let Some(value) = trimmed
         .strip_prefix('"')
         .and_then(|rest| rest.strip_suffix('"'))
-        .map(str::to_owned)
-        .or_else(|| {
-            let integer = !trimmed.is_empty() && trimmed.bytes().all(|b| b.is_ascii_digit());
-            let array = trimmed.starts_with('[') && trimmed.ends_with(']');
-            (integer || array).then(|| trimmed.to_owned())
-        });
+    {
+        Some(SettingValue::Quoted(value.to_owned()))
+    } else {
+        let integer = !trimmed.is_empty() && trimmed.bytes().all(|b| b.is_ascii_digit());
+        let array = trimmed.starts_with('[') && trimmed.ends_with(']');
+        let boolean = matches!(trimmed, "true" | "false");
+        (integer || array || boolean).then_some(SettingValue::Other)
+    };
     match (key.is_empty(), value) {
         (false, Some(value)) => Ok((key, value)),
         _ => Err(line_problem(index, "expected_quoted_string")),
+    }
+}
+
+/// Require a string value for a modeled field such as `version` or `checksum`.
+fn expect_quoted_string(value: SettingValue, index: usize) -> Result<String, String> {
+    match value {
+        SettingValue::Quoted(value) => Ok(value),
+        SettingValue::Other => Err(line_problem(index, "expected_quoted_string")),
     }
 }
 
