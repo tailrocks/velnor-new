@@ -116,6 +116,18 @@ pub(super) fn gh_function(pins: &ProductReleasePins) -> Result<String, RenderErr
     workflow_steps::gh_function(&pins.gh_argv)
 }
 
+pub(super) fn mise_install_step(name: &str, argv: &[String]) -> Result<Yaml, RenderError> {
+    workflow_steps::mise_install_step(name, argv)
+}
+
+pub(super) fn command_step(name: &str, argv: &[String]) -> Result<Yaml, RenderError> {
+    workflow_steps::command_step(name, argv)
+}
+
+pub(super) fn bash_step(name: &str, run: &str) -> Yaml {
+    workflow_steps::bash_step(name, run)
+}
+
 pub(super) fn release_gate_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, RenderError> {
     Ok(vec![
         workflow_steps::command_step(

@@ -128,6 +128,11 @@ Dockerfile into a temporary build context, builds the probe image with the
 exact release source SHA label, inspects its fixed configuration, runs the
 isolated smoke check, and saves the archive. It does not build from a floating
 Rust image or execute a post-build tool from an unpinned package source.
+It reloads the exact saved archive into the selected daemon and inspects the
+loaded `linux/amd64` image before writing the manifest. The later release
+assembly step saves only the existing runner and DinD images; it verifies the
+probe archive and manifest exist, then checksums those same bytes without
+rewriting the probe archive.
 
 The build job produces `RESOURCE_PROBE_MANIFEST.json` from validated metadata
 of the image it actually built and saved. The manifest has a fixed schema and
