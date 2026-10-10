@@ -213,8 +213,7 @@ async fn scale_session(
         status: 0,
         step: "resource budget",
     })?;
-    let Some(permit) =
-        resource_probe::start_permit(docker, journal, resource_budget, rest.guest_admission).await
+    let Some(permit) = resource_probe::start_permit(docker, journal, resource_budget, rest).await
     else {
         return Ok(None);
     };
@@ -291,8 +290,7 @@ where
         status: 0,
         step: "resource budget",
     })?;
-    let Some(permit) =
-        resource_probe::start_permit(docker, journal, resource_budget, rest.guest_admission).await
+    let Some(permit) = resource_probe::start_permit(docker, journal, resource_budget, rest).await
     else {
         return Ok(None);
     };

@@ -4470,11 +4470,13 @@ dependencies = [
 name = "velnor-runner-host"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
  "bollard",
  "flate2",
  "futures-util",
  "getrandom 0.4.3",
  "libc",
+ "reqwest",
  "security-framework",
  "serde",
  "serde_json",
