@@ -154,10 +154,19 @@ transitions:
    on the same engine.
 7. Mark `Removed` only after exact same-engine inspection proves that ID is
    absent. Otherwise retain the row for recovery and block new probes.
-8. Missing or multiple candidates after an ambiguous create, changed engine,
+8. Missing or multiple candidates after an ambiguous create,
    role/label/config/image mismatch, unreadable state, unsupported status, or
    corrupt phase is `Quarantined`. Quarantine never triggers prefix deletion,
    prune, guessed ownership, or runner cleanup.
+
+A selected-engine identity or `DockerRootDir` change is a hard stop: perform no
+Docker mutation and mint no sample or permit under the replacement binding.
+Retain the journal's original engine/root binding so a later attempt can
+reconcile or clean it only after fresh `info` confirms that exact original
+engine and root again. A restarted or interrupted sample is never reused.
+This temporary endpoint drift is distinct from a row/container ownership,
+projection, configuration, or unsupported-state mismatch, which is
+quarantined.
 
 Resolve every unresolved row before a new probe. Inspect only its exact name
 or immutable ID, and clean only one fully matching owned container. A
