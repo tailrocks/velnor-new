@@ -374,8 +374,12 @@ fn render_merged(
     } else {
         jobs.clone()
     };
-    let (jobs, task_files) =
-        task_wrapper::factor_obligation_steps(&jobs, &ctx.checkout_uses, &ctx.generator_version)?;
+    let (jobs, task_files) = task_wrapper::factor_obligation_steps(
+        &jobs,
+        &ctx.checkout_uses,
+        &ctx.generator_version,
+        &ctx.workflow_tasks,
+    )?;
     let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
     let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
     shared.files.extend(task_files);

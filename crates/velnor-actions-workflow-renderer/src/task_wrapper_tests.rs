@@ -2,9 +2,15 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::cachekey::{ToolchainInputs, toolchain_id};
 use velnor_actions_contract::workflow::crate_job::task_digest_for_execution;
-use velnor_actions_contract::{Job, JobTimeout, Step, StepKind, StepRole};
+use velnor_actions_contract::{
+    Job, JobTimeout, MiseTaskSource, Step, StepKind, StepRole, VerificationRunner, VerificationTask,
+};
 
 use crate::yaml::Yaml;
+use crate::{
+    MiseSetup,
+    verification_jobs::{VerificationTaskPolicy, WorkflowTaskPolicy},
+};
 
 use super::{ACTION_NAME_PREFIX, factor_obligation_steps};
 
@@ -33,7 +39,7 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
         .collect::<BTreeMap<_, _>>();
 
     let (factored, files) =
-        factor_obligation_steps(&jobs, CHECKOUT, VERSION).expect("factor obligations");
+        factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[]).expect("factor obligations");
 
     assert_eq!(factored.len(), 150);
     assert_eq!(files.len(), 1, "argv/env shape should share one action");
@@ -111,7 +117,7 @@ fn ordinary_shell_and_tofu_steps_stay_unfactored() {
     )]);
 
     let (factored, files) =
-        factor_obligation_steps(&jobs, CHECKOUT, VERSION).expect("leave shell tasks alone");
+        factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[]).expect("leave shell tasks alone");
     assert!(files.is_empty());
     assert_eq!(
         factored.keys().collect::<Vec<_>>(),
@@ -139,7 +145,7 @@ fn typed_task_requires_checkout_staging_and_credential_free_inputs() {
         simple_job(vec![acquire_step(), task.clone()]),
     )]);
     assert!(
-        factor_obligation_steps(&no_checkout, CHECKOUT, VERSION)
+        factor_obligation_steps(&no_checkout, CHECKOUT, VERSION, &[])
             .expect_err("checkout is mandatory")
             .to_string()
             .contains("declared_task_requires_checkout")
@@ -150,7 +156,7 @@ fn typed_task_requires_checkout_staging_and_credential_free_inputs() {
         simple_job(vec![checkout_step(), task.clone()]),
     )]);
     assert!(
-        factor_obligation_steps(&no_stage, CHECKOUT, VERSION)
+        factor_obligation_steps(&no_stage, CHECKOUT, VERSION, &[])
             .expect_err("the staged helper is mandatory")
             .to_string()
             .contains("declared_task_requires_staged_helper")
@@ -169,11 +175,72 @@ fn typed_task_requires_checkout_staging_and_credential_free_inputs() {
         simple_job(vec![checkout_step(), acquire_step(), credentialed]),
     )]);
     assert!(
-        factor_obligation_steps(&jobs, CHECKOUT, VERSION)
+        factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[])
             .expect_err("credentials cannot enter task action inputs")
             .to_string()
             .contains("credential_step_env:GITHUB_TOKEN")
     );
+}
+
+#[test]
+fn scale_set_task_requires_a_resolved_linux_x64_verification_profile() {
+    let mut job = simple_job(vec![checkout_step(), acquire_step(), task_step(0)]);
+    job.runs_on = "scale-set:velnor+orbstack-linux".to_owned();
+    let jobs = BTreeMap::from([("rust-demo".to_owned(), job)]);
+    assert!(
+        factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[])
+            .expect_err("an arbitrary self-hosted selector does not prove linux/amd64")
+            .to_string()
+            .contains("declared_task_requires_supported_linux_runner")
+    );
+}
+
+#[test]
+fn scale_set_task_rejects_a_non_linux_profile_or_different_resolved_token() {
+    let linux = verification_policy(VerificationRunner::LinuxX64);
+    assert!(super::supports_task_runner(
+        "task-rust-demo",
+        "scale-set:velnor+ubuntu-26.04-scale-set",
+        std::slice::from_ref(&linux),
+    ));
+
+    let macos = verification_policy(VerificationRunner::MacosArm64);
+    assert!(!super::supports_task_runner(
+        "task-rust-demo",
+        "scale-set:velnor+ubuntu-26.04-scale-set",
+        std::slice::from_ref(&macos),
+    ));
+    assert!(!super::supports_task_runner(
+        "task-rust-demo",
+        "scale-set:velnor+orbstack-linux",
+        std::slice::from_ref(&linux),
+    ));
+}
+
+fn verification_policy(runner: VerificationRunner) -> WorkflowTaskPolicy {
+    WorkflowTaskPolicy::Verification(VerificationTaskPolicy {
+        task: VerificationTask {
+            id: "rust-demo".to_owned(),
+            mise_task: "lint-demo".to_owned(),
+            source: MiseTaskSource {
+                mise_config: "mise.toml".to_owned(),
+                working_directory: ".".to_owned(),
+            },
+            runner,
+            timeout_minutes: 10,
+        },
+        runner_label: runner.runs_on().to_owned(),
+        scale_set_token: Some("scale-set:velnor+ubuntu-26.04-scale-set".to_owned()),
+        mise_setup: MiseSetup {
+            uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
+            version: "2026.10.7".to_owned(),
+            sha256: "a".repeat(64),
+        },
+        selected_tools: Vec::new(),
+        mise_config_sha256: None,
+        mise_lock_sha256: None,
+        rust_toolchain_sha256: None,
+    })
 }
 
 fn task_document_for_test() -> Yaml {
