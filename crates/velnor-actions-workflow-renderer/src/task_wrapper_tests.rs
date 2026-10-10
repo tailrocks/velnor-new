@@ -248,11 +248,7 @@ fn crate_obligation_scale_set_rejects_a_different_resolved_profile() {
 fn scale_set_selector() -> ScaleSetSelector {
     ScaleSetSelector::try_new(
         "ubuntu-26.04-scale-set",
-        &[
-            "ubuntu-26.04-scale-set".to_owned(),
-            "velnor".to_owned(),
-            "verification-worker".to_owned(),
-        ],
+        &["ubuntu-26.04-scale-set".to_owned(), "velnor".to_owned()],
     )
     .expect("validated Linux scale set")
 }
