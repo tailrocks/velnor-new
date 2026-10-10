@@ -2,11 +2,12 @@
 //!
 //! Run-string quoting and join cases live in
 //! `impl_renderer_steps_quote`.
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, process::Command};
 use velnor_actions_workflow_renderer::{
     ASSET_SHA_ENV, ASSET_URL_ENV, RELEASE_COMMIT_ENV, RenderError, STAGED_BINARY_PREFIX,
-    acquire_velnor_step, action_step, checkout_step, internal_step, merge_step, plan_step,
-    scan_for_private_subcommands, shell_step, validate_command_argv, validate_env, validate_uses,
+    acquire_velnor_step, action_step, checkout_step, internal_step, join_argv_for_run, merge_step,
+    plan_step, quote_run_arg, scan_for_private_subcommands, shell_step, validate_command_argv,
+    validate_env, validate_uses,
 };
 
 fn pin(name: &str) -> String {
@@ -15,6 +16,20 @@ fn pin(name: &str) -> String {
 
 fn argv(items: &[&str]) -> Vec<String> {
     items.iter().map(ToString::to_string).collect()
+}
+
+fn shell_argv(run_line: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let script = format!("set -- {run_line}; printf '%s\\0' \"$@\"");
+    let output = Command::new("/bin/sh").arg("-c").arg(script).output()?;
+    assert!(output.status.success(), "shell failed: {run_line:?}");
+    let body = output
+        .stdout
+        .strip_suffix(&[0])
+        .ok_or_else(|| std::io::Error::other("missing argv terminator"))?;
+    Ok(std::str::from_utf8(body)?
+        .split('\0')
+        .map(ToOwned::to_owned)
+        .collect())
 }
 
 #[test]
@@ -103,7 +118,11 @@ fn argv_rejects_background_shell_but_keeps_chains_and_urls() {
     for script in [
         "a && b",
         "cmd 2>&1",
+        "cmd &>output.log",
         "curl 'https://example.invalid/x?a=1&b=2'",
+        "echo \"a & b\"",
+        "echo 'a & b'",
+        r"echo a \& b",
         "echo done",
     ] {
         assert!(
@@ -111,6 +130,64 @@ fn argv_rejects_background_shell_but_keeps_chains_and_urls() {
             "legal rejected: {script}"
         );
     }
+    assert!(validate_command_argv(&argv(&["tool", "a & b"])).is_err());
+    assert!(validate_command_argv(&argv(&["curl", "https://example.invalid/x?a=1&b=2"])).is_ok());
+}
+
+#[test]
+fn nextest_filterset_values_are_typed_quoted_arguments() -> Result<(), Box<dyn std::error::Error>> {
+    let filters = [
+        "package(=demo)&binary(=control_states)&test(=name'with\\\"quotes)",
+        "package(=demo) & binary(=control_states) & test(=name'with\\\"quotes)",
+    ];
+    for filter in filters {
+        let direct = argv(&["cargo", "nextest", "run", "--filterset", filter]);
+        let joined = join_argv_for_run(&direct)?;
+        assert_eq!(
+            joined,
+            format!("cargo nextest run --filterset {}", quote_run_arg(filter)?)
+        );
+        assert_eq!(shell_argv(&joined)?, direct);
+        assert!(validate_command_argv(&direct).is_ok());
+
+        let wrapped = argv(&[
+            "mise",
+            "exec",
+            "--",
+            "cargo",
+            "nextest",
+            "run",
+            "--filterset",
+            filter,
+        ]);
+        let wrapped_line = join_argv_for_run(&wrapped)?;
+        assert_eq!(shell_argv(&wrapped_line)?, wrapped);
+    }
+
+    let attached_filter = "package(=demo) & binary(=control_states)";
+    let attached_option = format!("--filterset={attached_filter}");
+    let attached = argv(&["cargo", "nextest", "run", &attached_option]);
+    let attached_line = join_argv_for_run(&attached)?;
+    assert_eq!(shell_argv(&attached_line)?, attached);
+
+    let script = r#"cargo nextest run --filterset 'package(=demo)&binary(=control_states)&test(=name"quoted)'"#;
+    let composed = argv(&["sh", "-c", script]);
+    assert!(validate_command_argv(&composed).is_ok());
+    let composed_line = join_argv_for_run(&composed)?;
+    assert_eq!(shell_argv(&composed_line)?, composed);
+
+    for malformed in [
+        argv(&["cargo", "nextest", "run", "--filterset"]),
+        argv(&["cargo", "nextest", "run", "--filterset="]),
+        argv(&["cargo", "nextest", "run", "--filterset=--bad"]),
+        argv(&["cargo", "nextest", "run", "--filterset", "--test", "x & y"]),
+        argv(&["cargo", "nextest", "run", "--", "--filterset", "x & y"]),
+    ] {
+        assert!(validate_command_argv(&malformed).is_err(), "{malformed:?}");
+    }
+    assert!(validate_command_argv(&argv(&["echo", "--filterset", "x & y"])).is_err());
+    assert!(validate_command_argv(&argv(&["cargo", "test", "--filterset", "x & y"])).is_err());
+    Ok(())
 }
 
 #[test]

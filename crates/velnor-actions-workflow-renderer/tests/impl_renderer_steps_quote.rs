@@ -64,7 +64,7 @@ fn run_quoting_preserves_runner_expansion() -> Result<(), RenderError> {
     assert_eq!(quote_run_arg("$HOME")?, "\"$HOME\"");
     assert_eq!(quote_run_arg("plain")?, "plain");
     assert_eq!(quote_run_arg("with space")?, "'with space'");
-    assert_eq!(quote_run_arg("it's")?, "'it''\\'''s'");
+    assert_eq!(quote_run_arg("it's")?, "'it'\\''s'");
     Ok(())
 }
 
