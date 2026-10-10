@@ -79,13 +79,14 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
     assert_eq!(manifest_file.bytes.matches("\"task_id\":").count(), 150);
     let action = task_document_for_test();
     let run = action_run_scalar(&action);
-    assert!(run.contains("argv+=(\"$RUNTIME_VALUE\")"));
+    assert!(run.contains("argv+=(\"$value\")"));
     assert!(run.contains("env -- \"${task_env[@]}\" \"${argv[@]}\""));
     assert!(run.contains("write-task-report-v1"));
     assert!(run.contains("if [ \"$task_code\" -ne 0 ]; then exit \"$task_code\"; fi"));
     assert!(run.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
     assert!(!run.contains("eval"));
-    assert!(run.contains("replace_runner_temp"));
+    assert!(!run.contains("replace_runner_temp"));
+    assert!(run.contains("[[ \"$value\" != *'${{'* ]] || fail_frame"));
     assert!(run.contains("VELNOR_RUNTIME_RUNNER_TEMP"));
     for key in crate::toolchain_env::STEP_CREDENTIAL_DENYLIST
         .into_iter()
@@ -265,13 +266,17 @@ fn typed_task_preserves_only_the_exact_runner_temp_expression() {
 
 #[cfg(unix)]
 #[test]
-fn wrapper_resolves_runner_temp_and_passes_shell_metacharacters_as_data() {
+fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_data() {
     use std::os::unix::fs::PermissionsExt;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_DIR: AtomicU64 = AtomicU64::new(0);
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock after epoch")
+        .as_nanos();
     let test_root = std::env::temp_dir().join(format!(
-        "velnor task wrapper {} {}",
+        "velnor-task-wrapper-{}-{timestamp}-{}",
         std::process::id(),
         NEXT_DIR.fetch_add(1, Ordering::Relaxed)
     ));
@@ -283,7 +288,7 @@ fn wrapper_resolves_runner_temp_and_passes_shell_metacharacters_as_data() {
     let frame_path = test_root.join("frame.bin");
     let call_log = test_root.join("helper-calls.log");
     let sentinel = test_root.join("shell-injection-ran");
-    let cargo_home = "${{ runner.temp }}/velnor/cargo";
+    let cargo_home = runner_temp.join("velnor/cargo").display().to_string();
     let payload = format!("$(touch {}; printf injected)", sentinel.display());
     let expected_execution_digest = "a".repeat(64);
     let plan_digest = "b".repeat(64);
@@ -291,35 +296,39 @@ fn wrapper_resolves_runner_temp_and_passes_shell_metacharacters_as_data() {
         "test \"$MISE_CARGO_HOME\" = \"$EXPECTED_HOME\" && test \"$PAYLOAD\" = '{}'",
         payload
     );
-    let fields: [&str; 21] = [
-        "VELNOR-TASK-EXECUTION-V1",
-        "task/test",
-        &expected_execution_digest,
-        &plan_digest,
-        "matrix/test",
-        "default",
-        VERSION,
-        "0",
-        "",
-        "3",
-        "sh",
-        "-c",
-        &task_command,
-        "3",
-        "EXPECTED_HOME",
-        cargo_home,
-        "MISE_CARGO_HOME",
-        cargo_home,
-        "PAYLOAD",
-        &payload,
-        "END",
+    let fields = vec![
+        "VELNOR-TASK-EXECUTION-V1".to_owned(),
+        "task/test".to_owned(),
+        expected_execution_digest.clone(),
+        plan_digest,
+        "matrix/test".to_owned(),
+        "default".to_owned(),
+        VERSION.to_owned(),
+        "0".to_owned(),
+        String::new(),
+        "3".to_owned(),
+        "sh".to_owned(),
+        "-c".to_owned(),
+        task_command,
+        "3".to_owned(),
+        "EXPECTED_HOME".to_owned(),
+        cargo_home.to_owned(),
+        "MISE_CARGO_HOME".to_owned(),
+        cargo_home.to_owned(),
+        "PAYLOAD".to_owned(),
+        payload,
+        "END".to_owned(),
     ];
-    let mut frame = Vec::new();
-    for field in fields {
-        frame.extend_from_slice(field.as_bytes());
-        frame.push(0);
-    }
-    std::fs::write(&frame_path, frame).expect("write valid frame");
+    let encode_frame = |fields: &[String]| {
+        let mut bytes = Vec::new();
+        for field in fields {
+            bytes.extend_from_slice(field.as_bytes());
+            bytes.push(0);
+        }
+        bytes
+    };
+    let valid_frame = encode_frame(&fields);
+    std::fs::write(&frame_path, &valid_frame).expect("write valid frame");
     std::fs::write(
         &helper,
         b"#!/bin/sh\nprintf '%s\\n' \"$VELNOR_INTERNAL_OP\" >> \"$VELNOR_TEST_CALL_LOG\"\ncase \"$VELNOR_INTERNAL_OP\" in\n  resolve-task-execution-v1) cat \"$VELNOR_TEST_FRAME\" ;;\n  write-task-report-v1) exit 0 ;;\n  *) exit 9 ;;\nesac\n",
@@ -331,18 +340,22 @@ fn wrapper_resolves_runner_temp_and_passes_shell_metacharacters_as_data() {
     permissions.set_mode(0o700);
     std::fs::set_permissions(&helper, permissions).expect("make helper executable");
 
-    let result = std::process::Command::new("bash")
-        .arg("-c")
-        .arg(super::task_script(VERSION))
-        .env("RUNNER_TEMP", &runner_temp)
-        .env(super::RUNTIME_RUNNER_TEMP_ENV, &runner_temp)
-        .env(super::GENERATOR_VERSION_ENV, VERSION)
-        .env(super::TASK_EXECUTION_DIGEST_ENV, expected_execution_digest)
-        .env("VELNOR_TASK_ID", "task/test")
-        .env("VELNOR_TEST_FRAME", &frame_path)
-        .env("VELNOR_TEST_CALL_LOG", &call_log)
-        .output()
-        .expect("run generated Bash composite script");
+    let script = super::task_script(VERSION);
+    let run_script = || {
+        std::process::Command::new("bash")
+            .arg("-c")
+            .arg(&script)
+            .env("RUNNER_TEMP", &runner_temp)
+            .env(super::RUNTIME_RUNNER_TEMP_ENV, &runner_temp)
+            .env(super::GENERATOR_VERSION_ENV, VERSION)
+            .env(super::TASK_EXECUTION_DIGEST_ENV, &expected_execution_digest)
+            .env("VELNOR_TASK_ID", "task/test")
+            .env("VELNOR_TEST_FRAME", &frame_path)
+            .env("VELNOR_TEST_CALL_LOG", &call_log)
+            .output()
+            .expect("run generated Bash composite script")
+    };
+    let result = run_script();
     assert!(
         result.status.success(),
         "script failed: stdout={} stderr={}",
@@ -350,9 +363,46 @@ fn wrapper_resolves_runner_temp_and_passes_shell_metacharacters_as_data() {
         String::from_utf8_lossy(&result.stderr)
     );
     assert!(!sentinel.exists(), "payload is data, never shell source");
+
+    let mut bad_count = fields.clone();
+    bad_count[9] = "513".to_owned();
+    let mut bad_sentinel = fields.clone();
+    bad_sentinel[20] = "NOT-END".to_owned();
+    let mut wrong_digest = fields.clone();
+    wrong_digest[2] = "c".repeat(64);
+    let mut unsupported_expression = fields.clone();
+    unsupported_expression[15] = "${{ github.workspace }}/velnor/cargo".to_owned();
+    let mut unresolved_runner_temp = fields;
+    unresolved_runner_temp[17] = "${{ runner.temp }}/velnor/cargo".to_owned();
+    let mut unresolved_argv = unresolved_runner_temp.clone();
+    unresolved_argv[10] = "${{ runner.temp }}/velnor/sh".to_owned();
+    let mut trailing_field = valid_frame.clone();
+    trailing_field.extend_from_slice(b"EXTRA\0");
+    let mut missing_terminator = valid_frame;
+    missing_terminator.pop();
+    for invalid_frame in [
+        encode_frame(&bad_count),
+        encode_frame(&bad_sentinel),
+        encode_frame(&wrong_digest),
+        encode_frame(&unsupported_expression),
+        encode_frame(&unresolved_runner_temp),
+        encode_frame(&unresolved_argv),
+        trailing_field,
+        missing_terminator,
+    ] {
+        std::fs::write(&frame_path, invalid_frame).expect("write invalid frame");
+        let rejected = run_script();
+        assert_eq!(
+            rejected.status.code(),
+            Some(125),
+            "malformed frame reached task execution: stderr={}",
+            String::from_utf8_lossy(&rejected.stderr)
+        );
+        assert!(!sentinel.exists(), "invalid frame ran task shell data");
+    }
     assert_eq!(
         std::fs::read_to_string(&call_log).expect("record helper operations"),
-        "resolve-task-execution-v1\nwrite-task-report-v1\n"
+        "resolve-task-execution-v1\nwrite-task-report-v1\nresolve-task-execution-v1\nresolve-task-execution-v1\nresolve-task-execution-v1\nresolve-task-execution-v1\nresolve-task-execution-v1\nresolve-task-execution-v1\nresolve-task-execution-v1\nresolve-task-execution-v1\n"
     );
     std::fs::remove_dir_all(test_root).expect("remove fake runner tree");
 }

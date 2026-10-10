@@ -319,8 +319,8 @@ fn declared_task_call(
 }
 
 /// Task manifests currently carry only the exact GitHub expression
-/// `${{ runner.temp }}`. The generated composite resolves it from its trusted
-/// static action env; other expressions fail before they enter the manifest.
+/// `${{ runner.temp }}`. The data-only resolver materializes that value after
+/// checking the manifest and plan; other expressions fail before serialization.
 fn validate_runtime_expression(value: &str) -> Result<(), RenderError> {
     let mut rest = value;
     while let Some(start) = rest.find("${{") {
@@ -429,7 +429,7 @@ fn task_script(helper_version: &str) -> String {
         r#";
 set -euo pipefail
 fail_frame() { printf '%s\n' 'invalid declared-task execution frame' >&2; exit 125; }
-frame_file=$(mktemp)
+frame_file=$(mktemp "${TMPDIR:-/tmp}/velnor-task-frame.XXXXXXXX")
 trap 'rm -f "$frame_file"' EXIT
 helper="$RUNNER_TEMP/velnor/bin/velnor-actions-"#,
     );
@@ -474,22 +474,11 @@ expected_fields=$((env_count_position + 2 + env_count * 2))
 end_position=$((expected_fields - 1))
 [[ "${frame[end_position]}" == END ]] || fail_frame
 
-replace_runner_temp() {
-  local rest="$1" prefix output="" needle='${{ runner.temp }}'
-  while [[ "$rest" == *"$needle"* ]]; do
-    prefix=${rest%%"$needle"*}
-    rest=${rest#*"$needle"}
-    output+="${prefix}${VELNOR_RUNTIME_RUNNER_TEMP}"
-  done
-  RUNTIME_VALUE="${output}${rest}"
-  [[ "$RUNTIME_VALUE" != *'${{'* ]]
-}
-
 argv=()
 for ((index = 0; index < argv_count; index++)); do
   value=${frame[$((10 + index))]}
-  replace_runner_temp "$value" || fail_frame
-  argv+=("$RUNTIME_VALUE")
+  [[ "$value" != *'${{'* ]] || fail_frame
+  argv+=("$value")
 done
 
 task_env=(
@@ -515,8 +504,8 @@ for ((index = 0; index < env_count; index++)); do
     TF_*)
       case "$key" in TF_IN_AUTOMATION|TF_INPUT) ;; *) fail_frame ;; esac ;;
   esac
-  replace_runner_temp "$value" || fail_frame
-  task_env+=("$key=$RUNTIME_VALUE")
+  [[ "$value" != *'${{'* ]] || fail_frame
+  task_env+=("$key=$value")
 done
 [[ -n "$VELNOR_RUNTIME_RUNNER_TEMP" ]] || fail_frame
 unset VELNOR_INTERNAL_OP VELNOR_GENERATOR_VERSION VELNOR_TASK_EXECUTION_DIGEST VELNOR_RUNTIME_RUNNER_TEMP
