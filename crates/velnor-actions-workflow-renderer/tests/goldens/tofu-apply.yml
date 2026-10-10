@@ -67,8 +67,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
-          version: 2026.10.6
+          sha256: 6eb1b890e90818417ca34c90dbbd47881917d5cd199f31b63b062ea9c6b18d85
+          version: 2026.10.7
       - name: Check required GitHub provider secrets
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""

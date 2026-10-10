@@ -31,8 +31,8 @@ fn exec_argv(tool: &str, program: &str, args: &[&str]) -> Vec<String> {
 fn spec() -> ConsumerBinaryReleaseSpec {
     let linux_setup = MiseSetup {
         uses: "jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca".to_owned(),
-        version: "2026.10.6".to_owned(),
-        sha256: "3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366".to_owned(),
+        version: "2026.10.7".to_owned(),
+        sha256: "6eb1b890e90818417ca34c90dbbd47881917d5cd199f31b63b062ea9c6b18d85".to_owned(),
     };
     ConsumerBinaryReleaseSpec {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
@@ -44,8 +44,8 @@ fn spec() -> ConsumerBinaryReleaseSpec {
         linux_setup,
         macos_setup: MiseSetup {
             uses: "jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca".to_owned(),
-            version: "2026.10.6".to_owned(),
-            sha256: "bbcea7b0f844d026424a4c8335357a15a2f5c9e9132c9408de990d9be6f26101".to_owned(),
+            version: "2026.10.7".to_owned(),
+            sha256: "f5171e341518a57e8c4e9280e28443e35d66212c51164c83be76794e0a78b014".to_owned(),
         },
         install_tools_argv: install_argv(&["rust@1.98.1", "gh@2.102.0"]),
         install_rust_argv: install_argv(&["rust@1.98.1"]),
@@ -153,7 +153,7 @@ fn renders_four_isolated_jobs_bound_to_exact_package_and_source() {
     assert!(yaml.contains("assert_protected_environment"));
     assert!(yaml.contains("IMMUTABILITY_READ_TOKEN"));
     assert!(yaml.contains("consumer-binary-release"));
-    assert!(yaml.contains("2026.10.6"));
+    assert!(yaml.contains("2026.10.7"));
     assert!(yaml.contains("aarch64-apple-darwin"));
     assert!(yaml.contains("CARGO_TARGET_DIR"));
     assert!(yaml.contains("required-features"));

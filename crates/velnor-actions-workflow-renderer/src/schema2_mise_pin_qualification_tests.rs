@@ -3,19 +3,19 @@ use crate::setup::MiseSetup;
 use crate::yaml::render_yaml;
 use std::process::{Command, Output};
 
-const LINUX_OUTPUT: &str = "2026.10.6 linux-x64 (2026-10-09)";
-const MACOS_OUTPUT: &str = "2026.10.6 macos-x64 (2026-10-09)";
+const LINUX_OUTPUT: &str = "2026.10.7 linux-x64 (2026-10-09)";
+const MACOS_OUTPUT: &str = "2026.10.7 macos-x64 (2026-10-09)";
 
 fn pins() -> MisePinQualificationPins {
     MisePinQualificationPins {
         linux_x86_64_setup: MiseSetup {
             uses: format!("jdx/mise-action@{}", "a".repeat(40)),
-            version: "2026.10.6".to_owned(),
+            version: "2026.10.7".to_owned(),
             sha256: "b".repeat(64),
         },
         macos_x86_64_setup: MiseSetup {
             uses: format!("jdx/mise-action@{}", "a".repeat(40)),
-            version: "2026.10.6".to_owned(),
+            version: "2026.10.7".to_owned(),
             sha256: "c".repeat(64),
         },
     }
@@ -35,7 +35,7 @@ fn jobs_are_opt_in_exact_ref_read_only_and_no_publication() {
         assert!(rendered.contains("permissions:\n  contents: read"), "{id}");
         assert!(rendered.contains("ref: ${{ github.sha }}"), "{id}");
         assert!(rendered.contains("persist-credentials: \"false\""), "{id}");
-        assert!(rendered.contains("version: 2026.10.6"), "{id}");
+        assert!(rendered.contains("version: 2026.10.7"), "{id}");
         assert!(rendered.contains("install: \"false\""), "{id}");
         assert!(rendered.contains("env: \"false\""), "{id}");
         assert!(rendered.contains("cache: \"false\""), "{id}");
@@ -62,7 +62,7 @@ fn jobs_are_opt_in_exact_ref_read_only_and_no_publication() {
 #[test]
 fn mismatched_candidate_versions_fail_closed() {
     let mut pins = pins();
-    pins.macos_x86_64_setup.version = "2026.10.5".to_owned();
+    pins.macos_x86_64_setup.version = "2026.10.6".to_owned();
     assert!(jobs(&pins).is_err_and(|error| {
         error
             .to_string()
@@ -97,17 +97,17 @@ fn verification_rejects_invalid_version_platform_and_legacy_output_before_digest
     let cases = [
         (
             ReleaseTarget::LinuxX86_64,
-            "2026.10.5 linux-x64 (2026-10-09)",
+            "2026.10.6 linux-x64 (2026-10-09)",
         ),
         (
             ReleaseTarget::LinuxX86_64,
-            "2026.10.6 macos-x64 (2026-10-09)",
+            "2026.10.7 macos-x64 (2026-10-09)",
         ),
         (
             ReleaseTarget::LinuxX86_64,
-            "mise 2026.10.6 linux-x64 (2026-10-09)",
+            "mise 2026.10.7 linux-x64 (2026-10-09)",
         ),
-        (ReleaseTarget::MacosX86_64, "2026.10.6 macos-x64 (2026-1-9)"),
+        (ReleaseTarget::MacosX86_64, "2026.10.7 macos-x64 (2026-1-9)"),
     ];
 
     for (target, version_output) in cases {
@@ -149,7 +149,7 @@ shasum() {{ test "$1" = "-a"; test "$2" = "256"; printf 'DIGEST_CHECK_REACHED\n'
         .arg("-c")
         .arg(script)
         .env("GITHUB_SHA", "selected-ref")
-        .env("MISE_VERSION", "2026.10.6")
+        .env("MISE_VERSION", "2026.10.7")
         .env("MISE_SHA256", expected_digest)
         .env("MISE_OUTPUT", version_output)
         .env("ACTUAL_DIGEST", actual_digest)
