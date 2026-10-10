@@ -51,6 +51,7 @@ fn emit_node(value: &Yaml, indent: usize, out: &mut String) {
         | Yaml::Bool(_)
         | Yaml::Int(_)
         | Yaml::Flow(_)
+        | Yaml::FlowMap(_)
         | Yaml::Quoted(_) => {}
     }
 }
@@ -180,6 +181,7 @@ fn emit_inline(value: &Yaml, out: &mut String) {
         Yaml::Seq(items) if items.is_empty() => out.push_str("[]"),
         Yaml::Map(entries) if entries.is_empty() => out.push_str("{}"),
         Yaml::Flow(items) => emit_flow(items, out),
+        Yaml::FlowMap(entries) => emit_flow_map(entries, out),
         Yaml::Null | Yaml::Seq(_) | Yaml::Map(_) | Yaml::AnchoredMap { .. } => {}
     }
 }
@@ -194,6 +196,20 @@ fn emit_flow(items: &[String], out: &mut String) {
         out.push_str(&quote_scalar(item));
     }
     out.push(']');
+}
+
+/// Emit `{key: value}` with double-quoted scalars safe in flow context.
+fn emit_flow_map(entries: &[(String, String)], out: &mut String) {
+    out.push('{');
+    for (index, (key, value)) in entries.iter().enumerate() {
+        if index > 0 {
+            out.push_str(", ");
+        }
+        out.push_str(&quote_double(key));
+        out.push_str(": ");
+        out.push_str(&quote_double(value));
+    }
+    out.push('}');
 }
 
 /// Push 2-space indentation.
@@ -309,4 +325,22 @@ fn quote_double(value: &str) -> String {
     }
     out.push('"');
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::yaml::{Yaml, render_yaml};
+
+    #[test]
+    fn flow_map_quotes_collection_delimiters_and_escapes() {
+        let document = Yaml::FlowMap(vec![(
+            "key,[]{}:? #".to_owned(),
+            "value,[]{}: # \"quoted\" \\ line\nnext".to_owned(),
+        )]);
+
+        assert_eq!(
+            render_yaml(&document),
+            "{\"key,[]{}:? #\": \"value,[]{}: # \\\"quoted\\\" \\\\ line\\nnext\"}\n"
+        );
+    }
 }

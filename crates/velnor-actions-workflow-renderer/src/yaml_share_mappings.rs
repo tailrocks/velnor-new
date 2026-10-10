@@ -268,6 +268,7 @@ fn collect_anchor_values(node: &Yaml, anchors: &mut BTreeMap<AnchorName, Yaml>) 
         | Yaml::Bool(_)
         | Yaml::Int(_)
         | Yaml::Flow(_)
+        | Yaml::FlowMap(_)
         | Yaml::Quoted(_)
         | Yaml::Annotated { .. }
         | Yaml::Alias(_) => {}

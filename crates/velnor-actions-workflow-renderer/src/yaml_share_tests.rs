@@ -202,6 +202,7 @@ fn collect_anchor_uses(
         | Yaml::Bool(_)
         | Yaml::Int(_)
         | Yaml::Flow(_)
+        | Yaml::FlowMap(_)
         | Yaml::Quoted(_)
         | Yaml::Annotated { .. } => {}
     }

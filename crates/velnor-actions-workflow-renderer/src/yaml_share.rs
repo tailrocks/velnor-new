@@ -43,6 +43,7 @@ fn collect_alias_uses(node: &Yaml, aliases: &mut BTreeMap<AnchorName, usize>) {
         | Yaml::Bool(_)
         | Yaml::Int(_)
         | Yaml::Flow(_)
+        | Yaml::FlowMap(_)
         | Yaml::Quoted(_)
         | Yaml::Annotated { .. } => {}
     }
@@ -78,6 +79,7 @@ fn remove_unreferenced_anchors(node: &mut Yaml, aliases: &BTreeMap<AnchorName, u
         | Yaml::Bool(_)
         | Yaml::Int(_)
         | Yaml::Flow(_)
+        | Yaml::FlowMap(_)
         | Yaml::Quoted(_)
         | Yaml::Annotated { .. } => {}
     }
@@ -231,6 +233,7 @@ fn collect_anchor_names(node: &Yaml, names: &mut BTreeSet<AnchorName>) {
         | Yaml::Bool(_)
         | Yaml::Int(_)
         | Yaml::Flow(_)
+        | Yaml::FlowMap(_)
         | Yaml::Quoted(_)
         | Yaml::Annotated { .. } => {}
     }
