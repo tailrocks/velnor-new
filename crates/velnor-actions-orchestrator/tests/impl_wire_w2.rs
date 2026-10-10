@@ -295,7 +295,7 @@ fn local_select_uses_working_tree() -> TestResult {
             .as_array()
             .expect("task ids")
             .as_slice(),
-        []
+        [] as [serde_json::Value; 0]
     );
     assert!(has_warning(&value, "no_affected_files"));
     Ok(())
