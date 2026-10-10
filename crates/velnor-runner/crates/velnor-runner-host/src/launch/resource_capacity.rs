@@ -2,7 +2,7 @@
 
 use bollard::Docker;
 
-use crate::docker_client::{DOCKER_OPERATION_TIMEOUT, docker_deadline_after};
+use crate::docker_client::docker_deadline_after;
 use crate::journal::Journal;
 use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
@@ -72,16 +72,6 @@ pub(super) enum Discovery {
     Untrusted(EnsureError),
 }
 
-/// Inspect the selected Docker guest and calculate its configured-pair ceiling.
-pub(super) async fn discover(
-    docker: &Docker,
-    journal: &Journal,
-    budget: ResourceBudget,
-    ceiling: u32,
-) -> Discovery {
-    discover_after(docker, journal, budget, ceiling, DOCKER_OPERATION_TIMEOUT).await
-}
-
 pub(super) async fn discover_after(
     docker: &Docker,
     journal: &Journal,
@@ -90,23 +80,13 @@ pub(super) async fn discover_after(
     timeout: std::time::Duration,
 ) -> Discovery {
     let started = tokio::time::Instant::now();
-    let Ok(Ok(info)) = docker_deadline_after(docker.info(), timeout).await else {
+    let Ok(info) = verified_info_after(docker, journal, timeout).await else {
         return Discovery::Untrusted(capacity_error("docker capacity"));
     };
-    let Some(engine_id) = info.id.as_deref().filter(|id| !id.is_empty()) else {
-        return Discovery::Untrusted(capacity_error("docker capacity"));
-    };
-    let remaining = timeout.saturating_sub(started.elapsed());
-    let Ok(Ok(bound_engine)) = tokio::time::timeout(remaining, journal.engine_id()).await else {
-        return Discovery::Untrusted(capacity_error("docker capacity"));
-    };
-    if engine_id != bound_engine {
-        return Discovery::Untrusted(capacity_error("docker capacity"));
-    }
 
     let remaining = timeout.saturating_sub(started.elapsed());
     let inspect = async {
-        let totals = guest_totals(info.ncpu, info.mem_total)
+        let totals = guest_totals(info.cpus, info.memory_bytes)
             .ok_or_else(|| capacity_error("docker capacity"))?;
         let occupied = inspect::occupied(docker, journal, budget, ceiling).await?;
         calculate(totals, occupied, budget, ceiling)
@@ -115,6 +95,49 @@ pub(super) async fn discover_after(
         Ok(Ok(capacity)) => Discovery::Available(capacity),
         _ => Discovery::Unavailable,
     }
+}
+
+pub(super) async fn verify_engine_binding_after(
+    docker: &Docker,
+    journal: &Journal,
+    timeout: std::time::Duration,
+) -> Result<(), EnsureError> {
+    verified_info_after(docker, journal, timeout)
+        .await
+        .map(|_| ())
+}
+
+struct VerifiedInfo {
+    cpus: Option<i64>,
+    memory_bytes: Option<i64>,
+}
+
+async fn verified_info_after(
+    docker: &Docker,
+    journal: &Journal,
+    timeout: std::time::Duration,
+) -> Result<VerifiedInfo, EnsureError> {
+    let started = tokio::time::Instant::now();
+    let info = docker_deadline_after(docker.info(), timeout)
+        .await
+        .map_err(|_| capacity_error("docker capacity"))?
+        .map_err(|_| capacity_error("docker capacity"))?;
+    let engine_id = info
+        .id
+        .filter(|id| !id.trim().is_empty())
+        .ok_or_else(|| capacity_error("docker capacity"))?;
+    let remaining = timeout.saturating_sub(started.elapsed());
+    let bound_engine = tokio::time::timeout(remaining, journal.engine_id())
+        .await
+        .map_err(|_| capacity_error("docker capacity"))?
+        .map_err(|_| capacity_error("docker capacity"))?;
+    if engine_id != bound_engine {
+        return Err(capacity_error("docker capacity"));
+    }
+    Ok(VerifiedInfo {
+        cpus: info.ncpu,
+        memory_bytes: info.mem_total,
+    })
 }
 
 fn guest_totals(cpus: Option<i64>, memory: Option<i64>) -> Option<GuestTotals> {

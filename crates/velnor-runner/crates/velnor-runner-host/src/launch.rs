@@ -31,6 +31,7 @@ mod inspect;
 #[cfg(all(test, unix))]
 mod inspect_tests;
 mod name_taken;
+mod preflight;
 mod resource_capacity;
 mod runner_dir;
 
@@ -93,14 +94,8 @@ pub async fn launch_once(
     journal: &Journal,
     resource_budget: ResourceBudget,
 ) -> Result<LaunchReport, EnsureError> {
-    slot::release_exited(journal, docker).await?;
     let ceiling = job_capacity();
-    let capacity =
-        match resource_capacity::discover(docker, journal, resource_budget, ceiling).await {
-            resource_capacity::Discovery::Available(capacity) => capacity,
-            resource_capacity::Discovery::Unavailable => resource_capacity::JobCapacity::denied(),
-            resource_capacity::Discovery::Untrusted(error) => return Err(error),
-        };
+    let capacity = preflight::run(docker, docker, journal, resource_budget, ceiling).await?;
     let _capacity = install_job_capacity(capacity.poll_header());
     let set = ensure_product_scale_set(pat, owner, repo)?;
     if std::env::var("VELNOR_RECONCILE").ok().as_deref() == Some("1") {

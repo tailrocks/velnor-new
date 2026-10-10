@@ -45,6 +45,18 @@ async fn run(pat: &str) -> ExitCode {
             return ExitCode::from(1);
         }
     };
+    let engine_id = match docker.info().await {
+        Ok(info) => info.id.filter(|id| !id.trim().is_empty()),
+        Err(_) => None,
+    };
+    let Some(engine_id) = engine_id else {
+        eprintln!("launch_once: Docker engine identity unavailable");
+        return ExitCode::from(1);
+    };
+    if journal.bind_engine(&engine_id).await.is_err() {
+        eprintln!("launch_once: journal engine binding failed");
+        return ExitCode::from(1);
+    }
     match launch_once(
         pat,
         "tailrocks",
