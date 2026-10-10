@@ -805,7 +805,7 @@ jobs:
       contents: read
       actions: write
     env:
-      MBX_GC_AUTO: "1"
+      MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
       ACTIONS_CACHE_MODE: write
       CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
@@ -843,9 +843,10 @@ jobs:
           version: 1.21.1
           toolchain: 1.98.1
           isolate-objects-cache: "true"
-          cache-generation: velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          cache-generation: velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           save-on-workflow-dispatch: "true"
       - name: Verify MBX action identity and write policy
+        id: mbx-ready
         env:
           MBX_VERSION: ${{ steps.mbx_cache.outputs.mbx-version }}
           CACHE_SAVE_ELIGIBLE: ${{ steps.mbx_cache.outputs.cache-save-eligible }}
@@ -854,7 +855,10 @@ jobs:
         run: "test \"$MBX_VERSION\" = '1.21.1' && test \"$CACHE_SAVE_ELIGIBLE\" = 'true' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch'"
       - name: Compile MBX cache probe
         run: "set -eu\nroot=\"$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification\"\nmkdir -p \"$root/src\"\ncat > \"$root/Cargo.toml\" <<'EOF'\n[package]\nname = \"mbx-cache-qualification\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\".\"]\nresolver = \"3\"\n\n[lib]\npath = \"src/lib.rs\"\nEOF\ncat > \"$root/src/lib.rs\" <<'EOF'\npub fn cache_probe() -> u64 { 42 }\nEOF\nmbx build --manifest-path \"$root/Cargo.toml\"\n"
-      - name: Sample runner disk
+      - name: Clean MBX workspace outputs
+        if: always() && steps.mbx-ready.outcome == 'success'
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx clean
+      - name: Sample runner disk after cleanup
         run: "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\""
   mbx-cache-read-hosted:
     name: MBX objects cache / read-only reuse
@@ -867,7 +871,7 @@ jobs:
       contents: read
       actions: read
     env:
-      MBX_GC_AUTO: "1"
+      MBX_GC_AUTO: "0"
       MBX_SHARE_OUT_DIR: "0"
       ACTIONS_CACHE_MODE: read
       CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
@@ -905,9 +909,10 @@ jobs:
           version: 1.21.1
           toolchain: 1.98.1
           isolate-objects-cache: "true"
-          cache-generation: velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          cache-generation: velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           save-on-workflow-dispatch: "false"
       - name: Verify MBX action identity and write policy
+        id: mbx-ready
         env:
           MBX_VERSION: ${{ steps.mbx_cache.outputs.mbx-version }}
           CACHE_SAVE_ELIGIBLE: ${{ steps.mbx_cache.outputs.cache-save-eligible }}
@@ -920,6 +925,9 @@ jobs:
         run: "set -eu\nroot=\"$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification\"\nmkdir -p \"$root/src\"\ncat > \"$root/Cargo.toml\" <<'EOF'\n[package]\nname = \"mbx-cache-qualification\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\".\"]\nresolver = \"3\"\n\n[lib]\npath = \"src/lib.rs\"\nEOF\ncat > \"$root/src/lib.rs\" <<'EOF'\npub fn cache_probe() -> u64 { 42 }\nEOF\nmbx build --manifest-path \"$root/Cargo.toml\"\n"
       - name: Require reused compilation
         run: "set -e -o pipefail; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx stats --json | tee \"$RUNNER_TEMP/mbx-reuse-stats.json\"; jq -e '.savings.cached_compilations > 0' \"$RUNNER_TEMP/mbx-reuse-stats.json\""
+      - name: Clean MBX workspace outputs
+        if: always() && steps.mbx-ready.outcome == 'success'
+        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx clean
   mise-pin-linux-x64:
     name: Mise pin / hosted / Linux x64
     if: inputs.mode == 'mise-pin'

@@ -21,7 +21,7 @@ Workflow to generate
     - plan (11 steps)
     - publish-baseline (5 steps)
     - required (8 steps)
-    - rust-app (18 steps)
+    - rust-app (19 steps)
     - 1 Rust crate job
       Each: Clippy -> build -> run tests -> doctests -> doc build
       Entries:
