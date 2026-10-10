@@ -136,7 +136,7 @@ fn preserves_exact_hits_and_validated_seed_on_pure_cache_miss() {
 fn removes_untrusted_partial_and_malformed_restore_state() {
     let expected_key = format!("mise-tools-v2-{}", "a".repeat(64));
     assert_case(
-        "miss-without-seed",
+        "miss-without-admitted-seed",
         None,
         Some(&expected_key),
         None,
@@ -191,6 +191,52 @@ fn removes_untrusted_partial_and_malformed_restore_state() {
         Some("true"),
         false,
     );
+}
+
+#[test]
+fn valid_seed_without_file_payload_falls_through_to_miss_cleanup() {
+    let root = scratch("empty-seed-to-miss");
+    let (home, runner_temp) = populate_cache_paths(&root);
+    let seed = root.join("seed");
+    let key = format!("mise-tools-v2-{}", "a".repeat(64));
+    fs::create_dir_all(seed.join("mise/tree")).expect("empty mise tree");
+    fs::create_dir_all(seed.join("rustup/tree")).expect("empty rustup tree");
+    fs::write(seed.join("PROVENANCE"), "velnor-host-seed-v1\n").expect("provenance");
+    fs::write(seed.join("mise/KEY"), &key).expect("seed key");
+    let github_output = root.join("GITHUB_OUTPUT");
+    fs::write(&github_output, "").expect("composite output");
+
+    let script = crate::tool_seed::tool_seed_action_script(seed.to_str().expect("seed path"))
+        .expect("seed script");
+    let script = crate::tool_seed_test_support::mock_trust_commands(&script, &root);
+    let seed_run = Command::new("bash")
+        .arg("-c")
+        .arg(script)
+        .env("HOME", &home)
+        .env("RUNNER_TEMP", &runner_temp)
+        .env("RUNNER_OS", "Linux")
+        .env("SEED_KEY", &key)
+        .env("SEED_TEST_ROOT", &seed)
+        .env(
+            "SEED_TEST_MOUNTS",
+            format!("{} ext4 0:77 ro,nosuid,nodev", seed.display()),
+        )
+        .env("SEED_TEST_SKIP_OWNER_SCAN", "1")
+        .env("GITHUB_OUTPUT", &github_output)
+        .output()
+        .expect("run seed import");
+    assert!(seed_run.status.success(), "{seed_run:?}");
+    let admitted_output = fs::read_to_string(&github_output).expect("seed output");
+    let admitted = admitted_output
+        .strip_prefix("seed_admitted=")
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    let restore = run_script(&home, &runner_temp, None, Some(&key), None, admitted);
+    assert!(restore.status.success(), "{restore:?}");
+    assert_paths_removed(&home, &runner_temp);
+    assert_eq!(admitted_output, "");
+    fs::remove_dir_all(root).expect("cleanup empty-seed miss");
 }
 
 #[test]
