@@ -126,27 +126,6 @@ impl Drop for GenerateOwnership {
     }
 }
 
-/// Whether two paths share a filesystem (unix device ids).
-///
-/// Staging under the destination root constructs same-filesystem
-/// staging on every platform; unix additionally verifies device ids.
-#[cfg(unix)]
-pub(crate) fn same_filesystem(first: &Path, second: &Path) -> Result<bool, OrchestratorError> {
-    use std::os::unix::fs::MetadataExt;
-    let dev = |path: &Path| {
-        std::fs::metadata(path)
-            .map(|meta| meta.dev())
-            .map_err(|err| OrchestratorError::io(path.display().to_string(), err.to_string()))
-    };
-    Ok(dev(first)? == dev(second)?)
-}
-
-/// Non-unix staging shares the destination filesystem by construction.
-#[cfg(not(unix))]
-pub(crate) fn same_filesystem(_first: &Path, _second: &Path) -> Result<bool, OrchestratorError> {
-    Ok(true)
-}
-
 /// Build a preview refusal for one destination.
 fn preview_refused(path: &str, reason: &str) -> OrchestratorError {
     OrchestratorError::PreviewRefused {

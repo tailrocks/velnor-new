@@ -157,8 +157,14 @@ or an unvalidated shell fragment.
 
 ## 3. Replacement and preview
 
-generate MUST render into a temporary staging tree and validate every output
-before publishing. The orchestrator owns only the declared generated paths,
+generate MUST render into a staging tree and validate every output before
+publishing. For in-place generation only, the orchestrator may retain the
+private, self-ignored `.github.velnor-stage/` runtime container at the Git root.
+It contains a root-bound owner record and one persistent same-filesystem spare
+directory; generation clears spare children but never removes or recreates
+either root. This container is runtime state, not generated output. `plan`
+and preview generation never create or modify it. The orchestrator owns only
+the declared generated paths,
 the reserved `.github/workflows/**` namespace, and shared action definitions
 whose exact `.github/actions/<logical>/action.yml` path begins with a Velnor
 generated marker. Those paths are replaced when emitted and retired when a
@@ -176,10 +182,25 @@ to participate in workflow generation must be represented through supported
 Velnor configuration or another generated input, because their contents are
 not merged into generated files.
 
+For in-place generation, an existing `.github` root and every real directory
+below it MUST be owned by the effective user running Velnor. The orchestrator
+checks directory ownership without following symbolic links before staging and
+again immediately before exchange. A foreign-owned directory fails before
+publication and leaves `.github` unchanged. File ownership is not preserved;
+their bytes, permissions, names, and link targets remain the preservation
+contract. An out-of-band ownership change after the final scan can make retired
+tree cleanup fail after publication; the command reports that cleanup failure,
+leaves the published output in place, and requires safe operator recovery before
+the next in-place generation.
+
 With no --output-dir, the orchestrator MUST stage the generated tree together
-with preserved unmanaged content, then replace the repository `.github`
-directory only after staging and validation succeed. If generation fails, the
-existing `.github` directory remains unchanged.
+with preserved unmanaged content in the persistent spare, then replace the
+repository `.github` directory only after staging and validation succeed. If
+`.github` exists, its root mode MUST be preserved. If generation fails before
+publication, the existing `.github` directory remains unchanged. After
+publication, cleanup removes children from the retired root while keeping that
+spare path present; cleanup failure is reported with the published output left
+in place.
 
 With --output-dir PATH, PATH is the exact fresh preview root. It MUST be absent
 or empty; the command stages output beside PATH/.github and publishes the

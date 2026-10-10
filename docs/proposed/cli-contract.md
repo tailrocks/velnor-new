@@ -317,10 +317,17 @@ unsupported stack settings fail before any output replacement.
 Without `--output-dir`, the destination is the repository root. Velnor MUST
 replace the generated `.github` tree from scratch after rendering succeeds.
 The replacement MUST be atomic at the directory level: a failed scan, plan,
-render, or validation leaves the previous `.github` tree unchanged. No
-generated file may be written outside `.github` during this command. Project
-`rust-toolchain.toml`, `mise.toml`, and `mise.lock` are read-only inputs and
-MUST remain byte-for-byte unchanged.
+render, or validation leaves the previous `.github` tree unchanged. Generated
+output files are written only under `.github`. In-place generation may retain
+the private, self-ignored `.github.velnor-stage/` runtime container at the Git
+root, bound to that canonical worktree and containing one persistent same-
+filesystem spare; it is staging state, not generated output. Generation clears
+only spare children and never removes or recreates the container or spare root.
+`plan` and preview generation do not create or modify this state. An existing
+`.github` root and every real directory below it must be owned by the caller;
+foreign-owned directories fail before publication as specified by the
+generated-file contract. `rust-toolchain.toml`, `mise.toml`, and `mise.lock`
+are read-only inputs and MUST remain byte-for-byte unchanged.
 
 `--output-dir PATH` is preview mode. PATH is the exact preview root; Velnor
 writes `PATH/.github`. PATH MUST be fresh and empty (or absent); Velnor MUST

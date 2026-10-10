@@ -29,6 +29,8 @@ mod impl_generate_p09_leaf_links;
 mod impl_generate_p09_preview;
 mod impl_generate_preserve;
 mod impl_generate_size_guard;
+#[path = "impl_generate_stage_root.rs"]
+mod impl_generate_stage_root;
 mod impl_generate_tofu_env;
 mod impl_generator_seed;
 mod impl_git_authority_p10;
