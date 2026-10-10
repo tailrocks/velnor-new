@@ -190,7 +190,7 @@ fn tofu_exec_baked_env_survives_hostile_parent() -> Result<(), String> {
 }
 
 #[test]
-fn mbx_child_uses_rustup_path_without_mise_cargo_wrapper() -> Result<(), String> {
+fn mbx_child_uses_rustup_path_without_mise_cargo_wrappers_or_shims() -> Result<(), String> {
     let request = PinnedToolExec::new(
         vec![PinnedTool::Rust, PinnedTool::MrBoxington],
         std::ffi::OsStr::new("mbx"),
@@ -202,14 +202,20 @@ fn mbx_child_uses_rustup_path_without_mise_cargo_wrapper() -> Result<(), String>
         .map_err(|err| err.to_string())?;
     let original_path = std::env::join_paths([
         "/Users/alex/.local/share/mise/command-wrappers/bin",
+        "/Users/alex/.local/share/mise/shims",
         "/Users/alex/.cargo/bin",
         "/Users/alex/scratch/mise/command-wrappers/bin",
+        "/Users/alex/scratch/mise/shims",
         "/opt/other/command-wrappers/bin",
         "/usr/bin",
     ])
     .map_err(|err| err.to_string())?;
     let parent = vec![
         (OsString::from("HOME"), OsString::from("/Users/alex")),
+        (
+            OsString::from("MISE_DATA_DIR"),
+            OsString::from("/Users/alex/.local/share/mise"),
+        ),
         (OsString::from("PATH"), original_path),
         (OsString::from("GITHUB_TOKEN"), OsString::from("sentinel")),
         (
@@ -231,10 +237,11 @@ fn mbx_child_uses_rustup_path_without_mise_cargo_wrapper() -> Result<(), String>
         vec![
             std::path::PathBuf::from("/Users/alex/.cargo/bin"),
             std::path::PathBuf::from("/Users/alex/scratch/mise/command-wrappers/bin"),
+            std::path::PathBuf::from("/Users/alex/scratch/mise/shims"),
             std::path::PathBuf::from("/opt/other/command-wrappers/bin"),
             std::path::PathBuf::from("/usr/bin"),
         ],
-        "only the canonical Mise cargo wrapper is removed"
+        "only canonical Mise Cargo wrappers and shims are removed"
     );
     assert!(!has(&child, "GITHUB_TOKEN"));
     assert!(!has(&child, "CARGO_REGISTRY_TOKEN"));
