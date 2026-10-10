@@ -43,25 +43,55 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
         .expect("factor obligations");
 
     assert_eq!(factored.len(), 150);
-    assert_eq!(files.len(), 1, "argv/env shape should share one action");
     assert_eq!(
-        files[0].path,
+        files.len(),
+        2,
+        "one shared action and one execution manifest"
+    );
+    let action_file = files
+        .iter()
+        .find(|file| file.path.ends_with("/action.yml"))
+        .expect("shared composite action");
+    let manifest_file = files
+        .iter()
+        .find(|file| file.path == velnor_actions_contract::TASK_EXECUTION_MANIFEST_PATH)
+        .expect("versioned task execution manifest");
+    assert_eq!(
+        action_file.path,
         format!(".github/actions/{ACTION_NAME_PREFIX}0/action.yml")
     );
-    assert!(files[0].bytes.contains("using: composite"));
-    assert!(files[0].bytes.contains("shell: bash"));
+    assert!(action_file.bytes.contains("using: composite"));
+    assert!(action_file.bytes.contains("shell: bash"));
+    assert!(manifest_file.bytes.starts_with(&format!(
+        "{}\n",
+        crate::marker::marker_for_version(VERSION).expect("generator marker")
+    )));
+    assert!(
+        manifest_file
+            .bytes
+            .contains("\"task_id\":\"stack/rust/crate-0/test/default\"")
+    );
+    assert!(
+        manifest_file
+            .bytes
+            .contains("crate-0\\\"; printf injected; #")
+    );
+    assert_eq!(manifest_file.bytes.matches("\"task_id\":").count(), 150);
     let action = task_document_for_test();
     let run = action_run_scalar(&action);
-    assert!(run.contains("argv=( \"$VELNOR_WRAPPER_ARGV_0\""));
+    assert!(run.contains("argv+=(\"$RUNTIME_VALUE\")"));
+    assert!(run.contains("env -- \"${task_env[@]}\" \"${argv[@]}\""));
     assert!(run.contains("write-task-report-v1"));
     assert!(run.contains("if [ \"$task_code\" -ne 0 ]; then exit \"$task_code\"; fi"));
     assert!(run.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
     assert!(!run.contains("eval"));
+    assert!(run.contains("replace_runner_temp"));
+    assert!(run.contains("VELNOR_RUNTIME_RUNNER_TEMP"));
     for key in crate::toolchain_env::STEP_CREDENTIAL_DENYLIST
         .into_iter()
         .chain(crate::toolchain_env::STEP_ENDPOINT_DENYLIST)
     {
-        assert!(!files[0].bytes.contains(&format!("inputs.env_{key}")));
+        assert!(!action_file.bytes.contains(&format!("inputs.env_{key}")));
     }
 
     for (id, original) in &jobs {
@@ -84,21 +114,28 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
             panic!("obligation was not replaced by its composite call");
         };
         assert_eq!(uses, "./.github/actions/declared-task-0");
-        assert!(env.is_empty(), "task env crosses through declared inputs");
-        let expected_argument = if task_index == "0" {
-            HOSTILE_TASK_ARGUMENT.to_owned()
-        } else {
-            format!("crate-{task_index}")
-        };
-        assert_eq!(with["argv_10"], expected_argument);
-        if task_index == "0" {
-            assert!(!files[0].bytes.contains(HOSTILE_TASK_ARGUMENT));
-        }
+        assert!(
+            env.is_empty(),
+            "task values cross only through the manifest"
+        );
+        assert_eq!(
+            with.len(),
+            2,
+            "only stable ID and execution digest are inputs"
+        );
         assert_eq!(
             with["task_id"],
             format!("stack/rust/crate-{task_index}/test/default")
         );
-        assert!(!with.contains_key("env_GITHUB_TOKEN"));
+        assert_eq!(with["execution_digest"].len(), 64);
+        assert!(
+            with["execution_digest"]
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit())
+        );
+        assert!(!action_file.bytes.contains(HOSTILE_TASK_ARGUMENT));
+        assert!(!action_file.bytes.contains("inputs.argv_"));
+        assert!(!action_file.bytes.contains("inputs.env_"));
     }
 }
 
@@ -184,6 +221,143 @@ fn typed_task_requires_checkout_staging_and_credential_free_inputs() {
 }
 
 #[test]
+fn typed_task_preserves_only_the_exact_runner_temp_expression() {
+    let mut task = task_step(0);
+    let StepKind::TaskExecution { env, .. } = &mut task.kind else {
+        unreachable!();
+    };
+    assert_eq!(env["MISE_CARGO_HOME"], "${{ runner.temp }}/velnor/cargo");
+
+    let jobs = BTreeMap::from([(
+        "rust-demo".to_owned(),
+        simple_job(vec![checkout_step(), acquire_step(), task.clone()]),
+    )]);
+    let (factored, files) = factor_obligation_steps(&jobs, CHECKOUT, VERSION, VERSION, &[], None)
+        .expect("known expression is retained in the manifest");
+    let manifest = files
+        .iter()
+        .find(|file| file.path == velnor_actions_contract::TASK_EXECUTION_MANIFEST_PATH)
+        .expect("manifest emitted");
+    assert!(manifest.bytes.contains("${{ runner.temp }}/velnor/cargo"));
+    let StepKind::Action { with, .. } = &factored["rust-demo"].steps[2].kind else {
+        panic!("factored task uses the shared action");
+    };
+    assert_eq!(with["task_id"], "stack/rust/crate-0/test/default");
+
+    let StepKind::TaskExecution { env, .. } = &mut task.kind else {
+        unreachable!();
+    };
+    env.insert(
+        "MISE_CARGO_HOME".to_owned(),
+        "${{ github.workspace }}/.cargo".to_owned(),
+    );
+    let unsupported = BTreeMap::from([(
+        "rust-demo".to_owned(),
+        simple_job(vec![checkout_step(), acquire_step(), task]),
+    )]);
+    assert!(
+        factor_obligation_steps(&unsupported, CHECKOUT, VERSION, VERSION, &[], None)
+            .expect_err("unmodeled runtime expressions cannot be serialized")
+            .to_string()
+            .contains("unsupported_declared_task_expression")
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn wrapper_resolves_runner_temp_and_passes_shell_metacharacters_as_data() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_DIR: AtomicU64 = AtomicU64::new(0);
+    let test_root = std::env::temp_dir().join(format!(
+        "velnor task wrapper {} {}",
+        std::process::id(),
+        NEXT_DIR.fetch_add(1, Ordering::Relaxed)
+    ));
+    let runner_temp = test_root.join("runner temp");
+    let helper_dir = runner_temp.join("velnor/bin");
+    std::fs::create_dir_all(&helper_dir).expect("create fake runner temp");
+
+    let helper = helper_dir.join(format!("velnor-actions-{VERSION}"));
+    let frame_path = test_root.join("frame.bin");
+    let call_log = test_root.join("helper-calls.log");
+    let sentinel = test_root.join("shell-injection-ran");
+    let cargo_home = "${{ runner.temp }}/velnor/cargo";
+    let payload = format!("$(touch {}; printf injected)", sentinel.display());
+    let expected_execution_digest = "a".repeat(64);
+    let plan_digest = "b".repeat(64);
+    let task_command = format!(
+        "test \"$MISE_CARGO_HOME\" = \"$EXPECTED_HOME\" && test \"$PAYLOAD\" = '{}'",
+        payload
+    );
+    let fields: [&str; 21] = [
+        "VELNOR-TASK-EXECUTION-V1",
+        "task/test",
+        &expected_execution_digest,
+        &plan_digest,
+        "matrix/test",
+        "default",
+        VERSION,
+        "0",
+        "",
+        "3",
+        "sh",
+        "-c",
+        &task_command,
+        "3",
+        "EXPECTED_HOME",
+        cargo_home,
+        "MISE_CARGO_HOME",
+        cargo_home,
+        "PAYLOAD",
+        &payload,
+        "END",
+    ];
+    let mut frame = Vec::new();
+    for field in fields {
+        frame.extend_from_slice(field.as_bytes());
+        frame.push(0);
+    }
+    std::fs::write(&frame_path, frame).expect("write valid frame");
+    std::fs::write(
+        &helper,
+        b"#!/bin/sh\nprintf '%s\\n' \"$VELNOR_INTERNAL_OP\" >> \"$VELNOR_TEST_CALL_LOG\"\ncase \"$VELNOR_INTERNAL_OP\" in\n  resolve-task-execution-v1) cat \"$VELNOR_TEST_FRAME\" ;;\n  write-task-report-v1) exit 0 ;;\n  *) exit 9 ;;\nesac\n",
+    )
+    .expect("write fake helper");
+    let mut permissions = std::fs::metadata(&helper)
+        .expect("inspect fake helper")
+        .permissions();
+    permissions.set_mode(0o700);
+    std::fs::set_permissions(&helper, permissions).expect("make helper executable");
+
+    let result = std::process::Command::new("bash")
+        .arg("-c")
+        .arg(super::task_script(VERSION))
+        .env("RUNNER_TEMP", &runner_temp)
+        .env(super::RUNTIME_RUNNER_TEMP_ENV, &runner_temp)
+        .env(super::GENERATOR_VERSION_ENV, VERSION)
+        .env(super::TASK_EXECUTION_DIGEST_ENV, expected_execution_digest)
+        .env("VELNOR_TASK_ID", "task/test")
+        .env("VELNOR_TEST_FRAME", &frame_path)
+        .env("VELNOR_TEST_CALL_LOG", &call_log)
+        .output()
+        .expect("run generated Bash composite script");
+    assert!(
+        result.status.success(),
+        "script failed: stdout={} stderr={}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(!sentinel.exists(), "payload is data, never shell source");
+    assert_eq!(
+        std::fs::read_to_string(&call_log).expect("record helper operations"),
+        "resolve-task-execution-v1\nwrite-task-report-v1\n"
+    );
+    std::fs::remove_dir_all(test_root).expect("remove fake runner tree");
+}
+
+#[test]
 fn typed_task_rejects_helper_version_from_a_different_generation_context() {
     let mut task = task_step(0);
     let StepKind::TaskExecution {
@@ -233,15 +407,32 @@ fn generated_task_action_marker_uses_generator_version_and_body_uses_helper_vers
     let (_, files) =
         factor_obligation_steps(&jobs, CHECKOUT, VERSION, CONSUMER_HELPER_VERSION, &[], None)
             .expect("factor task under independently versioned generator/helper");
-    assert_eq!(files.len(), 1);
-    assert!(files[0].bytes.starts_with(&format!(
+    assert_eq!(files.len(), 2);
+    let action = files
+        .iter()
+        .find(|file| file.path.ends_with("/action.yml"))
+        .expect("action output");
+    let manifest = files
+        .iter()
+        .find(|file| file.path == velnor_actions_contract::TASK_EXECUTION_MANIFEST_PATH)
+        .expect("manifest output");
+    assert!(action.bytes.starts_with(&format!(
         "{}\n",
         crate::marker::marker_for_version(VERSION).expect("generator marker")
     )));
     assert!(
-        files[0]
+        action
             .bytes
             .contains("$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.4")
+    );
+    assert!(manifest.bytes.starts_with(&format!(
+        "{}\n",
+        crate::marker::marker_for_version(VERSION).expect("generator marker")
+    )));
+    assert!(
+        manifest
+            .bytes
+            .contains("\"report_helper_version\":\"0.1.4\"")
     );
 }
 
@@ -296,7 +487,7 @@ fn crate_obligation_scale_set_uses_the_explicit_profile_without_a_task_policy() 
     let (_, files) =
         factor_obligation_steps(&jobs, CHECKOUT, VERSION, VERSION, &[], Some(&selector))
             .expect("validated execution profile authorizes the crate route");
-    assert_eq!(files.len(), 1);
+    assert_eq!(files.len(), 2);
 }
 
 #[test]
@@ -347,8 +538,6 @@ fn verification_policy(runner: VerificationRunner) -> WorkflowTaskPolicy {
 fn task_document_for_test() -> Yaml {
     let task = task_step(0);
     let StepKind::TaskExecution {
-        argv,
-        env,
         report_helper_version,
         ..
     } = &task.kind
@@ -356,11 +545,9 @@ fn task_document_for_test() -> Yaml {
         unreachable!();
     };
     let shape = super::Shape {
-        argv_count: argv.len(),
-        env_keys: env.keys().cloned().collect(),
         helper_version: report_helper_version.clone(),
     };
-    super::declared_task_document(0, &shape).expect("typed composite document")
+    super::declared_task_document(0, &shape, VERSION).expect("typed composite document")
 }
 
 fn action_run_scalar(action: &Yaml) -> &str {
