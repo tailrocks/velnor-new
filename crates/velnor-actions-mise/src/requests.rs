@@ -1,10 +1,10 @@
 //! Typed mise requests: metadata discovery, qualification, and pinned exec.
 //!
-//! Discovery uses Cargo even for MBX workspaces (metadata discovery is not
-//! compilation). Discovery never resolves (`--no-deps`: no fetch, no write);
-//! only lockful qualification resolves, `--locked --offline`. Callers own
-//! parsing; discovery and qualification return the raw metadata JSON string,
-//! and pinned exec returns the typed output.
+//! Metadata discovery and locked qualification run through pinned MBX, including
+//! for workspaces that do not compile. Discovery never resolves (`--no-deps`:
+//! no fetch, no write); only lockful qualification resolves, `--locked
+//! --offline`. Callers own parsing; discovery and qualification return the raw
+//! metadata JSON string, and pinned exec returns the typed output.
 
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
@@ -15,15 +15,42 @@ use crate::command::{
 };
 use crate::error::MiseError;
 
-/// Cargo payload program executed after the `--` separator.
-const CARGO_PROGRAM: &str = "cargo";
+/// MBX payload program executed after the `--` separator.
+const MBX_PROGRAM: &str = "mbx";
 
-/// Cargo subcommand reporting workspace metadata as JSON.
-const CARGO_METADATA: &str = "metadata";
+/// MBX's exact Rust toolchain selector.
+fn mbx_rust_selector(catalog: &ToolCatalog) -> String {
+    // Kept as a helper so metadata requests and MBX's own command-line
+    // selector cannot diverge from the Rust catalog identity.
+    format!("+{}", catalog.version(PinnedTool::Rust))
+}
 
-/// Conservative discovery of one manifest through pinned Cargo.
+/// MBX subcommand reporting workspace metadata as JSON.
+const METADATA_SUBCOMMAND: &str = "metadata";
+
+fn metadata_mbx_argv(
+    catalog: &ToolCatalog,
+    manifest: &Path,
+    resolution_flags: &[&str],
+) -> Vec<OsString> {
+    let mut argv = vec![
+        OsString::from(MBX_PROGRAM),
+        OsString::from(mbx_rust_selector(catalog)),
+        OsString::from(METADATA_SUBCOMMAND),
+        OsString::from("--format-version"),
+        OsString::from("1"),
+    ];
+    argv.extend(resolution_flags.iter().map(OsString::from));
+    argv.extend([
+        OsString::from("--manifest-path"),
+        manifest.as_os_str().to_owned(),
+    ]);
+    argv
+}
+
+/// Conservative discovery of one manifest through pinned MBX.
 ///
-/// Exact payload: `cargo metadata --format-version 1 --no-deps
+/// Exact payload: `mbx +<rust> metadata --format-version 1 --no-deps
 /// --manifest-path <manifest>`. No `--locked`/`--offline`: discovery must not
 /// wait for full resolution. `--no-deps` skips resolution entirely, so the
 /// probe performs no index access, network fetch, or repository write --
@@ -57,24 +84,20 @@ impl MetadataDiscovery {
         &self.manifest
     }
 
-    /// Cargo-side payload arguments, byte-exact per the contract.
+    /// MBX payload arguments, byte-exact per the contract.
     #[must_use]
-    pub fn cargo_argv(&self) -> Vec<OsString> {
-        vec![
-            OsString::from(CARGO_PROGRAM),
-            OsString::from(CARGO_METADATA),
-            OsString::from("--format-version"),
-            OsString::from("1"),
-            OsString::from("--no-deps"),
-            OsString::from("--manifest-path"),
-            self.manifest.as_os_str().to_owned(),
-        ]
+    pub fn mbx_argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
+        metadata_mbx_argv(catalog, &self.manifest, &["--no-deps"])
     }
 
     /// Full mise argument vector including the program.
     #[must_use]
     pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
-        full_mise_argv(catalog, &[PinnedTool::Rust], &self.cargo_argv())
+        full_mise_argv(
+            catalog,
+            &[PinnedTool::Rust, PinnedTool::MrBoxington],
+            &self.mbx_argv(catalog),
+        )
     }
 
     /// Isolated command running this discovery.
@@ -84,15 +107,16 @@ impl MetadataDiscovery {
     /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
     /// empty, which the constructor rules out.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
-        let specs = catalog.tool_specs(&[PinnedTool::Rust]);
-        IsolatedCommand::mise_exec(&specs, &self.cargo_argv())
+        let specs = catalog.tool_specs(&[PinnedTool::Rust, PinnedTool::MrBoxington]);
+        Ok(IsolatedCommand::mise_exec(&specs, &self.mbx_argv(catalog))?
+            .with_policy(crate::command::EnvPolicy::Mbx))
     }
 
     /// Run discovery and return the raw metadata JSON string.
     ///
     /// # Errors
     ///
-    /// Returns [`MiseError::SpawnFailed`] when Cargo cannot launch,
+    /// Returns [`MiseError::SpawnFailed`] when MBX cannot launch,
     /// [`MiseError::NonZeroExit`] on nonzero status, and
     /// [`MiseError::InvalidUtf8`] when stdout is not text.
     pub fn run(&self, catalog: &ToolCatalog) -> Result<String, MiseError> {
@@ -104,7 +128,7 @@ impl MetadataDiscovery {
 
 /// Locked/offline qualification after dependency sources have been prepared.
 ///
-/// Exact payload: `cargo metadata --format-version 1 --locked --offline
+/// Exact payload: `mbx +<rust> metadata --format-version 1 --locked --offline
 /// --manifest-path <workspace-root>/Cargo.toml`. Missing offline
 /// dependencies surface as `preparation_incomplete` upstream, never a fetch.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -134,25 +158,24 @@ impl MetadataQualification {
         &self.workspace_manifest
     }
 
-    /// Cargo-side payload arguments, byte-exact per the contract.
+    /// MBX payload arguments, byte-exact per the contract.
     #[must_use]
-    pub fn cargo_argv(&self) -> Vec<OsString> {
-        vec![
-            OsString::from(CARGO_PROGRAM),
-            OsString::from(CARGO_METADATA),
-            OsString::from("--format-version"),
-            OsString::from("1"),
-            OsString::from("--locked"),
-            OsString::from("--offline"),
-            OsString::from("--manifest-path"),
-            self.workspace_manifest.as_os_str().to_owned(),
-        ]
+    pub fn mbx_argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
+        metadata_mbx_argv(
+            catalog,
+            &self.workspace_manifest,
+            &["--locked", "--offline"],
+        )
     }
 
     /// Full mise argument vector including the program.
     #[must_use]
     pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
-        full_mise_argv(catalog, &[PinnedTool::Rust], &self.cargo_argv())
+        full_mise_argv(
+            catalog,
+            &[PinnedTool::Rust, PinnedTool::MrBoxington],
+            &self.mbx_argv(catalog),
+        )
     }
 
     /// Isolated command running this qualification.
@@ -162,15 +185,16 @@ impl MetadataQualification {
     /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
     /// empty, which the constructor rules out.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
-        let specs = catalog.tool_specs(&[PinnedTool::Rust]);
-        IsolatedCommand::mise_exec(&specs, &self.cargo_argv())
+        let specs = catalog.tool_specs(&[PinnedTool::Rust, PinnedTool::MrBoxington]);
+        Ok(IsolatedCommand::mise_exec(&specs, &self.mbx_argv(catalog))?
+            .with_policy(crate::command::EnvPolicy::Mbx))
     }
 
     /// Run qualification and return the raw metadata JSON string.
     ///
     /// # Errors
     ///
-    /// Returns [`MiseError::SpawnFailed`] when Cargo cannot launch,
+    /// Returns [`MiseError::SpawnFailed`] when MBX cannot launch,
     /// [`MiseError::NonZeroExit`] on nonzero status, and
     /// [`MiseError::InvalidUtf8`] when stdout is not text.
     pub fn run(&self, catalog: &ToolCatalog) -> Result<String, MiseError> {
@@ -284,6 +308,12 @@ impl PinnedToolExec {
         let command = IsolatedCommand::mise_exec(&specs, &self.payload())?;
         if self.tools.as_slice() == [PinnedTool::Gh] {
             return Ok(command.with_policy(crate::command::EnvPolicy::Baseline));
+        }
+        if Path::new(&self.program)
+            .file_stem()
+            .is_some_and(|stem| stem == "mbx")
+        {
+            return Ok(command.with_policy(crate::command::EnvPolicy::Mbx));
         }
         Ok(command)
     }

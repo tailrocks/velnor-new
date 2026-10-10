@@ -1,10 +1,12 @@
 //! Prepare/plan/generate integration cases over tempdir-built fixtures.
 
+use std::ffi::OsString;
 use std::fs;
 use std::path::Path;
 
 use tempfile::TempDir;
 use velnor_actions_contract::StepKind;
+use velnor_actions_mise::{MetadataDiscovery, ToolCatalog};
 use velnor_actions_orchestrator::decisions::{MetadataFailure, classify_metadata_failure};
 use velnor_actions_orchestrator::{
     GenerateOptions, OrchestratorError, generate, prepare, render_staged_tree,
@@ -370,22 +372,28 @@ fn prepare_lockless_with_deps_writes_nothing() -> TestResult {
     assert_eq!(before, snapshot(root)?, "prepare must not write");
     assert!(!root.join("Cargo.lock").exists(), "no lockfile synthesized");
     assert!(!prep.discovery.workspaces.is_empty(), "demo detected");
-    let argv = velnor_actions_mise::MetadataDiscovery::new(root.join("Cargo.toml"))?.cargo_argv();
+    let catalog = ToolCatalog::pinned();
+    let request = MetadataDiscovery::new(root.join("Cargo.toml"))?;
+    let argv = request.argv(&catalog);
+    assert!(
+        !argv.iter().any(|arg| arg == "cargo"),
+        "metadata must use MBX"
+    );
     let skips = argv.iter().any(|arg| arg == "--no-deps");
     assert!(skips, "discovery skips resolution");
-    let probe = std::process::Command::new("cargo")
-        .args([
-            "metadata",
-            "--format-version",
-            "1",
-            "--no-deps",
-            "--manifest-path",
-        ])
-        .arg(root.join("Cargo.toml"))
-        .env("CARGO_HTTP_PROXY", "http://127.0.0.1:9/")
-        .env("CARGO_HTTPS_PROXY", "http://127.0.0.1:9/")
-        .output()?;
-    assert!(probe.status.success(), "no-deps never fetches");
+    let no_network = [
+        (
+            OsString::from("CARGO_HTTP_PROXY"),
+            OsString::from("http://127.0.0.1:9/"),
+        ),
+        (
+            OsString::from("CARGO_HTTPS_PROXY"),
+            OsString::from("http://127.0.0.1:9/"),
+        ),
+    ];
+    let command = request.command(&catalog)?.with_env(&no_network)?;
+    let probe = command.run()?;
+    assert!(probe.success, "no-deps never fetches: {:?}", probe.stderr);
     assert!(probe.stderr.is_empty(), "no index chatter");
     Ok(())
 }

@@ -250,7 +250,11 @@ impl IsolatedCommand {
     fn command(&self) -> Command {
         let mut command = Command::new(&self.program);
         command.args(&self.args);
-        if self.policy.inherits_parent() {
+        if self.policy == EnvPolicy::Mbx {
+            let parent: Vec<(OsString, OsString)> = std::env::vars_os().collect();
+            command.env_clear();
+            command.envs(self.policy.child_env(&parent, &self.full_env()));
+        } else if self.policy.inherits_parent() {
             strip_credentials(&mut command, self.policy);
         } else {
             command.env_clear();
@@ -259,8 +263,10 @@ impl IsolatedCommand {
                 command.envs(proxy_passthrough(&parent));
             }
         }
-        for (key, value) in self.full_env() {
-            command.env(key, value);
+        if self.policy != EnvPolicy::Mbx {
+            for (key, value) in self.full_env() {
+                command.env(key, value);
+            }
         }
         if let Some(cwd) = &self.cwd {
             command.current_dir(cwd);
