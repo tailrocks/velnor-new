@@ -214,7 +214,7 @@ pub(super) fn document(jobs: Vec<(String, Yaml)>, families: &[Family]) -> Yaml {
 
 fn workflow_dispatch(families: &[Family]) -> Yaml {
     let mut choices = BTreeSet::from(["all"]);
-    choices.extend(families.iter().map(|family| family.selector_value()));
+    choices.extend(families.iter().copied().map(Family::selector_value));
     let input = DispatchInput {
         name: "release_family".to_owned(),
         required: false,

@@ -250,6 +250,65 @@ pub(crate) fn step_to_yaml(
     }
 }
 
+/// Render one internal planner step. The operation travels in env, never argv.
+fn internal_step_to_yaml(
+    job_id: &str,
+    step: &Step,
+    ctx: &RenderContext,
+    needs_envs: &[(String, String)],
+    composite: bool,
+    step_context: &crate::document_lanes::JobStepContext<'_>,
+) -> Result<Yaml, RenderError> {
+    let StepKind::Internal {
+        operation,
+        env: step_env,
+    } = &step.kind
+    else {
+        return Err(RenderError::InvalidWorkflow(
+            "internal_step_required".to_owned(),
+        ));
+    };
+    let (op, target) = steps::split_internal_operation(operation)?;
+    if op == steps::FETCH_OPERATION && !step_context.actions_read {
+        return Err(RenderError::InvalidWorkflow(
+            "report_fetch_requires_actions_read".to_owned(),
+        ));
+    }
+    let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+    if let Some(condition) = &step.condition {
+        steps::scan_for_private_subcommands(condition)?;
+        entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+    }
+    // No `continue-on-error` on the fetch step (F5): the helper
+    // retries each leg bounded and still exits success on
+    // per-leg failure, so the merge judges honestly; only hard
+    // environment failures fail the job, unmasked.
+    let channel = if job_id == FINAL_JOB_ID && target == steps::MERGE_OPERATION {
+        needs_envs
+    } else {
+        &[]
+    };
+    crate::step_ids::push_step_id(&mut entries, step);
+    entries.push((
+        "env".to_owned(),
+        internal_env(
+            op,
+            target,
+            ctx,
+            channel,
+            step_context.job_env,
+            step_env,
+            step_context.actions_read,
+        )?,
+    ));
+    push_composite_shell(&mut entries, composite);
+    entries.push((
+        "run".to_owned(),
+        Yaml::str(commands::quote_run_arg(&ctx.staged_binary)?),
+    ));
+    Ok(Yaml::Map(entries))
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -315,63 +374,4 @@ mod tests {
         let ordinary_yaml = yaml::render_yaml(&ordinary_yaml);
         assert!(ordinary_yaml.contains(&format!("with:\n  digest: {digest}")));
     }
-}
-
-/// Render one internal planner step. The operation travels in env, never argv.
-fn internal_step_to_yaml(
-    job_id: &str,
-    step: &Step,
-    ctx: &RenderContext,
-    needs_envs: &[(String, String)],
-    composite: bool,
-    step_context: &crate::document_lanes::JobStepContext<'_>,
-) -> Result<Yaml, RenderError> {
-    let StepKind::Internal {
-        operation,
-        env: step_env,
-    } = &step.kind
-    else {
-        return Err(RenderError::InvalidWorkflow(
-            "internal_step_required".to_owned(),
-        ));
-    };
-    let (op, target) = steps::split_internal_operation(operation)?;
-    if op == steps::FETCH_OPERATION && !step_context.actions_read {
-        return Err(RenderError::InvalidWorkflow(
-            "report_fetch_requires_actions_read".to_owned(),
-        ));
-    }
-    let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-    if let Some(condition) = &step.condition {
-        steps::scan_for_private_subcommands(condition)?;
-        entries.push(("if".to_owned(), Yaml::str(condition.clone())));
-    }
-    // No `continue-on-error` on the fetch step (F5): the helper
-    // retries each leg bounded and still exits success on
-    // per-leg failure, so the merge judges honestly; only hard
-    // environment failures fail the job, unmasked.
-    let channel = if job_id == FINAL_JOB_ID && target == steps::MERGE_OPERATION {
-        needs_envs
-    } else {
-        &[]
-    };
-    crate::step_ids::push_step_id(&mut entries, step);
-    entries.push((
-        "env".to_owned(),
-        internal_env(
-            op,
-            target,
-            ctx,
-            channel,
-            step_context.job_env,
-            step_env,
-            step_context.actions_read,
-        )?,
-    ));
-    push_composite_shell(&mut entries, composite);
-    entries.push((
-        "run".to_owned(),
-        Yaml::str(commands::quote_run_arg(&ctx.staged_binary)?),
-    ));
-    Ok(Yaml::Map(entries))
 }
