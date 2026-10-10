@@ -94,6 +94,8 @@ fn mise_lock_projects_exact_selected_tool_and_macos_arm64_artifact() {
     // Parser-shape fixture only. It makes no install-acceptance or provenance claim.
     let value = toml::from_str(
         r#"
+lockfile_version = 3
+
 [tools]
 "github:boltffi/boltffi" = [
   { version = "0.30.1", backend = "github:boltffi/boltffi", "platforms.macos-arm64" = { url = "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-darwin-aarch64.tar.gz", checksum = "sha256:ce3a47b5c398cbb9c327098a612b431f30db15d353d62cee4e4637540fa8321a" } }
@@ -112,6 +114,8 @@ rust = [
     let macos = selected.macos_arm64.as_ref().expect("macOS ARM64 entry");
 
     assert!(lock.valid_shape);
+    assert!(lock.has_supported_root_shape());
+    assert_eq!(lock.lockfile_version, Some(3));
     assert!(selected.valid_shape);
     assert_eq!(selected.backend.as_deref(), Some("github:boltffi/boltffi"));
     assert_eq!(selected.version.as_deref(), Some("0.30.1"));
@@ -139,6 +143,8 @@ rust = [
 fn mise_lock_projects_exact_linux_x64_artifact() {
     let value = toml::from_str(
         r#"
+lockfile_version = 3
+
 [tools]
 "github:example/linter" = [
   { version = "1.2.3", backend = "github:example/linter", "platforms.linux-x64" = { url = "https://github.com/example/linter/releases/download/v1.2.3/linter-linux-x64.tar.gz", checksum = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } }
@@ -161,6 +167,7 @@ fn mise_lock_projects_exact_linux_x64_artifact() {
 fn mise_lock_exposes_unknown_fields_and_rejects_malformed_shapes() {
     let value = toml::from_str(
         r#"
+lockfile_version = 3
 future_root = true
 
 [tools]
@@ -180,6 +187,7 @@ malformed = [
     let lock = parse_native_mise_lock(&value).expect("Mise lock projection");
 
     assert!(lock.root_keys.contains(&"future_root".to_owned()));
+    assert!(!lock.has_supported_root_shape());
     let rust = lock.tools.get("rust").expect("Rust entry");
     assert!(rust.valid_shape);
     assert_eq!(rust.unsupported_fields, ["future_option"]);
@@ -194,4 +202,26 @@ malformed = [
     let malformed = lock.tools.get("malformed").expect("malformed entry");
     assert!(!malformed.valid_shape);
     assert!(parse_native_mise_lock(&toml::Value::String("not a lock".to_owned())).is_none());
+}
+
+#[test]
+fn native_mise_lock_accepts_only_v3_with_the_known_root_fields() {
+    let current = toml::from_str("lockfile_version = 3\n\n[tools]\n").expect("valid Mise v3 lock");
+    let current = parse_native_mise_lock(&current).expect("lock projection");
+    assert!(current.has_supported_root_shape());
+
+    for unsupported in [
+        "[tools]\n",
+        "lockfile_version = 2\n[tools]\n",
+        "lockfile_version = 4\n[tools]\n",
+        "lockfile_version = \"3\"\n[tools]\n",
+        "lockfile_version = 3\nfuture_root = true\n[tools]\n",
+    ] {
+        let value = toml::from_str(unsupported).expect("syntactically valid lock TOML");
+        let lock = parse_native_mise_lock(&value).expect("lock projection");
+        assert!(
+            !lock.has_supported_root_shape(),
+            "unsupported lock root must fail closed: {unsupported}"
+        );
+    }
 }
