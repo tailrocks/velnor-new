@@ -117,8 +117,9 @@ pub use render::{
     render_workflow_ir, render_workflow_ir_strict,
 };
 pub use schema2::{
-    MbxQualificationPins, MisePinQualificationPins, ProductReleasePins, Schema2WorkflowRequest,
-    render_schema2_workflows,
+    MbxQualificationPins, MisePinQualificationPins, ProductReleasePins,
+    RUST_TOOLCHAIN_QUALIFICATION_MANIFEST_SHA256, RustToolchainQualificationPins,
+    Schema2WorkflowRequest, render_schema2_workflows,
 };
 pub use setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
 pub use steps::{

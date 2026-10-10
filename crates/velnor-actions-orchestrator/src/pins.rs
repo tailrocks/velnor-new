@@ -34,6 +34,9 @@ pub(super) use consumer_binary_release::resolve_mise_setup_for_consumer_binary_r
 #[path = "pins_mise_pin_qualification.rs"]
 mod mise_pin_qualification;
 pub(super) use mise_pin_qualification::resolve as resolve_mise_pin_qualification;
+#[path = "pins_rust_toolchain_qualification.rs"]
+mod rust_toolchain_qualification;
+pub(super) use rust_toolchain_qualification::resolve as resolve_rust_toolchain_qualification;
 
 /// Resolve typed Mise setup pins: overrides plus the compiled catalog.
 ///
@@ -391,3 +394,6 @@ mod mise_pin_qualification_tests;
 #[cfg(test)]
 #[path = "pins_manifest_tests.rs"]
 mod pins_manifest_tests;
+#[cfg(test)]
+#[path = "pins_rust_toolchain_qualification_tests.rs"]
+mod rust_toolchain_qualification_tests;

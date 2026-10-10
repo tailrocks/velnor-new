@@ -5,8 +5,9 @@ use velnor_actions_contract::{RoutingWorkflow, ScheduleTrigger, WorkflowPolicy};
 use velnor_actions_workflow_renderer::freshness::{FreshnessSpec, render_freshness_workflow};
 use velnor_actions_workflow_renderer::release_tree::render_release_workflow;
 use velnor_actions_workflow_renderer::schema2::MbxQualificationPins;
-use velnor_actions_workflow_renderer::schema2::MisePinQualificationPins;
-use velnor_actions_workflow_renderer::schema2::Schema2WorkflowRequest;
+use velnor_actions_workflow_renderer::schema2::{
+    MisePinQualificationPins, RustToolchainQualificationPins, Schema2WorkflowRequest,
+};
 use velnor_actions_workflow_renderer::setup::MiseSetup;
 use velnor_actions_workflow_renderer::{
     MAX_WORKFLOW_BYTES, RenderError, RenderedFile, render_schema2_workflows, render_tree,
@@ -156,6 +157,13 @@ fn direct_schema2_renderer_rejects_an_oversized_workflow() -> Result<(), RenderE
                 version: "2026.10.5".to_owned(),
                 sha256: "c".repeat(64),
             },
+        }),
+        rust_toolchain_qualification: Some(RustToolchainQualificationPins {
+            rust_version: "1.99.0".to_owned(),
+            manifest_url: "https://static.rust-lang.org/dist/channel-rust-1.99.0.toml".to_owned(),
+            manifest_sha256:
+                velnor_actions_workflow_renderer::RUST_TOOLCHAIN_QUALIFICATION_MANIFEST_SHA256
+                    .to_owned(),
         }),
         product_release: None,
     };
