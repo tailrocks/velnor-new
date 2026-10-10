@@ -110,7 +110,7 @@ pub(super) fn staged_runs(
     Ok(runs)
 }
 
-pub(super) use workflow_scan::scan_workflow;
+use workflow_scan::scan_workflow;
 
 fn finish_workflow_scan(mut scan: WorkflowScan) -> Result<Vec<StagedRun>, OrchestratorError> {
     if scan.pending_mapping_anchor.is_some() {
