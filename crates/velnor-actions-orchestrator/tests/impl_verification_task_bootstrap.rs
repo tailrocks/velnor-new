@@ -2,10 +2,23 @@
 
 use std::fs;
 
-use velnor_actions_contract::VerificationRunner;
+use velnor_actions_contract::{VerificationRunner, VerificationTask, VerificationTaskSource};
 
 use super::resolve_verification_tools;
 use crate::toolcheck::check_tool_inputs;
+
+fn verification_task(task_name: &str, runner: VerificationRunner) -> VerificationTask {
+    VerificationTask {
+        id: "verify".to_owned(),
+        mise_task: task_name.to_owned(),
+        source: VerificationTaskSource {
+            mise_config: "mise.toml".to_owned(),
+            working_directory: ".".to_owned(),
+        },
+        runner,
+        timeout_minutes: 10,
+    }
+}
 
 fn tool_root() -> tempfile::TempDir {
     let root = tempfile::tempdir().expect("temporary tool input root");
@@ -55,10 +68,16 @@ tools = { "github:example/linter" = "1.2.3" }
 fn only_transitive_task_tools_are_selected_and_platform_rows_are_bound() {
     let root = tool_root();
     let checks = check_tool_inputs(root.path());
-    let linux = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
-        .expect("locked Linux task tool closure");
-    let macos = resolve_verification_tools(&checks, "verify", VerificationRunner::MacosArm64)
-        .expect("locked macOS task tool closure");
+    let linux = resolve_verification_tools(
+        &checks,
+        &verification_task("verify", VerificationRunner::LinuxX64),
+    )
+    .expect("locked Linux task tool closure");
+    let macos = resolve_verification_tools(
+        &checks,
+        &verification_task("verify", VerificationRunner::MacosArm64),
+    )
+    .expect("locked macOS task tool closure");
 
     assert_eq!(linux.selected_tools.len(), 2);
     assert_eq!(
@@ -118,7 +137,13 @@ tools = { "cargo:unsafe-tool" = "1.2.3" }
     )
     .expect("write Cargo source lock fixture");
     let checks = check_tool_inputs(root.path());
-    assert!(resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64).is_err());
+    assert!(
+        resolve_verification_tools(
+            &checks,
+            &verification_task("verify", VerificationRunner::LinuxX64)
+        )
+        .is_err()
+    );
 
     fs::write(
         root.path().join("mise.toml"),
@@ -134,7 +159,13 @@ tools = { "github:example/linter" = "1.2.3" }
     .expect("write missing-lock-row config");
     fs::write(root.path().join("mise.lock"), "[tools]\n").expect("remove selected lock row");
     let checks = check_tool_inputs(root.path());
-    assert!(resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64).is_err());
+    assert!(
+        resolve_verification_tools(
+            &checks,
+            &verification_task("verify", VerificationRunner::LinuxX64)
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -158,7 +189,13 @@ tools = { "aqua:vendor/tool" = "1.0.0" }
     )
     .expect("write conflicting selected tool pins");
     let checks = check_tool_inputs(root.path());
-    assert!(resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64).is_err());
+    assert!(
+        resolve_verification_tools(
+            &checks,
+            &verification_task("verify", VerificationRunner::LinuxX64)
+        )
+        .is_err()
+    );
 
     fs::write(
         root.path().join("mise.toml"),
@@ -175,7 +212,13 @@ run = "echo shared"
     )
     .expect("write unsupported nested invocation");
     let checks = check_tool_inputs(root.path());
-    assert!(resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64).is_err());
+    assert!(
+        resolve_verification_tools(
+            &checks,
+            &verification_task("verify", VerificationRunner::LinuxX64)
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -198,7 +241,13 @@ depends = ["verify"]
     )
     .expect("write task dependency cycle");
     let checks = check_tool_inputs(root.path());
-    assert!(resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64).is_err());
+    assert!(
+        resolve_verification_tools(
+            &checks,
+            &verification_task("verify", VerificationRunner::LinuxX64)
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -217,8 +266,11 @@ run = "echo verify"
     )
     .expect("write unsupported Mise setting");
     let checks = check_tool_inputs(root.path());
-    let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
-        .expect_err("unsupported settings fail closed without selected tools");
+    let error = resolve_verification_tools(
+        &checks,
+        &verification_task("verify", VerificationRunner::LinuxX64),
+    )
+    .expect_err("unsupported settings fail closed without selected tools");
     assert!(error.to_string().contains("verification_mise_settings"));
 
     fs::write(
@@ -234,8 +286,11 @@ run = "echo verify"
     )
     .expect("write malformed recognized setting");
     let checks = check_tool_inputs(root.path());
-    let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
-        .expect_err("malformed recognized settings fail closed");
+    let error = resolve_verification_tools(
+        &checks,
+        &verification_task("verify", VerificationRunner::LinuxX64),
+    )
+    .expect_err("malformed recognized settings fail closed");
     assert!(error.to_string().contains("verification_mise_settings"));
 
     for wrapper in [
@@ -247,8 +302,11 @@ run = "echo verify"
         );
         fs::write(root.path().join("mise.toml"), config).expect("write unsupported wrapper");
         let checks = check_tool_inputs(root.path());
-        let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
-            .expect_err("unsupported wrapper fails closed without selected tools");
+        let error = resolve_verification_tools(
+            &checks,
+            &verification_task("verify", VerificationRunner::LinuxX64),
+        )
+        .expect_err("unsupported wrapper fails closed without selected tools");
         assert!(error.to_string().contains("verification_mise_wrappers"));
     }
 }
@@ -265,8 +323,11 @@ fn missing_root_mise_config_does_not_admit_unmodeled_task_files() {
     )
     .expect("write unmodeled file task with install command");
     let checks = check_tool_inputs(root.path());
-    let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
-        .expect_err("unmodeled task files are not admitted without root mise.toml");
+    let error = resolve_verification_tools(
+        &checks,
+        &verification_task("verify", VerificationRunner::LinuxX64),
+    )
+    .expect_err("unmodeled task files are not admitted without root mise.toml");
     assert!(
         error
             .to_string()
@@ -308,8 +369,11 @@ run = "echo lint"
             .expect("write unmodeled task body");
 
         let checks = check_tool_inputs(root.path());
-        let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
-            .expect_err("metadata-only task must not inherit a file task body");
+        let error = resolve_verification_tools(
+            &checks,
+            &verification_task("verify", VerificationRunner::LinuxX64),
+        )
+        .expect_err("metadata-only task must not inherit a file task body");
         assert!(
             error
                 .to_string()
@@ -346,8 +410,11 @@ run = "echo lint"
         .expect("write unmodeled nested task body");
 
     let checks = check_tool_inputs(root.path());
-    let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
-        .expect_err("nested metadata-only task must not inherit a file task body");
+    let error = resolve_verification_tools(
+        &checks,
+        &verification_task("verify", VerificationRunner::LinuxX64),
+    )
+    .expect_err("nested metadata-only task must not inherit a file task body");
     assert!(
         error
             .to_string()
@@ -382,7 +449,10 @@ run = "echo lint"
         .expect("write unmodeled custom task body");
 
     let checks = check_tool_inputs(root.path());
-    let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
-        .expect_err("custom task directory config must fail closed");
+    let error = resolve_verification_tools(
+        &checks,
+        &verification_task("verify", VerificationRunner::LinuxX64),
+    )
+    .expect_err("custom task directory config must fail closed");
     assert!(error.to_string().contains("verification_mise_config_root"));
 }

@@ -67,7 +67,7 @@ pub use stacks::{
 };
 pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
 pub use tofu_apply::{GitHubTokenSecret, S3BackendConfig, TofuApplyConfig};
-pub use verification::{VerificationRunner, VerificationTask};
+pub use verification::{VerificationRunner, VerificationTask, VerificationTaskSource};
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, PullRequestCachePolicy, RUNNER_LABEL_CATALOG,
     RunnerSelection, VelnorSupportWorkflow, VerifyConfig, WorkflowConfig, WorkflowPolicy,

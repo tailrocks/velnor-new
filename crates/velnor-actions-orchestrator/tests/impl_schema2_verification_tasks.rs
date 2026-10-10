@@ -20,6 +20,19 @@ fn verification_tasks_follow_eligible_lanes_and_stay_required() -> TestResult {
         let actionlint = job_body(workflow, "actionlint")?;
         let macos = job_body(workflow, "task-native-format")?;
         assert!(
+            macos.contains(r#"cd -P \"$workspace_root/native\""#),
+            "{mode}: native task starts from its declared working directory: {macos}"
+        );
+        assert!(
+            macos.contains(r#"export MISE_CEILING_PATHS=\"$workspace_root/.\""#),
+            "{mode}: Mise discovery is capped above native config root: {macos}"
+        );
+        assert!(
+            macos.contains(r#"test -f \"$workspace_root/native/mise.toml\""#)
+                && macos.contains(r#"case \"$path\" in \"$workspace_root/native/mise.toml\""#),
+            "{mode}: exact nested config is hashed and admitted: {macos}"
+        );
+        assert!(
             actionlint.contains("runs-on: ubuntu-26.04"),
             "{mode}: {actionlint}"
         );
@@ -48,6 +61,10 @@ fn verification_tasks_follow_eligible_lanes_and_stay_required() -> TestResult {
         match mode {
             "hosted" => {
                 let linux = job_body(workflow, "task-linux-lint")?;
+                assert!(
+                    linux.contains("case \\\"$path\\\" in \\\"$workspace_root/mise.toml\\\""),
+                    "{mode}: root task continues to use its separately declared config: {linux}"
+                );
                 assert!(linux.contains("runs-on: ubuntu-26.04"), "{linux}");
                 assert!(required.contains("- task-linux-lint"), "{required}");
                 assert!(!workflow.contains("  task-linux-lint__hosted:"));
@@ -95,15 +112,17 @@ fn macos_task_cannot_select_the_linux_scale_set_profile() -> TestResult {
 }
 
 fn write_verification_task_config(root: &std::path::Path) -> TestResult {
+    fs::create_dir_all(root.join("native"))?;
     fs::write(
         root.join("mise.toml"),
         r#"
 [tasks.lint-linux]
 run = "echo lint-linux"
-
-[tasks.desktop-format-check]
-run = "echo desktop-format-check"
 "#,
+    )?;
+    fs::write(
+        root.join("native/mise.toml"),
+        "[tasks.desktop-format-check]\nrun = \"echo desktop-format-check\"\n",
     )?;
     Ok(())
 }
@@ -111,8 +130,8 @@ run = "echo desktop-format-check"
 pub(crate) fn config(mode: &str) -> String {
     format!(
         "schema = 2\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n\
-[[workflow.tasks]]\nid = \"linux-lint\"\nkind = \"verification\"\nmise_task = \"lint-linux\"\nrunner = \"linux-x64\"\ntimeout_minutes = 10\n\
-[[workflow.tasks]]\nid = \"native-format\"\nkind = \"verification\"\nmise_task = \"desktop-format-check\"\nrunner = \"macos-arm64\"\ntimeout_minutes = 10\n\
+[[workflow.tasks]]\nid = \"linux-lint\"\nkind = \"verification\"\nmise_task = \"lint-linux\"\nrunner = \"linux-x64\"\ntimeout_minutes = 10\nsource = {{ mise_config = \"mise.toml\", working_directory = \".\" }}\n\
+[[workflow.tasks]]\nid = \"native-format\"\nkind = \"verification\"\nmise_task = \"desktop-format-check\"\nrunner = \"macos-arm64\"\ntimeout_minutes = 10\nsource = {{ mise_config = \"native/mise.toml\", working_directory = \"native\" }}\n\
 [execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nmode = \"{mode}\"\n\
 [execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n\
 [execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\", \"verification-worker\"]\nplatform = \"linux/amd64\""

@@ -79,9 +79,12 @@ pub(crate) fn native_mise_source(
     bytes: &[u8],
     value: &toml::Value,
 ) -> Option<NativeToolInput> {
-    let source = match path {
-        "mise.toml" => NativeToolSource::MiseConfig(parse_native_mise_config(value)?),
-        "mise.lock" => NativeToolSource::MiseLock(parse_native_mise_lock(value)?),
+    let source = match std::path::Path::new(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+    {
+        Some("mise.toml") => NativeToolSource::MiseConfig(parse_native_mise_config(value)?),
+        Some("mise.lock") => NativeToolSource::MiseLock(parse_native_mise_lock(value)?),
         _ => return None,
     };
     Some(NativeToolInput {

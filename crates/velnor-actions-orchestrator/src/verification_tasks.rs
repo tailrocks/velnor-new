@@ -44,8 +44,7 @@ pub(crate) fn policies(
             WorkflowTask::Build(_) | WorkflowTask::NativeImage(_) => None,
         })
         .map(|task| {
-            let resolved =
-                resolve_verification_tools(&discovery.tool_checks, &task.mise_task, task.runner)?;
+            let resolved = resolve_verification_tools(&discovery.tool_checks, task)?;
             Ok(VerificationTaskPolicy {
                 task: task.clone(),
                 runner_label: task.runner.runs_on().to_owned(),
@@ -70,12 +69,14 @@ struct ResolvedVerificationTools {
 
 fn resolve_verification_tools(
     checks: &[ToolInputCheck],
-    task_name: &str,
-    runner: VerificationRunner,
+    task: &velnor_actions_contract::VerificationTask,
 ) -> Result<ResolvedVerificationTools, OrchestratorError> {
-    let mise = optional_source(checks, "mise.toml")?;
-    let lock = optional_source(checks, "mise.lock")?;
-    let rust = optional_source(checks, "rust-toolchain.toml")?;
+    let mise_config_path = &task.source.mise_config;
+    let mise_lock_path = task.source.mise_lock_path();
+    let rust_toolchain_path = task.source.rust_toolchain_path();
+    let mise = optional_source(checks, mise_config_path)?;
+    let lock = optional_source(checks, &mise_lock_path)?;
+    let rust = optional_source(checks, &rust_toolchain_path)?;
     let mise = mise.ok_or_else(|| failure("verification_mise_config_missing"))?;
     let mut result = ResolvedVerificationTools {
         mise_config_sha256: Some(mise.sha256.clone()),
@@ -89,8 +90,8 @@ fn resolve_verification_tools(
     validate_config_shape(mise_config)?;
     validate_settings(mise_config)?;
     validate_wrappers(mise_config)?;
-    let requested =
-        crate::native_mise_tasks::selected_task_tools(mise_config, task_name).map_err(failure)?;
+    let requested = crate::native_mise_tasks::selected_task_tools(mise_config, &task.mise_task)
+        .map_err(failure)?;
     if requested.is_empty() {
         if let Some(lock) = lock {
             let NativeToolSource::MiseLock(lock) = &lock.source else {
@@ -108,8 +109,8 @@ fn resolve_verification_tools(
     if requested.contains_key("rust") && mise_config.tools.contains_key("rust") {
         return Err(failure("verification_rust_must_use_idiomatic_file"));
     }
-    let rust_values = rust_tool_values(checks, rust, &requested)?;
-    let (mise_os, lock_platform) = platform(runner);
+    let rust_values = rust_tool_values(checks, rust, &requested, &rust_toolchain_path)?;
+    let (mise_os, lock_platform) = platform(task.runner);
     for (key, requested_version) in requested {
         let locked = mise_lock
             .tools
@@ -139,6 +140,7 @@ fn rust_tool_values(
     checks: &[ToolInputCheck],
     rust: Option<&NativeToolInput>,
     requested: &BTreeMap<String, String>,
+    rust_toolchain_path: &str,
 ) -> Result<Option<RustToolValues>, OrchestratorError> {
     if !requested.contains_key("rust") {
         return Ok(None);
@@ -149,7 +151,7 @@ fn rust_tool_values(
     };
     let values = checks
         .iter()
-        .find(|check| check.path == "rust-toolchain.toml")
+        .find(|check| check.path == rust_toolchain_path)
         .map(|check| &check.values)
         .ok_or_else(|| failure("verification_rust_toolchain_missing"))?;
     let version = values

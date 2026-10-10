@@ -70,13 +70,17 @@ mod tests {
     use super::{WorkflowTask, is_valid_workflow_task_id};
     use crate::config::{
         BuildTask, BuildTaskRunner, NativeImageCachePolicy, NativeImagePlatform, NativeImageTask,
-        VerificationRunner, VerificationTask,
+        VerificationRunner, VerificationTask, VerificationTaskSource,
     };
 
     fn verification(id: &str) -> WorkflowTask {
         WorkflowTask::Verification(VerificationTask {
             id: id.to_owned(),
             mise_task: "desktop-format-check".to_owned(),
+            source: VerificationTaskSource {
+                mise_config: "mise.toml".to_owned(),
+                working_directory: ".".to_owned(),
+            },
             runner: VerificationRunner::MacosArm64,
             timeout_minutes: 10,
         })
@@ -130,6 +134,10 @@ mod tests {
             r#"{"kind":"verification","id":"x","mise_task":"check","runner":"linux-x64","timeout_minutes":10,"extra":true}"#
         )
         .is_err());
+        assert!(serde_json::from_str::<WorkflowTask>(
+            r#"{"kind":"verification","id":"x","mise_task":"check","runner":"linux-x64","timeout_minutes":10}"#
+        )
+        .is_err(), "verification source is required");
         assert!(serde_json::from_str::<WorkflowTask>(
             r#"{"id":"native-desktop","mise_task":"desktop-ci","tools":["mr-boxington","rust"],"runner":"macos-26-arm64","timeout_minutes":120,"cargo_build_jobs":2,"nextest_test_threads":2}"#
         )

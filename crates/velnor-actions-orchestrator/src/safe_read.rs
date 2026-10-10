@@ -17,7 +17,7 @@
 
 use std::fs;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Component, Path};
 
 use velnor_actions_tofu::{FileCache, PinnedOutcome};
 
@@ -111,6 +111,7 @@ fn read_repo_bytes_until_inner(
     max_bytes: u64,
     deadline: Option<velnor_actions_mise::CheckDeadline>,
 ) -> Result<RepoBytes, OrchestratorError> {
+    reject_symlink_components(root, rel)?;
     let path = root.join(rel);
     match fs::symlink_metadata(&path) {
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(RepoBytes::Absent),
@@ -133,6 +134,30 @@ fn read_repo_bytes_until_inner(
     Ok(RepoBytes::Bytes(read_capped_bytes_until(
         &canonical, max_bytes, deadline,
     )?))
+}
+
+/// Reject traversal and every existing symlink component before resolving a
+/// repository-relative file. Canonical containment remains a second guard.
+fn reject_symlink_components(root: &Path, rel: &str) -> Result<(), OrchestratorError> {
+    let mut current = root.to_path_buf();
+    for component in Path::new(rel).components() {
+        let Component::Normal(segment) = component else {
+            if component == Component::CurDir {
+                continue;
+            }
+            return Err(unsafe_path(&root.join(rel), "invalid_relative_path"));
+        };
+        current.push(segment);
+        match fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(unsafe_path(&current, "symlink_refused"));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(unreadable(&current, error.to_string())),
+        }
+    }
+    Ok(())
 }
 
 /// Read one repo-relative file through the shared pinned compartment.
@@ -300,7 +325,7 @@ mod tests {
         std::os::unix::fs::symlink(outside.path(), root.path().join(".velnor")).expect("symlink");
         let err = read_repo_file(root.path(), ".velnor/config.toml", MAX_REPO_FILE_BYTES)
             .expect_err("escape refused");
-        assert!(err.to_string().contains("root_escape"), "{err}");
+        assert!(err.to_string().contains("symlink_refused"), "{err}");
         let err = read_event_file(&outside.path().join("config.toml"), MAX_REPO_FILE_BYTES)
             .expect("outside payload reads");
         assert_eq!(err, "schema = 1\n");
@@ -317,6 +342,19 @@ mod tests {
         let err = read_repo_file(dir.path(), "link.toml", MAX_REPO_FILE_BYTES)
             .expect_err("symlink refused");
         assert!(err.to_string().contains("symlink_refused"), "{err}");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn repo_symlinked_parent_is_rejected_even_when_target_stays_inside_root() {
+        let dir = tempfile::TempDir::new().expect("temp root");
+        let real = dir.path().join("real");
+        fs::create_dir(&real).expect("real dir");
+        fs::write(real.join("mise.toml"), "[tasks.check]\nrun = \"true\"\n").expect("config");
+        std::os::unix::fs::symlink(&real, dir.path().join("alias")).expect("parent symlink");
+        let error = read_repo_file(dir.path(), "alias/mise.toml", MAX_REPO_FILE_BYTES)
+            .expect_err("parent symlink refused");
+        assert!(error.to_string().contains("symlink_refused"), "{error}");
     }
 
     #[test]

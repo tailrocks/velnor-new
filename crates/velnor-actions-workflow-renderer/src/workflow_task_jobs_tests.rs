@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
     BuildTask, BuildTaskRunner, Job, JobTimeout, NativeImageCachePolicy, NativeImagePlatform,
-    NativeImageTask, VerificationRunner, VerificationTask,
+    NativeImageTask, VerificationRunner, VerificationTask, VerificationTaskSource,
 };
 
 use super::{WorkflowTaskPolicy, extend_required_needs, validate_workflow_task_jobs};
@@ -29,6 +29,10 @@ fn verification_policy() -> VerificationTaskPolicy {
         task: VerificationTask {
             id: "native-format".to_owned(),
             mise_task: "desktop-format-check".to_owned(),
+            source: VerificationTaskSource {
+                mise_config: "mise.toml".to_owned(),
+                working_directory: ".".to_owned(),
+            },
             runner: VerificationRunner::LinuxX64,
             timeout_minutes: 10,
         },
@@ -36,7 +40,7 @@ fn verification_policy() -> VerificationTaskPolicy {
         scale_set_token: None,
         mise_setup: mise_setup(),
         selected_tools: Vec::new(),
-        mise_config_sha256: None,
+        mise_config_sha256: Some("b".repeat(64)),
         mise_lock_sha256: None,
         rust_toolchain_sha256: None,
     }

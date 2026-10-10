@@ -1,8 +1,8 @@
 //! Read-only tool-input checks shared by plan and generate (tool §1-§2).
 //!
-//! Asks the owning adapter about `rust-toolchain.toml` and reads the
-//! Mise files read-only, reporting presence, parse status, extracted
-//! values, and content digests for every path. Nothing here writes,
+//! Asks the owning adapter about Rust toolchain files and reads the
+//! declared Mise sources read-only, reporting presence, parse status,
+//! extracted values, and content digests for every path. Nothing here writes,
 //! repairs, or passes project configuration to execution.
 
 use std::collections::BTreeMap;
@@ -60,7 +60,22 @@ pub struct ToolInputCheck {
 /// Check every tool-input path under `root`.
 #[must_use]
 pub fn check_tool_inputs(root: &Path) -> Vec<ToolInputCheck> {
-    TOOL_INPUT_PATHS
+    check_tool_inputs_with_paths(root, &[])
+}
+
+/// Check default tooling inputs plus explicitly declared task source files.
+#[must_use]
+pub(crate) fn check_tool_inputs_with_paths(
+    root: &Path,
+    additional_paths: &[String],
+) -> Vec<ToolInputCheck> {
+    let mut paths = TOOL_INPUT_PATHS.map(str::to_owned).to_vec();
+    for path in additional_paths {
+        if !paths.contains(path) {
+            paths.push(path.clone());
+        }
+    }
+    paths
         .iter()
         .map(|path| {
             let text = match crate::safe_read::read_repo_file(
@@ -72,10 +87,11 @@ pub fn check_tool_inputs(root: &Path) -> Vec<ToolInputCheck> {
                 Ok(crate::safe_read::RepoRead::Text(text)) => Some(text),
                 Err(_) => return inaccessible(path),
             };
-            if *path == TOOL_INPUT_PATHS[0] {
-                check_toolchain(path, text.as_deref())
-            } else {
-                check_mise_file(path, text.as_deref(), *path == TOOL_INPUT_PATHS[2])
+            match Path::new(path).file_name().and_then(|name| name.to_str()) {
+                Some("rust-toolchain.toml") => check_toolchain(path, text.as_deref()),
+                Some("mise.toml") => check_mise_file(path, text.as_deref(), false),
+                Some("mise.lock") => check_mise_file(path, text.as_deref(), true),
+                _ => inaccessible(path),
             }
         })
         .collect()
@@ -296,6 +312,56 @@ mod tests {
             missing
                 .iter()
                 .all(|check| check.parse == ToolParse::Missing)
+        );
+    }
+
+    #[test]
+    fn declared_nested_mise_sources_are_read_and_hashed_by_exact_path() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let native = dir.path().join("native");
+        std::fs::create_dir(&native).expect("native dir");
+        let config = "[tasks.desktop-format-check]\nrun = \"echo format\"\n";
+        let lock = "[tools]\n";
+        let toolchain = "[toolchain]\nchannel = \"1.99.0\"\n";
+        std::fs::write(native.join("mise.toml"), config).expect("native mise config");
+        std::fs::write(native.join("mise.lock"), lock).expect("native mise lock");
+        std::fs::write(native.join("rust-toolchain.toml"), toolchain)
+            .expect("native rust toolchain");
+
+        let paths = [
+            "native/mise.toml".to_owned(),
+            "native/mise.lock".to_owned(),
+            "native/rust-toolchain.toml".to_owned(),
+        ];
+        let checks = check_tool_inputs_with_paths(dir.path(), &paths);
+        assert_eq!(checks.len(), 6, "root inputs plus three declared sources");
+        let config_check = checks
+            .iter()
+            .find(|check| check.path == "native/mise.toml")
+            .expect("nested config check");
+        assert_eq!(config_check.parse, ToolParse::Valid);
+        assert!(config_check.native.is_some());
+        assert_eq!(
+            config_check
+                .values
+                .get("tasks.desktop-format-check.run")
+                .map(String::as_str),
+            Some("echo format")
+        );
+        let lock_check = checks
+            .iter()
+            .find(|check| check.path == "native/mise.lock")
+            .expect("nested lock check");
+        assert_eq!(lock_check.parse, ToolParse::Valid);
+        assert!(lock_check.native.is_some());
+        let rust_check = checks
+            .iter()
+            .find(|check| check.path == "native/rust-toolchain.toml")
+            .expect("nested toolchain check");
+        assert_eq!(rust_check.parse, ToolParse::Valid);
+        assert_eq!(
+            rust_check.values.get("channel").map(String::as_str),
+            Some("1.99.0")
         );
     }
 
