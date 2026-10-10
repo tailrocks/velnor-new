@@ -304,7 +304,7 @@ fn zizmor_input(text: &str) -> ZizmorConfigInput {
 #[test]
 fn zizmor_hashed_tree_has_no_ignores() {
     let output = render_zizmor_yaml(&zizmor_input(&sha_pinned_text())).expect("renders");
-    assert!(output.approved_ignores.is_empty());
+    assert_eq!(output.approved_ignores, [] as [std::string::String; 0]);
     assert!(output.yaml.ends_with("    ignore: []\n"));
     assert!(!output.yaml.contains("exception"));
 }
