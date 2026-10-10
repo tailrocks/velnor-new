@@ -6,6 +6,7 @@ use crate::journal::Journal;
 use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
 
+use self::provider::UnavailableImageProvider;
 pub(super) use self::sample::StartPermit;
 use super::Rest;
 
@@ -114,7 +115,7 @@ async fn collect(
         return Box::pin(lifecycle::collect(
             docker,
             journal,
-            &provider::UnavailableImageProvider,
+            &UnavailableImageProvider,
         ))
         .await;
     };
