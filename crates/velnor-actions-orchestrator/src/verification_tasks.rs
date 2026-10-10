@@ -312,10 +312,10 @@ fn resolve_tool(
         }
         None
     } else {
-        let locked_artifact = match lock_platform {
-            platform => locked.platforms.get(platform),
-        }
-        .ok_or_else(|| failure("verification_tool_platform_artifact"))?;
+        let locked_artifact = locked
+            .platforms
+            .get(lock_platform)
+            .ok_or_else(|| failure("verification_tool_platform_artifact"))?;
         if !locked_artifact.valid_shape || !locked_artifact.unsupported_fields.is_empty() {
             return Err(failure("verification_tool_platform_artifact"));
         }
