@@ -10,6 +10,7 @@ fn context(checkout_uses: &str) -> RenderContext {
     RenderContext {
         generator_version: "0.1.0".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        scale_set_selector: None,
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses: checkout_uses.to_owned(),

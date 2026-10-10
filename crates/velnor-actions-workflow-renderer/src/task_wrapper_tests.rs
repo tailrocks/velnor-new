@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::cachekey::{ToolchainInputs, toolchain_id};
 use velnor_actions_contract::workflow::crate_job::task_digest_for_execution;
 use velnor_actions_contract::{
-    Job, JobTimeout, MiseTaskSource, Step, StepKind, StepRole, VerificationRunner, VerificationTask,
+    Job, JobTimeout, MiseTaskSource, ScaleSetSelector, Step, StepKind, StepRole,
+    VerificationRunner, VerificationTask,
 };
 
 use crate::yaml::Yaml;
@@ -39,7 +40,7 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
         .collect::<BTreeMap<_, _>>();
 
     let (factored, files) =
-        factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[]).expect("factor obligations");
+        factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[], None).expect("factor obligations");
 
     assert_eq!(factored.len(), 150);
     assert_eq!(files.len(), 1, "argv/env shape should share one action");
@@ -116,8 +117,8 @@ fn ordinary_shell_and_tofu_steps_stay_unfactored() {
         simple_job(vec![checkout_step(), acquire_step(), shell, tofu]),
     )]);
 
-    let (factored, files) =
-        factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[]).expect("leave shell tasks alone");
+    let (factored, files) = factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[], None)
+        .expect("leave shell tasks alone");
     assert!(files.is_empty());
     assert_eq!(
         factored.keys().collect::<Vec<_>>(),
@@ -145,7 +146,7 @@ fn typed_task_requires_checkout_staging_and_credential_free_inputs() {
         simple_job(vec![acquire_step(), task.clone()]),
     )]);
     assert!(
-        factor_obligation_steps(&no_checkout, CHECKOUT, VERSION, &[])
+        factor_obligation_steps(&no_checkout, CHECKOUT, VERSION, &[], None)
             .expect_err("checkout is mandatory")
             .to_string()
             .contains("declared_task_requires_checkout")
@@ -156,7 +157,7 @@ fn typed_task_requires_checkout_staging_and_credential_free_inputs() {
         simple_job(vec![checkout_step(), task.clone()]),
     )]);
     assert!(
-        factor_obligation_steps(&no_stage, CHECKOUT, VERSION, &[])
+        factor_obligation_steps(&no_stage, CHECKOUT, VERSION, &[], None)
             .expect_err("the staged helper is mandatory")
             .to_string()
             .contains("declared_task_requires_staged_helper")
@@ -175,7 +176,7 @@ fn typed_task_requires_checkout_staging_and_credential_free_inputs() {
         simple_job(vec![checkout_step(), acquire_step(), credentialed]),
     )]);
     assert!(
-        factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[])
+        factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[], None)
             .expect_err("credentials cannot enter task action inputs")
             .to_string()
             .contains("credential_step_env:GITHUB_TOKEN")
@@ -188,7 +189,7 @@ fn scale_set_task_requires_a_resolved_linux_x64_verification_profile() {
     job.runs_on = "scale-set:velnor+orbstack-linux".to_owned();
     let jobs = BTreeMap::from([("rust-demo".to_owned(), job)]);
     assert!(
-        factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[])
+        factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[], None)
             .expect_err("an arbitrary self-hosted selector does not prove linux/amd64")
             .to_string()
             .contains("declared_task_requires_supported_linux_runner")
@@ -197,11 +198,13 @@ fn scale_set_task_requires_a_resolved_linux_x64_verification_profile() {
 
 #[test]
 fn scale_set_task_rejects_a_non_linux_profile_or_different_resolved_token() {
+    let selector = scale_set_selector();
     let linux = verification_policy(VerificationRunner::LinuxX64);
     assert!(super::supports_task_runner(
         "task-rust-demo",
         "scale-set:velnor+ubuntu-26.04-scale-set",
         std::slice::from_ref(&linux),
+        Some(&selector),
     ));
 
     let macos = verification_policy(VerificationRunner::MacosArm64);
@@ -209,12 +212,49 @@ fn scale_set_task_rejects_a_non_linux_profile_or_different_resolved_token() {
         "task-rust-demo",
         "scale-set:velnor+ubuntu-26.04-scale-set",
         std::slice::from_ref(&macos),
+        Some(&selector),
     ));
     assert!(!super::supports_task_runner(
         "task-rust-demo",
         "scale-set:velnor+orbstack-linux",
         std::slice::from_ref(&linux),
+        Some(&selector),
     ));
+}
+
+#[test]
+fn crate_obligation_scale_set_uses_the_explicit_profile_without_a_task_policy() {
+    let selector = scale_set_selector();
+    let token = selector.token();
+    let mut job = simple_job(vec![checkout_step(), acquire_step(), task_step(0)]);
+    job.runs_on.clone_from(&token);
+    let jobs = BTreeMap::from([("rust-demo".to_owned(), job)]);
+
+    assert!(factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[], None).is_err());
+    let (_, files) = factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[], Some(&selector))
+        .expect("validated execution profile authorizes the crate route");
+    assert_eq!(files.len(), 1);
+}
+
+#[test]
+fn crate_obligation_scale_set_rejects_a_different_resolved_profile() {
+    let selector = scale_set_selector();
+    let mut job = simple_job(vec![checkout_step(), acquire_step(), task_step(0)]);
+    job.runs_on = "scale-set:velnor+orbstack-linux".to_owned();
+    let jobs = BTreeMap::from([("rust-demo".to_owned(), job)]);
+    assert!(factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[], Some(&selector)).is_err());
+}
+
+fn scale_set_selector() -> ScaleSetSelector {
+    ScaleSetSelector::try_new(
+        "ubuntu-26.04-scale-set",
+        &[
+            "ubuntu-26.04-scale-set".to_owned(),
+            "velnor".to_owned(),
+            "verification-worker".to_owned(),
+        ],
+    )
+    .expect("validated Linux scale set")
 }
 
 fn verification_policy(runner: VerificationRunner) -> WorkflowTaskPolicy {

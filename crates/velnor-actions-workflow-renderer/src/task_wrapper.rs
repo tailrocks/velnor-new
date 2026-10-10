@@ -6,7 +6,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{Job, RunsOn, Step, StepKind, StepRole, VerificationRunner};
+use velnor_actions_contract::{
+    Job, RunsOn, ScaleSetSelector, Step, StepKind, StepRole, VerificationRunner,
+};
 
 use crate::{
     RenderError, action_ref::DECLARED_TASK_ACTION_PREFIX, composite, marker, steps, toolchain_env,
@@ -37,6 +39,7 @@ pub(crate) fn factor_obligation_steps(
     checkout_uses: &str,
     version: &str,
     workflow_tasks: &[crate::verification_jobs::WorkflowTaskPolicy],
+    scale_set_selector: Option<&ScaleSetSelector>,
 ) -> Result<(BTreeMap<String, Job>, Vec<RenderedFile>), RenderError> {
     let mut eligible = BTreeMap::<(String, usize), TaskExecutionRef<'_>>::new();
     let mut shapes = BTreeSet::new();
@@ -56,7 +59,7 @@ pub(crate) fn factor_obligation_steps(
             else {
                 continue;
             };
-            if !supports_task_runner(job_id, &job.runs_on, workflow_tasks) {
+            if !supports_task_runner(job_id, &job.runs_on, workflow_tasks, scale_set_selector) {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "declared_task_requires_supported_linux_runner:{job_id}"
                 )));
@@ -158,29 +161,41 @@ pub(crate) fn factor_obligation_steps(
     Ok((next, files))
 }
 
-/// Admit a hosted Ubuntu catalog runner or the exact Scale Set resolved for a
-/// typed Linux-x64 verification task. The orchestrator resolves that token
-/// from an execution profile validated as linux/amd64. A selector's label
-/// alone never proves the platform.
+/// Admit a hosted Ubuntu catalog runner or the exact Scale Set resolved from
+/// the validated Linux/amd64 execution profile. Crate-obligation jobs share
+/// that profile without being workflow-task jobs themselves. A selector's
+/// label alone never proves the platform.
 fn supports_task_runner(
     job_id: &str,
     runs_on: &str,
     workflow_tasks: &[crate::verification_jobs::WorkflowTaskPolicy],
+    scale_set_selector: Option<&ScaleSetSelector>,
 ) -> bool {
     match RunsOn::parse(runs_on) {
         Ok(RunsOn::Hosted(label)) => {
             label.starts_with("ubuntu-")
                 && velnor_actions_contract::config::RUNNER_LABEL_CATALOG.contains(&label.as_str())
         }
-        Ok(RunsOn::ScaleSet(_)) => workflow_tasks.iter().any(|task| {
-            let crate::verification_jobs::WorkflowTaskPolicy::Verification(policy) = task else {
+        Ok(RunsOn::ScaleSet(selector)) => {
+            let Some(configured) = scale_set_selector else {
                 return false;
             };
-            policy.owns_job_id(job_id)
-                && policy.task.runner == VerificationRunner::LinuxX64
-                && policy.runner_label == VerificationRunner::LinuxX64.runs_on()
-                && policy.scale_set_token.as_deref() == Some(runs_on)
-        }),
+            if configured != &selector {
+                return false;
+            }
+            workflow_tasks
+                .iter()
+                .find(|task| task.owns_job_id(job_id))
+                .is_none_or(|task| {
+                    let crate::verification_jobs::WorkflowTaskPolicy::Verification(policy) = task
+                    else {
+                        return false;
+                    };
+                    policy.task.runner == VerificationRunner::LinuxX64
+                        && policy.runner_label == VerificationRunner::LinuxX64.runs_on()
+                        && policy.scale_set_token.as_deref() == Some(runs_on)
+                })
+        }
         Err(_) => false,
     }
 }

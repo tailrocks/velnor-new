@@ -62,6 +62,7 @@ fn rendered_condition(step: &Step) -> String {
     let context = RenderContext {
         generator_version: "0.1.0".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        scale_set_selector: None,
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses: format!("actions/checkout@{:040x}", 0),
@@ -76,6 +77,7 @@ fn rendered_condition(step: &Step) -> String {
     let step_context = crate::document_lanes::JobStepContext {
         job_env: &job_env,
         runs_on: Some("ubuntu-26.04"),
+        scale_set_selector: None,
         actions_read: false,
     };
     let Yaml::Map(entries) =
