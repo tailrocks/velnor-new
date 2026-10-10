@@ -155,7 +155,10 @@ fn uncommented_init_sample_parses_with_overrides() -> TestResult {
         "[tasks.desktop-format-check]\nrun = \"echo desktop-format-check\"\n",
     )?;
     let prep = prepare(root)?;
-    assert!(prep.config.checks.is_empty());
+    assert_eq!(
+        prep.config.checks,
+        [] as [velnor_actions_contract::MiseCheck; 0]
+    );
     // Retired `Swatinem/rust-cache` is not an overridable sample pin.
     let overrides = &prep.config.actions.overrides;
     let keys: Vec<&str> = overrides.keys().map(String::as_str).collect();

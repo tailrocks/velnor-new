@@ -1,6 +1,7 @@
 //! Native build-task routing through schema-2 execution modes.
 
 use std::fs;
+use std::path::Path;
 
 use velnor_actions_contract::StepKind;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
@@ -40,98 +41,114 @@ fn native_build_variant_is_shared_source_bounded_and_required_in_every_mode() ->
         let workflow = required_file(&tree, ".github/workflows/ci.yml")?;
         let required = job_body(workflow, "required")?;
         let native = job_body(workflow, "task-native-desktop")?;
-
-        assert!(native.contains("runs-on: macos-26"), "{mode}: {native}");
-        assert!(native.contains("timeout-minutes: 120"), "{mode}: {native}");
-        assert!(
-            native.contains("CARGO_BUILD_JOBS: \"2\""),
-            "{mode}: {native}"
-        );
-        assert!(
-            native.contains("NEXTEST_TEST_THREADS: \"2\""),
-            "{mode}: {native}"
-        );
-        assert!(
-            native.contains("MISE_CARGO_BINSTALL_ONLY: \"1\""),
-            "{mode}: {native}"
-        );
-        assert!(native.contains("DEVELOPER_DIR:"), "{mode}: {native}");
-        assert!(
-            native.contains("persist-credentials: \"false\""),
-            "{mode}: {native}"
-        );
-        assert!(
-            native.contains("Verify locked MBX Rust route")
-                && native.contains("installs/mr-boxington/1.23.0/"),
-            "{mode}: {native}"
-        );
-        assert!(
-            native.contains("mise --no-env --locked --no-hooks run --skip-tools desktop-ci"),
-            "{mode}: {native}"
-        );
-        assert!(
-            native.contains(r#"cd -P \"$workspace_root/native\"; task_working_directory=\"$PWD\""#),
-            "{mode}: task must run from its declared nested directory: {native}"
-        );
-        assert!(
-            native.contains("$workspace_root/native/mise.toml")
-                && native.contains("$workspace_root/mise.toml"),
-            "{mode}: source task config and root tool config are hash-bound: {native}"
-        );
-        assert!(
-            native.contains(r#"export MISE_CEILING_PATHS=\"$workspace_ceiling\""#)
-                && native.contains(r#"workspace_ceiling=\"$workspace_root/..\""#),
-            "{mode}: config discovery includes the root and nested source: {native}"
-        );
-        let restore_cwd = native
-            .find(r#"cd -P \"$task_working_directory\""#)
-            .ok_or("MBX guard restores the task cwd")?;
-        let run_task = native
-            .find("mise --no-env --locked --no-hooks run --skip-tools desktop-ci")
-            .ok_or("declared task is executed")?;
-        assert!(restore_cwd < run_task, "{mode}: {native}");
-        let nested = fs::read_to_string(repo.path().join("native/mise.toml"))?;
-        assert!(nested.contains("run = \"mise run desktop-lint\""));
-        let root_mise = fs::read_to_string(repo.path().join("mise.toml"))?;
-        assert!(root_mise.contains("description = \"Native desktop build task\""));
-        assert!(
-            !root_mise.contains("wrappers") && !nested.contains("wrappers"),
-            "{mode}: source task configs must not restore a Cargo wrapper"
-        );
-        assert!(native.contains("export MISE_NO_ENV=1"), "{mode}: {native}");
-        assert!(
-            native.contains("github:boltffi/boltffi")
-                && native.contains("aqua:nextest-rs/nextest/cargo-nextest")
-                && native.contains("swiftlint")
-                && native.contains("xcodegen"),
-            "{mode}: selected native tool closure is incomplete: {native}"
-        );
-        assert!(!native.contains("repository:"), "{mode}: {native}");
-        assert!(!native.contains("ref:"), "{mode}: {native}");
-        assert!(!native.contains("actions/cache@"), "{mode}: {native}");
-        assert!(
-            !native.contains("actions/upload-artifact@"),
-            "{mode}: {native}"
-        );
-        assert!(
-            required.contains("- task-native-desktop"),
-            "{mode}: {required}"
-        );
-        assert!(required.contains("VELNOR_NEEDS_JSON"), "{mode}: {required}");
-        assert!(
-            required.contains("VELNOR_NEEDS_EXPECTED"),
-            "{mode}: {required}"
-        );
-        assert!(
-            required.lines().any(|line| {
-                line.contains("VELNOR_NEEDS_EXPECTED") && line.contains("task-native-desktop")
-            }),
-            "{mode}: the required conclusion inventory must include the native job: {required}"
-        );
-        assert!(!workflow.contains("task-native-desktop__hosted"));
-        assert!(!workflow.contains("task-native-desktop__local"));
+        assert_native_job_prefix(mode, native);
+        assert_native_source_guard(mode, native, repo.path())?;
+        assert_native_job_selected_tools(mode, native);
+        assert_required_job_includes_native(mode, workflow, required);
     }
     Ok(())
+}
+
+fn assert_native_job_prefix(mode: &str, native: &str) {
+    assert!(native.contains("runs-on: macos-26"), "{mode}: {native}");
+    assert!(native.contains("timeout-minutes: 120"), "{mode}: {native}");
+    assert!(
+        native.contains("CARGO_BUILD_JOBS: \"2\""),
+        "{mode}: {native}"
+    );
+    assert!(
+        native.contains("NEXTEST_TEST_THREADS: \"2\""),
+        "{mode}: {native}"
+    );
+    assert!(
+        native.contains("MISE_CARGO_BINSTALL_ONLY: \"1\""),
+        "{mode}: {native}"
+    );
+    assert!(native.contains("DEVELOPER_DIR:"), "{mode}: {native}");
+    assert!(
+        native.contains("persist-credentials: \"false\""),
+        "{mode}: {native}"
+    );
+    assert!(
+        native.contains("Verify locked MBX Rust route")
+            && native.contains("installs/mr-boxington/1.23.0/"),
+        "{mode}: {native}"
+    );
+    assert!(
+        native.contains("mise --no-env --locked --no-hooks run --skip-tools desktop-ci"),
+        "{mode}: {native}"
+    );
+}
+
+fn assert_native_source_guard(mode: &str, native: &str, repo: &Path) -> TestResult {
+    assert!(
+        native.contains(r#"cd -P \"$workspace_root/native\"; task_working_directory=\"$PWD\""#),
+        "{mode}: task must run from its declared nested directory: {native}"
+    );
+    assert!(
+        native.contains("$workspace_root/native/mise.toml")
+            && native.contains("$workspace_root/mise.toml"),
+        "{mode}: source task config and root tool config are hash-bound: {native}"
+    );
+    assert!(
+        native.contains(r#"export MISE_CEILING_PATHS=\"$workspace_ceiling\""#)
+            && native.contains(r#"workspace_ceiling=\"$workspace_root/..\""#),
+        "{mode}: config discovery includes the root and nested source: {native}"
+    );
+    let restore_cwd = native
+        .find(r#"cd -P \"$task_working_directory\""#)
+        .ok_or("MBX guard restores the task cwd")?;
+    let run_task = native
+        .find("mise --no-env --locked --no-hooks run --skip-tools desktop-ci")
+        .ok_or("declared task is executed")?;
+    assert!(restore_cwd < run_task, "{mode}: {native}");
+    let nested = fs::read_to_string(repo.join("native/mise.toml"))?;
+    assert!(nested.contains("run = \"mise run desktop-lint\""));
+    let root_mise = fs::read_to_string(repo.join("mise.toml"))?;
+    assert!(root_mise.contains("description = \"Native desktop build task\""));
+    assert!(
+        !root_mise.contains("wrappers") && !nested.contains("wrappers"),
+        "{mode}: source task configs must not restore a Cargo wrapper"
+    );
+    Ok(())
+}
+
+fn assert_native_job_selected_tools(mode: &str, native: &str) {
+    assert!(native.contains("export MISE_NO_ENV=1"), "{mode}: {native}");
+    assert!(
+        native.contains("github:boltffi/boltffi")
+            && native.contains("aqua:nextest-rs/nextest/cargo-nextest")
+            && native.contains("swiftlint")
+            && native.contains("xcodegen"),
+        "{mode}: selected native tool closure is incomplete: {native}"
+    );
+    assert!(!native.contains("repository:"), "{mode}: {native}");
+    assert!(!native.contains("ref:"), "{mode}: {native}");
+    assert!(!native.contains("actions/cache@"), "{mode}: {native}");
+    assert!(
+        !native.contains("actions/upload-artifact@"),
+        "{mode}: {native}"
+    );
+}
+
+fn assert_required_job_includes_native(mode: &str, workflow: &str, required: &str) {
+    assert!(
+        required.contains("- task-native-desktop"),
+        "{mode}: {required}"
+    );
+    assert!(required.contains("VELNOR_NEEDS_JSON"), "{mode}: {required}");
+    assert!(
+        required.contains("VELNOR_NEEDS_EXPECTED"),
+        "{mode}: {required}"
+    );
+    assert!(
+        required.lines().any(|line| {
+            line.contains("VELNOR_NEEDS_EXPECTED") && line.contains("task-native-desktop")
+        }),
+        "{mode}: the required conclusion inventory must include the native job: {required}"
+    );
+    assert!(!workflow.contains("task-native-desktop__hosted"));
+    assert!(!workflow.contains("task-native-desktop__local"));
 }
 
 fn assert_selected_mise_projection(
