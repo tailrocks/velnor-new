@@ -94,10 +94,15 @@ fn assert_product(workflows: &[&str], actions: &Actions) -> Result<(), Box<dyn s
         parent.contains("name: Velnor product releases\n"),
         "{parent}"
     );
-    assert!(parent.contains("workflow_dispatch: {}"), "{parent}");
+    assert!(
+        parent.contains("workflow_dispatch:\n    inputs:\n      release_family:"),
+        "{parent}"
+    );
     assert!(!parent.contains("schedule:"), "{parent}");
     assert!(!parent.contains("push:"), "{parent}");
-    assert!(!parent.contains("inputs:"), "{parent}");
+    assert!(parent.contains("default: all"), "{parent}");
+    assert!(parent.contains("          - generator\n"), "{parent}");
+    assert!(parent.contains("          - images\n"), "{parent}");
     assert_parent_job_order(parent);
     assert_source_gate(parent)?;
     for (path, module) in [
@@ -151,6 +156,10 @@ fn assert_parent_job_order(parent: &str) {
 
 fn assert_source_gate(parent: &str) -> Result<(), Box<dyn std::error::Error>> {
     let gate = super::job_body(parent, "release-eligibility")?;
+    assert!(
+        !gate.contains("if:"),
+        "shared eligibility is unconditional: {gate}"
+    );
     for required in [
         "workflow_authority_sha",
         "ci_run_id",
@@ -171,24 +180,30 @@ fn assert_source_gate(parent: &str) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn assert_family_calls(parent: &str) -> Result<(), Box<dyn std::error::Error>> {
-    for (id, prepare, path) in [
+    for (id, prepare, path, selector) in [
         (
             "release-images",
             "prepare-images",
             "./.github/workflows/product-release-images.yml # zizmor: ignore[self-repository]",
+            "images",
         ),
         (
             "release-binary",
             "prepare-binary",
             "./.github/workflows/product-release-binary.yml # zizmor: ignore[self-repository]",
+            "binary",
         ),
         (
             "release-generator",
             "prepare-generator",
             "./.github/workflows/product-release-generator.yml # zizmor: ignore[self-repository]",
+            "generator",
         ),
     ] {
         let job = super::job_body(parent, id)?;
+        let condition =
+            format!("if: inputs.release_family == 'all' || inputs.release_family == '{selector}'");
+        assert!(job.contains(&condition), "{job}");
         assert!(job.contains(&format!("uses: {path}")), "{job}");
         assert!(job.contains("actions: write"), "{job}");
         assert!(job.contains("artifact-metadata: write"), "{job}");
@@ -201,6 +216,8 @@ fn assert_family_calls(parent: &str) -> Result<(), Box<dyn std::error::Error>> {
             )),
             "{job}"
         );
+        let prepare_job = super::job_body(parent, prepare)?;
+        assert!(prepare_job.contains(&condition), "{prepare_job}");
     }
     assert!(parent.contains("cancel-in-progress: false"), "{parent}");
     Ok(())

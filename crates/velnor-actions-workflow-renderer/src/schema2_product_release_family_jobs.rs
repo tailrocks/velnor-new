@@ -78,6 +78,7 @@ pub(super) fn prepare_job(
             "name".to_owned(),
             Yaml::str(format!("Prepare {} release", family.label())),
         ),
+        ("if".to_owned(), Yaml::str(family.selector_condition())),
         ("runs-on".to_owned(), hosted),
         ("timeout-minutes".to_owned(), Yaml::Int(30)),
         (
