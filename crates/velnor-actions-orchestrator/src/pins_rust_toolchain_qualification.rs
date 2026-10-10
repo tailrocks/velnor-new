@@ -3,7 +3,7 @@
 use velnor_actions_contract::{ReleaseTarget, VelnorConfig};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::{
-    MiseSetup, RUST_TOOLCHAIN_QUALIFICATION_MANIFEST_SHA256, RustToolchainQualificationPins,
+    RUST_TOOLCHAIN_QUALIFICATION_MANIFEST_SHA256, RustToolchainQualificationPins,
 };
 
 use crate::OrchestratorError;
