@@ -325,7 +325,12 @@ filesystem spare; it is staging state, not generated output. Generation clears
 only spare children and never removes or recreates the container or spare root.
 In-place generation requires atomic directory exchange and is supported on
 Linux and macOS; other platforms fail before creating staging state. Preview
-generation does not use this restriction.
+generation does not use this restriction. In-place generation identifies the
+repository mount and fails closed if `.github`, the private staging state, or
+any real output directory is on another mount. It repeats the output scan
+immediately before exchange and before cleanup. Mount topology must remain
+stable during the operation; path-based cleanup does not claim protection
+against a privileged concurrent mount change.
 `plan` and preview generation do not create or modify this state. An existing
 `.github` root and every real directory below it must be owned by the caller;
 foreign-owned directories fail before publication as specified by the
@@ -345,7 +350,8 @@ velnor-actions generate --output-dir "$(mktemp -d "/tmp/velnor-actions-preview.X
 
 The destination MUST be outside the repository root and MUST NOT be an ancestor
 of it. The command prints the absolute preview root and generated file list to
-stderr. There is no
+stderr. Cleanup warnings returned after publication are also printed to stderr
+while the valid published tree remains in place. There is no
 `--check` mode; preview output and ordinary file comparison provide that
 workflow.
 

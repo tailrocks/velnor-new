@@ -11,9 +11,13 @@ mod cleanup;
 #[path = "generate_stage_root_fs.rs"]
 mod fs_ops;
 
+#[path = "generate_stage_mount.rs"]
+mod mount;
+
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use fs_ops::create_container;
 use fs_ops::validate_directory_owners;
+use mount::MountIdentity;
 
 #[cfg(unix)]
 pub(super) type OwnerId = u32;
@@ -77,6 +81,7 @@ struct RootIdentity {
     path: PathBuf,
     path_text: String,
     object: FsIdentity,
+    mount: MountIdentity,
 }
 
 impl RootIdentity {
@@ -84,6 +89,7 @@ impl RootIdentity {
     fn capture(root: &Path) -> Result<Self, OrchestratorError> {
         let path = root.canonicalize().map_err(|error| io(root, &error))?;
         let (object, metadata) = FsIdentity::capture(&path)?;
+        let mount = MountIdentity::capture(&path)?;
         if !metadata.is_dir() {
             return Err(unsafe_path(&path, "repository_root_not_directory"));
         }
@@ -95,6 +101,7 @@ impl RootIdentity {
             path,
             path_text,
             object,
+            mount,
         })
     }
 
@@ -172,6 +179,7 @@ impl StageRoot {
             return Err(unsafe_path(target, "not_a_directory"));
         }
         self.require_same_filesystem(target)?;
+        self.require_same_mount(target)?;
         self.require_owner(target, &metadata)?;
         Ok(Some(FsIdentity::from_metadata(&metadata)))
     }
@@ -186,13 +194,14 @@ impl StageRoot {
             return Ok(());
         };
         Self::require_identity(target, expected)?;
-        validate_directory_owners(target, self.owner)?;
+        validate_directory_owners(target, self.owner, &self.root.mount)?;
         Self::require_identity(target, expected)
     }
 
     /// Remove stale or retired children while retaining the spare root inode.
     pub(super) fn clear_spare_before_staging(&self) -> Result<(), OrchestratorError> {
         self.validate_container_and_spare(false)?;
+        validate_directory_owners(&self.spare, self.owner, &self.root.mount)?;
         Self::clear_children(&self.spare, self.spare_identity)
     }
 
@@ -208,6 +217,7 @@ impl StageRoot {
         }
         self.require_same_filesystem(&self.spare)?;
         self.require_owner(&self.spare, &metadata)?;
+        validate_directory_owners(&self.spare, self.owner, &self.root.mount)?;
         Self::clear_children(&self.spare, expected)
     }
 
@@ -224,6 +234,7 @@ impl StageRoot {
         self.require_same_filesystem(&self.spare)?;
         let (staged_identity, staged_metadata) = FsIdentity::capture(staged)?;
         self.require_same_filesystem(staged)?;
+        validate_directory_owners(staged, self.owner, &self.root.mount)?;
         self.require_owner(staged, &staged_metadata)?;
         let first_stage = self.spare.join(".github");
         let wanted = if original_target.is_some() {

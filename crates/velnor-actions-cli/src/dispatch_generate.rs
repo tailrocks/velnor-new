@@ -47,10 +47,20 @@ pub(crate) fn run_generate(output_dir: Option<PathBuf>, mode: Option<String>) ->
             for recommendation in &report.recommendations {
                 eprintln!("{recommendation}");
             }
+            for warning in warning_lines(&report.warnings) {
+                eprintln!("{warning}");
+            }
             ExitCode::SUCCESS
         }
         Err(error) => fail_public(&error),
     }
+}
+
+/// Format post-publication cleanup warnings for the command's stderr report.
+fn warning_lines(warnings: &[String]) -> impl Iterator<Item = String> + '_ {
+    warnings
+        .iter()
+        .map(|warning| format!("velnor-actions: WARNING: {warning}"))
 }
 
 /// Absolute preview path for the stderr report; canonical when possible.
@@ -61,4 +71,18 @@ fn absolute_preview(cwd: &Path, dir: &Path) -> PathBuf {
         cwd.join(dir)
     };
     joined.canonicalize().unwrap_or(joined)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::warning_lines;
+
+    #[test]
+    fn generate_report_warnings_are_prefixed_for_stderr() {
+        let warnings = vec!["retired_tree_cleanup_failed: busy".to_owned()];
+        assert_eq!(
+            warning_lines(&warnings).collect::<Vec<_>>(),
+            ["velnor-actions: WARNING: retired_tree_cleanup_failed: busy"]
+        );
+    }
 }

@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use crate::OrchestratorError;
 
+use super::mount::{MountIdentity, require_mount};
 use super::{
     FsIdentity, OWNER_FILE, OwnerId, PRIVATE_DIR_MODE, PRIVATE_FILE_MODE, RootIdentity, SPARE_DIR,
     StageRoot,
@@ -49,6 +50,7 @@ impl StageRoot {
         if !same_device(root.object, container_identity) {
             return Err(unsafe_path(&container, "cross_filesystem_staging"));
         }
+        require_mount(&container, &root.mount)?;
         require_mode(&container, &container_metadata, PRIVATE_DIR_MODE)?;
         require_owner_id(&container, &container_metadata, owner)?;
         validate_container_files(&container, &root, owner)?;
@@ -57,6 +59,7 @@ impl StageRoot {
         if !same_device(container_identity, spare_identity) {
             return Err(unsafe_path(&spare, "cross_filesystem_staging"));
         }
+        require_mount(&spare, &root.mount)?;
         require_owner_id(&spare, &spare_metadata, owner)?;
         let stage = Self {
             root,
@@ -83,6 +86,7 @@ impl StageRoot {
         if !same_device(self.container_identity, actual) {
             return Err(unsafe_path(&self.spare, "cross_filesystem_staging"));
         }
+        require_mount(&self.spare, &self.root.mount)?;
         self.require_owner(&self.spare, &metadata)
     }
 
@@ -98,6 +102,7 @@ impl StageRoot {
         if !same_device(self.root.object, actual) {
             return Err(unsafe_path(&self.container, "cross_filesystem_staging"));
         }
+        require_mount(&self.container, &self.root.mount)?;
         require_mode(&self.container, &metadata, PRIVATE_DIR_MODE)?;
         self.require_owner(&self.container, &metadata)?;
         validate_container_files(&self.container, &self.root, self.owner)
@@ -122,6 +127,11 @@ impl StageRoot {
             return Err(unsafe_path(path, "cross_filesystem_staging"));
         }
         Ok(())
+    }
+
+    /// Require a directory to remain on the repository's exact mounted volume.
+    pub(super) fn require_same_mount(&self, path: &Path) -> Result<(), OrchestratorError> {
+        require_mount(path, &self.root.mount)
     }
 
     /// Require the filesystem object to have the staging owner.
@@ -167,6 +177,7 @@ pub(super) fn validate_container_files(
 pub(super) fn validate_directory_owners(
     root: &Path,
     expected_owner: OwnerId,
+    expected_mount: &MountIdentity,
 ) -> Result<(), OrchestratorError> {
     let mut pending = vec![root.to_path_buf()];
     while let Some(path) = pending.pop() {
@@ -177,6 +188,7 @@ pub(super) fn validate_directory_owners(
         if metadata_owner(&metadata) != expected_owner {
             return Err(unsafe_path(&path, "foreign_directory_owner"));
         }
+        require_mount(&path, expected_mount)?;
         pending.extend(
             fs::read_dir(&path)
                 .map_err(|error| io(&path, &error))?
