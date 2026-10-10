@@ -66,9 +66,11 @@ EOF
   done
 }
 
-case_external_relative_symlink() {
-  local root="$work/external-link" status=0
-  rm -rf -- "$root"
+case_external_relative_symlink() (
+  local root status=0
+  mkdir -p /home/runner/work || return 1
+  root="$(mktemp -d /home/runner/work/velnor-tar-external-link.XXXXXX)" || return 1
+  trap 'rm -rf -- "$root"' EXIT
   mkdir -p "$root/dest/workspace/repo" "$root/dest/workspace/external/cache"
   write_ustar "$root/link.tar" s ../external/cache/link ../../shared/cache-target || return 1
   bash "$shim" -xf "$root/link.tar" -P -C "$root/dest/workspace/repo" || return 1
@@ -84,7 +86,7 @@ case_external_relative_symlink() {
   grep -F -q 'traverses symlink' "$root/err" || return 1
   [ ! -e "$root/dest/workspace/external/cache/link" ] || return 1
   [ ! -e "$root/dest/workspace/shared/pwned" ] || return 1
-}
+)
 
 case_directory_metadata() {
   local root="$work/directory-meta" existing fresh mode_existing mode_fresh time_existing time_fresh
