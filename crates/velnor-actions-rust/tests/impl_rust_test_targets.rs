@@ -112,7 +112,7 @@ fn untestable_bin_omits_both_test_runners() {
             .iter()
             .find(|group| matches!(group.kind, TaskKind::Test | TaskKind::Nextest))
             .expect("one test group");
-        assert!(test.target_flags.is_empty());
+        assert_eq!(test.target_flags, [] as [std::string::String; 0]);
         assert!(propose_task(test).expect("proposal").no_targets);
     }
 }

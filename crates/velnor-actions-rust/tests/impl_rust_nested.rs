@@ -108,7 +108,7 @@ fn nested_workspace_path_dep_on_parent_skips_and_records() -> Outcome {
     assert_eq!(record.workspace_root, "fuzz");
     assert_eq!(record.members, vec!["fuzz-id".to_owned()]);
     assert_eq!(record.packages.len(), 1);
-    assert!(record.edges.is_empty());
+    assert_eq!(record.edges, [] as [velnor_actions_rust::LocalEdge; 0]);
     assert_eq!(record.skipped_edges.len(), 1);
     let skipped = &record.skipped_edges[0];
     assert_eq!(skipped.from, "fuzz-id");
@@ -132,8 +132,11 @@ fn root_document_omitting_nested_workspace_parses_cleanly() -> Outcome {
     let record = parse_metadata_json(&doc.to_string(), &root, "Cargo.toml", &known)?;
     assert_eq!(record.workspace_root, "");
     assert_eq!(record.members, vec!["termpane-id".to_owned()]);
-    assert!(record.edges.is_empty());
-    assert!(record.skipped_edges.is_empty());
+    assert_eq!(record.edges, [] as [velnor_actions_rust::LocalEdge; 0]);
+    assert_eq!(
+        record.skipped_edges,
+        [] as [velnor_actions_rust::SkippedPathEdge; 0]
+    );
     Ok(())
 }
 
@@ -230,7 +233,7 @@ fn root_member_edge_to_nested_workspace_skips() -> Outcome {
     );
     let record = parse_metadata_json(&doc.to_string(), &root, "Cargo.toml", &known)?;
     assert_eq!(record.members, vec!["a-id".to_owned()]);
-    assert!(record.edges.is_empty());
+    assert_eq!(record.edges, [] as [velnor_actions_rust::LocalEdge; 0]);
     assert_eq!(record.skipped_edges.len(), 1);
     assert_eq!(record.skipped_edges[0].kind, DepKind::Dev);
     Ok(())
@@ -281,11 +284,14 @@ fn real_cargo_termpane_shape_parses_both_workspaces() -> Outcome {
     let fuzz_json = run_metadata(&root.join("fuzz/Cargo.toml"))?;
     let root_record = parse_metadata_json(&root_json, &root, "Cargo.toml", &known)?;
     assert_eq!(root_record.members.len(), 1);
-    assert!(root_record.skipped_edges.is_empty());
+    assert_eq!(
+        root_record.skipped_edges,
+        [] as [velnor_actions_rust::SkippedPathEdge; 0]
+    );
     let fuzz_record = parse_metadata_json(&fuzz_json, &root, "fuzz/Cargo.toml", &known)?;
     assert_eq!(fuzz_record.workspace_root, "fuzz");
     assert_eq!(fuzz_record.members.len(), 1);
-    assert!(fuzz_record.edges.is_empty());
+    assert_eq!(fuzz_record.edges, [] as [velnor_actions_rust::LocalEdge; 0]);
     assert_eq!(fuzz_record.skipped_edges.len(), 1);
     // The same real fuzz document stays fail-closed without the known set.
     let empty = BTreeSet::new();

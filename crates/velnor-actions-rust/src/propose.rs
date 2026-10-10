@@ -391,7 +391,13 @@ mod tests {
         assert!(needs.mbx && needs.nextest);
         assert!(!tool_needs("cargo", "cargo_test").mbx);
         assert_eq!(payload_env_for_kind("doc").len(), 1);
-        assert!(payload_env_for_kind("test").is_empty());
-        assert!(payload_env_for_kind("bogus").is_empty());
+        assert_eq!(
+            payload_env_for_kind("test"),
+            [] as [(std::ffi::OsString, std::ffi::OsString); 0]
+        );
+        assert_eq!(
+            payload_env_for_kind("bogus"),
+            [] as [(std::ffi::OsString, std::ffi::OsString); 0]
+        );
     }
 }

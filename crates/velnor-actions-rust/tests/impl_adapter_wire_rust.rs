@@ -241,7 +241,7 @@ fn workspace_fmt_only_with_explicit_config() {
 fn derive_marks_build_script_reads_undeclared() -> Result<(), ContractError> {
     let package = package();
     let groups = groups_for(&package)?;
-    assert!(!groups.is_empty());
+    assert_ne!(groups, [] as [velnor_actions_rust::TaskGroup; 0]);
     for group in &groups {
         assert!(group.undeclared_reads, "{} misses signal", group.task_id);
     }

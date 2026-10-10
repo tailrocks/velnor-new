@@ -103,7 +103,10 @@ fn parses_no_deps_metadata_into_conservative_graph() -> Outcome {
     assert!(record.edges.iter().any(|edge| edge.kind == DepKind::Dev));
     assert!(record.edges.iter().any(|edge| edge.kind == DepKind::Build));
     assert!(record.edges.windows(2).all(|pair| pair[0] <= pair[1]));
-    assert!(record.skipped_edges.is_empty());
+    assert_eq!(
+        record.skipped_edges,
+        [] as [velnor_actions_rust::SkippedPathEdge; 0]
+    );
     Ok(())
 }
 
