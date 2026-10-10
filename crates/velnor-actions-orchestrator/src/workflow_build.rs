@@ -21,7 +21,7 @@ use super::{
 };
 
 /// Inputs used to prepare the workflow's plan, task, and support jobs.
-pub(super) struct WorkflowBuildInput<'a> {
+pub(crate) struct WorkflowBuildInput<'a> {
     pub(crate) root: &'a std::path::Path,
     pub(crate) config: &'a VelnorConfig,
     pub(crate) branch: &'a str,
@@ -44,7 +44,7 @@ struct PreparedWorkflow {
     needs: PlanJobToolNeeds,
 }
 
-pub(super) fn build_workflow_for_consumer_release(
+pub(crate) fn build_workflow_for_consumer_release(
     input: &WorkflowBuildInput<'_>,
 ) -> Result<WorkflowPlan, OrchestratorError> {
     let mut prepared = prepare_workflow(input)?;
