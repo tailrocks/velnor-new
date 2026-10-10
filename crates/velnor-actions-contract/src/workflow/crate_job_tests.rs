@@ -113,6 +113,9 @@ fn crate_job_accepts_only_strictly_prior_gates() {
     let mut later = obligation();
     later.task_id =
         task_id_for_stack("tofu", "stacks/a", "plan", "default", None).expect("task id");
+    let toolchain = toolchain_id(&later.toolchain_inputs).expect("toolchain identity");
+    later.task_digest =
+        task_digest_for_execution(&later.task_id, &later.run, &toolchain).expect("task identity");
     later.gated_by.push(job.obligations[0].task_id.clone());
     job.obligations.push(later);
     assert!(job.validate().is_ok(), "prior gate accepted");
