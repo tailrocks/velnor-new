@@ -25,7 +25,7 @@ FIELDS = {"tool", "version", "source_commit", "source_tree", "upstream_base_comm
           "patch_url", "patch_sha256", "lockfile_sha256", "license_files"}
 OWNED_VERSION_PATTERN = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)-(?:owned-[a-z0-9]+(?:-[a-z0-9]+)*|velnor\.[1-9][0-9]*)"
 PORTABLE_LICENSE_PATTERN = r"[A-Za-z0-9._/-]+"
-BASES = {"mise": ("jdx/mise", "6be3cbdc639a66c03651479428e4c5f60b00485f"),
+BASES = {"mise": ("jdx/mise", "4599c53b4286ff101de876f8122feec0797b48b2"),
          "mbx": ("jdx/mr-boxington", "a0a44c61ca6aaa8da41d59deeebdfc46fc9d3313")}
 BOOTSTRAP = ["rust@1.99.0"]
 PREFIX = ["--no-config", "--no-env", "--no-hooks", "exec", *BOOTSTRAP, "--"]

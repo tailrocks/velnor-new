@@ -1,7 +1,7 @@
 //! Pinned tool catalog: exact mise tool selectors for every Velnor command.
 //!
-//! Qualified pins (checked 2026-10-08); project `mise.toml` selectors
-//! never alter these pins.
+//! Catalog pins carry their own upstream source and check date; project
+//! `mise.toml` selectors never alter these pins.
 
 use velnor_actions_contract::ToolIdentity;
 

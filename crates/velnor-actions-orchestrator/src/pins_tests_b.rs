@@ -51,16 +51,16 @@ fn consumer_binary_mise_setup_uses_latest_verified_platforms_only() {
     for (target, digest) in [
         (
             ReleaseTarget::LinuxX86_64,
-            "3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366",
+            "6eb1b890e90818417ca34c90dbbd47881917d5cd199f31b63b062ea9c6b18d85",
         ),
         (
             ReleaseTarget::MacosArm64,
-            "bbcea7b0f844d026424a4c8335357a15a2f5c9e9132c9408de990d9be6f26101",
+            "f5171e341518a57e8c4e9280e28443e35d66212c51164c83be76794e0a78b014",
         ),
     ] {
         let setup = resolve_mise_setup_for_consumer_binary_release(&config, target)
             .expect("supported consumer runner");
-        assert_eq!(setup.version, "2026.10.6");
+        assert_eq!(setup.version, "2026.10.7");
         assert_eq!(setup.sha256, digest);
     }
     assert!(

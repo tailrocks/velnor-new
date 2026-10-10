@@ -471,7 +471,7 @@ fn missing_root_mise_config_does_not_admit_unmodeled_task_files() {
 
 #[test]
 fn commandless_task_metadata_cannot_overlay_any_default_task_file() {
-    // Mise v2026.10.6 discovers file tasks from each of these default roots.
+    // The 2026-10-08 v2026.10.6 probe found file tasks under these default roots.
     // A metadata-only TOML task may overlay a same-named file task, retaining
     // its executable body, so every admitted node must provide its own run.
     for task_dir in [
