@@ -129,7 +129,7 @@ fn aliases_outside_executable_run_scalars_fail_closed() {
 #[test]
 fn renderer_mapping_and_step_aliases_preserve_every_run_use_site() -> Result<(), String> {
     let runs = bodies(
-        r#"jobs:
+        r"jobs:
   hosted:
     runs-on: ubuntu-26.04
     env: &m1
@@ -161,7 +161,7 @@ fn renderer_mapping_and_step_aliases_preserve_every_run_use_site() -> Result<(),
       - name: repeated action inputs
         uses: example/action@0000000000000000000000000000000000000000
         with: *m2
-"#,
+",
     )?;
     assert_eq!(
         runs,
