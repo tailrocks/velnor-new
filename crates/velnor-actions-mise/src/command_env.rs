@@ -220,7 +220,7 @@ pub enum EnvPolicy {
     /// credential key, plus the isolation overlay.
     Verify,
     /// Pinned MBX execution: inherits the verification environment while
-    /// removing Mise's cargo command-wrapper path so MBX resolves the
+    /// removing Mise's cargo command wrappers and shims so MBX resolves the
     /// selected real Rust toolchain binaries itself.
     Mbx,
     /// Read-only local discovery probes: inherits minus every
@@ -309,29 +309,30 @@ impl EnvPolicy {
         }
         env.extend(additions.iter().cloned());
         if matches!(self, Self::Mbx) {
-            sanitize_mise_command_wrapper_path(&mut env, parent);
+            sanitize_mise_cargo_paths(&mut env, parent);
         }
         env
     }
 }
 
-/// Remove only the caller's canonical Mise command-wrapper directory from the
+/// Remove only the caller's canonical Mise Cargo wrappers and shims from the
 /// last PATH assignment while preserving Rustup and unrelated path entries.
-/// MBX invokes Cargo internally; exposing Mise's outer command-wrapper entry
-/// makes `mise exec ... -- cargo` fail its shim check instead of reaching the
-/// Rustup-selected Cargo binary.
-fn sanitize_mise_command_wrapper_path(
-    env: &mut Vec<(OsString, OsString)>,
-    parent: &[(OsString, OsString)],
-) {
-    let Some(wrapper_dir) = mise_command_wrapper_dir(parent) else {
+/// MBX invokes Cargo internally; exposing either Mise path makes
+/// `mise exec ... -- cargo` resolve back to Mise instead of the Rustup-selected
+/// Cargo binary.
+fn sanitize_mise_cargo_paths(env: &mut Vec<(OsString, OsString)>, parent: &[(OsString, OsString)]) {
+    let Some(data_dir) = mise_data_dir(parent) else {
         return;
     };
+    let rejected = [
+        data_dir.join("command-wrappers").join("bin"),
+        data_dir.join("shims"),
+    ];
     let Some((_, path)) = env.iter().rev().find(|(key, _)| key == "PATH") else {
         return;
     };
     let entries = std::env::split_paths(path)
-        .filter(|entry| !same_path(entry, &wrapper_dir))
+        .filter(|entry| !rejected.iter().any(|path| same_path(entry, path)))
         .collect::<Vec<_>>();
     let Ok(path) = std::env::join_paths(entries) else {
         // A malformed PATH must not reintroduce the rejected shim. Omitting
@@ -343,7 +344,7 @@ fn sanitize_mise_command_wrapper_path(
     env.push((OsString::from("PATH"), path));
 }
 
-fn mise_command_wrapper_dir(parent: &[(OsString, OsString)]) -> Option<std::path::PathBuf> {
+fn mise_data_dir(parent: &[(OsString, OsString)]) -> Option<std::path::PathBuf> {
     let mise_data_dir = parent
         .iter()
         .rev()
@@ -361,7 +362,7 @@ fn mise_command_wrapper_dir(parent: &[(OsString, OsString)]) -> Option<std::path
     if !base.is_absolute() {
         return None;
     }
-    Some(base.join("command-wrappers").join("bin"))
+    Some(base)
 }
 
 fn same_path(left: &std::path::Path, right: &std::path::Path) -> bool {
