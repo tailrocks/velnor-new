@@ -207,6 +207,14 @@ impl MetadataQualification {
 /// One payload program run under at least one pinned tool.
 ///
 /// `Debug` redacts `--token` values; payload shape stays visible.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MbxAuthority {
+    /// MBX is selected from the catalog by the enclosing Mise command.
+    Catalog,
+    /// A typed candidate-build route supplies MBX through its pinned action.
+    ActionOwned,
+}
+
 #[derive(Clone, PartialEq, Eq)]
 pub struct PinnedToolExec {
     /// Tools selected as `<tool>@<exact>` before the `--` separator.
@@ -215,6 +223,9 @@ pub struct PinnedToolExec {
     program: OsString,
     /// Payload arguments passed byte-exact.
     args: Vec<OsString>,
+    /// Explicit authority for an MBX payload; arbitrary payloads cannot
+    /// silently resolve an ambient `mbx` executable.
+    mbx_authority: Option<MbxAuthority>,
 }
 
 impl std::fmt::Debug for PinnedToolExec {
@@ -223,6 +234,7 @@ impl std::fmt::Debug for PinnedToolExec {
             .field("tools", &self.tools)
             .field("program", &self.program)
             .field("args", &redact_argv_for_debug(&self.args))
+            .field("mbx_authority", &self.mbx_authority)
             .finish()
     }
 }
@@ -235,18 +247,54 @@ impl PinnedToolExec {
     /// Run `program` with `args` under the given pinned tools.
     ///
     /// Direct toolchain managers and installer actions are rejected:
-    /// validation runs through Mise-selected tools only.
+    /// validation runs through Mise-selected tools only. An `mbx` payload is
+    /// accepted only as the bare executable name with the exact MBX catalog
+    /// tool selected; path-qualified MBX executables are never treated as
+    /// catalog-pinned.
     ///
     /// # Errors
     ///
     /// Returns [`MiseError::EmptyToolchain`] for zero tools,
     /// [`MiseError::EmptyCommand`] for an empty program, and
-    /// [`MiseError::ForbiddenPayload`] for `rustup` programs and
-    /// `cargo install` payloads.
+    /// [`MiseError::ForbiddenPayload`] for `rustup` programs, `cargo install`
+    /// payloads, and MBX payloads without an exact catalog selector.
     pub fn new(
         tools: Vec<PinnedTool>,
         program: &OsStr,
         args: Vec<OsString>,
+    ) -> Result<Self, MiseError> {
+        let mbx_authority = if is_mbx_program(program) {
+            if program != OsStr::new("mbx") || !tools.contains(&PinnedTool::MrBoxington) {
+                return Err(unpinned_mbx_error(program));
+            }
+            Some(MbxAuthority::Catalog)
+        } else {
+            None
+        };
+        Self::new_with_authority(tools, program, args, mbx_authority)
+    }
+
+    /// Build a fixed candidate through Rust selected by Mise and MBX supplied
+    /// by the workflow's separately pinned native action.
+    pub(crate) fn new_action_owned_mbx(
+        tools: Vec<PinnedTool>,
+        program: &OsStr,
+        args: Vec<OsString>,
+    ) -> Result<Self, MiseError> {
+        if program != OsStr::new("mbx")
+            || !tools.contains(&PinnedTool::Rust)
+            || tools.contains(&PinnedTool::MrBoxington)
+        {
+            return Err(unpinned_mbx_error(program));
+        }
+        Self::new_with_authority(tools, program, args, Some(MbxAuthority::ActionOwned))
+    }
+
+    fn new_with_authority(
+        tools: Vec<PinnedTool>,
+        program: &OsStr,
+        args: Vec<OsString>,
+        mbx_authority: Option<MbxAuthority>,
     ) -> Result<Self, MiseError> {
         if tools.is_empty() {
             return Err(MiseError::EmptyToolchain);
@@ -261,6 +309,7 @@ impl PinnedToolExec {
             tools,
             program: program.to_owned(),
             args,
+            mbx_authority,
         })
     }
 
@@ -309,10 +358,7 @@ impl PinnedToolExec {
         if self.tools.as_slice() == [PinnedTool::Gh] {
             return Ok(command.with_policy(crate::command::EnvPolicy::Baseline));
         }
-        if Path::new(&self.program)
-            .file_stem()
-            .is_some_and(|stem| stem == "mbx")
-        {
+        if self.mbx_authority.is_some() {
             return Ok(command.with_policy(crate::command::EnvPolicy::Mbx));
         }
         Ok(command)
@@ -326,6 +372,19 @@ impl PinnedToolExec {
     /// spawned or reaped. A nonzero exit is returned as data.
     pub fn run(&self, catalog: &ToolCatalog) -> Result<ProcessOutput, MiseError> {
         self.command(catalog)?.run()
+    }
+}
+
+fn is_mbx_program(program: &OsStr) -> bool {
+    Path::new(program)
+        .file_stem()
+        .is_some_and(|stem| stem == "mbx")
+}
+
+fn unpinned_mbx_error(program: &OsStr) -> MiseError {
+    MiseError::ForbiddenPayload {
+        program: program.to_string_lossy().into_owned(),
+        reason: "mbx_requires_catalog_or_action_authority".to_owned(),
     }
 }
 
