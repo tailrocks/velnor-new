@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use crate::errors::ContractError;
 
 use super::TaskExecutionValidation;
@@ -41,7 +39,9 @@ fn validate_required_environment(input: &TaskExecutionValidation<'_>) -> Result<
     Ok(())
 }
 
-fn rust_toolchain_version(input: &TaskExecutionValidation<'_>) -> Result<&str, ContractError> {
+fn rust_toolchain_version<'a>(
+    input: &TaskExecutionValidation<'a>,
+) -> Result<&'a str, ContractError> {
     input
         .toolchain_inputs
         .tools
