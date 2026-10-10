@@ -7,7 +7,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    Job, RunsOn, ScaleSetSelector, Step, StepKind, StepRole, VerificationRunner,
+    Job, MAX_TASK_EXECUTION_ARGV, MAX_TASK_EXECUTION_ENV, MAX_TASK_EXECUTION_FRAME_BYTES, RunsOn,
+    ScaleSetSelector, Step, StepKind, StepRole, TASK_EXECUTION_FRAME_MAGIC,
+    TASK_EXECUTION_MANIFEST_PATH, TASK_EXECUTION_MANIFEST_SCHEMA, TaskExecutionManifestEntryV1,
+    TaskExecutionManifestV1, VerificationRunner,
 };
 
 use crate::{
@@ -17,14 +20,14 @@ use crate::{
 
 const ACTION_NAME_PREFIX: &str = "declared-task-";
 const TASK_ID_INPUT: &str = "task_id";
-const TASK_DIGEST_INPUT: &str = "task_digest";
-const MATRIX_ID_INPUT: &str = "matrix_id";
-const MATRIX_KEY_INPUT: &str = "matrix_key";
+const EXECUTION_DIGEST_INPUT: &str = "execution_digest";
+const RUNTIME_RUNNER_TEMP_ENV: &str = "VELNOR_RUNTIME_RUNNER_TEMP";
+const GENERATOR_VERSION_ENV: &str = "VELNOR_GENERATOR_VERSION";
+const TASK_EXECUTION_DIGEST_ENV: &str = "VELNOR_TASK_EXECUTION_DIGEST";
+const RUNNER_TEMP_EXPRESSION: &str = "${{ runner.temp }}";
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Shape {
-    argv_count: usize,
-    env_keys: Vec<String>,
     helper_version: String,
 }
 
@@ -44,6 +47,7 @@ pub(crate) fn factor_obligation_steps(
 ) -> Result<(BTreeMap<String, Job>, Vec<RenderedFile>), RenderError> {
     let mut eligible = BTreeMap::<(String, usize), TaskExecutionRef<'_>>::new();
     let mut shapes = BTreeSet::new();
+    let mut manifest_tasks = BTreeMap::new();
     for (job_id, job) in jobs {
         for (step_index, step) in job.steps.iter().enumerate() {
             let StepKind::TaskExecution {
@@ -54,8 +58,8 @@ pub(crate) fn factor_obligation_steps(
                 matrix_id,
                 matrix_key,
                 report_helper_version: task_helper_version,
-                matrix_max_parallel: _,
-                toolchain_inputs: _,
+                matrix_max_parallel,
+                toolchain_inputs,
             } = &step.kind
             else {
                 continue;
@@ -106,21 +110,36 @@ pub(crate) fn factor_obligation_steps(
                 )));
             }
             validate_task_fields(argv, env, task_id, task_digest, matrix_id, matrix_key)?;
+            let mut record = TaskExecutionManifestEntryV1 {
+                task_id: task_id.clone(),
+                execution_digest: String::new(),
+                task_digest: task_digest.clone(),
+                toolchain_inputs: toolchain_inputs.clone(),
+                argv: argv.clone(),
+                env: env.clone(),
+                matrix_id: matrix_id.clone(),
+                matrix_key: matrix_key.clone(),
+                report_helper_version: task_helper_version.clone(),
+                matrix_max_parallel: *matrix_max_parallel,
+            };
+            record
+                .refresh_execution_digest()
+                .map_err(RenderError::Contract)?;
+            let execution_digest = record.execution_digest.clone();
+            if manifest_tasks.insert(task_id.clone(), record).is_some() {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "declared_task_id_not_unique:{task_id}"
+                )));
+            }
             let shape = Shape {
-                argv_count: argv.len(),
-                env_keys: env.keys().cloned().collect(),
                 helper_version: task_helper_version.clone(),
             };
             shapes.insert(shape);
             eligible.insert(
                 (job_id.clone(), step_index),
                 TaskExecutionRef {
-                    argv,
-                    env,
                     task_id,
-                    task_digest,
-                    matrix_id,
-                    matrix_key,
+                    execution_digest,
                     helper_version: task_helper_version,
                 },
             );
@@ -134,8 +153,6 @@ pub(crate) fn factor_obligation_steps(
     let mut next = jobs.clone();
     for ((job_id, step_index), task) in &eligible {
         let shape = Shape {
-            argv_count: task.argv.len(),
-            env_keys: task.env.keys().cloned().collect(),
             helper_version: task.helper_version.clone(),
         };
         let action_id = shape_ids.get(&shape).ok_or_else(|| {
@@ -155,9 +172,22 @@ pub(crate) fn factor_obligation_steps(
             .ok_or_else(|| RenderError::InvalidWorkflow("declared_task_step_missing".to_owned()))?;
         *caller = action;
     }
-    let mut files = Vec::with_capacity(shape_ids.len());
+    let mut files = Vec::with_capacity(shape_ids.len() + usize::from(!manifest_tasks.is_empty()));
     for (shape, action_id) in &shape_ids {
         files.push(declared_task_file(*action_id, shape, generator_version)?);
+    }
+    if !manifest_tasks.is_empty() {
+        let manifest = TaskExecutionManifestV1 {
+            schema: TASK_EXECUTION_MANIFEST_SCHEMA,
+            generator_version: generator_version.to_owned(),
+            tasks: manifest_tasks,
+        };
+        let bytes = manifest.marked_json().map_err(RenderError::Contract)?;
+        steps::scan_for_private_subcommands(&bytes)?;
+        files.push(RenderedFile {
+            path: TASK_EXECUTION_MANIFEST_PATH.to_owned(),
+            bytes,
+        });
     }
     Ok((next, files))
 }
@@ -210,12 +240,8 @@ fn helper_staged_by(step: &Step, staged_binary: &str) -> bool {
 }
 
 struct TaskExecutionRef<'a> {
-    argv: &'a [String],
-    env: &'a BTreeMap<String, String>,
     task_id: &'a str,
-    task_digest: &'a str,
-    matrix_id: &'a str,
-    matrix_key: &'a str,
+    execution_digest: String,
     helper_version: &'a String,
 }
 
@@ -227,20 +253,40 @@ fn validate_task_fields(
     matrix_id: &str,
     matrix_key: &str,
 ) -> Result<(), RenderError> {
+    for value in argv.iter().chain(env.values()) {
+        validate_runtime_expression(value)?;
+    }
     crate::commands::validate_command_argv(argv)?;
     crate::commands::validate_env(env)?;
     crate::toolchain_env::reject_denied_step_keys(env)?;
+    for key in env.keys() {
+        if matches!(
+            key.as_str(),
+            "VELNOR_TASK_ID"
+                | "VELNOR_TASK_DIGEST"
+                | "VELNOR_MATRIX_ID"
+                | "VELNOR_MATRIX_KEY"
+                | "VELNOR_INTERNAL_OP"
+                | "VELNOR_GENERATOR_VERSION"
+                | "VELNOR_TASK_EXECUTION_DIGEST"
+                | "VELNOR_RUNTIME_RUNNER_TEMP"
+        ) {
+            return Err(RenderError::BadCommand(format!(
+                "reserved_declared_task_env_key:{key}"
+            )));
+        }
+    }
     for (index, argument) in argv.iter().enumerate() {
-        validate_input(&argv_input(index), argument)?;
+        validate_input(&format!("argv_{index}"), argument)?;
     }
     for (key, value) in env {
-        validate_input(&env_input(key), value)?;
+        validate_input(&format!("env_{key}"), value)?;
     }
     for (key, value) in [
         (TASK_ID_INPUT, task_id),
-        (TASK_DIGEST_INPUT, task_digest),
-        (MATRIX_ID_INPUT, matrix_id),
-        (MATRIX_KEY_INPUT, matrix_key),
+        ("task_digest", task_digest),
+        ("matrix_id", matrix_id),
+        ("matrix_key", matrix_key),
     ] {
         validate_input(key, value)?;
     }
@@ -252,21 +298,13 @@ fn declared_task_call(
     task: &TaskExecutionRef<'_>,
     original: &Step,
 ) -> Result<Step, RenderError> {
-    let mut with = BTreeMap::new();
-    for (index, argument) in task.argv.iter().enumerate() {
-        with.insert(argv_input(index), argument.clone());
-    }
-    for (key, value) in task.env {
-        with.insert(env_input(key), value.clone());
-    }
-    for (key, value) in [
-        (TASK_ID_INPUT, task.task_id),
-        (TASK_DIGEST_INPUT, task.task_digest),
-        (MATRIX_ID_INPUT, task.matrix_id),
-        (MATRIX_KEY_INPUT, task.matrix_key),
-    ] {
-        with.insert(key.to_owned(), value.to_owned());
-    }
+    let with = BTreeMap::from([
+        (TASK_ID_INPUT.to_owned(), task.task_id.to_owned()),
+        (
+            EXECUTION_DIGEST_INPUT.to_owned(),
+            task.execution_digest.clone(),
+        ),
+    ]);
     Ok(Step {
         name: original.name.clone(),
         id: original.id,
@@ -278,6 +316,28 @@ fn declared_task_call(
             env: BTreeMap::new(),
         },
     })
+}
+
+/// Task manifests currently carry only the exact GitHub expression
+/// `${{ runner.temp }}`. The generated composite resolves it from its trusted
+/// static action env; other expressions fail before they enter the manifest.
+fn validate_runtime_expression(value: &str) -> Result<(), RenderError> {
+    let mut rest = value;
+    while let Some(start) = rest.find("${{") {
+        let after = &rest[start + 3..];
+        let Some(end) = after.find("}}") else {
+            return Err(RenderError::BadCommand(
+                "unclosed_declared_task_expression".to_owned(),
+            ));
+        };
+        if &after[..end] != " runner.temp " {
+            return Err(RenderError::BadCommand(
+                "unsupported_declared_task_expression".to_owned(),
+            ));
+        }
+        rest = &after[end + 2..];
+    }
+    Ok(())
 }
 
 fn validate_input(key: &str, value: &str) -> Result<(), RenderError> {
@@ -292,7 +352,7 @@ fn declared_task_file(
     shape: &Shape,
     version: &str,
 ) -> Result<RenderedFile, RenderError> {
-    let body = declared_task_document(action_id, shape)?;
+    let body = declared_task_document(action_id, shape, version)?;
     let bytes = marker::with_marker(version, &crate::yaml::render_yaml(&body))?;
     steps::scan_for_private_subcommands(&bytes)?;
     Ok(RenderedFile {
@@ -301,42 +361,34 @@ fn declared_task_file(
     })
 }
 
-fn declared_task_document(action_id: usize, shape: &Shape) -> Result<Yaml, RenderError> {
-    let mut inputs = Vec::new();
-    for index in 0..shape.argv_count {
-        inputs.push(input_definition(argv_input(index)));
-    }
-    for key in &shape.env_keys {
-        inputs.push(input_definition(env_input(key)));
-    }
-    for key in [
-        TASK_ID_INPUT,
-        TASK_DIGEST_INPUT,
-        MATRIX_ID_INPUT,
-        MATRIX_KEY_INPUT,
-    ] {
-        inputs.push(input_definition(key.to_owned()));
-    }
+fn declared_task_document(
+    action_id: usize,
+    shape: &Shape,
+    generator_version: &str,
+) -> Result<Yaml, RenderError> {
+    let inputs = vec![
+        input_definition(TASK_ID_INPUT.to_owned()),
+        input_definition(EXECUTION_DIGEST_INPUT.to_owned()),
+    ];
     let mut env = toolchain_env::credential_scrub();
-    for index in 0..shape.argv_count {
-        env.insert(
-            argv_env(index),
-            format!("${{{{ inputs.{} }}}}", argv_input(index)),
-        );
-    }
-    for key in &shape.env_keys {
-        env.insert(key.clone(), format!("${{{{ inputs.{} }}}}", env_input(key)));
-    }
-    for (key, input) in [
-        ("VELNOR_TASK_ID", TASK_ID_INPUT),
-        ("VELNOR_TASK_DIGEST", TASK_DIGEST_INPUT),
-        ("VELNOR_MATRIX_ID", MATRIX_ID_INPUT),
-        ("VELNOR_MATRIX_KEY", MATRIX_KEY_INPUT),
-    ] {
-        env.insert(key.to_owned(), format!("${{{{ inputs.{input} }}}}"));
-    }
+    env.insert(
+        "VELNOR_TASK_ID".to_owned(),
+        format!("${{{{ inputs.{TASK_ID_INPUT} }}}}"),
+    );
+    env.insert(
+        TASK_EXECUTION_DIGEST_ENV.to_owned(),
+        format!("${{{{ inputs.{EXECUTION_DIGEST_INPUT} }}}}"),
+    );
+    env.insert(
+        GENERATOR_VERSION_ENV.to_owned(),
+        generator_version.to_owned(),
+    );
+    env.insert(
+        RUNTIME_RUNNER_TEMP_ENV.to_owned(),
+        RUNNER_TEMP_EXPRESSION.to_owned(),
+    );
     crate::commands::validate_composite_env(&env)?;
-    let script = task_script(shape.argv_count, &shape.helper_version);
+    let script = task_script(&shape.helper_version);
     let step = Yaml::Map(vec![
         (
             "name".to_owned(),
@@ -362,35 +414,135 @@ fn input_definition(name: String) -> (String, Yaml) {
         Yaml::Map(vec![
             (
                 "description".to_owned(),
-                Yaml::str("Fixed declared task argument or environment value."),
+                Yaml::str("Validated task identity and execution selection digest."),
             ),
             ("required".to_owned(), Yaml::Bool(true)),
         ]),
     )
 }
 
-fn argv_input(index: usize) -> String {
-    format!("argv_{index}")
+fn task_script(helper_version: &str) -> String {
+    let mut script = String::new();
+    script.push_str("unset ");
+    script.push_str(&toolchain_env::CREDENTIAL_UNSET_VARS.join(" "));
+    script.push_str(
+        r#";
+set -euo pipefail
+fail_frame() { printf '%s\n' 'invalid declared-task execution frame' >&2; exit 125; }
+frame_file=$(mktemp)
+trap 'rm -f "$frame_file"' EXIT
+helper="$RUNNER_TEMP/velnor/bin/velnor-actions-"#,
+    );
+    script.push_str(helper_version);
+    script.push_str("\"\n");
+    script.push_str(
+        r#"
+if ! env VELNOR_INTERNAL_OP=resolve-task-execution-v1 "$helper" > "$frame_file"; then fail_frame; fi
+frame_bytes=$(wc -c < "$frame_file")
+frame_bytes=${frame_bytes//[[:space:]]/}
+[[ "$frame_bytes" =~ ^[0-9]{1,7}$ ]] && (( frame_bytes <= @MAX_FRAME_BYTES@ )) || fail_frame
+last_byte=$(tail -c 1 "$frame_file" | od -An -t x1)
+last_byte=${last_byte//[[:space:]]/}
+[[ "$last_byte" == 00 ]] || fail_frame
+frame=()
+while IFS= read -r -d '' field; do frame+=("$field"); done < "$frame_file"
+(( ${#frame[@]} >= 13 )) || fail_frame
+[[ "${frame[0]}" == @FRAME_MAGIC@ ]] || fail_frame
+[[ "${frame[1]}" == "$VELNOR_TASK_ID" ]] || fail_frame
+[[ "${frame[2]}" == "$VELNOR_TASK_EXECUTION_DIGEST" ]] || fail_frame
+[[ "${frame[6]}" == "#,
+    );
+    script.push_str(helper_version);
+    script.push_str("\" ]] || fail_frame\n");
+    script.push_str(
+        r#"
+case "${frame[7]}" in
+  0) [[ -z "${frame[8]}" ]] || fail_frame ;;
+  1) [[ "${frame[8]}" =~ ^[1-9][0-9]{0,9}$ ]] && (( frame[8] <= @U32_MAX@ )) || fail_frame ;;
+  *) fail_frame ;;
+esac
+[[ "${frame[9]}" =~ ^[1-9][0-9]{0,2}$ ]] || fail_frame
+argv_count=${frame[9]}
+(( argv_count <= @MAX_ARGV@ )) || fail_frame
+env_count_position=$((10 + argv_count))
+(( ${#frame[@]} > env_count_position )) || fail_frame
+[[ "${frame[env_count_position]}" =~ ^(0|[1-9][0-9]?)$ ]] || fail_frame
+env_count=${frame[env_count_position]}
+(( env_count <= @MAX_ENV@ )) || fail_frame
+expected_fields=$((env_count_position + 2 + env_count * 2))
+(( ${#frame[@]} == expected_fields )) || fail_frame
+end_position=$((expected_fields - 1))
+[[ "${frame[end_position]}" == END ]] || fail_frame
+
+replace_runner_temp() {
+  local rest="$1" prefix output="" needle='${{ runner.temp }}'
+  while [[ "$rest" == *"$needle"* ]]; do
+    prefix=${rest%%"$needle"*}
+    rest=${rest#*"$needle"}
+    output+="${prefix}${VELNOR_RUNTIME_RUNNER_TEMP}"
+  done
+  RUNTIME_VALUE="${output}${rest}"
+  [[ "$RUNTIME_VALUE" != *'${{'* ]]
 }
 
-fn env_input(key: &str) -> String {
-    format!("env_{key}")
-}
+argv=()
+for ((index = 0; index < argv_count; index++)); do
+  value=${frame[$((10 + index))]}
+  replace_runner_temp "$value" || fail_frame
+  argv+=("$RUNTIME_VALUE")
+done
 
-fn argv_env(index: usize) -> String {
-    format!("VELNOR_WRAPPER_ARGV_{index}")
-}
-
-fn task_script(argv_count: usize, helper_version: &str) -> String {
-    let argv = (0..argv_count)
-        .map(|index| format!("\"$VELNOR_WRAPPER_ARGV_{index}\""))
-        .collect::<Vec<_>>()
-        .join(" ");
-    let helper = format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{helper_version}");
-    format!(
-        "unset {};\nset +e\nstarted_ms=$(date +%s%3N)\nargv=( {argv} )\n\"${{argv[@]}}\"\ntask_code=$?\nVELNOR_EXIT_CODE=\"$task_code\" VELNOR_START_MS=\"$started_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"{helper}\"\nreport_code=$?\nif [ \"$task_code\" -ne 0 ]; then exit \"$task_code\"; fi\nexit \"$report_code\"",
-        toolchain_env::CREDENTIAL_UNSET_VARS.join(" ")
-    )
+task_env=(
+  "VELNOR_TASK_ID=${frame[1]}"
+  "VELNOR_TASK_DIGEST=${frame[3]}"
+  "VELNOR_MATRIX_ID=${frame[4]}"
+  "VELNOR_MATRIX_KEY=${frame[5]}"
+)
+seen_keys=()
+for ((index = 0; index < env_count; index++)); do
+  key_position=$((env_count_position + 1 + index * 2))
+  key=${frame[key_position]}
+  value=${frame[$((key_position + 1))]}
+  [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || fail_frame
+  for seen_key in "${seen_keys[@]}"; do [[ "$seen_key" != "$key" ]] || fail_frame; done
+  seen_keys+=("$key")
+  case "$key" in
+    VELNOR_TASK_ID|VELNOR_TASK_DIGEST|VELNOR_MATRIX_ID|VELNOR_MATRIX_KEY|VELNOR_INTERNAL_OP|VELNOR_GENERATOR_VERSION|VELNOR_TASK_EXECUTION_DIGEST|VELNOR_RUNTIME_RUNNER_TEMP|#,
+    );
+    script.push_str(&toolchain_env::STEP_CREDENTIAL_DENYLIST.join("|"));
+    script.push_str(
+        r#"|CARGO_REGISTRIES_*|*_TOKEN|ACTIONS_ID_TOKEN_REQUEST_URL|GH_HOST|GH_CONFIG_DIR|CHECKPOINT_*) fail_frame ;;
+    TF_*)
+      case "$key" in TF_IN_AUTOMATION|TF_INPUT) ;; *) fail_frame ;; esac ;;
+  esac
+  replace_runner_temp "$value" || fail_frame
+  task_env+=("$key=$RUNTIME_VALUE")
+done
+[[ -n "$VELNOR_RUNTIME_RUNNER_TEMP" ]] || fail_frame
+unset VELNOR_INTERNAL_OP VELNOR_GENERATOR_VERSION VELNOR_TASK_EXECUTION_DIGEST VELNOR_RUNTIME_RUNNER_TEMP
+export VELNOR_TASK_ID="${frame[1]}"
+export VELNOR_TASK_DIGEST="${frame[3]}"
+export VELNOR_MATRIX_ID="${frame[4]}"
+export VELNOR_MATRIX_KEY="${frame[5]}"
+set +e
+started_ms=$(date +%s%3N)
+env -- "${task_env[@]}" "${argv[@]}"
+task_code=$?
+VELNOR_EXIT_CODE="$task_code" VELNOR_START_MS="$started_ms" VELNOR_INTERNAL_OP=write-task-report-v1 "$helper"
+report_code=$?
+if [ "$task_code" -ne 0 ]; then exit "$task_code"; fi
+exit "$report_code"
+"#,
+    );
+    script
+        .replace("@FRAME_MAGIC@", TASK_EXECUTION_FRAME_MAGIC)
+        .replace(
+            "@MAX_FRAME_BYTES@",
+            &MAX_TASK_EXECUTION_FRAME_BYTES.to_string(),
+        )
+        .replace("@MAX_ARGV@", &MAX_TASK_EXECUTION_ARGV.to_string())
+        .replace("@MAX_ENV@", &MAX_TASK_EXECUTION_ENV.to_string())
+        .replace("@U32_MAX@", &u32::MAX.to_string())
 }
 
 #[cfg(test)]
