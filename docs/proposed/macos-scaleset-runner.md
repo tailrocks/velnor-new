@@ -176,6 +176,7 @@ isolation remains unproven.
 
 The production resource-admission path, guest measurements, and controller-only
 probe boundary are specified in the [Scale Set resource-admission contract](runner-resource-admission.md).
+The probe lifecycle is specified in the [controller resource-probe contract](resource-probe-controller.md).
 
 `/var/run/docker.sock` inside the runner and inside the private daemon resolves
 to that worker's socket, never the outer engine socket. Named volumes back
