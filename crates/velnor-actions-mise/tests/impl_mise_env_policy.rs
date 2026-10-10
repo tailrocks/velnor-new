@@ -213,6 +213,26 @@ fn mbx_child_uses_rustup_path_without_mise_cargo_wrappers_or_shims() -> Result<(
     let parent = vec![
         (OsString::from("HOME"), OsString::from("/Users/alex")),
         (
+            OsString::from("CARGO"),
+            OsString::from("/Users/alex/.rustup/toolchains/1.99.0/bin/cargo"),
+        ),
+        (
+            OsString::from("RUSTC"),
+            OsString::from("/Users/alex/.rustup/toolchains/1.99.0/bin/rustc"),
+        ),
+        (
+            OsString::from("RUSTDOC"),
+            OsString::from("/Users/alex/.rustup/toolchains/1.99.0/bin/rustdoc"),
+        ),
+        (
+            OsString::from("CARGO_HOME"),
+            OsString::from("/Users/alex/scratch/cargo-home"),
+        ),
+        (
+            OsString::from("RUSTUP_HOME"),
+            OsString::from("/Users/alex/.rustup"),
+        ),
+        (
             OsString::from("MISE_DATA_DIR"),
             OsString::from("/Users/alex/.local/share/mise"),
         ),
@@ -243,6 +263,17 @@ fn mbx_child_uses_rustup_path_without_mise_cargo_wrappers_or_shims() -> Result<(
         ],
         "only canonical Mise Cargo wrappers and shims are removed"
     );
+    for key in ["CARGO", "RUSTC", "RUSTDOC"] {
+        assert!(
+            !has(&child, key),
+            "ambient {key} executable must not override the Mise-selected tool"
+        );
+    }
+    assert!(
+        has(&child, "CARGO_HOME"),
+        "isolated Cargo cache home is preserved"
+    );
+    assert!(has(&child, "RUSTUP_HOME"), "Rustup home is preserved");
     assert!(!has(&child, "GITHUB_TOKEN"));
     assert!(!has(&child, "CARGO_REGISTRY_TOKEN"));
     assert!(command.disables_auto_install());

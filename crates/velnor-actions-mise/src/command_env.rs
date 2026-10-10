@@ -220,8 +220,9 @@ pub enum EnvPolicy {
     /// credential key, plus the isolation overlay.
     Verify,
     /// Pinned MBX execution: inherits the verification environment while
-    /// removing Mise's cargo command wrappers and shims so MBX resolves the
-    /// selected real Rust toolchain binaries itself.
+    /// removing Mise's Cargo command wrappers and shims plus ambient Cargo,
+    /// rustc, and rustdoc executable overrides so the selected toolchain
+    /// controls those programs.
     Mbx,
     /// Read-only local discovery probes: inherits minus every
     /// credential key, plus the isolation overlay.
@@ -309,6 +310,11 @@ impl EnvPolicy {
         }
         env.extend(additions.iter().cloned());
         if matches!(self, Self::Mbx) {
+            // MBX honors `CARGO`, and Cargo honors `RUSTC`/`RUSTDOC`, as
+            // executable overrides. Keeping ambient tool paths can bypass
+            // the exact Rust tool selected by Mise. Resolve these programs
+            // only from the sanitized, Mise-selected toolchain.
+            env.retain(|(key, _)| key != "CARGO" && key != "RUSTC" && key != "RUSTDOC");
             sanitize_mise_cargo_paths(&mut env, parent);
         }
         env
