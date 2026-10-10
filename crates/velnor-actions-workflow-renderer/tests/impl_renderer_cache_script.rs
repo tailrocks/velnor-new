@@ -123,6 +123,7 @@ fn assert_one_marked_script(rendered: &RenderedWorkflow) -> Result<(), RenderErr
     );
     assert!(restore_action.bytes.contains("actions/cache/restore@"));
     assert!(restore_action.bytes.contains("key: ${{ inputs.key }}"));
+    assert_seed_admission_wiring(&preludes[0].bytes, &restore_action.bytes, &rendered.yaml);
     assert!(restore_action.bytes.starts_with(&format!("{marker}\n")));
     assert!(
         rendered
@@ -142,6 +143,14 @@ fn assert_one_marked_script(rendered: &RenderedWorkflow) -> Result<(), RenderErr
     ));
     assert!(!rendered.yaml.contains(IDENTITY_SCRIPT_PATH));
     Ok(())
+}
+
+fn assert_seed_admission_wiring(prelude: &str, restore: &str, workflow: &str) {
+    assert!(prelude.contains("id: seed"));
+    assert!(prelude.contains("value: ${{ steps.seed.outputs.seed_admitted }}"));
+    assert!(workflow.contains("seed-admitted: ${{ steps.v2.outputs.seed_admitted }}"));
+    assert!(restore.contains("default: \"false\""));
+    assert!(restore.contains("TOOLS_SEED_ADMITTED: ${{ inputs.seed-admitted }}"));
 }
 
 #[test]

@@ -240,9 +240,11 @@ case_space_name() {
   grep -qx 'space-ok' "$root/dest/my file.txt" || return 1
 }
 
-case_absolute_relative_target() {
-  local root="$work/absrel" link
-  rm -rf -- "$root"
+case_absolute_relative_target() (
+  local root link
+  mkdir -p /home/runner/work || return 1
+  root="$(mktemp -d /home/runner/work/velnor-tar-absrel.XXXXXX)" || return 1
+  trap 'rm -rf -- "$root"' EXIT
   mkdir -p "$root/dest" "$root/pit"
   link="$root/pit/link"
   write_ustar "$root/arc.tar" s "$link" tmp || return 1
@@ -250,7 +252,7 @@ case_absolute_relative_target() {
   [ -L "$link" ] || return 1
   [ "$(readlink "$link")" = tmp ] || return 1
   [ ! -e "$root/pit/tmp" ] || return 1
-}
+)
 
 case_absolute_link_target() {
   local root="$work/abslink" status=0

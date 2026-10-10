@@ -4,6 +4,8 @@ use velnor_actions_contract::{
     Job, JobTimeout, StepId, StepRole, workflow::step_identity::validate_step_sequence,
 };
 
+use crate::yaml::Yaml;
+
 use super::*;
 
 fn payload(runs_on: &str) -> Result<super::super::ToolsCachePayload, RenderError> {
@@ -98,6 +100,39 @@ fn fixed_composite_forwards_identity_and_runs_seed_before_outer_restore() -> Res
                 .contains("mise-tools-v2-${{steps.v2.outputs.identity}}")
         );
     }
+    Ok(())
+}
+
+#[test]
+fn prelude_exposes_the_validated_seed_admission_output() -> Result<(), RenderError> {
+    let file = action_file("ubuntu-26.04", "0.1.0")?;
+    assert!(file.bytes.contains("id: seed"), "{}", file.bytes);
+    assert!(file.bytes.contains("seed_admitted:"), "{}", file.bytes);
+    assert!(
+        file.bytes
+            .contains("value: ${{ steps.seed.outputs.seed_admitted }}"),
+        "{}",
+        file.bytes
+    );
+
+    let Yaml::Map(seed_entries) = super::seed_step() else {
+        return Err(RenderError::InvalidWorkflow(
+            "prelude_seed_step_not_mapping".to_owned(),
+        ));
+    };
+    assert!(seed_entries.contains(&("id".to_owned(), Yaml::Str("seed".to_owned()))));
+    let Yaml::Map(outputs) = super::output_map() else {
+        return Err(RenderError::InvalidWorkflow(
+            "prelude_outputs_not_mapping".to_owned(),
+        ));
+    };
+    assert!(outputs.contains(&(
+        "seed_admitted".to_owned(),
+        Yaml::Map(vec![(
+            "value".to_owned(),
+            Yaml::Str("${{ steps.seed.outputs.seed_admitted }}".to_owned()),
+        )]),
+    )));
     Ok(())
 }
 
