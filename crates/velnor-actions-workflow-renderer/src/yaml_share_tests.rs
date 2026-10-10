@@ -46,16 +46,22 @@ fn repeated_runs(extra: Vec<(String, Yaml)>) -> Yaml {
 }
 
 #[test]
-fn sharing_is_confined_to_step_runs_and_is_deterministic() {
+fn sharing_is_confined_to_step_runs_and_supported_input_maps() -> Result<(), String> {
     let node = repeated_runs(Vec::new());
-    let first = render_yaml(&share_repeated_workflow_nodes(node.clone()));
-    let second = render_yaml(&share_repeated_workflow_nodes(node));
+    let shared = share_repeated_workflow_nodes(node.clone());
+    let first = render_yaml(&shared);
+    let second = render_yaml(&share_repeated_workflow_nodes(node.clone()));
     assert_eq!(first, second);
     assert!(first.contains("run: &r1"));
     assert!(first.contains("run: *r1"));
     assert!(first.contains("defaults:\n  run: \"printf"));
-    assert!(first.contains("env:\n          run: \"printf"));
-    assert!(first.contains("with:\n          run: \"printf"));
+    assert!(first.contains("env: &m1\n          run: \"printf"));
+    assert!(first.contains("with: *m1"));
+    assert_eq!(
+        mapping::expand_aliases(&node)?,
+        mapping::expand_aliases(&shared)?
+    );
+    Ok(())
 }
 
 #[test]

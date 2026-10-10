@@ -187,7 +187,7 @@ fn small_repeated_maps_and_steps_are_not_anchored_when_they_cost_more() {
     assert_eq!(render_yaml(&shared), render_yaml(&document));
 }
 
-fn expand_aliases(node: &Yaml) -> Result<Yaml, String> {
+pub(super) fn expand_aliases(node: &Yaml) -> Result<Yaml, String> {
     use std::collections::{BTreeMap, BTreeSet};
 
     fn expand(
