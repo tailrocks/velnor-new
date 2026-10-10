@@ -76,6 +76,7 @@ pub(super) async fn poll_and_drive(
         repo: rest.repo,
         pat: rest.pat,
         resource_budget,
+        guest_admission: rest.guest_admission,
         cursor: 0,
         steady_retry: None,
     };
@@ -164,6 +165,7 @@ struct Turn<'a> {
     repo: &'a str,
     pat: &'a str,
     resource_budget: ResourceBudget,
+    guest_admission: super::drive::GuestAdmission,
     cursor: i64,
     steady_retry: Option<std::time::Instant>,
 }
@@ -231,6 +233,10 @@ impl Turn<'_> {
         match decision {
             // HTTP 202 keeps the session open. A job can arrive on a later poll.
             Admit::Stay => self.stay(workers).await,
+            Admit::Hold if !self.guest_admission.permits_start() => {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                Ok(false)
+            }
             Admit::Hold => self.hold().await,
             Admit::Stop => Ok(true),
             Admit::Error => Err(EnsureError::Unexpected {
@@ -266,6 +272,7 @@ impl Turn<'_> {
             repo: self.repo,
             pat: self.pat,
             resource_budget: Some(self.resource_budget),
+            guest_admission: self.guest_admission,
         };
         let launched = drive_ready(
             &mut lane,

@@ -38,6 +38,29 @@ pub(crate) struct Rest<'a> {
     pub(crate) pat: &'a str,
     /// Validated runner and `DinD` limits for new worker pairs.
     pub(crate) resource_budget: Option<ResourceBudget>,
+    /// Fresh guest metrics required before any acquire, JIT, or worker start.
+    pub(crate) guest_admission: GuestAdmission,
+}
+
+/// Whether this job-start attempt has a fresh selected-guest sample.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GuestAdmission {
+    /// No supported guest probe is available, so new work stays unacquired.
+    Unavailable,
+    /// A current selected-guest sample permits this attempt to proceed.
+    #[cfg(test)]
+    FreshSample,
+}
+
+impl GuestAdmission {
+    #[must_use]
+    pub(crate) const fn permits_start(self) -> bool {
+        match self {
+            Self::Unavailable => false,
+            #[cfg(test)]
+            Self::FreshSample => true,
+        }
+    }
 }
 
 impl fmt::Debug for Drive {

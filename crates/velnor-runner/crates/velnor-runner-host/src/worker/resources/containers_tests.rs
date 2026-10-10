@@ -18,6 +18,8 @@ use super::{inspect_labels_match, same_launch, topology_matches, validate_existi
 mod cgroupns;
 #[path = "containers_limits_tests.rs"]
 mod limits;
+#[path = "containers_topology_tests.rs"]
+mod topology;
 
 const UBUNTU_PATH: &str = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
@@ -378,15 +380,6 @@ fn runner_topology_rejects_user_and_working_directory_drift() -> Result<(), Host
         .ok_or(HostError::Ownership)?
         .working_dir = Some("/".to_owned());
     assert!(!topology_matches(&spec, &wrong_directory)?);
-    Ok(())
-}
-
-#[test]
-fn dind_topology_matches_its_image_command_and_closed_stdin() -> Result<(), HostError> {
-    let spec = dind_create_for_identity(&identity()?)?;
-    let inspected = inspect_projection(&spec)?;
-
-    assert!(topology_matches(&spec, &inspected)?);
     Ok(())
 }
 

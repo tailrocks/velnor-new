@@ -4,5 +4,3 @@
 
 #[cfg(test)]
 mod containers;
-#[cfg(test)]
-pub(crate) mod guest;

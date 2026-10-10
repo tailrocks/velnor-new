@@ -74,6 +74,7 @@ async fn busy_slot_does_not_ack_scale_assignment() -> Result<(), String> {
                     repo: "",
                     pat: "",
                     resource_budget: crate::worker::test_resource_budget().ok(),
+                    guest_admission: super::drive::GuestAdmission::FreshSample,
                 },
             ),
             "busy drive",
