@@ -1,6 +1,8 @@
 //! Renderer context construction from discovered repository evidence.
 
-use velnor_actions_contract::{GeneratorValidation, ValidatorKind, VelnorConfig, WorkflowPolicy};
+use velnor_actions_contract::{
+    GeneratorValidation, ScaleSetSelector, ValidatorKind, VelnorConfig, WorkflowPolicy,
+};
 use velnor_actions_mise::{IsolatedCommand, PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::{CandidateSpec, RenderContext, ValidatorCommand};
 use velnor_actions_workflow_renderer::steps::{
@@ -124,7 +126,9 @@ fn candidate_spec_for(
     }
 }
 
-fn scale_set_selector(config: &VelnorConfig) -> Result<Option<String>, OrchestratorError> {
+fn scale_set_selector(
+    config: &VelnorConfig,
+) -> Result<Option<ScaleSetSelector>, OrchestratorError> {
     let selector = config
         .execution
         .as_ref()
