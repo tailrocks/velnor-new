@@ -1,10 +1,11 @@
 //! Stop one worker pair on the local Docker engine, or remove one recorded id.
 //! Dummy JIT bytes are not printed.
 
+use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 
 use velnor_runner_host::{
-    DeleteDecision, PairStop, connect_unix, remove_recorded, start_pair_until,
+    DeleteDecision, HostConfig, PairStop, connect_unix, remove_recorded, start_pair_until,
 };
 
 const DUMMY_JIT: &[u8] = b"stage-stop-not-a-jit";
@@ -40,7 +41,11 @@ async fn stage(stop_name: &str, volume: Option<String>) -> ExitCode {
         Ok(docker) => docker,
         Err(code) => return code,
     };
-    match start_pair_until(&docker, &volume, DUMMY_JIT, stop).await {
+    let resource_budget = match host_resource_budget() {
+        Ok(budget) => budget,
+        Err(code) => return code,
+    };
+    match start_pair_until(&docker, &volume, resource_budget, DUMMY_JIT, stop).await {
         Ok(partial) => {
             let dind = partial.dind_id.as_deref().unwrap_or("");
             let runner = partial.runner_id.as_deref().unwrap_or("");
@@ -52,6 +57,14 @@ async fn stage(stop_name: &str, volume: Option<String>) -> ExitCode {
             ExitCode::from(1)
         }
     }
+}
+
+fn host_resource_budget() -> Result<velnor_runner_host::ResourceBudget, ExitCode> {
+    let home = std::env::var("HOME").map_err(|_| ExitCode::from(1))?;
+    let path = PathBuf::from(home).join("Library/Application Support/Velnor/host.toml");
+    let text = std::fs::read_to_string(path).map_err(|_| ExitCode::from(1))?;
+    let config = HostConfig::parse(&text).map_err(|_| ExitCode::from(1))?;
+    config.resource_budget().map_err(|_| ExitCode::from(1))
 }
 
 async fn remove_owned(owned: Option<String>, name: Option<String>) -> ExitCode {

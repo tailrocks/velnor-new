@@ -1,13 +1,8 @@
-//! Live host pressure. Configured `max_jobs` is the ceiling, not the live count.
+//! Guest pressure policy. Configured `max_jobs` is a ceiling, not a live count.
 //!
-//! Each call grows or shrinks by one. A missing sample holds the previous count.
-//! The first advertisement starts at one so a high ceiling cannot stampede.
-
-// Live sampling is macOS-only; only command() uses Command, so the
-// import is macOS-only too. (The parse helpers below are
-// any(test, macos) because unit tests cover them on Linux.)
-#[cfg(target_os = "macos")]
-use std::process::Command;
+//! Each fresh sample grows or shrinks by one. Missing guest metrics hold the
+//! previous count; job starts remain separately gated until a fresh sample exists.
+//! A new session advertises one slot before the first successful sample.
 
 const GROW_LOAD_PER_CPU_MILLIS: u32 = 750;
 const SHRINK_LOAD_PER_CPU_MILLIS: u32 = 1150;
@@ -17,16 +12,16 @@ const SHRINK_MEM: u64 = 4 * GIB;
 const GROW_DISK: u64 = 20 * GIB;
 const SHRINK_DISK: u64 = 10 * GIB;
 
-/// One host sample. `disk_free == u64::MAX` means disk was not observed.
+/// One selected-guest sample. `disk_free == u64::MAX` means disk was not observed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Sample {
-    /// One-minute load average times 1000.
+    /// One-minute guest load average times 1000.
     pub load_millis: u32,
-    /// Online CPUs. Zero is treated as saturated.
+    /// Guest vCPUs. Zero is treated as saturated.
     pub ncpu: u32,
-    /// Bytes `memory_pressure` still calls free.
+    /// Guest `MemAvailable` bytes.
     pub mem_available: u64,
-    /// Free bytes on the sampled filesystem.
+    /// Free bytes on the filesystem containing Docker's root.
     pub disk_free: u64,
 }
 
@@ -58,13 +53,14 @@ pub(crate) fn decide(current: u32, running: u32, ceiling: u32, sample: Option<Sa
 /// First `X-ScaleSetMaxCapacity` for this session.
 #[must_use]
 pub(crate) fn advertise(ceiling: u32) -> u32 {
-    decide(1, 0, ceiling, sample())
+    floor_of(1, ceiling)
 }
 
-/// Next poll header. A failed sample does not change `current`.
+/// Later poll header. The trusted guest probe is not wired yet, so this holds
+/// the current count and never falls back to host metrics.
 #[must_use]
 pub(crate) fn adjust(current: u32, running: u32, ceiling: u32) -> u32 {
-    decide(current, running, ceiling, sample())
+    decide(current, running, ceiling, None)
 }
 
 fn step(current: u32, floor: u32, ceiling: u32, sample: Sample) -> u32 {
@@ -109,122 +105,9 @@ const fn load_per_cpu(sample: Sample) -> u32 {
     }
 }
 
-/// `{ 33.41 42.75 40.01 }` -> `33410`. Later averages are ignored.
-#[cfg(any(test, target_os = "macos"))]
-#[must_use]
-pub(crate) fn parse_loadavg(text: &str) -> Option<u32> {
-    text.split_whitespace().find_map(load_token_millis)
-}
-
-#[cfg(any(test, target_os = "macos"))]
-fn load_token_millis(token: &str) -> Option<u32> {
-    let token = token.trim_matches(|c: char| c == '{' || c == '}' || c == ',');
-    let (whole, frac) = token.split_once('.').unwrap_or((token, ""));
-    if whole.is_empty() || !whole.chars().all(|c| c.is_ascii_digit()) {
-        return None;
-    }
-    if !frac.chars().all(|c| c.is_ascii_digit()) {
-        return None;
-    }
-    let whole = whole.parse::<u32>().ok()?;
-    let mut millis = 0u32;
-    let mut scale = 100u32;
-    for digit in frac.chars().take(3) {
-        let value = digit.to_digit(10)?;
-        millis = millis.saturating_add(value * scale);
-        scale /= 10;
-    }
-    whole.checked_mul(1000)?.checked_add(millis)
-}
-
-/// Reads `System-wide memory free percentage: N%`.
-#[cfg(any(test, target_os = "macos"))]
-#[must_use]
-pub(crate) fn parse_memory_pressure_percent(text: &str) -> Option<u8> {
-    let rest = text.split("System-wide memory free percentage:").nth(1)?;
-    let digits: String = rest
-        .trim_start()
-        .chars()
-        .take_while(char::is_ascii_digit)
-        .collect();
-    let percent = digits.parse::<u16>().ok()?;
-    u8::try_from(percent).ok().filter(|value| *value <= 100)
-}
-
-/// `memsize * percent / 100`, saturating at `u64::MAX`.
-#[cfg(any(test, target_os = "macos"))]
-#[must_use]
-pub(crate) fn available_bytes(memsize: u64, percent: u8) -> u64 {
-    let product = u128::from(memsize) * u128::from(percent) / 100;
-    u64::try_from(product).unwrap_or(u64::MAX)
-}
-
-/// Online CPU count. Zero and garbage are `None`.
-#[cfg(any(test, target_os = "macos"))]
-#[must_use]
-pub(crate) fn parse_ncpu(text: &str) -> Option<u32> {
-    let count = text.trim().parse::<u32>().ok()?;
-    (count > 0).then_some(count)
-}
-
-/// Available column of one `df -kP` line, converted from KiB to bytes.
-#[cfg(any(test, target_os = "macos"))]
-#[must_use]
-pub(crate) fn parse_df_avail_kib(line: &str) -> Option<u64> {
-    let mut fields = line.split_whitespace();
-    let _filesystem = fields.next()?;
-    let _blocks = fields.next()?;
-    let _used = fields.next()?;
-    let avail = fields.next()?.parse::<u64>().ok()?;
-    avail.checked_mul(1024)
-}
-
-fn sample() -> Option<Sample> {
-    #[cfg(target_os = "macos")]
-    {
-        sample_macos()
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        None
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn sample_macos() -> Option<Sample> {
-    let load_millis = parse_loadavg(&command("sysctl", &["-n", "vm.loadavg"])?)?;
-    let ncpu = parse_ncpu(&command("sysctl", &["-n", "hw.ncpu"])?)?;
-    let memsize = command("sysctl", &["-n", "hw.memsize"])?
-        .trim()
-        .parse::<u64>()
-        .ok()?;
-    let percent = parse_memory_pressure_percent(&command("memory_pressure", &["-Q"])?)?;
-    let disk_free = command("df", &["-kP", "/"])
-        .and_then(|text| text.lines().rev().find_map(parse_df_avail_kib))
-        .unwrap_or(u64::MAX);
-    Some(Sample {
-        load_millis,
-        ncpu,
-        mem_available: available_bytes(memsize, percent),
-        disk_free,
-    })
-}
-
-#[cfg(target_os = "macos")]
-fn command(bin: &str, args: &[&str]) -> Option<String> {
-    let output = Command::new(bin).args(args).output().ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    String::from_utf8(output.stdout).ok()
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        GROW_DISK, GROW_MEM, SHRINK_DISK, SHRINK_MEM, Sample, available_bytes, decide,
-        parse_df_avail_kib, parse_loadavg, parse_memory_pressure_percent, parse_ncpu,
-    };
+    use super::{GROW_DISK, GROW_MEM, SHRINK_DISK, SHRINK_MEM, Sample, adjust, advertise, decide};
 
     fn sample(load_millis: u32, mem: u64, disk: u64) -> Sample {
         Sample {
@@ -252,7 +135,7 @@ mod tests {
     }
 
     #[test]
-    fn idle_host_grows_one_slot() {
+    fn idle_guest_grows_one_slot() {
         let grown = step(500, 64 * GROW_MEM / 8, 100 * GROW_DISK / 20, 1, 1, 8);
         assert_eq!(grown, 2);
     }
@@ -264,7 +147,7 @@ mod tests {
     }
 
     #[test]
-    fn saturated_host_shrinks_toward_running() {
+    fn saturated_guest_shrinks_toward_running() {
         let shrunk = step(2000 * 18, GROW_MEM, GROW_DISK, 4, 2, 8);
         assert_eq!(shrunk, 3);
     }
@@ -315,22 +198,15 @@ mod tests {
     }
 
     #[test]
-    fn parsers_read_host_text() {
-        assert_eq!(parse_loadavg("{ 33.41 42.75 40.01 }"), Some(33_410));
-        assert_eq!(parse_loadavg("{ 0.50 0.40 0.30 }"), Some(500));
-        assert_eq!(parse_loadavg("nope"), None);
-        let pressure = "System-wide memory free percentage: 77%\n";
-        assert_eq!(parse_memory_pressure_percent(pressure), Some(77));
-        assert_eq!(parse_memory_pressure_percent("free"), None);
-        assert_eq!(available_bytes(137_438_953_472, 77), 105_827_994_173);
-        assert_eq!(parse_ncpu("18"), Some(18));
-        assert_eq!(parse_ncpu("0"), None);
-        assert_eq!(parse_ncpu("nope"), None);
-        let line = "/dev/disk3s5 1000 100 610000000 84% /System/Volumes/Data";
-        assert_eq!(parse_df_avail_kib(line), Some(610_000_000 * 1024));
-        assert_eq!(
-            parse_df_avail_kib("Filesystem 1024-blocks Used Available"),
-            None
-        );
+    fn new_session_advertises_one_without_guest_metrics() {
+        assert_eq!(advertise(0), 1);
+        assert_eq!(advertise(8), 1);
+    }
+
+    #[test]
+    fn production_adjustment_holds_without_guest_metrics() {
+        assert_eq!(adjust(1, 0, 8), 1);
+        assert_eq!(adjust(3, 1, 8), 3);
+        assert_eq!(adjust(1, 2, 8), 2);
     }
 }

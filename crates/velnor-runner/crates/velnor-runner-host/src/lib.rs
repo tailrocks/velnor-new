@@ -10,7 +10,6 @@ mod daemon_lock;
 mod docker_client;
 mod docker_spec;
 mod error;
-mod guest;
 mod https;
 mod ipc;
 mod journal;
@@ -42,7 +41,6 @@ pub use docker_spec::{
     ContainerPlan, DeleteDecision, audit_plan, delete_decision, plan_contains, runner_plan,
 };
 pub use error::{HostError, PreparationCause};
-pub use guest::guest_slots;
 pub use https::HttpsTransport;
 pub use ipc::{MAX_FRAME, SOCKET_DIR_MODE, decode_frame, encode_frame};
 pub use journal::{IntentState, Journal, Outcome};
@@ -59,8 +57,8 @@ pub use reconcile::{
 pub use scale_set::{EnsureError, EnsuredSet, ensure_product_scale_set, product_runner_groups};
 pub use stage::{PairStop, PartialPair, remove_recorded, start_pair_until};
 pub use worker::{
-    BollardCreate, CreateProjection, Started, bollard_create, dind_create, runner_create,
-    start_pair,
+    BindMount, BollardCreate, CreateProjection, ResourceBudget, Started, bollard_create,
+    dind_create, runner_create, start_pair,
 };
 
 #[cfg(test)]

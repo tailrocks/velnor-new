@@ -23,7 +23,13 @@ async fn empty_jit_does_not_create() -> Result<(), String> {
     let idle = ScriptedDocker::open(Vec::new())?;
     for volume in ["a/b", "worker_a"] {
         assert_eq!(
-            start_pair(&idle.docker, volume, b"").await,
+            start_pair(
+                &idle.docker,
+                volume,
+                crate::worker::test_resource_budget().map_err(|error| error.to_string())?,
+                b"",
+            )
+            .await,
             Err(HostError::EmptyJit)
         );
     }

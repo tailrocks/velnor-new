@@ -26,6 +26,7 @@ use super::{BindMount, CreateProjection, DIND_ENTRYPOINT, DIND_IMAGE, runner_cre
 pub(crate) fn dind_create_for_identity(
     identity: &LaunchIdentity,
 ) -> Result<CreateProjection, HostError> {
+    let resource_budget = super::resource_budget::test_resource_budget()?;
     let runner = runner_plan(identity.private_volume())?;
     let mut mounts = runner.mounts;
     mounts.push(Mount {
@@ -50,7 +51,7 @@ pub(crate) fn dind_create_for_identity(
         privileged: true,
         open_stdin: false,
         network_mode: None,
-        resource_budget: None,
+        resource_budget,
     })
 }
 
@@ -65,8 +66,9 @@ pub(crate) fn runner_create_for_identity(
     identity: &LaunchIdentity,
     archive_cache_path: Option<&Path>,
 ) -> Result<CreateProjection, HostError> {
+    let resource_budget = super::resource_budget::test_resource_budget()?;
     let plan = runner_plan(identity.private_volume())?;
-    let mut spec = runner_create(&plan)?;
+    let mut spec = runner_create(&plan, resource_budget)?;
     spec.name = container_name(identity, "runner");
     spec.labels = container_labels(identity, "runner");
     if let Some(path) = archive_cache_path {

@@ -18,6 +18,8 @@ use super::{inspect_labels_match, same_launch, topology_matches, validate_existi
 mod cgroupns;
 #[path = "containers_limits_tests.rs"]
 mod limits;
+#[path = "containers_topology_tests.rs"]
+mod topology;
 
 const UBUNTU_PATH: &str = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
@@ -42,6 +44,12 @@ fn inspect_with_labels(labels: HashMap<String, String>) -> ContainerInspectRespo
 
 fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectResponse, HostError> {
     let labels = label_map(&spec.labels)?.ok_or(HostError::Ownership)?;
+    let budget = spec.resource_budget;
+    let limits = if spec.privileged {
+        budget.dind()
+    } else {
+        budget.runner()
+    };
     let mut mounts = Vec::with_capacity(spec.mounts.len() + spec.bind_mounts.len());
     let mut env = vec![UBUNTU_PATH.to_owned()];
     env.extend(spec.env.iter().cloned());
@@ -86,6 +94,9 @@ fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectRespons
             cgroupns_mode: Some(HostConfigCgroupnsModeEnum::PRIVATE),
             privileged: Some(spec.privileged),
             network_mode: spec.network_mode.clone(),
+            nano_cpus: Some(limits.nano_cpus),
+            memory: Some(limits.memory_bytes),
+            memory_swap: Some(limits.memory_bytes),
             ..Default::default()
         }),
         mounts: Some(mounts),
@@ -369,15 +380,6 @@ fn runner_topology_rejects_user_and_working_directory_drift() -> Result<(), Host
         .ok_or(HostError::Ownership)?
         .working_dir = Some("/".to_owned());
     assert!(!topology_matches(&spec, &wrong_directory)?);
-    Ok(())
-}
-
-#[test]
-fn dind_topology_matches_its_image_command_and_closed_stdin() -> Result<(), HostError> {
-    let spec = dind_create_for_identity(&identity()?)?;
-    let inspected = inspect_projection(&spec)?;
-
-    assert!(topology_matches(&spec, &inspected)?);
     Ok(())
 }
 

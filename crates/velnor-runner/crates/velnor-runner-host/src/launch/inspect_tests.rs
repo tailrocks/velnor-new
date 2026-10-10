@@ -5,12 +5,13 @@ use std::time::Duration;
 
 use crate::launch::{gate, slot};
 use crate::launch_harness::Scratch;
-use crate::{EnsureError, HostError, IntentState, Journal, Outcome};
+use crate::{EnsureError, IntentState, Journal, Outcome};
 
 mod docker_stub;
 pub(super) use self::docker_stub::DockerStub;
+use self::docker_stub::closed;
+pub(in crate::launch) use self::docker_stub::hanging;
 pub(in crate::launch) use self::docker_stub::http;
-use self::docker_stub::{closed, hanging};
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -99,45 +100,26 @@ async fn failed_done_row_inspect_cannot_advertise_capacity() -> Result<(), Strin
 }
 
 #[tokio::test]
-async fn guest_capacity_uses_the_selected_docker_engine_info() -> Result<(), String> {
-    let memory = 121_u64 * 1024 * 1024 * 1024;
-    let body = format!(r#"{{"NCPU":18,"MemTotal":{memory}}}"#);
-    let stub = DockerStub::open(vec![http(200, &body)])?;
-
-    let capacity =
-        crate::guest::discover_guest_capacity_with_timeout(&stub.docker, 8, Duration::from_secs(1))
-            .await;
-    stub.finish().await?;
-
-    assert_eq!(capacity, Ok(4));
-    Ok(())
-}
-
-#[tokio::test]
-async fn docker_info_failure_does_not_fall_back_to_the_configured_ceiling() -> Result<(), String> {
-    let stub = DockerStub::open(vec![http(500, r#"{"message":"private engine detail"}"#)])?;
-    let capacity =
-        crate::guest::discover_guest_capacity_with_timeout(&stub.docker, 8, Duration::from_secs(1))
-            .await;
-    stub.finish().await?;
-
-    assert_eq!(capacity, Err(HostError::Docker));
-    assert_eq!(format!("{capacity:?}"), "Err(Docker)");
-    Ok(())
-}
-
-#[tokio::test]
-async fn hanging_docker_info_stops_at_the_configured_deadline() -> Result<(), String> {
+async fn resource_capacity_scan_has_a_total_deadline() -> Result<(), String> {
+    let (_scratch, journal) = journal("capacity-deadline").await?;
     let stub = DockerStub::open(vec![hanging()])?;
-    let capacity = crate::guest::discover_guest_capacity_with_timeout(
+    let capacity = crate::launch::resource_capacity::discover_after(
         &stub.docker,
+        &journal,
+        crate::worker::test_resource_budget().map_err(|error| error.to_string())?,
         8,
         Duration::from_millis(20),
     )
     .await;
-
-    assert_eq!(capacity, Err(HostError::Docker));
     drop(stub);
+
+    assert_eq!(
+        capacity,
+        crate::launch::resource_capacity::Discovery::Untrusted(EnsureError::Unexpected {
+            status: 0,
+            step: "docker capacity",
+        })
+    );
     Ok(())
 }
 

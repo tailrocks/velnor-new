@@ -138,7 +138,7 @@ pub(super) fn closed() -> DockerResponse {
     }
 }
 
-pub(super) fn hanging() -> DockerResponse {
+pub(in crate::launch) fn hanging() -> DockerResponse {
     DockerResponse {
         status: None,
         body: String::new(),

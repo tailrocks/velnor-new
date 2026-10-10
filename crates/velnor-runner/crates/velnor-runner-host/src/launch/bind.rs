@@ -3,7 +3,7 @@
 use crate::error::HostError;
 use crate::journal::Journal;
 use crate::stage::{PairSink, PairStop, drive};
-use crate::worker::Started;
+use crate::worker::{ResourceBudget, Started};
 
 /// Owned journal handle for the row this pair belongs to.
 #[derive(Debug, Clone)]
@@ -39,9 +39,18 @@ pub(super) async fn start_bound(
     docker: &bollard::Docker,
     volume: &str,
     jit: &[u8],
+    resource_budget: ResourceBudget,
     bind: &Bind,
 ) -> Result<Started, HostError> {
-    let partial = Box::pin(drive(docker, volume, jit, PairStop::Jit, bind)).await?;
+    let partial = Box::pin(drive(
+        docker,
+        volume,
+        resource_budget,
+        jit,
+        PairStop::Jit,
+        bind,
+    ))
+    .await?;
     Ok(Started {
         dind_id: partial.dind_id.ok_or(HostError::Docker)?,
         runner_id: partial.runner_id.ok_or(HostError::Docker)?,

@@ -5,7 +5,7 @@ use crate::launch::{Admit, admission};
 use crate::launch_harness::{absent, assigned_wait, open};
 use crate::launch_test_support::Engine;
 use crate::stage::PairEngine;
-use crate::worker::{dind_create, join_dind_net, runner_create};
+use crate::worker::{dind_create, join_dind_net, runner_create, test_resource_budget};
 use crate::{IntentState, Journal, Outcome};
 
 #[tokio::test]
@@ -158,13 +158,17 @@ async fn create_unbound_pair(
         .prepare_volumes(&volume)
         .await
         .map_err(|err| err.to_string())?;
+    let resource_budget = test_resource_budget().map_err(|err| err.to_string())?;
     let dind = engine
-        .create(&dind_create(&volume).map_err(|err| err.to_string())?)
+        .create(&dind_create(&volume, resource_budget).map_err(|err| err.to_string())?)
         .await
         .map_err(|err| err.to_string())?;
     engine.start(&dind).await.map_err(|err| err.to_string())?;
-    let runner = runner_create(&runner_plan(&volume).map_err(|err| err.to_string())?)
-        .map_err(|err| err.to_string())?;
+    let runner = runner_create(
+        &runner_plan(&volume).map_err(|err| err.to_string())?,
+        resource_budget,
+    )
+    .map_err(|err| err.to_string())?;
     let runner = join_dind_net(runner, &dind).map_err(|err| err.to_string())?;
     let runner = engine
         .create(&runner)

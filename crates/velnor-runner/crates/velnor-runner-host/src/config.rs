@@ -86,7 +86,7 @@ impl HostConfig {
     /// # Errors
     ///
     /// Returns [`HostError::Config`] when a resource limit is zero or overflows.
-    pub(crate) fn resource_budget(&self) -> Result<ResourceBudget, HostError> {
+    pub fn resource_budget(&self) -> Result<ResourceBudget, HostError> {
         self.host.resources.validate()
     }
 }

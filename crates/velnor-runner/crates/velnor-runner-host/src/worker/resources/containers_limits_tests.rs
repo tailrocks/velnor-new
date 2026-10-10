@@ -10,7 +10,7 @@ use super::{identity, inspect_projection};
 fn budgeted_topology_accepts_exact_resource_limits() -> Result<(), HostError> {
     let budget = test_resource_budget()?;
     let mut dind = dind_create_for_identity(&identity()?)?;
-    dind.resource_budget = Some(budget);
+    dind.resource_budget = budget;
     let mut inspected = inspect_projection(&dind)?;
     let host = inspected.host_config.as_mut().ok_or(HostError::Ownership)?;
     let expected = budget.dind();
@@ -20,7 +20,7 @@ fn budgeted_topology_accepts_exact_resource_limits() -> Result<(), HostError> {
     assert!(topology_matches(&dind, &inspected)?);
 
     let mut runner = runner_create_for_identity(&identity()?, None)?;
-    runner.resource_budget = Some(budget);
+    runner.resource_budget = budget;
     let mut inspected = inspect_projection(&runner)?;
     let host = inspected.host_config.as_mut().ok_or(HostError::Ownership)?;
     let expected = budget.runner();
@@ -34,7 +34,7 @@ fn budgeted_topology_accepts_exact_resource_limits() -> Result<(), HostError> {
 #[test]
 fn dind_topology_rejects_resource_limit_drift() -> Result<(), HostError> {
     let mut spec = dind_create_for_identity(&identity()?)?;
-    spec.resource_budget = Some(test_resource_budget()?);
+    spec.resource_budget = test_resource_budget()?;
     let mut inspected = inspect_projection(&spec)?;
     inspected
         .host_config
@@ -48,7 +48,7 @@ fn dind_topology_rejects_resource_limit_drift() -> Result<(), HostError> {
 #[test]
 fn runner_topology_rejects_cpu_memory_and_swap_drift() -> Result<(), HostError> {
     let mut spec = runner_create_for_identity(&identity()?, None)?;
-    spec.resource_budget = Some(test_resource_budget()?);
+    spec.resource_budget = test_resource_budget()?;
     let valid = inspect_projection(&spec)?;
 
     let mut wrong_cpu = valid.clone();
@@ -67,12 +67,28 @@ fn runner_topology_rejects_cpu_memory_and_swap_drift() -> Result<(), HostError> 
         .memory = Some(1_073_741_824);
     assert!(!topology_matches(&spec, &wrong_memory)?);
 
-    let mut unbounded_swap = valid;
-    unbounded_swap
+    let mut missing_cpu = valid.clone();
+    missing_cpu
+        .host_config
+        .as_mut()
+        .ok_or(HostError::Ownership)?
+        .nano_cpus = None;
+    assert!(!topology_matches(&spec, &missing_cpu)?);
+
+    let mut missing_memory = valid.clone();
+    missing_memory
+        .host_config
+        .as_mut()
+        .ok_or(HostError::Ownership)?
+        .memory = None;
+    assert!(!topology_matches(&spec, &missing_memory)?);
+
+    let mut missing_swap = valid;
+    missing_swap
         .host_config
         .as_mut()
         .ok_or(HostError::Ownership)?
         .memory_swap = None;
-    assert!(!topology_matches(&spec, &unbounded_swap)?);
+    assert!(!topology_matches(&spec, &missing_swap)?);
     Ok(())
 }
