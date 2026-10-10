@@ -14,7 +14,73 @@ pub(super) fn share_repeated_workflow_nodes(mut node: Yaml) -> Yaml {
     share_step_run_scalars(&mut node, &mut used);
     mappings::share_workflow_mappings(&mut node, &mut used);
     mappings::share_step_mappings(&mut node, &mut used);
+    prune_unreferenced_anchors(&mut node);
     node
+}
+
+fn prune_unreferenced_anchors(node: &mut Yaml) {
+    let mut aliases = BTreeMap::new();
+    collect_alias_uses(node, &mut aliases);
+    remove_unreferenced_anchors(node, &aliases);
+}
+
+fn collect_alias_uses(node: &Yaml, aliases: &mut BTreeMap<AnchorName, usize>) {
+    match node {
+        Yaml::Alias(name) => *aliases.entry(name.clone()).or_default() += 1,
+        Yaml::AnchoredMap { entries, .. } | Yaml::Map(entries) => {
+            for (_, value) in entries {
+                collect_alias_uses(value, aliases);
+            }
+        }
+        Yaml::Seq(items) => {
+            for item in items {
+                collect_alias_uses(item, aliases);
+            }
+        }
+        Yaml::AnchoredScalar { .. }
+        | Yaml::Null
+        | Yaml::Str(_)
+        | Yaml::Bool(_)
+        | Yaml::Int(_)
+        | Yaml::Flow(_)
+        | Yaml::Quoted(_)
+        | Yaml::Annotated { .. } => {}
+    }
+}
+
+fn remove_unreferenced_anchors(node: &mut Yaml, aliases: &BTreeMap<AnchorName, usize>) {
+    match node {
+        Yaml::AnchoredScalar { name, value }
+            if aliases.get(name).copied().unwrap_or_default() == 0 =>
+        {
+            *node = Yaml::Str(std::mem::take(value));
+        }
+        Yaml::AnchoredMap { name, entries }
+            if aliases.get(name).copied().unwrap_or_default() == 0 =>
+        {
+            *node = Yaml::Map(std::mem::take(entries));
+            remove_unreferenced_anchors(node, aliases);
+        }
+        Yaml::AnchoredMap { entries, .. } | Yaml::Map(entries) => {
+            for (_, value) in entries {
+                remove_unreferenced_anchors(value, aliases);
+            }
+        }
+        Yaml::Seq(items) => {
+            for item in items {
+                remove_unreferenced_anchors(item, aliases);
+            }
+        }
+        Yaml::Alias(_)
+        | Yaml::AnchoredScalar { .. }
+        | Yaml::Null
+        | Yaml::Str(_)
+        | Yaml::Bool(_)
+        | Yaml::Int(_)
+        | Yaml::Flow(_)
+        | Yaml::Quoted(_)
+        | Yaml::Annotated { .. } => {}
+    }
 }
 
 fn share_step_run_scalars(node: &mut Yaml, used: &mut BTreeSet<AnchorName>) {

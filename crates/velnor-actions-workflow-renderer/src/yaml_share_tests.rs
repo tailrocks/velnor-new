@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use super::share_repeated_workflow_nodes;
 use crate::yaml::{AnchorName, Yaml, render_yaml};
 
@@ -115,6 +117,94 @@ fn short_repeats_are_not_rewritten_when_anchors_cost_more() {
         render_yaml(&share_repeated_workflow_nodes(node.clone())),
         render_yaml(&node)
     );
+}
+
+#[test]
+fn parent_step_aliases_do_not_leave_unused_nested_anchors() -> Result<(), String> {
+    let command = "printf '%s' 'a repeated command long enough to share safely'";
+    let repeated_env = Yaml::Map(vec![(
+        "TOKEN".to_owned(),
+        Yaml::str("a repeated environment value"),
+    )]);
+    let repeated_with = Yaml::Map(vec![(
+        "INPUT".to_owned(),
+        Yaml::str("a repeated action input value"),
+    )]);
+    let step = Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str("same step")),
+        ("run".to_owned(), Yaml::str(command)),
+        ("env".to_owned(), repeated_env),
+        ("with".to_owned(), repeated_with),
+    ]);
+    let source = Yaml::Map(vec![(
+        "jobs".to_owned(),
+        Yaml::Map(vec![(
+            "job".to_owned(),
+            Yaml::Map(vec![(
+                "steps".to_owned(),
+                Yaml::Seq(vec![step.clone(), step]),
+            )]),
+        )]),
+    )]);
+
+    let shared = share_repeated_workflow_nodes(source.clone());
+    let rendered = render_yaml(&shared);
+    assert!(rendered.contains("- &s1"));
+    assert!(rendered.contains("*s1"));
+    assert!(
+        !rendered.contains("&m"),
+        "nested mapping anchor is redundant"
+    );
+    assert!(!rendered.contains("&r"), "nested run anchor is redundant");
+    assert_eq!(
+        mapping::expand_aliases(&source)?,
+        mapping::expand_aliases(&shared)?,
+        "pruning must preserve the expanded workflow"
+    );
+
+    let mut anchors = BTreeMap::new();
+    let mut aliases = BTreeMap::new();
+    collect_anchor_uses(&shared, &mut anchors, &mut aliases);
+    assert!(!anchors.is_empty());
+    assert!(anchors.iter().all(|(name, count)| {
+        *count == 1 && aliases.get(name).copied().unwrap_or_default() > 0
+    }));
+    Ok(())
+}
+
+fn collect_anchor_uses(
+    node: &Yaml,
+    anchors: &mut BTreeMap<AnchorName, usize>,
+    aliases: &mut BTreeMap<AnchorName, usize>,
+) {
+    match node {
+        Yaml::AnchoredScalar { name, .. } | Yaml::AnchoredMap { name, .. } => {
+            *anchors.entry(name.clone()).or_default() += 1;
+            if let Yaml::AnchoredMap { entries, .. } = node {
+                for (_, value) in entries {
+                    collect_anchor_uses(value, anchors, aliases);
+                }
+            }
+        }
+        Yaml::Alias(name) => *aliases.entry(name.clone()).or_default() += 1,
+        Yaml::Map(entries) => {
+            for (_, value) in entries {
+                collect_anchor_uses(value, anchors, aliases);
+            }
+        }
+        Yaml::Seq(items) => {
+            for item in items {
+                collect_anchor_uses(item, anchors, aliases);
+            }
+        }
+        Yaml::Null
+        | Yaml::Str(_)
+        | Yaml::Bool(_)
+        | Yaml::Int(_)
+        | Yaml::Flow(_)
+        | Yaml::Quoted(_)
+        | Yaml::Annotated { .. } => {}
+    }
 }
 
 #[test]
