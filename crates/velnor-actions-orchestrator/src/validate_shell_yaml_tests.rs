@@ -85,7 +85,7 @@ fn only_step_run_keys_are_linted() -> Result<(), String> {
     )?;
     assert_eq!(
         runs,
-        [] as [(String, validate_shell::workflow::ShellDialect); 0]
+        [] as [(String, crate::validate_shell::workflow::ShellDialect); 0]
     );
     Ok(())
 }
@@ -130,7 +130,7 @@ fn nested_run_values_are_not_confused_with_steps() -> Result<(), String> {
     )?;
     assert_eq!(
         runs,
-        [] as [(String, validate_shell::workflow::ShellDialect); 0]
+        [] as [(String, crate::validate_shell::workflow::ShellDialect); 0]
     );
     Ok(())
 }
