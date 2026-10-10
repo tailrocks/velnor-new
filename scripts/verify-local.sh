@@ -73,6 +73,7 @@ LOG_DIR="$(create_log_dir)" || {
   exit 1
 }
 TOOLCHAIN_LOG="$LOG_DIR/toolchain.log"
+MISE_PIN_LOG="$LOG_DIR/mise-pin.log"
 MISE_POLICY_LOG="$LOG_DIR/mise-policy.log"
 TOOLCHAIN_POLICY_LOG="$LOG_DIR/toolchain-policy.log"
 GENERATED_SELECTOR_LOG="$LOG_DIR/generated-selector.log"
@@ -149,7 +150,7 @@ _PIN_PARTS=($SPECS)
 RUST_PIN="${_PIN_PARTS[0]#*@}"
 MBX_PIN="${_PIN_PARTS[1]#*@}"
 NEXTEST_PIN="${_PIN_PARTS[2]#*@}"
-POLICY_MISE="$(toml_tool_pin .velnor/version-policy.toml mise 2>"$MISE_POLICY_LOG")"
+POLICY_MISE="$(toml_tool_pin .velnor/version-policy.toml mise 2>"$MISE_PIN_LOG")"
 LOCAL_MISE="$(mise --version 2>/dev/null | awk "{print \$1}")"
 echo "mise: local $LOCAL_MISE, policy $POLICY_MISE"
 if [ "$LOCAL_MISE" != "$POLICY_MISE" ]; then
