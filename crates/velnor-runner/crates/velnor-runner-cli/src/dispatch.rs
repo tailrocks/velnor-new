@@ -6,9 +6,9 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use velnor_runner_host::{
-    ConnectPlan, DisconnectEffect, HostConfig, HostError, READINESS_BUDGET, Readiness,
-    SetOwnership, connect_plan, disconnect_effects, doctor_json, import_secret, read_secret,
-    status_json,
+    ConnectPlan, DisconnectEffect, HostConfig, HostError, KeychainReference, READINESS_BUDGET,
+    Readiness, SetOwnership, connect_plan, disconnect_effects, doctor_json, import_secret,
+    read_secret, status_json,
 };
 
 use crate::args::{Cli, Command, DaemonAction};
@@ -139,7 +139,7 @@ fn remove_flag(state: &Path, name: &str) -> ExitCode {
 }
 
 pub(crate) const KEYCHAIN_SERVICE: &str = "com.tailrocks.velnor.host";
-pub(crate) const KEYCHAIN_ACCOUNT: &str = "velnor-host";
+const DEFAULT_KEYCHAIN_ACCOUNT: &str = "local";
 
 /// Fields for one `connect` invocation. The token is not a field.
 struct ConnectRequest<'a> {
@@ -199,7 +199,23 @@ fn connect_with<R: Read>(
     service: &str,
     request: &ConnectRequest<'_>,
 ) -> Result<(), ConnectError> {
-    let text = sample_config(&SampleConfig {
+    connect_with_store(input, service, request, import_secret)
+}
+
+fn connect_with_store<R, F>(
+    input: &mut R,
+    service: &str,
+    request: &ConnectRequest<'_>,
+    store: F,
+) -> Result<(), ConnectError>
+where
+    R: Read,
+    F: FnOnce(&str, &str, &[u8]) -> Result<(), HostError>,
+{
+    let default_reference =
+        KeychainReference::parse(&format!("keychain:{service}/{DEFAULT_KEYCHAIN_ACCOUNT}"))
+            .map_err(|_| ConnectError::Config)?;
+    let params = SampleConfig {
         repo: request.repo,
         scale_set: request.scale_set,
         platform: request.platform,
@@ -210,18 +226,19 @@ fn connect_with<R: Read>(
         runner_memory_bytes: request.runner_memory_bytes,
         dind_cpu_millicores: request.dind_cpu_millicores,
         dind_memory_bytes: request.dind_memory_bytes,
-    });
-    let parsed = HostConfig::parse(&text).map_err(|_| ConnectError::Config)?;
-    if binding_rejected(request.state, &parsed) {
+    };
+    let candidate_text = sample_config(&params, &default_reference);
+    let candidate = HostConfig::parse(&candidate_text).map_err(|_| ConnectError::Config)?;
+    let existing = read_host(request.state);
+    if connect_plan(existing.as_ref(), &candidate) == ConnectPlan::Rejected {
         return Err(ConnectError::Rejected);
     }
-    store_token(input, service)?;
+    let credential_ref = existing
+        .map(|config| config.github.credential_ref)
+        .unwrap_or(default_reference);
+    let text = sample_config(&params, &credential_ref);
+    store_token(input, &credential_ref, store)?;
     persist_host(request.state, &text)
-}
-
-fn binding_rejected(state: &Path, request: &HostConfig) -> bool {
-    let existing = read_host(state);
-    connect_plan(existing.as_ref(), request) == ConnectPlan::Rejected
 }
 
 fn read_host(state: &Path) -> Option<HostConfig> {
@@ -229,9 +246,17 @@ fn read_host(state: &Path) -> Option<HostConfig> {
     HostConfig::parse(&raw).ok()
 }
 
-fn store_token<R: Read>(input: &mut R, service: &str) -> Result<(), ConnectError> {
+fn store_token<R, F>(
+    input: &mut R,
+    credential_ref: &KeychainReference,
+    store: F,
+) -> Result<(), ConnectError>
+where
+    R: Read,
+    F: FnOnce(&str, &str, &[u8]) -> Result<(), HostError>,
+{
     let secret = read_secret(input).map_err(ConnectError::Secret)?;
-    import_secret(service, KEYCHAIN_ACCOUNT, &secret).map_err(ConnectError::Secret)
+    store(credential_ref.service(), credential_ref.account(), &secret).map_err(ConnectError::Secret)
 }
 
 fn persist_host(state: &Path, text: &str) -> Result<(), ConnectError> {
@@ -257,9 +282,10 @@ struct SampleConfig<'a> {
     dind_memory_bytes: u64,
 }
 
-fn sample_config(params: &SampleConfig<'_>) -> String {
+fn sample_config(params: &SampleConfig<'_>, credential_ref: &KeychainReference) -> String {
     let context = params.docker_context.unwrap_or("orbstack");
     let socket = params.endpoint.unwrap_or("unix:///var/run/docker.sock");
+    let credential_ref = toml_basic_string(&credential_ref.to_string());
     let SampleConfig {
         repo,
         scale_set,
@@ -272,8 +298,13 @@ fn sample_config(params: &SampleConfig<'_>) -> String {
         ..
     } = *params;
     format!(
-        "schema = 1\n[github]\nrepository = \"{repo}\"\nscale_set_name = \"{scale_set}\"\ncredential_ref = \"keychain:com.tailrocks.velnor.host/local\"\n[host]\nmax_jobs = {max_jobs}\n[host.resources]\nrunner_cpu_millicores = {runner_cpu_millicores}\nrunner_memory_bytes = {runner_memory_bytes}\ndind_cpu_millicores = {dind_cpu_millicores}\ndind_memory_bytes = {dind_memory_bytes}\n[docker]\ncontext = \"{context}\"\nplatform = \"{platform}\"\nendpoint = \"{socket}\"\n"
+        "schema = 1\n[github]\nrepository = \"{repo}\"\nscale_set_name = \"{scale_set}\"\ncredential_ref = {credential_ref}\n[host]\nmax_jobs = {max_jobs}\n[host.resources]\nrunner_cpu_millicores = {runner_cpu_millicores}\nrunner_memory_bytes = {runner_memory_bytes}\ndind_cpu_millicores = {dind_cpu_millicores}\ndind_memory_bytes = {dind_memory_bytes}\n[docker]\ncontext = \"{context}\"\nplatform = \"{platform}\"\nendpoint = \"{socket}\"\n"
     )
+}
+
+fn toml_basic_string(value: &str) -> String {
+    let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
+    format!("\"{escaped}\"")
 }
 
 fn daemon(state: &Path, action: DaemonAction) -> ExitCode {

@@ -58,9 +58,14 @@ Commands: `connect`, `status` (`--json`), `doctor` (read-only unless `--probe`),
 `compare`, `disconnect`.
 
 `connect` is idempotent. It persists the selected Docker context and engine
-identity and never switches providers silently. Credentials are a Keychain
-reference. No PAT on argv. No secret in TOML. Ready means bounded readiness,
-not "a process exists".
+identity and never switches providers silently. `github.credential_ref` is the
+authoritative credential location and must contain exactly one separator in
+`keychain:<service>/<account>`, with both components nonempty and free of slash,
+whitespace, and control characters.
+`connect` stores stdin under that pair and retains an existing pair on an
+idempotent reconnect; `daemon run` and readiness load the same configured pair.
+No fallback account is consulted. No PAT on argv. No secret in TOML. Ready means
+bounded readiness, not "a process exists".
 
 One active repository connection. A second incompatible connection is rejected.
 A second daemon fails before it opens another session.

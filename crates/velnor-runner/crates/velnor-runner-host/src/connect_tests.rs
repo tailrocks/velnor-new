@@ -44,7 +44,7 @@ fn stored() -> Result<HostConfig, HostError> {
 #[test]
 fn same_binding_is_idempotent_and_other_bindings_are_rejected() -> Result<(), HostError> {
     let current = stored()?;
-    assert!(current.github.credential_ref.starts_with("keychain:"));
+    assert_eq!(current.github.credential_ref.account(), "chainargos");
     assert_eq!(connect_plan(None, &current), ConnectPlan::Create);
     assert_eq!(
         connect_plan(Some(&current), &current),
@@ -93,11 +93,12 @@ fn credential_is_a_keychain_ref() -> Result<(), HostError> {
         "unix:///var/run/docker.sock",
         "keychain:com.tailrocks.velnor.host/chainargos",
     );
-    assert!(
-        HostConfig::parse(&good)?
-            .github
-            .credential_ref
-            .starts_with("keychain:")
+    let credential = HostConfig::parse(&good)?.github.credential_ref;
+    assert_eq!(credential.service(), "com.tailrocks.velnor.host");
+    assert_eq!(credential.account(), "chainargos");
+    assert_eq!(
+        credential.to_string(),
+        "keychain:com.tailrocks.velnor.host/chainargos"
     );
     assert!(
         HostConfig::parse(&good.replace(
@@ -112,6 +113,18 @@ fn credential_is_a_keychain_ref() -> Result<(), HostError> {
         )
         .is_err()
     );
+    for malformed in [
+        "keychain:/account",
+        "keychain:service/",
+        "keychain:service/account/extra",
+        "keychain:service/account with-space",
+        "keychain:service/account\\tother",
+        "keychain:service",
+    ] {
+        let malformed_config =
+            good.replace("keychain:com.tailrocks.velnor.host/chainargos", malformed);
+        assert!(HostConfig::parse(&malformed_config).is_err(), "{malformed}");
+    }
     assert!(
         HostConfig::parse(&good.replacen("schema = 1\n", "schema = 1\npat = \"ghp_secret\"\n", 1))
             .is_err()
@@ -205,13 +218,13 @@ fn disconnect_deletes_only_recorded_ownership() {
 }
 
 #[test]
-fn structs_used_by_connect_plan_stay_secret_free() {
+fn structs_used_by_connect_plan_stay_secret_free() -> Result<(), HostError> {
     let config = HostConfig {
         schema: 1,
         github: GithubSection {
             repository: "ChainArgos/java-monorepo".to_owned(),
             scale_set_name: "ubuntu-26.04-scale-set".to_owned(),
-            credential_ref: "keychain:item".to_owned(),
+            credential_ref: crate::KeychainReference::parse("keychain:service/account")?,
         },
         host: HostLimits {
             max_jobs: 1,
@@ -229,4 +242,5 @@ fn structs_used_by_connect_plan_stay_secret_free() {
         },
     };
     assert_eq!(connect_plan(None, &config), ConnectPlan::Create);
+    Ok(())
 }

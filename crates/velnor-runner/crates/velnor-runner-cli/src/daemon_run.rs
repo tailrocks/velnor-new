@@ -5,9 +5,9 @@ use std::process::ExitCode;
 use std::thread;
 use std::time::Duration;
 
-use velnor_runner_host::{DaemonLock, HostConfig, LaunchReport, launch_blocking, load_secret};
-
-use crate::dispatch::{KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE};
+use velnor_runner_host::{
+    DaemonLock, HostConfig, HostError, LaunchReport, launch_blocking, load_secret,
+};
 
 const RETRY: Duration = Duration::from_secs(5);
 
@@ -86,7 +86,7 @@ fn drive(state: &Path, config: &HostConfig) {
         pause();
         return;
     };
-    let secret = match load_secret(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT) {
+    let secret = match load_configured_secret(config, load_secret) {
         Ok(secret) => secret,
         Err(error) => {
             eprintln!("{error}");
@@ -121,6 +121,14 @@ fn drive(state: &Path, config: &HostConfig) {
             pause();
         }
     }
+}
+
+fn load_configured_secret<T, F>(config: &HostConfig, load: F) -> Result<T, HostError>
+where
+    F: FnOnce(&str, &str) -> Result<T, HostError>,
+{
+    let reference = &config.github.credential_ref;
+    load(reference.service(), reference.account())
 }
 
 fn finish_launch(report: &LaunchReport) {
@@ -192,6 +200,23 @@ mod tests {
     #[test]
     fn valid_host_toml_listens() {
         assert_eq!(daemon_intent(Some(SAMPLE)), DaemonIntent::Listen);
+    }
+
+    #[test]
+    fn daemon_loads_the_pair_selected_by_host_toml() -> Result<(), String> {
+        let config = HostConfig::parse(SAMPLE).map_err(|error| error.to_string())?;
+        let mut selected = None;
+        let loaded = super::load_configured_secret(&config, |service, account| {
+            selected = Some((service.to_owned(), account.to_owned()));
+            Ok("loaded")
+        })
+        .map_err(|error| error.to_string())?;
+        if selected != Some(("com.tailrocks.velnor.host".to_owned(), "local".to_owned()))
+            || loaded != "loaded"
+        {
+            return Err("daemon ignored host.toml credential_ref".to_owned());
+        }
+        Ok(())
     }
 
     #[test]
