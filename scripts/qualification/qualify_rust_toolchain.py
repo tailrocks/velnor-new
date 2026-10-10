@@ -139,6 +139,14 @@ def mbx_executor_identity(mbx_executable: Path, version: str) -> dict[str, str]:
     }
 
 
+def ensure_mbx_executor_unchanged(
+    expected: dict[str, str],
+    actual: dict[str, str],
+) -> None:
+    if actual != expected:
+        raise QualificationError("MBX executable identity changed during qualification")
+
+
 def run_mbx_probe(
     mbx_executable: Path,
     project_root: Path,
@@ -189,6 +197,7 @@ def qualify(
         raise QualificationError("pinned MBX executable is missing or not executable")
     if not project_root.is_dir():
         raise QualificationError("qualification project root is missing")
+    executor = mbx_executor_identity(mbx_executable, mbx_version)
     with tempfile.TemporaryDirectory(prefix="velnor-rust-qualification-") as temporary:
         root = Path(temporary)
         environment = {"HOME": str(root), "PATH": os.defpath}
@@ -235,6 +244,10 @@ def qualify(
             raise QualificationError("installed Rust probes differ from the pinned version")
         if f"host: {target}" not in rustc_output.splitlines():
             raise QualificationError("installed Rust host differs from the runner target")
+        ensure_mbx_executor_unchanged(
+            executor,
+            mbx_executor_identity(mbx_executable, mbx_version),
+        )
         executables = [
             {
                 "name": name,
@@ -249,7 +262,7 @@ def qualify(
         ]
         return {
             "schema": 2,
-            "executor": mbx_executor_identity(mbx_executable, mbx_version),
+            "executor": executor,
             "source": {
                 "repository": repository,
                 "sha": source_sha,

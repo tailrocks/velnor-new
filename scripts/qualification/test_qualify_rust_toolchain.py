@@ -11,6 +11,7 @@ from unittest.mock import patch
 from pathlib import Path
 
 from qualify_rust_toolchain import (
+    ensure_mbx_executor_unchanged,
     manifest_artifacts,
     mbx_exec_argv,
     mbx_executor_identity,
@@ -68,6 +69,17 @@ class QualificationTests(unittest.TestCase):
                     "sha256": hashlib.sha256(b"pinned MBX executable bytes\n").hexdigest(),
                 },
             )
+
+    def test_qualification_rejects_mbx_replacement_after_version_check(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            mbx = Path(temporary) / "mbx"
+            mbx.write_bytes(b"version-checked bytes\n")
+            mbx.chmod(0o755)
+            initial = mbx_executor_identity(mbx, "1.23.0")
+            mbx.write_bytes(b"replacement bytes\n")
+            replacement = mbx_executor_identity(mbx, "1.23.0")
+            with self.assertRaises(QualificationError):
+                ensure_mbx_executor_unchanged(initial, replacement)
 
     def test_manifest_selects_exact_component_archives(self) -> None:
         target = "aarch64-apple-darwin"
