@@ -8,7 +8,7 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use tempfile::tempdir;
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 
-use super::impl_common::{TestResult, config_with_branch, make_repo};
+use super::impl_common::{TestResult, config_with_branch, git_fixture, make_repo};
 
 #[test]
 fn generate_stage_root_preserves_output_mode_and_retired_inode() -> TestResult {
@@ -27,6 +27,7 @@ fn generate_stage_root_preserves_output_mode_and_retired_inode() -> TestResult {
     let options = GenerateOptions::default();
 
     generate(&prep, &options)?;
+    assert_private_stage_is_git_ignored(root)?;
     assert_eq!(fs::metadata(&target)?.permissions().mode() & 0o7777, 0o751);
     assert_eq!(fs::metadata(&local)?.permissions().mode() & 0o7777, 0o711);
     assert_eq!(
@@ -47,6 +48,31 @@ fn generate_stage_root_preserves_output_mode_and_retired_inode() -> TestResult {
     assert_eq!(fs::symlink_metadata(&spare)?.ino(), first_published_root);
     assert!(fs::read_dir(&spare)?.next().is_none());
     fs::set_permissions(&target, fs::Permissions::from_mode(0o700))?;
+    Ok(())
+}
+
+fn assert_private_stage_is_git_ignored(root: &std::path::Path) -> TestResult {
+    let status = git_fixture::command(root)?
+        .args([
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+            "--",
+            ".github.velnor-stage",
+        ])
+        .output()?;
+    assert!(status.status.success(), "{:?}", status.stderr);
+    assert!(status.stdout.is_empty(), "{:?}", status.stdout);
+    for path in [
+        ".github.velnor-stage/.gitignore",
+        ".github.velnor-stage/owner",
+    ] {
+        let ignored = git_fixture::command(root)?
+            .args(["check-ignore", "-v", path])
+            .output()?;
+        assert!(ignored.status.success(), "{path}: {:?}", ignored.stderr);
+        assert!(String::from_utf8(ignored.stdout)?.contains('*'));
+    }
     Ok(())
 }
 
