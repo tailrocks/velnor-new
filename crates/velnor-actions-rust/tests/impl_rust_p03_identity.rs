@@ -192,7 +192,10 @@ fn relocated_checkout_keeps_extension_identity() -> TestResult {
         data_of(&ext)?,
         data_of(&group.identity_extension(&inputs(&graph, &config, known(&lock), &targets)))?
     );
-    assert!(unresolved_inputs(&ext).is_empty());
+    assert_eq!(
+        unresolved_inputs(&ext),
+        [] as [velnor_actions_rust::identity::UnresolvedInput; 0]
+    );
     Ok(())
 }
 

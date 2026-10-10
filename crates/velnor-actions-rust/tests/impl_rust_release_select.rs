@@ -73,7 +73,7 @@ fn single_root_package_selects_with_default_registry() -> Outcome {
     assert_eq!(selection.packages[0].manifest, "Cargo.toml");
     let graph = graph_of(&selection, &json, &root, &registry(&[]))?;
     assert_eq!(graph.order, vec!["solo".to_owned()]);
-    assert!(graph.edges.is_empty());
+    assert_eq!(graph.edges, [] as [velnor_actions_rust::PackagingEdge; 0]);
     Ok(())
 }
 

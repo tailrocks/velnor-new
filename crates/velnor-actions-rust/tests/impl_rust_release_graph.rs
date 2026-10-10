@@ -134,7 +134,7 @@ fn unpublished_local_dep_names_fix_or_uses_registry() -> Outcome {
     let published = registry(&[("alpha", &["1.2.0"])]);
     let graph = graph_of(&selection, &json, &root, &published)?;
     assert_eq!(graph.order, vec!["beta".to_owned()]);
-    assert!(graph.edges.is_empty());
+    assert_eq!(graph.edges, [] as [velnor_actions_rust::PackagingEdge; 0]);
     Ok(())
 }
 
