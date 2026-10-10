@@ -1,10 +1,12 @@
 //! Offline image import and exact daemon-local identity validation.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use bollard::Docker;
 use bollard::models::{ContainerConfig, ImageInspect, SystemInfo};
 use bollard::query_parameters::ImportImageOptionsBuilder;
+use bollard::{ClientVersion, Docker};
 use futures_util::StreamExt;
 use tokio::time::{Instant, timeout_at};
 
@@ -17,6 +19,9 @@ use super::release::VerifiedRelease;
 
 const MINIMUM_LOAD_WINDOW: Duration = Duration::from_secs(5);
 const MAX_LOAD_MESSAGES: usize = 1024;
+const MINIMUM_PLATFORM_API: (usize, usize) = (1, 49);
+const INSPECT_PATH: &str = "/images/velnor-resource-probe:linux-amd64/json";
+const PLATFORM_QUERY: &str = "%7B%22architecture%22%3A%22amd64%22%2C%22os%22%3A%22linux%22%7D";
 
 pub(super) async fn load_and_inspect(
     docker: &Docker,
@@ -74,9 +79,10 @@ async fn inspect(
     release: &VerifiedRelease,
     deadline: Instant,
 ) -> Result<Option<RuntimeImage>, HostError> {
-    let response = timeout_at(deadline, docker.inspect_image(super::manifest::IMAGE_TAG))
+    let response = timeout_at(deadline, inspect_image_for_platform(docker))
         .await
         .map_err(|_| HostError::DockerTimeout)?;
+    let response = response?;
     match response {
         Ok(inspect) => {
             validate_inspect(inspect, &release.manifest, &release.archive_identity).map(Some)
@@ -84,6 +90,69 @@ async fn inspect(
         Err(error) if is_image_missing(&error) => Ok(None),
         Err(_) => Err(HostError::Docker),
     }
+}
+
+async fn inspect_image_for_platform(
+    docker: &Docker,
+) -> Result<Result<bollard::models::ImageInspect, bollard::errors::Error>, HostError> {
+    let version = docker.client_version();
+    ensure_platform_api(version)?;
+    let versioned_path = versioned_inspect_path(version);
+    let applied = Arc::new(AtomicBool::new(false));
+    let modifier_applied = Arc::clone(&applied);
+    let platform_docker = docker.clone().with_request_modifier(move |request| {
+        add_platform_query(request, INSPECT_PATH, &versioned_path, &modifier_applied)
+    });
+    let response = platform_docker
+        .inspect_image(super::manifest::IMAGE_TAG)
+        .await;
+    if !applied.load(Ordering::Acquire) {
+        return Err(HostError::Identity);
+    }
+    Ok(response)
+}
+
+fn ensure_platform_api(version: ClientVersion) -> Result<(), HostError> {
+    if (version.major_version, version.minor_version) < MINIMUM_PLATFORM_API {
+        Err(HostError::Identity)
+    } else {
+        Ok(())
+    }
+}
+
+fn versioned_inspect_path(version: ClientVersion) -> String {
+    format!(
+        "/v{}.{}{}",
+        version.major_version, version.minor_version, INSPECT_PATH
+    )
+}
+
+fn add_platform_query(
+    mut request: bollard::BollardRequest,
+    expected_path: &str,
+    versioned_path: &str,
+    applied: &AtomicBool,
+) -> bollard::BollardRequest {
+    if request.method().as_str() != "GET" {
+        return request;
+    }
+    let mut uri_parts = request.uri().clone().into_parts();
+    let Some(path_and_query) = uri_parts.path_and_query.as_ref() else {
+        return request;
+    };
+    if path_and_query.path() != expected_path || path_and_query.query().is_some() {
+        return request;
+    }
+    let Ok(path_and_query) = format!("{versioned_path}?platform={PLATFORM_QUERY}").parse() else {
+        return request;
+    };
+    uri_parts.path_and_query = Some(path_and_query);
+    let Ok(uri) = uri_parts.try_into() else {
+        return request;
+    };
+    *request.uri_mut() = uri;
+    applied.store(true, Ordering::Release);
+    request
 }
 
 fn is_image_missing(error: &bollard::errors::Error) -> bool {
@@ -171,21 +240,9 @@ fn ensure_remaining(deadline: Instant, minimum: Duration) -> Result<(), HostErro
 }
 
 #[cfg(test)]
-mod tests {
-    use super::is_image_missing;
+#[path = "docker_tests.rs"]
+mod tests;
 
-    #[test]
-    fn only_exact_docker_not_found_allows_an_import_attempt() {
-        let not_found = bollard::errors::Error::DockerResponseServerError {
-            status_code: 404,
-            message: "not found".to_owned(),
-        };
-        let server_error = bollard::errors::Error::DockerResponseServerError {
-            status_code: 500,
-            message: "server error".to_owned(),
-        };
-
-        assert!(is_image_missing(&not_found));
-        assert!(!is_image_missing(&server_error));
-    }
-}
+#[cfg(test)]
+#[path = "docker_flow_tests.rs"]
+mod flow_tests;
