@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::Path,
+};
 
 use crate::OrchestratorError;
 use velnor_actions_contract::VerificationRunner;
@@ -41,6 +44,10 @@ struct WorkflowScan {
     saw_jobs: bool,
     workflow_shell: Option<ShellDialect>,
     run_anchors: BTreeMap<String, String>,
+    used_anchor_names: BTreeSet<String>,
+    mapping_anchors: BTreeSet<String>,
+    pending_mapping_anchor: Option<(String, usize)>,
+    step_anchors: BTreeMap<String, StepScan>,
     current_job: Option<JobScan>,
     jobs: Vec<JobScan>,
 }
@@ -73,11 +80,13 @@ enum JobSection {
     Steps,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct StepScan {
     body: Option<String>,
     shell: Option<ShellDialect>,
     nested_mapping: Option<String>,
+    anchor_definition: Option<String>,
+    anchored_name_seen: bool,
 }
 
 /// Extract only `jobs.*.steps[*].run` from the renderer's emitted YAML grammar.
@@ -105,6 +114,46 @@ fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
         if content.is_empty() || content.starts_with('#') {
             continue;
         }
+
+        if let Some((name, parent_indent)) = scan.pending_mapping_anchor.take() {
+            if indent != parent_indent + 2
+                || content.starts_with("- ")
+                || mapping_entry(content).is_none()
+            {
+                return Err(shellcheck_fail("workflow_mapping_anchor_not_a_mapping"));
+            }
+            scan.mapping_anchors.insert(name);
+        }
+
+        let step_sequence_item = is_step_sequence_item(&scan, indent, content);
+        if step_sequence_item {
+            finish_current_step(&mut scan)?;
+            if let Some(property) = alias_scope::parse_step_property(content)? {
+                match property {
+                    alias_scope::StepProperty::Anchor(name) => {
+                        reserve_anchor_name(&mut scan, &name)?;
+                        let Some(job) = scan.current_job.as_mut() else {
+                            return Err(shellcheck_fail("workflow_step_anchor_outside_steps"));
+                        };
+                        job.current_step = Some(StepScan {
+                            anchor_definition: Some(name),
+                            ..StepScan::default()
+                        });
+                    }
+                    alias_scope::StepProperty::Alias(name) => {
+                        let Some(step) = scan.step_anchors.get(&name).cloned() else {
+                            return Err(shellcheck_fail("workflow_step_alias_unresolved"));
+                        };
+                        let Some(job) = scan.current_job.as_mut() else {
+                            return Err(shellcheck_fail("workflow_step_alias_outside_steps"));
+                        };
+                        job.runs.push(step);
+                    }
+                }
+                continue;
+            }
+        }
+
         let entry = mapping_entry(content);
         if indent == 6
             && content.starts_with("- ")
@@ -126,13 +175,40 @@ fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
             continue;
         };
         let is_step_run = is_step_run_site(&scan, indent, key);
-        alias_scope::validate_mapping_value(key, source_value, is_step_run)?;
+        let is_supported_mapping = is_supported_mapping_site(&scan, indent, key);
+        alias_scope::validate_mapping_value(key, source_value, is_step_run, is_supported_mapping)?;
+        let mut value = source_value.to_owned();
+        if is_supported_mapping {
+            match alias_scope::parse_mapping_property(source_value)? {
+                Some(alias_scope::MappingProperty::Anchor { name, inline_empty }) => {
+                    reserve_anchor_name(&mut scan, &name)?;
+                    if inline_empty {
+                        scan.mapping_anchors.insert(name);
+                    } else {
+                        scan.pending_mapping_anchor = Some((name, indent));
+                    }
+                    value.clear();
+                }
+                Some(alias_scope::MappingProperty::Alias(name)) => {
+                    if !scan.mapping_anchors.contains(&name) {
+                        return Err(shellcheck_fail("workflow_mapping_alias_unresolved"));
+                    }
+                    value.clear();
+                }
+                None => {}
+            }
+        }
         let value = if is_step_run {
-            run_anchor::resolve_run_scalar(source_value, &mut scan.run_anchors)?
+            run_anchor::resolve_run_scalar(
+                source_value,
+                &mut scan.run_anchors,
+                &mut scan.used_anchor_names,
+            )?
         } else {
-            source_value.to_owned()
+            value
         };
         if indent == 0 {
+            finish_current_step(&mut scan)?;
             if let Some(job) = scan.current_job.take() {
                 scan.jobs.push(job.finish());
             }
@@ -151,6 +227,7 @@ fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
             continue;
         }
         if indent == 2 && value.is_empty() && !key.starts_with('-') {
+            finish_current_step(&mut scan)?;
             if let Some(job) = scan.current_job.take() {
                 scan.jobs.push(job.finish());
             }
@@ -180,6 +257,10 @@ fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
 }
 
 fn finish_workflow_scan(mut scan: WorkflowScan) -> Result<Vec<StagedRun>, OrchestratorError> {
+    if scan.pending_mapping_anchor.is_some() {
+        return Err(shellcheck_fail("workflow_mapping_anchor_not_a_mapping"));
+    }
+    finish_current_step(&mut scan)?;
     if let Some(job) = scan.current_job.take() {
         scan.jobs.push(job.finish());
     }
@@ -187,6 +268,54 @@ fn finish_workflow_scan(mut scan: WorkflowScan) -> Result<Vec<StagedRun>, Orches
         return Err(shellcheck_fail("workflow_jobs_missing"));
     }
     collect_runs(scan.jobs, scan.workflow_shell)
+}
+
+fn is_step_sequence_item(scan: &WorkflowScan, indent: usize, content: &str) -> bool {
+    indent == 6
+        && content.starts_with("- ")
+        && scan.section == WorkflowSection::Jobs
+        && scan
+            .current_job
+            .as_ref()
+            .is_some_and(|job| job.section == JobSection::Steps)
+}
+
+fn is_supported_mapping_site(scan: &WorkflowScan, indent: usize, key: &str) -> bool {
+    if scan.section != WorkflowSection::Jobs {
+        return false;
+    }
+    let Some(job) = scan.current_job.as_ref() else {
+        return false;
+    };
+    (indent == 4 && key == "env")
+        || (indent == 8
+            && job.section == JobSection::Steps
+            && job.current_step.is_some()
+            && matches!(key, "env" | "with"))
+}
+
+fn reserve_anchor_name(scan: &mut WorkflowScan, name: &str) -> Result<(), OrchestratorError> {
+    if !scan.used_anchor_names.insert(name.to_owned()) {
+        return Err(shellcheck_fail("workflow_anchor_duplicate"));
+    }
+    Ok(())
+}
+
+fn finish_current_step(scan: &mut WorkflowScan) -> Result<(), OrchestratorError> {
+    let Some(job) = scan.current_job.as_mut() else {
+        return Ok(());
+    };
+    let Some(mut step) = job.current_step.take() else {
+        return Ok(());
+    };
+    if let Some(name) = step.anchor_definition.take() {
+        if !step.anchored_name_seen {
+            return Err(shellcheck_fail("workflow_anchored_step_name_missing"));
+        }
+        scan.step_anchors.insert(name, step.clone());
+    }
+    job.runs.push(step);
+    Ok(())
 }
 
 fn is_step_run_site(scan: &WorkflowScan, indent: usize, key: &str) -> bool {
@@ -290,6 +419,12 @@ fn scan_job_nested_value(
             Ok(())
         };
     };
+    if step.anchor_definition.is_some() && !step.anchored_name_seen {
+        if key != "name" || value.trim().is_empty() {
+            return Err(shellcheck_fail("workflow_anchored_step_name_missing"));
+        }
+        step.anchored_name_seen = true;
+    }
     match key {
         "run" => {
             if step.body.is_some() {

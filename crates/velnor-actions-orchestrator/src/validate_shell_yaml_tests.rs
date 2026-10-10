@@ -267,6 +267,137 @@ fn aliases_outside_executable_run_scalars_fail_closed() {
 }
 
 #[test]
+fn renderer_mapping_and_step_aliases_preserve_every_run_use_site() -> Result<(), String> {
+    let runs = bodies(
+        r#"jobs:
+  hosted:
+    runs-on: ubuntu-26.04
+    env: &m1
+      SHARED: value
+    steps:
+      - &s1
+        name: shared command
+        env: *m1
+        run: echo $SHARED
+      - *s1
+      - name: step environment anchor
+        env: &m3
+          LOCAL: value
+        run: echo $LOCAL
+      - name: step environment alias
+        env: *m3
+        run: echo $LOCAL
+  scale:
+    runs-on: [self-hosted, runner]
+    defaults:
+      run:
+        shell: sh
+    steps:
+      - *s1
+      - name: action inputs
+        uses: example/action@0000000000000000000000000000000000000000
+        with: &m2
+          value: shared
+      - name: repeated action inputs
+        uses: example/action@0000000000000000000000000000000000000000
+        with: *m2
+"#,
+    )?;
+    assert_eq!(
+        runs,
+        [
+            ("echo $SHARED".to_owned(), ShellDialect::Bash),
+            ("echo $SHARED".to_owned(), ShellDialect::Bash),
+            ("echo $LOCAL".to_owned(), ShellDialect::Bash),
+            ("echo $LOCAL".to_owned(), ShellDialect::Bash),
+            ("echo $SHARED".to_owned(), ShellDialect::Sh),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn inline_empty_mapping_anchors_are_typed_and_resolved() -> Result<(), String> {
+    let runs = bodies(
+        "jobs:\n  first:\n    runs-on: ubuntu-26.04\n    env: &m1 {}\n    steps:\n      - name: command\n        run: echo safe\n  second:\n    runs-on: ubuntu-26.04\n    env: *m1\n    steps:\n      - name: command\n        run: echo safe\n",
+    )?;
+    assert_eq!(runs.len(), 2);
+    Ok(())
+}
+
+#[test]
+fn repeated_step_alias_commands_are_shellchecked_at_the_use_site() -> Result<(), String> {
+    let staging = tempfile::tempdir().map_err(|error| error.to_string())?;
+    let workflow_path = ".github/workflows/ci.yml";
+    let full_path = staging.path().join(workflow_path);
+    std::fs::create_dir_all(full_path.parent().ok_or("workflow has no parent")?)
+        .map_err(|error| error.to_string())?;
+    std::fs::write(
+        &full_path,
+        r#"jobs:
+  hosted:
+    runs-on: ubuntu-26.04
+    steps:
+      - &s1
+        name: define bash array
+        run: "paths=(\"$HOME\"); printf '%s' \"${paths[0]}\""
+  scale:
+    runs-on: [self-hosted, runner]
+    defaults:
+      run:
+        shell: sh
+    steps:
+      - *s1
+"#,
+    )
+    .map_err(|error| error.to_string())?;
+    let error = run_shellcheck_bodies(
+        &velnor_actions_mise::ToolCatalog::pinned(),
+        staging.path(),
+        &[workflow_path.to_owned()],
+    )
+    .expect_err("an aliased bash-only step must be checked under the using job shell");
+    assert!(error.to_string().contains("SC3030"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn mapping_and_step_aliases_reject_wrong_scope_kind_and_order() {
+    let forward_mapping = "jobs:\n  job:\n    env: *m1\n    runs-on: ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n";
+    let scalar_as_mapping = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: scalar\n        run: &r1 echo safe\n      - name: wrong kind\n        env: *r1\n        run: echo safe\n";
+    let mapping_as_step = "jobs:\n  job:\n    env: &m1\n      KEY: value\n    runs-on: ubuntu-26.04\n    steps:\n      - *m1\n";
+    let step_as_mapping = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - &s1\n        name: command\n        run: echo safe\n      - name: wrong kind\n        env: *s1\n        run: echo safe\n";
+    let unknown_step = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - *s1\n";
+    let malformed_step = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - &bad.name\n        name: malformed\n        run: echo safe\n";
+    let malformed_map = "jobs:\n  job:\n    env: &bad.name\n      KEY: value\n    runs-on: ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n";
+    let empty_block_map = "jobs:\n  job:\n    env: &m1\n    runs-on: ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n";
+    let duplicate_cross_kind = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: scalar\n        run: &x echo safe\n      - &x\n        name: duplicate map\n        run: echo safe\n";
+    let cyclic_mapping = "jobs:\n  job:\n    env: &m1\n      COPY: *m1\n    runs-on: ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n";
+    let duplicate_mapping = "jobs:\n  job:\n    env: &m1\n      KEY: value\n    steps:\n      - name: duplicate\n        env: &m1\n          KEY: value\n        run: echo safe\n";
+    let arbitrary_scope = "jobs:\n  job:\n    runs-on: &r1 ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n";
+
+    for workflow in [
+        forward_mapping,
+        scalar_as_mapping,
+        mapping_as_step,
+        step_as_mapping,
+        unknown_step,
+        malformed_step,
+        malformed_map,
+        empty_block_map,
+        duplicate_cross_kind,
+        cyclic_mapping,
+        duplicate_mapping,
+        arbitrary_scope,
+    ] {
+        assert!(
+            bodies(workflow).is_err(),
+            "accepted unsupported or unresolved alias structure: {workflow}"
+        );
+    }
+}
+
+#[test]
 fn literal_shell_globs_and_comments_are_not_yaml_aliases() -> Result<(), String> {
     let workflow = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: shell glob\n        env:\n          PATTERN: path[*]\n        run: echo [*r1] [&r1] # &comment\n";
     let scanned = bodies(workflow)?;
