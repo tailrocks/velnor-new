@@ -5,7 +5,7 @@
 use super::*;
 use crate::clippy_groups::ClippyMemoryPlan;
 use crate::discover::Discovery;
-use crate::workflow::plan_uses_rust;
+use crate::workflow::workflow_policy::plan_uses_rust;
 use velnor_actions_contract::StepKind;
 use velnor_actions_contract::WorkflowPolicy;
 
