@@ -56,7 +56,8 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
         assert!(!files[0].bytes.contains(&format!("inputs.env_{key}")));
     }
 
-    for (index, (id, original)) in jobs.iter().enumerate() {
+    for (id, original) in &jobs {
+        let task_index = id.strip_prefix("rust-crate-").expect("numeric crate ID");
         let rewritten = factored.get(id).expect("job retained");
         assert_eq!(rewritten.display_name, original.display_name);
         assert_eq!(rewritten.runs_on, original.runs_on);
@@ -76,10 +77,10 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
         };
         assert_eq!(uses, "./.github/actions/declared-task-0");
         assert!(env.is_empty(), "task env crosses through declared inputs");
-        assert_eq!(with["argv_10"], format!("crate-{index}"));
+        assert_eq!(with["argv_10"], format!("crate-{task_index}"));
         assert_eq!(
             with["task_id"],
-            format!("stack/rust/crate-{index}/test/default")
+            format!("stack/rust/crate-{task_index}/test/default")
         );
         assert!(!with.contains_key("env_GITHUB_TOKEN"));
     }
@@ -162,7 +163,7 @@ fn typed_task_requires_checkout_staging_and_credential_free_inputs() {
         factor_obligation_steps(&jobs, CHECKOUT, VERSION)
             .expect_err("credentials cannot enter task action inputs")
             .to_string()
-            .contains("denied")
+            .contains("credential_step_env:GITHUB_TOKEN")
     );
 }
 
