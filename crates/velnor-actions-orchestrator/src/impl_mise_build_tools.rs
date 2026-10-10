@@ -107,11 +107,12 @@ rust = [
     )
     .expect("valid lock TOML");
     let lock = parse_native_mise_lock(&value).expect("Mise lock projection");
-    let selected = lock
+    let selected_rows = lock
         .tools
         .get("github:boltffi/boltffi")
-        .and_then(|entries| entries.first())
-        .expect("selected tool entry");
+        .expect("selected tool rows");
+    assert_eq!(selected_rows.len(), 1, "fixture has one exact selected row");
+    let selected = selected_rows.first().expect("selected tool entry");
     let macos = selected
         .platforms
         .get("macos-arm64")
@@ -213,11 +214,12 @@ malformed = [
     assert!(rust.valid_shape);
     assert_eq!(rust.unsupported_fields, ["future_option"]);
 
-    let selected = lock
+    let selected_rows = lock
         .tools
         .get("github:boltffi/boltffi")
-        .and_then(|entries| entries.first())
-        .expect("selected tool entry");
+        .expect("selected tool rows");
+    assert_eq!(selected_rows.len(), 1, "fixture has one exact selected row");
+    let selected = selected_rows.first().expect("selected tool entry");
     let macos = selected
         .platforms
         .get("macos-arm64")
