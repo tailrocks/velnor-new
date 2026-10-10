@@ -184,98 +184,110 @@ pub(crate) fn append_workspace_cleanups(
     jobs: &mut BTreeMap<String, Job>,
 ) -> Result<(), RenderError> {
     for (id, job) in jobs {
-        let actions: Vec<usize> = job
-            .steps
-            .iter()
-            .enumerate()
-            .filter(|(_, step)| is_mbx_action(step))
-            .map(|(index, _)| index)
-            .collect();
-        let ready_checks: Vec<usize> = job
-            .steps
-            .iter()
-            .enumerate()
-            .filter(|(_, step)| step.role == Some(StepRole::MbxVersionCheck))
-            .map(|(index, _)| index)
-            .collect();
-        let cleanups = job
-            .steps
-            .iter()
-            .filter(|step| step.role == Some(StepRole::MbxWorkspaceCleanup))
-            .count();
-        if actions.is_empty() {
-            if cleanups == 0 && ready_checks.is_empty() {
-                continue;
-            }
-            return Err(RenderError::InvalidWorkflow(format!(
-                "mbx_lifecycle_without_action:{id}"
-            )));
-        }
-        if actions.len() != 1 {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "mbx_cleanup_action_duplicated:{id}"
-            )));
-        }
-        if cleanups != 0 {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "mbx_cleanup_duplicated:{id}"
-            )));
-        }
-        if ready_checks.is_empty() {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "mbx_ready_check_missing:{id}"
-            )));
-        }
-        if ready_checks.len() != 1 {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "mbx_ready_check_duplicated:{id}"
-            )));
-        }
-
-        let action_at = actions[0];
-        let ready_at = ready_checks[0];
-        if action_at >= ready_at {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "mbx_ready_check_order:{id}"
-            )));
-        }
-        let action = &job.steps[action_at];
-        let StepKind::Action { with, env, .. } = &action.kind else {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "mbx_cleanup_action_kind_mismatch:{id}"
-            )));
-        };
-        let version = with
-            .get("version")
-            .ok_or_else(|| RenderError::InvalidWorkflow("mbx_version_missing".to_owned()))?;
-        let rust_toolchain = with
-            .get("toolchain")
-            .ok_or_else(|| RenderError::InvalidWorkflow("mbx_toolchain_missing".to_owned()))?;
-        let expected_ready = mbx_version_check_step(version, rust_toolchain, env.clone())?;
-        let actual_ready = &job.steps[ready_at];
-        if actual_ready.id != expected_ready.id
-            || actual_ready.role != expected_ready.role
-            || actual_ready.condition != expected_ready.condition
-            || actual_ready.kind != expected_ready.kind
-        {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "mbx_ready_check_mismatch:{id}"
-            )));
-        }
-        if job.steps.iter().enumerate().any(|(index, step)| {
-            index < ready_at
-                && step.role != Some(StepRole::MbxVersionCheck)
-                && uses_mbx_command(step)
-        }) {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "mbx_consumer_before_ready:{id}"
-            )));
-        }
-
-        let cleanup = crate::cache_steps::mbx_workspace_clean_step_for_action(action)?;
-        job.steps.push(cleanup);
+        append_workspace_cleanup(id, job)?;
     }
     Ok(())
+}
+
+fn append_workspace_cleanup(id: &str, job: &mut Job) -> Result<(), RenderError> {
+    let Some((action_at, ready_at)) = lifecycle_step_indices(id, job)? else {
+        return Ok(());
+    };
+    validate_ready_check(id, job, action_at, ready_at)?;
+    if has_consumer_before_ready(job, ready_at) {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_consumer_before_ready:{id}"
+        )));
+    }
+    let cleanup = crate::cache_steps::mbx_workspace_clean_step_for_action(&job.steps[action_at])?;
+    job.steps.push(cleanup);
+    Ok(())
+}
+
+fn lifecycle_step_indices(id: &str, job: &Job) -> Result<Option<(usize, usize)>, RenderError> {
+    let actions = role_indices(job, StepRole::MbxCache);
+    let ready = role_indices(job, StepRole::MbxVersionCheck);
+    let cleanups = role_indices(job, StepRole::MbxWorkspaceCleanup);
+    if actions.is_empty() && ready.is_empty() && cleanups.is_empty() {
+        return Ok(None);
+    }
+    if actions.is_empty() {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_lifecycle_without_action:{id}"
+        )));
+    }
+    if actions.len() != 1 {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_cleanup_action_duplicated:{id}"
+        )));
+    }
+    if !cleanups.is_empty() {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_cleanup_duplicated:{id}"
+        )));
+    }
+    if ready.is_empty() {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_ready_check_missing:{id}"
+        )));
+    }
+    if ready.len() != 1 {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_ready_check_duplicated:{id}"
+        )));
+    }
+    Ok(Some((actions[0], ready[0])))
+}
+
+fn role_indices(job: &Job, role: StepRole) -> Vec<usize> {
+    job.steps
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| step.role == Some(role))
+        .map(|(index, _)| index)
+        .collect()
+}
+
+fn validate_ready_check(
+    id: &str,
+    job: &Job,
+    action_at: usize,
+    ready_at: usize,
+) -> Result<(), RenderError> {
+    if action_at >= ready_at {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_ready_check_order:{id}"
+        )));
+    }
+    let StepKind::Action { with, env, .. } = &job.steps[action_at].kind else {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_cleanup_action_kind_mismatch:{id}"
+        )));
+    };
+    let version = with
+        .get("version")
+        .ok_or_else(|| RenderError::InvalidWorkflow("mbx_version_missing".to_owned()))?;
+    let rust_toolchain = with
+        .get("toolchain")
+        .ok_or_else(|| RenderError::InvalidWorkflow("mbx_toolchain_missing".to_owned()))?;
+    let expected = mbx_version_check_step(version, rust_toolchain, env.clone())?;
+    let actual = &job.steps[ready_at];
+    if actual.id != expected.id
+        || actual.role != expected.role
+        || actual.condition != expected.condition
+        || actual.kind != expected.kind
+    {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_ready_check_mismatch:{id}"
+        )));
+    }
+    Ok(())
+}
+
+fn has_consumer_before_ready(job: &Job, ready_at: usize) -> bool {
+    job.steps.iter().enumerate().any(|(index, step)| {
+        index < ready_at && step.role != Some(StepRole::MbxVersionCheck) && uses_mbx_command(step)
+    })
 }
 
 /// True for the pinned native MBX action.

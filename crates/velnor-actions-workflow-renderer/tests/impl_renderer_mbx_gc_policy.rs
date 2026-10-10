@@ -63,38 +63,7 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
 /// Lane extraction preserves GC policy and final cleanup on both runners.
 #[test]
 fn mbx_job_policy_applies_to_hosted_and_scale_set_lanes() -> Result<(), RenderError> {
-    let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
-    let mbx = mbx_tool_steps(&uses, "1.21.1", "1.98.1")?;
-    let checkout = checkout_step(&checkout_pin())?;
-    let hosted = job(
-        &format!("rust-demo{HOSTED_SUFFIX}"),
-        "Rust demo hosted",
-        Vec::new(),
-        vec![
-            checkout.clone(),
-            mbx[0].clone(),
-            mbx[1].clone(),
-            mbx[2].clone(),
-        ],
-    );
-    let mut local = job(
-        &format!("rust-demo{SCALE_SUFFIX}"),
-        "Rust demo scale set",
-        Vec::new(),
-        vec![checkout, mbx[0].clone(), mbx[1].clone(), mbx[2].clone()],
-    );
-    local.1.runs_on = ScaleSetSelector::try_new(
-        SCALE_SET_NAME,
-        &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
-    )
-    .expect("valid scale-set selector")
-    .token();
-    let text = render_workflow_ir(
-        &fixture_ir(vec![hosted, local]),
-        WorkflowPolicy::ConsumerV1,
-        None,
-        &fixture_ctx(),
-    )?;
+    let text = render_mbx_lane_pair()?;
     assert_eq!(
         text.matches("MBX_GC_AUTO: \"0\"").count(),
         2,
@@ -128,18 +97,19 @@ fn mbx_job_policy_applies_to_hosted_and_scale_set_lanes() -> Result<(), RenderEr
         2,
         "cleanup uses the exact task toolchain in both lanes: {text}"
     );
-    let ready_checks: Vec<usize> = text
-        .match_indices("id: mbx-ready")
-        .map(|(at, _)| at)
-        .collect();
-    let lane_calls: Vec<usize> = text
-        .match_indices("uses: ./.github/actions/rust-demo")
-        .map(|(at, _)| at)
-        .collect();
-    let cleanups: Vec<usize> = text
-        .match_indices("name: Clean MBX workspace outputs")
-        .map(|(at, _)| at)
-        .collect();
+    assert!(
+        !text.contains("isolate-objects-cache"),
+        "v1.6 has no isolation input"
+    );
+    Ok(())
+}
+
+#[test]
+fn mbx_ready_guard_stays_outside_each_shared_lane_body() -> Result<(), RenderError> {
+    let text = render_mbx_lane_pair()?;
+    let ready_checks = positions(&text, "id: mbx-ready");
+    let lane_calls = positions(&text, "uses: ./.github/actions/rust-demo");
+    let cleanups = positions(&text, "name: Clean MBX workspace outputs");
     assert_eq!(ready_checks.len(), 2, "one ready guard per lane: {text}");
     assert_eq!(lane_calls.len(), 2, "one shared task call per lane: {text}");
     assert_eq!(cleanups.len(), 2, "one cleanup per lane: {text}");
@@ -149,11 +119,47 @@ fn mbx_job_policy_applies_to_hosted_and_scale_set_lanes() -> Result<(), RenderEr
             "ready → shared tasks → clean: {text}"
         );
     }
-    assert!(
-        !text.contains("isolate-objects-cache"),
-        "v1.6 has no isolation input"
-    );
     Ok(())
+}
+
+fn render_mbx_lane_pair() -> Result<String, RenderError> {
+    let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
+    let mbx = mbx_tool_steps(&uses, "1.21.1", "1.98.1")?;
+    let checkout = checkout_step(&checkout_pin())?;
+    let hosted = job(
+        &format!("rust-demo{HOSTED_SUFFIX}"),
+        "Rust demo hosted",
+        Vec::new(),
+        vec![
+            checkout.clone(),
+            mbx[0].clone(),
+            mbx[1].clone(),
+            mbx[2].clone(),
+        ],
+    );
+    let mut local = job(
+        &format!("rust-demo{SCALE_SUFFIX}"),
+        "Rust demo scale set",
+        Vec::new(),
+        vec![checkout, mbx[0].clone(), mbx[1].clone(), mbx[2].clone()],
+    );
+    local.1.runs_on = ScaleSetSelector::try_new(
+        SCALE_SET_NAME,
+        &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
+    )
+    .map_err(|_| RenderError::InvalidWorkflow("bad_scale_set".to_owned()))?
+    .token();
+    let text = render_workflow_ir(
+        &fixture_ir(vec![hosted, local]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )?;
+    Ok(text)
+}
+
+fn positions(text: &str, needle: &str) -> Vec<usize> {
+    text.match_indices(needle).map(|(at, _)| at).collect()
 }
 
 #[test]
@@ -190,7 +196,7 @@ fn public_renderer_rejects_missing_duplicate_and_misordered_mbx_ready_checks() {
             .contains("mbx_ready_check_order"),
     );
 
-    let mut noncanonical = valid.to_vec();
+    let mut noncanonical = valid.clone();
     let velnor_actions_contract::StepKind::Shell { run, .. } = &mut noncanonical[2].kind else {
         panic!("ready check is a shell step");
     };
