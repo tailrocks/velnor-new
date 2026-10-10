@@ -188,6 +188,19 @@ fn only_requested_families_are_composed() -> Result<(), Box<dyn Error>> {
     assert!(rendered.contains("          - all\n          - images\n"));
     assert!(!rendered.contains("          - binary\n"));
     assert!(!rendered.contains("          - generator\n"));
+    let selected_condition =
+        "if: inputs.release_family == 'all' || inputs.release_family == 'images'";
+    assert_eq!(rendered.matches(selected_condition).count(), 2);
+    assert_eq!(rendered.matches("if: inputs.release_family").count(), 2);
+    for unsupported in ["binary", "generator", "malformed"] {
+        let condition = format!(
+            "if: inputs.release_family == 'all' || inputs.release_family == '{unsupported}'"
+        );
+        assert!(
+            !rendered.contains(&condition),
+            "unexpected condition {condition}"
+        );
+    }
     assert_eq!(product.family_workflows.len(), 1);
     assert_eq!(
         product.family_workflows[0].0,
