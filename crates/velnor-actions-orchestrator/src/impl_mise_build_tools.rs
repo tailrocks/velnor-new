@@ -216,6 +216,7 @@ malformed = [
     let selected = lock
         .tools
         .get("github:boltffi/boltffi")
+        .and_then(|entries| entries.first())
         .expect("selected tool entry");
     let macos = selected
         .platforms
