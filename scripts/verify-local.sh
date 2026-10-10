@@ -43,6 +43,50 @@ ROOT=""
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 1
 
+create_log_dir() {
+  local parent candidate fallback
+  parent="${TMPDIR:-/tmp}"
+  if [ ! -d "$parent" ] || [ ! -w "$parent" ] || [ ! -x "$parent" ]; then
+    parent="/tmp"
+  fi
+  parent="$(cd -P -- "$parent" 2>/dev/null && pwd -P)" || parent=""
+  if [ -z "$parent" ]; then
+    parent="$(cd -P -- /tmp 2>/dev/null && pwd -P)" || return 1
+  fi
+  candidate="$( (umask 077; mktemp -d "$parent/velnor-verify-local.XXXXXXXX") 2>/dev/null)" || {
+    fallback="$(cd -P -- /tmp 2>/dev/null && pwd -P)" || return 1
+    [ "$parent" = "$fallback" ] && return 1
+    candidate="$( (umask 077; mktemp -d "$fallback/velnor-verify-local.XXXXXXXX") 2>/dev/null)" || return 1
+  }
+  if [ ! -d "$candidate" ] || [ ! -O "$candidate" ]; then
+    return 1
+  fi
+  candidate="$(cd -P -- "$candidate" 2>/dev/null && pwd -P)" || return 1
+  if [ ! -d "$candidate" ] || [ ! -O "$candidate" ]; then
+    return 1
+  fi
+  printf '%s\n' "$candidate"
+}
+
+LOG_DIR="$(create_log_dir)" || {
+  echo "verify-local: FAIL: could not create a private log directory under TMPDIR or /tmp"
+  exit 1
+}
+TOOLCHAIN_LOG="$LOG_DIR/toolchain.log"
+MISE_PIN_LOG="$LOG_DIR/mise-pin.log"
+MISE_POLICY_LOG="$LOG_DIR/mise-policy.log"
+TOOLCHAIN_POLICY_LOG="$LOG_DIR/toolchain-policy.log"
+GENERATED_SELECTOR_LOG="$LOG_DIR/generated-selector.log"
+GENERATED_ARTIFACTS="$LOG_DIR/generated-artifacts.jsonl"
+GENERATED_BUILD_LOG="$LOG_DIR/generated-build.log"
+GENERATED_RUN_LOG="$LOG_DIR/generated-run.log"
+GENERATED_DIFF_LOG="$LOG_DIR/generated-diff.log"
+CRATE_LIST_LOG="$LOG_DIR/crate-list.log"
+DOCTEST_LIST_LOG="$LOG_DIR/doctest-list.log"
+FIXTURES_LOG="$LOG_DIR/fixtures.log"
+INTEGRATION_LOG="$LOG_DIR/integration.log"
+echo "verify-local: log directory: $LOG_DIR"
+
 FAILURES=""
 
 fail() {
@@ -56,17 +100,18 @@ pass() {
 
 stage() {
   local name="$1"
+  local log="$LOG_DIR/$1.log"
   shift
   echo "--- verify-local: $name"
-  if "$@" >"/tmp/verify-local-$name.log" 2>&1; then
+  if "$@" >"$log" 2>&1; then
     pass "$name"
   else
-    fail "$name (log: /tmp/verify-local-$name.log)"
+    fail "$name (log: $log)"
   fi
 }
 
 if ! command -v mise >/dev/null 2>&1; then
-  echo "verify-local: FAIL: mise not found on PATH (install mise, then re-run)"
+  echo "verify-local: FAIL: mise not found on PATH (install mise, then re-run; logs: $LOG_DIR)"
   exit 1
 fi
 
@@ -84,12 +129,12 @@ SPECS=""
 RUST_LOCAL="$(toml_tool_pin mise.toml rust 2>/dev/null || true)"
 MBX_LOCAL="$(toml_tool_pin mise.toml mr-boxington 2>/dev/null || true)"
 NEXTEST_LOCAL="$(toml_tool_pin mise.toml aqua:nextest-rs/nextest/cargo-nextest 2>/dev/null || true)"
-RUST_POLICY="$(toml_tool_pin .velnor/version-policy.toml rust 2>"/tmp/verify-local-toolchain.log")"
-MBX_POLICY="$(toml_tool_pin .velnor/version-policy.toml mr-boxington 2>>"/tmp/verify-local-toolchain.log")"
-NEXTEST_POLICY="$(toml_tool_pin .velnor/version-policy.toml nextest 2>>"/tmp/verify-local-toolchain.log")"
+RUST_POLICY="$(toml_tool_pin .velnor/version-policy.toml rust 2>"$TOOLCHAIN_LOG")"
+MBX_POLICY="$(toml_tool_pin .velnor/version-policy.toml mr-boxington 2>>"$TOOLCHAIN_LOG")"
+NEXTEST_POLICY="$(toml_tool_pin .velnor/version-policy.toml nextest 2>>"$TOOLCHAIN_LOG")"
 if [ -z "$RUST_POLICY" ] || [ -z "$MBX_POLICY" ] || [ -z "$NEXTEST_POLICY" ]; then
-  cat "/tmp/verify-local-toolchain.log" >&2 || true
-  echo "verify-local: FAIL: toolchain (missing policy pin; log: /tmp/verify-local-toolchain.log)"
+  cat "$TOOLCHAIN_LOG" >&2 || true
+  echo "verify-local: FAIL: toolchain (missing policy pin; log: $TOOLCHAIN_LOG)"
   exit 1
 fi
 echo "local mise.toml tools: rust=${RUST_LOCAL:-<missing>} mr-boxington=${MBX_LOCAL:-<missing>} nextest=${NEXTEST_LOCAL:-<missing>}"
@@ -105,7 +150,7 @@ _PIN_PARTS=($SPECS)
 RUST_PIN="${_PIN_PARTS[0]#*@}"
 MBX_PIN="${_PIN_PARTS[1]#*@}"
 NEXTEST_PIN="${_PIN_PARTS[2]#*@}"
-POLICY_MISE="$(toml_tool_pin .velnor/version-policy.toml mise 2>"/tmp/verify-local-mise-policy.log")"
+POLICY_MISE="$(toml_tool_pin .velnor/version-policy.toml mise 2>"$MISE_PIN_LOG")"
 LOCAL_MISE="$(mise --version 2>/dev/null | awk "{print \$1}")"
 echo "mise: local $LOCAL_MISE, policy $POLICY_MISE"
 if [ "$LOCAL_MISE" != "$POLICY_MISE" ]; then
@@ -113,8 +158,8 @@ if [ "$LOCAL_MISE" != "$POLICY_MISE" ]; then
 fi
 # shellcheck disable=SC2206
 SPEC_ARR=($SPECS)
-if ! mise install "${SPEC_ARR[@]}" >>"/tmp/verify-local-toolchain.log" 2>&1; then
-  fail "toolchain (mise install failed; log: /tmp/verify-local-toolchain.log)"
+if ! mise install "${SPEC_ARR[@]}" >>"$TOOLCHAIN_LOG" 2>&1; then
+  fail "toolchain (mise install failed; log: $TOOLCHAIN_LOG)"
   echo "verify-local: FAIL:$FAILURES"
   exit 1
 fi
@@ -128,20 +173,20 @@ repo_policy() {
     "${MISE_EXEC[@]}" cargo run --quiet --locked -p velnor-actions-cli \
       --bin velnor-actions
 }
-POLICY_SPECS="$(repo_policy toolchain-specs 2>"/tmp/verify-local-toolchain-policy.log")"
+POLICY_SPECS="$(repo_policy toolchain-specs 2>"$TOOLCHAIN_POLICY_LOG")"
 if [ "$POLICY_SPECS" != "$SPECS" ]; then
-  fail "toolchain (Rust policy specs '$POLICY_SPECS' != bootstrap pins '$SPECS'; log: /tmp/verify-local-toolchain-policy.log)"
+  fail "toolchain (Rust policy specs '$POLICY_SPECS' != bootstrap pins '$SPECS'; log: $TOOLCHAIN_POLICY_LOG)"
   echo "verify-local: FAIL:$FAILURES"
   exit 1
 fi
-POLICY_MISE="$(repo_policy mise-version 2>"/tmp/verify-local-mise-policy.log")"
+POLICY_MISE="$(repo_policy mise-version 2>"$MISE_POLICY_LOG")"
 # The effective binaries must BE the pins: a symlink-rust or an ambient
 # cargo-nextest next to cargo can otherwise shadow the pinned tools.
-CARGO_VER="$("${MISE_EXEC[@]}" cargo --version 2>>"/tmp/verify-local-toolchain.log" | awk "{print \$2}")"
-MBX_VER="$("${MISE_EXEC[@]}" mbx --version 2>>"/tmp/verify-local-toolchain.log" | awk "{print \$2}")"
+CARGO_VER="$("${MISE_EXEC[@]}" cargo --version 2>>"$TOOLCHAIN_LOG" | awk "{print \$2}")"
+MBX_VER="$("${MISE_EXEC[@]}" mbx --version 2>>"$TOOLCHAIN_LOG" | awk "{print \$2}")"
 echo "effective: cargo $CARGO_VER, mbx $MBX_VER"
 if [ "$CARGO_VER" != "$RUST_PIN" ] || [ "$MBX_VER" != "$MBX_PIN" ]; then
-  fail "toolchain (effective cargo $CARGO_VER / mbx $MBX_VER != pins $RUST_PIN / $MBX_PIN)"
+  fail "toolchain (effective cargo $CARGO_VER / mbx $MBX_VER != pins $RUST_PIN / $MBX_PIN; log: $TOOLCHAIN_LOG)"
   echo "verify-local: FAIL:$FAILURES"
   exit 1
 fi
@@ -190,46 +235,48 @@ stage repo-policy "${MISE_EXEC[@]}" bash scripts/check-freshness.sh
 GEN_DIR=""
 GEN_DIR="$(mktemp -d 2>/dev/null)"
 if [ -z "$GEN_DIR" ]; then
-  fail "generated-tree (mktemp failed)"
+  fail "generated-tree (mktemp failed; logs: $LOG_DIR)"
 else
   echo "--- verify-local: generated-selector"
   if python3 -B scripts/test_cargo_artifact_executable.py \
-    >"/tmp/verify-local-generated-selector.log" 2>&1; then
+    >"$GENERATED_SELECTOR_LOG" 2>&1; then
     pass "generated-selector"
   else
-    fail "generated-selector (log: /tmp/verify-local-generated-selector.log)"
+    fail "generated-selector (log: $GENERATED_SELECTOR_LOG)"
   fi
   echo "--- verify-local: generated-tree"
   if "${MISE_EXEC[@]}" cargo build --locked --message-format=json-render-diagnostics \
     -p velnor-actions-cli --bin velnor-actions \
-    >"/tmp/verify-local-generated-artifacts.jsonl" \
-    2>"/tmp/verify-local-generated-build.log"; then
+    >"$GENERATED_ARTIFACTS" \
+    2>"$GENERATED_BUILD_LOG"; then
     BIN="$(python3 scripts/cargo_artifact_executable.py \
       --workspace-root "$ROOT" \
       --manifest-path crates/velnor-actions-cli/Cargo.toml \
       --target velnor-actions \
-      /tmp/verify-local-generated-artifacts.jsonl \
-      2>>"/tmp/verify-local-generated-build.log")"
+      "$GENERATED_ARTIFACTS" \
+      2>>"$GENERATED_BUILD_LOG")"
     # Schema 2 emits the full product workflow set; compare it directly.
+    : >"$GENERATED_RUN_LOG"
+    : >"$GENERATED_DIFF_LOG"
     if [ -n "$BIN" ] && "$BIN" generate --output-dir "$GEN_DIR/tree" \
-      >"/tmp/verify-local-generated-run.log" 2>&1 &&
+      >"$GENERATED_RUN_LOG" 2>&1 &&
       diff -r --brief .github "$GEN_DIR/tree/.github" \
-        >"/tmp/verify-local-generated-diff.log" 2>&1; then
+        >"$GENERATED_DIFF_LOG" 2>&1; then
       pass "generated-tree"
     else
-      fail "generated-tree (see /tmp/verify-local-generated-*.log)"
+      fail "generated-tree (logs: $GENERATED_BUILD_LOG, $GENERATED_ARTIFACTS, $GENERATED_RUN_LOG, $GENERATED_DIFF_LOG)"
     fi
   else
-    fail "generated-tree (build failed: /tmp/verify-local-generated-build.log)"
+    fail "generated-tree (build failed: log $GENERATED_BUILD_LOG, artifacts $GENERATED_ARTIFACTS)"
   fi
   rm -rf "$GEN_DIR"
 fi
 
 # --- per-crate clippy, tests, doctests, docs ---------------------------------
 MEMBERS=""
-MEMBERS="$(repo_policy workspace-members 2>/tmp/verify-local-crate-list.log)"
+MEMBERS="$(repo_policy workspace-members 2>"$CRATE_LIST_LOG")"
 if [ -z "$MEMBERS" ]; then
-  fail "crate-list (log: /tmp/verify-local-crate-list.log)"
+  fail "crate-list (log: $CRATE_LIST_LOG)"
 else
   for member in $MEMBERS; do
     safe="$(printf '%s' "$member" | tr -c 'A-Za-z0-9' '_')"
@@ -240,9 +287,9 @@ else
     stage "test-$safe" "${MISE_EXEC[@]}" cargo test --locked -p "$member"
   done
   LIB_MEMBERS=""
-  LIB_MEMBERS="$(repo_policy library-members 2>/tmp/verify-local-doctest-list.log)"
+  LIB_MEMBERS="$(repo_policy library-members 2>"$DOCTEST_LIST_LOG")"
   if [ -z "$LIB_MEMBERS" ]; then
-    fail "doctest-list (log: /tmp/verify-local-doctest-list.log)"
+    fail "doctest-list (log: $DOCTEST_LIST_LOG)"
   else
     for member in $MEMBERS; do
       safe="$(printf '%s' "$member" | tr -c 'A-Za-z0-9' '_')"
@@ -269,25 +316,25 @@ fi
 echo "--- verify-local: fixtures"
 if "${MISE_EXEC[@]}" cargo test --locked -p velnor-actions-orchestrator --test velnor_orchestrator \
   evasion_fixtures_are_all_flagged \
-  >"/tmp/verify-local-fixtures.log" 2>&1; then
+  >"$FIXTURES_LOG" 2>&1; then
   pass "fixtures"
 else
-  fail "fixtures (log: /tmp/verify-local-fixtures.log)"
+  fail "fixtures (log: $FIXTURES_LOG)"
 fi
 
 # --- whole-workspace integration pass ----------------------------------------
 echo "--- verify-local: integration"
 if [ "${#NEXTEST_RUN[@]}" -gt 0 ]; then
   if "${NEXTEST_RUN[@]}" run --workspace --locked --profile ci --no-tests fail \
-    >"/tmp/verify-local-integration.log" 2>&1; then
+    >"$INTEGRATION_LOG" 2>&1; then
     pass "integration (nextest ci)"
   else
-    fail "integration (log: /tmp/verify-local-integration.log)"
+    fail "integration (log: $INTEGRATION_LOG)"
   fi
-elif "${MISE_EXEC[@]}" cargo test --locked --workspace >"/tmp/verify-local-integration.log" 2>&1; then
+elif "${MISE_EXEC[@]}" cargo test --locked --workspace >"$INTEGRATION_LOG" 2>&1; then
   pass "integration (cargo test)"
 else
-  fail "integration (log: /tmp/verify-local-integration.log)"
+  fail "integration (log: $INTEGRATION_LOG)"
 fi
 
 # --- summary -------------------------------------------------------------------
@@ -296,5 +343,6 @@ if [ -z "$FAILURES" ]; then
   exit 0
 else
   echo "verify-local: FAIL:$FAILURES"
+  echo "verify-local: logs retained in $LOG_DIR"
   exit 1
 fi
