@@ -115,7 +115,7 @@ fn inspect_empty_lock_is_neutral() {
     for content in ["", "\n", "  \n\t\n"] {
         let inspection = inspect_lockfile(".terraform.lock.hcl", Some(content)).expect("empty");
         let spec = inspection.spec.expect("spec");
-        assert!(spec.providers.is_empty());
+        assert_eq!(spec.providers, [] as [String; 0]);
         assert!(inspection.findings.is_empty(), "neutral lock stays silent");
     }
 }
@@ -159,7 +159,7 @@ fn inspect_ignores_non_provider_blocks() {
     let content = "# comment only\nterraform {\n  required_version = \">= 1.6\"\n}\n";
     let inspection = inspect_lockfile(".terraform.lock.hcl", Some(content)).expect("blocks");
     let spec = inspection.spec.expect("spec");
-    assert!(spec.providers.is_empty());
+    assert_eq!(spec.providers, [] as [String; 0]);
     assert!(inspection.findings.is_empty());
 }
 

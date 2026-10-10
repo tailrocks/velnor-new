@@ -49,7 +49,7 @@ fn malformed_content_abandons_inference() {
         &contents(&[("main.tf", "((( garbage")]),
         &mise(&[]),
     );
-    assert!(evidence.inferred.is_empty());
+    assert_eq!(evidence.inferred, [] as [String; 0]);
 }
 
 #[test]
