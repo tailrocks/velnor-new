@@ -14,6 +14,13 @@ pub(super) fn resolve_cargo_out_dir_source(
 ) -> Outcome<PathBuf> {
     validate_suffix(suffix)?;
     let out_dir = compiler_out_dir.canonicalize()?;
+    if compiler_out_dir.as_os_str() != out_dir.as_os_str() {
+        return Err(format!(
+            "compiler OUT_DIR is not its exact canonical path: {}",
+            compiler_out_dir.display()
+        )
+        .into());
+    }
     if !out_dir.is_dir() {
         return Err(format!("compiler OUT_DIR is not a directory: {}", out_dir.display()).into());
     }
@@ -32,7 +39,7 @@ pub(super) fn resolve_cargo_out_dir_source(
         .into());
     }
     let source = expected.canonicalize()?;
-    if source != expected {
+    if source.as_os_str() != expected.as_os_str() {
         return Err(format!(
             "compiler OUT_DIR source resolves outside its exact path: {}",
             expected.display()
@@ -157,6 +164,44 @@ mod tests {
         assert!(
             resolve_cargo_out_dir_source(Path::new("generated.rs"), &dependencies, &out_dir)
                 .is_err()
+        );
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn out_dir_resolution_rejects_symlinked_out_dir_and_intermediate_path() -> Outcome<()> {
+        use std::os::unix::fs::symlink;
+
+        let scratch = ScratchDir::create()?;
+        let actual_out_dir = scratch.0.join("actual-out");
+        let aliased_out_dir = scratch.0.join("out-alias");
+        let actual_nested = scratch.0.join("actual-nested");
+        let nested_alias = actual_out_dir.join("nested");
+        let generated = actual_nested.join("generated.rs");
+        fs::create_dir_all(&actual_out_dir)?;
+        fs::create_dir_all(&actual_nested)?;
+        fs::write(&generated, "#[test] fn generated() {}\n")?;
+        symlink(&actual_out_dir, &aliased_out_dir)?;
+        symlink(&actual_nested, &nested_alias)?;
+        let dependencies = HashSet::from([generated.canonicalize()?]);
+        assert!(
+            resolve_cargo_out_dir_source(
+                Path::new("nested/generated.rs"),
+                &dependencies,
+                &aliased_out_dir
+            )
+            .is_err(),
+            "accepted a symlinked compiler OUT_DIR"
+        );
+        assert!(
+            resolve_cargo_out_dir_source(
+                Path::new("nested/generated.rs"),
+                &dependencies,
+                &actual_out_dir
+            )
+            .is_err(),
+            "accepted a symlinked intermediate source directory"
         );
         Ok(())
     }
