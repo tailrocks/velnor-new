@@ -107,7 +107,10 @@ fn provider_writer_election_elects_lowest_id_per_key() -> Result<(), RenderError
         Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
         "lowest id wins with the key bound to its composite output"
     );
-    assert!(provider_saves(&jobs["tofu-b"]).is_empty());
+    assert_eq!(
+        provider_saves(&jobs["tofu-b"]),
+        [] as [&velnor_actions_contract::Step; 0]
+    );
     assert_eq!(
         provider_saved_key(&jobs["tofu-c"]),
         Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
