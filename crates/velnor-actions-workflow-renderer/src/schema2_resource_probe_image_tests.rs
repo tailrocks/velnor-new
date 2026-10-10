@@ -17,7 +17,7 @@ fn image_family_uses_pinned_musl_build_and_exact_five_file_inventory() -> Result
     for expected in [
         "Install pinned Rust for the resource probe",
         "Install pinned Linux musl target",
-        "rustup target add --toolchain 1.98.1 x86_64-unknown-linux-musl",
+        "rustup target add --toolchain 1.99.0 x86_64-unknown-linux-musl",
         "Build locked resource probe",
         "cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml",
         "--package velnor-resource-probe --bin velnor-resource-probe --release --target x86_64-unknown-linux-musl",

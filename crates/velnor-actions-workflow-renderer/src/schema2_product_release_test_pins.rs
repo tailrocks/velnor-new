@@ -48,8 +48,8 @@ pub(super) fn test_pins() -> ProductReleasePins {
         .into_iter()
         .map(str::to_owned)
         .collect(),
-        rust_version: "1.98.1".to_owned(),
-        mr_boxington_version: "1.21.1".to_owned(),
+        rust_version: "1.99.0".to_owned(),
+        mr_boxington_version: "1.23.0".to_owned(),
     }
 }
 
@@ -60,13 +60,13 @@ fn resource_probe_argvs() -> (Vec<String>, Vec<String>) {
         "--no-env",
         "--no-hooks",
         "exec",
-        "rust@1.98.1",
+        "rust@1.99.0",
         "--",
         "rustup",
         "target",
         "add",
         "--toolchain",
-        "1.98.1",
+        "1.99.0",
         "x86_64-unknown-linux-musl",
     ]
     .map(str::to_owned)
@@ -77,7 +77,7 @@ fn resource_probe_argvs() -> (Vec<String>, Vec<String>) {
         "--no-env",
         "--no-hooks",
         "exec",
-        "rust@1.98.1",
+        "rust@1.99.0",
         "--",
         "cargo",
         "build",
