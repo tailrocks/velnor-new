@@ -27,8 +27,10 @@ pub const TOFU_PROVIDERS_KEY_PREFIX: &str = "velnor-v1-tofu-providers";
 pub const TOFU_PROVIDERS_KEY_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outputs.cache-key }}";
 /// Composite output expression for the owned provider-cache path.
 pub const TOFU_PROVIDERS_PATH_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outputs.cache-path }}";
+/// Run MBX workspace cleanup only after the exact-version/store guard passed.
+pub const MBX_WORKSPACE_CLEAN_CONDITION: &str = "always() && steps.mbx-ready.outcome == 'success'";
 
-/// Stable GitHub Actions id for a step whose outputs have consumers.
+/// Stable GitHub Actions id for a step whose outputs or outcome have consumers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum StepId {
@@ -40,6 +42,8 @@ pub enum StepId {
     ToolsCacheIdentity,
     /// `OpenTofu` provider-cache composite outputs consumed by the save step.
     TofuProviders,
+    /// Successful MBX version/store guard that enables final workspace cleanup.
+    MbxReady,
 }
 
 impl StepId {
@@ -51,6 +55,7 @@ impl StepId {
             Self::PublishBaseline => "publish-baseline",
             Self::ToolsCacheIdentity => "v2",
             Self::TofuProviders => "tofu-providers",
+            Self::MbxReady => "mbx-ready",
         }
     }
 }
@@ -149,6 +154,8 @@ pub enum StepRole {
     MbxVersionCheck,
     /// Exact MBX and Rust toolchain preflight.
     MbxPreflight,
+    /// Final workspace-target cleanup before the native MBX action post step.
+    MbxWorkspaceCleanup,
 }
 
 impl StepRole {
@@ -193,7 +200,9 @@ impl StepRole {
             Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
             Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),
             Self::MbxCache => valid_mbx_cache(kind),
-            Self::MbxVersionCheck => matches!(kind, StepKind::Shell { .. }),
+            Self::MbxVersionCheck | Self::MbxWorkspaceCleanup => {
+                matches!(kind, StepKind::Shell { .. })
+            }
             Self::PreparePinnedTools
             | Self::PrepareRustComponents
             | Self::CargoDeny
@@ -226,6 +235,7 @@ impl StepRole {
             Self::BaselinePublisher => Some(StepId::PublishBaseline),
             Self::ToolsCacheIdentity => Some(StepId::ToolsCacheIdentity),
             Self::TofuProvidersRestore => Some(StepId::TofuProviders),
+            Self::MbxVersionCheck => Some(StepId::MbxReady),
             _ => None,
         }
     }
@@ -237,6 +247,7 @@ impl StepRole {
             StepId::PublishBaseline => Self::BaselinePublisher,
             StepId::ToolsCacheIdentity => Self::ToolsCacheIdentity,
             StepId::TofuProviders => Self::TofuProvidersRestore,
+            StepId::MbxReady => Self::MbxVersionCheck,
         }
     }
 }
@@ -344,6 +355,7 @@ fn valid_mbx_cache(kind: &StepKind) -> bool {
 /// Returns a contract error for an invalid role/payload or duplicate step ID.
 pub fn validate_step_sequence(steps: &[Step], scope: &str) -> Result<(), ContractError> {
     validate_step_identities(steps, scope)?;
+    super::step_mbx_lifecycle::validate_mbx_cleanup_sequence(steps, scope)?;
     super::step_protocol::validate_tofu_provider_sequence(steps, scope)
 }
 

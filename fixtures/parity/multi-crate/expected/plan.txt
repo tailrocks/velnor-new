@@ -21,8 +21,8 @@ Workflow to generate
     - plan (14 steps)
     - publish-baseline (5 steps)
     - required (8 steps)
-    - rust-parity-app (21 steps)
-    - rust-parity-tool (19 steps)
+    - rust-parity-app (22 steps)
+    - rust-parity-tool (20 steps)
     - 2 Rust crate jobs
       Each: Clippy -> build -> run tests -> doctests -> doc build
       Entries:

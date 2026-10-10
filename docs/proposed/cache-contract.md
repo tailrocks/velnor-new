@@ -106,7 +106,7 @@ Each path has one owner:
 |---|---|---|
 | Mise tools and Rust components | V2 tools layer | Archive exact tool, Rustup, and Cargo-bin paths under typed static and runtime-qualified identity; disable Mise's built-in cache |
 | Cargo registry and Git sources | Velnor source layer | Archive only `registry/index`, `registry/cache`, and `git/db`; exclude binaries and credentials |
-| Compiler objects and scheduler state | `jdx/mr-boxington-action` when MBX is selected | Production remains pinned to action v1.6.0 and MBX `1.21.1`; the newer MBX `1.22.0` is candidate-only pending exact source, lifecycle, disk, and input qualification. The action owns object format, cache transport, and post step. The stable logical store path is `$RUNNER_TEMP/velnor/mbx`. Velnor does not install MBX through Mise or implement the object format |
+| Compiler objects and scheduler state | `jdx/mr-boxington-action` when MBX is selected | Production remains pinned to action v1.6.0 and MBX `1.21.1`; the newer MBX `1.22.0` is candidate-only pending exact source, lifecycle, disk, and input qualification. The action owns object format, cache transport, and post step. Velnor sets `MBX_GC_AUTO=0` during active work, then runs guarded `mbx clean` after the last workspace consumer and before action post; this removes managed workspace outputs but preserves the object store and receipts for export. The stable logical store path is `$RUNNER_TEMP/velnor/mbx`. Velnor does not install MBX through Mise or implement the object format |
 | Mutable target directory | Matrix job | Reuse sequentially; never share concurrently |
 | Successful task result | Mise task cache | Use only for qualified deterministic tasks and complete outputs |
 

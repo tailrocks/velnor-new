@@ -11,6 +11,8 @@ use velnor_actions_orchestrator::{prepare, render_staged_tree};
 
 use crate::impl_common::{TestResult, make_repo};
 
+const CACHE_GENERATION: &str = "velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37";
+
 fn assert_candidate_ref(writer: &str) {
     assert!(
         writer.contains(&format!(
@@ -50,6 +52,12 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
     assert_candidate_ref(writer);
     assert_writer(writer);
     assert_reader(reader);
+    assert_lifecycle_cleanup(
+        writer,
+        "Compile MBX cache probe",
+        Some("Sample runner disk after cleanup"),
+    );
+    assert_lifecycle_cleanup(reader, "Require reused compilation", None);
     Ok(())
 }
 
@@ -60,13 +68,13 @@ fn assert_writer(writer: &str) {
     );
     assert!(writer.contains("actions: write"), "{writer}");
     assert!(writer.contains("ACTIONS_CACHE_MODE: write"), "{writer}");
-    assert!(writer.contains("MBX_GC_AUTO: \"1\""), "{writer}");
+    assert!(writer.contains("MBX_GC_AUTO: \"0\""), "{writer}");
     assert!(
         writer.contains("save-on-workflow-dispatch: \"true\""),
         "{writer}"
     );
     assert!(
-        writer.contains("velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
+        writer.contains(&format!("{CACHE_GENERATION}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}")),
         "{writer}"
     );
     assert!(writer.contains("version: 1.21.1"), "{writer}");
@@ -96,13 +104,13 @@ fn assert_reader(reader: &str) {
     );
     assert!(reader.contains("actions: read"), "{reader}");
     assert!(reader.contains("ACTIONS_CACHE_MODE: read"), "{reader}");
-    assert!(reader.contains("MBX_GC_AUTO: \"1\""), "{reader}");
+    assert!(reader.contains("MBX_GC_AUTO: \"0\""), "{reader}");
     assert!(
         reader.contains("steps.mbx_cache.outputs.cache-hit"),
         "{reader}"
     );
     assert!(
-        reader.contains("velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
+        reader.contains(&format!("{CACHE_GENERATION}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}")),
         "{reader}"
     );
     assert!(
@@ -155,6 +163,31 @@ fn assert_reader(reader: &str) {
         "{reader}"
     );
     assert_candidate_owner(reader);
+}
+
+fn assert_lifecycle_cleanup(job: &str, final_consumer: &str, post_clean_sample: Option<&str>) {
+    let action = job.find("      - name: Restore MBX objects\n");
+    let ready = job.find("      - name: Verify MBX action identity and write policy\n");
+    let consumer = job.find(&format!("      - name: {final_consumer}\n"));
+    let clean = job.find("      - name: Clean MBX workspace outputs\n");
+    assert!(
+        action.is_some_and(|position| ready.is_some_and(|ready| position < ready))
+            && ready.is_some_and(|ready| consumer.is_some_and(|consumer| ready < consumer))
+            && consumer.is_some_and(|consumer| clean.is_some_and(|clean| consumer < clean)),
+        "cleanup must follow the successful action identity check and final consumer: {job}"
+    );
+    assert!(
+        job.contains("if: always() && steps.mbx-ready.outcome == 'success'"),
+        "cleanup must require successful action setup without masking task failure: {job}"
+    );
+    if let Some(sample) = post_clean_sample {
+        let clean = clean.unwrap_or(usize::MAX);
+        assert!(
+            job.find(&format!("      - name: {sample}\n"))
+                .is_some_and(|sample| clean < sample),
+            "the final disk sample must follow workspace cleanup: {job}"
+        );
+    }
 }
 
 #[cfg(unix)]

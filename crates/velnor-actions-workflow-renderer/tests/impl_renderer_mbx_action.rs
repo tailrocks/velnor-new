@@ -39,6 +39,10 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
         version_check.name,
         velnor_actions_workflow_renderer::MBX_VERSION_CHECK_NAME
     );
+    assert_eq!(
+        version_check.id,
+        Some(velnor_actions_contract::StepId::MbxReady)
+    );
     let StepKind::Shell {
         run,
         env: check_env,
@@ -79,7 +83,7 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
     assert!(!with.contains_key("cache-key"));
     assert!(!with.contains_key("restore-keys"));
     let expected_generation = format!(
-        "{}-gc-auto-v1-action-{}-lane-${{{{ runner.environment }}}}-job-${{{{ github.job }}}}",
+        "{}-gc-auto-off-final-clean-v1-action-{}-lane-${{{{ runner.environment }}}}-job-${{{{ github.job }}}}",
         mbx_cache_generation(TEST_MBX_VERSION),
         "a".repeat(40)
     );
@@ -202,6 +206,9 @@ fn rendered_action_has_rust_homes_and_native_owner_policy() -> Result<(), Render
     );
     assert!(text.contains("MBX_SHARE_OUT_DIR: \"0\""));
     assert!(text.contains("MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx"));
-    assert!(text.contains("MBX_GC_AUTO: \"1\""));
+    assert!(text.contains("MBX_GC_AUTO: \"0\""));
+    assert!(text.contains("name: Clean MBX workspace outputs"));
+    assert!(text.contains("if: always() && steps.mbx-ready.outcome == 'success'"));
+    assert!(text.contains("mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx clean"));
     Ok(())
 }
