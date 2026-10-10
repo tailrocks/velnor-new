@@ -184,6 +184,32 @@ fn typed_task_requires_checkout_staging_and_credential_free_inputs() {
 }
 
 #[test]
+fn typed_task_rejects_helper_version_from_a_different_generation_context() {
+    let mut task = task_step(0);
+    let StepKind::TaskExecution {
+        report_helper_version,
+        ..
+    } = &mut task.kind
+    else {
+        unreachable!();
+    };
+    *report_helper_version = "0.1.4".to_owned();
+    let jobs = BTreeMap::from([(
+        "rust-demo".to_owned(),
+        simple_job(vec![checkout_step(), acquire_step(), task]),
+    )]);
+
+    let error = factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[], None)
+        .expect_err("task metadata cannot name a different helper release than the renderer");
+    assert!(
+        error
+            .to_string()
+            .contains("declared_task_helper_version_mismatch:rust-demo"),
+        "unexpected error: {error}"
+    );
+}
+
+#[test]
 fn scale_set_task_requires_a_resolved_linux_x64_verification_profile() {
     let mut job = simple_job(vec![checkout_step(), acquire_step(), task_step(0)]);
     job.runs_on = "scale-set:velnor+orbstack-linux".to_owned();

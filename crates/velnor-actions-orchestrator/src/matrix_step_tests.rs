@@ -131,7 +131,14 @@ fn identity_env_contract_enforces_in_every_build() {
 #[test]
 fn obligation_step_carries_the_report_lookup_key() {
     let obligation = obligation();
-    let step = obligation_step(&obligation, &ToolCatalog::pinned(), &[], None).expect("step");
+    let step = obligation_step(
+        &obligation,
+        &ToolCatalog::pinned(),
+        &[],
+        None,
+        env!("CARGO_PKG_VERSION"),
+    )
+    .expect("step");
     let velnor_actions_contract::StepKind::TaskExecution {
         task_id,
         task_digest,
@@ -227,7 +234,16 @@ fn actual_nextest_producer_selector_passes_task_execution_contract() {
         run,
     };
     let checkout_uses = format!("actions/checkout@{:040x}", 0);
-    let step = obligation_step(&obligation, &catalog, &[], None).expect("typed task step");
+    let step = obligation_step(&obligation, &catalog, &[], None, env!("CARGO_PKG_VERSION"))
+        .expect("typed task step");
+    let velnor_actions_contract::StepKind::TaskExecution {
+        report_helper_version,
+        ..
+    } = &step.kind
+    else {
+        panic!("obligation must remain a typed task step");
+    };
+    assert_eq!(report_helper_version, env!("CARGO_PKG_VERSION"));
     let ir = obligation_workflow_ir(&checkout_uses, step);
     let context = renderer_context(checkout_uses);
     velnor_actions_workflow_renderer::render_workflow_ir(
@@ -265,7 +281,8 @@ fn actual_obligation_producer_renders_150_jobs_through_one_typed_action_shape() 
         .map(|word| word.into_string().expect("UTF-8 task argv"))
         .collect();
         refresh_task_identity(&mut task);
-        let step = obligation_step(&task, &catalog, &[], None).expect("producer step");
+        let step = obligation_step(&task, &catalog, &[], None, env!("CARGO_PKG_VERSION"))
+            .expect("producer step");
         ir.jobs.insert(
             format!("rust-crate-{index}"),
             obligation_task_job(&checkout_uses, step),
@@ -313,7 +330,8 @@ fn generated_pinned_task_step() -> Step {
     let toolchain = toolchain_id(&task.toolchain_inputs).expect("toolchain identity");
     task.task_digest = task_digest_for_execution(&task.task_id, &task.run, &toolchain)
         .expect("updated task digest");
-    obligation_step(&task, &catalog, &[], None).expect("generated task step")
+    obligation_step(&task, &catalog, &[], None, env!("CARGO_PKG_VERSION"))
+        .expect("generated task step")
 }
 
 fn obligation_workflow_ir(checkout_uses: &str, task_step: Step) -> WorkflowIr {
@@ -428,7 +446,14 @@ fn renderer_context(
 #[test]
 fn obligation_step_skips_when_plan_covered_it() {
     let obligation = obligation();
-    let step = obligation_step(&obligation, &ToolCatalog::pinned(), &[], None).expect("step");
+    let step = obligation_step(
+        &obligation,
+        &ToolCatalog::pinned(),
+        &[],
+        None,
+        env!("CARGO_PKG_VERSION"),
+    )
+    .expect("step");
     assert_eq!(
         step.condition.as_deref(),
         Some("!contains(needs.plan.outputs.covered_tasks, ',stack/rust/demo/clippy/default,')")
@@ -436,10 +461,16 @@ fn obligation_step_skips_when_plan_covered_it() {
     let mut forged = obligation.clone();
     forged.task_id = "not-a-task".to_owned();
     assert!(
-        obligation_step(&forged, &ToolCatalog::pinned(), &[], None)
-            .expect_err("malformed id")
-            .to_string()
-            .contains("malformed_task_id"),
+        obligation_step(
+            &forged,
+            &ToolCatalog::pinned(),
+            &[],
+            None,
+            env!("CARGO_PKG_VERSION")
+        )
+        .expect_err("malformed id")
+        .to_string()
+        .contains("malformed_task_id"),
         "malformed IDs never reach generated expressions"
     );
 }
@@ -509,7 +540,14 @@ fn doc_obligation_step_carries_typed_rustdocflags() {
     doc.kind = TaskKind::Doc.as_str().to_owned();
     doc.step_name = DOCUMENTATION_NAME.to_owned();
     refresh_task_identity(&mut doc);
-    let step = obligation_step(&doc, &ToolCatalog::pinned(), &[], None).expect("step");
+    let step = obligation_step(
+        &doc,
+        &ToolCatalog::pinned(),
+        &[],
+        None,
+        env!("CARGO_PKG_VERSION"),
+    )
+    .expect("step");
     let velnor_actions_contract::StepKind::TaskExecution { env, .. } = &step.kind else {
         panic!("obligation must be a typed task step");
     };
@@ -547,7 +585,14 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
     tofu.kind = "validate".to_owned();
     tofu.step_name = "Validate".to_owned();
     refresh_task_identity(&mut tofu);
-    let step = obligation_step(&tofu, &ToolCatalog::pinned(), &[], None).expect("step");
+    let step = obligation_step(
+        &tofu,
+        &ToolCatalog::pinned(),
+        &[],
+        None,
+        env!("CARGO_PKG_VERSION"),
+    )
+    .expect("step");
     let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
         panic!("OpenTofu remains a shell step");
     };
@@ -587,7 +632,14 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
         !env.contains_key(TF_CLI_CONFIG_FILE_ENV),
         "temp CLI config stays local-only until a materialization step lands"
     );
-    let step = obligation_step(&obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
+    let step = obligation_step(
+        &obligation(),
+        &ToolCatalog::pinned(),
+        &[],
+        None,
+        env!("CARGO_PKG_VERSION"),
+    )
+    .expect("step");
     let velnor_actions_contract::StepKind::TaskExecution { env, .. } = &step.kind else {
         panic!("obligation must be a typed task step");
     };
@@ -610,7 +662,14 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
 #[test]
 fn non_doc_obligation_steps_carry_no_rustdocflags() {
     use velnor_actions_rust::RUSTDOCFLAGS_ENV;
-    let step = obligation_step(&obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
+    let step = obligation_step(
+        &obligation(),
+        &ToolCatalog::pinned(),
+        &[],
+        None,
+        env!("CARGO_PKG_VERSION"),
+    )
+    .expect("step");
     let velnor_actions_contract::StepKind::TaskExecution { env, .. } = &step.kind else {
         panic!("Rust obligations use typed task steps");
     };

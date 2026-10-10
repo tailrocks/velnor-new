@@ -163,6 +163,7 @@ pub(super) fn build_workflow_for_consumer_release(
         &catalog,
         fetch_roots,
         acquire.as_ref(),
+        &version,
     )?;
     let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
     for (id, job) in built.jobs {

@@ -53,6 +53,7 @@ pub(crate) fn build_for_workflow(
     catalog: &ToolCatalog,
     fetch_roots: &[String],
     acquire: Option<&Step>,
+    helper_version: &str,
 ) -> Result<CrateBuild, OrchestratorError> {
     build_crate_jobs(
         label,
@@ -62,6 +63,7 @@ pub(crate) fn build_for_workflow(
         fetch_roots,
         acquire,
         config.workflow.max_parallel_jobs,
+        helper_version,
     )
 }
 
@@ -86,6 +88,7 @@ pub(crate) fn build_crate_jobs(
     fetch_roots: &[String],
     acquire: Option<&Step>,
     max_parallel_jobs: u32,
+    helper_version: &str,
 ) -> Result<CrateBuild, OrchestratorError> {
     let grouped = group_runnable(&discovery.proposals);
     let assigned = assign_group_ids(&grouped);
@@ -136,6 +139,7 @@ pub(crate) fn build_crate_jobs(
             use_opentofu,
             acquire,
             max_parallel_jobs,
+            helper_version,
         )?;
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
@@ -253,6 +257,7 @@ fn render_job(
     use_opentofu: bool,
     acquire: Option<&Step>,
     max_parallel_jobs: u32,
+    helper_version: &str,
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(acquire.cloned());
@@ -309,6 +314,7 @@ fn render_job(
             catalog,
             &downstream,
             cap,
+            helper_version,
         )?);
     }
     steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);

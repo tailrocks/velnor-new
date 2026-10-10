@@ -13,6 +13,7 @@ fn drivers_follow_per_crate_selection() {
         &[],
         None,
         2,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.drivers["rust-demo"], RenderDriver::Mbx);

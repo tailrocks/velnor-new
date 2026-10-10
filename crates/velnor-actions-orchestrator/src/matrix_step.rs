@@ -208,6 +208,7 @@ pub(crate) fn obligation_step(
     catalog: &ToolCatalog,
     _downstream: &[String],
     matrix_cap: Option<u32>,
+    helper_version: &str,
 ) -> Result<Step, OrchestratorError> {
     // Unknown segments keep the previous single-stack behavior: the
     // grammar validation below fails them as malformed task IDs.
@@ -238,7 +239,7 @@ pub(crate) fn obligation_step(
                 toolchain_inputs: obligation.toolchain_inputs.clone(),
                 matrix_id,
                 matrix_key: obligation.matrix_key.clone(),
-                report_helper_version: env!("CARGO_PKG_VERSION").to_owned(),
+                report_helper_version: helper_version.to_owned(),
                 matrix_max_parallel: matrix_cap,
             },
         }

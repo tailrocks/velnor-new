@@ -84,6 +84,7 @@ fn groups_obligations_into_one_ordered_job_per_crate() {
         &[],
         None,
         2,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 2, "one job per crate");
@@ -140,6 +141,7 @@ fn skips_testless_and_workspace_groups() {
         &[],
         None,
         2,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1);
@@ -165,6 +167,7 @@ fn member_binding_agrees_with_built_jobs() {
         &[],
         None,
         2,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1);
@@ -233,6 +236,7 @@ fn drivers_follow_per_crate_selection() {
         &[],
         None,
         2,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.drivers["rust-demo"], RenderDriver::Mbx);
@@ -253,6 +257,7 @@ fn empty_groups_build_no_jobs() {
         &[],
         None,
         2,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("empty build");
     assert!(found.jobs.is_empty() && found.drivers.is_empty());
@@ -278,6 +283,7 @@ fn acquire_stages_before_report_wrappers() {
         &[],
         Some(&acquire),
         2,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     let steps = names(&found.jobs[0].1);
@@ -323,6 +329,7 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
         &[],
         None,
         2,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 3);

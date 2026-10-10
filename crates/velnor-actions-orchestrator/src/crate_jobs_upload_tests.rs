@@ -64,6 +64,7 @@ fn two_obligation_job() -> (String, Job, String, String) {
         &[],
         None,
         2,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     let (job_id, job) = found.jobs.into_iter().next().expect("demo job");
