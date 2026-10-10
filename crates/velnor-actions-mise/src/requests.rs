@@ -217,6 +217,7 @@ enum MbxAuthority {
     ActionOwned,
 }
 
+/// Typed exact-pinned tool execution that rejects payloads bypassing Mise.
 #[derive(Clone, PartialEq, Eq)]
 pub struct PinnedToolExec {
     /// Tools selected as `<tool>@<exact>` before the `--` separator.
