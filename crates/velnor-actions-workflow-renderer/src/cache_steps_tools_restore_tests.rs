@@ -276,6 +276,10 @@ fn one_tree_seed_admission_preserves_only_the_imported_payload_on_miss() {
     assert!(seed_run.status.success(), "{seed_run:?}");
     let admitted_output = fs::read_to_string(&github_output).expect("seed output");
     assert_eq!(admitted_output, "seed_admitted=true\n", "{seed_run:?}");
+    let admitted = admitted_output
+        .strip_prefix("seed_admitted=")
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
     let imported_mise = home.join(".local/share/mise/installs/marker");
     assert_eq!(
         fs::read_to_string(&imported_mise).expect("Mise import"),
@@ -283,7 +287,7 @@ fn one_tree_seed_admission_preserves_only_the_imported_payload_on_miss() {
     );
     assert!(!runner_temp.join("velnor/rustup").exists());
 
-    let restore = run_script(&home, &runner_temp, None, Some(&key), None, Some("true"));
+    let restore = run_script(&home, &runner_temp, None, Some(&key), None, admitted);
     assert!(restore.status.success(), "{restore:?}");
     assert_eq!(
         fs::read_to_string(imported_mise).expect("retained Mise import"),
