@@ -119,15 +119,15 @@ fn receipts_require_exact_pins_paths_digests_and_platform() {
     let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(60))
         .expect("test deadline");
     assert!(verify_check_system_tools(CheckPlatform::LinuxX64, &[pin()], deadline).is_err());
-    assert!(
+    assert_eq!(
         verify_check_system_tools(
             CheckPlatform::LinuxX64,
             &[],
             velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(60))
                 .expect("test deadline"),
         )
-        .expect("empty")
-        .is_empty()
+        .expect("empty"),
+        [] as [velnor_actions_mise::checks::SystemToolProof; 0]
     );
 }
 

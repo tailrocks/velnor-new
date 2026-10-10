@@ -213,9 +213,9 @@ fn credential_allowlists_are_exact() {
         ["MISE_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"]
     );
     assert_eq!(CREDENTIAL_ALLOWLIST_BASELINE, ["GITHUB_TOKEN", "GH_TOKEN"]);
-    assert!(EnvPolicy::Verify.allowed_credentials().is_empty());
-    assert!(EnvPolicy::Discovery.allowed_credentials().is_empty());
-    assert!(EnvPolicy::RepoTask.allowed_credentials().is_empty());
+    assert_eq!(EnvPolicy::Verify.allowed_credentials(), []);
+    assert_eq!(EnvPolicy::Discovery.allowed_credentials(), []);
+    assert_eq!(EnvPolicy::RepoTask.allowed_credentials(), []);
     assert!(EnvPolicy::Bootstrap.inherits_parent());
     assert!(EnvPolicy::Baseline.inherits_parent());
     assert!(!EnvPolicy::RepoTask.inherits_parent());

@@ -9,8 +9,13 @@ fn has(env: &[(OsString, OsString)], key: &str) -> bool {
     env.iter().any(|(name, _)| name == key)
 }
 
-#[test]
-fn mbx_child_uses_rustup_path_without_mise_cargo_wrappers_or_shims() -> Result<(), String> {
+struct MbxChildSnapshot {
+    catalog: ToolCatalog,
+    child: Vec<(OsString, OsString)>,
+    disables_auto_install: bool,
+}
+
+fn child_snapshot() -> Result<MbxChildSnapshot, String> {
     let request = PinnedToolExec::new(
         vec![PinnedTool::Rust, PinnedTool::MrBoxington],
         std::ffi::OsStr::new("mbx"),
@@ -25,7 +30,16 @@ fn mbx_child_uses_rustup_path_without_mise_cargo_wrappers_or_shims() -> Result<(
         .map_err(|err| err.to_string())?
         .with_env(&homes.env(&catalog))
         .map_err(|err| err.to_string())?;
-    let original_path = std::env::join_paths([
+    let child = command.spawn_env(&parent_environment(original_path()?));
+    Ok(MbxChildSnapshot {
+        catalog,
+        child,
+        disables_auto_install: command.disables_auto_install(),
+    })
+}
+
+fn original_path() -> Result<OsString, String> {
+    std::env::join_paths([
         "/Users/alex/.local/share/mise/command-wrappers/bin",
         "/Users/alex/.local/share/mise/shims",
         "/Users/alex/.cargo/bin",
@@ -34,8 +48,11 @@ fn mbx_child_uses_rustup_path_without_mise_cargo_wrappers_or_shims() -> Result<(
         "/opt/other/command-wrappers/bin",
         "/usr/bin",
     ])
-    .map_err(|err| err.to_string())?;
-    let parent = vec![
+    .map_err(|err| err.to_string())
+}
+
+fn parent_environment(path: OsString) -> Vec<(OsString, OsString)> {
+    vec![
         (OsString::from("HOME"), OsString::from("/Users/alex")),
         (
             OsString::from("CARGO"),
@@ -65,15 +82,27 @@ fn mbx_child_uses_rustup_path_without_mise_cargo_wrappers_or_shims() -> Result<(
             OsString::from("MISE_DATA_DIR"),
             OsString::from("/Users/alex/.local/share/mise"),
         ),
-        (OsString::from("PATH"), original_path),
+        (OsString::from("PATH"), path),
         (OsString::from("GITHUB_TOKEN"), OsString::from("sentinel")),
         (
             OsString::from("CARGO_REGISTRY_TOKEN"),
             OsString::from("sentinel"),
         ),
-    ];
+    ]
+}
 
-    let child = command.spawn_env(&parent);
+#[test]
+fn mbx_child_uses_rustup_path_without_mise_cargo_wrappers_or_shims() -> Result<(), String> {
+    let snapshot = child_snapshot()?;
+    assert_mbx_path_is_selected(&snapshot.child)?;
+    assert_catalog_rustup_selector(&snapshot);
+    assert_owned_tool_homes_survive(&snapshot.child);
+    assert_credentials_are_removed(&snapshot.child);
+    assert!(snapshot.disables_auto_install);
+    Ok(())
+}
+
+fn assert_mbx_path_is_selected(child: &[(OsString, OsString)]) -> Result<(), String> {
     let child_path = child
         .iter()
         .rev()
@@ -94,20 +123,28 @@ fn mbx_child_uses_rustup_path_without_mise_cargo_wrappers_or_shims() -> Result<(
     );
     for key in ["CARGO", "RUSTC", "RUSTDOC"] {
         assert!(
-            !has(&child, key),
+            !has(child, key),
             "ambient {key} executable must not override the Mise-selected tool"
         );
     }
-    let rustup_selectors: Vec<OsString> = child
+    Ok(())
+}
+
+fn assert_catalog_rustup_selector(snapshot: &MbxChildSnapshot) {
+    let rustup_selectors = snapshot
+        .child
         .iter()
         .filter(|(key, _)| key == RUSTUP_TOOLCHAIN_ENV)
         .map(|(_, value)| value.clone())
-        .collect();
+        .collect::<Vec<_>>();
     assert_eq!(
         rustup_selectors,
-        [OsString::from(catalog.rustup_toolchain())],
+        [OsString::from(snapshot.catalog.rustup_toolchain())],
         "the inherited selector is stripped, while the explicit typed Rust pin survives"
     );
+}
+
+fn assert_owned_tool_homes_survive(child: &[(OsString, OsString)]) {
     assert!(
         child
             .iter()
@@ -121,12 +158,13 @@ fn mbx_child_uses_rustup_path_without_mise_cargo_wrappers_or_shims() -> Result<(
         "the catalog-owned Cargo home survives"
     );
     assert!(
-        has(&child, "CARGO_HOME"),
+        has(child, "CARGO_HOME"),
         "isolated Cargo cache home is preserved"
     );
-    assert!(has(&child, "RUSTUP_HOME"), "Rustup home is preserved");
-    assert!(!has(&child, "GITHUB_TOKEN"));
-    assert!(!has(&child, "CARGO_REGISTRY_TOKEN"));
-    assert!(command.disables_auto_install());
-    Ok(())
+    assert!(has(child, "RUSTUP_HOME"), "Rustup home is preserved");
+}
+
+fn assert_credentials_are_removed(child: &[(OsString, OsString)]) {
+    assert!(!has(child, "GITHUB_TOKEN"));
+    assert!(!has(child, "CARGO_REGISTRY_TOKEN"));
 }
