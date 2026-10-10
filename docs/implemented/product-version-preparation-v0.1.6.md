@@ -1,14 +1,16 @@
 # Product version preparation for v0.1.6
 
-- State: version-owned source and generated outputs have been reconciled on
-  `fix/release-0.1.6-qualified-generator`. Merge commit
-  `2ca50a23a6c11b6db4d23a10414c08b853f7948b` integrates accepted `main`
-  commit `1b2b5f25e418a883c85f5af31e2b657f0deb42bc`, whose tree
-  `43689bd68a6fcd7fae8df15b844e1e9a25a63086` equals reviewed PR #129 head
-  `ab8ea904d46b2bf925db73c6ed8a3a80051cdd08`. Supported captures and the
-  focused checks below pass. Full branch gates, final independent review,
-  official binary qualification, and hosted publication remain pending. This
-  is a preparation record, not a readiness or release claim.
+- State: version-owned source and generated outputs were reconciled on
+  `fix/release-0.1.6-qualified-generator` and merged by PR #122 into `main` at
+  `b081957206450b61d079b1a3a8137b164f663e4f`. The merge has parent
+  `1b2b5f25e418a883c85f5af31e2b657f0deb42bc` and tree
+  `c41fd1418519569788592a8d509770a9b41f9b4b`, identical to reviewed PR head
+  `40f3648e76f6ea3dc00d4a6beee331d5adbf7bf3`. All eight final local gate
+  commands, `verify-local`, the final independent PR review, and the ready-event
+  PR workflow passed on that exact head. The exact-main push workflow was still
+  in progress at the latest observation recorded below. Official binary
+  qualification and hosted publication remain pending; this is a preparation
+  record, not a release claim.
 - Version decision: a read-only GitHub inventory at 2026-10-10 02:14 UTC found
   immutable generator release `v0.1.4` (ID 406452151, 20 assets; manifest
   digest `d6f7788e50e0c6168c36d122d910476ac6772cd4603352ef2319a88b888fc076`)
@@ -105,6 +107,51 @@
   `git diff --check` passed. Full workspace gates, `verify-local.sh`, exact-main
   release eligibility, three-target official binary qualification, and
   generator acceptance receipt remain separate pending requirements.
-- No `v0.1.6` tag, release, draft, publication, or qualification was created
-  or claimed. The branch remains a preparation checkpoint and does not replace
-  the canonical protected product-release workflow.
+- No official `v0.1.6` tag, release, draft, or publication was created or
+  claimed. These results do not replace the canonical protected product-release
+  workflow or establish release eligibility.
+
+## Final source-branch qualification and integration
+
+- The final source-branch batch ran on clean head
+  `40f3648e76f6ea3dc00d4a6beee331d5adbf7bf3` with tree
+  `c41fd1418519569788592a8d509770a9b41f9b4b`. The receipt at
+  `/private/tmp/v016q.55gki8/final-40f/batch-receipt.txt` records the pinned
+  Mise 2026.10.6 / Rust 1.98.1 / Nextest 0.9.148 / MBX 1.21.1 environment,
+  exact target and temporary paths, unchanged root and nested lockfile hashes,
+  and command start/end times. All eight commands in `status.tsv` exited 0:
+  formatting, workspace Clippy, workspace Nextest, Alint configuration
+  validation, Alint checks, Cargo Deny, freshness, and `verify-local`.
+- Standalone workspace Nextest ran 3,668 tests: 3,668 passed and 2 were
+  skipped. `verify-local` passed all 51 stages, including the generated-selector
+  stage, a zero-diff generated workflow tree, and integration Nextest (3,668
+  passed, 2 skipped). Its selector used the executable emitted by that Cargo
+  build: `/private/tmp/v016q.55gki8/target/debug/velnor-actions`, SHA-256
+  `88026383f1ad31ef0f60546caf59063cc4916f6a3b9952f0e52bc4d6788f1564`.
+- The final independent review of PR #122 marked exact head `40f` Ready with no
+  unresolved review threads. Ready-event workflow
+  [38021035331](https://github.com/tailrocks/velnor-new/actions/runs/38021035331)
+  completed successfully: 20 jobs succeeded, including `Required`; the
+  optional Publish baseline job was skipped. PR #122 then merged as
+  `b081957206450b61d079b1a3a8137b164f663e4f`; GitHub reports Alexey Zhokhov as
+  author, GitHub as committer, and a verified commit signature.
+- The merged commit message has the trailer lines in reverse order from the
+  required source-commit order: `Signed-off-by` precedes `Co-authored-by`.
+  The saved merge attempt at
+  `/private/tmp/v016q.55gki8/final-40f/merge-attempt.txt` records a guarded
+  `gh pr merge` invocation with `--squash` and `--match-head-commit`, but without
+  `--body-file` or `--author-email`. The saved PR body
+  (`pr-body-terminal-success.md`, SHA-256
+  `666ad466edaa77176d232fb302356d6812cd27108be24cd44718ac8bbdfe0b1a`) contains
+  no trailers. Therefore the command selected GitHub's default squash-message
+  assembly; the recorded result is not evidence that GitHub reordered an
+  explicitly supplied trailer body. The source branch commit itself has the
+  required `Co-authored-by` then `Signed-off-by` order. The merged commit is
+  retained as history; this note records its actual metadata without rewriting
+  it.
+- Exact-main push workflow
+  [38022151895](https://github.com/tailrocks/velnor-new/actions/runs/38022151895)
+  targets merge commit `b081957206450b61d079b1a3a8137b164f663e4f`. At
+  2026-10-10 04:01:57 UTC, the GitHub API reported the run `in_progress`: 18 of
+  19 jobs had completed successfully and `Rust / velnor-actions-cli` was still
+  running. This is an observation at that time, not a terminal success result.
