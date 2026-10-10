@@ -12,7 +12,7 @@ use crate::{RunnerSelection, Trust, digest_b3};
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
-fn serialized_control_and_task_result_saves_cannot_authorize_cache_access() -> TestResult {
+fn serialized_disabled_layers_cannot_authorize_cache_access() -> TestResult {
     for (phase, layer) in [
         (
             QualificationPhase::Control,
@@ -22,6 +22,10 @@ fn serialized_control_and_task_result_saves_cannot_authorize_cache_access() -> T
             QualificationPhase::Cold,
             QualificationCacheLayer::TaskResult,
         ),
+        (
+            QualificationPhase::Cold,
+            QualificationCacheLayer::MbxObjects,
+        ),
     ] {
         let plan = qualification_plan(phase, 700, &"a".repeat(40), None)?;
         let entry = &plan.matrix.include[0];
@@ -30,6 +34,7 @@ fn serialized_control_and_task_result_saves_cannot_authorize_cache_access() -> T
         let layer_directive = directive
             .layer(&entry.matrix_key, layer)
             .ok_or_else(|| std::io::Error::other("layer directive missing"))?;
+        assert!(!layer_directive.active);
         let evidence = runtime_identity(&layer_directive.runtime);
         let mut serialized = serde_json::to_value(&directive)?;
         let layers = serialized["lanes"][0]["layers"]
