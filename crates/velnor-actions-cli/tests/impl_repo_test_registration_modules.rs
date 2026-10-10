@@ -14,6 +14,8 @@ use super::graph::{self, Possibility};
 mod macro_closure;
 #[path = "impl_repo_test_registration_module_paths.rs"]
 mod module_paths;
+#[path = "impl_repo_test_registration_out_dir.rs"]
+mod out_dir;
 
 type Outcome<T> = Result<T, Box<dyn Error>>;
 
@@ -88,17 +90,19 @@ impl<'ast> Visit<'ast> for ModuleCollector {
 pub(super) fn source_closure(
     root: &Path,
     compiler_dependencies: &HashSet<PathBuf>,
+    cargo_out_dir: Option<&Path>,
 ) -> Outcome<HashSet<PathBuf>> {
-    source_closure_with_evidence(root, Some(compiler_dependencies))
+    source_closure_with_evidence(root, Some(compiler_dependencies), cargo_out_dir)
 }
 
 pub(super) fn declared_target_source_closure(root: &Path) -> Outcome<HashSet<PathBuf>> {
-    source_closure_with_evidence(root, None)
+    source_closure_with_evidence(root, None, None)
 }
 
 fn source_closure_with_evidence(
     root: &Path,
     compiler_dependencies: Option<&HashSet<PathBuf>>,
+    cargo_out_dir: Option<&Path>,
 ) -> Outcome<HashSet<PathBuf>> {
     let root = root.canonicalize()?;
     let source_base = root
@@ -142,15 +146,13 @@ fn source_closure_with_evidence(
                 pending.extend(collector.modules);
             }
             let findings = graph::source_findings(&source)?;
-            for include in &findings.includes {
-                enqueue_compiled_include(
-                    &include.path,
-                    combine(file.condition, include.condition),
-                    compiler_dependencies,
-                    &file,
-                    &mut pending,
-                )?;
-            }
+            enqueue_source_includes(
+                &findings,
+                &file,
+                compiler_dependencies,
+                cargo_out_dir,
+                &mut pending,
+            )?;
             records.push(SourceRecord { file, findings });
         }
         let macro_includes = macro_closure::collect(&records, &mut expanded_macro_definitions)?;
@@ -168,6 +170,42 @@ fn source_closure_with_evidence(
         }
     }
     Ok(sources)
+}
+
+fn enqueue_source_includes(
+    findings: &graph::SourceFindings,
+    file: &ModuleFile,
+    compiler_dependencies: Option<&HashSet<PathBuf>>,
+    cargo_out_dir: Option<&Path>,
+    pending: &mut VecDeque<ModuleFile>,
+) -> Outcome<()> {
+    for include in &findings.includes {
+        let condition = combine(file.condition, include.condition);
+        match &include.path {
+            graph::IncludePath::Relative(path) => {
+                enqueue_compiled_include(path, condition, compiler_dependencies, file, pending)?;
+            }
+            graph::IncludePath::CargoOutDir(suffix) => {
+                if condition == Possibility::Never {
+                    continue;
+                }
+                let dependencies = compiler_dependencies
+                    .ok_or("Cargo OUT_DIR include has no compiled artifact evidence")?;
+                let out_dir =
+                    cargo_out_dir.ok_or("Cargo OUT_DIR include has no compiler OUT_DIR binding")?;
+                let generated =
+                    out_dir::resolve_cargo_out_dir_source(suffix, dependencies, out_dir)?;
+                enqueue_compiled_include(
+                    &generated,
+                    condition,
+                    compiler_dependencies,
+                    file,
+                    pending,
+                )?;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn enqueue_compiled_include(

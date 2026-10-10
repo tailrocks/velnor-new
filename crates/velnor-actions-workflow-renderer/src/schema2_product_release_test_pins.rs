@@ -32,6 +32,28 @@ pub(super) fn test_pins() -> ProductReleasePins {
         install_intel_target_argv: vec!["mise".to_owned(), "exec".to_owned()],
         install_resource_probe_target_argv,
         runner_build_argv: vec!["mise".to_owned(), "exec".to_owned()],
+        runner_attestation_helper_build_argv: [
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+            "rust@1.98.1",
+            "--",
+            "cargo",
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--release",
+            "-p",
+            "velnor-runner-attestation",
+            "--bin",
+            "velnor-runner-attestation-helper",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
         resource_probe_build_argv,
         actionlint_argv: vec!["mise".to_owned(), "exec".to_owned()],
         zizmor_argv: vec!["mise".to_owned(), "exec".to_owned()],

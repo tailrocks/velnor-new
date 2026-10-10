@@ -1,10 +1,10 @@
-Velnor Actions plan 0.1.6
+Velnor Actions plan 0.1.7
 Repository: <repo>
 
 Detected stacks
   Rust: selected
   Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
-  Workspace crates: 15
+  Workspace crates: 16
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, example, test; depends on velnor-actions-freshness, velnor-actions-orchestrator]
     - velnor-actions-contract (crates/velnor-actions-contract/Cargo.toml) [lib, test]
@@ -16,6 +16,7 @@ Detected stacks
     - velnor-actions-workflow-renderer (crates/velnor-actions-workflow-renderer/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-archive-guard (crates/velnor-archive-guard/Cargo.toml) [bin, lib, test]
     - velnor-resource-probe (crates/velnor-runner/crates/velnor-resource-probe/Cargo.toml) [bin, lib]
+    - velnor-runner-attestation (crates/velnor-runner/crates/velnor-runner-attestation/Cargo.toml) [bin, test]
     - velnor-runner-cli (crates/velnor-runner/crates/velnor-runner-cli/Cargo.toml) [bin, lib, test; depends on velnor-runner-core, velnor-runner-host]
     - velnor-runner-core (crates/velnor-runner/crates/velnor-runner-core/Cargo.toml) [lib, test]
     - velnor-runner-github (crates/velnor-runner/crates/velnor-runner-github/Cargo.toml) [lib, test; depends on velnor-runner-core]
@@ -57,12 +58,13 @@ Workflow to generate
     - rust-velnor-actions-tofu (24 steps)
     - rust-velnor-actions-workflow-renderer (24 steps)
     - rust-velnor-resource-probe (24 steps)
+    - rust-velnor-runner-attestation (23 steps)
     - rust-velnor-runner-cli (24 steps)
     - rust-velnor-runner-core (24 steps)
     - rust-velnor-runner-github (24 steps)
     - rust-velnor-runner-host (24 steps)
     - zizmor (7 steps)
-    - 13 Rust crate jobs
+    - 14 Rust crate jobs
       Each: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
         - rust-velnor-actions-actionlint
@@ -74,6 +76,7 @@ Workflow to generate
         - rust-velnor-actions-tofu
         - rust-velnor-actions-workflow-renderer
         - rust-velnor-resource-probe
+        - rust-velnor-runner-attestation
         - rust-velnor-runner-cli
         - rust-velnor-runner-core
         - rust-velnor-runner-github
@@ -132,6 +135,11 @@ Workflow to generate
         - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/fmt/default
         - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/nextest/default
+        - stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/build/default
+        - stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/clippy/default
+        - stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/doc/default
+        - stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/fmt/default
+        - stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/nextest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/build/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/clippy/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/doc/default
@@ -156,7 +164,7 @@ Workflow to generate
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default
-  Parallel: 13 independent crate jobs; no matrix fan-out
+  Parallel: 14 independent crate jobs; no matrix fan-out
   Critical path: stack/rust/crates/velnor-actions-actionlint/clippy/default -> stack/rust/crates/velnor-actions-actionlint/build/default -> stack/rust/crates/velnor-actions-actionlint/nextest/default (3 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
@@ -171,6 +179,7 @@ Workflow to generate
     - jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
     - jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
   Ineligible: stack/rust/crates/velnor-actions-cli/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/doctest/default has no test targets; no test command emitted
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 
 Required-check migration
