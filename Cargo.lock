@@ -998,6 +998,7 @@ name = "velnor-actions-workflow-renderer"
 version = "0.1.6"
 dependencies = [
  "velnor-actions-contract",
+ "velnor-actions-mise",
 ]
 
 [[package]]

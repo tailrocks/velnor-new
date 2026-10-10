@@ -3,6 +3,7 @@
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::{VelnorConfig, WorkflowTask, is_valid_mise_task_name};
+use velnor_actions_mise::catalog::{MR_BOXINGTON_VERSION, RUST_VERSION};
 use velnor_actions_workflow_renderer::verification_jobs::BuildTaskPolicy;
 
 use crate::build_task_tools::resolve_selected_tools;
@@ -67,7 +68,7 @@ pub(crate) fn policies(
         return Err(failure("build_task_mise_lock"));
     };
 
-    validate_config_shape(mise_config)?;
+    validate_config_shape(mise_config, rust_version)?;
     validate_lock_shape(mise_lock)?;
     let root_lock_sha256 = native_sha256(lock)?;
     let root_rust_sha256 = native_sha256(rust)?;
@@ -139,6 +140,7 @@ pub(crate) fn policies(
                 rust_version,
                 &rust_lock_options,
             )?;
+            validate_mbx_tool_closure(task, &selected_tools)?;
             Ok(BuildTaskPolicy {
                 task: (*task).clone(),
                 runner_label: task.runner.runs_on().to_owned(),
@@ -201,13 +203,16 @@ fn native_sha256(check: &ToolInputCheck) -> Result<String, OrchestratorError> {
         .ok_or_else(|| failure("build_task_source_missing_or_invalid"))
 }
 
-fn validate_config_shape(config: &NativeMiseConfig) -> Result<(), OrchestratorError> {
-    let allowed = ["min_version", "settings", "tasks", "tools", "wrappers"];
+fn validate_config_shape(
+    config: &NativeMiseConfig,
+    rust_toolchain_version: &str,
+) -> Result<(), OrchestratorError> {
+    let allowed = ["min_version", "settings", "tasks", "tools"];
     if config
         .root_keys
         .iter()
         .any(|key| !allowed.contains(&key.as_str()))
-        || !["settings", "tasks", "tools", "wrappers"]
+        || !["settings", "tasks", "tools"]
             .iter()
             .all(|key| config.root_keys.iter().any(|actual| actual == key))
     {
@@ -215,6 +220,35 @@ fn validate_config_shape(config: &NativeMiseConfig) -> Result<(), OrchestratorEr
     }
     if !config.min_version_supported() {
         return Err(failure("build_task_mise_min_version"));
+    }
+    if rust_toolchain_version != RUST_VERSION {
+        return Err(failure("build_task_rust_toolchain_version"));
+    }
+    let rust = config
+        .tools
+        .get("rust")
+        .ok_or_else(|| failure("build_task_rust_selector"))?;
+    if !rust.valid_shape
+        || !rust.unsupported_options.is_empty()
+        || rust.version.as_deref() != Some(rust_toolchain_version)
+        || rust.os.is_some()
+        || !rust.config_options.is_empty()
+        || rust.mr_boxington != Some(true)
+    {
+        return Err(failure("build_task_rust_selector"));
+    }
+    let mbx = config
+        .tools
+        .get("mr-boxington")
+        .ok_or_else(|| failure("build_task_mbx_selector"))?;
+    if !mbx.valid_shape
+        || !mbx.unsupported_options.is_empty()
+        || mbx.version.as_deref() != Some(MR_BOXINGTON_VERSION)
+        || mbx.os.is_some()
+        || !mbx.config_options.is_empty()
+        || mbx.mr_boxington.is_some()
+    {
+        return Err(failure("build_task_mbx_selector"));
     }
     let settings = &config.settings;
     if !settings.present
@@ -230,14 +264,18 @@ fn validate_config_shape(config: &NativeMiseConfig) -> Result<(), OrchestratorEr
     {
         return Err(failure("build_task_mise_settings"));
     }
-    let wrappers = &config.wrappers;
-    if !wrappers.present
-        || !wrappers.valid_shape
-        || wrappers.cargo_command.as_deref() != Some("mbx")
-        || wrappers.mbx_cargo_shim_mode.as_deref() != Some("1")
-        || !wrappers.unsupported_fields.is_empty()
-    {
-        return Err(failure("build_task_mise_mbx_wrapper"));
+    Ok(())
+}
+
+/// Rust build tasks must select the separately pinned MBX executable.
+fn validate_mbx_tool_closure(
+    task: &velnor_actions_contract::BuildTask,
+    selected_tools: &[velnor_actions_workflow_renderer::verification_jobs::BuildTaskTool],
+) -> Result<(), OrchestratorError> {
+    let uses_rust = task.tools.iter().any(|tool| tool == "rust");
+    let selects_mbx = selected_tools.iter().any(|tool| tool.key == "mr-boxington");
+    if uses_rust && !selects_mbx {
+        return Err(failure("build_task_rust_requires_mbx"));
     }
     Ok(())
 }
@@ -260,7 +298,6 @@ fn validate_task_source_shape(
         || config.tasks.is_empty()
         || !config.tools.is_empty()
         || config.settings.present
-        || config.wrappers.present
     {
         return Err(failure("build_task_source_config_must_only_declare_tasks"));
     }
@@ -360,3 +397,7 @@ fn failure(problem: &str) -> OrchestratorError {
         problem: problem.to_owned(),
     }
 }
+
+#[cfg(test)]
+#[path = "build_tasks_tests.rs"]
+mod tests;
