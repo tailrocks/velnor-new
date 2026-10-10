@@ -21,6 +21,8 @@ pub enum Yaml {
     Map(Vec<(String, Self)>),
     /// One-line flow sequence of scalars: `[a, b]`.
     Flow(Vec<String>),
+    /// One-line flow mapping of strings, used for compact generated inputs.
+    FlowMap(Vec<(String, String)>),
     /// Double-quoted scalar. Plain `6379:6379` is a mapping in a sequence.
     Quoted(String),
     /// Plain or quoted scalar plus a trailing YAML comment.
@@ -101,6 +103,7 @@ impl Yaml {
             | Self::Bool(_)
             | Self::Int(_)
             | Self::Flow(_)
+            | Self::FlowMap(_)
             | Self::Quoted(_)
             | Self::Annotated { .. }
             | Self::AnchoredScalar { .. }

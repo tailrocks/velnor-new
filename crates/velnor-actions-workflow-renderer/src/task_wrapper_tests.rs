@@ -77,6 +77,9 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
             .contains("crate-0\\\"; printf injected; #")
     );
     assert_eq!(manifest_file.bytes.matches("\"task_id\":").count(), 150);
+    assert!(!action_file.bytes.contains("inputs.task_id"));
+    assert!(!action_file.bytes.contains("inputs.execution_digest"));
+    assert!(action_file.bytes.contains("inputs.digest"));
     let action = task_document_for_test();
     let run = action_run_scalar(&action);
     assert!(run.contains("argv+=(\"$value\")"));
@@ -96,7 +99,6 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
     }
 
     for (id, original) in &jobs {
-        let task_index = id.strip_prefix("rust-crate-").expect("numeric crate ID");
         let rewritten = factored.get(id).expect("job retained");
         assert_eq!(rewritten.display_name, original.display_name);
         assert_eq!(rewritten.runs_on, original.runs_on);
@@ -121,17 +123,14 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
         );
         assert_eq!(
             with.len(),
-            2,
-            "only stable ID and execution digest are inputs"
+            1,
+            "the full digest selects the validated record"
         );
-        assert_eq!(
-            with["task_id"],
-            format!("stack/rust/crate-{task_index}/test/default")
-        );
-        assert_eq!(with["execution_digest"].len(), 67);
+        assert_eq!(with.keys().next().map(String::as_str), Some("digest"));
+        assert_eq!(with["digest"].len(), 67);
         assert!(
-            with["execution_digest"].starts_with("b3-")
-                && with["execution_digest"][3..]
+            with["digest"].starts_with("b3-")
+                && with["digest"][3..]
                     .bytes()
                     .all(|byte| byte.is_ascii_hexdigit())
         );
@@ -260,7 +259,8 @@ fn typed_task_preserves_only_the_exact_runner_temp_expression() {
     let StepKind::Action { with, .. } = &factored["rust-demo"].steps[2].kind else {
         panic!("factored task uses the shared action");
     };
-    assert_eq!(with["task_id"], "stack/rust/crate-0/test/default");
+    assert_eq!(with.keys().next().map(String::as_str), Some("digest"));
+    assert_eq!(with["digest"].len(), 67);
 
     let StepKind::TaskExecution { env, .. } = &mut task.kind else {
         unreachable!();

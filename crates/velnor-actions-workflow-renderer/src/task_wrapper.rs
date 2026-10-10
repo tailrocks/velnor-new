@@ -19,8 +19,7 @@ use crate::{
 };
 
 const ACTION_NAME_PREFIX: &str = "declared-task-";
-const TASK_ID_INPUT: &str = "task_id";
-const EXECUTION_DIGEST_INPUT: &str = "execution_digest";
+const EXECUTION_DIGEST_INPUT: &str = "digest";
 const RUNTIME_RUNNER_TEMP_ENV: &str = "VELNOR_RUNTIME_RUNNER_TEMP";
 const GENERATOR_VERSION_ENV: &str = "VELNOR_GENERATOR_VERSION";
 const TASK_EXECUTION_DIGEST_ENV: &str = "VELNOR_TASK_EXECUTION_DIGEST";
@@ -138,7 +137,6 @@ pub(crate) fn factor_obligation_steps(
             eligible.insert(
                 (job_id.clone(), step_index),
                 TaskExecutionRef {
-                    task_id,
                     execution_digest,
                     helper_version: task_helper_version,
                 },
@@ -240,7 +238,6 @@ fn helper_staged_by(step: &Step, staged_binary: &str) -> bool {
 }
 
 struct TaskExecutionRef<'a> {
-    task_id: &'a str,
     execution_digest: String,
     helper_version: &'a String,
 }
@@ -283,7 +280,7 @@ fn validate_task_fields(
         validate_input(&format!("env_{key}"), value)?;
     }
     for (key, value) in [
-        (TASK_ID_INPUT, task_id),
+        ("task_id", task_id),
         ("task_digest", task_digest),
         ("matrix_id", matrix_id),
         ("matrix_key", matrix_key),
@@ -298,13 +295,10 @@ fn declared_task_call(
     task: &TaskExecutionRef<'_>,
     original: &Step,
 ) -> Result<Step, RenderError> {
-    let with = BTreeMap::from([
-        (TASK_ID_INPUT.to_owned(), task.task_id.to_owned()),
-        (
-            EXECUTION_DIGEST_INPUT.to_owned(),
-            task.execution_digest.clone(),
-        ),
-    ]);
+    let with = BTreeMap::from([(
+        EXECUTION_DIGEST_INPUT.to_owned(),
+        task.execution_digest.clone(),
+    )]);
     Ok(Step {
         name: original.name.clone(),
         id: original.id,
@@ -366,15 +360,8 @@ fn declared_task_document(
     shape: &Shape,
     generator_version: &str,
 ) -> Result<Yaml, RenderError> {
-    let inputs = vec![
-        input_definition(TASK_ID_INPUT.to_owned()),
-        input_definition(EXECUTION_DIGEST_INPUT.to_owned()),
-    ];
+    let inputs = vec![input_definition(EXECUTION_DIGEST_INPUT.to_owned())];
     let mut env = toolchain_env::credential_scrub();
-    env.insert(
-        "VELNOR_TASK_ID".to_owned(),
-        format!("${{{{ inputs.{TASK_ID_INPUT} }}}}"),
-    );
     env.insert(
         TASK_EXECUTION_DIGEST_ENV.to_owned(),
         format!("${{{{ inputs.{EXECUTION_DIGEST_INPUT} }}}}"),
@@ -414,7 +401,7 @@ fn input_definition(name: String) -> (String, Yaml) {
         Yaml::Map(vec![
             (
                 "description".to_owned(),
-                Yaml::str("Validated task identity and execution selection digest."),
+                Yaml::str("Full execution selection digest for one validated task record."),
             ),
             ("required".to_owned(), Yaml::Bool(true)),
         ]),
@@ -425,6 +412,7 @@ fn task_script(helper_version: &str) -> String {
     let mut script = String::new();
     script.push_str("unset ");
     script.push_str(&toolchain_env::CREDENTIAL_UNSET_VARS.join(" "));
+    script.push_str(" VELNOR_TASK_ID");
     script.push_str(
         r#";
 set -euo pipefail
@@ -448,7 +436,6 @@ frame=()
 while IFS= read -r -d '' field; do frame+=("$field"); done < "$frame_file"
 (( ${#frame[@]} >= 13 )) || fail_frame
 [[ "${frame[0]}" == @FRAME_MAGIC@ ]] || fail_frame
-[[ "${frame[1]}" == "$VELNOR_TASK_ID" ]] || fail_frame
 [[ "${frame[2]}" == "$VELNOR_TASK_EXECUTION_DIGEST" ]] || fail_frame
 [[ "${frame[1]}" =~ ^(stack|internal)/[a-z0-9._/-]+$ ]] || fail_frame
 [[ "${frame[2]}" =~ ^b3-[0-9a-f]{64}$ ]] || fail_frame
