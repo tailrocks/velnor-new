@@ -33,7 +33,7 @@ pub(super) fn parse_step(step: &Step) -> Result<Option<ParsedTask>, RenderError>
         return Ok(None);
     };
     let prefix = format!(
-        "{}s=$(date +%s%3N); ",
+        "{} s=$(date +%s%3N); ",
         toolchain_env::credential_unset_prelude()
     );
     let Some(body) = script.strip_prefix(&prefix) else {
