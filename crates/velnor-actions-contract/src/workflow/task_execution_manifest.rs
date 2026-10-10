@@ -1,8 +1,8 @@
 //! Bounded, versioned data for generated declared-task wrappers.
 //!
 //! The manifest stores task inputs once. A wrapper selects one entry by its
-//! stable task ID and execution digest; the existing plan digest remains a
-//! separate binding to the planner's obligation.
+//! full execution digest and derives the stable task ID from that record; the
+//! existing plan digest remains a separate binding to the planner's obligation.
 
 use std::collections::BTreeMap;
 
