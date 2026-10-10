@@ -102,7 +102,7 @@
     }
   ],
   "check_interval_hours": 24,
-  "checked_at": "2026-10-09T22:40:38Z",
+  "checked_at": "2026-10-10T07:31:46Z",
   "exceptions": [],
   "max_exception_days": 14,
   "runner": {
@@ -128,15 +128,6 @@
       "reason": "latest v1.7.1 resolves to commit d0825fbaf3cc36ca2609aa38e71046265a1f1e37. PR #29 closed unmerged and is historical context; it did not qualify this exact current action source for protected-main cache lifecycle behavior. Keep the qualified v1.6.0 pin until the current source passes qualification."
     },
     {
-      "expires": "2026-10-18",
-      "granted": "2026-10-04",
-      "held_version": "1.21.1",
-      "issue": "#29",
-      "key": "mr-boxington",
-      "owner": "@donbeave",
-      "reason": "latest v1.23.0 resolves to commit fb614644ff98c8ee3a3f28a6d31b3ba0af37b17f. PR #29 closed unmerged and is historical context; it did not qualify this exact current source for protected-main cache lifecycle, disk, and input behavior. Keep the qualified 1.21.1 pin until that source passes current-source qualification."
-    },
-    {
       "expires": "2026-10-21",
       "granted": "2026-10-07",
       "held_version": "v8.0.1",
@@ -153,44 +144,35 @@
       "key": "actions/upload-artifact",
       "owner": "@donbeave",
       "reason": "upstream released a routine patch during v0.1.1 qualification (429-retry handling, no security content); pin held for the release, update tracked with the #6 update set"
-    },
-    {
-      "expires": "2026-10-15",
-      "granted": "2026-10-08",
-      "held_version": "1.98.1",
-      "issue": "#6",
-      "key": "rust",
-      "owner": "@donbeave",
-      "reason": "issue #6 proposes Rust 1.99.0, but this candidate preserves the selected toolchain at the declared workspace MSRV 1.98 until separate compatibility evidence and approval support moving the compiler pin above it"
     }
   ],
   "tools": [
     {
-      "checked_at": "2026-10-09T22:40:38Z",
-      "latest": "2026.10.6",
+      "checked_at": "2026-10-10T07:31:46Z",
+      "latest": "2026.10.7",
       "name": "mise",
-      "pinned": "2026.10.6",
-      "qualified": "2026.10.6",
+      "pinned": "2026.10.7",
+      "qualified": "2026.10.7",
       "source": "https://api.github.com/repos/jdx/mise/releases/latest",
       "status": "current"
     },
     {
-      "checked_at": "2026-10-09T22:40:38Z",
+      "checked_at": "2026-10-10T07:31:46Z",
       "latest": "1.99.0",
       "name": "rust",
-      "pinned": "1.98.1",
-      "qualified": "1.98.1",
+      "pinned": "1.99.0",
+      "qualified": "1.99.0",
       "source": "https://static.rust-lang.org/dist/channel-rust-stable.toml",
-      "status": "held"
+      "status": "current"
     },
     {
-      "checked_at": "2026-10-09T22:40:38Z",
+      "checked_at": "2026-10-10T07:31:46Z",
       "latest": "v1.23.0",
       "name": "mr-boxington",
-      "pinned": "1.21.1",
-      "qualified": "1.21.1",
+      "pinned": "1.23.0",
+      "qualified": "1.23.0",
       "source": "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
-      "status": "held",
+      "status": "current",
       "latest_sha": "fb614644ff98c8ee3a3f28a6d31b3ba0af37b17f"
     },
     {
