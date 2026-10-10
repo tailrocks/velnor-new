@@ -69,12 +69,14 @@ containing only the probe executable. Its fixed image configuration is:
 
 - platform `linux/amd64`;
 - numeric user and group `65532:65532`;
-- entrypoint `/velnor/resource-probe`, with no command or environment values;
+- entrypoint `/velnor/resource-probe`, with no command and the exact
+  `Config.Env` produced by the pinned image builder (the tested Docker 29.4.0
+  fixture contains only its default `PATH` entry);
 - an OCI revision label equal to the source SHA used for the release build.
 
 The host-side runtime owner must run the image with a read-only root filesystem,
 no network, all Linux capabilities dropped, no-new-privileges enabled, no
-arguments or environment, and exactly one read-only bind mount of the
+arguments or environment overrides, and exactly one read-only bind mount of the
 selected daemon's canonical `DockerRootDir` to `/velnor/docker-root`. The host
 gets this source path from that daemon's `info` response, rejects a
 noncanonical or root path, and rechecks the same engine identity and path
@@ -100,12 +102,12 @@ unreviewed write or accepting a substitutable path; this proposal does not
 depend on such an anchor.
 
 The image build workflow must inspect the built image's OS, architecture, user,
-entrypoint, empty command/environment, and revision label. It must also run the
-actual image as UID/GID 65532 with the same isolation options and a disposable
-read-only directory mounted at the fixed path, then validate one bounded
-protocol record. This proves the packaged static executable starts under the
-declared profile; it does not qualify the host's security options or resource
-policy.
+entrypoint, absent command, exact builder-produced environment, and revision
+label. It must also run the actual image as UID/GID 65532 with the same
+isolation options and a disposable read-only directory mounted at the fixed
+path, then validate one bounded protocol record. This proves the packaged
+static executable starts under the declared profile; it does not qualify the
+host's security options or resource policy.
 
 ## Build, manifest, and publication
 
@@ -151,22 +153,90 @@ remaining identity fields bind the exact repository, source ref, source
 commit, signer workflow/ref, and workflow authority accepted by the protected
 coordinator for that run.
 
-The manifest also binds `platform`, `docker_image_id`, `config_digest`,
-`archive_name`, `archive_sha256`, `protocol_version`, `image_user`, and
-`entrypoint`. `docker_image_id` is the full `sha256:<64 lowercase hex>` Docker
-image ID reported for the built single-platform image; `config_digest` is the
-SHA-256 digest of that image's configuration JSON. Docker defines an image ID
-as the SHA-256 hash of its configuration JSON, so the build must verify that
-these fields are exactly equal before writing the manifest. The host verifies
-the same equality, then compares the full `docker_image_id` to the ID returned
-after loading the saved archive. A mismatch fails closed. The archive SHA-256
-is a separate digest and is not used as the Docker image ID or config digest.
+The manifest also binds `platform`, `archive_format`, `archive_sha256`,
+`oci_index_sha256`, `image_manifest_digest`, `config_digest`,
+`protocol_version`, `image_user`, and `entrypoint`. These digests identify
+different layers of the saved artifact and must never be treated as
+interchangeable:
+
+| Field | Identity |
+| --- | --- |
+| `archive_format` | Exact versioned profile `buildkit-oci-layout-docker-compat-v1`; other values are unsupported. |
+| `archive_sha256` | SHA-256 of the complete published tar archive. |
+| `oci_index_sha256` | SHA-256 of the exact `index.json` bytes in the archive. |
+| `image_manifest_digest` | Digest of the one selected `linux/amd64` OCI image manifest in the index. |
+| `config_digest` | Digest of the image configuration JSON referenced by that image manifest. |
+
+The build validates the descriptor chain from `index.json` to the selected
+image manifest, its config, and every layer before it writes the manifest.
+It also checks that the config says `linux/amd64` and matches the inspected
+user, entrypoint, absent command, exact builder-produced environment, and
+revision label. The probe itself reads no environment values, and the host
+passes no runtime environment overrides. A root index may
+also contain a separate provenance/referrer descriptor. That descriptor is
+not an image platform candidate: the build and host validate its subject
+against the selected image manifest and keep its identity separate from the
+image manifest and config digests. The version-1 archive parser accepts only
+the release-produced BuildKit OCI-layout archive with its Docker compatibility
+record, requires a unique `linux/amd64` image candidate, validates every
+descriptor, size, and digest, and rejects duplicate or unsafe archive paths,
+links, unrecognized entries, ambiguous image candidates, and unsupported
+archive forms. It cross-checks the Docker compatibility record against the
+selected OCI image. The classic store's separately generated save archive is
+not a version-1 input format; format extensions require a reviewed parser
+change and new saved-archive fixtures.
+
+The loaded Docker image ID is not a portable substitute for either digest.
+Docker Engine 29.4.0 returned the selected image-manifest digest as the ID in
+its containerd image store, and the config digest as the ID in its classic
+image store. The same BuildKit archive loaded successfully in both disposable
+store profiles. Therefore the host validates the archive identities first,
+then performs `image inspect --platform linux/amd64` on the selected daemon and
+checks the returned OS, architecture, and image configuration against the
+manifest. It validates the immutable inspected ID against the matching
+store-specific identity: the image-manifest digest when the inspected result
+exposes the containerd descriptor, or the config digest for the tested classic
+result without a descriptor. Descriptor and ID fields, when present, must
+agree with the validated archive chain. An unrecognized inspect shape or
+identity fails closed. The host creates the probe using the immutable ID from
+that verified inspect result; it never creates by the archive tag. The exact
+Docker Engine version and inspect behavior must remain covered by consumer
+qualification before this proposal is implemented.
+
+The archive SHA-256 is separately authenticated by the published asset
+inventory and is not the Docker image ID, manifest digest, or config digest.
 The manifest is data about the archive, not an independent trust root: the
-host verifies each identity field against the accepted coordinator and the
-signer identity extracted from the verified attestation, never against the
-manifest alone. The release job computes
-`SHA256SUMS` over the runner archive, DinD archive, probe archive, and
-`RESOURCE_PROBE_MANIFEST.json`.
+host verifies each identity field against the accepted coordinator and signer
+identity extracted from the verified attestation, never against the manifest
+alone. The release job computes `SHA256SUMS` over the runner archive, DinD
+archive, probe archive, and `RESOURCE_PROBE_MANIFEST.json`.
+
+The observed Docker Engine 29.4.0 mapping is evidence for this design
+correction, not a product or consumer qualification:
+
+| Disposable/observed store | `image inspect --platform linux/amd64` ID | Descriptor digest |
+| --- | --- | --- |
+| containerd snapshotter | `sha256:055b3124b01a1b4b5b1c06fcd8b2b27859948c0c9812129121157b8ed78fed48` (image manifest) | same image-manifest digest |
+| classic VFS store | `sha256:2fb80254177669698c443a8414897d0afcf40f1eac64456cb149339e599c66bb` (config) | absent |
+
+For that archive the config digest was
+`sha256:2fb80254177669698c443a8414897d0afcf40f1eac64456cb149339e599c66bb`,
+distinct from the selected manifest digest. The configured outer OrbStack
+daemon also returned the manifest digest for explicit `linux/amd64` inspect
+and an index digest for default multi-platform inspect; the host must always
+specify the required platform. These observations do not qualify the eventual
+consumer or any engine version beyond the tested fixtures.
+
+The version-specific identity behavior is corroborated by the pinned engine
+source: [containerd image inspection](https://github.com/moby/moby/blob/docker-v29.4.0/daemon/containerd/image_inspect.go)
+returns the selected target descriptor digest, while [classic image
+inspection](https://github.com/moby/moby/blob/docker-v29.4.0/daemon/images/image_inspect.go)
+returns the image ID derived from its config. [Containerd archive
+export](https://github.com/moby/moby/blob/docker-v29.4.0/daemon/containerd/image_exporter.go)
+and [classic archive export](https://github.com/moby/moby/blob/docker-v29.4.0/daemon/images/image_exporter.go)
+use different store paths. These sources support keeping archive, manifest,
+config, and loaded image identities distinct; the saved-archive fixtures are
+the evidence for the exact load and inspect behavior in the tested profiles.
 
 The exact five-file release inventory is:
 
@@ -210,6 +280,11 @@ artifact work must not add host modules or claim those controls are complete.
   environment, or source label. The actual smoke run proves the static image
   starts as the numeric non-root user with the required restrictions and emits
   one record within the cap.
+- Saved-archive fixtures cover every enabled Docker image-store profile. They
+  verify the archive descriptor/config chain before load and verify that each
+  supported daemon returns the expected immutable inspect identity for the
+  explicit `linux/amd64` platform; config, manifest, and archive digests must
+  remain distinct fields.
 - Workflow tests prove the build uses locked nested dependencies and pinned
   Rust/Mise target commands, builds only for linux/amd64, creates the manifest
   from actual image/archive metadata, and includes exactly the five named
