@@ -107,7 +107,22 @@ fn ordinary_shell_and_tofu_steps_stay_unfactored() {
     let (factored, files) =
         factor_obligation_steps(&jobs, CHECKOUT, VERSION).expect("leave shell tasks alone");
     assert!(files.is_empty());
-    assert_eq!(factored, jobs);
+    assert_eq!(
+        factored.keys().collect::<Vec<_>>(),
+        jobs.keys().collect::<Vec<_>>()
+    );
+    for (job_id, original) in &jobs {
+        let preserved = &factored[job_id];
+        assert_eq!(preserved.display_name, original.display_name);
+        assert_eq!(preserved.runs_on, original.runs_on);
+        assert_eq!(preserved.check_runner, original.check_runner);
+        assert_eq!(preserved.timeout_minutes, original.timeout_minutes);
+        assert_eq!(preserved.needs, original.needs);
+        assert_eq!(preserved.condition, original.condition);
+        assert_eq!(preserved.permissions, original.permissions);
+        assert_eq!(preserved.environment, original.environment);
+        assert_eq!(preserved.steps, original.steps);
+    }
 }
 
 #[test]

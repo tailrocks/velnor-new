@@ -9,10 +9,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use serde::Serialize;
 use velnor_actions_contract::{
     MatrixEntry, NamedCheckLane, PlanObligation, PlannedPlatform, ProposedTask, Stack,
-    StackExtension, canonical_json_bytes, digest_b3,
+    StackExtension,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::restore::probe_tool_availability;
@@ -344,11 +343,6 @@ fn record_lane_target_dir(metadata: &mut serde_json::Value, lane_id: &str) {
         "cargo_target_dir".to_owned(),
         serde_json::Value::String(crate::internal_plan::target_dir_for_lane_id(lane_id)),
     );
-}
-
-/// Digest of canonical bytes for a serializable input struct.
-fn digest_of<T: Serialize>(inputs: &T) -> Result<String, velnor_actions_contract::ContractError> {
-    Ok(digest_b3(&canonical_json_bytes(inputs)?))
 }
 
 /// Task digest binding argv plus toolchain for one obligation.
