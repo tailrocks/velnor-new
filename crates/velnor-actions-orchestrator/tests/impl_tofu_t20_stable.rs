@@ -97,7 +97,8 @@ fn tofu_cross_checkout_determinism() -> TestResult {
     Ok(())
 }
 
-/// Plan and generate leave every tofu byte alone; only `.github` is written.
+/// Plan and preview leave the repository unchanged; in-place generation adds
+/// `.github` output and two fixed stage metadata files.
 #[test]
 fn tofu_plan_and_generate_leave_every_byte() -> TestResult {
     let repo = pure_tofu_repo(
@@ -129,9 +130,25 @@ fn tofu_plan_and_generate_leave_every_byte() -> TestResult {
             None => added.push(rel.clone()),
         }
     }
+    let stage_metadata = [
+        ".github.velnor-stage/.gitignore",
+        ".github.velnor-stage/owner",
+    ];
+    for expected in stage_metadata {
+        assert!(
+            added.iter().any(|rel| rel.as_str() == expected),
+            "missing documented stage metadata {expected}: {added:?}"
+        );
+    }
     assert!(
-        added.iter().all(|rel| rel.starts_with(".github/")),
-        "only .github gains files: {added:?}"
+        added.iter().all(|rel| {
+            rel.starts_with(".github/")
+                || matches!(
+                    rel.as_str(),
+                    ".github.velnor-stage/.gitignore" | ".github.velnor-stage/owner"
+                )
+        }),
+        "only generated .github files and fixed stage metadata gain files: {added:?}"
     );
     assert_eq!(
         fs::read(root.join("stacks/a/.terraform.lock.hcl"))?,
