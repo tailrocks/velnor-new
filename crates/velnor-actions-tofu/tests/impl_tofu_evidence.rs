@@ -21,8 +21,8 @@ fn mise(entries: &[(&str, &str)]) -> BTreeMap<String, String> {
 fn empty_repo_classifies_none_silently() {
     let evidence = classify(&files(&["src/lib.rs", "Cargo.toml"]), &mise(&[]));
     assert_eq!(evidence.level, EvidenceLevel::None);
-    assert!(evidence.signals.is_empty());
-    assert!(evidence.inferred.is_empty());
+    assert_eq!(evidence.signals, [] as [String; 0]);
+    assert_eq!(evidence.inferred, [] as [String; 0]);
     assert_eq!(plan_note(&evidence), None);
 }
 
@@ -144,9 +144,9 @@ fn single_effective_dir_infers_advisory_roots() {
 #[test]
 fn ambiguous_or_empty_dirs_infer_nothing() {
     let evidence = classify(&files(&["a/main.tf", "b/main.tf"]), &mise(&[]));
-    assert!(evidence.inferred.is_empty());
+    assert_eq!(evidence.inferred, [] as [String; 0]);
     let evidence = classify(&files(&["notes.txt"]), &mise(&[]));
-    assert!(evidence.inferred.is_empty());
+    assert_eq!(evidence.inferred, [] as [String; 0]);
     // Shadowed pairs still locate their directory.
     let evidence = classify(&files(&["infra/main.tf", "infra/main.tofu"]), &mise(&[]));
     assert_eq!(evidence.inferred, files(&["infra"]));
@@ -164,7 +164,7 @@ fn sightings_cap_with_overflow_entry() {
     );
     assert_eq!(evidence.signals.len(), 9);
     // Twenty dirs stay ambiguous.
-    assert!(evidence.inferred.is_empty());
+    assert_eq!(evidence.inferred, [] as [String; 0]);
 }
 
 #[test]

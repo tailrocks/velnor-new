@@ -256,7 +256,7 @@ fn edge_pairs_project_like_rust() {
         module_edge_pairs(&edges),
         vec![("a".to_owned(), "b".to_owned())]
     );
-    assert!(module_edge_pairs(&[]).is_empty());
+    assert_eq!(module_edge_pairs(&[]), [] as [(String, String); 0]);
 }
 
 #[test]
@@ -280,5 +280,5 @@ fn identities_digest_is_stable_and_sensitive() {
     assert_ne!(first, moved);
     let empty = identities_digest(&[]);
     assert_ne!(first, empty);
-    assert!(!empty.is_empty());
+    assert_ne!(empty, "");
 }

@@ -82,7 +82,7 @@ fn init_and_validate_share_the_load_set() -> Outcome {
         init.inputs.get("source_tree"),
         validate.inputs.get("source_tree")
     );
-    assert!(init.unknown_inputs().is_empty());
+    assert_eq!(init.unknown_inputs(), [] as [&str; 0]);
     Ok(())
 }
 
@@ -102,7 +102,7 @@ fn modules_input_binds_local_closure() -> Outcome {
         closure.inputs.get("modules"),
         Some(Provenance::Known { .. })
     ));
-    assert!(closure.unknown_inputs().is_empty());
+    assert_eq!(closure.unknown_inputs(), [] as [&str; 0]);
     Ok(())
 }
 
@@ -246,6 +246,6 @@ fn fmt_excludes_modules_and_varfiles() -> Outcome {
         closure.inputs.get("varfiles"),
         Some(Provenance::AbsentProven { .. })
     ));
-    assert!(closure.unknown_inputs().is_empty());
+    assert_eq!(closure.unknown_inputs(), [] as [&str; 0]);
     Ok(())
 }
