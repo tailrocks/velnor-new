@@ -17,6 +17,21 @@ fn step_shell_after_run_overrides_the_hosted_default() -> Result<(), String> {
 }
 
 #[test]
+fn hosted_macos_26_uses_the_typed_bash_default() -> Result<(), String> {
+    let runs = bodies(
+        "jobs:\n  macos-26:\n    runs-on: macos-26\n    steps:\n      - name: test\n        run: echo probe\n  macos-15:\n    runs-on: macos-15\n    steps:\n      - name: test\n        run: echo probe\n",
+    )?;
+    assert_eq!(
+        runs,
+        [
+            ("echo probe".to_owned(), ShellDialect::Bash),
+            ("echo probe".to_owned(), ShellDialect::Bash),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
 fn step_job_and_workflow_shell_precedence_is_order_independent() -> Result<(), String> {
     let runs = bodies(
         "jobs:\n  job-default-after-steps:\n    runs-on: [self-hosted, runner]\n    steps:\n      - name: job default\n        run: echo job\n    defaults:\n      run:\n        shell: bash -e {0}\n  step-override:\n    runs-on: [self-hosted, runner]\n    defaults:\n      run:\n        shell: bash -e {0}\n    steps:\n      - name: step override\n        run: echo step\n        shell: sh\n  workflow-default:\n    runs-on: [self-hosted, runner]\n    steps:\n      - name: workflow default\n        run: echo workflow\ndefaults:\n  run:\n    shell: sh\n",
@@ -77,6 +92,11 @@ fn unknown_runner_shell_and_shellcheck_overrides_fail_closed() {
     let unknown_runner = "jobs:\n  probe:\n    runs-on: [self-hosted, runner]\n    steps:\n      - name: test\n        run: echo probe\n";
     assert!(
         bodies(unknown_runner).is_err_and(|err| { err.contains("shell_unresolved_for_runner") })
+    );
+
+    let unknown_macos = "jobs:\n  probe:\n    runs-on: macos-27\n    steps:\n      - name: test\n        run: echo probe\n";
+    assert!(
+        bodies(unknown_macos).is_err_and(|err| { err.contains("shell_unresolved_for_runner") })
     );
 
     let custom_shell = "jobs:\n  probe:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: test\n        run: echo probe\n        shell: bash --noprofile {0}\n";
