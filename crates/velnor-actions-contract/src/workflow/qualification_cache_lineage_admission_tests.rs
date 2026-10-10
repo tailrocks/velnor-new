@@ -166,6 +166,17 @@ fn receipt_admission_rejects_missing_extra_and_retired_layers() -> TestResult {
     let plan = qualification_plan(QualificationPhase::Cold, 707, SOURCE_A, None)?;
     let node = completed_node(&plan, None, None)?;
 
+    let mut active_mbx_objects = node.value.clone();
+    let mbx_objects = active_mbx_objects["receipt"]["lanes"][0]["layers"]
+        .as_array_mut()
+        .ok_or_else(|| std::io::Error::other("receipt layers are not an array"))?
+        .iter_mut()
+        .find(|layer| layer["layer"] == "mbx_objects")
+        .ok_or_else(|| std::io::Error::other("MBX objects receipt is missing"))?;
+    assert_eq!(mbx_objects["active"], false);
+    mbx_objects["active"] = serde_json::json!(true);
+    assert!(rejects_admission(&active_mbx_objects, &plan, None));
+
     let mut missing = node.value.clone();
     missing["receipt"]["lanes"][0]["layers"]
         .as_array_mut()
@@ -180,6 +191,23 @@ fn receipt_admission_rejects_missing_extra_and_retired_layers() -> TestResult {
         .ok_or_else(|| std::io::Error::other("receipt layers are not an array"))?
         .push(extra_layer);
     assert!(rejects_admission(&extra, &plan, None));
+
+    let mut duplicate = node.value.clone();
+    let layers = duplicate["receipt"]["lanes"][0]["layers"]
+        .as_array_mut()
+        .ok_or_else(|| std::io::Error::other("receipt layers are not an array"))?;
+    let first_layer = layers[0].clone();
+    layers[1] = first_layer;
+    assert_eq!(layers.len(), 5);
+    assert!(rejects_admission(&duplicate, &plan, None));
+
+    let mut reordered = node.value.clone();
+    let layers = reordered["receipt"]["lanes"][0]["layers"]
+        .as_array_mut()
+        .ok_or_else(|| std::io::Error::other("receipt layers are not an array"))?;
+    layers.swap(0, 1);
+    assert_eq!(layers.len(), 5);
+    assert!(rejects_admission(&reordered, &plan, None));
 
     let mut retired = node.value.clone();
     retired["receipt"]["lanes"][0]["layers"][0]["layer"] = serde_json::json!("mbx_bundle");
