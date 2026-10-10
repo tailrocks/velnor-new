@@ -142,22 +142,28 @@ fn source_task_digests(
         return Err(failure("build_task_mise_task_config"));
     };
     validate_task_source_shape(&task.source.mise_config, task_config)?;
-    let (selected_tools, source_task_tools) = selected_task_tools(task, task_config, root)?;
-    let task_lock = source_task_lock_digest(task, discovery, root, &source_task_tools)?;
+    let tool_selection = selected_task_tools(task, task_config, root)?;
+    let task_lock =
+        source_task_lock_digest(task, discovery, root, &tool_selection.source_requests)?;
     let task_rust = source_task_rust_digest(task, discovery, &root.rust_sha256)?;
     Ok(BuildTaskSourceDigests {
         mise_config: native_sha256(task_config_input)?,
         mise_lock: task_lock,
         rust_toolchain: task_rust,
-        selected_tools,
+        selected_tools: tool_selection.selected,
     })
+}
+
+struct TaskToolSelection {
+    selected: Vec<BuildTaskTool>,
+    source_requests: BTreeSet<(String, String)>,
 }
 
 fn selected_task_tools(
     task: &BuildTask,
     task_config: &NativeMiseConfig,
     root: &RootBuildTaskSources<'_>,
-) -> Result<(Vec<BuildTaskTool>, BTreeSet<(String, String)>), OrchestratorError> {
+) -> Result<TaskToolSelection, OrchestratorError> {
     let mut merged_tasks = root.mise_config.clone();
     merged_tasks.tasks.extend(task_config.tasks.clone());
     let local_task_tools =
@@ -179,7 +185,10 @@ fn selected_task_tools(
             &selected_tools,
         )?;
     }
-    Ok((selected_tools, source_task_tools))
+    Ok(TaskToolSelection {
+        selected: selected_tools,
+        source_requests: source_task_tools,
+    })
 }
 
 fn source_task_lock_digest(
