@@ -1,6 +1,6 @@
-//! Exact SemVer parsing for a Mise configuration's hard minimum.
+//! Exact `SemVer` parsing for a Mise configuration's hard minimum.
 
-/// Exact SemVer minimum declared by a Mise configuration.
+/// Exact `SemVer` minimum declared by a Mise configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct NativeMiseVersion {
     core: [u64; 3],
