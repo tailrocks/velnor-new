@@ -3,9 +3,7 @@
 use std::process::ExitCode;
 
 use clap::Parser;
-use velnor_actions_orchestrator::{
-    OrchestratorError, init_config, plan_text_checked, prepare, resolve_root,
-};
+use velnor_actions_orchestrator::{init_config, plan_text_checked, prepare, resolve_root};
 
 use super::{fail_public, owned_publication, working_dir};
 use crate::args::{Cli, Command};
