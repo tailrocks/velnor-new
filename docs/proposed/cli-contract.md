@@ -323,6 +323,9 @@ the private, self-ignored `.github.velnor-stage/` runtime container at the Git
 root, bound to that canonical worktree and containing one persistent same-
 filesystem spare; it is staging state, not generated output. Generation clears
 only spare children and never removes or recreates the container or spare root.
+In-place generation requires atomic directory exchange and is supported on
+Linux and macOS; other platforms fail before creating staging state. Preview
+generation does not use this restriction.
 `plan` and preview generation do not create or modify this state. An existing
 `.github` root and every real directory below it must be owned by the caller;
 foreign-owned directories fail before publication as specified by the

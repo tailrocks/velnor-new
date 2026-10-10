@@ -7,10 +7,12 @@ use std::path::{Path, PathBuf};
 use crate::OrchestratorError;
 
 use super::{
-    FsIdentity, OWNER_FILE, PRIVATE_DIR_MODE, PRIVATE_FILE_MODE, RootIdentity, SPARE_DIR, StageRoot,
+    FsIdentity, OWNER_FILE, OwnerId, PRIVATE_DIR_MODE, PRIVATE_FILE_MODE, RootIdentity, SPARE_DIR,
+    StageRoot,
 };
 
 /// Create the runtime container once, leaving partial failures for inspection.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub(super) fn create_container(
     root: &RootIdentity,
     container: &Path,
@@ -37,6 +39,7 @@ fn write_private_file(path: &Path, bytes: &[u8]) -> Result<(), OrchestratorError
 
 impl StageRoot {
     /// Validate a previously created container and bind its current identities.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     pub(super) fn validate(
         root: RootIdentity,
         container: PathBuf,
@@ -102,7 +105,6 @@ impl StageRoot {
 
     /// Require a path to remain the exact directory inode captured earlier.
     pub(super) fn require_identity(
-        &self,
         path: &Path,
         expected: FsIdentity,
     ) -> Result<(), OrchestratorError> {
@@ -133,13 +135,12 @@ impl StageRoot {
 
     /// Clear only contents after confirming the persistent root inode.
     pub(super) fn clear_children(
-        &self,
         path: &Path,
         expected: FsIdentity,
     ) -> Result<(), OrchestratorError> {
-        self.require_identity(path, expected)?;
+        Self::require_identity(path, expected)?;
         super::cleanup::clear_children(path)?;
-        self.require_identity(path, expected)
+        Self::require_identity(path, expected)
     }
 }
 
@@ -147,7 +148,7 @@ impl StageRoot {
 pub(super) fn validate_container_files(
     container: &Path,
     root: &RootIdentity,
-    owner: Option<u32>,
+    owner: OwnerId,
 ) -> Result<(), OrchestratorError> {
     let ignore = container.join(".gitignore");
     validate_private_file(&ignore, b"*\n", owner, "staging_ignore_mismatch")?;
@@ -165,7 +166,7 @@ pub(super) fn validate_container_files(
 /// Validate every real directory while leaving symlink entries untouched.
 pub(super) fn validate_directory_owners(
     root: &Path,
-    expected_owner: Option<u32>,
+    expected_owner: OwnerId,
 ) -> Result<(), OrchestratorError> {
     let mut pending = vec![root.to_path_buf()];
     while let Some(path) = pending.pop() {
@@ -194,7 +195,7 @@ pub(super) fn validate_directory_owners(
 fn validate_private_file(
     path: &Path,
     expected: &[u8],
-    owner: Option<u32>,
+    owner: OwnerId,
     mismatch_reason: &str,
 ) -> Result<(), OrchestratorError> {
     let metadata = fs::symlink_metadata(path).map_err(|error| io(path, &error))?;
@@ -211,14 +212,15 @@ fn validate_private_file(
 }
 
 /// Read an owner id without trusting user-controlled environment variables.
-fn current_owner() -> Option<u32> {
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn current_owner() -> OwnerId {
     #[cfg(unix)]
     {
-        Some(rustix::process::geteuid().as_raw())
+        rustix::process::geteuid().as_raw()
     }
     #[cfg(not(unix))]
     {
-        None
+        ()
     }
 }
 
@@ -259,7 +261,7 @@ pub(super) fn require_mode(
 pub(super) fn require_owner_id(
     path: &Path,
     metadata: &Metadata,
-    expected: Option<u32>,
+    expected: OwnerId,
 ) -> Result<(), OrchestratorError> {
     if metadata_owner(metadata) != expected {
         return Err(unsafe_path(path, "staging_owner_mismatch"));
@@ -268,16 +270,16 @@ pub(super) fn require_owner_id(
 }
 
 /// Return a stable Unix owner id when the platform provides one.
-pub(super) fn metadata_owner(metadata: &Metadata) -> Option<u32> {
+pub(super) fn metadata_owner(metadata: &Metadata) -> OwnerId {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        Some(metadata.uid())
+        metadata.uid()
     }
     #[cfg(not(unix))]
     {
         let _ = metadata;
-        None
+        ()
     }
 }
 

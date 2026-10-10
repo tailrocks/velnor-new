@@ -11,8 +11,14 @@ mod cleanup;
 #[path = "generate_stage_root_fs.rs"]
 mod fs_ops;
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use fs_ops::create_container;
 use fs_ops::validate_directory_owners;
+
+#[cfg(unix)]
+pub(super) type OwnerId = u32;
+#[cfg(not(unix))]
+pub(super) type OwnerId = ();
 
 #[cfg(test)]
 #[path = "generate_stage_root_tests.rs"]
@@ -74,6 +80,7 @@ struct RootIdentity {
 }
 
 impl RootIdentity {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     fn capture(root: &Path) -> Result<Self, OrchestratorError> {
         let path = root.canonicalize().map_err(|error| io(root, &error))?;
         let (object, metadata) = FsIdentity::capture(&path)?;
@@ -108,12 +115,28 @@ pub(super) struct StageRoot {
     container_identity: FsIdentity,
     spare: PathBuf,
     spare_identity: FsIdentity,
-    owner: Option<u32>,
+    owner: OwnerId,
 }
 
 impl StageRoot {
     /// Open an owned staging container or create it once at this worktree root.
     pub(super) fn open(root: &Path) -> Result<Self, OrchestratorError> {
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        {
+            Self::open_supported(root)
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        {
+            let _ = root;
+            Err(OrchestratorError::unsupported(
+                "in_place_generation",
+                "atomic_directory_exchange_requires_linux_or_macos",
+            ))
+        }
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    fn open_supported(root: &Path) -> Result<Self, OrchestratorError> {
         let identity = RootIdentity::capture(root)?;
         let container = identity.path.join(CONTAINER);
         match fs::symlink_metadata(&container) {
@@ -162,22 +185,22 @@ impl StageRoot {
         let Some(expected) = expected else {
             return Ok(());
         };
-        self.require_identity(target, expected)?;
+        Self::require_identity(target, expected)?;
         validate_directory_owners(target, self.owner)?;
-        self.require_identity(target, expected)
+        Self::require_identity(target, expected)
     }
 
     /// Remove stale or retired children while retaining the spare root inode.
     pub(super) fn clear_spare_before_staging(&self) -> Result<(), OrchestratorError> {
         self.validate_container_and_spare(false)?;
-        self.clear_children(&self.spare, self.spare_identity)
+        Self::clear_children(&self.spare, self.spare_identity)
     }
 
     /// Remove children from the retired root only after a successful exchange.
     pub(super) fn clean_retired_root(&self, expected: FsIdentity) -> Result<(), OrchestratorError> {
         self.validate_container()?;
         let published = self.root.path.join(".github");
-        self.require_identity(&published, self.spare_identity)
+        Self::require_identity(&published, self.spare_identity)
             .map_err(|_| unsafe_path(&published, "published_root_identity_changed"))?;
         let (actual, metadata) = FsIdentity::capture(&self.spare)?;
         if actual != expected {
@@ -185,7 +208,7 @@ impl StageRoot {
         }
         self.require_same_filesystem(&self.spare)?;
         self.require_owner(&self.spare, &metadata)?;
-        self.clear_children(&self.spare, expected)
+        Self::clear_children(&self.spare, expected)
     }
 
     /// Check the staged tree and both roots again immediately before commit.
@@ -196,8 +219,8 @@ impl StageRoot {
         staged: &Path,
     ) -> Result<(), OrchestratorError> {
         self.validate_container()?;
-        self.require_identity(&self.container, self.container_identity)?;
-        self.require_identity(&self.spare, self.spare_identity)?;
+        Self::require_identity(&self.container, self.container_identity)?;
+        Self::require_identity(&self.spare, self.spare_identity)?;
         self.require_same_filesystem(&self.spare)?;
         let (staged_identity, staged_metadata) = FsIdentity::capture(staged)?;
         self.require_same_filesystem(staged)?;
@@ -212,7 +235,7 @@ impl StageRoot {
             return Err(unsafe_path(staged, "unexpected_staging_path"));
         }
         if original_target.is_some() {
-            self.require_identity(&self.spare, staged_identity)?;
+            Self::require_identity(&self.spare, staged_identity)?;
         }
         let current_target = self.validate_target(target)?;
         if current_target != original_target {
