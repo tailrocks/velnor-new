@@ -220,7 +220,7 @@ fail closed. The no-quota storage limitation remains explicit in all evidence.
 
 | Concern | Source owner |
 |---|---|
-| Resource policy and guest sample | `crates/velnor-runner/crates/velnor-runner-host/src/{config.rs,guest.rs,launch.rs,launch_blocking.rs,launch/capacity.rs,launch/pressure.rs,launch/turn.rs,worker/resource_budget/,worker/resources/guest.rs}` |
+| Resource policy and guest sample | `crates/velnor-runner/crates/velnor-runner-host/src/{config.rs,guest.rs,launch.rs,launch_blocking.rs,launch/capacity.rs,launch/pressure.rs,launch/resource_capacity.rs,launch/turn.rs,worker/resource_budget/,worker/resources/guest.rs}` |
 | Runtime budget propagation and Docker create projections | `crates/velnor-runner/crates/velnor-runner-cli/src/daemon_run.rs`; `crates/velnor-runner/crates/velnor-runner-host/src/{stage.rs,worker.rs,worker/mounts.rs}` |
 | Probe binary and immutable image | a new nested runner probe crate and a separate minimal image source; never the workflow runner image |
 | Image asset publication and source binding | `crates/velnor-actions-workflow-renderer/src/schema2_product_release_family.rs`, the source-owned official release workflow and manifest/attestation producer, generated-output capture owner, and `crates/velnor-actions-orchestrator/tests/snapshots/` |
