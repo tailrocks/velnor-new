@@ -30,6 +30,7 @@ use crate::discover::Discovery;
 use crate::pins::consumer_acquire_step;
 use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed, final_job, lint_job, plan_job};
 
+#[path = "workflow_policy.rs"]
 mod workflow_policy;
 use workflow_policy::plan_uses_nextest;
 pub(crate) use workflow_policy::{
