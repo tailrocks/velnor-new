@@ -17,14 +17,17 @@ and module/test attribute declarations.
 The test-registration check starts from Cargo compiler artifacts whose
 profiles actually enable `cfg(test)`, then follows Rust modules, direct literal
 `include!` sources, direct `include!(concat!(env!("OUT_DIR"), "..."))` sources
-with a safe relative `.rs` suffix proven by exactly one matching source in that
-artifact's rustc dep-info under Cargo's canonical `debug/build/<unit>/out`
-directory (which may have a target-triple prefix), and invoked `macro_rules!`
-includes that have one empty matcher and empty calls in the same source module.
-Unresolved, ambiguous, absent, or out-of-target `OUT_DIR` sources fail closed;
-metadata-only targets cannot claim generated `OUT_DIR` sources. A macro call is
-associated only with an earlier definition in Rust source order. Other invoked
-macros that contain `include!` fail closed. A metadata-declared test target
+with a safe relative `.rs` suffix, and invoked `macro_rules!` includes that
+have one empty matcher and empty calls in the same source module. An `OUT_DIR`
+source is accepted only when that exact artifact's rustc dep-info records one
+absolute `OUT_DIR` env-dependency and the exact `OUT_DIR`-joined source is a
+regular, non-symlink file listed among the same artifact's prerequisites. The
+compiler-recorded directory may be outside Cargo's target directory, such as
+when a compiler cache relocates build output. Missing, malformed, duplicate,
+or mismatched evidence fails closed; metadata-only targets cannot claim
+generated `OUT_DIR` sources. A macro call is associated only with an earlier
+definition in Rust source order. Other invoked macros that contain `include!`
+fail closed. A metadata-declared test target
 skipped by Cargo because its `required-features` are disabled is still registered: its
 declared source and statically reachable module/include closure are inspected,
 but this does not claim that the target was compiled. For compiled targets,
