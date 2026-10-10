@@ -1,8 +1,8 @@
 //! Deterministic YAML emitter: stable order, safe quoting, and 2-space indent.
 //!
-//! Block style only. Workflow output uses typed scalar anchors only for
-//! repeated step-run strings. Flow sequences are empty `[]` plus the typed
-//! `runs-on` selector. Key order is caller-controlled.
+//! Block style only. Workflow output uses typed anchors for repeated step-run
+//! strings and structurally identical workflow mappings. Flow sequences are
+//! empty `[]` plus the typed `runs-on` selector. Key order is caller-controlled.
 
 /// Minimal YAML value tree with explicit mapping order.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,7 +37,14 @@ pub enum Yaml {
         /// Anchored scalar value.
         value: String,
     },
-    /// Alias to an earlier scalar anchor.
+    /// Repeated workflow mapping emitted with a YAML anchor.
+    AnchoredMap {
+        /// YAML anchor name.
+        name: AnchorName,
+        /// Anchored mapping entries.
+        entries: Vec<(String, Self)>,
+    },
+    /// Alias to an earlier YAML anchor.
     Alias(AnchorName),
 }
 
@@ -98,6 +105,7 @@ impl Yaml {
             | Self::Annotated { .. }
             | Self::AnchoredScalar { .. }
             | Self::Alias(_) => true,
+            Self::AnchoredMap { entries, .. } => entries.is_empty(),
             Self::Seq(items) => items.is_empty(),
             Self::Map(entries) => entries.is_empty(),
         }
@@ -107,10 +115,10 @@ impl Yaml {
 #[path = "yaml_share.rs"]
 mod share;
 
-/// Share repeated step-run strings using aliases in an owned workflow tree.
+/// Share repeated workflow nodes using aliases in an owned workflow tree.
 #[must_use]
-pub(crate) fn share_step_run_scalars(node: Yaml) -> Yaml {
-    share::share_step_run_scalars(node)
+pub(crate) fn share_repeated_workflow_nodes(node: Yaml) -> Yaml {
+    share::share_repeated_workflow_nodes(node)
 }
 
 /// Render a document with a trailing newline.
@@ -149,6 +157,11 @@ fn emit_node(value: &Yaml, indent: usize, out: &mut String) {
                 emit_map_entry(key, child, indent, out);
             }
         }
+        Yaml::AnchoredMap { entries, .. } => {
+            for (key, child) in entries {
+                emit_map_entry(key, child, indent, out);
+            }
+        }
         Yaml::Null
         | Yaml::Str(_)
         | Yaml::AnchoredScalar { .. }
@@ -171,6 +184,14 @@ fn emit_map_entry(key: &str, value: &Yaml, indent: usize, out: &mut String) {
             out.push_str(": *");
             out.push_str(name.as_str());
             out.push('\n');
+        }
+        Yaml::AnchoredMap { name, entries } if !entries.is_empty() => {
+            out.push_str(": &");
+            out.push_str(name.as_str());
+            out.push('\n');
+            for (nested_key, nested_value) in entries {
+                emit_map_entry(nested_key, nested_value, indent + 1, out);
+            }
         }
         inline if inline.is_inline() => {
             out.push_str(": ");
@@ -197,6 +218,14 @@ fn emit_seq_item(item: &Yaml, indent: usize, out: &mut String) {
                 }
             }
         }
+        Yaml::AnchoredMap { name, entries } if !entries.is_empty() => {
+            out.push_str("- &");
+            out.push_str(name.as_str());
+            out.push('\n');
+            for (key, value) in entries {
+                emit_map_entry(key, value, indent + 1, out);
+            }
+        }
         Yaml::Seq(items) if !items.is_empty() => {
             out.push_str("-\n");
             emit_node(item, indent + 1, out);
@@ -220,6 +249,14 @@ fn emit_first_entry(key: &str, value: &Yaml, indent: usize, out: &mut String) {
             out.push_str(name.as_str());
             out.push('\n');
         }
+        Yaml::AnchoredMap { name, entries } if !entries.is_empty() => {
+            out.push_str(": &");
+            out.push_str(name.as_str());
+            out.push('\n');
+            for (nested_key, nested_value) in entries {
+                emit_map_entry(nested_key, nested_value, indent + 2, out);
+            }
+        }
         inline if inline.is_inline() => {
             out.push_str(": ");
             emit_inline(inline, out);
@@ -242,6 +279,11 @@ fn emit_inline(value: &Yaml, out: &mut String) {
             out.push(' ');
             out.push_str(&quote_scalar(value));
         }
+        Yaml::AnchoredMap { name, entries } if entries.is_empty() => {
+            out.push('&');
+            out.push_str(name.as_str());
+            out.push_str(" {}");
+        }
         Yaml::Alias(name) => {
             out.push('*');
             out.push_str(name.as_str());
@@ -257,7 +299,7 @@ fn emit_inline(value: &Yaml, out: &mut String) {
         Yaml::Seq(items) if items.is_empty() => out.push_str("[]"),
         Yaml::Map(entries) if entries.is_empty() => out.push_str("{}"),
         Yaml::Flow(items) => emit_flow(items, out),
-        Yaml::Null | Yaml::Seq(_) | Yaml::Map(_) => {}
+        Yaml::Null | Yaml::Seq(_) | Yaml::Map(_) | Yaml::AnchoredMap { .. } => {}
     }
 }
 
