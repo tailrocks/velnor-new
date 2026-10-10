@@ -123,39 +123,7 @@ fn parse_native_locked_tool(value: &toml::Value) -> NativeLockedTool {
     };
     let mut unsupported_fields = Vec::new();
     let mut options = BTreeMap::new();
-    let specifiers = match entry.get("specifiers") {
-        Some(toml::Value::Array(values)) => {
-            let strings = values
-                .iter()
-                .map(toml::Value::as_str)
-                .collect::<Option<Vec<_>>>();
-            match strings {
-                Some(values)
-                    if !values.is_empty()
-                        && values.iter().all(|value| !value.is_empty())
-                        && values
-                            .iter()
-                            .collect::<std::collections::BTreeSet<_>>()
-                            .len()
-                            == values.len() =>
-                {
-                    Some(values.into_iter().map(ToOwned::to_owned).collect())
-                }
-                _ => {
-                    unsupported_fields.push("specifiers.shape".to_owned());
-                    None
-                }
-            }
-        }
-        Some(_) => {
-            unsupported_fields.push("specifiers.shape".to_owned());
-            None
-        }
-        None => {
-            unsupported_fields.push("specifiers.missing".to_owned());
-            None
-        }
-    };
+    let specifiers = parse_lock_specifiers(entry.get("specifiers"), &mut unsupported_fields);
     if let Some(options_table) = entry.get("options") {
         if let Some(table) = options_table.as_table() {
             for (key, option) in table {
@@ -199,6 +167,45 @@ fn parse_native_locked_tool(value: &toml::Value) -> NativeLockedTool {
         platforms,
         unsupported_fields,
         valid_shape: true,
+    }
+}
+
+fn parse_lock_specifiers(
+    value: Option<&toml::Value>,
+    unsupported_fields: &mut Vec<String>,
+) -> Option<Vec<String>> {
+    match value {
+        Some(toml::Value::Array(values)) => {
+            let strings = values
+                .iter()
+                .map(toml::Value::as_str)
+                .collect::<Option<Vec<_>>>();
+            match strings {
+                Some(values)
+                    if !values.is_empty()
+                        && values.iter().all(|value| !value.is_empty())
+                        && values
+                            .iter()
+                            .collect::<std::collections::BTreeSet<_>>()
+                            .len()
+                            == values.len() =>
+                {
+                    Some(values.into_iter().map(ToOwned::to_owned).collect())
+                }
+                _ => {
+                    unsupported_fields.push("specifiers.shape".to_owned());
+                    None
+                }
+            }
+        }
+        Some(_) => {
+            unsupported_fields.push("specifiers.shape".to_owned());
+            None
+        }
+        None => {
+            unsupported_fields.push("specifiers.missing".to_owned());
+            None
+        }
     }
 }
 

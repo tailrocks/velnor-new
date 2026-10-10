@@ -2,214 +2,18 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{BuildTask, VelnorConfig, WorkflowTask};
-use velnor_actions_mise::catalog::{MR_BOXINGTON_VERSION, RUST_VERSION};
-use velnor_actions_workflow_renderer::verification_jobs::{BuildTaskPolicy, BuildTaskTool};
+use velnor_actions_contract::BuildTask;
+use velnor_actions_workflow_renderer::verification_jobs::BuildTaskTool;
 
-use crate::build_task_tools::resolve_selected_tools;
-use crate::native_tool_input::{NativeMiseConfig, NativeToolSource};
-use crate::native_tool_lock::rust_toolchain_options;
-use crate::pins::resolve_build_task_mise_setup;
+use crate::OrchestratorError;
+use crate::native_tool_input::NativeMiseConfig;
 use crate::toolcheck::{ToolInputCheck, ToolParse};
-use crate::{OrchestratorError, discover::Discovery};
 #[path = "build_task_lock_validation.rs"]
 mod build_task_lock_validation;
-use build_task_lock_validation::{
-    source_task_tool_requests, validate_lock_shape, validate_source_lock_subset,
-    validate_source_task_lock_requests,
-};
 
-/// Resolve each task against source-bound Mise files and the fixed runner pin.
-pub(crate) fn policies(
-    config: &VelnorConfig,
-    discovery: &Discovery,
-) -> Result<Vec<BuildTaskPolicy>, OrchestratorError> {
-    let build_tasks = config
-        .workflow
-        .tasks
-        .iter()
-        .filter_map(|task| match task {
-            WorkflowTask::Build(build) => Some(build),
-            WorkflowTask::Verification(_) | WorkflowTask::NativeImage(_) => None,
-        })
-        .collect::<Vec<_>>();
-    if build_tasks.is_empty() {
-        return Ok(Vec::new());
-    }
-    let rust = checked_source(&discovery.tool_checks, "rust-toolchain.toml")?;
-    let rust_version = rust
-        .values
-        .get("channel")
-        .filter(|version| exact_version(version))
-        .ok_or_else(|| failure("build_task_rust_toolchain"))?;
-    let rust_lock_options = rust_toolchain_options(&rust.values)
-        .ok_or_else(|| failure("build_task_rust_toolchain_options"))?;
-    let NativeToolSource::RustToolchain = &rust
-        .native
-        .as_ref()
-        .ok_or_else(|| failure("build_task_rust_toolchain"))?
-        .source
-    else {
-        return Err(failure("build_task_rust_toolchain"));
-    };
-
-    let mise = checked_source(&discovery.tool_checks, "mise.toml")?;
-    let NativeToolSource::MiseConfig(mise_config) = &mise
-        .native
-        .as_ref()
-        .ok_or_else(|| failure("build_task_mise_config"))?
-        .source
-    else {
-        return Err(failure("build_task_mise_config"));
-    };
-    let lock = checked_source(&discovery.tool_checks, "mise.lock")?;
-    let NativeToolSource::MiseLock(mise_lock) = &lock
-        .native
-        .as_ref()
-        .ok_or_else(|| failure("build_task_mise_lock"))?
-        .source
-    else {
-        return Err(failure("build_task_mise_lock"));
-    };
-
-    validate_config_shape(mise_config, rust_version)?;
-    validate_lock_shape(mise_lock)?;
-    let root_lock_sha256 = native_sha256(lock)?;
-    let root_rust_sha256 = native_sha256(rust)?;
-    let mut source_digests = Vec::with_capacity(build_tasks.len());
-    for task in &build_tasks {
-        task.validate(".velnor/config.toml")
-            .map_err(|_| failure("build_task_contract"))?;
-        let task_config_input = checked_source(&discovery.tool_checks, &task.source.mise_config)?;
-        let NativeToolSource::MiseConfig(task_config) = &task_config_input
-            .native
-            .as_ref()
-            .ok_or_else(|| failure("build_task_mise_task_config"))?
-            .source
-        else {
-            return Err(failure("build_task_mise_task_config"));
-        };
-        validate_task_source_shape(&task.source.mise_config, task_config)?;
-        let mut merged_tasks = mise_config.clone();
-        merged_tasks.tasks.extend(task_config.tasks.clone());
-        let local_task_tools =
-            crate::native_mise_tasks::selected_build_task_tools(&merged_tasks, &task.mise_task)
-                .map_err(|problem| failure(build_task_graph_problem(problem)))?;
-        let selected_tools = resolve_selected_tools(
-            task,
-            mise_config,
-            mise_lock,
-            rust_version,
-            &rust_lock_options,
-        )?;
-        validate_task_tool_selection(task, &local_task_tools, &selected_tools)?;
-        let source_task_tools = source_task_tool_requests(task_config)?;
-        for (key, version) in &source_task_tools {
-            validate_task_tool_selection(
-                task,
-                &BTreeMap::from([(key.clone(), version.clone())]),
-                &selected_tools,
-            )?;
-        }
-
-        let task_lock_path = task.source.mise_lock_path();
-        let task_lock = if task_lock_path == "mise.lock" {
-            None
-        } else {
-            optional_checked_source(&discovery.tool_checks, &task_lock_path)?
-        };
-        if let Some(task_lock_input) = task_lock {
-            let NativeToolSource::MiseLock(task_lock) = &task_lock_input
-                .native
-                .as_ref()
-                .ok_or_else(|| failure("build_task_source_mise_lock"))?
-                .source
-            else {
-                return Err(failure("build_task_source_mise_lock"));
-            };
-            validate_lock_shape(task_lock)?;
-            validate_source_lock_subset(task_lock, mise_lock)?;
-        }
-        let source_lock = if task_lock_path == "mise.lock" {
-            Some(mise_lock)
-        } else if let Some(task_lock_input) = task_lock {
-            match &task_lock_input
-                .native
-                .as_ref()
-                .ok_or_else(|| failure("build_task_source_mise_lock"))?
-                .source
-            {
-                NativeToolSource::MiseLock(lock) => Some(lock),
-                NativeToolSource::RustToolchain | NativeToolSource::MiseConfig(_) => {
-                    return Err(failure("build_task_source_mise_lock"));
-                }
-            }
-        } else {
-            None
-        };
-        validate_source_task_lock_requests(
-            &source_task_tools,
-            source_lock,
-            task_lock_path == "mise.lock",
-            mise_config,
-            mise_lock,
-            rust_version,
-            &rust_lock_options,
-        )?;
-        let task_lock_digest = task_lock.map(native_sha256).transpose()?;
-
-        let task_rust_path = task.source.rust_toolchain_path();
-        let task_rust_digest = if task_rust_path == "rust-toolchain.toml" {
-            None
-        } else {
-            optional_checked_source(&discovery.tool_checks, &task_rust_path)?
-                .map(native_sha256)
-                .transpose()?
-        };
-        if task_rust_digest
-            .as_deref()
-            .is_some_and(|digest| digest != root_rust_sha256)
-        {
-            return Err(failure(
-                "build_task_source_rust_toolchain_differs_from_root",
-            ));
-        }
-
-        source_digests.push(BuildTaskSourceDigests {
-            mise_config: native_sha256(task_config_input)?,
-            mise_lock: task_lock_digest,
-            rust_toolchain: task_rust_digest,
-            selected_tools,
-        });
-    }
-
-    build_tasks
-        .iter()
-        .zip(source_digests)
-        .map(|(task, source)| {
-            validate_mbx_tool_closure(task, &source.selected_tools)?;
-            Ok(BuildTaskPolicy {
-                task: (*task).clone(),
-                runner_label: task.runner.runs_on().to_owned(),
-                mise_setup: resolve_build_task_mise_setup(config, task.runner)?,
-                mise_config_sha256: native_sha256(mise)?,
-                mise_lock_sha256: root_lock_sha256.clone(),
-                rust_toolchain_sha256: root_rust_sha256.clone(),
-                source_mise_config_sha256: source.mise_config,
-                source_mise_lock_sha256: source.mise_lock,
-                source_rust_toolchain_sha256: source.rust_toolchain,
-                selected_tools: source.selected_tools,
-            })
-        })
-        .collect()
-}
-
-struct BuildTaskSourceDigests {
-    mise_config: String,
-    mise_lock: Option<String>,
-    rust_toolchain: Option<String>,
-    selected_tools: Vec<BuildTaskTool>,
-}
+#[path = "build_task_policy.rs"]
+mod source_policy;
+pub(crate) use source_policy::policies;
 
 fn checked_source<'a>(
     checks: &'a [ToolInputCheck],
@@ -381,7 +185,7 @@ fn failure(problem: &str) -> OrchestratorError {
 
 fn build_task_graph_problem(problem: &str) -> &'static str {
     match problem {
-        "verification_task_graph" => "build_task_task_graph",
+        "verification_task_graph" | "build_task_task_graph" => "build_task_task_graph",
         "verification_task_graph_bound" => "build_task_task_graph_bound",
         "verification_task_missing" => "build_task_task_missing",
         "verification_task_shape" => "build_task_task_shape",

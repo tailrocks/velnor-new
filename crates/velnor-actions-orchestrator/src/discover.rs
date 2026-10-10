@@ -116,25 +116,7 @@ fn discover_inner(
         previous = stack_id;
         candidates.extend(detect(&index));
     }
-    let task_tool_paths = config
-        .workflow
-        .tasks
-        .iter()
-        .filter_map(|task| match task {
-            WorkflowTask::Verification(task) => Some(&task.source),
-            WorkflowTask::Build(task) => Some(&task.source),
-            WorkflowTask::NativeImage(_) => None,
-        })
-        .flat_map(|source| {
-            [
-                source.mise_config.clone(),
-                source.mise_lock_path(),
-                source.rust_toolchain_path(),
-            ]
-        })
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>();
+    let task_tool_paths = task_tool_paths(config);
     let tool_checks = check_tool_inputs_with_paths(root, &task_tool_paths);
     let mut reads = velnor_actions_tofu::FileCache::new();
     let tofu_step = qualify_tofu_step(root, config, &index, &tool_checks, &mut reads)?;
@@ -190,6 +172,28 @@ fn discover_inner(
         tofu_note: tofu_step.note,
         tofu_units,
     })
+}
+
+fn task_tool_paths(config: &VelnorConfig) -> Vec<String> {
+    config
+        .workflow
+        .tasks
+        .iter()
+        .filter_map(|task| match task {
+            WorkflowTask::Verification(task) => Some(&task.source),
+            WorkflowTask::Build(task) => Some(&task.source),
+            WorkflowTask::NativeImage(_) => None,
+        })
+        .flat_map(|source| {
+            [
+                source.mise_config.clone(),
+                source.mise_lock_path(),
+                source.rust_toolchain_path(),
+            ]
+        })
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
 }
 
 /// Sorted local dependency display names for one package.
