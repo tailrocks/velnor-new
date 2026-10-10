@@ -28,15 +28,23 @@ pub(crate) fn resolve_selected_tools(
     task.tools
         .iter()
         .map(|key| {
-            let selected = lock
-                .tools
-                .get(key)
-                .ok_or_else(|| failure("build_task_tool_unlocked"))?;
             let (version, config_options, os) =
                 selected_version_and_options(key, config, rust_version, rust_lock_options)?;
+            let selected = lock
+                .selected_tool(key, &version, &version, &config_options)
+                .ok_or_else(|| {
+                    failure(if lock.tools.contains_key(key) {
+                        "build_task_tool_lock_mismatch"
+                    } else {
+                        "build_task_tool_unlocked"
+                    })
+                })?;
             if !selected.valid_shape
                 || !selected.unsupported_fields.is_empty()
                 || selected.version.as_deref() != Some(version.as_str())
+                || !selected.specifiers.as_ref().is_some_and(|specifiers| {
+                    specifiers.iter().any(|specifier| specifier == &version)
+                })
                 || (key == "rust" && &selected.options != rust_lock_options)
             {
                 return Err(failure("build_task_tool_lock_mismatch"));
@@ -96,14 +104,14 @@ fn selected_artifact(
     selected: &NativeLockedTool,
 ) -> Result<Option<BuildTaskArtifact>, OrchestratorError> {
     if key == "rust" {
-        if selected.macos_arm64.is_some() {
+        if !selected.platforms.is_empty() {
             return Err(failure("build_task_rust_lock_artifact"));
         }
         return Ok(None);
     }
     let artifact = selected
-        .macos_arm64
-        .as_ref()
+        .platforms
+        .get("macos-arm64")
         .ok_or_else(|| failure("build_task_tool_artifact"))?;
     if !artifact.valid_shape
         || !artifact.unsupported_fields.is_empty()

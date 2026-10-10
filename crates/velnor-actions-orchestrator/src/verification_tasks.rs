@@ -112,18 +112,23 @@ fn resolve_verification_tools(
     let rust_values = rust_tool_values(checks, rust, &requested, &rust_toolchain_path)?;
     let (mise_os, lock_platform) = platform(task.runner);
     for (key, requested_version) in requested {
-        let locked = mise_lock
-            .tools
-            .get(&key)
-            .ok_or_else(|| failure("verification_tool_unlocked"))?;
+        let requested_specifier = requested_version.clone();
         let (version, config_options, os) = requested_tool_version(
             &key,
             requested_version,
             mise_config,
             mise_os,
             rust_values.as_ref(),
-            locked,
         )?;
+        let locked = mise_lock
+            .selected_tool(&key, &version, &requested_specifier, &config_options)
+            .ok_or_else(|| {
+                failure(if mise_lock.tools.contains_key(&key) {
+                    "verification_tool_identity_or_lock"
+                } else {
+                    "verification_tool_unlocked"
+                })
+            })?;
         result.selected_tools.push(resolve_tool(
             &key,
             &version,
@@ -179,12 +184,11 @@ fn requested_tool_version(
     mise_config: &NativeMiseConfig,
     mise_os: &str,
     rust_values: Option<&RustToolValues>,
-    locked: &NativeLockedTool,
 ) -> Result<ToolVersionSelection, OrchestratorError> {
     if key == "rust" {
         let (version, options) =
             rust_values.ok_or_else(|| failure("verification_rust_toolchain"))?;
-        if requested_version != *version || locked.options != *options {
+        if requested_version != *version {
             return Err(failure("verification_rust_tool_lock"));
         }
         return Ok((version.clone(), options.clone(), Vec::new()));
@@ -299,6 +303,10 @@ fn resolve_tool(
         || !locked.valid_shape
         || !locked.unsupported_fields.is_empty()
         || locked.version.as_deref() != Some(version)
+        || !locked
+            .specifiers
+            .as_ref()
+            .is_some_and(|specifiers| specifiers.iter().any(|specifier| specifier == version))
     {
         return Err(failure("verification_tool_identity_or_lock"));
     }
@@ -311,8 +319,7 @@ fn resolve_tool(
     }
     let artifact = if key == "rust" {
         if backend != "core:rust"
-            || locked.macos_arm64.is_some()
-            || locked.linux_x64.is_some()
+            || !locked.platforms.is_empty()
             || !locked
                 .options
                 .keys()
@@ -323,9 +330,7 @@ fn resolve_tool(
         None
     } else {
         let locked_artifact = match lock_platform {
-            "linux-x64" => locked.linux_x64.as_ref(),
-            "macos-arm64" => locked.macos_arm64.as_ref(),
-            _ => None,
+            platform => locked.platforms.get(platform),
         }
         .ok_or_else(|| failure("verification_tool_platform_artifact"))?;
         if !locked_artifact.valid_shape || !locked_artifact.unsupported_fields.is_empty() {
