@@ -131,20 +131,29 @@ fn validate_expected_inputs(
             return Err("expected claim value is empty or exceeds byte limit".into());
         }
     }
-    for digest in [
+    // Fulcio .1.10, .1.13, and .1.19 encode immutable Git references, such as
+    // the 40-character commit IDs used by this GitHub source policy. See
+    // https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md.
+    for commit_id in [
         &expected.signer_digest,
         &expected.source_digest,
         &expected.build_config_digest,
-        &checksum.digest,
-        &target.digest,
     ] {
-        if digest.len() != 64
-            || !digest
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        {
+        if !is_lower_hex(commit_id, 40) {
+            return Err("expected Git commit ID is malformed".into());
+        }
+    }
+    for digest in [&checksum.digest, &target.digest] {
+        if !is_lower_hex(digest, 64) {
             return Err("expected SHA-256 digest is malformed".into());
         }
     }
     Ok(())
+}
+
+fn is_lower_hex(value: &str, length: usize) -> bool {
+    value.len() == length
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }

@@ -3,7 +3,7 @@ mod tests {
     use super::{
         BoundedTufTransport, ExpectedClaims, ExpectedSubject, InlineVerifyRequest,
         MAX_BUNDLE_BYTES, MAX_TUF_RESPONSE_BYTES, VERIFY_DEADLINE, is_supported_ci_oid,
-        single_claim, verify_inline_checksum_target,
+        single_claim, validate_expected_inputs, verify_inline_checksum_target,
     };
     use base64::Engine;
     use std::collections::BTreeMap;
@@ -51,6 +51,57 @@ mod tests {
         assert!(!is_supported_ci_oid("1.3.6.1.4.1.57264.2.1").expect("foreign OID is ignored"));
     }
 
+    #[test]
+    fn fulcio_commit_claims_use_40_hex_while_artifact_digests_use_64() {
+        let expected = ExpectedClaims {
+            signer: "https://github.com/example/repo/.github/workflows/build.yml@refs/heads/main"
+                .to_owned(),
+            signer_digest: "a".repeat(40),
+            source: "https://github.com/example/repo".to_owned(),
+            source_digest: "b".repeat(40),
+            source_ref: "refs/heads/main".to_owned(),
+            build_config: "https://github.com/example/repo/.github/workflows/build.yml@refs/heads/main"
+                .to_owned(),
+            build_config_digest: "c".repeat(40),
+        };
+        let checksum = ExpectedSubject {
+            name: "SHA256SUMS".to_owned(),
+            digest: "d".repeat(64),
+        };
+        let target = ExpectedSubject {
+            name: "velnor-host".to_owned(),
+            digest: "e".repeat(64),
+        };
+        assert!(validate_expected_inputs(&expected, &checksum, &target).is_ok());
+
+        for malformed in [
+            "a".repeat(39),
+            "A".repeat(40),
+            "g".repeat(40),
+            "a".repeat(64),
+        ] {
+            for field in 0..3 {
+                let mut malformed_expected = expected.clone();
+                match field {
+                    0 => malformed_expected.signer_digest.clone_from(&malformed),
+                    1 => malformed_expected.source_digest.clone_from(&malformed),
+                    _ => malformed_expected.build_config_digest.clone_from(&malformed),
+                }
+                assert!(validate_expected_inputs(&malformed_expected, &checksum, &target).is_err());
+            }
+        }
+
+        let mut malformed_checksum = checksum.clone();
+        malformed_checksum.digest = "d".repeat(40);
+        assert!(validate_expected_inputs(&expected, &malformed_checksum, &target).is_err());
+
+        malformed_checksum.digest = "g".repeat(64);
+        assert!(validate_expected_inputs(&expected, &malformed_checksum, &target).is_err());
+
+        let mut malformed_target = target.clone();
+        malformed_target.digest = "e".repeat(65);
+        assert!(validate_expected_inputs(&expected, &checksum, &malformed_target).is_err());
+}
     #[tokio::test]
     async fn inline_entrypoint_rejects_oversized_bundle_before_network_access() {
         let request = InlineVerifyRequest {
@@ -73,4 +124,5 @@ mod tests {
         let result = verify_inline_checksum_target(request, Instant::now() + VERIFY_DEADLINE).await;
         assert!(result.is_err_and(|error| error.to_string() == "verification bundle exceeds bound"));
     }
+
 }
