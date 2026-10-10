@@ -1,4 +1,4 @@
-use super::{MAX_WORKFLOW_BYTES, check_workflow_size};
+use super::{MAX_WORKFLOW_BYTES, check_workflow_size, is_over_workflow_size};
 use velnor_actions_workflow_steps::RenderError;
 
 fn marked_workflow_with_byte_size(size: usize) -> Result<String, RenderError> {
@@ -55,4 +55,13 @@ fn size_limit_recognizes_case_insensitive_workflow_extensions() {
         .expect_err("case-insensitive workflow extensions must be limited");
     assert!(matches!(error, RenderError::InvalidWorkflow(problem)
         if problem == "workflow_too_large:.github/workflows/ci.YML:500001:500000"));
+}
+
+#[test]
+fn size_probe_matches_fail_closed_boundary() {
+    let exact = "x".repeat(MAX_WORKFLOW_BYTES);
+    let over = "x".repeat(MAX_WORKFLOW_BYTES + 1);
+    assert!(!is_over_workflow_size(".github/workflows/ci.yml", &exact));
+    assert!(is_over_workflow_size(".github/workflows/ci.yml", &over));
+    assert!(!is_over_workflow_size(".github/actionlint.yaml", &over));
 }

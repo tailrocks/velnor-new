@@ -9,7 +9,7 @@ use velnor_actions_workflow_renderer::render_workflow_ir;
 use velnor_actions_workflow_steps::{
     CRATE_REPORT_UPLOAD_NAME, MATRIX_REPORT_UPLOAD_NAME, RUN_KEY_EXPR, RenderError,
     SETUP_MISE_NAME, checkout_step, crate_job_report_upload_step, matrix_report_upload_step,
-    plan_step,
+    plan_step, shell_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -138,8 +138,16 @@ fn typed_job_output_renders_the_uploaded_report_artifact_id() -> Result<(), Rend
         "rust-demo",
         "Rust / demo",
         vec!["plan".to_owned()],
-        vec![upload],
+        Vec::new(),
     );
+    let mut demo = shell_step(
+        "Run demo",
+        vec!["true".to_owned()],
+        std::collections::BTreeMap::default(),
+    )?;
+    demo.condition =
+        Some("!contains(needs.plan.outputs.covered_tasks, ',internal/demo/bar,')".to_owned());
+    task.steps = vec![checkout_step(&checkout_pin())?, demo, upload];
     task.outputs = vec![
         JobOutput::task_report_artifact_id(),
         JobOutput::task_report_check_run_id(),

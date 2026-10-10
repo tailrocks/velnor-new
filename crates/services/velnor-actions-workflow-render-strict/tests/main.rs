@@ -11,5 +11,6 @@ mod impl_renderer_planformat;
 mod impl_renderer_preseed;
 mod impl_renderer_preseed_strict;
 mod impl_renderer_setup;
+mod impl_renderer_size_fallback;
 mod impl_renderer_sweep_strict;
 mod impl_renderer_typed_ir;

@@ -99,3 +99,16 @@ fn direct_freshness_renderer_rejects_an_oversized_workflow() {
             .contains("workflow_too_large:.github/workflows/freshness.yml")
     );
 }
+
+#[test]
+fn tree_assembly_rejects_hand_edited_workflow_markers() -> Result<(), RenderError> {
+    let generated = with_marker(VERSION, "run: generated\n")?;
+    let actionlint = with_marker(VERSION, "config-variables: []\n")?;
+    assert!(render_tree(&generated, &actionlint, VERSION).is_ok());
+
+    let hand_edited = format!("run: hand-edited\n{generated}");
+    let error = render_tree(&hand_edited, &actionlint, VERSION)
+        .expect_err("a hand-edited workflow must not bypass generated-tree validation");
+    assert!(matches!(error, RenderError::BadMarker { .. }), "{error}");
+    Ok(())
+}

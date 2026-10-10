@@ -11,6 +11,12 @@ use velnor_actions_workflow_steps::RenderError;
 /// limit.
 pub const MAX_WORKFLOW_BYTES: usize = 500_000;
 
+/// True only when a workflow path exceeds [`MAX_WORKFLOW_BYTES`].
+#[must_use]
+pub fn is_over_workflow_size(path: &str, bytes: &str) -> bool {
+    is_workflow_path(path) && bytes.len() > MAX_WORKFLOW_BYTES
+}
+
 /// Reject an oversized generated workflow after its marker has been added.
 ///
 /// Non-workflow files do not use this limit. The tree assembler applies the

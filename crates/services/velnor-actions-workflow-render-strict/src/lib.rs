@@ -128,8 +128,17 @@ pub fn render_merged_with_mode(
     artifact_matrix::attach_artifact_matrices(&mut document, &artifact_matrices)?;
     matrix::attach_crate_job_caps(&mut document, &caps)?;
     let document = velnor_actions_workflow_tree::yaml::quote_run_values_in_yaml(document);
-    let document = velnor_actions_workflow_tree::yaml::share_repeated_run_scalars(document);
-    let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
+    let canonical_text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
+    let text = if velnor_actions_workflow_tree::workflow_size::is_over_workflow_size(
+        CI_WORKFLOW_PATH,
+        &canonical_text,
+    ) {
+        let shared_document =
+            velnor_actions_workflow_tree::yaml::share_repeated_run_scalars(document);
+        marker::with_marker(&ctx.generator_version, &render_yaml(&shared_document))?
+    } else {
+        canonical_text
+    };
     velnor_actions_workflow_tree::workflow_size::check_workflow_size(CI_WORKFLOW_PATH, &text)?;
     steps::scan_for_private_subcommands(&text)?;
     let mut files = shared.files;
