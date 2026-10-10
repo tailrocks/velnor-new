@@ -4,6 +4,7 @@ use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
+use std::{io, io::Write};
 
 use tempfile::TempDir;
 
@@ -13,6 +14,23 @@ use super::*;
 const PROCESS_MODE: &str = "VELNOR_CACHE_PROCESS_TEST_MODE";
 const PROCESS_ROOT: &str = "VELNOR_CACHE_PROCESS_TEST_ROOT";
 const PROCESS_MARKER: &str = "VELNOR_CACHE_PROCESS_TEST_MARKER";
+
+fn publish_complete_marker(marker: &Path, contents: &[u8]) -> io::Result<()> {
+    let mut temporary_name = marker
+        .file_name()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "marker path has no file name"))?
+        .to_os_string();
+    temporary_name.push(format!(".tmp-{}", std::process::id()));
+    let temporary = marker.with_file_name(temporary_name);
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary)?;
+    file.write_all(contents)?;
+    drop(file);
+    fs::rename(temporary, marker)?;
+    Ok(())
+}
 
 fn process_test_child(mode: &str, root: &Path, marker: &Path) -> Child {
     Command::new(std::env::current_exe().expect("locate current test executable"))
@@ -67,7 +85,7 @@ async fn process_boundary_worker() {
         .expect("worker acquires process lock");
 
     if mode == "hold-lock" {
-        fs::write(&marker, b"locked").expect("signal lock acquired");
+        publish_complete_marker(&marker, b"locked").expect("signal lock acquired");
         tokio::time::sleep(Duration::from_secs(60)).await;
         return;
     }
@@ -94,7 +112,7 @@ async fn process_boundary_worker() {
         }
         _ => panic!("unknown process boundary mode"),
     }
-    fs::write(&marker, id.as_bytes()).expect("signal crash boundary ready");
+    publish_complete_marker(&marker, id.as_bytes()).expect("signal crash boundary ready");
     tokio::time::sleep(Duration::from_secs(60)).await;
 }
 
