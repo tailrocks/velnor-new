@@ -1,8 +1,8 @@
 //! Hosted measurement of the selected official Rust distribution components.
 
+use super::features::{self, CHECKOUT_USES};
 use super::{RunnerSpec, RustToolchainQualificationPins};
 use crate::RenderError;
-use crate::schema2_features::{self, CHECKOUT_USES};
 use crate::yaml::Yaml;
 use velnor_actions_contract::ReleaseTarget;
 
