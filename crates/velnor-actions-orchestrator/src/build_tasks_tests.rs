@@ -1,5 +1,7 @@
-use crate::build_tasks::validate_config_shape;
-use crate::native_tool_input::{NativeMiseConfig, NativeToolSource, native_mise_source};
+use crate::build_tasks::{validate_config_shape, validate_source_lock_subset};
+use crate::native_tool_input::{
+    NativeMiseConfig, NativeMiseLock, NativeToolSource, native_mise_source,
+};
 
 const ROOT_CONFIG: &str = r#"
 min_version = "2026.10.7"
@@ -28,6 +30,29 @@ fn project(source: &str) -> NativeMiseConfig {
     }
 }
 
+fn lock(source: &str) -> NativeMiseLock {
+    let value = toml::from_str(source).expect("lock TOML");
+    let input = native_mise_source("mise.lock", source.as_bytes(), &value).expect("typed lock");
+    match input.source {
+        NativeToolSource::MiseLock(lock) => lock,
+        NativeToolSource::RustToolchain | NativeToolSource::MiseConfig(_) => panic!("wrong source"),
+    }
+}
+
+const SWIFTLINT_ROW: &str = r#"
+version = "0.65.1"
+backend = "aqua:realm/SwiftLint"
+specifiers = ["0.65.1"]
+
+[tools.swiftlint.platforms.macos-arm64]
+checksum = "sha256:0123456789abcdef"
+url = "https://example.invalid/swiftlint.zip"
+"#;
+
+fn swiftlint_lock(rows: &str) -> String {
+    format!("lockfile_version = 3\n\n[[tools.swiftlint]]\n{rows}")
+}
+
 #[test]
 fn current_root_mise_shape_accepts_pinned_mbx_rust_without_wrappers() {
     let config = project(ROOT_CONFIG);
@@ -52,4 +77,43 @@ fn legacy_wrapper_and_selected_tool_drift_fail_closed() {
 
     let malformed_route = ROOT_CONFIG.replace("mr_boxington = true", "mr_boxington = \"true\"");
     assert!(validate_config_shape(&project(&malformed_route), "1.99.0").is_err());
+}
+
+#[test]
+fn accepts_task_lock_as_exact_supported_subset_of_root_lock() {
+    let root = lock(&format!(
+        "{}\n[[tools.mise]]\nversion = \"2026.10.7\"\nbackend = \"aqua:jdx/mise\"\nspecifiers = [\"2026.10.7\"]\n",
+        swiftlint_lock(SWIFTLINT_ROW)
+    ));
+    let source = lock(&swiftlint_lock(SWIFTLINT_ROW));
+
+    validate_source_lock_subset(&source, &root).expect("exact task-local row is in root lock");
+}
+
+#[test]
+fn rejects_foreign_or_incompatible_task_lock_rows() {
+    let root = lock(&swiftlint_lock(SWIFTLINT_ROW));
+    let foreign = lock(&swiftlint_lock(SWIFTLINT_ROW).replace("tools.swiftlint", "tools.foreign"));
+    assert!(validate_source_lock_subset(&foreign, &root).is_err());
+
+    let incompatible = lock(&swiftlint_lock(
+        &SWIFTLINT_ROW.replace("0123456789abcdef", "fedcba9876543210"),
+    ));
+    assert!(validate_source_lock_subset(&incompatible, &root).is_err());
+}
+
+#[test]
+fn rejects_duplicate_task_rows_and_ambiguous_root_rows() {
+    let single = swiftlint_lock(SWIFTLINT_ROW);
+    let duplicated_source = lock(&format!(
+        "lockfile_version = 3\n\n[[tools.swiftlint]]\n{SWIFTLINT_ROW}\n[[tools.swiftlint]]\n{SWIFTLINT_ROW}"
+    ));
+    let root = lock(&single);
+    assert!(validate_source_lock_subset(&duplicated_source, &root).is_err());
+
+    let duplicated_root = lock(&format!(
+        "lockfile_version = 3\n\n[[tools.swiftlint]]\n{SWIFTLINT_ROW}\n[[tools.swiftlint]]\n{SWIFTLINT_ROW}"
+    ));
+    let source = lock(&single);
+    assert!(validate_source_lock_subset(&source, &duplicated_root).is_err());
 }

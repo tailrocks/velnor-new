@@ -91,19 +91,24 @@ pub(crate) fn policies(
         validate_task_closure(&merged_tasks, &task.mise_task)?;
 
         let task_lock_path = task.source.mise_lock_path();
-        let task_lock_digest = if task_lock_path == "mise.lock" {
+        let task_lock = if task_lock_path == "mise.lock" {
             None
         } else {
             optional_checked_source(&discovery.tool_checks, &task_lock_path)?
-                .map(native_sha256)
-                .transpose()?
         };
-        if task_lock_digest
-            .as_deref()
-            .is_some_and(|digest| digest != root_lock_sha256)
-        {
-            return Err(failure("build_task_source_lock_differs_from_root"));
+        if let Some(task_lock_input) = task_lock {
+            let NativeToolSource::MiseLock(task_lock) = &task_lock_input
+                .native
+                .as_ref()
+                .ok_or_else(|| failure("build_task_source_mise_lock"))?
+                .source
+            else {
+                return Err(failure("build_task_source_mise_lock"));
+            };
+            validate_lock_shape(task_lock)?;
+            validate_source_lock_subset(task_lock, mise_lock)?;
         }
+        let task_lock_digest = task_lock.map(native_sha256).transpose()?;
 
         let task_rust_path = task.source.rust_toolchain_path();
         let task_rust_digest = if task_rust_path == "rust-toolchain.toml" {
@@ -285,6 +290,56 @@ fn validate_lock_shape(lock: &NativeMiseLock) -> Result<(), OrchestratorError> {
         return Err(failure("build_task_mise_lock_root"));
     }
     Ok(())
+}
+
+/// A task-local lock may narrow the root lock, but it cannot introduce or
+/// alter any artifact row. Its raw source digest remains separately bound.
+fn validate_source_lock_subset(
+    source: &NativeMiseLock,
+    root: &NativeMiseLock,
+) -> Result<(), OrchestratorError> {
+    if !source.has_supported_root_shape() || !root.has_supported_root_shape() {
+        return Err(failure("build_task_source_mise_lock"));
+    }
+    for (key, rows) in &source.tools {
+        let root_rows = root
+            .tools
+            .get(key)
+            .ok_or_else(|| failure("build_task_source_lock_foreign_tool"))?;
+        if rows.is_empty() {
+            return Err(failure("build_task_source_lock_empty_rows"));
+        }
+        for (index, row) in rows.iter().enumerate() {
+            if !supported_lock_row(row) || rows[..index].contains(row) {
+                return Err(failure("build_task_source_lock_row_shape"));
+            }
+            if root_rows.iter().filter(|root_row| *root_row == row).count() != 1 {
+                return Err(failure("build_task_source_lock_not_root_subset"));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn supported_lock_row(row: &crate::native_tool_lock::NativeLockedTool) -> bool {
+    row.valid_shape
+        && row.unsupported_fields.is_empty()
+        && row
+            .version
+            .as_deref()
+            .is_some_and(|version| !version.is_empty())
+        && row
+            .backend
+            .as_deref()
+            .is_some_and(|backend| !backend.is_empty())
+        && row
+            .specifiers
+            .as_ref()
+            .is_some_and(|specifiers| !specifiers.is_empty())
+        && row
+            .platforms
+            .values()
+            .all(|artifact| artifact.valid_shape && artifact.unsupported_fields.is_empty())
 }
 
 fn validate_task_source_shape(
