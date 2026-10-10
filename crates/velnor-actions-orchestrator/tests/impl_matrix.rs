@@ -188,7 +188,7 @@ fn ignored_rust_merges_to_no_work_never_passes() -> TestResult {
     let final_report = merge(&request)?;
     final_report.validate()?;
     assert_eq!(final_report.status, FinalStatus::NoWork);
-    assert!(final_report.expected_report_ids.is_empty());
+    assert_eq!(final_report.expected_report_ids, [] as [String; 0]);
     assert_eq!(final_report.counts.selected, 0);
     assert_eq!(final_report.counts.executed, 0);
     assert_eq!(final_report.counts.covered, 0);

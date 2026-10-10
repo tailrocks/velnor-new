@@ -307,7 +307,7 @@ fn declared_keys_are_typed_and_closed() -> TestResult {
     ] {
         let repo = make_repo(config)?;
         let err = err_of(prepare(repo.path()).map(|_| ()), "bad key rejected")?;
-        assert!(!err.to_string().is_empty());
+        assert_ne!(err.to_string(), "");
     }
     let repo = make_repo(&declared_config("cargo", "cargo_test"))?;
     let prep = prepare(repo.path())?;

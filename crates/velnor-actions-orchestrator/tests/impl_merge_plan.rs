@@ -86,7 +86,7 @@ fn missing_plan_merges_to_planning_failed() -> TestResult {
     final_report.validate()?;
     assert_eq!(final_report.status, FinalStatus::PlanningFailed);
     assert_eq!(final_report.report_id, "final-local");
-    assert!(final_report.expected_report_ids.is_empty());
+    assert_eq!(final_report.expected_report_ids, [] as [String; 0]);
     assert_eq!(final_report.required_job_results.len(), 1);
 
     // A missing matrix file with a present plan is also planning_failed.
