@@ -109,7 +109,7 @@ fn workflow_tasks_require_sorted_unique_safe_ids() {
         WorkflowTask::Verification(VerificationTask {
             id: id.to_owned(),
             mise_task: format!("check-{id}"),
-            source: super::VerificationTaskSource {
+            source: crate::config::VerificationTaskSource {
                 mise_config: "mise.toml".to_owned(),
                 working_directory: ".".to_owned(),
             },
@@ -174,7 +174,7 @@ fn workflow_task_variants_share_sorted_unique_ids_and_build_bound() {
         WorkflowTask::Verification(VerificationTask {
             id: "native-desktop".to_owned(),
             mise_task: "desktop-format-check".to_owned(),
-            source: super::VerificationTaskSource {
+            source: crate::config::VerificationTaskSource {
                 mise_config: "mise.toml".to_owned(),
                 working_directory: ".".to_owned(),
             },
