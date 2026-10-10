@@ -128,9 +128,103 @@ fn mbx_job_policy_applies_to_hosted_and_scale_set_lanes() -> Result<(), RenderEr
         2,
         "cleanup uses the exact task toolchain in both lanes: {text}"
     );
+    let ready_checks: Vec<usize> = text
+        .match_indices("id: mbx-ready")
+        .map(|(at, _)| at)
+        .collect();
+    let lane_calls: Vec<usize> = text
+        .match_indices("uses: ./.github/actions/rust-demo")
+        .map(|(at, _)| at)
+        .collect();
+    let cleanups: Vec<usize> = text
+        .match_indices("name: Clean MBX workspace outputs")
+        .map(|(at, _)| at)
+        .collect();
+    assert_eq!(ready_checks.len(), 2, "one ready guard per lane: {text}");
+    assert_eq!(lane_calls.len(), 2, "one shared task call per lane: {text}");
+    assert_eq!(cleanups.len(), 2, "one cleanup per lane: {text}");
+    for ((ready, call), cleanup) in ready_checks.iter().zip(&lane_calls).zip(&cleanups) {
+        assert!(
+            ready < call && call < cleanup,
+            "ready → shared tasks → clean: {text}"
+        );
+    }
     assert!(
         !text.contains("isolate-objects-cache"),
         "v1.6 has no isolation input"
     );
     Ok(())
+}
+
+#[test]
+fn public_renderer_rejects_missing_duplicate_and_misordered_mbx_ready_checks() {
+    let uses = format!("jdx/mr-boxington-action@{}", "b".repeat(40));
+    let valid = mbx_tool_steps(&uses, "1.21.1", "1.98.1")
+        .expect("native MBX steps render")
+        .to_vec();
+
+    let mut missing = valid.clone();
+    missing.remove(2);
+    assert!(
+        render_native_steps(missing)
+            .expect_err("missing same-job ready check is rejected")
+            .to_string()
+            .contains("mbx_ready_check_missing"),
+    );
+
+    let mut duplicate = valid.clone();
+    duplicate.push(valid[2].clone());
+    assert!(
+        render_native_steps(duplicate)
+            .expect_err("duplicate same-job ready IDs are rejected")
+            .to_string()
+            .contains("duplicate_step_id"),
+    );
+
+    let mut misordered = valid.clone();
+    misordered.swap(1, 2);
+    assert!(
+        render_native_steps(misordered)
+            .expect_err("ready check before action setup is rejected")
+            .to_string()
+            .contains("mbx_ready_check_order"),
+    );
+
+    let mut noncanonical = valid.to_vec();
+    let velnor_actions_contract::StepKind::Shell { run, .. } = &mut noncanonical[2].kind else {
+        panic!("ready check is a shell step");
+    };
+    run[0] = "true".to_owned();
+    assert!(
+        render_native_steps(noncanonical)
+            .expect_err("noncanonical ready script is rejected")
+            .to_string()
+            .contains("mbx_ready_check_mismatch"),
+    );
+
+    let mut consumer_before_ready = valid;
+    consumer_before_ready.insert(
+        2,
+        velnor_actions_workflow_renderer::shell_step(
+            "MBX consumer before ready",
+            vec!["mbx".to_owned(), "test".to_owned()],
+            std::collections::BTreeMap::new(),
+        )
+        .expect("MBX consumer step builds"),
+    );
+    assert!(
+        render_native_steps(consumer_before_ready)
+            .expect_err("MBX consumer before ready check is rejected")
+            .to_string()
+            .contains("mbx_consumer_before_ready"),
+    );
+}
+
+fn render_native_steps(steps: Vec<velnor_actions_contract::Step>) -> Result<String, RenderError> {
+    render_workflow_ir(
+        &fixture_ir(vec![job("mbx-job", "Native MBX", Vec::new(), steps)]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )
 }

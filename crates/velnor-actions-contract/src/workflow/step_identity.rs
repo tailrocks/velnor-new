@@ -355,6 +355,7 @@ fn valid_mbx_cache(kind: &StepKind) -> bool {
 /// Returns a contract error for an invalid role/payload or duplicate step ID.
 pub fn validate_step_sequence(steps: &[Step], scope: &str) -> Result<(), ContractError> {
     validate_step_identities(steps, scope)?;
+    super::step_mbx_lifecycle::validate_mbx_cleanup_sequence(steps, scope)?;
     super::step_protocol::validate_tofu_provider_sequence(steps, scope)
 }
 

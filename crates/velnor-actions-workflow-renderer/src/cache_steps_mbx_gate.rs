@@ -6,7 +6,7 @@ use super::mbx_command::{has_external_mbx_selector, uses_mbx_command};
 use super::mbx_preflight::{canonical_mbx_preflight_step, mbx_version_check_step};
 use super::{CompileDriver, MBX_ACTION_NAME};
 use crate::RenderError;
-use velnor_actions_contract::{Job, Step, StepRole};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 /// Gate native MBX action and executable selection against each job's driver.
 ///
@@ -184,37 +184,95 @@ pub(crate) fn append_workspace_cleanups(
     jobs: &mut BTreeMap<String, Job>,
 ) -> Result<(), RenderError> {
     for (id, job) in jobs {
-        let actions: Vec<Step> = job
+        let actions: Vec<usize> = job
             .steps
             .iter()
-            .filter(|step| is_mbx_action(step))
-            .cloned()
+            .enumerate()
+            .filter(|(_, step)| is_mbx_action(step))
+            .map(|(index, _)| index)
+            .collect();
+        let ready_checks: Vec<usize> = job
+            .steps
+            .iter()
+            .enumerate()
+            .filter(|(_, step)| step.role == Some(StepRole::MbxVersionCheck))
+            .map(|(index, _)| index)
             .collect();
         let cleanups = job
             .steps
             .iter()
             .filter(|step| step.role == Some(StepRole::MbxWorkspaceCleanup))
             .count();
-        match actions.as_slice() {
-            [] if cleanups == 0 => continue,
-            [] => {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "mbx_cleanup_without_action:{id}"
-                )));
+        if actions.is_empty() {
+            if cleanups == 0 && ready_checks.is_empty() {
+                continue;
             }
-            [_] if cleanups == 0 => {}
-            [_] => {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "mbx_cleanup_duplicated:{id}"
-                )));
-            }
-            _ => {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "mbx_cleanup_action_duplicated:{id}"
-                )));
-            }
+            return Err(RenderError::InvalidWorkflow(format!(
+                "mbx_lifecycle_without_action:{id}"
+            )));
         }
-        let cleanup = crate::cache_steps::mbx_workspace_clean_step_for_action(&actions[0])?;
+        if actions.len() != 1 {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "mbx_cleanup_action_duplicated:{id}"
+            )));
+        }
+        if cleanups != 0 {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "mbx_cleanup_duplicated:{id}"
+            )));
+        }
+        if ready_checks.is_empty() {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "mbx_ready_check_missing:{id}"
+            )));
+        }
+        if ready_checks.len() != 1 {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "mbx_ready_check_duplicated:{id}"
+            )));
+        }
+
+        let action_at = actions[0];
+        let ready_at = ready_checks[0];
+        if action_at >= ready_at {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "mbx_ready_check_order:{id}"
+            )));
+        }
+        let action = &job.steps[action_at];
+        let StepKind::Action { with, env, .. } = &action.kind else {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "mbx_cleanup_action_kind_mismatch:{id}"
+            )));
+        };
+        let version = with
+            .get("version")
+            .ok_or_else(|| RenderError::InvalidWorkflow("mbx_version_missing".to_owned()))?;
+        let rust_toolchain = with
+            .get("toolchain")
+            .ok_or_else(|| RenderError::InvalidWorkflow("mbx_toolchain_missing".to_owned()))?;
+        let expected_ready = mbx_version_check_step(version, rust_toolchain, env.clone())?;
+        let actual_ready = &job.steps[ready_at];
+        if actual_ready.id != expected_ready.id
+            || actual_ready.role != expected_ready.role
+            || actual_ready.condition != expected_ready.condition
+            || actual_ready.kind != expected_ready.kind
+        {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "mbx_ready_check_mismatch:{id}"
+            )));
+        }
+        if job.steps.iter().enumerate().any(|(index, step)| {
+            index < ready_at
+                && step.role != Some(StepRole::MbxVersionCheck)
+                && uses_mbx_command(step)
+        }) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "mbx_consumer_before_ready:{id}"
+            )));
+        }
+
+        let cleanup = crate::cache_steps::mbx_workspace_clean_step_for_action(action)?;
         job.steps.push(cleanup);
     }
     Ok(())
