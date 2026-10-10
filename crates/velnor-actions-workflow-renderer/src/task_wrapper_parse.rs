@@ -29,7 +29,7 @@ pub(super) fn parse_step(step: &Step) -> Result<Option<ParsedTask>, RenderError>
     if !has_task_identity(env) || !has_exact_scrub(env) {
         return Ok(None);
     }
-    let Some(script) = unwrap_env_shell(run) else {
+    let Some(script) = unwrap_inline_shell(run) else {
         return Ok(None);
     };
     let prefix = format!(
@@ -103,21 +103,11 @@ fn has_exact_scrub(env: &BTreeMap<String, String>) -> bool {
         .all(|(key, value)| env.get(key) == Some(value))
 }
 
-fn unwrap_env_shell(run: &[String]) -> Option<&str> {
-    let unset = toolchain_env::CREDENTIAL_UNSET_VARS;
-    let shell_at = 1 + unset.len() * 2;
-    if run.first()?.as_str() != "env" || run.get(shell_at)?.as_str() != "sh" {
+fn unwrap_inline_shell(run: &[String]) -> Option<&str> {
+    if run.len() != 3 || run[0] != "sh" || run[1] != "-c" {
         return None;
     }
-    if run.get(shell_at + 1)?.as_str() != "-c" || run.len() != shell_at + 3 {
-        return None;
-    }
-    for (index, name) in unset.iter().enumerate() {
-        if run.get(1 + index * 2)?.as_str() != "-u" || run.get(2 + index * 2)?.as_str() != *name {
-            return None;
-        }
-    }
-    run.get(shell_at + 2).map(String::as_str)
+    run.get(2).map(String::as_str)
 }
 
 fn safe_helper_path(helper: &str) -> bool {
