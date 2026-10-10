@@ -157,7 +157,7 @@ pub(super) struct Deadline {
 }
 
 impl Deadline {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             began: Instant::now(),
         }

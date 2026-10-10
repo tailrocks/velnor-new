@@ -10,7 +10,7 @@ use super::TIMEOUT;
 
 pub(in crate::launch) struct DockerResponse {
     status: Option<u16>,
-    body: String,
+    body: Vec<u8>,
     hang: bool,
 }
 
@@ -35,25 +35,18 @@ impl DockerStub {
         let (stop, mut stopped) = oneshot::channel();
         let task = tokio::spawn(async move {
             let mut requests = Vec::with_capacity(expected);
-            for response in responses {
-                let (mut stream, _) = listener.accept().await.map_err(|error| error.to_string())?;
-                requests.push(read_request(&mut stream).await?);
-                send_response(&mut stream, &response).await?;
-            }
+            let mut responses = responses.into_iter();
             loop {
                 tokio::select! {
                     accepted = listener.accept() => {
                         let (mut stream, _) = accepted.map_err(|error| error.to_string())?;
                         requests.push(read_request(&mut stream).await?);
-                        send_response(
-                            &mut stream,
-                            &DockerResponse {
+                        let response = responses.next().unwrap_or(DockerResponse {
                                 status: Some(500),
-                                body: r#"{"message":"unexpected Docker request"}"#.to_owned(),
+                                body: br#"{"message":"unexpected Docker request"}"#.to_vec(),
                                 hang: false,
-                            },
-                        )
-                        .await?;
+                            });
+                        send_response(&mut stream, &response).await?;
                     }
                     _ = &mut stopped => break,
                 }
@@ -81,6 +74,14 @@ impl DockerStub {
     }
 
     pub(in crate::launch) async fn finish(mut self) -> Result<Vec<String>, String> {
+        self.collect(true).await
+    }
+
+    pub(in crate::launch) async fn finish_observed(mut self) -> Result<Vec<String>, String> {
+        self.collect(false).await
+    }
+
+    async fn collect(&mut self, require_expected: bool) -> Result<Vec<String>, String> {
         let stop = self
             .stop
             .take()
@@ -100,7 +101,7 @@ impl DockerStub {
         let removed = std::fs::remove_file(&self.path).map_err(|error| error.to_string());
         let requests = served?;
         removed?;
-        if requests.len() != self.expected {
+        if require_expected && requests.len() != self.expected {
             return Err(format!(
                 "expected {} Docker requests, got {}",
                 self.expected,
@@ -125,15 +126,23 @@ impl Drop for DockerStub {
 pub(in crate::launch) fn http(status: u16, body: &str) -> DockerResponse {
     DockerResponse {
         status: Some(status),
-        body: body.to_owned(),
+        body: body.as_bytes().to_vec(),
         hang: false,
     }
 }
 
-pub(super) fn closed() -> DockerResponse {
+pub(in crate::launch) fn raw_http(status: u16, body: Vec<u8>) -> DockerResponse {
+    DockerResponse {
+        status: Some(status),
+        body,
+        hang: false,
+    }
+}
+
+pub(in crate::launch) fn closed() -> DockerResponse {
     DockerResponse {
         status: None,
-        body: String::new(),
+        body: Vec::new(),
         hang: false,
     }
 }
@@ -141,7 +150,7 @@ pub(super) fn closed() -> DockerResponse {
 pub(in crate::launch) fn hanging() -> DockerResponse {
     DockerResponse {
         status: None,
-        body: String::new(),
+        body: Vec::new(),
         hang: true,
     }
 }
@@ -154,13 +163,16 @@ async fn send_response(stream: &mut UnixStream, response: &DockerResponse) -> Re
         return Ok(());
     };
     let message = format!(
-        "HTTP/1.1 {status} {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        "HTTP/1.1 {status} {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         reason(status),
-        response.body.len(),
-        response.body
+        response.body.len()
     );
     stream
         .write_all(message.as_bytes())
+        .await
+        .map_err(|error| error.to_string())?;
+    stream
+        .write_all(&response.body)
         .await
         .map_err(|error| error.to_string())
 }

@@ -5,6 +5,8 @@ use crate::Journal;
 use crate::journal::{ProbePhase, ProbeSeed};
 use crate::launch_harness::Scratch;
 
+mod docker_lifecycle;
+
 const MEMORY_TOTAL: u64 = 8 * 1024 * 1024 * 1024;
 
 fn record(psi: &str) -> Vec<u8> {
