@@ -134,4 +134,3 @@ fn mbx_child_uses_rustup_path_without_mise_cargo_wrappers_or_shims() -> Result<(
     assert!(command.disables_auto_install());
     Ok(())
 }
-
