@@ -1,98 +1,167 @@
+use std::ffi::{OsStr, OsString};
+
+use velnor_actions_contract::ReleaseTarget;
+use velnor_actions_mise::catalog::{PinnedTool, ToolCatalog};
+use velnor_actions_mise::{MiseInstall, PinnedToolExec, PrepareRustTarget};
+
 use crate::schema2::ProductReleasePins;
 use crate::setup::MiseSetup;
+use crate::toolchain_env::with_env_unset_argv;
 
 pub(super) fn test_pins() -> ProductReleasePins {
+    let catalog = ToolCatalog::pinned();
     let setup = MiseSetup {
         uses: format!("jdx/mise-action@{}", "a".repeat(40)),
         version: "2026.10.4".to_owned(),
         sha256: "b".repeat(64),
     };
-    let (install_resource_probe_target_argv, resource_probe_build_argv) = resource_probe_argvs();
+    let install_runner_build_tools_argv =
+        install_argv(&[PinnedTool::Rust, PinnedTool::MrBoxington], &catalog);
+    let install_resource_probe_target_argv = target_argv(
+        ReleaseTarget::LinuxX86_64,
+        "x86_64-unknown-linux-musl",
+        &catalog,
+    );
+    let install_intel_target_argv = target_argv(
+        ReleaseTarget::MacosArm64,
+        ReleaseTarget::MacosX86_64.triple(),
+        &catalog,
+    );
+    let mut candidate_build_args = vec![
+        "build",
+        "--release",
+        "--locked",
+        "--package",
+        "velnor-actions-cli",
+        "--bin",
+        "velnor-actions",
+    ];
+    let build_argv = mbx_build_argv(&candidate_build_args, &catalog);
+    candidate_build_args.extend(["--target", ReleaseTarget::MacosX86_64.triple()]);
+    let intel_build_argv = mbx_build_argv(&candidate_build_args, &catalog);
+    let resource_probe_build_argv = mbx_build_argv(
+        &[
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--package",
+            "velnor-resource-probe",
+            "--bin",
+            "velnor-resource-probe",
+            "--release",
+            "--target",
+            "x86_64-unknown-linux-musl",
+        ],
+        &catalog,
+    );
+    let runner_build_argv = mbx_build_argv(
+        &[
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--release",
+            "--package",
+            "velnor-runner-cli",
+        ],
+        &catalog,
+    );
     ProductReleasePins {
         linux_x86_64_setup: setup.clone(),
         macos_arm64_setup: setup.clone(),
         macos_x86_64_setup: setup,
-        install_gate_tools_argv: vec!["mise".to_owned(), "install".to_owned()],
-        install_build_tools_argv: vec!["mise".to_owned(), "install".to_owned()],
-        install_qualify_tools_argv: vec!["mise".to_owned(), "install".to_owned()],
-        install_runner_build_tools_argv: vec!["mise".to_owned(), "install".to_owned()],
-        install_gh_argv: [
-            "mise",
-            "--no-config",
-            "--no-env",
-            "--no-hooks",
-            "install",
-            "gh@2.102.0",
-        ]
-        .into_iter()
-        .map(str::to_owned)
-        .collect(),
-        build_argv: vec!["mise".to_owned(), "exec".to_owned()],
-        intel_build_argv: vec!["mise".to_owned(), "exec".to_owned()],
-        install_intel_target_argv: vec!["mise".to_owned(), "exec".to_owned()],
+        install_gate_tools_argv: install_argv(
+            &[
+                PinnedTool::Gh,
+                PinnedTool::Actionlint,
+                PinnedTool::Shellcheck,
+                PinnedTool::Zizmor,
+            ],
+            &catalog,
+        ),
+        install_build_tools_argv: install_runner_build_tools_argv.clone(),
+        install_qualify_tools_argv: install_argv(
+            &[
+                PinnedTool::Rust,
+                PinnedTool::Actionlint,
+                PinnedTool::Shellcheck,
+                PinnedTool::Zizmor,
+            ],
+            &catalog,
+        ),
+        install_runner_build_tools_argv,
+        install_gh_argv: install_argv(&[PinnedTool::Gh], &catalog),
+        build_argv,
+        intel_build_argv,
+        install_intel_target_argv,
         install_resource_probe_target_argv,
-        runner_build_argv: vec!["mise".to_owned(), "exec".to_owned()],
+        runner_build_argv,
         resource_probe_build_argv,
-        actionlint_argv: vec!["mise".to_owned(), "exec".to_owned()],
-        zizmor_argv: vec!["mise".to_owned(), "exec".to_owned()],
-        gh_argv: [
-            "mise",
-            "--no-config",
-            "--no-env",
-            "--no-hooks",
-            "exec",
-            "gh@2.102.0",
-            "--",
-            "gh",
-        ]
-        .into_iter()
-        .map(str::to_owned)
-        .collect(),
-        rust_version: "1.99.0".to_owned(),
-        mr_boxington_version: "1.23.0".to_owned(),
+        actionlint_argv: exec_argv(
+            &[PinnedTool::Actionlint, PinnedTool::Shellcheck],
+            "actionlint",
+            &["-color"],
+            &catalog,
+        ),
+        zizmor_argv: with_env_unset_argv(&exec_argv(
+            &[PinnedTool::Zizmor],
+            "zizmor",
+            &[
+                "--no-online-audits",
+                "--config",
+                ".zizmor.yml",
+                ".github/workflows",
+            ],
+            &catalog,
+        )),
+        gh_argv: exec_argv(&[PinnedTool::Gh], "gh", &[], &catalog),
+        rust_version: catalog.version(PinnedTool::Rust).to_owned(),
+        mr_boxington_version: catalog.version(PinnedTool::MrBoxington).to_owned(),
     }
 }
 
-fn resource_probe_argvs() -> (Vec<String>, Vec<String>) {
-    let install = [
-        "mise",
-        "--no-config",
-        "--no-env",
-        "--no-hooks",
-        "exec",
-        "rust@1.99.0",
-        "--",
-        "rustup",
-        "target",
-        "add",
-        "--toolchain",
-        "1.99.0",
-        "x86_64-unknown-linux-musl",
-    ]
-    .map(str::to_owned)
-    .to_vec();
-    let build = [
-        "mise",
-        "--no-config",
-        "--no-env",
-        "--no-hooks",
-        "exec",
-        "rust@1.99.0",
-        "--",
-        "cargo",
-        "build",
-        "--locked",
-        "--manifest-path",
-        "crates/velnor-runner/Cargo.toml",
-        "--package",
-        "velnor-resource-probe",
-        "--bin",
-        "velnor-resource-probe",
-        "--release",
-        "--target",
-        "x86_64-unknown-linux-musl",
-    ]
-    .map(str::to_owned)
-    .to_vec();
-    (install, build)
+fn install_argv(tools: &[PinnedTool], catalog: &ToolCatalog) -> Vec<String> {
+    MiseInstall::new(tools.to_vec())
+        .expect("test tool list is non-empty")
+        .argv(catalog)
+        .into_iter()
+        .map(|arg| arg.into_string().expect("Mise argv is UTF-8"))
+        .collect()
+}
+
+fn mbx_build_argv(args: &[&str], catalog: &ToolCatalog) -> Vec<String> {
+    exec_argv(
+        &[PinnedTool::Rust, PinnedTool::MrBoxington],
+        "mbx",
+        args,
+        catalog,
+    )
+}
+
+fn exec_argv(
+    tools: &[PinnedTool],
+    program: &str,
+    args: &[&str],
+    catalog: &ToolCatalog,
+) -> Vec<String> {
+    PinnedToolExec::new(
+        tools.to_vec(),
+        OsStr::new(program),
+        args.iter().map(OsString::from).collect(),
+    )
+    .expect("test MBX argv is valid")
+    .argv(catalog)
+    .into_iter()
+    .map(|arg| arg.into_string().expect("Mise argv is UTF-8"))
+    .collect()
+}
+
+fn target_argv(host: ReleaseTarget, target: &str, catalog: &ToolCatalog) -> Vec<String> {
+    PrepareRustTarget::new(host.triple(), target)
+        .expect("test Rust target pair is valid")
+        .argv(catalog)
+        .into_iter()
+        .map(|arg| arg.into_string().expect("Mise argv is UTF-8"))
+        .collect()
 }
