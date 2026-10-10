@@ -49,6 +49,7 @@ pub(crate) fn factor_obligation_steps(
                 matrix_key,
                 report_helper_version,
                 matrix_max_parallel: _,
+                toolchain_inputs: _,
             } = &step.kind
             else {
                 continue;
