@@ -151,25 +151,44 @@ probe = { kind = "cargo_nextest_version", expected = "cargo-nextest 0.9.148 (cd1
 [[qualified_tools]]
 id = "rust"
 backend = { kind = "core", tool = "rust" }
-version = "1.98.1"
+version = "1.99.0"
 options = { kind = "rust", components = [], targets = [] }
 depends_on = []
 [[qualified_tools.platforms]]
 platform = "linux_x64"
 artifacts = [
-  { url = "https://static.rust-lang.org/dist/2026-09-03/cargo-1.98.1-x86_64-unknown-linux-gnu.tar.xz", sha256 = "ea1de9f9e23107d97ee2b41a72c552f34064a593da503789218387aee59f3ba4" },
-  { url = "https://static.rust-lang.org/dist/2026-09-03/rust-std-1.98.1-x86_64-unknown-linux-gnu.tar.xz", sha256 = "fa3ff450172a16c026944030230c5069947af93c728d9179971d44e5e0cfb561" },
-  { url = "https://static.rust-lang.org/dist/2026-09-03/rustc-1.98.1-x86_64-unknown-linux-gnu.tar.xz", sha256 = "e974f036b28565f37c0f3bd92ddefa809bee16c04f9dcf07b9ed96e05aaaf7c4" },
+  { url = "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-x86_64-unknown-linux-gnu.tar.xz", sha256 = "d7674918d28093097614cd9728b6ca60db9ea3038f640f0bd1e9a4188c7568ce" },
+  { url = "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-x86_64-unknown-linux-gnu.tar.xz", sha256 = "3e58dff2d0b72196b5ea4e90536e174d400de88564a52694686b81e091169933" },
+  { url = "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-x86_64-unknown-linux-gnu.tar.xz", sha256 = "77171ba2a0345fdf2abc4fedda55d6de078dae7a68527c28be8c77dcc9604bd5" },
 ]
 dependency_artifacts = []
-install_tree_sha256 = "53f388a3b565f1717c2e6f55c8748c905f9141c20dc8757cca152c1ff5bb744a"
+install_tree_sha256 = "0f35f35b8690b4ddd921c1be2b9802d776142070a5c193dbbaebf2afc7feddc3"
 [[qualified_tools.platforms.executables]]
 name = "cargo"
 path = "bin/cargo"
-sha256 = "da77c8b33849312255ccde3179198ada4c8deb370488d050286146b1d1b27e14"
-probe = { kind = "version", expected = "cargo 1.98.1 (797e8a9bc 2026-08-05)" }
+sha256 = "e951141cc55a6cd7b9876d187bd30a3720e6086b99413af95e3b8de1cdd72f14"
+probe = { kind = "version", expected = "cargo 1.99.0 (5f94df478 2026-08-27)" }
 [[qualified_tools.platforms.executables]]
 name = "rustc"
 path = "bin/rustc"
-sha256 = "859254978c0a0402c32f949f6de0d99aee73be8d15f45aac00ae1448aac51e74"
-probe = { kind = "rustc_verbose", expected = "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8" }
+sha256 = "f3834d26669b03f6855fa54bd2381443123e860167bc0c7a8dd137e5cf6e5e4f"
+probe = { kind = "rustc_verbose", expected = "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1" }
+[[qualified_tools.platforms]]
+platform = "macos_arm64"
+artifacts = [
+  { url = "https://static.rust-lang.org/dist/2026-10-01/cargo-1.99.0-aarch64-apple-darwin.tar.xz", sha256 = "76abff0ad79a10a3152dff640ea0d8b3c37637d9300bf55da41b95c3ddc069c1" },
+  { url = "https://static.rust-lang.org/dist/2026-10-01/rust-std-1.99.0-aarch64-apple-darwin.tar.xz", sha256 = "a7c6de8aa21e7c31163a7656295b321bb85f5dce55ed8ea95ac9ac561202bb5b" },
+  { url = "https://static.rust-lang.org/dist/2026-10-01/rustc-1.99.0-aarch64-apple-darwin.tar.xz", sha256 = "334a66714ca316d71bbe5efe44f71762d0b276cea73be2987374693a837f7450" },
+]
+dependency_artifacts = []
+install_tree_sha256 = "5120b02b0a1abc1f6ecbcfd1af0f735ac1ae313b0ed35a689a95276e993e70fd"
+[[qualified_tools.platforms.executables]]
+name = "cargo"
+path = "bin/cargo"
+sha256 = "fc7aa5077deca8abc0651f329e8ec1d968f520e996a93b428f9935014362b382"
+probe = { kind = "version", expected = "cargo 1.99.0 (5f94df478 2026-08-27)" }
+[[qualified_tools.platforms.executables]]
+name = "rustc"
+path = "bin/rustc"
+sha256 = "dd6f58440b3418aa9157ae3f05d71eecff741ca41bc4eec120e7e8f2d933b9a0"
+probe = { kind = "rustc_verbose", expected = "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: aarch64-apple-darwin\nrelease: 1.99.0\nLLVM version: 23.1.1" }
