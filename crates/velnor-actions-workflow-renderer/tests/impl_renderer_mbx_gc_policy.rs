@@ -122,6 +122,57 @@ fn mbx_ready_guard_stays_outside_each_shared_lane_body() -> Result<(), RenderErr
     Ok(())
 }
 
+#[test]
+fn native_mbx_disk_samples_cover_the_active_lifecycle_boundaries() -> Result<(), RenderError> {
+    let text = render_mbx_lane_pair()?;
+    let pre_restore = positions(&text, "mbx_disk_sample before-action-restore");
+    let actions = positions(&text, "uses: jdx/mr-boxington-action@");
+    let post_restore = positions(&text, "mbx_disk_sample after-cache-restore");
+    let consumers = positions(&text, "uses: ./.github/actions/rust-demo");
+    let before_clean = positions(&text, "mbx_disk_sample before-final-clean");
+    let clean_calls = positions(&text, "mbx clean");
+    let after_clean = positions(&text, "mbx_disk_sample after-final-clean");
+    for positions in [
+        &pre_restore,
+        &actions,
+        &post_restore,
+        &consumers,
+        &before_clean,
+        &clean_calls,
+        &after_clean,
+    ] {
+        assert_eq!(
+            positions.len(),
+            2,
+            "one sample boundary per native lane: {text}"
+        );
+    }
+    for ((((((pre_restore, action), post_restore), consumer), before_clean), clean), after_clean) in
+        pre_restore
+            .iter()
+            .zip(&actions)
+            .zip(&post_restore)
+            .zip(&consumers)
+            .zip(&before_clean)
+            .zip(&clean_calls)
+            .zip(&after_clean)
+    {
+        assert!(
+            pre_restore < action
+                && action < post_restore
+                && post_restore < consumer
+                && consumer < before_clean
+                && before_clean < clean
+                && clean < after_clean,
+            "samples bracket import, consumers, and final cleanup: {text}"
+        );
+    }
+    assert_eq!(text.matches("df -Pk").count(), 6);
+    assert_eq!(text.matches("df -Pi").count(), 6);
+    assert_eq!(text.matches("du -sk").count(), 12);
+    Ok(())
+}
+
 fn render_mbx_lane_pair() -> Result<String, RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
     let mbx = mbx_tool_steps(&uses, "1.21.1", "1.98.1")?;

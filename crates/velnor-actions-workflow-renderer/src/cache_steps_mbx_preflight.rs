@@ -57,6 +57,15 @@ pub(crate) const MBX_SHARE_OUT_DIR_VALUE: &str = "0";
 /// Stable logical store path; runner namespaces provide physical job isolation.
 pub(crate) const MBX_CACHE_DIR_ENV: &str = "MBX_CACHE_DIR";
 pub(crate) const MBX_CACHE_DIR_VALUE: &str = "${{ runner.temp }}/velnor/mbx";
+const MBX_DISK_SAMPLE_BODY: &[&str] = &[
+    "boundary=$1",
+    r#"case "${RUNNER_TEMP:-}" in /*) ;; *) printf '%s\n' 'MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute' >&2; return 0 ;; esac"#,
+    r#"if [ -d "$RUNNER_TEMP" ] && [ ! -L "$RUNNER_TEMP" ]; then printf 'MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\n' "$boundary"; if df -Pk "$RUNNER_TEMP"; then :; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\n' "$boundary" >&2; fi; printf 'MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\n' "$boundary"; if df -Pi "$RUNNER_TEMP"; then :; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\n' "$boundary" >&2; fi; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\n' "$boundary" >&2; return 0; fi"#,
+    r#"store_path="$RUNNER_TEMP/velnor/mbx""#,
+    r#"if [ "${MBX_CACHE_DIR:-}" = "$store_path" ] && [ -d "$store_path" ] && [ ! -L "$store_path" ]; then printf 'MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\n' "$boundary"; if du -sk "$store_path"; then :; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\n' "$boundary" >&2; fi; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\n' "$boundary" >&2; fi"#,
+    r#"target_path="$RUNNER_TEMP/velnor/target""#,
+    r#"if [ -L "$target_path" ]; then printf 'MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\n' "$boundary" >&2; elif [ -d "$target_path" ]; then printf 'MBX_DISK_ALLOCATED_KIB boundary=%s root=target\n' "$boundary"; if du -sk "$target_path"; then :; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\n' "$boundary" >&2; fi; else printf 'MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\n' "$boundary"; fi"#,
+];
 /// Write permission is granted only to protected default-branch pushes.
 const CACHE_MODE_VALUE: &str = "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}";
 
@@ -100,7 +109,7 @@ fn rust_path_preflight_step(
     rust_toolchain: &str,
     env: BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
-    let script = [
+    let mut script = vec![
         "set -eu".to_owned(),
         "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac".to_owned(),
         "[ -d \"$RUNNER_TEMP\" ] || { printf '%s\\n' 'RUNNER_TEMP must exist' >&2; exit 1; }".to_owned(),
@@ -137,8 +146,9 @@ fn rust_path_preflight_step(
         format!("\"$rustc_bin\" '+{rust_toolchain}' -vV > \"$probe_dir/rustc-output\""),
         format!("grep -Fqx 'release: {rust_toolchain}' \"$probe_dir/rustc-output\" || {{ printf 'Rustup did not report exact toolchain {rust_toolchain}\\n' >&2; exit 1; }}"),
         "printf '%s\\n' \"$rust_root\" >> \"$GITHUB_PATH\"".to_owned(),
-    ]
-    .join("; ");
+    ];
+    script.extend(mbx_disk_sample_commands("before-action-restore"));
+    let script = script.join("; ");
     let mut step = shell_step(
         MBX_PREFLIGHT_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],
@@ -159,7 +169,7 @@ pub(super) fn mbx_version_check_step(
         )));
     }
     validate_rust_toolchain(rust_toolchain)?;
-    let script = [
+    let mut script = vec![
         "set -eu".to_owned(),
         "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac".to_owned(),
         "check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }".to_owned(),
@@ -187,8 +197,9 @@ pub(super) fn mbx_version_check_step(
         "extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '%s\\n' 'MBX cache dir output has extra data' >&2; exit 1; fi".to_owned(),
         "exec 3<&-".to_owned(),
         "[ \"$cache_dir\" = \"$MBX_CACHE_DIR/actions\" ] || { printf '%s\\n' 'MBX reported an unexpected object store path' >&2; exit 1; }".to_owned(),
-    ]
-    .join("; ");
+    ];
+    script.extend(mbx_disk_sample_commands("after-cache-restore"));
+    let script = script.join("; ");
     let mut step = shell_step(
         MBX_VERSION_CHECK_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],
@@ -226,24 +237,41 @@ pub(crate) fn mbx_workspace_clean_step_for_action(action: &Step) -> Result<Step,
 
     let mut clean_env = env.clone();
     clean_env.remove(MBX_CACHE_MODE_ENV);
+    let script = [
+        "set -eu".to_owned(),
+        "check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }".to_owned(),
+        "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac".to_owned(),
+        "[ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '%s\\n' 'RUNNER_TEMP must be a real directory' >&2; exit 1; }".to_owned(),
+        "[ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] && [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '%s\\n' 'MBX store path changed before cleanup' >&2; exit 1; }".to_owned(),
+        mbx_disk_sample_function(),
+        "mbx_disk_sample before-final-clean".to_owned(),
+        format!("clean_status=0; if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- mbx clean; then clean_status=0; else clean_status=$?; fi"),
+        "mbx_disk_sample after-final-clean".to_owned(),
+        "exit \"$clean_status\"".to_owned(),
+    ]
+    .join("; ");
     let mut step = shell_step(
         "Clean MBX workspace outputs",
-        vec![
-            "mise".to_owned(),
-            "--no-config".to_owned(),
-            "--no-env".to_owned(),
-            "--no-hooks".to_owned(),
-            "exec".to_owned(),
-            format!("rust@{rust_toolchain}"),
-            "--".to_owned(),
-            "mbx".to_owned(),
-            "clean".to_owned(),
-        ],
+        vec!["sh".to_owned(), "-c".to_owned(), script],
         clean_env,
     )?;
     step.condition = Some(MBX_WORKSPACE_CLEAN_CONDITION.to_owned());
     step.role = Some(StepRole::MbxWorkspaceCleanup);
     Ok(step)
+}
+
+fn mbx_disk_sample_commands(boundary: &'static str) -> [String; 2] {
+    [
+        mbx_disk_sample_function(),
+        format!("mbx_disk_sample {boundary}"),
+    ]
+}
+
+fn mbx_disk_sample_function() -> String {
+    format!(
+        "mbx_disk_sample() {{ {}; }}",
+        MBX_DISK_SAMPLE_BODY.join("; ")
+    )
 }
 
 fn mbx_objects_action_step(
