@@ -19,6 +19,7 @@ use velnor_actions_workflow_renderer::{MiseSetup, STAGED_BINARY_PREFIX};
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 
+#[path = "pins_acquire.rs"]
 mod pins_acquire;
 pub(super) use pins_acquire::{acquire_script_argv, acquire_step};
 

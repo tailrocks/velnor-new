@@ -4,9 +4,8 @@ use std::ffi::OsString;
 
 use super::{
     CREDENTIAL_ALLOWLIST_BASELINE, CREDENTIAL_ALLOWLIST_BOOTSTRAP, ENDPOINT_ENV_KEYS,
-    MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV, RUSTUP_TOOLCHAIN_ENV, TF_IN_AUTOMATION_ENV,
-    TF_INPUT_ENV, is_denied_credential_key, is_denied_endpoint_key, is_stripped_ambient_key,
-    mise_cargo_path, proxy_passthrough,
+    RUSTUP_TOOLCHAIN_ENV, is_denied_credential_key, is_stripped_ambient_key, mise_cargo_path,
+    proxy_passthrough,
 };
 
 /// Which parent environment a child may see: every policy inherits

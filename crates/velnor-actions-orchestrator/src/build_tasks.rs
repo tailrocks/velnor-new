@@ -12,7 +12,7 @@ use crate::native_tool_lock::rust_toolchain_options;
 use crate::pins::resolve_build_task_mise_setup;
 use crate::toolcheck::{ToolInputCheck, ToolParse};
 use crate::{OrchestratorError, discover::Discovery};
-
+#[path = "build_task_lock_validation.rs"]
 mod build_task_lock_validation;
 use build_task_lock_validation::{
     source_task_tool_requests, validate_lock_shape, validate_source_lock_subset,
