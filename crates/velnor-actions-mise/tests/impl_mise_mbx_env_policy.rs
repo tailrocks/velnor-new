@@ -5,10 +5,6 @@ use velnor_actions_mise::command::RUSTUP_TOOLCHAIN_ENV;
 use velnor_actions_mise::steps::ToolHomes;
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 
-fn pair(key: &str, value: &str) -> (OsString, OsString) {
-    (OsString::from(key), OsString::from(value))
-}
-
 fn has(env: &[(OsString, OsString)], key: &str) -> bool {
     env.iter().any(|(name, _)| name == key)
 }

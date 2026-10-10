@@ -58,7 +58,7 @@ fn source_fixture_with_ids(
 fn source_fixture(source: &[u8]) -> Result<(PathBuf, FreshnessContext), String> {
     source_fixture_with_ids(source, std::process::id(), || {
         NEXT_SOURCE_FIXTURE_ID
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
                 current.checked_add(1)
             })
             .ok()

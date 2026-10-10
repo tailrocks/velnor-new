@@ -35,7 +35,7 @@ fn unique_temp_dir_in_with_counter(
     let process_id = std::process::id();
     for _ in 0..MAX_TEMP_DIRECTORY_ATTEMPTS {
         let id = counter
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
                 current.checked_add(1)
             })
             .map_err(|_| io::Error::other("temporary directory ID space exhausted"))?;
