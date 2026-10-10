@@ -68,6 +68,16 @@ fn task_document_for_test() -> Yaml {
     super::declared_task_document(0, &shape, VERSION).expect("typed composite document")
 }
 
+#[test]
+fn generated_shell_expression_guard_does_not_emit_open_github_template_tokens() {
+    let script = action_run_scalar(&task_document_for_test());
+    assert_eq!(script.matches("*'$''{{'*").count(), 2);
+    assert!(
+        !script.contains("${{"),
+        "run script is parsed by Actions as a template: {script}"
+    );
+}
+
 fn action_run_scalar(action: &Yaml) -> &str {
     let Yaml::Map(action_fields) = action else {
         panic!("composite action is a mapping");
