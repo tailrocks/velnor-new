@@ -274,11 +274,12 @@ fn mbx_nextest_commands_use_action_owned_pinned_mbx() -> Result<(), String> {
         .map_err(|err| err.to_string())?;
     let archive_command = archive.command(&catalog).map_err(|err| err.to_string())?;
     assert_eq!(archive_command.argv(), archive.argv(&catalog));
+    let rust_spec = catalog.tool_spec(PinnedTool::Rust);
     assert!(
         archive_command
             .argv()
             .iter()
-            .any(|arg| arg == &catalog.tool_spec(PinnedTool::Rust))
+            .any(|arg| arg.to_str() == Some(rust_spec.as_str()))
     );
     assert!(
         archive_command

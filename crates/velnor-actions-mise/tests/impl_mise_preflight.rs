@@ -54,7 +54,11 @@ fn mbx_route_separates_action_identity_from_mise_probe() -> Result<(), String> {
     assert_eq!(selection.identity_specs(), &[rust.clone(), mbx.clone()]);
     assert_eq!(selection.probe_specs(), &[rust.clone()]);
     let invocation = selection.invocation(&pinned());
-    assert!(!invocation.iter().any(|arg| arg == &mbx));
+    assert!(
+        !invocation
+            .iter()
+            .any(|arg| arg.to_str() == Some(mbx.as_str()))
+    );
     assert_eq!(
         invocation.last(),
         Some(&OsString::from("--version")),
