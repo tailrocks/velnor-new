@@ -262,7 +262,6 @@ reject_symlink_traversal() {
       if [ -n "${links[$prefix]:-}" ] || [ -L "$prefix" ]; then
         die "member traverses symlink: $name"
       fi
-      safe["$prefix"]=1
       [ "$prefix" = "$root" ] && break
       prefix="${prefix%/*}"
       [ -n "$prefix" ] || prefix="/"
@@ -273,117 +272,6 @@ reject_symlink_traversal() {
 
 # shellcheck disable=SC1091
 . "$_velnor_tar_here/tar-extract.sh"
-
-# A directory member stays put. Moving it drops later children still in the stage.
-extract_stage_fifo() {
-  local fifo="$1" indices="$2" i intended
-  stage_dir="$(mktemp -d "${TMPDIR:-/tmp}/velnor-tar-mstage.XXXXXX")"
-  mkdir -p -- "$stage_dir/root"
-  busybox tar -xf "$fifo" -C "$stage_dir/root" &
-  bb_pid=$!
-  wait_child "$bb_pid" "$prod_pid" || die "member extract failed"
-  bb_pid=""
-  for i in $indices; do
-    if [ "${mem_type[$i]}" = 5 ] || [[ "${mem_name[$i]}" == */ ]]; then
-      intended="$(member_intended "${mem_name[$i]}")"
-      mkdir -p -- "$intended"
-    else
-      install_member "$stage_dir/root" "$i"
-    fi
-  done
-  rm -rf -- "$stage_dir"
-  stage_dir=""
-}
-
-extract_planned() {
-  local -a batch=()
-  local -a stage=()
-  local -a group_kind=()
-  local -A strip_count=()
-  local i stripped
-  [ "${#mem_name[@]}" -gt 0 ] || return 0
-  for i in "${!mem_name[@]}"; do
-    [ "${mem_wanted[$i]}" -eq 1 ] || continue
-    stripped="${mem_strip[$i]}"
-    strip_count["$stripped"]=$((${strip_count["$stripped"]:-0} + 1))
-  done
-  plan_file="$(mktemp "${TMPDIR:-/tmp}/velnor-tar-plan.XXXXXX")"
-  for i in "${!mem_name[@]}"; do
-    [ "${mem_wanted[$i]}" -eq 1 ] || continue
-    if [ "${mem_isolated[$i]}" -eq 1 ] && [ "${strip_count[${mem_strip[$i]}]}" -eq 1 ]; then
-      if [ "${#batch[@]}" -gt 0 ]; then
-        printf '%s\n' "${batch[*]}" >>"$plan_file"
-        group_kind+=("root")
-        batch=()
-      fi
-      stage+=("$i")
-      continue
-    fi
-    if [ "${#stage[@]}" -gt 0 ]; then
-      printf '%s\n' "${stage[*]}" >>"$plan_file"
-      group_kind+=("stage")
-      stage=()
-    fi
-    if [ "${mem_isolated[$i]}" -eq 1 ]; then
-      if [ "${#batch[@]}" -gt 0 ]; then
-        printf '%s\n' "${batch[*]}" >>"$plan_file"
-        group_kind+=("root")
-        batch=()
-      fi
-      printf '%s\n' "$i" >>"$plan_file"
-      group_kind+=("one")
-      continue
-    fi
-    batch+=("$i")
-  done
-  if [ "${#stage[@]}" -gt 0 ]; then
-    printf '%s\n' "${stage[*]}" >>"$plan_file"
-    group_kind+=("stage")
-  fi
-  if [ "${#batch[@]}" -gt 0 ]; then
-    printf '%s\n' "${batch[*]}" >>"$plan_file"
-    group_kind+=("root")
-  fi
-  if [ "${#group_kind[@]}" -eq 0 ]; then
-    rm -f -- "$plan_file"
-    plan_file=""
-    return 0
-  fi
-  run_plan "$plan_file" group_kind
-  rm -f -- "$plan_file"
-  plan_file=""
-}
-
-run_plan() {
-  local plan="$1"
-  local -n kinds=$2
-  local seq=0 line fifo
-  seq_dir="$(mktemp -d "${TMPDIR:-/tmp}/velnor-tar-seq.XXXXXX")"
-  (
-    set -o pipefail
-    stream_archive | perl "$member_pl" --emit "$plan" "$seq_dir"
-  ) &
-  prod_pid=$!
-  while IFS= read -r line || [ -n "$line" ]; do
-    [ -n "$line" ] || continue
-    fifo="$seq_dir/$seq.fifo"
-    mkfifo "$fifo"
-    if [ "${kinds[$seq]}" = root ]; then
-      extract_root_fifo "$fifo"
-    elif [ "${kinds[$seq]}" = stage ]; then
-      extract_stage_fifo "$fifo" "$line"
-    else
-      extract_one_fifo "$fifo" "$line"
-    fi
-    rm -f -- "$fifo"
-    seq=$((seq + 1))
-  done <"$plan"
-  : >"$seq_dir/done"
-  wait "$prod_pid" || die "member split failed"
-  prod_pid=""
-  rm -rf -- "$seq_dir"
-  seq_dir=""
-}
 
 finish_tar() {
   local needs_pax=0 path stripped
