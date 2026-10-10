@@ -4,9 +4,12 @@ mod tests {
         BoundedTufTransport, ExpectedClaims, ExpectedSubject, InlineVerifyRequest,
         MAX_BUNDLE_BYTES, MAX_TUF_RESPONSE_BYTES, VERIFY_DEADLINE, is_supported_ci_oid,
         single_claim, validate_expected_inputs, verify_inline_checksum_target,
+        validate_state_directory,
     };
     use base64::Engine;
     use std::collections::BTreeMap;
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
     use std::time::Instant;
     use url::Url;
 
@@ -104,8 +107,17 @@ mod tests {
 }
     #[tokio::test]
     async fn inline_entrypoint_rejects_oversized_bundle_before_network_access() {
+        let state = tempfile::Builder::new()
+            .permissions(fs::Permissions::from_mode(0o700))
+            .tempdir()
+            .expect("create private service state");
+        let state_directory = fs::canonicalize(state.path())
+            .expect("canonicalize service state")
+            .to_string_lossy()
+            .into_owned();
         let request = InlineVerifyRequest {
-            schema: 1,
+            schema: 2,
+            state_directory,
             bundle_base64: base64::engine::general_purpose::STANDARD
                 .encode(vec![b' '; MAX_BUNDLE_BYTES + 1]),
             checksum_base64: String::new(),
@@ -123,6 +135,86 @@ mod tests {
         };
         let result = verify_inline_checksum_target(request, Instant::now() + VERIFY_DEADLINE).await;
         assert!(result.is_err_and(|error| error.to_string() == "verification bundle exceeds bound"));
+    }
+
+    #[tokio::test]
+    async fn malformed_state_root_is_rejected_before_payload_processing() {
+        let request = InlineVerifyRequest {
+            schema: 2,
+            state_directory: "relative/state".to_owned(),
+            bundle_base64: "!".to_owned(),
+            checksum_base64: String::new(),
+            expected: ExpectedClaims {
+                signer: String::new(),
+                signer_digest: String::new(),
+                source: String::new(),
+                source_digest: String::new(),
+                source_ref: String::new(),
+                build_config: String::new(),
+                build_config_digest: String::new(),
+            },
+            checksum_subject: ExpectedSubject {
+                name: String::new(),
+                digest: String::new(),
+            },
+            target_subject: ExpectedSubject {
+                name: String::new(),
+                digest: String::new(),
+            },
+        };
+        let error = verify_inline_checksum_target(request, Instant::now() + VERIFY_DEADLINE)
+            .await
+            .expect_err("relative service state must fail closed");
+        assert_eq!(
+            error.to_string(),
+            "state directory is malformed or exceeds byte limit"
+        );
+    }
+
+    #[test]
+    fn state_root_requires_canonical_private_existing_directory() {
+        let parent = tempfile::Builder::new()
+            .permissions(fs::Permissions::from_mode(0o700))
+            .tempdir()
+            .expect("create private test parent");
+        let state = parent.path().join("state");
+        fs::create_dir(&state).expect("create service state");
+        fs::set_permissions(&state, fs::Permissions::from_mode(0o700))
+            .expect("make service state private");
+        let canonical = fs::canonicalize(&state).expect("canonicalize service state");
+        let value = canonical.to_str().expect("test path is UTF-8");
+        assert_eq!(
+            validate_state_directory(value).expect("private canonical root is accepted"),
+            canonical
+        );
+        assert!(validate_state_directory("relative/state").is_err());
+        assert!(validate_state_directory(&format!("{value}/../state")).is_err());
+        assert!(validate_state_directory(&format!("{value}/./child")).is_err());
+        assert!(validate_state_directory(&format!("/{0}", "s".repeat(4096))).is_err());
+
+        let shared = parent.path().join("shared");
+        fs::create_dir(&shared).expect("create unsafe state root");
+        fs::set_permissions(&shared, fs::Permissions::from_mode(0o777))
+            .expect("make state root shared");
+        assert!(validate_state_directory(shared.to_str().expect("test path is UTF-8")).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn state_root_rejects_symlinked_components() {
+        use std::os::unix::fs::symlink;
+
+        let parent = tempfile::Builder::new()
+            .permissions(fs::Permissions::from_mode(0o700))
+            .tempdir()
+            .expect("create private test parent");
+        let state = parent.path().join("state");
+        fs::create_dir(&state).expect("create service state");
+        fs::set_permissions(&state, fs::Permissions::from_mode(0o700))
+            .expect("make service state private");
+        let alias = parent.path().join("alias");
+        symlink(&state, &alias).expect("create symlinked state alias");
+        assert!(validate_state_directory(alias.to_str().expect("test path is UTF-8")).is_err());
     }
 
 }

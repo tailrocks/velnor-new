@@ -4,9 +4,6 @@ use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
 
-use base64::Engine;
-use serde::Serialize;
-use serde_json::Value;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::process::{Child, Command};
 use tokio::sync::oneshot;
@@ -16,40 +13,12 @@ use tokio::time::{Instant, timeout_at};
 use crate::error::HostError;
 
 mod path;
+mod request;
+pub(super) use request::ChecksumTarget;
 
 const HELPER_DEADLINE: Duration = Duration::from_secs(90);
 const KILL_REAP_DEADLINE: Duration = Duration::from_secs(2);
-const MAX_BUNDLE_BYTES: usize = 2_000_000;
-const MAX_CHECKSUM_BYTES: usize = 64 * 1024;
-const MAX_REQUEST_BYTES: usize = 3 * 1024 * 1024;
 const MAX_OUTPUT_BYTES: usize = 16 * 1024;
-
-#[derive(Serialize)]
-struct Request<'a> {
-    schema: u8,
-    bundle_base64: String,
-    checksum_base64: String,
-    expected: Expected<'a>,
-    checksum_subject: Subject<'a>,
-    target_subject: Subject<'a>,
-}
-
-#[derive(Serialize)]
-struct Expected<'a> {
-    signer: &'a str,
-    signer_digest: &'a str,
-    source: &'a str,
-    source_digest: &'a str,
-    source_ref: &'a str,
-    build_config: &'a str,
-    build_config_digest: &'a str,
-}
-
-#[derive(Serialize)]
-struct Subject<'a> {
-    name: &'a str,
-    digest: &'a str,
-}
 
 struct CancellationGuard(Option<oneshot::Sender<()>>);
 
@@ -64,57 +33,11 @@ struct CapturedOutput {
     exceeded: bool,
 }
 
-pub(super) struct ChecksumTarget<'a> {
-    pub(super) bundle: &'a Value,
-    pub(super) checksum_bytes: &'a [u8],
-    pub(super) source_sha: &'a str,
-    pub(super) authority_sha: &'a str,
-    pub(super) checksum_digest: &'a str,
-    pub(super) target_name: &'a str,
-    pub(super) target_digest: &'a str,
-}
-
 pub(super) async fn verify_checksum_target(
     expected_helper_sha256: &[u8; 32],
     target: ChecksumTarget<'_>,
 ) -> Result<(), HostError> {
-    if target.checksum_bytes.is_empty()
-        || target.checksum_bytes.len() > MAX_CHECKSUM_BYTES
-        || target.target_name.is_empty()
-    {
-        return Err(HostError::Identity);
-    }
-    let bundle_bytes = serde_json::to_vec(target.bundle).map_err(|_| HostError::Identity)?;
-    if bundle_bytes.is_empty() || bundle_bytes.len() > MAX_BUNDLE_BYTES {
-        return Err(HostError::Frame);
-    }
-    let expected = Expected {
-        signer: "https://github.com/tailrocks/velnor-new/.github/workflows/product-release-images.yml@refs/heads/main",
-        signer_digest: target.authority_sha,
-        source: "https://github.com/tailrocks/velnor-new",
-        source_digest: target.source_sha,
-        source_ref: "refs/heads/main",
-        build_config: "https://github.com/tailrocks/velnor-new/.github/workflows/product-release-images.yml@refs/heads/main",
-        build_config_digest: target.authority_sha,
-    };
-    let request = Request {
-        schema: 1,
-        bundle_base64: base64::engine::general_purpose::STANDARD.encode(bundle_bytes),
-        checksum_base64: base64::engine::general_purpose::STANDARD.encode(target.checksum_bytes),
-        expected,
-        checksum_subject: Subject {
-            name: "SHA256SUMS",
-            digest: target.checksum_digest,
-        },
-        target_subject: Subject {
-            name: target.target_name,
-            digest: target.target_digest,
-        },
-    };
-    let input = serde_json::to_vec(&request).map_err(|_| HostError::Identity)?;
-    if input.len() > MAX_REQUEST_BYTES {
-        return Err(HostError::Frame);
-    }
+    let input = request::encode(&target)?;
     let helper = path::open_verified(expected_helper_sha256)?;
     run_helper(&helper, input).await
 }
@@ -222,7 +145,7 @@ async fn supervise_inner(
     if !status.success()
         || stdout.exceeded
         || stderr.exceeded
-        || stdout.bytes != br#"{"schema":1,"result":"verified"}"#
+        || stdout.bytes != br#"{"schema":2,"result":"verified"}"#
     {
         return Err(HostError::Identity);
     }

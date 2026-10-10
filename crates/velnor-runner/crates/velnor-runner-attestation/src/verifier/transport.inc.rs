@@ -1,3 +1,5 @@
+use std::path::Path;
+
 #[derive(Clone, Debug)]
 struct BoundedTufTransport {
     client: Client,
@@ -78,11 +80,13 @@ impl Transport for BoundedTufTransport {
     }
 }
 
-async fn load_public_good_trusted_root() -> Result<TrustedRoot, Box<dyn Error>> {
+async fn load_public_good_trusted_root(
+    state_directory: &Path,
+) -> Result<TrustedRoot, Box<dyn Error>> {
     let base = Url::parse("https://tuf-repo-cdn.sigstore.dev/")?;
     let target = TargetName::new("trusted_root.json")?;
     let capture = RootResponseCapture::new();
-    let refreshed = TufCache::new(tuf_cache_path()?)
+    let refreshed = TufCache::new(tuf_cache_path(state_directory)?)
         .refresh(TufRefreshRequest {
             bootstrap: SIGSTORE_TUF_ROOT,
             migration: None,
@@ -102,10 +106,11 @@ async fn load_public_good_trusted_root() -> Result<TrustedRoot, Box<dyn Error>> 
     Ok(refreshed.target_value)
 }
 
-fn tuf_cache_path() -> Result<std::path::PathBuf, Box<dyn Error>> {
-    let executable = std::env::current_exe()?;
-    let directory = executable
-        .parent()
-        .ok_or("installed helper path has no parent")?;
-    Ok(directory.join("attestation-tuf-cache"))
+fn tuf_cache_path(state_directory: &Path) -> Result<std::path::PathBuf, Box<dyn Error>> {
+    crate::tuf_state::validate_private_directory_path(state_directory)?;
+    let canonical = std::fs::canonicalize(state_directory)?;
+    if canonical != state_directory {
+        return Err("state directory is not canonical".into());
+    }
+    Ok(state_directory.join("attestation-tuf-cache"))
 }

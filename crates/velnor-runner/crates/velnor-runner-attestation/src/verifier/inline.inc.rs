@@ -4,6 +4,7 @@ async fn qualify_checksum_target_bytes(
     expected: &ExpectedClaims,
     checksum_subject: &ExpectedSubject,
     target_subject: &ExpectedSubject,
+    state_directory: &std::path::Path,
     deadline: Instant,
 ) -> Result<(), Box<dyn Error>> {
     if bundle_bytes.len() > MAX_BUNDLE_BYTES {
@@ -28,7 +29,7 @@ async fn qualify_checksum_target_bytes(
         return Err("signed checksum list target digest missing, duplicated, or mismatched".into());
     }
     let digest = Sha256Hash::from_hex(target_digests[0])?;
-    let trusted_root = load_public_good_trusted_root().await?;
+    let trusted_root = load_public_good_trusted_root(state_directory).await?;
     let expected = expected.clone();
     let checksum_subject = checksum_subject.clone();
     let target_subject = target_subject.clone();
@@ -69,6 +70,7 @@ async fn qualify_checksum_target_bytes(
 #[serde(deny_unknown_fields)]
 pub(crate) struct InlineVerifyRequest {
     schema: u8,
+    state_directory: String,
     bundle_base64: String,
     checksum_base64: String,
     expected: ExpectedClaims,
@@ -86,9 +88,10 @@ pub(crate) async fn verify_inline_checksum_target(
     request: InlineVerifyRequest,
     deadline: Instant,
 ) -> Result<InlineVerifyResponse, Box<dyn Error>> {
-    if request.schema != 1 {
+    if request.schema != 2 {
         return Err("unsupported request schema".into());
     }
+    let state_directory = validate_state_directory(&request.state_directory)?;
     let bundle_bytes = base64::engine::general_purpose::STANDARD.decode(&request.bundle_base64)?;
     let checksum_bytes =
         base64::engine::general_purpose::STANDARD.decode(&request.checksum_base64)?;
@@ -105,13 +108,38 @@ pub(crate) async fn verify_inline_checksum_target(
         &request.expected,
         &request.checksum_subject,
         &request.target_subject,
+        &state_directory,
         deadline,
     )
     .await?;
     Ok(InlineVerifyResponse {
-        schema: 1,
+        schema: 2,
         result: "verified",
     })
+}
+
+fn validate_state_directory(value: &str) -> Result<std::path::PathBuf, Box<dyn Error>> {
+    use std::path::Path;
+
+    let components = value.strip_prefix('/');
+    if value.is_empty()
+        || value.len() > 4096
+        || value.chars().any(char::is_control)
+        || !components.is_some_and(|path| {
+            !path.is_empty()
+                && path
+                    .split('/')
+                    .all(|component| !component.is_empty() && component != "." && component != "..")
+        })
+    {
+        return Err("state directory is malformed or exceeds byte limit".into());
+    }
+    crate::tuf_state::validate_private_directory_path(Path::new(value))?;
+    let canonical = std::fs::canonicalize(value)?;
+    if canonical != Path::new(value) {
+        return Err("state directory is not canonical".into());
+    }
+    Ok(canonical)
 }
 
 fn validate_expected_inputs(

@@ -1,5 +1,6 @@
 //! Source-bound release admission for the controller-owned resource probe.
 
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
 use bollard::Docker;
@@ -23,6 +24,7 @@ mod strict_json;
 struct CacheKey {
     source_sha: String,
     helper_sha256: [u8; 32],
+    state_directory: PathBuf,
 }
 
 struct CachedRelease {
@@ -37,6 +39,7 @@ pub(crate) struct NativeArtifactProvider<'a> {
     pat: &'a str,
     identity: CompiledReleaseIdentity,
     key: CacheKey,
+    state_directory: PathBuf,
 }
 
 pub(crate) struct ArtifactCandidate {
@@ -48,9 +51,15 @@ pub(crate) struct ArtifactCandidate {
 }
 
 impl<'a> NativeArtifactProvider<'a> {
-    pub(crate) fn from_compiled_release_identity(pat: &'a str) -> Result<Self, HostError> {
+    pub(crate) fn from_compiled_release_identity(
+        pat: &'a str,
+        state_directory: &Path,
+    ) -> Result<Self, HostError> {
         let identity =
             crate::compile_identity::compiled_release_identity().ok_or(HostError::Identity)?;
+        if !state_directory.is_absolute() {
+            return Err(HostError::Path);
+        }
         if !github::valid_pat(pat) {
             return Err(HostError::Identity);
         }
@@ -58,12 +67,14 @@ impl<'a> NativeArtifactProvider<'a> {
         let key = CacheKey {
             source_sha,
             helper_sha256: *identity.helper_sha256(),
+            state_directory: state_directory.to_path_buf(),
         };
         Ok(Self {
             client: github::client()?,
             pat,
             identity,
             key,
+            state_directory: state_directory.to_path_buf(),
         })
     }
 
@@ -101,8 +112,15 @@ impl<'a> NativeArtifactProvider<'a> {
         if let Some(release) = cached_release(guard.as_ref(), &self.key) {
             return Ok(release);
         }
-        let fetched =
-            Arc::new(release::fetch_verified(&self.client, self.pat, &self.identity).await?);
+        let fetched = Arc::new(
+            release::fetch_verified(
+                &self.client,
+                self.pat,
+                &self.identity,
+                &self.state_directory,
+            )
+            .await?,
+        );
         validate_fetched_release(&self.key, &fetched)?;
         *guard = Some(CachedRelease {
             key: self.key.clone(),
@@ -168,6 +186,7 @@ fn image_binding_fingerprint(
 
 #[cfg(test)]
 mod tests {
+    use std::path::{Path, PathBuf};
     use std::sync::Arc;
 
     use super::{
@@ -208,13 +227,20 @@ mod tests {
     fn provider_factory_uses_only_the_current_compiled_pin_pair() -> Result<(), HostError> {
         let Some(identity) = crate::compile_identity::compiled_release_identity() else {
             assert_eq!(
-                NativeArtifactProvider::from_compiled_release_identity("ghp_test-token")
-                    .map(|_| ()),
+                NativeArtifactProvider::from_compiled_release_identity(
+                    "ghp_test-token",
+                    Path::new("/tmp/velnor-state"),
+                )
+                .map(|_| ()),
                 Err(HostError::Identity)
             );
             return Ok(());
         };
-        let provider = NativeArtifactProvider::from_compiled_release_identity("ghp_test-token")?;
+        let state_directory = Path::new("/tmp/velnor-state");
+        let provider = NativeArtifactProvider::from_compiled_release_identity(
+            "ghp_test-token",
+            state_directory,
+        )?;
         assert_eq!(provider.identity, identity);
         assert_eq!(
             provider.key.source_sha,
@@ -222,9 +248,11 @@ mod tests {
         );
         assert_eq!(provider.key.helper_sha256, *identity.helper_sha256());
         assert_eq!(provider.pat, "ghp_test-token");
+        assert_eq!(provider.state_directory, state_directory);
         for invalid in ["", "token\nvalue", &"x".repeat(4097)] {
             assert_eq!(
-                NativeArtifactProvider::from_compiled_release_identity(invalid).map(|_| ()),
+                NativeArtifactProvider::from_compiled_release_identity(invalid, state_directory)
+                    .map(|_| ()),
                 Err(HostError::Identity)
             );
         }
@@ -236,6 +264,7 @@ mod tests {
         let key = CacheKey {
             source_sha: "a".repeat(40),
             helper_sha256: [0x22; 32],
+            state_directory: PathBuf::from("/private/state-a"),
         };
         let cached = CachedRelease {
             key: key.clone(),
@@ -246,8 +275,11 @@ mod tests {
         wrong_source.source_sha = "c".repeat(40);
         let mut wrong_helper = key.clone();
         wrong_helper.helper_sha256[0] ^= 1;
+        let mut wrong_state = key.clone();
+        wrong_state.state_directory = PathBuf::from("/private/state-b");
         assert!(cached_release(Some(&cached), &wrong_source).is_none());
         assert!(cached_release(Some(&cached), &wrong_helper).is_none());
+        assert!(cached_release(Some(&cached), &wrong_state).is_none());
     }
 
     #[test]
@@ -255,6 +287,7 @@ mod tests {
         let key = CacheKey {
             source_sha: "a".repeat(40),
             helper_sha256: [0x22; 32],
+            state_directory: PathBuf::from("/private/state-a"),
         };
         let valid = release(&key.source_sha, &key.source_sha, &"b".repeat(64));
         assert_eq!(validate_fetched_release(&key, &valid), Ok(()));

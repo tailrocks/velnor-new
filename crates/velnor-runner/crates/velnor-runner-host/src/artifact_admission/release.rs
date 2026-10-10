@@ -1,6 +1,7 @@
 //! Validate exact release bytes and their shared signed checksum provenance.
 
 use reqwest::Client;
+use std::path::Path;
 
 use crate::compile_identity::CompiledReleaseIdentity;
 use crate::error::HostError;
@@ -25,6 +26,7 @@ pub(super) async fn fetch_verified(
     client: &Client,
     pat: &str,
     identity: &CompiledReleaseIdentity,
+    state_directory: &Path,
 ) -> Result<VerifiedRelease, HostError> {
     if !github::valid_pat(pat) {
         return Err(HostError::Identity);
@@ -69,6 +71,7 @@ pub(super) async fn fetch_verified(
             source_sha: &source_sha,
             authority_sha: &authority_sha,
             checksum_bytes: &checksum_bytes,
+            state_directory,
             checksum_asset,
             manifest_asset,
             archive_asset,
@@ -91,6 +94,7 @@ struct ProvenanceClaims<'a> {
     source_sha: &'a str,
     authority_sha: &'a str,
     checksum_bytes: &'a [u8],
+    state_directory: &'a Path,
     checksum_asset: &'a Asset,
     manifest_asset: &'a Asset,
     archive_asset: &'a Asset,
@@ -112,6 +116,7 @@ async fn verify_provenance(
         let manifest_valid = crate::helper_supervisor::verify_checksum_target(
             claims.identity.helper_sha256(),
             ChecksumTarget {
+                state_directory: claims.state_directory,
                 bundle: &bundle,
                 checksum_bytes: claims.checksum_bytes,
                 source_sha: claims.source_sha,
@@ -126,6 +131,7 @@ async fn verify_provenance(
         let archive_valid = crate::helper_supervisor::verify_checksum_target(
             claims.identity.helper_sha256(),
             ChecksumTarget {
+                state_directory: claims.state_directory,
                 bundle: &bundle,
                 checksum_bytes: claims.checksum_bytes,
                 source_sha: claims.source_sha,
