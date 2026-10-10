@@ -78,12 +78,12 @@ fn native_build_variant_is_shared_source_bounded_and_required_in_every_mode() ->
             "{mode}: source task config and root tool config are hash-bound: {native}"
         );
         assert!(
-            native.contains("export MISE_CEILING_PATHS=\"$workspace_ceiling\"")
-                && native.contains("workspace_ceiling=\"$workspace_root/..\""),
+            native.contains(r#"export MISE_CEILING_PATHS=\"$workspace_ceiling\""#)
+                && native.contains(r#"workspace_ceiling=\"$workspace_root/..\""#),
             "{mode}: config discovery includes the root and nested source: {native}"
         );
         let restore_cwd = native
-            .find("cd -P \"$task_working_directory\"")
+            .find(r#"cd -P \"$task_working_directory\""#)
             .ok_or("MBX guard restores the task cwd")?;
         let run_task = native
             .find("mise --no-env --locked --no-hooks run --skip-tools desktop-ci")
