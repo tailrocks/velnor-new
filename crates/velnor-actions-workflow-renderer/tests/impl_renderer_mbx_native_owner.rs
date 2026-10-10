@@ -49,15 +49,15 @@ fn native_action_is_the_only_mbx_cache_owner_on_both_lanes() -> Result<(), Rende
         assert!(yaml.contains("version: 1.21.1"), "{yaml}");
         assert!(yaml.contains("github-cache-mode: objects"), "{yaml}");
         assert!(
-            yaml.contains("MBX_GC_AUTO: \"1\""),
+            yaml.contains("MBX_GC_AUTO: \"0\""),
             "native MBX consumers set the shared collection policy: {yaml}"
         );
         assert!(yaml.contains("MBX_SHARE_OUT_DIR: \"0\""), "{yaml}");
         assert_eq!(
             yaml.matches("MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx")
                 .count(),
-            3,
-            "preflight, action main/post, and PATH guard use the same step-level path: {yaml}"
+            4,
+            "preflight, action, version check, and cleanup use the same step-level path: {yaml}"
         );
         assert!(yaml.contains("GITHUB_ENV"), "job-wide path export: {yaml}");
         assert!(
@@ -71,6 +71,7 @@ fn native_action_is_the_only_mbx_cache_owner_on_both_lanes() -> Result<(), Rende
             "a later build step inherits the preflight-exported store: {yaml}"
         );
         assert!(yaml.contains("cache-generation: "), "{yaml}");
+        assert!(yaml.contains("name: Clean MBX workspace outputs"), "{yaml}");
         assert!(
             !yaml.contains("cache-key:"),
             "the v1.6 action derives its Rust identity key"

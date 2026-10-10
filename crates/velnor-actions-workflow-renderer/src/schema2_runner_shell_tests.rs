@@ -128,6 +128,86 @@ fn qualification_and_monitoring_declare_shell_only_for_typed_scale_set() {
 }
 
 #[test]
+fn candidate_mbx_roundtrip_defers_gc_and_cleans_after_each_last_consumer() {
+    let workflow = render_schema2_workflows(&request())
+        .expect("schema2 renders")
+        .into_iter()
+        .find(|file| file.path == super::QUALIFICATION_WORKFLOW)
+        .expect("qualification workflow is emitted");
+    let yaml = workflow.bytes.as_str();
+    assert_eq!(yaml.matches("MBX_GC_AUTO: \"0\"").count(), 2, "{yaml}");
+    assert_eq!(
+        yaml.matches("MBX_SHARE_OUT_DIR: \"0\"").count(),
+        2,
+        "{yaml}"
+    );
+    assert_eq!(
+        yaml.matches("gc-auto-off-final-clean-v1-action-").count(),
+        2,
+        "writer and reader use the lifecycle-qualified generation: {yaml}"
+    );
+    assert!(
+        yaml.contains("uses: jdx/mr-boxington-action@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+    );
+    assert!(yaml.contains("isolate-objects-cache: \"true\""));
+    assert_eq!(
+        yaml.matches("if: always() && steps.mbx-ready.outcome == 'success'")
+            .count(),
+        2,
+        "cleanup remains gated by each job's successful action identity check: {yaml}"
+    );
+
+    let writer = qualification_job(yaml, "mbx-cache-write-hosted");
+    assert_step_before(
+        writer,
+        "Compile MBX cache probe",
+        "Clean MBX workspace outputs",
+    );
+    assert_step_before(
+        writer,
+        "Clean MBX workspace outputs",
+        "Sample runner disk after cleanup",
+    );
+    let reader = qualification_job(yaml, "mbx-cache-read-hosted");
+    assert_step_before(
+        reader,
+        "Require imported MBX objects",
+        "Compile MBX cache probe",
+    );
+    assert_step_before(
+        reader,
+        "Require reused compilation",
+        "Clean MBX workspace outputs",
+    );
+}
+
+fn qualification_job<'a>(yaml: &'a str, id: &str) -> &'a str {
+    let start = yaml
+        .find(&format!("\n  {id}:\n"))
+        .unwrap_or_else(|| panic!("qualification job {id} missing"));
+    let body = &yaml[start..];
+    let header_end = body[1..].find('\n').map_or(body.len(), |offset| offset + 1);
+    let next_job = body[header_end..]
+        .match_indices("\n  ")
+        .find_map(|(offset, _)| {
+            let line = &body[header_end + offset + 3..];
+            (!line.starts_with(' ')).then_some(header_end + offset)
+        });
+    let end = next_job.unwrap_or(body.len());
+    &body[..end]
+}
+
+fn assert_step_before(job: &str, first: &str, second: &str) {
+    let first_at = job
+        .find(first)
+        .unwrap_or_else(|| panic!("qualification step {first:?} missing from job:\n{job}"));
+    let second_at = job
+        .find(second)
+        .unwrap_or_else(|| panic!("qualification step {second:?} missing from job:\n{job}"));
+    assert!(first_at < second_at, "{first:?} must precede {second:?}");
+}
+
+#[test]
 fn empty_cache_key_templates_bind_run_attempt_in_rendered_workflow() {
     let workflow = render_schema2_workflows(&request())
         .expect("schema2 renders")

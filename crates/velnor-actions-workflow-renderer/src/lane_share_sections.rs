@@ -121,7 +121,9 @@ fn is_mbx_prelude_step(step: &Step) -> bool {
 fn is_postlude_step(step: &Step) -> bool {
     matches!(
         step.role,
-        Some(StepRole::ToolsCacheSave | StepRole::TofuProvidersSave)
+        Some(
+            StepRole::ToolsCacheSave | StepRole::TofuProvidersSave | StepRole::MbxWorkspaceCleanup
+        )
     )
 }
 

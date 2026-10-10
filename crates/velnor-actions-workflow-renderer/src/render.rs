@@ -1,10 +1,8 @@
 //! Workflow-IR documents and the exact two-file generated tree.
 //!
-//! Fail-closed gates: exact triggers, concurrency, single runner label,
-//! consumer support rejection, and candidate-never-plans invariants.
-//! The strict entrypoint additionally mandates Mise setup, staged
-//! helpers, and the plan anchor; the legacy entrypoint preserves the
-//! previous contract for in-flight callers.
+//! Fail-closed gates cover triggers, concurrency, runner, consumer support,
+//! and candidate-planning invariants. Strict rendering also mandates Mise,
+//! staged helpers, and the plan anchor; legacy preserves the prior contract.
 
 use std::collections::BTreeMap;
 
@@ -20,6 +18,8 @@ use crate::{
     RenderError, cache_p08, closure, commands, document, final_steps, guard, marker, matrix, msrv,
     preseed_closure, steps, support, workflow_policy,
 };
+
+type JobMap = BTreeMap<String, Job>;
 
 #[path = "render_fallback.rs"]
 pub(crate) mod fallback;
@@ -179,9 +179,8 @@ impl RenderContext {
 
 /// Render one workflow document from IR under a policy gate.
 ///
-/// Inserts the mandated closures (plan, request, task, final) shared by
-/// both entrypoints; use [`render_workflow_ir_strict`] for the full
-/// fail-closed pass (Mise setup plus staged-helper gates).
+/// Inserts the mandated closures shared by both entrypoints; use
+/// [`render_workflow_ir_strict`] for setup and staged-helper gates.
 ///
 /// # Errors
 ///
@@ -207,7 +206,7 @@ fn render_workflow_parts(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
-    validate_final_jobs(ir, &jobs)?;
+    validate_final_jobs(ir, &mut jobs)?;
     render_merged(ir, &jobs, ctx)
 }
 
@@ -305,12 +304,13 @@ pub fn finalize_jobs(
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
     crate::dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
-    validate_final_jobs(ir, &jobs)?;
+    validate_final_jobs(ir, &mut jobs)?;
     Ok(jobs)
 }
 
 /// Validate every finalized job after policy merging and internal expansion.
-fn validate_final_jobs(ir: &WorkflowIr, jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
+fn validate_final_jobs(ir: &WorkflowIr, jobs: &mut JobMap) -> Result<(), RenderError> {
+    crate::cache_steps::append_workspace_cleanups(jobs)?;
     let mut finalized = ir.clone();
     finalized.jobs.clone_from(jobs);
     finalized.validate().map_err(RenderError::Contract)

@@ -7,7 +7,7 @@
 //! The action ref is an explicit candidate input separate from the production
 //! pin; emitting this probe does not assert that candidate qualification passed.
 //!
-//! Both jobs set `MBX_GC_AUTO=1` and `MBX_SHARE_OUT_DIR=0`. The candidate
+//! Both jobs set `MBX_GC_AUTO=0` and `MBX_SHARE_OUT_DIR=0`. The candidate
 //! action experiment remains separate from the production action pin and
 //! typed hosted/Scale Set routes; passing it does not qualify those routes.
 
@@ -16,6 +16,7 @@ use super::{MbxQualificationPins, RunnerSpec};
 use crate::cache_steps::MBX_ACTION_NAME;
 use crate::yaml::Yaml;
 use crate::{RenderError, steps::validate_uses};
+use velnor_actions_contract::workflow::MBX_WORKSPACE_CLEAN_CONDITION;
 
 const MAIN_REF: &str = "github.ref == 'refs/heads/main' && github.ref_protected == true";
 const SMOKE_CRATE: &str = r#"set -eu
@@ -110,11 +111,12 @@ fn job(request: &MbxQualificationPins, hosted: &RunnerSpec, writer: bool) -> (St
         steps.push(run_step("Require imported MBX objects", IMPORT_PROBE));
     }
     steps.push(build_step());
-    if writer {
-        steps.push(run_step("Sample runner disk", DISK_SAMPLE));
-    }
     if !writer {
         steps.push(run_step("Require reused compilation", REUSE_PROBE));
+    }
+    steps.push(clean_workspace_step(request));
+    if writer {
+        steps.push(run_step("Sample runner disk after cleanup", DISK_SAMPLE));
     }
 
     let when = format!("inputs.mode == '{mode}' && {MAIN_REF}");
@@ -160,7 +162,7 @@ fn mise_install_step(request: &MbxQualificationPins) -> Yaml {
 
 fn mbx_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
     let generation = format!(
-        "velnor-qualification-mbx-{}-share-out-dir-disabled-v1-action-{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
+        "velnor-qualification-mbx-{}-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
         request.mbx_version,
         &request.candidate_action_uses[format!("{MBX_ACTION_NAME}@").len()..]
     );
@@ -208,6 +210,7 @@ fn verify_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
             "name".to_owned(),
             Yaml::str("Verify MBX action identity and write policy"),
         ),
+        ("id".to_owned(), Yaml::str("mbx-ready")),
         (
             "env".to_owned(),
             mapping(&[
@@ -240,10 +243,24 @@ fn build_step() -> Yaml {
     ])
 }
 
+fn clean_workspace_step(request: &MbxQualificationPins) -> Yaml {
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str("Clean MBX workspace outputs")),
+        ("if".to_owned(), Yaml::str(MBX_WORKSPACE_CLEAN_CONDITION)),
+        (
+            "run".to_owned(),
+            Yaml::str(format!(
+                "mise --no-config --no-env --no-hooks exec rust@{} -- mbx clean",
+                request.rust_version
+            )),
+        ),
+    ])
+}
+
 fn qualification_env(request: &MbxQualificationPins, writer: bool) -> Yaml {
     let home = "${{ github.workspace }}/.velnor-mbx-cache-qualification";
     mapping(&[
-        ("MBX_GC_AUTO", "1"),
+        ("MBX_GC_AUTO", "0"),
         ("MBX_SHARE_OUT_DIR", "0"),
         ("ACTIONS_CACHE_MODE", if writer { "write" } else { "read" }),
         ("CARGO_HOME", &format!("{home}/cargo")),
