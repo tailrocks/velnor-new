@@ -3,8 +3,8 @@ use std::collections::BTreeSet;
 use velnor_actions_contract::{RoutingWorkflow, SCALE_SET_NAME, VELNOR_LABEL};
 
 use super::{
-    MbxQualificationPins, MisePinQualificationPins, Schema2WorkflowRequest, monitoring,
-    qualification, render_schema2_workflows,
+    MbxQualificationPins, MisePinQualificationPins, RustToolchainQualificationPins,
+    Schema2WorkflowRequest, monitoring, qualification, render_schema2_workflows,
 };
 use crate::setup::MiseSetup;
 use crate::yaml::Yaml;
@@ -40,6 +40,11 @@ fn request() -> Schema2WorkflowRequest {
                 version: "2026.10.5".to_owned(),
                 sha256: "c".repeat(64),
             },
+        }),
+        rust_toolchain_qualification: Some(RustToolchainQualificationPins {
+            rust_version: "1.99.0".to_owned(),
+            manifest_url: "https://static.rust-lang.org/dist/channel-rust-1.99.0.toml".to_owned(),
+            manifest_sha256: super::super::RUST_TOOLCHAIN_QUALIFICATION_MANIFEST_SHA256.to_owned(),
         }),
         product_release: None,
     }

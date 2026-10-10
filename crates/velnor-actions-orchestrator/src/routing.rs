@@ -152,6 +152,11 @@ fn workflow_request(
         .contains(&RoutingWorkflow::Qualification)
         .then(|| crate::pins::resolve_mise_pin_qualification(config))
         .transpose()?;
+    let rust_toolchain_qualification = execution
+        .workflows
+        .contains(&RoutingWorkflow::Qualification)
+        .then(crate::pins::resolve_rust_toolchain_qualification)
+        .transpose()?;
     let product_release_requested = [
         RoutingWorkflow::ImageRelease,
         RoutingWorkflow::MacosBinaryRelease,
@@ -169,6 +174,7 @@ fn workflow_request(
         workflows: execution.workflows.clone(),
         mbx_qualification,
         mise_pin_qualification,
+        rust_toolchain_qualification,
         product_release,
     })
 }

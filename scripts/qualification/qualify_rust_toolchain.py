@@ -9,6 +9,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tarfile
 import tempfile
 import tomllib
@@ -110,10 +111,14 @@ def qualify(
     manifest_sha256: str,
 ) -> dict[str, object]:
     target = TARGETS[target_key]
+    repository = os.environ.get("GITHUB_REPOSITORY", "")
+    workflow_sha = os.environ.get("GITHUB_WORKFLOW_SHA", "")
     if (
         not re.fullmatch(r"[0-9a-f]{40}", source_sha)
         or not run_id.isdigit()
         or not run_attempt.isdigit()
+        or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository)
+        or not re.fullmatch(r"[0-9a-f]{40}", workflow_sha)
         or not re.fullmatch(r"\d+\.\d+\.\d+", version)
         or not re.fullmatch(r"[0-9a-f]{64}", manifest_sha256)
         or manifest_url != f"https://static.rust-lang.org/dist/channel-rust-{version}.toml"
@@ -167,9 +172,9 @@ def qualify(
         return {
             "schema": 1,
             "source": {
-                "repository": os.environ.get("GITHUB_REPOSITORY", ""),
+                "repository": repository,
                 "sha": source_sha,
-                "workflow_sha": os.environ.get("GITHUB_WORKFLOW_SHA", ""),
+                "workflow_sha": workflow_sha,
             },
             "run": {"id": run_id, "attempt": run_attempt},
             "tool": {
@@ -189,6 +194,8 @@ def qualify(
 
 
 def main() -> int:
+    if sys.version_info < (3, 11):
+        raise QualificationError("Python 3.11 or newer is required for TOML manifest validation")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True)
     parser.add_argument("--manifest-url", required=True)
