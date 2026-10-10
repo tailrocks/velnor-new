@@ -190,6 +190,59 @@ fn tofu_exec_baked_env_survives_hostile_parent() -> Result<(), String> {
 }
 
 #[test]
+fn mbx_child_uses_rustup_path_without_mise_cargo_wrapper() -> Result<(), String> {
+    let request = PinnedToolExec::new(
+        vec![PinnedTool::Rust, PinnedTool::MrBoxington],
+        std::ffi::OsStr::new("mbx"),
+        vec![OsString::from("metadata")],
+    )
+    .map_err(|err| err.to_string())?;
+    let command = request
+        .command(&ToolCatalog::pinned())
+        .map_err(|err| err.to_string())?;
+    let original_path = std::env::join_paths([
+        "/Users/alex/.local/share/mise/command-wrappers/bin",
+        "/Users/alex/.cargo/bin",
+        "/Users/alex/scratch/mise/command-wrappers/bin",
+        "/opt/other/command-wrappers/bin",
+        "/usr/bin",
+    ])
+    .map_err(|err| err.to_string())?;
+    let parent = vec![
+        (OsString::from("HOME"), OsString::from("/Users/alex")),
+        (OsString::from("PATH"), original_path),
+        (OsString::from("GITHUB_TOKEN"), OsString::from("sentinel")),
+        (
+            OsString::from("CARGO_REGISTRY_TOKEN"),
+            OsString::from("sentinel"),
+        ),
+    ];
+
+    let child = command.spawn_env(&parent);
+    let child_path = child
+        .iter()
+        .rev()
+        .find(|(key, _)| key == "PATH")
+        .map(|(_, value)| value)
+        .ok_or_else(|| "MBX child PATH was removed".to_owned())?;
+    let paths = std::env::split_paths(child_path).collect::<Vec<_>>();
+    assert_eq!(
+        paths,
+        vec![
+            std::path::PathBuf::from("/Users/alex/.cargo/bin"),
+            std::path::PathBuf::from("/Users/alex/scratch/mise/command-wrappers/bin"),
+            std::path::PathBuf::from("/opt/other/command-wrappers/bin"),
+            std::path::PathBuf::from("/usr/bin"),
+        ],
+        "only the canonical Mise cargo wrapper is removed"
+    );
+    assert!(!has(&child, "GITHUB_TOKEN"));
+    assert!(!has(&child, "CARGO_REGISTRY_TOKEN"));
+    assert!(command.disables_auto_install());
+    Ok(())
+}
+
+#[test]
 fn proxy_allowlist_is_exact() {
     assert_eq!(
         PROXY_ENV_KEYS,

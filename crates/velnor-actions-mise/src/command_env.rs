@@ -219,6 +219,10 @@ pub enum EnvPolicy {
     /// Trusted evidence validation (offline): inherits minus every
     /// credential key, plus the isolation overlay.
     Verify,
+    /// Pinned MBX execution: inherits the verification environment while
+    /// removing Mise's cargo command-wrapper path so MBX resolves the
+    /// selected real Rust toolchain binaries itself.
+    Mbx,
     /// Read-only local discovery probes: inherits minus every
     /// credential key, plus the isolation overlay.
     Discovery,
@@ -243,6 +247,7 @@ impl EnvPolicy {
             Self::Bootstrap => &CREDENTIAL_ALLOWLIST_BOOTSTRAP,
             Self::Baseline => &CREDENTIAL_ALLOWLIST_BASELINE,
             Self::Verify
+            | Self::Mbx
             | Self::Discovery
             | Self::RepoTask
             | Self::QualifiedCheck
@@ -303,8 +308,75 @@ impl EnvPolicy {
             env.extend(proxy_passthrough(parent));
         }
         env.extend(additions.iter().cloned());
+        if matches!(self, Self::Mbx) {
+            sanitize_mise_command_wrapper_path(&mut env, parent);
+        }
         env
     }
+}
+
+/// Remove only the caller's canonical Mise command-wrapper directory from the
+/// last PATH assignment while preserving Rustup and unrelated path entries.
+/// MBX invokes Cargo internally; exposing Mise's outer command-wrapper entry
+/// makes `mise exec ... -- cargo` fail its shim check instead of reaching the
+/// Rustup-selected Cargo binary.
+fn sanitize_mise_command_wrapper_path(
+    env: &mut Vec<(OsString, OsString)>,
+    parent: &[(OsString, OsString)],
+) {
+    let Some(wrapper_dir) = mise_command_wrapper_dir(parent) else {
+        return;
+    };
+    let Some((_, path)) = env.iter().rev().find(|(key, _)| key == "PATH") else {
+        return;
+    };
+    let entries = std::env::split_paths(path)
+        .filter(|entry| !same_path(entry, &wrapper_dir))
+        .collect::<Vec<_>>();
+    let Ok(path) = std::env::join_paths(entries) else {
+        // A malformed PATH must not reintroduce the rejected shim. Omitting
+        // it makes MBX fail closed when it tries to resolve its compiler.
+        env.retain(|(key, _)| key != "PATH");
+        return;
+    };
+    env.retain(|(key, _)| key != "PATH");
+    env.push((OsString::from("PATH"), path));
+}
+
+fn mise_command_wrapper_dir(parent: &[(OsString, OsString)]) -> Option<std::path::PathBuf> {
+    let mise_data_dir = parent
+        .iter()
+        .rev()
+        .find(|(key, _)| key == "MISE_DATA_DIR")
+        .map(|(_, value)| std::path::PathBuf::from(value));
+    // Keep the default path tied to the caller's home rather than the
+    // isolated MISE_DATA_DIR added for the child.
+    let base = mise_data_dir.or_else(|| {
+        parent
+            .iter()
+            .rev()
+            .find(|(key, _)| key == "HOME")
+            .map(|(_, home)| std::path::PathBuf::from(home).join(".local/share/mise"))
+    })?;
+    if !base.is_absolute() {
+        return None;
+    }
+    Some(base.join("command-wrappers").join("bin"))
+}
+
+fn same_path(left: &std::path::Path, right: &std::path::Path) -> bool {
+    let left = left.components().collect::<Vec<_>>();
+    let right = right.components().collect::<Vec<_>>();
+    left.len() == right.len()
+        && left.iter().zip(right.iter()).all(|(left, right)| {
+            let left = left.as_os_str().to_string_lossy();
+            let right = right.as_os_str().to_string_lossy();
+            if cfg!(windows) || cfg!(target_os = "macos") {
+                left.eq_ignore_ascii_case(&right)
+            } else {
+                left == right
+            }
+        })
 }
 
 /// Parent proxy entries in [`PROXY_ENV_KEYS`] order (P07-2).
