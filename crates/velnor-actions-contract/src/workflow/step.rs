@@ -7,7 +7,7 @@ use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 
 mod task_execution;
-pub(super) use task_execution::validate_task_execution;
+pub(super) use task_execution::{TaskExecutionValidation, validate_task_execution};
 
 /// Maximum arguments carried by one generated task record.
 pub const MAX_TASK_EXECUTION_ARGV: usize = 512;
@@ -234,7 +234,7 @@ fn validate_kind(kind: &StepKind, job: &str) -> Result<(), ContractError> {
             matrix_key,
             report_helper_version,
             matrix_max_parallel,
-        } => validate_task_execution(
+        } => validate_task_execution(&TaskExecutionValidation {
             argv,
             env,
             task_id,
@@ -243,9 +243,9 @@ fn validate_kind(kind: &StepKind, job: &str) -> Result<(), ContractError> {
             matrix_id,
             matrix_key,
             report_helper_version,
-            *matrix_max_parallel,
+            matrix_max_parallel: *matrix_max_parallel,
             job,
-        )?,
+        })?,
         StepKind::Internal { operation, env } => {
             if operation.trim().is_empty() {
                 return Err(ContractError::identity(
