@@ -64,7 +64,7 @@ async fn assert_assignment_is_held(journal: &Journal, message_id: i64) -> Result
     assert_eq!(decision, crate::launch::Admit::Hold);
     assert_eq!(result, Ok(false));
     assert_eq!(script.calls, [] as [&str; 0]);
-    assert_eq!(workers, [] as [worker::projection_types::Started; 0]);
+    assert_eq!(workers, [] as [crate::worker::Started; 0]);
     Ok(())
 }
 

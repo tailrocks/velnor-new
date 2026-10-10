@@ -124,10 +124,7 @@ fn invalid_lookup_and_delete_inputs_do_not_reach_transport() {
         error(&get_runner_by_name(&mut lookup, "", ADMIN)),
         Ok(SessionError::Wire(WireError::RegistrationRejected))
     );
-    assert_eq!(
-        lookup.seen,
-        [] as [velnor_runner_github::SessionRequest; 0]
-    );
+    assert_eq!(lookup.seen, [] as [velnor_runner_github::SessionRequest; 0]);
 
     for runner_id in [0, -1] {
         let mut remove = Script::once(204, "");
@@ -135,10 +132,7 @@ fn invalid_lookup_and_delete_inputs_do_not_reach_transport() {
             error(&remove_runner(&mut remove, runner_id, ADMIN)),
             Ok(SessionError::Wire(WireError::RegistrationRejected))
         );
-        assert_eq!(
-            remove.seen,
-            [] as [velnor_runner_github::SessionRequest; 0]
-        );
+        assert_eq!(remove.seen, [] as [velnor_runner_github::SessionRequest; 0]);
     }
 }
 

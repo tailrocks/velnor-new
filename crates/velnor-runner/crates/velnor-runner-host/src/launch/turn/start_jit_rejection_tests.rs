@@ -36,7 +36,7 @@ async fn definite_assigned_jit_rejection_releases_then_redelivery_retries() -> R
 
     assert_eq!(result, Err(EnsureError::Forbidden));
     assert_eq!(rejected.calls, ["jit"]);
-    assert_eq!(workers, [] as [worker::projection_types::Started; 0]);
+    assert_eq!(workers, [] as [crate::worker::Started; 0]);
     assert_eq!(crate::launch::slot::occupied(&journal).await, Ok(0));
     let failed = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(failed.len(), 1);
@@ -68,7 +68,7 @@ async fn definite_assigned_jit_rejection_releases_then_redelivery_retries() -> R
     // fresh row is held uncertain; no HTTP call is made.
     assert_eq!(result, Err(EnsureError::Uncertain));
     assert_eq!(recovered.calls, [] as [&str; 0]);
-    assert_eq!(workers, [] as [worker::projection_types::Started; 0]);
+    assert_eq!(workers, [] as [crate::worker::Started; 0]);
     // The held uncertain row keeps its permit; the dead row does not.
     assert_eq!(crate::launch::slot::occupied(&journal).await, Ok(1));
     let docker_requests = docker.finish().await?;

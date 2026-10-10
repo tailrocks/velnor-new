@@ -144,7 +144,7 @@ async fn ambiguous_legacy_request_subjects_are_not_guessed() -> Result<(), HostE
     );
     assert_eq!(
         journal.due_completed_launches(0, 10).await?,
-        [] as [journal::completion::CompletedLaunch; 0]
+        [] as [crate::journal::CompletedLaunch; 0]
     );
     Ok(())
 }
