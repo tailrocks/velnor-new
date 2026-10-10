@@ -251,7 +251,7 @@ fn declared_task_file(
     shape: &Shape,
     version: &str,
 ) -> Result<RenderedFile, RenderError> {
-    let body = declared_task_document(action_id, shape, version)?;
+    let body = declared_task_document(action_id, shape)?;
     let bytes = marker::with_marker(version, &crate::yaml::render_yaml(&body))?;
     steps::scan_for_private_subcommands(&bytes)?;
     Ok(RenderedFile {
@@ -260,11 +260,7 @@ fn declared_task_file(
     })
 }
 
-fn declared_task_document(
-    action_id: usize,
-    shape: &Shape,
-    version: &str,
-) -> Result<Yaml, RenderError> {
+fn declared_task_document(action_id: usize, shape: &Shape) -> Result<Yaml, RenderError> {
     let mut inputs = Vec::new();
     for index in 0..shape.argv_count {
         inputs.push(input_definition(argv_input(index)));

@@ -42,7 +42,8 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
     );
     assert!(files[0].bytes.contains("using: composite"));
     assert!(files[0].bytes.contains("shell: bash"));
-    let run = action_run_scalar(&task_document_for_test());
+    let action = task_document_for_test();
+    let run = action_run_scalar(&action);
     assert!(run.contains("argv=( \"$VELNOR_WRAPPER_ARGV_0\""));
     assert!(run.contains("write-task-report-v1"));
     assert!(run.contains("if [ \"$task_code\" -ne 0 ]; then exit \"$task_code\"; fi"));
@@ -181,7 +182,7 @@ fn task_document_for_test() -> Yaml {
         env_keys: env.keys().cloned().collect(),
         helper_version: report_helper_version.clone(),
     };
-    super::declared_task_document(0, &shape, VERSION).expect("typed composite document")
+    super::declared_task_document(0, &shape).expect("typed composite document")
 }
 
 fn action_run_scalar(action: &Yaml) -> &str {
