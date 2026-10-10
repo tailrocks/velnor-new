@@ -3,9 +3,7 @@ use std::collections::BTreeMap;
 use crate::build_tasks::{
     validate_config_shape, validate_source_lock_subset, validate_source_task_lock_requests,
 };
-use crate::native_tool_input::{
-    NativeMiseConfig, NativeToolSource, native_mise_source,
-};
+use crate::native_tool_input::{NativeMiseConfig, NativeToolSource, native_mise_source};
 use crate::native_tool_lock::NativeMiseLock;
 
 const ROOT_CONFIG: &str = r#"
@@ -48,10 +46,7 @@ const SWIFTLINT_ROW: &str = r#"
 version = "0.65.1"
 backend = "aqua:realm/SwiftLint"
 specifiers = ["0.65.1"]
-
-[tools.swiftlint.platforms.macos-arm64]
-checksum = "sha256:0123456789abcdef"
-url = "https://example.invalid/swiftlint.zip"
+"platforms.macos-arm64" = { checksum = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", url = "https://example.invalid/swiftlint.zip" }
 "#;
 
 fn swiftlint_lock(rows: &str) -> String {
