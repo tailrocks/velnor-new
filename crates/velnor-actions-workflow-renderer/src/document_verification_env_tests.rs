@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::permissions::PermissionLevel;
-use velnor_actions_contract::{VerificationRunner, VerificationTask};
+use velnor_actions_contract::{VerificationRunner, VerificationTask, VerificationTaskSource};
 
 use crate::{
     MiseSetup, RenderContext, VerificationTaskPolicy, build_verification_task_job,
@@ -25,6 +25,10 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         task: VerificationTask {
             id: "native-format".to_owned(),
             mise_task: "desktop-format-check".to_owned(),
+            source: VerificationTaskSource {
+                mise_config: "mise.toml".to_owned(),
+                working_directory: ".".to_owned(),
+            },
             runner: VerificationRunner::MacosArm64,
             timeout_minutes: 10,
         },
@@ -36,7 +40,7 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
             sha256: "a".repeat(64),
         },
         selected_tools: Vec::new(),
-        mise_config_sha256: None,
+        mise_config_sha256: Some("b".repeat(64)),
         mise_lock_sha256: None,
         rust_toolchain_sha256: None,
     };

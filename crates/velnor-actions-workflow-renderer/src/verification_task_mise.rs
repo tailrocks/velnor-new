@@ -61,9 +61,12 @@ pub(crate) fn validate_policy(policy: &VerificationTaskPolicy) -> Result<(), Ren
             ));
         }
     }
-    if !policy.selected_tools.is_empty()
-        && (policy.mise_config_sha256.is_none() || policy.mise_lock_sha256.is_none())
-    {
+    if policy.mise_config_sha256.is_none() {
+        return Err(RenderError::InvalidWorkflow(
+            "verification_mise_config_missing".to_owned(),
+        ));
+    }
+    if !policy.selected_tools.is_empty() && policy.mise_lock_sha256.is_none() {
         return Err(RenderError::InvalidWorkflow(
             "verification_tool_source_missing".to_owned(),
         ));
@@ -200,8 +203,15 @@ fn run_script(policy: &VerificationTaskPolicy) -> String {
         "[[ \"$GITHUB_RUN_ATTEMPT\" =~ ^[0-9]+$ ]]".to_owned(),
         "cd -P \"$GITHUB_WORKSPACE\"".to_owned(),
         "workspace_root=\"$PWD\"".to_owned(),
-        "cd -P \"$workspace_root\"".to_owned(),
     ]);
+    statements.extend(repository_path_guards(
+        &policy.task.source.working_directory,
+        true,
+    ));
+    statements.push(format!(
+        "cd -P \"$workspace_root/{}\"",
+        policy.task.source.working_directory
+    ));
     if policy.selected_tools.is_empty() {
         statements.extend([
             "/bin/mkdir -m 700 \"$task_root\"".to_owned(),
@@ -214,19 +224,29 @@ fn run_script(policy: &VerificationTaskPolicy) -> String {
     }
     statements.extend(private_environment());
     statements.extend([
-        "export MISE_CEILING_PATHS=\"$workspace_root\"".to_owned(),
+        format!(
+            "export MISE_CEILING_PATHS=\"$workspace_root/{}\"",
+            policy.task.source.config_ceiling_directory()
+        ),
         "export MISE_TRUSTED_CONFIG_PATHS=\"$workspace_root\"".to_owned(),
         "export MISE_NO_HOOKS=1".to_owned(),
         "export MISE_CARGO_BINSTALL_ONLY=1".to_owned(),
         "unset MISE_CONFIG_FILE MISE_ENV MISE_ENV_FILE".to_owned(),
-        source_hash_check("mise.toml", policy.mise_config_sha256.as_deref(), policy),
-        source_hash_check("mise.lock", policy.mise_lock_sha256.as_deref(), policy),
         source_hash_check(
-            "rust-toolchain.toml",
+            &policy.task.source.mise_config,
+            policy.mise_config_sha256.as_deref(),
+            policy,
+        ),
+        source_hash_check(
+            &policy.task.source.mise_lock_path(),
+            policy.mise_lock_sha256.as_deref(),
+            policy,
+        ),
+        source_hash_check(
+            &policy.task.source.rust_toolchain_path(),
             policy.rust_toolchain_sha256.as_deref(),
             policy,
         ),
-        "cd -P \"$workspace_root\"".to_owned(),
         jq_guard(),
         workspace_config_chain_check(policy),
     ]);
@@ -318,14 +338,31 @@ fn source_hash_check(
         velnor_actions_contract::VerificationRunner::LinuxX64 => ("/usr/bin/sha256sum", ""),
         velnor_actions_contract::VerificationRunner::MacosArm64 => ("/usr/bin/shasum", "-a 256"),
     };
-    match expected {
+    let mut statements = repository_path_guards(path, false);
+    statements.push(match expected {
         Some(expected) => format!(
             "test -f \"$workspace_root/{path}\"; test ! -L \"$workspace_root/{path}\"; {hash_bin} {hash_args} \"$workspace_root/{path}\" > \"$task_root/sha256.txt\"; read actual rest < \"$task_root/sha256.txt\"; test \"$actual\" = \"{expected}\""
         ),
-        None => {
-            format!("test ! -e \"$workspace_root/{path}\" && test ! -L \"$workspace_root/{path}\"")
-        }
-    }
+        None => format!(
+            "test ! -e \"$workspace_root/{path}\" && test ! -L \"$workspace_root/{path}\""
+        ),
+    });
+    statements.join("; ")
+}
+
+fn repository_path_guards(path: &str, directory: bool) -> Vec<String> {
+    let components = path.split('/').collect::<Vec<_>>();
+    let prefix_len = if directory {
+        components.len()
+    } else {
+        components.len().saturating_sub(1)
+    };
+    (1..=prefix_len)
+        .map(|length| {
+            let prefix = components[..length].join("/");
+            format!("test -d \"$workspace_root/{prefix}\"; test ! -L \"$workspace_root/{prefix}\"")
+        })
+        .collect()
 }
 
 fn private_config_chain_check(expected: &str) -> String {
@@ -335,10 +372,15 @@ fn private_config_chain_check(expected: &str) -> String {
 }
 
 fn workspace_config_chain_check(policy: &VerificationTaskPolicy) -> String {
+    let config_path = format!("$workspace_root/{}", policy.task.source.mise_config);
+    let rust_path = format!(
+        "$workspace_root/{}",
+        policy.task.source.rust_toolchain_path()
+    );
     let mut checks = vec![
         "mise --no-env --no-hooks config ls --json | \"$jq_path\" -r '.[].path' | LC_ALL=C /usr/bin/sort > \"$task_root/mise_configs.txt\"".to_owned(),
         "workspace_config_found=false".to_owned(),
-        "while IFS= read -r path; do case \"$path\" in \"$workspace_root/mise.toml\") workspace_config_found=true ;; \"$workspace_root/rust-toolchain.toml\"|\"$task_root/global.toml\"|\"$task_root/system.toml\") ;; *) exit 1 ;; esac; done < \"$task_root/mise_configs.txt\"".to_owned(),
+        format!("while IFS= read -r path; do case \"$path\" in \"{config_path}\") workspace_config_found=true ;; \"{rust_path}\"|\"$task_root/global.toml\"|\"$task_root/system.toml\") ;; *) exit 1 ;; esac; done < \"$task_root/mise_configs.txt\""),
     ];
     checks.push(if policy.mise_config_sha256.is_some() {
         "[[ \"$workspace_config_found\" == true ]]".to_owned()

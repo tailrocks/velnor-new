@@ -211,6 +211,7 @@ schema = 1
 # id = "native-format"
 # kind = "verification"
 # mise_task = "desktop-format-check"
+# source = { mise_config = "native/mise.toml", working_directory = "native" }
 # runner = "macos-arm64"           # Or "linux-x64".
 # timeout_minutes = 10              # Required, bounded 1..=360.
 
