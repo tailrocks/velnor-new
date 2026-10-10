@@ -345,6 +345,7 @@ fn renderer_context(
         staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{generator_version}"),
         generator_version,
         runs_on: "ubuntu-26.04".to_owned(),
+        scale_set_selector: None,
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses,
         validator_commands: Vec::new(),

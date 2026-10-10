@@ -84,9 +84,31 @@ pub(super) fn render_context(
         } else {
             None
         };
+    let scale_set_selector = config
+        .execution
+        .as_ref()
+        .map(|execution| {
+            execution
+                .validate("config.toml")
+                .map_err(|error| OrchestratorError::Contract {
+                    problem: error.to_string(),
+                })?;
+            if !execution.emits_scale_set_selector() {
+                return Ok(None);
+            }
+            execution
+                .scale_selector()
+                .map(Some)
+                .map_err(|error| OrchestratorError::Contract {
+                    problem: error.to_string(),
+                })
+        })
+        .transpose()?
+        .flatten();
     Ok(RenderContext {
         generator_version: version.to_owned(),
         runs_on: label.to_owned(),
+        scale_set_selector,
         staged_binary: format!("{STAGED_BINARY_PREFIX}{version}"),
         request_dir: REQUEST_DIR.to_owned(),
         checkout_uses: CHECKOUT_USES.to_owned(),

@@ -10,8 +10,8 @@ use velnor_actions_contract::{
     CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID, PullRequestCachePolicy,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
-    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ValidatorKind, VelnorSupportWorkflow, WorkflowIr,
-    WorkflowPolicy,
+    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ScaleSetSelector, ValidatorKind,
+    VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 
 use crate::{
@@ -92,6 +92,9 @@ pub struct RenderContext {
     pub generator_version: String,
     /// Single literal versioned Ubuntu label every job must use.
     pub runs_on: String,
+    /// Scale Set selected by the validated execution profile, when present.
+    /// Typed task steps can use only this exact Linux/amd64 selector.
+    pub scale_set_selector: Option<ScaleSetSelector>,
     /// Digest-verified staged binary under runner temp.
     pub staged_binary: String,
     /// Internal request directory under runner temp.
@@ -379,6 +382,7 @@ fn render_merged(
         &ctx.checkout_uses,
         &ctx.generator_version,
         &ctx.workflow_tasks,
+        ctx.scale_set_selector.as_ref(),
     )?;
     let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
     let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
