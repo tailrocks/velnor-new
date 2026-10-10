@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use sha2::{Digest, Sha256};
+use crate::cover_identity::generator::sha256_hex;
 use velnor_actions_workflow_renderer::render::test_render_capture::full_tree_capture_guard;
 use velnor_actions_workflow_renderer::tree::RenderedTree;
 
@@ -75,21 +75,20 @@ fn capture_exact_consumer_marked_workflow_before_size_guard()
     std::fs::create_dir_all(&validation_runtime)?;
     crate::validate_zizmor::write_zizmor_config(&validation_runtime, tree)?;
     let zizmor = std::fs::read(validation_runtime.join(".zizmor.yml"))?;
-    let zizmor_sha256 = Sha256::digest(&zizmor);
+    let zizmor_sha256 = sha256_hex(&zizmor);
     std::fs::write(
         output.join("validation-runtime-inventory.tsv"),
         format!(
-            "path\tbytes\tsha256\n.zizmor.yml\t{}\t{:x}\n",
+            "path\tbytes\tsha256\n.zizmor.yml\t{}\t{}\n",
             zizmor.len(),
             zizmor_sha256
         ),
     )?;
     eprintln!(
-        "pre-cap capture written: canonical_bytes={canonical_bytes} selected_bytes={selected_bytes} shared_files={} shared_bytes={shared_bytes} tree_files={} tree_bytes={tree_bytes}; post-assembly validator config validation-runtime/.zizmor.yml bytes={} sha256={:x}",
+        "pre-cap capture written: canonical_bytes={canonical_bytes} selected_bytes={selected_bytes} shared_files={} shared_bytes={shared_bytes} tree_files={} tree_bytes={tree_bytes}; post-assembly validator config validation-runtime/.zizmor.yml bytes={} sha256={zizmor_sha256}",
         capture.shared.len(),
         tree.files.len(),
-        zizmor.len(),
-        zizmor_sha256
+        zizmor.len()
     );
     let tree = match rendered {
         Ok(tree) => {
@@ -148,10 +147,10 @@ fn write_tree_capture(
         let parent = destination.parent().ok_or("tree file has no parent")?;
         std::fs::create_dir_all(parent)?;
         std::fs::write(&destination, file.bytes.as_bytes())?;
-        let digest = Sha256::digest(file.bytes.as_bytes());
+        let digest = sha256_hex(file.bytes.as_bytes());
         total_bytes += file.bytes.len();
         inventory.push_str(&format!(
-            "{}\t{}\t{:x}\n",
+            "{}\t{}\t{}\n",
             file.path,
             file.bytes.len(),
             digest
