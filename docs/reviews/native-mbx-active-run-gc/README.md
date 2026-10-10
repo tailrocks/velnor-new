@@ -6,12 +6,18 @@ v1.21.1 source at commit `a0a44c61ca6aaa8da41d59deeebdfc46fc9d3313` in
 tests to `crates/mbx-cache-store/src/store_tests.rs`. The upstream crate is
 MIT-licensed; its license notice is included here.
 
-From a clean checkout of that exact commit, apply the patch and run:
+From the Velnor repository root, clone the exact upstream source, apply this
+repository's patch by its absolute path, and run the tests from the upstream
+checkout:
 
 ```sh
-git checkout --detach a0a44c61ca6aaa8da41d59deeebdfc46fc9d3313
-git apply docs/reviews/native-mbx-active-run-gc/active-prediction-repro.patch
-rustup run 1.98.1 cargo test -p mbx-cache-store a_sweep_ --locked -- --nocapture
+VELNOR_REPO_ROOT="$(git rev-parse --show-toplevel)"
+MBX_SOURCE=a0a44c61ca6aaa8da41d59deeebdfc46fc9d3313
+MBX_UPSTREAM_CHECKOUT="$(mktemp -d /tmp/mbx-v1.21.1.XXXXXX)"
+git clone --no-checkout https://github.com/jdx/mr-boxington "$MBX_UPSTREAM_CHECKOUT"
+git -C "$MBX_UPSTREAM_CHECKOUT" checkout --detach "$MBX_SOURCE"
+git -C "$MBX_UPSTREAM_CHECKOUT" apply "$VELNOR_REPO_ROOT/docs/reviews/native-mbx-active-run-gc/active-prediction-repro.patch"
+(cd "$MBX_UPSTREAM_CHECKOUT" && rustup run 1.98.1 cargo test -p mbx-cache-store a_sweep_ --locked -- --nocapture)
 ```
 
 The exact 13-line output is stored compressed as
@@ -24,9 +30,10 @@ records 3 passed tests, 71 filtered. The patch has SHA-256
 
 The cases establish three bounded behaviors in the store:
 
-1. Collection before a completed task/group receipt can remove an action
-   result referenced only by an active in-memory prediction; a later export
-   reports the synthetic missing-result digest
+1. Collection before a completed task/group receipt can remove an otherwise
+   unrooted action result. This models the persistent store state while a
+   prediction is pending, but does not instantiate CacheAgent or its
+   in-memory prediction object. A later export reports the synthetic digest
    `800f006f2aaae60a808991d88a45b5c6d3af11e6d2be2868e3301220599e6b02`.
 2. Collection after receipt persistence can remove unrelated stale data while
    retaining a small receipt-rooted export closure.
