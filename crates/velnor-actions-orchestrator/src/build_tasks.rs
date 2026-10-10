@@ -98,6 +98,14 @@ pub(crate) fn policies(
             &rust_lock_options,
         )?;
         validate_task_tool_selection(task, &local_task_tools, &selected_tools)?;
+        let source_task_tools = source_task_tool_requests(task_config)?;
+        for (key, version) in &source_task_tools {
+            validate_task_tool_selection(
+                task,
+                &BTreeMap::from([(key.clone(), version.clone())]),
+                &selected_tools,
+            )?;
+        }
 
         let task_lock_path = task.source.mise_lock_path();
         let task_lock = if task_lock_path == "mise.lock" {
@@ -135,7 +143,7 @@ pub(crate) fn policies(
             None
         };
         validate_source_task_lock_requests(
-            task_config,
+            &source_task_tools,
             source_lock,
             task_lock_path == "mise.lock",
             mise_config,
@@ -343,12 +351,33 @@ fn validate_source_lock_subset(
             if !supported_lock_row(row) || rows[..index].contains(row) {
                 return Err(failure("build_task_source_lock_row_shape"));
             }
-            if root_rows.iter().filter(|root_row| *root_row == row).count() != 1 {
+            if root_rows
+                .iter()
+                .filter(|root_row| {
+                    supported_lock_row(root_row) && lock_row_is_subset(row, root_row)
+                })
+                .count()
+                != 1
+            {
                 return Err(failure("build_task_source_lock_not_root_subset"));
             }
         }
     }
     Ok(())
+}
+
+fn lock_row_is_subset(
+    source: &crate::native_tool_lock::NativeLockedTool,
+    root: &crate::native_tool_lock::NativeLockedTool,
+) -> bool {
+    source.version == root.version
+        && source.backend == root.backend
+        && source.specifiers == root.specifiers
+        && source.options == root.options
+        && source
+            .platforms
+            .iter()
+            .all(|(platform, artifact)| root.platforms.get(platform) == Some(artifact))
 }
 
 fn supported_lock_row(row: &crate::native_tool_lock::NativeLockedTool) -> bool {
@@ -366,10 +395,18 @@ fn supported_lock_row(row: &crate::native_tool_lock::NativeLockedTool) -> bool {
             .specifiers
             .as_ref()
             .is_some_and(|specifiers| !specifiers.is_empty())
-        && row
-            .platforms
-            .values()
-            .all(|artifact| artifact.valid_shape && artifact.unsupported_fields.is_empty())
+        && row.platforms.values().all(|artifact| {
+            artifact.valid_shape
+                && artifact.unsupported_fields.is_empty()
+                && artifact
+                    .checksum
+                    .as_deref()
+                    .is_some_and(|value| !value.is_empty())
+                && artifact
+                    .url
+                    .as_deref()
+                    .is_some_and(|value| !value.is_empty())
+        })
 }
 
 fn source_task_tool_requests(
@@ -398,7 +435,7 @@ fn source_task_tool_requests(
 /// task lock must contain exactly the local requests from its source config;
 /// root-provided tool rows remain in the root lock.
 fn validate_source_task_lock_requests(
-    task_config: &NativeMiseConfig,
+    requests: &BTreeSet<(String, String)>,
     source_lock: Option<&NativeMiseLock>,
     source_lock_is_root: bool,
     root_config: &NativeMiseConfig,
@@ -406,7 +443,6 @@ fn validate_source_task_lock_requests(
     rust_version: &str,
     rust_options: &BTreeMap<String, String>,
 ) -> Result<(), OrchestratorError> {
-    let requests = source_task_tool_requests(task_config)?;
     let Some(source_lock) = source_lock else {
         return if requests.is_empty() {
             Ok(())
@@ -453,7 +489,10 @@ fn validate_source_task_lock_requests(
             .selected_tool(&key, &version, &requested_version, &options)
             .filter(|row| supported_lock_row(row))
             .ok_or_else(|| failure("build_task_source_task_tool_source_lock"))?;
-        if source_row != root_row {
+        if key != "rust" && !source_row.platforms.contains_key("macos-arm64") {
+            return Err(failure("build_task_source_task_tool_platform_missing"));
+        }
+        if !lock_row_is_subset(source_row, root_row) {
             return Err(failure("build_task_source_task_tool_lock_mismatch"));
         }
     }
