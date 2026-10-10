@@ -9,7 +9,7 @@
 use std::error::Error;
 
 const WORKSPACE_MANIFESTS: [&str; 2] = ["Cargo.toml", "crates/velnor-runner/Cargo.toml"];
-pub(super) const RUNNER_MEMBERS: [(&str, &str); 4] = [
+pub(super) const RUNNER_MEMBERS: [(&str, &str); 5] = [
     (
         "crates/velnor-runner/crates/velnor-runner-cli",
         "velnor-runner-cli",
@@ -25,6 +25,10 @@ pub(super) const RUNNER_MEMBERS: [(&str, &str); 4] = [
     (
         "crates/velnor-runner/crates/velnor-runner-host",
         "velnor-runner-host",
+    ),
+    (
+        "crates/velnor-runner/crates/velnor-resource-probe",
+        "velnor-resource-probe",
     ),
 ];
 
@@ -299,7 +303,7 @@ fn metadata_members_match_products_and_archive_guard() -> Result<(), Box<dyn Err
 }
 
 #[test]
-fn metadata_runner_members_match_four() -> Result<(), Box<dyn Error>> {
+fn metadata_runner_members_match_five() -> Result<(), Box<dyn Error>> {
     let doc = metadata_for("crates/velnor-runner/Cargo.toml")?;
     let mut names: Vec<&str> = workspace_packages(&doc)?
         .iter()
