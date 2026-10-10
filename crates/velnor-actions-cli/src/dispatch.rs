@@ -19,11 +19,12 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
-    DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, MERGE_OP, PLAN_MATRIX_OUTPUT_MODE_ENV,
-    PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PlanOutputMode, REPORT_OP, REQUEST_FILE_ENV,
-    TASK_EXECUTION_RESOLVER_OP, WRITE_REQUEST_OP, execute_check, merge_internal, merge_passed,
-    plan_internal, plan_outputs, publish_final_report, publish_plan_files, resolve_task_execution,
-    response_path_for, retrieve_reports, write_preseed_manifest, write_request, write_task_report,
+    DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, MERGE_OP, OrchestratorError,
+    PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PlanOutputMode,
+    REPORT_OP, REQUEST_FILE_ENV, TASK_EXECUTION_RESOLVER_OP, WRITE_REQUEST_OP, execute_check,
+    merge_internal, merge_passed, plan_internal, plan_outputs, publish_final_report,
+    publish_plan_files, resolve_task_execution, response_path_for, retrieve_reports,
+    write_preseed_manifest, write_request, write_task_report,
 };
 
 use crate::dispatch_publish::run_publish_internal;
@@ -321,4 +322,10 @@ pub(crate) fn working_dir() -> Option<PathBuf> {
 pub(crate) fn fail_public(error: &OrchestratorError) -> ExitCode {
     eprintln!("velnor-actions: {}", single_line(&error.to_string()));
     ExitCode::from(1)
+}
+
+/// Collapse error values to one log line so untrusted input cannot inject
+/// additional stderr records.
+fn single_line(text: &str) -> String {
+    text.replace(['\n', '\r'], " ")
 }
