@@ -83,7 +83,7 @@ depends = ["verify"]
 }
 
 #[test]
-fn empty_tool_closure_still_rejects_unsupported_settings_and_wrappers() {
+fn empty_tool_closure_still_rejects_unsupported_settings_and_wrapper_root_keys() {
     let root = tool_root();
     fs::write(
         root.path().join("mise.toml"),
@@ -139,7 +139,7 @@ run = "echo verify"
             &verification_task("verify", VerificationRunner::LinuxX64),
         )
         .expect_err("unsupported wrapper fails closed without selected tools");
-        assert!(error.to_string().contains("verification_mise_wrappers"));
+        assert!(error.to_string().contains("verification_mise_config_root"));
     }
 }
 

@@ -171,12 +171,16 @@ fn generated_pinned_obligation_renders_through_shared_declared_task_action() {
         "generated obligation should use the shared action:\n{yaml}"
     );
     assert!(
-        yaml.contains("argv_10: demo"),
-        "task argv preserved:\n{yaml}"
+        yaml.contains("with: {\"digest\": \"b3-"),
+        "task invocation is selected by its bound execution digest:\n{yaml}"
     );
     assert!(
-        yaml.contains("task_id: stack/rust/demo/clippy/default"),
-        "report identity preserved as input:\n{yaml}"
+        !yaml.contains("argv_"),
+        "argv stays in the manifest:\n{yaml}"
+    );
+    assert!(
+        !yaml.contains("task_id:"),
+        "task ID stays in the manifest:\n{yaml}"
     );
 }
 
@@ -304,8 +308,19 @@ fn actual_obligation_producer_renders_150_jobs_through_one_typed_action_shape() 
         150,
         "each generated obligation remains a job and calls the shared action"
     );
+    assert_eq!(
+        yaml.matches("with: {\"digest\": \"b3-").count(),
+        150,
+        "each generated task has a digest-only action input"
+    );
+    assert!(!yaml.contains("argv_"), "argv stays in the manifest");
+    assert!(!yaml.contains("task_id:"), "task ID stays in the manifest");
     for index in 0..150 {
-        assert!(yaml.contains(&format!("task_id: stack/rust/crate-{index}/test/default")));
+        let task_id = format!("stack/rust/crate-{index}/test/default");
+        assert!(
+            yaml.contains(&format!("',{task_id},'")),
+            "task identity still gates plan coverage: {task_id}"
+        );
         assert!(yaml.contains(&format!("crate-{index}")));
     }
 }
