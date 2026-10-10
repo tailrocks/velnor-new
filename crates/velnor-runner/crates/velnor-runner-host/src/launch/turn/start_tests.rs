@@ -13,6 +13,7 @@ use crate::{EnsureError, IntentState};
 
 mod guest_admission;
 mod legacy_failed;
+mod zero_census_conflict;
 
 const INITIAL_SESSION: &[u8] = br#"{"sessionId":"session","messageQueueUrl":"https://queue.example/messages","messageQueueAccessToken":"queue-token","statistics":{"totalAvailableJobs":0,"totalAcquiredJobs":0,"totalAssignedJobs":0,"totalRunningJobs":0,"totalRegisteredRunners":0,"totalBusyRunners":0,"totalIdleRunners":0}}"#;
 
@@ -51,53 +52,6 @@ pub(super) fn ready<'a>(session: &'a QueueSession, polled: &'a Poll) -> Ready<'a
         path: "messages".to_owned(),
         polled,
     }
-}
-
-#[tokio::test]
-async fn zero_initial_census_and_positive_poll_keep_jit_conflict_unacked() -> Result<(), String> {
-    let (scratch, journal) = open("turn-census-conflict").await?;
-    let session = zero_assignment_session()?;
-    assert_eq!(
-        session
-            .statistics()
-            .map(velnor_runner_github::Statistics::assigned_population),
-        Some(0)
-    );
-    let polled = assigned_wait(91, 1);
-    assert_eq!(crate::launch::idle(&polled), crate::launch::Idle::Scale);
-
-    let docker = DockerStub::open(Vec::new())?;
-    let mut script = Script {
-        calls: Vec::new(),
-        mode: Mode::JitConflict,
-    };
-    let mut workers: Vec<Started> = Vec::new();
-    let result = start_turn(
-        &mut script,
-        &mut workers,
-        StartTurn {
-            ready: ready(&session, &polled),
-            journal: &journal,
-            docker: &docker.docker,
-            capacity: 2,
-            rest: rest(),
-            stop: false,
-        },
-    )
-    .await;
-    drop(docker);
-
-    assert_eq!(result, Err(EnsureError::Conflict));
-    assert_eq!(script.calls, ["jit"]);
-    assert!(workers.is_empty());
-    let rows = journal.rows().await.map_err(|error| error.to_string())?;
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].subject, "m91");
-    assert_eq!(rows[0].state, IntentState::Failed);
-    assert!(rows[0].docker_id.is_none());
-    assert!(rows[0].dind_id.is_none());
-    assert!(rows[0].worker_volume.is_none());
-    absent(&scratch.file())
 }
 
 #[tokio::test]
@@ -284,8 +238,11 @@ async fn bound_running_worker_acks_without_a_second_jit_request() -> Result<(), 
     let polled = assigned_wait(93, 1);
     let docker = DockerStub::open(vec![
         http(200, r#"{"State":{"Status":"running","Running":true}}"#),
-        // Best-effort engine identity probe; empty ID keeps the old `None` behavior.
-        http(200, r#"{"ID":""}"#),
+        // Bind the fixture sample to the same selected daemon and root.
+        http(
+            200,
+            r#"{"ID":"test-engine","DockerRootDir":"/var/lib/docker"}"#,
+        ),
     ])?;
     let mut script = Script {
         calls: Vec::new(),
@@ -353,7 +310,10 @@ async fn bound_resource_keeps_assignment(
         .map_err(|error| error.to_string())?;
     let session = zero_assignment_session()?;
     let polled = assigned_wait(message_id, 1);
-    let docker = DockerStub::open(Vec::new())?;
+    let docker = DockerStub::open(vec![http(
+        200,
+        r#"{"ID":"test-engine","DockerRootDir":"/var/lib/docker"}"#,
+    )])?;
     let mut script = Script {
         calls: Vec::new(),
         mode: Mode::JitConflict,

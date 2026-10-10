@@ -71,6 +71,7 @@ containing only the probe executable. Its fixed image configuration is:
 
 - platform `linux/amd64`;
 - numeric user and group `65532:65532`;
+- working directory `/`;
 - entrypoint `/velnor/resource-probe`, with no command and the exact
   `Config.Env` produced by the pinned image builder (the tested Docker 29.4.0
   fixture contains only its default `PATH` entry);
@@ -103,9 +104,11 @@ binding to the selected daemon's `DockerRootDir` are proven without adding an
 unreviewed write or accepting a substitutable path; this proposal does not
 depend on such an anchor.
 
-The image build workflow must inspect the built image's OS, architecture, user,
-entrypoint, absent command, exact builder-produced environment, and revision
-label. It must also run the actual image as UID/GID 65532 with the same
+Images built before the explicit `WORKDIR /` profile was added do not satisfy
+this contract and must be rebuilt and requalified before use. The image build
+workflow must inspect the built image's OS, architecture, user, working
+directory, entrypoint, absent command, exact builder-produced environment, and
+revision label. It must also run the actual image as UID/GID 65532 with the same
 isolation options and a disposable read-only directory mounted at the fixed
 path, then validate one bounded protocol record. This proves the packaged
 static executable starts under the declared profile; it does not qualify the
@@ -284,7 +287,7 @@ artifact work must not add host modules or claim those controls are complete.
 - Unit cases cover exact numeric parsing, upward load rounding, byte conversion,
   checked Docker-root total/free multiplication and ordering, zero and
   boundary values, malformed and oversized input, and overflow.
-- Image inspection rejects wrong platform, user, entrypoint, command,
+- Image inspection rejects wrong platform, user, working directory, entrypoint, command,
   environment, or source label. The actual smoke run proves the static image
   starts as the numeric non-root user with the required restrictions and emits
   one record within the cap.

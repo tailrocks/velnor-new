@@ -1,0 +1,83 @@
+{
+  "Id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "Name": "/velnor-resource-probe-dddddddddddddddddddddddddddddddd",
+  "Image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "Path": "/velnor/resource-probe",
+  "Args": [],
+  "RestartCount": 0,
+  "State": {
+    "Status": "exited",
+    "Running": false,
+    "OOMKilled": false,
+    "ExitCode": 0
+  },
+  "Config": {
+    "AttachStderr": false,
+    "AttachStdin": false,
+    "AttachStdout": true,
+    "Cmd": null,
+    "Domainname": "",
+    "Entrypoint": [
+      "/velnor/resource-probe"
+    ],
+    "Env": [
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    ],
+    "Hostname": "0123456789ab",
+    "Image": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "Labels": {
+      "org.opencontainers.image.revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "velnor.engine": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "velnor.instance": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "velnor.operation": "dddddddddddddddddddddddddddddddd",
+      "velnor.probe.binding": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "velnor.role": "resource-probe"
+    },
+    "OpenStdin": false,
+    "StdinOnce": false,
+    "Tty": false,
+    "User": "65532:65532",
+    "Volumes": null,
+    "WorkingDir": "/"
+  },
+  "HostConfig": {
+    "AutoRemove": false,
+    "Privileged": false,
+    "ReadonlyRootfs": true,
+    "NetworkMode": "none",
+    "CapDrop": [
+      "ALL"
+    ],
+    "CapAdd": null,
+    "SecurityOpt": [
+      "no-new-privileges:true"
+    ],
+    "Devices": [],
+    "DeviceRequests": null,
+    "Binds": null,
+    "VolumesFrom": null,
+    "PortBindings": {},
+    "RestartPolicy": {
+      "Name": "no",
+      "MaximumRetryCount": 0
+    },
+    "Mounts": [
+      {
+        "Type": "bind",
+        "Source": "/var/lib/docker",
+        "Target": "/velnor/docker-root",
+        "ReadOnly": true
+      }
+    ]
+  },
+  "Mounts": [
+    {
+      "Type": "bind",
+      "Source": "/var/lib/docker",
+      "Destination": "/velnor/docker-root",
+      "Mode": "",
+      "RW": false,
+      "Propagation": "rprivate"
+    }
+  ]
+}

@@ -5,6 +5,8 @@ use uuid::Uuid;
 
 use crate::error::HostError;
 
+mod resource_probe;
+
 /// Run the extended-schema statements inside the caller's transaction.
 ///
 /// The journal bootstrap owns the transaction so a validation failure rolls
@@ -45,6 +47,7 @@ pub(super) async fn bootstrap(connection: &Connection) -> Result<(), HostError> 
         )
         .await
         .map_err(|_| HostError::Journal)?;
+    resource_probe::bootstrap(connection).await?;
     // The versioned schema owns `completion_cleanup`; its shape carries the
     // scale-set identity columns and uniqueness guards this package never had.
     let instance_id = Uuid::new_v4().simple().to_string();
@@ -125,6 +128,9 @@ async fn drop_revision_triggers(connection: &Connection) -> Result<(), HostError
         "completion_cleanup_revision_insert",
         "completion_cleanup_revision_update",
         "completion_cleanup_revision_delete",
+        "resource_probe_revision_insert",
+        "resource_probe_revision_update",
+        "resource_probe_revision_delete",
         "journal_lineage_revision",
     ] {
         connection
@@ -148,6 +154,9 @@ pub(super) async fn install_revision_triggers(connection: &Connection) -> Result
         "CREATE TRIGGER IF NOT EXISTS completion_cleanup_revision_insert AFTER INSERT ON completion_cleanup BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
         "CREATE TRIGGER IF NOT EXISTS completion_cleanup_revision_update AFTER UPDATE ON completion_cleanup BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
         "CREATE TRIGGER IF NOT EXISTS completion_cleanup_revision_delete AFTER DELETE ON completion_cleanup BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
+        "CREATE TRIGGER IF NOT EXISTS resource_probe_revision_insert AFTER INSERT ON resource_probe_operations BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
+        "CREATE TRIGGER IF NOT EXISTS resource_probe_revision_update AFTER UPDATE ON resource_probe_operations BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
+        "CREATE TRIGGER IF NOT EXISTS resource_probe_revision_delete AFTER DELETE ON resource_probe_operations BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
         "CREATE TRIGGER journal_lineage_revision AFTER UPDATE OF instance_id, engine_id, lineage_pinned ON journal_meta WHEN OLD.instance_id IS NOT NEW.instance_id OR OLD.engine_id IS NOT NEW.engine_id OR OLD.lineage_pinned IS NOT NEW.lineage_pinned BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
     ] {
         connection

@@ -12,8 +12,9 @@ async fn definite_assigned_jit_rejection_releases_then_redelivery_retries() -> R
     let (scratch, journal) = open("assigned-jit-forbidden").await?;
     let session = zero_assignment_session()?;
     let polled = assigned_wait(91, 1);
-    // One best-effort engine identity probe per turn; empty ID keeps `None`.
-    let docker = DockerStub::open(vec![http(200, r#"{"ID":""}"#), http(200, r#"{"ID":""}"#)])?;
+    // Each turn binds the test sample to the same selected engine and root.
+    let engine = r#"{"ID":"test-engine","DockerRootDir":"/var/lib/docker"}"#;
+    let docker = DockerStub::open(vec![http(200, engine), http(200, engine)])?;
     let mut rejected = Script {
         calls: Vec::new(),
         mode: Mode::JitForbidden,
@@ -71,7 +72,7 @@ async fn definite_assigned_jit_rejection_releases_then_redelivery_retries() -> R
     // The held uncertain row keeps its permit; the dead row does not.
     assert_eq!(crate::launch::slot::occupied(&journal).await, Ok(1));
     let docker_requests = docker.finish().await?;
-    // Only the two canned engine identity probes; no container inspect calls.
+    // Only the two engine identity probes; no container inspect calls.
     assert_eq!(docker_requests.len(), 2);
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 2);

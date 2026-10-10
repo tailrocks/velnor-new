@@ -59,8 +59,20 @@ pub(crate) fn advertise(ceiling: u32) -> u32 {
 /// Later poll header. The trusted guest probe is not wired yet, so this holds
 /// the current count and never falls back to host metrics.
 #[must_use]
+#[cfg(test)]
 pub(crate) fn adjust(current: u32, running: u32, ceiling: u32) -> u32 {
-    decide(current, running, ceiling, None)
+    adjust_with_sample(current, running, ceiling, None)
+}
+
+/// Adjust one poll from the selected guest, or hold when no current sample exists.
+#[must_use]
+pub(crate) fn adjust_with_sample(
+    current: u32,
+    running: u32,
+    ceiling: u32,
+    sample: Option<Sample>,
+) -> u32 {
+    decide(current, running, ceiling, sample)
 }
 
 fn step(current: u32, floor: u32, ceiling: u32, sample: Sample) -> u32 {
