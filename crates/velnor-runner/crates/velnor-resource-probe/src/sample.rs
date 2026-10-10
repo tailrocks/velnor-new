@@ -3,6 +3,7 @@ use std::io::Read;
 
 use rustix::fs::statvfs;
 
+use crate::capacity::docker_root_bytes;
 use crate::memory::available_bytes;
 use crate::pressure::memory_some_avg10;
 use crate::{ProbeError, ProbeRecord, load};
@@ -24,10 +25,8 @@ const PRESSURE_LIMIT: usize = 4096;
 pub fn sample() -> Result<ProbeRecord, ProbeError> {
     let root =
         statvfs(DOCKER_ROOT).map_err(|error| ProbeError::Read("docker_root", error.into()))?;
-    let docker_root_free_bytes = root
-        .f_bavail
-        .checked_mul(root.f_frsize)
-        .ok_or(ProbeError::Overflow("docker_root"))?;
+    let (docker_root_free_bytes, docker_root_total_bytes) =
+        docker_root_bytes(root.f_blocks, root.f_bavail, root.f_frsize)?;
     let memory_available_bytes =
         available_bytes(&read_bounded(MEMINFO_PATH, MEMINFO_LIMIT, "meminfo")?)?;
     let load_milli =
@@ -38,6 +37,7 @@ pub fn sample() -> Result<ProbeRecord, ProbeError> {
     Ok(ProbeRecord {
         schema_version: 1,
         docker_root_free_bytes,
+        docker_root_total_bytes,
         memory_available_bytes,
         load_milli,
         memory_psi_some_avg10_bps,

@@ -1,5 +1,6 @@
 //! Fixed, bounded Linux guest resource measurements for the controller-only probe image.
 
+mod capacity;
 mod error;
 mod load;
 mod memory;

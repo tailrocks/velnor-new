@@ -1,10 +1,23 @@
 use std::error::Error;
 
+use crate::capacity::docker_root_bytes;
 use crate::load::one_minute_milli;
 use crate::memory::available_bytes;
 use crate::pressure::memory_some_avg10;
 use crate::record::{MAX_OUTPUT_BYTES, ProbeRecord};
 use crate::units::{decimal_milli_ceil, percent_basis_points};
+
+#[test]
+fn docker_root_capacity_uses_checked_fragment_bytes_and_bounds_free_space()
+-> Result<(), Box<dyn Error>> {
+    assert_eq!(docker_root_bytes(10, 4, 4096)?, (16_384, 40_960));
+    assert_eq!(docker_root_bytes(0, 0, 4096)?, (0, 0));
+    assert!(docker_root_bytes(u64::MAX, 0, 2).is_err());
+    assert!(docker_root_bytes(10, u64::MAX, 2).is_err());
+    assert!(docker_root_bytes(4, 5, 1).is_err());
+    assert!(docker_root_bytes(10, 4, 0).is_err());
+    Ok(())
+}
 
 #[test]
 fn decimal_load_uses_checked_thousandth_ceiling() -> Result<(), Box<dyn Error>> {
@@ -76,6 +89,7 @@ fn record_json_has_stable_required_keys_and_nullable_psi() -> Result<(), Box<dyn
     let record = ProbeRecord {
         schema_version: 1,
         docker_root_free_bytes: 0,
+        docker_root_total_bytes: 4,
         memory_available_bytes: 2,
         load_milli: 3,
         memory_psi_some_avg10_bps: None,
@@ -83,7 +97,7 @@ fn record_json_has_stable_required_keys_and_nullable_psi() -> Result<(), Box<dyn
     let bytes = serde_json::to_vec(&record)?;
     assert_eq!(
         std::str::from_utf8(&bytes)?,
-        r#"{"schema_version":1,"docker_root_free_bytes":0,"memory_available_bytes":2,"load_milli":3,"memory_psi_some_avg10_bps":null}"#
+        r#"{"schema_version":1,"docker_root_free_bytes":0,"docker_root_total_bytes":4,"memory_available_bytes":2,"load_milli":3,"memory_psi_some_avg10_bps":null}"#
     );
     assert!(bytes.len() < MAX_OUTPUT_BYTES);
     Ok(())

@@ -30,7 +30,7 @@ This artifact must preserve that limitation.
 
 The executable takes no arguments and reads no environment variables. On
 success it writes exactly one compact JSON object followed by a newline to
-stdout. All five keys are required; the first four are unsigned integers and
+stdout. All six keys are required; the first five are unsigned integers and
 the PSI value is either an unsigned integer or `null`. The host rejects
 malformed JSON, duplicate or unknown keys, missing values, overflow, trailing
 output, and output above 512 bytes. A failed mandatory read or conversion
@@ -40,13 +40,15 @@ exits nonzero without writing a partial record. Diagnostics go to stderr only.
 | --- | --- |
 | `schema_version` | Integer `1`. |
 | `docker_root_free_bytes` | Checked `f_bavail * f_frsize` from `statvfs` on `/velnor/docker-root`, a read-only bind of the selected daemon's exact canonical `DockerRootDir` returned by that same daemon's `info` response. The controller binds the sample to the engine identity and root path observed before the probe, then checks both again after it; the probe accepts no path override. |
+| `docker_root_total_bytes` | Checked `f_blocks * f_frsize` from `statvfs` on the same mounted filesystem. This describes the actual mounted filesystem, not a value inferred from Docker info. The probe rejects multiplication overflow and any sample where available bytes exceed total bytes. |
 | `memory_available_bytes` | `MemAvailable` from the fixed `/proc/meminfo` file, in kB multiplied by 1024 with checked arithmetic. |
 | `load_milli` | The first `/proc/loadavg` value (one-minute load), multiplied by 1000 and rounded upward using checked integer arithmetic. The host normalizes this value by the guest CPU count for the 750/1,150 milli-load-per-CPU policy thresholds. |
 | `memory_psi_some_avg10_bps` | Either `null` when PSI is unavailable, disabled, unsupported, or malformed, or `some avg10` from `/proc/pressure/memory` represented in hundredths of a percent (10,000 = 100%). It is diagnostic only and does not gate admission. |
 
 Every key is present in the version-1 record. `schema_version`,
-`docker_root_free_bytes`, `memory_available_bytes`, and `load_milli` are
-required unsigned integers; PSI is the sole nullable field. Reads from
+`docker_root_free_bytes`, `docker_root_total_bytes`,
+`memory_available_bytes`, and `load_milli` are required unsigned integers; PSI
+is the sole nullable field. Reads from
 `/proc` use fixed paths and small explicit byte caps. Parsers accept only the
 documented decimal forms, reject signs, exponent notation, missing required
 fields, duplicate fields, invalid ranges, and arithmetic overflow, and never
@@ -275,7 +277,8 @@ artifact work must not add host modules or claim those controls are complete.
 ## Required proof before implementation is called ready
 
 - Unit cases cover exact numeric parsing, upward load rounding, byte conversion,
-  zero and boundary values, malformed and oversized input, and overflow.
+  checked Docker-root total/free multiplication and ordering, zero and
+  boundary values, malformed and oversized input, and overflow.
 - Image inspection rejects wrong platform, user, entrypoint, command,
   environment, or source label. The actual smoke run proves the static image
   starts as the numeric non-root user with the required restrictions and emits

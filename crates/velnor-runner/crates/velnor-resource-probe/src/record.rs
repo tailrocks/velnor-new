@@ -7,6 +7,8 @@ pub struct ProbeRecord {
     pub schema_version: u8,
     /// Guest Docker-root available bytes from checked `f_bavail * f_frsize`.
     pub docker_root_free_bytes: u64,
+    /// Guest Docker-root total bytes from checked `f_blocks * f_frsize`.
+    pub docker_root_total_bytes: u64,
     /// Guest `MemAvailable`, converted from KiB to bytes.
     pub memory_available_bytes: u64,
     /// Guest one-minute load rounded upward to thousandths.
