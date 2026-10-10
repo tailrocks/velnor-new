@@ -304,7 +304,6 @@ fn resolver_rejects_untrusted_marker_version_before_manifest_selection() {
 #[test]
 fn resolver_rejects_execution_and_plan_identity_mismatches() {
     let fixture = Fixture::new();
-    let record = fixture.manifest.tasks.get(TASK_ID).expect("record");
     let error = resolve_task_execution_to(
         fixture.repo.path(),
         fixture.runner_temp.path(),
