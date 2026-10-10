@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{Job, RunsOn, Step, StepKind, StepRole};
+use velnor_actions_contract::{Job, RunsOn, Step, StepKind, StepRole, VerificationRunner};
 
 use crate::{
     RenderError, action_ref::DECLARED_TASK_ACTION_PREFIX, composite, marker, steps, toolchain_env,
@@ -28,13 +28,15 @@ struct Shape {
 
 /// Replace typed task steps and emit one composite per structural shape.
 ///
-/// Every typed step must be on Ubuntu and follow the configured checkout. A
-/// task which violates either precondition fails closed instead of silently
-/// taking a shell fallback. The caller name and condition remain unchanged.
+/// Every typed step must use a supported Linux runner and follow the
+/// configured checkout. A task which violates either precondition fails
+/// closed instead of silently taking a shell fallback. The caller name and
+/// condition remain unchanged.
 pub(crate) fn factor_obligation_steps(
     jobs: &BTreeMap<String, Job>,
     checkout_uses: &str,
     version: &str,
+    workflow_tasks: &[crate::verification_jobs::WorkflowTaskPolicy],
 ) -> Result<(BTreeMap<String, Job>, Vec<RenderedFile>), RenderError> {
     let mut eligible = BTreeMap::<(String, usize), TaskExecutionRef<'_>>::new();
     let mut shapes = BTreeSet::new();
@@ -54,13 +56,9 @@ pub(crate) fn factor_obligation_steps(
             else {
                 continue;
             };
-            let hosted_ubuntu = matches!(RunsOn::parse(&job.runs_on), Ok(RunsOn::Hosted(label))
-                if label.starts_with("ubuntu-")
-                    && velnor_actions_contract::config::RUNNER_LABEL_CATALOG
-                        .contains(&label.as_str()));
-            if !hosted_ubuntu {
+            if !supports_task_runner(job_id, &job.runs_on, workflow_tasks) {
                 return Err(RenderError::InvalidWorkflow(format!(
-                    "declared_task_requires_ubuntu:{job_id}"
+                    "declared_task_requires_supported_linux_runner:{job_id}"
                 )));
             }
             if job.check_runner.is_some()
@@ -158,6 +156,33 @@ pub(crate) fn factor_obligation_steps(
         files.push(declared_task_file(*action_id, shape, version)?);
     }
     Ok((next, files))
+}
+
+/// Admit a hosted Ubuntu catalog runner or the exact Scale Set resolved for a
+/// typed Linux-x64 verification task. The orchestrator resolves that token
+/// from an execution profile validated as linux/amd64. A selector's label
+/// alone never proves the platform.
+fn supports_task_runner(
+    job_id: &str,
+    runs_on: &str,
+    workflow_tasks: &[crate::verification_jobs::WorkflowTaskPolicy],
+) -> bool {
+    match RunsOn::parse(runs_on) {
+        Ok(RunsOn::Hosted(label)) => {
+            label.starts_with("ubuntu-")
+                && velnor_actions_contract::config::RUNNER_LABEL_CATALOG.contains(&label.as_str())
+        }
+        Ok(RunsOn::ScaleSet(_)) => workflow_tasks.iter().any(|task| {
+            let crate::verification_jobs::WorkflowTaskPolicy::Verification(policy) = task else {
+                return false;
+            };
+            policy.owns_job_id(job_id)
+                && policy.task.runner == VerificationRunner::LinuxX64
+                && policy.runner_label == VerificationRunner::LinuxX64.runs_on()
+                && policy.scale_set_token.as_deref() == Some(runs_on)
+        }),
+        Err(_) => false,
+    }
 }
 
 fn helper_staged_by(step: &Step, staged_binary: &str) -> bool {
