@@ -5,6 +5,7 @@ members = [
     "crates/velnor-runner-host",
     "crates/velnor-runner-cli",
     "crates/velnor-resource-probe",
+    "crates/velnor-runner-attestation",
 ]
 exclude = []
 resolver = "3"
