@@ -61,7 +61,8 @@ fn native_build_variant_is_shared_source_bounded_and_required_in_every_mode() ->
             "{mode}: {native}"
         );
         assert!(
-            native.contains("wrappers.cargo.command"),
+            native.contains("Verify locked MBX Rust route")
+                && native.contains("installs/mr-boxington/1.23.0/"),
             "{mode}: {native}"
         );
         assert!(
@@ -93,6 +94,10 @@ fn native_build_variant_is_shared_source_bounded_and_required_in_every_mode() ->
         assert!(nested.contains("run = \"mise run desktop-lint\""));
         let root_mise = fs::read_to_string(repo.path().join("mise.toml"))?;
         assert!(root_mise.contains("description = \"Native desktop build task\""));
+        assert!(
+            !root_mise.contains("wrappers") && !nested.contains("wrappers"),
+            "{mode}: source task configs must not restore a Cargo wrapper"
+        );
         assert!(native.contains("export MISE_NO_ENV=1"), "{mode}: {native}");
         assert!(
             native.contains("github:boltffi/boltffi")
