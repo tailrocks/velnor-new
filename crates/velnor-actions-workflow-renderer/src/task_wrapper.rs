@@ -458,6 +458,7 @@ while IFS= read -r -d '' field; do frame+=("$field"); done < "$frame_file"
 [[ "${frame[4]#*|task:}" == "${frame[1]}" ]] || fail_frame
 [[ "${frame[6]}" == "#,
     );
+    script.push_str("\"");
     script.push_str(helper_version);
     script.push_str("\" ]] || fail_frame\n");
     script.push_str(
