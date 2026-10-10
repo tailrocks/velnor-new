@@ -254,7 +254,7 @@ fn replace_task_steps(
     shape_ids: &BTreeMap<Shape, usize>,
 ) -> Result<BTreeMap<String, Job>, RenderError> {
     let mut next = jobs.clone();
-    for ((job_id, step_index), task) in &eligible {
+    for ((job_id, step_index), task) in eligible {
         let shape = Shape {
             helper_version: task.helper_version.clone(),
         };
@@ -284,7 +284,7 @@ fn render_task_files(
     generator_version: &str,
 ) -> Result<Vec<RenderedFile>, RenderError> {
     let mut files = Vec::with_capacity(shape_ids.len() + usize::from(!manifest_tasks.is_empty()));
-    for (shape, action_id) in &shape_ids {
+    for (shape, action_id) in shape_ids {
         files.push(declared_task_file(*action_id, shape, generator_version)?);
     }
     if !manifest_tasks.is_empty() {
