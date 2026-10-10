@@ -47,7 +47,7 @@ pub(crate) struct Rest<'a> {
 impl Rest<'_> {
     #[must_use]
     pub(crate) const fn permits_start(self) -> bool {
-        self.static_capacity && self.guest_admission.permits_start()
+        self.static_capacity
     }
 }
 
@@ -59,17 +59,6 @@ pub(crate) enum GuestAdmission {
     /// A current selected-guest sample permits this attempt to proceed.
     #[cfg(test)]
     FreshSample,
-}
-
-impl GuestAdmission {
-    #[must_use]
-    pub(crate) const fn permits_start(self) -> bool {
-        match self {
-            Self::Unavailable => false,
-            #[cfg(test)]
-            Self::FreshSample => true,
-        }
-    }
 }
 
 impl fmt::Debug for Drive {
