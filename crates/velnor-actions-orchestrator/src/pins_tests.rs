@@ -69,6 +69,30 @@ fn consumer_manifest_mismatch_and_bad_target_fail() {
 }
 
 #[test]
+fn consumer_release_version_is_bound_to_the_expected_manifest() {
+    let published_manifest = test_manifest_json_for_version("0.1.4");
+    let production_error = consumer_acquire_from(
+        "ubuntu-26.04",
+        env!("CARGO_PKG_VERSION"),
+        Some(&published_manifest),
+    )
+    .expect_err("production generation must stay bound to this package version");
+    assert!(production_error.to_string().contains(&format!(
+        "release_manifest_version_mismatch:0.1.4:{}",
+        env!("CARGO_PKG_VERSION")
+    )));
+
+    let wrong_capture_manifest = test_manifest_json();
+    let capture_error =
+        consumer_acquire_from("ubuntu-26.04", "0.1.4", Some(&wrong_capture_manifest))
+            .expect_err("the diagnostic pin must reject a manifest for another release");
+    assert!(capture_error.to_string().contains(&format!(
+        "release_manifest_version_mismatch:{}:0.1.4",
+        env!("CARGO_PKG_VERSION")
+    )));
+}
+
+#[test]
 fn consumer_gate_rejects_attacker_manifests() {
     let version = env!("CARGO_PKG_VERSION");
     let sha = "a".repeat(64);

@@ -364,7 +364,11 @@ fn file_token(value: &str) -> bool {
 /// `cfg(test)`-only fixture manifest matching the workspace version.
 #[cfg(test)]
 fn test_manifest_json() -> String {
-    let version = env!("CARGO_PKG_VERSION");
+    test_manifest_json_for_version(env!("CARGO_PKG_VERSION"))
+}
+
+#[cfg(test)]
+fn test_manifest_json_for_version(version: &str) -> String {
     let targets = velnor_actions_contract::SUPPORTED_TARGETS
         .iter()
         .map(|target| {

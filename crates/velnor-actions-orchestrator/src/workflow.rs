@@ -87,7 +87,8 @@ fn build_plan_job(
 /// # Errors
 ///
 /// Returns contract, render-context, or tool-request errors.
-pub(crate) fn build_workflow(
+#[cfg(test)]
+pub(super) fn build_workflow(
     root: &std::path::Path,
     config: &VelnorConfig,
     branch: &str,
@@ -95,9 +96,29 @@ pub(crate) fn build_workflow(
     discovery: &Discovery,
     fetch_roots: &[String],
 ) -> Result<WorkflowPlan, OrchestratorError> {
+    build_workflow_for_consumer_release(
+        root,
+        config,
+        branch,
+        label,
+        discovery,
+        fetch_roots,
+        env!("CARGO_PKG_VERSION"),
+    )
+}
+
+pub(super) fn build_workflow_for_consumer_release(
+    root: &std::path::Path,
+    config: &VelnorConfig,
+    branch: &str,
+    label: &str,
+    discovery: &Discovery,
+    fetch_roots: &[String],
+    consumer_release_version: &str,
+) -> Result<WorkflowPlan, OrchestratorError> {
     wire_w1::vet_step_syntax(StepSyntax::JobMatrix)?;
     let catalog = ToolCatalog::pinned();
-    let version = env!("CARGO_PKG_VERSION").to_owned();
+    let version = consumer_release_version.to_owned();
     let policy = config.workflow.policy;
     let workflow_tasks = crate::workflow_task_jobs::policies(root, config, discovery)?;
     let validation = config.workflow.generator_validation;
