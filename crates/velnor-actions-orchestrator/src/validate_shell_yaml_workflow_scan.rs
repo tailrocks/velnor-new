@@ -2,10 +2,10 @@ use crate::OrchestratorError;
 
 use super::run_anchor;
 use super::{
-    JobScan, StagedRun, StepScan, WorkflowScan, alias_scope, finish_current_step,
-    finish_workflow_scan, indent_content, is_step_run_site, is_step_sequence_item,
-    is_supported_mapping_site, mapping_entry, reserve_anchor_name, scan_job_line,
-    scan_workflow_default, shellcheck_fail,
+    JobScan, JobSection, StagedRun, StepScan, WorkflowScan, WorkflowSection, alias_scope,
+    content_is_step_item, finish_current_step, finish_workflow_scan, indent_content,
+    is_step_run_site, is_step_sequence_item, is_supported_mapping_site, mapping_entry,
+    reserve_anchor_name, scan_job_line, scan_workflow_default, shellcheck_fail,
 };
 
 pub(super) fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
