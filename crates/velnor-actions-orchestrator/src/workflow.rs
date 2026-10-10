@@ -3,8 +3,11 @@
 //! W1 emission wiring lives in the child module below.
 #[path = "wire_w1.rs"]
 pub(crate) mod wire_w1;
+#[path = "workflow_build.rs"]
+mod workflow_build;
 #[path = "workflow_context.rs"]
 mod workflow_context;
+pub(super) use workflow_build::{WorkflowBuildInput, build_workflow_for_consumer_release};
 #[path = "workflow_dispatch.rs"]
 mod workflow_dispatch;
 
@@ -13,7 +16,7 @@ pub(crate) mod check_jobs;
 
 use std::collections::BTreeMap;
 
-use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax};
+use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy};
 use velnor_actions_contract::{
     Concurrency, GeneratorValidation, Job, Permissions, Step, StepKind, Trigger, ValidatorKind,
     VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
@@ -27,12 +30,10 @@ use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
-use crate::pins::consumer_acquire_step;
-use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed, final_job, lint_job, plan_job};
+use crate::workflow_jobs::{PlanJobToolNeeds, final_job, lint_job, plan_job};
 
 #[path = "workflow_policy.rs"]
 mod workflow_policy;
-use workflow_policy::plan_uses_nextest;
 pub(crate) use workflow_policy::{
     plan_uses_opentofu, plan_uses_rust, prepare_rust_components_step,
 };
@@ -99,109 +100,14 @@ pub(super) fn build_workflow(
     discovery: &Discovery,
     fetch_roots: &[String],
 ) -> Result<WorkflowPlan, OrchestratorError> {
-    build_workflow_for_consumer_release(
+    build_workflow_for_consumer_release(&WorkflowBuildInput {
         root,
         config,
         branch,
         label,
         discovery,
         fetch_roots,
-        env!("CARGO_PKG_VERSION"),
-    )
-}
-
-pub(super) fn build_workflow_for_consumer_release(
-    root: &std::path::Path,
-    config: &VelnorConfig,
-    branch: &str,
-    label: &str,
-    discovery: &Discovery,
-    fetch_roots: &[String],
-    consumer_release_version: &str,
-) -> Result<WorkflowPlan, OrchestratorError> {
-    wire_w1::vet_step_syntax(StepSyntax::JobMatrix)?;
-    let catalog = ToolCatalog::pinned();
-    let report_helper_version = consumer_release_version.to_owned();
-    let generator_version = env!("CARGO_PKG_VERSION");
-    let policy = config.workflow.policy;
-    let workflow_tasks = crate::workflow_task_jobs::policies(root, config, discovery)?;
-    let validation = config.workflow.generator_validation;
-    let verify = crate::verify::verify_kinds(&config.workflow.verify.jobs)?;
-    let support = support_workflow(policy, validation, discovery, &verify);
-    let mut jobs = BTreeMap::new();
-    let acquire = match policy {
-        WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(
-            label,
-            &report_helper_version,
-            discovery,
-        )?),
-        WorkflowPolicy::VelnorRepositoryV1 => None,
-    };
-    let format = wire_w1::workspace_format_step(discovery, &catalog)?;
-    let rust = match (plan_uses_rust(discovery, policy), format.is_some()) {
-        (false, false) => PlanRustNeed::None,
-        (_, true) => PlanRustNeed::CompilerAndComponents,
-        (true, false) => PlanRustNeed::Compiler,
-    };
-    let needs = PlanJobToolNeeds {
-        rust,
-        nextest: plan_uses_nextest(discovery),
-        opentofu: plan_uses_opentofu(discovery),
-        gh: policy == WorkflowPolicy::VelnorRepositoryV1,
-    };
-    let mut plan = build_plan_job(
-        label,
-        acquire.clone(),
-        &catalog,
-        needs,
-        fetch_roots,
-        discovery,
-    )?;
-    if let Some(format) = format {
-        insert_format_step(&mut plan, format);
-    }
-    if policy == WorkflowPolicy::VelnorRepositoryV1 {
-        plan.permissions = Some(crate::workflow_jobs::read_actions_permissions());
-    }
-    jobs.insert(PLAN_JOB_ID.to_owned(), plan);
-    let built = crate::crate_jobs::build_for_workflow(
-        config,
-        label,
-        discovery,
-        &catalog,
-        fetch_roots,
-        acquire.as_ref(),
-        &report_helper_version,
-    )?;
-    let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
-    for (id, job) in built.jobs {
-        jobs.insert(id, job);
-    }
-    for (id, job) in check_jobs::build_check_jobs(policy, discovery, &catalog)? {
-        required_ids.push(id.clone());
-        jobs.insert(id, job);
-    }
-    crate::workflow_task_jobs::insert_jobs(&mut jobs, &workflow_tasks)?;
-    insert_gate_jobs(&mut jobs, label, branch, &required_ids, acquire, &catalog)?;
-    wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
-    let ir = workflow_ir(config, branch, jobs, policy);
-    let context = workflow_context::render_context(
-        config,
-        label,
-        generator_version,
-        &report_helper_version,
-        &catalog,
-        discovery,
-        rust.has_compiler(),
-        workflow_tasks,
-        &verify,
-    )?;
-    let actionlint = actionlint_input(config, generator_version, label);
-    Ok(WorkflowPlan {
-        ir,
-        support,
-        context,
-        actionlint,
+        consumer_release_version: env!("CARGO_PKG_VERSION"),
     })
 }
 

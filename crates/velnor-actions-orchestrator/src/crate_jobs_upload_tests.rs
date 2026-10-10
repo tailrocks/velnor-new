@@ -56,16 +56,16 @@ fn two_obligation_job() -> (String, Job, String, String) {
     let clippy_id = clippy.task_id.clone();
     let test = group("demo", TaskKind::Test, &[clippy_id.as_str()]);
     let test_id = test.task_id.clone();
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::ConsumerV1,
-        &discovery(vec![test, clippy]),
-        &ToolCatalog::pinned(),
-        &[],
-        None,
-        2,
-        env!("CARGO_PKG_VERSION"),
-    )
+    let found = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &discovery(vec![test, clippy]),
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &[],
+        acquire: None,
+        max_parallel_jobs: 2,
+        helper_version: env!("CARGO_PKG_VERSION"),
+    })
     .expect("crate jobs");
     let (job_id, job) = found.jobs.into_iter().next().expect("demo job");
     (job_id, job, clippy_id, test_id)

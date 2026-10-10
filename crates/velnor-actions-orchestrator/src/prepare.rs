@@ -103,13 +103,15 @@ fn prepare_inner_with_consumer_release_version(
     let fetch_roots = lockful_roots(&canonical, &discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
     let workflow = crate::workflow::build_workflow_for_consumer_release(
-        &canonical,
-        &config,
-        &default_branch,
-        &runner_label,
-        &discovery,
-        &fetch_roots,
-        consumer_release_version,
+        &crate::workflow::WorkflowBuildInput {
+            root: &canonical,
+            config: &config,
+            branch: &default_branch,
+            label: &runner_label,
+            discovery: &discovery,
+            fetch_roots: &fetch_roots,
+            consumer_release_version,
+        },
     )?;
     let runner_image = runner_image_evidence();
     let audit = crate::lock_audit::audit_prepare_installs(

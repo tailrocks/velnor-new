@@ -76,16 +76,16 @@ fn groups_obligations_into_one_ordered_job_per_crate() {
     let doctest = group("demo", TaskKind::Doctest, &[clippy_id.as_str()]);
     let doc = group("demo", TaskKind::Doc, &[clippy_id.as_str()]);
     let other = group("nested", TaskKind::Clippy, &[]);
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::ConsumerV1,
-        &discovery(vec![test, doc, doctest, clippy, other]),
-        &ToolCatalog::pinned(),
-        &[],
-        None,
-        2,
-        env!("CARGO_PKG_VERSION"),
-    )
+    let found = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &discovery(vec![test, doc, doctest, clippy, other]),
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &[],
+        acquire: None,
+        max_parallel_jobs: 2,
+        helper_version: env!("CARGO_PKG_VERSION"),
+    })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 2, "one job per crate");
     let ids: Vec<&str> = found.jobs.iter().map(|(id, _)| id.as_str()).collect();
@@ -133,16 +133,16 @@ fn skips_testless_and_workspace_groups() {
     workspace_fmt.identity.unit_id.clear();
     workspace_fmt.display_name.clear();
     let clippy = group("demo", TaskKind::Clippy, &[]);
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::ConsumerV1,
-        &discovery(vec![testless, workspace_fmt, clippy]),
-        &ToolCatalog::pinned(),
-        &[],
-        None,
-        2,
-        env!("CARGO_PKG_VERSION"),
-    )
+    let found = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &discovery(vec![testless, workspace_fmt, clippy]),
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &[],
+        acquire: None,
+        max_parallel_jobs: 2,
+        helper_version: env!("CARGO_PKG_VERSION"),
+    })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1);
     let steps = names(&found.jobs[0].1);
@@ -159,16 +159,16 @@ fn member_binding_agrees_with_built_jobs() {
     workspace_fmt.identity.unit_id.clear();
     workspace_fmt.display_name.clear();
     let groups = vec![clippy, test, workspace_fmt];
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::ConsumerV1,
-        &discovery(groups.clone()),
-        &ToolCatalog::pinned(),
-        &[],
-        None,
-        2,
-        env!("CARGO_PKG_VERSION"),
-    )
+    let found = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &discovery(groups.clone()),
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &[],
+        acquire: None,
+        max_parallel_jobs: 2,
+        helper_version: env!("CARGO_PKG_VERSION"),
+    })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1);
     let built = found.jobs[0].0.as_str();
@@ -228,16 +228,16 @@ fn drivers_follow_per_crate_selection() {
     let mut mbx = group("demo", TaskKind::Clippy, &[]);
     mbx.identity.compile_driver = CompileDriver::Mbx.as_str().to_owned();
     let cargo = group("nested", TaskKind::Clippy, &[]);
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::ConsumerV1,
-        &discovery(vec![mbx, cargo]),
-        &ToolCatalog::pinned(),
-        &[],
-        None,
-        2,
-        env!("CARGO_PKG_VERSION"),
-    )
+    let found = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &discovery(vec![mbx, cargo]),
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &[],
+        acquire: None,
+        max_parallel_jobs: 2,
+        helper_version: env!("CARGO_PKG_VERSION"),
+    })
     .expect("crate jobs");
     assert_eq!(found.drivers["rust-demo"], RenderDriver::Mbx);
     assert_eq!(found.drivers["rust-nested"], RenderDriver::Cargo);
@@ -249,16 +249,16 @@ fn drivers_follow_per_crate_selection() {
 
 #[test]
 fn empty_groups_build_no_jobs() {
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::ConsumerV1,
-        &discovery(Vec::new()),
-        &ToolCatalog::pinned(),
-        &[],
-        None,
-        2,
-        env!("CARGO_PKG_VERSION"),
-    )
+    let found = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &discovery(Vec::new()),
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &[],
+        acquire: None,
+        max_parallel_jobs: 2,
+        helper_version: env!("CARGO_PKG_VERSION"),
+    })
     .expect("empty build");
     assert!(found.jobs.is_empty() && found.drivers.is_empty());
 }
@@ -275,16 +275,16 @@ fn acquire_stages_before_report_wrappers() {
             env: BTreeMap::new(),
         },
     };
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::ConsumerV1,
-        &discovery(vec![group("demo", TaskKind::Clippy, &[])]),
-        &ToolCatalog::pinned(),
-        &[],
-        Some(&acquire),
-        2,
-        env!("CARGO_PKG_VERSION"),
-    )
+    let found = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &discovery(vec![group("demo", TaskKind::Clippy, &[])]),
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &[],
+        acquire: Some(&acquire),
+        max_parallel_jobs: 2,
+        helper_version: env!("CARGO_PKG_VERSION"),
+    })
     .expect("crate jobs");
     let steps = names(&found.jobs[0].1);
     assert_eq!(
@@ -317,20 +317,20 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
         catalog.tool_spec(PinnedTool::Shellcheck),
         catalog.tool_spec(PinnedTool::Zizmor),
     ];
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::VelnorRepositoryV1,
-        &discovery(vec![
+    let found = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::VelnorRepositoryV1,
+        discovery: &discovery(vec![
             group("velnor-actions-orchestrator", TaskKind::Test, &[]),
             group("velnor-actions-cli", TaskKind::Test, &[]),
             group("velnor-actions-contract", TaskKind::Test, &[]),
         ]),
-        &catalog,
-        &[],
-        None,
-        2,
-        env!("CARGO_PKG_VERSION"),
-    )
+        catalog: &catalog,
+        fetch_roots: &[],
+        acquire: None,
+        max_parallel_jobs: 2,
+        helper_version: env!("CARGO_PKG_VERSION"),
+    })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 3);
     for (id, job) in &found.jobs {
