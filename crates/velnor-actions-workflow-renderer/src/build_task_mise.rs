@@ -226,6 +226,7 @@ fn task_root_expr(task_id: &str) -> String {
 
 fn config_chain_check<'a>(expected: impl IntoIterator<Item = &'a str>) -> String {
     let expected_args = expected
+        .into_iter()
         .map(|path| format!("\"{path}\""))
         .collect::<Vec<_>>()
         .join(" ");
@@ -235,8 +236,7 @@ fn config_chain_check<'a>(expected: impl IntoIterator<Item = &'a str>) -> String
 }
 
 fn source_hash_check(path: &str, sha256: Option<&str>) -> String {
-    let guards = repository_path_guards(path, false);
-    let guard = guards.join("; ");
+    let guard = repository_path_guards(path, false);
     match sha256 {
         Some(sha256) => format!(
             "{guard}; test -f \"$workspace_root/{path}\"; test ! -L \"$workspace_root/{path}\"; /usr/bin/shasum -a 256 \"$workspace_root/{path}\" > \"$task_root/sha256.txt\"; read actual rest < \"$task_root/sha256.txt\"; test \"$actual\" = '{sha256}'"
