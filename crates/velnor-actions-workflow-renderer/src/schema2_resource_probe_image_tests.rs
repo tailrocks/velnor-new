@@ -1,7 +1,8 @@
 use std::collections::BTreeSet;
 use std::error::Error;
 
-use velnor_actions_contract::RoutingWorkflow;
+use velnor_actions_contract::{ReleaseTarget, RoutingWorkflow};
+use velnor_actions_mise::catalog::ToolCatalog;
 
 use super::product_release_family::{self, Family};
 use super::product_release_test_pins::test_pins;
@@ -14,11 +15,16 @@ fn image_family_uses_pinned_musl_build_and_exact_five_file_inventory() -> Result
     let pins = test_pins();
     let steps = resource_probe_image::build_steps(&pins)?;
     let step_text = render_yaml(&Yaml::Seq(steps));
+    let resource_probe_target = pins.install_resource_probe_target_argv.join(" ");
     let resource_probe_build = pins.resource_probe_build_argv.join(" ");
+    let catalog = ToolCatalog::pinned();
+    let host = ReleaseTarget::LinuxX86_64.triple();
+    let rust_toolchain = catalog.rust_toolchain_name_for_host(host);
+    let expected_target_install =
+        format!("rustup target add --toolchain {rust_toolchain} x86_64-unknown-linux-musl");
     for expected in [
         "Install pinned Rust and MBX for the resource probe",
         "Install pinned Linux musl target",
-        "rustup target add --toolchain 1.99.0 x86_64-unknown-linux-musl",
         "Build locked resource probe through MBX",
         "rust@1.99.0 mr-boxington@1.23.0 -- mbx build --locked --manifest-path crates/velnor-runner/Cargo.toml",
         "--package velnor-resource-probe --bin velnor-resource-probe --release --target x86_64-unknown-linux-musl",
@@ -29,6 +35,11 @@ fn image_family_uses_pinned_musl_build_and_exact_five_file_inventory() -> Result
             "missing {expected}: {step_text}"
         );
     }
+    assert!(
+        step_text.contains(&expected_target_install),
+        "resource-probe target install must use the catalog's host-qualified Rust toolchain: {step_text}"
+    );
+    assert!(step_text.contains(&resource_probe_target));
     assert!(step_text.contains(&resource_probe_build));
     assert!(!resource_probe_build.contains("cargo"));
 
