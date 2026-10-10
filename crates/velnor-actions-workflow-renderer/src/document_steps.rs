@@ -235,6 +235,9 @@ pub(crate) fn step_to_yaml(
         StepKind::Internal { .. } => {
             internal_step_to_yaml(job_id, step, ctx, needs_envs, composite, step_context)
         }
+        StepKind::TaskExecution { .. } => Err(RenderError::InvalidWorkflow(
+            "unfactored_task_execution".to_owned(),
+        )),
     }
 }
 

@@ -8,23 +8,84 @@ use std::{
 };
 
 use super::*;
+use velnor_actions_contract::cachekey::{ToolchainInputs, toolchain_id};
+use velnor_actions_contract::workflow::crate_job::task_digest_for_execution;
 use velnor_actions_contract::{
     Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowIr, WorkflowPolicy,
 };
-use velnor_actions_mise::{PinnedTool, PinnedToolExec};
+use velnor_actions_mise::{PinnedTool, PinnedToolExec, PrepareRustComponents};
 use velnor_actions_rust::{TaskKind, cargo_payload_env};
 
 /// Obligation fixture for step construction.
 fn obligation() -> CrateObligation {
+    let task_id = "stack/rust/demo/clippy/default".to_owned();
+    let matrix_id = velnor_actions_contract::matrix_id_for_task_group("rust", &task_id)
+        .expect("matrix identity");
+    let matrix_key = velnor_actions_contract::matrix_key_for_id(&matrix_id).expect("matrix key");
+    let catalog = ToolCatalog::pinned();
+    let run = PinnedToolExec::new(
+        vec![PinnedTool::Rust],
+        OsStr::new("cargo"),
+        ["clippy"].into_iter().map(OsString::from).collect(),
+    )
+    .expect("pinned task")
+    .argv(&catalog)
+    .into_iter()
+    .map(|word| word.into_string().expect("UTF-8 task argv"))
+    .collect::<Vec<_>>();
+    let toolchain_inputs = ToolchainInputs {
+        tools: catalog.tool_specs(&[PinnedTool::Rust]),
+        components: PrepareRustComponents::components(),
+        compile_driver: "cargo".to_owned(),
+        test_runner: "cargo_test".to_owned(),
+    };
+    let toolchain = toolchain_id(&toolchain_inputs).expect("toolchain identity");
     CrateObligation {
-        task_id: "stack/rust/demo/clippy/default".to_owned(),
+        task_id: task_id.clone(),
         kind: "clippy".to_owned(),
         step_name: "Clippy".to_owned(),
         gated_by: Vec::new(),
-        matrix_key: "m-0123456789abcdef".to_owned(),
-        task_digest: format!("b3-{}", "a".repeat(64)),
-        run: vec!["true".to_owned()],
+        matrix_key,
+        task_digest: task_digest_for_execution(&task_id, &run, &toolchain).expect("task digest"),
+        toolchain_inputs,
+        run,
     }
+}
+
+fn refresh_task_identity(obligation: &mut CrateObligation) {
+    let stack = if obligation.task_id.starts_with("stack/tofu/") {
+        let catalog = ToolCatalog::pinned();
+        obligation.toolchain_inputs = ToolchainInputs {
+            tools: catalog.tool_specs(&[PinnedTool::Opentofu]),
+            components: Vec::new(),
+            compile_driver: "tofu".to_owned(),
+            test_runner: "tofu".to_owned(),
+        };
+        obligation.run = PinnedToolExec::new(
+            vec![PinnedTool::Opentofu],
+            OsStr::new("tofu"),
+            ["-chdir", "dir-", "validate"]
+                .into_iter()
+                .map(OsString::from)
+                .collect(),
+        )
+        .expect("pinned tofu task")
+        .argv(&catalog)
+        .into_iter()
+        .map(|word| word.into_string().expect("UTF-8 task argv"))
+        .collect();
+        "tofu"
+    } else {
+        "rust"
+    };
+    let matrix_id = velnor_actions_contract::matrix_id_for_task_group(stack, &obligation.task_id)
+        .expect("matrix id");
+    obligation.matrix_key =
+        velnor_actions_contract::matrix_key_for_id(&matrix_id).expect("matrix key");
+    let toolchain = toolchain_id(&obligation.toolchain_inputs).expect("toolchain identity");
+    obligation.task_digest =
+        task_digest_for_execution(&obligation.task_id, &obligation.run, &toolchain)
+            .expect("task digest");
 }
 
 #[test]
@@ -69,14 +130,18 @@ fn identity_env_contract_enforces_in_every_build() {
 fn obligation_step_carries_the_report_lookup_key() {
     let obligation = obligation();
     let step = obligation_step(&obligation, &ToolCatalog::pinned(), &[], None).expect("step");
-    let velnor_actions_contract::StepKind::Shell { run, env } = &step.kind else {
-        panic!("obligation must be a shell step");
+    let velnor_actions_contract::StepKind::TaskExecution {
+        task_id,
+        task_digest,
+        argv,
+        ..
+    } = &step.kind
+    else {
+        panic!("obligation must be a typed task step");
     };
-    assert_eq!(
-        env.get(TASK_ID_ENV).map(String::as_str),
-        Some(obligation.task_id.as_str())
-    );
-    assert!(run[2].contains(REPORT_OP), "wrapper reports: {run:?}");
+    assert_eq!(task_id, &obligation.task_id);
+    assert_eq!(task_digest, &obligation.task_digest);
+    assert_eq!(argv, &obligation.run);
 }
 
 #[test]
@@ -101,9 +166,63 @@ fn generated_pinned_obligation_renders_through_shared_declared_task_action() {
         "task argv preserved:\n{yaml}"
     );
     assert!(
-        yaml.contains("env_VELNOR_TASK_ID: stack/rust/demo/clippy/default"),
+        yaml.contains("task_id: stack/rust/demo/clippy/default"),
         "report identity preserved as input:\n{yaml}"
     );
+}
+
+#[test]
+fn actual_obligation_producer_renders_150_jobs_through_one_typed_action_shape() {
+    let checkout_uses = format!("actions/checkout@{:040x}", 0);
+    let mut ir = obligation_workflow_ir(&checkout_uses, generated_pinned_task_step());
+    ir.jobs.remove("rust-demo");
+    let catalog = ToolCatalog::pinned();
+    for index in 0..150 {
+        let package = format!("crate-{index}");
+        let mut task = obligation();
+        task.task_id = format!("stack/rust/{package}/test/default");
+        task.kind = "test".to_owned();
+        task.step_name = "Test".to_owned();
+        task.run = PinnedToolExec::new(
+            vec![PinnedTool::Rust],
+            OsStr::new("cargo"),
+            ["test", "-p", package.as_str()]
+                .into_iter()
+                .map(OsString::from)
+                .collect(),
+        )
+        .expect("pinned Cargo test")
+        .argv(&catalog)
+        .into_iter()
+        .map(|word| word.into_string().expect("UTF-8 task argv"))
+        .collect();
+        refresh_task_identity(&mut task);
+        let step = obligation_step(&task, &catalog, &[], None).expect("producer step");
+        ir.jobs.insert(
+            format!("rust-crate-{index}"),
+            obligation_task_job(&checkout_uses, step),
+        );
+    }
+
+    let context = renderer_context(checkout_uses);
+    let yaml = velnor_actions_workflow_renderer::render_workflow_ir(
+        &ir,
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &context,
+    )
+    .expect("render 150 producer-backed obligations");
+
+    assert_eq!(
+        yaml.matches("uses: ./.github/actions/declared-task-0")
+            .count(),
+        150,
+        "each generated obligation remains a job and calls the shared action"
+    );
+    for index in 0..150 {
+        assert!(yaml.contains(&format!("task_id: stack/rust/crate-{index}/test/default")));
+        assert!(yaml.contains(&format!("crate-{index}")));
+    }
 }
 
 fn generated_pinned_task_step() -> Step {
@@ -123,6 +242,9 @@ fn generated_pinned_task_step() -> Step {
         .into_iter()
         .map(|word| word.into_string().expect("UTF-8 pinned task argv"))
         .collect();
+    let toolchain = toolchain_id(&task.toolchain_inputs).expect("toolchain identity");
+    task.task_digest = task_digest_for_execution(&task.task_id, &task.run, &toolchain)
+        .expect("updated task digest");
     obligation_step(&task, &catalog, &[], None).expect("generated task step")
 }
 
@@ -183,8 +305,32 @@ fn obligation_task_job(checkout_uses: &str, task_step: Step) -> Job {
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![checked_out(checkout_uses), task_step],
+        steps: vec![checked_out(checkout_uses), staged_helper_step(), task_step],
     }
+}
+
+fn staged_helper_step() -> Step {
+    let version = env!("CARGO_PKG_VERSION");
+    let staged = format!(
+        "{}{}",
+        velnor_actions_workflow_renderer::STAGED_BINARY_PREFIX,
+        version
+    );
+    velnor_actions_workflow_renderer::provision_acquire_step(
+        &velnor_actions_workflow_renderer::HelperProvenance::ReleaseAsset {
+            url: "https://example.invalid/velnor".to_owned(),
+            sha256: "a".repeat(64),
+            commit: "b".repeat(40),
+        },
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            format!(
+                "curl -fsSL \"$VELNOR_ASSET_URL\" -o {staged} && echo \"$VELNOR_ASSET_SHA256  {staged}\" | sha256sum -c - && chmod +x {staged}"
+            ),
+        ],
+    )
+    .expect("digest-verified helper staging")
 }
 
 fn checked_out(checkout_uses: &str) -> Step {
@@ -293,9 +439,10 @@ fn doc_obligation_step_carries_typed_rustdocflags() {
     doc.task_id = "stack/rust/demo/doc/default".to_owned();
     doc.kind = TaskKind::Doc.as_str().to_owned();
     doc.step_name = DOCUMENTATION_NAME.to_owned();
+    refresh_task_identity(&mut doc);
     let step = obligation_step(&doc, &ToolCatalog::pinned(), &[], None).expect("step");
-    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
-        panic!("obligation must be a shell step");
+    let velnor_actions_contract::StepKind::TaskExecution { env, .. } = &step.kind else {
+        panic!("obligation must be a typed task step");
     };
     let typed: Vec<(String, String)> = cargo_payload_env(TaskKind::Doc)
         .into_iter()
@@ -330,9 +477,10 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
     tofu.task_id = "stack/tofu/dir-/validate/default".to_owned();
     tofu.kind = "validate".to_owned();
     tofu.step_name = "Validate".to_owned();
+    refresh_task_identity(&mut tofu);
     let step = obligation_step(&tofu, &ToolCatalog::pinned(), &[], None).expect("step");
     let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
-        panic!("obligation must be a shell step");
+        panic!("OpenTofu remains a shell step");
     };
     for key in [
         MISE_RUSTUP_HOME_ENV,
@@ -371,8 +519,8 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
         "temp CLI config stays local-only until a materialization step lands"
     );
     let step = obligation_step(&obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
-    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
-        panic!("obligation must be a shell step");
+    let velnor_actions_contract::StepKind::TaskExecution { env, .. } = &step.kind else {
+        panic!("obligation must be a typed task step");
     };
     assert!(
         !env.contains_key(TF_DATA_DIR_ENV),
@@ -394,8 +542,8 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
 fn non_doc_obligation_steps_carry_no_rustdocflags() {
     use velnor_actions_rust::RUSTDOCFLAGS_ENV;
     let step = obligation_step(&obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
-    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
-        panic!("obligation must be a shell step");
+    let velnor_actions_contract::StepKind::TaskExecution { env, .. } = &step.kind else {
+        panic!("Rust obligations use typed task steps");
     };
     assert!(
         !env.contains_key(RUSTDOCFLAGS_ENV),

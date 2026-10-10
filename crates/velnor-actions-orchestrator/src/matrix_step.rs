@@ -3,7 +3,9 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 
-use velnor_actions_contract::{CrateObligation, Stack, Step, StepRole, sanitize_error_detail};
+use velnor_actions_contract::{
+    CrateObligation, Stack, Step, StepKind, StepRole, sanitize_error_detail,
+};
 use velnor_actions_mise::{ISOLATION_ENV, NO_AUTO_INSTALL_ENV, ToolCatalog, ToolHomes};
 use velnor_actions_rust::{payload_env_for_kind, step_base_name};
 use velnor_actions_workflow_renderer::plan_format::FORMAT_STEP_NAME;
@@ -213,34 +215,56 @@ pub(crate) fn obligation_step(
     let matrix_id =
         velnor_actions_contract::matrix_id_for_task_group(stack_id, &obligation.task_id)
             .map_err(crate::internal::internal_contract)?;
-    let mut identity = obligation_identity_env(
-        &obligation.task_id,
-        &obligation.task_digest,
-        &matrix_id,
-        &obligation.matrix_key,
-        matrix_cap,
-    );
+    let needs_rust = obligation_stack(&obligation.task_id) != Some(Stack::Tofu);
+    let mut payload_env = BTreeMap::new();
     for (key, value) in payload_env_for_obligation(&obligation.task_id, &obligation.kind) {
-        identity.insert(
+        payload_env.insert(
             key.to_string_lossy().into_owned(),
             value.to_string_lossy().into_owned(),
         );
     }
-    check_identity_env_contract(&identity, &obligation.task_id)?;
-    let needs_rust = obligation_stack(&obligation.task_id) != Some(Stack::Tofu);
-    let env = task_step_env(catalog, &identity, needs_rust)?;
-    let joined =
-        velnor_actions_workflow_renderer::join_argv_for_run(&obligation.run).map_err(|err| {
-            OrchestratorError::Contract {
+    let mut step = if needs_rust {
+        let env = task_step_env(catalog, &payload_env, true)?;
+        Step {
+            name: obligation.step_name.clone(),
+            id: None,
+            role: None,
+            condition: None,
+            kind: StepKind::TaskExecution {
+                argv: obligation.run.clone(),
+                env,
+                task_id: obligation.task_id.clone(),
+                task_digest: obligation.task_digest.clone(),
+                toolchain_inputs: obligation.toolchain_inputs.clone(),
+                matrix_id,
+                matrix_key: obligation.matrix_key.clone(),
+                report_helper_version: env!("CARGO_PKG_VERSION").to_owned(),
+                matrix_max_parallel: matrix_cap,
+            },
+        }
+    } else {
+        let mut identity = obligation_identity_env(
+            &obligation.task_id,
+            &obligation.task_digest,
+            &matrix_id,
+            &obligation.matrix_key,
+            matrix_cap,
+        );
+        identity.extend(payload_env);
+        check_identity_env_contract(&identity, &obligation.task_id)?;
+        let env = task_step_env(catalog, &identity, false)?;
+        let joined = velnor_actions_workflow_renderer::join_argv_for_run(&obligation.run).map_err(
+            |err| OrchestratorError::Contract {
                 problem: err.to_string(),
-            }
-        })?;
-    let run = report_wrapper_argv(&joined, &helper_path_for_version());
-    let mut step = velnor_actions_workflow_renderer::shell_step(&obligation.step_name, run, env)
-        .map_err(OrchestratorError::from)?;
-    if !needs_rust {
-        step.role = Some(StepRole::TofuProviderUse);
-    }
+            },
+        )?;
+        let run = report_wrapper_argv(&joined, &helper_path_for_version());
+        let mut tofu =
+            velnor_actions_workflow_renderer::shell_step(&obligation.step_name, run, env)
+                .map_err(OrchestratorError::from)?;
+        tofu.role = Some(StepRole::TofuProviderUse);
+        tofu
+    };
     // Skip when the plan covered this obligation: unknown coverage
     // (absent output) executes, so the gate can only skip proven work.
     //

@@ -79,6 +79,21 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
             }
             check_scrub_coverage(id, &step.name, step.role, env)?;
         }
+        StepKind::TaskExecution { argv, env, .. } => {
+            check_env_tokens(id, env)?;
+            for arg in argv {
+                if names_token(arg) {
+                    return Err(RenderError::InvalidWorkflow(format!(
+                        "token_in_run:{id}:{}",
+                        step.name
+                    )));
+                }
+            }
+            // The typed task composite owns credential removal inside its
+            // shell. The task env is deliberately credential-free and is
+            // validated here; caller env inheritance cannot scrub runner
+            // credentials before the action starts.
+        }
         StepKind::Action { with, env, .. } => {
             for value in with.values() {
                 if names_token(value) {

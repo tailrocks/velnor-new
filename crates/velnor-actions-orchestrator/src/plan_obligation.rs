@@ -360,20 +360,9 @@ pub(crate) fn task_digest(
     argv: &[String],
     toolchain_id: &str,
 ) -> Result<String, velnor_actions_contract::ContractError> {
-    digest_of(&TaskDigestInputs {
+    velnor_actions_contract::workflow::crate_job::task_digest_for_execution(
         task_id,
         argv,
         toolchain_id,
-    })
-}
-
-/// Task-digest preimage fields.
-#[derive(Debug, Serialize)]
-struct TaskDigestInputs<'a> {
-    /// Stable task ID.
-    task_id: &'a str,
-    /// Fixed argument vector.
-    argv: &'a [String],
-    /// Toolchain identity digest.
-    toolchain_id: &'a str,
+    )
 }

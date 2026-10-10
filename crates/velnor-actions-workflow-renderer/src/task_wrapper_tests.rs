@@ -1,24 +1,19 @@
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::cachekey::{ToolchainInputs, toolchain_id};
+use velnor_actions_contract::workflow::crate_job::task_digest_for_execution;
 use velnor_actions_contract::{Job, JobTimeout, Step, StepKind, StepRole};
 
 use super::{ACTION_NAME_PREFIX, factor_obligation_steps};
-use crate::toolchain_env;
 
 const CHECKOUT: &str = "actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const HELPER: &str = "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.6";
 const VERSION: &str = "0.1.6";
 
 #[test]
-fn one_typed_action_serves_all_150_obligation_jobs_without_dropping_headers() {
+fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() {
     let jobs = (0..150)
         .map(|index| {
             let id = format!("rust-crate-{index}");
-            let condition = if index % 2 == 0 {
-                "success()"
-            } else {
-                "always()"
-            };
             let job = Job {
                 display_name: format!("Rust / crate {index}"),
                 runs_on: "ubuntu-26.04".to_owned(),
@@ -28,7 +23,7 @@ fn one_typed_action_serves_all_150_obligation_jobs_without_dropping_headers() {
                 condition: Some("needs.plan.result == 'success'".to_owned()),
                 permissions: None,
                 environment: None,
-                steps: vec![checkout_step(), obligation_step(index, condition)],
+                steps: vec![checkout_step(), acquire_step(), task_step(index)],
             };
             (id, job)
         })
@@ -58,9 +53,9 @@ fn one_typed_action_serves_all_150_obligation_jobs_without_dropping_headers() {
             .contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN")
     );
     assert!(!files[0].bytes.contains("eval"));
-    for key in toolchain_env::STEP_CREDENTIAL_DENYLIST
+    for key in crate::toolchain_env::STEP_CREDENTIAL_DENYLIST
         .into_iter()
-        .chain(toolchain_env::STEP_ENDPOINT_DENYLIST)
+        .chain(crate::toolchain_env::STEP_ENDPOINT_DENYLIST)
     {
         assert!(!files[0].bytes.contains(&format!("inputs.env_{key}")));
     }
@@ -76,87 +71,124 @@ fn one_typed_action_serves_all_150_obligation_jobs_without_dropping_headers() {
         assert_eq!(rewritten.environment, original.environment);
         assert_eq!(rewritten.steps.len(), original.steps.len());
         assert_eq!(rewritten.steps[0], original.steps[0]);
-        let caller = &rewritten.steps[1];
-        assert_eq!(caller.name, original.steps[1].name);
-        assert_eq!(caller.condition, original.steps[1].condition);
+        assert_eq!(rewritten.steps[1], original.steps[1]);
+        let caller = &rewritten.steps[2];
+        assert_eq!(caller.name, original.steps[2].name);
+        assert_eq!(caller.condition, original.steps[2].condition);
         let StepKind::Action { uses, with, env } = &caller.kind else {
             panic!("obligation was not replaced by its composite call");
         };
         assert_eq!(uses, "./.github/actions/declared-task-0");
         assert!(env.is_empty(), "task env crosses through declared inputs");
         assert_eq!(with["argv_10"], format!("crate-{index}"));
-        assert_eq!(with["env_VELNOR_TASK_ID"], format!("task/{index}"));
+        assert_eq!(
+            with["task_id"],
+            format!("stack/rust/crate-{index}/test/default")
+        );
         assert!(!with.contains_key("env_GITHUB_TOKEN"));
     }
 }
 
 #[test]
-fn dynamic_shell_expansion_and_typed_tofu_role_stay_unfactored() {
-    let mut dynamic = obligation_step(0, "success()");
-    let StepKind::Shell { run, .. } = &mut dynamic.kind else {
-        panic!("fixture shell step");
-    };
-    let command = crate::commands::join_argv_for_run(&[
-        "mise".to_owned(),
-        "--no-config".to_owned(),
-        "--no-env".to_owned(),
-        "--no-hooks".to_owned(),
-        "exec".to_owned(),
-        "rust@1.99.0".to_owned(),
-        "--".to_owned(),
-        "cargo".to_owned(),
-        "test".to_owned(),
-        "--tool=$HOME".to_owned(),
-    ])
-    .expect("valid dynamic shell fixture");
-    let script_index = run.len() - 1;
-    run[script_index] = format!(
-        "{} s=$(date +%s%3N); {command}; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"{HELPER}\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"",
-        toolchain_env::credential_unset_prelude()
-    );
-    let mut tofu = obligation_step(1, "success()");
+fn ordinary_shell_and_tofu_steps_stay_unfactored() {
+    let shell = crate::steps::shell_step(
+        "Tofu remains an ordinary shell step",
+        vec!["tofu".to_owned(), "validate".to_owned()],
+        BTreeMap::new(),
+    )
+    .expect("fixed shell step");
+    let mut tofu = shell.clone();
     tofu.role = Some(StepRole::TofuProviderUse);
     let jobs = BTreeMap::from([(
         "rust-demo".to_owned(),
-        simple_job(vec![checkout_step(), dynamic.clone(), tofu.clone()]),
+        simple_job(vec![checkout_step(), acquire_step(), shell, tofu]),
     )]);
 
     let (factored, files) =
-        factor_obligation_steps(&jobs, CHECKOUT, VERSION).expect("fail-closed factor");
-    assert_eq!(files.len(), 0);
-    assert_eq!(
-        factored.get("rust-demo").expect("retained job").steps,
-        jobs.get("rust-demo").expect("original job").steps
+        factor_obligation_steps(&jobs, CHECKOUT, VERSION).expect("leave shell tasks alone");
+    assert!(files.is_empty());
+    assert_eq!(factored, jobs);
+}
+
+#[test]
+fn typed_task_requires_checkout_staging_and_credential_free_inputs() {
+    let task = task_step(0);
+    let no_checkout = BTreeMap::from([(
+        "rust-demo".to_owned(),
+        simple_job(vec![acquire_step(), task.clone()]),
+    )]);
+    assert!(
+        factor_obligation_steps(&no_checkout, CHECKOUT, VERSION)
+            .expect_err("checkout is mandatory")
+            .to_string()
+            .contains("declared_task_requires_checkout")
+    );
+
+    let no_stage = BTreeMap::from([(
+        "rust-demo".to_owned(),
+        simple_job(vec![checkout_step(), task.clone()]),
+    )]);
+    assert!(
+        factor_obligation_steps(&no_stage, CHECKOUT, VERSION)
+            .expect_err("the staged helper is mandatory")
+            .to_string()
+            .contains("declared_task_requires_staged_helper")
+    );
+
+    let mut credentialed = task;
+    let StepKind::TaskExecution { env, .. } = &mut credentialed.kind else {
+        unreachable!();
+    };
+    env.insert(
+        "GITHUB_TOKEN".to_owned(),
+        "${{ secrets.GITHUB_TOKEN }}".to_owned(),
+    );
+    let jobs = BTreeMap::from([(
+        "rust-demo".to_owned(),
+        simple_job(vec![checkout_step(), acquire_step(), credentialed]),
+    )]);
+    assert!(
+        factor_obligation_steps(&jobs, CHECKOUT, VERSION)
+            .expect_err("credentials cannot enter task action inputs")
+            .to_string()
+            .contains("denied")
     );
 }
 
 fn checkout_step() -> Step {
-    Step {
-        name: "Checkout".to_owned(),
-        id: None,
-        role: None,
-        condition: None,
-        kind: StepKind::Action {
-            uses: CHECKOUT.to_owned(),
-            with: BTreeMap::new(),
-            env: BTreeMap::new(),
-        },
-    }
+    crate::steps::checkout_step(CHECKOUT).expect("configured checkout")
 }
 
-fn obligation_step(index: usize, condition: &str) -> Step {
-    let mut env = BTreeMap::from([
-        ("VELNOR_TASK_ID".to_owned(), format!("task/{index}")),
-        ("VELNOR_TASK_DIGEST".to_owned(), format!("digest-{index}")),
-        ("VELNOR_MATRIX_ID".to_owned(), format!("matrix-{index}")),
-        ("VELNOR_MATRIX_KEY".to_owned(), format!("key-{index}")),
-        (
-            "MISE_CARGO_HOME".to_owned(),
-            "${{ runner.temp }}/velnor/cargo".to_owned(),
-        ),
-        ("MISE_NO_CONFIG".to_owned(), "1".to_owned()),
-    ]);
-    env.extend(toolchain_env::credential_scrub());
+fn acquire_step() -> Step {
+    let helper = format!("{}{}", crate::steps::STAGED_BINARY_PREFIX, VERSION);
+    crate::steps::acquire_velnor_step(
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            format!(
+                "curl -fsSL \"$VELNOR_ASSET_URL\" -o {helper} && echo \"$VELNOR_ASSET_SHA256  {helper}\" | sha256sum -c - && chmod +x {helper}"
+            ),
+        ],
+        &BTreeMap::from([
+            (
+                crate::steps::ASSET_URL_ENV.to_owned(),
+                "https://example.invalid/velnor".to_owned(),
+            ),
+            (crate::steps::ASSET_SHA_ENV.to_owned(), "a".repeat(64)),
+            (crate::steps::RELEASE_COMMIT_ENV.to_owned(), "b".repeat(40)),
+        ]),
+    )
+    .expect("digest-verified helper staging")
+}
+
+fn task_step(index: usize) -> Step {
+    let task_id = format!("stack/rust/crate-{index}/test/default");
+    let toolchain_inputs = ToolchainInputs {
+        tools: vec!["rust@1.99.0".to_owned()],
+        components: vec!["clippy".to_owned(), "rustfmt".to_owned()],
+        compile_driver: "cargo".to_owned(),
+        test_runner: "cargo_test".to_owned(),
+    };
     let argv = vec![
         "mise".to_owned(),
         "--no-config".to_owned(),
@@ -170,18 +202,47 @@ fn obligation_step(index: usize, condition: &str) -> Step {
         "-p".to_owned(),
         format!("crate-{index}"),
     ];
-    let joined = crate::commands::join_argv_for_run(&argv).expect("fixed task argv");
-    let run = format!(
-        "s=$(date +%s%3N); {joined}; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"{HELPER}\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\""
-    );
-    let mut step = crate::steps::shell_step(
-        &format!("Run crate {index}"),
-        vec!["sh".to_owned(), "-c".to_owned(), run],
-        env,
-    )
-    .expect("validated fixture step");
-    step.condition = Some(condition.to_owned());
-    step
+    let toolchain = toolchain_id(&toolchain_inputs).expect("toolchain id");
+    let task_digest = task_digest_for_execution(&task_id, &argv, &toolchain).expect("task digest");
+    let matrix_id =
+        velnor_actions_contract::matrix_id_for_task_group("rust", &task_id).expect("matrix id");
+    let matrix_key = velnor_actions_contract::matrix_key_for_id(&matrix_id).expect("matrix key");
+    let env = BTreeMap::from([
+        ("MISE_NO_CONFIG".to_owned(), "1".to_owned()),
+        ("MISE_NO_ENV".to_owned(), "1".to_owned()),
+        ("MISE_NO_HOOKS".to_owned(), "1".to_owned()),
+        ("MISE_LOCKFILE".to_owned(), "0".to_owned()),
+        ("MISE_AUTO_INSTALL".to_owned(), "false".to_owned()),
+        ("MISE_EXEC_AUTO_INSTALL".to_owned(), "false".to_owned()),
+        (
+            "MISE_RUSTUP_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/rustup".to_owned(),
+        ),
+        (
+            "MISE_CARGO_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/cargo".to_owned(),
+        ),
+        ("RUSTUP_TOOLCHAIN".to_owned(), "1.99.0".to_owned()),
+    ]);
+    let condition = velnor_actions_contract::workflow::step::task_execution_condition(&task_id)
+        .expect("coverage condition");
+    Step {
+        name: format!("Test crate {index}"),
+        id: None,
+        role: None,
+        condition: Some(condition),
+        kind: StepKind::TaskExecution {
+            argv,
+            env,
+            task_id,
+            task_digest,
+            toolchain_inputs,
+            matrix_id,
+            matrix_key,
+            report_helper_version: VERSION.to_owned(),
+            matrix_max_parallel: None,
+        },
+    }
 }
 
 fn simple_job(steps: Vec<Step>) -> Job {

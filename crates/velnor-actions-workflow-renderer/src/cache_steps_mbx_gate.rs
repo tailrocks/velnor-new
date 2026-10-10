@@ -155,6 +155,33 @@ fn check_mbx_version_order(
             "mbx_toolchain_missing:{id}"
         )));
     };
+    for step in &job.steps {
+        let StepKind::TaskExecution {
+            toolchain_inputs, ..
+        } = &step.kind
+        else {
+            continue;
+        };
+        let mbx_pins: Vec<&str> = toolchain_inputs
+            .tools
+            .iter()
+            .filter_map(|selector| selector.strip_prefix("mr-boxington@"))
+            .collect();
+        let rust_pins: Vec<&str> = toolchain_inputs
+            .tools
+            .iter()
+            .filter_map(|selector| selector.strip_prefix("rust@"))
+            .collect();
+        if mbx_pins.len() != 1
+            || mbx_pins[0] != version
+            || rust_pins.len() != 1
+            || rust_pins[0] != rust_toolchain
+        {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "mbx_task_toolchain_mismatch:{id}"
+            )));
+        }
+    }
     let expected_preflight = canonical_mbx_preflight_step(version, rust_toolchain, env)?;
     if job.steps.get(preflight_at) != Some(&expected_preflight) {
         return Err(RenderError::InvalidWorkflow(format!(
