@@ -10,7 +10,7 @@ root `.github` tree. The capture ran with Mise 2026.10.4 and Rust 1.98.1, and
 used at reviewed commit `2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca`; this
 current stable release supersedes issue #6's earlier v5.0.1 target.
 
-## Product version prep (2026-10-09)
+## Product version prep v0.1.5 (2026-10-09)
 
 The product version owners and generated outputs are prepared from 0.1.4 to
 0.1.5. Supported CLI generation refreshed the root `.github` tree;
@@ -34,6 +34,27 @@ The markers never enter the real release manifest, generator lock, producer
 `.github`, published assets, or attestation evidence. The checked-in
 `fixtures/consumer-release-manifest.json` stays unchanged at 0.1.4 as a
 historical schema fixture for direct schema tests.
+
+## Product version prep v0.1.6 (2026-10-09)
+
+From `fix/release-0.1.6-qualified-generator`, the source was forward-merged
+with integrated `origin/main` at `2edc5cad367f098fd295e5edd09e5f1fd79a9acb`.
+The supported `velnor-actions generate` command was replayed against that
+merged source; its exact preview and in-place tree matched. The five case
+captures were then regenerated and checked using the same source-built 0.1.6 CLI:
+`scripts/capture-opentofu-goldens.sh capture` and `check` both completed with
+all five cases matching; dogfood reported `tree identical`. The CLI parity
+golden capture and compare each passed four tests.
+
+ConsumerV1 scratch manifests take version `0.1.6` and canonical current URLs
+from the tested CLI. Their deterministic source and digest markers remain
+confined to disposable capture workspaces and the supplementary fixture
+oracle; the capture script validates and stages exact candidate inputs before
+comparison. Tree and manifest indexes are measured hashes of the captured
+bytes. The historical `fixtures/consumer-release-manifest.json` remains at
+0.1.4. This is source-generation evidence only, not release qualification or
+publication evidence. Full workspace gates and final qualification remain
+pending.
 
 The 2026-10-05 checkpoint and capture environment below record the earlier
 source state and remain as historical evidence.

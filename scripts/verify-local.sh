@@ -10,9 +10,10 @@
 #   repo-policy       `scripts/check-freshness.sh` (pins, policy mirror,
 #                     upstream evidence, deny policy; the live advisory scan
 #                     runs in CI, not here)
-#   generated-tree    build the CLI, `generate --output-dir` to a temp dir,
-#                     and `diff -r` the committed `.github` tree, including
-#                     schema-2 workflows, against `generate --output-dir`.
+#   generated-selector focused regression tests for Cargo artifact selection
+#   generated-tree    build the CLI, select the exact executable Cargo reports,
+#                     `generate --output-dir` to a temp dir, and `diff -r` the
+#                     committed `.github` tree against that generated tree.
 #   clippy-<crate>    per-crate pinned `cargo clippy --all-targets -- -D warnings`
 #   test-<crate>      per-crate pinned `cargo test` (unit plus integration plus doc)
 #   doctest-<crate>   per-crate pinned `cargo test --doc` for crates with library
@@ -191,13 +192,24 @@ GEN_DIR="$(mktemp -d 2>/dev/null)"
 if [ -z "$GEN_DIR" ]; then
   fail "generated-tree (mktemp failed)"
 else
+  echo "--- verify-local: generated-selector"
+  if python3 -B scripts/test_cargo_artifact_executable.py \
+    >"/tmp/verify-local-generated-selector.log" 2>&1; then
+    pass "generated-selector"
+  else
+    fail "generated-selector (log: /tmp/verify-local-generated-selector.log)"
+  fi
   echo "--- verify-local: generated-tree"
-  if "${MISE_EXEC[@]}" cargo build --locked -p velnor-actions-cli --bin velnor-actions \
-    >"/tmp/verify-local-generated-build.log" 2>&1; then
-    BIN="$(find target/debug target/release -maxdepth 1 -name velnor-actions -type f 2>/dev/null | head -n 1)"
-    if [ -z "$BIN" ] && [ -n "${CARGO_TARGET_DIR:-}" ]; then
-      BIN="$(find "$CARGO_TARGET_DIR/debug" "$CARGO_TARGET_DIR/release" -maxdepth 1 -name velnor-actions -type f 2>/dev/null | head -n 1)"
-    fi
+  if "${MISE_EXEC[@]}" cargo build --locked --message-format=json-render-diagnostics \
+    -p velnor-actions-cli --bin velnor-actions \
+    >"/tmp/verify-local-generated-artifacts.jsonl" \
+    2>"/tmp/verify-local-generated-build.log"; then
+    BIN="$(python3 scripts/cargo_artifact_executable.py \
+      --workspace-root "$ROOT" \
+      --manifest-path crates/velnor-actions-cli/Cargo.toml \
+      --target velnor-actions \
+      /tmp/verify-local-generated-artifacts.jsonl \
+      2>>"/tmp/verify-local-generated-build.log")"
     # Schema 2 emits the full product workflow set; compare it directly.
     if [ -n "$BIN" ] && "$BIN" generate --output-dir "$GEN_DIR/tree" \
       >"/tmp/verify-local-generated-run.log" 2>&1 &&
