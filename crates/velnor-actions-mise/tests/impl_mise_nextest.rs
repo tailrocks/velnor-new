@@ -252,3 +252,46 @@ fn nextest_commands_match_argv() -> Result<(), String> {
     );
     Ok(())
 }
+
+#[test]
+fn mbx_nextest_commands_use_action_owned_pinned_mbx() -> Result<(), String> {
+    let catalog = pinned();
+    let archive = NextestArchive::new(NextestDriver::Mbx, "demo", &[], None)
+        .map_err(|err| err.to_string())?;
+    let archive_command = archive.command(&catalog).map_err(|err| err.to_string())?;
+    assert_eq!(archive_command.argv(), archive.argv(&catalog));
+    assert!(
+        archive_command
+            .argv()
+            .iter()
+            .any(|arg| arg == "rust@1.98.1")
+    );
+    assert!(
+        archive_command
+            .argv()
+            .iter()
+            .any(|arg| arg == "aqua:nextest-rs/nextest/cargo-nextest@0.9.148")
+    );
+    assert!(
+        !archive_command
+            .argv()
+            .iter()
+            .any(|arg| arg.to_string_lossy().starts_with("mr-boxington@"))
+    );
+
+    let partition = NextestPartition::new(1, 1).map_err(|err| err.to_string())?;
+    let list = NextestList::new(NextestDriver::Mbx, partition);
+    assert_eq!(
+        list.command(&catalog)
+            .map_err(|err| err.to_string())?
+            .argv(),
+        list.argv(&catalog)
+    );
+    let run = NextestRun::new(NextestDriver::Mbx, partition, "m-abc", "p1")
+        .map_err(|err| err.to_string())?;
+    assert_eq!(
+        run.command(&catalog).map_err(|err| err.to_string())?.argv(),
+        run.argv(&catalog)
+    );
+    Ok(())
+}
