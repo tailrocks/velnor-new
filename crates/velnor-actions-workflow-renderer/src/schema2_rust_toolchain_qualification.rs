@@ -1,6 +1,6 @@
 //! Hosted measurement of the selected official Rust distribution components.
 
-use super::features::{self, CHECKOUT_USES};
+use super::features::{self as schema2_features, CHECKOUT_USES};
 use super::{RunnerSpec, RustToolchainQualificationPins};
 use crate::RenderError;
 use crate::yaml::Yaml;
