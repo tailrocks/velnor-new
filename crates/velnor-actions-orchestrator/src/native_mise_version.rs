@@ -37,7 +37,7 @@ impl NativeMiseMinimum {
         Some(hard.map_or(Self::NoHardMinimum, Self::Hard))
     }
 
-    fn hard(self) -> Option<NativeMiseVersion> {
+    pub(crate) fn hard(self) -> Option<NativeMiseVersion> {
         match self {
             Self::Hard(version) => Some(version),
             Self::NoHardMinimum => None,
