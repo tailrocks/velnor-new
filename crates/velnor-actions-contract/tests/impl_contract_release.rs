@@ -249,6 +249,7 @@ fn release_wired_into_stack_validation_with_key_paths() {
         compile_driver: None,
         test_runner: None,
         run_ignored: None,
+        nextest_test_selectors: vec![],
         release: valid_release(),
         binary_release: RustBinaryReleaseConfig::default(),
     };

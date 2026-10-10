@@ -17,6 +17,7 @@ pub mod identity;
 mod manifest_edges;
 pub mod metadata;
 pub mod metadata_edges;
+mod nextest_selector;
 pub mod profile;
 mod profile_select;
 pub mod propose;
@@ -54,6 +55,7 @@ pub use metadata::{
     WorkspaceRecord, parse_metadata_json,
 };
 pub use metadata_edges::{DepKind, LocalEdge, SkippedPathEdge, local_edge_pairs};
+pub use nextest_selector::propose_nextest_selection;
 pub use profile::{
     AMBIGUOUS_DRIVER_CODE, AMBIGUOUS_RUNNER_CODE, CompileDriver, NextestProfile,
     PROFILE_CONFLICT_CODE, ProfileError, ProfileFinding, ProfileInputs, ProfileOutcome,
