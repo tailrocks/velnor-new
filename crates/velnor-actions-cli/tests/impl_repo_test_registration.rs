@@ -78,6 +78,7 @@ fn compiled_test_sources(workspace: &WorkspacePlan) -> Outcome<HashSet<PathBuf>>
             sources.extend(modules::source_closure(
                 &artifact.source,
                 &artifact.dependencies,
+                &nested_target,
             )?);
         }
     }
@@ -224,8 +225,10 @@ pub(super) fn registration_audit(
         }
         let macro_includes = graph::active_macro_includes(&findings)?;
         for include in &findings.includes {
-            if include.path.is_file() {
-                pending.insert(include.path.clone());
+            if let graph::IncludePath::Relative(path) = &include.path
+                && path.is_file()
+            {
+                pending.insert(path.clone());
             }
         }
         for (include, _) in macro_includes {

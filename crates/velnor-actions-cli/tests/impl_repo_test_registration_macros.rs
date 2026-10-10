@@ -4,8 +4,9 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 
 use proc_macro2::{TokenStream, TokenTree};
+use syn::parse::Parser;
 use syn::visit::{self, Visit};
-use syn::{ItemConst, ItemFn, ItemImpl, ItemMacro, ItemStatic, ItemTrait, LitStr, Meta};
+use syn::{Expr, ItemConst, ItemFn, ItemImpl, ItemMacro, ItemStatic, ItemTrait, Lit, LitStr, Meta};
 
 use super::Possibility;
 
@@ -267,6 +268,86 @@ pub(super) fn include_source(tokens: &TokenStream, source: &Path) -> Outcome<Pat
         .parent()
         .ok_or("include source has no parent")?
         .join(literal.value()))
+}
+
+pub(super) fn direct_include_path(
+    tokens: &TokenStream,
+    source: &Path,
+) -> Outcome<super::IncludePath> {
+    let expression: Expr = syn::parse2(tokens.clone())?;
+    match expression {
+        Expr::Lit(expression) => match expression.lit {
+            Lit::Str(literal) => Ok(super::IncludePath::Relative(
+                source
+                    .parent()
+                    .ok_or("include source has no parent")?
+                    .join(literal.value()),
+            )),
+            _ => Err("include! source is not a string literal".into()),
+        },
+        Expr::Macro(expression)
+            if expression.mac.path.is_ident("concat")
+                && matches!(expression.mac.delimiter, syn::MacroDelimiter::Paren(_)) =>
+        {
+            cargo_out_dir_suffix(&expression.mac.tokens).map(super::IncludePath::CargoOutDir)
+        }
+        _ => Err("include! source must be a literal or Cargo OUT_DIR concat".into()),
+    }
+}
+
+fn cargo_out_dir_suffix(tokens: &TokenStream) -> Outcome<PathBuf> {
+    let parser = syn::punctuated::Punctuated::<Expr, syn::Token![,]>::parse_terminated;
+    let arguments = parser.parse2(tokens.clone())?;
+    let mut arguments = arguments.into_iter();
+    let directory = arguments.next().ok_or("OUT_DIR concat has no directory")?;
+    let Expr::Macro(directory) = directory else {
+        return Err("OUT_DIR concat must start with env!(\"OUT_DIR\")".into());
+    };
+    if !directory.mac.path.is_ident("env") {
+        return Err("OUT_DIR concat must start with env!(\"OUT_DIR\")".into());
+    }
+    if !matches!(directory.mac.delimiter, syn::MacroDelimiter::Paren(_)) {
+        return Err("OUT_DIR environment macro must use parentheses".into());
+    }
+    let name: LitStr = syn::parse2(directory.mac.tokens)?;
+    if name.value() != "OUT_DIR" {
+        return Err("OUT_DIR concat references an unexpected environment variable".into());
+    }
+    let mut suffix = String::new();
+    let mut count = 0;
+    for argument in arguments {
+        let Expr::Lit(expression) = argument else {
+            return Err("OUT_DIR concat suffix must contain only string literals".into());
+        };
+        let Lit::Str(literal) = expression.lit else {
+            return Err("OUT_DIR concat suffix must contain only string literals".into());
+        };
+        suffix.push_str(&literal.value());
+        count += 1;
+    }
+    if count == 0 {
+        return Err("OUT_DIR concat has no relative suffix".into());
+    }
+    safe_out_dir_suffix(&suffix)
+}
+
+fn safe_out_dir_suffix(suffix: &str) -> Outcome<PathBuf> {
+    let relative = suffix
+        .strip_prefix('/')
+        .filter(|relative| !relative.is_empty() && !relative.starts_with('/'))
+        .ok_or("OUT_DIR concat suffix must start with one path separator")?;
+    let path = Path::new(relative);
+    if relative.contains(['\\', ':', '\0'])
+        || relative.contains("//")
+        || relative.ends_with('/')
+        || path
+            .components()
+            .any(|part| !matches!(part, std::path::Component::Normal(_)))
+        || path.extension().is_none_or(|extension| extension != "rs")
+    {
+        return Err("OUT_DIR concat suffix is not a safe relative Rust source path".into());
+    }
+    Ok(path.to_path_buf())
 }
 
 fn punct_is(token: &TokenTree, expected: char) -> bool {
