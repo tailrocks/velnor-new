@@ -75,7 +75,15 @@ fn all_requested_products_share_one_dispatch_only_source_bound_workflow()
     let all = all_text(&product);
     for required in [
         "name: Velnor product releases",
-        "workflow_dispatch: {}",
+        "release_family:",
+        "type: choice",
+        "required: false",
+        "default: all",
+        "options:",
+        "          - all",
+        "          - binary",
+        "          - generator",
+        "          - images",
         "cancel-in-progress: false",
         "release-eligibility:",
         "prepare-images:",
@@ -92,6 +100,20 @@ fn all_requested_products_share_one_dispatch_only_source_bound_workflow()
     ] {
         assert!(rendered.contains(required), "missing {required}");
     }
+    for family in ["images", "binary", "generator"] {
+        let condition =
+            format!("inputs.release_family == 'all' || inputs.release_family == '{family}'");
+        assert_eq!(rendered.matches(&condition).count(), 2, "{condition}");
+    }
+    let eligibility = rendered
+        .split("  release-eligibility:\n")
+        .nth(1)
+        .and_then(|jobs| jobs.split("\n  prepare-images:").next())
+        .ok_or("release eligibility job is missing")?;
+    assert!(
+        !eligibility.contains("\n    if:"),
+        "shared exact-source eligibility must always run: {eligibility}"
+    );
     assert_generator_publisher_metadata_surface(&all);
     assert!(!rendered.contains("schedule:"));
     assert!(!rendered.contains("push:"));
@@ -163,6 +185,9 @@ fn only_requested_families_are_composed() -> Result<(), Box<dyn Error>> {
     assert!(rendered.contains("release-images:"));
     assert!(!rendered.contains("prepare-binary:"));
     assert!(!rendered.contains("prepare-generator:"));
+    assert!(rendered.contains("          - all\n          - images\n"));
+    assert!(!rendered.contains("          - binary\n"));
+    assert!(!rendered.contains("          - generator\n"));
     assert_eq!(product.family_workflows.len(), 1);
     assert_eq!(
         product.family_workflows[0].0,
