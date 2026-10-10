@@ -7,11 +7,14 @@
 //! need runner temp plus the numeric run ID instead, and
 //! `write-preseed-manifest-v1` needs runner temp only, and
 //! `resolve-qualification-v1` requires a dispatch event, request file, and
-//! read-only GitHub token. Anything else falls through to Clap, so public
-//! behavior is byte-identical with or without the environment set.
+//! read-only GitHub token. `resolve-task-execution-v1` requires runner temp
+//! and the run ID; it emits only the plan-bound task data frame. Anything else
+//! falls through to Clap, so public behavior is byte-identical with or without
+//! the environment set.
 
 use std::env;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -19,10 +22,10 @@ use clap::Parser;
 use velnor_actions_orchestrator::{
     DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, MERGE_OP, OrchestratorError,
     PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PlanOutputMode,
-    REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, execute_check, init_config, merge_internal,
-    merge_passed, plan_internal, plan_outputs, plan_text_checked, prepare, publish_final_report,
-    publish_plan_files, resolve_root, response_path_for, retrieve_reports, write_preseed_manifest,
-    write_request, write_task_report,
+    REPORT_OP, REQUEST_FILE_ENV, TASK_EXECUTION_RESOLVER_OP, WRITE_REQUEST_OP, execute_check,
+    init_config, merge_internal, merge_passed, plan_internal, plan_outputs, plan_text_checked,
+    prepare, publish_final_report, publish_plan_files, resolve_root, resolve_task_execution,
+    response_path_for, retrieve_reports, write_preseed_manifest, write_request, write_task_report,
 };
 
 use crate::args::{Cli, Command};
@@ -64,6 +67,8 @@ enum InternalOp {
     RepoPolicy,
     /// Read-only predecessor resolution for hosted qualification.
     ResolveQualification,
+    /// Data-only task execution record resolution for a generated wrapper.
+    ResolveTaskExecution,
 }
 
 /// Validated private request: operation plus exact request-file path.
@@ -133,8 +138,15 @@ fn gate_request() -> Option<InternalRequest> {
         Ok(tag) if crate::dispatch_qualification::is_resolver_op(tag) => {
             InternalOp::ResolveQualification
         }
+        Ok(tag) if tag == TASK_EXECUTION_RESOLVER_OP => InternalOp::ResolveTaskExecution,
         _ => return None,
     };
+    if op == InternalOp::ResolveTaskExecution {
+        if !env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
+            return None;
+        }
+        return runner_velnor_dir().map(|path| InternalRequest { op, path });
+    }
     if op == InternalOp::Fetch || op == InternalOp::Report || op == InternalOp::ExecuteCheck {
         if env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
             return runner_velnor_dir().map(|path| InternalRequest { op, path });
@@ -177,7 +189,8 @@ fn gate_request() -> Option<InternalRequest> {
         | InternalOp::Report
         | InternalOp::PreseedManifest
         | InternalOp::RepoPolicy
-        | InternalOp::ExecuteCheck => {}
+        | InternalOp::ExecuteCheck
+        | InternalOp::ResolveTaskExecution => {}
     }
     Some(InternalRequest { op, path })
 }
@@ -221,6 +234,13 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::Publish => run_publish_internal(&request.path),
         InternalOp::RepoPolicy => crate::dispatch_repo_policy::run(&request.path),
         InternalOp::ResolveQualification => crate::dispatch_qualification::run(&request.path),
+        InternalOp::ResolveTaskExecution => match resolve_task_execution() {
+            Ok(frame) => match std::io::stdout().lock().write_all(&frame) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => fail_internal(&format!("write task execution frame: {error}")),
+            },
+            Err(error) => fail_internal(&error.to_string()),
+        },
     }
 }
 

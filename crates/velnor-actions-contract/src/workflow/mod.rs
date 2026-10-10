@@ -105,7 +105,7 @@ pub use step_identity::{MBX_WORKSPACE_CLEAN_CONDITION, StepId, StepRole};
 pub use task_execution_manifest::{
     MAX_TASK_EXECUTION_FRAME_BYTES, MAX_TASK_EXECUTION_RECORDS, TASK_EXECUTION_FRAME_MAGIC,
     TASK_EXECUTION_MANIFEST_PATH, TASK_EXECUTION_MANIFEST_SCHEMA, TaskExecutionManifestEntryV1,
-    TaskExecutionManifestV1,
+    TaskExecutionManifestV1, task_execution_manifest_marker_line,
 };
 pub use timeout::JobTimeout;
 pub use trust::{Trust, trust_for_event};
