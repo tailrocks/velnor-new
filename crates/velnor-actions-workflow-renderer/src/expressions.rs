@@ -132,8 +132,10 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
     };
     for inner in spans {
         let composite_input = composite
-            && inner.strip_prefix("inputs.")
-                == Some(crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT);
+            && inner.strip_prefix("inputs.").is_some_and(|name| {
+                name == crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT
+                    || is_declared_task_input(name)
+            });
         if !ENV_EXPRESSIONS.contains(&inner)
             && !is_matrix_field(inner)
             && !composite_input
@@ -143,6 +145,22 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
         }
     }
     Ok(())
+}
+
+fn is_declared_task_input(name: &str) -> bool {
+    if let Some(index) = name.strip_prefix("argv_") {
+        return !index.is_empty()
+            && index.bytes().all(|byte| byte.is_ascii_digit())
+            && index
+                .parse::<usize>()
+                .is_ok_and(|value| value.to_string() == index);
+    }
+    name.strip_prefix("env_").is_some_and(|key| {
+        !key.is_empty()
+            && key
+                .bytes()
+                .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_')
+    })
 }
 
 /// Declared provider token inputs use an uppercase Actions secret handle.
