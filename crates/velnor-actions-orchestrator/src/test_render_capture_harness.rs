@@ -33,12 +33,45 @@ fn capture_exact_consumer_marked_workflow_before_size_guard()
     );
 
     velnor_actions_workflow_renderer::render::test_render_capture::clear();
-    let tree = crate::render_staged_tree_with(&preparation, None)?;
+    let rendered = crate::render_staged_tree_with(&preparation, None);
+    let capture = velnor_actions_workflow_renderer::render::test_render_capture::take();
+    let captured = capture.is_some();
+    if let Some(capture) = capture {
+        let canonical_bytes = capture.canonical.len();
+        let selected_bytes = capture.selected.len();
+        std::fs::write(output.join("canonical.yml"), capture.canonical)?;
+        std::fs::write(output.join("selected.yml"), capture.selected)?;
+        eprintln!(
+            "pre-cap capture written: canonical_bytes={canonical_bytes} selected_bytes={selected_bytes}"
+        );
+    }
+    let tree = match rendered {
+        Ok(tree) => tree,
+        Err(error)
+            if captured
+                && capture_overflow_matches(
+                    &error.to_string(),
+                    output.join("selected.yml").as_path(),
+                )? =>
+        {
+            return Ok(());
+        }
+        Err(error) => return Err(error.into()),
+    };
+    if !captured {
+        return Err("render boundary did not record a workflow".into());
+    }
     crate::validate::validate_staged(&tree)?;
-    let capture = velnor_actions_workflow_renderer::render::test_render_capture::take()
-        .ok_or("render boundary did not record a workflow")?;
-    std::fs::write(output.join("canonical.yml"), capture.canonical)?;
-    std::fs::write(output.join("selected.yml"), capture.selected)?;
     assert!(tree.get(".github/workflows/ci.yml").is_some());
     Ok(())
+}
+
+fn capture_overflow_matches(
+    error: &str,
+    selected_path: &std::path::Path,
+) -> Result<bool, std::io::Error> {
+    let selected_bytes = std::fs::read(selected_path)?.len();
+    Ok(error.contains(&format!(
+        "workflow_too_large:.github/workflows/ci.yml:{selected_bytes}:500000"
+    )))
 }
