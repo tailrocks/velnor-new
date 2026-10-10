@@ -61,6 +61,11 @@ fn mbx_route_separates_action_identity_from_mise_probe() -> Result<(), String> {
         "identity probe invocation: {invocation:?}"
     );
     assert_eq!(invocation[0], OsString::from("mise"));
+    let command = selection
+        .command(&pinned())
+        .map_err(|err| err.to_string())?;
+    assert_eq!(command.argv(), invocation);
+    assert_eq!(command.program(), "mise");
     assert!(velnor_actions_contract::is_valid_digest(
         selection.cache_format_id()
     ));

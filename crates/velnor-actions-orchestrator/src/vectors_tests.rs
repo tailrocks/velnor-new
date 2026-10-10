@@ -211,15 +211,38 @@ fn task_payload_program_follows_route_driver() {
 fn task_runner_tools_follow_test_runner() {
     let catalog = ToolCatalog::pinned();
     let nextest = catalog.tool_spec(PinnedTool::Nextest);
-    for (runner, want) in [
-        (TestRunner::CargoTest, false),
-        (TestRunner::CargoNextest, true),
-    ] {
-        let mut task = group_with_driver(CompileDriver::Cargo);
-        task.identity.test_runner = runner.as_str().to_owned();
-        let argv = task_argv(&task, &catalog).expect("task argv");
-        assert_eq!(argv.contains(&nextest), want, "{} nextest", runner.as_str());
+    for (driver, program) in [(CompileDriver::Cargo, "cargo"), (CompileDriver::Mbx, "mbx")] {
+        for (runner, want) in [
+            (TestRunner::CargoTest, false),
+            (TestRunner::CargoNextest, true),
+        ] {
+            let mut task = group_with_driver(driver);
+            task.identity.test_runner = runner.as_str().to_owned();
+            let argv = task_argv(&task, &catalog).expect("task argv");
+            let at = argv.iter().position(|arg| arg == "--").expect("separator");
+            assert_eq!(argv[at + 1], program);
+            assert_eq!(argv.contains(&nextest), want, "{} nextest", runner.as_str());
+            if driver == CompileDriver::Mbx {
+                assert!(
+                    !argv.iter().any(|arg| arg.contains("mr-boxington")),
+                    "action-owned MBX must not become a Mise selector: {argv:?}"
+                );
+            }
+        }
     }
+}
+
+#[test]
+fn unknown_compile_driver_fails_instead_of_defaulting_to_cargo() {
+    let mut task = group_with_driver(CompileDriver::Cargo);
+    task.identity.compile_driver = "future-driver".to_owned();
+    let error = task_argv(&task, &ToolCatalog::pinned()).expect_err("unknown route must fail");
+    assert!(
+        error
+            .to_string()
+            .contains("unknown_compile_driver:future-driver"),
+        "route miss reason: {error}"
+    );
 }
 
 #[test]
