@@ -1,7 +1,6 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{BuildTask, VelnorConfig, WorkflowTask};
-use velnor_actions_mise::catalog::{MR_BOXINGTON_VERSION, RUST_VERSION};
 use velnor_actions_workflow_renderer::verification_jobs::{BuildTaskPolicy, BuildTaskTool};
 
 use super::build_task_lock_validation::{
@@ -158,7 +157,7 @@ fn selected_task_tools(
     task: &BuildTask,
     task_config: &NativeMiseConfig,
     root: &RootBuildTaskSources<'_>,
-) -> Result<(Vec<BuildTaskTool>, Vec<(String, String)>), OrchestratorError> {
+) -> Result<(Vec<BuildTaskTool>, BTreeSet<(String, String)>), OrchestratorError> {
     let mut merged_tasks = root.mise_config.clone();
     merged_tasks.tasks.extend(task_config.tasks.clone());
     let local_task_tools =
@@ -187,7 +186,7 @@ fn source_task_lock_digest(
     task: &BuildTask,
     discovery: &Discovery,
     root: &RootBuildTaskSources<'_>,
-    source_task_tools: &[(String, String)],
+    source_task_tools: &BTreeSet<(String, String)>,
 ) -> Result<Option<String>, OrchestratorError> {
     let task_lock_path = task.source.mise_lock_path();
     let task_lock = if task_lock_path == "mise.lock" {
