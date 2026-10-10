@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
 use crate::build_tasks::{
-    validate_config_shape, validate_source_lock_subset, validate_source_task_lock_requests,
+    source_task_tool_requests, validate_config_shape, validate_source_lock_subset,
+    validate_source_task_lock_requests,
 };
 use crate::native_tool_input::{NativeMiseConfig, NativeToolSource, native_mise_source};
 use crate::native_tool_lock::NativeMiseLock;
@@ -53,6 +54,13 @@ fn swiftlint_lock(rows: &str) -> String {
     format!("lockfile_version = 3\n\n[[tools.swiftlint]]\n{rows}")
 }
 
+fn root_swiftlint_lock() -> NativeMiseLock {
+    let rows = format!(
+        "{SWIFTLINT_ROW}\n\"platforms.macos-x64\" = {{ checksum = \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", url = \"https://example.invalid/swiftlint-x64.zip\" }}"
+    );
+    lock(&swiftlint_lock(&rows))
+}
+
 #[test]
 fn current_root_mise_shape_accepts_pinned_mbx_rust_without_wrappers() {
     let config = project(ROOT_CONFIG);
@@ -81,13 +89,11 @@ fn legacy_wrapper_and_selected_tool_drift_fail_closed() {
 
 #[test]
 fn accepts_task_lock_as_exact_supported_subset_of_root_lock() {
-    let root = lock(&format!(
-        "{}\n[[tools.mise]]\nversion = \"2026.10.7\"\nbackend = \"aqua:jdx/mise\"\nspecifiers = [\"2026.10.7\"]\n",
-        swiftlint_lock(SWIFTLINT_ROW)
-    ));
+    let root = root_swiftlint_lock();
     let source = lock(&swiftlint_lock(SWIFTLINT_ROW));
 
-    validate_source_lock_subset(&source, &root).expect("exact task-local row is in root lock");
+    validate_source_lock_subset(&source, &root)
+        .expect("exact selected platform row is in root lock");
 }
 
 #[test]
@@ -100,6 +106,17 @@ fn rejects_foreign_or_incompatible_task_lock_rows() {
         &SWIFTLINT_ROW.replace("0123456789abcdef", "fedcba9876543210"),
     ));
     assert!(validate_source_lock_subset(&incompatible, &root).is_err());
+}
+
+#[test]
+fn rejects_task_lock_platforms_not_bound_by_the_root_row() {
+    let root = lock(&swiftlint_lock(SWIFTLINT_ROW));
+    let source_rows = format!(
+        "{SWIFTLINT_ROW}\n\"platforms.macos-x64\" = {{ checksum = \"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", url = \"https://example.invalid/swiftlint-x64.zip\" }}"
+    );
+    let source = lock(&swiftlint_lock(&source_rows));
+
+    assert!(validate_source_lock_subset(&source, &root).is_err());
 }
 
 #[test]
@@ -130,10 +147,11 @@ run = "swiftlint lint --strict"
 tools = { swiftlint = "0.65.1" }
 "#,
     );
-    let root_lock = lock(&swiftlint_lock(SWIFTLINT_ROW));
+    let root_lock = root_swiftlint_lock();
     let source_lock = lock(&swiftlint_lock(SWIFTLINT_ROW));
+    let source_requests = source_task_tool_requests(&source_config).expect("valid task tools");
     validate_source_task_lock_requests(
-        &source_config,
+        &source_requests,
         Some(&source_lock),
         false,
         &root_config,
@@ -150,7 +168,7 @@ tools = { swiftlint = "0.65.1" }
     let unrelated_lock = lock(&unrelated_row);
     assert!(
         validate_source_task_lock_requests(
-            &source_config,
+            &source_requests,
             Some(&unrelated_lock),
             false,
             &root_config,
@@ -166,7 +184,7 @@ tools = { swiftlint = "0.65.1" }
     ));
     assert!(
         validate_source_task_lock_requests(
-            &source_config,
+            &source_requests,
             Some(&source_lock),
             false,
             &wrong_version_config,
