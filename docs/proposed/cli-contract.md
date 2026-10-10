@@ -324,12 +324,14 @@ root, bound to that canonical worktree and containing one persistent same-
 filesystem spare; it is staging state, not generated output. Generation clears
 only spare children and never removes or recreates the container or spare root.
 In-place generation requires atomic directory exchange and is supported on
-Linux and macOS; other platforms fail before creating staging state. Preview
-generation does not use this restriction. In-place generation identifies the
-repository mount and fails closed if `.github`, the private staging state, or
-any real output directory is on another mount. It repeats the output scan
-immediately before exchange and before cleanup. Mount topology must remain
-stable during the operation; path-based cleanup does not claim protection
+Linux and macOS; other platforms fail before creating staging state. Linux
+requires kernel 5.8 or newer with `STATX_MNT_ID` reported; Ubuntu 22.04 and
+newer require a compatible running kernel. Otherwise generation fails closed
+before staging. Preview generation does not use this restriction. In-place
+generation identifies the repository mount and fails closed if `.github`, the
+private staging state, or any real output directory is on another mount. It
+repeats the output scan immediately before exchange and before cleanup. Mount
+topology must remain stable during the operation; path-based cleanup does not claim protection
 against a privileged concurrent mount change.
 `plan` and preview generation do not create or modify this state. An existing
 `.github` root and every real directory below it must be owned by the caller;
