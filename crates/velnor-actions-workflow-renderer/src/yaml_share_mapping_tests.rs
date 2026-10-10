@@ -20,12 +20,14 @@ fn repeated_job_and_step_input_maps_are_anchored_without_changing_expanded_data(
             Yaml::str("${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}"),
         ),
     ]);
-    let step = Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Restore build cache")),
-        ("uses".to_owned(), Yaml::str("actions/cache@v4")),
-        ("with".to_owned(), with),
-        ("env".to_owned(), env.clone()),
-    ]);
+    let step = |name: &str| {
+        Yaml::Map(vec![
+            ("name".to_owned(), Yaml::str(name)),
+            ("uses".to_owned(), Yaml::str("actions/cache@v4")),
+            ("with".to_owned(), with.clone()),
+            ("env".to_owned(), env.clone()),
+        ])
+    };
     let document = Yaml::Map(vec![
         (
             "metadata".to_owned(),
@@ -38,14 +40,20 @@ fn repeated_job_and_step_input_maps_are_anchored_without_changing_expanded_data(
                     "first".to_owned(),
                     Yaml::Map(vec![
                         ("env".to_owned(), env.clone()),
-                        ("steps".to_owned(), Yaml::Seq(vec![step.clone()])),
+                        (
+                            "steps".to_owned(),
+                            Yaml::Seq(vec![step("Restore build cache one")]),
+                        ),
                     ]),
                 ),
                 (
                     "second".to_owned(),
                     Yaml::Map(vec![
                         ("env".to_owned(), env),
-                        ("steps".to_owned(), Yaml::Seq(vec![step])),
+                        (
+                            "steps".to_owned(),
+                            Yaml::Seq(vec![step("Restore build cache two")]),
+                        ),
                     ]),
                 ),
             ]),
@@ -58,12 +66,53 @@ fn repeated_job_and_step_input_maps_are_anchored_without_changing_expanded_data(
     assert!(rendered.contains("env: *m1"));
     assert!(rendered.contains("with: &m2"));
     assert!(rendered.contains("with: *m2"));
-    assert!(rendered.contains("- &s1"));
-    assert!(rendered.contains("- *s1"));
+    assert!(!rendered.contains("- &s"));
     assert!(
         rendered.contains("metadata:\n  env:\n"),
         "outside jobs is not shared"
     );
+    assert_eq!(expand_aliases(&document)?, expand_aliases(&shared)?);
+    Ok(())
+}
+
+#[test]
+fn identical_step_maps_are_anchored_without_changing_expanded_data() -> Result<(), String> {
+    let step = Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str("Repeated setup")),
+        ("uses".to_owned(), Yaml::str("actions/cache@v4")),
+        (
+            "with".to_owned(),
+            Yaml::Map(vec![(
+                "path".to_owned(),
+                Yaml::str("a sufficiently long repeated cache path"),
+            )]),
+        ),
+        (
+            "env".to_owned(),
+            Yaml::Map(vec![(
+                "LONG_SETTING".to_owned(),
+                Yaml::str("same sufficiently long repeated value"),
+            )]),
+        ),
+    ]);
+    let document = Yaml::Map(vec![(
+        "jobs".to_owned(),
+        Yaml::Map(vec![
+            (
+                "first".to_owned(),
+                Yaml::Map(vec![("steps".to_owned(), Yaml::Seq(vec![step.clone()]))]),
+            ),
+            (
+                "second".to_owned(),
+                Yaml::Map(vec![("steps".to_owned(), Yaml::Seq(vec![step]))]),
+            ),
+        ]),
+    )]);
+    let shared = share_repeated_workflow_nodes(document.clone());
+    let rendered = render_yaml(&shared);
+
+    assert!(rendered.contains("- &s1"));
+    assert!(rendered.contains("- *s1"));
     assert_eq!(expand_aliases(&document)?, expand_aliases(&shared)?);
     Ok(())
 }
