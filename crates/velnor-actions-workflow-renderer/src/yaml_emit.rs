@@ -1,10 +1,10 @@
 //! YAML output primitives for the typed workflow tree.
 
-use super::{AnchorName, Yaml};
+use super::Yaml;
 
 /// Render a document with a trailing newline.
 #[must_use]
-pub fn render_yaml(value: &Yaml) -> String {
+pub(super) fn render_yaml(value: &Yaml) -> String {
     let mut out = String::new();
     emit_node(value, 0, &mut out);
     out
@@ -12,7 +12,7 @@ pub fn render_yaml(value: &Yaml) -> String {
 
 /// Quote a scalar only when plain style would be unsafe or ambiguous.
 #[must_use]
-pub fn quote_scalar(value: &str) -> String {
+pub(super) fn quote_scalar(value: &str) -> String {
     if can_emit_plain(value) {
         value.to_owned()
     } else {
