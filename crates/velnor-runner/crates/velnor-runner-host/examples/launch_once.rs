@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 
-use velnor_runner_host::{Journal, Started, connect_unix, launch_once};
+use velnor_runner_host::{HostConfig, Journal, Started, connect_unix, launch_once};
 use zeroize::Zeroize;
 
 #[tokio::main]
@@ -19,6 +19,10 @@ async fn main() -> ExitCode {
 }
 
 async fn run(pat: &str) -> ExitCode {
+    let resource_budget = match host_resource_budget() {
+        Ok(budget) => budget,
+        Err(code) => return code,
+    };
     let socket = match docker_socket() {
         Ok(socket) => socket,
         Err(code) => return code,
@@ -41,7 +45,28 @@ async fn run(pat: &str) -> ExitCode {
             return ExitCode::from(1);
         }
     };
-    match launch_once(pat, "tailrocks", "velnor-new", &docker, &journal).await {
+    let engine_id = match docker.info().await {
+        Ok(info) => info.id.filter(|id| !id.trim().is_empty()),
+        Err(_) => None,
+    };
+    let Some(engine_id) = engine_id else {
+        eprintln!("launch_once: Docker engine identity unavailable");
+        return ExitCode::from(1);
+    };
+    if journal.bind_engine(&engine_id).await.is_err() {
+        eprintln!("launch_once: journal engine binding failed");
+        return ExitCode::from(1);
+    }
+    match launch_once(
+        pat,
+        "tailrocks",
+        "velnor-new",
+        &docker,
+        &journal,
+        resource_budget,
+    )
+    .await
+    {
         Ok(report) => {
             print_workers(report.set_id, &report.workers);
             ExitCode::SUCCESS
@@ -51,6 +76,14 @@ async fn run(pat: &str) -> ExitCode {
             ExitCode::from(1)
         }
     }
+}
+
+fn host_resource_budget() -> Result<velnor_runner_host::ResourceBudget, ExitCode> {
+    let home = std::env::var("HOME").map_err(|_| ExitCode::from(1))?;
+    let path = PathBuf::from(home).join("Library/Application Support/Velnor/host.toml");
+    let text = std::fs::read_to_string(path).map_err(|_| ExitCode::from(1))?;
+    let config = HostConfig::parse(&text).map_err(|_| ExitCode::from(1))?;
+    config.resource_budget().map_err(|_| ExitCode::from(1))
 }
 
 fn print_workers(set_id: i64, workers: &[Started]) {

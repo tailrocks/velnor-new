@@ -112,6 +112,16 @@ impl Journal {
         journal_schema::instance_id(&conn).await
     }
 
+    /// Read the Docker engine identity bound to this journal.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Journal`] when the binding is absent or invalid.
+    pub(crate) async fn engine_id(&self) -> Result<String, HostError> {
+        let conn = self.connection().await?;
+        journal_schema::engine_id(&conn).await
+    }
+
     /// Read the monotonic state revision committed with journal writes.
     ///
     /// # Errors

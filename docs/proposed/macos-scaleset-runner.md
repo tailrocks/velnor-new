@@ -174,6 +174,9 @@ volumes have no per-job storage-size limit here. Free-space checks cannot stop
 a job from consuming the remaining Docker-root storage, so enforced storage
 isolation remains unproven.
 
+The production resource-admission path, guest measurements, and controller-only
+probe boundary are specified in the [Scale Set resource-admission contract](runner-resource-admission.md).
+
 `/var/run/docker.sock` inside the runner and inside the private daemon resolves
 to that worker's socket, never the outer engine socket. Named volumes back
 work, temp, actions, tools, and the socket. JIT is delivered on a short-lived

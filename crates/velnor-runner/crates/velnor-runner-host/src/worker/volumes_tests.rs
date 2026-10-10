@@ -10,7 +10,7 @@ use tokio::net::{UnixListener, UnixStream};
 
 use crate::launch::admission;
 use crate::worker::{create_named_volumes, remove_worker_volumes, worker_id_for_name};
-use crate::{HostError, IntentState, Outcome, dind_create};
+use crate::{HostError, IntentState, Outcome};
 
 #[path = "volumes_effect_tests.rs"]
 mod effect_tests;
@@ -85,8 +85,8 @@ async fn created_volumes_have_exact_worker_and_role_labels() -> Result<(), Strin
         .map(|(name, role)| http(201, &volume_json(name, WORKER, role)))
         .collect();
     let stub = DockerStub::open(responses)?;
-    let plan = dind_create(WORKER).map_err(|error| error.to_string())?;
-    let created = create_named_volumes(&stub.docker, WORKER, &plan.mounts).await;
+    let mounts = crate::worker::dind_mounts(WORKER).map_err(|error| error.to_string())?;
+    let created = create_named_volumes(&stub.docker, WORKER, &mounts).await;
     let requests = stub.finish().await?;
 
     assert_eq!(created, Ok(()));

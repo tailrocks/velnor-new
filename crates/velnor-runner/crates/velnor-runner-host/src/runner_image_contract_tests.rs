@@ -29,7 +29,11 @@ fn jit_work_folder_resolves_to_both_worker_mounts() -> Result<(), String> {
     assert_eq!(resolved, runner_work_path());
 
     let runner = runner_plan("runner-contract").map_err(|error| error.to_string())?;
-    let dind = dind_create("runner-contract").map_err(|error| error.to_string())?;
+    let dind = dind_create(
+        "runner-contract",
+        crate::worker::test_resource_budget().map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())?;
     assert_eq!(runner.mounts[1].target, resolved);
     assert_eq!(dind.mounts[1].target, resolved);
     assert!(runner.mounts.iter().all(|mount| mount.target != "/tmp"));

@@ -15,6 +15,7 @@ use crate::journal::Journal;
 use crate::listen::{Link, Secret, admin_link};
 use crate::reconcile::Reconcile;
 use crate::scale_set::EnsureError;
+use crate::worker::ResourceBudget;
 use crate::worker::Started;
 
 mod bind;
@@ -30,10 +31,13 @@ mod inspect;
 #[cfg(all(test, unix))]
 mod inspect_tests;
 mod name_taken;
+mod preflight;
+mod resource_capacity;
 mod runner_dir;
 
 pub(crate) use drive::{Drive, Lane, Rest};
 pub(crate) use inspect::classify_inspect;
+pub(crate) use slot::HOLDS_ROWS_SQL;
 mod mint_origin;
 mod pressure;
 mod session;
@@ -88,16 +92,11 @@ pub async fn launch_once(
     repo: &str,
     docker: &bollard::Docker,
     journal: &Journal,
+    resource_budget: ResourceBudget,
 ) -> Result<LaunchReport, EnsureError> {
     let ceiling = job_capacity();
-    let capacity = crate::guest::discover_guest_capacity(docker, ceiling)
-        .await
-        .map_err(|_| EnsureError::Unexpected {
-            status: 0,
-            step: "docker budget",
-        })?;
-    let _capacity = install_job_capacity(capacity);
-    slot::release_exited(journal, docker).await?;
+    let capacity = preflight::run(docker, docker, journal, resource_budget, ceiling).await?;
+    let _capacity = install_job_capacity(capacity.poll_header());
     let set = ensure_product_scale_set(pat, owner, repo)?;
     if std::env::var("VELNOR_RECONCILE").ok().as_deref() == Some("1") {
         let decision = gate::reconcile_gate(journal, docker).await?;
@@ -113,7 +112,14 @@ pub async fn launch_once(
     let mut link = admin_link(pat, owner, repo)?;
     let admin = Secret::new(link.token());
     let (session, row) = session::open_session(&mut link, set.id, admin.expose(), journal).await?;
-    let rest = Rest { owner, repo, pat };
+    let rest = Rest {
+        owner,
+        repo,
+        pat,
+        resource_budget: Some(resource_budget),
+        static_capacity: capacity.permits_start(),
+        guest_admission: drive::GuestAdmission::Unavailable,
+    };
     let driven = turn::poll_and_drive(
         &mut link,
         set.id,
@@ -193,12 +199,19 @@ async fn scale_session(
     docker: &bollard::Docker,
     rest: Rest<'_>,
 ) -> Result<Option<Started>, EnsureError> {
+    if !rest.permits_start() {
+        return Ok(None);
+    }
     let population = session
         .statistics()
         .map_or(0, velnor_runner_github::Statistics::assigned_population);
     if population <= 0 {
         return Ok(None);
     }
+    let resource_budget = rest.resource_budget.ok_or(EnsureError::Unexpected {
+        status: 0,
+        step: "resource budget",
+    })?;
     let mut ctx = Drive::from_rest(
         set_id,
         String::new(),
@@ -217,7 +230,7 @@ async fn scale_session(
     steps::scale_unacked(&mut lane, &ctx, journal, &name, |volume, jit, bind| {
         let volume = volume.to_owned();
         let payload = jit.to_vec();
-        async move { bind::start_bound(docker, &volume, &payload, &bind).await }
+        async move { bind::start_bound(docker, &volume, &payload, resource_budget, &bind).await }
     })
     .await
 }
@@ -255,10 +268,17 @@ async fn drive_ready<T>(
 where
     T: Transport + Lane,
 {
+    if !rest.permits_start() {
+        return Ok(None);
+    }
     let except = steps::mint_subject(ready.polled);
     if slot::busy_except(journal, docker, capacity, except.as_deref()).await? {
         return Ok(None);
     }
+    let resource_budget = rest.resource_budget.ok_or(EnsureError::Unexpected {
+        status: 0,
+        step: "resource budget",
+    })?;
     let mut ctx = Drive::from_rest(
         ready.set_id,
         ready.path,
@@ -270,7 +290,7 @@ where
     drive_offer(lane, &ctx, ready.polled, journal, |volume, jit, bind| {
         let volume = volume.to_owned();
         let payload = jit.to_vec();
-        async move { bind::start_bound(docker, &volume, &payload, &bind).await }
+        async move { bind::start_bound(docker, &volume, &payload, resource_budget, &bind).await }
     })
     .await
 }
@@ -301,6 +321,9 @@ fn ack_ready(
             owner: "",
             repo: "",
             pat: "",
+            resource_budget: None,
+            static_capacity: false,
+            guest_admission: drive::GuestAdmission::Unavailable,
         },
     );
     let admin = link.base().to_owned();

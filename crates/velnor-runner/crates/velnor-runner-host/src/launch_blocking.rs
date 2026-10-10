@@ -8,6 +8,7 @@ use crate::error::HostError;
 use crate::journal::Journal;
 use crate::launch::{self, LaunchReport};
 use crate::scale_set::EnsureError;
+use crate::worker::ResourceBudget;
 
 /// `launch_once` failed, or the local socket or journal did.
 #[derive(Debug, thiserror::Error)]
@@ -36,13 +37,21 @@ pub fn launch_blocking(
     endpoint: &str,
     journal_path: &Path,
     max_jobs: u32,
+    resource_budget: ResourceBudget,
 ) -> Result<LaunchReport, ListenFault> {
     let _guard = launch::install_job_capacity(max_jobs);
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|_| HostError::Journal)?;
-    runtime.block_on(drive(pat, owner, repo, endpoint, journal_path))
+    runtime.block_on(drive(
+        pat,
+        owner,
+        repo,
+        endpoint,
+        journal_path,
+        resource_budget,
+    ))
 }
 
 async fn drive(
@@ -51,6 +60,7 @@ async fn drive(
     repo: &str,
     endpoint: &str,
     journal_path: &Path,
+    resource_budget: ResourceBudget,
 ) -> Result<LaunchReport, ListenFault> {
     let docker = connect_unix(endpoint)?;
     let engine_id = docker
@@ -67,7 +77,7 @@ async fn drive(
     let revision = journal.revision().await?;
     lineage_guard.verify_lineage(&journal_path, &instance_id, revision)?;
     journal.attach_lineage_guard(lineage_guard.clone())?;
-    let launched = launch::launch_once(pat, owner, repo, &docker, &journal).await;
+    let launched = launch::launch_once(pat, owner, repo, &docker, &journal, resource_budget).await;
     let revision = journal.revision().await?;
     lineage_guard.advance_revision(revision)?;
     Ok(launched?)

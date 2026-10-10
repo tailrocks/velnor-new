@@ -6,6 +6,13 @@ use crate::reconcile::IntentRow;
 use crate::scale_set::EnsureError;
 use crate::stage::PairEngine;
 
+/// SQL predicate matching [`holds`] for bounded capacity reads.
+pub(crate) const HOLDS_ROWS_SQL: &str = concat!(
+    "kind = 'launch' AND cleanup_proven = 0 AND ",
+    "(state != 'failed' OR docker_id IS NOT NULL OR dind_id IS NOT NULL ",
+    "OR worker_volume IS NOT NULL OR github_runner_id IS NOT NULL)"
+);
+
 pub(super) async fn busy_except<E: PairEngine + ?Sized>(
     journal: &Journal,
     engine: &E,
@@ -49,8 +56,11 @@ fn idless_self(row: &IntentRow, except: Option<&str>) -> bool {
     // An attempted acquire or JIT may have applied its effect. That row keeps
     // its reservation even without worker ids; only a never-attempted empty
     // row is safe to except for its own redelivered mint.
-    row.subject == subject
-        && row.state == IntentState::Uncertain
+    row.subject == subject && idless_unattempted(row)
+}
+
+pub(super) fn idless_unattempted(row: &IntentRow) -> bool {
+    row.state == IntentState::Uncertain
         && !row.acquire_attempted
         && !row.jit_requested
         && row.docker_id.as_deref().is_none_or(str::is_empty)

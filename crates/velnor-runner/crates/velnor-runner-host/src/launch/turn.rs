@@ -39,16 +39,11 @@ pub(super) async fn poll_and_drive(
     let mut workers = Vec::new();
     let ceiling = capacity::job_capacity();
     let capacity = super::pressure::advertise(ceiling);
-    let population = session
-        .statistics()
-        .map_or(0, velnor_runner_github::Statistics::assigned_population);
-    let occupied = slot::occupied(journal).await?;
-    let running = slot::running_count(journal, docker).await?;
-    if !capacity::statistics_blocked(occupied, running, capacity, population)
-        && let Some(started) =
-            scale_session(link, set_id, session, admin_token, journal, docker, rest).await?
-    {
-        workers.push(started);
+    if rest.resource_budget.is_none() {
+        return Err(EnsureError::Unexpected {
+            status: 0,
+            step: "resource budget",
+        });
     }
     let completion = CompletionWorker::start(
         journal.clone(),
@@ -57,6 +52,19 @@ pub(super) async fn poll_and_drive(
         admin_token.to_owned(),
     )
     .map_err(|_| completion_error())?;
+    if rest.permits_start() {
+        let population = session
+            .statistics()
+            .map_or(0, velnor_runner_github::Statistics::assigned_population);
+        let occupied = slot::occupied(journal).await?;
+        let running = slot::running_count(journal, docker).await?;
+        if !capacity::statistics_blocked(occupied, running, capacity, population)
+            && let Some(started) =
+                scale_session(link, set_id, session, admin_token, journal, docker, rest).await?
+        {
+            workers.push(started);
+        }
+    }
     let target = capacity::admit_target(capacity);
     let mut turn = Turn {
         link,
@@ -68,9 +76,7 @@ pub(super) async fn poll_and_drive(
         completion: &completion,
         capacity,
         target,
-        owner: rest.owner,
-        repo: rest.repo,
-        pat: rest.pat,
+        rest,
         cursor: 0,
         steady_retry: None,
     };
@@ -155,16 +161,16 @@ struct Turn<'a> {
     completion: &'a CompletionWorker,
     capacity: u32,
     target: u32,
-    owner: &'a str,
-    repo: &'a str,
-    pat: &'a str,
+    rest: super::drive::Rest<'a>,
     cursor: i64,
     steady_retry: Option<std::time::Instant>,
 }
 
 impl Turn<'_> {
     async fn drive_poll(&mut self, workers: &mut Vec<Started>) -> Result<bool, EnsureError> {
-        self.fit_pressure().await?;
+        if self.rest.permits_start() {
+            self.fit_pressure().await?;
+        }
         let (saved, path) = point_at_queue(self.link, &self.session.message_queue_url)?;
         let queue = saved.as_ref().map(|_| self.link.base().to_owned());
         let now = std::time::Instant::now();
@@ -187,7 +193,7 @@ impl Turn<'_> {
         if intake.wake_cleanup {
             self.completion.notify();
         }
-        if intake.completion_only {
+        if intake.completion_only || !self.rest.permits_start() {
             return Ok(false);
         }
         let started = u32::try_from(workers.len()).unwrap_or(u32::MAX);
@@ -225,6 +231,10 @@ impl Turn<'_> {
         match decision {
             // HTTP 202 keeps the session open. A job can arrive on a later poll.
             Admit::Stay => self.stay(workers).await,
+            Admit::Hold | Admit::Start { .. } if !self.rest.permits_start() => {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                Ok(false)
+            }
             Admit::Hold => self.hold().await,
             Admit::Stop => Ok(true),
             Admit::Error => Err(EnsureError::Unexpected {
@@ -255,11 +265,7 @@ impl Turn<'_> {
             admin,
             queue: queue.clone(),
         };
-        let rest = Rest {
-            owner: self.owner,
-            repo: self.repo,
-            pat: self.pat,
-        };
+        let rest: Rest<'_> = self.rest;
         let launched = drive_ready(
             &mut lane,
             Ready {

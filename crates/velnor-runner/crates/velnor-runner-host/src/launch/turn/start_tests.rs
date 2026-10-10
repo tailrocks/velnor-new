@@ -11,6 +11,7 @@ use crate::launch_harness::{Mode, Script, absent, assigned_wait, open};
 use crate::worker::Started;
 use crate::{EnsureError, IntentState};
 
+mod guest_admission;
 mod legacy_failed;
 
 const INITIAL_SESSION: &[u8] = br#"{"sessionId":"session","messageQueueUrl":"https://queue.example/messages","messageQueueAccessToken":"queue-token","statistics":{"totalAvailableJobs":0,"totalAcquiredJobs":0,"totalAssignedJobs":0,"totalRunningJobs":0,"totalRegisteredRunners":0,"totalBusyRunners":0,"totalIdleRunners":0}}"#;
@@ -36,6 +37,9 @@ pub(super) fn rest() -> crate::launch::Rest<'static> {
         owner: "",
         repo: "",
         pat: "",
+        resource_budget: crate::worker::test_resource_budget().ok(),
+        static_capacity: true,
+        guest_admission: crate::launch::drive::GuestAdmission::FreshSample,
     }
 }
 

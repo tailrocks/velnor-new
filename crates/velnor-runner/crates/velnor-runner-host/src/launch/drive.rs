@@ -5,6 +5,7 @@ use std::fmt;
 use zeroize::Zeroize;
 
 use crate::scale_set::EnsureError;
+use crate::worker::ResourceBudget;
 
 /// Call context. Tokens are redacted in `Debug` and zeroized on drop.
 pub(crate) struct Drive {
@@ -35,6 +36,40 @@ pub(crate) struct Rest<'a> {
     pub(crate) repo: &'a str,
     /// PAT. Not logged.
     pub(crate) pat: &'a str,
+    /// Validated runner and `DinD` limits for new worker pairs.
+    pub(crate) resource_budget: Option<ResourceBudget>,
+    /// Static Docker CPU and memory totals can fit a configured worker pair.
+    pub(crate) static_capacity: bool,
+    /// Fresh guest metrics required before any acquire, JIT, or worker start.
+    pub(crate) guest_admission: GuestAdmission,
+}
+
+impl Rest<'_> {
+    #[must_use]
+    pub(crate) const fn permits_start(self) -> bool {
+        self.static_capacity && self.guest_admission.permits_start()
+    }
+}
+
+/// Whether this job-start attempt has a fresh selected-guest sample.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GuestAdmission {
+    /// No supported guest probe is available, so new work stays unacquired.
+    Unavailable,
+    /// A current selected-guest sample permits this attempt to proceed.
+    #[cfg(test)]
+    FreshSample,
+}
+
+impl GuestAdmission {
+    #[must_use]
+    pub(crate) const fn permits_start(self) -> bool {
+        match self {
+            Self::Unavailable => false,
+            #[cfg(test)]
+            Self::FreshSample => true,
+        }
+    }
 }
 
 impl fmt::Debug for Drive {

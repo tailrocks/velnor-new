@@ -4,13 +4,14 @@ use std::path::PathBuf;
 
 use bollard::models::MountType;
 
+use crate::worker::test_resource_budget;
 use crate::{
     BollardCreate, CreateProjection, HostError, bollard_create, dind_create, runner_create,
     runner_plan,
 };
 
 fn projection(volume: &str) -> Result<CreateProjection, HostError> {
-    runner_create(&runner_plan(volume)?)
+    runner_create(&runner_plan(volume)?, test_resource_budget()?)
 }
 
 fn bollard(volume: &str) -> Result<BollardCreate, HostError> {
@@ -50,20 +51,31 @@ fn runner_create_rejects_jit_in_env_or_cmd() -> Result<(), HostError> {
     let mut plan = runner_plan("worker_a")?;
     plan.env
         .push("ACTIONS_RUNNER_INPUT_JITCONFIG=canary".to_owned());
-    assert_eq!(runner_create(&plan), Err(HostError::ForbiddenMount));
+    assert_eq!(
+        runner_create(&plan, test_resource_budget()?),
+        Err(HostError::ForbiddenMount)
+    );
 
     let mut plan = runner_plan("worker_a")?;
     plan.cmd.push("canary-jit".to_owned());
-    assert_eq!(runner_create(&plan), Err(HostError::ForbiddenMount));
+    assert_eq!(
+        runner_create(&plan, test_resource_budget()?),
+        Err(HostError::ForbiddenMount)
+    );
     Ok(())
 }
 
 #[test]
 fn dind_is_privileged_and_shares_the_runner_volumes() -> Result<(), HostError> {
+    let budget = test_resource_budget()?;
     for name in ["", "a/b", "a b", ".hidden", "has:colon"] {
-        assert_eq!(dind_create(name).err(), runner_plan(name).err(), "{name}");
+        assert_eq!(
+            dind_create(name, budget).err(),
+            runner_plan(name).err(),
+            "{name}"
+        );
     }
-    let spec = dind_create("worker_a")?;
+    let spec = dind_create("worker_a", budget)?;
     assert_eq!(spec.name, "worker_a-dind");
     assert!(spec.labels.contains(&"velnor.worker=worker_a".to_owned()));
     assert!(spec.labels.contains(&"velnor.role=dind".to_owned()));
@@ -133,7 +145,7 @@ fn runner_joins_only_its_dind_netns() -> Result<(), HostError> {
         .ok_or(HostError::Docker)?;
     assert_eq!(host.privileged, Some(false));
     assert_eq!(host.network_mode.as_deref(), Some(mode.as_str()));
-    let dind = bollard_create(&dind_create("worker_a")?)?;
+    let dind = bollard_create(&dind_create("worker_a", test_resource_budget()?)?)?;
     let dind_host = dind.config.host_config.as_ref().ok_or(HostError::Docker)?;
     assert!(dind_host.network_mode.is_none());
     Ok(())
@@ -169,7 +181,7 @@ fn bollard_config_from_a_clean_plan_omits_canary() -> Result<(), HostError> {
     assert!(!text.contains("canary-jit"));
     assert!(!text.to_ascii_lowercase().contains("jitconfig"));
 
-    let dind = bollard_create(&dind_create("worker_a")?)?;
+    let dind = bollard_create(&dind_create("worker_a", test_resource_budget()?)?)?;
     assert_eq!(dind.options.name.as_deref(), Some("worker_a-dind"));
     assert_eq!(dind.options.platform, "linux/amd64");
     assert_eq!(dind.config.open_stdin, Some(false));
@@ -229,7 +241,7 @@ fn archive_mount_projects_read_only() -> Result<(), HostError> {
 
 #[test]
 fn bollard_create_rejects_a_host_bind() -> Result<(), HostError> {
-    let mut spec = dind_create("worker_a")?;
+    let mut spec = dind_create("worker_a", test_resource_budget()?)?;
     spec.mounts[0].source = "/var/run/docker.sock".to_owned();
     assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
     Ok(())
