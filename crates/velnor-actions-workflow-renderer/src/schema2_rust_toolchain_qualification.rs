@@ -11,6 +11,7 @@ const UPLOAD_USES: &str = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a
 pub(super) const MANIFEST_SHA256: &str =
     "ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2";
 const RUST_VERSION: &str = "1.99.0";
+const MBX_INSTALL_NAME: &str = "Install pinned MBX through Mise";
 
 /// Emit read-only qualification jobs on Linux x64 and macOS ARM64.
 ///
@@ -43,6 +44,7 @@ pub(super) fn jobs(
 }
 
 fn validate_pins(pins: &RustToolchainQualificationPins) -> Result<(), RenderError> {
+    pins.mise_setup.validate()?;
     let expected_url = format!(
         "https://static.rust-lang.org/dist/channel-rust-{}.toml",
         pins.rust_version
@@ -56,6 +58,7 @@ fn validate_pins(pins: &RustToolchainQualificationPins) -> Result<(), RenderErro
     if pins.rust_version != RUST_VERSION
         || pins.manifest_url != expected_url
         || pins.manifest_sha256 != MANIFEST_SHA256
+        || pins.mbx_version != velnor_actions_mise::MR_BOXINGTON_VERSION
         || !digest_valid
     {
         return Err(RenderError::BadCommand(
@@ -75,6 +78,9 @@ fn job(
     pins: &RustToolchainQualificationPins,
 ) -> Result<(String, Yaml), RenderError> {
     let hosted = RunnerSpec::hosted_release_target(runner, target)?;
+    let mise_setup = pins.mise_setup.for_target(target.triple())?;
+    let mise_setup =
+        crate::steps_plain::plain_step_to_yaml(&crate::setup::mise_setup_step(&mise_setup)?)?;
     let mut fields = schema2_features::lane_base(name, &hosted, 30);
     fields.insert(1, ("if".to_owned(), Yaml::str(MODE)));
     fields.push(("permissions".to_owned(), mapping(&[("contents", "read")])));
@@ -83,10 +89,33 @@ fn job(
         fields,
         vec![
             checkout_step(),
+            mise_setup,
+            mbx_install_step(pins),
             probe_step(platform, pins),
             upload_step(artifact_name),
         ],
     ))
+}
+
+fn mbx_install_step(pins: &RustToolchainQualificationPins) -> Yaml {
+    let run = concat!(
+        "set -euo pipefail\n",
+        "mise --no-config --no-env --no-hooks install \"mr-boxington@$MBX_VERSION\"\n",
+        "mbx_path=\"$(mise --no-config --no-env --no-hooks which mbx --tool \"mr-boxington@$MBX_VERSION\")\"\n",
+        "case \"$mbx_path\" in /*) ;; *) echo 'Mise returned a non-absolute MBX path' >&2; exit 1 ;; esac\n",
+        "test -x \"$mbx_path\"\n",
+        "test \"$(\"$mbx_path\" --version)\" = \"mbx $MBX_VERSION\"\n",
+        "printf 'MBX_EXECUTABLE=%s\\n' \"$mbx_path\" >> \"$GITHUB_ENV\""
+    );
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str(MBX_INSTALL_NAME)),
+        ("shell".to_owned(), Yaml::str("bash")),
+        (
+            "env".to_owned(),
+            mapping(&[("MBX_VERSION", &pins.mbx_version)]),
+        ),
+        ("run".to_owned(), Yaml::str(run)),
+    ])
 }
 
 fn checkout_step() -> Yaml {
@@ -108,6 +137,9 @@ fn probe_step(platform: &str, pins: &RustToolchainQualificationPins) -> Yaml {
         "set -euo pipefail\n",
         "python3 --version\n",
         "python3 scripts/qualification/qualify_rust_toolchain.py \\\n",
+        "  --mbx-executable \"$MBX_EXECUTABLE\" \\\n",
+        "  --mbx-version \"$MBX_VERSION\" \\\n",
+        "  --project-root \"$GITHUB_WORKSPACE\" \\\n",
         "  --version \"$RUST_VERSION\" \\\n",
         "  --manifest-url \"$RUST_MANIFEST_URL\" \\\n",
         "  --manifest-sha256 \"$RUST_MANIFEST_SHA256\" \\\n",
@@ -124,6 +156,7 @@ fn probe_step(platform: &str, pins: &RustToolchainQualificationPins) -> Yaml {
             "env".to_owned(),
             mapping(&[
                 ("RUST_VERSION", &pins.rust_version),
+                ("MBX_VERSION", &pins.mbx_version),
                 ("RUST_MANIFEST_URL", &pins.manifest_url),
                 ("RUST_MANIFEST_SHA256", &pins.manifest_sha256),
                 ("QUALIFICATION_PLATFORM", platform),

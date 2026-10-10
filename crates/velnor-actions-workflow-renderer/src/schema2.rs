@@ -135,6 +135,10 @@ pub struct MisePinQualificationPins {
 /// Exact official Rust distribution inputs for hosted component qualification.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustToolchainQualificationPins {
+    /// Exact Mise setup action and runner-specific binary digest.
+    pub mise_setup: MiseSetup,
+    /// Exact MBX version used to execute the candidate Rust binaries.
+    pub mbx_version: String,
     /// Exact Rust release selected by the Mise catalog.
     pub rust_version: String,
     /// Official versioned Rust channel manifest URL.

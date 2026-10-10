@@ -155,7 +155,7 @@ fn workflow_request(
     let rust_toolchain_qualification = execution
         .workflows
         .contains(&RoutingWorkflow::Qualification)
-        .then(crate::pins::resolve_rust_toolchain_qualification)
+        .then(|| crate::pins::resolve_rust_toolchain_qualification(config))
         .transpose()?;
     let product_release_requested = [
         RoutingWorkflow::ImageRelease,

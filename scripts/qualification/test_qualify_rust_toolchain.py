@@ -7,9 +7,16 @@ import io
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
-from qualify_rust_toolchain import manifest_artifacts
+from qualify_rust_toolchain import (
+    manifest_artifacts,
+    mbx_exec_argv,
+    mbx_executor_identity,
+    run_mbx_probe,
+    validate_mbx_version,
+)
 from rust_toolchain_tree import (
     QualificationError,
     canonical_tree_sha256,
@@ -21,6 +28,47 @@ from rust_toolchain_tree import (
 
 
 class QualificationTests(unittest.TestCase):
+    def test_candidate_probes_run_through_absolute_mbx_and_project_root(self) -> None:
+        mbx = Path("/mise/installs/mr-boxington/1.23.0/bin/mbx")
+        project_root = Path("/workspace/project")
+        candidate = Path("/tmp/rust-prefix/bin/cargo")
+        expected = [
+            str(mbx),
+            "exec",
+            "--project-root",
+            str(project_root),
+            str(candidate),
+            "--version",
+        ]
+        self.assertEqual(mbx_exec_argv(mbx, project_root, candidate, ("--version",)), expected)
+        with patch("qualify_rust_toolchain.subprocess.run") as run:
+            run_mbx_probe(mbx, project_root, candidate, ("--version",), {"HOME": "/tmp"})
+        self.assertEqual(run.call_args.args[0], expected)
+        self.assertTrue(run.call_args.kwargs["check"])
+        self.assertEqual(run.call_args.kwargs["timeout"], 30)
+
+    def test_mbx_probe_rejects_relative_paths_and_unpinned_executor_version(self) -> None:
+        with self.assertRaises(QualificationError):
+            mbx_exec_argv(Path("mbx"), Path("/workspace"), Path("/tmp/rustc"), ("-vV",))
+        with self.assertRaises(QualificationError):
+            validate_mbx_version("mbx 1.23.1\n", "1.23.0")
+        validate_mbx_version("mbx 1.23.0\n", "1.23.0")
+
+    def test_receipt_binds_exact_mbx_executable_bytes_and_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            mbx = Path(temporary) / "mbx"
+            mbx.write_bytes(b"pinned MBX executable bytes\n")
+            mbx.chmod(0o755)
+            self.assertEqual(
+                mbx_executor_identity(mbx, "1.23.0"),
+                {
+                    "id": "mr-boxington",
+                    "version": "1.23.0",
+                    "path": str(mbx),
+                    "sha256": hashlib.sha256(b"pinned MBX executable bytes\n").hexdigest(),
+                },
+            )
+
     def test_manifest_selects_exact_component_archives(self) -> None:
         target = "aarch64-apple-darwin"
         names = {
