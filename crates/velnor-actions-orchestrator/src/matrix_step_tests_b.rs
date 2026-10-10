@@ -133,6 +133,11 @@ fn doc_obligation_step_carries_typed_rustdocflags() {
 
 #[test]
 fn tofu_obligation_steps_carry_the_automation_pair() {
+    assert_tofu_step_automation_environment();
+    assert_rust_step_owned_homes();
+}
+
+fn assert_tofu_step_automation_environment() {
     use velnor_actions_mise::{MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV, RUSTUP_TOOLCHAIN_ENV};
     use velnor_actions_tofu::{
         TF_CLI_CONFIG_FILE_ENV, TF_DATA_DIR_ENV, TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON,
@@ -190,6 +195,11 @@ fn tofu_obligation_steps_carry_the_automation_pair() {
         !env.contains_key(TF_CLI_CONFIG_FILE_ENV),
         "temp CLI config stays local-only until a materialization step lands"
     );
+}
+
+fn assert_rust_step_owned_homes() {
+    use velnor_actions_mise::{MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV, RUSTUP_TOOLCHAIN_ENV};
+    use velnor_actions_tofu::TF_DATA_DIR_ENV;
     let step = obligation_step(
         &obligation(),
         &ToolCatalog::pinned(),
