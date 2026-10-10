@@ -17,6 +17,8 @@ use crate::error::MiseError;
 
 /// MBX payload program executed after the `--` separator.
 const MBX_PROGRAM: &str = "mbx";
+/// Cargo payload name retained only for rejecting source-install commands.
+const CARGO_PROGRAM: &str = "cargo";
 
 /// MBX's exact Rust toolchain selector.
 fn mbx_rust_selector(catalog: &ToolCatalog) -> String {
