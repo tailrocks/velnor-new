@@ -1,6 +1,6 @@
 # Native MBX active-run GC evidence
 
-**State: incident evidence only; no Velnor fix or release qualification.** This record separates the hosted CI failure, a deterministic upstream store-level reproduction, and the source-supported race hypothesis. The reproduction does not prove that its synthetic missing-result digest is the digest reported by CI.
+**State: incident evidence and mitigation status; production qualification remains pending.** This record separates the historical hosted CI failure, a deterministic upstream store-level reproduction, and the source-supported race hypothesis. PR #133 is integrated at main commit `57f1cfb2aa7c69833a7f1970d97a7220809a5309`: native jobs disable automatic MBX object GC (`MBX_GC_AUTO=0`) during consumers and run terminal `mbx clean` after the final consumer, before the action post-step export. This mitigation does not prove that the production digest was collected or establish production acceptance.
 
 ## Exact-main observations
 
@@ -66,4 +66,4 @@ The upstream MBX v1.21.1 `mbx clean` path removes managed workspace target and i
 
 ## Release state
 
-The exact d227 main Required check failed. This evidence is not a waiver, a fix, or a release qualification. Product-release dispatch remains on hold until an independently reviewed solution preserves safe active-run reachability and bounded storage for both hosted and Scale Set routes, and the normal exact-main publication gates pass. This assignment did not dispatch publication or create a release.
+The exact d227 main Required check failed. The source mitigation is integrated at main commit `57f1cfb2aa7c69833a7f1970d97a7220809a5309`: native jobs keep automatic MBX object GC disabled during consumers and run terminal managed-workspace cleanup after the final consumer, before action post-step export. This addresses the source-supported collection window, but exact digest causation and active-run end-to-end behavior remain unproven. Native-MBX production consumer acceptance and measured storage capacity on both GitHub-hosted and Scale Set routes are still pending; product-release dispatch remains on hold until those qualifications and the normal exact-main publication gates pass. This assignment did not dispatch publication or create a release.
