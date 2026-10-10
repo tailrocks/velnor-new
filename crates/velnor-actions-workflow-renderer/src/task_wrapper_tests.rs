@@ -296,7 +296,7 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
     let plan_digest = format!("b3-{}", "b".repeat(64));
     std::fs::write(
         &task_runner,
-        b"#!/bin/sh\nprintf '%s' \"$1\"\n: > \"$TASK_STARTED_MARKER\"\n",
+        b"#!/bin/sh\nprintf '%s' \"$1\"\n: > \"$TASK_STARTED_MARKER\"\nexit \"$TASK_EXIT_CODE\"\n",
     )
     .expect("write fixed argv probe");
     let mut task_permissions = std::fs::metadata(&task_runner)
@@ -318,9 +318,11 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
         "2".to_owned(),
         task_runner.display().to_string(),
         payload,
-        "1".to_owned(),
+        "2".to_owned(),
         "TASK_STARTED_MARKER".to_owned(),
         task_started_marker.display().to_string(),
+        "TASK_EXIT_CODE".to_owned(),
+        "0".to_owned(),
         "END".to_owned(),
     ];
     let encode_frame = |fields: &[String]| {
@@ -335,7 +337,7 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
     std::fs::write(&frame_path, &valid_frame).expect("write valid frame");
     std::fs::write(
         &helper,
-        b"#!/bin/sh\nprintf '%s\\n' \"$VELNOR_INTERNAL_OP\" >> \"$VELNOR_TEST_CALL_LOG\"\ncase \"$VELNOR_INTERNAL_OP\" in\n  resolve-task-execution-v1) cat \"$VELNOR_TEST_FRAME\" ;;\n  write-task-report-v1) exit 0 ;;\n  *) exit 9 ;;\nesac\n",
+        b"#!/bin/sh\nprintf '%s\\n' \"$VELNOR_INTERNAL_OP\" >> \"$VELNOR_TEST_CALL_LOG\"\ncase \"$VELNOR_INTERNAL_OP\" in\n  resolve-task-execution-v1) cat \"$VELNOR_TEST_FRAME\" ;;\n  write-task-report-v1) exit \"${VELNOR_TEST_REPORT_CODE:-0}\" ;;\n  *) exit 9 ;;\nesac\n",
     )
     .expect("write fake helper");
     let mut permissions = std::fs::metadata(&helper)
@@ -345,7 +347,7 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
     std::fs::set_permissions(&helper, permissions).expect("make helper executable");
 
     let script = super::task_script(VERSION);
-    let run_script = || {
+    let run_script = |report_code: &str| {
         std::process::Command::new("bash")
             .arg("-c")
             .arg(&script)
@@ -356,10 +358,11 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
             .env("VELNOR_TASK_ID", "stack/rust/crate-0/test/default")
             .env("VELNOR_TEST_FRAME", &frame_path)
             .env("VELNOR_TEST_CALL_LOG", &call_log)
+            .env("VELNOR_TEST_REPORT_CODE", report_code)
             .output()
             .expect("run generated Bash composite script")
     };
-    let result = run_script();
+    let result = run_script("0");
     assert!(
         result.status.success(),
         "script failed: stdout={} stderr={}",
@@ -381,10 +384,40 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
     );
     std::fs::remove_file(&task_started_marker).expect("clear valid task marker");
 
+    let mut task_and_report_fail = fields.clone();
+    task_and_report_fail[16] = "7".to_owned();
+    std::fs::write(&frame_path, encode_frame(&task_and_report_fail))
+        .expect("write task failure frame");
+    let task_failure = run_script("9");
+    assert_eq!(task_failure.status.code(), Some(7));
+    assert!(
+        task_started_marker.exists(),
+        "task failure reached the probe"
+    );
+    assert!(
+        !injection_marker.exists(),
+        "failure payload remained literal"
+    );
+    std::fs::remove_file(&task_started_marker).expect("clear task failure marker");
+
+    std::fs::write(&frame_path, &valid_frame).expect("restore valid frame");
+    let report_failure = run_script("9");
+    assert_eq!(report_failure.status.code(), Some(9));
+    assert!(
+        task_started_marker.exists(),
+        "report ran after successful task"
+    );
+    std::fs::remove_file(&task_started_marker).expect("clear report failure marker");
+
     let mut bad_count = fields.clone();
     bad_count[9] = "513".to_owned();
     let mut bad_sentinel = fields.clone();
-    bad_sentinel[15] = "NOT-END".to_owned();
+    bad_sentinel[17] = "NOT-END".to_owned();
+    let mut malformed_cap_flag = fields.clone();
+    malformed_cap_flag[7] = "2".to_owned();
+    let mut malformed_cap_value = fields.clone();
+    malformed_cap_value[7] = "1".to_owned();
+    malformed_cap_value[8] = "0".to_owned();
     let mut wrong_digest = fields.clone();
     wrong_digest[2] = format!("b3-{}", "c".repeat(64));
     let mut malformed_execution_digest = fields.clone();
@@ -395,6 +428,15 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
     malformed_matrix_id[4] = "matrix/test".to_owned();
     let mut malformed_matrix_key = fields.clone();
     malformed_matrix_key[5] = "not-a-key".to_owned();
+    let mut duplicate_env_key = fields.clone();
+    duplicate_env_key[12] = "3".to_owned();
+    duplicate_env_key.splice(
+        17..17,
+        [
+            "TASK_STARTED_MARKER".to_owned(),
+            task_started_marker.display().to_string(),
+        ],
+    );
     let mut unsupported_expression = fields.clone();
     unsupported_expression[14] = "${{ github.workspace }}/marker".to_owned();
     let mut unresolved_runner_temp = fields.clone();
@@ -408,6 +450,8 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
     let invalid_frames = [
         ("bad argv count", encode_frame(&bad_count)),
         ("bad END sentinel", encode_frame(&bad_sentinel)),
+        ("malformed cap flag", encode_frame(&malformed_cap_flag)),
+        ("malformed cap value", encode_frame(&malformed_cap_value)),
         ("wrong execution digest", encode_frame(&wrong_digest)),
         (
             "malformed execution digest",
@@ -419,6 +463,7 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
         ),
         ("malformed matrix ID", encode_frame(&malformed_matrix_id)),
         ("malformed matrix key", encode_frame(&malformed_matrix_key)),
+        ("duplicate env key", encode_frame(&duplicate_env_key)),
         (
             "unsupported expression",
             encode_frame(&unsupported_expression),
@@ -442,7 +487,7 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
                 .expect("clear injection marker before rejection case");
         }
         std::fs::write(&frame_path, invalid_frame).expect("write invalid frame");
-        let rejected = run_script();
+        let rejected = run_script("0");
         assert_eq!(
             rejected.status.code(),
             Some(125),
@@ -460,7 +505,7 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
         );
     }
     let expected_calls = format!(
-        "resolve-task-execution-v1\nwrite-task-report-v1\n{}",
+        "resolve-task-execution-v1\nwrite-task-report-v1\nresolve-task-execution-v1\nwrite-task-report-v1\nresolve-task-execution-v1\nwrite-task-report-v1\n{}",
         "resolve-task-execution-v1\n".repeat(invalid_frame_count)
     );
     assert_eq!(
