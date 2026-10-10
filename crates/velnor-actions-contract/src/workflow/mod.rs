@@ -96,7 +96,7 @@ pub use report::{
     CacheLayer, CacheOutcome, CacheResult, MatrixReport, MatrixStatus, MatrixTaskEntry,
     NotSelectedReason, TaskReport, TaskStatus, TaskTiming,
 };
-pub use step::{Step, StepKind};
+pub use step::{Step, StepKind, TASK_COVERED_OUTPUT, task_execution_condition};
 pub use step_identity::{MBX_WORKSPACE_CLEAN_CONDITION, StepId, StepRole};
 pub use timeout::JobTimeout;
 pub use trust::{Trust, trust_for_event};

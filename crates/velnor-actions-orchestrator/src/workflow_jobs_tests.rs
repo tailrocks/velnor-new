@@ -80,7 +80,7 @@ pub(crate) fn needs(rust: PlanRustNeed) -> PlanJobToolNeeds {
 fn operation_of(step: &Step) -> Option<&str> {
     match &step.kind {
         StepKind::Internal { operation, .. } => Some(operation),
-        StepKind::Action { .. } | StepKind::Shell { .. } => None,
+        StepKind::Action { .. } | StepKind::Shell { .. } | StepKind::TaskExecution { .. } => None,
     }
 }
 

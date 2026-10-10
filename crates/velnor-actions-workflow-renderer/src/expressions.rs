@@ -148,6 +148,9 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
 }
 
 fn is_declared_task_input(name: &str) -> bool {
+    if matches!(name, "task_id" | "task_digest" | "matrix_id" | "matrix_key") {
+        return true;
+    }
     if let Some(index) = name.strip_prefix("argv_") {
         return !index.is_empty()
             && index.bytes().all(|byte| byte.is_ascii_digit())

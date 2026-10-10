@@ -87,10 +87,7 @@ pub(crate) fn covered_by_baseline(plan: &Plan, task_id: &str) -> bool {
 ///
 /// Returns a contract error when the task ID is malformed.
 pub(crate) fn skip_condition(task_id: &str) -> Result<String, OrchestratorError> {
-    validate_task_id(task_id).map_err(internal_contract)?;
-    Ok(format!(
-        "!contains(needs.plan.outputs.{COVERED_TASKS_OUTPUT}, ',{task_id},')"
-    ))
+    velnor_actions_contract::task_execution_condition(task_id).map_err(internal_contract)
 }
 
 #[cfg(test)]
