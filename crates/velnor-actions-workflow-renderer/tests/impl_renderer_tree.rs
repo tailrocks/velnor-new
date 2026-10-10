@@ -157,7 +157,10 @@ fn consumer_tree_has_exactly_four_sorted_paths() -> Result<(), RenderError> {
     )?;
     let tree = render_tree(&workflow, &actionlint_bytes()?, VERSION)?;
     assert_eq!(tree.files.len(), 4);
-    assert!(tree.symlinks.is_empty());
+    assert_eq!(
+        tree.symlinks,
+        [] as [velnor_actions_workflow_renderer::RenderedSymlink; 0]
+    );
     assert_eq!(tree.files[0].path, AGENTS_MD_PATH);
     assert_eq!(tree.files[1].path, CLAUDE_MD_PATH);
     assert_eq!(tree.files[2].path, ACTIONLINT_PATH);
@@ -201,7 +204,10 @@ fn consumer_tree_has_no_codeowners_merges_verify_and_rejects_candidate() -> Resu
     assert!(!text.contains("CODEOWNERS"));
     let tree = render_tree(&text, &actionlint_bytes()?, VERSION)?;
     assert_eq!(tree.files.len(), 4);
-    assert!(tree.symlinks.is_empty());
+    assert_eq!(
+        tree.symlinks,
+        [] as [velnor_actions_workflow_renderer::RenderedSymlink; 0]
+    );
     Ok(())
 }
 

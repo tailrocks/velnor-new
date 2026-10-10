@@ -76,7 +76,10 @@ fn tools_cache_writer_election_prefers_plan_then_lowest_id() -> Result<(), Rende
         restore_key(&jobs["rust-a"]),
         "lowest id wins without plan"
     );
-    assert!(tools_saves(&jobs["rust-b"]).is_empty());
+    assert_eq!(
+        tools_saves(&jobs["rust-b"]),
+        [] as [&velnor_actions_contract::Step; 0]
+    );
     Ok(())
 }
 
@@ -257,7 +260,10 @@ fn provider_writer_election_elects_lowest_id_per_key() -> Result<(), RenderError
         Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
         "lowest id wins the shared key"
     );
-    assert!(provider_saves(&jobs["tofu-b"]).is_empty());
+    assert_eq!(
+        provider_saves(&jobs["tofu-b"]),
+        [] as [&velnor_actions_contract::Step; 0]
+    );
     assert_eq!(
         provider_saved_key(&jobs["tofu-c"]),
         Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
@@ -353,7 +359,10 @@ fn combined_election_rejects_provider_conflict_before_appending_tools_save()
     for (id, steps) in original_steps {
         assert_eq!(jobs[&id].steps, steps, "failed election mutated {id}");
     }
-    assert!(tools_saves(&jobs["plan"]).is_empty());
+    assert_eq!(
+        tools_saves(&jobs["plan"]),
+        [] as [&velnor_actions_contract::Step; 0]
+    );
     Ok(())
 }
 
