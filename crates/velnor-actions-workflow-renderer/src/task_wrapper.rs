@@ -502,7 +502,7 @@ for ((index = 0; index < env_count; index++)); do
   for seen_key in "${seen_keys[@]}"; do [[ "$seen_key" != "$key" ]] || fail_frame; done
   seen_keys+=("$key")
   case "$key" in
-    VELNOR_TASK_ID|VELNOR_TASK_DIGEST|VELNOR_MATRIX_ID|VELNOR_MATRIX_KEY|VELNOR_INTERNAL_OP|VELNOR_GENERATOR_VERSION|VELNOR_TASK_EXECUTION_DIGEST|VELNOR_RUNTIME_RUNNER_TEMP|#,
+    VELNOR_TASK_ID|VELNOR_TASK_DIGEST|VELNOR_MATRIX_ID|VELNOR_MATRIX_KEY|VELNOR_INTERNAL_OP|VELNOR_GENERATOR_VERSION|VELNOR_TASK_EXECUTION_DIGEST|VELNOR_RUNTIME_RUNNER_TEMP|"#,
     );
     script.push_str(&toolchain_env::STEP_CREDENTIAL_DENYLIST.join("|"));
     script.push_str(
