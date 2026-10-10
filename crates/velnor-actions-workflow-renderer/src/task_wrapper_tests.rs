@@ -10,6 +10,7 @@ use super::{ACTION_NAME_PREFIX, factor_obligation_steps};
 
 const CHECKOUT: &str = "actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const VERSION: &str = "0.1.6";
+const HOSTILE_TASK_ARGUMENT: &str = "crate-0\"; printf injected; #";
 
 #[test]
 fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() {
@@ -77,7 +78,15 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
         };
         assert_eq!(uses, "./.github/actions/declared-task-0");
         assert!(env.is_empty(), "task env crosses through declared inputs");
-        assert_eq!(with["argv_10"], format!("crate-{task_index}"));
+        let expected_argument = if task_index == "0" {
+            HOSTILE_TASK_ARGUMENT.to_owned()
+        } else {
+            format!("crate-{task_index}")
+        };
+        assert_eq!(with["argv_10"], expected_argument);
+        if task_index == "0" {
+            assert!(!files[0].bytes.contains(HOSTILE_TASK_ARGUMENT));
+        }
         assert_eq!(
             with["task_id"],
             format!("stack/rust/crate-{task_index}/test/default")
@@ -240,7 +249,7 @@ fn task_step(index: usize) -> Step {
         compile_driver: "cargo".to_owned(),
         test_runner: "cargo_test".to_owned(),
     };
-    let argv = vec![
+    let mut argv = vec![
         "mise".to_owned(),
         "--no-config".to_owned(),
         "--no-env".to_owned(),
@@ -253,6 +262,9 @@ fn task_step(index: usize) -> Step {
         "-p".to_owned(),
         format!("crate-{index}"),
     ];
+    if index == 0 {
+        argv[10] = HOSTILE_TASK_ARGUMENT.to_owned();
+    }
     let toolchain = toolchain_id(&toolchain_inputs).expect("toolchain id");
     let task_digest = task_digest_for_execution(&task_id, &argv, &toolchain).expect("task digest");
     let matrix_id =
