@@ -23,8 +23,8 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::render::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PLAN_JOB_ID,
-    PUBLISH_JOB_ID, RenderContext, WORKFLOW_PATH,
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PUBLISH_JOB_ID,
+    RenderContext, WORKFLOW_PATH,
 };
 use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
 
@@ -34,9 +34,7 @@ use crate::workflow_jobs::{PlanJobToolNeeds, final_job, lint_job, plan_job};
 
 #[path = "workflow_policy.rs"]
 mod workflow_policy;
-pub(crate) use workflow_policy::{
-    plan_uses_opentofu, plan_uses_rust, prepare_rust_components_step,
-};
+pub(crate) use workflow_policy::prepare_rust_components_step;
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
 

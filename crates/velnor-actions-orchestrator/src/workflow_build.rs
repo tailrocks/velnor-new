@@ -7,7 +7,8 @@ use velnor_actions_contract::{
     Job, Step, ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowPolicy,
 };
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_workflow_renderer::render::{PLAN_JOB_ID, WorkflowTaskPolicy};
+use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
+use velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
