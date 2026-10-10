@@ -91,17 +91,20 @@ pub(crate) fn task_argv(
             });
         }
     }
-    let driver = RouteDriver::from_compile_driver(&task.identity.compile_driver);
-    let mut tools = driver.map_or(vec![PinnedTool::Rust], RouteDriver::probe_tools);
-    if tool_needs(&task.identity.compile_driver, &task.identity.test_runner).nextest {
-        tools.push(PinnedTool::Nextest);
-    }
-    let program = OsString::from(driver.map_or("cargo", RouteDriver::program));
-    let exec = PinnedToolExec::new(tools, &program, task.payload.clone()).map_err(|err| {
-        OrchestratorError::Contract {
+    let driver =
+        RouteDriver::from_compile_driver(&task.identity.compile_driver).ok_or_else(|| {
+            OrchestratorError::Contract {
+                problem: format!("unknown_compile_driver:{}", task.identity.compile_driver),
+            }
+        })?;
+    let exec = driver
+        .task_exec(
+            task.payload.clone(),
+            tool_needs(&task.identity.compile_driver, &task.identity.test_runner).nextest,
+        )
+        .map_err(|err| OrchestratorError::Contract {
             problem: err.to_string(),
-        }
-    })?;
+        })?;
     strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
@@ -325,7 +328,12 @@ pub(crate) fn validator_argv(
 ///
 /// Returns a contract error when the Mise adapter rejects the vector.
 pub(crate) fn mbx_probe_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
-    exec_argv(vec![PinnedTool::Rust], "mbx", &["--version"], catalog)
+    let exec = RouteDriver::Mbx
+        .probe_exec(vec![OsString::from("--version")])
+        .map_err(|err| OrchestratorError::Contract {
+            problem: err.to_string(),
+        })?;
+    strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
 /// Fixed bootstrap §4 build vector through pinned Mise.

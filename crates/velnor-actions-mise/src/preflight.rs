@@ -71,6 +71,45 @@ impl RouteDriver {
             Self::Mbx => vec![PinnedTool::Rust, PinnedTool::MrBoxington],
         }
     }
+
+    /// Construct a fixed preflight probe under this route's Mise selectors.
+    ///
+    /// MBX is supplied by the separately pinned workflow action, so the MBX
+    /// route selects only Rust through Mise. Cargo remains a normal Mise
+    /// payload. Callers cannot supply a program or selector list that could
+    /// change this authority decision.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MiseError`] if the fixed command is rejected.
+    pub fn probe_exec(self, args: Vec<OsString>) -> Result<PinnedToolExec, MiseError> {
+        self.task_exec(args, false)
+    }
+
+    /// Construct a compile-task invocation, optionally selecting Nextest.
+    ///
+    /// The selected program and Mise tools are fixed by the typed route. MBX
+    /// authority is therefore action-owned for every MBX task, including
+    /// tasks which select Nextest.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MiseError`] if the fixed command is rejected.
+    pub fn task_exec(
+        self,
+        args: Vec<OsString>,
+        nextest: bool,
+    ) -> Result<PinnedToolExec, MiseError> {
+        let mut tools = self.probe_tools();
+        if nextest {
+            tools.push(PinnedTool::Nextest);
+        }
+        let program = OsStr::new(self.program());
+        match self {
+            Self::Cargo => PinnedToolExec::new(tools, program, args),
+            Self::Mbx => PinnedToolExec::new_action_owned_mbx(tools, program, args),
+        }
+    }
 }
 
 /// Selected route inputs, exact probe invocation, and format identity.
@@ -158,14 +197,10 @@ pub fn select_route(
     let cache_format_id = cache_format_id(&inputs).map_err(|err| MiseError::Contract {
         problem: err.to_string(),
     })?;
-    let tools = driver.probe_tools();
     let identity_specs = catalog.tool_specs(&driver.identity_tools());
-    let probe_specs = catalog.tool_specs(&tools);
-    let probe = PinnedToolExec::new(
-        tools,
-        OsStr::new(driver.program()),
-        vec![OsString::from("--version")],
-    )?;
+    let probe_specs = catalog.tool_specs(&driver.probe_tools());
+    let args = vec![OsString::from("--version")];
+    let probe = driver.probe_exec(args)?;
     Ok(RouteSelection {
         driver,
         probe,
