@@ -21,7 +21,6 @@ fn row(kind: &str, state: IntentState, cleanup_proven: bool) -> IntentRow {
         requested_workflow_run_id: None,
         requested_job_id: None,
         runner_name: None,
-        observed_runner_started: false,
         observed_job_id: None,
         observed_workflow_run_id: None,
         observed_actions_attempt: None,

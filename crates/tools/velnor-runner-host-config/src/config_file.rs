@@ -10,6 +10,8 @@ use velnor_runner_journal::HostError;
 mod atomic;
 mod read;
 mod secure_read;
+#[cfg(test)]
+mod test_fifo;
 
 /// Assign path ownership without dereferencing symlinks.
 ///

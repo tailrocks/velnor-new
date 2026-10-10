@@ -4,7 +4,7 @@ use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use rustix::fs::{Mode, OFlags, mkfifoat, open};
+use rustix::fs::{Mode, OFlags, open};
 
 use super::{MAX_HOST_CONFIG_BYTES, read_leaf};
 
@@ -80,8 +80,7 @@ fn bounded_reader_rejects_symlinks_and_fifo_without_waiting_for_a_writer() -> Re
         return Err("symlink config was accepted".to_owned());
     }
 
-    mkfifoat(&directory_fd, "waiting.toml", Mode::RUSR | Mode::WUSR)
-        .map_err(|error| error.to_string())?;
+    super::super::test_fifo::create_fifo(directory.path(), "waiting.toml")?;
     if read_leaf(&directory_fd, OsStr::new("waiting.toml"), |_| Ok(true)).is_ok() {
         return Err("FIFO config was accepted".to_owned());
     }

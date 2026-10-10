@@ -4,8 +4,6 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use rustix::fs::{Mode, mkfifoat};
-
 use super::{
     DirectoryPolicy, FilePolicy, ModePolicy, open_regular_file_at, open_trusted_directory,
 };
@@ -129,7 +127,7 @@ fn file_open_rejects_symlinks_fifos_and_oversized_config() -> Result<(), HostErr
     assert!(open_regular_file_at(&directory_fd, "github-token", secret_policy).is_err());
     fs::remove_file(directory.path().join("github-token")).map_err(|_| HostError::Config)?;
 
-    mkfifoat(&directory_fd, "github-token", Mode::from_raw_mode(0o600))
+    super::super::test_fifo::create_fifo(directory.path(), "github-token")
         .map_err(|_| HostError::Config)?;
     assert!(open_regular_file_at(&directory_fd, "github-token", secret_policy).is_err());
     fs::remove_file(directory.path().join("github-token")).map_err(|_| HostError::Config)?;

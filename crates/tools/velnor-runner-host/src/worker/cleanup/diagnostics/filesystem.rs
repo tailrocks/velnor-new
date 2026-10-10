@@ -17,8 +17,8 @@ use crate::HostError;
 
 use super::DiagnosticsReceipt;
 
-const PRIVATE_DIRECTORY_MODE: u32 = 0o700;
-const PRIVATE_FILE_MODE: u32 = 0o600;
+const PRIVATE_DIRECTORY_MODE: u16 = 0o700;
+const PRIVATE_FILE_MODE: u16 = 0o600;
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 pub(super) fn effective_uid() -> u32 {
@@ -125,7 +125,7 @@ pub(super) fn validate_private_directory(directory: &File, owner: u32) -> Result
     let metadata = directory.metadata().map_err(|_| HostError::Path)?;
     if !metadata.is_dir()
         || metadata.uid() != owner
-        || metadata.mode() & 0o7777 != PRIVATE_DIRECTORY_MODE
+        || metadata.mode() & 0o7777 != u32::from(PRIVATE_DIRECTORY_MODE)
     {
         return Err(HostError::Path);
     }
@@ -162,7 +162,7 @@ pub(super) fn read_private_file_at(
     let metadata = file.metadata().map_err(|_| HostError::Path)?;
     if !metadata.is_file()
         || metadata.uid() != owner
-        || metadata.mode() & 0o7777 != PRIVATE_FILE_MODE
+        || metadata.mode() & 0o7777 != u32::from(PRIVATE_FILE_MODE)
         || metadata.len() > u64::try_from(max_bytes).map_err(|_| HostError::Frame)?
     {
         return Err(HostError::Path);
@@ -198,7 +198,7 @@ pub(super) fn atomic_write_at(
     let metadata = temporary.file.metadata().map_err(|_| HostError::Path)?;
     if !metadata.is_file()
         || metadata.uid() != owner
-        || metadata.mode() & 0o7777 != PRIVATE_FILE_MODE
+        || metadata.mode() & 0o7777 != u32::from(PRIVATE_FILE_MODE)
     {
         return Err(HostError::Path);
     }

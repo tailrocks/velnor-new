@@ -143,18 +143,13 @@ fn streamed_repo_file_opens_a_replaced_fifo_nonblocking_then_rejects_it() {
     let root = tempfile::TempDir::new().expect("temp root");
     let parent = root.path().join("dist");
     std::fs::create_dir(&parent).expect("parent");
-    let parent_fd = rustix::fs::open(
+    let _parent_fd = rustix::fs::open(
         &parent,
         rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::DIRECTORY | rustix::fs::OFlags::CLOEXEC,
         rustix::fs::Mode::empty(),
     )
     .expect("open parent");
-    rustix::fs::mkfifoat(
-        &parent_fd,
-        "image.tar",
-        rustix::fs::Mode::RUSR | rustix::fs::Mode::WUSR,
-    )
-    .expect("create fifo");
+    create_fifo(&parent, "image.tar").expect("create fifo");
     let root_path = root.path().to_path_buf();
     let (sender, receiver) = mpsc::channel();
     let worker = std::thread::spawn(move || {
@@ -177,6 +172,20 @@ fn streamed_repo_file_opens_a_replaced_fifo_nonblocking_then_rejects_it() {
     };
     worker.join().expect("worker thread");
     assert!(outcome.contains("not_a_file"), "{outcome}");
+}
+
+#[cfg(unix)]
+fn create_fifo(directory: &std::path::Path, name: &str) -> Result<(), String> {
+    let path = directory.join(name);
+    let outcome = std::process::Command::new("mkfifo")
+        .arg(&path)
+        .status()
+        .map_err(|error| format!("run mkfifo: {error}"))?;
+    if outcome.success() {
+        Ok(())
+    } else {
+        Err(format!("mkfifo failed for {}", path.display()))
+    }
 }
 
 #[test]

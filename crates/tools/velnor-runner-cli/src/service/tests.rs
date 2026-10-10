@@ -14,10 +14,13 @@ use std::{
     thread,
 };
 
-use super::{
-    ControllerServiceState, bootout_argv, bootstrap_argv, controller_service_status_line,
-    journalctl_command, launchctl_service_state, systemd_service_state, with_logs,
-};
+use super::{ControllerServiceState, controller_service_status_line, systemd_service_state};
+
+#[cfg(target_os = "macos")]
+use super::{bootout_argv, bootstrap_argv, launchctl_service_state, with_logs};
+
+#[cfg(target_os = "linux")]
+use super::journalctl_command;
 
 #[cfg(target_os = "linux")]
 use super::{JOURNALCTL_PATH, busctl_command, command_code, journalctl_args, systemctl_command};

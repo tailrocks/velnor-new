@@ -210,8 +210,8 @@ fn owner_matches(
     actual_user == required_user && required_group.is_none_or(|required| actual_group == required)
 }
 
-fn mode_matches(raw_mode: u32, policy: ModePolicy) -> bool {
-    let mode = raw_mode & 0o7777;
+fn mode_matches(raw_mode: impl Into<u32>, policy: ModePolicy) -> bool {
+    let mode = raw_mode.into() & 0o7777;
     match policy {
         ModePolicy::Exact(expected) => mode == expected,
         ModePolicy::Clear(mask) => mode & mask == 0,
@@ -219,4 +219,5 @@ fn mode_matches(raw_mode: u32, policy: ModePolicy) -> bool {
 }
 
 #[cfg(test)]
+#[cfg(target_os = "linux")]
 mod tests;
