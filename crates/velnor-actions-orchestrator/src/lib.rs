@@ -49,6 +49,7 @@ mod merge;
 mod merge_request;
 mod native_image_tasks;
 mod native_mise_tasks;
+mod native_mise_version;
 mod native_tool_input;
 mod native_tool_lock;
 mod noop_report;

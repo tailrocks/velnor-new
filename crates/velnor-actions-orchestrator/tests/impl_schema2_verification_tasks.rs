@@ -111,18 +111,20 @@ fn macos_task_cannot_select_the_linux_scale_set_profile() -> TestResult {
     Ok(())
 }
 
-fn write_verification_task_config(root: &std::path::Path) -> TestResult {
+pub(crate) fn write_verification_task_config(root: &std::path::Path) -> TestResult {
     fs::create_dir_all(root.join("native"))?;
     fs::write(
         root.join("mise.toml"),
         r#"
+min_version = "2026.10.7"
+
 [tasks.lint-linux]
 run = "echo lint-linux"
 "#,
     )?;
     fs::write(
         root.join("native/mise.toml"),
-        "[tasks.desktop-format-check]\nrun = \"echo desktop-format-check\"\n",
+        "[tasks.format-check]\nrun = \"echo format-check\"\n",
     )?;
     Ok(())
 }
@@ -131,7 +133,7 @@ pub(crate) fn config(mode: &str) -> String {
     format!(
         "schema = 2\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n\
 [[workflow.tasks]]\nid = \"linux-lint\"\nkind = \"verification\"\nmise_task = \"lint-linux\"\nrunner = \"linux-x64\"\ntimeout_minutes = 10\nsource = {{ mise_config = \"mise.toml\", working_directory = \".\" }}\n\
-[[workflow.tasks]]\nid = \"native-format\"\nkind = \"verification\"\nmise_task = \"desktop-format-check\"\nrunner = \"macos-arm64\"\ntimeout_minutes = 10\nsource = {{ mise_config = \"native/mise.toml\", working_directory = \"native\" }}\n\
+[[workflow.tasks]]\nid = \"native-format\"\nkind = \"verification\"\nmise_task = \"format-check\"\nrunner = \"macos-arm64\"\ntimeout_minutes = 10\nsource = {{ mise_config = \"native/mise.toml\", working_directory = \"native\" }}\n\
 [execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nmode = \"{mode}\"\n\
 [execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n\
 [execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\", \"verification-worker\"]\nplatform = \"linux/amd64\""

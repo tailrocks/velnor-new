@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::native_mise_version::{NativeMiseMinimum, NativeMiseVersion};
 use crate::native_tool_lock::{NativeMiseLock, parse_native_mise_lock};
 
 const MAX_VALUES: usize = 64;
@@ -28,10 +29,30 @@ pub(crate) enum NativeToolSource {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct NativeMiseConfig {
     pub(crate) root_keys: Vec<String>,
+    pub(crate) min_version: Option<NativeMiseMinimum>,
     pub(crate) tools: BTreeMap<String, NativeToolSelector>,
     pub(crate) tasks: BTreeMap<String, NativeMiseTask>,
     pub(crate) settings: NativeMiseSettings,
     pub(crate) wrappers: NativeMiseWrappers,
+}
+
+impl NativeMiseConfig {
+    pub(crate) fn min_version_supported(&self) -> bool {
+        let configured = self.root_keys.iter().any(|key| key == "min_version");
+        if !configured {
+            return self.min_version.is_none();
+        }
+        let Some(required) = self.min_version else {
+            return false;
+        };
+        let Some(catalog) = NativeMiseVersion::parse(velnor_actions_mise::catalog::MISE_VERSION)
+        else {
+            return false;
+        };
+        required
+            .hard()
+            .is_none_or(|required| required.is_not_newer_than(catalog))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -97,6 +118,7 @@ fn parse_native_mise_config(value: &toml::Value) -> Option<NativeMiseConfig> {
     let root = value.as_table()?;
     let mut config = NativeMiseConfig {
         root_keys: root.keys().cloned().collect(),
+        min_version: root.get("min_version").and_then(NativeMiseMinimum::parse),
         ..NativeMiseConfig::default()
     };
     if let Some(tools) = root.get("tools") {

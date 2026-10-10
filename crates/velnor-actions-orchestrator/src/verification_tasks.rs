@@ -223,13 +223,16 @@ fn optional_source<'a>(
 }
 
 fn validate_config_shape(config: &NativeMiseConfig) -> Result<(), OrchestratorError> {
-    let allowed = ["settings", "tasks", "tools", "wrappers"];
+    let allowed = ["min_version", "settings", "tasks", "tools", "wrappers"];
     if config
         .root_keys
         .iter()
         .any(|key| !allowed.contains(&key.as_str()))
     {
         return Err(failure("verification_mise_config_root"));
+    }
+    if !config.min_version_supported() {
+        return Err(failure("verification_mise_min_version"));
     }
     Ok(())
 }
