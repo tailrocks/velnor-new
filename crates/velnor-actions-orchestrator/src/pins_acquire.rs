@@ -9,7 +9,7 @@ use crate::OrchestratorError;
 
 /// Digest-verified staging step: fetch URL, check SHA-256, record the source
 /// commit, make executable. Both provenance paths supply the commit (F3).
-fn acquire_step(
+pub(super) fn acquire_step(
     url: &str,
     sha: &str,
     commit: &str,
