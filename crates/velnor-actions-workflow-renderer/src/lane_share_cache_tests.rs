@@ -117,6 +117,36 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
     assert_emitted_restore_is_hosted_only(&shared, hosted_id, local_id);
 }
 
+#[test]
+fn paired_nonempty_tools_preludes_compare_seed_admission_as_an_exact_expression() {
+    let hosted = tools_cache_prelude(HOSTED_RUNS).expect("hosted prelude");
+    let local_runs_on = "ubuntu-24.04";
+    let local = tools_cache_prelude(local_runs_on).expect("second hosted prelude");
+    assert_eq!(hosted.len(), 2);
+    assert_eq!(local.len(), 2);
+    assert!(super::super::runtime::same_tools_cache_prelude_shape(
+        &hosted,
+        &local,
+        HOSTED_RUNS,
+        local_runs_on,
+    ));
+
+    let mut wrong_local = local;
+    let StepKind::Action { with, .. } = &mut wrong_local[1].kind else {
+        panic!("restore is an action");
+    };
+    with.insert(
+        crate::cache_steps::TOOLS_SEED_ADMITTED_INPUT.to_owned(),
+        "${{ steps.untrusted.outputs.seed_admitted }}".to_owned(),
+    );
+    assert!(!super::super::runtime::same_tools_cache_prelude_shape(
+        &hosted,
+        &wrong_local,
+        HOSTED_RUNS,
+        local_runs_on,
+    ));
+}
+
 fn tools_cache_prelude(
     runs_on: &str,
 ) -> Result<Vec<velnor_actions_contract::Step>, crate::RenderError> {

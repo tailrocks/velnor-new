@@ -190,6 +190,58 @@ fn absent_seed_does_not_report_admission() {
 }
 
 #[test]
+fn empty_seed_trees_do_not_report_admission_or_touch_existing_cache_bytes() {
+    let root = scratch("empty-trees");
+    let seed = root.join("seed");
+    let home = root.join("home");
+    fs::create_dir_all(seed.join("mise/tree")).expect("empty mise tree");
+    fs::create_dir_all(seed.join("rustup/tree")).expect("empty rustup tree");
+    fs::create_dir_all(seed.join("mise")).expect("mise seed");
+    fs::write(seed.join("PROVENANCE"), "velnor-host-seed-v1\n").expect("provenance");
+    fs::write(seed.join("mise/KEY"), runtime_key()).expect("seed key");
+
+    let existing = [
+        (home.join(".local/share/mise/marker"), "mise-cache"),
+        (
+            home.join("runner-temp/velnor/rustup/marker"),
+            "rustup-cache",
+        ),
+        (
+            home.join("runner-temp/velnor/cargo/bin/marker"),
+            "cargo-bin",
+        ),
+        (
+            home.join("runner-temp/velnor/cargo/.crates.toml"),
+            "crate-state",
+        ),
+        (
+            home.join("runner-temp/velnor/cargo/.crates2.json"),
+            "crate-state",
+        ),
+    ];
+    for (path, bytes) in &existing {
+        fs::create_dir_all(path.parent().expect("cache parent")).expect("cache parent");
+        fs::write(path, bytes).expect("existing cache bytes");
+    }
+
+    let script = tool_seed_action_script(seed.to_str().expect("seed path")).expect("script");
+    let output = run(&script, &home, &seed, &mount(&seed));
+    assert!(output.status.success(), "empty seed stays cold: {output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("no copyable payload"),
+        "{output:?}"
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("GITHUB_OUTPUT")).expect("empty-tree output"),
+        ""
+    );
+    for (path, bytes) in existing {
+        assert_eq!(fs::read_to_string(path).expect("cache bytes remain"), bytes);
+    }
+    fs::remove_dir_all(root).expect("cleanup empty trees");
+}
+
+#[test]
 fn failed_second_copy_does_not_report_admission() {
     let root = scratch("copy-failure");
     let seed = root.join("seed");

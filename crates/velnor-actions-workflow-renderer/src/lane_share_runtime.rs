@@ -150,7 +150,7 @@ fn same_tools_step(hosted: &Step, local: &Step, hosted_runs_on: &str, local_runs
                 && local_uses == crate::cache_steps::TOOLS_RESTORE_USES
                 && hosted_env == local_env
                 && same_keyed_inputs(hosted_with, local_with, "key")
-                && same_keyed_inputs(
+                && same_seed_admission_input(
                     hosted_with,
                     local_with,
                     crate::cache_steps::TOOLS_SEED_ADMITTED_INPUT,
@@ -181,4 +181,14 @@ fn same_keyed_inputs(
     hosted_shape.insert(field.to_owned(), normalized.to_owned());
     local_shape.insert(field.to_owned(), normalized.to_owned());
     hosted_shape == local_shape
+}
+
+fn same_seed_admission_input(
+    hosted: &std::collections::BTreeMap<String, String>,
+    local: &std::collections::BTreeMap<String, String>,
+    field: &str,
+) -> bool {
+    let expected = crate::cache_steps::TOOLS_SEED_ADMITTED_EXPRESSION;
+    hosted.get(field).map(String::as_str) == Some(expected)
+        && local.get(field).map(String::as_str) == Some(expected)
 }
