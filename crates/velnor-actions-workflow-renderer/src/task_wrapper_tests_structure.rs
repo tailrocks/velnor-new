@@ -1,6 +1,69 @@
 use super::*;
 
 #[test]
+fn hosted_and_scale_set_copies_share_one_identical_manifest_record() {
+    let selector = scale_set_selector();
+    let task = task_step(0);
+    let hosted = simple_job(vec![checkout_step(), acquire_step(), task.clone()]);
+    let mut scale_set = simple_job(vec![checkout_step(), acquire_step(), task]);
+    scale_set.runs_on.clone_from(&selector.token());
+    let jobs = BTreeMap::from([
+        ("rust-hosted".to_owned(), hosted),
+        ("rust-scale-set".to_owned(), scale_set),
+    ]);
+
+    let (factored, files) =
+        factor_obligation_steps(&jobs, CHECKOUT, VERSION, VERSION, &[], Some(&selector))
+            .expect("both runner lanes use the same typed execution record");
+    let manifest = files
+        .iter()
+        .find(|file| file.path == velnor_actions_contract::TASK_EXECUTION_MANIFEST_PATH)
+        .expect("shared execution manifest");
+    assert_eq!(manifest.bytes.matches("\"task_id\":").count(), 1);
+    assert!(
+        manifest
+            .bytes
+            .contains("\"task_id\":\"stack/rust/crate-0/test/default\"")
+    );
+
+    let digest_for = |job_id: &str| {
+        let StepKind::Action { with, .. } = &factored[job_id].steps[2].kind else {
+            panic!("typed task remains an action call in both lanes");
+        };
+        with.get("digest").expect("manifest record selector")
+    };
+    assert_eq!(digest_for("rust-hosted"), digest_for("rust-scale-set"));
+}
+
+#[test]
+fn same_task_id_rejects_a_different_complete_execution_record() {
+    let task = task_step(0);
+    let mut conflicting_task = task.clone();
+    let StepKind::TaskExecution { env, .. } = &mut conflicting_task.kind else {
+        unreachable!();
+    };
+    env.insert("CARGO_TERM_COLOR".to_owned(), "always".to_owned());
+    let jobs = BTreeMap::from([
+        (
+            "rust-first".to_owned(),
+            simple_job(vec![checkout_step(), acquire_step(), task]),
+        ),
+        (
+            "rust-second".to_owned(),
+            simple_job(vec![checkout_step(), acquire_step(), conflicting_task]),
+        ),
+    ]);
+
+    let error = factor_obligation_steps(&jobs, CHECKOUT, VERSION, VERSION, &[], None)
+        .expect_err("one task ID cannot select conflicting execution records");
+    assert!(
+        error
+            .to_string()
+            .contains("declared_task_id_not_unique:stack/rust/crate-0/test/default")
+    );
+}
+
+#[test]
 fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() {
     let jobs = (0..150)
         .map(|index| {
