@@ -55,6 +55,7 @@ fn image_family_uses_pinned_musl_build_and_exact_five_file_inventory() -> Result
         workflows: BTreeSet::from([RoutingWorkflow::ImageRelease]),
         mbx_qualification: None,
         mise_pin_qualification: None,
+        rust_toolchain_qualification: None,
         product_release: Some(test_pins()),
     };
     let product = product_release::render(&request)?.ok_or("image workflow was not rendered")?;
