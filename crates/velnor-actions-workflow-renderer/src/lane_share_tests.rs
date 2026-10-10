@@ -18,6 +18,7 @@ const LOGICAL_JOBS: usize = 21;
 pub(super) fn ctx() -> RenderContext {
     RenderContext {
         generator_version: "0.1.0".to_owned(),
+        report_helper_version: "0.1.0".to_owned(),
         runs_on: HOSTED_RUNS.to_owned(),
         scale_set_selector: None,
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),

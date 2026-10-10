@@ -202,6 +202,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
         support: None,
         context: RenderContext {
             generator_version: "0.1.0".to_owned(),
+            report_helper_version: "0.1.0".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             scale_set_selector: None,
             staged_binary: format!("{STAGED_BINARY_PREFIX}0.1.0"),
@@ -305,6 +306,7 @@ fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
         support: None,
         context: RenderContext {
             generator_version: "0.1.0".to_owned(),
+            report_helper_version: "0.1.0".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             scale_set_selector: None,
             staged_binary: format!("{STAGED_BINARY_PREFIX}0.1.0"),

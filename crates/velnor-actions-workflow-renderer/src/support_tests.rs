@@ -9,6 +9,7 @@ use velnor_actions_contract::{
 fn fixture_ctx(commands: Vec<ValidatorCommand>) -> RenderContext {
     let ctx = RenderContext {
         generator_version: "0.1.0".to_owned(),
+        report_helper_version: "0.1.0".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         scale_set_selector: None,
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),

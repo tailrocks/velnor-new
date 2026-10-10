@@ -16,7 +16,8 @@ use crate::vectors::{
 
 use super::{CHECKOUT_USES, REQUEST_DIR};
 
-/// Renderer scalars: version, label, staged path, request dir, pins.
+/// Renderer scalars: generator marker version, helper version, label, request
+/// directory, and pins.
 ///
 /// The plan-consumer env follows the plan role: pure-tofu plans run
 /// the plan-op and freshness steps triple-less, every other role
@@ -28,7 +29,8 @@ use super::{CHECKOUT_USES, REQUEST_DIR};
 pub(super) fn render_context(
     config: &VelnorConfig,
     label: &str,
-    version: &str,
+    generator_version: &str,
+    report_helper_version: &str,
     catalog: &ToolCatalog,
     discovery: &Discovery,
     plan_needs_rust: bool,
@@ -106,10 +108,11 @@ pub(super) fn render_context(
         .transpose()?
         .flatten();
     Ok(RenderContext {
-        generator_version: version.to_owned(),
+        generator_version: generator_version.to_owned(),
+        report_helper_version: report_helper_version.to_owned(),
         runs_on: label.to_owned(),
         scale_set_selector,
-        staged_binary: format!("{STAGED_BINARY_PREFIX}{version}"),
+        staged_binary: format!("{STAGED_BINARY_PREFIX}{report_helper_version}"),
         request_dir: REQUEST_DIR.to_owned(),
         checkout_uses: CHECKOUT_USES.to_owned(),
         validator_commands,

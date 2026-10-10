@@ -188,6 +188,7 @@ const EMIT_LABEL: &str = "ubuntu-26.04";
 fn emit_ctx() -> RenderContext {
     RenderContext {
         generator_version: EMIT_VERSION.to_owned(),
+        report_helper_version: EMIT_VERSION.to_owned(),
         runs_on: EMIT_LABEL.to_owned(),
         scale_set_selector: None,
         staged_binary: format!("{STAGED_BINARY_PREFIX}{EMIT_VERSION}"),
