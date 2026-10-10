@@ -338,7 +338,10 @@ fn source_hash_check(
 ) -> String {
     let (hash_bin, hash_args) = match policy.task.runner {
         velnor_actions_contract::VerificationRunner::LinuxX64 => ("/usr/bin/sha256sum", ""),
-        velnor_actions_contract::VerificationRunner::MacosArm64 => ("/usr/bin/shasum", "-a 256"),
+        velnor_actions_contract::VerificationRunner::MacosArm64
+        | velnor_actions_contract::VerificationRunner::Macos26Arm64 => {
+            ("/usr/bin/shasum", "-a 256")
+        }
     };
     let mut statements = repository_path_guards(path, false);
     statements.push(match expected {
@@ -410,7 +413,8 @@ fn bash_script(script: &str) -> Vec<String> {
 fn platform(runner: velnor_actions_contract::VerificationRunner) -> (&'static str, &'static str) {
     match runner {
         velnor_actions_contract::VerificationRunner::LinuxX64 => ("linux", "linux-x64"),
-        velnor_actions_contract::VerificationRunner::MacosArm64 => ("macos", "macos-arm64"),
+        velnor_actions_contract::VerificationRunner::MacosArm64
+        | velnor_actions_contract::VerificationRunner::Macos26Arm64 => ("macos", "macos-arm64"),
     }
 }
 

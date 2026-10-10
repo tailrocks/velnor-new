@@ -28,6 +28,9 @@ pub enum VerificationRunner {
     LinuxX64,
     /// GitHub-hosted macOS Apple ARM64 runner.
     MacosArm64,
+    /// GitHub-hosted macOS 26 Apple ARM64 runner.
+    #[serde(rename = "macos-26-arm64")]
+    Macos26Arm64,
 }
 
 /// Runner label for one typed verification platform.
@@ -38,6 +41,7 @@ impl VerificationRunner {
         match self {
             Self::LinuxX64 => "ubuntu-26.04",
             Self::MacosArm64 => "macos-15",
+            Self::Macos26Arm64 => "macos-26",
         }
     }
 
@@ -46,7 +50,7 @@ impl VerificationRunner {
     pub const fn mise_target(self) -> &'static str {
         match self {
             Self::LinuxX64 => "x86_64-unknown-linux-gnu",
-            Self::MacosArm64 => "aarch64-apple-darwin",
+            Self::MacosArm64 | Self::Macos26Arm64 => "aarch64-apple-darwin",
         }
     }
 }
@@ -145,6 +149,16 @@ mod tests {
         assert_eq!(
             VerificationRunner::MacosArm64.mise_target(),
             "aarch64-apple-darwin"
+        );
+        assert_eq!(VerificationRunner::Macos26Arm64.runs_on(), "macos-26");
+        assert_eq!(
+            VerificationRunner::Macos26Arm64.mise_target(),
+            "aarch64-apple-darwin"
+        );
+        assert_eq!(
+            serde_json::to_string(&VerificationRunner::Macos26Arm64)
+                .expect("serialize macOS 26 runner"),
+            "\"macos-26-arm64\""
         );
     }
 

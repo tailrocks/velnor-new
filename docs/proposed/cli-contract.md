@@ -212,7 +212,7 @@ schema = 1
 # kind = "verification"
 # mise_task = "desktop-format-check"
 # source = { mise_config = "native/mise.toml", working_directory = "native" }
-# runner = "macos-arm64"           # Or "linux-x64".
+# runner = "macos-arm64"           # Or "macos-26-arm64" or "linux-x64".
 # timeout_minutes = 10              # Required, bounded 1..=360.
 # [[workflow.tasks]]               # Optional isolated native build job.
 # id = "native-desktop"

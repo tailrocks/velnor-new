@@ -213,11 +213,15 @@ fn verification_mise_setup_pins_each_runner_architecture() {
         .expect("Linux Mise pin");
     let macos = resolve_verification_mise_setup(&config, VerificationRunner::MacosArm64)
         .expect("Apple ARM64 Mise pin");
+    let macos_26 = resolve_verification_mise_setup(&config, VerificationRunner::Macos26Arm64)
+        .expect("macOS 26 Apple ARM64 Mise pin");
 
     assert_eq!(linux.version, MISE_VERSION);
     assert_eq!(linux.sha256, MISE_BINARY_SHA256_LINUX_X64);
     assert_eq!(macos.version, MISE_VERSION);
     assert_eq!(macos.sha256, MISE_BINARY_SHA256_MACOS_ARM64);
+    assert_eq!(macos_26.version, MISE_VERSION);
+    assert_eq!(macos_26.sha256, MISE_BINARY_SHA256_MACOS_ARM64);
     assert_ne!(linux.sha256, macos.sha256);
 }
 

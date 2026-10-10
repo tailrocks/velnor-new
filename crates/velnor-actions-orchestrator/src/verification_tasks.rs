@@ -356,7 +356,9 @@ fn resolve_tool(
 fn platform(runner: VerificationRunner) -> (&'static str, &'static str) {
     match runner {
         VerificationRunner::LinuxX64 => ("linux", "linux-x64"),
-        VerificationRunner::MacosArm64 => ("macos", "macos-arm64"),
+        VerificationRunner::MacosArm64 | VerificationRunner::Macos26Arm64 => {
+            ("macos", "macos-arm64")
+        }
     }
 }
 
