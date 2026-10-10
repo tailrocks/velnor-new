@@ -387,6 +387,7 @@ fn render_merged(
     let (jobs, task_files) = task_wrapper::factor_obligation_steps(
         &jobs,
         &ctx.checkout_uses,
+        &ctx.generator_version,
         &ctx.report_helper_version,
         &ctx.workflow_tasks,
         ctx.scale_set_selector.as_ref(),
