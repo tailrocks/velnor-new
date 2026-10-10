@@ -68,6 +68,7 @@ pub(crate) fn build_for_workflow(
 }
 
 /// All authority and rendering inputs for one crate-job build.
+#[derive(Clone, Copy)]
 pub(crate) struct CrateJobInputs<'a> {
     pub(crate) label: &'a str,
     pub(crate) policy: WorkflowPolicy,
