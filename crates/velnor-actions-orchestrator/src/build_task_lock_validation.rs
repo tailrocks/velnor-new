@@ -3,7 +3,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::is_valid_build_tool_key;
-use velnor_actions_workflow_renderer::verification_jobs::BuildTaskTool;
 
 use crate::OrchestratorError;
 use crate::build_task_tools::selected_version_and_options;
