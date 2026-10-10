@@ -50,16 +50,16 @@ fn step_inputs<'a>(job: &'a Job, name: &str) -> &'a std::collections::BTreeMap<S
 
 #[test]
 fn provider_restore_precedes_init_obligation() {
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::ConsumerV1,
-        &crate_jobs_tests::discovery(tofu_triples(&["stacks/a"])),
-        &ToolCatalog::pinned(),
-        &[],
-        None,
-        2,
-        env!("CARGO_PKG_VERSION"),
-    )
+    let found = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &crate_jobs_tests::discovery(tofu_triples(&["stacks/a"])),
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &[],
+        acquire: None,
+        max_parallel_jobs: 2,
+        helper_version: env!("CARGO_PKG_VERSION"),
+    })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1, "one job per tofu root");
     let job = &found.jobs[0].1;
@@ -92,16 +92,16 @@ fn provider_restore_precedes_init_obligation() {
 
 #[test]
 fn provider_restore_keys_are_per_root() {
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::ConsumerV1,
-        &crate_jobs_tests::discovery(tofu_triples(&["stacks/a", "stacks/b"])),
-        &ToolCatalog::pinned(),
-        &[],
-        None,
-        5,
-        env!("CARGO_PKG_VERSION"),
-    )
+    let found = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &crate_jobs_tests::discovery(tofu_triples(&["stacks/a", "stacks/b"])),
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &[],
+        acquire: None,
+        max_parallel_jobs: 5,
+        helper_version: env!("CARGO_PKG_VERSION"),
+    })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 2);
     let mut keys: Vec<&str> = found
@@ -132,16 +132,16 @@ fn provider_restore_keys_are_per_root() {
 #[test]
 fn rust_jobs_carry_no_provider_restore() {
     let rust = crate_jobs_tests::group("demo", TaskKind::Clippy, &[]);
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::ConsumerV1,
-        &crate_jobs_tests::discovery(vec![rust]),
-        &ToolCatalog::pinned(),
-        &[String::new()],
-        None,
-        2,
-        env!("CARGO_PKG_VERSION"),
-    )
+    let found = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &crate_jobs_tests::discovery(vec![rust]),
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &[String::new()],
+        acquire: None,
+        max_parallel_jobs: 2,
+        helper_version: env!("CARGO_PKG_VERSION"),
+    })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1);
     let names = crate_jobs_tests::names(&found.jobs[0].1);
@@ -158,16 +158,16 @@ fn mixed_job_restores_both_sources_and_providers() {
     let tofu = tofu_group("stacks/a", TofuTaskKind::Validate);
     rust.identity.unit_id.clone_from(&tofu.identity.unit_id);
     rust.configuration.clone_from(&tofu.configuration);
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::ConsumerV1,
-        &crate_jobs_tests::discovery(vec![rust, tofu]),
-        &ToolCatalog::pinned(),
-        &[String::new()],
-        None,
-        2,
-        env!("CARGO_PKG_VERSION"),
-    )
+    let found = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &crate_jobs_tests::discovery(vec![rust, tofu]),
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &[String::new()],
+        acquire: None,
+        max_parallel_jobs: 2,
+        helper_version: env!("CARGO_PKG_VERSION"),
+    })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1, "shared group renders once");
     let names = crate_jobs_tests::names(&found.jobs[0].1);

@@ -5,16 +5,16 @@ fn drivers_follow_per_crate_selection() {
     let mut mbx = group("demo", TaskKind::Clippy, &[]);
     mbx.identity.compile_driver = CompileDriver::Mbx.as_str().to_owned();
     let cargo = group("nested", TaskKind::Clippy, &[]);
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::ConsumerV1,
-        &discovery(vec![mbx, cargo]),
-        &ToolCatalog::pinned(),
-        &[],
-        None,
-        2,
-        env!("CARGO_PKG_VERSION"),
-    )
+    let found = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &discovery(vec![mbx, cargo]),
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &[],
+        acquire: None,
+        max_parallel_jobs: 2,
+        helper_version: env!("CARGO_PKG_VERSION"),
+    })
     .expect("crate jobs");
     assert_eq!(found.drivers["rust-demo"], RenderDriver::Mbx);
     assert_eq!(found.drivers["rust-nested"], RenderDriver::Cargo);
