@@ -127,7 +127,7 @@ fn boltffi_tool() -> BuildTaskTool {
 
 fn mbx_tool() -> BuildTaskTool {
     let mut artifact = artifact(
-        "https://github.com/jdx/mr-boxington/releases/download/v1.22.0/mbx-aarch64-apple-darwin.tar.gz",
+        "https://github.com/jdx/mr-boxington/releases/download/v1.23.0/mbx-aarch64-apple-darwin.tar.gz",
         "e548b5758498cf822a180b6328597e6aded8fe9bb3046cd918399172ae30dde2",
     );
     artifact.signer = Some(
@@ -136,7 +136,7 @@ fn mbx_tool() -> BuildTaskTool {
     );
     tool(
         "mr-boxington",
-        "1.22.0",
+        "1.23.0",
         "packslip:github.com/jdx/mr-boxington",
         Some(artifact),
     )
@@ -150,7 +150,7 @@ fn rust_tool() -> BuildTaskTool {
             "aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu".to_owned(),
         ),
     ]);
-    let mut tool = tool("rust", "1.97.1", "core:rust", None);
+    let mut tool = tool("rust", "1.99.0", "core:rust", None);
     tool.config_options = options.clone();
     tool.lock_options = options;
     tool
@@ -245,14 +245,18 @@ fn native_job_bootstraps_only_locked_selected_tools_and_guards_current_source() 
     assert_eq!(job.steps[4].name, VERIFY_BUILD_TASK_MBX_NAME);
     let (guard, _) = shell_parts(&job, 4).expect("source guard shell step");
     let guard = guard.join(" ");
-    assert!(guard.contains("wrappers.cargo.command"));
-    assert!(guard.contains("MBX_CARGO_SHIM_MODE"));
+    assert!(!guard.contains("wrappers"));
+    assert!(!guard.contains("MBX_CARGO_SHIM_MODE"));
     assert!(guard.contains("mise.lock"));
     assert!(guard.contains("rust-toolchain.toml"));
-    assert!(guard.contains("MISE_DATA_DIR/command-wrappers/bin/cargo"));
-    assert!(guard.contains("test -L \"$cargo_path\""));
-    assert!(guard.contains("/usr/bin/readlink \"$cargo_path\""));
-    assert!(guard.contains("mise --no-env --locked --no-hooks exec -- cargo --version"));
+    assert!(guard.contains("MISE_DATA_DIR/installs/mr-boxington/1.23.0/"));
+    assert!(guard.contains("mise --no-env --locked --no-hooks which rustc"));
+    assert!(guard.contains("MISE_DATA_DIR/installs/rust/1.99.0/"));
+    assert!(guard.contains(
+        "\"$mbx_path\" exec --project-root \"$workspace_root\" \"$rustc_path\" --version"
+    ));
+    assert!(guard.contains("'rustc 1.99.0 ('*"));
+    assert!(!guard.contains("cargo --version"));
 
     assert_eq!(job.steps[5].name, RUN_BUILD_TASK_NAME);
     let (run, env) = shell_parts(&job, 5).expect("task shell step");
@@ -307,7 +311,7 @@ fn nested_task_source_is_hash_bound_and_mbx_preserves_its_working_directory() {
         "task_working_directory=\"$PWD\"",
         "export MISE_CEILING_PATHS=\"$workspace_ceiling\"",
         "workspace_ceiling=\"$workspace_root/..\"",
-        "config get wrappers.cargo.command --file \"$workspace_root/mise.toml\"",
+        "mise --no-env --locked --no-hooks exec -- mbx +1.99.0 rustc --version",
         "cd -P \"$task_working_directory\"",
     ];
     for fragment in expected {
@@ -326,14 +330,15 @@ fn nested_task_source_is_hash_bound_and_mbx_preserves_its_working_directory() {
 #[test]
 fn selected_config_and_lock_preserve_only_selected_platform_pins() {
     let (config, lock) = selected_mise_files(&policy()).expect("selected source projection");
-    assert!(config.contains("[tools.\"mr-boxington\"]\nversion = \"1.22.0\""));
-    assert!(config.contains("[tools.\"rust\"]\nversion = \"1.97.1\""));
+    assert!(config.contains("[tools.\"mr-boxington\"]\nversion = \"1.23.0\""));
+    assert!(config.contains("[tools.\"rust\"]\nversion = \"1.99.0\""));
     assert!(config.contains("components = \"clippy,rustfmt\""));
     assert!(config.contains("targets = \"aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu\""));
     assert!(config.contains("\"github:boltffi/boltffi\""));
     assert!(config.contains(BOLTFFI_MATCHING_REGEX));
     assert!(config.contains("os = [\"macos\"]"));
-    assert!(config.contains("command = \"mbx\""));
+    assert!(!config.contains("wrappers"));
+    assert!(!config.contains("command = \"mbx\""));
     assert!(lock.contains("backend = \"packslip:github.com/jdx/mr-boxington\""));
     assert!(lock.contains("sha256:"));
     assert!(lock.contains("platforms.macos-arm64"));
@@ -385,6 +390,23 @@ fn unsupported_source_backend_and_unbound_artifacts_fail_closed() {
         .url = "https://evil.example/tool.tar.gz".to_owned();
     assert!(install_selected_tools_script(&bad_asset_policy).is_err());
     assert!(build_build_task_job(&bad_asset_policy, CHECKOUT).is_err());
+}
+
+#[test]
+fn selected_mbx_or_rust_pin_tampering_is_rejected() {
+    for (key, version) in [("mr-boxington", "1.22.0"), ("rust", "1.97.1")] {
+        let mut changed = policy();
+        changed
+            .selected_tools
+            .iter_mut()
+            .find(|tool| tool.key == key)
+            .expect("selected tool")
+            .version = version.to_owned();
+        assert!(
+            build_build_task_job(&changed, CHECKOUT).is_err(),
+            "tampered {key} pin must not produce executable authority"
+        );
+    }
 }
 
 #[test]

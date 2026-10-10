@@ -18,7 +18,7 @@ mod tests;
 /// Contract-fixed Xcode/SDK capability check step.
 pub(crate) const VERIFY_BUILD_TASK_MACOS_NAME: &str = "Verify macOS build toolchain";
 /// Contract-fixed MBX wrapper policy check step.
-pub(crate) const VERIFY_BUILD_TASK_MBX_NAME: &str = "Verify locked MBX Cargo wrapper";
+pub(crate) const VERIFY_BUILD_TASK_MBX_NAME: &str = "Verify locked MBX Rust route";
 /// Contract-fixed declared Mise task step.
 pub(crate) const RUN_BUILD_TASK_NAME: &str = "Run declared build task";
 /// Contract-fixed selected-tool bootstrap step.

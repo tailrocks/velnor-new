@@ -22,9 +22,6 @@ pub(crate) fn resolve_selected_tools(
     rust_version: &str,
     rust_lock_options: &BTreeMap<String, String>,
 ) -> Result<Vec<BuildTaskTool>, OrchestratorError> {
-    if config.tools.contains_key("rust") {
-        return Err(failure("build_task_rust_must_use_idiomatic_file"));
-    }
     task.tools
         .iter()
         .map(|key| {
@@ -85,7 +82,10 @@ fn selected_version_and_options(
         .tools
         .get(key)
         .ok_or_else(|| failure("build_task_tool_unconfigured"))?;
-    if !selector.valid_shape || !selector.unsupported_options.is_empty() {
+    if !selector.valid_shape
+        || !selector.unsupported_options.is_empty()
+        || selector.mr_boxington.is_some()
+    {
         return Err(failure("build_task_tool_selector"));
     }
     let version = selector

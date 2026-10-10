@@ -160,15 +160,7 @@ fn validate_tool(tool: &BuildTaskTool) -> Result<(), RenderError> {
 
 fn install_script(policy: &VerificationTaskPolicy) -> Result<String, RenderError> {
     let (mise_os, lock_platform) = platform(policy.task.runner);
-    let (config, lock) = selected_mise_files_for(
-        &policy.selected_tools,
-        mise_os,
-        lock_platform,
-        policy
-            .selected_tools
-            .iter()
-            .any(|tool| tool.key == MBX_TOOL_KEY && tool.backend == MBX_BACKEND),
-    )?;
+    let (config, lock) = selected_mise_files_for(&policy.selected_tools, mise_os, lock_platform)?;
     let root = task_root(policy);
     let mut statements = base_environment(&root);
     statements.extend([

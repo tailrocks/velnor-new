@@ -11,6 +11,7 @@ test-render-capture = []
 
 [dependencies]
 velnor-actions-contract = { version = "=0.1.6", path = "../velnor-actions-contract" }
+velnor-actions-mise = { version = "=0.1.6", path = "../velnor-actions-mise" }
 
 [lints]
 workspace = true

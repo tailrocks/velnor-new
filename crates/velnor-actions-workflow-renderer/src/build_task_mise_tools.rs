@@ -2,6 +2,8 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_mise::catalog::{MR_BOXINGTON_VERSION, RUST_VERSION};
+
 use crate::RenderError;
 use crate::verification_jobs::build_task_jobs::{BuildTaskArtifact, BuildTaskPolicy};
 
@@ -12,14 +14,13 @@ pub(super) fn selected_mise_files(
     policy: &BuildTaskPolicy,
 ) -> Result<(String, String), RenderError> {
     validate_selected_tools(policy)?;
-    selected_mise_files_for(&policy.selected_tools, "macos", "macos-arm64", true)
+    selected_mise_files_for(&policy.selected_tools, "macos", "macos-arm64")
 }
 
 pub(super) fn selected_mise_files_for(
     selected_tools: &[crate::verification_jobs::build_task_jobs::BuildTaskTool],
     mise_os: &str,
     lock_platform: &str,
-    cargo_wrapper: bool,
 ) -> Result<(String, String), RenderError> {
     if !matches!(
         (mise_os, lock_platform),
@@ -53,21 +54,6 @@ pub(super) fn selected_mise_files_for(
         "[settings]".to_owned(),
         "lockfile = true".to_owned(),
     ]);
-    if cargo_wrapper {
-        config.extend([
-            String::new(),
-            "[settings.cargo]".to_owned(),
-            "binstall = true".to_owned(),
-            "binstall_only = true".to_owned(),
-            String::new(),
-            "[wrappers.cargo]".to_owned(),
-            "command = \"mbx\"".to_owned(),
-            String::new(),
-            "[wrappers.cargo.env]".to_owned(),
-            "MBX_CARGO_SHIM_MODE = \"1\"".to_owned(),
-        ]);
-    }
-
     let mut lock = Vec::new();
     for tool in selected_tools {
         let key = toml_string(&tool.key);
@@ -117,6 +103,20 @@ fn validate_selected_tools(policy: &BuildTaskPolicy) -> Result<(), RenderError> 
     if policy.selected_tools.len() != policy.task.tools.len() {
         return Err(RenderError::InvalidWorkflow(
             "build_task_tool_count".to_owned(),
+        ));
+    }
+    let selected_version = |key: &str| {
+        policy
+            .selected_tools
+            .iter()
+            .find(|tool| tool.key == key)
+            .map(|tool| tool.version.as_str())
+    };
+    if selected_version("mr-boxington") != Some(MR_BOXINGTON_VERSION)
+        || selected_version("rust") != Some(RUST_VERSION)
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "build_task_toolchain_pin_mismatch".to_owned(),
         ));
     }
     let expected_boltffi_options = BTreeMap::from([(

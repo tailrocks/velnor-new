@@ -89,7 +89,6 @@ fn resolve_verification_tools(
     };
     validate_config_shape(mise_config)?;
     validate_settings(mise_config)?;
-    validate_wrappers(mise_config)?;
     let requested = crate::native_mise_tasks::selected_task_tools(mise_config, &task.mise_task)
         .map_err(failure)?;
     if requested.is_empty() {
@@ -227,7 +226,7 @@ fn optional_source<'a>(
 }
 
 fn validate_config_shape(config: &NativeMiseConfig) -> Result<(), OrchestratorError> {
-    let allowed = ["min_version", "settings", "tasks", "tools", "wrappers"];
+    let allowed = ["min_version", "settings", "tasks", "tools"];
     if config
         .root_keys
         .iter()
@@ -259,22 +258,6 @@ fn validate_settings(config: &NativeMiseConfig) -> Result<(), OrchestratorError>
         || !settings.unsupported_fields.is_empty()
     {
         return Err(failure("verification_mise_settings"));
-    }
-    Ok(())
-}
-
-fn validate_wrappers(config: &NativeMiseConfig) -> Result<(), OrchestratorError> {
-    if !config.root_keys.iter().any(|key| key == "wrappers") {
-        return Ok(());
-    }
-    let wrappers = &config.wrappers;
-    if !wrappers.present
-        || !wrappers.valid_shape
-        || wrappers.cargo_command.as_deref() != Some("mbx")
-        || wrappers.mbx_cargo_shim_mode.as_deref() != Some("1")
-        || !wrappers.unsupported_fields.is_empty()
-    {
-        return Err(failure("verification_mise_wrappers"));
     }
     Ok(())
 }

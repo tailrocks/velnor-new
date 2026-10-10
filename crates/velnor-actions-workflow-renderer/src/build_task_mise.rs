@@ -64,6 +64,11 @@ pub(super) fn source_guard_script(policy: &BuildTaskPolicy) -> Result<String, Re
         .iter()
         .find(|tool| tool.key == "mr-boxington")
         .ok_or_else(|| RenderError::InvalidWorkflow("build_task_mbx_missing".to_owned()))?;
+    let rust = policy
+        .selected_tools
+        .iter()
+        .find(|tool| tool.key == "rust")
+        .ok_or_else(|| RenderError::InvalidWorkflow("build_task_rust_missing".to_owned()))?;
     let mut statements = base_environment(&task_root);
     statements.extend(["test -d \"$task_root\"".to_owned()]);
     statements.extend(private_environment());
@@ -71,7 +76,6 @@ pub(super) fn source_guard_script(policy: &BuildTaskPolicy) -> Result<String, Re
         "export MISE_TRUSTED_CONFIG_PATHS=\"$GITHUB_WORKSPACE\"".to_owned(),
         "export MISE_CEILING_PATHS=\"$GITHUB_WORKSPACE/..\"".to_owned(),
         "export MISE_NO_HOOKS=1".to_owned(),
-        "export MBX_CARGO_SHIM_MODE=1".to_owned(),
         format!("export {CARGO_BINSTALL_ONLY_ENV}=1"),
         "unset MISE_CONFIG_FILE MISE_ENV MISE_ENV_FILE".to_owned(),
         "cd -P \"$GITHUB_WORKSPACE\"".to_owned(),
@@ -115,16 +119,13 @@ pub(super) fn source_guard_script(policy: &BuildTaskPolicy) -> Result<String, Re
         "task_working_directory=\"$PWD\"".to_owned(),
         jq_guard(),
         config_chain_check(expected_config_chain(policy).iter().map(String::as_str)),
-        "mise --no-env --no-hooks config get wrappers.cargo.command --file \"$workspace_root/mise.toml\" | /usr/bin/grep -Fqx mbx".to_owned(),
-        "mise --no-env --no-hooks config get wrappers.cargo.env.MBX_CARGO_SHIM_MODE --file \"$workspace_root/mise.toml\" | /usr/bin/grep -Fqx 1".to_owned(),
     ]);
-    statements.extend(mbx_guard(&mbx.version));
-    statements.push("mise --no-env --locked --no-hooks exec -- cargo --version".to_owned());
+    statements.extend(mbx_guard(&mbx.version, &rust.version));
     Ok(statements.join("; "))
 }
 
-/// Pinned-MBX and Cargo-wrapper identity checks without command substitution.
-fn mbx_guard(mbx_version: &str) -> Vec<String> {
+/// Pinned-MBX and selected Rust toolchain identity checks.
+fn mbx_guard(mbx_version: &str, rust_version: &str) -> Vec<String> {
     vec![
         capture_command(
             "mise --no-env --no-hooks which mbx",
@@ -149,27 +150,20 @@ fn mbx_guard(mbx_version: &str) -> Vec<String> {
         ),
         "test \"$mbx_command\" = \"$mbx_path\"".to_owned(),
         capture_command(
-            "mise --no-env --locked --no-hooks exec -- sh -c 'command -v cargo'",
-            "$task_root/cargo_path.txt",
-            "cargo_path",
+            "mise --no-env --locked --no-hooks which rustc",
+            "$task_root/rustc_path.txt",
+            "rustc_path",
         ),
-        "test \"$cargo_path\" = \"$MISE_DATA_DIR/command-wrappers/bin/cargo\"".to_owned(),
-        "test -x \"$cargo_path\"".to_owned(),
-        "test -L \"$cargo_path\"".to_owned(),
+        format!(
+            "case \"$rustc_path\" in \"$MISE_DATA_DIR/installs/rust/{rust_version}/\"*) ;; *) exit 1 ;; esac"
+        ),
+        "test -x \"$rustc_path\"".to_owned(),
         capture_command(
-            "mise --no-env --locked --no-hooks exec -- sh -c 'command -v mise'",
-            "$task_root/mise_path.txt",
-            "mise_path",
+            "\"$mbx_path\" exec --project-root \"$workspace_root\" \"$rustc_path\" --version",
+            "$task_root/rustc_version.txt",
+            "rustc_version",
         ),
-        "case \"$mise_path\" in /*) ;; *) exit 1 ;; esac".to_owned(),
-        "test -x \"$mise_path\"".to_owned(),
-        capture_command(
-            "/usr/bin/readlink \"$cargo_path\"",
-            "$task_root/mise_target.txt",
-            "mise_target",
-        ),
-        "case \"$mise_target\" in /*) ;; *) exit 1 ;; esac".to_owned(),
-        "test \"$mise_target\" = \"$mise_path\"".to_owned(),
+        format!("case \"$rustc_version\" in 'rustc {rust_version} ('*) ;; *) exit 1 ;; esac"),
     ]
 }
 
