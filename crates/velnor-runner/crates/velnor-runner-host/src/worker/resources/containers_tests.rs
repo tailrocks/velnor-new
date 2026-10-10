@@ -42,6 +42,12 @@ fn inspect_with_labels(labels: HashMap<String, String>) -> ContainerInspectRespo
 
 fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectResponse, HostError> {
     let labels = label_map(&spec.labels)?.ok_or(HostError::Ownership)?;
+    let budget = spec.resource_budget.ok_or(HostError::Config)?;
+    let limits = if spec.privileged {
+        budget.dind()
+    } else {
+        budget.runner()
+    };
     let mut mounts = Vec::with_capacity(spec.mounts.len() + spec.bind_mounts.len());
     let mut env = vec![UBUNTU_PATH.to_owned()];
     env.extend(spec.env.iter().cloned());
@@ -86,6 +92,9 @@ fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectRespons
             cgroupns_mode: Some(HostConfigCgroupnsModeEnum::PRIVATE),
             privileged: Some(spec.privileged),
             network_mode: spec.network_mode.clone(),
+            nano_cpus: Some(limits.nano_cpus),
+            memory: Some(limits.memory_bytes),
+            memory_swap: Some(limits.memory_bytes),
             ..Default::default()
         }),
         mounts: Some(mounts),

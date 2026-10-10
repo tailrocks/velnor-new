@@ -63,7 +63,7 @@ pub(crate) struct PairResourceBudget {
 
 /// Validated per-container limits and their aggregate pair budget.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct ResourceBudget {
+pub struct ResourceBudget {
     runner: DockerResourceLimits,
     dind: DockerResourceLimits,
     pair: PairResourceBudget,

@@ -5,7 +5,7 @@ use velnor_runner_github::{Poll, QueueSession};
 use crate::journal::Journal;
 use crate::listen::{Link, point_at_queue, poll_path, restore_base};
 use crate::scale_set::EnsureError;
-use crate::worker::Started;
+use crate::worker::{ResourceBudget, Started};
 
 use super::capacity::{self, Admit};
 use super::completion::CompletionWorker;
@@ -39,6 +39,10 @@ pub(super) async fn poll_and_drive(
     let mut workers = Vec::new();
     let ceiling = capacity::job_capacity();
     let capacity = super::pressure::advertise(ceiling);
+    let resource_budget = rest.resource_budget.ok_or(EnsureError::Unexpected {
+        status: 0,
+        step: "resource budget",
+    })?;
     let population = session
         .statistics()
         .map_or(0, velnor_runner_github::Statistics::assigned_population);
@@ -71,6 +75,7 @@ pub(super) async fn poll_and_drive(
         owner: rest.owner,
         repo: rest.repo,
         pat: rest.pat,
+        resource_budget,
         cursor: 0,
         steady_retry: None,
     };
@@ -158,6 +163,7 @@ struct Turn<'a> {
     owner: &'a str,
     repo: &'a str,
     pat: &'a str,
+    resource_budget: ResourceBudget,
     cursor: i64,
     steady_retry: Option<std::time::Instant>,
 }
@@ -259,6 +265,7 @@ impl Turn<'_> {
             owner: self.owner,
             repo: self.repo,
             pat: self.pat,
+            resource_budget: Some(self.resource_budget),
         };
         let launched = drive_ready(
             &mut lane,

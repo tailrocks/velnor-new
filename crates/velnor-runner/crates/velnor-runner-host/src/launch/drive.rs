@@ -5,6 +5,7 @@ use std::fmt;
 use zeroize::Zeroize;
 
 use crate::scale_set::EnsureError;
+use crate::worker::ResourceBudget;
 
 /// Call context. Tokens are redacted in `Debug` and zeroized on drop.
 pub(crate) struct Drive {
@@ -35,6 +36,8 @@ pub(crate) struct Rest<'a> {
     pub(crate) repo: &'a str,
     /// PAT. Not logged.
     pub(crate) pat: &'a str,
+    /// Validated runner and `DinD` limits for new worker pairs.
+    pub(crate) resource_budget: Option<ResourceBudget>,
 }
 
 impl fmt::Debug for Drive {

@@ -6,7 +6,7 @@ use super::{Context, EffectBudget, Failure, run_effect};
 use crate::journal::{CleanupClaim, CompletedLaunch};
 use crate::runner_plan;
 use crate::stage::PairEngine;
-use crate::worker::dind_create;
+use crate::worker::dind_container_name;
 
 #[cfg(test)]
 #[path = "container_tests.rs"]
@@ -24,7 +24,8 @@ pub(super) async fn cleanup(
         .as_deref()
         .ok_or_else(|| Failure::not_proven("worker identity"))?;
     let runner = runner_plan(worker).map_err(|error| Failure::request("runner plan", error))?;
-    let dind = dind_create(worker).map_err(|error| Failure::request("dind plan", error))?;
+    let dind_name =
+        dind_container_name(worker).map_err(|error| Failure::request("dind identity", error))?;
     let tasks = [
         ContainerCleanup {
             recorded_id: launch.intent.docker_id.as_deref(),
@@ -34,7 +35,7 @@ pub(super) async fn cleanup(
         },
         ContainerCleanup {
             recorded_id: launch.intent.dind_id.as_deref(),
-            name: &dind.name,
+            name: &dind_name,
             volume: worker,
             role: "dind",
         },

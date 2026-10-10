@@ -10,9 +10,9 @@ use crate::docker_client::docker_deadline;
 use crate::docker_spec::{DeleteDecision, delete_decision, runner_plan};
 use crate::error::HostError;
 use crate::worker::{
-    CreateProjection, WorkerVolumeRole, WorkerVolumeVerification, create_named_volumes,
-    create_only, deliver_jit, dind_create, join_dind_net, remove_worker_volumes, runner_create,
-    start_id, verify_worker_volume,
+    CreateProjection, ResourceBudget, WorkerVolumeRole, WorkerVolumeVerification,
+    create_named_volumes, create_only, deliver_jit, dind_create, join_dind_net,
+    remove_worker_volumes, runner_create, start_id, verify_worker_volume,
 };
 
 /// Where `start_pair_until` returns. Later steps are not started.
@@ -94,12 +94,8 @@ impl PairSink for Forget {
 
 impl PairEngine for Docker {
     async fn prepare_volumes(&self, volume: &str) -> Result<(), HostError> {
-        Box::pin(docker_deadline(create_named_volumes(
-            self,
-            volume,
-            &dind_create(volume)?.mounts,
-        )))
-        .await??;
+        let mounts = crate::worker::dind_mounts(volume)?;
+        Box::pin(docker_deadline(create_named_volumes(self, volume, &mounts))).await??;
         crate::work_owner::own_work_volume(self, &format!("{volume}-work")).await
     }
 
@@ -179,15 +175,25 @@ impl PairEngine for Docker {
 pub async fn start_pair_until(
     docker: &Docker,
     private_volume: &str,
+    resource_budget: ResourceBudget,
     jit: &[u8],
     stop: PairStop,
 ) -> Result<PartialPair, HostError> {
-    Box::pin(drive(docker, private_volume, jit, stop, &Forget)).await
+    Box::pin(drive(
+        docker,
+        private_volume,
+        resource_budget,
+        jit,
+        stop,
+        &Forget,
+    ))
+    .await
 }
 
 pub(crate) async fn drive<E: PairEngine, S: PairSink>(
     engine: &E,
     private_volume: &str,
+    resource_budget: ResourceBudget,
     jit: &[u8],
     stop: PairStop,
     sink: &S,
@@ -195,8 +201,8 @@ pub(crate) async fn drive<E: PairEngine, S: PairSink>(
     if jit.is_empty() {
         return Err(HostError::EmptyJit);
     }
-    let runner = runner_create(&runner_plan(private_volume)?)?;
-    let dind = dind_create(private_volume)?;
+    let runner = runner_create(&runner_plan(private_volume)?, resource_budget)?;
+    let dind = dind_create(private_volume, resource_budget)?;
     sink.volume(private_volume).await?;
     engine.prepare_volumes(private_volume).await?;
     if stop == PairStop::Volumes {

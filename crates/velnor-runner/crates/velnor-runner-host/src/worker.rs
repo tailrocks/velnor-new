@@ -31,11 +31,12 @@ mod volumes_tests;
 pub(crate) use projection::{dind_create_for_identity, runner_create_for_identity};
 #[cfg(test)]
 pub(crate) use projection::{identity_labels_match, launch_identity_labels_match};
+pub use resource_budget::ResourceBudget;
+pub(crate) use resource_budget::ResourceBudgetConfig;
 #[cfg(test)]
 pub(crate) use resource_budget::bounded_host_limits;
 #[cfg(test)]
 pub(crate) use resource_budget::test_resource_budget;
-pub(crate) use resource_budget::{ResourceBudget, ResourceBudgetConfig};
 #[cfg(test)]
 mod projection_tests;
 
@@ -99,7 +100,8 @@ pub struct CreateProjection {
     pub open_stdin: bool,
     /// `container:<id>` joins that container's network namespace. Runner only.
     pub network_mode: Option<String>,
-    /// Validated CPU/memory budget. `None` keeps legacy unbounded behavior.
+    /// Validated CPU/memory budget. Identity-only plans may omit it; Docker
+    /// create projection rejects a missing budget.
     pub(crate) resource_budget: Option<ResourceBudget>,
 }
 
@@ -140,7 +142,10 @@ pub struct BollardCreate {
 ///
 /// Returns [`HostError::PrivilegedRunner`] or [`HostError::ForbiddenMount`]
 /// from [`audit_plan`], including JIT in env, cmd, or labels.
-pub fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, HostError> {
+pub fn runner_create(
+    plan: &ContainerPlan,
+    resource_budget: ResourceBudget,
+) -> Result<CreateProjection, HostError> {
     audit_plan(plan)?;
     if plan.cmd.iter().any(|item| cmd_names_jit(item)) {
         return Err(HostError::ForbiddenMount);
@@ -160,7 +165,7 @@ pub fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, HostError
         privileged: false,
         open_stdin: true,
         network_mode: None,
-        resource_budget: None,
+        resource_budget: Some(resource_budget),
     })
 }
 
@@ -197,13 +202,12 @@ fn dind_container_id(id: &str) -> bool {
 /// # Errors
 ///
 /// Returns [`HostError::ForbiddenMount`] when `private_volume` is not one private name.
-pub fn dind_create(private_volume: &str) -> Result<CreateProjection, HostError> {
+pub fn dind_create(
+    private_volume: &str,
+    resource_budget: ResourceBudget,
+) -> Result<CreateProjection, HostError> {
     let runner = runner_plan(private_volume)?;
-    let mut mounts = runner.mounts;
-    mounts.push(Mount {
-        source: format!("volume:{private_volume}-docker"),
-        target: "/var/lib/docker".to_owned(),
-    });
+    let mounts = dind_mounts_for(private_volume, runner.mounts);
     let mut labels = vec![
         "velnor.role=dind".to_owned(),
         format!("velnor.volume={private_volume}"),
@@ -225,8 +229,30 @@ pub fn dind_create(private_volume: &str) -> Result<CreateProjection, HostError> 
         privileged: true,
         open_stdin: false,
         network_mode: None,
-        resource_budget: None,
+        resource_budget: Some(resource_budget),
     })
+}
+
+pub(crate) fn dind_mounts(private_volume: &str) -> Result<Vec<Mount>, HostError> {
+    let runner = runner_plan(private_volume)?;
+    Ok(dind_mounts_for(private_volume, runner.mounts))
+}
+
+fn dind_mounts_for(private_volume: &str, mut mounts: Vec<Mount>) -> Vec<Mount> {
+    mounts.push(Mount {
+        source: format!("volume:{private_volume}-docker"),
+        target: "/var/lib/docker".to_owned(),
+    });
+    mounts
+}
+
+/// Stable `DinD` container name used by cleanup and recovery.
+///
+/// This identity helper deliberately does not carry a resource budget; cleanup
+/// must remain independent of the current configuration.
+pub(crate) fn dind_container_name(private_volume: &str) -> Result<String, HostError> {
+    runner_plan(private_volume)?;
+    Ok(format!("{private_volume}-dind"))
 }
 
 /// Bollard config for [`bollard::Docker::create_container`]. No JIT parameter.
@@ -238,6 +264,9 @@ pub fn dind_create(private_volume: &str) -> Result<CreateProjection, HostError> 
 pub fn bollard_create(spec: &CreateProjection) -> Result<BollardCreate, HostError> {
     if spec.platform != PLATFORM {
         return Err(HostError::ForbiddenMount);
+    }
+    if spec.resource_budget.is_none() {
+        return Err(HostError::Config);
     }
     let config = ContainerCreateBody {
         image: Some(spec.image.clone()),
@@ -273,11 +302,13 @@ pub fn bollard_create(spec: &CreateProjection) -> Result<BollardCreate, HostErro
 pub async fn start_pair(
     docker: &Docker,
     private_volume: &str,
+    resource_budget: ResourceBudget,
     jit: &[u8],
 ) -> Result<Started, HostError> {
     let partial = Box::pin(crate::stage::start_pair_until(
         docker,
         private_volume,
+        resource_budget,
         jit,
         PairStop::Jit,
     ))

@@ -106,6 +106,14 @@ fn drive(state: &Path, config: &HostConfig) {
         &config.docker.endpoint,
         &state.join("launch.db"),
         config.host.max_jobs,
+        match config.resource_budget() {
+            Ok(budget) => budget,
+            Err(error) => {
+                eprintln!("{error}");
+                pause();
+                return;
+            }
+        },
     ) {
         Ok(report) => finish_launch(&report),
         Err(error) => {

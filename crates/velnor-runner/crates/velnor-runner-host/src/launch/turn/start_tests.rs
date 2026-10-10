@@ -36,6 +36,7 @@ pub(super) fn rest() -> crate::launch::Rest<'static> {
         owner: "",
         repo: "",
         pat: "",
+        resource_budget: crate::worker::test_resource_budget().ok(),
     }
 }
 

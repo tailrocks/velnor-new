@@ -188,7 +188,15 @@ async fn uncertain_dind_only_recovery_keeps_reservation_and_owned_resources() ->
             let volume = volume.to_owned();
             let jit = jit.to_vec();
             async move {
-                let partial = drive(&*engine, &volume, &jit, PairStop::DindCreated, &bind).await?;
+                let partial = drive(
+                    &*engine,
+                    &volume,
+                    crate::worker::test_resource_budget()?,
+                    &jit,
+                    PairStop::DindCreated,
+                    &bind,
+                )
+                .await?;
                 assert!(partial.runner_id.is_none());
                 assert!(partial.dind_id.is_some());
                 Err(HostError::Docker)

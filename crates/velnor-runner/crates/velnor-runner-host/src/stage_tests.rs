@@ -5,7 +5,10 @@ use std::sync::Mutex;
 
 use super::HostError;
 use super::stage::{Forget, PairEngine, PairStop, decide, drive};
-use super::worker::{CreateProjection, WorkerVolumeRole, WorkerVolumeVerification};
+use super::worker::{
+    CreateProjection, ResourceBudget, WorkerVolumeRole, WorkerVolumeVerification,
+    test_resource_budget,
+};
 
 // join_dind_net accepts only a 64-hex container id.
 const FIRST_CONTAINER_ID: &str = "0000000000000000000000000000000000000000000000000000000000000001";
@@ -15,6 +18,7 @@ struct Fake {
     ids: Mutex<Vec<String>>,
     names: Mutex<HashMap<String, String>>,
     removed: Mutex<Vec<String>>,
+    budgets: Mutex<Vec<Option<ResourceBudget>>>,
     /// Fail the Nth call of this method name. `None` never fails.
     fail_at: Mutex<Option<(&'static str, u8)>>,
     counts: Mutex<HashMap<&'static str, u8>>,
@@ -27,6 +31,7 @@ impl Fake {
             ids: Mutex::new(Vec::new()),
             names: Mutex::new(HashMap::new()),
             removed: Mutex::new(Vec::new()),
+            budgets: Mutex::new(Vec::new()),
             fail_at: Mutex::new(None),
             counts: Mutex::new(HashMap::new()),
         }
@@ -41,6 +46,13 @@ impl Fake {
 
     fn removed(&self) -> Vec<String> {
         self.removed
+            .lock()
+            .map(|guard| guard.clone())
+            .unwrap_or_default()
+    }
+
+    fn budgets(&self) -> Vec<Option<ResourceBudget>> {
+        self.budgets
             .lock()
             .map(|guard| guard.clone())
             .unwrap_or_default()
@@ -74,6 +86,10 @@ impl PairEngine for Fake {
 
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError> {
         self.hit("create")?;
+        self.budgets
+            .lock()
+            .map_err(|_| HostError::Docker)?
+            .push(spec.resource_budget);
         push(&self.events, "create")?;
         let mut ids = self.ids.lock().map_err(|_| HostError::Docker)?;
         let id = format!("{:064x}", ids.len() + 1);
@@ -150,7 +166,15 @@ fn push(events: &Mutex<Vec<&'static str>>, event: &'static str) -> Result<(), Ho
 #[tokio::test]
 async fn dind_created_does_not_start() -> Result<(), HostError> {
     let engine = Fake::new();
-    let partial = drive(&engine, "worker_a", b"jit", PairStop::DindCreated, &Forget).await?;
+    let partial = drive(
+        &engine,
+        "worker_a",
+        test_resource_budget()?,
+        b"jit",
+        PairStop::DindCreated,
+        &Forget,
+    )
+    .await?;
     assert_eq!(partial.dind_id.as_deref(), Some(FIRST_CONTAINER_ID));
     assert_eq!(partial.runner_id, None);
     assert_eq!(engine.events(), ["volumes", "create"]);
@@ -160,13 +184,15 @@ async fn dind_created_does_not_start() -> Result<(), HostError> {
 #[tokio::test]
 async fn jit_stop_writes_stdin_after_both_starts() -> Result<(), HostError> {
     let engine = Fake::new();
-    let partial = drive(&engine, "worker_a", b"jit", PairStop::Jit, &Forget).await?;
+    let budget = test_resource_budget()?;
+    let partial = drive(&engine, "worker_a", budget, b"jit", PairStop::Jit, &Forget).await?;
     assert!(partial.dind_id.is_some());
     assert!(partial.runner_id.is_some());
     assert_eq!(
         engine.events(),
         ["volumes", "create", "start", "create", "start", "jit"]
     );
+    assert_eq!(engine.budgets(), [Some(budget), Some(budget)]);
     Ok(())
 }
 
@@ -201,7 +227,15 @@ async fn remove_recorded_keeps_a_foreign_id() -> Result<(), HostError> {
 #[tokio::test]
 async fn volumes_stop_creates_no_container() -> Result<(), HostError> {
     let engine = Fake::new();
-    let partial = drive(&engine, "worker_a", b"jit", PairStop::Volumes, &Forget).await?;
+    let partial = drive(
+        &engine,
+        "worker_a",
+        test_resource_budget()?,
+        b"jit",
+        PairStop::Volumes,
+        &Forget,
+    )
+    .await?;
     assert_eq!(partial.dind_id, None);
     assert_eq!(partial.runner_id, None);
     assert_eq!(engine.events(), ["volumes"]);
@@ -211,7 +245,15 @@ async fn volumes_stop_creates_no_container() -> Result<(), HostError> {
 #[tokio::test]
 async fn dind_started_does_not_create_the_runner() -> Result<(), HostError> {
     let engine = Fake::new();
-    let partial = drive(&engine, "worker_a", b"jit", PairStop::DindStarted, &Forget).await?;
+    let partial = drive(
+        &engine,
+        "worker_a",
+        test_resource_budget()?,
+        b"jit",
+        PairStop::DindStarted,
+        &Forget,
+    )
+    .await?;
     assert_eq!(partial.dind_id.as_deref(), Some(FIRST_CONTAINER_ID));
     assert_eq!(partial.runner_id, None);
     assert_eq!(engine.events(), ["volumes", "create", "start"]);
@@ -224,6 +266,7 @@ async fn runner_created_does_not_start() -> Result<(), HostError> {
     let partial = drive(
         &engine,
         "worker_a",
+        test_resource_budget()?,
         b"jit",
         PairStop::RunnerCreated,
         &Forget,
@@ -240,6 +283,7 @@ async fn runner_started_does_not_write_jit() -> Result<(), HostError> {
     let partial = drive(
         &engine,
         "worker_a",
+        test_resource_budget()?,
         b"jit",
         PairStop::RunnerStarted,
         &Forget,
@@ -262,7 +306,16 @@ async fn second_create_failure_removes_only_the_owned_dind() -> Result<(), HostE
         .lock()
         .map_err(|_| HostError::Docker)?
         .insert("foreign".to_owned(), "bbbbbbbbbbbb".to_owned());
-    let Err(error) = drive(&engine, "worker_a", b"jit", PairStop::Jit, &Forget).await else {
+    let Err(error) = drive(
+        &engine,
+        "worker_a",
+        test_resource_budget()?,
+        b"jit",
+        PairStop::Jit,
+        &Forget,
+    )
+    .await
+    else {
         return Err(HostError::Docker);
     };
     assert_eq!(error, HostError::Docker);

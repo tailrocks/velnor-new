@@ -59,8 +59,8 @@ pub use reconcile::{
 pub use scale_set::{EnsureError, EnsuredSet, ensure_product_scale_set, product_runner_groups};
 pub use stage::{PairStop, PartialPair, remove_recorded, start_pair_until};
 pub use worker::{
-    BollardCreate, CreateProjection, Started, bollard_create, dind_create, runner_create,
-    start_pair,
+    BollardCreate, CreateProjection, ResourceBudget, Started, bollard_create, dind_create,
+    runner_create, start_pair,
 };
 
 #[cfg(test)]

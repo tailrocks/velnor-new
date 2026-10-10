@@ -2,7 +2,6 @@
 
 use super::{PairResourceBudget, ResourceBudgetConfig};
 use crate::error::HostError;
-use crate::worker::CreateProjection;
 
 fn config() -> ResourceBudgetConfig {
     ResourceBudgetConfig {
@@ -96,23 +95,8 @@ fn docker_minimum_memory_and_guest_cpu_limits_are_checked() -> Result<(), HostEr
 
 #[test]
 fn emitted_host_config_serializes_cpu_and_memory_limits() -> Result<(), HostError> {
-    let spec = CreateProjection {
-        name: "test-runner".to_owned(),
-        image: "test:image".to_owned(),
-        platform: "linux/amd64".to_owned(),
-        env: Vec::new(),
-        cmd: Vec::new(),
-        entrypoint: vec!["/entrypoint".to_owned()],
-        user: None,
-        working_dir: None,
-        labels: Vec::new(),
-        mounts: Vec::new(),
-        bind_mounts: Vec::new(),
-        privileged: false,
-        open_stdin: true,
-        network_mode: None,
-        resource_budget: Some(config().validate()?),
-    };
+    let budget = config().validate()?;
+    let spec = crate::worker::runner_create(&crate::runner_plan("worker_a")?, budget)?;
     let create = crate::worker::bollard_create(&spec)?;
     let host = create.config.host_config.ok_or(HostError::Docker)?;
     let serialized = serde_json::to_value(host).map_err(|_| HostError::Docker)?;
@@ -122,8 +106,7 @@ fn emitted_host_config_serializes_cpu_and_memory_limits() -> Result<(), HostErro
     assert_eq!(serialized["CgroupnsMode"].as_str(), Some("private"));
     assert_eq!(serialized["Privileged"].as_bool(), Some(false));
 
-    let mut dind = crate::worker::dind_create("worker_a")?;
-    dind.resource_budget = Some(config().validate()?);
+    let dind = crate::worker::dind_create("worker_a", budget)?;
     let created = crate::worker::bollard_create(&dind)?;
     let host = created.config.host_config.ok_or(HostError::Docker)?;
     let serialized = serde_json::to_value(host).map_err(|_| HostError::Docker)?;
@@ -134,15 +117,35 @@ fn emitted_host_config_serializes_cpu_and_memory_limits() -> Result<(), HostErro
     assert_eq!(serialized["Privileged"].as_bool(), Some(true));
     let mut unbounded = spec;
     unbounded.resource_budget = None;
-    let unbounded_create = crate::worker::bollard_create(&unbounded)?;
-    let unbounded_host = unbounded_create
-        .config
-        .host_config
-        .ok_or(HostError::Docker)?;
-    let unbounded_value = serde_json::to_value(unbounded_host).map_err(|_| HostError::Docker)?;
-    assert_eq!(unbounded_value["NanoCpus"].as_i64(), None);
-    assert_eq!(unbounded_value["Memory"].as_i64(), None);
-    assert_eq!(unbounded_value["MemorySwap"].as_i64(), None);
+    assert_eq!(
+        crate::worker::bollard_create(&unbounded),
+        Err(HostError::Config)
+    );
+    Ok(())
+}
+
+#[test]
+fn changed_config_reaches_both_actual_container_create_projections() -> Result<(), HostError> {
+    let config = ResourceBudgetConfig {
+        runner_cpu_millicores: 1_500,
+        runner_memory_bytes: 3_221_225_472,
+        dind_cpu_millicores: 2_500,
+        dind_memory_bytes: 5_368_709_120,
+    };
+    let budget = config.validate()?;
+    let runner = crate::worker::runner_create(&crate::runner_plan("worker_a")?, budget)?;
+    let runner = crate::worker::bollard_create(&runner)?;
+    let runner_host = runner.config.host_config.ok_or(HostError::Docker)?;
+    assert_eq!(runner_host.nano_cpus, Some(1_500_000_000));
+    assert_eq!(runner_host.memory, Some(3_221_225_472));
+    assert_eq!(runner_host.memory_swap, Some(3_221_225_472));
+
+    let dind = crate::worker::dind_create("worker_a", budget)?;
+    let dind = crate::worker::bollard_create(&dind)?;
+    let dind_host = dind.config.host_config.ok_or(HostError::Docker)?;
+    assert_eq!(dind_host.nano_cpus, Some(2_500_000_000));
+    assert_eq!(dind_host.memory, Some(5_368_709_120));
+    assert_eq!(dind_host.memory_swap, Some(5_368_709_120));
     Ok(())
 }
 

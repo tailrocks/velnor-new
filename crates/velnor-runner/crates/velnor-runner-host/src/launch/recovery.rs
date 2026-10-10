@@ -12,7 +12,7 @@ use crate::docker_client::docker_deadline;
 use crate::docker_spec::runner_plan;
 use crate::error::HostError;
 use crate::journal::{Journal, RecoveryLease};
-use crate::worker::{WorkerVolumeRole, dind_create};
+use crate::worker::{WorkerVolumeRole, dind_container_name};
 
 const RECOVERY_LEASE_SECONDS: i64 = 90;
 const RECOVERY_RETRY_SECONDS: i64 = 30;
@@ -196,7 +196,7 @@ where
         return Ok(false);
     }
     let runner = runner_plan(&worker)?;
-    let dind = dind_create(&worker)?;
+    let dind_name = dind_container_name(&worker)?;
     let runner_id = locate_worker(
         journal,
         engine,
@@ -212,7 +212,7 @@ where
         engine,
         lease,
         lease.intent.dind_id.clone(),
-        &dind.name,
+        &dind_name,
         &worker,
         "dind",
     )
