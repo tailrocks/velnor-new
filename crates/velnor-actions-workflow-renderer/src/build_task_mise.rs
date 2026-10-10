@@ -47,7 +47,7 @@ pub(super) fn install_selected_tools_script(
         printf_write("$task_root/mise.lock", &lock, "build_task")?,
         "cd -P \"$task_root\"".to_owned(),
         jq_guard(),
-        config_chain_check(&[
+        config_chain_check([
             "$task_root/mise.toml",
             "$task_root/global.toml",
             "$task_root/system.toml",
@@ -114,7 +114,7 @@ pub(super) fn source_guard_script(policy: &BuildTaskPolicy) -> Result<String, Re
         ),
         "task_working_directory=\"$PWD\"".to_owned(),
         jq_guard(),
-        config_chain_check(&expected_config_chain(policy)),
+        config_chain_check(expected_config_chain(policy).iter().map(String::as_str)),
         "mise --no-env --no-hooks config get wrappers.cargo.command --file \"$workspace_root/mise.toml\" | /usr/bin/grep -Fqx mbx".to_owned(),
         "mise --no-env --no-hooks config get wrappers.cargo.env.MBX_CARGO_SHIM_MODE --file \"$workspace_root/mise.toml\" | /usr/bin/grep -Fqx 1".to_owned(),
     ]);
@@ -224,9 +224,8 @@ fn task_root_expr(task_id: &str) -> String {
     format!("${{RUNNER_TEMP}}/velnor-task-${{GITHUB_RUN_ID}}-${{GITHUB_RUN_ATTEMPT}}-{task_id}")
 }
 
-fn config_chain_check(expected: &[&str]) -> String {
+fn config_chain_check<'a>(expected: impl IntoIterator<Item = &'a str>) -> String {
     let expected_args = expected
-        .iter()
         .map(|path| format!("\"{path}\""))
         .collect::<Vec<_>>()
         .join(" ");
