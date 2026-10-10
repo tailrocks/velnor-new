@@ -69,7 +69,7 @@ fn native_build_variant_is_shared_source_bounded_and_required_in_every_mode() ->
             "{mode}: {native}"
         );
         assert!(
-            native.contains("cd -P \"$workspace_root/native\"; task_working_directory=\"$PWD\""),
+            native.contains(r#"cd -P \"$workspace_root/native\"; task_working_directory=\"$PWD\""#),
             "{mode}: task must run from its declared nested directory: {native}"
         );
         assert!(
