@@ -7,8 +7,9 @@
 use std::ffi::OsString;
 use velnor_actions_mise::command::{
     CREDENTIAL_ALLOWLIST_BASELINE, CREDENTIAL_ALLOWLIST_BOOTSTRAP, CREDENTIAL_ENV_KEYS, EnvPolicy,
-    IsolatedCommand, PROXY_ENV_KEYS,
+    IsolatedCommand, PROXY_ENV_KEYS, RUSTUP_TOOLCHAIN_ENV,
 };
+use velnor_actions_mise::steps::ToolHomes;
 use velnor_actions_mise::{GitRequest, PinnedTool, PinnedToolExec, ToolCatalog};
 
 fn pair(key: &str, value: &str) -> (OsString, OsString) {
@@ -197,8 +198,13 @@ fn mbx_child_uses_rustup_path_without_mise_cargo_wrappers_or_shims() -> Result<(
         vec![OsString::from("metadata")],
     )
     .map_err(|err| err.to_string())?;
+    let catalog = ToolCatalog::pinned();
+    let homes = ToolHomes::new("/Users/alex/owned-rustup", "/Users/alex/owned-cargo")
+        .map_err(|err| err.to_string())?;
     let command = request
-        .command(&ToolCatalog::pinned())
+        .command(&catalog)
+        .map_err(|err| err.to_string())?
+        .with_env(&homes.env(&catalog))
         .map_err(|err| err.to_string())?;
     let original_path = std::env::join_paths([
         "/Users/alex/.local/share/mise/command-wrappers/bin",
@@ -231,6 +237,10 @@ fn mbx_child_uses_rustup_path_without_mise_cargo_wrappers_or_shims() -> Result<(
         (
             OsString::from("RUSTUP_HOME"),
             OsString::from("/Users/alex/.rustup"),
+        ),
+        (
+            OsString::from(RUSTUP_TOOLCHAIN_ENV),
+            OsString::from("1.97.1"),
         ),
         (
             OsString::from("MISE_DATA_DIR"),
@@ -269,6 +279,28 @@ fn mbx_child_uses_rustup_path_without_mise_cargo_wrappers_or_shims() -> Result<(
             "ambient {key} executable must not override the Mise-selected tool"
         );
     }
+    let rustup_selectors: Vec<OsString> = child
+        .iter()
+        .filter(|(key, _)| key == RUSTUP_TOOLCHAIN_ENV)
+        .map(|(_, value)| value.clone())
+        .collect();
+    assert_eq!(
+        rustup_selectors,
+        [OsString::from(catalog.rustup_toolchain())],
+        "the inherited selector is stripped, while the explicit typed Rust pin survives"
+    );
+    assert!(
+        child
+            .iter()
+            .any(|(key, value)| key == "MISE_RUSTUP_HOME" && value == "/Users/alex/owned-rustup"),
+        "the catalog-owned Rustup home survives"
+    );
+    assert!(
+        child
+            .iter()
+            .any(|(key, value)| key == "MISE_CARGO_HOME" && value == "/Users/alex/owned-cargo"),
+        "the catalog-owned Cargo home survives"
+    );
     assert!(
         has(&child, "CARGO_HOME"),
         "isolated Cargo cache home is preserved"
