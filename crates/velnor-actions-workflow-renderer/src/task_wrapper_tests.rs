@@ -363,6 +363,18 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
     std::fs::set_permissions(&helper, permissions).expect("make helper executable");
 
     let script = super::task_script(VERSION);
+    let script_path = test_root.join("task-wrapper.sh");
+    std::fs::write(&script_path, &script).expect("write generated wrapper for syntax check");
+    let syntax = std::process::Command::new("bash")
+        .arg("-n")
+        .arg(&script_path)
+        .output()
+        .expect("check generated Bash syntax");
+    assert!(
+        syntax.status.success(),
+        "generated wrapper is not valid Bash: {}",
+        String::from_utf8_lossy(&syntax.stderr)
+    );
     let run_script = |report_code: &str| {
         std::process::Command::new("bash")
             .arg("-x")
