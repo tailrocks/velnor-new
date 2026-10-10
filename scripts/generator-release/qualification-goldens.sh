@@ -323,7 +323,7 @@ capture_release_dogfood() {
   # Same HOME/mise environment as the candidate run below, so the same
   # cache is warmed. `--locked` keeps a lock rewrite from slipping in.
   for manifest in "$repo/Cargo.toml" "$repo/crates/velnor-runner/Cargo.toml"; do
-    if ! mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path "$manifest"; then
+    if ! mise --no-config --no-env --no-hooks exec rust@1.99.0 mr-boxington@1.23.0 -- mbx fetch --locked --manifest-path "$manifest"; then
       echo "FATAL: could not fetch dogfood cargo sources for $manifest"
       exit 2
     fi

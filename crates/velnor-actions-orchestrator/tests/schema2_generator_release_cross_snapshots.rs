@@ -30,7 +30,7 @@ pub(super) fn assert_intel_cross_build(
     );
     assert!(
         intel_action.contains(
-            "rustup target add --toolchain 1.98.1-aarch64-apple-darwin x86_64-apple-darwin"
+            "rustup target add --toolchain 1.99.0-aarch64-apple-darwin x86_64-apple-darwin"
         ),
         "{intel_action}"
     );

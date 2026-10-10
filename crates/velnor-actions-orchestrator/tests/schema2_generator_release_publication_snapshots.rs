@@ -156,7 +156,7 @@ fn assert_build_actions(body: &str, actions: &Actions) -> Result<(), Box<dyn std
         "{linux_action}"
     );
     assert!(
-        linux_action.contains("rust@1.98.1 mr-boxington@1.21.1"),
+        linux_action.contains("rust@1.99.0 mr-boxington@1.23.0"),
         "{linux_action}"
     );
     assert_macos_build(body, actions)
@@ -276,7 +276,7 @@ fn assert_manifest_attestation_job(
 fn assert_manifest_builder_contract(manifest: &str) {
     assert!(
         manifest.contains(
-            "create-release-manifest.sh '0.1.6' 'tailrocks/velnor-new' '1.98.1' '1.21.1'"
+            "create-release-manifest.sh '0.1.6' 'tailrocks/velnor-new' '1.99.0' '1.23.0'"
         ),
         "{manifest}"
     );
