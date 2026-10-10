@@ -6,6 +6,11 @@ use crate::launch::resource_probe::provider::{ImageProvider, VerifiedCandidate};
 
 struct FixtureProvider;
 
+fn has_exact_stop_request(requests: &[String]) -> bool {
+    let prefix = format!("POST /containers/{CONTAINER_ID}/stop?");
+    requests.iter().any(|request| request.starts_with(&prefix))
+}
+
 impl ImageProvider for FixtureProvider {
     async fn verified_candidate(
         &self,
@@ -155,6 +160,7 @@ async fn engine_change_after_create_blocks_start_then_cleans_on_bound_engine() -
             .iter()
             .any(|request| request.ends_with("/start HTTP/1.1"))
     );
+    assert!(!has_exact_stop_request(&changed_requests));
     assert!(
         !changed_requests
             .iter()
@@ -237,6 +243,7 @@ async fn root_change_after_create_blocks_start_then_cleans_on_original_root() ->
             .iter()
             .any(|request| request.ends_with("/start HTTP/1.1"))
     );
+    assert!(!has_exact_stop_request(&changed_requests));
     assert!(
         !changed_requests
             .iter()
