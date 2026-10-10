@@ -100,10 +100,17 @@ fn build_only_config() -> Result<String, Box<dyn std::error::Error>> {
 fn replace_min_version(root: &std::path::Path, minimum: &str) -> TestResult {
     let path = root.join("mise.toml");
     let source = fs::read_to_string(&path)?;
-    let updated = source.replace(
-        "min_version = \"2026.10.7\"",
-        &format!("min_version = {minimum}"),
+    let fixture_pin = "min_version = \"2026.10.7\"";
+    let replacement = format!("min_version = {minimum}");
+    assert_eq!(
+        source.matches(fixture_pin).count(),
+        1,
+        "fixture pin is unique"
     );
+    if replacement == fixture_pin {
+        return Ok(());
+    }
+    let updated = source.replace(fixture_pin, &replacement);
     assert_ne!(source, updated, "the test value replaces the fixture pin");
     fs::write(path, updated)?;
     Ok(())
