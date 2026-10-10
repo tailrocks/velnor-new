@@ -237,9 +237,10 @@ version = "0.9.140"
 version = "0.30.1"
 matching_regex = '^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$'
 [tools."mr-boxington"]
-version = "1.22.0"
+version = "1.23.0"
 [tools."rust"]
-version = "1.97.1"
+version = "1.99.0"
+mr_boxington = true
 components = "clippy,rustfmt"
 targets = "aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu"
 [tools."swiftlint"]
@@ -252,10 +253,6 @@ lockfile = true
 [settings.cargo]
 binstall = true
 binstall_only = true
-[wrappers.cargo]
-command = "mbx"
-[wrappers.cargo.env]
-MBX_CARGO_SHIM_MODE = "1"
 "#;
 
 /// Synthetic source-bound task/tool fixture for the resolver integration.
@@ -270,7 +267,8 @@ min_version = "2026.10.7"
 [tools]
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.140"
 "github:boltffi/boltffi" = { version = "0.30.1", matching_regex = '^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$' }
-"mr-boxington" = "1.22.0"
+"mr-boxington" = "1.23.0"
+rust = { version = "1.99.0", mr_boxington = true }
 swiftlint = { version = "0.65.1", os = ["macos"] }
 xcodegen = "2.46.0"
 
@@ -280,12 +278,6 @@ idiomatic_version_file_enable_tools = ["rust"]
 
 [settings.cargo]
 binstall = true
-
-[wrappers.cargo]
-command = "mbx"
-
-[wrappers.cargo.env]
-MBX_CARGO_SHIM_MODE = "1"
 
 [tasks.lint-linux]
 run = "echo lint-linux"
@@ -335,7 +327,7 @@ run = "cargo xtask desktop verify"
     )?;
     fs::write(
         root.join("rust-toolchain.toml"),
-        "[toolchain]\nchannel = \"1.97.1\"\ncomponents = [\"clippy\", \"rustfmt\"]\ntargets = [\"aarch64-unknown-linux-gnu\", \"x86_64-unknown-linux-gnu\"]\n",
+        "[toolchain]\nchannel = \"1.99.0\"\ncomponents = [\"clippy\", \"rustfmt\"]\ntargets = [\"aarch64-unknown-linux-gnu\", \"x86_64-unknown-linux-gnu\"]\n",
     )?;
     fs::write(
         root.join("mise.lock"),
@@ -345,8 +337,8 @@ lockfile_version = 3
 [tools]
 "aqua:nextest-rs/nextest/cargo-nextest" = [{ version = "0.9.140", backend = "aqua:nextest-rs/nextest/cargo-nextest", specifiers = ["0.9.140"], "platforms.macos-arm64" = { url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.140/cargo-nextest-0.9.140-universal-apple-darwin.tar.gz", checksum = "sha256:58e0a722f9444078fab447783f322acf15a2a771ba785b3fbbe8bacda31c3df9" } }]
 "github:boltffi/boltffi" = [{ version = "0.30.1", backend = "github:boltffi/boltffi", specifiers = ["0.30.1"], options = { matching_regex = '^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$' }, "platforms.macos-arm64" = { url = "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-darwin-aarch64.tar.gz", checksum = "sha256:ce3a47b5c398cbb9c327098a612b431f30db15d353d62cee4e4637540fa8321a" } }]
-"mr-boxington" = [{ version = "1.22.0", backend = "packslip:github.com/jdx/mr-boxington", specifiers = ["1.22.0"], "platforms.macos-arm64" = { url = "https://github.com/jdx/mr-boxington/releases/download/v1.22.0/mbx-aarch64-apple-darwin.tar.gz", checksum = "sha256:e548b5758498cf822a180b6328597e6aded8fe9bb3046cd918399172ae30dde2", signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml" } }]
-rust = [{ version = "1.97.1", backend = "core:rust", specifiers = ["1.97.1"], options = { components = "clippy,rustfmt", targets = "aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu" } }]
+"mr-boxington" = [{ version = "1.23.0", backend = "packslip:github.com/jdx/mr-boxington", specifiers = ["1.23.0"], "platforms.macos-arm64" = { url = "https://github.com/jdx/mr-boxington/releases/download/v1.23.0/mbx-aarch64-apple-darwin.tar.gz", checksum = "sha256:e548b5758498cf822a180b6328597e6aded8fe9bb3046cd918399172ae30dde2", signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml" } }]
+rust = [{ version = "1.99.0", backend = "core:rust", specifiers = ["1.99.0"], options = { components = "clippy,rustfmt", targets = "aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu" } }]
 swiftlint = [{ version = "0.65.1", backend = "aqua:realm/SwiftLint", specifiers = ["0.65.1"], "platforms.macos-arm64" = { url = "https://github.com/realm/SwiftLint/releases/download/0.65.1/portable_swiftlint.zip", checksum = "sha256:c1e429b0599cf1b516f369a2d9ec04eaf0e436f3c12b637df8851fa52ff694d0" } }]
 xcodegen = [{ version = "2.46.0", backend = "aqua:yonaskolb/XcodeGen", specifiers = ["2.46.0"], "platforms.macos-arm64" = { url = "https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip", checksum = "sha256:4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806" } }]
 "#,
