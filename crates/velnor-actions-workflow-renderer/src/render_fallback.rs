@@ -44,6 +44,12 @@ pub(crate) fn render_checked_workflow(
     generator_version: &str,
 ) -> Result<String, RenderError> {
     let text = render_marked_workflow(path, document, generator_version)?;
+    #[cfg(feature = "test-render-capture")]
+    if workflow_size::is_workflow_path(path)
+        && crate::render::test_render_capture::full_tree_capture_enabled()
+    {
+        return Ok(text);
+    }
     workflow_size::check_workflow_size(path, &text)?;
     Ok(text)
 }

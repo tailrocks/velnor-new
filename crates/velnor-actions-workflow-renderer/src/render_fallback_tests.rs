@@ -96,3 +96,45 @@ fn irreducible_over_cap_workflow_still_fails_closed() {
     assert!(matches!(error, RenderError::InvalidWorkflow(problem)
         if problem.starts_with("workflow_too_large:.github/workflows/ci.yml:")));
 }
+
+#[cfg(feature = "test-render-capture")]
+#[test]
+fn diagnostic_capture_bypasses_only_the_early_guard_and_resets() -> Result<(), RenderError> {
+    use crate::render::test_render_capture::{full_tree_capture_guard, take};
+
+    let command = "x".repeat(MAX_WORKFLOW_BYTES + 100);
+    let document = workflow(&command, 1);
+    let selected = render_marked_workflow(".github/workflows/ci.yml", &document, VERSION)?;
+    let expected = format!(
+        "workflow_too_large:.github/workflows/ci.yml:{}:{MAX_WORKFLOW_BYTES}",
+        selected.len()
+    );
+
+    let ordinary = render_checked_workflow(".github/workflows/ci.yml", &document, VERSION)
+        .expect_err("the normal early guard must reject this workflow");
+    assert!(matches!(ordinary, RenderError::InvalidWorkflow(problem) if problem == expected));
+
+    {
+        let _guard = full_tree_capture_guard();
+        let bypassed = render_checked_workflow(".github/workflows/ci.yml", &document, VERSION)?;
+        assert_eq!(bypassed, selected);
+
+        let actionlint = marker::with_marker(VERSION, "")?;
+        let tree_error = crate::tree::render_tree(&bypassed, &actionlint, VERSION)
+            .expect_err("the unchanged assembled-tree cap must reject the workflow");
+        assert!(matches!(tree_error, RenderError::InvalidWorkflow(problem) if problem == expected));
+
+        let capture = take().expect("complete render capture");
+        let tree = capture.tree.expect("tree recorded before its size gate");
+        assert_eq!(
+            tree.get(".github/workflows/ci.yml"),
+            Some(selected.as_str())
+        );
+        assert!(tree.get(".github/actionlint.yaml").is_some());
+    }
+
+    let after_drop = render_checked_workflow(".github/workflows/ci.yml", &document, VERSION)
+        .expect_err("dropping the diagnostic guard must restore the early limit");
+    assert!(matches!(after_drop, RenderError::InvalidWorkflow(problem) if problem == expected));
+    Ok(())
+}
