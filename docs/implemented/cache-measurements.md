@@ -218,7 +218,7 @@ Both jobs in the recorded round-trip probe set `MBX_GC_AUTO=1` and
 `ac3ab6a3d`, not the current native renderer lifecycle. The native MBX
 object lifecycle follows the [cache contract](../proposed/cache-contract.md),
 which assigns MBX object transport and its post step to the pinned action. The
-current native renderer candidate sets `MBX_GC_AUTO=0` while task results are
+current native renderer sets `MBX_GC_AUTO=0` while task results are
 active and runs guarded `mbx clean` after the final workspace consumer. The
 historical production measurements above used `MBX_GC_AUTO=0` on hosted Linux
 and a Scale Set local backend with a manual bundle, before the native object

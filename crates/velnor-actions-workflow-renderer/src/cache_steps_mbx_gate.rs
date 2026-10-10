@@ -6,7 +6,7 @@ use super::mbx_command::{has_external_mbx_selector, uses_mbx_command};
 use super::mbx_preflight::{canonical_mbx_preflight_step, mbx_version_check_step};
 use super::{CompileDriver, MBX_ACTION_NAME};
 use crate::RenderError;
-use velnor_actions_contract::{Job, Step, StepRole};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 /// Gate native MBX action and executable selection against each job's driver.
 ///
@@ -177,6 +177,117 @@ fn check_mbx_version_order(
         )));
     }
     Ok(())
+}
+
+/// Append one guarded workspace cleanup after every job's final task step.
+pub(crate) fn append_workspace_cleanups(
+    jobs: &mut BTreeMap<String, Job>,
+) -> Result<(), RenderError> {
+    for (id, job) in jobs {
+        append_workspace_cleanup(id, job)?;
+    }
+    Ok(())
+}
+
+fn append_workspace_cleanup(id: &str, job: &mut Job) -> Result<(), RenderError> {
+    let Some((action_at, ready_at)) = lifecycle_step_indices(id, job)? else {
+        return Ok(());
+    };
+    validate_ready_check(id, job, action_at, ready_at)?;
+    if has_consumer_before_ready(job, ready_at) {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_consumer_before_ready:{id}"
+        )));
+    }
+    let cleanup = crate::cache_steps::mbx_workspace_clean_step_for_action(&job.steps[action_at])?;
+    job.steps.push(cleanup);
+    Ok(())
+}
+
+fn lifecycle_step_indices(id: &str, job: &Job) -> Result<Option<(usize, usize)>, RenderError> {
+    let actions = role_indices(job, StepRole::MbxCache);
+    let ready = role_indices(job, StepRole::MbxVersionCheck);
+    let cleanups = role_indices(job, StepRole::MbxWorkspaceCleanup);
+    if actions.is_empty() && ready.is_empty() && cleanups.is_empty() {
+        return Ok(None);
+    }
+    if actions.is_empty() {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_lifecycle_without_action:{id}"
+        )));
+    }
+    if actions.len() != 1 {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_cleanup_action_duplicated:{id}"
+        )));
+    }
+    if !cleanups.is_empty() {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_cleanup_duplicated:{id}"
+        )));
+    }
+    if ready.is_empty() {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_ready_check_missing:{id}"
+        )));
+    }
+    if ready.len() != 1 {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_ready_check_duplicated:{id}"
+        )));
+    }
+    Ok(Some((actions[0], ready[0])))
+}
+
+fn role_indices(job: &Job, role: StepRole) -> Vec<usize> {
+    job.steps
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| step.role == Some(role))
+        .map(|(index, _)| index)
+        .collect()
+}
+
+fn validate_ready_check(
+    id: &str,
+    job: &Job,
+    action_at: usize,
+    ready_at: usize,
+) -> Result<(), RenderError> {
+    if action_at >= ready_at {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_ready_check_order:{id}"
+        )));
+    }
+    let StepKind::Action { with, env, .. } = &job.steps[action_at].kind else {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_cleanup_action_kind_mismatch:{id}"
+        )));
+    };
+    let version = with
+        .get("version")
+        .ok_or_else(|| RenderError::InvalidWorkflow("mbx_version_missing".to_owned()))?;
+    let rust_toolchain = with
+        .get("toolchain")
+        .ok_or_else(|| RenderError::InvalidWorkflow("mbx_toolchain_missing".to_owned()))?;
+    let expected = mbx_version_check_step(version, rust_toolchain, env.clone())?;
+    let actual = &job.steps[ready_at];
+    if actual.id != expected.id
+        || actual.role != expected.role
+        || actual.condition != expected.condition
+        || actual.kind != expected.kind
+    {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_ready_check_mismatch:{id}"
+        )));
+    }
+    Ok(())
+}
+
+fn has_consumer_before_ready(job: &Job, ready_at: usize) -> bool {
+    job.steps.iter().enumerate().any(|(index, step)| {
+        index < ready_at && step.role != Some(StepRole::MbxVersionCheck) && uses_mbx_command(step)
+    })
 }
 
 /// True for the pinned native MBX action.

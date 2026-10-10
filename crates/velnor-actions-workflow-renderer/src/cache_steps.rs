@@ -13,6 +13,7 @@ mod mbx_command;
 mod mbx_gate;
 #[path = "cache_steps_mbx_preflight.rs"]
 mod mbx_preflight;
+pub(crate) use mbx_gate::append_workspace_cleanups;
 pub use mbx_gate::check_mbx_gating;
 pub(crate) use mbx_gate::is_mbx_action;
 pub use mbx_preflight::{
@@ -21,6 +22,7 @@ pub use mbx_preflight::{
 };
 pub(crate) use mbx_preflight::{
     MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE,
+    mbx_workspace_clean_step_for_action,
 };
 
 use crate::{

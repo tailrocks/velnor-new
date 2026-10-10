@@ -29,12 +29,16 @@ installs and owns production MBX at exact version `1.21.1`, with
 `github-cache-mode: objects`. Velnor keeps the action's default compiler
 identity key and binds cache generation to the action SHA, actual runner environment,
 GitHub job ID,
-MBX version, and `MBX_SHARE_OUT_DIR=0` / `MBX_GC_AUTO=1` policy. The action's
+MBX version, and `MBX_SHARE_OUT_DIR=0` / `MBX_GC_AUTO=0` policy. The action's
 stable logical object path is `$RUNNER_TEMP/velnor/mbx`; runner job namespaces
 provide physical isolation. The workflow does not install MBX through Mise.
 A following guard checks both `mbx --version` and `mbx cache dir` through the
 selected Rust Mise environment, requiring the exact version and the expected
-action-owned store before the build.
+action-owned store before the build. Automatic GC stays off while task results
+are in flight. After the final foreground workspace consumer and report step,
+a cleanup guarded by the successful version/store check runs `mbx clean`; this
+removes managed workspace outputs while leaving the action-owned object store
+and receipts available to the action's post export.
 
 This generation does not yet bind the canonical `platform_id` from the exact
 runner label, runtime `ImageOS`/`ImageVersion`, and execution target required by

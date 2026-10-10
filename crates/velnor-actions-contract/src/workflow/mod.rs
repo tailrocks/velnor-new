@@ -22,6 +22,7 @@ pub mod report;
 mod report_validate;
 pub mod step;
 pub mod step_identity;
+mod step_mbx_lifecycle;
 mod step_protocol;
 pub mod timeout;
 pub mod trust;
@@ -96,6 +97,6 @@ pub use report::{
     NotSelectedReason, TaskReport, TaskStatus, TaskTiming,
 };
 pub use step::{Step, StepKind};
-pub use step_identity::{StepId, StepRole};
+pub use step_identity::{MBX_WORKSPACE_CLEAN_CONDITION, StepId, StepRole};
 pub use timeout::JobTimeout;
 pub use trust::{Trust, trust_for_event};
