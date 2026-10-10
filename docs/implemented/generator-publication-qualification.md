@@ -1,6 +1,18 @@
 # Generator publication qualification
 
-- Snapshot (read-only GitHub observation at 2026-10-09 23:34 UTC): immutable
+- Refreshed inventory (read-only GitHub observation at 2026-10-10 02:14 UTC):
+  `v0.1.4` remains the latest published generator release: immutable release
+  ID 406452151, 20 assets, with manifest digest
+  `d6f7788e50e0c6168c36d122d910476ac6772cd4603352ef2319a88b888fc076`; its
+  tag resolves to `d3590d321e51f7b99bfb0a92c11d3d6eb7af61cd`. The occupied
+  `v0.1.5` draft remains release ID 407717552, with 20 assets and the first
+  asset URL under `untagged-6899c9b4aa4e941dadba`; its tag resolves to
+  `f1041f322c54cd7edfdef06afd307799eeaa801a`. The `v0.1.6` tag was absent
+  from `git ls-remote`, the release list, and a release lookup at this
+  observation. This records availability only; it does not reserve `0.1.6`.
+  GitHub's `isLatest` flag names a separate immutable `binary-...` release,
+  which is not a generator acceptance receipt.
+- Earlier snapshot (read-only GitHub observation at 2026-10-09 23:34 UTC): immutable
   `v0.1.4` (release ID 406452151) is the latest published generator release;
   its tag resolves to `d3590d321e51f7b99bfb0a92c11d3d6eb7af61cd` and it has 20
   assets.
@@ -30,12 +42,13 @@
   asset inventory checks; after publication it still requires canonical asset
   URLs and immutable metadata. No successful official publication after this
   fix has been observed.
-- The `v0.1.5` tag and draft are occupied and must not be reused, overwritten,
-  moved, or deleted. At the snapshot, both `v0.1.6` tag and release lookups
-  returned 404. PR #122 is still open at head
-  `87f7390abf7272d076f43b7fb75a9218228d14d0` against `main` at
-  `3139334cb79c0b494eb530b1de88ff258af10f21`; it proposes the next version but
-  does not establish release readiness or hosted acceptance.
+- Historical PR #122 snapshot at 2026-10-09 23:34 UTC: the `v0.1.5` tag and
+  draft were occupied and both `v0.1.6` tag/release lookups returned 404. PR
+  #122 was then at head `87f7390abf7272d076f43b7fb75a9218228d14d0` against
+  `main` at `3139334cb79c0b494eb530b1de88ff258af10f21`. That snapshot was
+  version preparation only; it did not establish release readiness or hosted
+  acceptance. The refreshed inventory above confirms that `v0.1.5` remains
+  occupied and `v0.1.6` remains unused.
 - Canonical route and gates: dispatch only
   [`.github/workflows/product-release.yml`](../../.github/workflows/product-release.yml#L4)
   on `main`, with `workflow_dispatch: {}` and no inputs. Release eligibility
