@@ -13,7 +13,7 @@ use crate::errors::ContractError;
 use crate::strict_json::MAX_UNTRUSTED_DOCUMENT_BYTES;
 use crate::validate_digest;
 
-use super::step::validate_task_execution;
+use super::step::{TaskExecutionValidation, validate_task_execution};
 
 /// Fixed generated path for the versioned task execution manifest.
 pub const TASK_EXECUTION_MANIFEST_PATH: &str = ".github/velnor/task-execution-manifest-v1.json";
@@ -195,18 +195,18 @@ impl TaskExecutionManifestEntryV1 {
     ///
     /// Returns a contract error when any field or binding is malformed.
     pub fn validate(&self) -> Result<(), ContractError> {
-        validate_task_execution(
-            &self.argv,
-            &self.env,
-            &self.task_id,
-            &self.task_digest,
-            &self.toolchain_inputs,
-            &self.matrix_id,
-            &self.matrix_key,
-            &self.report_helper_version,
-            self.matrix_max_parallel,
-            "manifest",
-        )?;
+        validate_task_execution(&TaskExecutionValidation {
+            argv: &self.argv,
+            env: &self.env,
+            task_id: &self.task_id,
+            task_digest: &self.task_digest,
+            toolchain_inputs: &self.toolchain_inputs,
+            matrix_id: &self.matrix_id,
+            matrix_key: &self.matrix_key,
+            report_helper_version: &self.report_helper_version,
+            matrix_max_parallel: self.matrix_max_parallel,
+            job: "manifest",
+        })?;
         validate_digest(&self.execution_digest)?;
         if self.execution_digest != self.computed_execution_digest()? {
             return Err(ContractError::identity(
