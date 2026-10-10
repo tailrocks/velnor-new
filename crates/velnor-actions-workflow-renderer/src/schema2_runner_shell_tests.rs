@@ -100,7 +100,9 @@ fn assert_lane_shells(document: &Yaml, minimum_per_lane: usize) {
                     "scale-set job {id} must declare its shell"
                 );
             }
-            Yaml::Str(label) if label == "ubuntu-26.04" || label == "macos-15-intel" => {
+            Yaml::Str(label)
+                if label == "ubuntu-26.04" || label == "macos-15-intel" || label == "macos-26" =>
+            {
                 hosted += 1;
                 if has_container {
                     assert_eq!(

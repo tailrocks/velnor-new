@@ -1,6 +1,33 @@
 use super::*;
 use crate::yaml::render_yaml;
 
+fn run_step<'a>(job: &'a Yaml, step_name: &str) -> &'a str {
+    let Yaml::Map(job_fields) = job else {
+        panic!("job must be a mapping");
+    };
+    let Some((_, Yaml::Seq(steps))) = job_fields.iter().find(|(key, _)| key == "steps") else {
+        panic!("job steps are missing");
+    };
+    let step = steps
+        .iter()
+        .find(|step| {
+            let Yaml::Map(fields) = step else {
+                return false;
+            };
+            fields
+                .iter()
+                .any(|(key, value)| key == "name" && value == &Yaml::str(step_name))
+        })
+        .unwrap_or_else(|| panic!("step {step_name} is missing"));
+    let Yaml::Map(fields) = step else {
+        unreachable!("selected step is a mapping");
+    };
+    let Some((_, Yaml::Str(run))) = fields.iter().find(|(key, _)| key == "run") else {
+        panic!("step {step_name} has no string run value");
+    };
+    run
+}
+
 fn pins() -> RustToolchainQualificationPins {
     RustToolchainQualificationPins {
         mise_setup: crate::setup::MiseSetup {
@@ -53,26 +80,39 @@ fn qualification_measures_both_hosted_targets_without_claiming_a_result() {
             rendered.contains("name: Install pinned MBX through Mise"),
             "{id}"
         );
+        let install_run = run_step(body, "Install pinned MBX through Mise");
         assert!(
-            rendered.contains(
+            install_run.contains(
                 "mise --no-config --no-env --no-hooks install \"mr-boxington@$MBX_VERSION\""
             ),
-            "{id}"
+            "{id}: {install_run:?}"
         );
-        assert!(rendered.contains("mise --no-config --no-env --no-hooks which mbx --tool \"mr-boxington@$MBX_VERSION\""), "{id}");
+        assert!(
+            install_run.contains(
+                "mise --no-config --no-env --no-hooks which mbx --tool \"mr-boxington@$MBX_VERSION\""
+            ),
+            "{id}: {install_run:?}"
+        );
         assert!(rendered.contains("MBX_VERSION: 1.23.0"), "{id}");
-        assert!(
-            rendered.contains("--project-root \"$GITHUB_WORKSPACE\""),
-            "{id}"
+        let probe_run = run_step(
+            body,
+            "Install official Rust components and measure the qualified tree",
         );
         assert!(
-            rendered.contains("--mbx-executable \"$MBX_EXECUTABLE\""),
-            "{id}"
+            probe_run.contains("--project-root \"$GITHUB_WORKSPACE\""),
+            "{id}: {probe_run:?}"
         );
-        assert!(rendered.contains("--mbx-version \"$MBX_VERSION\""), "{id}");
         assert!(
-            rendered.contains("python3 scripts/qualification/qualify_rust_toolchain.py"),
-            "{id}"
+            probe_run.contains("--mbx-executable \"$MBX_EXECUTABLE\""),
+            "{id}: {probe_run:?}"
+        );
+        assert!(
+            probe_run.contains("--mbx-version \"$MBX_VERSION\""),
+            "{id}: {probe_run:?}"
+        );
+        assert!(
+            probe_run.contains("python3 scripts/qualification/qualify_rust_toolchain.py"),
+            "{id}: {probe_run:?}"
         );
         assert!(rendered.contains("RUST_VERSION: 1.99.0"), "{id}");
         assert!(
@@ -81,7 +121,8 @@ fn qualification_measures_both_hosted_targets_without_claiming_a_result() {
         );
         assert!(rendered.contains(MANIFEST_SHA256), "{id}");
         assert!(
-            rendered.contains("install official Rust components"),
+            rendered
+                .contains("name: Install official Rust components and measure the qualified tree"),
             "{id}"
         );
         assert!(
