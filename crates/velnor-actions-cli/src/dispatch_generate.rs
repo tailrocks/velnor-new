@@ -9,6 +9,9 @@ use velnor_actions_orchestrator::{
 
 use crate::dispatch::{fail_public, working_dir};
 
+#[path = "dispatch_generate_warnings.rs"]
+mod warning_format;
+
 /// Dispatch `generate`: files written and recommendations go to stderr.
 pub(crate) fn run_generate(output_dir: Option<PathBuf>, mode: Option<String>) -> ExitCode {
     let Some(cwd) = working_dir() else {
@@ -46,6 +49,9 @@ pub(crate) fn run_generate(output_dir: Option<PathBuf>, mode: Option<String>) ->
             }
             for recommendation in &report.recommendations {
                 eprintln!("{recommendation}");
+            }
+            for warning in warning_format::warning_lines(&report.warnings) {
+                eprintln!("{warning}");
             }
             ExitCode::SUCCESS
         }

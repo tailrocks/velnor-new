@@ -30,10 +30,14 @@ mod preserve;
 #[path = "generate_preview.rs"]
 mod preview;
 
+/// Own the private persistent spare used only for in-place generation.
+#[path = "generate_stage_root.rs"]
+mod stage_root;
+
 /// Re-exported snapshot: the `generate::ToolSnapshot` path is stable API.
 pub use guards::ToolSnapshot;
 
-use guards::{GenerateOwnership, same_filesystem};
+use guards::GenerateOwnership;
 use leaf_links::check_no_symlink_or_emitted_leaf;
 
 /// Options for [`generate`].
@@ -230,25 +234,72 @@ fn replace_in_place(
     let _ownership = GenerateOwnership::acquire(root)?;
     let target = root.join(".github");
     reject_symlink(&target)?;
+    let staging = stage_root::StageRoot::open(root)?;
+    let target_identity = staging.validate_target(&target)?;
+    staging.validate_target_directories(&target, target_identity)?;
     reject_symlink(&target.join("workflows"))?;
-    if target.exists() && !target.is_dir() {
-        return Err(OrchestratorError::UnsafePath {
-            path: target.display().to_string(),
-            reason: "not_a_directory".to_owned(),
-        });
-    }
     for rel in check_tree_paths(tree)? {
         check_no_symlink_or_emitted_leaf(root, &rel)?;
     }
-    let staging = tempfile::tempdir_in(root)
-        .map_err(|err| OrchestratorError::io(root.display().to_string(), err.to_string()))?;
-    let staged = preserve::stage_in_place(&target, staging.path(), tree)?;
-    if !same_filesystem(staging.path(), root)? {
-        return Err(OrchestratorError::Contract {
-            problem: "cross_filesystem_staging".to_owned(),
-        });
+    staging.clear_spare_before_staging()?;
+    let staged = match preserve::stage_in_place(&target, staging.spare(), tree) {
+        Ok(path) => path,
+        Err(error) => return Err(staging.abort_before_commit(error)),
+    };
+    if let Err(error) = staging.validate_staged(&target, target_identity, &staged) {
+        return Err(staging.abort_before_commit(error));
     }
-    swap_directories(root, &target, &staged)
+    publish_in_place(&staging, &target, target_identity, &staged)
+}
+
+/// Publish through the spare slot without removing its root directory.
+fn publish_in_place(
+    staging: &stage_root::StageRoot,
+    target: &Path,
+    target_identity: Option<stage_root::FsIdentity>,
+    staged: &Path,
+) -> Result<Vec<String>, OrchestratorError> {
+    match target_identity {
+        Some(retired) => publish_existing_in_place(staging, target, retired, staged),
+        None => publish_first_in_place(staging, target, staged),
+    }
+}
+
+/// Exchange existing output and remove only children of the retired root.
+fn publish_existing_in_place(
+    staging: &stage_root::StageRoot,
+    target: &Path,
+    retired: stage_root::FsIdentity,
+    staged: &Path,
+) -> Result<Vec<String>, OrchestratorError> {
+    if let Err(error) = staging.validate_target_directories(target, Some(retired)) {
+        return Err(staging.abort_before_commit(error));
+    }
+    if let Err(error) = exchange_directories(staged, target) {
+        return Err(staging.abort_before_commit(OrchestratorError::io(
+            target.display().to_string(),
+            error.to_string(),
+        )));
+    }
+    match staging.clean_retired_root(retired) {
+        Ok(()) => Ok(Vec::new()),
+        Err(error) => Ok(vec![format!("backup_cleanup_failed:{error}")]),
+    }
+}
+
+/// Move a first generated tree out of the spare and preserve its root.
+fn publish_first_in_place(
+    staging: &stage_root::StageRoot,
+    target: &Path,
+    staged: &Path,
+) -> Result<Vec<String>, OrchestratorError> {
+    match std::fs::rename(staged, target) {
+        Ok(()) => Ok(Vec::new()),
+        Err(error) => Err(staging.abort_before_commit(OrchestratorError::io(
+            target.display().to_string(),
+            error.to_string(),
+        ))),
+    }
 }
 
 /// Commit fresh output with one rename and existing output with one exchange.

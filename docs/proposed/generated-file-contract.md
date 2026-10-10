@@ -157,8 +157,20 @@ or an unvalidated shell fragment.
 
 ## 3. Replacement and preview
 
-generate MUST render into a temporary staging tree and validate every output
-before publishing. The orchestrator owns only the declared generated paths,
+generate MUST render into a staging tree and validate every output before
+publishing. For in-place generation only, the orchestrator may retain the
+private, self-ignored `.github.velnor-stage/` runtime container at the Git root.
+In-place generation requires atomic directory exchange and is supported on
+Linux and macOS; other platforms fail before creating staging state. Linux
+requires kernel 5.8 or newer and `statx` reporting `STATX_MNT_ID`. Ubuntu
+22.04 and newer are supported when the running kernel reports this field;
+older kernels or missing mount identity fail closed before staging. Preview
+generation does not use this restriction.
+It contains a root-bound owner record and one persistent same-filesystem spare
+directory; generation clears spare children but never removes or recreates
+either root. This container is runtime state, not generated output. `plan`
+and preview generation never create or modify it. The orchestrator owns only
+the declared generated paths,
 the reserved `.github/workflows/**` namespace, and shared action definitions
 whose exact `.github/actions/<logical>/action.yml` path begins with a Velnor
 generated marker. Those paths are replaced when emitted and retired when a
@@ -176,10 +188,36 @@ to participate in workflow generation must be represented through supported
 Velnor configuration or another generated input, because their contents are
 not merged into generated files.
 
+For in-place generation, an existing `.github` root and every real directory
+below it MUST be owned by the effective user running Velnor. The orchestrator
+checks directory ownership without following symbolic links before staging and
+again immediately before exchange. A foreign-owned directory fails before
+publication and leaves `.github` unchanged. File ownership is not preserved;
+their bytes, permissions, names, and link targets remain the preservation
+contract. An out-of-band ownership change after the final scan can make retired
+tree cleanup fail after publication; the command reports that cleanup failure,
+leaves the published output in place, and requires safe operator recovery before
+the next in-place generation.
+
+In-place generation identifies the repository mount using Linux `STATX_MNT_ID`
+or the macOS mount-point name returned by `fstatfs`; device IDs alone do not
+identify mount boundaries. `.github`, the private staging state, and every real
+output directory MUST remain on the repository mount. The orchestrator checks
+all real output directories before staging and immediately before exchange,
+then rescans the spare immediately before clearing stale or retired contents.
+A changed boundary aborts cleanup, preserves the persistent root, and is
+reported as a cleanup warning after publication. Mount topology MUST remain
+stable during in-place generation: the path-based cleanup walk does not claim
+protection against a privileged concurrent mount change.
+
 With no --output-dir, the orchestrator MUST stage the generated tree together
-with preserved unmanaged content, then replace the repository `.github`
-directory only after staging and validation succeed. If generation fails, the
-existing `.github` directory remains unchanged.
+with preserved unmanaged content in the persistent spare, then replace the
+repository `.github` directory only after staging and validation succeed. If
+`.github` exists, its root mode MUST be preserved. If generation fails before
+publication, the existing `.github` directory remains unchanged. After
+publication, cleanup removes children from the retired root while keeping that
+spare path present; cleanup failure is reported with the published output left
+in place.
 
 With --output-dir PATH, PATH is the exact fresh preview root. It MUST be absent
 or empty; the command stages output beside PATH/.github and publishes the

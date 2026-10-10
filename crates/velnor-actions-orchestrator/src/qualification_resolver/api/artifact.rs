@@ -195,7 +195,7 @@ fn validate_document(
     document: &QualificationCacheReceiptArtifactDocument,
     run: QualificationRunRef,
 ) -> Result<(), OrchestratorError> {
-    if document.schema != 1 || document.producer.run != run || document.receipt.run != run {
+    if document.schema != 2 || document.producer.run != run || document.receipt.run != run {
         return Err(internal("qualification_receipt_run_mismatch"));
     }
     Ok(())
@@ -226,3 +226,7 @@ fn required(value: Option<String>, error: &'static str) -> Result<String, Orches
         .filter(|value| !value.is_empty())
         .ok_or_else(|| internal(error))
 }
+
+#[cfg(test)]
+#[path = "artifact_tests.rs"]
+mod tests;

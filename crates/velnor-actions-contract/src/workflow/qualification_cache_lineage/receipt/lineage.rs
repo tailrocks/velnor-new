@@ -93,7 +93,7 @@ pub(super) fn layer_applies(
         | ("tofu", QualificationCacheLayer::MiseTools | QualificationCacheLayer::TofuProviders) => {
             true
         }
-        ("rust", QualificationCacheLayer::MbxObjects | QualificationCacheLayer::MbxBundle) => {
+        ("rust", QualificationCacheLayer::MbxObjects) => {
             entry.adapter_metadata["compile_driver"].as_str() == Some("mbx")
         }
         _ => false,

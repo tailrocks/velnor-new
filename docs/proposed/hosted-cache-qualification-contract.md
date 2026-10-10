@@ -61,15 +61,23 @@ consumption. The producer must bind the selected backend cache ID, key, ref,
 version/format, and stored size to the admitted receipt before bytes are
 imported or used. Unexpected Cold bytes are discarded; a mismatched Warm,
 Third, or UsefulDelta candidate is never moved into a live tool/cache path.
-Control omits or disables restores and saves for MBX objects, the MBX bundle,
-Cargo sources, Mise tools, and OpenTofu providers. Task-result reuse stays
-disabled in every phase.
+Control omits or disables restores and saves for MBX objects, Cargo sources,
+Mise tools, and OpenTofu providers. Task-result reuse stays disabled in every
+phase. A directive and receipt use schema 2 and contain exactly five ordered
+layer records: MBX objects, Cargo sources, Mise tools, OpenTofu providers,
+and the disabled task-result layer. The native MBX object layer is active only
+for Rust lanes whose validated compile driver is MBX; it remains owned by the
+MBX action's object store. There is no separate MBX bundle layer. The cache-key
+identity preimage remains schema 1: removing the bundle record leaves the
+identity inputs and layer spelling unchanged for every retained layer, so
+those cache keys remain stable. Schema 2 versions the directive and receipt
+wire documents, not the cache-key preimage.
 
 ## Immutable receipt and collection
 
 Each successful producer run publishes one artifact named
-`velnor-qualification-cache-receipt-v1` containing exactly
-`qualification-cache-receipt.json`. The schema-1 document binds the producer's
+`velnor-qualification-cache-receipt-v2` containing exactly
+`qualification-cache-receipt.json`. The schema-2 document binds the producer's
 runner context to the validated plan and contains every lane's completed task
 IDs, closure and useful-state digests, and one record per cache layer. Each
 layer records the requested primary key, restore result and exact matched
