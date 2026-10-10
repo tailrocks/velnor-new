@@ -44,8 +44,9 @@
   for 12 edge strings and direct Zizmor results of 88 ignored and 1 suppressed
   with `unpinned-uses.ignore: []`. The CBA fixture removes its release manifest
   for debug rendering; these results do not prove unchanged-consumer adoption
-  or official binary/release qualification. The independent artifact audit of
-  this report remains pending.
+  or official binary/release qualification. Independent audit marked this
+  report Ready within its debug-fixture source-regression scope; official
+  binary and release qualification remain pending.
 - Tooling and capture environment: commands used the retained local wrapper
   `/private/tmp/velnor-persistent-stage-mise.sh` (SHA-256
   `602fa43a3854e3f2c85d78f2c491d972ecc32b8021173170dee86f4c1395cd33`),
