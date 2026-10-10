@@ -17,6 +17,7 @@ const PROBE_TARGET: &str = "/velnor/docker-root";
 const PROBE_PLATFORM: &str = "linux/amd64";
 const PROBE_ENTRYPOINT: &str = "/velnor/resource-probe";
 const PROBE_USER: &str = "65532:65532";
+const PROBE_WORKING_DIR: &str = "/";
 const PATH_ENV: &str = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 const SOURCE_LABEL: &str = "org.opencontainers.image.revision";
 const DIGEST_DOMAIN: &[u8] = b"velnor-resource-probe-root-v1\0";
@@ -330,13 +331,38 @@ fn image_config_matches(config: &ContainerConfig, source_revision: &str) -> bool
     config == &expected_image_config(source_revision)
 }
 
+pub(super) fn expected_container_config(projection: &ProbeProjection) -> Option<ContainerConfig> {
+    let mut expected =
+        serde_json::to_value(expected_image_config(projection.image.source_revision())).ok()?;
+    let requested = serde_json::to_value(&projection.config).ok()?;
+    let expected = expected.as_object_mut()?;
+    let requested = requested.as_object()?;
+    for (key, value) in requested {
+        if value.is_null() || key == "HostConfig" || key == "NetworkingConfig" {
+            continue;
+        }
+        if key == "Labels" {
+            let expected_labels = expected
+                .get_mut(key)
+                .and_then(serde_json::Value::as_object_mut)?;
+            let requested_labels = value.as_object()?;
+            for (label, label_value) in requested_labels {
+                expected_labels.insert(label.clone(), label_value.clone());
+            }
+        } else {
+            expected.insert(key.clone(), value.clone());
+        }
+    }
+    serde_json::from_value(serde_json::Value::Object(expected.clone())).ok()
+}
+
 pub(super) fn expected_image_config(source_revision: &str) -> ContainerConfig {
     let mut labels = std::collections::HashMap::new();
     labels.insert(SOURCE_LABEL.to_owned(), source_revision.to_owned());
     ContainerConfig {
         user: Some(PROBE_USER.to_owned()),
         env: Some(vec![PATH_ENV.to_owned()]),
-        working_dir: Some("/".to_owned()),
+        working_dir: Some(PROBE_WORKING_DIR.to_owned()),
         entrypoint: Some(vec![PROBE_ENTRYPOINT.to_owned()]),
         labels: Some(labels),
         ..Default::default()

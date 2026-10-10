@@ -1,4 +1,5 @@
 use super::*;
+use serde_json::Value;
 
 #[tokio::test]
 async fn cleanup_timeout_keeps_owned_container_retryable_after_reopen() -> Result<(), String> {
@@ -124,5 +125,62 @@ async fn held_journal_transition_timeout_sends_no_docker_request() -> Result<(),
         .map_err(|error| error.to_string())?
         .ok_or_else(|| "held transition removed its prepared row".to_owned())?;
     assert_eq!(retained.phase, crate::journal::ProbePhase::Prepared);
+    Ok(())
+}
+
+#[tokio::test]
+async fn failed_quarantine_commit_is_propagated_without_lifecycle_retry() -> Result<(), String> {
+    let (_scratch, journal, projection) = prepared().await?;
+    journal
+        .transition_probe(
+            &projection.operation_id,
+            crate::journal::ProbePhase::Prepared,
+            crate::journal::ProbePhase::CreateRequested,
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    journal
+        .bind_probe_container(&projection.operation_id, CONTAINER_ID)
+        .await
+        .map_err(|error| error.to_string())?;
+    let row = journal
+        .active_probe()
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "probe row disappeared before recovery".to_owned())?;
+    let info = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":17179869184}"#;
+    let mut malformed = serde_json::from_str::<Value>(&inspect(&projection, "created", 0)?)
+        .map_err(|error| error.to_string())?;
+    malformed["Config"]["WorkingDir"] = serde_json::json!("/tmp");
+    let malformed = serde_json::to_string(&malformed).map_err(|error| error.to_string())?;
+    let docker = DockerStub::open(vec![
+        http(200, info),
+        http(200, &malformed),
+        http(200, &malformed),
+    ])?;
+    let held = journal.write_guard().await;
+    let result = Box::pin(crate::launch::resource_probe::recover::active(
+        &docker.docker,
+        &journal,
+        &serde_json::from_str::<bollard::models::SystemInfo>(info)
+            .map_err(|error| error.to_string())?,
+        &crate::launch::resource_probe::projection::DockerRoot::parse("/var/lib/docker")
+            .map_err(|error| error.to_string())?,
+        &Deadline::test_with_timeouts(Duration::from_millis(250), Duration::from_millis(30)),
+        row,
+    ))
+    .await;
+    drop(held);
+    assert!(matches!(result, Err(HostError::DockerTimeout)));
+    let requests = docker.finish_observed().await?;
+    assert_eq!(requests.len(), 3);
+    assert!(requests.iter().all(|request| !request.starts_with("POST ")));
+    let retained = journal
+        .active_probe()
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "failed quarantine removed its active row".to_owned())?;
+    assert_eq!(retained.phase, crate::journal::ProbePhase::ContainerCreated);
+    assert_eq!(retained.container_id.as_deref(), Some(CONTAINER_ID));
     Ok(())
 }

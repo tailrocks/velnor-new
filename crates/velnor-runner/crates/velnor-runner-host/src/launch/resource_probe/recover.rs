@@ -37,9 +37,9 @@ pub(super) async fn active(
         ) {
             return Err(error);
         }
-        let _quarantined = deadline
+        deadline
             .within(journal.quarantine_probe(&row.operation_id))
-            .await;
+            .await??;
         return Err(error);
     }
     Ok(())

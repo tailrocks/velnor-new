@@ -1,4 +1,3 @@
-use bollard::models::ContainerConfig;
 use serde_json::json;
 
 use crate::error::HostError;
@@ -15,6 +14,8 @@ use crate::launch::resource_probe::provider::UnavailableImageProvider;
 use crate::launch_harness::Scratch;
 use std::time::{Duration, Instant};
 
+#[path = "docker_lifecycle/effective_config.rs"]
+mod effective_config;
 #[path = "docker_lifecycle/engine_identity.rs"]
 mod engine_identity;
 #[path = "docker_lifecycle/recovery.rs"]
@@ -300,10 +301,27 @@ fn append_cleanup(
 }
 
 fn inspect(projection: &ProbeProjection, status: &str, exit_code: i64) -> Result<String, String> {
-    let config_value =
-        serde_json::to_value(&projection.config).map_err(|error| error.to_string())?;
-    let config: ContainerConfig =
-        serde_json::from_value(config_value).map_err(|error| error.to_string())?;
+    let mut labels = std::collections::HashMap::from([(
+        "org.opencontainers.image.revision".to_owned(),
+        projection.image.source_revision().to_owned(),
+    )]);
+    labels.extend(projection.config.labels.clone().unwrap_or_default());
+    let config = json!({
+        "Hostname": &CONTAINER_ID[..12],
+        "User": "65532:65532",
+        "AttachStdin": false,
+        "AttachStdout": true,
+        "AttachStderr": false,
+        "Tty": false,
+        "OpenStdin": false,
+        "StdinOnce": false,
+        "Env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],
+        "Image": projection.image.runtime_id(),
+        "WorkingDir": "/",
+        "Entrypoint": ["/velnor/resource-probe"],
+        "NetworkDisabled": true,
+        "Labels": labels,
+    });
     let host_config = projection
         .config
         .host_config

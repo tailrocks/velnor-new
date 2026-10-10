@@ -40,7 +40,7 @@ pub(super) fn matches(
         && response.restart_count == Some(0)
         && response.path.as_deref() == Some("/velnor/resource-probe")
         && response.args.as_ref().is_none_or(Vec::is_empty)
-        && config_matches(projection, response)
+        && config_matches(projection, response, container_id)
         && host_matches(projection, response)
         && mounts_match(projection, response)
 }
@@ -87,14 +87,60 @@ pub(super) fn created_or_exited(response: &ContainerInspectResponse) -> bool {
     created(response) || exited(response)
 }
 
-fn config_matches(projection: &ProbeProjection, response: &ContainerInspectResponse) -> bool {
-    let Some(actual) = response.config.as_ref() else {
+fn config_matches(
+    projection: &ProbeProjection,
+    response: &ContainerInspectResponse,
+    container_id: &str,
+) -> bool {
+    let Some(mut actual) = response.config.clone() else {
         return false;
     };
-    let expected = serde_json::to_value(&projection.config)
-        .ok()
-        .and_then(|value| serde_json::from_value(value).ok());
-    expected.as_ref() == Some(actual)
+    let Some(expected) = super::projection::expected_container_config(projection) else {
+        return false;
+    };
+    normalize_docker_defaults(&mut actual, container_id) && actual == expected
+}
+
+fn normalize_docker_defaults(actual: &mut bollard::models::ContainerConfig, id: &str) -> bool {
+    let Some(short_id) = id.get(..12) else {
+        return false;
+    };
+    if actual
+        .hostname
+        .as_deref()
+        .is_some_and(|hostname| !hostname.is_empty() && hostname != short_id)
+        || actual
+            .domainname
+            .as_deref()
+            .is_some_and(|domain| !domain.is_empty())
+    {
+        return false;
+    }
+    actual.hostname = None;
+    actual.domainname = None;
+    if actual.cmd.as_ref().is_some_and(Vec::is_empty) {
+        actual.cmd = None;
+    }
+    if actual.network_disabled == Some(false) {
+        return false;
+    }
+    if actual.network_disabled.is_none() {
+        // Engine 29 omits this inspect field; host_matches still requires NetworkMode=none.
+        actual.network_disabled = Some(true);
+    }
+    if actual.exposed_ports.as_ref().is_some_and(Vec::is_empty) {
+        actual.exposed_ports = None;
+    }
+    if actual.volumes.as_ref().is_some_and(Vec::is_empty) {
+        actual.volumes = None;
+    }
+    if actual.on_build.as_ref().is_some_and(Vec::is_empty) {
+        actual.on_build = None;
+    }
+    if actual.args_escaped == Some(false) {
+        actual.args_escaped = None;
+    }
+    true
 }
 
 fn host_matches(projection: &ProbeProjection, response: &ContainerInspectResponse) -> bool {
