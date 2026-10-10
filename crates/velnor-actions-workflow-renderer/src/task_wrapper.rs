@@ -265,7 +265,7 @@ fn replace_task_steps(
             .get(job_id)
             .and_then(|job| job.steps.get(*step_index))
             .ok_or_else(|| RenderError::InvalidWorkflow("declared_task_step_missing".to_owned()))?;
-        let action = declared_task_call(*action_id, task, original)?;
+        let action = declared_task_call(*action_id, task, original);
         let job = next
             .get_mut(job_id)
             .ok_or_else(|| RenderError::InvalidWorkflow("declared_task_job_missing".to_owned()))?;
