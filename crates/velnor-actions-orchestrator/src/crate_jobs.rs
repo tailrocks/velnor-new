@@ -191,7 +191,7 @@ fn obligation_for(
     catalog: &ToolCatalog,
 ) -> Result<CrateObligation, OrchestratorError> {
     let argv = crate::vectors::task_argv(task, catalog)?;
-    let toolchain_inputs = crate::identities::toolchain_inputs_for(task, catalog)?;
+    let toolchain_inputs = crate::internal_plan::identities::toolchain_inputs_for(task, catalog)?;
     let toolchain = velnor_actions_contract::cachekey::toolchain_id(&toolchain_inputs)?;
     let digest = crate::internal::plan_obligation::task_digest(&task.task_id, &argv, &toolchain)?;
     let matrix_id = matrix_id_for_task_group(&task.stack_id, &task.task_id)?;
