@@ -79,6 +79,10 @@ impl LocalServer {
             while !worker_stop.load(Ordering::Acquire) {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
+                        if stream.set_nonblocking(false).is_err() {
+                            let _shutdown = stream.shutdown(Shutdown::Both);
+                            continue;
+                        }
                         if stream
                             .set_read_timeout(Some(Duration::from_millis(250)))
                             .is_err()

@@ -3,7 +3,6 @@ use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const ARCHIVE_FIXTURE: &str = r#"
@@ -119,43 +118,10 @@ fn create_archive(path: &Path, case: &str) -> Result<(), Box<dyn Error>> {
     Err(format!("archive fixture creation failed for {case}").into())
 }
 
-fn repository_root() -> Result<PathBuf, Box<dyn Error>> {
-    Ok(Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../..")
-        .canonicalize()?)
-}
-
-fn ensure_archive_guard() -> Result<(), Box<dyn Error>> {
-    static GUARD: OnceLock<Result<(), String>> = OnceLock::new();
-    let result = GUARD.get_or_init(|| {
-        let repository = repository_root().map_err(|error| error.to_string())?;
-        let status = Command::new("bash")
-            .arg(repository.join("scripts/with-owned-archive-guard.sh"))
-            .arg("--")
-            .arg("true")
-            .current_dir(repository)
-            .status()
-            .map_err(|error| format!("could not provision native archive guard: {error}"))?;
-        if status.success() {
-            Ok(())
-        } else {
-            Err(format!(
-                "native archive guard provisioning failed: {status}"
-            ))
-        }
-    });
-    if let Err(error) = result {
-        Err(Box::new(std::io::Error::other(error.clone())) as Box<dyn Error>)
-    } else {
-        Ok(())
-    }
-}
-
 fn run_extractor(directory: &Path, archive: &Path) -> Result<bool, Box<dyn Error>> {
-    ensure_archive_guard()?;
-    let repository = repository_root()?;
+    let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../scripts");
     let status = Command::new("python3")
-        .arg(repository.join("scripts/generator-release/extract-candidate.py"))
+        .arg(repository.join("generator-release/extract-candidate.py"))
         .arg(archive)
         .arg(directory)
         .arg(BINARY)

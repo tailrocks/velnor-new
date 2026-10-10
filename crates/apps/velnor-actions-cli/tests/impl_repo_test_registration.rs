@@ -26,7 +26,7 @@ pub(super) fn repo_root() -> PathBuf {
 }
 
 struct PackagePlan {
-    id: String,
+    name: String,
     root: PathBuf,
     test_targets: Vec<TestTarget>,
 }
@@ -56,30 +56,53 @@ fn compiled_test_sources(workspace: &WorkspacePlan) -> Outcome<HashSet<PathBuf>>
     let output = cargo_config::cargo_output_at_target(
         &workspace.manifest,
         &[
-            "test",
-            "--no-run",
+            "nextest",
+            "list",
             "--locked",
             "--workspace",
-            "--message-format=json",
+            "--message-format",
+            "json",
         ],
         &workspace.target_directory,
     )?;
-    let package_ids: HashSet<&str> = workspace
-        .packages
-        .iter()
-        .map(|package| package.id.as_str())
-        .collect();
+    let document = nextest_document(&output)?;
     let mut sources = HashSet::new();
-    for line in output.stdout.split(|byte| *byte == b'\n') {
-        if line.is_empty() {
+    for suite in document["rust-suites"]
+        .as_object()
+        .into_iter()
+        .flat_map(|suites| suites.values().collect::<Vec<_>>())
+    {
+        let package_name = suite["package-name"].as_str().ok_or("suite package name")?;
+        let Some(package) = workspace
+            .packages
+            .iter()
+            .find(|package| package.name == package_name)
+        else {
             continue;
+        };
+        let executable = suite["binary-path"].as_str().ok_or("suite binary path")?;
+        let dep_info = PathBuf::from(executable).with_extension("d");
+        if !dep_info.is_file() {
+            return Err(format!(
+                "cargo nextest executable is missing dep-info: {}",
+                dep_info.display()
+            )
+            .into());
         }
-        let message: Value = serde_json::from_slice(line)?;
-        if let Some(artifact) = test_artifact(&message, &package_ids, workspace)? {
-            sources.extend(modules::source_closure(
-                &artifact.source,
-                &artifact.dependencies,
-            )?);
+        let dependencies: HashSet<PathBuf> = dep_info::sources(&dep_info, &workspace.root)?
+            .into_iter()
+            .collect();
+        for target in &package.test_targets {
+            if dependencies.contains(&target.source) {
+                sources.extend(
+                    modules::source_closure(&target.source, &dependencies).map_err(|error| {
+                        format!(
+                            "cannot derive source closure for {}: {error}",
+                            target.source.display()
+                        )
+                    })?,
+                );
+            }
         }
     }
     for package in &workspace.packages {
@@ -100,66 +123,14 @@ fn compiled_test_sources(workspace: &WorkspacePlan) -> Outcome<HashSet<PathBuf>>
     Ok(sources)
 }
 
-struct TestArtifact {
-    source: PathBuf,
-    dependencies: HashSet<PathBuf>,
-}
-
-fn test_artifact(
-    message: &Value,
-    package_ids: &HashSet<&str>,
-    workspace: &WorkspacePlan,
-) -> Outcome<Option<TestArtifact>> {
-    if message["reason"] != "compiler-artifact"
-        || message["target"]["test"].as_bool() != Some(true)
-        || message["profile"]["test"].as_bool() != Some(true)
-    {
-        return Ok(None);
-    }
-    let package_id = message["package_id"]
-        .as_str()
-        .ok_or("artifact package id")?;
-    if !package_ids.contains(package_id) {
-        return Ok(None);
-    }
-    let Some(executable) = message["executable"].as_str() else {
-        return Ok(None);
-    };
-    let dep_info = PathBuf::from(executable).with_extension("d");
-    if !dep_info.is_file() {
-        if Path::new(executable)
-            .parent()
-            .and_then(Path::file_name)
-            .is_some_and(|directory| directory == "deps")
-        {
-            return Err(format!(
-                "Cargo test executable is missing dep-info: {}",
-                dep_info.display()
-            )
-            .into());
+fn nextest_document(output: &std::process::Output) -> Outcome<Value> {
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with('{') {
+            return Ok(serde_json::from_str(trimmed)?);
         }
-        return Ok(None);
     }
-    let dependencies: HashSet<PathBuf> = dep_info::sources(&dep_info, &workspace.root)?
-        .into_iter()
-        .collect();
-    let source = PathBuf::from(
-        message["target"]["src_path"]
-            .as_str()
-            .ok_or("test artifact source path")?,
-    )
-    .canonicalize()?;
-    if !dependencies.contains(&source) {
-        return Err(format!(
-            "test-profile dep-info omits Cargo test source {}",
-            source.display()
-        )
-        .into());
-    }
-    Ok(Some(TestArtifact {
-        source,
-        dependencies,
-    }))
+    Err("cargo nextest list did not emit its JSON document".into())
 }
 
 fn rust_files(
@@ -203,18 +174,25 @@ pub(super) fn registration_audit(
     let mut pending = BTreeSet::new();
     for workspace in workspaces {
         for package in &workspace.packages {
-            pending.extend(rust_files(
-                &package.root,
-                &workspace.target_directory,
-                workspace.vcs_metadata.as_deref(),
-            )?);
+            pending.extend(
+                rust_files(
+                    &package.root,
+                    &workspace.target_directory,
+                    workspace.vcs_metadata.as_deref(),
+                )
+                .map_err(|error| {
+                    format!("cannot scan package {}: {error}", package.root.display())
+                })?,
+            );
         }
     }
     let mut visited = HashSet::new();
     let mut candidates = HashSet::new();
     let mut source_records = Vec::new();
     while let Some(path) = pending.pop_first() {
-        let path = path.canonicalize()?;
+        let path = path
+            .canonicalize()
+            .map_err(|error| format!("cannot canonicalize {}: {error}", path.display()))?;
         if !visited.insert(path.clone()) {
             continue;
         }
@@ -279,10 +257,11 @@ pub(super) fn relative_paths(root: &Path, paths: &[PathBuf]) -> Outcome<Vec<Stri
 #[test]
 fn cargo_targets_register_every_test_bearing_source() -> Outcome<()> {
     let root = repo_root().canonicalize()?;
-    let workspaces = cargo_config::workspace_plans(&root)?;
+    let workspaces = cargo_config::workspace_plans(&root)
+        .map_err(|error| format!("workspace planning failed: {error}"))?;
     let (registered, orphans) = registration_audit(&workspaces)?;
     for expected in [
-        "crates/services/velnor-actions-orchestrator/tests/impl_generator_seed.rs",
+        "crates/services/velnor-actions-orchestrator-pins/tests/impl_generator_seed.rs",
         "crates/adapters/velnor-actions-tofu/tests/impl_tofu_t27_select.rs",
         "crates/adapters/velnor-actions-tofu/tests/impl_tofu_file_cache.rs",
     ] {

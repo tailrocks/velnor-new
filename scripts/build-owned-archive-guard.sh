@@ -99,10 +99,16 @@ check_safe_ancestor() {
   local path="$1" identity owner mode owner_id
   [[ ! -L "$path" && -d "$path" ]] \
     || fail "archive checkout ancestry is unsafe: $path"
-  identity="$(stat_identity "$path")" \
-    || fail "cannot inspect archive checkout ancestry: $path"
+  if [[ "$(uname -s)" == Darwin ]]; then
+    identity="$(stat -f '%u %p' "$path")" \
+      || fail "cannot inspect archive checkout ancestry: $path"
+  else
+    identity="$(stat_identity "$path")" \
+      || fail "cannot inspect archive checkout ancestry: $path"
+  fi
   read -r owner mode <<<"$identity"
   owner_id="$(id -u)"
+  mode="$(printf '%o' "$((8#$mode & 07777))")"
   [[ ("$owner" == "$owner_id" || "$owner" == 0) && "$mode" =~ ^[0-7]+$ ]] \
     || fail "archive checkout ancestry has untrusted ownership: $path"
   if (( (8#$mode & 022) != 0 )); then

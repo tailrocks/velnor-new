@@ -9,7 +9,7 @@ use serde_json::Value;
 
 use super::{Outcome, PackagePlan, TestTarget, WorkspacePlan, repo_root};
 
-const WORKSPACE_ROOTS: [&str; 2] = ["", "crates/velnor-runner"];
+const WORKSPACE_ROOTS: [&str; 1] = [""];
 
 pub(super) fn cargo_target_dir_for_manifest(manifest: &Path) -> Outcome<PathBuf> {
     if let Some(configured) = std::env::var_os("CARGO_TARGET_DIR") {
@@ -69,6 +69,7 @@ fn cargo_output_with_target(
         .arg("--manifest-path")
         .arg(manifest)
         .args(options)
+        .env_remove("NEXTEST_PROFILE")
         .current_dir(manifest_dir);
     if let Some(target_dir) = target_dir {
         process.env("CARGO_TARGET_DIR", absolute_path(&current_dir, target_dir));
@@ -115,7 +116,7 @@ pub(super) fn workspace_plan_at_target(
     let packages = document["packages"].as_array().ok_or("metadata packages")?;
     let mut plans = Vec::new();
     for package in packages {
-        let id = package["id"].as_str().ok_or("package id")?.to_owned();
+        let name = package["name"].as_str().ok_or("package name")?.to_owned();
         let package_manifest = PathBuf::from(
             package["manifest_path"]
                 .as_str()
@@ -156,7 +157,7 @@ pub(super) fn workspace_plan_at_target(
             });
         }
         plans.push(PackagePlan {
-            id,
+            name,
             root: package_root,
             test_targets,
         });

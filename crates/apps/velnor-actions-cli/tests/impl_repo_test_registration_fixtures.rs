@@ -172,7 +172,7 @@ fn write_orphan_test_sources(scratch: &ScratchDir) -> Outcome<()> {
 fn write_package_source_candidates(scratch: &ScratchDir) -> Outcome<()> {
     scratch.write(
         "src/main.rs",
-        "#[cfg(not(test))] mod ordinary_only;\nfn main() {}\n",
+        "#[cfg(test)]\nmod ordinary_tests {\n    #[test]\n    fn ordinary_artifact_is_compiled() {}\n}\n\n#[cfg(not(test))]\nmod ordinary_only;\nfn main() {}\n",
     )?;
     scratch.write(
         "src/ordinary_only.rs",
@@ -225,10 +225,10 @@ fn compiler_closure_handles_paths_includes_macros_fixtures_and_orphans() -> Outc
     assert!(!orphans.contains(&scratch.0.join("target/build_output.rs").canonicalize()?));
     assert!(orphans.contains(&scratch.0.join("src/target/orphan.rs").canonicalize()?));
     let registered_root = scratch.0.join("tests/registered.rs").canonicalize()?;
+    let macos_included = scratch.0.join("tests/macos_included.rs").canonicalize()?;
     let root_findings = super::graph::source_findings(&registered_root)?;
     assert!(root_findings.includes.iter().any(|include| {
-        include.path == scratch.0.join("tests/macos_included.rs")
-            && include.condition == super::graph::Possibility::Sometimes
+        include.path == macos_included && include.condition == super::graph::Possibility::Sometimes
     }));
     for source in [
         "tests/registered.rs",
@@ -255,7 +255,7 @@ fn compiler_closure_handles_paths_includes_macros_fixtures_and_orphans() -> Outc
         );
     }
     assert!(!registered.contains(&data_only));
-    let actual = super::relative_paths(&scratch.0, &orphans)?;
+    let actual = super::relative_paths(&scratch.0.canonicalize()?, &orphans)?;
     let mut expected = vec![
         "no-tests/src/lib.rs",
         "src/ordinary_only.rs",
@@ -283,21 +283,25 @@ fn compiler_dependencies_contain(
 ) -> Outcome<bool> {
     let output = super::cargo_config::cargo_output_at_target(
         &workspace.manifest,
-        &["test", "--no-run", "--locked", "--message-format=json"],
+        &["nextest", "list", "--locked", "--message-format", "json"],
         &workspace.target_directory,
     )?;
-    let package_ids = workspace
-        .packages
-        .iter()
-        .map(|package| package.id.as_str())
-        .collect::<std::collections::HashSet<_>>();
-    for line in output.stdout.split(|byte| *byte == b'\n') {
-        if line.is_empty() {
+    let document = super::nextest_document(&output)?;
+    for suite in document["rust-suites"]
+        .as_object()
+        .into_iter()
+        .flat_map(|suites| suites.values().collect::<Vec<_>>())
+    {
+        let Some(executable) = suite["binary-path"].as_str() else {
+            continue;
+        };
+        let dep_info = std::path::PathBuf::from(executable).with_extension("d");
+        if !dep_info.is_file() {
             continue;
         }
-        let message: serde_json::Value = serde_json::from_slice(line)?;
-        if let Some(artifact) = super::test_artifact(&message, &package_ids, workspace)?
-            && artifact.dependencies.contains(source)
+        if super::dep_info::sources(&dep_info, &workspace.root)?
+            .into_iter()
+            .any(|dependency| dependency == source)
         {
             return Ok(true);
         }

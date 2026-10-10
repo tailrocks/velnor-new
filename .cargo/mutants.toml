@@ -26,7 +26,7 @@ examine_globs = [
     "crates/core/velnor-actions-contract-release/src/candidate_manifest.rs",
     "crates/core/velnor-actions-contract-release/src/tooling.rs",
     "crates/core/velnor-actions-contract-workflow/src/workflow/plan.rs",
-    "crates/adapters/velnor-actions-rust/src/metadata.rs",
+    "crates/adapters/velnor-actions-rust-core/src/metadata.rs",
     "crates/adapters/velnor-actions-mise-catalog/src/catalog/lock.rs",
     "crates/adapters/velnor-actions-mise-catalog/src/toolfiles.rs",
     # Identities: validated ids, cache keys/ids, rust identity, cover id.
@@ -42,8 +42,8 @@ examine_globs = [
     "crates/services/velnor-actions-orchestrator-discovery/src/select_edges.rs",
     # Aggregation: baseline coverage, final merge, merge requests.
     "crates/services/velnor-actions-orchestrator-cover/src/**/*.rs",
-    "crates/services/velnor-actions-orchestrator/src/cover_baseline.rs",
-    "crates/services/velnor-actions-orchestrator/src/merge_request.rs",
+    "crates/services/velnor-actions-orchestrator-internal/src/cover_baseline.rs",
+    "crates/services/velnor-actions-orchestrator-internal/src/merge_request.rs",
     "crates/services/velnor-actions-orchestrator-merge-ports/src/**/*.rs",
     "crates/services/velnor-actions-orchestrator-merge/src/**/*.rs",
     "crates/services/velnor-actions-orchestrator-merge-request-ports/src/**/*.rs",
@@ -59,8 +59,8 @@ examine_globs = [
     "crates/services/velnor-actions-orchestrator-discovery/src/inventory.rs",
     "crates/services/velnor-actions-orchestrator-pins/src/pins.rs",
     "crates/services/velnor-actions-orchestrator-staged-validation/src/validate.rs",
-    "crates/services/velnor-actions-orchestrator/src/wire_w1.rs",
-    "crates/services/velnor-actions-orchestrator/src/wire_w2.rs",
+    "crates/services/velnor-actions-orchestrator-workflow-ir/src/workflow/wire_w1.rs",
+    "crates/services/velnor-actions-orchestrator-graph/src/internal_plan/wire_w2.rs",
 ]
 
 exclude_globs = [
