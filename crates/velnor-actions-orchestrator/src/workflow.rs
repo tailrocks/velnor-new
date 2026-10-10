@@ -118,7 +118,8 @@ pub(super) fn build_workflow_for_consumer_release(
 ) -> Result<WorkflowPlan, OrchestratorError> {
     wire_w1::vet_step_syntax(StepSyntax::JobMatrix)?;
     let catalog = ToolCatalog::pinned();
-    let version = consumer_release_version.to_owned();
+    let report_helper_version = consumer_release_version.to_owned();
+    let generator_version = env!("CARGO_PKG_VERSION");
     let policy = config.workflow.policy;
     let workflow_tasks = crate::workflow_task_jobs::policies(root, config, discovery)?;
     let validation = config.workflow.generator_validation;
@@ -126,7 +127,11 @@ pub(super) fn build_workflow_for_consumer_release(
     let support = support_workflow(policy, validation, discovery, &verify);
     let mut jobs = BTreeMap::new();
     let acquire = match policy {
-        WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(label, &version, discovery)?),
+        WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(
+            label,
+            &report_helper_version,
+            discovery,
+        )?),
         WorkflowPolicy::VelnorRepositoryV1 => None,
     };
     let format = wire_w1::workspace_format_step(discovery, &catalog)?;
@@ -163,7 +168,7 @@ pub(super) fn build_workflow_for_consumer_release(
         &catalog,
         fetch_roots,
         acquire.as_ref(),
-        &version,
+        &report_helper_version,
     )?;
     let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
     for (id, job) in built.jobs {
@@ -180,14 +185,15 @@ pub(super) fn build_workflow_for_consumer_release(
     let context = workflow_context::render_context(
         config,
         label,
-        &version,
+        generator_version,
+        &report_helper_version,
         &catalog,
         discovery,
         rust.has_compiler(),
         workflow_tasks,
         &verify,
     )?;
-    let actionlint = actionlint_input(config, &version, label);
+    let actionlint = actionlint_input(config, generator_version, label);
     Ok(WorkflowPlan {
         ir,
         support,

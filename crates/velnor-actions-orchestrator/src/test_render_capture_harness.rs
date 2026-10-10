@@ -33,6 +33,20 @@ fn capture_exact_consumer_marked_workflow_before_size_guard()
         preparation.config.workflow.policy,
         velnor_actions_contract::WorkflowPolicy::ConsumerV1
     );
+    assert_eq!(
+        preparation.workflow.context.generator_version,
+        env!("CARGO_PKG_VERSION"),
+        "generated-file markers retain the running generator's version"
+    );
+    assert_eq!(
+        preparation.workflow.context.report_helper_version, CAPTURE_CONSUMER_RELEASE_VERSION,
+        "task wrappers use the consumer's validated helper release"
+    );
+    assert_eq!(
+        preparation.workflow.context.staged_binary,
+        format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{CAPTURE_CONSUMER_RELEASE_VERSION}"),
+        "the staged helper path matches the consumer helper release"
+    );
     let task_helper_versions = preparation
         .workflow
         .ir
@@ -91,12 +105,25 @@ fn capture_exact_consumer_marked_workflow_before_size_guard()
     })?;
     let canonical_bytes = capture.canonical.len();
     let selected_bytes = capture.selected.len();
+    let generated_marker = format!(
+        "{}\n",
+        velnor_actions_workflow_renderer::marker::marker_for_version(
+            &preparation.workflow.context.generator_version,
+        )?
+    );
+    assert!(capture.canonical.starts_with(&generated_marker));
+    assert!(capture.selected.starts_with(&generated_marker));
     assert_required_task_coverage(&capture.selected, &configured_tasks);
     std::fs::write(output.join("canonical.yml"), capture.canonical.as_bytes())?;
     std::fs::write(output.join("selected.yml"), capture.selected.as_bytes())?;
     let mut shared_bytes = 0usize;
     let mut shared_paths = BTreeSet::new();
     for file in &capture.shared {
+        assert!(
+            file.bytes.starts_with(&generated_marker),
+            "shared generated file uses the generator marker: {}",
+            file.path
+        );
         if !shared_paths.insert(&file.path) {
             return Err(format!("duplicate shared action path: {}", file.path).into());
         }

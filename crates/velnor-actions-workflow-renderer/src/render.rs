@@ -88,8 +88,14 @@ pub const ALINT_BINARY_VERSION: &str = "v0.17.0";
 /// Caller-supplied validated scalars the IR cannot carry.
 #[derive(Debug, Clone)]
 pub struct RenderContext {
-    /// Exact generator version for the marker and staged path.
+    /// Exact generator version for generated-file markers and runtime identity.
     pub generator_version: String,
+    /// Exact helper release selected by the consumer's validated release manifest.
+    ///
+    /// This can differ from `generator_version` while rendering a newer
+    /// generator against an older pinned consumer. Task report wrappers and
+    /// the staged helper path use this version; generated-file markers do not.
+    pub report_helper_version: String,
     /// Single literal versioned Ubuntu label every job must use.
     pub runs_on: String,
     /// Scale Set selected by the validated execution profile, when present.
@@ -158,8 +164,9 @@ impl RenderContext {
     /// Returns [`RenderError`] describing the first invalid scalar.
     pub fn validate(&self) -> Result<(), RenderError> {
         marker::validate_version(&self.generator_version)?;
+        marker::validate_version(&self.report_helper_version)?;
         guard::validate_runs_on(&self.runs_on)?;
-        guard::validate_staged_binary(&self.staged_binary, &self.generator_version)?;
+        guard::validate_staged_binary(&self.staged_binary, &self.report_helper_version)?;
         guard::validate_request_dir(&self.request_dir)?;
         steps::checkout_step(&self.checkout_uses).map(|_| ())?;
         for command in &self.validator_commands {
@@ -380,7 +387,7 @@ fn render_merged(
     let (jobs, task_files) = task_wrapper::factor_obligation_steps(
         &jobs,
         &ctx.checkout_uses,
-        &ctx.generator_version,
+        &ctx.report_helper_version,
         &ctx.workflow_tasks,
         ctx.scale_set_selector.as_ref(),
     )?;

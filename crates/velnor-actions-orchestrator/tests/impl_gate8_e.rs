@@ -50,6 +50,7 @@ fn manifest_text(sha: &str) -> String {
 fn ctx() -> RenderContext {
     RenderContext {
         generator_version: GENERATOR_VERSION.to_owned(),
+        report_helper_version: GENERATOR_VERSION.to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         scale_set_selector: None,
         staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{GENERATOR_VERSION}"),
