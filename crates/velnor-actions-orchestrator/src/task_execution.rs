@@ -16,7 +16,7 @@ use velnor_actions_contract::workflow::{
 };
 use velnor_actions_contract::{
     MAX_TASK_EXECUTION_ARGV, MAX_TASK_EXECUTION_ENV, MAX_TASK_EXECUTION_FRAME_BYTES,
-    canonical_json_bytes, parse_strict_json, validate_digest, validate_run_key, validate_task_id,
+    canonical_json_bytes, parse_strict_json, validate_digest, validate_run_key,
 };
 
 use crate::OrchestratorError;
@@ -57,20 +57,18 @@ pub fn resolve_task_execution() -> Result<Vec<u8>, OrchestratorError> {
         .ok_or_else(|| internal("missing_runtime_runner_temp"))?;
     validate_runner_temp_binding(&runner_temp, &action_runner_temp)?;
     let run_key = crate::internal_request::resolve_run_key(None)?;
-    let task_id = required_env(crate::task_report::TASK_ID_ENV, "missing_task_id")?;
     let execution_digest = required_env(TASK_EXECUTION_DIGEST_ENV, "missing_execution_digest")?;
     let generator_version = required_env(GENERATOR_VERSION_ENV, "missing_generator_version")?;
     resolve_task_execution_to(
         &root,
         &runner_temp,
         &run_key,
-        &task_id,
         &execution_digest,
         &generator_version,
     )
 }
 
-/// Resolve one record using explicit runner inputs (testable core).
+/// Resolve one record using the full execution digest as the caller selector.
 ///
 /// The renderer version is an independent input supplied by the generated
 /// composite. The manifest's own version is checked only after its marker has
@@ -84,7 +82,6 @@ pub(crate) fn resolve_task_execution_to(
     root: &Path,
     runner_temp: &Path,
     run_key: &str,
-    task_id: &str,
     expected_execution_digest: &str,
     expected_generator_version: &str,
 ) -> Result<Vec<u8>, OrchestratorError> {
@@ -93,16 +90,10 @@ pub(crate) fn resolve_task_execution_to(
     }
     validate_runner_temp_path(runner_temp)?;
     validate_run_key(run_key).map_err(internal_contract)?;
-    validate_task_id(task_id).map_err(internal_contract)?;
     validate_digest(expected_execution_digest).map_err(internal_contract)?;
     let manifest = read_manifest(root, expected_generator_version)?;
-    let record = manifest
-        .tasks
-        .get(task_id)
-        .ok_or_else(|| internal("task_not_in_execution_manifest"))?;
-    if record.execution_digest != expected_execution_digest {
-        return Err(internal("execution_digest_mismatch"));
-    }
+    let record = unique_record_by_execution_digest(&manifest, expected_execution_digest)?;
+    let task_id = record.task_id.as_str();
     let plan = crate::task_report::load_plan(run_key, runner_temp)?;
     let obligation = plan
         .obligations
@@ -115,7 +106,6 @@ pub(crate) fn resolve_task_execution_to(
     let (entry, plan_task_digest) = crate::task_report::entry_and_digest(&plan, task_id)?;
     if record.task_digest != plan_task_digest
         || entry.task_digest != plan_task_digest
-        || record.task_id != task_id
         || record.matrix_id != entry.id
         || record.matrix_key != entry.matrix_key
     {
@@ -125,6 +115,26 @@ pub(crate) fn resolve_task_execution_to(
     // The manifest digest and existing plan digest bind the original literal
     // expression. Materialize it only after both bindings have been checked.
     encode_runtime_frame(record, runner_temp)
+}
+
+/// Select a single validated manifest record using its full execution digest.
+///
+/// A collision must fail closed instead of depending on map iteration order.
+fn unique_record_by_execution_digest<'a>(
+    manifest: &'a TaskExecutionManifestV1,
+    expected_execution_digest: &str,
+) -> Result<&'a TaskExecutionManifestEntryV1, OrchestratorError> {
+    let mut matching = manifest
+        .tasks
+        .values()
+        .filter(|record| record.execution_digest == expected_execution_digest);
+    let Some(record) = matching.next() else {
+        return Err(internal("execution_digest_mismatch"));
+    };
+    if matching.next().is_some() {
+        return Err(internal("ambiguous_execution_digest"));
+    }
+    Ok(record)
 }
 
 fn validate_runner_temp_binding(
