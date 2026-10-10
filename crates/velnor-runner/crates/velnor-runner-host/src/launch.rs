@@ -95,7 +95,7 @@ pub async fn launch_once(
     slot::release_exited(journal, docker).await?;
     let ceiling = job_capacity();
     let capacity = resource_capacity::discover(docker, journal, resource_budget, ceiling).await?;
-    let _capacity = install_job_capacity(capacity);
+    let _capacity = install_job_capacity(capacity.poll_header());
     let set = ensure_product_scale_set(pat, owner, repo)?;
     if std::env::var("VELNOR_RECONCILE").ok().as_deref() == Some("1") {
         let decision = gate::reconcile_gate(journal, docker).await?;
@@ -116,6 +116,7 @@ pub async fn launch_once(
         repo,
         pat,
         resource_budget: Some(resource_budget),
+        static_capacity: capacity.permits_start(),
         guest_admission: drive::GuestAdmission::Unavailable,
     };
     let driven = turn::poll_and_drive(
@@ -197,7 +198,7 @@ async fn scale_session(
     docker: &bollard::Docker,
     rest: Rest<'_>,
 ) -> Result<Option<Started>, EnsureError> {
-    if !rest.guest_admission.permits_start() {
+    if !rest.permits_start() {
         return Ok(None);
     }
     let population = session
@@ -266,7 +267,7 @@ async fn drive_ready<T>(
 where
     T: Transport + Lane,
 {
-    if !rest.guest_admission.permits_start() {
+    if !rest.permits_start() {
         return Ok(None);
     }
     let except = steps::mint_subject(ready.polled);
@@ -320,6 +321,7 @@ fn ack_ready(
             repo: "",
             pat: "",
             resource_budget: None,
+            static_capacity: false,
             guest_admission: drive::GuestAdmission::Unavailable,
         },
     );

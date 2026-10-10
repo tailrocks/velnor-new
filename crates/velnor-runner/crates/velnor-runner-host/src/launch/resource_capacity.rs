@@ -13,16 +13,42 @@ const NANO_CPUS_PER_CPU: u64 = 1_000_000_000;
 const NANO_CPUS_PER_MILLICORE: u64 = NANO_CPUS_PER_CPU / 1_000;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-struct OccupiedResources {
-    permits: u32,
-    nano_cpus: u64,
-    memory_bytes: u64,
+pub(super) struct OccupiedResources {
+    pub(super) permits: u32,
+    pub(super) nano_cpus: u64,
+    pub(super) memory_bytes: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct GuestTotals {
-    cpus: u32,
-    memory_bytes: u64,
+pub(super) struct GuestTotals {
+    pub(super) cpus: u32,
+    pub(super) memory_bytes: u64,
+}
+
+/// Resource-derived total job capacity. Zero remains distinct from the
+/// one-worker poll header required before a usable guest sample exists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct JobCapacity {
+    total: u32,
+}
+
+impl JobCapacity {
+    /// Keep the queue header nonzero without granting a worker-start permit.
+    #[must_use]
+    pub(super) const fn poll_header(self) -> u32 {
+        if self.total == 0 { 1 } else { self.total }
+    }
+
+    /// Whether static CPU and memory totals can fit one configured pair.
+    #[must_use]
+    pub(super) const fn permits_start(self) -> bool {
+        self.total > 0
+    }
+
+    #[cfg(test)]
+    pub(super) const fn total(self) -> u32 {
+        self.total
+    }
 }
 
 /// Inspect the selected Docker guest and calculate its configured-pair ceiling.
@@ -36,7 +62,7 @@ pub(super) async fn discover(
     journal: &Journal,
     budget: ResourceBudget,
     ceiling: u32,
-) -> Result<u32, EnsureError> {
+) -> Result<JobCapacity, EnsureError> {
     discover_after(docker, journal, budget, ceiling, DOCKER_OPERATION_TIMEOUT).await
 }
 
@@ -46,7 +72,7 @@ pub(super) async fn discover_after(
     budget: ResourceBudget,
     ceiling: u32,
     timeout: std::time::Duration,
-) -> Result<u32, EnsureError> {
+) -> Result<JobCapacity, EnsureError> {
     let inspect = async {
         let info = docker_deadline_after(docker.info(), timeout)
             .await
@@ -81,12 +107,12 @@ fn guest_totals(cpus: Option<i64>, memory: Option<i64>) -> Option<GuestTotals> {
     })
 }
 
-fn calculate(
+pub(super) fn calculate(
     guest: GuestTotals,
     occupied: OccupiedResources,
     budget: ResourceBudget,
     ceiling: u32,
-) -> Result<u32, EnsureError> {
+) -> Result<JobCapacity, EnsureError> {
     let pair = budget.pair();
     let pair_cpu = pair
         .cpu_millicores
@@ -109,7 +135,9 @@ fn calculate(
         .permits
         .checked_add(additional)
         .ok_or_else(|| capacity_error("docker capacity"))?;
-    Ok(possible.min(ceiling))
+    Ok(JobCapacity {
+        total: possible.min(ceiling),
+    })
 }
 
 const fn remaining(total: u64, used: u64) -> u64 {

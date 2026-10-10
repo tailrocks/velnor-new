@@ -38,6 +38,7 @@ pub(super) fn rest() -> crate::launch::Rest<'static> {
         repo: "",
         pat: "",
         resource_budget: crate::worker::test_resource_budget().ok(),
+        static_capacity: true,
         guest_admission: crate::launch::drive::GuestAdmission::FreshSample,
     }
 }

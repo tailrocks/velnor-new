@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use super::{OccupiedResources, calculate, discover_after, guest_totals};
+use super::{JobCapacity, OccupiedResources, calculate, discover_after, guest_totals};
 use crate::launch::inspect_tests::{DockerStub, http, journal};
 use crate::worker::test_resource_budget;
 use crate::{EnsureError, Outcome};
@@ -23,7 +23,7 @@ fn configured_pair_cost_and_occupied_limits_bound_static_capacity() -> Result<()
 
     let capacity = calculate(guest, occupied, budget, 8).map_err(|error| error.to_string())?;
 
-    assert_eq!(capacity, 4);
+    assert_eq!(capacity.total(), 4);
     Ok(())
 }
 
@@ -41,7 +41,7 @@ fn exact_old_container_limits_and_changed_current_budget_use_checked_totals() ->
 
     let capacity = calculate(guest, occupied, budget, 8).map_err(|error| error.to_string())?;
 
-    assert_eq!(capacity, 1);
+    assert_eq!(capacity.total(), 1);
     assert_eq!(
         calculate(
             guest,
@@ -52,7 +52,7 @@ fn exact_old_container_limits_and_changed_current_budget_use_checked_totals() ->
             budget,
             8,
         ),
-        Ok(1)
+        Ok(JobCapacity { total: 1 })
     );
     Ok(())
 }
@@ -98,7 +98,7 @@ async fn exact_owned_pair_uses_inspected_limits_and_bound_engine() -> Result<(),
     .await;
     let requests = stub.finish().await?;
 
-    assert_eq!(capacity, Ok(4));
+    assert_eq!(capacity.map(JobCapacity::total), Ok(4));
     assert_eq!(requests.len(), 3);
     assert!(requests[1].contains(&format!("{VOLUME}-runner")));
     assert!(requests[2].contains(&format!("{VOLUME}-dind")));
@@ -188,7 +188,7 @@ async fn absent_half_is_charged_at_current_limit_only_after_exact_404() -> Resul
     .await;
     stub.finish().await?;
 
-    assert_eq!(capacity, Ok(1));
+    assert_eq!(capacity.map(JobCapacity::total), Ok(1));
     Ok(())
 }
 
@@ -337,7 +337,7 @@ async fn already_clean_rows_do_not_consume_capacity() -> Result<(), String> {
     .await;
     stub.finish().await?;
 
-    assert_eq!(capacity, Ok(4));
+    assert_eq!(capacity.map(JobCapacity::total), Ok(4));
     Ok(())
 }
 

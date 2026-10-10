@@ -38,8 +38,17 @@ pub(crate) struct Rest<'a> {
     pub(crate) pat: &'a str,
     /// Validated runner and `DinD` limits for new worker pairs.
     pub(crate) resource_budget: Option<ResourceBudget>,
+    /// Static Docker CPU and memory totals can fit a configured worker pair.
+    pub(crate) static_capacity: bool,
     /// Fresh guest metrics required before any acquire, JIT, or worker start.
     pub(crate) guest_admission: GuestAdmission,
+}
+
+impl Rest<'_> {
+    #[must_use]
+    pub(crate) const fn permits_start(self) -> bool {
+        self.static_capacity && self.guest_admission.permits_start()
+    }
 }
 
 /// Whether this job-start attempt has a fresh selected-guest sample.

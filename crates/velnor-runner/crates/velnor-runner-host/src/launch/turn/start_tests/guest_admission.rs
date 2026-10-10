@@ -2,10 +2,12 @@
 
 use super::super::{StartTurn, start_turn};
 use super::{ready, rest, zero_assignment_session};
+use crate::launch::capacity::{install_job_capacity, job_capacity};
 use crate::launch::drive::GuestAdmission;
 use crate::launch::inspect_tests::DockerStub;
+use crate::launch::resource_capacity::{GuestTotals, OccupiedResources, calculate};
 use crate::launch_harness::{Mode, Script, absent, assigned_wait, open};
-use crate::worker::Started;
+use crate::worker::{ResourceBudget, Started, test_resource_budget};
 
 #[tokio::test]
 async fn unavailable_guest_sample_blocks_acquire_and_worker_start() -> Result<(), String> {
@@ -29,6 +31,79 @@ async fn unavailable_guest_sample_blocks_acquire_and_worker_start() -> Result<()
             journal: &journal,
             docker: &docker.docker,
             capacity: 2,
+            rest,
+            stop: false,
+        },
+    )
+    .await;
+    let requests = docker.finish().await?;
+
+    assert_eq!(result, Ok(false));
+    assert!(requests.is_empty());
+    assert!(script.calls.is_empty());
+    assert!(workers.is_empty());
+    assert!(
+        journal
+            .rows()
+            .await
+            .map_err(|error| error.to_string())?
+            .is_empty()
+    );
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn no_fit_capacity_keeps_header_one_but_blocks_start() -> Result<(), String> {
+    let budget = test_resource_budget().map_err(|error| error.to_string())?;
+    let pair = budget.pair();
+    no_fit_case(
+        "cpu-capacity-denied",
+        GuestTotals {
+            cpus: 1,
+            memory_bytes: pair.memory_bytes,
+        },
+        budget,
+    )
+    .await?;
+    no_fit_case(
+        "memory-capacity-denied",
+        GuestTotals {
+            cpus: 8,
+            memory_bytes: pair.memory_bytes - 1,
+        },
+        budget,
+    )
+    .await
+}
+
+async fn no_fit_case(name: &str, guest: GuestTotals, budget: ResourceBudget) -> Result<(), String> {
+    let capacity = calculate(guest, OccupiedResources::default(), budget, 8)
+        .map_err(|error| error.to_string())?;
+    assert_eq!(capacity.total(), 0);
+    assert!(!capacity.permits_start());
+    let _capacity = install_job_capacity(capacity.poll_header());
+    assert_eq!(job_capacity(), 1);
+
+    let (scratch, journal) = open(name).await?;
+    let session = zero_assignment_session()?;
+    let polled = assigned_wait(90, 1);
+    let docker = DockerStub::open(Vec::new())?;
+    let mut script = Script {
+        calls: Vec::new(),
+        mode: Mode::Ok,
+    };
+    let mut workers: Vec<Started> = Vec::new();
+    let mut rest = rest();
+    rest.static_capacity = capacity.permits_start();
+
+    let result = start_turn(
+        &mut script,
+        &mut workers,
+        StartTurn {
+            ready: ready(&session, &polled),
+            journal: &journal,
+            docker: &docker.docker,
+            capacity: job_capacity(),
             rest,
             stop: false,
         },
