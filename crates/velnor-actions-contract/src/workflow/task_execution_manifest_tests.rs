@@ -103,28 +103,64 @@ fn execution_digest_binds_all_record_metadata() {
     let digest = original.execution_digest.clone();
     let mut changed = original.clone();
     changed.task_id.push_str("/different-task");
-    assert_ne!(changed.computed_execution_digest().unwrap(), digest);
+    assert_ne!(
+        changed.computed_execution_digest().expect("task ID digest"),
+        digest
+    );
     let mut changed = original.clone();
     changed.argv[9] = "--all".to_owned();
-    assert_ne!(changed.computed_execution_digest().unwrap(), digest);
+    assert_ne!(
+        changed.computed_execution_digest().expect("argv digest"),
+        digest
+    );
     let mut changed = original.clone();
     changed.task_digest = format!("b3-{}", "c".repeat(64));
-    assert_ne!(changed.computed_execution_digest().unwrap(), digest);
+    assert_ne!(
+        changed
+            .computed_execution_digest()
+            .expect("task digest binding"),
+        digest
+    );
     let mut changed = original.clone();
     changed.toolchain_inputs.tools[0] = "rust@1.98.0".to_owned();
-    assert_ne!(changed.computed_execution_digest().unwrap(), digest);
+    assert_ne!(
+        changed
+            .computed_execution_digest()
+            .expect("toolchain digest"),
+        digest
+    );
     let mut changed = original.clone();
     changed.matrix_id.push_str("-changed");
-    assert_ne!(changed.computed_execution_digest().unwrap(), digest);
+    assert_ne!(
+        changed
+            .computed_execution_digest()
+            .expect("matrix ID digest"),
+        digest
+    );
     let mut changed = original.clone();
     changed.matrix_key.push_str("-changed");
-    assert_ne!(changed.computed_execution_digest().unwrap(), digest);
+    assert_ne!(
+        changed
+            .computed_execution_digest()
+            .expect("matrix key digest"),
+        digest
+    );
     let mut changed = original.clone();
     changed.report_helper_version = "0.1.8".to_owned();
-    assert_ne!(changed.computed_execution_digest().unwrap(), digest);
+    assert_ne!(
+        changed
+            .computed_execution_digest()
+            .expect("report helper digest"),
+        digest
+    );
     let mut changed = original;
     changed.matrix_max_parallel = Some(9);
-    assert_ne!(changed.computed_execution_digest().unwrap(), digest);
+    assert_ne!(
+        changed
+            .computed_execution_digest()
+            .expect("matrix cap digest"),
+        digest
+    );
 }
 
 #[test]

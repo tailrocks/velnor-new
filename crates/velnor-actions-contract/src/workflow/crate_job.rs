@@ -158,6 +158,11 @@ impl CrateObligation {
 /// Shared by planned obligations and generated workflow steps so a typed
 /// execution cannot swap either its pinned command or tool inputs after the
 /// plan has bound the task.
+///
+/// # Errors
+///
+/// Returns a contract error when the task or toolchain identity is invalid,
+/// the argument vector is malformed, or canonical digest serialization fails.
 pub fn task_digest_for_execution(
     task_id: &str,
     argv: &[String],
