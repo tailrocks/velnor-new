@@ -235,13 +235,7 @@ fn workflow_dispatch(families: &[Family]) -> Yaml {
     }
     input_fields.push((
         "options".to_owned(),
-        Yaml::Seq(
-            input
-                .choices
-                .into_iter()
-                .map(|choice| Yaml::str(choice))
-                .collect(),
-        ),
+        Yaml::Seq(input.choices.into_iter().map(Yaml::str).collect()),
     ));
     Yaml::Map(vec![(
         "workflow_dispatch".to_owned(),

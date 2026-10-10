@@ -12,7 +12,7 @@ pub(super) fn task_script(helper_version: &str) -> String {
     append_argv_checks(&mut script);
     append_env_checks(&mut script);
     append_task_run(&mut script);
-    replace_frame_limits(script)
+    replace_frame_limits(&script)
 }
 
 fn append_setup(script: &mut String, helper_version: &str) {
@@ -151,7 +151,7 @@ exit "$report_code"
     );
 }
 
-fn replace_frame_limits(script: String) -> String {
+fn replace_frame_limits(script: &str) -> String {
     script
         .replace("@FRAME_MAGIC@", TASK_EXECUTION_FRAME_MAGIC)
         .replace(
