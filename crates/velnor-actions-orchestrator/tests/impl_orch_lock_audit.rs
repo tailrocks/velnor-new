@@ -19,7 +19,8 @@ const PINS: [(&str, &str); 5] = [
 
 /// v3 lock entry; `platforms` selects checksummed platforms (`rust` takes none).
 fn entry(tool: &str, version: &str, platforms: &[&str], seed: u8) -> String {
-    let mut out = format!("[[tools.{tool}]]\nversion = \"{version}\"\n");
+    let mut out =
+        format!("[[tools.{tool}]]\nversion = \"{version}\"\nspecifiers = [\"{version}\"]\n");
     for platform in platforms {
         let hex = format!("{seed:02x}").repeat(32);
         let block = format!(

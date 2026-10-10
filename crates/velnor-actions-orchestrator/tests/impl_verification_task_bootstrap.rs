@@ -52,13 +52,13 @@ lockfile_version = 3
 
 [tools]
 "aqua:vendor/tool" = [
-  { version = "2.3.4", backend = "aqua:vendor/tool", "platforms.linux-x64" = { url = "https://github.com/vendor/tool/releases/download/v2.3.4/tool-linux-x64.tar.gz", checksum = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }, "platforms.macos-arm64" = { url = "https://github.com/vendor/tool/releases/download/v2.3.4/tool-darwin-arm64.tar.gz", checksum = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" } }
+  { version = "2.3.4", backend = "aqua:vendor/tool", specifiers = ["2.3.4"], "platforms.linux-x64" = { url = "https://github.com/vendor/tool/releases/download/v2.3.4/tool-linux-x64.tar.gz", checksum = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }, "platforms.macos-arm64" = { url = "https://github.com/vendor/tool/releases/download/v2.3.4/tool-darwin-arm64.tar.gz", checksum = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" } }
 ]
 "github:example/linter" = [
-  { version = "1.2.3", backend = "github:example/linter", "platforms.linux-x64" = { url = "https://github.com/example/linter/releases/download/v1.2.3/linter-linux-x64.tar.gz", checksum = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" }, "platforms.macos-arm64" = { url = "https://github.com/example/linter/releases/download/v1.2.3/linter-darwin-arm64.tar.gz", checksum = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" } }
+  { version = "1.2.3", backend = "github:example/linter", specifiers = ["1.2.3"], "platforms.linux-x64" = { url = "https://github.com/example/linter/releases/download/v1.2.3/linter-linux-x64.tar.gz", checksum = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" }, "platforms.macos-arm64" = { url = "https://github.com/example/linter/releases/download/v1.2.3/linter-darwin-arm64.tar.gz", checksum = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" } }
 ]
 "cargo:codebook-lsp" = [
-  { version = "0.1.0", backend = "cargo:codebook-lsp" }
+  { version = "0.1.0", backend = "cargo:codebook-lsp", specifiers = ["0.1.0"] }
 ]
 "#,
     )
@@ -90,6 +90,29 @@ fn verification_task_rejects_unsupported_mise_lockfile_versions() {
             "{error}"
         );
     }
+}
+
+#[test]
+fn verification_task_requires_the_configured_request_in_lock_specifiers() {
+    let root = tool_root();
+    let lock_path = root.path().join("mise.lock");
+    let lock = fs::read_to_string(&lock_path)
+        .expect("read lock fixture")
+        .replace("specifiers = [\"2.3.4\"]", "specifiers = [\"2.3\"]");
+    fs::write(lock_path, lock).expect("write mismatched specifier");
+    let checks = check_tool_inputs(root.path());
+
+    let error = resolve_verification_tools(
+        &checks,
+        &verification_task("verify", VerificationRunner::LinuxX64),
+    )
+    .expect_err("lock specifier must contain the selected config request");
+    assert!(
+        error
+            .to_string()
+            .contains("verification_tool_identity_or_lock"),
+        "{error}"
+    );
 }
 
 #[test]
@@ -220,7 +243,7 @@ fn nested_mbx_task_uses_its_declared_config_when_root_has_same_task_name() {
 
 fn mbx_lock(version: &str) -> String {
     format!(
-        "lockfile_version = 3\n\n[tools]\n\"mr-boxington\" = [{{ version = \"{version}\", backend = \"packslip:github.com/jdx/mr-boxington\", \"platforms.linux-x64\" = {{ url = \"https://github.com/jdx/mr-boxington/releases/download/v{version}/mbx-x86_64-unknown-linux-gnu.tar.gz\", checksum = \"sha256:{}\" }} }}]\n",
+        "lockfile_version = 3\n\n[tools]\n\"mr-boxington\" = [{{ version = \"{version}\", backend = \"packslip:github.com/jdx/mr-boxington\", specifiers = [\"{version}\"], \"platforms.linux-x64\" = {{ url = \"https://github.com/jdx/mr-boxington/releases/download/v{version}/mbx-x86_64-unknown-linux-gnu.tar.gz\", checksum = \"sha256:{}\" }} }}]\n",
         "a".repeat(64)
     )
 }
@@ -242,7 +265,7 @@ tools = { "cargo:unsafe-tool" = "1.2.3" }
         r#"
 [tools]
 "cargo:unsafe-tool" = [
-  { version = "1.2.3", backend = "cargo:unsafe-tool" }
+  { version = "1.2.3", backend = "cargo:unsafe-tool", specifiers = ["1.2.3"] }
 ]
 "#,
     )

@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 pub(crate) struct NativeMiseLock {
     pub(crate) root_keys: Vec<String>,
     pub(crate) lockfile_version: Option<i64>,
-    pub(crate) tools: BTreeMap<String, NativeLockedTool>,
+    pub(crate) tools: BTreeMap<String, Vec<NativeLockedTool>>,
     pub(crate) valid_shape: bool,
 }
 
@@ -21,13 +21,35 @@ impl NativeMiseLock {
     }
 }
 
+impl NativeMiseLock {
+    /// Select exactly one lock row for a pinned request, preserving variant identity.
+    pub(crate) fn selected_tool(
+        &self,
+        key: &str,
+        version: &str,
+        specifier: &str,
+        options: &BTreeMap<String, String>,
+    ) -> Option<&NativeLockedTool> {
+        let mut matching = self.tools.get(key)?.iter().filter(|tool| {
+            tool.version.as_deref() == Some(version)
+                && tool
+                    .specifiers
+                    .as_ref()
+                    .is_some_and(|specifiers| specifiers.iter().any(|value| value == specifier))
+                && &tool.options == options
+        });
+        let selected = matching.next()?;
+        matching.next().is_none().then_some(selected)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct NativeLockedTool {
     pub(crate) version: Option<String>,
     pub(crate) backend: Option<String>,
+    pub(crate) specifiers: Option<Vec<String>>,
     pub(crate) options: BTreeMap<String, String>,
-    pub(crate) linux_x64: Option<NativeLockedArtifact>,
-    pub(crate) macos_arm64: Option<NativeLockedArtifact>,
+    pub(crate) platforms: BTreeMap<String, NativeLockedArtifact>,
     pub(crate) unsupported_fields: Vec<String>,
     pub(crate) valid_shape: bool,
 }
@@ -39,8 +61,15 @@ pub(crate) struct NativeLockedArtifact {
     pub(crate) url_api: Option<String>,
     pub(crate) signer: Option<String>,
     pub(crate) provenance: Option<String>,
+    pub(crate) repository_ids: Option<NativeRepositoryIds>,
     pub(crate) unsupported_fields: Vec<String>,
     pub(crate) valid_shape: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct NativeRepositoryIds {
+    pub(crate) repository: Option<String>,
+    pub(crate) owner: Option<String>,
 }
 
 /// Normalize the Rust toolchain's component and target options for the lock projection.
@@ -76,60 +105,101 @@ pub(crate) fn parse_native_mise_lock(value: &toml::Value) -> Option<NativeMiseLo
     let tools = root.get("tools")?.as_table()?;
     for (name, value) in tools {
         let Some(entries) = value.as_array() else {
-            lock.tools.insert(name.clone(), NativeLockedTool::default());
+            lock.tools
+                .insert(name.clone(), vec![NativeLockedTool::default()]);
             continue;
         };
-        if entries.len() != 1 {
-            lock.tools.insert(name.clone(), NativeLockedTool::default());
-            continue;
-        }
-        let Some(entry) = entries[0].as_table() else {
-            lock.tools.insert(name.clone(), NativeLockedTool::default());
-            continue;
-        };
-        let mut unsupported_fields = Vec::new();
-        let mut options = BTreeMap::new();
-        if let Some(options_table) = entry.get("options") {
-            if let Some(table) = options_table.as_table() {
-                for (key, option) in table {
-                    if let Some(text) = native_scalar_or_list(option) {
-                        options.insert(key.clone(), text);
-                    } else {
-                        unsupported_fields.push(format!("options.{key}"));
-                    }
-                }
-            } else {
-                unsupported_fields.push("options.shape".to_owned());
-            }
-        }
-        let mut platforms = BTreeMap::new();
-        for (key, item) in entry {
-            if let Some(platform) = key.strip_prefix("platforms.") {
-                platforms.insert(platform.to_owned(), parse_native_locked_artifact(item));
-            } else if !matches!(key.as_str(), "version" | "backend" | "options") {
-                unsupported_fields.push(key.clone());
-            }
-        }
         lock.tools.insert(
             name.clone(),
-            NativeLockedTool {
-                version: entry
-                    .get("version")
-                    .and_then(toml::Value::as_str)
-                    .map(ToOwned::to_owned),
-                backend: entry
-                    .get("backend")
-                    .and_then(toml::Value::as_str)
-                    .map(ToOwned::to_owned),
-                options,
-                linux_x64: platforms.remove("linux-x64"),
-                macos_arm64: platforms.remove("macos-arm64"),
-                unsupported_fields,
-                valid_shape: true,
-            },
+            entries.iter().map(parse_native_locked_tool).collect(),
         );
     }
     Some(lock)
+}
+
+fn parse_native_locked_tool(value: &toml::Value) -> NativeLockedTool {
+    let Some(entry) = value.as_table() else {
+        return NativeLockedTool::default();
+    };
+    let mut unsupported_fields = Vec::new();
+    let mut options = BTreeMap::new();
+    let specifiers = match entry.get("specifiers") {
+        Some(toml::Value::Array(values)) => {
+            let strings = values
+                .iter()
+                .map(toml::Value::as_str)
+                .collect::<Option<Vec<_>>>();
+            match strings {
+                Some(values)
+                    if !values.is_empty()
+                        && values.iter().all(|value| !value.is_empty())
+                        && values
+                            .iter()
+                            .collect::<std::collections::BTreeSet<_>>()
+                            .len()
+                            == values.len() =>
+                {
+                    Some(values.into_iter().map(ToOwned::to_owned).collect())
+                }
+                _ => {
+                    unsupported_fields.push("specifiers.shape".to_owned());
+                    None
+                }
+            }
+        }
+        Some(_) => {
+            unsupported_fields.push("specifiers.shape".to_owned());
+            None
+        }
+        None => {
+            unsupported_fields.push("specifiers.missing".to_owned());
+            None
+        }
+    };
+    if let Some(options_table) = entry.get("options") {
+        if let Some(table) = options_table.as_table() {
+            for (key, option) in table {
+                if let Some(text) = native_scalar_or_list(option) {
+                    options.insert(key.clone(), text);
+                } else {
+                    unsupported_fields.push(format!("options.{key}"));
+                }
+            }
+        } else {
+            unsupported_fields.push("options.shape".to_owned());
+        }
+    }
+    let mut platforms = BTreeMap::new();
+    for (key, item) in entry {
+        if let Some(platform) = key.strip_prefix("platforms.") {
+            if platforms
+                .insert(platform.to_owned(), parse_native_locked_artifact(item))
+                .is_some()
+            {
+                unsupported_fields.push(format!("platforms.{platform}.duplicate"));
+            }
+        } else if !matches!(
+            key.as_str(),
+            "version" | "backend" | "specifiers" | "options"
+        ) {
+            unsupported_fields.push(key.clone());
+        }
+    }
+    NativeLockedTool {
+        version: entry
+            .get("version")
+            .and_then(toml::Value::as_str)
+            .map(ToOwned::to_owned),
+        backend: entry
+            .get("backend")
+            .and_then(toml::Value::as_str)
+            .map(ToOwned::to_owned),
+        specifiers,
+        options,
+        platforms,
+        unsupported_fields,
+        valid_shape: true,
+    }
 }
 
 fn native_scalar_or_list(value: &toml::Value) -> Option<String> {
@@ -150,6 +220,36 @@ fn parse_native_locked_artifact(value: &toml::Value) -> NativeLockedArtifact {
     let Some(table) = value.as_table() else {
         return NativeLockedArtifact::default();
     };
+    let mut unsupported_fields = Vec::new();
+    let repository_ids = table.get("repository_ids").and_then(|value| {
+        let Some(ids) = value.as_table() else {
+            unsupported_fields.push("repository_ids.shape".to_owned());
+            return None;
+        };
+        let repository = ids
+            .get("repository")
+            .and_then(toml::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned);
+        let owner = ids
+            .get("owner")
+            .and_then(toml::Value::as_str)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned);
+        if repository.is_none() {
+            unsupported_fields.push("repository_ids.repository".to_owned());
+        }
+        if ids
+            .keys()
+            .any(|key| !matches!(key.as_str(), "repository" | "owner"))
+        {
+            unsupported_fields.push("repository_ids.unknown_field".to_owned());
+        }
+        if ids.get("owner").is_some() && owner.is_none() {
+            unsupported_fields.push("repository_ids.owner".to_owned());
+        }
+        Some(NativeRepositoryIds { repository, owner })
+    });
     NativeLockedArtifact {
         checksum: table
             .get("checksum")
@@ -171,16 +271,26 @@ fn parse_native_locked_artifact(value: &toml::Value) -> NativeLockedArtifact {
             .get("provenance")
             .and_then(toml::Value::as_str)
             .map(ToOwned::to_owned),
-        unsupported_fields: table
-            .keys()
-            .filter(|key| {
-                !matches!(
-                    key.as_str(),
-                    "checksum" | "url" | "url_api" | "signer" | "provenance"
-                )
-            })
-            .cloned()
-            .collect(),
+        repository_ids,
+        unsupported_fields: {
+            unsupported_fields.extend(
+                table
+                    .keys()
+                    .filter(|key| {
+                        !matches!(
+                            key.as_str(),
+                            "checksum"
+                                | "url"
+                                | "url_api"
+                                | "signer"
+                                | "provenance"
+                                | "repository_ids"
+                        )
+                    })
+                    .cloned(),
+            );
+            unsupported_fields
+        },
         valid_shape: true,
     }
 }
