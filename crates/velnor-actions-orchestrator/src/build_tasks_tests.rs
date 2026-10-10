@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
-use crate::build_tasks::{
-    source_task_tool_requests, validate_config_shape, validate_source_lock_subset,
-    validate_source_task_lock_requests,
+use super::build_task_lock_validation::{
+    source_task_tool_requests, validate_source_lock_subset, validate_source_task_lock_requests,
 };
+use crate::build_tasks::validate_config_shape;
 use crate::native_tool_input::{NativeMiseConfig, NativeToolSource, native_mise_source};
 use crate::native_tool_lock::NativeMiseLock;
 
