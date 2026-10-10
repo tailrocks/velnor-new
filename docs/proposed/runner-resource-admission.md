@@ -8,6 +8,10 @@ specification. The selected Docker daemon is the authority for guest CPU,
 memory, and Docker-root measurements. macOS host totals and filesystem free
 space are not substitutes for guest measurements.
 
+The controller-owned probe projection, output record, admission attempt, and
+operation-journal lifecycle are specified in the
+[resource-probe controller contract](resource-probe-controller.md).
+
 ## Resource budgets and worker creation
 
 Every new worker pair uses the validated `ResourceBudget` made from the four
