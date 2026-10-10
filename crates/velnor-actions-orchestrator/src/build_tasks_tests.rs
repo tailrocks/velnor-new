@@ -4,8 +4,9 @@ use crate::build_tasks::{
     validate_config_shape, validate_source_lock_subset, validate_source_task_lock_requests,
 };
 use crate::native_tool_input::{
-    NativeMiseConfig, NativeMiseLock, NativeToolSource, native_mise_source,
+    NativeMiseConfig, NativeToolSource, native_mise_source,
 };
+use crate::native_tool_lock::NativeMiseLock;
 
 const ROOT_CONFIG: &str = r#"
 min_version = "2026.10.7"
