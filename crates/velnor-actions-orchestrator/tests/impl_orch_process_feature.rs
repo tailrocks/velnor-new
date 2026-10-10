@@ -7,7 +7,7 @@ use proc_macro2::{TokenStream, TokenTree};
 use syn::visit::{self, Visit};
 use syn::{Expr, ExprCall, ExprPath, Path as RustPath, UseTree};
 
-const OWNER_CHECK_SOURCE: &str = "generate_stage_root_fs.rs";
+const OWNER_CHECK_SOURCE: &str = "src/generate_stage_root_fs.rs";
 
 #[derive(Default)]
 struct ProcessFeatureAudit {
@@ -164,19 +164,24 @@ fn audit_source(source: &str) -> Result<ProcessFeatureAudit, syn::Error> {
     Ok(audit)
 }
 
+fn is_owner_check_source(path: &Path) -> bool {
+    path == Path::new(OWNER_CHECK_SOURCE)
+}
+
 #[test]
 fn orchestrator_process_feature_is_limited_to_exact_stage_uid_check() -> Result<(), Box<dyn Error>>
 {
-    let source_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+    let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let source_root = crate_root.join("src");
     let mut uid_calls = 0;
     for path in rust_sources(&source_root)? {
         let source = std::fs::read_to_string(&path)?;
         let audit = audit_source(&source)?;
         assert_eq!(audit.violations, 0, "process API in {}", path.display());
         if audit.uid_calls > 0 {
-            assert_eq!(
-                path.file_name().and_then(|name| name.to_str()),
-                Some(OWNER_CHECK_SOURCE),
+            let relative_path = path.strip_prefix(&crate_root)?;
+            assert!(
+                is_owner_check_source(relative_path),
                 "geteuid call outside stage owner check: {}",
                 path.display()
             );
@@ -185,6 +190,14 @@ fn orchestrator_process_feature_is_limited_to_exact_stage_uid_check() -> Result<
     }
     assert_eq!(uid_calls, 1, "exactly one caller UID lookup is required");
     Ok(())
+}
+
+#[test]
+fn process_feature_guard_requires_exact_owner_source_path() {
+    assert!(is_owner_check_source(Path::new(OWNER_CHECK_SOURCE)));
+    assert!(!is_owner_check_source(Path::new(
+        "src/nested/generate_stage_root_fs.rs"
+    )));
 }
 
 #[test]
