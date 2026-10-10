@@ -10,7 +10,7 @@ use crate::native_tool_input::NativeMiseConfig;
 use crate::native_tool_lock::{NativeLockedTool, NativeMiseLock};
 
 /// (`version`, `options`, `extra_args`) selected for a tool.
-type ToolVersionSelection = (String, BTreeMap<String, String>, Vec<String>);
+pub(crate) type ToolVersionSelection = (String, BTreeMap<String, String>, Vec<String>);
 
 const BOLTFFI_KEY: &str = "github:boltffi/boltffi";
 const BOLTFFI_MATCHING_REGEX: &str = r"^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$";
@@ -65,7 +65,7 @@ pub(crate) fn resolve_selected_tools(
         .collect()
 }
 
-fn selected_version_and_options(
+pub(crate) fn selected_version_and_options(
     key: &str,
     config: &NativeMiseConfig,
     rust_version: &str,

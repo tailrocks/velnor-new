@@ -1,19 +1,18 @@
 //! Resolve native build tasks against the exact checked-in Mise source.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{VelnorConfig, WorkflowTask, is_valid_mise_task_name};
+use velnor_actions_contract::{BuildTask, VelnorConfig, WorkflowTask, is_valid_build_tool_key};
 use velnor_actions_mise::catalog::{MR_BOXINGTON_VERSION, RUST_VERSION};
-use velnor_actions_workflow_renderer::verification_jobs::BuildTaskPolicy;
+use velnor_actions_workflow_renderer::verification_jobs::{BuildTaskPolicy, BuildTaskTool};
 
-use crate::build_task_tools::resolve_selected_tools;
-use crate::native_tool_input::{NativeMiseConfig, NativeMiseTask, NativeToolSource};
+use crate::build_task_tools::{resolve_selected_tools, selected_version_and_options};
+use crate::native_mise_tasks::safe_task_tool_version;
+use crate::native_tool_input::{NativeMiseConfig, NativeToolSource};
 use crate::native_tool_lock::{NativeMiseLock, rust_toolchain_options};
 use crate::pins::resolve_build_task_mise_setup;
 use crate::toolcheck::{ToolInputCheck, ToolParse};
 use crate::{OrchestratorError, discover::Discovery};
-
-const MAX_TASK_CLOSURE: usize = 128;
 
 /// Resolve each task against source-bound Mise files and the fixed runner pin.
 pub(crate) fn policies(
@@ -88,7 +87,17 @@ pub(crate) fn policies(
         validate_task_source_shape(&task.source.mise_config, task_config)?;
         let mut merged_tasks = mise_config.clone();
         merged_tasks.tasks.extend(task_config.tasks.clone());
-        validate_task_closure(&merged_tasks, &task.mise_task)?;
+        let local_task_tools =
+            crate::native_mise_tasks::selected_build_task_tools(&merged_tasks, &task.mise_task)
+                .map_err(|problem| failure(build_task_graph_problem(problem)))?;
+        let selected_tools = resolve_selected_tools(
+            task,
+            mise_config,
+            mise_lock,
+            rust_version,
+            &rust_lock_options,
+        )?;
+        validate_task_tool_selection(task, &local_task_tools, &selected_tools)?;
 
         let task_lock_path = task.source.mise_lock_path();
         let task_lock = if task_lock_path == "mise.lock" {
@@ -108,6 +117,32 @@ pub(crate) fn policies(
             validate_lock_shape(task_lock)?;
             validate_source_lock_subset(task_lock, mise_lock)?;
         }
+        let source_lock = if task_lock_path == "mise.lock" {
+            Some(mise_lock)
+        } else if let Some(task_lock_input) = task_lock {
+            match &task_lock_input
+                .native
+                .as_ref()
+                .ok_or_else(|| failure("build_task_source_mise_lock"))?
+                .source
+            {
+                NativeToolSource::MiseLock(lock) => Some(lock),
+                NativeToolSource::RustToolchain | NativeToolSource::MiseConfig(_) => {
+                    return Err(failure("build_task_source_mise_lock"));
+                }
+            }
+        } else {
+            None
+        };
+        validate_source_task_lock_requests(
+            task_config,
+            source_lock,
+            task_lock_path == "mise.lock",
+            mise_config,
+            mise_lock,
+            rust_version,
+            &rust_lock_options,
+        )?;
         let task_lock_digest = task_lock.map(native_sha256).transpose()?;
 
         let task_rust_path = task.source.rust_toolchain_path();
@@ -131,6 +166,7 @@ pub(crate) fn policies(
             mise_config: native_sha256(task_config_input)?,
             mise_lock: task_lock_digest,
             rust_toolchain: task_rust_digest,
+            selected_tools,
         });
     }
 
@@ -138,14 +174,7 @@ pub(crate) fn policies(
         .iter()
         .zip(source_digests)
         .map(|(task, source)| {
-            let selected_tools = resolve_selected_tools(
-                task,
-                mise_config,
-                mise_lock,
-                rust_version,
-                &rust_lock_options,
-            )?;
-            validate_mbx_tool_closure(task, &selected_tools)?;
+            validate_mbx_tool_closure(task, &source.selected_tools)?;
             Ok(BuildTaskPolicy {
                 task: (*task).clone(),
                 runner_label: task.runner.runs_on().to_owned(),
@@ -156,7 +185,7 @@ pub(crate) fn policies(
                 source_mise_config_sha256: source.mise_config,
                 source_mise_lock_sha256: source.mise_lock,
                 source_rust_toolchain_sha256: source.rust_toolchain,
-                selected_tools,
+                selected_tools: source.selected_tools,
             })
         })
         .collect()
@@ -166,6 +195,7 @@ struct BuildTaskSourceDigests {
     mise_config: String,
     mise_lock: Option<String>,
     rust_toolchain: Option<String>,
+    selected_tools: Vec<BuildTaskTool>,
 }
 
 fn checked_source<'a>(
@@ -342,6 +372,114 @@ fn supported_lock_row(row: &crate::native_tool_lock::NativeLockedTool) -> bool {
             .all(|artifact| artifact.valid_shape && artifact.unsupported_fields.is_empty())
 }
 
+fn source_task_tool_requests(
+    config: &NativeMiseConfig,
+) -> Result<BTreeSet<(String, String)>, OrchestratorError> {
+    let mut requests = BTreeSet::new();
+    for task in config.tasks.values() {
+        if task
+            .unsupported_fields
+            .iter()
+            .any(|field| field == "tools.shape")
+        {
+            return Err(failure("build_task_task_tool_shape"));
+        }
+        for (key, version) in &task.task_tools {
+            if !is_valid_build_tool_key(key) || !safe_task_tool_version(version) {
+                return Err(failure("build_task_task_tool_shape"));
+            }
+            requests.insert((key.clone(), version.clone()));
+        }
+    }
+    Ok(requests)
+}
+
+/// Bind every task-local selector to the root config and lock. A separate
+/// task lock must contain exactly the local requests from its source config;
+/// root-provided tool rows remain in the root lock.
+fn validate_source_task_lock_requests(
+    task_config: &NativeMiseConfig,
+    source_lock: Option<&NativeMiseLock>,
+    source_lock_is_root: bool,
+    root_config: &NativeMiseConfig,
+    root_lock: &NativeMiseLock,
+    rust_version: &str,
+    rust_options: &BTreeMap<String, String>,
+) -> Result<(), OrchestratorError> {
+    let requests = source_task_tool_requests(task_config)?;
+    let Some(source_lock) = source_lock else {
+        return if requests.is_empty() {
+            Ok(())
+        } else {
+            Err(failure("build_task_source_task_lock_missing"))
+        };
+    };
+
+    if !source_lock_is_root {
+        let mut expected = BTreeMap::<&str, BTreeSet<&str>>::new();
+        for (key, version) in &requests {
+            expected.entry(key).or_default().insert(version);
+        }
+        if source_lock.tools.len() != expected.len() {
+            return Err(failure("build_task_source_task_lock_requests"));
+        }
+        for (key, rows) in &source_lock.tools {
+            let versions = expected
+                .get(key.as_str())
+                .ok_or_else(|| failure("build_task_source_task_lock_requests"))?;
+            if rows.len() != versions.len()
+                || rows.iter().any(|row| {
+                    row.version
+                        .as_deref()
+                        .is_none_or(|version| !versions.contains(version))
+                })
+            {
+                return Err(failure("build_task_source_task_lock_requests"));
+            }
+        }
+    }
+
+    for (key, requested_version) in requests {
+        let (version, options, _) =
+            selected_version_and_options(&key, root_config, rust_version, rust_options)?;
+        if version != requested_version {
+            return Err(failure("build_task_source_task_tool_version"));
+        }
+        let root_row = root_lock
+            .selected_tool(&key, &version, &requested_version, &options)
+            .filter(|row| supported_lock_row(row))
+            .ok_or_else(|| failure("build_task_source_task_tool_root_lock"))?;
+        let source_row = source_lock
+            .selected_tool(&key, &version, &requested_version, &options)
+            .filter(|row| supported_lock_row(row))
+            .ok_or_else(|| failure("build_task_source_task_tool_source_lock"))?;
+        if source_row != root_row {
+            return Err(failure("build_task_source_task_tool_lock_mismatch"));
+        }
+    }
+    Ok(())
+}
+
+fn validate_task_tool_selection(
+    task: &BuildTask,
+    requested: &BTreeMap<String, String>,
+    selected_tools: &[BuildTaskTool],
+) -> Result<(), OrchestratorError> {
+    for (key, version) in requested {
+        if !task.tools.iter().any(|declared| declared == key) {
+            return Err(failure("build_task_task_tool_not_declared"));
+        }
+        let selected = selected_tools
+            .iter()
+            .find(|tool| tool.key == *key)
+            .ok_or_else(|| failure("build_task_task_tool_not_selected"))?;
+        if selected.version != *version {
+            return Err(failure("build_task_task_tool_version"));
+        }
+    }
+    Ok(())
+}
+
 fn validate_task_source_shape(
     path: &str,
     config: &NativeMiseConfig,
@@ -359,86 +497,6 @@ fn validate_task_source_shape(
     Ok(())
 }
 
-fn validate_task_closure(
-    config: &NativeMiseConfig,
-    task_name: &str,
-) -> Result<(), OrchestratorError> {
-    let mut active = BTreeSet::new();
-    let mut complete = BTreeSet::new();
-    let mut count = 0;
-    visit_task(config, task_name, &mut active, &mut complete, &mut count)
-}
-
-fn visit_task(
-    config: &NativeMiseConfig,
-    name: &str,
-    active: &mut BTreeSet<String>,
-    complete: &mut BTreeSet<String>,
-    count: &mut usize,
-) -> Result<(), OrchestratorError> {
-    if complete.contains(name) {
-        return Ok(());
-    }
-    if !is_valid_mise_task_name(name) || !active.insert(name.to_owned()) {
-        return Err(failure("build_task_task_graph"));
-    }
-    *count += 1;
-    if *count > MAX_TASK_CLOSURE {
-        return Err(failure("build_task_task_graph_bound"));
-    }
-    let task = config
-        .tasks
-        .get(name)
-        .ok_or_else(|| failure("build_task_task_missing"))?;
-    let children = task_children(task)?;
-    for child in children {
-        visit_task(config, &child, active, complete, count)?;
-    }
-    active.remove(name);
-    complete.insert(name.to_owned());
-    Ok(())
-}
-
-fn task_children(task: &NativeMiseTask) -> Result<Vec<String>, OrchestratorError> {
-    if !task.valid_shape || !task.unsupported_fields.is_empty() || !task.task_tools.is_empty() {
-        return Err(failure("build_task_task_shape"));
-    }
-    if task.run_field_present && task.run_commands.is_none() {
-        return Err(failure("build_task_task_run_shape"));
-    }
-    let mut children = BTreeSet::new();
-    for dependency in &task.dependencies {
-        if !is_valid_mise_task_name(dependency) {
-            return Err(failure("build_task_task_dependency"));
-        }
-        children.insert(dependency.clone());
-    }
-    for command in task.run_commands.iter().flatten() {
-        for line in command.lines() {
-            let line = line.trim();
-            if !line.contains("mise") {
-                continue;
-            }
-            let words = line.split_whitespace().collect::<Vec<_>>();
-            if words.len() != 3
-                || words[0] != "mise"
-                || words[1] != "run"
-                || !is_valid_mise_task_name(words[2])
-            {
-                return Err(failure("build_task_task_nested_call"));
-            }
-            children.insert(words[2].to_owned());
-        }
-    }
-    if !task.run_field_present && children.is_empty() {
-        return Err(failure("build_task_task_empty"));
-    }
-    if children.len() > MAX_TASK_CLOSURE {
-        return Err(failure("build_task_task_graph_bound"));
-    }
-    Ok(children.into_iter().collect())
-}
-
 fn exact_version(value: &str) -> bool {
     let parts = value.split('.').collect::<Vec<_>>();
     parts.len() == 3
@@ -450,6 +508,22 @@ fn exact_version(value: &str) -> bool {
 fn failure(problem: &str) -> OrchestratorError {
     OrchestratorError::Contract {
         problem: problem.to_owned(),
+    }
+}
+
+fn build_task_graph_problem(problem: &str) -> &'static str {
+    match problem {
+        "verification_task_graph" => "build_task_task_graph",
+        "verification_task_graph_bound" => "build_task_task_graph_bound",
+        "verification_task_missing" => "build_task_task_missing",
+        "verification_task_shape" => "build_task_task_shape",
+        "verification_task_run_shape" => "build_task_task_run_shape",
+        "verification_task_tool_shape" => "build_task_task_tool_shape",
+        "verification_task_tool_conflict" => "build_task_task_tool_conflict",
+        "verification_task_dependency" => "build_task_task_dependency",
+        "verification_task_nested_call" => "build_task_task_nested_call",
+        "build_task_task_empty" => "build_task_task_empty",
+        _ => "build_task_task_graph",
     }
 }
 
