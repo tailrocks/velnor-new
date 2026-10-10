@@ -4,16 +4,11 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
-use tempfile::TempDir;
-use velnor_actions_contract::cachekey::{ToolchainInputs, toolchain_id};
-use velnor_actions_contract::workflow::crate_job::task_digest_for_execution;
+use velnor_actions_contract::workflow::MatrixEntry;
 use velnor_actions_contract::workflow::{
-    ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, ObligationDecision, Plan, PlanBaseline,
-    PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, PlannedPlatform,
-    TASK_EXECUTION_MANIFEST_PATH, TASK_EXECUTION_MANIFEST_SCHEMA, TaskExecutionManifestEntryV1,
-    TaskExecutionManifestV1, WorkflowEvent,
+    ExecuteTaskIds, ExecuteTaskRef, ObligationDecision, Plan, TASK_EXECUTION_MANIFEST_PATH,
+    TaskExecutionManifestV1,
 };
-use velnor_actions_contract::{RunnerSelection, Trust, plan_id_for_run};
 
 use super::*;
 
@@ -21,172 +16,9 @@ const RUN_KEY: &str = "local";
 const TASK_ID: &str = "stack/rust/demo/clippy/default";
 const GENERATOR_VERSION: &str = "0.1.7";
 
-struct Fixture {
-    repo: TempDir,
-    runner_temp: TempDir,
-    manifest: TaskExecutionManifestV1,
-    plan: Plan,
-}
-
-impl Fixture {
-    fn new() -> Self {
-        let argv = vec![
-            "mise".to_owned(),
-            "--no-config".to_owned(),
-            "--no-env".to_owned(),
-            "--no-hooks".to_owned(),
-            "exec".to_owned(),
-            "rust@1.99.0".to_owned(),
-            "--".to_owned(),
-            "cargo".to_owned(),
-            "fmt".to_owned(),
-            "--check".to_owned(),
-        ];
-        let toolchain_inputs = ToolchainInputs {
-            tools: vec!["rust@1.99.0".to_owned()],
-            components: vec!["clippy".to_owned(), "rustfmt".to_owned()],
-            compile_driver: "cargo".to_owned(),
-            test_runner: "cargo_test".to_owned(),
-        };
-        let toolchain = toolchain_id(&toolchain_inputs).expect("toolchain id");
-        let task_digest =
-            task_digest_for_execution(TASK_ID, &argv, &toolchain).expect("task digest");
-        let matrix_id =
-            velnor_actions_contract::matrix_id_for_task_group("rust", TASK_ID).expect("matrix id");
-        let matrix_key =
-            velnor_actions_contract::matrix_key_for_id(&matrix_id).expect("matrix key");
-        let env = BTreeMap::from([
-            ("MISE_NO_CONFIG".to_owned(), "1".to_owned()),
-            ("MISE_NO_ENV".to_owned(), "1".to_owned()),
-            ("MISE_NO_HOOKS".to_owned(), "1".to_owned()),
-            ("MISE_LOCKFILE".to_owned(), "0".to_owned()),
-            ("MISE_AUTO_INSTALL".to_owned(), "false".to_owned()),
-            ("MISE_EXEC_AUTO_INSTALL".to_owned(), "false".to_owned()),
-            (
-                "MISE_RUSTUP_HOME".to_owned(),
-                "${{ runner.temp }}/velnor/rustup".to_owned(),
-            ),
-            (
-                "MISE_CARGO_HOME".to_owned(),
-                "${{ runner.temp }}/velnor/cargo".to_owned(),
-            ),
-            ("RUSTUP_TOOLCHAIN".to_owned(), "1.99.0".to_owned()),
-            ("RUSTDOCFLAGS".to_owned(), "-D warnings".to_owned()),
-        ]);
-        let mut record = TaskExecutionManifestEntryV1 {
-            task_id: TASK_ID.to_owned(),
-            execution_digest: String::new(),
-            task_digest: task_digest.clone(),
-            toolchain_inputs,
-            argv,
-            env,
-            matrix_id: matrix_id.clone(),
-            matrix_key: matrix_key.clone(),
-            report_helper_version: GENERATOR_VERSION.to_owned(),
-            matrix_max_parallel: Some(8),
-        };
-        record.refresh_execution_digest().expect("execution digest");
-        let manifest = TaskExecutionManifestV1 {
-            schema: TASK_EXECUTION_MANIFEST_SCHEMA,
-            generator_version: GENERATOR_VERSION.to_owned(),
-            tasks: BTreeMap::from([(TASK_ID.to_owned(), record)]),
-        };
-        manifest.validate().expect("manifest validates");
-
-        let entry = MatrixEntry::derive(
-            "rust",
-            TASK_ID,
-            "true",
-            &task_digest,
-            serde_json::json!({}),
-            ExecuteTaskIds {
-                tasks: BTreeMap::from([(
-                    "clippy".to_owned(),
-                    ExecuteTaskRef::Single(TASK_ID.to_owned()),
-                )]),
-            },
-            &digest(11),
-            RUN_KEY,
-            "crate_clippy",
-            PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")
-                .expect("planned platform"),
-        )
-        .expect("matrix entry");
-        let plan = Plan {
-            schema: Plan::SCHEMA,
-            run_key: RUN_KEY.to_owned(),
-            plan_id: plan_id_for_run(RUN_KEY).expect("plan id"),
-            base: None,
-            head: "HEAD".to_owned(),
-            event: WorkflowEvent::PullRequest,
-            qualification: None,
-            runner: PlanRunner {
-                label: "ubuntu-26.04".to_owned(),
-                selection: RunnerSelection::LatestDefault,
-            },
-            trust: Trust::Pr,
-            baseline: PlanBaseline::unavailable(None).expect("baseline"),
-            generator: PlanGenerator {
-                version: GENERATOR_VERSION.to_owned(),
-                target: "x86_64-unknown-linux-gnu".to_owned(),
-                sha256: "a".repeat(64),
-            },
-            packages: Vec::new(),
-            obligations: vec![PlanObligation {
-                task_id: TASK_ID.to_owned(),
-                decision: ObligationDecision::Execute,
-                reason: "selected".to_owned(),
-                task_digest,
-                input_digest: digest(11),
-                closure_digest: digest(12),
-                baseline_proof: None,
-            }],
-            matrix: PlanMatrix {
-                include: vec![entry],
-            },
-            task_ids: vec![TASK_ID.to_owned()],
-            warnings: Vec::new(),
-            edges: Vec::new(),
-        };
-        plan.validate().expect("plan validates");
-
-        let repo = TempDir::new().expect("repo tempdir");
-        let manifest_path = repo.path().join(TASK_EXECUTION_MANIFEST_PATH);
-        fs::create_dir_all(manifest_path.parent().expect("manifest parent"))
-            .expect("manifest directory");
-        fs::write(
-            &manifest_path,
-            manifest.marked_json().expect("marked manifest"),
-        )
-        .expect("manifest file");
-        let runner_temp = TempDir::new().expect("runner tempdir");
-        let plan_path = runner_temp
-            .path()
-            .join("velnor")
-            .join(RUN_KEY)
-            .join("plan.json");
-        fs::create_dir_all(plan_path.parent().expect("plan parent")).expect("plan directory");
-        fs::write(&plan_path, serde_json::to_vec(&plan).expect("plan JSON")).expect("plan file");
-
-        Self {
-            repo,
-            runner_temp,
-            manifest,
-            plan,
-        }
-    }
-
-    fn resolve(&self) -> Result<Vec<u8>, OrchestratorError> {
-        let record = self.manifest.tasks.get(TASK_ID).expect("manifest record");
-        resolve_task_execution_to(
-            self.repo.path(),
-            self.runner_temp.path(),
-            RUN_KEY,
-            &record.execution_digest,
-            GENERATOR_VERSION,
-        )
-    }
-}
+#[path = "task_execution_fixture.rs"]
+mod fixture;
+use fixture::Fixture;
 
 #[test]
 fn resolver_emits_the_bound_record_without_altering_plan_data() {
@@ -228,9 +60,15 @@ fn resolver_emits_the_bound_record_without_altering_plan_data() {
         .parse::<usize>()
         .expect("environment count");
     let env_start = env_count_position + 1;
-    let resolved_env = fields[env_start..fields.len() - 1]
-        .chunks_exact(2)
-        .map(|pair| (pair[0], pair[1]))
+    let (env_pairs, remainder) = fields[env_start..fields.len() - 1].as_chunks::<2>();
+    assert_eq!(
+        remainder,
+        &[] as &[&str],
+        "environment fields are key/value pairs"
+    );
+    let resolved_env = env_pairs
+        .iter()
+        .map(|[key, value]| (*key, *value))
         .collect::<BTreeMap<_, _>>();
     assert_eq!(resolved_env.len(), env_count);
     let runner_temp = fixture

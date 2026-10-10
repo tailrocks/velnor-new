@@ -19,7 +19,10 @@ fn enumeration_follows_plan_order() {
             "velnor-matrix-r7-a2-m-0000000000000001",
         ]
     );
-    assert!(expected_artifact_ids(&serde_json::json!({})).is_empty());
+    assert_eq!(
+        expected_artifact_ids(&serde_json::json!({})),
+        [] as [&str; 0]
+    );
 }
 
 #[test]

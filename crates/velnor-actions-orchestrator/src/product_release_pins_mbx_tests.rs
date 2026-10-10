@@ -30,7 +30,8 @@ fn assert_catalog_mbx_build(args: &[String], expected_build_args: &[&str]) {
 #[test]
 fn product_release_installs_catalog_mbx_for_runner_builds() {
     let catalog = ToolCatalog::pinned();
-    let argv = install_argv(&[PinnedTool::Rust, PinnedTool::MrBoxington], &catalog).unwrap();
+    let argv = install_argv(&[PinnedTool::Rust, PinnedTool::MrBoxington], &catalog)
+        .expect("pinned tool install arguments");
     let actual = strings(&argv);
     let rust = format!("rust@{}", catalog.version(PinnedTool::Rust));
     let mbx = format!("mr-boxington@{}", catalog.version(PinnedTool::MrBoxington));
@@ -52,7 +53,7 @@ fn product_release_installs_catalog_mbx_for_runner_builds() {
 #[test]
 fn macos_runner_binary_build_uses_catalog_mbx_and_pinned_rust() {
     let catalog = ToolCatalog::pinned();
-    let argv = runner_build_argv(&catalog).unwrap();
+    let argv = runner_build_argv(&catalog).expect("pinned runner build arguments");
 
     assert_catalog_mbx_build(
         &argv,
@@ -71,7 +72,7 @@ fn macos_runner_binary_build_uses_catalog_mbx_and_pinned_rust() {
 #[test]
 fn linux_resource_probe_build_uses_catalog_mbx_and_preserves_target() {
     let catalog = ToolCatalog::pinned();
-    let argv = resource_probe_build_argv(&catalog).unwrap();
+    let argv = resource_probe_build_argv(&catalog).expect("pinned resource-probe build arguments");
 
     assert_catalog_mbx_build(
         &argv,

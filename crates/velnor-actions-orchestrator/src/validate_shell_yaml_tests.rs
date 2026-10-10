@@ -83,7 +83,10 @@ fn only_step_run_keys_are_linted() -> Result<(), String> {
     let runs = bodies(
         "defaults:\n  run:\n    shell: bash\njobs:\n  probe:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: action\n        uses: example/action@0000000000000000000000000000000000000000\n        with:\n          run: action-input\n        env:\n          run: environment-value\n",
     )?;
-    assert!(runs.is_empty());
+    assert_eq!(
+        runs,
+        [] as [(String, validate_shell::workflow::ShellDialect); 0]
+    );
     Ok(())
 }
 
@@ -125,7 +128,10 @@ fn nested_run_values_are_not_confused_with_steps() -> Result<(), String> {
     let runs = bodies(
         "jobs:\n  probe:\n    runs-on: [self-hosted, runner]\n    steps:\n      - name: action\n        uses: example/action@0000000000000000000000000000000000000000\n        with:\n          run: action-input\n        env:\n          run: environment-value\n",
     )?;
-    assert!(runs.is_empty());
+    assert_eq!(
+        runs,
+        [] as [(String, validate_shell::workflow::ShellDialect); 0]
+    );
     Ok(())
 }
 

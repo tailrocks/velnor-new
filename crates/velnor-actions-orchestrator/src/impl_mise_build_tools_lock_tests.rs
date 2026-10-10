@@ -14,11 +14,17 @@ hk = [
     )
     .expect("valid TOML repository identity");
     let lock = parse_native_mise_lock(&value).expect("lock projection");
-    let artifact = lock.tools["hk"][0].platforms.get("macos-arm64").unwrap();
-    let ids = artifact.repository_ids.as_ref().unwrap();
+    let artifact = lock.tools["hk"][0]
+        .platforms
+        .get("macos-arm64")
+        .expect("macOS artifact exists");
+    let ids = artifact
+        .repository_ids
+        .as_ref()
+        .expect("repository IDs are parsed");
     assert_eq!(ids.repository.as_deref(), Some("922514152"));
     assert_eq!(ids.owner.as_deref(), Some("jdx"));
-    assert!(artifact.unsupported_fields.is_empty());
+    assert_eq!(artifact.unsupported_fields, [] as [String; 0]);
 
     for ids in [
         r#"repository_ids = "922514152""#,
@@ -32,7 +38,10 @@ hk = [
         let source = format!("lockfile_version = 3\n[tools]\nhk = [{row}]\n");
         let value = toml::from_str(&source).expect("valid TOML malformed-field fixture");
         let lock = parse_native_mise_lock(&value).expect("lock projection");
-        let artifact = lock.tools["hk"][0].platforms.get("macos-arm64").unwrap();
+        let artifact = lock.tools["hk"][0]
+            .platforms
+            .get("macos-arm64")
+            .expect("macOS artifact exists");
         assert!(
             !artifact.unsupported_fields.is_empty(),
             "malformed repository identity must fail closed: {ids}"
