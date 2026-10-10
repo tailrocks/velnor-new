@@ -137,7 +137,10 @@ async fn inbox_conflict_prevents_quarantine_ack() -> Result<(), String> {
     })
     .await;
     assert!(result.is_err());
-    assert_eq!(ack.requests, Vec::new());
+    assert_eq!(
+        ack.requests,
+        [] as [(velnor_runner_github::Method, std::string::String); 0]
+    );
     Ok(())
 }
 

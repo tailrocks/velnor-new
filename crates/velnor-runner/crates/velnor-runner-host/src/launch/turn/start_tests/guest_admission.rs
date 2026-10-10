@@ -40,12 +40,12 @@ async fn unavailable_guest_sample_blocks_acquire_and_worker_start() -> Result<()
     let requests = docker.finish().await?;
 
     assert_eq!(result, Ok(false));
-    assert_eq!(requests, Vec::new());
-    assert_eq!(script.calls, Vec::new());
-    assert_eq!(workers, Vec::new());
+    assert_eq!(requests, [] as [std::string::String; 0]);
+    assert_eq!(script.calls, [] as [&str; 0]);
+    assert_eq!(workers, [] as [worker::projection_types::Started; 0]);
     assert_eq!(
         journal.rows().await.map_err(|error| error.to_string())?,
-        Vec::new()
+        [] as [reconcile::IntentRow; 0]
     );
     absent(&scratch.file())
 }
@@ -132,9 +132,9 @@ async fn safe_idless_redelivery_cannot_start_when_guest_cannot_fit_a_pair() -> R
     let requests = docker.finish().await?;
 
     assert_eq!(result, Ok(false));
-    assert_eq!(requests, Vec::new());
-    assert_eq!(script.calls, Vec::new());
-    assert_eq!(workers, Vec::new());
+    assert_eq!(requests, [] as [std::string::String; 0]);
+    assert_eq!(script.calls, [] as [&str; 0]);
+    assert_eq!(workers, [] as [worker::projection_types::Started; 0]);
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Uncertain);
@@ -178,12 +178,12 @@ async fn no_fit_case(name: &str, guest: GuestTotals, budget: ResourceBudget) -> 
     let requests = docker.finish().await?;
 
     assert_eq!(result, Ok(false));
-    assert_eq!(requests, Vec::new());
-    assert_eq!(script.calls, Vec::new());
-    assert_eq!(workers, Vec::new());
+    assert_eq!(requests, [] as [std::string::String; 0]);
+    assert_eq!(script.calls, [] as [&str; 0]);
+    assert_eq!(workers, [] as [worker::projection_types::Started; 0]);
     assert_eq!(
         journal.rows().await.map_err(|error| error.to_string())?,
-        Vec::new()
+        [] as [reconcile::IntentRow; 0]
     );
     absent(&scratch.file())
 }

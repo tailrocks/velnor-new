@@ -91,7 +91,7 @@ async fn unmatched_completion_is_quarantined_without_claiming_cleanup_authority(
             .due_completed_launches(0, 10)
             .await
             .map_err(|error| error.to_string())?,
-        Vec::new()
+        [] as [journal::completion::CompletedLaunch; 0]
     );
     assert!(
         journal
@@ -126,7 +126,7 @@ async fn invalid_completion_identity_is_quarantined_without_journal_authority() 
             .due_completed_launches(0, 10)
             .await
             .map_err(|error| error.to_string())?,
-        Vec::new()
+        [] as [journal::completion::CompletedLaunch; 0]
     );
     let inbox = journal
         .pending_completion_inbox(0, 4)
@@ -170,7 +170,7 @@ async fn negative_completion_id_fails_before_authority_or_ack() -> Result<(), St
             .due_completed_launches(0, 10)
             .await
             .map_err(|error| error.to_string())?,
-        Vec::new()
+        [] as [journal::completion::CompletedLaunch; 0]
     );
     assert!(
         journal
@@ -207,7 +207,7 @@ async fn oversized_completion_data_fails_before_inbox_write() -> Result<(), Stri
             .pending_completion_inbox(0, 4)
             .await
             .map_err(|error| error.to_string())?,
-        Vec::new()
+        [] as [journal::completion::inbox::CompletionInboxEntry; 0]
     );
 
     let Poll::Batch(mut too_many) = completed(Some(61), Some(901), Some("v61")) else {
@@ -225,7 +225,7 @@ async fn oversized_completion_data_fails_before_inbox_write() -> Result<(), Stri
             .pending_completion_inbox(0, 4)
             .await
             .map_err(|error| error.to_string())?,
-        Vec::new()
+        [] as [journal::completion::inbox::CompletionInboxEntry; 0]
     );
     Ok(())
 }
@@ -242,7 +242,7 @@ async fn quarantined_completion_retries_after_legacy_identity_appears() -> Resul
             .due_completed_launches(0, 10)
             .await
             .map_err(|error| error.to_string())?,
-        Vec::new()
+        [] as [journal::completion::CompletedLaunch; 0]
     );
 
     let (id, fresh) = journal
@@ -267,7 +267,7 @@ async fn quarantined_completion_retries_after_legacy_identity_appears() -> Resul
             .pending_completion_inbox(i64::MAX, 4)
             .await
             .map_err(|error| error.to_string())?,
-        Vec::new()
+        [] as [journal::completion::inbox::CompletionInboxEntry; 0]
     );
     Ok(())
 }

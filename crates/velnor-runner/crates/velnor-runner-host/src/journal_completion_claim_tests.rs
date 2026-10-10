@@ -75,7 +75,10 @@ async fn claims_fence_retries_and_survive_reopen() -> Result<(), HostError> {
         .ok_or(HostError::Journal)?;
     assert_eq!(first.generation, 1);
     assert_eq!(first.attempt, 1);
-    assert_eq!(journal.due_completed_launches(100, 10).await?, Vec::new());
+    assert_eq!(
+        journal.due_completed_launches(100, 10).await?,
+        [] as [journal::completion::CompletedLaunch; 0]
+    );
     assert!(
         journal
             .record_completion_runner_absent_at(id, first.generation, 109)
@@ -91,7 +94,10 @@ async fn claims_fence_retries_and_survive_reopen() -> Result<(), HostError> {
             .completion_cleanup_claim_current_at(id, first.generation, 109)
             .await?
     );
-    assert_eq!(journal.due_completed_launches(118, 10).await?, Vec::new());
+    assert_eq!(
+        journal.due_completed_launches(118, 10).await?,
+        [] as [journal::completion::CompletedLaunch; 0]
+    );
     let due = journal.due_completed_launches(119, 10).await?;
     assert_eq!(due.len(), 1);
     assert!(due[0].identity.runner_absent);
