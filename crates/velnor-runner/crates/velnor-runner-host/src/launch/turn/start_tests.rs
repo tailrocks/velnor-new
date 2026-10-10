@@ -207,7 +207,7 @@ async fn missing_current_census_blocks_ack_and_start() -> Result<(), String> {
     assert_eq!(decision, crate::launch::Admit::Error);
     assert_eq!(
         journal.rows().await.map_err(|error| error.to_string())?,
-        [] as [reconcile::IntentRow; 0]
+        [] as [crate::IntentRow; 0]
     );
     absent(&scratch.file())
 }
