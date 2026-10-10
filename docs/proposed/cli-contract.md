@@ -314,30 +314,23 @@ pipeline, and generate all Velnor-owned GitHub Actions files. Missing optional
 configuration values use hardcoded defaults; unknown keys, invalid values, and
 unsupported stack settings fail before any output replacement.
 
-Without `--output-dir`, the destination is the repository root. Velnor MUST
-replace the generated `.github` tree from scratch after rendering succeeds.
-The replacement MUST be atomic at the directory level: a failed scan, plan,
-render, or validation leaves the previous `.github` tree unchanged. Generated
-output files are written only under `.github`. In-place generation may retain
-the private, self-ignored `.github.velnor-stage/` runtime container at the Git
-root, bound to that canonical worktree and containing one persistent same-
-filesystem spare; it is staging state, not generated output. Generation clears
-only spare children and never removes or recreates the container or spare root.
-In-place generation requires atomic directory exchange and is supported on
-Linux and macOS; other platforms fail before creating staging state. Linux
-requires kernel 5.8 or newer with `STATX_MNT_ID` reported; Ubuntu 22.04 and
-newer require a compatible running kernel. Otherwise generation fails closed
-before staging. Preview generation does not use this restriction. In-place
-generation identifies the repository mount and fails closed if `.github`, the
-private staging state, or any real output directory is on another mount. It
-repeats the output scan immediately before exchange and before cleanup. Mount
-topology must remain stable during the operation; path-based cleanup does not claim protection
-against a privileged concurrent mount change.
-`plan` and preview generation do not create or modify this state. An existing
-`.github` root and every real directory below it must be owned by the caller;
-foreign-owned directories fail before publication as specified by the
-generated-file contract. `rust-toolchain.toml`, `mise.toml`, and `mise.lock`
-are read-only inputs and MUST remain byte-for-byte unchanged.
+Without `--output-dir`, destination is repository root. Velnor MUST atomically
+replace generated `.github` after scan, plan, render and validation succeed; failure leaves it unchanged and outputs stay under `.github`.
+
+In-place generation may retain a private self-ignored `.github.velnor-stage/`
+container at the canonical worktree root, bound to it and holding one persistent
+same-filesystem spare. Staging state is not output; generation clears spare
+children and never removes or recreates either root. Atomic exchange is supported
+on Linux/macOS; other platforms fail before creating stage state. Linux requires
+kernel 5.8+ and reported `STATX_MNT_ID` (Ubuntu 22.04+ needs a compatible
+kernel); otherwise generation fails before staging. Preview is unrestricted.
+In-place generation rejects cross-mount `.github`, stage, or output directories
+and repeats the scan before exchange and cleanup. Mount topology must stay
+stable during path-based cleanup; privileged concurrent mount changes are
+outside the guarantee. `plan` and preview create no stage state. If `.github`
+exists, its root and real subdirectories must be caller-owned; foreign ownership
+fails before publication. The check uses only read-only effective-UID lookup;
+process creation/control remains forbidden. Tool files stay byte-identical.
 
 `--output-dir PATH` is preview mode. PATH is the exact preview root; Velnor
 writes `PATH/.github`. PATH MUST be fresh and empty (or absent); Velnor MUST

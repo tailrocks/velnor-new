@@ -37,6 +37,10 @@ mod impl_cli_tmp;
 mod impl_cli_tofu_capacity;
 #[path = "impl_cli_verify_local.rs"]
 mod impl_cli_verify_local;
+#[path = "impl_cli_warning.rs"]
+mod impl_cli_warning;
+#[path = "impl_repo_dep_features.rs"]
+mod impl_repo_dep_features;
 #[path = "impl_repo_deps.rs"]
 mod impl_repo_deps;
 #[path = "impl_repo_freshness.rs"]

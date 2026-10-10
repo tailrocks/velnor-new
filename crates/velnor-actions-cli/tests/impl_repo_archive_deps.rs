@@ -4,7 +4,7 @@ use crate::impl_repo_policy::p11_toml;
 
 /// Reviewed qualified-archive decoders are exclusive to the IO owner.
 /// Complete declarations fix versions, disable defaults, and close features.
-pub(super) fn reviewed_archive_dependency(dir: &str, key: &str, line: &str) -> bool {
+pub(crate) fn reviewed_archive_dependency(dir: &str, key: &str, line: &str) -> bool {
     if dir != "crates/velnor-actions-orchestrator" {
         return false;
     }
