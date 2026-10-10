@@ -16,7 +16,7 @@ use crate::{
 use super::{ACTION_NAME_PREFIX, factor_obligation_steps};
 
 const CHECKOUT: &str = "actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const VERSION: &str = "0.1.6";
+const VERSION: &str = "0.1.7";
 const HOSTILE_TASK_ARGUMENT: &str = "crate-0\"; printf injected; #";
 
 #[test]

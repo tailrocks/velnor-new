@@ -41,7 +41,7 @@ fn task_execution_resolver_requires_runner_gate_and_keeps_stdout_data_only()
             ("GITHUB_RUN_ID", "12345"),
             ("GITHUB_RUN_ATTEMPT", "1"),
             ("VELNOR_TASK_EXECUTION_DIGEST", execution_digest.as_str()),
-            ("VELNOR_GENERATOR_VERSION", "0.1.6"),
+            ("VELNOR_GENERATOR_VERSION", "0.1.7"),
         ],
         &workspace,
     )?;

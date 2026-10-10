@@ -72,7 +72,7 @@ fn assert_global_policy(body: &str, actions: &Actions) {
     let combined = format!("{body}\n{}", action_text(actions));
     assert_eq!(body.matches("contents: write").count(), 1, "{body}");
     assert_eq!(body.matches("id-token: write").count(), 4, "{body}");
-    assert!(combined.contains("v0.1.6"), "{combined}");
+    assert!(combined.contains("v0.1.7"), "{combined}");
     assert!(!combined.contains("generator-${GITHUB_SHA}"), "{combined}");
     assert!(body.contains("workflow_dispatch: {}"), "{body}");
     assert!(!body.contains("inputs:"), "{body}");

@@ -19,7 +19,7 @@ use super::*;
 
 const RUN_KEY: &str = "local";
 const TASK_ID: &str = "stack/rust/demo/clippy/default";
-const GENERATOR_VERSION: &str = "0.1.6";
+const GENERATOR_VERSION: &str = "0.1.7";
 
 struct Fixture {
     repo: TempDir,
