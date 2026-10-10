@@ -148,7 +148,10 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
 }
 
 fn is_declared_task_input(name: &str) -> bool {
-    if matches!(name, "task_id" | "task_digest" | "matrix_id" | "matrix_key") {
+    if matches!(
+        name,
+        "task_id" | "execution_digest" | "task_digest" | "matrix_id" | "matrix_key"
+    ) {
         return true;
     }
     if let Some(index) = name.strip_prefix("argv_") {
@@ -212,4 +215,20 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn execution_digest_is_allowed_only_as_a_declared_composite_input() {
+        let env = BTreeMap::from([(
+            "VELNOR_TASK_EXECUTION_DIGEST".to_owned(),
+            "${{ inputs.execution_digest }}".to_owned(),
+        )]);
+
+        assert!(crate::commands::validate_composite_env(&env).is_ok());
+        assert!(crate::commands::validate_env(&env).is_err());
+    }
 }
