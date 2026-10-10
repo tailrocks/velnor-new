@@ -365,6 +365,7 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
     let script = super::task_script(VERSION);
     let run_script = |report_code: &str| {
         std::process::Command::new("bash")
+            .arg("-x")
             .arg("-c")
             .arg(&script)
             .env("RUNNER_TEMP", &runner_temp)
@@ -388,7 +389,10 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
     assert_eq!(
         result.stdout.as_slice(),
         fields[11].as_bytes(),
-        "the fixed probe receives the hostile literal as one argv value"
+        "the fixed probe receives the hostile literal as one argv value; stderr={}; helper_calls={}; task_started={}",
+        String::from_utf8_lossy(&result.stderr),
+        std::fs::read_to_string(&call_log).unwrap_or_default(),
+        task_started_marker.exists(),
     );
     assert!(
         !injection_marker.exists(),
