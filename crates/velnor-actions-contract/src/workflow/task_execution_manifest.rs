@@ -13,7 +13,7 @@ use crate::errors::ContractError;
 use crate::strict_json::MAX_UNTRUSTED_DOCUMENT_BYTES;
 use crate::validate_digest;
 
-use super::step::{MAX_TASK_EXECUTION_ARGV, MAX_TASK_EXECUTION_ENV, validate_task_execution};
+use super::step::validate_task_execution;
 
 /// Fixed generated path for the versioned task execution manifest.
 pub const TASK_EXECUTION_MANIFEST_PATH: &str = ".github/velnor/task-execution-manifest-v1.json";
