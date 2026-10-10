@@ -43,7 +43,10 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, Orche
             &catalog,
         )?,
         install_qualify_tools_argv: qualify_install_argv(&catalog)?,
-        install_runner_build_tools_argv: install_argv(&[PinnedTool::Rust], &catalog)?,
+        install_runner_build_tools_argv: install_argv(
+            &[PinnedTool::Rust, PinnedTool::MrBoxington],
+            &catalog,
+        )?,
         install_gh_argv: install_argv(&[PinnedTool::Gh], &catalog)?,
         build_argv: mbx_build_argv(&[], &catalog)?,
         intel_build_argv: mbx_build_argv(
@@ -56,20 +59,7 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, Orche
             &catalog,
         )?,
         install_resource_probe_target_argv: resource_probe_target_argv(&catalog)?,
-        runner_build_argv: exec_argv(
-            &[PinnedTool::Rust],
-            "cargo",
-            &[
-                "build",
-                "--locked",
-                "--manifest-path",
-                "crates/velnor-runner/Cargo.toml",
-                "--release",
-                "-p",
-                "velnor-runner-cli",
-            ],
-            &catalog,
-        )?,
+        runner_build_argv: runner_build_argv(&catalog)?,
         resource_probe_build_argv: resource_probe_build_argv(&catalog)?,
         actionlint_argv: exec_argv(
             &[PinnedTool::Actionlint, PinnedTool::Shellcheck],
@@ -105,9 +95,7 @@ fn resource_probe_target_argv(catalog: &ToolCatalog) -> Result<Vec<String>, Orch
 }
 
 fn resource_probe_build_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
-    exec_argv(
-        &[PinnedTool::Rust],
-        "cargo",
+    mbx_locked_build_argv(
         &[
             "build",
             "--locked",
@@ -120,6 +108,21 @@ fn resource_probe_build_argv(catalog: &ToolCatalog) -> Result<Vec<String>, Orche
             "--release",
             "--target",
             "x86_64-unknown-linux-musl",
+        ],
+        catalog,
+    )
+}
+
+fn runner_build_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
+    mbx_locked_build_argv(
+        &[
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--release",
+            "--package",
+            "velnor-runner-cli",
         ],
         catalog,
     )
@@ -157,10 +160,17 @@ fn mbx_build_argv(extra: &[&str], catalog: &ToolCatalog) -> Result<Vec<String>, 
         "velnor-actions",
     ];
     args.extend(extra.iter().copied());
+    mbx_locked_build_argv(&args, catalog)
+}
+
+fn mbx_locked_build_argv(
+    args: &[&str],
+    catalog: &ToolCatalog,
+) -> Result<Vec<String>, OrchestratorError> {
     exec_argv(
         &[PinnedTool::Rust, PinnedTool::MrBoxington],
         "mbx",
-        &args,
+        args,
         catalog,
     )
 }
@@ -194,3 +204,7 @@ fn contract_error(problem: impl std::fmt::Display) -> OrchestratorError {
         problem: problem.to_string(),
     }
 }
+
+#[cfg(test)]
+#[path = "product_release_pins_mbx_tests.rs"]
+mod mbx_tests;
