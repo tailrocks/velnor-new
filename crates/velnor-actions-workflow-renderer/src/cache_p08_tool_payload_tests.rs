@@ -77,7 +77,6 @@ fn rendered_condition(step: &Step) -> String {
     let step_context = crate::document_lanes::JobStepContext {
         job_env: &job_env,
         runs_on: Some("ubuntu-26.04"),
-        scale_set_selector: None,
         actions_read: false,
     };
     let Yaml::Map(entries) =
