@@ -31,7 +31,7 @@ fn schema2_qualification_routes_catalog_aligned_rust_pins() {
         .iter()
         .find(|file| file.path == velnor_actions_workflow_renderer::schema2::QUALIFICATION_WORKFLOW)
         .expect("qualification file is present");
-    let yaml = std::str::from_utf8(&qualification.bytes).expect("workflow is UTF-8");
+    let yaml = qualification.bytes.as_str();
     assert!(yaml.contains("rust-toolchain-linux-x64"));
     assert!(yaml.contains("rust-toolchain-macos-arm64"));
     assert!(yaml.contains("channel-rust-1.99.0.toml"));
