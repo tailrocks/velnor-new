@@ -33,12 +33,7 @@ fn emit_node(value: &Yaml, indent: usize, out: &mut String) {
                 emit_seq_item(item, indent, out);
             }
         }
-        Yaml::Map(entries) => {
-            for (key, child) in entries {
-                emit_map_entry(key, child, indent, out);
-            }
-        }
-        Yaml::AnchoredMap { entries, .. } => {
+        Yaml::Map(entries) | Yaml::AnchoredMap { entries, .. } => {
             for (key, child) in entries {
                 emit_map_entry(key, child, indent, out);
             }

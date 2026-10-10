@@ -108,9 +108,8 @@ impl Yaml {
             | Self::Annotated { .. }
             | Self::AnchoredScalar { .. }
             | Self::Alias(_) => true,
-            Self::AnchoredMap { entries, .. } => entries.is_empty(),
             Self::Seq(items) => items.is_empty(),
-            Self::Map(entries) => entries.is_empty(),
+            Self::Map(entries) | Self::AnchoredMap { entries, .. } => entries.is_empty(),
         }
     }
 }
