@@ -298,7 +298,7 @@ fn plan_outputs_bind_qualification_phase_and_cache_policy() -> TestResult {
     let lanes = directives["lanes"]
         .as_array()
         .ok_or("qualification cache lanes are not an array")?;
-    assert_ne!(lanes.as_slice(), []);
+    assert_ne!(lanes.as_slice(), [] as [serde_json::Value; 0]);
     assert!(lanes.iter().all(|lane| {
         lane["layers"]
             .as_array()
