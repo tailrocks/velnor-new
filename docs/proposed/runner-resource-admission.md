@@ -133,21 +133,40 @@ metadata, but never a post-build artifact digest. The source-bound image
 release is the immutable
 `runner-${source_sha}` release. It contains
 `velnor-resource-probe-linux-amd64.tar`, `RESOURCE_PROBE_MANIFEST.json`, and
-`SHA256SUMS`. The manifest names the full Docker image ID, archive SHA-256,
-repository, signer workflow/ref, workflow authority digest, source commit, and
-trusted signing identity. The image release workflow builds the runner, DinD,
-and probe artifacts from the same source commit, then signs/attests the
-manifest and assets. The host release's verified source commit selects exactly this image release
-manifest; neither the host binary nor the manifest embeds a post-build digest
-that would create a circular build input. The controller verifies the
-manifest, attestation, and archive checksum against that exact repository,
-release, workflow, ref, source commit, and signing authority before local
-image load. It inspects the loaded image
-and requires the full Docker image ID from the manifest, then creates the
-probe by that ID. It never resolves a mutable tag or pulls an image from a
-registry. If the existing official release chain cannot authenticate and
-publish this manifest and asset, probe readiness fails closed until that
-source-owned release path is implemented.
+`SHA256SUMS`. The manifest binds the archive SHA-256, OCI index digest, selected
+`linux/amd64` image-manifest digest, config digest, repository, signer
+workflow/ref, workflow authority digest, source commit, and trusted signing
+identity. These digests name different bytes and are never interchangeable.
+The image release workflow builds the runner, DinD, and probe artifacts from the
+same source commit, then signs/attests the manifest and assets. The host
+release's verified source commit selects exactly this image release manifest;
+neither the host binary nor the manifest embeds a post-build digest that would
+create a circular build input. The controller verifies the manifest,
+attestation, and archive checksum against that exact repository, release,
+workflow, ref, source commit, and signing authority before local image load.
+It validates the archive descriptor chain from `index.json` through exactly
+one `linux/amd64` image manifest to its config and layers. Any separate
+provenance/referrer descriptor must bind to that image manifest and is not an
+image platform candidate. Version 1 accepts only the release-produced
+BuildKit OCI-layout archive with its Docker compatibility record; duplicate,
+unsafe, ambiguous, unrecognized, or unsupported archive entries fail closed.
+
+The controller then inspects the loaded image with an explicit `linux/amd64`
+platform and checks its OS, architecture, configuration, and immutable ID
+against the validated archive chain. A Docker image ID is store-specific: on
+the tested Docker Engine 29.4.0 containerd profile the ID and inspect
+`Descriptor.Digest` were the selected image-manifest digest; on the tested
+classic profile the ID was the config digest and no descriptor was returned.
+The same BuildKit archive loaded in both disposable profiles. Therefore the
+host checks the manifest digest for the first inspect shape or the config
+digest for the second, and rejects an unknown or inconsistent inspect shape;
+it does not require image ID to equal config digest on every engine. The probe
+is created by the immutable ID from the verified inspect response, never by a
+mutable tag, and no image is pulled from a registry. The exact platform and
+store behavior must remain covered by consumer qualification. If the existing
+official release chain cannot authenticate and publish this manifest and
+asset, probe readiness fails closed until that source-owned release path is
+implemented.
 
 The controller accepts only the normalized absolute, non-root `DockerRootDir`
 returned by the selected daemon's `info` response; it does not accept a caller
