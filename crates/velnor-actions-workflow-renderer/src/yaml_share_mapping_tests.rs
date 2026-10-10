@@ -49,7 +49,7 @@ fn repeated_job_and_step_input_maps_are_anchored_without_changing_expanded_data(
                 (
                     "second".to_owned(),
                     Yaml::Map(vec![
-                        ("env".to_owned(), env),
+                        ("env".to_owned(), env.clone()),
                         (
                             "steps".to_owned(),
                             Yaml::Seq(vec![step("Restore build cache two")]),

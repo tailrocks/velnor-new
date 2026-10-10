@@ -1,4 +1,4 @@
-use super::super::{run_shellcheck_bodies, workflow};
+use super::super::run_shellcheck_bodies;
 use super::{ShellDialect, scan_workflow};
 
 fn bodies(workflow: &str) -> Result<Vec<(String, ShellDialect)>, String> {
