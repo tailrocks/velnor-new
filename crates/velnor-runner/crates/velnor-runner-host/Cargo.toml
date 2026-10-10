@@ -16,6 +16,7 @@ futures-util = { version = "=0.3.34" }
 getrandom = { workspace = true }
 libc = { version = "=0.2.190" }
 reqwest = { version = "=0.13.5", default-features = false, features = ["native-tls", "system-proxy", "stream"] }
+rustix = { workspace = true, features = ["process"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
