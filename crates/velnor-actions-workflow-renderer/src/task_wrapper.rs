@@ -7,14 +7,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    Job, MAX_TASK_EXECUTION_ARGV, MAX_TASK_EXECUTION_ENV, MAX_TASK_EXECUTION_FRAME_BYTES, RunsOn,
-    ScaleSetSelector, Step, StepKind, StepRole, TASK_EXECUTION_FRAME_MAGIC,
-    TASK_EXECUTION_MANIFEST_PATH, TASK_EXECUTION_MANIFEST_SCHEMA, TaskExecutionManifestEntryV1,
-    TaskExecutionManifestV1, VerificationRunner,
+    Job, RunsOn, ScaleSetSelector, Step, StepKind, StepRole, TASK_EXECUTION_MANIFEST_PATH,
+    TASK_EXECUTION_MANIFEST_SCHEMA, TaskExecutionManifestEntryV1, TaskExecutionManifestV1,
+    VerificationRunner,
 };
 
 use crate::{
-    RenderError, action_ref::DECLARED_TASK_ACTION_PREFIX, composite, marker, steps, toolchain_env,
+    RenderError, action_ref::DECLARED_TASK_ACTION_PREFIX, composite, marker, steps,
     tree::RenderedFile, yaml::Yaml,
 };
 
@@ -25,6 +24,10 @@ const GENERATOR_VERSION_ENV: &str = "VELNOR_GENERATOR_VERSION";
 const TASK_EXECUTION_DIGEST_ENV: &str = "VELNOR_TASK_EXECUTION_DIGEST";
 const RUNNER_TEMP_EXPRESSION: &str = "${{ runner.temp }}";
 
+#[path = "task_wrapper_script.rs"]
+mod script;
+use self::script::task_script;
+
 #[path = "task_wrapper_declared.rs"]
 mod declared;
 #[cfg(test)]
@@ -34,6 +37,24 @@ use self::declared::{declared_task_call, declared_task_file, validate_task_field
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Shape {
     helper_version: String,
+}
+
+struct TaskFactorContext<'a> {
+    checkout_uses: &'a str,
+    report_helper_version: &'a str,
+    workflow_tasks: &'a [crate::verification_jobs::WorkflowTaskPolicy],
+    scale_set_selector: Option<&'a ScaleSetSelector>,
+}
+
+struct PreparedTaskExecution<'a> {
+    record: TaskExecutionManifestEntryV1,
+    reference: TaskExecutionRef<'a>,
+}
+
+struct CollectedTaskExecutions<'a> {
+    eligible: BTreeMap<(String, usize), TaskExecutionRef<'a>>,
+    shapes: BTreeSet<Shape>,
+    manifest_tasks: BTreeMap<String, TaskExecutionManifestEntryV1>,
 }
 
 /// Replace typed task steps and emit one composite per structural shape.
@@ -50,116 +71,188 @@ pub(crate) fn factor_obligation_steps(
     workflow_tasks: &[crate::verification_jobs::WorkflowTaskPolicy],
     scale_set_selector: Option<&ScaleSetSelector>,
 ) -> Result<(BTreeMap<String, Job>, Vec<RenderedFile>), RenderError> {
+    let context = TaskFactorContext {
+        checkout_uses,
+        report_helper_version,
+        workflow_tasks,
+        scale_set_selector,
+    };
+    let collected = collect_task_executions(jobs, &context)?;
+    let shape_ids = index_shapes(collected.shapes);
+    let factored = replace_task_steps(jobs, &collected.eligible, &shape_ids)?;
+    let files = render_task_files(&shape_ids, collected.manifest_tasks, generator_version)?;
+    Ok((factored, files))
+}
+
+fn collect_task_executions<'a>(
+    jobs: &'a BTreeMap<String, Job>,
+    context: &TaskFactorContext<'_>,
+) -> Result<CollectedTaskExecutions<'a>, RenderError> {
     let mut eligible = BTreeMap::<(String, usize), TaskExecutionRef<'_>>::new();
     let mut shapes = BTreeSet::new();
-    let mut manifest_tasks = BTreeMap::new();
+    let mut manifest_tasks = BTreeMap::<String, TaskExecutionManifestEntryV1>::new();
     for (job_id, job) in jobs {
         for (step_index, step) in job.steps.iter().enumerate() {
-            let StepKind::TaskExecution {
-                argv,
-                env,
-                task_id,
-                task_digest,
-                matrix_id,
-                matrix_key,
-                report_helper_version: task_helper_version,
-                matrix_max_parallel,
-                toolchain_inputs,
-            } = &step.kind
+            let Some(prepared) = prepare_task_execution(job_id, job, step_index, step, context)?
             else {
                 continue;
             };
-            if !supports_task_runner(job_id, &job.runs_on, workflow_tasks, scale_set_selector) {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "declared_task_requires_supported_linux_runner:{job_id}"
-                )));
-            }
-            if job.check_runner.is_some()
-                || !job
-                    .needs
-                    .iter()
-                    .any(|need| need == crate::render::PLAN_JOB_ID)
-            {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "declared_task_job_scope_mismatch:{job_id}"
-                )));
-            }
-            if step.id.is_some() || step.role.is_some() || step.condition.is_none() {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "declared_task_authority_mismatch:{job_id}"
-                )));
-            }
-            if task_helper_version != report_helper_version {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "declared_task_helper_version_mismatch:{job_id}"
-                )));
-            }
-            let checkout_at = job.steps[..step_index].iter().position(|previous| {
-                velnor_actions_contract::workflow::step_identity::is_configured_checkout(
-                    previous,
-                    checkout_uses,
-                )
-            });
-            let Some(checkout_at) = checkout_at else {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "declared_task_requires_checkout:{job_id}"
-                )));
-            };
-            let staged_binary = format!("{}{report_helper_version}", steps::STAGED_BINARY_PREFIX);
-            let helper_staged_after_checkout = job.steps[checkout_at + 1..step_index]
-                .iter()
-                .any(|previous| helper_staged_by(previous, &staged_binary));
-            if !helper_staged_after_checkout {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "declared_task_requires_staged_helper:{job_id}"
-                )));
-            }
-            validate_task_fields(argv, env, task_id, task_digest, matrix_id, matrix_key)?;
-            let mut record = TaskExecutionManifestEntryV1 {
-                task_id: task_id.clone(),
-                execution_digest: String::new(),
-                task_digest: task_digest.clone(),
-                toolchain_inputs: toolchain_inputs.clone(),
-                argv: argv.clone(),
-                env: env.clone(),
-                matrix_id: matrix_id.clone(),
-                matrix_key: matrix_key.clone(),
-                report_helper_version: task_helper_version.clone(),
-                matrix_max_parallel: *matrix_max_parallel,
-            };
-            record
-                .refresh_execution_digest()
-                .map_err(RenderError::Contract)?;
-            let execution_digest = record.execution_digest.clone();
-            match manifest_tasks.entry(task_id.clone()) {
+            match manifest_tasks.entry(prepared.record.task_id.clone()) {
                 std::collections::btree_map::Entry::Vacant(entry) => {
-                    entry.insert(record);
+                    entry.insert(prepared.record.clone());
                 }
-                std::collections::btree_map::Entry::Occupied(entry) if entry.get() == &record => {}
+                std::collections::btree_map::Entry::Occupied(entry)
+                    if entry.get() == &prepared.record => {}
                 std::collections::btree_map::Entry::Occupied(_) => {
                     return Err(RenderError::InvalidWorkflow(format!(
-                        "declared_task_id_not_unique:{task_id}"
+                        "declared_task_id_not_unique:{}",
+                        prepared.record.task_id
                     )));
                 }
             }
             let shape = Shape {
-                helper_version: task_helper_version.clone(),
+                helper_version: prepared.reference.helper_version.clone(),
             };
             shapes.insert(shape);
-            eligible.insert(
-                (job_id.clone(), step_index),
-                TaskExecutionRef {
-                    execution_digest,
-                    helper_version: task_helper_version,
-                },
-            );
+            eligible.insert((job_id.clone(), step_index), prepared.reference);
         }
     }
-    let shape_ids: BTreeMap<Shape, usize> = shapes
+    Ok(CollectedTaskExecutions {
+        eligible,
+        shapes,
+        manifest_tasks,
+    })
+}
+
+fn prepare_task_execution<'a>(
+    job_id: &str,
+    job: &Job,
+    step_index: usize,
+    step: &'a Step,
+    context: &TaskFactorContext<'_>,
+) -> Result<Option<PreparedTaskExecution<'a>>, RenderError> {
+    let StepKind::TaskExecution {
+        argv,
+        env,
+        task_id,
+        task_digest,
+        matrix_id,
+        matrix_key,
+        report_helper_version: task_helper_version,
+        matrix_max_parallel,
+        toolchain_inputs,
+    } = &step.kind
+    else {
+        return Ok(None);
+    };
+    if !supports_task_runner(
+        job_id,
+        &job.runs_on,
+        context.workflow_tasks,
+        context.scale_set_selector,
+    ) {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "declared_task_requires_supported_linux_runner:{job_id}"
+        )));
+    }
+    validate_task_job_scope(job_id, job, step)?;
+    if task_helper_version != context.report_helper_version {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "declared_task_helper_version_mismatch:{job_id}"
+        )));
+    }
+    validate_task_checkout(
+        job_id,
+        job,
+        step_index,
+        context.checkout_uses,
+        context.report_helper_version,
+    )?;
+    validate_task_fields(argv, env, task_id, task_digest, matrix_id, matrix_key)?;
+    let mut record = TaskExecutionManifestEntryV1 {
+        task_id: task_id.clone(),
+        execution_digest: String::new(),
+        task_digest: task_digest.clone(),
+        toolchain_inputs: toolchain_inputs.clone(),
+        argv: argv.clone(),
+        env: env.clone(),
+        matrix_id: matrix_id.clone(),
+        matrix_key: matrix_key.clone(),
+        report_helper_version: task_helper_version.clone(),
+        matrix_max_parallel: *matrix_max_parallel,
+    };
+    record
+        .refresh_execution_digest()
+        .map_err(RenderError::Contract)?;
+    let reference = TaskExecutionRef {
+        execution_digest: record.execution_digest.clone(),
+        helper_version: task_helper_version,
+    };
+    Ok(Some(PreparedTaskExecution { record, reference }))
+}
+
+fn validate_task_job_scope(job_id: &str, job: &Job, step: &Step) -> Result<(), RenderError> {
+    if job.check_runner.is_some()
+        || !job
+            .needs
+            .iter()
+            .any(|need| need == crate::render::PLAN_JOB_ID)
+    {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "declared_task_job_scope_mismatch:{job_id}"
+        )));
+    }
+    if step.id.is_some() || step.role.is_some() || step.condition.is_none() {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "declared_task_authority_mismatch:{job_id}"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_task_checkout(
+    job_id: &str,
+    job: &Job,
+    step_index: usize,
+    checkout_uses: &str,
+    report_helper_version: &str,
+) -> Result<(), RenderError> {
+    let checkout_at = job.steps[..step_index].iter().position(|previous| {
+        velnor_actions_contract::workflow::step_identity::is_configured_checkout(
+            previous,
+            checkout_uses,
+        )
+    });
+    let Some(checkout_at) = checkout_at else {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "declared_task_requires_checkout:{job_id}"
+        )));
+    };
+    let staged_binary = format!("{}{report_helper_version}", steps::STAGED_BINARY_PREFIX);
+    let helper_staged = job.steps[checkout_at + 1..step_index]
+        .iter()
+        .any(|previous| helper_staged_by(previous, &staged_binary));
+    if !helper_staged {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "declared_task_requires_staged_helper:{job_id}"
+        )));
+    }
+    Ok(())
+}
+
+fn index_shapes(shapes: BTreeSet<Shape>) -> BTreeMap<Shape, usize> {
+    shapes
         .into_iter()
         .enumerate()
         .map(|(index, shape)| (shape, index))
-        .collect();
+        .collect()
+}
+
+fn replace_task_steps(
+    jobs: &BTreeMap<String, Job>,
+    eligible: &BTreeMap<(String, usize), TaskExecutionRef<'_>>,
+    shape_ids: &BTreeMap<Shape, usize>,
+) -> Result<BTreeMap<String, Job>, RenderError> {
     let mut next = jobs.clone();
     for ((job_id, step_index), task) in &eligible {
         let shape = Shape {
@@ -182,6 +275,14 @@ pub(crate) fn factor_obligation_steps(
             .ok_or_else(|| RenderError::InvalidWorkflow("declared_task_step_missing".to_owned()))?;
         *caller = action;
     }
+    Ok(next)
+}
+
+fn render_task_files(
+    shape_ids: &BTreeMap<Shape, usize>,
+    manifest_tasks: BTreeMap<String, TaskExecutionManifestEntryV1>,
+    generator_version: &str,
+) -> Result<Vec<RenderedFile>, RenderError> {
     let mut files = Vec::with_capacity(shape_ids.len() + usize::from(!manifest_tasks.is_empty()));
     for (shape, action_id) in &shape_ids {
         files.push(declared_task_file(*action_id, shape, generator_version)?);
@@ -199,7 +300,7 @@ pub(crate) fn factor_obligation_steps(
             bytes,
         });
     }
-    Ok((next, files))
+    Ok(files)
 }
 
 /// Admit a hosted Ubuntu catalog runner or the exact Scale Set resolved from
@@ -252,128 +353,6 @@ fn helper_staged_by(step: &Step, staged_binary: &str) -> bool {
 struct TaskExecutionRef<'a> {
     execution_digest: String,
     helper_version: &'a String,
-}
-
-fn task_script(helper_version: &str) -> String {
-    let mut script = String::new();
-    script.push_str("unset ");
-    script.push_str(&toolchain_env::CREDENTIAL_UNSET_VARS.join(" "));
-    script.push_str(" VELNOR_TASK_ID");
-    script.push_str(
-        r#";
-set -euo pipefail
-fail_frame() { printf '%s\n' 'invalid declared-task execution frame' >&2; exit 125; }
-frame_file=$(mktemp "${TMPDIR:-/tmp}/velnor-task-frame.XXXXXXXX")
-trap 'rm -f "$frame_file"' EXIT
-helper="$RUNNER_TEMP/velnor/bin/velnor-actions-"#,
-    );
-    script.push_str(helper_version);
-    script.push_str("\"\n");
-    script.push_str(
-        r#"
-if ! env VELNOR_INTERNAL_OP=resolve-task-execution-v1 "$helper" > "$frame_file"; then fail_frame; fi
-frame_bytes=$(wc -c < "$frame_file")
-frame_bytes=${frame_bytes//[[:space:]]/}
-[[ "$frame_bytes" =~ ^[0-9]{1,7}$ ]] && (( frame_bytes <= @MAX_FRAME_BYTES@ )) || fail_frame
-last_byte=$(tail -c 1 "$frame_file" | od -An -t x1)
-last_byte=${last_byte//[[:space:]]/}
-[[ "$last_byte" == 00 ]] || fail_frame
-frame=()
-while IFS= read -r -d '' field; do frame+=("$field"); done < "$frame_file"
-(( ${#frame[@]} >= 13 )) || fail_frame
-[[ "${frame[0]}" == @FRAME_MAGIC@ ]] || fail_frame
-[[ "${frame[2]}" == "$VELNOR_TASK_EXECUTION_DIGEST" ]] || fail_frame
-[[ "${frame[1]}" =~ ^(stack|internal)/[a-z0-9._/-]+$ ]] || fail_frame
-[[ "${frame[2]}" =~ ^b3-[0-9a-f]{64}$ ]] || fail_frame
-[[ "${frame[3]}" =~ ^b3-[0-9a-f]{64}$ ]] || fail_frame
-[[ "${frame[4]}" =~ ^stack:[a-z0-9._-]+\|task:(stack|internal)/[a-z0-9._/-]+$ ]] || fail_frame
-[[ "${frame[5]}" =~ ^m-[0-9a-f]{16}$ ]] || fail_frame
-[[ "${frame[4]#*|task:}" == "${frame[1]}" ]] || fail_frame
-[[ "${frame[6]}" == "#,
-    );
-    script.push_str("\"");
-    script.push_str(helper_version);
-    script.push_str("\" ]] || fail_frame\n");
-    script.push_str(
-        r#"
-case "${frame[7]}" in
-  0) [[ -z "${frame[8]}" ]] || fail_frame ;;
-  1) [[ "${frame[8]}" =~ ^[1-9][0-9]{0,9}$ ]] && (( frame[8] <= @U32_MAX@ )) || fail_frame ;;
-  *) fail_frame ;;
-esac
-[[ "${frame[9]}" =~ ^[1-9][0-9]{0,2}$ ]] || fail_frame
-argv_count=${frame[9]}
-(( argv_count <= @MAX_ARGV@ )) || fail_frame
-env_count_position=$((10 + argv_count))
-(( ${#frame[@]} > env_count_position )) || fail_frame
-[[ "${frame[env_count_position]}" =~ ^(0|[1-9][0-9]?)$ ]] || fail_frame
-env_count=${frame[env_count_position]}
-(( env_count <= @MAX_ENV@ )) || fail_frame
-expected_fields=$((env_count_position + 2 + env_count * 2))
-(( ${#frame[@]} == expected_fields )) || fail_frame
-end_position=$((expected_fields - 1))
-[[ "${frame[end_position]}" == END ]] || fail_frame
-
-argv=()
-for ((index = 0; index < argv_count; index++)); do
-  value=${frame[$((10 + index))]}
-  [[ "$value" != *'$''{{'* ]] || fail_frame
-  argv+=("$value")
-done
-
-task_env=(
-  "VELNOR_TASK_ID=${frame[1]}"
-  "VELNOR_TASK_DIGEST=${frame[3]}"
-  "VELNOR_MATRIX_ID=${frame[4]}"
-  "VELNOR_MATRIX_KEY=${frame[5]}"
-)
-seen_keys=()
-for ((index = 0; index < env_count; index++)); do
-  key_position=$((env_count_position + 1 + index * 2))
-  key=${frame[key_position]}
-  value=${frame[$((key_position + 1))]}
-  [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || fail_frame
-  if (( ${#seen_keys[@]} > 0 )); then
-    for seen_key in "${seen_keys[@]}"; do [[ "$seen_key" != "$key" ]] || fail_frame; done
-  fi
-  seen_keys+=("$key")
-  case "$key" in
-    VELNOR_TASK_ID|VELNOR_TASK_DIGEST|VELNOR_MATRIX_ID|VELNOR_MATRIX_KEY|VELNOR_INTERNAL_OP|VELNOR_GENERATOR_VERSION|VELNOR_TASK_EXECUTION_DIGEST|VELNOR_RUNTIME_RUNNER_TEMP|"#,
-    );
-    script.push_str(&toolchain_env::STEP_CREDENTIAL_DENYLIST.join("|"));
-    script.push_str(
-        r#"|CARGO_REGISTRIES_*|*_TOKEN|ACTIONS_ID_TOKEN_REQUEST_URL|GH_HOST|GH_CONFIG_DIR|CHECKPOINT_*) fail_frame ;;
-    TF_*)
-      case "$key" in TF_IN_AUTOMATION|TF_INPUT) ;; *) fail_frame ;; esac ;;
-  esac
-  [[ "$value" != *'$''{{'* ]] || fail_frame
-  task_env+=("$key=$value")
-done
-[[ -n "$VELNOR_RUNTIME_RUNNER_TEMP" ]] || fail_frame
-unset VELNOR_INTERNAL_OP VELNOR_GENERATOR_VERSION VELNOR_TASK_EXECUTION_DIGEST VELNOR_RUNTIME_RUNNER_TEMP
-export VELNOR_TASK_ID="${frame[1]}"
-export VELNOR_TASK_DIGEST="${frame[3]}"
-export VELNOR_MATRIX_ID="${frame[4]}"
-export VELNOR_MATRIX_KEY="${frame[5]}"
-set +e
-started_ms=$(date +%s%3N)
-env -- "${task_env[@]}" "${argv[@]}"
-task_code=$?
-VELNOR_EXIT_CODE="$task_code" VELNOR_START_MS="$started_ms" VELNOR_INTERNAL_OP=write-task-report-v1 "$helper"
-report_code=$?
-if [ "$task_code" -ne 0 ]; then exit "$task_code"; fi
-exit "$report_code"
-"#,
-    );
-    script
-        .replace("@FRAME_MAGIC@", TASK_EXECUTION_FRAME_MAGIC)
-        .replace(
-            "@MAX_FRAME_BYTES@",
-            &MAX_TASK_EXECUTION_FRAME_BYTES.to_string(),
-        )
-        .replace("@MAX_ARGV@", &MAX_TASK_EXECUTION_ARGV.to_string())
-        .replace("@MAX_ENV@", &MAX_TASK_EXECUTION_ENV.to_string())
-        .replace("@U32_MAX@", &u32::MAX.to_string())
 }
 
 #[cfg(test)]
