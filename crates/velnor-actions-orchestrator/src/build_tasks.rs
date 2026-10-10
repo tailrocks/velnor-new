@@ -69,15 +69,69 @@ pub(crate) fn policies(
 
     validate_config_shape(mise_config)?;
     validate_lock_shape(mise_lock)?;
+    let root_lock_sha256 = native_sha256(lock)?;
+    let root_rust_sha256 = native_sha256(rust)?;
+    let mut source_digests = Vec::with_capacity(build_tasks.len());
     for task in &build_tasks {
         task.validate(".velnor/config.toml")
             .map_err(|_| failure("build_task_contract"))?;
-        validate_task_closure(mise_config, &task.mise_task)?;
+        let task_config_input = checked_source(&discovery.tool_checks, &task.source.mise_config)?;
+        let NativeToolSource::MiseConfig(task_config) = &task_config_input
+            .native
+            .as_ref()
+            .ok_or_else(|| failure("build_task_mise_task_config"))?
+            .source
+        else {
+            return Err(failure("build_task_mise_task_config"));
+        };
+        validate_task_source_shape(&task.source.mise_config, task_config)?;
+        let mut merged_tasks = mise_config.clone();
+        merged_tasks.tasks.extend(task_config.tasks.clone());
+        validate_task_closure(&merged_tasks, &task.mise_task)?;
+
+        let task_lock_path = task.source.mise_lock_path();
+        let task_lock_digest = if task_lock_path == "mise.lock" {
+            None
+        } else {
+            optional_checked_source(&discovery.tool_checks, &task_lock_path)?
+                .map(native_sha256)
+                .transpose()?
+        };
+        if task_lock_digest
+            .as_deref()
+            .is_some_and(|digest| digest != root_lock_sha256)
+        {
+            return Err(failure("build_task_source_lock_differs_from_root"));
+        }
+
+        let task_rust_path = task.source.rust_toolchain_path();
+        let task_rust_digest = if task_rust_path == "rust-toolchain.toml" {
+            None
+        } else {
+            optional_checked_source(&discovery.tool_checks, &task_rust_path)?
+                .map(native_sha256)
+                .transpose()?
+        };
+        if task_rust_digest
+            .as_deref()
+            .is_some_and(|digest| digest != root_rust_sha256)
+        {
+            return Err(failure(
+                "build_task_source_rust_toolchain_differs_from_root",
+            ));
+        }
+
+        source_digests.push(BuildTaskSourceDigests {
+            mise_config: native_sha256(task_config_input)?,
+            mise_lock: task_lock_digest,
+            rust_toolchain: task_rust_digest,
+        });
     }
 
     build_tasks
         .iter()
-        .map(|task| {
+        .zip(source_digests)
+        .map(|(task, source)| {
             let selected_tools = resolve_selected_tools(
                 task,
                 mise_config,
@@ -90,12 +144,21 @@ pub(crate) fn policies(
                 runner_label: task.runner.runs_on().to_owned(),
                 mise_setup: resolve_build_task_mise_setup(config, task.runner)?,
                 mise_config_sha256: native_sha256(mise)?,
-                mise_lock_sha256: native_sha256(lock)?,
-                rust_toolchain_sha256: native_sha256(rust)?,
+                mise_lock_sha256: root_lock_sha256.clone(),
+                rust_toolchain_sha256: root_rust_sha256.clone(),
+                source_mise_config_sha256: source.mise_config,
+                source_mise_lock_sha256: source.mise_lock,
+                source_rust_toolchain_sha256: source.rust_toolchain,
                 selected_tools,
             })
         })
         .collect()
+}
+
+struct BuildTaskSourceDigests {
+    mise_config: String,
+    mise_lock: Option<String>,
+    rust_toolchain: Option<String>,
 }
 
 fn checked_source<'a>(
@@ -107,6 +170,25 @@ fn checked_source<'a>(
         .find(|check| check.path == path)
         .filter(|check| check.present && check.parse == ToolParse::Valid)
         .and_then(|check| check.native.as_ref().map(|_| check))
+        .ok_or_else(|| failure("build_task_source_missing_or_invalid"))
+}
+
+fn optional_checked_source<'a>(
+    checks: &'a [ToolInputCheck],
+    path: &str,
+) -> Result<Option<&'a ToolInputCheck>, OrchestratorError> {
+    let check = checks
+        .iter()
+        .find(|check| check.path == path)
+        .ok_or_else(|| failure("build_task_source_missing_or_invalid"))?;
+    if !check.present && check.parse == ToolParse::Missing {
+        return Ok(None);
+    }
+    check
+        .present
+        .then_some(check)
+        .filter(|check| check.parse == ToolParse::Valid && check.native.is_some())
+        .map(Some)
         .ok_or_else(|| failure("build_task_source_missing_or_invalid"))
 }
 
@@ -160,6 +242,24 @@ fn validate_config_shape(config: &NativeMiseConfig) -> Result<(), OrchestratorEr
 fn validate_lock_shape(lock: &NativeMiseLock) -> Result<(), OrchestratorError> {
     if !lock.valid_shape || lock.root_keys.len() != 1 || lock.root_keys[0] != "tools" {
         return Err(failure("build_task_mise_lock_root"));
+    }
+    Ok(())
+}
+
+fn validate_task_source_shape(
+    path: &str,
+    config: &NativeMiseConfig,
+) -> Result<(), OrchestratorError> {
+    if path == "mise.toml" {
+        return Ok(());
+    }
+    if config.root_keys != ["tasks"]
+        || config.tasks.is_empty()
+        || !config.tools.is_empty()
+        || config.settings.present
+        || config.wrappers.present
+    {
+        return Err(failure("build_task_source_config_must_only_declare_tasks"));
     }
     Ok(())
 }

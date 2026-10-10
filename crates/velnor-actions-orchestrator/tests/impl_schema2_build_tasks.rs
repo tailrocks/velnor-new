@@ -68,6 +68,31 @@ fn native_build_variant_is_shared_source_bounded_and_required_in_every_mode() ->
             native.contains("mise --no-env --locked --no-hooks run --skip-tools desktop-ci"),
             "{mode}: {native}"
         );
+        assert!(
+            native.contains("cd -P \"$workspace_root/native\"; task_working_directory=\"$PWD\""),
+            "{mode}: task must run from its declared nested directory: {native}"
+        );
+        assert!(
+            native.contains("$workspace_root/native/mise.toml")
+                && native.contains("$workspace_root/mise.toml"),
+            "{mode}: source task config and root tool config are hash-bound: {native}"
+        );
+        assert!(
+            native.contains("export MISE_CEILING_PATHS=\"$workspace_ceiling\"")
+                && native.contains("workspace_ceiling=\"$workspace_root/..\""),
+            "{mode}: config discovery includes the root and nested source: {native}"
+        );
+        let restore_cwd = native
+            .find("cd -P \"$task_working_directory\"")
+            .ok_or("MBX guard restores the task cwd")?;
+        let run_task = native
+            .find("mise --no-env --locked --no-hooks run --skip-tools desktop-ci")
+            .ok_or("declared task is executed")?;
+        assert!(restore_cwd < run_task, "{mode}: {native}");
+        let nested = fs::read_to_string(repo.path().join("native/mise.toml"))?;
+        assert!(nested.contains("run = \"mise run desktop-lint\""));
+        let root_mise = fs::read_to_string(repo.path().join("mise.toml"))?;
+        assert!(root_mise.contains("description = \"Native desktop build task\""));
         assert!(native.contains("export MISE_NO_ENV=1"), "{mode}: {native}");
         assert!(
             native.contains("github:boltffi/boltffi")
@@ -323,6 +348,11 @@ usage = 'arg "<app>"'
 run = "cargo xtask desktop verify"
 "#,
     )?;
+    fs::create_dir_all(root.join("native"))?;
+    fs::write(
+        root.join("native/mise.toml"),
+        "[tasks.desktop-ci]\nrun = \"mise run desktop-lint\"\n",
+    )?;
     fs::write(
         root.join("rust-toolchain.toml"),
         "[toolchain]\nchannel = \"1.97.1\"\ncomponents = [\"clippy\", \"rustfmt\"]\ntargets = [\"aarch64-unknown-linux-gnu\", \"x86_64-unknown-linux-gnu\"]\n",
@@ -343,7 +373,7 @@ xcodegen = [{ version = "2.46.0", backend = "aqua:yonaskolb/XcodeGen", "platform
 }
 
 fn config_with_build(mode: &str) -> String {
-    let build = "[[workflow.tasks]]\nid = \"native-desktop\"\nkind = \"build\"\nmise_task = \"desktop-ci\"\ntools = [\"aqua:nextest-rs/nextest/cargo-nextest\", \"github:boltffi/boltffi\", \"mr-boxington\", \"rust\", \"swiftlint\", \"xcodegen\"]\nrunner = \"macos-26-arm64\"\ntimeout_minutes = 120\ncargo_build_jobs = 2\nnextest_test_threads = 2\n";
+    let build = "[[workflow.tasks]]\nid = \"native-desktop\"\nkind = \"build\"\nmise_task = \"desktop-ci\"\nsource = { mise_config = \"native/mise.toml\", working_directory = \"native\" }\ntools = [\"aqua:nextest-rs/nextest/cargo-nextest\", \"github:boltffi/boltffi\", \"mr-boxington\", \"rust\", \"swiftlint\", \"xcodegen\"]\nrunner = \"macos-26-arm64\"\ntimeout_minutes = 120\ncargo_build_jobs = 2\nnextest_test_threads = 2\n";
     config(mode).replace(
         "[[workflow.tasks]]\nid = \"native-format\"",
         &format!("{build}[[workflow.tasks]]\nid = \"native-format\""),

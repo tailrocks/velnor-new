@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    BuildTask, BuildTaskRunner, Job, JobTimeout, NativeImageCachePolicy, NativeImagePlatform,
-    NativeImageTask, VerificationRunner, VerificationTask, VerificationTaskSource,
+    BuildTask, BuildTaskRunner, Job, JobTimeout, MiseTaskSource, NativeImageCachePolicy,
+    NativeImagePlatform, NativeImageTask, VerificationRunner, VerificationTask,
 };
 
 use super::{WorkflowTaskPolicy, extend_required_needs, validate_workflow_task_jobs};
@@ -29,7 +29,7 @@ fn verification_policy() -> VerificationTaskPolicy {
         task: VerificationTask {
             id: "native-format".to_owned(),
             mise_task: "desktop-format-check".to_owned(),
-            source: VerificationTaskSource {
+            source: MiseTaskSource {
                 mise_config: "mise.toml".to_owned(),
                 working_directory: ".".to_owned(),
             },
@@ -51,6 +51,10 @@ fn build_policy() -> BuildTaskPolicy {
         task: BuildTask {
             id: "native-desktop".to_owned(),
             mise_task: "desktop-ci".to_owned(),
+            source: MiseTaskSource {
+                mise_config: "native/mise.toml".to_owned(),
+                working_directory: "native".to_owned(),
+            },
             tools: vec!["mr-boxington".to_owned(), "rust".to_owned()],
             runner: BuildTaskRunner::Macos26Arm64,
             timeout_minutes: 120,
@@ -62,6 +66,9 @@ fn build_policy() -> BuildTaskPolicy {
         mise_config_sha256: "b".repeat(64),
         mise_lock_sha256: "c".repeat(64),
         rust_toolchain_sha256: "d".repeat(64),
+        source_mise_config_sha256: "e".repeat(64),
+        source_mise_lock_sha256: None,
+        source_rust_toolchain_sha256: None,
         selected_tools: vec![
             BuildTaskTool {
                 key: "mr-boxington".to_owned(),

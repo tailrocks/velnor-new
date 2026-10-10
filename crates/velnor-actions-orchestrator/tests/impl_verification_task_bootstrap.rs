@@ -2,7 +2,7 @@
 
 use std::fs;
 
-use velnor_actions_contract::{VerificationRunner, VerificationTask, VerificationTaskSource};
+use velnor_actions_contract::{MiseTaskSource, VerificationRunner, VerificationTask};
 
 use super::resolve_verification_tools;
 use crate::toolcheck::{check_tool_inputs, check_tool_inputs_with_paths};
@@ -11,7 +11,7 @@ fn verification_task(task_name: &str, runner: VerificationRunner) -> Verificatio
     VerificationTask {
         id: "verify".to_owned(),
         mise_task: task_name.to_owned(),
-        source: VerificationTaskSource {
+        source: MiseTaskSource {
             mise_config: "mise.toml".to_owned(),
             working_directory: ".".to_owned(),
         },
@@ -142,7 +142,7 @@ fn nested_mbx_task_uses_its_declared_config_when_root_has_same_task_name() {
     let root_task = VerificationTask {
         id: "verify-root".to_owned(),
         mise_task: "verify".to_owned(),
-        source: VerificationTaskSource {
+        source: MiseTaskSource {
             mise_config: "mise.toml".to_owned(),
             working_directory: ".".to_owned(),
         },
@@ -152,7 +152,7 @@ fn nested_mbx_task_uses_its_declared_config_when_root_has_same_task_name() {
     let native_task = VerificationTask {
         id: "verify-native".to_owned(),
         mise_task: "verify".to_owned(),
-        source: VerificationTaskSource {
+        source: MiseTaskSource {
             mise_config: "native/mise.toml".to_owned(),
             working_directory: "native".to_owned(),
         },

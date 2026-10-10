@@ -1,5 +1,6 @@
 //! Closed declarations for native build-capable Mise tasks.
 
+use super::MiseTaskSource;
 use crate::errors::ContractError;
 
 /// One allowlisted task that may compile repository code in a native job.
@@ -14,6 +15,8 @@ pub struct BuildTask {
     pub id: String,
     /// Exact task name from the repository's locked Mise configuration.
     pub mise_task: String,
+    /// Exact Mise source file and task working directory.
+    pub source: MiseTaskSource,
     /// Sorted, explicit closure of tool keys consumed by this task.
     pub tools: Vec<String>,
     /// Native OS and architecture used for this build task.
@@ -69,6 +72,13 @@ impl BuildTask {
                 file,
                 "workflow.tasks.mise_task",
                 format!("bad_mise_task:{}", self.mise_task),
+            ));
+        }
+        if !self.source.validate() {
+            return Err(ContractError::config(
+                file,
+                "workflow.tasks.source",
+                "bad_build_task_source_or_working_directory",
             ));
         }
         if self.tools.is_empty() || self.tools.len() > 32 {
@@ -147,11 +157,16 @@ pub fn is_valid_build_tool_key(key: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{BuildTask, BuildTaskRunner, is_valid_build_tool_key};
+    use crate::config::MiseTaskSource;
 
     fn build_task(id: &str, mise_task: &str) -> BuildTask {
         BuildTask {
             id: id.to_owned(),
             mise_task: mise_task.to_owned(),
+            source: MiseTaskSource {
+                mise_config: "mise.toml".to_owned(),
+                working_directory: ".".to_owned(),
+            },
             tools: vec!["mr-boxington".to_owned(), "rust".to_owned()],
             runner: BuildTaskRunner::Macos26Arm64,
             timeout_minutes: 120,
@@ -230,15 +245,18 @@ mod tests {
         let encoded = serde_json::to_string(&task).expect("serialize build task");
         assert_eq!(
             encoded,
-            "{\"id\":\"native-desktop\",\"mise_task\":\"desktop-ci\",\"tools\":[\"mr-boxington\",\"rust\"],\"runner\":\"macos-26-arm64\",\"timeout_minutes\":120,\"cargo_build_jobs\":2,\"nextest_test_threads\":2}"
+            "{\"id\":\"native-desktop\",\"mise_task\":\"desktop-ci\",\"source\":{\"mise_config\":\"mise.toml\",\"working_directory\":\".\"},\"tools\":[\"mr-boxington\",\"rust\"],\"runner\":\"macos-26-arm64\",\"timeout_minutes\":120,\"cargo_build_jobs\":2,\"nextest_test_threads\":2}"
         );
         assert_eq!(
             serde_json::to_string(&task).expect("repeat serialization"),
             encoded
         );
         assert!(serde_json::from_str::<BuildTask>(
-            "{\"id\":\"native-desktop\",\"mise_task\":\"desktop-ci\",\"tools\":[\"mr-boxington\",\"rust\"],\"runner\":\"macos-26-arm64\",\"timeout_minutes\":120,\"cargo_build_jobs\":2,\"nextest_test_threads\":2,\"extra\":true}"
+            "{\"id\":\"native-desktop\",\"mise_task\":\"desktop-ci\",\"source\":{\"mise_config\":\"mise.toml\",\"working_directory\":\".\"},\"tools\":[\"mr-boxington\",\"rust\"],\"runner\":\"macos-26-arm64\",\"timeout_minutes\":120,\"cargo_build_jobs\":2,\"nextest_test_threads\":2,\"extra\":true}"
         )
         .is_err());
+        assert!(serde_json::from_str::<BuildTask>(
+            "{\"id\":\"native-desktop\",\"mise_task\":\"desktop-ci\",\"tools\":[\"mr-boxington\",\"rust\"],\"runner\":\"macos-26-arm64\",\"timeout_minutes\":120,\"cargo_build_jobs\":2,\"nextest_test_threads\":2}"
+        ).is_err(), "the task source is mandatory");
     }
 }

@@ -214,6 +214,16 @@ schema = 1
 # source = { mise_config = "native/mise.toml", working_directory = "native" }
 # runner = "macos-arm64"           # Or "linux-x64".
 # timeout_minutes = 10              # Required, bounded 1..=360.
+# [[workflow.tasks]]               # Optional isolated native build job.
+# id = "native-desktop"
+# kind = "build"
+# mise_task = "desktop-ci"
+# source = { mise_config = "native/mise.toml", working_directory = "native" }
+# tools = ["mr-boxington", "rust"] # Exact selected tool closure from root mise.toml/mise.lock.
+# runner = "macos-26-arm64"       # The only native build runner.
+# timeout_minutes = 120             # Bounded 1..=180.
+# cargo_build_jobs = 2              # Bounded 1..=2.
+# nextest_test_threads = 2          # Bounded 1..=2.
 
 # Optional repository-relative POSIX globs excluded before detector input.
 # [discovery]

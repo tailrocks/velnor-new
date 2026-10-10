@@ -1,6 +1,6 @@
 //! Closed declarations for isolated, credential-free verification jobs.
 
-use super::mise::is_valid_mise_task_name;
+use super::{MiseTaskSource, mise::is_valid_mise_task_name};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 
@@ -13,101 +13,11 @@ pub struct VerificationTask {
     /// Exact task name from the repository's locked Mise configuration.
     pub mise_task: String,
     /// Exact Mise source file and task working directory.
-    pub source: VerificationTaskSource,
+    pub source: MiseTaskSource,
     /// OS and architecture used for this task.
     pub runner: VerificationRunner,
     /// Required per-job timeout in minutes.
     pub timeout_minutes: u16,
-}
-
-/// Repository-local source selected for one verification task.
-///
-/// The config file is the task's Mise root. The working directory must be
-/// that directory or one of its descendants so Mise cannot resolve the task
-/// from an unrelated repository config.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct VerificationTaskSource {
-    /// Repository-relative `mise.toml` that declares the task.
-    pub mise_config: String,
-    /// Repository-relative directory from which the task is invoked.
-    pub working_directory: String,
-}
-
-impl VerificationTaskSource {
-    /// `mise.lock` beside the declared config, if present.
-    #[must_use]
-    pub fn mise_lock_path(&self) -> String {
-        self.sibling("mise.lock")
-    }
-
-    /// Idiomatic Rust toolchain file beside the declared config, if present.
-    #[must_use]
-    pub fn rust_toolchain_path(&self) -> String {
-        self.sibling("rust-toolchain.toml")
-    }
-
-    /// Directory immediately above the source config directory. Mise uses
-    /// this as its ceiling so parent repository configs cannot be discovered.
-    #[must_use]
-    pub fn config_ceiling_directory(&self) -> String {
-        let config_dir = self.config_directory();
-        if config_dir == "." {
-            "..".to_owned()
-        } else {
-            config_dir
-                .rsplit_once('/')
-                .map_or_else(|| ".".to_owned(), |(parent, _)| parent.to_owned())
-        }
-    }
-
-    fn config_directory(&self) -> &str {
-        self.mise_config
-            .strip_suffix("/mise.toml")
-            .filter(|directory| !directory.is_empty())
-            .unwrap_or(".")
-    }
-
-    fn sibling(&self, name: &str) -> String {
-        if self.config_directory() == "." {
-            name.to_owned()
-        } else {
-            format!("{}/{name}", self.config_directory())
-        }
-    }
-
-    fn validate(&self) -> bool {
-        valid_repository_path(&self.mise_config, false)
-            && self.mise_config.ends_with("mise.toml")
-            && valid_repository_path(&self.working_directory, true)
-            && self.working_directory.len() <= 1024
-            && self
-                .mise_config
-                .strip_suffix("mise.toml")
-                .is_some_and(|prefix| prefix.is_empty() || prefix.ends_with('/'))
-            && (self.config_directory() == "."
-                || self.working_directory == self.config_directory()
-                || self
-                    .working_directory
-                    .strip_prefix(self.config_directory())
-                    .is_some_and(|suffix| suffix.starts_with('/')))
-    }
-}
-
-fn valid_repository_path(path: &str, root_allowed: bool) -> bool {
-    if path == "." {
-        return root_allowed;
-    }
-    !path.is_empty()
-        && path.len() <= 1024
-        && !path.starts_with('/')
-        && !path.ends_with('/')
-        && path
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-'))
-        && path
-            .split('/')
-            .all(|segment| !segment.is_empty() && segment != "." && segment != "..")
 }
 
 /// Supported verification runner OS and architecture pairs.
@@ -179,14 +89,15 @@ impl VerificationTask {
 
 #[cfg(test)]
 mod tests {
-    use super::{VerificationRunner, VerificationTask, VerificationTaskSource};
+    use super::{VerificationRunner, VerificationTask};
+    use crate::config::MiseTaskSource;
     use crate::config::mise::is_valid_mise_task_name;
 
     fn task(id: &str, mise_task: &str, timeout_minutes: u16) -> VerificationTask {
         VerificationTask {
             id: id.to_owned(),
             mise_task: mise_task.to_owned(),
-            source: VerificationTaskSource {
+            source: MiseTaskSource {
                 mise_config: "mise.toml".to_owned(),
                 working_directory: ".".to_owned(),
             },
@@ -239,7 +150,7 @@ mod tests {
 
     #[test]
     fn source_paths_are_canonical_and_working_directory_stays_under_config_root() {
-        let valid = VerificationTaskSource {
+        let valid = MiseTaskSource {
             mise_config: "native/mise.toml".to_owned(),
             working_directory: "native/apple".to_owned(),
         };
@@ -264,7 +175,7 @@ mod tests {
             ("native/mise.toml", "native/$HOME"),
         ] {
             let mut invalid = task("native-format", "format", 10);
-            invalid.source = VerificationTaskSource {
+            invalid.source = MiseTaskSource {
                 mise_config: mise_config.to_owned(),
                 working_directory: working_directory.to_owned(),
             };

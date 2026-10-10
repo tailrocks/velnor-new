@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::verification_jobs::build_task_jobs::{BuildTaskArtifact, BuildTaskTool};
 use velnor_actions_contract::{
-    Job, JobTimeout, PermissionLevel, VerificationRunner, VerificationTask, VerificationTaskSource,
+    Job, JobTimeout, MiseTaskSource, PermissionLevel, VerificationRunner, VerificationTask,
 };
 
 use super::{
@@ -19,7 +19,7 @@ fn policy(id: &str, runner: VerificationRunner) -> VerificationTaskPolicy {
         task: VerificationTask {
             id: id.to_owned(),
             mise_task: format!("lint-{id}"),
-            source: VerificationTaskSource {
+            source: MiseTaskSource {
                 mise_config: "mise.toml".to_owned(),
                 working_directory: ".".to_owned(),
             },
@@ -150,7 +150,7 @@ fn selected_prebuilt_tools_are_isolated_and_task_tools_are_skipped_at_runtime() 
 fn nested_mbx_task_restores_its_declared_working_directory_after_identity_checks() {
     let mut task = policy("native-mbx", VerificationRunner::LinuxX64);
     task.task.mise_task = "desktop-format-check".to_owned();
-    task.task.source = VerificationTaskSource {
+    task.task.source = MiseTaskSource {
         mise_config: "native/mise.toml".to_owned(),
         working_directory: "native".to_owned(),
     };

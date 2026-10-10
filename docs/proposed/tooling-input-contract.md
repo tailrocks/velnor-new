@@ -150,9 +150,19 @@ does not accept a repository or ref override.
 
 The job checks for Xcode 26.6 build 17F113 and macOS SDK 26.5 under
 `/Applications/Xcode_26.6.app/Contents/Developer`. Checkout disables
-persisted credentials. The pinned Mise action sets up only Mise itself. The
-job verifies the checked-out `mise.toml`, `mise.lock`, and
-`rust-toolchain.toml` against the source-bound digests, then creates a private
+persisted credentials. The pinned Mise action sets up only Mise itself. A
+build task declares a repository-relative `source.mise_config` and
+`source.working_directory`; the latter is that config directory or a
+descendant. The source config must contain tasks only. Its task names override
+same-named root tasks, while task dependencies and nested `mise run` calls may
+resolve from either config. Root `mise.toml` remains the authority for the
+selected tools, root `mise.lock`, Cargo wrapper, and Rust toolchain. The job
+hash-binds the root tool files and source task config. A source-local
+`mise.lock` or `rust-toolchain.toml`, when present, must match the corresponding
+root file and is also hash-bound. The job rejects symlinked path components
+and runs Mise from the declared working directory with a ceiling above the
+repository root, so Mise loads the root and nested task configs but nothing
+above the checkout. The job creates a private
 task-owned Mise home containing only the declared tool closure and its exact
 locked rows, including the locked ARM64 checksum artifacts where required.
 It installs that isolated closure once with
@@ -163,8 +173,8 @@ verified `mbx` wrapper, and the task's Rust compilation runs through that
 wrapper. All Mise inspection, install, exec, and task commands set
 `--no-env`; the task also inherits `MISE_NO_ENV=1`, so repository env files
 and `env._.source` directives cannot run or alter the selected tools. The
-checked config-file chain is compared before install and before task
-execution. The declared task runs from the checked-out root with
+checked config-file chain is compared before task
+execution. The declared task runs from its source working directory with
 `CARGO_BUILD_JOBS` and `NEXTEST_TEST_THREADS` from the validated limits,
 Mise task and exec auto-install disabled, and the same Xcode developer
 directory. Every shell step clears credential variables; the job grants only

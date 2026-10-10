@@ -203,12 +203,47 @@ fn validate_source_digests(policy: &BuildTaskPolicy) -> Result<(), RenderError> 
         &policy.mise_config_sha256,
         &policy.mise_lock_sha256,
         &policy.rust_toolchain_sha256,
+        &policy.source_mise_config_sha256,
     ] {
         if !velnor_actions_contract::ids::is_lower_hex_len(digest, 64) {
             return Err(RenderError::InvalidWorkflow(
                 "build_task_source_sha256".to_owned(),
             ));
         }
+    }
+    for digest in [
+        policy.source_mise_lock_sha256.as_ref(),
+        policy.source_rust_toolchain_sha256.as_ref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if !velnor_actions_contract::ids::is_lower_hex_len(digest, 64) {
+            return Err(RenderError::InvalidWorkflow(
+                "build_task_source_sha256".to_owned(),
+            ));
+        }
+    }
+    if policy.task.source.mise_config == "mise.toml"
+        && policy.source_mise_config_sha256 != policy.mise_config_sha256
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "build_task_source_config_identity".to_owned(),
+        ));
+    }
+    if policy.task.source.mise_lock_path() == "mise.lock"
+        && policy.source_mise_lock_sha256.is_some()
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "build_task_source_lock_identity".to_owned(),
+        ));
+    }
+    if policy.task.source.rust_toolchain_path() == "rust-toolchain.toml"
+        && policy.source_rust_toolchain_sha256.is_some()
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "build_task_source_rust_identity".to_owned(),
+        ));
     }
     Ok(())
 }

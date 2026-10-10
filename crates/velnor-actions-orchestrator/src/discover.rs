@@ -122,7 +122,8 @@ fn discover_inner(
         .iter()
         .filter_map(|task| match task {
             WorkflowTask::Verification(task) => Some(&task.source),
-            WorkflowTask::Build(_) | WorkflowTask::NativeImage(_) => None,
+            WorkflowTask::Build(task) => Some(&task.source),
+            WorkflowTask::NativeImage(_) => None,
         })
         .flat_map(|source| {
             [

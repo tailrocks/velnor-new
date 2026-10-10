@@ -85,6 +85,12 @@ pub struct BuildTaskPolicy {
     pub mise_lock_sha256: String,
     /// SHA-256 digest of the idiomatic Rust toolchain checked during planning.
     pub rust_toolchain_sha256: String,
+    /// SHA-256 of the task's declared Mise config, including its task bodies.
+    pub source_mise_config_sha256: String,
+    /// SHA-256 of a task-config-local Mise lock, when one exists.
+    pub source_mise_lock_sha256: Option<String>,
+    /// SHA-256 of a task-config-local Rust toolchain file, when one exists.
+    pub source_rust_toolchain_sha256: Option<String>,
     /// Sorted selected tools with the current runner's locked artifacts.
     pub selected_tools: Vec<BuildTaskTool>,
 }
