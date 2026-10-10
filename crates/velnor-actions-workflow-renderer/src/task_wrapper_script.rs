@@ -86,7 +86,6 @@ end_position=$((expected_fields - 1))
 fn append_argv_checks(script: &mut String) {
     script.push_str(
         r#"
-
 argv=()
 for ((index = 0; index < argv_count; index++)); do
   value=${frame[$((10 + index))]}
