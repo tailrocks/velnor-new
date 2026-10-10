@@ -3,6 +3,8 @@ Repository: <repo>
 .github/AGENTS.md
 .github/CLAUDE.md
 .github/actionlint.yaml
+.github/actions/task-rust-a/action.yml
+.github/actions/task-rust-lib/action.yml
 .github/actions/velnor-tool-seed/action.yml
 .github/workflows/ci.yml
 mise.lock not found; Velnor will not create or refresh it
@@ -10,4 +12,4 @@ mise.toml not found; Velnor will use its pinned tools
 nextest_recommendation: no explicit test-runner usage; defaulting to `cargo test`
 persist_evidence: no MBX or Nextest usage detected; to adopt either, add a durable signal
 rust-toolchain.toml not found; Velnor will not create it
-tool_install_unverified:5 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.0, rust@1.98.1, shellcheck@0.11.0, zizmor@1.30.1; install on the CI platform and commit the resulting lock
+tool_install_unverified:6 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.0, nextest@0.9.146, rust@1.98.1, shellcheck@0.11.0, zizmor@1.30.1; install on the CI platform and commit the resulting lock

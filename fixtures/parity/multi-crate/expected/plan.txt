@@ -17,14 +17,14 @@ Workflow to generate
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - actionlint (5 steps)
-    - plan (14 steps)
+    - actionlint (6 steps)
+    - plan (15 steps)
     - publish-baseline (5 steps)
-    - required (9 steps)
+    - required (10 steps)
     - rust-parity-app (19 steps)
-    - rust-parity-tool (18 steps)
+    - rust-parity-tool (19 steps)
     - 2 Rust crate jobs
-      Each: Clippy -> build -> run tests -> doctests -> doc build
+      Each: Clippy -> build -> run tests -> doc build
       Entries:
         - rust-parity-app
         - rust-parity-tool
@@ -32,7 +32,6 @@ Workflow to generate
         - stack/rust/crates/app/build/default
         - stack/rust/crates/app/clippy/default
         - stack/rust/crates/app/doc/default
-        - stack/rust/crates/app/doctest/default
         - stack/rust/crates/app/nextest/default/shard-1-of-2
         - stack/rust/crates/app/nextest/default/shard-2-of-2
         - stack/rust/crates/tool/build/default
@@ -53,7 +52,8 @@ Workflow to generate
     - actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
     - jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
     - jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
-  Ineligible: stack/rust/crates/tool/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/app/doctest/default NOT_RUN: doctest coverage is an explicit gap; no doctest command emitted
+  Ineligible: stack/rust/crates/tool/doctest/default NOT_RUN: doctest coverage is an explicit gap; no doctest command emitted
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 
 Required-check migration

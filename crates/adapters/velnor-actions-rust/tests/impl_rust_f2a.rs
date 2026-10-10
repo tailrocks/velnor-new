@@ -332,7 +332,7 @@ fn profile_runner_enters_task_identity() {
     let cargo_ext = cargo_groups[0].identity_extension(&digests(&package, &targets, Some(&known)));
     let nextest_ext =
         nextest_groups[0].identity_extension(&digests(&package, &targets, Some(&known)));
-    assert_eq!(cargo_ext.driver, "cargo+cargo_test");
+    assert_eq!(cargo_ext.driver, "cargo+cargo_nextest");
     assert_eq!(nextest_ext.driver, "mbx+cargo_nextest");
     assert_ne!(json_of(&cargo_ext), json_of(&nextest_ext));
 }
@@ -354,14 +354,14 @@ fn adapter_entry_metadata_carries_driver_runner_evidence() {
         meta["package_id"],
         serde_json::Value::String("a-id".to_owned())
     );
-    assert_eq!(meta["kind"], serde_json::Value::String("test".to_owned()));
+    assert_eq!(meta["kind"], serde_json::Value::String("build".to_owned()));
     assert_eq!(
         meta["compile_driver"],
         serde_json::Value::String("cargo".to_owned())
     );
     assert_eq!(
         meta["test_runner"],
-        serde_json::Value::String("cargo_test".to_owned())
+        serde_json::Value::String("cargo_nextest".to_owned())
     );
     let ids = meta["evidence_ids"].as_array().expect("evidence ids");
     assert_eq!(ids.len(), 1);

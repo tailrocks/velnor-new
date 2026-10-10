@@ -156,8 +156,9 @@ fn target_flags_skip_test_opt_out_bins() {
     };
     let test = groups
         .iter()
-        .find(|group| group.kind == TaskKind::Test)
+        .find(|group| group.kind == TaskKind::Nextest)
         .expect("one test group");
     assert!(!test.no_test_targets);
+    assert_eq!(test.test_runner, TestRunner::CargoNextest);
     assert_eq!(test.target_flags, vec!["--lib"]);
 }

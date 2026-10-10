@@ -1,5 +1,6 @@
-4778fbe08a93634a2e5d2f4dfa53dceb2694697b5bd53aaf8cd1bc6eb164bde9  ./.github/AGENTS.md
+ecf9a09d20d9c238717ccacbaa7737c2e3838a86ca690e2696e596d4b8527d19  ./.github/AGENTS.md
 e8b37bd2c2e072053779a49aa8c24e3f07cb382690cab7dc59756b8899b61854  ./.github/actionlint.yaml
+da3fac0eae95176c9c6f106544c24cc0182761d4bb70a6ce25dbe197c90932f9  ./.github/actions/task-rust-empty-suite/action.yml
 6139179ce61ff5097625f4ea76159d97de3ea4275e0aeea4ab0b86e3272c61e8  ./.github/actions/velnor-tool-seed/action.yml
-aff940885ea251022c5f7deef6bfdfe5b805e9fef17cdac652eab63892c326e6  ./.github/workflows/ci.yml
+b8e13177e50d05ce7bc359ae8735da8490cc074e1d60485175a5dce3358f8d5e  ./.github/workflows/ci.yml
 link ./.github/CLAUDE.md -> AGENTS.md

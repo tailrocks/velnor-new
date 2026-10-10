@@ -21,20 +21,47 @@ jobs:
     name: Actionlint
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Resolve hosted Mise cache identity
+        env:
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_EXPECTED_RUNNER_ARCH: X64
+          VELNOR_CACHE_EXPECTED_RUNNER_OS: Linux
+          VELNOR_CACHE_RUNNER_ARCH: ${{ runner.arch }}
+          VELNOR_CACHE_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+          VELNOR_CACHE_RUNNER_OS: ${{ runner.os }}
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; enabled=false; suffix=disabled; if [ \"$VELNOR_CACHE_RUNNER_ENVIRONMENT\" = github-hosted ] && [ \"$VELNOR_CACHE_RUNNER_OS\" = \"$VELNOR_CACHE_EXPECTED_RUNNER_OS\" ] && [ \"$VELNOR_CACHE_RUNNER_ARCH\" = \"$VELNOR_CACHE_EXPECTED_RUNNER_ARCH\" ] && [ \"${ImageOS:-}\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ]; then image_version=${ImageVersion:-}; case \"$image_version\" in '\\'''\\''|*[!0-9.]*|.*|*..*|*.) ;; *) if [ \"${#image_version}\" -le 64 ] && [ \"$image_version\" != latest ]; then enabled=true; suffix=\"$ImageOS-$image_version\"; fi ;; esac; fi; if [ -z \"${GITHUB_ENV:-}\" ] || [ ! -f \"$GITHUB_ENV\" ] || [ -L \"$GITHUB_ENV\" ]; then printf '\\''%s\\n'\\'' '\\''GITHUB_ENV must be a regular runner file'\\'' >&2; exit 1; fi; printf '\\''VELNOR_MISE_CACHE_ENABLED=%s\\nVELNOR_MISE_CACHE_SUFFIX=%s\\n'\\'' \"$enabled\" \"$suffix\" >> \"$GITHUB_ENV\"'"
       - name: Restore Velnor tool seed
         uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
         with:
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f
+          cache_key: mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f-${{env.VELNOR_MISE_CACHE_SUFFIX}}
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f
+          cache: ${{env.VELNOR_MISE_CACHE_ENABLED}}
+          cache_key: mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f-${{env.VELNOR_MISE_CACHE_SUFFIX}}
           cache_save: "false"
           env: "false"
           install: "false"
@@ -43,10 +70,10 @@ jobs:
       - name: Run actionlint
         run: mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color
       - name: Save Mise tools
-        if: success() && github.event_name == 'push'
+        if: success() && github.event_name == 'push' && env.VELNOR_MISE_CACHE_ENABLED == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f
+          key: mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f-${{env.VELNOR_MISE_CACHE_SUFFIX}}
           path: ~/.local/share/mise
   plan:
     name: Plan
@@ -82,15 +109,24 @@ jobs:
         with:
           fetch-depth: "0"
           persist-credentials: "false"
+      - name: Resolve hosted Mise cache identity
+        env:
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_EXPECTED_RUNNER_ARCH: X64
+          VELNOR_CACHE_EXPECTED_RUNNER_OS: Linux
+          VELNOR_CACHE_RUNNER_ARCH: ${{ runner.arch }}
+          VELNOR_CACHE_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+          VELNOR_CACHE_RUNNER_OS: ${{ runner.os }}
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; enabled=false; suffix=disabled; if [ \"$VELNOR_CACHE_RUNNER_ENVIRONMENT\" = github-hosted ] && [ \"$VELNOR_CACHE_RUNNER_OS\" = \"$VELNOR_CACHE_EXPECTED_RUNNER_OS\" ] && [ \"$VELNOR_CACHE_RUNNER_ARCH\" = \"$VELNOR_CACHE_EXPECTED_RUNNER_ARCH\" ] && [ \"${ImageOS:-}\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ]; then image_version=${ImageVersion:-}; case \"$image_version\" in '\\'''\\''|*[!0-9.]*|.*|*..*|*.) ;; *) if [ \"${#image_version}\" -le 64 ] && [ \"$image_version\" != latest ]; then enabled=true; suffix=\"$ImageOS-$image_version\"; fi ;; esac; fi; if [ -z \"${GITHUB_ENV:-}\" ] || [ ! -f \"$GITHUB_ENV\" ] || [ -L \"$GITHUB_ENV\" ]; then printf '\\''%s\\n'\\'' '\\''GITHUB_ENV must be a regular runner file'\\'' >&2; exit 1; fi; printf '\\''VELNOR_MISE_CACHE_ENABLED=%s\\nVELNOR_MISE_CACHE_SUFFIX=%s\\n'\\'' \"$enabled\" \"$suffix\" >> \"$GITHUB_ENV\"'"
       - name: Restore Velnor tool seed
         uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
         with:
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
+          cache_key: mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661-${{env.VELNOR_MISE_CACHE_SUFFIX}}
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
+          cache: ${{env.VELNOR_MISE_CACHE_ENABLED}}
+          cache_key: mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661-${{env.VELNOR_MISE_CACHE_SUFFIX}}
           cache_save: "false"
           env: "false"
           install: "false"
@@ -137,10 +173,10 @@ jobs:
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
       - name: Save Mise tools
-        if: success() && github.event_name == 'push'
+        if: success() && github.event_name == 'push' && env.VELNOR_MISE_CACHE_ENABLED == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
+          key: mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661-${{env.VELNOR_MISE_CACHE_SUFFIX}}
           path: ~/.local/share/mise
   publish-baseline:
     name: Publish baseline
@@ -231,11 +267,20 @@ jobs:
       - actionlint
     if: always()
     steps:
+      - name: Resolve hosted Mise cache identity
+        env:
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_EXPECTED_RUNNER_ARCH: X64
+          VELNOR_CACHE_EXPECTED_RUNNER_OS: Linux
+          VELNOR_CACHE_RUNNER_ARCH: ${{ runner.arch }}
+          VELNOR_CACHE_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+          VELNOR_CACHE_RUNNER_OS: ${{ runner.os }}
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; enabled=false; suffix=disabled; if [ \"$VELNOR_CACHE_RUNNER_ENVIRONMENT\" = github-hosted ] && [ \"$VELNOR_CACHE_RUNNER_OS\" = \"$VELNOR_CACHE_EXPECTED_RUNNER_OS\" ] && [ \"$VELNOR_CACHE_RUNNER_ARCH\" = \"$VELNOR_CACHE_EXPECTED_RUNNER_ARCH\" ] && [ \"${ImageOS:-}\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ]; then image_version=${ImageVersion:-}; case \"$image_version\" in '\\'''\\''|*[!0-9.]*|.*|*..*|*.) ;; *) if [ \"${#image_version}\" -le 64 ] && [ \"$image_version\" != latest ]; then enabled=true; suffix=\"$ImageOS-$image_version\"; fi ;; esac; fi; if [ -z \"${GITHUB_ENV:-}\" ] || [ ! -f \"$GITHUB_ENV\" ] || [ -L \"$GITHUB_ENV\" ]; then printf '\\''%s\\n'\\'' '\\''GITHUB_ENV must be a regular runner file'\\'' >&2; exit 1; fi; printf '\\''VELNOR_MISE_CACHE_ENABLED=%s\\nVELNOR_MISE_CACHE_SUFFIX=%s\\n'\\'' \"$enabled\" \"$suffix\" >> \"$GITHUB_ENV\"'"
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-14ee3a9bbb90604c
+          cache: ${{env.VELNOR_MISE_CACHE_ENABLED}}
+          cache_key: mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.18-14ee3a9bbb90604c-${{env.VELNOR_MISE_CACHE_SUFFIX}}
           cache_save: "false"
           env: "false"
           install: "false"
@@ -275,10 +320,10 @@ jobs:
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
         run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\""
       - name: Save Mise tools
-        if: success() && github.event_name == 'push'
+        if: success() && github.event_name == 'push' && env.VELNOR_MISE_CACHE_ENABLED == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-14ee3a9bbb90604c
+          key: mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.18-14ee3a9bbb90604c-${{env.VELNOR_MISE_CACHE_SUFFIX}}
           path: ~/.local/share/mise
       - name: Publish final report
         if: always()

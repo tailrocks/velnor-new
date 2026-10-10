@@ -3,6 +3,7 @@ Repository: <repo>
 .github/AGENTS.md
 .github/CLAUDE.md
 .github/actionlint.yaml
+.github/actions/task-rust-empty-suite/action.yml
 .github/actions/velnor-tool-seed/action.yml
 .github/workflows/ci.yml
 mise.lock not found; Velnor will not create or refresh it

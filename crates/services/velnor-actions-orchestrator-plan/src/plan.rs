@@ -291,12 +291,14 @@ fn cache_layers(prep: &GenerationPreparation) -> String {
 fn ineligible_lines(out: &mut String, prep: &GenerationPreparation) {
     for task in &prep.discovery.proposals {
         if task.no_targets {
+            let reason = if task.task_kind == "doctest" {
+                "NOT_RUN: doctest coverage is an explicit gap; no doctest command emitted"
+            } else {
+                "has no test targets; no test command emitted"
+            };
             push(
                 out,
-                &format!(
-                    "  Ineligible: {} has no test targets; no test command emitted",
-                    task.task_id
-                ),
+                &format!("  Ineligible: {task_id} {reason}", task_id = task.task_id),
             );
         }
     }

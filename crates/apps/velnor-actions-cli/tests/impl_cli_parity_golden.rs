@@ -107,6 +107,61 @@ fn normalized_plan(repo: &Path, head: &str, stdout: &[u8]) -> Result<Vec<u8>, Bo
         .into_bytes())
 }
 
+/// Scan every generated Actions YAML document in one preview tree.
+fn scan_generated_ci_policy(preview: &Path) -> Result<(), Box<dyn Error>> {
+    let github = preview.join(".github");
+    let mut pending = vec![github.clone()];
+    let mut scanned = 0;
+    while let Some(path) = pending.pop() {
+        for entry in std::fs::read_dir(&path)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            if path
+                .extension()
+                .is_none_or(|extension| extension != "yml" && extension != "yaml")
+            {
+                continue;
+            }
+            let bytes = std::fs::read(&path)?;
+            let text = String::from_utf8(bytes)
+                .map_err(|err| format!("non-UTF-8 generated YAML {}: {err}", path.display()))?;
+            let relative = path.strip_prefix(&github)?.display().to_string();
+            assert!(
+                !text.contains("cargo test"),
+                "generated action/workflow .github/{relative} contains forbidden `cargo test`"
+            );
+            scanned += 1;
+        }
+    }
+    assert!(
+        scanned > 0,
+        "preview lacks generated YAML: {}",
+        github.display()
+    );
+    Ok(())
+}
+
+/// Require the explicit doctest coverage gap for Rust-bearing previews.
+fn assert_doctest_gap(case: &str, stdout: &[u8]) -> Result<(), Box<dyn Error>> {
+    let text = String::from_utf8_lossy(stdout);
+    if case == "ignored-stack" {
+        assert!(
+            !text.contains("task_kind = doctest"),
+            "ignored-stack unexpectedly contains a doctest proposal"
+        );
+        return Ok(());
+    }
+    assert!(
+        text.contains("NOT_RUN: doctest coverage is an explicit gap"),
+        "{case} lacks the explicit doctest NOT_RUN gap:\n{text}"
+    );
+    Ok(())
+}
+
 use crate::impl_cli_parity_golden_normalize::normalized_response;
 
 /// Merge expected-report set derived from the response (mirrors the
@@ -286,6 +341,7 @@ fn check_case(case: &str) -> Result<(), Box<dyn Error>> {
         "plan.txt",
         &normalized_plan(&repo, &head, &plan.stdout)?,
     )?;
+    assert_doctest_gap(case, &plan.stdout)?;
     let preview = repo.parent().ok_or("repo lacks a parent")?.join("preview");
     let generate = spawn(
         &[
@@ -299,6 +355,7 @@ fn check_case(case: &str) -> Result<(), Box<dyn Error>> {
     if code(&generate) != 0 {
         return Err(format!("{case}: generate failed: {:?}", generate.stderr).into());
     }
+    scan_generated_ci_policy(&preview)?;
     check_golden(
         case,
         "ci.yml",
@@ -354,6 +411,19 @@ fn parity_artifacts_match_goldens() -> Result<(), Box<dyn Error>> {
 fn parity_malformed_fails_with_token() -> Result<(), Box<dyn Error>> {
     for case in FAIL_CASES {
         check_fail(case)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn generated_ci_policy_covers_every_preview_yaml() -> Result<(), Box<dyn Error>> {
+    for case in CASES {
+        check_case(case)?;
+    }
+    let cases = Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/opentofu-goldens/cases");
+    for entry in std::fs::read_dir(cases)? {
+        let entry = entry?;
+        scan_generated_ci_policy(&entry.path().join("preview"))?;
     }
     Ok(())
 }

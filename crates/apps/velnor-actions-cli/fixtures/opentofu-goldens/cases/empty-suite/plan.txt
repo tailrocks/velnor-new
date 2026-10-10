@@ -15,11 +15,11 @@ Workflow to generate
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - actionlint (5 steps)
-    - plan (11 steps)
+    - actionlint (6 steps)
+    - plan (12 steps)
     - publish-baseline (5 steps)
-    - required (9 steps)
-    - rust-empty-suite (11 steps)
+    - required (10 steps)
+    - rust-empty-suite (12 steps)
     - 1 Rust crate job
       Each: Clippy -> build -> doc build
       Entries:
@@ -39,7 +39,7 @@ Workflow to generate
     - actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
     - actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
     - jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
-  Ineligible: stack/rust/root/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/root/doctest/default NOT_RUN: doctest coverage is an explicit gap; no doctest command emitted
   Ineligible: stack/rust/root/nextest/default has no test targets; no test command emitted
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 

@@ -15,28 +15,28 @@ Workflow to generate
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - actionlint (5 steps)
-    - plan (13 steps)
+    - actionlint (6 steps)
+    - plan (14 steps)
     - publish-baseline (5 steps)
-    - required (9 steps)
-    - rust-a (14 steps)
-    - rust-lib (14 steps)
+    - required (10 steps)
+    - rust-a (16 steps)
+    - rust-lib (15 steps)
     - 2 Rust crate jobs
-      Each: Clippy -> run tests -> doctests -> doc build
+      Each: Clippy -> build -> run tests -> doc build
       Entries:
         - rust-a
         - rust-lib
       Obligations:
+        - stack/rust/crates/a/build/default
         - stack/rust/crates/a/clippy/default
         - stack/rust/crates/a/doc/default
-        - stack/rust/crates/a/doctest/default
-        - stack/rust/crates/a/test/default
+        - stack/rust/crates/a/nextest/default
+        - stack/rust/nested/lib/build/default
         - stack/rust/nested/lib/clippy/default
         - stack/rust/nested/lib/doc/default
-        - stack/rust/nested/lib/doctest/default
-        - stack/rust/nested/lib/test/default
+        - stack/rust/nested/lib/nextest/default
   Parallel: 2 independent crate jobs; no matrix fan-out
-  Critical path: stack/rust/crates/a/clippy/default -> stack/rust/crates/a/doctest/default -> stack/rust/crates/a/doc/default (3 tasks)
+  Critical path: stack/rust/crates/a/clippy/default -> stack/rust/crates/a/build/default -> stack/rust/crates/a/nextest/default (3 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources
   Actionlint: 1.7.12 pinned
@@ -47,6 +47,8 @@ Workflow to generate
     - actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
     - actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
     - jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+  Ineligible: stack/rust/crates/a/doctest/default NOT_RUN: doctest coverage is an explicit gap; no doctest command emitted
+  Ineligible: stack/rust/nested/lib/doctest/default NOT_RUN: doctest coverage is an explicit gap; no doctest command emitted
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 
 Required-check migration
@@ -62,4 +64,4 @@ Recommendations
   nextest_recommendation: no explicit test-runner usage; defaulting to `cargo test`
   persist_evidence: no MBX or Nextest usage detected; to adopt either, add a durable signal
   rust-toolchain.toml not found; Velnor will not create it
-  tool_install_unverified:5 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.0, rust@1.98.1, shellcheck@0.11.0, zizmor@1.30.1; install on the CI platform and commit the resulting lock
+  tool_install_unverified:6 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.0, nextest@0.9.146, rust@1.98.1, shellcheck@0.11.0, zizmor@1.30.1; install on the CI platform and commit the resulting lock

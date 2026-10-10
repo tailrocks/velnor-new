@@ -21,20 +21,47 @@ jobs:
     name: Actionlint
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Resolve hosted Mise cache identity
+        env:
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_EXPECTED_RUNNER_ARCH: X64
+          VELNOR_CACHE_EXPECTED_RUNNER_OS: Linux
+          VELNOR_CACHE_RUNNER_ARCH: ${{ runner.arch }}
+          VELNOR_CACHE_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+          VELNOR_CACHE_RUNNER_OS: ${{ runner.os }}
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; enabled=false; suffix=disabled; if [ \"$VELNOR_CACHE_RUNNER_ENVIRONMENT\" = github-hosted ] && [ \"$VELNOR_CACHE_RUNNER_OS\" = \"$VELNOR_CACHE_EXPECTED_RUNNER_OS\" ] && [ \"$VELNOR_CACHE_RUNNER_ARCH\" = \"$VELNOR_CACHE_EXPECTED_RUNNER_ARCH\" ] && [ \"${ImageOS:-}\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ]; then image_version=${ImageVersion:-}; case \"$image_version\" in '\\'''\\''|*[!0-9.]*|.*|*..*|*.) ;; *) if [ \"${#image_version}\" -le 64 ] && [ \"$image_version\" != latest ]; then enabled=true; suffix=\"$ImageOS-$image_version\"; fi ;; esac; fi; if [ -z \"${GITHUB_ENV:-}\" ] || [ ! -f \"$GITHUB_ENV\" ] || [ -L \"$GITHUB_ENV\" ]; then printf '\\''%s\\n'\\'' '\\''GITHUB_ENV must be a regular runner file'\\'' >&2; exit 1; fi; printf '\\''VELNOR_MISE_CACHE_ENABLED=%s\\nVELNOR_MISE_CACHE_SUFFIX=%s\\n'\\'' \"$enabled\" \"$suffix\" >> \"$GITHUB_ENV\"'"
       - name: Restore Velnor tool seed
         uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
         with:
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f
+          cache_key: mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f-${{env.VELNOR_MISE_CACHE_SUFFIX}}
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f
+          cache: ${{env.VELNOR_MISE_CACHE_ENABLED}}
+          cache_key: mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f-${{env.VELNOR_MISE_CACHE_SUFFIX}}
           cache_save: "false"
           env: "false"
           install: "false"
@@ -43,10 +70,10 @@ jobs:
       - name: Run actionlint
         run: mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color
       - name: Save Mise tools
-        if: success() && github.event_name == 'push'
+        if: success() && github.event_name == 'push' && env.VELNOR_MISE_CACHE_ENABLED == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f
+          key: mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f-${{env.VELNOR_MISE_CACHE_SUFFIX}}
           path: ~/.local/share/mise
   plan:
     name: Plan
@@ -82,15 +109,24 @@ jobs:
         with:
           fetch-depth: "0"
           persist-credentials: "false"
+      - name: Resolve hosted Mise cache identity
+        env:
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_EXPECTED_RUNNER_ARCH: X64
+          VELNOR_CACHE_EXPECTED_RUNNER_OS: Linux
+          VELNOR_CACHE_RUNNER_ARCH: ${{ runner.arch }}
+          VELNOR_CACHE_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+          VELNOR_CACHE_RUNNER_OS: ${{ runner.os }}
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; enabled=false; suffix=disabled; if [ \"$VELNOR_CACHE_RUNNER_ENVIRONMENT\" = github-hosted ] && [ \"$VELNOR_CACHE_RUNNER_OS\" = \"$VELNOR_CACHE_EXPECTED_RUNNER_OS\" ] && [ \"$VELNOR_CACHE_RUNNER_ARCH\" = \"$VELNOR_CACHE_EXPECTED_RUNNER_ARCH\" ] && [ \"${ImageOS:-}\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ]; then image_version=${ImageVersion:-}; case \"$image_version\" in '\\'''\\''|*[!0-9.]*|.*|*..*|*.) ;; *) if [ \"${#image_version}\" -le 64 ] && [ \"$image_version\" != latest ]; then enabled=true; suffix=\"$ImageOS-$image_version\"; fi ;; esac; fi; if [ -z \"${GITHUB_ENV:-}\" ] || [ ! -f \"$GITHUB_ENV\" ] || [ -L \"$GITHUB_ENV\" ]; then printf '\\''%s\\n'\\'' '\\''GITHUB_ENV must be a regular runner file'\\'' >&2; exit 1; fi; printf '\\''VELNOR_MISE_CACHE_ENABLED=%s\\nVELNOR_MISE_CACHE_SUFFIX=%s\\n'\\'' \"$enabled\" \"$suffix\" >> \"$GITHUB_ENV\"'"
       - name: Restore Velnor tool seed
         uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
         with:
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
+          cache_key: mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661-${{env.VELNOR_MISE_CACHE_SUFFIX}}
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
+          cache: ${{env.VELNOR_MISE_CACHE_ENABLED}}
+          cache_key: mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661-${{env.VELNOR_MISE_CACHE_SUFFIX}}
           cache_save: "false"
           env: "false"
           install: "false"
@@ -151,10 +187,10 @@ jobs:
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
       - name: Save Mise tools
-        if: success() && github.event_name == 'push'
+        if: success() && github.event_name == 'push' && env.VELNOR_MISE_CACHE_ENABLED == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
+          key: mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661-${{env.VELNOR_MISE_CACHE_SUFFIX}}
           path: ~/.local/share/mise
   publish-baseline:
     name: Publish baseline
@@ -247,11 +283,20 @@ jobs:
       - actionlint
     if: always()
     steps:
+      - name: Resolve hosted Mise cache identity
+        env:
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_EXPECTED_RUNNER_ARCH: X64
+          VELNOR_CACHE_EXPECTED_RUNNER_OS: Linux
+          VELNOR_CACHE_RUNNER_ARCH: ${{ runner.arch }}
+          VELNOR_CACHE_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+          VELNOR_CACHE_RUNNER_OS: ${{ runner.os }}
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; enabled=false; suffix=disabled; if [ \"$VELNOR_CACHE_RUNNER_ENVIRONMENT\" = github-hosted ] && [ \"$VELNOR_CACHE_RUNNER_OS\" = \"$VELNOR_CACHE_EXPECTED_RUNNER_OS\" ] && [ \"$VELNOR_CACHE_RUNNER_ARCH\" = \"$VELNOR_CACHE_EXPECTED_RUNNER_ARCH\" ] && [ \"${ImageOS:-}\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ]; then image_version=${ImageVersion:-}; case \"$image_version\" in '\\'''\\''|*[!0-9.]*|.*|*..*|*.) ;; *) if [ \"${#image_version}\" -le 64 ] && [ \"$image_version\" != latest ]; then enabled=true; suffix=\"$ImageOS-$image_version\"; fi ;; esac; fi; if [ -z \"${GITHUB_ENV:-}\" ] || [ ! -f \"$GITHUB_ENV\" ] || [ -L \"$GITHUB_ENV\" ]; then printf '\\''%s\\n'\\'' '\\''GITHUB_ENV must be a regular runner file'\\'' >&2; exit 1; fi; printf '\\''VELNOR_MISE_CACHE_ENABLED=%s\\nVELNOR_MISE_CACHE_SUFFIX=%s\\n'\\'' \"$enabled\" \"$suffix\" >> \"$GITHUB_ENV\"'"
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-14ee3a9bbb90604c
+          cache: ${{env.VELNOR_MISE_CACHE_ENABLED}}
+          cache_key: mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.18-14ee3a9bbb90604c-${{env.VELNOR_MISE_CACHE_SUFFIX}}
           cache_save: "false"
           env: "false"
           install: "false"
@@ -291,10 +336,10 @@ jobs:
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
         run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\""
       - name: Save Mise tools
-        if: success() && github.event_name == 'push'
+        if: success() && github.event_name == 'push' && env.VELNOR_MISE_CACHE_ENABLED == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-14ee3a9bbb90604c
+          key: mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.18-14ee3a9bbb90604c-${{env.VELNOR_MISE_CACHE_SUFFIX}}
           path: ~/.local/share/mise
       - name: Publish final report
         if: always()
@@ -332,100 +377,20 @@ jobs:
       VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     needs:
       - plan
+    outputs:
+      task_report_artifact_id: ${{ steps.crate-report-upload.outputs.artifact-id }}
+      task_report_check_run_id: ${{ job.check_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+      - name: Run shared steps
+        uses: ./.github/actions/task-rust-a # zizmor: ignore[self-repository]
         with:
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
-      - name: Setup Mise
-        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
-        with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
-          cache_save: "false"
-          env: "false"
-          install: "false"
-          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
-          version: 2026.9.18
-      - name: Acquire Velnor
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.1\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
-      - name: Download plan
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
-      - name: Prepare pinned tools
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1
-      - name: Prepare Rust components
-        env:
-          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
-      - name: Restore Cargo registry
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
-        with:
-          add-job-id-key: "false"
-          cache-on-failure: "false"
-          cache-targets: "false"
-          prefix-key: velnor-v1-cargo
-          save-if: "false"
-          shared-key: velnor-cargo-x86_64-unknown-linux-gnu-1.98.1
-      - name: Fetch Cargo sources
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
-      - name: Clippy
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/a/clippy/default,')"
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/a/clippy/default
-          VELNOR_MATRIX_KEY: m-0942c890ab413b23
-          VELNOR_TASK_DIGEST: b3-66726080679df3d9cba6b24a76e02f4d4908d7a41a896ef69d9de664fd36ca54
-          VELNOR_TASK_ID: stack/rust/crates/a/clippy/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo clippy --locked --offline --manifest-path crates/a/Cargo.toml --package a --all-targets -- -D warnings; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
-      - name: Unit and integration tests
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/a/test/default,')"
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/a/test/default
-          VELNOR_MATRIX_KEY: m-ec8bf231299f4045
-          VELNOR_TASK_DIGEST: b3-6b355c4ed4eea5bd85869c0393d50debbeb2bc61ae75a5ddbe5911f16e8ed84e
-          VELNOR_TASK_ID: stack/rust/crates/a/test/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo test --locked --offline --manifest-path crates/a/Cargo.toml --package a --lib; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
-      - name: Doctests
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/a/doctest/default,')"
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/a/doctest/default
-          VELNOR_MATRIX_KEY: m-46826b991a6ada8b
-          VELNOR_TASK_DIGEST: b3-9421e2f4f7aea223a4b9aa80864aa56d3302b824fd39042e91f7eb643a86394b
-          VELNOR_TASK_ID: stack/rust/crates/a/doctest/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo test --locked --offline --manifest-path crates/a/Cargo.toml --package a --doc; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
-      - name: Documentation
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/a/doc/default,')"
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          RUSTDOCFLAGS: "-D warnings"
-          VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/a/doc/default
-          VELNOR_MATRIX_KEY: m-96c2000d56d4332a
-          VELNOR_TASK_DIGEST: b3-81fc601cf978f2f584a250d0c6a5e9385cf067ca2a8f0b18d9ae8de481e21e24
-          VELNOR_TASK_ID: stack/rust/crates/a/doc/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo doc --locked --offline --manifest-path crates/a/Cargo.toml --package a --no-deps; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+          covered_tasks: ${{ needs.plan.outputs.covered_tasks }}
       - name: Upload crate reports
+        id: crate-report-upload
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
@@ -433,6 +398,12 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-a
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
+      - name: Save Mise tools
+        if: success() && github.event_name == 'push' && env.VELNOR_MISE_CACHE_ENABLED == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-v2-hosted-ubuntu26-x86_64-unknown-linux-gnu-2026.9.18-ccc5d847fd871b3b-${{env.VELNOR_MISE_CACHE_SUFFIX}}
+          path: ~/.local/share/mise
   rust-lib:
     name: Rust / lib
     runs-on: ubuntu-26.04
@@ -461,100 +432,20 @@ jobs:
       VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     needs:
       - plan
+    outputs:
+      task_report_artifact_id: ${{ steps.crate-report-upload.outputs.artifact-id }}
+      task_report_check_run_id: ${{ job.check_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+      - name: Run shared steps
+        uses: ./.github/actions/task-rust-lib # zizmor: ignore[self-repository]
         with:
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
-      - name: Setup Mise
-        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
-        with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
-          cache_save: "false"
-          env: "false"
-          install: "false"
-          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
-          version: 2026.9.18
-      - name: Acquire Velnor
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.1\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
-      - name: Download plan
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
-      - name: Prepare pinned tools
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1
-      - name: Prepare Rust components
-        env:
-          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
-      - name: Restore Cargo registry
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
-        with:
-          add-job-id-key: "false"
-          cache-on-failure: "false"
-          cache-targets: "false"
-          prefix-key: velnor-v1-cargo
-          save-if: "false"
-          shared-key: velnor-cargo-x86_64-unknown-linux-gnu-1.98.1
-      - name: Fetch Cargo sources
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
-      - name: Clippy
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/nested/lib/clippy/default,')"
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          VELNOR_MATRIX_ID: stack:rust|task:stack/rust/nested/lib/clippy/default
-          VELNOR_MATRIX_KEY: m-c229a5bca5cb4036
-          VELNOR_TASK_DIGEST: b3-b7e7490a597424d4517537745bd9f30edf41605b2736b6180b0fb282adbe41bf
-          VELNOR_TASK_ID: stack/rust/nested/lib/clippy/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo clippy --locked --offline --manifest-path nested/lib/Cargo.toml --package lib --all-targets -- -D warnings; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
-      - name: Unit and integration tests
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/nested/lib/test/default,')"
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          VELNOR_MATRIX_ID: stack:rust|task:stack/rust/nested/lib/test/default
-          VELNOR_MATRIX_KEY: m-0fcc0072a12c618b
-          VELNOR_TASK_DIGEST: b3-d4facb9331e00510c2eaeb5350ff4a494442351cedc31f401cf07b2f3b033fb8
-          VELNOR_TASK_ID: stack/rust/nested/lib/test/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo test --locked --offline --manifest-path nested/lib/Cargo.toml --package lib --lib; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
-      - name: Doctests
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/nested/lib/doctest/default,')"
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          VELNOR_MATRIX_ID: stack:rust|task:stack/rust/nested/lib/doctest/default
-          VELNOR_MATRIX_KEY: m-c76919f7a2c20d79
-          VELNOR_TASK_DIGEST: b3-405ce7fe0239398e17dfc2684f3f3a0a657b796d1d63c0488eba5b7cb0e68d8b
-          VELNOR_TASK_ID: stack/rust/nested/lib/doctest/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo test --locked --offline --manifest-path nested/lib/Cargo.toml --package lib --doc; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
-      - name: Documentation
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/nested/lib/doc/default,')"
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          RUSTDOCFLAGS: "-D warnings"
-          VELNOR_MATRIX_ID: stack:rust|task:stack/rust/nested/lib/doc/default
-          VELNOR_MATRIX_KEY: m-64e41d61cfd10ad0
-          VELNOR_TASK_DIGEST: b3-0c69897ced160a0c08342d56b79102ab9b7b2dcaea2a44907ca00791d1a65af1
-          VELNOR_TASK_ID: stack/rust/nested/lib/doc/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo doc --locked --offline --manifest-path nested/lib/Cargo.toml --package lib --no-deps; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+          covered_tasks: ${{ needs.plan.outputs.covered_tasks }}
       - name: Upload crate reports
+        id: crate-report-upload
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:

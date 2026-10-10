@@ -20,11 +20,11 @@ pub enum TaskKind {
     Fmt,
     /// Clippy lint gate.
     Clippy,
-    /// Unit and integration tests via plain `cargo test`.
+    /// Generated legacy Cargo-test request; superseded by Nextest.
     Test,
     /// Unit and integration tests via Nextest.
     Nextest,
-    /// Documentation tests.
+    /// Documentation-test coverage gap; never executable in generated CI.
     Doctest,
     /// Documentation build.
     Doc,
@@ -75,7 +75,7 @@ pub struct TaskGroup {
     pub gated_by: Vec<String>,
     /// Data producers that must finish first (task ids).
     pub depends_on: Vec<String>,
-    /// Existing metadata-derived non-doc target flags (`test` kind only).
+    /// Existing metadata-derived non-doc target flags (`Nextest` only).
     pub target_flags: Vec<String>,
     /// No applicable test target exists; emit no test command.
     pub no_test_targets: bool,
@@ -156,11 +156,11 @@ struct GroupBase<'a> {
     package: &'a PackageRecord,
 }
 
-/// Derive the per-package task groups; Clippy gates build, test, doctest, doc.
+/// Derive per-package task groups; Nextest owns unit/integration execution.
 ///
 /// Formatting is per package only with explicit configuration; otherwise the
-/// plan-job Format step covers formatting. The build group exists only for
-/// Nextest profiles; plain `cargo test` compiles and runs in one step.
+/// plan-job Format step covers formatting. Cargo's test runner is forbidden in
+/// generated Actions, so every executable test profile normalizes to Nextest.
 ///
 /// # Errors
 ///
@@ -175,33 +175,29 @@ pub fn derive_task_groups(inputs: &DeriveInputs<'_>) -> Result<Vec<TaskGroup>, C
         features: &features,
         target: inputs.target,
         driver: inputs.profile.compile_driver,
-        runner: inputs.profile.test_runner,
+        runner: TestRunner::CargoNextest,
         nextest_profile: inputs.profile.nextest_profile,
         run_ignored: inputs.profile.run_ignored.clone(),
         package: inputs.package,
     };
     let clippy_id = task_id(&base, TaskKind::Clippy)?;
     let mut groups = vec![clippy_group(&base, &clippy_id)];
-    let (build_id, test_kind) = if inputs.profile.test_runner == TestRunner::CargoNextest {
-        let id = task_id(&base, TaskKind::Build)?;
-        groups.push(plain_group(
-            &base,
-            TaskKind::Build,
-            &id,
-            std::slice::from_ref(&clippy_id),
-            &[],
-        ));
-        (Some(id), TaskKind::Nextest)
-    } else {
-        (None, TaskKind::Test)
-    };
+    let build_id = task_id(&base, TaskKind::Build)?;
+    groups.push(plain_group(
+        &base,
+        TaskKind::Build,
+        &build_id,
+        std::slice::from_ref(&clippy_id),
+        &[],
+    ));
+    let test_kind = TaskKind::Nextest;
     let test_id = task_id(&base, test_kind)?;
     groups.push(test_group(
         &base,
         test_kind,
         &test_id,
         &clippy_id,
-        build_id.as_deref(),
+        Some(build_id.as_str()),
     ));
     let doctest_id = task_id(&base, TaskKind::Doctest)?;
     groups.push(doctest_group(&base, &doctest_id, &clippy_id));
@@ -343,10 +339,10 @@ fn test_group(
     build_id: Option<&str>,
 ) -> TaskGroup {
     let mut group = plain_group(base, kind, id, &[clippy_id.to_owned()], &[]);
-    if kind == TaskKind::Test {
-        group.target_flags = target_flags(base.package);
-    }
     if kind == TaskKind::Nextest {
+        let mut target_flags = target_flags(base.package);
+        target_flags.sort();
+        group.target_flags = target_flags;
         group.run_ignored = base.run_ignored.clone().or_else(|| {
             (base.package.name.contains("conformance") || base.package.name.contains("visual"))
                 .then(|| "all".to_owned())
@@ -357,10 +353,14 @@ fn test_group(
     group
 }
 
-/// Build the doctest group, separate in either test profile.
+/// Build the non-executable doctest gap for either test profile.
+///
+/// Cargo's documented-test runner is forbidden in generated Actions.
+/// Nextest has no supported doctest mode, so coverage remains explicit
+/// `NOT_RUN` rather than silently claiming execution.
 fn doctest_group(base: &GroupBase<'_>, id: &str, clippy_id: &str) -> TaskGroup {
     let mut group = plain_group(base, TaskKind::Doctest, id, &[clippy_id.to_owned()], &[]);
-    group.no_test_targets = !base.package.targets.iter().any(|target| target.doctest);
+    group.no_test_targets = true;
     group
 }
 

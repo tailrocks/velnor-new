@@ -117,7 +117,8 @@ fn derives_groups_with_clippy_gates() {
         kinds,
         vec![
             TaskKind::Clippy,
-            TaskKind::Test,
+            TaskKind::Build,
+            TaskKind::Nextest,
             TaskKind::Doctest,
             TaskKind::Doc
         ]
@@ -146,6 +147,15 @@ fn derives_groups_with_clippy_gates() {
         }
     }
     assert!(groups[1].depends_on.is_empty());
+    let nextest = groups
+        .iter()
+        .find(|group| group.kind == TaskKind::Nextest)
+        .expect("nextest");
+    let build = groups
+        .iter()
+        .find(|group| group.kind == TaskKind::Build)
+        .expect("build");
+    assert_eq!(nextest.depends_on, vec![build.task_id.clone()]);
 }
 
 #[test]
@@ -179,7 +189,7 @@ fn nextest_adds_build_with_data_edge() {
 }
 
 #[test]
-fn cargo_test_emits_only_existing_target_flags() {
+fn cargo_profile_normalizes_to_nextest_target_flags() {
     let package = package();
     let profile = cargo_profile();
     let features = vec!["default".to_owned()];
@@ -187,12 +197,12 @@ fn cargo_test_emits_only_existing_target_flags() {
     let groups = derive_task_groups(&inputs).expect("derivation ok");
     let test: Vec<&velnor_actions_rust::TaskGroup> = groups
         .iter()
-        .filter(|group| group.kind == TaskKind::Test)
+        .filter(|group| group.kind == TaskKind::Nextest)
         .collect();
     assert_eq!(test.len(), 1);
     assert_eq!(
         test[0].target_flags,
-        vec!["--lib", "--bins", "--tests", "--examples"]
+        vec!["--bins", "--examples", "--lib", "--tests"]
     );
     assert!(!test[0].no_test_targets);
     let doctest: Vec<&velnor_actions_rust::TaskGroup> = groups
@@ -200,7 +210,25 @@ fn cargo_test_emits_only_existing_target_flags() {
         .filter(|group| group.kind == TaskKind::Doctest)
         .collect();
     assert!(doctest[0].target_flags.is_empty());
-    assert!(!doctest[0].no_test_targets);
+    assert!(doctest[0].no_test_targets);
+}
+
+#[test]
+fn doctest_is_a_not_run_gap_for_every_runner() {
+    for profile in [cargo_profile(), nextest_profile()] {
+        for package in [package(), bin_only_package(), empty_package()] {
+            let features = vec!["default".to_owned()];
+            let inputs = inputs(&package, &profile, &features);
+            let groups = derive_task_groups(&inputs).expect("derivation ok");
+            assert!(ids_for(&groups, TaskKind::Test).is_empty());
+            let doctests: Vec<&velnor_actions_rust::TaskGroup> = groups
+                .iter()
+                .filter(|group| group.kind == TaskKind::Doctest)
+                .collect();
+            assert_eq!(doctests.len(), 1);
+            assert!(doctests[0].no_test_targets);
+        }
+    }
 }
 
 #[test]
@@ -212,7 +240,7 @@ fn no_targets_records_valid_no_test_targets() {
     let groups = derive_task_groups(&inputs).expect("derivation ok");
     let test: Vec<&velnor_actions_rust::TaskGroup> = groups
         .iter()
-        .filter(|group| group.kind == TaskKind::Test)
+        .filter(|group| group.kind == TaskKind::Nextest)
         .collect();
     assert!(test[0].no_test_targets);
     assert!(test[0].target_flags.is_empty());
@@ -238,7 +266,7 @@ fn bin_only_package_marks_doctest_valid_no_target() {
     assert!(doctest[0].no_test_targets);
     let test: Vec<&velnor_actions_rust::TaskGroup> = groups
         .iter()
-        .filter(|group| group.kind == TaskKind::Test)
+        .filter(|group| group.kind == TaskKind::Nextest)
         .collect();
     assert_eq!(test.len(), 1);
     assert!(!test[0].no_test_targets);
@@ -251,7 +279,7 @@ fn bin_only_package_marks_doctest_valid_no_target() {
         .filter(|group| group.kind == TaskKind::Doctest)
         .collect();
     assert_eq!(doctest.len(), 1);
-    assert!(!doctest[0].no_test_targets);
+    assert!(doctest[0].no_test_targets);
 }
 
 #[test]
@@ -266,8 +294,8 @@ fn doctest_stays_separate_in_both_profiles() {
     let cargo = cargo_profile();
     let inputs = inputs(&package, &cargo, &features);
     let groups = derive_task_groups(&inputs).expect("derivation ok");
-    assert!(ids_for(&groups, TaskKind::Nextest).is_empty());
-    assert!(ids_for(&groups, TaskKind::Build).is_empty());
+    assert_eq!(ids_for(&groups, TaskKind::Nextest).len(), 1);
+    assert_eq!(ids_for(&groups, TaskKind::Build).len(), 1);
 }
 
 #[test]
