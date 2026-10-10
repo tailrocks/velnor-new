@@ -90,8 +90,9 @@ bounded `timeout_minutes`. The config file must be named `mise.toml`, and the
 working directory must be that config root or a descendant. `mise.lock` and
 `rust-toolchain.toml`, when present, are resolved beside the config. IDs must be sorted,
 unique, and safe as job keys; the generated base ID is `task-{id}`. The only
-V1 runners are `linux-x64` (`ubuntu-26.04`) and `macos-arm64` (`macos-15`),
-with separate pinned Mise binary digests. Task jobs are unconditional on pull
+V1 runners are `linux-x64` (`ubuntu-26.04`), `macos-arm64` (`macos-15`), and
+`macos-26-arm64` (`macos-26`), with separate pinned Mise binary digests per
+operating system and architecture. Task jobs are unconditional on pull
 requests, pushes, and merge groups, have no dependencies of their own, and
 join the `Required` fan-in. In schema 2, Linux tasks follow `hosted`,
 `scale-set`, or `both` mode; `both` emits a hosted and a Scale Set job, and

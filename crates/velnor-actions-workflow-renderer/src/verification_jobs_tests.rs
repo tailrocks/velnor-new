@@ -221,15 +221,29 @@ fn verification_rejects_cargo_sources_and_unbound_artifacts() {
 fn mixed_linux_and_apple_arm_tasks_keep_distinct_runners() {
     let linux = policy("linux-lint", VerificationRunner::LinuxX64);
     let macos = policy("native-format", VerificationRunner::MacosArm64);
+    let macos_26 = policy("native-swiftlint", VerificationRunner::Macos26Arm64);
     let linux_job = build_verification_task_job(&linux, CHECKOUT).expect("linux job");
     let macos_job = build_verification_task_job(&macos, CHECKOUT).expect("macos job");
+    let macos_26_job = build_verification_task_job(&macos_26, CHECKOUT).expect("macOS 26 job");
     assert_eq!(linux_job.runs_on, "ubuntu-26.04");
     assert_eq!(macos_job.runs_on, "macos-15");
+    assert_eq!(macos_26_job.runs_on, "macos-26");
 
-    let jobs = BTreeMap::from([(linux.job_id(), linux_job), (macos.job_id(), macos_job)]);
-    let ids = validate_verification_jobs(&jobs, &[linux, macos], CHECKOUT)
+    let jobs = BTreeMap::from([
+        (linux.job_id(), linux_job),
+        (macos.job_id(), macos_job),
+        (macos_26.job_id(), macos_26_job),
+    ]);
+    let ids = validate_verification_jobs(&jobs, &[linux, macos, macos_26], CHECKOUT)
         .expect("both platform jobs satisfy policy");
-    assert_eq!(ids, ["task-linux-lint", "task-native-format"]);
+    assert_eq!(
+        ids,
+        [
+            "task-linux-lint",
+            "task-native-format",
+            "task-native-swiftlint"
+        ]
+    );
 }
 
 #[test]
@@ -335,7 +349,11 @@ fn task_job_contract_rejects_conditions_dependencies_and_extra_steps() {
 
 #[test]
 fn emitted_verification_scripts_are_single_line_without_command_substitution() {
-    for runner in [VerificationRunner::LinuxX64, VerificationRunner::MacosArm64] {
+    for runner in [
+        VerificationRunner::LinuxX64,
+        VerificationRunner::MacosArm64,
+        VerificationRunner::Macos26Arm64,
+    ] {
         let task = policy("native-format", runner);
         let job = build_verification_task_job(&task, CHECKOUT).expect("task job");
         for step in &job.steps {

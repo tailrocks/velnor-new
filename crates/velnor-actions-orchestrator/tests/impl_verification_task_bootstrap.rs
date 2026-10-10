@@ -78,6 +78,11 @@ fn only_transitive_task_tools_are_selected_and_platform_rows_are_bound() {
         &verification_task("verify", VerificationRunner::MacosArm64),
     )
     .expect("locked macOS task tool closure");
+    let macos_26 = resolve_verification_tools(
+        &checks,
+        &verification_task("verify", VerificationRunner::Macos26Arm64),
+    )
+    .expect("locked macOS 26 task tool closure");
 
     assert_eq!(linux.selected_tools.len(), 2);
     assert_eq!(
@@ -107,6 +112,14 @@ fn only_transitive_task_tools_are_selected_and_platform_rows_are_bound() {
             .artifact
             .as_ref()
             .expect("macOS lock artifact")
+            .url,
+        "https://github.com/vendor/tool/releases/download/v2.3.4/tool-darwin-arm64.tar.gz"
+    );
+    assert_eq!(
+        macos_26.selected_tools[0]
+            .artifact
+            .as_ref()
+            .expect("macOS 26 lock artifact")
             .url,
         "https://github.com/vendor/tool/releases/download/v2.3.4/tool-darwin-arm64.tar.gz"
     );

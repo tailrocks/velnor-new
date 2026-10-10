@@ -29,10 +29,10 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
                 mise_config: "mise.toml".to_owned(),
                 working_directory: ".".to_owned(),
             },
-            runner: VerificationRunner::MacosArm64,
+            runner: VerificationRunner::Macos26Arm64,
             timeout_minutes: 10,
         },
-        runner_label: "macos-15".to_owned(),
+        runner_label: "macos-26".to_owned(),
         scale_set_token: None,
         mise_setup: MiseSetup {
             uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
