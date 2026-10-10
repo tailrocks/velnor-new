@@ -251,6 +251,20 @@ fn declared_task_file(
     shape: &Shape,
     version: &str,
 ) -> Result<RenderedFile, RenderError> {
+    let body = declared_task_document(action_id, shape, version)?;
+    let bytes = marker::with_marker(version, &crate::yaml::render_yaml(&body))?;
+    steps::scan_for_private_subcommands(&bytes)?;
+    Ok(RenderedFile {
+        path: format!(".github/actions/{ACTION_NAME_PREFIX}{action_id}/action.yml"),
+        bytes,
+    })
+}
+
+fn declared_task_document(
+    action_id: usize,
+    shape: &Shape,
+    version: &str,
+) -> Result<Yaml, RenderError> {
     let mut inputs = Vec::new();
     for index in 0..shape.argv_count {
         inputs.push(input_definition(argv_input(index)));
@@ -298,17 +312,11 @@ fn declared_task_file(
         ),
         ("run".to_owned(), Yaml::str(script)),
     ]);
-    let body = composite::composite_yaml_with_inputs(
+    composite::composite_yaml_with_inputs(
         &format!("{ACTION_NAME_PREFIX}{action_id}"),
         inputs,
         vec![step],
-    )?;
-    let bytes = marker::with_marker(version, &crate::yaml::render_yaml(&body))?;
-    steps::scan_for_private_subcommands(&bytes)?;
-    Ok(RenderedFile {
-        path: format!(".github/actions/{ACTION_NAME_PREFIX}{action_id}/action.yml"),
-        bytes,
-    })
+    )
 }
 
 fn input_definition(name: String) -> (String, Yaml) {

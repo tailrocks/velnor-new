@@ -4,6 +4,8 @@ use velnor_actions_contract::cachekey::{ToolchainInputs, toolchain_id};
 use velnor_actions_contract::workflow::crate_job::task_digest_for_execution;
 use velnor_actions_contract::{Job, JobTimeout, Step, StepKind, StepRole};
 
+use crate::yaml::Yaml;
+
 use super::{ACTION_NAME_PREFIX, factor_obligation_steps};
 
 const CHECKOUT: &str = "actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -40,19 +42,12 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
     );
     assert!(files[0].bytes.contains("using: composite"));
     assert!(files[0].bytes.contains("shell: bash"));
-    assert!(files[0].bytes.contains("argv=( \"$VELNOR_WRAPPER_ARGV_0\""));
-    assert!(files[0].bytes.contains("write-task-report-v1"));
-    assert!(
-        files[0]
-            .bytes
-            .contains("if [ \"$task_code\" -ne 0 ]; then exit \"$task_code\"; fi")
-    );
-    assert!(
-        files[0]
-            .bytes
-            .contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN")
-    );
-    assert!(!files[0].bytes.contains("eval"));
+    let run = action_run_scalar(&task_document_for_test());
+    assert!(run.contains("argv=( \"$VELNOR_WRAPPER_ARGV_0\""));
+    assert!(run.contains("write-task-report-v1"));
+    assert!(run.contains("if [ \"$task_code\" -ne 0 ]; then exit \"$task_code\"; fi"));
+    assert!(run.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
+    assert!(!run.contains("eval"));
     for key in crate::toolchain_env::STEP_CREDENTIAL_DENYLIST
         .into_iter()
         .chain(crate::toolchain_env::STEP_ENDPOINT_DENYLIST)
@@ -168,6 +163,45 @@ fn typed_task_requires_checkout_staging_and_credential_free_inputs() {
             .to_string()
             .contains("denied")
     );
+}
+
+fn task_document_for_test() -> Yaml {
+    let task = task_step(0);
+    let StepKind::TaskExecution {
+        argv,
+        env,
+        report_helper_version,
+        ..
+    } = &task.kind
+    else {
+        unreachable!();
+    };
+    let shape = super::Shape {
+        argv_count: argv.len(),
+        env_keys: env.keys().cloned().collect(),
+        helper_version: report_helper_version.clone(),
+    };
+    super::declared_task_document(0, &shape, VERSION).expect("typed composite document")
+}
+
+fn action_run_scalar(action: &Yaml) -> &str {
+    let Yaml::Map(action_fields) = action else {
+        panic!("composite action is a mapping");
+    };
+    let Some((_, Yaml::Map(runs_fields))) = action_fields.iter().find(|(key, _)| key == "runs")
+    else {
+        panic!("composite action has a runs mapping");
+    };
+    let Some((_, Yaml::Seq(steps))) = runs_fields.iter().find(|(key, _)| key == "steps") else {
+        panic!("composite runs has a steps sequence");
+    };
+    let Some(Yaml::Map(step_fields)) = steps.first() else {
+        panic!("composite action has one typed run step");
+    };
+    let Some((_, Yaml::Str(run))) = step_fields.iter().find(|(key, _)| key == "run") else {
+        panic!("composite step has a run scalar");
+    };
+    run
 }
 
 fn checkout_step() -> Step {
