@@ -251,23 +251,26 @@ impl PinnedToolExec {
     ///
     /// Direct toolchain managers and installer actions are rejected:
     /// validation runs through Mise-selected tools only. An `mbx` payload is
-    /// accepted only as the bare executable name with the exact MBX catalog
-    /// tool selected; path-qualified MBX executables are never treated as
-    /// catalog-pinned.
+    /// accepted only as the bare executable name with both the Rust and MBX
+    /// catalog tools selected; path-qualified MBX executables are never
+    /// treated as catalog-pinned.
     ///
     /// # Errors
     ///
     /// Returns [`MiseError::EmptyToolchain`] for zero tools,
     /// [`MiseError::EmptyCommand`] for an empty program, and
     /// [`MiseError::ForbiddenPayload`] for `rustup` programs, `cargo install`
-    /// payloads, and MBX payloads without an exact catalog selector.
+    /// payloads, and MBX payloads without exact Rust and MBX catalog selectors.
     pub fn new(
         tools: Vec<PinnedTool>,
         program: &OsStr,
         args: Vec<OsString>,
     ) -> Result<Self, MiseError> {
         let mbx_authority = if is_mbx_program(program) {
-            if program != OsStr::new("mbx") || !tools.contains(&PinnedTool::MrBoxington) {
+            if program != OsStr::new("mbx")
+                || !tools.contains(&PinnedTool::Rust)
+                || !tools.contains(&PinnedTool::MrBoxington)
+            {
                 return Err(unpinned_mbx_error(program));
             }
             Some(MbxAuthority::Catalog)

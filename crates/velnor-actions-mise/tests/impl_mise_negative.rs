@@ -109,6 +109,17 @@ fn mbx_requires_exact_catalog_authority_and_bare_program() {
 }
 
 #[test]
+fn catalog_mbx_requires_a_pinned_rust_toolchain() {
+    let error = PinnedToolExec::new(
+        vec![PinnedTool::MrBoxington],
+        OsStr::new("mbx"),
+        strings(&["+1.99.0", "--version"]),
+    )
+    .expect_err("catalog MBX execution must have Rust selected through Mise");
+    assert!(matches!(error, MiseError::ForbiddenPayload { .. }));
+}
+
+#[test]
 fn forbidden_rejection_names_program_and_reason() {
     let err = PinnedToolExec::new(
         vec![PinnedTool::Rust],

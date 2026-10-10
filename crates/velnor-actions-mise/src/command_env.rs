@@ -221,8 +221,10 @@ pub enum EnvPolicy {
     Verify,
     /// Pinned MBX execution: inherits the verification environment while
     /// removing Mise's Cargo command wrappers and shims plus ambient Cargo,
-    /// rustc, and rustdoc executable overrides so the selected toolchain
-    /// controls those programs.
+    /// rustc, rustdoc, and Rustup toolchain selectors so the typed Rust
+    /// selection controls those programs. A validated explicit
+    /// `RUSTUP_TOOLCHAIN` addition is applied after inherited values are
+    /// filtered.
     Mbx,
     /// Read-only local discovery probes: inherits minus every
     /// credential key, plus the isolation overlay.
@@ -300,7 +302,8 @@ impl EnvPolicy {
                 let stripped = (is_denied_credential_key(&name)
                     && !allowed.contains(&name.as_ref()))
                     || ENDPOINT_ENV_KEYS.contains(&name.as_ref())
-                    || is_stripped_ambient_key(&name);
+                    || is_stripped_ambient_key(&name)
+                    || (matches!(self, Self::Mbx) && name == RUSTUP_TOOLCHAIN_ENV);
                 if !stripped {
                     env.push((key.clone(), value.clone()));
                 }
