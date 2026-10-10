@@ -1,4 +1,4 @@
-//! Latest verified Mise pins for consumer binary release jobs.
+//! Official per-target Mise pins for consumer binary release jobs.
 
 use super::{OrchestratorError, mise_action_uses};
 use velnor_actions_contract::{ReleaseTarget, VelnorConfig};

@@ -46,7 +46,7 @@ fn mise_setup_defaults_to_compiled_pins() {
 }
 
 #[test]
-fn consumer_binary_mise_setup_uses_latest_verified_platforms_only() {
+fn consumer_binary_mise_setup_uses_official_platform_pins_only() {
     let config = config_with(BTreeMap::new());
     for (target, digest) in [
         (
