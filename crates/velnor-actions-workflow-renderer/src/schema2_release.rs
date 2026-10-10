@@ -23,6 +23,8 @@ const ASSET_DIR: &str = "assets";
 const CHECKSUMS: &str = "SHA256SUMS";
 const RUNNER_TAR: &str = "velnor-runner-linux-amd64.tar";
 const DIND_TAR: &str = "velnor-dind-linux-amd64.tar";
+const RESOURCE_PROBE_TAR: &str = "velnor-resource-probe-linux-amd64.tar";
+const RESOURCE_PROBE_MANIFEST: &str = "RESOURCE_PROBE_MANIFEST.json";
 const HOST_BIN: &str = "velnor-host";
 
 const IMAGE_BUILD: &str = "\
@@ -42,11 +44,13 @@ set -eu
 docker save --output velnor-runner-linux-amd64.tar velnor-runner:linux-amd64
 docker save --output velnor-dind-linux-amd64.tar velnor-dind:linux-amd64
 test -s velnor-runner-linux-amd64.tar
-test -s velnor-dind-linux-amd64.tar";
+test -s velnor-dind-linux-amd64.tar
+test -s velnor-resource-probe-linux-amd64.tar
+test -s RESOURCE_PROBE_MANIFEST.json";
 
 const IMAGE_SUM: &str = "\
 set -eu
-sha256sum velnor-runner-linux-amd64.tar velnor-dind-linux-amd64.tar > SHA256SUMS";
+sha256sum velnor-runner-linux-amd64.tar velnor-dind-linux-amd64.tar velnor-resource-probe-linux-amd64.tar RESOURCE_PROBE_MANIFEST.json > SHA256SUMS";
 
 const BINARY_VERIFY: &str = "\
 set -eu
@@ -66,8 +70,25 @@ shasum -a 256 velnor-host > SHA256SUMS";
 ///
 /// An illegal hosted label fails.
 pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
+    let pins = request
+        .product_release
+        .as_ref()
+        .ok_or_else(|| RenderError::InvalidWorkflow("product_release_pins_missing".to_owned()))?;
     let hosted = runs_on_yaml(&request.hosted_label)?;
-    let files = [RUNNER_TAR, DIND_TAR, CHECKSUMS];
+    let files = [
+        RUNNER_TAR,
+        DIND_TAR,
+        RESOURCE_PROBE_TAR,
+        RESOURCE_PROBE_MANIFEST,
+        CHECKSUMS,
+    ];
+    let mut build_steps = vec![run_step("Build runner and DinD images", IMAGE_BUILD)];
+    build_steps.extend(super::resource_probe_image::build_steps(pins)?);
+    build_steps.extend([
+        run_step("Verify image architectures", IMAGE_VERIFY),
+        run_step("Save image archives", IMAGE_SAVE),
+        run_step("Checksum built bytes", IMAGE_SUM),
+    ]);
     Ok(document(
         "Image release",
         vec![
@@ -76,12 +97,7 @@ pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
                 "Build runner images",
                 hosted.clone(),
                 60,
-                vec![
-                    run_step("Build images", IMAGE_BUILD),
-                    run_step("Verify image architecture", IMAGE_VERIFY),
-                    run_step("Save image tars", IMAGE_SAVE),
-                    run_step("Checksum built bytes", IMAGE_SUM),
-                ],
+                build_steps,
                 "Upload image assets",
                 &files,
             ),

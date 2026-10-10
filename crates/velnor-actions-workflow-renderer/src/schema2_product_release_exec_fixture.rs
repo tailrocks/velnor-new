@@ -123,6 +123,8 @@ impl Fixture {
             Family::Images => &[
                 "velnor-runner-linux-amd64.tar",
                 "velnor-dind-linux-amd64.tar",
+                "velnor-resource-probe-linux-amd64.tar",
+                "RESOURCE_PROBE_MANIFEST.json",
                 "SHA256SUMS",
             ],
             Family::Binary => &["velnor-host", "SHA256SUMS"],

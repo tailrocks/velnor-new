@@ -76,5 +76,6 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 20. [Rust test policy](rust-test-policy.md) defines test layout, integration entry points, doctest separation, fixture independence, and snapshot review (companion to the quality contract §4).
 21. [Rust verification contract](rust-verification-contract.md) defines the required focused task templates, workflow verification, and risk-triggered checks (binding extension of the quality contract §9).
 20. [macOS Scale Set runner](macos-scaleset-runner.md) is the active runner specification. It supersedes conflicting deferred roadmap clauses.
+22. [Resource probe image artifact](resource-probe-artifact.md) defines the trusted probe image, archive, manifest, and publication contract.
 
 The listed documents are intended to be implementable without inventing behavior. If a behavior is not specified, fail with a clear error and add a decision to the spec before implementing it. Do not silently broaden V1.
