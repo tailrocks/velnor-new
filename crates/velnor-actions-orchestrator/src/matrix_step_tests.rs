@@ -429,8 +429,8 @@ fn renderer_context(
     let generator_version = env!("CARGO_PKG_VERSION").to_owned();
     velnor_actions_workflow_renderer::render::RenderContext {
         staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{generator_version}"),
-        generator_version,
-        report_helper_version: generator_version.clone(),
+        generator_version: generator_version.clone(),
+        report_helper_version: generator_version,
         runs_on: "ubuntu-26.04".to_owned(),
         scale_set_selector: None,
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
