@@ -4,7 +4,7 @@ use crate::errors::ContractError;
 
 use super::{MAX_TASK_EXECUTION_ARGV, MAX_TASK_EXECUTION_ENV};
 
-pub(super) fn validate_task_execution(
+pub(in crate::workflow) fn validate_task_execution(
     argv: &[String],
     env: &std::collections::BTreeMap<String, String>,
     task_id: &str,
