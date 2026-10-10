@@ -109,7 +109,8 @@ fn dynamic_shell_expansion_and_typed_tofu_role_stay_unfactored() {
         "--tool=$HOME".to_owned(),
     ])
     .expect("valid dynamic shell fixture");
-    run[run.len() - 1] = format!(
+    let script_index = run.len() - 1;
+    run[script_index] = format!(
         "{} s=$(date +%s%3N); {command}; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"{HELPER}\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"",
         toolchain_env::credential_unset_prelude()
     );
