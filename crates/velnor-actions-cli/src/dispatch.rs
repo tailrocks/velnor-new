@@ -18,18 +18,18 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use clap::Parser;
 use velnor_actions_orchestrator::{
-    DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, MERGE_OP, OrchestratorError,
-    PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PlanOutputMode,
-    REPORT_OP, REQUEST_FILE_ENV, TASK_EXECUTION_RESOLVER_OP, WRITE_REQUEST_OP, execute_check,
-    init_config, merge_internal, merge_passed, plan_internal, plan_outputs, plan_text_checked,
-    prepare, publish_final_report, publish_plan_files, resolve_root, resolve_task_execution,
+    DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, MERGE_OP, PLAN_MATRIX_OUTPUT_MODE_ENV,
+    PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PlanOutputMode, REPORT_OP, REQUEST_FILE_ENV,
+    TASK_EXECUTION_RESOLVER_OP, WRITE_REQUEST_OP, execute_check, merge_internal, merge_passed,
+    plan_internal, plan_outputs, publish_final_report, publish_plan_files, resolve_task_execution,
     response_path_for, retrieve_reports, write_preseed_manifest, write_request, write_task_report,
 };
 
-use crate::args::{Cli, Command};
 use crate::dispatch_publish::run_publish_internal;
+
+mod public;
+pub(crate) use public::run_public;
 #[path = "dispatch_owned_tool_publication.rs"]
 mod owned_publication;
 
@@ -78,35 +78,6 @@ struct InternalRequest {
     op: InternalOp,
     /// Exact request-file path from the environment.
     path: PathBuf,
-}
-
-/// Parse Clap arguments and dispatch one public command.
-///
-/// Clap owns `--help`, `--version`, and usage errors (exit 2).
-pub(crate) fn run_public() -> ExitCode {
-    let command = Cli::parse().command;
-    if command.is_owned_preview() {
-        return owned_publication::run_owned_command(command);
-    }
-    match command {
-        Command::Init => run_init(),
-        Command::Plan => run_plan(),
-        Command::Generate {
-            output_dir, mode, ..
-        } => crate::dispatch_generate::run_generate(output_dir, mode),
-        Command::Config { command } => crate::dispatch_config::run_config(&command),
-        Command::VerifyReleaseManifest {
-            manifest,
-            expected_source_commit,
-            linux_x64_binary,
-            macos_arm64_binary,
-        } => crate::dispatch_local_release::run_verify_release_manifest(
-            &manifest,
-            &expected_source_commit,
-            &linux_x64_binary,
-            &macos_arm64_binary,
-        ),
-    }
 }
 
 /// Run the private file entrypoint when the gate is satisfied.
@@ -335,48 +306,6 @@ pub(crate) fn fail_internal(problem: &str) -> ExitCode {
     ExitCode::from(1)
 }
 
-/// Dispatch `init`: resolve the root, then create the config file.
-fn run_init() -> ExitCode {
-    let Some(cwd) = working_dir() else {
-        return ExitCode::from(1);
-    };
-    let report = resolve_root(&cwd).and_then(|root| init_config(&root));
-    match report {
-        Ok(report) => {
-            for path in &report.created {
-                println!("{path}");
-            }
-            ExitCode::SUCCESS
-        }
-        Err(error) => fail_public(&error),
-    }
-}
-
-/// Dispatch `plan`: report (recommendations included) to stdout only.
-///
-/// Contract §5 routes findings to stderr in one sentence, but §5's own
-/// example shows `Recommendations` inside the stdout report and §7 assigns
-/// the report to stdout; the example plus §7 govern, so stderr stays empty.
-fn run_plan() -> ExitCode {
-    let Some(cwd) = working_dir() else {
-        return ExitCode::from(1);
-    };
-    let preparation = resolve_root(&cwd).and_then(|root| prepare(&root));
-    let preparation = match preparation {
-        Ok(preparation) => preparation,
-        Err(error) => return fail_public(&error),
-    };
-    let text = match plan_text_checked(&preparation) {
-        Ok(text) => text,
-        Err(error) => return fail_public(&error),
-    };
-    print!("{text}");
-    if !text.ends_with('\n') {
-        println!();
-    }
-    ExitCode::SUCCESS
-}
-
 /// Read the working directory, reporting failures as exit 1.
 pub(crate) fn working_dir() -> Option<PathBuf> {
     match env::current_dir() {
@@ -392,11 +321,4 @@ pub(crate) fn working_dir() -> Option<PathBuf> {
 pub(crate) fn fail_public(error: &OrchestratorError) -> ExitCode {
     eprintln!("velnor-actions: {}", single_line(&error.to_string()));
     ExitCode::from(1)
-}
-
-/// Collapse one error to a single log line (X8: values echoed into
-/// errors, such as `unsupported_label` or `bad_custom_task`, must not
-/// inject newlines into logs).
-fn single_line(text: &str) -> String {
-    text.replace(['\n', '\r'], " ")
 }
