@@ -43,8 +43,8 @@ mise exec -- cargo build --locked -p velnor-actions-cli
 diff -r .github /private/tmp/velnor-preview/.github  # no output: preview matches
 ```
 
-Velnor CI pins checked on 2026-10-09 include Mise 2026.10.6 (candidate;
-hosted qualification pending), Rust 1.98.1, Nextest 0.9.148, and release-plz
+Velnor CI pins checked on 2026-10-10 include Mise 2026.10.7 (official
+candidate; hosted qualification pending), Rust 1.98.1, Nextest 0.9.148, and release-plz
 0.3.170. Issue [#6](https://github.com/tailrocks/velnor-new/issues/6)
 proposes Rust 1.99.0, but this update keeps the selected toolchain aligned
 with the declared Rust 1.98 MSRV while a separate compatibility decision is

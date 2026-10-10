@@ -62,8 +62,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
-          version: 2026.10.6
+          sha256: 6eb1b890e90818417ca34c90dbbd47881917d5cd199f31b63b062ea9c6b18d85
+          version: 2026.10.7
       - name: Prepare pinned tools
         run: mise --no-config --no-env --no-hooks install actionlint@1.7.12 shellcheck@0.11.0
       - name: Run actionlint
@@ -114,8 +114,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
-          version: 2026.10.6
+          sha256: 6eb1b890e90818417ca34c90dbbd47881917d5cd199f31b63b062ea9c6b18d85
+          version: 2026.10.7
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -237,8 +237,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
-          version: 2026.10.6
+          sha256: 6eb1b890e90818417ca34c90dbbd47881917d5cd199f31b63b062ea9c6b18d85
+          version: 2026.10.7
       - name: Acquire Velnor
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.6\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --retry 5 --retry-all-errors --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
       - name: Prepare pinned tools
@@ -316,8 +316,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
-          version: 2026.10.6
+          sha256: 6eb1b890e90818417ca34c90dbbd47881917d5cd199f31b63b062ea9c6b18d85
+          version: 2026.10.7
       - name: Acquire Velnor
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.6\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --retry 5 --retry-all-errors --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
       - name: Download plan
@@ -505,8 +505,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
-          version: 2026.10.6
+          sha256: 6eb1b890e90818417ca34c90dbbd47881917d5cd199f31b63b062ea9c6b18d85
+          version: 2026.10.7
       - name: Acquire Velnor
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.6\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --retry 5 --retry-all-errors --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
       - name: Download plan
