@@ -282,14 +282,25 @@ fn native_build_task_rejects_cargo_source_install_fallback() -> TestResult {
 
 #[test]
 fn native_build_task_rejects_unsupported_mise_lockfile_versions() -> TestResult {
+    let mut config = toml::from_str::<toml::Value>(&config_with_build("hosted"))?;
+    let tasks = config
+        .get_mut("workflow")
+        .and_then(toml::Value::as_table_mut)
+        .and_then(|workflow| workflow.get_mut("tasks"))
+        .and_then(toml::Value::as_array_mut)
+        .ok_or("workflow task array")?;
+    tasks.retain(|task| task.get("kind").and_then(toml::Value::as_str) == Some("build"));
+    let config = toml::to_string(&config)?;
+
     for version in [2, 4] {
-        let repo = make_repo(&config_with_build("hosted"))?;
+        let repo = make_repo(&config)?;
         write_native_source_fixture(repo.path())?;
         let lock_path = repo.path().join("mise.lock");
-        let lock = fs::read_to_string(&lock_path)?.replace(
-            "[tools]",
-            &format!("lockfile_version = {version}\n\n[tools]"),
-        );
+        let source = fs::read_to_string(&lock_path)?;
+        let version_field = "lockfile_version = 3";
+        assert_eq!(source.matches(version_field).count(), 1);
+        let lock = source.replace(version_field, &format!("lockfile_version = {version}"));
+        toml::from_str::<toml::Value>(&lock)?;
         fs::write(lock_path, lock)?;
 
         let error = prepare(repo.path()).expect_err("unsupported Mise lock version must fail");
