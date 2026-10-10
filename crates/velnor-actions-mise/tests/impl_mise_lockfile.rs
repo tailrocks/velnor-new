@@ -23,7 +23,7 @@ fn checksum(hex: &str) -> String {
 /// v3 lock with one fully checksummed tool plus a checksum-less rust.
 fn lock_text() -> String {
     format!(
-        "# @generated\n\nlockfile_version = 3\n\n[[tools.actionlint]]\nversion = \"1.7.12\"\nbackend = \"aqua:rhysd/actionlint\"\nspecifiers = [\"1.7.12\"]\n\n[tools.actionlint.\"platforms.linux-x64\"]\nchecksum = \"{}\"\nurl = \"https://example.invalid/a\"\n\n[tools.actionlint.\"platforms.macos-arm64\"]\nchecksum = \"{}\"\nurl = \"https://example.invalid/b\"\n\n[[tools.rust]]\nversion = \"1.98.1\"\nbackend = \"core:rust\"\nspecifiers = [\"1.98.1\"]\n",
+        "# @generated\n\nlockfile_version = 3\n\n[[tools.actionlint]]\nversion = \"1.7.12\"\nbackend = \"aqua:rhysd/actionlint\"\nspecifiers = [\"1.7.12\"]\n\n[tools.actionlint.\"platforms.linux-x64\"]\nchecksum = \"{}\"\nurl = \"https://example.invalid/a\"\n\n[tools.actionlint.\"platforms.macos-arm64\"]\nchecksum = \"{}\"\nurl = \"https://example.invalid/b\"\n\n[[tools.rust]]\nversion = \"1.99.0\"\nbackend = \"core:rust\"\nspecifiers = [\"1.99.0\"]\n",
         checksum(&"a".repeat(64)),
         checksum(&"b".repeat(64)),
     )
@@ -59,7 +59,7 @@ fn parses_v3_entries_with_platform_checksums() -> Result<(), String> {
     );
     assert_eq!(actionlint.checksums.len(), 2);
     let rust = lock.tools.get("rust").ok_or("rust entry")?;
-    assert_eq!(rust.version, "1.98.1");
+    assert_eq!(rust.version, "1.99.0");
     assert!(rust.checksums.is_empty());
     Ok(())
 }
