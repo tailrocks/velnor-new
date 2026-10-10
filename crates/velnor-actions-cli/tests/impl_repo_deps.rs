@@ -7,15 +7,14 @@ use std::collections::BTreeMap;
 use std::error::Error;
 
 #[path = "impl_repo_archive_deps.rs"]
-mod archive_deps;
+pub(crate) mod archive_deps;
 #[path = "impl_repo_size_limits.rs"]
 mod size_limits;
+
 use crate::impl_cli_tmp::git_fixture;
-use archive_deps::reviewed_archive_dependency;
 
 use crate::impl_repo_policy::{
-    MEMBERS, dep_key, dep_lines, dep_referenced, manifest, p11_toml, read, repo_root, test_markers,
-    tree_files,
+    MEMBERS, dep_key, dep_lines, manifest, p11_toml, read, repo_root, test_markers, tree_files,
 };
 
 /// Intra-workspace edges allowed per member package.
@@ -57,103 +56,6 @@ fn dependency_edges_match_ownership_table() -> Result<(), Box<dyn Error>> {
             .collect();
         want.sort();
         assert_eq!(found, want, "{dir} edges drift");
-    }
-    Ok(())
-}
-
-#[test]
-fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
-    let allowed = [
-        "serde",
-        "serde_json",
-        "toml",
-        "cargo_metadata",
-        "globset",
-        "blake3",
-        "clap",
-        "thiserror",
-        "anyhow",
-        "tracing",
-        "tempfile",
-        // Reviewed OS shim already in the lockfile via tempfile, zero new
-        // crates. `fs` supports the P09 atomic directory exchange; `process`
-        // supports PR20 deadline-bound Unix process-group termination.
-        "rustix",
-        // Reviewed hash impl for the pre-seed manifest writer (SHA-256 of
-        // the fresh helper) and generator SHA-256 identity (replaces
-        // hand-rolled SHA-256 so release-pin comparison cannot drift from
-        // the audited implementation); pure Rust, default features only.
-        "sha2",
-        // Reviewed HCL structural parser for the tofu stack (T10, S8):
-        // `hcl` renames `hcl-rs` 0.19.8 (Q1 pre-qualified; MSRV
-        // compile-gated at 1.98.1); default features only, facade-owned
-        // byte/count/depth caps, no expression evaluation.
-        "hcl",
-        // Reviewed proc-macro token tree for the test-source scanner.
-        "proc-macro2",
-        // Reviewed Rust AST (`full`, `visit`) for the test-source closure guard.
-        "syn",
-        "flate2",
-        // Bounded GitHub receipt ZIP reader; only pure-Rust deflate decoding
-        // is enabled so artifacts can be validated without extracting paths.
-        "zip",
-        "rustls",
-        "rustls-native-certs",
-        "ureq",
-        // CLI trailer compatibility preserves Python Unicode word-boundary semantics.
-        "unicode-general-category",
-    ];
-    for (dir, _) in MEMBERS {
-        let body = manifest(dir)?;
-        assert!(!body.contains("tokio"), "{dir} must not use tokio");
-        for line in dep_lines(&body) {
-            let key = dep_key(line);
-            if key.starts_with("velnor-actions") {
-                continue;
-            }
-            let archive_decoder = reviewed_archive_dependency(dir, key, line);
-            assert!(
-                allowed.contains(&key) || archive_decoder,
-                "{dir} uses {key}"
-            );
-            if let Some(index) = line.find("features").filter(|_| !archive_decoder) {
-                let quoted: Vec<&str> = line[index..].split('"').collect();
-                for feature in quoted.into_iter().skip(1).step_by(2) {
-                    // Only `derive` globally, plus narrowly used rustix and
-                    // freshness transport/parser features. No network, pty,
-                    // or terminal rustix APIs are enabled.
-                    let narrow = feature == "derive"
-                        || (key == "rustix" && feature == "fs")
-                        || (key == "rustix"
-                            && feature == "process"
-                            && matches!(
-                                dir,
-                                "crates/velnor-actions-freshness" | "crates/velnor-actions-mise"
-                            ))
-                        || (dir == "crates/velnor-actions-freshness"
-                            && ((key == "flate2" && feature == "rust_backend")
-                                || (key == "rustls" && feature == "ring")
-                                || (key == "syn" && ["full", "parsing"].contains(&feature))
-                                || (key == "ureq" && feature == "rustls-no-provider")))
-                        || (dir == "crates/velnor-actions-cli"
-                            && key == "syn"
-                            && matches!(feature, "full" | "visit"))
-                        // F2A scanner tests (dev-deps): syn parse + span lines.
-                        || (dir == "crates/velnor-actions-orchestrator" && ((key == "syn"
-                            && matches!(feature, "full" | "parsing" | "printing" | "visit"))
-                            || (key == "proc-macro2" && feature == "span-locations")));
-                    assert!(narrow, "{dir}/{key} feature {feature}");
-                }
-            }
-            // Cargo maps dependency hyphens to underscores in Rust identifiers.
-            // A lone flate2 may only serve as the reviewed zip backend.
-            let feature_backend =
-                key == "flate2" && body.contains("zip = ") && body.contains("deflate-flate2");
-            assert!(
-                dep_referenced(dir, &key.replace('-', "_"))? || feature_backend,
-                "{dir} never uses {key}"
-            );
-        }
     }
     Ok(())
 }

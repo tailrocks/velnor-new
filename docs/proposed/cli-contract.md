@@ -314,13 +314,23 @@ pipeline, and generate all Velnor-owned GitHub Actions files. Missing optional
 configuration values use hardcoded defaults; unknown keys, invalid values, and
 unsupported stack settings fail before any output replacement.
 
-Without `--output-dir`, the destination is the repository root. Velnor MUST
-replace the generated `.github` tree from scratch after rendering succeeds.
-The replacement MUST be atomic at the directory level: a failed scan, plan,
-render, or validation leaves the previous `.github` tree unchanged. No
-generated file may be written outside `.github` during this command. Project
-`rust-toolchain.toml`, `mise.toml`, and `mise.lock` are read-only inputs and
-MUST remain byte-for-byte unchanged.
+Without `--output-dir`, destination is repository root; generated output stays
+under `.github`. Velnor MUST atomically replace `.github` only after scan, plan,
+render, and validation succeed. Failures in those prepublication steps leave
+the prior tree unchanged.
+
+In-place generation may retain a private self-ignored `.github.velnor-stage/` container
+bound to the canonical worktree root and holding one persistent same-filesystem spare.
+The spare is staging state, not output; Velnor clears children but never removes or recreates either root.
+Linux/macOS support atomic exchange; other platforms fail before stage creation.
+Linux requires kernel 5.8+ with reported `STATX_MNT_ID`; Ubuntu 22.04+ needs a compatible kernel.
+Otherwise generation fails before staging. Plan and preview create no stage state; preview bypasses in-place staging gates.
+In-place generation rejects cross-mount `.github`, stage, and every real output directory;
+it rescans before exchange and again before cleanup. Mount topology must stay stable
+during path-based cleanup; privileged concurrent mount changes are outside the guarantee.
+If `.github` exists, its root and real subdirectories must be caller-owned; foreign ownership
+fails before publication. The check uses only read-only effective-UID lookup; process creation/control remains forbidden.
+`rust-toolchain.toml`, `mise.toml`, and `mise.lock` remain byte-identical.
 
 `--output-dir PATH` is preview mode. PATH is the exact preview root; Velnor
 writes `PATH/.github`. PATH MUST be fresh and empty (or absent); Velnor MUST
@@ -335,7 +345,8 @@ velnor-actions generate --output-dir "$(mktemp -d "/tmp/velnor-actions-preview.X
 
 The destination MUST be outside the repository root and MUST NOT be an ancestor
 of it. The command prints the absolute preview root and generated file list to
-stderr. There is no
+stderr. Cleanup warnings returned after publication are also printed to stderr
+while the valid published tree remains in place. There is no
 `--check` mode; preview output and ordinary file comparison provide that
 workflow.
 

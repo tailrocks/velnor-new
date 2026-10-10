@@ -75,13 +75,12 @@ fn validate_lane(
         })
         .collect::<Vec<_>>();
     expected_tasks.sort();
-    if lane.completed_task_ids != expected_tasks || lane.layers.len() != 6 {
+    if lane.completed_task_ids != expected_tasks || lane.layers.len() != 5 {
         return Err(invalid("lane_execution_or_layer_set_mismatch"));
     }
     let requirements = runtime_requirements(plan, entry)?;
     let expected_layers = [
         QualificationCacheLayer::MbxObjects,
-        QualificationCacheLayer::MbxBundle,
         QualificationCacheLayer::CargoSources,
         QualificationCacheLayer::MiseTools,
         QualificationCacheLayer::TofuProviders,

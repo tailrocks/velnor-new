@@ -59,7 +59,7 @@ impl QualificationCacheReceiptArtifactDocument {
         metadata: &QualificationCacheRunMetadata,
         current_run: QualificationRunRef,
     ) -> Result<(), ContractError> {
-        if self.schema != 1
+        if self.schema != 2
             || self.producer.repository != context.repository
             || self.producer.default_branch != context.default_branch
             || self.producer.git_ref != context.git_ref

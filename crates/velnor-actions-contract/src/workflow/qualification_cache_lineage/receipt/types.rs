@@ -7,7 +7,7 @@ use super::super::runtime::QualificationRuntimeIdentity;
 use crate::workflow::{QualificationPhase, QualificationRunRef};
 
 /// Immutable uploaded receipt artifact name consumed by the dispatcher.
-pub const QUALIFICATION_CACHE_RECEIPT_ARTIFACT: &str = "velnor-qualification-cache-receipt-v1";
+pub const QUALIFICATION_CACHE_RECEIPT_ARTIFACT: &str = "velnor-qualification-cache-receipt-v2";
 /// The sole file inside each immutable qualification receipt artifact.
 pub const QUALIFICATION_CACHE_RECEIPT_FILENAME: &str = "qualification-cache-receipt.json";
 /// Maximum staged receipt document size before deserialization.
