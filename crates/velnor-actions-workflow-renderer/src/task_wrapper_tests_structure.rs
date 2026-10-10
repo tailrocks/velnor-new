@@ -97,8 +97,8 @@ fn validated_crate_jobs() -> BTreeMap<String, Job> {
 }
 
 fn shared_action_and_manifest(
-    files: &[tree::RenderedFile],
-) -> (&tree::RenderedFile, &tree::RenderedFile) {
+    files: &[crate::tree::RenderedFile],
+) -> (&crate::tree::RenderedFile, &crate::tree::RenderedFile) {
     assert_eq!(
         files.len(),
         2,
@@ -116,8 +116,8 @@ fn shared_action_and_manifest(
 }
 
 fn assert_shared_artifact_shape(
-    action_file: &tree::RenderedFile,
-    manifest_file: &tree::RenderedFile,
+    action_file: &crate::tree::RenderedFile,
+    manifest_file: &crate::tree::RenderedFile,
 ) {
     assert_eq!(
         action_file.path,
@@ -131,7 +131,7 @@ fn assert_shared_artifact_shape(
     )));
 }
 
-fn assert_manifest_records(manifest_file: &tree::RenderedFile) {
+fn assert_manifest_records(manifest_file: &crate::tree::RenderedFile) {
     assert!(
         manifest_file
             .bytes
@@ -145,7 +145,7 @@ fn assert_manifest_records(manifest_file: &tree::RenderedFile) {
     assert_eq!(manifest_file.bytes.matches("\"task_id\":").count(), 150);
 }
 
-fn assert_shell_wrapper_contract(action_file: &tree::RenderedFile) {
+fn assert_shell_wrapper_contract(action_file: &crate::tree::RenderedFile) {
     assert!(!action_file.bytes.contains("inputs.task_id"));
     assert!(!action_file.bytes.contains("inputs.execution_digest"));
     assert!(action_file.bytes.contains("inputs.digest"));
@@ -171,9 +171,9 @@ fn assert_shell_wrapper_contract(action_file: &tree::RenderedFile) {
 fn assert_job_contracts(
     jobs: &BTreeMap<String, Job>,
     factored: &BTreeMap<String, Job>,
-    action_file: &tree::RenderedFile,
+    action_file: &crate::tree::RenderedFile,
 ) {
-    for (id, original) in &jobs {
+    for (id, original) in jobs {
         let rewritten = factored.get(id).expect("job retained");
         assert_job_metadata(original, rewritten);
         assert_task_call(original, rewritten, action_file);
@@ -193,7 +193,7 @@ fn assert_job_metadata(original: &Job, rewritten: &Job) {
     assert_eq!(rewritten.steps[1], original.steps[1]);
 }
 
-fn assert_task_call(original: &Job, rewritten: &Job, action_file: &tree::RenderedFile) {
+fn assert_task_call(original: &Job, rewritten: &Job, action_file: &crate::tree::RenderedFile) {
     let caller = &rewritten.steps[2];
     assert_eq!(caller.name, original.steps[2].name);
     assert_eq!(caller.condition, original.steps[2].condition);
@@ -240,7 +240,7 @@ fn ordinary_shell_and_tofu_steps_stay_unfactored() {
 
     let (factored, files) = factor_obligation_steps(&jobs, CHECKOUT, VERSION, VERSION, &[], None)
         .expect("leave shell tasks alone");
-    assert_eq!(files, [] as [tree::RenderedFile; 0]);
+    assert_eq!(files, [] as [crate::tree::RenderedFile; 0]);
     assert_eq!(
         factored.keys().collect::<Vec<_>>(),
         jobs.keys().collect::<Vec<_>>()
