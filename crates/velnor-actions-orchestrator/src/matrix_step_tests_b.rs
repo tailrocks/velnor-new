@@ -1,4 +1,5 @@
 use super::*;
+use crate::task_report::{EXIT_CODE_ENV, START_MS_ENV};
 
 #[test]
 fn obligation_step_skips_when_plan_covered_it() {
