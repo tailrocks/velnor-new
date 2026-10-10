@@ -94,7 +94,10 @@ fn enforces_helper_owner_executable_mode_and_private_parent() -> Result<(), Host
         .map_err(|_| HostError::Path)?
         .uid();
     assert_eq!(validate_directory(&fixture.directory, owner), Ok(()));
-    assert_eq!(validate_directory(&fixture.directory, owner ^ 1), Err(HostError::Identity));
+    assert_eq!(
+        validate_directory(&fixture.directory, owner ^ 1),
+        Err(HostError::Identity)
+    );
     assert!(open_regular(&fixture.helper, owner ^ 1).is_err());
 
     fs::set_permissions(&fixture.helper, fs::Permissions::from_mode(0o777))
@@ -108,7 +111,10 @@ fn enforces_helper_owner_executable_mode_and_private_parent() -> Result<(), Host
         .map_err(|_| HostError::Path)?;
     fs::set_permissions(&fixture.directory, fs::Permissions::from_mode(0o777))
         .map_err(|_| HostError::Path)?;
-    assert_eq!(validate_directory(&fixture.directory, owner), Err(HostError::Identity));
+    assert_eq!(
+        validate_directory(&fixture.directory, owner),
+        Err(HostError::Identity)
+    );
     assert_eq!(
         open_verified_from(&fixture.executable, &Fixture::expected_sha256()),
         Err(HostError::Identity)

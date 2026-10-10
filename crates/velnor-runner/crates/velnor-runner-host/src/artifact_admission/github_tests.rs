@@ -2,12 +2,15 @@ use reqwest::header::{ACCEPT, AUTHORIZATION};
 use serde_json::{Value, json};
 
 use super::response::{attestation_path, parse_attestations, parse_release};
-use super::{api_request, api_url, asset_redirect_request, client, valid_pat, validate_asset_redirect};
+use super::{
+    api_request, api_url, asset_redirect_request, client, valid_pat, validate_asset_redirect,
+};
 use crate::artifact_admission::manifest::{ARCHIVE_ASSET, CHECKSUM_ASSET, MANIFEST_ASSET};
 use crate::error::HostError;
 
 const SOURCE: &str = "11abcdef11abcdef11abcdef11abcdef11abcdef";
-const ASSET_DIGEST: &str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const ASSET_DIGEST: &str =
+    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 fn asset(name: &str, id: u64) -> Value {
     json!({"id": id, "name": name, "state": "uploaded", "size": 1, "digest": ASSET_DIGEST})
@@ -60,7 +63,10 @@ fn accepts_only_the_exact_immutable_release_and_asset_set() -> Result<(), HostEr
 fn rejects_release_identity_and_publication_state_mismatches() {
     for (field, value) in [
         ("tag_name", json!("runner-wrong")),
-        ("target_commitish", json!("22abcdef22abcdef22abcdef22abcdef22abcdef")),
+        (
+            "target_commitish",
+            json!("22abcdef22abcdef22abcdef22abcdef22abcdef"),
+        ),
         ("draft", json!(true)),
         ("prerelease", json!(true)),
         ("immutable", json!(false)),
@@ -91,14 +97,21 @@ fn rejects_missing_extra_duplicate_or_invalid_assets() {
     invalid_state["assets"][0]["state"] = json!("new");
     let mut invalid_digest = release_response(SOURCE);
     invalid_digest["assets"][0]["digest"] = json!("sha256:ABC");
-    for response in [missing, extra, duplicate, invalid_id, invalid_state, invalid_digest] {
+    for response in [
+        missing,
+        extra,
+        duplicate,
+        invalid_id,
+        invalid_state,
+        invalid_digest,
+    ] {
         assert_eq!(parse_release(SOURCE, response), Err(HostError::Identity));
     }
 }
 
 #[test]
-fn accepts_only_product_repository_bundles_with_required_envelope_fields()
--> Result<(), HostError> {
+fn accepts_only_product_repository_bundles_with_required_envelope_fields() -> Result<(), HostError>
+{
     let response = attestation_response();
     let bundles = parse_attestations(&response)?;
     assert_eq!(bundles, vec![bundle()]);
@@ -114,15 +127,20 @@ fn rejects_foreign_or_malformed_attestation_rows() {
     let mut wrong_media = attestation_response();
     wrong_media["attestations"][0]["bundle"]["mediaType"] = json!("other");
     let mut missing_dsse = attestation_response();
-    assert!(missing_dsse["attestations"][0]["bundle"]
-        .as_object_mut()
-        .is_some_and(|object| object.remove("dsseEnvelope").is_some()));
+    assert!(
+        missing_dsse["attestations"][0]["bundle"]
+            .as_object_mut()
+            .is_some_and(|object| object.remove("dsseEnvelope").is_some())
+    );
     let mut missing_material = attestation_response();
-    assert!(missing_material["attestations"][0]["bundle"]
-        .as_object_mut()
-        .is_some_and(|object| object.remove("verificationMaterial").is_some()));
+    assert!(
+        missing_material["attestations"][0]["bundle"]
+            .as_object_mut()
+            .is_some_and(|object| object.remove("verificationMaterial").is_some())
+    );
     let empty = json!({"attestations": []});
-    let too_many = json!({"attestations": vec![attestation_response()["attestations"][0].clone(); 17]});
+    let too_many =
+        json!({"attestations": vec![attestation_response()["attestations"][0].clone(); 17]});
     for response in [
         foreign_id,
         foreign_repo,
@@ -152,17 +170,39 @@ fn requires_a_canonical_checksum_digest_for_attestation_lookup() -> Result<(), H
 #[test]
 fn api_requests_keep_the_fixed_origin_and_required_headers() -> Result<(), HostError> {
     assert_eq!(
-        api_url("repos/tailrocks/velnor-new/releases").map(|url| url.origin().ascii_serialization()),
+        api_url("repos/tailrocks/velnor-new/releases")
+            .map(|url| url.origin().ascii_serialization()),
         Ok("https://api.github.com".to_owned())
     );
     assert_eq!(api_url("//attacker.example/path"), Err(HostError::Identity));
     let client = client()?;
-    let request = api_request(&client, "ghp_test-token", "repos/tailrocks/velnor-new/releases")
-        .and_then(|builder| builder.build().map_err(|_| HostError::Identity))?;
-    assert_eq!(request.headers().get(ACCEPT).and_then(|value| value.to_str().ok()), Some("application/vnd.github+json"));
-    assert_eq!(request.headers().get("X-GitHub-Api-Version").and_then(|value| value.to_str().ok()), Some("2022-11-28"));
+    let request = api_request(
+        &client,
+        "ghp_test-token",
+        "repos/tailrocks/velnor-new/releases",
+    )
+    .and_then(|builder| builder.build().map_err(|_| HostError::Identity))?;
+    assert_eq!(
+        request
+            .headers()
+            .get(ACCEPT)
+            .and_then(|value| value.to_str().ok()),
+        Some("application/vnd.github+json")
+    );
+    assert_eq!(
+        request
+            .headers()
+            .get("X-GitHub-Api-Version")
+            .and_then(|value| value.to_str().ok()),
+        Some("2022-11-28")
+    );
     assert!(request.headers().contains_key(AUTHORIZATION));
-    assert!(request.url().as_str().starts_with("https://api.github.com/repos/"));
+    assert!(
+        request
+            .url()
+            .as_str()
+            .starts_with("https://api.github.com/repos/")
+    );
     Ok(())
 }
 

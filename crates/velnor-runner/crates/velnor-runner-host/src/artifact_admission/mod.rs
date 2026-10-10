@@ -171,8 +171,8 @@ mod tests {
     use std::sync::Arc;
 
     use super::{
-        CacheKey, CachedRelease, NativeArtifactProvider, cached_release,
-        image_binding_fingerprint, validate_fetched_release,
+        CacheKey, CachedRelease, NativeArtifactProvider, cached_release, image_binding_fingerprint,
+        validate_fetched_release,
     };
     use crate::artifact_admission::{hash, release::VerifiedRelease};
     use crate::error::HostError;
@@ -216,7 +216,10 @@ mod tests {
         };
         let provider = NativeArtifactProvider::from_compiled_release_identity("ghp_test-token")?;
         assert_eq!(provider.identity, identity);
-        assert_eq!(provider.key.source_sha, hash::lowercase_hex(identity.source_sha()));
+        assert_eq!(
+            provider.key.source_sha,
+            hash::lowercase_hex(identity.source_sha())
+        );
         assert_eq!(provider.key.helper_sha256, *identity.helper_sha256());
         assert_eq!(provider.pat, "ghp_test-token");
         for invalid in ["", "token\nvalue", &"x".repeat(4097)] {
@@ -256,16 +259,25 @@ mod tests {
         let valid = release(&key.source_sha, &key.source_sha, &"b".repeat(64));
         assert_eq!(validate_fetched_release(&key, &valid), Ok(()));
         assert_eq!(
-            validate_fetched_release(&key, &release(&"c".repeat(40), &key.source_sha, &"b".repeat(64))),
+            validate_fetched_release(
+                &key,
+                &release(&"c".repeat(40), &key.source_sha, &"b".repeat(64))
+            ),
             Err(HostError::Identity)
         );
         assert_eq!(
-            validate_fetched_release(&key, &release(&key.source_sha, &"c".repeat(40), &"b".repeat(64))),
+            validate_fetched_release(
+                &key,
+                &release(&key.source_sha, &"c".repeat(40), &"b".repeat(64))
+            ),
             Err(HostError::Identity)
         );
         let mut wrong_archive = release(&key.source_sha, &key.source_sha, &"b".repeat(64));
         wrong_archive.archive_sha = "c".repeat(64);
-        assert_eq!(validate_fetched_release(&key, &wrong_archive), Err(HostError::Identity));
+        assert_eq!(
+            validate_fetched_release(&key, &wrong_archive),
+            Err(HostError::Identity)
+        );
     }
 
     #[test]
