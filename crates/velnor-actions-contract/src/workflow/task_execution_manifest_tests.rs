@@ -102,6 +102,9 @@ fn execution_digest_binds_all_record_metadata() {
     let original = entry();
     let digest = original.execution_digest.clone();
     let mut changed = original.clone();
+    changed.task_id.push_str("/different-task");
+    assert_ne!(changed.computed_execution_digest().unwrap(), digest);
+    let mut changed = original.clone();
     changed.argv[9] = "--all".to_owned();
     assert_ne!(changed.computed_execution_digest().unwrap(), digest);
     let mut changed = original.clone();

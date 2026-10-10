@@ -27,7 +27,6 @@ fn task_execution_resolver_requires_runner_gate_and_keeps_stdout_data_only()
     assert_eq!(bare.stdout, no_run_id.stdout);
     assert_eq!(bare.stderr, no_run_id.stderr);
 
-    let task_id = "stack/rust/demo/clippy/default";
     let execution_digest = format!("b3-{}", "a".repeat(64));
     let output = spawn_isolated(
         &[],
@@ -41,7 +40,6 @@ fn task_execution_resolver_requires_runner_gate_and_keeps_stdout_data_only()
             ("GITHUB_WORKSPACE", workspace.to_str().unwrap_or("/")),
             ("GITHUB_RUN_ID", "12345"),
             ("GITHUB_RUN_ATTEMPT", "1"),
-            ("VELNOR_TASK_ID", task_id),
             ("VELNOR_TASK_EXECUTION_DIGEST", execution_digest.as_str()),
             ("VELNOR_GENERATOR_VERSION", "0.1.6"),
         ],
@@ -56,10 +54,6 @@ fn task_execution_resolver_requires_runner_gate_and_keeps_stdout_data_only()
     assert!(
         stderr.contains("missing_task_execution_manifest"),
         "{stderr}"
-    );
-    assert!(
-        !stderr.contains(task_id),
-        "task identity is not diagnostic output"
     );
     assert!(
         !stderr.contains(&execution_digest),

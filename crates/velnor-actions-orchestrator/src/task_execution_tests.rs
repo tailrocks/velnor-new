@@ -182,7 +182,6 @@ impl Fixture {
             self.repo.path(),
             self.runner_temp.path(),
             RUN_KEY,
-            TASK_ID,
             &record.execution_digest,
             GENERATOR_VERSION,
         )
@@ -293,7 +292,6 @@ fn resolver_rejects_untrusted_marker_version_before_manifest_selection() {
         fixture.repo.path(),
         fixture.runner_temp.path(),
         RUN_KEY,
-        TASK_ID,
         &record.execution_digest,
         "0.1.7",
     )
@@ -308,7 +306,6 @@ fn resolver_rejects_execution_and_plan_identity_mismatches() {
         fixture.repo.path(),
         fixture.runner_temp.path(),
         RUN_KEY,
-        TASK_ID,
         &digest(90),
         GENERATOR_VERSION,
     )
@@ -336,6 +333,25 @@ fn resolver_rejects_execution_and_plan_identity_mismatches() {
         .resolve()
         .expect_err("matrix identity mismatch rejected");
     assert_error(&error, "task_execution_plan_binding_mismatch");
+}
+
+#[test]
+fn resolver_rejects_ambiguous_execution_digest_matches() {
+    let fixture = Fixture::new();
+    let record = fixture.manifest.tasks.get(TASK_ID).expect("record");
+    let expected_digest = record.execution_digest.as_str();
+    let mut manifest = fixture.manifest.clone();
+
+    // A second matching value stands in for a digest collision. The real
+    // resolver validates every record before this selector runs; this direct
+    // test proves the selector never chooses by BTreeMap iteration order.
+    let mut collision = record.clone();
+    collision.task_id.push_str("/collision");
+    manifest.tasks.insert(collision.task_id.clone(), collision);
+
+    let error = unique_record_by_execution_digest(&manifest, expected_digest)
+        .expect_err("ambiguous digest match is rejected");
+    assert_error(&error, "ambiguous_execution_digest");
 }
 
 #[test]
