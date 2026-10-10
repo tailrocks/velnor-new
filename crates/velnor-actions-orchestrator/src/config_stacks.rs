@@ -165,7 +165,10 @@ mod tests {
 
         let root = rooted("schema = 1\n");
         let config = load(root.path()).expect("minimal config");
-        assert!(config.workflow.tasks.is_empty());
+        assert_eq!(
+            config.workflow.tasks,
+            [] as [velnor_actions_contract::WorkflowTask; 0]
+        );
 
         let legacy = rooted(
             "schema = 1\n[[workflow.build_tasks]]\nid = \"native-desktop\"\nmise_task = \"desktop-ci\"\ntools = [\"mr-boxington\", \"rust\"]\nrunner = \"macos-26-arm64\"\ntimeout_minutes = 120\ncargo_build_jobs = 2\nnextest_test_threads = 2\n",
@@ -285,7 +288,7 @@ mod tests {
         let load = load_config;
         let root = rooted("schema = 1\n");
         let config = load(root.path()).expect("minimal config");
-        assert!(config.checks.is_empty());
+        assert_eq!(config.checks, [] as [velnor_actions_contract::MiseCheck; 0]);
         let json = serde_json::to_value(&config).expect("serialize config");
         assert!(json.get("checks").is_none());
         let root = rooted(

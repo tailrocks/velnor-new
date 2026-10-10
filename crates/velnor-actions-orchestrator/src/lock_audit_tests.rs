@@ -106,7 +106,7 @@ fn unknown_label_skips_loudly_without_blocking() {
         "rust@1.98.1".to_owned(),
     ]));
     let outcome = audit_prepare_installs(dir.path(), &ir, "self-hosted-1", &[]);
-    assert!(outcome.blocking.is_empty());
+    assert_eq!(outcome.blocking, [] as [String; 0]);
     let summary = outcome.recommendation.expect("loud skip");
     assert!(summary.contains("self-hosted-1"), "{summary}");
     assert!(summary.contains("tool_install_unverified"), "{summary}");
@@ -118,7 +118,7 @@ fn empty_install_set_stays_silent() {
     let mut ir = ir_for(shell_job(vec!["true".to_owned()]));
     ir.jobs.get_mut("plan").expect("plan").steps.clear();
     let outcome = audit_prepare_installs(dir.path(), &ir, "ubuntu-26.04", &[]);
-    assert!(outcome.blocking.is_empty());
+    assert_eq!(outcome.blocking, [] as [String; 0]);
     assert!(outcome.recommendation.is_none());
 }
 
@@ -212,7 +212,7 @@ fn deny_drift_blocks() {
         "mise exec cargo-deny@0.20.2 -- cargo deny check",
     )];
     let outcome = audit_prepare_installs(dir.path(), &ir, "ubuntu-26.04", &commands);
-    assert!(outcome.blocking.is_empty());
+    assert_eq!(outcome.blocking, [] as [String; 0]);
     assert!(outcome.recommendation.is_none());
     // A catalog spec inside a validator command resolves through
     // nothing: commands audit validator pins only, never catalog tools.
@@ -241,7 +241,7 @@ fn deny_drift_blocks() {
         prepare_argv: Vec::new(),
     }];
     let outcome = audit_prepare_installs(dir.path(), &ir, "ubuntu-26.04", &commands);
-    assert!(outcome.blocking.is_empty());
+    assert_eq!(outcome.blocking, [] as [String; 0]);
     assert!(outcome.recommendation.is_none());
 }
 

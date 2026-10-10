@@ -131,7 +131,10 @@ fn repository_maintenance_owner_is_scoped_to_the_canonical_repository_policy()
     repository_config.workflow.policy = WorkflowPolicy::VelnorRepositoryV1;
     let support = workspace(VelnorV1TaskOwner::RepositoryMaintenance);
 
-    assert!(derive(&repository_config, &index, &support)?.is_empty());
+    assert_eq!(
+        derive(&repository_config, &index, &support)?,
+        [] as [velnor_actions_rust::TaskGroup; 0]
+    );
     assert!(
         declared_union(
             std::slice::from_ref(&support),
@@ -143,7 +146,10 @@ fn repository_maintenance_owner_is_scoped_to_the_canonical_repository_policy()
 
     let mut consumer_config = repository_config.clone();
     consumer_config.workflow.policy = WorkflowPolicy::ConsumerV1;
-    assert!(!derive(&consumer_config, &index, &support)?.is_empty());
+    assert_ne!(
+        derive(&consumer_config, &index, &support)?,
+        [] as [velnor_actions_rust::TaskGroup; 0]
+    );
     assert!(
         declared_union(
             std::slice::from_ref(&support),
@@ -154,6 +160,9 @@ fn repository_maintenance_owner_is_scoped_to_the_canonical_repository_policy()
     );
 
     let same_name_without_owner = workspace(VelnorV1TaskOwner::Project);
-    assert!(!derive(&repository_config, &index, &same_name_without_owner)?.is_empty());
+    assert_ne!(
+        derive(&repository_config, &index, &same_name_without_owner)?,
+        [] as [velnor_actions_rust::TaskGroup; 0]
+    );
     Ok(())
 }
