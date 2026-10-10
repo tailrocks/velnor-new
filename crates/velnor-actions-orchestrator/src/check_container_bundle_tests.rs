@@ -4,9 +4,26 @@ use crate::cover_identity::generator::sha256_hex;
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 use velnor_actions_contract::config::HostOrbStackSdk;
+
+#[cfg(unix)]
+fn set_special_mode(path: &Path, requested: u32) {
+    fs::set_permissions(path, fs::Permissions::from_mode(requested)).expect("special mode");
+    let metadata = fs::metadata(path).expect("mode metadata");
+    let observed = metadata.permissions().mode();
+    assert_eq!(
+        observed & 0o7000,
+        requested & 0o7000,
+        "special-mode fixture did not retain requested bits: path={} requested_mode={:04o} observed_mode={:04o} uid={} gid={}",
+        path.display(),
+        requested & 0o7777,
+        observed & 0o7777,
+        std::os::unix::fs::MetadataExt::uid(&metadata),
+        std::os::unix::fs::MetadataExt::gid(&metadata),
+    );
+}
 
 fn fixture() -> (TempDir, PathBuf, HostOrbStackSdk, PathBuf) {
     let temp = tempfile::tempdir().expect("temp");
@@ -105,37 +122,30 @@ fn projects_full_tree_and_rejects_overwrite() {
 #[test]
 fn special_modes_are_rejected_in_source_and_owned_tree() {
     let (_temp, home, sdk, cli) = fixture();
-    fs::set_permissions(&cli, fs::Permissions::from_mode(0o4755)).expect("source root mode");
+    set_special_mode(&cli, 0o4755);
     assert!(project_sdk(&home, &sdk).is_err());
 
     let (_temp, home, sdk, cli) = fixture();
-    fs::set_permissions(cli.join("Contents"), fs::Permissions::from_mode(0o2755))
-        .expect("source child mode");
+    set_special_mode(&cli.join("Contents"), 0o2755);
     assert!(project_sdk(&home, &sdk).is_err());
 
     for mode in [0o4500, 0o2500] {
         let (_temp, home, sdk, _) = fixture();
         let projection = project_sdk(&home, &sdk).expect("projection");
-        fs::set_permissions(&projection.orbctl_program, fs::Permissions::from_mode(mode))
-            .expect("owned file mode");
+        set_special_mode(&projection.orbctl_program, mode);
         assert!(revalidate_sdk(&projection, &sdk).is_err());
     }
 
     for mode in [0o4700, 0o2700] {
         let (_temp, home, sdk, _) = fixture();
         let projection = project_sdk(&home, &sdk).expect("projection");
-        fs::set_permissions(&projection.owned_bundle, fs::Permissions::from_mode(mode))
-            .expect("owned root mode");
+        set_special_mode(&projection.owned_bundle, mode);
         assert!(revalidate_sdk(&projection, &sdk).is_err());
     }
 
     let (_temp, home, sdk, _) = fixture();
     let projection = project_sdk(&home, &sdk).expect("projection");
-    fs::set_permissions(
-        projection.owned_bundle.join("Contents"),
-        fs::Permissions::from_mode(0o2700),
-    )
-    .expect("owned child mode");
+    set_special_mode(&projection.owned_bundle.join("Contents"), 0o2700);
     assert!(revalidate_sdk(&projection, &sdk).is_err());
 }
 
