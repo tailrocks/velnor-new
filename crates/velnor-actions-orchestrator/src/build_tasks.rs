@@ -453,8 +453,11 @@ fn validate_source_task_lock_requests(
 
     if !source_lock_is_root {
         let mut expected = BTreeMap::<&str, BTreeSet<&str>>::new();
-        for (key, version) in &requests {
-            expected.entry(key).or_default().insert(version);
+        for (key, version) in requests {
+            expected
+                .entry(key.as_str())
+                .or_default()
+                .insert(version.as_str());
         }
         if source_lock.tools.len() != expected.len() {
             return Err(failure("build_task_source_task_lock_requests"));
@@ -477,16 +480,16 @@ fn validate_source_task_lock_requests(
 
     for (key, requested_version) in requests {
         let (version, options, _) =
-            selected_version_and_options(&key, root_config, rust_version, rust_options)?;
-        if version != requested_version {
+            selected_version_and_options(key, root_config, rust_version, rust_options)?;
+        if version.as_str() != requested_version.as_str() {
             return Err(failure("build_task_source_task_tool_version"));
         }
         let root_row = root_lock
-            .selected_tool(&key, &version, &requested_version, &options)
+            .selected_tool(key, &version, requested_version, &options)
             .filter(|row| supported_lock_row(row))
             .ok_or_else(|| failure("build_task_source_task_tool_root_lock"))?;
         let source_row = source_lock
-            .selected_tool(&key, &version, &requested_version, &options)
+            .selected_tool(key, &version, requested_version, &options)
             .filter(|row| supported_lock_row(row))
             .ok_or_else(|| failure("build_task_source_task_tool_source_lock"))?;
         if key != "rust" && !source_row.platforms.contains_key("macos-arm64") {
