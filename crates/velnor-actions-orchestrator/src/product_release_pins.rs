@@ -55,6 +55,7 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, Orche
             ReleaseTarget::MacosX86_64.triple(),
             &catalog,
         )?,
+        install_resource_probe_target_argv: resource_probe_target_argv(&catalog)?,
         runner_build_argv: exec_argv(
             &[PinnedTool::Rust],
             "cargo",
@@ -69,6 +70,7 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, Orche
             ],
             &catalog,
         )?,
+        resource_probe_build_argv: resource_probe_build_argv(&catalog)?,
         actionlint_argv: exec_argv(
             &[PinnedTool::Actionlint, PinnedTool::Shellcheck],
             "actionlint",
@@ -92,6 +94,35 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, Orche
         rust_version: catalog.version(PinnedTool::Rust).to_owned(),
         mr_boxington_version: catalog.version(PinnedTool::MrBoxington).to_owned(),
     })
+}
+
+fn resource_probe_target_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
+    target_argv(
+        ReleaseTarget::LinuxX86_64.triple(),
+        "x86_64-unknown-linux-musl",
+        catalog,
+    )
+}
+
+fn resource_probe_build_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
+    exec_argv(
+        &[PinnedTool::Rust],
+        "cargo",
+        &[
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--package",
+            "velnor-resource-probe",
+            "--bin",
+            "velnor-resource-probe",
+            "--release",
+            "--target",
+            "x86_64-unknown-linux-musl",
+        ],
+        catalog,
+    )
 }
 
 fn install_argv(

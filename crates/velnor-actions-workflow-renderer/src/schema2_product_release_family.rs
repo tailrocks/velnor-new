@@ -116,6 +116,8 @@ impl Family {
             Self::Images => [
                 "velnor-runner-linux-amd64.tar",
                 "velnor-dind-linux-amd64.tar",
+                "velnor-resource-probe-linux-amd64.tar",
+                "RESOURCE_PROBE_MANIFEST.json",
                 "SHA256SUMS",
             ]
             .map(|name| format!("assets/{name}"))
@@ -127,7 +129,7 @@ impl Family {
         }
     }
 
-    fn asset_names(self) -> Vec<String> {
+    pub(super) fn asset_names(self) -> Vec<String> {
         self.asset_paths()
             .into_iter()
             .filter_map(|path| path.rsplit('/').next().map(str::to_owned))
