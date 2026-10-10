@@ -196,6 +196,17 @@ tree cleanup fail after publication; the command reports that cleanup failure,
 leaves the published output in place, and requires safe operator recovery before
 the next in-place generation.
 
+In-place generation identifies the repository mount using Linux `STATX_MNT_ID`
+or the macOS mount-point name returned by `fstatfs`; device IDs alone do not
+identify mount boundaries. `.github`, the private staging state, and every real
+output directory MUST remain on the repository mount. The orchestrator checks
+all real output directories before staging and immediately before exchange,
+then rescans the spare immediately before clearing stale or retired contents.
+A changed boundary aborts cleanup, preserves the persistent root, and is
+reported as a cleanup warning after publication. Mount topology MUST remain
+stable during in-place generation: the path-based cleanup walk does not claim
+protection against a privileged concurrent mount change.
+
 With no --output-dir, the orchestrator MUST stage the generated tree together
 with preserved unmanaged content in the persistent spare, then replace the
 repository `.github` directory only after staging and validation succeed. If

@@ -152,14 +152,35 @@ fn generate_stage_root_rejects_foreign_owned_output_directories() -> Result<(), 
         eprintln!(
             "foreign-owner fixture unavailable: effective_uid={effective_owner}; exercising owner predicate only"
         );
-        let error = super::fs_ops::validate_directory_owners(&nested, foreign_owner)
-            .expect_err("mismatched owner predicate must fail closed");
+        let error =
+            super::fs_ops::validate_directory_owners(&nested, foreign_owner, &store.root.mount)
+                .expect_err("mismatched owner predicate must fail closed");
         assert!(
             error.to_string().contains("foreign_directory_owner"),
             "{error}"
         );
     }
     assert_eq!(fs::read(nested.join("marker"))?, b"keep");
+    Ok(())
+}
+
+#[test]
+fn generate_stage_root_rejects_mount_mismatch_before_cleanup() -> Result<(), Box<dyn Error>> {
+    let repo = tempdir()?;
+    let target = repo.path().join(".github");
+    fs::create_dir(&target)?;
+    fs::write(target.join("keep"), b"unchanged")?;
+    let store = StageRoot::open(repo.path())?;
+    let expected_owner = super::fs_ops::metadata_owner(&fs::metadata(&target)?);
+    let foreign_mount = store.root.mount.different_for_test();
+
+    let error = super::fs_ops::validate_directory_owners(&target, expected_owner, &foreign_mount)
+        .expect_err("a mount identity mismatch must fail closed");
+    assert!(
+        error.to_string().contains("cross_mount_boundary"),
+        "{error}"
+    );
+    assert_eq!(fs::read(target.join("keep"))?, b"unchanged");
     Ok(())
 }
 

@@ -237,7 +237,12 @@ persistent same-filesystem spare; cleanup removes spare children but keeps the
 container and spare root. This state is not product output. In-place generation
 requires atomic directory exchange and is supported on Linux and macOS; other
 platforms fail before creating staging state. `plan` and preview generation do
-not create or modify it. In-place generation requires an
+not create or modify it. In-place generation checks that the repository,
+`.github`, staging state, and real output directories remain on one mount,
+including same-device mount boundaries, before staging, before exchange, and
+before cleanup. Mount topology must remain stable during the operation because
+cleanup uses path-based removal. The mount identity source and cleanup-failure
+behavior are specified in the generated-file contract. In-place generation requires an
 existing `.github` root and every real directory below it to be owned by the
 caller, as specified in the generated-file contract. Velnor MUST not create
 `.mise/tasks` or any other generated repository path. Before output replacement
