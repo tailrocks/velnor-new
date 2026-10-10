@@ -540,11 +540,12 @@ fn validate_task_execution(
 
 fn pinned_tool_selector(selector: &str) -> Option<(&str, &str)> {
     let (tool, version) = selector.rsplit_once('@')?;
-    matches!(
-        tool,
-        "rust" | "mr-boxington" | "nextest-rs/nextest/cargo-nextest" | "opentofu"
-    )
-    .then_some((tool, version))
+    let canonical_tool = match tool {
+        "rust" | "mr-boxington" | "opentofu" => tool,
+        "aqua:nextest-rs/nextest/cargo-nextest" => "nextest-rs/nextest/cargo-nextest",
+        _ => return None,
+    };
+    Some((canonical_tool, version))
 }
 
 fn valid_pinned_version(version: &str) -> bool {
@@ -554,4 +555,40 @@ fn valid_pinned_version(version: &str) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'+' | b'-' | b'_'))
         && !version.eq_ignore_ascii_case("latest")
+}
+
+#[cfg(test)]
+mod pinned_tool_selector_tests {
+    use super::{pinned_tool_selector, valid_pinned_version};
+
+    const NEXTEST: &str = "nextest-rs/nextest/cargo-nextest";
+
+    #[test]
+    fn accepts_only_the_catalog_backend_qualified_nextest_selector() {
+        assert_eq!(
+            pinned_tool_selector("aqua:nextest-rs/nextest/cargo-nextest@0.9.148"),
+            Some((NEXTEST, "0.9.148")),
+        );
+        assert_eq!(
+            pinned_tool_selector("nextest-rs/nextest/cargo-nextest@0.9.148"),
+            None,
+            "the backend-qualified catalog identity is required"
+        );
+        assert_eq!(
+            pinned_tool_selector("github:nextest-rs/nextest/cargo-nextest@0.9.148"),
+            None,
+            "other backends are outside the pinned catalog"
+        );
+        let (_, version) = pinned_tool_selector("aqua:nextest-rs/nextest/cargo-nextest@latest")
+            .expect("the selector has the recognized backend and tool name");
+        assert!(
+            !valid_pinned_version(version),
+            "floating versions stay rejected"
+        );
+        assert_eq!(
+            pinned_tool_selector("aqua:nextest-rs/nextest/cargo-nextest"),
+            None,
+            "the selector must carry an exact version"
+        );
+    }
 }
