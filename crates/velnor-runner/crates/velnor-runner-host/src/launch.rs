@@ -33,6 +33,7 @@ mod inspect_tests;
 mod name_taken;
 mod preflight;
 mod resource_capacity;
+mod resource_probe;
 mod runner_dir;
 
 pub(crate) use drive::{Drive, Lane, Rest};
@@ -212,6 +213,11 @@ async fn scale_session(
         status: 0,
         step: "resource budget",
     })?;
+    let Some(permit) =
+        resource_probe::start_permit(docker, journal, resource_budget, rest.guest_admission).await
+    else {
+        return Ok(None);
+    };
     let mut ctx = Drive::from_rest(
         set_id,
         String::new(),
@@ -219,7 +225,13 @@ async fn scale_session(
         admin_token.to_owned(),
         rest,
     );
-    ctx.docker_engine_id = engine_identity(docker).await.ok();
+    let Some((engine_id, root_digest)) = resource_probe::engine_binding(docker).await.ok() else {
+        return Ok(None);
+    };
+    if !resource_probe::consume_permit(permit, &engine_id, &root_digest) {
+        return Ok(None);
+    }
+    ctx.docker_engine_id = Some(engine_id);
     let admin = link.base().to_owned();
     let mut lane = HostLane {
         link,
@@ -279,6 +291,11 @@ where
         status: 0,
         step: "resource budget",
     })?;
+    let Some(permit) =
+        resource_probe::start_permit(docker, journal, resource_budget, rest.guest_admission).await
+    else {
+        return Ok(None);
+    };
     let mut ctx = Drive::from_rest(
         ready.set_id,
         ready.path,
@@ -286,7 +303,13 @@ where
         ready.admin_token.to_owned(),
         rest,
     );
-    ctx.docker_engine_id = engine_identity(docker).await.ok();
+    let Some((engine_id, root_digest)) = resource_probe::engine_binding(docker).await.ok() else {
+        return Ok(None);
+    };
+    if !resource_probe::consume_permit(permit, &engine_id, &root_digest) {
+        return Ok(None);
+    }
+    ctx.docker_engine_id = Some(engine_id);
     drive_offer(lane, &ctx, ready.polled, journal, |volume, jit, bind| {
         let volume = volume.to_owned();
         let payload = jit.to_vec();
@@ -329,23 +352,6 @@ fn ack_ready(
     let admin = link.base().to_owned();
     let mut lane = HostLane { link, admin, queue };
     steps::acknowledge(&mut lane, &ctx, &batch)
-}
-
-async fn engine_identity(docker: &bollard::Docker) -> Result<String, EnsureError> {
-    let info = crate::docker_client::docker_deadline(docker.info())
-        .await
-        .map_err(|_| docker_identity_error())?
-        .map_err(|_| docker_identity_error())?;
-    info.id
-        .filter(|id| !id.trim().is_empty())
-        .ok_or_else(docker_identity_error)
-}
-
-fn docker_identity_error() -> EnsureError {
-    EnsureError::Unexpected {
-        status: 0,
-        step: "docker identity",
-    }
 }
 
 struct HostLane<'a> {
