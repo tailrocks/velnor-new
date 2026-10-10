@@ -131,10 +131,16 @@ pub(crate) fn factor_obligation_steps(
                 .refresh_execution_digest()
                 .map_err(RenderError::Contract)?;
             let execution_digest = record.execution_digest.clone();
-            if manifest_tasks.insert(task_id.clone(), record).is_some() {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "declared_task_id_not_unique:{task_id}"
-                )));
+            match manifest_tasks.entry(task_id.clone()) {
+                std::collections::btree_map::Entry::Vacant(entry) => {
+                    entry.insert(record);
+                }
+                std::collections::btree_map::Entry::Occupied(entry) if entry.get() == &record => {}
+                std::collections::btree_map::Entry::Occupied(_) => {
+                    return Err(RenderError::InvalidWorkflow(format!(
+                        "declared_task_id_not_unique:{task_id}"
+                    )));
+                }
             }
             let shape = Shape {
                 helper_version: task_helper_version.clone(),
