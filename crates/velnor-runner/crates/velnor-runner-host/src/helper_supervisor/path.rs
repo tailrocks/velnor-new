@@ -16,10 +16,7 @@ pub(super) fn open_verified(expected_sha256: &[u8; 32]) -> Result<PathBuf, HostE
     open_verified_from(&executable, expected_sha256)
 }
 
-fn open_verified_from(
-    executable: &Path,
-    expected_sha256: &[u8; 32],
-) -> Result<PathBuf, HostError> {
+fn open_verified_from(executable: &Path, expected_sha256: &[u8; 32]) -> Result<PathBuf, HostError> {
     let canonical = std::fs::canonicalize(executable).map_err(|_| HostError::Identity)?;
     if executable != canonical.as_path() || !safe_components(&canonical) {
         return Err(HostError::Identity);
