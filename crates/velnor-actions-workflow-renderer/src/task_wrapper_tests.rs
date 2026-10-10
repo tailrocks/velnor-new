@@ -202,14 +202,30 @@ fn typed_task_requires_checkout_staging_and_credential_free_inputs() {
             .contains("declared_task_requires_staged_helper")
     );
 
-    let mut credentialed = task;
-    let StepKind::TaskExecution { env, .. } = &mut credentialed.kind else {
+    let mut secret_expression = task.clone();
+    let StepKind::TaskExecution { env, .. } = &mut secret_expression.kind else {
         unreachable!();
     };
     env.insert(
         "GITHUB_TOKEN".to_owned(),
         "${{ secrets.GITHUB_TOKEN }}".to_owned(),
     );
+    let jobs = BTreeMap::from([(
+        "rust-demo".to_owned(),
+        simple_job(vec![checkout_step(), acquire_step(), secret_expression]),
+    )]);
+    assert!(
+        factor_obligation_steps(&jobs, CHECKOUT, VERSION, VERSION, &[], None)
+            .expect_err("only the exact runner.temp expression is supported")
+            .to_string()
+            .contains("unsupported_declared_task_expression")
+    );
+
+    let mut credentialed = task;
+    let StepKind::TaskExecution { env, .. } = &mut credentialed.kind else {
+        unreachable!();
+    };
+    env.insert("GITHUB_TOKEN".to_owned(), "fixture-token-value".to_owned());
     let jobs = BTreeMap::from([(
         "rust-demo".to_owned(),
         simple_job(vec![checkout_step(), acquire_step(), credentialed]),
