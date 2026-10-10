@@ -1,6 +1,7 @@
 use std::{collections::BTreeMap, path::Path};
 
 use crate::OrchestratorError;
+use velnor_actions_contract::VerificationRunner;
 
 use super::{shellcheck_fail, unquote_run_scalar};
 
@@ -355,7 +356,12 @@ fn collect_runs(
 fn hosted_runner_default(runs_on: Option<&str>) -> Option<ShellDialect> {
     let label = runs_on?;
     let is_known_linux = velnor_actions_contract::config::is_hosted_catalog(label);
-    let is_known_macos = label == "macos-15";
+    let is_known_macos = [
+        VerificationRunner::MacosArm64,
+        VerificationRunner::Macos26Arm64,
+    ]
+    .into_iter()
+    .any(|runner| runner.runs_on() == label);
     if (is_known_linux && label.starts_with("ubuntu-")) || is_known_macos {
         // GitHub-hosted Ubuntu and macOS runners default `run` steps to Bash.
         Some(ShellDialect::Bash)
