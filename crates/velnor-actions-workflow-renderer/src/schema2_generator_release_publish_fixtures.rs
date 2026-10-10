@@ -3,6 +3,7 @@
 use super::super::assets;
 use super::super::required_tool_path::with_required_tool_path;
 use super::{Failure, REPOSITORY, SOURCE_SHA, manifest};
+use crate::schema2::product_release_test_pins::test_pins;
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,6 +23,7 @@ pub(super) fn copy_release_helpers(root: &Path) -> Result<(), Box<dyn Error>> {
 }
 
 pub(super) fn write_candidate_records(root: &Path, case: Failure) -> Result<(), Box<dyn Error>> {
+    let pins = test_pins();
     let products = [assets::LINUX, assets::MACOS_ARM64, assets::MACOS_X86_64];
     for (index, product) in products.into_iter().enumerate() {
         let directory = root.join(product.directory);
@@ -50,9 +52,11 @@ pub(super) fn write_candidate_records(root: &Path, case: Failure) -> Result<(), 
         fs::write(
             directory.join(product.provenance),
             format!(
-                "{{\"schema\":1,\"version\":\"0.1.7\",\"repository\":\"{REPOSITORY}\",\"commit\":\"{SOURCE_SHA}\",\"target\":\"{}\",\"asset\":\"{}\",\"sha256\":\"{digest}\",\"toolchain\":{{\"rust\":\"1.98.1\",\"mr-boxington\":\"1.21.1\"}}}}\n",
+                "{{\"schema\":1,\"version\":\"0.1.7\",\"repository\":\"{REPOSITORY}\",\"commit\":\"{SOURCE_SHA}\",\"target\":\"{}\",\"asset\":\"{}\",\"sha256\":\"{digest}\",\"toolchain\":{{\"rust\":\"{}\",\"mr-boxington\":\"{}\"}}}}\n",
                 product.target.triple(),
-                product.binary
+                product.binary,
+                pins.rust_version,
+                pins.mr_boxington_version
             ),
         )?;
     }
