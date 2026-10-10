@@ -1,9 +1,12 @@
 use std::time::Duration;
 
-use super::{JobCapacity, OccupiedResources, calculate, discover_after, guest_totals};
-use crate::launch::inspect_tests::{DockerStub, http, journal};
+use super::{Discovery, JobCapacity, OccupiedResources, calculate, discover_after, guest_totals};
+use crate::EnsureError;
+use crate::launch::inspect_tests::{DockerStub, hanging, http, journal};
 use crate::worker::test_resource_budget;
-use crate::{EnsureError, Outcome};
+
+#[path = "resource_capacity_edge_tests.rs"]
+mod edge_tests;
 
 const ENGINE: &str = "resource-engine";
 const RUNNER_ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -42,6 +45,7 @@ fn exact_old_container_limits_and_changed_current_budget_use_checked_totals() ->
     let capacity = calculate(guest, occupied, budget, 8).map_err(|error| error.to_string())?;
 
     assert_eq!(capacity.total(), 1);
+    assert!(capacity.permits_start());
     assert_eq!(
         calculate(
             guest,
@@ -52,8 +56,34 @@ fn exact_old_container_limits_and_changed_current_budget_use_checked_totals() ->
             budget,
             8,
         ),
-        Ok(JobCapacity { total: 1 })
+        Ok(JobCapacity {
+            total: 1,
+            pair_fits: true,
+        })
     );
+    Ok(())
+}
+
+#[test]
+fn occupied_permits_do_not_turn_impossible_guest_totals_into_a_start_permit() -> Result<(), String>
+{
+    let budget = test_resource_budget().map_err(|error| error.to_string())?;
+    let pair = budget.pair();
+    let occupied = OccupiedResources {
+        permits: 1,
+        nano_cpus: pair.cpu_millicores * 1_000_000,
+        memory_bytes: pair.memory_bytes,
+    };
+    let pair_memory = i64::try_from(pair.memory_bytes).map_err(|_| "pair memory overflow")?;
+    for guest in [
+        guest_totals(Some(1), Some(pair_memory)).ok_or("cpu totals missing")?,
+        guest_totals(Some(8), Some(pair_memory - 1)).ok_or("memory totals missing")?,
+    ] {
+        let capacity = calculate(guest, occupied, budget, 8).map_err(|error| error.to_string())?;
+        assert_eq!(capacity.total(), 1);
+        assert_eq!(capacity.poll_header(), 1);
+        assert!(!capacity.permits_start());
+    }
     Ok(())
 }
 
@@ -98,7 +128,13 @@ async fn exact_owned_pair_uses_inspected_limits_and_bound_engine() -> Result<(),
     .await;
     let requests = stub.finish().await?;
 
-    assert_eq!(capacity.map(JobCapacity::total), Ok(4));
+    assert_eq!(
+        capacity,
+        Discovery::Available(JobCapacity {
+            total: 4,
+            pair_fits: true
+        })
+    );
     assert_eq!(requests.len(), 3);
     assert!(requests[1].contains(&format!("{VOLUME}-runner")));
     assert!(requests[2].contains(&format!("{VOLUME}-dind")));
@@ -124,7 +160,10 @@ async fn engine_identity_mismatch_fails_closed_before_accounting() -> Result<(),
     .await;
     let requests = stub.finish().await?;
 
-    assert_eq!(capacity, Err(capacity_error("docker capacity")));
+    assert_eq!(
+        capacity,
+        Discovery::Untrusted(capacity_error("docker capacity"))
+    );
     assert_eq!(requests.len(), 1);
     Ok(())
 }
@@ -144,7 +183,10 @@ async fn docker_info_failure_cannot_fall_back_to_the_configured_ceiling() -> Res
     .await;
     let requests = stub.finish().await?;
 
-    assert_eq!(capacity, Err(capacity_error("docker capacity")));
+    assert_eq!(
+        capacity,
+        Discovery::Untrusted(capacity_error("docker capacity"))
+    );
     assert_eq!(requests.len(), 1);
     assert!(!format!("{capacity:?}").contains("private detail"));
     Ok(())
@@ -188,7 +230,13 @@ async fn absent_half_is_charged_at_current_limit_only_after_exact_404() -> Resul
     .await;
     stub.finish().await?;
 
-    assert_eq!(capacity.map(JobCapacity::total), Ok(1));
+    assert_eq!(
+        capacity,
+        Discovery::Available(JobCapacity {
+            total: 1,
+            pair_fits: true
+        })
+    );
     Ok(())
 }
 
@@ -231,7 +279,7 @@ async fn recorded_id_absence_requires_both_name_and_id_not_found() -> Result<(),
     .await;
     let requests = stub.finish().await?;
 
-    assert_eq!(capacity, Err(capacity_error("docker inspect")));
+    assert_eq!(capacity, Discovery::Unavailable);
     assert_eq!(requests.len(), 4);
     Ok(())
 }
@@ -275,69 +323,42 @@ async fn missing_limits_or_unowned_containers_fail_closed() -> Result<(), String
     .await;
     stub.finish().await?;
 
-    assert_eq!(capacity, Err(capacity_error("worker resources")));
+    assert_eq!(capacity, Discovery::Unavailable);
     Ok(())
 }
 
 #[tokio::test]
-async fn an_idless_row_without_a_durable_volume_blocks_new_capacity() -> Result<(), String> {
-    let (_scratch, journal) = journal("resource-idless-row").await?;
-    journal
-        .bind_engine(ENGINE)
-        .await
-        .map_err(|error| error.to_string())?;
-    journal
-        .begin_launch("m103")
-        .await
-        .map_err(|error| error.to_string())?;
-    let stub = DockerStub::open(vec![http(200, &docker_info(18, 128 * GIB, ENGINE))])?;
-
-    let capacity = discover_after(
-        &stub.docker,
-        &journal,
-        test_resource_budget().map_err(|error| error.to_string())?,
-        8,
-        Duration::from_secs(1),
-    )
-    .await;
-    stub.finish().await?;
-
-    assert_eq!(capacity, Err(capacity_error("worker ownership")));
-    Ok(())
-}
-
-#[tokio::test]
-async fn already_clean_rows_do_not_consume_capacity() -> Result<(), String> {
-    let (_scratch, journal) = journal("resource-clean-row").await?;
+async fn verified_engine_inspect_timeout_preserves_capacity_unavailable_state() -> Result<(), String>
+{
+    let (_scratch, journal) = journal("resource-verified-inspect-timeout").await?;
     journal
         .bind_engine(ENGINE)
         .await
         .map_err(|error| error.to_string())?;
     let (row, _) = journal
-        .begin_launch("m104")
+        .begin_launch("m109")
         .await
         .map_err(|error| error.to_string())?;
     journal
-        .finish(row, Outcome::Done)
+        .bind_worker_volume(row, VOLUME)
         .await
         .map_err(|error| error.to_string())?;
-    journal
-        .record_cleanup(row)
-        .await
-        .map_err(|error| error.to_string())?;
-    let stub = DockerStub::open(vec![http(200, &docker_info(18, 128 * GIB, ENGINE))])?;
+    let stub = DockerStub::open(vec![
+        http(200, &docker_info(18, 128 * GIB, ENGINE)),
+        hanging(),
+    ])?;
 
     let capacity = discover_after(
         &stub.docker,
         &journal,
         test_resource_budget().map_err(|error| error.to_string())?,
         8,
-        Duration::from_secs(1),
+        Duration::from_millis(300),
     )
     .await;
-    stub.finish().await?;
+    drop(stub);
 
-    assert_eq!(capacity.map(JobCapacity::total), Ok(4));
+    assert_eq!(capacity, Discovery::Unavailable);
     Ok(())
 }
 

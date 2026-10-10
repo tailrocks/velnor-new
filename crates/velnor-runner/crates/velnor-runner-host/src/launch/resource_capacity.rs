@@ -30,6 +30,7 @@ pub(super) struct GuestTotals {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct JobCapacity {
     total: u32,
+    pair_fits: bool,
 }
 
 impl JobCapacity {
@@ -42,7 +43,16 @@ impl JobCapacity {
     /// Whether static CPU and memory totals can fit one configured pair.
     #[must_use]
     pub(super) const fn permits_start(self) -> bool {
-        self.total > 0
+        self.pair_fits
+    }
+
+    /// Deny new starts when the selected engine is trusted but capacity is unknown.
+    #[must_use]
+    pub(super) const fn denied() -> Self {
+        Self {
+            total: 0,
+            pair_fits: false,
+        }
     }
 
     #[cfg(test)]
@@ -51,18 +61,24 @@ impl JobCapacity {
     }
 }
 
+/// Whether capacity was measured on a trusted engine or admission must stop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Discovery {
+    /// A matching journal-bound engine and valid capacity measurement.
+    Available(JobCapacity),
+    /// Engine identity is verified, but capacity cannot be established.
+    Unavailable,
+    /// The selected Docker engine could not be verified against the journal.
+    Untrusted(EnsureError),
+}
+
 /// Inspect the selected Docker guest and calculate its configured-pair ceiling.
-///
-/// # Errors
-///
-/// Returns a generic error when engine identity, totals, ownership, or limits
-/// cannot be established without ambiguity.
 pub(super) async fn discover(
     docker: &Docker,
     journal: &Journal,
     budget: ResourceBudget,
     ceiling: u32,
-) -> Result<JobCapacity, EnsureError> {
+) -> Discovery {
     discover_after(docker, journal, budget, ceiling, DOCKER_OPERATION_TIMEOUT).await
 }
 
@@ -72,32 +88,33 @@ pub(super) async fn discover_after(
     budget: ResourceBudget,
     ceiling: u32,
     timeout: std::time::Duration,
-) -> Result<JobCapacity, EnsureError> {
+) -> Discovery {
+    let started = tokio::time::Instant::now();
+    let Ok(Ok(info)) = docker_deadline_after(docker.info(), timeout).await else {
+        return Discovery::Untrusted(capacity_error("docker capacity"));
+    };
+    let Some(engine_id) = info.id.as_deref().filter(|id| !id.is_empty()) else {
+        return Discovery::Untrusted(capacity_error("docker capacity"));
+    };
+    let remaining = timeout.saturating_sub(started.elapsed());
+    let Ok(Ok(bound_engine)) = tokio::time::timeout(remaining, journal.engine_id()).await else {
+        return Discovery::Untrusted(capacity_error("docker capacity"));
+    };
+    if engine_id != bound_engine {
+        return Discovery::Untrusted(capacity_error("docker capacity"));
+    }
+
+    let remaining = timeout.saturating_sub(started.elapsed());
     let inspect = async {
-        let info = docker_deadline_after(docker.info(), timeout)
-            .await
-            .map_err(|_| capacity_error("docker capacity"))?
-            .map_err(|_| capacity_error("docker capacity"))?;
-        let engine_id = info
-            .id
-            .as_deref()
-            .filter(|id| !id.is_empty())
-            .ok_or_else(|| capacity_error("docker capacity"))?;
-        let bound_engine = journal
-            .engine_id()
-            .await
-            .map_err(|_| capacity_error("docker capacity"))?;
-        if engine_id != bound_engine {
-            return Err(capacity_error("docker capacity"));
-        }
         let totals = guest_totals(info.ncpu, info.mem_total)
             .ok_or_else(|| capacity_error("docker capacity"))?;
-        let occupied = inspect::occupied(docker, journal, budget).await?;
+        let occupied = inspect::occupied(docker, journal, budget, ceiling).await?;
         calculate(totals, occupied, budget, ceiling)
     };
-    tokio::time::timeout(timeout, inspect)
-        .await
-        .map_err(|_| capacity_error("docker capacity"))?
+    match tokio::time::timeout(remaining, inspect).await {
+        Ok(Ok(capacity)) => Discovery::Available(capacity),
+        _ => Discovery::Unavailable,
+    }
 }
 
 fn guest_totals(cpus: Option<i64>, memory: Option<i64>) -> Option<GuestTotals> {
@@ -126,6 +143,7 @@ pub(super) fn calculate(
         .checked_mul(NANO_CPUS_PER_CPU)
         .ok_or_else(|| capacity_error("docker capacity"))?;
     let usable_cpu = total_cpu.saturating_sub(NANO_CPUS_PER_CPU);
+    let pair_fits = usable_cpu >= pair_cpu && guest.memory_bytes >= pair_memory;
     let cpu_slots = remaining(usable_cpu, occupied.nano_cpus) / pair_cpu;
     let memory_slots = remaining(guest.memory_bytes, occupied.memory_bytes) / pair_memory;
     let free_permits = ceiling.saturating_sub(occupied.permits);
@@ -137,6 +155,7 @@ pub(super) fn calculate(
         .ok_or_else(|| capacity_error("docker capacity"))?;
     Ok(JobCapacity {
         total: possible.min(ceiling),
+        pair_fits,
     })
 }
 

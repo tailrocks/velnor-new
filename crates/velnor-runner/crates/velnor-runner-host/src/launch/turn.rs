@@ -5,7 +5,7 @@ use velnor_runner_github::{Poll, QueueSession};
 use crate::journal::Journal;
 use crate::listen::{Link, point_at_queue, poll_path, restore_base};
 use crate::scale_set::EnsureError;
-use crate::worker::{ResourceBudget, Started};
+use crate::worker::Started;
 
 use super::capacity::{self, Admit};
 use super::completion::CompletionWorker;
@@ -39,20 +39,11 @@ pub(super) async fn poll_and_drive(
     let mut workers = Vec::new();
     let ceiling = capacity::job_capacity();
     let capacity = super::pressure::advertise(ceiling);
-    let resource_budget = rest.resource_budget.ok_or(EnsureError::Unexpected {
-        status: 0,
-        step: "resource budget",
-    })?;
-    let population = session
-        .statistics()
-        .map_or(0, velnor_runner_github::Statistics::assigned_population);
-    let occupied = slot::occupied(journal).await?;
-    let running = slot::running_count(journal, docker).await?;
-    if !capacity::statistics_blocked(occupied, running, capacity, population)
-        && let Some(started) =
-            scale_session(link, set_id, session, admin_token, journal, docker, rest).await?
-    {
-        workers.push(started);
+    if rest.resource_budget.is_none() {
+        return Err(EnsureError::Unexpected {
+            status: 0,
+            step: "resource budget",
+        });
     }
     let completion = CompletionWorker::start(
         journal.clone(),
@@ -61,6 +52,19 @@ pub(super) async fn poll_and_drive(
         admin_token.to_owned(),
     )
     .map_err(|_| completion_error())?;
+    if rest.permits_start() {
+        let population = session
+            .statistics()
+            .map_or(0, velnor_runner_github::Statistics::assigned_population);
+        let occupied = slot::occupied(journal).await?;
+        let running = slot::running_count(journal, docker).await?;
+        if !capacity::statistics_blocked(occupied, running, capacity, population)
+            && let Some(started) =
+                scale_session(link, set_id, session, admin_token, journal, docker, rest).await?
+        {
+            workers.push(started);
+        }
+    }
     let target = capacity::admit_target(capacity);
     let mut turn = Turn {
         link,
@@ -72,12 +76,7 @@ pub(super) async fn poll_and_drive(
         completion: &completion,
         capacity,
         target,
-        owner: rest.owner,
-        repo: rest.repo,
-        pat: rest.pat,
-        resource_budget,
-        static_capacity: rest.static_capacity,
-        guest_admission: rest.guest_admission,
+        rest,
         cursor: 0,
         steady_retry: None,
     };
@@ -162,19 +161,16 @@ struct Turn<'a> {
     completion: &'a CompletionWorker,
     capacity: u32,
     target: u32,
-    owner: &'a str,
-    repo: &'a str,
-    pat: &'a str,
-    resource_budget: ResourceBudget,
-    static_capacity: bool,
-    guest_admission: super::drive::GuestAdmission,
+    rest: super::drive::Rest<'a>,
     cursor: i64,
     steady_retry: Option<std::time::Instant>,
 }
 
 impl Turn<'_> {
     async fn drive_poll(&mut self, workers: &mut Vec<Started>) -> Result<bool, EnsureError> {
-        self.fit_pressure().await?;
+        if self.rest.permits_start() {
+            self.fit_pressure().await?;
+        }
         let (saved, path) = point_at_queue(self.link, &self.session.message_queue_url)?;
         let queue = saved.as_ref().map(|_| self.link.base().to_owned());
         let now = std::time::Instant::now();
@@ -197,7 +193,7 @@ impl Turn<'_> {
         if intake.wake_cleanup {
             self.completion.notify();
         }
-        if intake.completion_only {
+        if intake.completion_only || !self.rest.permits_start() {
             return Ok(false);
         }
         let started = u32::try_from(workers.len()).unwrap_or(u32::MAX);
@@ -235,7 +231,7 @@ impl Turn<'_> {
         match decision {
             // HTTP 202 keeps the session open. A job can arrive on a later poll.
             Admit::Stay => self.stay(workers).await,
-            Admit::Hold | Admit::Start { .. } if !self.permits_start() => {
+            Admit::Hold | Admit::Start { .. } if !self.rest.permits_start() => {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 Ok(false)
             }
@@ -269,14 +265,7 @@ impl Turn<'_> {
             admin,
             queue: queue.clone(),
         };
-        let rest = Rest {
-            owner: self.owner,
-            repo: self.repo,
-            pat: self.pat,
-            resource_budget: Some(self.resource_budget),
-            static_capacity: self.static_capacity,
-            guest_admission: self.guest_admission,
-        };
+        let rest: Rest<'_> = self.rest;
         let launched = drive_ready(
             &mut lane,
             Ready {
@@ -317,10 +306,6 @@ impl Turn<'_> {
         };
         workers.push(worker);
         Ok(stop)
-    }
-
-    fn permits_start(&self) -> bool {
-        self.static_capacity && self.guest_admission.permits_start()
     }
 
     async fn stay(&self, workers: &[Started]) -> Result<bool, EnsureError> {

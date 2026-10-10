@@ -17,9 +17,10 @@ pub(super) async fn occupied(
     docker: &Docker,
     journal: &Journal,
     budget: ResourceBudget,
+    ceiling: u32,
 ) -> Result<OccupiedResources, EnsureError> {
     let rows = journal
-        .rows()
+        .capacity_rows(ceiling)
         .await
         .map_err(|_| capacity_error("journal"))?;
     let mut total = OccupiedResources::default();
@@ -38,11 +39,15 @@ async fn row_usage(
     row: &IntentRow,
     budget: ResourceBudget,
 ) -> Result<OccupiedResources, EnsureError> {
-    let volume = row
+    let volume = match row
         .worker_volume
         .as_deref()
-        .filter(|value| valid_worker(value))
-        .ok_or_else(|| capacity_error("worker ownership"))?;
+        .filter(|value| !value.is_empty())
+    {
+        None if slot::idless_unattempted(row) => return configured_pair_usage(budget),
+        Some(value) if valid_worker(value) => value,
+        _ => return Err(capacity_error("worker ownership")),
+    };
     if invalid_recorded_id(row.docker_id.as_deref()) || invalid_recorded_id(row.dind_id.as_deref())
     {
         return Err(capacity_error("worker ownership"));
@@ -169,6 +174,21 @@ fn configured_usage(limits: DockerResourceLimits) -> Result<OccupiedResources, E
         memory_bytes: u64::try_from(limits.memory_bytes)
             .ok()
             .filter(|value| *value > 0)
+            .ok_or_else(|| capacity_error("worker resources"))?,
+    })
+}
+
+fn configured_pair_usage(budget: ResourceBudget) -> Result<OccupiedResources, EnsureError> {
+    let pair = budget.pair();
+    Ok(OccupiedResources {
+        permits: 0,
+        nano_cpus: pair
+            .cpu_millicores
+            .checked_mul(super::NANO_CPUS_PER_MILLICORE)
+            .filter(|value| *value > 0)
+            .ok_or_else(|| capacity_error("worker resources"))?,
+        memory_bytes: (pair.memory_bytes > 0)
+            .then_some(pair.memory_bytes)
             .ok_or_else(|| capacity_error("worker resources"))?,
     })
 }

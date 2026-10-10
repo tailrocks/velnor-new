@@ -9,8 +9,9 @@ use crate::{EnsureError, IntentState, Journal, Outcome};
 
 mod docker_stub;
 pub(super) use self::docker_stub::DockerStub;
+use self::docker_stub::closed;
+pub(in crate::launch) use self::docker_stub::hanging;
 pub(in crate::launch) use self::docker_stub::http;
-use self::docker_stub::{closed, hanging};
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -114,7 +115,7 @@ async fn resource_capacity_scan_has_a_total_deadline() -> Result<(), String> {
 
     assert_eq!(
         capacity,
-        Err(EnsureError::Unexpected {
+        crate::launch::resource_capacity::Discovery::Untrusted(EnsureError::Unexpected {
             status: 0,
             step: "docker capacity",
         })

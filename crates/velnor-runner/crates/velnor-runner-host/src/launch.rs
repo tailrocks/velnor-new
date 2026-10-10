@@ -36,6 +36,7 @@ mod runner_dir;
 
 pub(crate) use drive::{Drive, Lane, Rest};
 pub(crate) use inspect::classify_inspect;
+pub(crate) use slot::HOLDS_ROWS_SQL;
 mod mint_origin;
 mod pressure;
 mod session;
@@ -94,7 +95,12 @@ pub async fn launch_once(
 ) -> Result<LaunchReport, EnsureError> {
     slot::release_exited(journal, docker).await?;
     let ceiling = job_capacity();
-    let capacity = resource_capacity::discover(docker, journal, resource_budget, ceiling).await?;
+    let capacity =
+        match resource_capacity::discover(docker, journal, resource_budget, ceiling).await {
+            resource_capacity::Discovery::Available(capacity) => capacity,
+            resource_capacity::Discovery::Unavailable => resource_capacity::JobCapacity::denied(),
+            resource_capacity::Discovery::Untrusted(error) => return Err(error),
+        };
     let _capacity = install_job_capacity(capacity.poll_header());
     let set = ensure_product_scale_set(pat, owner, repo)?;
     if std::env::var("VELNOR_RECONCILE").ok().as_deref() == Some("1") {
