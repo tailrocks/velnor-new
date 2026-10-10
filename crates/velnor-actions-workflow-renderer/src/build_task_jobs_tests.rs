@@ -311,7 +311,7 @@ fn nested_task_source_is_hash_bound_and_mbx_preserves_its_working_directory() {
         "task_working_directory=\"$PWD\"",
         "export MISE_CEILING_PATHS=\"$workspace_ceiling\"",
         "workspace_ceiling=\"$workspace_root/..\"",
-        "mise --no-env --locked --no-hooks exec -- mbx +1.99.0 rustc --version",
+        "\"$mbx_path\" exec --project-root \"$workspace_root\" \"$rustc_path\" --version",
         "cd -P \"$task_working_directory\"",
     ];
     for fragment in expected {
