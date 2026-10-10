@@ -1,4 +1,8 @@
-use crate::build_tasks::{validate_config_shape, validate_source_lock_subset};
+use std::collections::BTreeMap;
+
+use crate::build_tasks::{
+    validate_config_shape, validate_source_lock_subset, validate_source_task_lock_requests,
+};
 use crate::native_tool_input::{
     NativeMiseConfig, NativeMiseLock, NativeToolSource, native_mise_source,
 };
@@ -116,4 +120,64 @@ fn rejects_duplicate_task_rows_and_ambiguous_root_rows() {
     ));
     let source = lock(&single);
     assert!(validate_source_lock_subset(&source, &duplicated_root).is_err());
+}
+
+#[test]
+fn task_local_lock_matches_only_declared_tools_and_root_authority() {
+    let root_config = project(&format!(
+        "{ROOT_CONFIG}\n[tools.swiftlint]\nversion = \"0.65.1\"\n"
+    ));
+    let source_config = project(
+        r#"
+[tasks.lint]
+run = "swiftlint lint --strict"
+tools = { swiftlint = "0.65.1" }
+"#,
+    );
+    let root_lock = lock(&swiftlint_lock(SWIFTLINT_ROW));
+    let source_lock = lock(&swiftlint_lock(SWIFTLINT_ROW));
+    validate_source_task_lock_requests(
+        &source_config,
+        Some(&source_lock),
+        false,
+        &root_config,
+        &root_lock,
+        "1.99.0",
+        &BTreeMap::new(),
+    )
+    .expect("task-local selector has the exact root-selected locked row");
+
+    let unrelated_row = format!(
+        "{}\n[[tools.foreign]]\nversion = \"0.1.0\"\nbackend = \"aqua:example/foreign\"\nspecifiers = [\"0.1.0\"]\n",
+        swiftlint_lock(SWIFTLINT_ROW)
+    );
+    let unrelated_lock = lock(&unrelated_row);
+    assert!(
+        validate_source_task_lock_requests(
+            &source_config,
+            Some(&unrelated_lock),
+            false,
+            &root_config,
+            &root_lock,
+            "1.99.0",
+            &BTreeMap::new(),
+        )
+        .is_err()
+    );
+
+    let wrong_version_config = project(&format!(
+        "{ROOT_CONFIG}\n[tools.swiftlint]\nversion = \"0.64.0\"\n"
+    ));
+    assert!(
+        validate_source_task_lock_requests(
+            &source_config,
+            Some(&source_lock),
+            false,
+            &wrong_version_config,
+            &root_lock,
+            "1.99.0",
+            &BTreeMap::new(),
+        )
+        .is_err()
+    );
 }
