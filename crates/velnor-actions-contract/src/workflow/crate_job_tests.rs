@@ -32,14 +32,15 @@ fn obligation() -> CrateObligation {
         test_runner: "none".to_owned(),
     };
     let toolchain_id = toolchain_id(&toolchain_inputs).expect("toolchain identity");
+    let task_digest =
+        task_digest_for_execution(&task_id, &run, &toolchain_id).expect("task identity");
     CrateObligation {
         task_id,
         kind: "validate".to_owned(),
         step_name: "Validate".to_owned(),
         gated_by: Vec::new(),
         matrix_key: matrix_key_for_id(&matrix_id).expect("matrix key"),
-        task_digest: task_digest_for_execution(&task_id, &run, &toolchain_id)
-            .expect("task identity"),
+        task_digest,
         toolchain_inputs,
         run,
     }
