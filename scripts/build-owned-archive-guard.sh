@@ -38,6 +38,8 @@ cleanup() {
   fi
 }
 
+trap cleanup EXIT
+
 [[ "$script_path" == "$repository/scripts/build-owned-archive-guard.sh" ]] \
   || fail 'builder script is not the checkout-owned entrypoint'
 if ! mise_bin="$(command -v mise)" || [[ "$mise_bin" != /* ]]; then
@@ -288,7 +290,15 @@ run_mise() {
 }
 
 validate_local_cargo_closure() {
-  local package package_path tree_pid
+  local package package_path tree_status
+  temporary="$(mktemp "$run_tmp/archive-guard-cargo-tree.XXXXXX")"
+  if run_mise exec rust@1.98.1 -- cargo tree --locked \
+    --manifest-path "$repository/Cargo.toml" -p velnor-archive-guard \
+    --edges normal,build --prefix none --format '{p}' >"$temporary"; then
+    tree_status=0
+  else
+    tree_status=$?
+  fi
   while IFS= read -r package; do
     case "$package" in
       *" ("*")")
@@ -318,11 +328,10 @@ validate_local_cargo_closure() {
           || fail "unrecognized Cargo package identity: $package"
         ;;
     esac
-  done < <(run_mise exec rust@1.98.1 -- cargo tree --locked \
-    --manifest-path "$repository/Cargo.toml" -p velnor-archive-guard \
-    --edges normal,build --prefix none --format '{p}')
-  tree_pid=$!
-  if ! wait "$tree_pid"; then
+  done <"$temporary"
+  rm -f -- "$temporary"
+  temporary=''
+  if ((tree_status != 0)); then
     fail 'cannot determine locked local Cargo dependency closure'
   fi
 }

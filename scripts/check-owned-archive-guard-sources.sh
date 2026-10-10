@@ -71,10 +71,16 @@ stat_source_identity() {
 }
 
 validate_source_tree() {
-  local relative="$1" full entry find_pid discovered=0 directories=1
+  local relative="$1" full entry find_status discovered=0 directories=1
   full="$repository/$relative"
   check_source_parent_dirs "$relative" false
   check_directory "$full"
+  temporary="$(mktemp "${TMPDIR:-/tmp}/archive-guard-find.XXXXXX")"
+  if find "$full" -mindepth 1 -print0 >"$temporary"; then
+    find_status=0
+  else
+    find_status=$?
+  fi
   while IFS= read -r -d '' entry; do
     discovered=$((discovered + 1))
     (( discovered <= 512 )) \
@@ -92,9 +98,10 @@ validate_source_tree() {
     else
       fail "archive guard source tree contains a special file: $entry"
     fi
-  done < <(find "$full" -mindepth 1 -print0)
-  find_pid=$!
-  if ! wait "$find_pid"; then
+  done <"$temporary"
+  rm -f -- "$temporary"
+  temporary=''
+  if ((find_status != 0)); then
     fail "cannot enumerate archive guard source tree: $relative"
   fi
 }
