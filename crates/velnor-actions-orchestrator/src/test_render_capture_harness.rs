@@ -8,6 +8,9 @@ use crate::cover_identity::generator::sha256_hex;
 use velnor_actions_workflow_renderer::render::test_render_capture::full_tree_capture_guard;
 use velnor_actions_workflow_renderer::tree::RenderedTree;
 
+/// The exact currently published helper release pinned by the consumer input.
+const CAPTURE_CONSUMER_RELEASE_VERSION: &str = "0.1.4";
+
 #[test]
 #[ignore = "requires VELNOR_CAPTURE_ROOT and external VELNOR_CAPTURE_OUT"]
 fn capture_exact_consumer_marked_workflow_before_size_guard()
@@ -24,7 +27,7 @@ fn capture_exact_consumer_marked_workflow_before_size_guard()
         return Err("capture output directory must be empty".into());
     }
 
-    let preparation = crate::prepare(&root)?;
+    let preparation = crate::prepare::prepare_for_capture(&root, CAPTURE_CONSUMER_RELEASE_VERSION)?;
     let execution = preparation
         .config
         .execution

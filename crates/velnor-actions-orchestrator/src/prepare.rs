@@ -12,7 +12,7 @@ use crate::decisions::runner_image_evidence;
 use crate::discover::{Discovery, discover, discover_with_phase_timings};
 use crate::internal::phase_timing::PlanPhaseTimings;
 use crate::source_prep::lockful_roots;
-use crate::workflow::{DEFAULT_RUNNER_LABEL, WorkflowPlan, build_workflow};
+use crate::workflow::{DEFAULT_RUNNER_LABEL, WorkflowPlan};
 
 /// Canonical repository identity allowed the Velnor-repository policy.
 const VELNOR_IDENTITY: &str = "tailrocks/velnor-new";
@@ -52,6 +52,20 @@ pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> 
     prepare_inner(root, None)
 }
 
+/// Prepare an exact-consumer diagnostic using its committed helper release pin.
+///
+/// This exists only for the ignored full-tree capture harness: the harness
+/// renders a consumer pinned to an already published release while testing
+/// newer generator source. Normal `prepare` continues to bind the generator's
+/// own package version.
+#[cfg(all(feature = "test-render-capture", test))]
+pub(super) fn prepare_for_capture(
+    root: &Path,
+    consumer_release_version: &str,
+) -> Result<GenerationPreparation, OrchestratorError> {
+    prepare_inner_with_consumer_release_version(root, None, consumer_release_version)
+}
+
 pub(crate) fn prepare_with_phase_timings(
     root: &Path,
     phases: &mut PlanPhaseTimings,
@@ -62,6 +76,14 @@ pub(crate) fn prepare_with_phase_timings(
 fn prepare_inner(
     root: &Path,
     phases: Option<&mut PlanPhaseTimings>,
+) -> Result<GenerationPreparation, OrchestratorError> {
+    prepare_inner_with_consumer_release_version(root, phases, env!("CARGO_PKG_VERSION"))
+}
+
+fn prepare_inner_with_consumer_release_version(
+    root: &Path,
+    phases: Option<&mut PlanPhaseTimings>,
+    consumer_release_version: &str,
 ) -> Result<GenerationPreparation, OrchestratorError> {
     let canonical = root
         .canonicalize()
@@ -80,13 +102,14 @@ fn prepare_inner(
     };
     let fetch_roots = lockful_roots(&canonical, &discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
-    let workflow = build_workflow(
+    let workflow = crate::workflow::build_workflow_for_consumer_release(
         &canonical,
         &config,
         &default_branch,
         &runner_label,
         &discovery,
         &fetch_roots,
+        consumer_release_version,
     )?;
     let runner_image = runner_image_evidence();
     let audit = crate::lock_audit::audit_prepare_installs(
