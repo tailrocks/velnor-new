@@ -1,4 +1,4 @@
-//! Snapshot the exact platform-qualified Mise bytes before any invocation.
+//! Snapshot the exact platform-pinned Mise bytes before any invocation.
 use crate::OrchestratorError;
 use crate::internal::internal;
 use std::path::Path;
