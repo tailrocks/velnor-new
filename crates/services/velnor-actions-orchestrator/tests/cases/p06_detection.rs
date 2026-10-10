@@ -95,11 +95,7 @@ fn wrapper_only_detects_mbx() -> TestResult {
     let sighting = &workspace.profile.evidence[0];
     assert_eq!(sighting.path, "mise.toml");
     assert_eq!(sighting.line, 1);
-    assert!(
-        sighting
-            .command_or_setting
-            .contains("cargo wrapper")
-    );
+    assert!(sighting.command_or_setting.contains("cargo wrapper"));
     assert!(workspace.findings.is_empty());
     let plan = plan_for(&prep)?;
     assert!(plan.contains("mbx compile driver (detected)"), "{plan}");

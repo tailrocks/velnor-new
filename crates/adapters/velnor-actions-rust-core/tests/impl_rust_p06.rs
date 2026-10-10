@@ -67,11 +67,7 @@ fn wrapper_only_selects_mbx() {
     assert_eq!(outcome.profile.evidence.len(), 1);
     let sighting = &outcome.profile.evidence[0];
     assert_eq!((sighting.path.as_str(), sighting.line), ("mise.toml", 1));
-    assert!(
-        sighting
-            .command_or_setting
-            .contains("cargo wrapper")
-    );
+    assert!(sighting.command_or_setting.contains("cargo wrapper"));
     assert!(sighting.command_or_setting.contains("\"mbx\""));
     assert!(sighting.command_or_setting.contains("MBX_CARGO_SHIM_MODE"));
     assert_eq!(codes(&outcome), vec![NEXTEST_RECOMMENDATION]);
