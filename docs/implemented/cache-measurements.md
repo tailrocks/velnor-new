@@ -216,12 +216,13 @@ measurement instead of requiring an exact primary-key hit.
 Both jobs in the recorded round-trip probe set `MBX_GC_AUTO=1` and
 `MBX_SHARE_OUT_DIR=0`. This is the historical probe configuration recorded in
 `ac3ab6a3d`, not the current native renderer lifecycle. The native MBX
-lifecycle policy in [PR #133](https://github.com/tailrocks/velnor-new/pull/133)
-sets `MBX_GC_AUTO=0` while task results are active and runs guarded `mbx clean`
-after the final workspace consumer. The historical production measurements
-above used `MBX_GC_AUTO=0` on hosted Linux and a Scale Set local backend with a
-manual bundle, before the native object action route. Neither those
-measurements nor this `GC_AUTO=1` probe measure
+object lifecycle follows the [cache contract](../proposed/cache-contract.md),
+which assigns MBX object transport and its post step to the pinned action. The
+current native renderer candidate sets `MBX_GC_AUTO=0` while task results are
+active and runs guarded `mbx clean` after the final workspace consumer. The
+historical production measurements above used `MBX_GC_AUTO=0` on hosted Linux
+and a Scale Set local backend with a manual bundle, before the native object
+action route. Neither those measurements nor this `GC_AUTO=1` probe measure
 the current native lifecycle's post-export peak disk use. The probe uses a
 separate candidate action ref, so its result does not qualify the production
 action pin, current lifecycle, or either typed production lane. Dispatch once
