@@ -3,6 +3,12 @@ use crate::yaml::render_yaml;
 
 fn pins() -> RustToolchainQualificationPins {
     RustToolchainQualificationPins {
+        mise_setup: crate::setup::MiseSetup {
+            uses: format!("jdx/mise-action@{}", "a".repeat(40)),
+            version: velnor_actions_mise::MISE_VERSION.to_owned(),
+            sha256: crate::setup::MISE_BINARY_SHA256_LINUX_X64.to_owned(),
+        },
+        mbx_version: velnor_actions_mise::MR_BOXINGTON_VERSION.to_owned(),
         rust_version: "1.99.0".to_owned(),
         manifest_url: "https://static.rust-lang.org/dist/channel-rust-1.99.0.toml".to_owned(),
         manifest_sha256: MANIFEST_SHA256.to_owned(),
@@ -33,6 +39,37 @@ fn qualification_measures_both_hosted_targets_without_claiming_a_result() {
         assert!(!rendered.contains("actions: write"), "{id}");
         assert!(rendered.contains("ref: ${{ github.sha }}"), "{id}");
         assert!(rendered.contains("persist-credentials: \"false\""), "{id}");
+        assert!(rendered.contains("name: Setup Mise"), "{id}");
+        assert!(rendered.contains("version: 2026.10.7"), "{id}");
+        assert!(
+            rendered.contains(if index == 0 {
+                crate::setup::MISE_BINARY_SHA256_LINUX_X64
+            } else {
+                crate::setup::MISE_BINARY_SHA256_MACOS_ARM64
+            }),
+            "{id}"
+        );
+        assert!(
+            rendered.contains("name: Install pinned MBX through Mise"),
+            "{id}"
+        );
+        assert!(
+            rendered.contains(
+                "mise --no-config --no-env --no-hooks install \"mr-boxington@$MBX_VERSION\""
+            ),
+            "{id}"
+        );
+        assert!(rendered.contains("mise --no-config --no-env --no-hooks which mbx --tool \"mr-boxington@$MBX_VERSION\""), "{id}");
+        assert!(rendered.contains("MBX_VERSION: 1.23.0"), "{id}");
+        assert!(
+            rendered.contains("--project-root \"$GITHUB_WORKSPACE\""),
+            "{id}"
+        );
+        assert!(
+            rendered.contains("--mbx-executable \"$MBX_EXECUTABLE\""),
+            "{id}"
+        );
+        assert!(rendered.contains("--mbx-version \"$MBX_VERSION\""), "{id}");
         assert!(
             rendered.contains("python3 scripts/qualification/qualify_rust_toolchain.py"),
             "{id}"
@@ -70,5 +107,9 @@ fn qualification_rejects_unreviewed_version_url_and_digest() {
 
     let mut candidate = pins();
     candidate.manifest_sha256 = "a".repeat(64);
+    assert!(jobs(&candidate).is_err());
+
+    let mut candidate = pins();
+    candidate.mbx_version = "1.23.1".to_owned();
     assert!(jobs(&candidate).is_err());
 }

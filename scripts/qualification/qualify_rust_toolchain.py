@@ -101,11 +101,69 @@ def manifest_artifacts(manifest: dict[str, object], target: str, version: str) -
     return sorted(artifacts, key=lambda item: item["url"])
 
 
+def mbx_exec_argv(
+    mbx_executable: Path,
+    project_root: Path,
+    executable: Path,
+    arguments: tuple[str, ...],
+) -> list[str]:
+    if not mbx_executable.is_absolute() or not project_root.is_absolute() or not executable.is_absolute():
+        raise QualificationError("MBX qualification paths must be absolute")
+    return [
+        str(mbx_executable),
+        "exec",
+        "--project-root",
+        str(project_root),
+        str(executable),
+        *arguments,
+    ]
+
+
+def validate_mbx_version(output: str, version: str) -> None:
+    if output.splitlines() != [f"mbx {version}"]:
+        raise QualificationError("MBX executable differs from the pinned version")
+
+
+def mbx_executor_identity(mbx_executable: Path, version: str) -> dict[str, str]:
+    if (
+        not mbx_executable.is_absolute()
+        or not mbx_executable.is_file()
+        or not os.access(mbx_executable, os.X_OK)
+    ):
+        raise QualificationError("pinned MBX executable is missing or not executable")
+    return {
+        "id": "mr-boxington",
+        "version": version,
+        "path": str(mbx_executable),
+        "sha256": digest_file(mbx_executable),
+    }
+
+
+def run_mbx_probe(
+    mbx_executable: Path,
+    project_root: Path,
+    executable: Path,
+    arguments: tuple[str, ...],
+    environment: dict[str, str],
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        mbx_exec_argv(mbx_executable, project_root, executable, arguments),
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env=environment,
+    )
+
+
 def qualify(
     target_key: str,
     source_sha: str,
     run_id: str,
     run_attempt: str,
+    mbx_executable: Path,
+    mbx_version: str,
+    project_root: Path,
     version: str,
     manifest_url: str,
     manifest_sha256: str,
@@ -120,12 +178,29 @@ def qualify(
         or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository)
         or not re.fullmatch(r"[0-9a-f]{40}", workflow_sha)
         or not re.fullmatch(r"\d+\.\d+\.\d+", version)
+        or not re.fullmatch(r"\d+\.\d+\.\d+", mbx_version)
         or not re.fullmatch(r"[0-9a-f]{64}", manifest_sha256)
         or manifest_url != f"https://static.rust-lang.org/dist/channel-rust-{version}.toml"
+        or not mbx_executable.is_absolute()
+        or not project_root.is_absolute()
     ):
         raise QualificationError("workflow source or run identity is malformed")
+    if not mbx_executable.is_file() or not os.access(mbx_executable, os.X_OK):
+        raise QualificationError("pinned MBX executable is missing or not executable")
+    if not project_root.is_dir():
+        raise QualificationError("qualification project root is missing")
     with tempfile.TemporaryDirectory(prefix="velnor-rust-qualification-") as temporary:
         root = Path(temporary)
+        environment = {"HOME": str(root), "PATH": os.defpath}
+        mbx_output = subprocess.run(
+            [str(mbx_executable), "--version"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=environment,
+        ).stdout
+        validate_mbx_version(mbx_output, mbx_version)
         manifest_path = root / "channel.toml"
         manifest_sha = fetch(manifest_url, manifest_path, manifest_sha256)
         manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
@@ -146,14 +221,17 @@ def qualify(
             merge_component(component, artifact["component"], prefix)
         cargo_path = prefix / "bin" / "cargo"
         rustc_path = prefix / "bin" / "rustc"
-        environment = {"HOME": str(root), "PATH": f"{prefix / 'bin'}:{os.defpath}"}
-        cargo_output = subprocess.run(
-            [cargo_path, "--version"], check=True, capture_output=True, text=True, timeout=30, env=environment
+        environment["PATH"] = f"{prefix / 'bin'}:{os.defpath}"
+        cargo_output = run_mbx_probe(
+            mbx_executable, project_root, cargo_path, ("--version",), environment
         ).stdout.splitlines()[0]
-        rustc_output = subprocess.run(
-            [rustc_path, "-vV"], check=True, capture_output=True, text=True, timeout=30, env=environment
+        rustc_output = run_mbx_probe(
+            mbx_executable, project_root, rustc_path, ("-vV",), environment
         ).stdout.rstrip("\n")
-        if not cargo_output.startswith(f"cargo {version} ") or f"release: {version}" not in rustc_output.splitlines():
+        if (
+            not cargo_output.startswith(f"cargo {version} ")
+            or f"release: {version}" not in rustc_output.splitlines()
+        ):
             raise QualificationError("installed Rust probes differ from the pinned version")
         if f"host: {target}" not in rustc_output.splitlines():
             raise QualificationError("installed Rust host differs from the runner target")
@@ -170,7 +248,8 @@ def qualify(
             ]
         ]
         return {
-            "schema": 1,
+            "schema": 2,
+            "executor": mbx_executor_identity(mbx_executable, mbx_version),
             "source": {
                 "repository": repository,
                 "sha": source_sha,
@@ -184,7 +263,9 @@ def qualify(
                 "options": {"kind": "rust", "components": [], "targets": []},
                 "depends_on": [],
                 "platform": target_key,
-                "artifacts": [{"url": item["url"], "sha256": item["sha256"]} for item in artifacts],
+                "artifacts": [
+                    {"url": item["url"], "sha256": item["sha256"]} for item in artifacts
+                ],
                 "dependency_artifacts": [],
                 "install_tree_sha256": canonical_tree_sha256(tree_entries(prefix)),
                 "executables": executables,
@@ -200,12 +281,25 @@ def main() -> int:
     parser.add_argument("--version", required=True)
     parser.add_argument("--manifest-url", required=True)
     parser.add_argument("--manifest-sha256", required=True)
+    parser.add_argument("--mbx-executable", type=Path, required=True)
+    parser.add_argument("--mbx-version", required=True)
+    parser.add_argument("--project-root", type=Path, required=True)
     parser.add_argument("--platform", choices=sorted(TARGETS), required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     source_sha = os.environ.get("GITHUB_SHA", "")
+    if not args.mbx_executable.is_absolute() or not args.project_root.is_absolute():
+        raise QualificationError("MBX executable and project root must be absolute")
+    project_root = args.project_root.resolve(strict=True)
+    workspace = os.environ.get("GITHUB_WORKSPACE", "")
+    if not workspace or Path(workspace).resolve(strict=True) != project_root:
+        raise QualificationError("qualification root differs from the runner workspace")
     checked_out = subprocess.run(
-        ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+        ["git", "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+        cwd=project_root,
     ).stdout.strip()
     if source_sha != checked_out:
         raise QualificationError("checkout does not match the dispatched workflow SHA")
@@ -214,6 +308,9 @@ def main() -> int:
         source_sha,
         os.environ["GITHUB_RUN_ID"],
         os.environ["GITHUB_RUN_ATTEMPT"],
+        args.mbx_executable.resolve(strict=True),
+        args.mbx_version,
+        project_root,
         args.version,
         args.manifest_url,
         args.manifest_sha256,

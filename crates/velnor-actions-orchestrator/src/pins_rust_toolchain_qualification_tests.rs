@@ -5,7 +5,14 @@ use velnor_actions_contract::{ExecutionConfig, RoutingWorkflow, VelnorConfig};
 
 #[test]
 fn qualification_uses_the_current_rust_catalog_and_reviewed_manifest() {
-    let pins = resolve_rust_toolchain_qualification().expect("reviewed Rust pins resolve");
+    let config = config_with(BTreeMap::new());
+    let pins = resolve_rust_toolchain_qualification(&config).expect("reviewed Rust pins resolve");
+    assert_eq!(pins.mise_setup.version, velnor_actions_mise::MISE_VERSION);
+    assert_eq!(
+        pins.mise_setup.sha256,
+        velnor_actions_workflow_renderer::setup::MISE_BINARY_SHA256_LINUX_X64
+    );
+    assert_eq!(pins.mbx_version, velnor_actions_mise::MR_BOXINGTON_VERSION);
     assert_eq!(pins.rust_version, "1.99.0");
     assert_eq!(
         pins.manifest_url,

@@ -42,6 +42,12 @@ fn request() -> Schema2WorkflowRequest {
             },
         }),
         rust_toolchain_qualification: Some(RustToolchainQualificationPins {
+            mise_setup: MiseSetup {
+                uses: format!("jdx/mise-action@{}", "a".repeat(40)),
+                version: velnor_actions_mise::MISE_VERSION.to_owned(),
+                sha256: crate::setup::MISE_BINARY_SHA256_LINUX_X64.to_owned(),
+            },
+            mbx_version: velnor_actions_mise::MR_BOXINGTON_VERSION.to_owned(),
             rust_version: "1.99.0".to_owned(),
             manifest_url: "https://static.rust-lang.org/dist/channel-rust-1.99.0.toml".to_owned(),
             manifest_sha256: super::super::RUST_TOOLCHAIN_QUALIFICATION_MANIFEST_SHA256.to_owned(),

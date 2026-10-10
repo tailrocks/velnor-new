@@ -159,6 +159,13 @@ fn direct_schema2_renderer_rejects_an_oversized_workflow() -> Result<(), RenderE
             },
         }),
         rust_toolchain_qualification: Some(RustToolchainQualificationPins {
+            mise_setup: MiseSetup {
+                uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
+                version: velnor_actions_mise::MISE_VERSION.to_owned(),
+                sha256: velnor_actions_workflow_renderer::setup::MISE_BINARY_SHA256_LINUX_X64
+                    .to_owned(),
+            },
+            mbx_version: velnor_actions_mise::MR_BOXINGTON_VERSION.to_owned(),
             rust_version: "1.99.0".to_owned(),
             manifest_url: "https://static.rust-lang.org/dist/channel-rust-1.99.0.toml".to_owned(),
             manifest_sha256:
