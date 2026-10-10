@@ -196,7 +196,7 @@ fn native_job_bootstraps_only_locked_selected_tools_and_guards_current_source() 
     assert_eq!(policy.job_id(), "task-native-desktop");
     assert_eq!(job.runs_on, "macos-26");
     assert_eq!(job.timeout_minutes.minutes(), 120);
-    assert!(job.needs.is_empty());
+    assert_eq!(job.needs, [] as [String; 0]);
     assert!(job.condition.is_none());
     assert!(job.environment.is_none());
     let permissions = job.permissions.as_ref().expect("explicit permissions");
