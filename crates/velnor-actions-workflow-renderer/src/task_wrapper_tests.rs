@@ -405,7 +405,7 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
     trailing_field.extend_from_slice(b"EXTRA\0");
     let mut missing_terminator = valid_frame;
     missing_terminator.pop();
-    for (case, invalid_frame) in [
+    let invalid_frames = [
         ("bad argv count", encode_frame(&bad_count)),
         ("bad END sentinel", encode_frame(&bad_sentinel)),
         ("wrong execution digest", encode_frame(&wrong_digest)),
@@ -430,7 +430,9 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
         ("unresolved argv", encode_frame(&unresolved_argv)),
         ("trailing field", trailing_field),
         ("missing terminator", missing_terminator),
-    ] {
+    ];
+    let invalid_frame_count = invalid_frames.len();
+    for (case, invalid_frame) in invalid_frames {
         if task_started_marker.exists() {
             std::fs::remove_file(&task_started_marker)
                 .expect("clear task marker before rejection case");
@@ -457,9 +459,13 @@ fn wrapper_rejects_unresolved_expressions_and_passes_shell_metacharacters_as_dat
             "{case}: invalid frame evaluated hostile argv data"
         );
     }
+    let expected_calls = format!(
+        "resolve-task-execution-v1\nwrite-task-report-v1\n{}",
+        "resolve-task-execution-v1\n".repeat(invalid_frame_count)
+    );
     assert_eq!(
         std::fs::read_to_string(&call_log).expect("record helper operations"),
-        "resolve-task-execution-v1\nwrite-task-report-v1\nresolve-task-execution-v1\nresolve-task-execution-v1\nresolve-task-execution-v1\nresolve-task-execution-v1\nresolve-task-execution-v1\nresolve-task-execution-v1\nresolve-task-execution-v1\nresolve-task-execution-v1\n"
+        expected_calls
     );
     std::fs::remove_dir_all(test_root).expect("remove fake runner tree");
 }
