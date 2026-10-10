@@ -179,6 +179,47 @@ fn check_mbx_version_order(
     Ok(())
 }
 
+/// Append one guarded workspace cleanup after every job's final task step.
+pub(crate) fn append_workspace_cleanups(
+    jobs: &mut BTreeMap<String, Job>,
+) -> Result<(), RenderError> {
+    for (id, job) in jobs {
+        let actions: Vec<Step> = job
+            .steps
+            .iter()
+            .filter(|step| is_mbx_action(step))
+            .cloned()
+            .collect();
+        let cleanups = job
+            .steps
+            .iter()
+            .filter(|step| step.role == Some(StepRole::MbxWorkspaceCleanup))
+            .count();
+        match actions.as_slice() {
+            [] if cleanups == 0 => continue,
+            [] => {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "mbx_cleanup_without_action:{id}"
+                )));
+            }
+            [_] if cleanups == 0 => {}
+            [_] => {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "mbx_cleanup_duplicated:{id}"
+                )));
+            }
+            _ => {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "mbx_cleanup_action_duplicated:{id}"
+                )));
+            }
+        }
+        let cleanup = crate::cache_steps::mbx_workspace_clean_step_for_action(&actions[0])?;
+        job.steps.push(cleanup);
+    }
+    Ok(())
+}
+
 /// True for the pinned native MBX action.
 pub(crate) fn is_mbx_action(step: &Step) -> bool {
     matches!(&step.kind, velnor_actions_contract::StepKind::Action { uses, .. } if uses.starts_with(&format!("{MBX_ACTION_NAME}@")))

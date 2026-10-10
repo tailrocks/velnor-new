@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::workflow::MBX_WORKSPACE_CLEAN_CONDITION;
 use velnor_actions_contract::workflow::step_identity::validate_step_sequence;
 use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
@@ -56,6 +57,38 @@ fn role_kind_mismatch_fails_even_when_display_name_matches() {
     };
     let error = validate_step_sequence(&[step], "plan").expect_err("wrong semantic payload");
     assert!(error.to_string().contains("role_kind_mismatch"));
+}
+
+#[test]
+fn mbx_cleanup_requires_the_successful_ready_outcome_guard() {
+    let ready = Step {
+        name: "Verify native MBX version".to_owned(),
+        id: Some(StepId::MbxReady),
+        role: Some(StepRole::MbxVersionCheck),
+        condition: None,
+        kind: StepKind::Shell {
+            run: vec!["mbx --version".to_owned()],
+            env: BTreeMap::new(),
+        },
+    };
+    let cleanup = Step {
+        name: "Clean MBX workspace outputs".to_owned(),
+        id: None,
+        role: Some(StepRole::MbxWorkspaceCleanup),
+        condition: Some(MBX_WORKSPACE_CLEAN_CONDITION.to_owned()),
+        kind: StepKind::Shell {
+            run: vec!["mbx".to_owned(), "clean".to_owned()],
+            env: BTreeMap::new(),
+        },
+    };
+    validate_step_sequence(&[ready, cleanup.clone()], "mbx-job")
+        .expect("cleanup is guarded by the native ready check");
+
+    let mut unguarded = cleanup;
+    unguarded.condition = None;
+    let error = validate_step_sequence(&[unguarded], "mbx-job")
+        .expect_err("unconditional MBX cleanup must fail validation");
+    assert!(error.to_string().contains("mbx_cleanup_condition_mismatch"));
 }
 
 fn tofu_restore() -> Step {

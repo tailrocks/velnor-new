@@ -6,7 +6,8 @@ use super::{CompileDriver, MBX_ACTION_NAME};
 use crate::RenderError;
 use crate::steps::{action_step_with_env, shell_step, validate_uses};
 use velnor_actions_contract::cachekey::mbx_cache_generation;
-use velnor_actions_contract::{Step, StepRole};
+use velnor_actions_contract::workflow::MBX_WORKSPACE_CLEAN_CONDITION;
+use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 /// Display name for the strict Rust check before the action installs MBX.
 pub const MBX_PREFLIGHT_NAME: &str = "Verify Rust before MBX action";
@@ -46,10 +47,10 @@ pub const MBX_CACHE_MODE_ENV: &str = "ACTIONS_CACHE_MODE";
 pub const MBX_RESTORE_NAME: &str = "Restore MBX objects";
 /// Display name for the exact MBX binary placed on PATH by its native action.
 pub const MBX_VERSION_CHECK_NAME: &str = "Verify native MBX version";
-/// Preserve MBX's automatic collection for low-disk recovery.
+/// Keep automatic collection from evicting uncommitted active-run results.
 pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
-/// MBX automatic collection remains enabled for the native object store.
-pub(crate) const MBX_GC_AUTO_VALUE: &str = "1";
+/// Defer collection until the native action has committed and exported the job group.
+pub(crate) const MBX_GC_AUTO_VALUE: &str = "0";
 /// Disable shared `OUT_DIR` stabilization in each independently mounted store.
 pub(crate) const MBX_SHARE_OUT_DIR_ENV: &str = "MBX_SHARE_OUT_DIR";
 pub(crate) const MBX_SHARE_OUT_DIR_VALUE: &str = "0";
@@ -193,7 +194,55 @@ pub(super) fn mbx_version_check_step(
         vec!["sh".to_owned(), "-c".to_owned(), script],
         env,
     )?;
+    step.id = Some(StepId::MbxReady);
     step.role = Some(StepRole::MbxVersionCheck);
+    Ok(step)
+}
+
+/// Build the final workspace cleanup from the exact native action inputs.
+pub(crate) fn mbx_workspace_clean_step_for_action(action: &Step) -> Result<Step, RenderError> {
+    if action.role != Some(StepRole::MbxCache) {
+        return Err(RenderError::InvalidWorkflow(
+            "mbx_cleanup_action_role_mismatch".to_owned(),
+        ));
+    }
+    let StepKind::Action { with, env, .. } = &action.kind else {
+        return Err(RenderError::InvalidWorkflow(
+            "mbx_cleanup_action_kind_mismatch".to_owned(),
+        ));
+    };
+    let version = with
+        .get("version")
+        .ok_or_else(|| RenderError::InvalidWorkflow("mbx_cleanup_version_missing".to_owned()))?;
+    let rust_toolchain = with
+        .get("toolchain")
+        .ok_or_else(|| RenderError::InvalidWorkflow("mbx_cleanup_toolchain_missing".to_owned()))?;
+    if !is_exact_mbx_version(version) {
+        return Err(RenderError::BadCommand(format!(
+            "bad_mbx_version:{version}"
+        )));
+    }
+    validate_rust_toolchain(rust_toolchain)?;
+
+    let mut clean_env = env.clone();
+    clean_env.remove(MBX_CACHE_MODE_ENV);
+    let mut step = shell_step(
+        "Clean MBX workspace outputs",
+        vec![
+            "mise".to_owned(),
+            "--no-config".to_owned(),
+            "--no-env".to_owned(),
+            "--no-hooks".to_owned(),
+            "exec".to_owned(),
+            format!("rust@{rust_toolchain}"),
+            "--".to_owned(),
+            "mbx".to_owned(),
+            "clean".to_owned(),
+        ],
+        clean_env,
+    )?;
+    step.condition = Some(MBX_WORKSPACE_CLEAN_CONDITION.to_owned());
+    step.role = Some(StepRole::MbxWorkspaceCleanup);
     Ok(step)
 }
 
@@ -243,7 +292,7 @@ fn cache_generation(mbx_version: &str, action_sha: &str) -> String {
     // These action-input contexts identify the actual runner and job, even
     // when hosted-only and Scale Set-only plans use the same logical job ID.
     format!(
-        "{}-gc-auto-v1-action-{action_sha}-lane-${{{{ runner.environment }}}}-job-${{{{ github.job }}}}",
+        "{}-gc-auto-off-final-clean-v1-action-{action_sha}-lane-${{{{ runner.environment }}}}-job-${{{{ github.job }}}}",
         mbx_cache_generation(mbx_version)
     )
 }

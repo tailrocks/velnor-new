@@ -1,4 +1,4 @@
-//! Automatic MBX collection must cover setup, build, and test steps.
+//! Native MBX collection stays off until the guarded post-task cleanup.
 
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
@@ -30,8 +30,8 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
         "only protected default-branch pushes write:\n{text}"
     );
     assert!(
-        text.contains("MBX_GC_AUTO: \"1\""),
-        "MBX jobs enable GC:\n{text}"
+        text.contains("MBX_GC_AUTO: \"0\""),
+        "MBX jobs defer GC while action results may be in flight:\n{text}"
     );
     assert!(text.contains("MBX_SHARE_OUT_DIR: \"0\""), "{text}");
     assert!(text.contains(&format!("{MBX_CACHE_MODE_ENV}:")), "{text}");
@@ -60,7 +60,7 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Lane extraction preserves the same GC and `OUT_DIR` policy on both runners.
+/// Lane extraction preserves GC policy and final cleanup on both runners.
 #[test]
 fn mbx_job_policy_applies_to_hosted_and_scale_set_lanes() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
@@ -96,7 +96,7 @@ fn mbx_job_policy_applies_to_hosted_and_scale_set_lanes() -> Result<(), RenderEr
         &fixture_ctx(),
     )?;
     assert_eq!(
-        text.matches("MBX_GC_AUTO: \"1\"").count(),
+        text.matches("MBX_GC_AUTO: \"0\"").count(),
         2,
         "both native MBX consumers use the same GC policy: {text}"
     );
@@ -108,8 +108,25 @@ fn mbx_job_policy_applies_to_hosted_and_scale_set_lanes() -> Result<(), RenderEr
     assert_eq!(
         text.matches("MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx")
             .count(),
-        6,
-        "preflight, action main/post, and version guard use one path per job: {text}"
+        8,
+        "preflight, action main/post, version guard, and cleanup use one path per job: {text}"
+    );
+    assert_eq!(
+        text.matches("name: Clean MBX workspace outputs").count(),
+        2,
+        "each hosted and Scale Set native job cleans after its shared task body: {text}"
+    );
+    assert_eq!(
+        text.matches("if: always() && steps.mbx-ready.outcome == 'success'")
+            .count(),
+        2,
+        "task failures still clean after a successful native setup guard: {text}"
+    );
+    assert_eq!(
+        text.matches("mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx clean")
+            .count(),
+        2,
+        "cleanup uses the exact task toolchain in both lanes: {text}"
     );
     assert!(
         !text.contains("isolate-objects-cache"),
