@@ -22,6 +22,10 @@ pub const TOOLS_SAVE_USES: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec
 pub const TOOLS_RESTORE_NAME: &str = "Restore Mise tools";
 /// Display name of the tools save step.
 pub const TOOLS_SAVE_NAME: &str = "Save Mise tools";
+/// Composite input carrying the trusted prelude's exact-key seed result.
+pub(crate) const TOOLS_SEED_ADMITTED_INPUT: &str = "seed-admitted";
+/// Caller expression for the renderer-owned V2 prelude's seed result.
+pub(crate) const TOOLS_SEED_ADMITTED_EXPRESSION: &str = "${{ steps.v2.outputs.seed_admitted }}";
 /// Mise tool installation root.
 pub const TOOLS_CACHE_PATH: &str = "~/.local/share/mise";
 /// Exact V2 tool-payload paths shared by restore and save.
@@ -59,7 +63,13 @@ pub(super) fn cache_step(
         let mut step = crate::steps::action_step(
             TOOLS_RESTORE_NAME,
             TOOLS_RESTORE_USES,
-            std::collections::BTreeMap::from([("key".to_owned(), key.to_owned())]),
+            std::collections::BTreeMap::from([
+                ("key".to_owned(), key.to_owned()),
+                (
+                    TOOLS_SEED_ADMITTED_INPUT.to_owned(),
+                    TOOLS_SEED_ADMITTED_EXPRESSION.to_owned(),
+                ),
+            ]),
         )?;
         step.condition = condition;
         step.role = Some(StepRole::ToolsCacheRestore);

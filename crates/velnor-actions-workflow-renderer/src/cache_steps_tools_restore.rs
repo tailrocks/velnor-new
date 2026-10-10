@@ -15,11 +15,13 @@ pub(crate) fn validate_call(step: &Step) -> Result<&str, RenderError> {
     let key = with.get("key").ok_or_else(|| {
         RenderError::InvalidWorkflow("tools_cache_restore_key_missing".to_owned())
     })?;
+    let seed_admitted = with.get(super::TOOLS_SEED_ADMITTED_INPUT);
     if step.role != Some(StepRole::ToolsCacheRestore)
         || step.id.is_some()
         || uses != super::TOOLS_RESTORE_USES
         || !env.is_empty()
-        || with.len() != 1
+        || with.len() != 2
+        || seed_admitted.map(String::as_str) != Some(super::TOOLS_SEED_ADMITTED_EXPRESSION)
         || !crate::cache_p08::is_v2_cache_key_expression(key)
         || step.condition.as_deref() != Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
     {
@@ -30,14 +32,24 @@ pub(crate) fn validate_call(step: &Step) -> Result<&str, RenderError> {
     Ok(key)
 }
 
-/// Drop restored tools bytes unless the pinned action reports an exact key hit.
+/// Keep only an exact cache hit or a validated seed on an empty-cache miss.
 /// Semicolons keep this valid after `quote_run_line_env_paths` joins words with spaces.
 const TOOLS_CACHE_ADMISSION_SCRIPT: &str = r#"set -eu;
 [ -n "$HOME" ] && [ -n "$RUNNER_TEMP" ] || exit 1;
 case "$HOME" in /*) ;; *) exit 1 ;; esac;
 case "$RUNNER_TEMP" in /*) ;; *) exit 1 ;; esac;
 [ "$HOME" != / ] && [ "$RUNNER_TEMP" != / ] || exit 1;
-if [ "$TOOLS_CACHE_HIT" = true ] && [ -n "$TOOLS_EXPECTED_KEY" ] && [ "$TOOLS_MATCHED_KEY" = "$TOOLS_EXPECTED_KEY" ]; then
+cache_hit="${TOOLS_CACHE_HIT-}";
+expected_key="${TOOLS_EXPECTED_KEY-}";
+matched_key="${TOOLS_MATCHED_KEY-}";
+seed_admitted="${TOOLS_SEED_ADMITTED-}";
+keep=false;
+if [ "$cache_hit" = true ] && [[ "$expected_key" =~ ^mise-tools-v2-[0-9a-f]{64}$ ]] && [ "$matched_key" = "$expected_key" ]; then
+keep=true;
+elif [ -z "$cache_hit" ] && [[ "$expected_key" =~ ^mise-tools-v2-[0-9a-f]{64}$ ]] && [ -z "$matched_key" ] && [ "$seed_admitted" = true ]; then
+keep=true;
+fi;
+if [ "$keep" = true ]; then
 [ ! -L "$HOME/.local/share/mise" ] || exit 1;
 [ ! -L "$RUNNER_TEMP/velnor/rustup" ] || exit 1;
 [ ! -L "$RUNNER_TEMP/velnor/cargo/bin" ] || exit 1;
@@ -83,6 +95,7 @@ fn admission_step() -> Yaml {
             "TOOLS_MATCHED_KEY",
             "steps.restore.outputs.cache-matched-key",
         ),
+        ("TOOLS_SEED_ADMITTED", "inputs.seed-admitted"),
     ]
     .into_iter()
     .map(|(key, value)| {
@@ -95,7 +108,7 @@ fn admission_step() -> Yaml {
     Yaml::Map(vec![
         (
             "name".to_owned(),
-            Yaml::str("Discard tools bytes unless the exact restore key matched"),
+            Yaml::str("Keep only an exact cache hit or validated seed on a miss"),
         ),
         ("shell".to_owned(), Yaml::str("bash")),
         ("env".to_owned(), Yaml::Map(env)),
@@ -103,10 +116,8 @@ fn admission_step() -> Yaml {
     ])
 }
 
-/// Build the pinned restore action with its renderer-owned archive paths.
-/// # Errors
-pub(crate) fn action_file(version: &str) -> Result<RenderedFile, RenderError> {
-    let body = Yaml::Map(vec![
+fn action_body() -> Result<Yaml, RenderError> {
+    Ok(Yaml::Map(vec![
         (
             "name".to_owned(),
             Yaml::str("Velnor Mise tools cache restore"),
@@ -117,16 +128,29 @@ pub(crate) fn action_file(version: &str) -> Result<RenderedFile, RenderError> {
         ),
         (
             "inputs".to_owned(),
-            Yaml::Map(vec![(
-                "key".to_owned(),
-                Yaml::Map(vec![
-                    (
-                        "description".to_owned(),
-                        Yaml::str("Exact runtime-qualified V2 tools key."),
-                    ),
-                    ("required".to_owned(), Yaml::Bool(true)),
-                ]),
-            )]),
+            Yaml::Map(vec![
+                (
+                    "key".to_owned(),
+                    Yaml::Map(vec![
+                        (
+                            "description".to_owned(),
+                            Yaml::str("Exact runtime-qualified V2 tools key."),
+                        ),
+                        ("required".to_owned(), Yaml::Bool(true)),
+                    ]),
+                ),
+                (
+                    super::TOOLS_SEED_ADMITTED_INPUT.to_owned(),
+                    Yaml::Map(vec![
+                        (
+                            "description".to_owned(),
+                            Yaml::str("Whether the trusted V2 prelude copied the exact seed."),
+                        ),
+                        ("required".to_owned(), Yaml::Bool(false)),
+                        ("default".to_owned(), Yaml::quoted("false")),
+                    ]),
+                ),
+            ]),
         ),
         (
             "runs".to_owned(),
@@ -138,7 +162,13 @@ pub(crate) fn action_file(version: &str) -> Result<RenderedFile, RenderError> {
                 ),
             ]),
         ),
-    ]);
+    ]))
+}
+
+/// Build the pinned restore action with its renderer-owned archive paths.
+/// # Errors
+pub(crate) fn action_file(version: &str) -> Result<RenderedFile, RenderError> {
+    let body = action_body()?;
     let bytes = marker::with_marker(version, &crate::yaml::render_yaml(&body))?;
     steps::scan_for_private_subcommands(&bytes)?;
     let action_directory = super::TOOLS_RESTORE_USES
@@ -193,3 +223,7 @@ pub(crate) fn assert_rendered_admission_parses(bytes: &str) {
         .expect("bash -n");
     assert!(status.success(), "{script}");
 }
+
+#[cfg(test)]
+#[path = "cache_steps_tools_restore_tests.rs"]
+mod tests;

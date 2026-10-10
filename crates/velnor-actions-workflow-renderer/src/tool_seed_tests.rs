@@ -60,6 +60,8 @@ fn run(script: &str, home: &Path, seed: &Path, mounts: &str) -> Output {
 fn run_with_key(script: &str, home: &Path, seed: &Path, mounts: &str, key: &str) -> Output {
     let test_dir = seed.parent().expect("seed parent");
     let script = mock_trust_commands(script, test_dir);
+    let github_output = test_dir.join("GITHUB_OUTPUT");
+    fs::write(&github_output, "").expect("output file");
     Command::new("bash")
         .arg("-c")
         .arg(script)
@@ -70,6 +72,7 @@ fn run_with_key(script: &str, home: &Path, seed: &Path, mounts: &str, key: &str)
         .env("SEED_TEST_ROOT", seed)
         .env("SEED_TEST_MOUNTS", mounts)
         .env("SEED_TEST_SKIP_OWNER_SCAN", "1")
+        .env("GITHUB_OUTPUT", &github_output)
         .output()
         .expect("run seed action")
 }
@@ -104,6 +107,10 @@ fn matching_tool_seed_copies_both_trees_after_admission_and_keeps_source() {
         fs::read_to_string(seed.join("mise/tree/installs/marker")).expect("seed kept"),
         "mise-bytes"
     );
+    assert_eq!(
+        fs::read_to_string(root.join("GITHUB_OUTPUT")).expect("admission output"),
+        "seed_admitted=true\n"
+    );
     fs::remove_dir_all(root).expect("cleanup");
 }
 
@@ -124,6 +131,10 @@ fn rejected_mount_and_mismatched_key_leave_destinations_untouched() {
         String::from_utf8_lossy(&output.stdout).contains("untrusted tool seed"),
         "{output:?}"
     );
+    assert_eq!(
+        fs::read_to_string(root.join("GITHUB_OUTPUT")).expect("rejected mount output"),
+        ""
+    );
     assert!(!home.exists(), "admission failure creates no destination");
 
     fs::write(seed.join("mise/KEY"), "mise-v1-other-key-0123456789abcdef").expect("wrong key");
@@ -135,6 +146,10 @@ fn rejected_mount_and_mismatched_key_leave_destinations_untouched() {
     assert!(
         String::from_utf8_lossy(&output.stdout).contains("tool seed key mismatch"),
         "{output:?}"
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("GITHUB_OUTPUT")).expect("mismatched key output"),
+        ""
     );
     assert!(!home.exists(), "key mismatch creates no destination");
 
@@ -148,8 +163,53 @@ fn rejected_mount_and_mismatched_key_leave_destinations_untouched() {
         String::from_utf8_lossy(&output.stdout).contains("tool seed key mismatch"),
         "{output:?}"
     );
+    assert_eq!(
+        fs::read_to_string(root.join("GITHUB_OUTPUT")).expect("malformed key output"),
+        ""
+    );
     assert!(!home.exists(), "multiline key creates no destination");
     fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
+fn absent_seed_does_not_report_admission() {
+    let root = scratch("absent");
+    let seed = root.join("seed");
+    let home = root.join("home");
+    let script = tool_seed_action_script(seed.to_str().expect("seed path")).expect("script");
+    let output = run(&script, &home, &seed, &mount(&seed));
+    assert!(
+        output.status.success(),
+        "absent seed stays cold: {output:?}"
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("GITHUB_OUTPUT")).expect("absent seed output"),
+        ""
+    );
+    fs::remove_dir_all(root).expect("cleanup absent seed");
+}
+
+#[test]
+fn failed_second_copy_does_not_report_admission() {
+    let root = scratch("copy-failure");
+    let seed = root.join("seed");
+    let home = root.join("home");
+    ready_seed(&seed, &runtime_key());
+    fs::create_dir_all(home.join("runner-temp/velnor")).expect("runner temp parent");
+    fs::write(home.join("runner-temp/velnor/rustup"), "blocking file")
+        .expect("blocking rustup path");
+    let script = tool_seed_action_script(seed.to_str().expect("seed path")).expect("script");
+    let output = run(&script, &home, &seed, &mount(&seed));
+    assert!(
+        !output.status.success(),
+        "copy failure stops workflow: {output:?}"
+    );
+    assert!(home.join(".local/share/mise/installs/marker").is_file());
+    assert_eq!(
+        fs::read_to_string(root.join("GITHUB_OUTPUT")).expect("copy output"),
+        ""
+    );
+    fs::remove_dir_all(root).expect("cleanup copy failure");
 }
 
 #[test]

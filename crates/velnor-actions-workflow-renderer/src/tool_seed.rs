@@ -21,7 +21,8 @@ pub(crate) const TOOL_SEED_NAME: &str = "Restore Velnor tool seed";
 /// Repository path of that composite.
 const TOOL_SEED_ACTION_PATH: &str = ".github/actions/velnor-tool-seed/action.yml";
 
-/// Copy script. The composite sets `SEED_KEY` from `inputs.cache_key`.
+/// Copy script. The composite sets `SEED_KEY` from `inputs.cache_key` and
+/// exports `seed_admitted` only after the exact trusted seed was copied.
 ///
 /// The script does not embed a job-specific key, so one action file serves
 /// every job. An empty key does not match. Rustup lands at
@@ -38,7 +39,7 @@ pub(crate) fn tool_seed_action_script(seed_root: &str) -> Result<String, RenderE
 
 fn copy_script(seed_root: &str, key_shell: &str, guard: &str) -> String {
     format!(
-        r#"set -euo pipefail; seed="{seed_root}"; key={key_shell}; if [ -z "$key" ]; then echo "tool seed disabled"; exit 0; fi; {guard}; if [ ! -e "$seed" ]; then echo "tool seed absent"; exit 0; fi; if ! trusted_seed_is_trusted "$seed"; then echo "untrusted tool seed; continuing cold"; exit 0; fi; if [[ ! "$key" =~ ^mise-tools-v2-[0-9a-f]{{64}}$ ]] || [ ! -f "$seed/mise/KEY" ]; then echo "tool seed key mismatch"; exit 0; fi; if ! trusted_seed_file_matches "$seed/mise/KEY" "$key"; then echo "tool seed key mismatch"; exit 0; fi; if [ -d "$seed/mise/tree" ]; then /bin/mkdir -p "$HOME/.local/share/mise"; /bin/cp -R "$seed/mise/tree/." "$HOME/.local/share/mise/"; echo "tool seed restored share-dir"; fi; if [ -d "$seed/rustup/tree" ]; then /bin/mkdir -p "$RUNNER_TEMP/velnor/rustup"; /bin/cp -R "$seed/rustup/tree/." "$RUNNER_TEMP/velnor/rustup/"; echo "tool seed restored toolchain-dir"; fi"#
+        r#"set -euo pipefail; seed="{seed_root}"; key={key_shell}; if [ -z "$key" ]; then echo "tool seed disabled"; exit 0; fi; {guard}; if [ ! -e "$seed" ]; then echo "tool seed absent"; exit 0; fi; if ! trusted_seed_is_trusted "$seed"; then echo "untrusted tool seed; continuing cold"; exit 0; fi; if [[ ! "$key" =~ ^mise-tools-v2-[0-9a-f]{{64}}$ ]] || [ ! -f "$seed/mise/KEY" ]; then echo "tool seed key mismatch"; exit 0; fi; if ! trusted_seed_file_matches "$seed/mise/KEY" "$key"; then echo "tool seed key mismatch"; exit 0; fi; if [ -d "$seed/mise/tree" ]; then /bin/mkdir -p "$HOME/.local/share/mise"; /bin/cp -R "$seed/mise/tree/." "$HOME/.local/share/mise/"; echo "tool seed restored share-dir"; fi; if [ -d "$seed/rustup/tree" ]; then /bin/mkdir -p "$RUNNER_TEMP/velnor/rustup"; /bin/cp -R "$seed/rustup/tree/." "$RUNNER_TEMP/velnor/rustup/"; echo "tool seed restored toolchain-dir"; fi; printf 'seed_admitted=true\n' >> "$GITHUB_OUTPUT""#
     )
 }
 
@@ -173,12 +174,29 @@ fn action_yaml(step_name: &str, env: &BTreeMap<String, String>, run: &str) -> Ya
             )]),
         ),
         (
+            "outputs".to_owned(),
+            Yaml::Map(vec![(
+                "seed_admitted".to_owned(),
+                Yaml::Map(vec![
+                    (
+                        "description".to_owned(),
+                        Yaml::str("True only when the trusted seed matched and was copied."),
+                    ),
+                    (
+                        "value".to_owned(),
+                        Yaml::str("${{ steps.copy.outputs.seed_admitted }}"),
+                    ),
+                ]),
+            )]),
+        ),
+        (
             "runs".to_owned(),
             Yaml::Map(vec![
                 ("using".to_owned(), Yaml::str("composite".to_owned())),
                 (
                     "steps".to_owned(),
                     Yaml::Seq(vec![Yaml::Map(vec![
+                        ("id".to_owned(), Yaml::str("copy".to_owned())),
                         ("name".to_owned(), Yaml::str(step_name.to_owned())),
                         (
                             "env".to_owned(),
