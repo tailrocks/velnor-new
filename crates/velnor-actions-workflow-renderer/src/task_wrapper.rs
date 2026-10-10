@@ -37,7 +37,8 @@ struct Shape {
 pub(crate) fn factor_obligation_steps(
     jobs: &BTreeMap<String, Job>,
     checkout_uses: &str,
-    version: &str,
+    generator_version: &str,
+    report_helper_version: &str,
     workflow_tasks: &[crate::verification_jobs::WorkflowTaskPolicy],
     scale_set_selector: Option<&ScaleSetSelector>,
 ) -> Result<(BTreeMap<String, Job>, Vec<RenderedFile>), RenderError> {
@@ -52,7 +53,7 @@ pub(crate) fn factor_obligation_steps(
                 task_digest,
                 matrix_id,
                 matrix_key,
-                report_helper_version,
+                report_helper_version: task_helper_version,
                 matrix_max_parallel: _,
                 toolchain_inputs: _,
             } = &step.kind
@@ -79,7 +80,7 @@ pub(crate) fn factor_obligation_steps(
                     "declared_task_authority_mismatch:{job_id}"
                 )));
             }
-            if report_helper_version != version {
+            if task_helper_version != report_helper_version {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "declared_task_helper_version_mismatch:{job_id}"
                 )));
@@ -108,7 +109,7 @@ pub(crate) fn factor_obligation_steps(
             let shape = Shape {
                 argv_count: argv.len(),
                 env_keys: env.keys().cloned().collect(),
-                helper_version: report_helper_version.clone(),
+                helper_version: task_helper_version.clone(),
             };
             shapes.insert(shape);
             eligible.insert(
@@ -120,7 +121,7 @@ pub(crate) fn factor_obligation_steps(
                     task_digest,
                     matrix_id,
                     matrix_key,
-                    helper_version: report_helper_version,
+                    helper_version: task_helper_version,
                 },
             );
         }
@@ -156,7 +157,7 @@ pub(crate) fn factor_obligation_steps(
     }
     let mut files = Vec::with_capacity(shape_ids.len());
     for (shape, action_id) in &shape_ids {
-        files.push(declared_task_file(*action_id, shape, version)?);
+        files.push(declared_task_file(*action_id, shape, generator_version)?);
     }
     Ok((next, files))
 }

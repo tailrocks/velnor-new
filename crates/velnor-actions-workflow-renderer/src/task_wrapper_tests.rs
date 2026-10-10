@@ -39,8 +39,8 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
         })
         .collect::<BTreeMap<_, _>>();
 
-    let (factored, files) =
-        factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[], None).expect("factor obligations");
+    let (factored, files) = factor_obligation_steps(&jobs, CHECKOUT, VERSION, VERSION, &[], None)
+        .expect("factor obligations");
 
     assert_eq!(factored.len(), 150);
     assert_eq!(files.len(), 1, "argv/env shape should share one action");
@@ -117,7 +117,7 @@ fn ordinary_shell_and_tofu_steps_stay_unfactored() {
         simple_job(vec![checkout_step(), acquire_step(), shell, tofu]),
     )]);
 
-    let (factored, files) = factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[], None)
+    let (factored, files) = factor_obligation_steps(&jobs, CHECKOUT, VERSION, VERSION, &[], None)
         .expect("leave shell tasks alone");
     assert!(files.is_empty());
     assert_eq!(
@@ -146,7 +146,7 @@ fn typed_task_requires_checkout_staging_and_credential_free_inputs() {
         simple_job(vec![acquire_step(), task.clone()]),
     )]);
     assert!(
-        factor_obligation_steps(&no_checkout, CHECKOUT, VERSION, &[], None)
+        factor_obligation_steps(&no_checkout, CHECKOUT, VERSION, VERSION, &[], None)
             .expect_err("checkout is mandatory")
             .to_string()
             .contains("declared_task_requires_checkout")
@@ -157,7 +157,7 @@ fn typed_task_requires_checkout_staging_and_credential_free_inputs() {
         simple_job(vec![checkout_step(), task.clone()]),
     )]);
     assert!(
-        factor_obligation_steps(&no_stage, CHECKOUT, VERSION, &[], None)
+        factor_obligation_steps(&no_stage, CHECKOUT, VERSION, VERSION, &[], None)
             .expect_err("the staged helper is mandatory")
             .to_string()
             .contains("declared_task_requires_staged_helper")
@@ -176,7 +176,7 @@ fn typed_task_requires_checkout_staging_and_credential_free_inputs() {
         simple_job(vec![checkout_step(), acquire_step(), credentialed]),
     )]);
     assert!(
-        factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[], None)
+        factor_obligation_steps(&jobs, CHECKOUT, VERSION, VERSION, &[], None)
             .expect_err("credentials cannot enter task action inputs")
             .to_string()
             .contains("credential_step_env:GITHUB_TOKEN")
@@ -199,7 +199,7 @@ fn typed_task_rejects_helper_version_from_a_different_generation_context() {
         simple_job(vec![checkout_step(), acquire_step(), task]),
     )]);
 
-    let error = factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[], None)
+    let error = factor_obligation_steps(&jobs, CHECKOUT, VERSION, VERSION, &[], None)
         .expect_err("task metadata cannot name a different helper release than the renderer");
     assert!(
         error
@@ -210,12 +210,48 @@ fn typed_task_rejects_helper_version_from_a_different_generation_context() {
 }
 
 #[test]
+fn generated_task_action_marker_uses_generator_version_and_body_uses_helper_version() {
+    const CONSUMER_HELPER_VERSION: &str = "0.1.4";
+    let mut task = task_step(0);
+    let StepKind::TaskExecution {
+        report_helper_version,
+        ..
+    } = &mut task.kind
+    else {
+        unreachable!();
+    };
+    *report_helper_version = CONSUMER_HELPER_VERSION.to_owned();
+    let jobs = BTreeMap::from([(
+        "rust-demo".to_owned(),
+        simple_job(vec![
+            checkout_step(),
+            acquire_step_for(CONSUMER_HELPER_VERSION),
+            task,
+        ]),
+    )]);
+
+    let (_, files) =
+        factor_obligation_steps(&jobs, CHECKOUT, VERSION, CONSUMER_HELPER_VERSION, &[], None)
+            .expect("factor task under independently versioned generator/helper");
+    assert_eq!(files.len(), 1);
+    assert!(files[0].bytes.starts_with(&format!(
+        "{}\n",
+        crate::marker::marker_for_version(VERSION).expect("generator marker")
+    )));
+    assert!(
+        files[0]
+            .bytes
+            .contains("$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.4")
+    );
+}
+
+#[test]
 fn scale_set_task_requires_a_resolved_linux_x64_verification_profile() {
     let mut job = simple_job(vec![checkout_step(), acquire_step(), task_step(0)]);
     job.runs_on = "scale-set:velnor+orbstack-linux".to_owned();
     let jobs = BTreeMap::from([("rust-demo".to_owned(), job)]);
     assert!(
-        factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[], None)
+        factor_obligation_steps(&jobs, CHECKOUT, VERSION, VERSION, &[], None)
             .expect_err("an arbitrary self-hosted selector does not prove linux/amd64")
             .to_string()
             .contains("declared_task_requires_supported_linux_runner")
@@ -256,9 +292,10 @@ fn crate_obligation_scale_set_uses_the_explicit_profile_without_a_task_policy() 
     job.runs_on.clone_from(&token);
     let jobs = BTreeMap::from([("rust-demo".to_owned(), job)]);
 
-    assert!(factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[], None).is_err());
-    let (_, files) = factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[], Some(&selector))
-        .expect("validated execution profile authorizes the crate route");
+    assert!(factor_obligation_steps(&jobs, CHECKOUT, VERSION, VERSION, &[], None).is_err());
+    let (_, files) =
+        factor_obligation_steps(&jobs, CHECKOUT, VERSION, VERSION, &[], Some(&selector))
+            .expect("validated execution profile authorizes the crate route");
     assert_eq!(files.len(), 1);
 }
 
@@ -268,7 +305,9 @@ fn crate_obligation_scale_set_rejects_a_different_resolved_profile() {
     let mut job = simple_job(vec![checkout_step(), acquire_step(), task_step(0)]);
     job.runs_on = "scale-set:velnor+orbstack-linux".to_owned();
     let jobs = BTreeMap::from([("rust-demo".to_owned(), job)]);
-    assert!(factor_obligation_steps(&jobs, CHECKOUT, VERSION, &[], Some(&selector)).is_err());
+    assert!(
+        factor_obligation_steps(&jobs, CHECKOUT, VERSION, VERSION, &[], Some(&selector)).is_err()
+    );
 }
 
 fn scale_set_selector() -> ScaleSetSelector {
@@ -349,7 +388,11 @@ fn checkout_step() -> Step {
 }
 
 fn acquire_step() -> Step {
-    let helper = format!("{}{}", crate::steps::STAGED_BINARY_PREFIX, VERSION);
+    acquire_step_for(VERSION)
+}
+
+fn acquire_step_for(version: &str) -> Step {
+    let helper = format!("{}{version}", crate::steps::STAGED_BINARY_PREFIX);
     crate::steps::acquire_velnor_step(
         vec![
             "sh".to_owned(),
