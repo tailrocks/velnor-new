@@ -196,7 +196,8 @@ steps in the [task execution contract](task-execution-contract.md) and uploads o
    required job reads `.github/actionlint.yaml` and checks every generated workflow, even with no Rust stack.
 4. `required`: `if: always()`, depends on base and enabled policy jobs, validates reports/conclusions, and is the required status check.
 
-Only for `workflow.policy = "velnor-repository-v1"`, emit one independent job per repository validator plus generated `release.yml` and `velnor-qualification.yml` workflows rendered from typed workflow IR, each with an explicit `permissions:` block (least privilege for its role). `alint`
+Only for `workflow.policy = "velnor-repository-v1"`, emit one independent job per repository validator. Its five-phase hosted cache campaign ([contract](hosted-cache-qualification-contract.md)) uses `workflow_dispatch` inputs in generated `ci.yml`: required `campaign` and `phase` (`cold`, `control`, `third`, `useful_delta`, or `warm`), plus the paired optional `predecessor_run_id` and `predecessor_run_attempt`. The plan job resolves and validates predecessor evidence when the phase requires it. This Velnor-only campaign is not a separate workflow file. Independently, schema-2 `[execution].workflows` may select the optional generic `.github/workflows/qualification.yml` under either workflow policy.
+The repository-policy jobs and any emitted workflows are rendered from typed workflow IR, each with an explicit `permissions:` block (least privilege for its role). `alint`
 checks out source with `persist-credentials: false` and runs the full-SHA-pinned `asamarts/alint` action with `path: .`,
 `config: .alint.yml`, `format: github`, and `fail-on-warning: true`. `cargo-deny`, `cargo-machete`, and `zizmor`
 each run their single dependency/security check in their own job; no umbrella grouping exists.

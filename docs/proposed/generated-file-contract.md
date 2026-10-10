@@ -16,14 +16,19 @@ preserves other repository-owned entries as specified in §3:
 ├── release-plz.toml             # consumer-v1 only, release enabled
 └── workflows/
     ├── binary-release.yml         # consumer-v1 only, Rust binary release enabled
-    ├── ci.yml
-    ├── velnor-qualification.yml  # velnor-repository-v1 only
+    ├── ci.yml                      # both policies; Velnor policy adds campaign inputs
+    ├── qualification.yml           # optional schema 2 workflow selected by configuration
     └── release.yml               # velnor-repository-v1, or consumer-v1 with release enabled
 ```
 
-The qualification workflow is emitted only for
-`workflow.policy = "velnor-repository-v1"`; `consumer-v1` MUST NOT emit
-it. `release.yml` is emitted for `velnor-repository-v1` (keeping
+Schema 2 emits `qualification.yml` when `[execution].workflows` selects
+`qualification`, independently of `workflow.policy`; otherwise it is absent.
+This optional workflow is distinct from Velnor's five-phase hosted cache
+campaign ([contract](hosted-cache-qualification-contract.md)): the campaign's
+dispatch inputs and predecessor resolver are part of generated `ci.yml`
+under `velnor-repository-v1`, not a separate workflow file.
+
+`release.yml` is emitted for `velnor-repository-v1` (keeping
 its existing Velnor-internal meaning) and for `consumer-v1` when
 `[stacks.rust.release].enabled = true`, together with the two effective
 release-plz configs; with release disabled, `consumer-v1` emits none of
