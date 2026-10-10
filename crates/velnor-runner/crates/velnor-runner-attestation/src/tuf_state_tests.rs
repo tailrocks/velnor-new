@@ -170,7 +170,10 @@ fn existing_permissive_cache_directory_is_rejected_without_chmod_repair() {
 
 #[test]
 fn cache_directory_owner_must_match_the_effective_service_uid() {
-    let temporary = TempDir::new().expect("create isolated cache root");
+    let temporary = tempfile::Builder::new()
+        .permissions(fs::Permissions::from_mode(0o700))
+        .tempdir()
+        .expect("create isolated cache root");
     let path = fs::canonicalize(temporary.path()).expect("canonicalize private directory");
     let current_uid = effective_uid();
     assert!(validate_private_directory_path_for_uid(&path, current_uid).is_ok());
