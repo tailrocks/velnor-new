@@ -30,25 +30,32 @@ This artifact must preserve that limitation.
 
 The executable takes no arguments and reads no environment variables. On
 success it writes exactly one compact JSON object followed by a newline to
-stdout. All fields are required unsigned integers; the host rejects malformed
-JSON, duplicate or unknown fields, missing values, overflow, trailing output,
-and output above 512 bytes. A failed read or conversion exits nonzero without
-writing a partial record. Diagnostics go to stderr only.
+stdout. All five keys are required; the first four are unsigned integers and
+the PSI value is either an unsigned integer or `null`. The host rejects
+malformed JSON, duplicate or unknown keys, missing values, overflow, trailing
+output, and output above 512 bytes. A failed mandatory read or conversion
+exits nonzero without writing a partial record. Diagnostics go to stderr only.
 
 | Field | Meaning and source |
 | --- | --- |
 | `schema_version` | Integer `1`. |
-| `docker_root_free_bytes` | Checked `f_bavail * f_frsize` from `statvfs` on the fixed `/velnor/docker-root` mount. The probe never opens or enumerates files under this path. |
+| `docker_root_free_bytes` | Checked `f_bavail * f_frsize` from `statvfs` on `/velnor/docker-root`, a read-only bind of the selected daemon's exact canonical `DockerRootDir` returned by that same daemon's `info` response. The controller binds the sample to the engine identity and root path observed before the probe, then checks both again after it; the probe accepts no path override. |
 | `memory_available_bytes` | `MemAvailable` from the fixed `/proc/meminfo` file, in kB multiplied by 1024 with checked arithmetic. |
 | `load_milli` | The first `/proc/loadavg` value (one-minute load), multiplied by 1000 and rounded upward using checked integer arithmetic. The host normalizes this value by the guest CPU count for the 750/1,150 milli-load-per-CPU policy thresholds. |
-| `memory_psi_some_avg10_bps` | `some avg10` from `/proc/pressure/memory`, represented in hundredths of a percent (10,000 = 100%). It is diagnostic only and does not gate admission. |
+| `memory_psi_some_avg10_bps` | Either `null` when PSI is unavailable, disabled, unsupported, or malformed, or `some avg10` from `/proc/pressure/memory` represented in hundredths of a percent (10,000 = 100%). It is diagnostic only and does not gate admission. |
 
-Reads from `/proc` use fixed paths and small explicit byte caps. Parsers accept
-only the documented decimal forms, reject signs, exponent notation, missing
+Every key is present in the version-1 record. `schema_version`,
+`docker_root_free_bytes`, `memory_available_bytes`, and `load_milli` are
+required unsigned integers; PSI is the sole nullable field. Reads from
+`/proc` use fixed paths and small explicit byte caps. Parsers accept only the
+documented decimal forms, reject signs, exponent notation, missing required
 fields, duplicate fields, invalid ranges, and arithmetic overflow, and never
-fall back to another file or source. The probe does not accept a path from a
-caller. The runtime contract limits stdout to 512 bytes; the host enforces the
-same limit before parsing.
+fall back to another file or source. Failure to obtain a valid mandatory
+measurement fails the sample; PSI read or parse failure produces `null` and
+does not deny an otherwise valid sample. The probe does not accept a path
+from a caller. The runtime contract limits stdout to 512 bytes; the host
+enforces the same limit before parsing and rejects unknown keys or missing
+keys.
 
 The probe uses safe Rust APIs only. The filesystem query uses the exact pinned
 `rustix` registry dependency in the nested runner workspace; no FFI or
@@ -67,12 +74,30 @@ containing only the probe executable. Its fixed image configuration is:
 
 The host-side runtime owner must run the image with a read-only root filesystem,
 no network, all Linux capabilities dropped, no-new-privileges enabled, no
-arguments or environment, and exactly one read-only bind mount of the private
-DinD daemon's Docker root to `/velnor/docker-root`. It must not mount the outer
+arguments or environment, and exactly one read-only bind mount of the
+selected daemon's canonical `DockerRootDir` to `/velnor/docker-root`. The host
+gets this source path from that daemon's `info` response, rejects a
+noncanonical or root path, and rechecks the same engine identity and path
+after sampling. It must not mount the outer
 Docker socket, job workspace, host home, credentials, or another host path.
 Those options and the image's release identity are enforced and tested by the
 host-side work, not by this image's Dockerfile. The image itself cannot verify
 that the mount is read-only; the controller must create it that way.
+
+That mount exposes the selected worker's whole daemon data root to the probe
+process. Read-only prevents writes; it does not prevent reads that the
+container's UID is allowed by filesystem permissions to perform. The fixed
+probe implementation only calls `statvfs` on the mount and never opens,
+enumerates, or emits data from Docker-root files, but this is not a kernel
+confidentiality boundary against a compromised probe. The trust boundary is
+the controller-only, source-bound and attested image running as a fixed
+non-root UID with no network, dropped capabilities, no job-provided input,
+numeric bounded output, and no retained raw output. The controller never
+passes this image or mount to the job or DinD container. A narrower same-
+filesystem anchor is a possible future design only if its creation and exact
+binding to the selected daemon's `DockerRootDir` are proven without adding an
+unreviewed write or accepting a substitutable path; this proposal does not
+depend on such an anchor.
 
 The image build workflow must inspect the built image's OS, architecture, user,
 entrypoint, empty command/environment, and revision label. It must also run the
@@ -102,10 +127,44 @@ Rust image or execute a post-build tool from an unpinned package source.
 
 The build job produces `RESOURCE_PROBE_MANIFEST.json` from validated metadata
 of the image it actually built and saved. The manifest has a fixed schema and
-field order, contains no timestamp, and binds the exact source SHA, platform,
-Docker image config digest, archive name and SHA-256, probe protocol version,
-numeric image user, and fixed entrypoint. The manifest is data about the
-archive, not an independent trust root. The release job computes
+field order, contains no timestamp, and includes these identity fields:
+
+| Field | Required value and verification |
+| --- | --- |
+| `repository` | `tailrocks/velnor-new`; match the attested source repository. |
+| `source_ref` | `refs/heads/main`; match the attested source ref. |
+| `source_commit` | Full source commit SHA; match the source digest accepted by `product-release.yml` and the attested digest. |
+| `signer_workflow` | `.github/workflows/product-release-images.yml`; match the exact image-asset signer workflow. |
+| `signer_ref` | `refs/heads/main`; match the signer identity. |
+| `workflow_authority_sha` | Exact workflow authority digest accepted by `product-release.yml`; match the signed attestation's signer digest. |
+| `trusted_signing_identity` | Object with `oidc_issuer` and `certificate_identity`; both must match the verified attestation certificate and the pinned Velnor policy. |
+
+The version-1 `trusted_signing_identity` values are:
+
+- `oidc_issuer`: `https://token.actions.githubusercontent.com`;
+- `certificate_identity`:
+  `https://github.com/tailrocks/velnor-new/.github/workflows/product-release-images.yml@refs/heads/main`.
+
+The coordinator and host verifier must check those values against the verified
+attestation certificate, not accept them from the manifest as authority. The
+remaining identity fields bind the exact repository, source ref, source
+commit, signer workflow/ref, and workflow authority accepted by the protected
+coordinator for that run.
+
+The manifest also binds `platform`, `docker_image_id`, `config_digest`,
+`archive_name`, `archive_sha256`, `protocol_version`, `image_user`, and
+`entrypoint`. `docker_image_id` is the full `sha256:<64 lowercase hex>` Docker
+image ID reported for the built single-platform image; `config_digest` is the
+SHA-256 digest of that image's configuration JSON. Docker defines an image ID
+as the SHA-256 hash of its configuration JSON, so the build must verify that
+these fields are exactly equal before writing the manifest. The host verifies
+the same equality, then compares the full `docker_image_id` to the ID returned
+after loading the saved archive. A mismatch fails closed. The archive SHA-256
+is a separate digest and is not used as the Docker image ID or config digest.
+The manifest is data about the archive, not an independent trust root: the
+host verifies each identity field against the accepted coordinator and the
+signer identity extracted from the verified attestation, never against the
+manifest alone. The release job computes
 `SHA256SUMS` over the runner archive, DinD archive, probe archive, and
 `RESOURCE_PROBE_MANIFEST.json`.
 
