@@ -1,12 +1,12 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::{ConfigFact, JournalFact, assess, classify_engine_journal, journal_mark, read_config};
+use super::{
+    ConfigFact, JournalFact, assess, assess_with, classify_engine_journal, journal_mark,
+    read_config,
+};
 use crate::journal::{Journal, Outcome};
 use crate::readiness::Readiness;
-
-const SERVICE: &str = "com.tailrocks.velnor.readiness-test";
-const ACCOUNT: &str = "absent";
 
 fn deadline() -> tokio::time::Instant {
     tokio::time::Instant::now() + super::READINESS_BUDGET
@@ -44,7 +44,7 @@ fn sample() -> String {
 fn missing_state_remains_missing() -> Result<(), String> {
     let scratch = Scratch::new("missing-state")?;
     let missing = scratch.path().join("missing");
-    let state = super::controller_readiness(&missing, SERVICE, ACCOUNT);
+    let state = super::controller_readiness(&missing);
     if missing.exists() {
         return Err("readiness created the missing state directory".to_owned());
     }
@@ -59,7 +59,7 @@ fn missing_state_remains_missing() -> Result<(), String> {
 async fn drain_file_reports_draining_without_config() -> Result<(), String> {
     let scratch = Scratch::new("drain")?;
     std::fs::write(scratch.path().join("drain"), b"1").map_err(|err| err.to_string())?;
-    let state = assess(scratch.path(), SERVICE, ACCOUNT, deadline()).await;
+    let state = assess(scratch.path(), deadline()).await;
     if state == Readiness::Draining {
         Ok(())
     } else {
@@ -71,7 +71,18 @@ async fn drain_file_reports_draining_without_config() -> Result<(), String> {
 async fn missing_keychain_item_beats_a_dead_socket() -> Result<(), String> {
     let scratch = Scratch::new("cred")?;
     std::fs::write(scratch.path().join("host.toml"), sample()).map_err(|err| err.to_string())?;
-    let state = assess(scratch.path(), SERVICE, ACCOUNT, deadline()).await;
+    let mut selected = None;
+    let state = assess_with(scratch.path(), deadline(), |reference| {
+        selected = Some((
+            reference.service().to_owned(),
+            reference.account().to_owned(),
+        ));
+        false
+    })
+    .await;
+    if selected != Some(("test".to_owned(), "absent".to_owned())) {
+        return Err("readiness ignored host.toml credential_ref".to_owned());
+    }
     if state == Readiness::WaitingForCredentials {
         Ok(())
     } else {

@@ -1,6 +1,9 @@
 //! Secret-free host TOML. A `pat` or `token` field is rejected.
 
-use serde::Deserialize;
+use std::fmt::{Display, Formatter};
+
+use serde::de::Error as DeError;
+use serde::{Deserialize, Deserializer};
 
 use crate::error::HostError;
 use crate::worker::{ResourceBudget, ResourceBudgetConfig};
@@ -27,8 +30,76 @@ pub struct GithubSection {
     pub repository: String,
     /// Scale set name.
     pub scale_set_name: String,
-    /// `keychain:` reference.
-    pub credential_ref: String,
+    /// Keychain service and account used by every host credential operation.
+    pub credential_ref: KeychainReference,
+}
+
+/// A parsed `keychain:<service>/<account>` reference.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeychainReference {
+    service: String,
+    account: String,
+}
+
+impl KeychainReference {
+    /// Parse a canonical Keychain reference.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Config`] for an empty or malformed pair.
+    pub fn parse(value: &str) -> Result<Self, HostError> {
+        let Some(pair) = value.strip_prefix("keychain:") else {
+            return Err(HostError::Config);
+        };
+        let Some((service, account)) = pair.split_once('/') else {
+            return Err(HostError::Config);
+        };
+        if !valid_keychain_component(service)
+            || !valid_keychain_component(account)
+            || account.contains('/')
+        {
+            return Err(HostError::Config);
+        }
+        Ok(Self {
+            service: service.to_owned(),
+            account: account.to_owned(),
+        })
+    }
+
+    /// Keychain service name.
+    #[must_use]
+    pub fn service(&self) -> &str {
+        &self.service
+    }
+
+    /// Keychain account name.
+    #[must_use]
+    pub fn account(&self) -> &str {
+        &self.account
+    }
+}
+
+impl Display for KeychainReference {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "keychain:{}/{}", self.service, self.account)
+    }
+}
+
+impl<'de> Deserialize<'de> for KeychainReference {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::parse(&value).map_err(D::Error::custom)
+    }
+}
+
+fn valid_keychain_component(value: &str) -> bool {
+    !value.is_empty()
+        && !value.chars().any(|character| {
+            character.is_whitespace() || character.is_control() || character == '/'
+        })
 }
 
 /// Host limits.
@@ -92,10 +163,7 @@ impl HostConfig {
 }
 
 fn validate_github(github: &GithubSection) -> Result<(), HostError> {
-    if repository_ok(&github.repository)
-        && keychain_ref(&github.credential_ref)
-        && github.scale_set_name == "ubuntu-26.04-scale-set"
-    {
+    if repository_ok(&github.repository) && github.scale_set_name == "ubuntu-26.04-scale-set" {
         Ok(())
     } else {
         Err(HostError::Config)
@@ -110,13 +178,6 @@ fn repository_ok(repository: &str) -> bool {
         }
         _ => false,
     }
-}
-
-fn keychain_ref(value: &str) -> bool {
-    let Some(name) = value.strip_prefix("keychain:") else {
-        return false;
-    };
-    !name.is_empty() && !name.chars().any(char::is_whitespace)
 }
 
 fn validate_docker(docker: &DockerConfig) -> Result<(), HostError> {
