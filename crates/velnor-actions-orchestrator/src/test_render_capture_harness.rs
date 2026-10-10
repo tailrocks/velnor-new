@@ -66,7 +66,10 @@ fn capture_exact_consumer_marked_workflow_before_size_guard()
     let _capture_guard = full_tree_capture_guard();
     let rendered = crate::render_staged_tree_with(&preparation, None);
     let capture = velnor_actions_workflow_renderer::render::test_render_capture::take();
-    let capture = capture.ok_or("render boundary did not record a workflow")?;
+    let capture = capture.ok_or_else(|| match &rendered {
+        Ok(_) => "render boundary did not record a workflow".to_owned(),
+        Err(error) => format!("render failed before workflow capture: {error}"),
+    })?;
     let canonical_bytes = capture.canonical.len();
     let selected_bytes = capture.selected.len();
     assert_required_task_coverage(&capture.selected, &configured_tasks);
