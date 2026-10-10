@@ -32,7 +32,16 @@ struct HelperOutput {
 #[tokio::test]
 async fn compiled_helper_verifies_real_bundle_and_rejects_claim_mutations()
 -> Result<(), Box<dyn Error>> {
-    let directory = tempfile::tempdir()?;
+    #[cfg(unix)]
+    let directory = {
+        use std::os::unix::fs::PermissionsExt;
+
+        tempfile::Builder::new()
+            .permissions(fs::Permissions::from_mode(0o700))
+            .tempdir()?
+    };
+    #[cfg(not(unix))]
+    let directory = tempfile::Builder::new().tempdir()?;
     let private_directory = directory.path().canonicalize()?;
     let helper = private_directory.join("velnor-runner-attestation-helper");
     fs::copy(
