@@ -48,6 +48,8 @@ mod impl_renderer_mbx_preflight;
 mod impl_renderer_mbx_selector;
 #[path = "impl_renderer_mbxgate.rs"]
 mod impl_renderer_mbxgate;
+#[path = "impl_renderer_mise_pins.rs"]
+mod impl_renderer_mise_pins;
 #[path = "impl_renderer_msrv.rs"]
 mod impl_renderer_msrv;
 #[path = "impl_renderer_overlap.rs"]
@@ -98,8 +100,6 @@ mod impl_renderer_release_tree;
 mod impl_renderer_release_units;
 #[path = "impl_renderer_release_version.rs"]
 mod impl_renderer_release_version;
-#[path = "impl_renderer_mise_pins.rs"]
-mod impl_renderer_mise_pins;
 #[path = "impl_renderer_setup.rs"]
 mod impl_renderer_setup;
 #[path = "impl_renderer_size.rs"]
