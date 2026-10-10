@@ -65,7 +65,19 @@ fn same_task_id_rejects_a_different_complete_execution_record() {
 
 #[test]
 fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() {
-    let jobs = (0..150)
+    let jobs = validated_crate_jobs();
+    let (factored, files) = factor_obligation_steps(&jobs, CHECKOUT, VERSION, VERSION, &[], None)
+        .expect("factor obligations");
+    assert_eq!(factored.len(), 150);
+    let (action_file, manifest_file) = shared_action_and_manifest(&files);
+    assert_shared_artifact_shape(action_file, manifest_file);
+    assert_manifest_records(manifest_file);
+    assert_shell_wrapper_contract(action_file);
+    assert_job_contracts(&jobs, &factored, action_file);
+}
+
+fn validated_crate_jobs() -> BTreeMap<String, Job> {
+    (0..150)
         .map(|index| {
             let id = format!("rust-crate-{index}");
             let job = Job {
@@ -81,12 +93,12 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
             };
             (id, job)
         })
-        .collect::<BTreeMap<_, _>>();
+        .collect()
+}
 
-    let (factored, files) = factor_obligation_steps(&jobs, CHECKOUT, VERSION, VERSION, &[], None)
-        .expect("factor obligations");
-
-    assert_eq!(factored.len(), 150);
+fn shared_action_and_manifest(
+    files: &[tree::RenderedFile],
+) -> (&tree::RenderedFile, &tree::RenderedFile) {
     assert_eq!(
         files.len(),
         2,
@@ -100,6 +112,13 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
         .iter()
         .find(|file| file.path == velnor_actions_contract::TASK_EXECUTION_MANIFEST_PATH)
         .expect("versioned task execution manifest");
+    (action_file, manifest_file)
+}
+
+fn assert_shared_artifact_shape(
+    action_file: &tree::RenderedFile,
+    manifest_file: &tree::RenderedFile,
+) {
     assert_eq!(
         action_file.path,
         format!(".github/actions/{ACTION_NAME_PREFIX}0/action.yml")
@@ -110,6 +129,9 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
         "{}\n",
         crate::marker::marker_for_version(VERSION).expect("generator marker")
     )));
+}
+
+fn assert_manifest_records(manifest_file: &tree::RenderedFile) {
     assert!(
         manifest_file
             .bytes
@@ -121,6 +143,9 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
             .contains("crate-0\\\"; printf injected; #")
     );
     assert_eq!(manifest_file.bytes.matches("\"task_id\":").count(), 150);
+}
+
+fn assert_shell_wrapper_contract(action_file: &tree::RenderedFile) {
     assert!(!action_file.bytes.contains("inputs.task_id"));
     assert!(!action_file.bytes.contains("inputs.execution_digest"));
     assert!(action_file.bytes.contains("inputs.digest"));
@@ -141,47 +166,61 @@ fn one_typed_action_serves_150_validated_tasks_without_dropping_job_contracts() 
     {
         assert!(!action_file.bytes.contains(&format!("inputs.env_{key}")));
     }
+}
 
+fn assert_job_contracts(
+    jobs: &BTreeMap<String, Job>,
+    factored: &BTreeMap<String, Job>,
+    action_file: &tree::RenderedFile,
+) {
     for (id, original) in &jobs {
         let rewritten = factored.get(id).expect("job retained");
-        assert_eq!(rewritten.display_name, original.display_name);
-        assert_eq!(rewritten.runs_on, original.runs_on);
-        assert_eq!(rewritten.timeout_minutes, original.timeout_minutes);
-        assert_eq!(rewritten.needs, original.needs);
-        assert_eq!(rewritten.condition, original.condition);
-        assert_eq!(rewritten.permissions, original.permissions);
-        assert_eq!(rewritten.environment, original.environment);
-        assert_eq!(rewritten.steps.len(), original.steps.len());
-        assert_eq!(rewritten.steps[0], original.steps[0]);
-        assert_eq!(rewritten.steps[1], original.steps[1]);
-        let caller = &rewritten.steps[2];
-        assert_eq!(caller.name, original.steps[2].name);
-        assert_eq!(caller.condition, original.steps[2].condition);
-        let StepKind::Action { uses, with, env } = &caller.kind else {
-            panic!("obligation was not replaced by its composite call");
-        };
-        assert_eq!(uses, "./.github/actions/declared-task-0");
-        assert!(
-            env.is_empty(),
-            "task values cross only through the manifest"
-        );
-        assert_eq!(
-            with.len(),
-            1,
-            "the full digest selects the validated record"
-        );
-        assert_eq!(with.keys().next().map(String::as_str), Some("digest"));
-        assert_eq!(with["digest"].len(), 67);
-        assert!(
-            with["digest"].starts_with("b3-")
-                && with["digest"][3..]
-                    .bytes()
-                    .all(|byte| byte.is_ascii_hexdigit())
-        );
-        assert!(!action_file.bytes.contains(HOSTILE_TASK_ARGUMENT));
-        assert!(!action_file.bytes.contains("inputs.argv_"));
-        assert!(!action_file.bytes.contains("inputs.env_"));
+        assert_job_metadata(original, rewritten);
+        assert_task_call(original, rewritten, action_file);
     }
+}
+
+fn assert_job_metadata(original: &Job, rewritten: &Job) {
+    assert_eq!(rewritten.display_name, original.display_name);
+    assert_eq!(rewritten.runs_on, original.runs_on);
+    assert_eq!(rewritten.timeout_minutes, original.timeout_minutes);
+    assert_eq!(rewritten.needs, original.needs);
+    assert_eq!(rewritten.condition, original.condition);
+    assert_eq!(rewritten.permissions, original.permissions);
+    assert_eq!(rewritten.environment, original.environment);
+    assert_eq!(rewritten.steps.len(), original.steps.len());
+    assert_eq!(rewritten.steps[0], original.steps[0]);
+    assert_eq!(rewritten.steps[1], original.steps[1]);
+}
+
+fn assert_task_call(original: &Job, rewritten: &Job, action_file: &tree::RenderedFile) {
+    let caller = &rewritten.steps[2];
+    assert_eq!(caller.name, original.steps[2].name);
+    assert_eq!(caller.condition, original.steps[2].condition);
+    let StepKind::Action { uses, with, env } = &caller.kind else {
+        panic!("obligation was not replaced by its composite call");
+    };
+    assert_eq!(uses, "./.github/actions/declared-task-0");
+    assert!(
+        env.is_empty(),
+        "task values cross only through the manifest"
+    );
+    assert_eq!(
+        with.len(),
+        1,
+        "the full digest selects the validated record"
+    );
+    assert_eq!(with.keys().next().map(String::as_str), Some("digest"));
+    assert_eq!(with["digest"].len(), 67);
+    assert!(
+        with["digest"].starts_with("b3-")
+            && with["digest"][3..]
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit())
+    );
+    assert!(!action_file.bytes.contains(HOSTILE_TASK_ARGUMENT));
+    assert!(!action_file.bytes.contains("inputs.argv_"));
+    assert!(!action_file.bytes.contains("inputs.env_"));
 }
 
 #[test]
@@ -201,7 +240,7 @@ fn ordinary_shell_and_tofu_steps_stay_unfactored() {
 
     let (factored, files) = factor_obligation_steps(&jobs, CHECKOUT, VERSION, VERSION, &[], None)
         .expect("leave shell tasks alone");
-    assert!(files.is_empty());
+    assert_eq!(files, [] as [tree::RenderedFile; 0]);
     assert_eq!(
         factored.keys().collect::<Vec<_>>(),
         jobs.keys().collect::<Vec<_>>()

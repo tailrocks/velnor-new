@@ -94,6 +94,11 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
     assert!(rendered.contains("GITHUB_TOKEN: \"\""));
     assert!(rendered.contains("GH_TOKEN: \"\""));
     assert!(rendered.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
+    assert_enabled_mise_configuration(&rendered);
+    assert_verification_task_execution(&rendered);
+}
+
+fn assert_enabled_mise_configuration(rendered: &str) {
     for key in ["MISE_NO_CONFIG", "MISE_LOCKFILE"] {
         assert!(
             !rendered.contains(key),
@@ -103,5 +108,8 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
     assert!(rendered.contains("export MISE_NO_ENV=1"));
     assert!(rendered.contains("export MISE_NO_HOOKS=1"));
     assert!(!rendered.contains("mise --no-env --locked --no-hooks install"));
+}
+
+fn assert_verification_task_execution(rendered: &str) {
     assert!(rendered.contains("mise --no-env --no-hooks run --skip-tools desktop-format-check"));
 }

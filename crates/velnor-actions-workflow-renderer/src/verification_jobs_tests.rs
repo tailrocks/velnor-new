@@ -45,7 +45,7 @@ fn task_job_is_unconditional_cache_off_and_credential_scrubbed() {
     let linux = policy("construct-assets", VerificationRunner::LinuxX64);
     let job = build_verification_task_job(&linux, CHECKOUT).expect("fixed task job");
     assert_eq!(job.runs_on, "ubuntu-26.04");
-    assert!(job.needs.is_empty());
+    assert_eq!(job.needs, [] as [String; 0]);
     assert!(job.condition.is_none());
     assert_eq!(job.timeout_minutes.minutes(), 10);
     let permissions = job.permissions.expect("job permissions are explicit");

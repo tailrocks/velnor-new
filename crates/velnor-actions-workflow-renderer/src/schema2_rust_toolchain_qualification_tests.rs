@@ -51,89 +51,103 @@ fn qualification_measures_both_hosted_targets_without_claiming_a_result() {
     );
 
     for (index, (id, body)) in jobs.iter().enumerate() {
-        let rendered = render_yaml(body);
-        let (runner, platform, artifact) = if index == 0 {
-            ("ubuntu-26.04", "linux_x64", "rust-toolchain-linux-x64")
-        } else {
-            ("macos-26", "macos_arm64", "rust-toolchain-macos-arm64")
-        };
-        assert!(rendered.contains(&format!("runs-on: {runner}")), "{id}");
-        assert!(
-            rendered.contains("if: inputs.mode == 'rust-toolchain'"),
-            "{id}"
-        );
-        assert!(rendered.contains("permissions:\n  contents: read"), "{id}");
-        assert!(!rendered.contains("actions: write"), "{id}");
-        assert!(rendered.contains("ref: ${{ github.sha }}"), "{id}");
-        assert!(rendered.contains("persist-credentials: \"false\""), "{id}");
-        assert!(rendered.contains("name: Setup Mise"), "{id}");
-        assert!(rendered.contains("version: 2026.10.7"), "{id}");
-        assert!(
-            rendered.contains(if index == 0 {
-                crate::setup::MISE_BINARY_SHA256_LINUX_X64
-            } else {
-                crate::setup::MISE_BINARY_SHA256_MACOS_ARM64
-            }),
-            "{id}"
-        );
-        assert!(
-            rendered.contains("name: Install pinned MBX through Mise"),
-            "{id}"
-        );
-        let install_run = run_step(body, "Install pinned MBX through Mise");
-        assert!(
-            install_run.contains(
-                "mise --no-config --no-env --no-hooks install \"mr-boxington@$MBX_VERSION\""
-            ),
-            "{id}: {install_run:?}"
-        );
-        assert!(
-            install_run.contains(
-                "mise --no-config --no-env --no-hooks which mbx --tool \"mr-boxington@$MBX_VERSION\""
-            ),
-            "{id}: {install_run:?}"
-        );
-        assert!(rendered.contains("MBX_VERSION: 1.23.0"), "{id}");
-        let probe_run = run_step(
-            body,
-            "Install official Rust components and measure the qualified tree",
-        );
-        assert!(
-            probe_run.contains("--project-root \"$GITHUB_WORKSPACE\""),
-            "{id}: {probe_run:?}"
-        );
-        assert!(
-            probe_run.contains("--mbx-executable \"$MBX_EXECUTABLE\""),
-            "{id}: {probe_run:?}"
-        );
-        assert!(
-            probe_run.contains("--mbx-version \"$MBX_VERSION\""),
-            "{id}: {probe_run:?}"
-        );
-        assert!(
-            probe_run.contains("python3 scripts/qualification/qualify_rust_toolchain.py"),
-            "{id}: {probe_run:?}"
-        );
-        assert!(rendered.contains("RUST_VERSION: 1.99.0"), "{id}");
-        assert!(
-            rendered.contains(&format!("QUALIFICATION_PLATFORM: {platform}")),
-            "{id}"
-        );
-        assert!(rendered.contains(MANIFEST_SHA256), "{id}");
-        assert!(
-            rendered
-                .contains("name: Install official Rust components and measure the qualified tree"),
-            "{id}"
-        );
-        assert!(
-            rendered.contains("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"),
-            "{id}"
-        );
-        assert!(rendered.contains(&format!("name: {artifact}")), "{id}");
-        assert!(rendered.contains("if-no-files-found: error"), "{id}");
-        assert!(!rendered.contains("secrets."), "{id}");
-        assert!(!rendered.contains("publish"), "{id}");
+        assert_hosted_target_setup(index, id, body);
+        assert_measurement_artifact(index, id, body);
     }
+}
+
+fn assert_hosted_target_setup(index: usize, id: &str, body: &Yaml) {
+    let rendered = render_yaml(body);
+    let runner = if index == 0 {
+        "ubuntu-26.04"
+    } else {
+        "macos-26"
+    };
+    assert!(rendered.contains(&format!("runs-on: {runner}")), "{id}");
+    assert!(
+        rendered.contains("if: inputs.mode == 'rust-toolchain'"),
+        "{id}"
+    );
+    assert!(rendered.contains("permissions:\n  contents: read"), "{id}");
+    assert!(!rendered.contains("actions: write"), "{id}");
+    assert!(rendered.contains("ref: ${{ github.sha }}"), "{id}");
+    assert!(rendered.contains("persist-credentials: \"false\""), "{id}");
+    assert!(rendered.contains("name: Setup Mise"), "{id}");
+    assert!(rendered.contains("version: 2026.10.7"), "{id}");
+    let mise_sha = if index == 0 {
+        crate::setup::MISE_BINARY_SHA256_LINUX_X64
+    } else {
+        crate::setup::MISE_BINARY_SHA256_MACOS_ARM64
+    };
+    assert!(rendered.contains(mise_sha), "{id}");
+    assert!(rendered.contains("MBX_VERSION: 1.23.0"), "{id}");
+    assert_pinned_mbx_install(id, body);
+}
+
+fn assert_pinned_mbx_install(id: &str, body: &Yaml) {
+    let install_run = run_step(body, "Install pinned MBX through Mise");
+    assert!(
+        install_run
+            .contains("mise --no-config --no-env --no-hooks install \"mr-boxington@$MBX_VERSION\""),
+        "{id}: {install_run:?}"
+    );
+    assert!(
+        install_run.contains(
+            "mise --no-config --no-env --no-hooks which mbx --tool \"mr-boxington@$MBX_VERSION\""
+        ),
+        "{id}: {install_run:?}"
+    );
+}
+
+fn assert_measurement_artifact(index: usize, id: &str, body: &Yaml) {
+    let rendered = render_yaml(body);
+    let (platform, artifact) = if index == 0 {
+        ("linux_x64", "rust-toolchain-linux-x64")
+    } else {
+        ("macos_arm64", "rust-toolchain-macos-arm64")
+    };
+    assert!(rendered.contains("RUST_VERSION: 1.99.0"), "{id}");
+    assert!(
+        rendered.contains(&format!("QUALIFICATION_PLATFORM: {platform}")),
+        "{id}"
+    );
+    assert!(rendered.contains(MANIFEST_SHA256), "{id}");
+    assert!(
+        rendered.contains("name: Install official Rust components and measure the qualified tree"),
+        "{id}"
+    );
+    assert_qualification_probe(body, id);
+    assert!(
+        rendered.contains("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"),
+        "{id}"
+    );
+    assert!(rendered.contains(&format!("name: {artifact}")), "{id}");
+    assert!(rendered.contains("if-no-files-found: error"), "{id}");
+    assert!(!rendered.contains("secrets."), "{id}");
+    assert!(!rendered.contains("publish"), "{id}");
+}
+
+fn assert_qualification_probe(body: &Yaml, id: &str) {
+    let probe_run = run_step(
+        body,
+        "Install official Rust components and measure the qualified tree",
+    );
+    assert!(
+        probe_run.contains("--project-root \"$GITHUB_WORKSPACE\""),
+        "{id}: {probe_run:?}"
+    );
+    assert!(
+        probe_run.contains("--mbx-executable \"$MBX_EXECUTABLE\""),
+        "{id}: {probe_run:?}"
+    );
+    assert!(
+        probe_run.contains("--mbx-version \"$MBX_VERSION\""),
+        "{id}: {probe_run:?}"
+    );
+    assert!(
+        probe_run.contains("python3 scripts/qualification/qualify_rust_toolchain.py"),
+        "{id}: {probe_run:?}"
+    );
 }
 
 #[test]
