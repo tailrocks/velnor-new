@@ -146,6 +146,7 @@ fn mise_crate_job_prepare_installs_opentofu() {
         &[],
         None,
         2,
+        env!("CARGO_PKG_VERSION"),
     )
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 2);
