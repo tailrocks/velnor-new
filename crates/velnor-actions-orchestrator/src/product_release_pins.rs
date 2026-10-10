@@ -70,6 +70,7 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, Orche
             ],
             &catalog,
         )?,
+        runner_attestation_helper_build_argv: runner_attestation_helper_build_argv(&catalog)?,
         resource_probe_build_argv: resource_probe_build_argv(&catalog)?,
         actionlint_argv: exec_argv(
             &[PinnedTool::Actionlint, PinnedTool::Shellcheck],
@@ -100,6 +101,27 @@ fn resource_probe_target_argv(catalog: &ToolCatalog) -> Result<Vec<String>, Orch
     target_argv(
         ReleaseTarget::LinuxX86_64.triple(),
         "x86_64-unknown-linux-musl",
+        catalog,
+    )
+}
+
+fn runner_attestation_helper_build_argv(
+    catalog: &ToolCatalog,
+) -> Result<Vec<String>, OrchestratorError> {
+    exec_argv(
+        &[PinnedTool::Rust],
+        "cargo",
+        &[
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--release",
+            "-p",
+            "velnor-runner-attestation",
+            "--bin",
+            "velnor-runner-attestation-helper",
+        ],
         catalog,
     )
 }
@@ -192,5 +214,38 @@ fn target_argv(
 fn contract_error(problem: impl std::fmt::Display) -> OrchestratorError {
     OrchestratorError::Contract {
         problem: problem.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PinnedTool, ToolCatalog, runner_attestation_helper_build_argv};
+
+    #[test]
+    fn helper_build_command_uses_pinned_rust_and_exact_locked_binary()
+    -> Result<(), super::OrchestratorError> {
+        let catalog = ToolCatalog::pinned();
+        let actual = runner_attestation_helper_build_argv(&catalog)?;
+        let expected = [
+            "mise".to_owned(),
+            "--no-config".to_owned(),
+            "--no-env".to_owned(),
+            "--no-hooks".to_owned(),
+            "exec".to_owned(),
+            format!("rust@{}", catalog.version(PinnedTool::Rust)),
+            "--".to_owned(),
+            "cargo".to_owned(),
+            "build".to_owned(),
+            "--locked".to_owned(),
+            "--manifest-path".to_owned(),
+            "crates/velnor-runner/Cargo.toml".to_owned(),
+            "--release".to_owned(),
+            "-p".to_owned(),
+            "velnor-runner-attestation".to_owned(),
+            "--bin".to_owned(),
+            "velnor-runner-attestation-helper".to_owned(),
+        ];
+        assert_eq!(actual, expected);
+        Ok(())
     }
 }
