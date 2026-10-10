@@ -63,7 +63,7 @@ fn decode_problem(document: &str) -> Option<String> {
 fn release_disabled_by_default_and_enabled_needs_allowlist() {
     let default = RustReleaseConfig::default();
     assert!(!default.enabled);
-    assert!(default.packages.is_empty());
+    assert_eq!(default.packages, [] as [std::string::String; 0]);
     assert_eq!(default.validate(FILE), Ok(()));
     assert_eq!(
         default.authentication,
