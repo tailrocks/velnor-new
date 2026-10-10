@@ -49,8 +49,8 @@ async fn idless_uncertain_reservation_blocks_turn_without_jit_or_ack() -> Result
 
     assert_eq!(decision, crate::launch::Admit::Hold);
     assert_eq!(result, Ok(false));
-    assert!(script.calls.is_empty());
-    assert!(workers.is_empty());
+    assert_eq!(script.calls, Vec::new());
+    assert_eq!(workers, Vec::new());
     assert_eq!(crate::launch::slot::occupied(&journal).await, Ok(1));
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);

@@ -219,12 +219,10 @@ async fn uncertain_dind_only_recovery_keeps_reservation_and_owned_resources() ->
         .await
         .map_err(|err| err.to_string())?;
     assert_eq!(decision, Admit::Hold);
-    assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
-    assert!(
-        engine
-            .removed_volumes()
-            .map_err(|err| err.to_string())?
-            .is_empty()
+    assert_eq!(engine.removed().map_err(|err| err.to_string())?, Vec::new());
+    assert_eq!(
+        engine.removed_volumes().map_err(|err| err.to_string())?,
+        Vec::new()
     );
     assert!(engine.alive(&foreign).map_err(|err| err.to_string())?);
     assert!(engine.alive(&dind).map_err(|err| err.to_string())?);
@@ -256,7 +254,7 @@ async fn replay_of_a_running_worker_does_not_mint_again() -> Result<(), String> 
         .await
         .map_err(|err| err.to_string())?;
     assert_eq!(decision, Admit::Ack { stop: false });
-    assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
+    assert_eq!(engine.removed().map_err(|err| err.to_string())?, Vec::new());
     let mut calls = script();
     let again = drive_offer(
         &mut calls,

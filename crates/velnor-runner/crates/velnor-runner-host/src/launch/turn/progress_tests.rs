@@ -88,7 +88,7 @@ async fn missing_stats_notifications_ack_then_poll_again() -> Result<(), String>
 
     assert_eq!(host.poll_count, 3);
     assert_eq!(host.script.calls, ["ack", "ack"]);
-    assert!(workers.is_empty());
+    assert_eq!(workers, Vec::new());
     assert_eq!(launch::slot::occupied(&journal).await, Ok(1));
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
@@ -117,7 +117,7 @@ async fn ack_error_propagates_without_start_or_repoll() -> Result<(), String> {
     );
     assert_eq!(host.poll_count, 1);
     assert_eq!(host.script.calls, ["ack"]);
-    assert!(workers.is_empty());
+    assert_eq!(workers, Vec::new());
     assert_eq!(launch::slot::occupied(&journal).await, Ok(0));
     absent(&scratch.file())
 }

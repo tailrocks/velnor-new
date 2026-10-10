@@ -103,8 +103,8 @@ async fn missing_status_keeps_the_slot_and_blocks_assignment() -> Result<(), Str
     );
     assert_eq!(requests.len(), 1);
     assert!(requests[0].contains("/containers/runner-container/json"));
-    assert!(script.calls.is_empty());
-    assert!(workers.is_empty());
+    assert_eq!(script.calls, Vec::new());
+    assert_eq!(workers, Vec::new());
     assert_eq!(crate::launch::slot::occupied(&journal).await, Ok(1));
     let after = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(after, before);
@@ -147,7 +147,7 @@ async fn uncertain_volume_keeps_cleanup_unproven_and_redelivery_unacked() -> Res
     let requests = docker.finish().await?;
 
     assert_eq!(decision, Ok(crate::launch::Admit::Hold));
-    assert!(requests.is_empty());
+    assert_eq!(requests, Vec::new());
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Uncertain);
@@ -176,8 +176,8 @@ async fn uncertain_volume_keeps_cleanup_unproven_and_redelivery_unacked() -> Res
     docker.finish().await?;
 
     assert_eq!(redelivered, Ok(false));
-    assert!(script.calls.is_empty());
-    assert!(workers.is_empty());
+    assert_eq!(script.calls, Vec::new());
+    assert_eq!(workers, Vec::new());
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Uncertain);
@@ -205,12 +205,9 @@ async fn missing_current_census_blocks_ack_and_start() -> Result<(), String> {
     .await
     .map_err(|error| error.to_string())?;
     assert_eq!(decision, crate::launch::Admit::Error);
-    assert!(
-        journal
-            .rows()
-            .await
-            .map_err(|error| error.to_string())?
-            .is_empty()
+    assert_eq!(
+        journal.rows().await.map_err(|error| error.to_string())?,
+        Vec::new()
     );
     absent(&scratch.file())
 }
@@ -266,7 +263,7 @@ async fn bound_running_worker_acks_without_a_second_jit_request() -> Result<(), 
 
     assert_eq!(result, Ok(false));
     assert_eq!(script.calls, ["ack"]);
-    assert!(workers.is_empty());
+    assert_eq!(workers, Vec::new());
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows[0].state, IntentState::Done);
     assert_eq!(rows[0].docker_id.as_deref(), Some("runner-container"));
@@ -335,8 +332,8 @@ async fn bound_resource_keeps_assignment(
     drop(docker);
 
     assert_eq!(result, Err(EnsureError::Uncertain));
-    assert!(script.calls.is_empty());
-    assert!(workers.is_empty());
+    assert_eq!(script.calls, Vec::new());
+    assert_eq!(workers, Vec::new());
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Uncertain);

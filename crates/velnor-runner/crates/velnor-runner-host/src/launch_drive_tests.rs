@@ -132,7 +132,7 @@ async fn jit_uncertainty_does_not_repeat_acquire_or_jit() -> Result<(), String> 
         .await,
         Err(EnsureError::Uncertain)
     );
-    assert!(replay.calls.is_empty());
+    assert_eq!(replay.calls, Vec::new());
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Uncertain);

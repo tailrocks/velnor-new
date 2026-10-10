@@ -137,7 +137,7 @@ async fn inbox_conflict_prevents_quarantine_ack() -> Result<(), String> {
     })
     .await;
     assert!(result.is_err());
-    assert!(ack.requests.is_empty());
+    assert_eq!(ack.requests, Vec::new());
     Ok(())
 }
 

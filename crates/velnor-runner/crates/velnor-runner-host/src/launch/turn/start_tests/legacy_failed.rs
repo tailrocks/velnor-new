@@ -63,8 +63,8 @@ async fn assert_assignment_is_held(journal: &Journal, message_id: i64) -> Result
 
     assert_eq!(decision, crate::launch::Admit::Hold);
     assert_eq!(result, Ok(false));
-    assert!(script.calls.is_empty());
-    assert!(workers.is_empty());
+    assert_eq!(script.calls, Vec::new());
+    assert_eq!(workers, Vec::new());
     Ok(())
 }
 
