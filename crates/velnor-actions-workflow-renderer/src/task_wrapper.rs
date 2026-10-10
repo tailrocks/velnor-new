@@ -450,6 +450,12 @@ while IFS= read -r -d '' field; do frame+=("$field"); done < "$frame_file"
 [[ "${frame[0]}" == @FRAME_MAGIC@ ]] || fail_frame
 [[ "${frame[1]}" == "$VELNOR_TASK_ID" ]] || fail_frame
 [[ "${frame[2]}" == "$VELNOR_TASK_EXECUTION_DIGEST" ]] || fail_frame
+[[ "${frame[1]}" =~ ^(stack|internal)/[a-z0-9._/-]+$ ]] || fail_frame
+[[ "${frame[2]}" =~ ^b3-[0-9a-f]{64}$ ]] || fail_frame
+[[ "${frame[3]}" =~ ^b3-[0-9a-f]{64}$ ]] || fail_frame
+[[ "${frame[4]}" =~ ^stack:[a-z0-9._-]+\|task:(stack|internal)/[a-z0-9._/-]+$ ]] || fail_frame
+[[ "${frame[5]}" =~ ^m-[0-9a-f]{16}$ ]] || fail_frame
+[[ "${frame[4]#*|task:}" == "${frame[1]}" ]] || fail_frame
 [[ "${frame[6]}" == "#,
     );
     script.push_str(helper_version);
