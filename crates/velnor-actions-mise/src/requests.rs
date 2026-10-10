@@ -213,7 +213,7 @@ impl MetadataQualification {
 enum MbxAuthority {
     /// MBX is selected from the catalog by the enclosing Mise command.
     Catalog,
-    /// A typed candidate-build route supplies MBX through its pinned action.
+    /// A typed action-owned route supplies MBX through its pinned action.
     ActionOwned,
 }
 

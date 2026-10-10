@@ -36,6 +36,19 @@ impl NextestDriver {
             Self::Cargo | Self::Mbx => vec![PinnedTool::Rust, PinnedTool::Nextest],
         }
     }
+
+    /// Construct an execution using this driver's pinned authority.
+    ///
+    /// MBX is supplied by the separately pinned workflow action, while Mise
+    /// selects Rust and Nextest. It must not be impersonated as a catalog
+    /// tool; Cargo remains a normal Mise-selected payload.
+    pub(crate) fn exec(self, args: Vec<OsString>) -> Result<PinnedToolExec, MiseError> {
+        let program = OsStr::new(self.program());
+        match self {
+            Self::Cargo => PinnedToolExec::new(self.tools(), program, args),
+            Self::Mbx => PinnedToolExec::new_action_owned_mbx(self.tools(), program, args),
+        }
+    }
 }
 
 /// Archive file every shape reads or writes.
@@ -128,7 +141,7 @@ pub(crate) fn nextest_exec(
     driver: NextestDriver,
     args: &[OsString],
 ) -> Result<PinnedToolExec, MiseError> {
-    PinnedToolExec::new(driver.tools(), OsStr::new(driver.program()), args.to_vec())
+    driver.exec(args.to_vec())
 }
 
 /// Full mise argv for one driver plus a program-first payload.
