@@ -120,7 +120,7 @@ fn execution_digest_binds_all_record_metadata() {
     changed.matrix_key.push_str("-changed");
     assert_ne!(changed.computed_execution_digest().unwrap(), digest);
     let mut changed = original.clone();
-    changed.report_helper_version = "0.1.7".to_owned();
+    changed.report_helper_version = "0.1.8".to_owned();
     assert_ne!(changed.computed_execution_digest().unwrap(), digest);
     let mut changed = original;
     changed.matrix_max_parallel = Some(9);

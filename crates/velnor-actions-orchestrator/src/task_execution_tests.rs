@@ -293,7 +293,7 @@ fn resolver_rejects_untrusted_marker_version_before_manifest_selection() {
         fixture.runner_temp.path(),
         RUN_KEY,
         &record.execution_digest,
-        "0.1.7",
+        "0.1.6",
     )
     .expect_err("wrong static renderer version rejected");
     assert_error(&error, "task_execution_marker_mismatch");
