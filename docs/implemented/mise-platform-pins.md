@@ -42,5 +42,8 @@ The run completed at 2026-10-09T21:50:11Z. This historical result does not
 qualify Mise 2026.10.7, the generator release, or any additional runner family.
 Hosted qualification for 2026.10.7 remains pending.
 
-The target-specific digests are compiled into the generator. After qualification
-of the candidate, update the pins and regenerate the workflow as one change.
+The target-specific digests are compiled into the generator. When hosted
+qualification succeeds, record the qualifying run and target results, then
+regenerate the workflow inputs that carry the qualification evidence. The
+current official 2026.10.7 asset pins remain candidates until those hosted
+checks pass.
