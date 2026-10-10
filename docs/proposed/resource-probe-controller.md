@@ -141,10 +141,14 @@ transitions:
    create again.
 4. `StartRequested` precedes start. Resolve an ambiguous response only by
    inspecting the exact ID on the same verified engine and checking labels,
-   complete projection, and image binding. Unknown execution state is
+   complete projection, and image binding. A result can authorize the current
+   attempt only when the exact container has a successful exit and its bounded
+   record validates for that same live attempt. A merely started, queued, or
+   still-running container never supplies a permit. Unknown execution state is
    quarantined.
 5. Observe and validate output once in memory. Do not journal a reusable
-   sample. A sample interrupted by restart is discarded.
+   sample. A sample interrupted by restart is discarded, even when output was
+   already observed.
 6. Persist `StopRequested` and `RemoveRequested` before those requests. A lost
    response is resolved only by bounded inspection of the exact recorded ID
    on the same engine.
@@ -167,10 +171,11 @@ Tests must cover exact projection acceptance and rejection of extra mounts,
 arguments, environment, job data, network, privilege, capabilities, mutable
 image selection, or wrong UID; every parser, numeric, overflow, newline,
 output-size, and deadline boundary; missing guest metrics; engine/root change;
-duplicate or mismatched containers; and every journal transition, crash
-point, and lost create/start/stop/remove response. Include restart/migration
-tests that preserve active runner rows and prove `Prepared` abort performs no
-Docker call.
+duplicate or mismatched containers; and every journal transition and crash
+point, including lost create/start/wait/log/stop/remove responses and
+ambiguous execution. Cover nonzero exit, invalid record, and restart after
+valid output without granting a permit. Include restart/migration tests that
+preserve active runner rows and prove `Prepared` abort performs no Docker call.
 
 Exercise both real production start paths. Missing/stale sample, unverified
 image, static zero fit, insufficient guest memory, low Docker-root space, or
