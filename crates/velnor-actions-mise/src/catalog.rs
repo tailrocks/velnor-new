@@ -40,15 +40,15 @@ mod versions;
 pub use versions::{check_freshness_requirements, validate_exact_version};
 use versions::{invalid_version, tool_source};
 
-/// Adopted Mise runner release (tag `v2026.10.6`); hosted qualification is pending.
-/// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-10-09.
-pub const MISE_VERSION: &str = "2026.10.6";
-/// Qualified Rust stable toolchain; 1.99.0 is held pending policy review.
-/// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-10-08.
-pub const RUST_VERSION: &str = "1.98.1";
-/// Qualified `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.21.1`).
-/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-03.
-pub const MR_BOXINGTON_VERSION: &str = "1.21.1";
+/// Adopted Mise runner release (tag `v2026.10.7`).
+/// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-10-10.
+pub const MISE_VERSION: &str = "2026.10.7";
+/// Rust stable toolchain (release `1.99.0`).
+/// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-10-10.
+pub const RUST_VERSION: &str = "1.99.0";
+/// `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.23.0`).
+/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-10.
+pub const MR_BOXINGTON_VERSION: &str = "1.23.0";
 /// Qualified GitHub CLI (tag `v2.102.0`).
 /// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-09-30.
 pub const GH_VERSION: &str = "2.102.0";

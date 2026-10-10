@@ -18,10 +18,10 @@ fn repo_policy_mirror_matches_compiled_catalog() -> Result<(), LockError> {
 #[test]
 fn policy_drift_fails_mirror_check() {
     let text = std::fs::read_to_string(policy_path()).expect("repo version-policy exists");
-    let drifted = text.replace("rust = \"1.98.1\"", "rust = \"1.99.0\"");
+    let drifted = text.replace("rust = \"1.99.0\"", "rust = \"1.98.1\"");
     assert_ne!(text, drifted);
     let err = verify_version_policy(&drifted, &ToolCatalog::pinned());
     assert!(err.is_err_and(|err| err.to_string().contains("tool:rust")));
-    let missing = text.replace("mise = \"2026.10.6\"\n", "");
+    let missing = text.replace("mise = \"2026.10.7\"\n", "");
     assert!(verify_version_policy(&missing, &ToolCatalog::pinned()).is_err());
 }
