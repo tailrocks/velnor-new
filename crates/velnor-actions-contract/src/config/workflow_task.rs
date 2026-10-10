@@ -69,15 +69,15 @@ pub fn is_valid_workflow_task_id(id: &str) -> bool {
 mod tests {
     use super::{WorkflowTask, is_valid_workflow_task_id};
     use crate::config::{
-        BuildTask, BuildTaskRunner, NativeImageCachePolicy, NativeImagePlatform, NativeImageTask,
-        VerificationRunner, VerificationTask, VerificationTaskSource,
+        BuildTask, BuildTaskRunner, MiseTaskSource, NativeImageCachePolicy, NativeImagePlatform,
+        NativeImageTask, VerificationRunner, VerificationTask,
     };
 
     fn verification(id: &str) -> WorkflowTask {
         WorkflowTask::Verification(VerificationTask {
             id: id.to_owned(),
             mise_task: "desktop-format-check".to_owned(),
-            source: VerificationTaskSource {
+            source: MiseTaskSource {
                 mise_config: "mise.toml".to_owned(),
                 working_directory: ".".to_owned(),
             },
@@ -90,6 +90,10 @@ mod tests {
         WorkflowTask::Build(BuildTask {
             id: id.to_owned(),
             mise_task: "desktop-ci".to_owned(),
+            source: MiseTaskSource {
+                mise_config: "mise.toml".to_owned(),
+                working_directory: ".".to_owned(),
+            },
             tools: vec!["mr-boxington".to_owned(), "rust".to_owned()],
             runner: BuildTaskRunner::Macos26Arm64,
             timeout_minutes: 120,

@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::permissions::PermissionLevel;
-use velnor_actions_contract::{VerificationRunner, VerificationTask, VerificationTaskSource};
+use velnor_actions_contract::{MiseTaskSource, VerificationRunner, VerificationTask};
 
 use crate::{
     MiseSetup, RenderContext, VerificationTaskPolicy, build_verification_task_job,
@@ -25,7 +25,7 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         task: VerificationTask {
             id: "native-format".to_owned(),
             mise_task: "desktop-format-check".to_owned(),
-            source: VerificationTaskSource {
+            source: MiseTaskSource {
                 mise_config: "mise.toml".to_owned(),
                 working_directory: ".".to_owned(),
             },

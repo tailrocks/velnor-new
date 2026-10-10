@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{BuildTask, BuildTaskRunner, Job, PermissionLevel, StepKind};
+use velnor_actions_contract::{
+    BuildTask, BuildTaskRunner, Job, MiseTaskSource, PermissionLevel, StepKind,
+};
 
 use crate::MiseSetup;
 use crate::verification_jobs::build_task_jobs::{
@@ -10,7 +12,7 @@ use crate::verification_jobs::build_task_jobs::{
     validate_build_task_jobs,
 };
 use crate::verification_jobs::build_task_mise::{
-    install_selected_tools_script, run_build_task_script, selected_mise_files,
+    install_selected_tools_script, run_build_task_script, selected_mise_files, source_guard_script,
 };
 
 const CHECKOUT: &str = "actions/checkout@0123456789abcdef0123456789abcdef01234567";
@@ -48,6 +50,10 @@ fn policy() -> BuildTaskPolicy {
         task: BuildTask {
             id: "native-desktop".to_owned(),
             mise_task: "desktop-ci".to_owned(),
+            source: MiseTaskSource {
+                mise_config: "native/mise.toml".to_owned(),
+                working_directory: "native".to_owned(),
+            },
             tools: vec![
                 "aqua:nextest-rs/nextest/cargo-nextest".to_owned(),
                 "github:boltffi/boltffi".to_owned(),
@@ -70,6 +76,9 @@ fn policy() -> BuildTaskPolicy {
         mise_config_sha256: "b".repeat(64),
         mise_lock_sha256: "c".repeat(64),
         rust_toolchain_sha256: "d".repeat(64),
+        source_mise_config_sha256: "e".repeat(64),
+        source_mise_lock_sha256: None,
+        source_rust_toolchain_sha256: None,
         selected_tools: selected_tools(),
     }
 }
@@ -283,6 +292,35 @@ fn env_source_overlay_is_suppressed_before_config_inspection_and_task_execution(
         .expect("no-env task run");
     assert!(env_disable < task, "{run}");
     assert!(run.contains("unset MISE_CONFIG_FILE MISE_ENV MISE_ENV_FILE"));
+}
+
+#[test]
+fn nested_task_source_is_hash_bound_and_mbx_preserves_its_working_directory() {
+    let policy = policy();
+    let script = source_guard_script(&policy).expect("source guard");
+    let expected = [
+        "test -f \"$workspace_root/mise.toml\"",
+        "test -f \"$workspace_root/native/mise.toml\"",
+        "$workspace_root/native/mise.toml",
+        "test ! -L \"$workspace_root/native\"",
+        "cd -P \"$workspace_root/native\"",
+        "task_working_directory=\"$PWD\"",
+        "export MISE_CEILING_PATHS=\"$workspace_ceiling\"",
+        "workspace_ceiling=\"$workspace_root/..\"",
+        "config get wrappers.cargo.command --file \"$workspace_root/mise.toml\"",
+        "cd -P \"$task_working_directory\"",
+    ];
+    for fragment in expected {
+        assert!(script.contains(fragment), "missing {fragment}: {script}");
+    }
+    assert!(script.contains("$workspace_root/rust-toolchain.toml"));
+    let enter = script
+        .find("cd -P \"$workspace_root/native\"")
+        .expect("declared source working directory");
+    let restore = script
+        .find("cd -P \"$task_working_directory\"")
+        .expect("MBX guard restores declared directory");
+    assert!(enter < restore, "{script}");
 }
 
 #[test]

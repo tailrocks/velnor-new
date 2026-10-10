@@ -35,7 +35,9 @@ pub(super) fn install_selected_tools_script(
     ]);
     statements.extend(private_environment());
     statements.extend([
-        "export MISE_CEILING_PATHS=\"$task_root\"".to_owned(),
+        // Mise excludes the ceiling directory itself, so use the private
+        // root's parent to make the generated config the first loaded file.
+        "export MISE_CEILING_PATHS=\"$task_root/..\"".to_owned(),
         "export MISE_TRUSTED_CONFIG_PATHS=\"$task_root\"".to_owned(),
         "export MISE_NO_HOOKS=1".to_owned(),
         format!("export {CARGO_BINSTALL_ONLY_ENV}=1"),
@@ -67,26 +69,54 @@ pub(super) fn source_guard_script(policy: &BuildTaskPolicy) -> Result<String, Re
     statements.extend(private_environment());
     statements.extend([
         "export MISE_TRUSTED_CONFIG_PATHS=\"$GITHUB_WORKSPACE\"".to_owned(),
-        "export MISE_CEILING_PATHS=\"$GITHUB_WORKSPACE\"".to_owned(),
+        "export MISE_CEILING_PATHS=\"$GITHUB_WORKSPACE/..\"".to_owned(),
         "export MISE_NO_HOOKS=1".to_owned(),
         "export MBX_CARGO_SHIM_MODE=1".to_owned(),
         format!("export {CARGO_BINSTALL_ONLY_ENV}=1"),
         "unset MISE_CONFIG_FILE MISE_ENV MISE_ENV_FILE".to_owned(),
         "cd -P \"$GITHUB_WORKSPACE\"".to_owned(),
         "workspace_root=\"$PWD\"".to_owned(),
+        "workspace_ceiling=\"$workspace_root/..\"".to_owned(),
+        "cd -P \"$workspace_ceiling\"".to_owned(),
+        "workspace_ceiling=\"$PWD\"".to_owned(),
         "cd -P \"$workspace_root\"".to_owned(),
-        source_hash_check("mise.toml", &policy.mise_config_sha256),
-        source_hash_check("mise.lock", &policy.mise_lock_sha256),
-        source_hash_check("rust-toolchain.toml", &policy.rust_toolchain_sha256),
+        "export MISE_CEILING_PATHS=\"$workspace_ceiling\"".to_owned(),
+        repository_path_guards("mise.toml", false),
+        repository_path_guards("mise.lock", false),
+        repository_path_guards("rust-toolchain.toml", false),
+        source_hash_check("mise.toml", Some(&policy.mise_config_sha256)),
+        source_hash_check("mise.lock", Some(&policy.mise_lock_sha256)),
+        source_hash_check("rust-toolchain.toml", Some(&policy.rust_toolchain_sha256)),
+        source_hash_check(
+            &policy.task.source.mise_config,
+            Some(&policy.source_mise_config_sha256),
+        ),
+    ]);
+    let source_lock_path = policy.task.source.mise_lock_path();
+    if source_lock_path != "mise.lock" {
+        statements.push(source_hash_check(
+            &source_lock_path,
+            policy.source_mise_lock_sha256.as_deref(),
+        ));
+    }
+    let source_rust_path = policy.task.source.rust_toolchain_path();
+    if source_rust_path != "rust-toolchain.toml" {
+        statements.push(source_hash_check(
+            &source_rust_path,
+            policy.source_rust_toolchain_sha256.as_deref(),
+        ));
+    }
+    statements.extend([
+        repository_path_guards(&policy.task.source.working_directory, true),
+        format!(
+            "cd -P \"$workspace_root/{}\"",
+            policy.task.source.working_directory
+        ),
+        "task_working_directory=\"$PWD\"".to_owned(),
         jq_guard(),
-        config_chain_check(&[
-            "$workspace_root/mise.toml",
-            "$workspace_root/rust-toolchain.toml",
-            "$task_root/global.toml",
-            "$task_root/system.toml",
-        ]),
-        "mise --no-env --no-hooks config get wrappers.cargo.command --file mise.toml | /usr/bin/grep -Fqx mbx".to_owned(),
-        "mise --no-env --no-hooks config get wrappers.cargo.env.MBX_CARGO_SHIM_MODE --file mise.toml | /usr/bin/grep -Fqx 1".to_owned(),
+        config_chain_check(&expected_config_chain(policy)),
+        "mise --no-env --no-hooks config get wrappers.cargo.command --file \"$workspace_root/mise.toml\" | /usr/bin/grep -Fqx mbx".to_owned(),
+        "mise --no-env --no-hooks config get wrappers.cargo.env.MBX_CARGO_SHIM_MODE --file \"$workspace_root/mise.toml\" | /usr/bin/grep -Fqx 1".to_owned(),
     ]);
     statements.extend(mbx_guard(&mbx.version));
     statements.push("mise --no-env --locked --no-hooks exec -- cargo --version".to_owned());
@@ -109,7 +139,7 @@ fn mbx_guard(mbx_version: &str) -> Vec<String> {
         "mbx_dir=\"${mbx_path%/*}\"".to_owned(),
         "cd -P \"$mbx_dir\"".to_owned(),
         "mbx_parent=\"$PWD\"".to_owned(),
-        "cd -P \"$workspace_root\"".to_owned(),
+        "cd -P \"$task_working_directory\"".to_owned(),
         "mbx_base=\"${mbx_path##*/}\"".to_owned(),
         "test \"$mbx_path\" = \"$mbx_parent/$mbx_base\"".to_owned(),
         capture_command(
@@ -205,10 +235,58 @@ fn config_chain_check(expected: &[&str]) -> String {
     )
 }
 
-fn source_hash_check(path: &str, sha256: &str) -> String {
-    format!(
-        "test -f \"$workspace_root/{path}\"; test ! -L \"$workspace_root/{path}\"; /usr/bin/shasum -a 256 \"$workspace_root/{path}\" > \"$task_root/sha256.txt\"; read actual rest < \"$task_root/sha256.txt\"; test \"$actual\" = '{sha256}'"
-    )
+fn source_hash_check(path: &str, sha256: Option<&str>) -> String {
+    let guards = repository_path_guards(path, false);
+    let guard = guards.join("; ");
+    match sha256 {
+        Some(sha256) => format!(
+            "{guard}; test -f \"$workspace_root/{path}\"; test ! -L \"$workspace_root/{path}\"; /usr/bin/shasum -a 256 \"$workspace_root/{path}\" > \"$task_root/sha256.txt\"; read actual rest < \"$task_root/sha256.txt\"; test \"$actual\" = '{sha256}'"
+        ),
+        None => format!(
+            "{guard}; test ! -e \"$workspace_root/{path}\"; test ! -L \"$workspace_root/{path}\""
+        ),
+    }
+}
+
+fn repository_path_guards(path: &str, directory: bool) -> String {
+    let components = path.split('/').collect::<Vec<_>>();
+    let prefix_len = if directory {
+        components.len()
+    } else {
+        components.len().saturating_sub(1)
+    };
+    let guards = (1..=prefix_len)
+        .map(|length| {
+            let prefix = components[..length].join("/");
+            format!("test -d \"$workspace_root/{prefix}\"; test ! -L \"$workspace_root/{prefix}\"")
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    if guards.is_empty() {
+        ":".to_owned()
+    } else {
+        guards
+    }
+}
+
+fn expected_config_chain(policy: &BuildTaskPolicy) -> Vec<String> {
+    let mut paths = vec!["$workspace_root/mise.toml".to_owned()];
+    if policy.task.source.mise_config != "mise.toml" {
+        paths.push(format!(
+            "$workspace_root/{}",
+            policy.task.source.mise_config
+        ));
+    }
+    paths.push("$workspace_root/rust-toolchain.toml".to_owned());
+    let source_rust = policy.task.source.rust_toolchain_path();
+    if source_rust != "rust-toolchain.toml" && policy.source_rust_toolchain_sha256.is_some() {
+        paths.push(format!("$workspace_root/{source_rust}"));
+    }
+    paths.extend([
+        "$task_root/global.toml".to_owned(),
+        "$task_root/system.toml".to_owned(),
+    ]);
+    paths
 }
 
 #[cfg(test)]
