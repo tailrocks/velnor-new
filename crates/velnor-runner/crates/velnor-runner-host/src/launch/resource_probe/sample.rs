@@ -1,6 +1,6 @@
 //! Non-serializable results scoped to one completed probe transaction.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::worker::ResourceBudget;
 
@@ -8,6 +8,8 @@ use crate::worker::ResourceBudget;
 use crate::launch::pressure::Sample;
 
 use super::record::ProbeRecord;
+
+const MAX_OBSERVATION_AGE: Duration = Duration::from_secs(30);
 
 /// A validated selected-guest sample that cannot survive a process restart.
 pub(super) struct Observation {
@@ -42,19 +44,29 @@ impl Observation {
         })
     }
 
+    pub(super) fn is_recent_at(&self, now: Instant) -> bool {
+        now.checked_duration_since(self.observed_at)
+            .is_some_and(|age| age <= MAX_OBSERVATION_AGE)
+    }
+
+    #[cfg(test)]
+    pub(super) fn observed_at(&self) -> Instant {
+        self.observed_at
+    }
+
     #[cfg(not(test))]
-    pub(super) fn pressure(self) -> Sample {
-        Sample {
+    pub(super) fn pressure(self) -> Option<Sample> {
+        self.is_recent_at(Instant::now()).then_some(Sample {
             load_millis: self.record.load_milli,
             ncpu: self.cpus,
             mem_available: self.record.memory_available_bytes,
             disk_free: self.record.docker_root_free_bytes,
-        }
+        })
     }
 
     pub(super) fn into_start_permit(self, budget: ResourceBudget) -> Option<StartPermit> {
         let pair = budget.pair();
-        let recent = self.observed_at.elapsed().as_secs() <= 30;
+        let recent = self.is_recent_at(Instant::now());
         (recent
             && self.record.docker_root_free_bytes >= 10 * 1024 * 1024 * 1024
             && self.record.memory_available_bytes >= pair.memory_bytes)
@@ -67,9 +79,18 @@ pub(crate) struct StartPermit(Observation);
 
 impl StartPermit {
     pub(super) fn consume(self, current_engine_id: &str, current_root_digest: &str) -> bool {
-        self.0.engine_id == current_engine_id
-            && self.0.docker_root_digest == current_root_digest
-            && self.0.observed_at.elapsed().as_secs() <= 30
+        self.is_valid_at(current_engine_id, current_root_digest, Instant::now())
+    }
+
+    fn is_valid_at(&self, engine_id: &str, root_digest: &str, now: Instant) -> bool {
+        self.0.engine_id == engine_id
+            && self.0.docker_root_digest == root_digest
+            && self.0.is_recent_at(now)
+    }
+
+    #[cfg(test)]
+    pub(super) fn test_is_valid_at(&self, now: Instant) -> bool {
+        self.is_valid_at("test-engine", &self.0.docker_root_digest, now)
     }
 
     #[cfg(test)]

@@ -23,15 +23,23 @@ pub(super) async fn active(
     }
     let instance_id = deadline.within(journal.instance_id()).await??;
     let engine_id = info.id.as_deref().ok_or(HostError::Identity)?;
-    if row.instance_id != instance_id
-        || row.engine_id != engine_id
-        || row.docker_root_digest != root.digest()
-    {
-        return quarantine(journal, &row).await;
+    if row.instance_id != instance_id {
+        return quarantine(journal, &row, deadline).await;
+    }
+    if row.engine_id != engine_id || row.docker_root_digest != root.digest() {
+        return Err(HostError::Identity);
     }
     let projection = persisted_projection(&row, root)?;
     if let Err(error) = cleanup(docker, journal, &row, &projection, deadline).await {
-        let _quarantined = journal.quarantine_probe(&row.operation_id).await;
+        if matches!(
+            error,
+            HostError::DockerTimeout | HostError::Identity | HostError::Path
+        ) {
+            return Err(error);
+        }
+        let _quarantined = deadline
+            .within(journal.quarantine_probe(&row.operation_id))
+            .await;
         return Err(error);
     }
     Ok(())
@@ -51,6 +59,25 @@ pub(super) async fn cleanup(
     cleanup_recorded(docker, journal, row, projection, deadline).await
 }
 
+pub(super) async fn verify_current_projection(
+    docker: &Docker,
+    journal: &Journal,
+    projection: &ProbeProjection,
+    deadline: &Deadline,
+) -> Result<(), HostError> {
+    let row = deadline
+        .within(journal.active_probe())
+        .await??
+        .ok_or(HostError::Journal)?;
+    if row.operation_id != projection.operation_id
+        || row.projection_digest != projection.projection_digest
+        || row.phase == ProbePhase::Quarantined
+    {
+        return Err(HostError::Ownership);
+    }
+    verify_bound_engine(docker, &row, projection, deadline).await
+}
+
 async fn bind_created_by_name(
     docker: &Docker,
     journal: &Journal,
@@ -59,18 +86,21 @@ async fn bind_created_by_name(
     deadline: &Deadline,
 ) -> Result<(), HostError> {
     if row.phase != ProbePhase::CreateRequested {
-        return quarantine(journal, row).await;
+        return quarantine(journal, row, deadline).await;
     }
     let Some(response) = inspect::by_reference(docker, &projection.name, deadline).await? else {
-        return journal
-            .confirm_probe_absent(&row.operation_id, row.phase)
-            .await;
+        deadline
+            .within(journal.confirm_probe_absent(&row.operation_id, row.phase))
+            .await??;
+        return Ok(());
     };
     let id = response.id.as_deref().ok_or(HostError::Ownership)?;
     if !inspect::matches(projection, &response, id) || !inspect::created(&response) {
-        return quarantine(journal, row).await;
+        return quarantine(journal, row, deadline).await;
     }
-    journal.bind_probe_container(&row.operation_id, id).await?;
+    deadline
+        .within(journal.bind_probe_container(&row.operation_id, id))
+        .await??;
     let mut bound = row.clone();
     bound.container_id = Some(id.to_owned());
     bound.phase = ProbePhase::ContainerCreated;
@@ -86,9 +116,10 @@ async fn cleanup_recorded(
 ) -> Result<(), HostError> {
     let id = row.container_id.as_deref().ok_or(HostError::Ownership)?;
     let Some(response) = inspect_pair(docker, projection, id, deadline).await? else {
-        return journal
-            .confirm_probe_absent(&row.operation_id, row.phase)
-            .await;
+        deadline
+            .within(journal.confirm_probe_absent(&row.operation_id, row.phase))
+            .await??;
+        return Ok(());
     };
     let phase = if inspect::running(&response) {
         let Some(phase) = stop_owned(docker, journal, row, projection, id, deadline).await? else {
@@ -96,7 +127,7 @@ async fn cleanup_recorded(
         };
         phase
     } else if !inspect::created(&response) && !inspect::exited(&response) {
-        return quarantine(journal, row).await;
+        return quarantine(journal, row, deadline).await;
     } else {
         row.phase
     };
@@ -112,24 +143,28 @@ async fn stop_owned(
     deadline: &Deadline,
 ) -> Result<Option<ProbePhase>, HostError> {
     if row.phase == ProbePhase::RemoveRequested || !supports_stop(row.phase) {
-        return quarantine(journal, row).await;
+        return quarantine(journal, row, deadline).await;
     }
     if row.phase != ProbePhase::StopRequested {
-        journal
-            .transition_probe(&row.operation_id, row.phase, ProbePhase::StopRequested)
-            .await?;
+        deadline
+            .within(journal.transition_probe(
+                &row.operation_id,
+                row.phase,
+                ProbePhase::StopRequested,
+            ))
+            .await??;
     }
     verify_bound_engine(docker, row, projection, deadline).await?;
     let _stopped = ops::stop(docker, id, deadline).await;
     verify_bound_engine(docker, row, projection, deadline).await?;
     let Some(response) = inspect_pair(docker, projection, id, deadline).await? else {
-        journal
-            .confirm_probe_absent(&row.operation_id, ProbePhase::StopRequested)
-            .await?;
+        deadline
+            .within(journal.confirm_probe_absent(&row.operation_id, ProbePhase::StopRequested))
+            .await??;
         return Ok(None);
     };
     if inspect::running(&response) || !inspect::created_or_exited(&response) {
-        return quarantine(journal, row).await;
+        return quarantine(journal, row, deadline).await;
     }
     Ok(Some(ProbePhase::StopRequested))
 }
@@ -146,9 +181,9 @@ async fn remove_owned(
     let removal_phase = if phase == ProbePhase::RemoveRequested {
         ProbePhase::RemoveRequested
     } else {
-        journal
-            .transition_probe(&row.operation_id, phase, ProbePhase::RemoveRequested)
-            .await?;
+        deadline
+            .within(journal.transition_probe(&row.operation_id, phase, ProbePhase::RemoveRequested))
+            .await??;
         ProbePhase::RemoveRequested
     };
     verify_bound_engine(docker, row, projection, deadline).await?;
@@ -158,6 +193,7 @@ async fn remove_owned(
         .await?
         .is_none();
     if !absent {
+        verify_bound_engine(docker, row, projection, deadline).await?;
         let _retry = ops::remove(docker, id, deadline).await;
     }
     if inspect_pair(docker, projection, id, deadline)
@@ -167,9 +203,9 @@ async fn remove_owned(
         return Err(HostError::Cleanup);
     }
     verify_bound_engine(docker, row, projection, deadline).await?;
-    journal
-        .confirm_probe_absent(&row.operation_id, removal_phase)
-        .await
+    deadline
+        .within(journal.confirm_probe_absent(&row.operation_id, removal_phase))
+        .await?
 }
 
 async fn verify_bound_engine(
@@ -247,9 +283,15 @@ fn supports_stop(phase: ProbePhase) -> bool {
     )
 }
 
-async fn quarantine<T>(journal: &Journal, row: &ProbeRow) -> Result<T, HostError> {
+async fn quarantine<T>(
+    journal: &Journal,
+    row: &ProbeRow,
+    deadline: &Deadline,
+) -> Result<T, HostError> {
     if row.phase != ProbePhase::Quarantined {
-        journal.quarantine_probe(&row.operation_id).await?;
+        deadline
+            .within(journal.quarantine_probe(&row.operation_id))
+            .await??;
     }
     Err(HostError::Ownership)
 }

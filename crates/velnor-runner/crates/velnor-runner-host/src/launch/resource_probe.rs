@@ -90,7 +90,7 @@ pub(super) async fn pressure_sample(
     .await
     .ok()
     .flatten()
-    .map(sample::Observation::pressure)
+    .and_then(sample::Observation::pressure)
 }
 
 pub(super) fn consume_permit(permit: StartPermit, engine_id: &str, root_digest: &str) -> bool {

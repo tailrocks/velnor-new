@@ -10,6 +10,9 @@ use sha2::{Digest, Sha256};
 
 use crate::error::HostError;
 
+#[path = "projection/canonical.rs"]
+mod canonical;
+
 const PROBE_TARGET: &str = "/velnor/docker-root";
 const PROBE_PLATFORM: &str = "linux/amd64";
 const PROBE_ENTRYPOINT: &str = "/velnor/resource-probe";
@@ -280,9 +283,15 @@ fn projection_digest(
     options: &CreateContainerOptions,
     config: &ContainerCreateBody,
 ) -> Result<String, HostError> {
-    let mut bytes = serde_json::to_vec(options).map_err(|_| HostError::Docker)?;
-    bytes.extend(serde_json::to_vec(config).map_err(|_| HostError::Docker)?);
-    Ok(digest_text(&bytes))
+    canonical::pair(options, config).map(|bytes| digest_text(&bytes))
+}
+
+#[cfg(test)]
+pub(super) fn test_projection_digest(
+    options: &CreateContainerOptions,
+    config: &ContainerCreateBody,
+) -> Result<String, HostError> {
+    projection_digest(options, config)
 }
 
 fn canonical_absolute_nonroot(path: &str) -> bool {

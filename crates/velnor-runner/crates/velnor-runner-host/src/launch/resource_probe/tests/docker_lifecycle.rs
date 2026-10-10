@@ -1,16 +1,24 @@
 use bollard::models::ContainerConfig;
 use serde_json::json;
 
+use crate::error::HostError;
 use crate::journal::{Journal, ProbeSeed};
-use crate::launch::inspect_tests::{DockerResponse, DockerStub, closed, http, raw_http};
+use crate::launch::inspect_tests::{
+    DockerResponse, DockerStub, closed, delayed_http, http, raw_http,
+};
 use crate::launch::resource_probe::execute;
 use crate::launch::resource_probe::lifecycle::{self, Deadline};
 use crate::launch::resource_probe::projection::{
     ProbeProjection, VerifiedProbeImage, expected_image_config,
 };
 use crate::launch::resource_probe::provider::UnavailableImageProvider;
-use crate::launch::resource_probe::sample::Observation;
 use crate::launch_harness::Scratch;
+use std::time::{Duration, Instant};
+
+#[path = "docker_lifecycle/engine_identity.rs"]
+mod engine_identity;
+#[path = "docker_lifecycle/recovery.rs"]
+mod recovery;
 
 const CONTAINER_ID: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 const ENGINE_ID: &str = "probe-engine";
@@ -23,15 +31,16 @@ const RUNTIME_ID: &str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 async fn completed_probe_cleans_the_exact_container_before_returning_metrics() -> Result<(), String>
 {
     let (scratch, journal, projection) = prepared().await?;
+    let cleanup_delay = Duration::from_millis(80);
     let mut responses = start_responses(&projection)?;
     responses.push(http(200, "{}"));
     responses.push(http(200, r#"{"StatusCode":0,"Error":null}"#));
     responses.push(http(200, &inspect(&projection, "exited", 0)?));
     responses.push(raw_http(200, log_frame(&record_bytes())?));
-    append_cleanup(&mut responses, &projection, "exited", 0)?;
+    append_cleanup(&mut responses, &projection, "exited", 0, cleanup_delay)?;
     let docker = DockerStub::open(responses)?;
 
-    let result = execute::run(
+    let output = execute::run(
         &docker.docker,
         &journal,
         &projection,
@@ -40,14 +49,16 @@ async fn completed_probe_cleans_the_exact_container_before_returning_metrics() -
     )
     .await;
     let requests = docker.finish_observed().await?;
-    let record = result.map_err(|error| format!("{error}; requests: {requests:?}"))?;
+    let output = output.map_err(|error| format!("{error}; requests: {requests:?}"))?;
+    let observed_at = output.observed_at;
+    assert!(observed_at.elapsed() >= cleanup_delay);
 
-    assert_eq!(requests.len(), 18);
-    assert!(requests[0].starts_with("POST /containers/create?"));
-    assert!(requests[3].ends_with("/start HTTP/1.1"));
-    assert!(requests[4].contains("/wait?"));
-    assert!(requests[6].contains("/logs?"));
-    assert!(requests[11].starts_with("DELETE /containers/"));
+    assert_eq!(requests.len(), 20);
+    assert!(requests[1].starts_with("POST /containers/create?"));
+    assert!(requests[5].ends_with("/start HTTP/1.1"));
+    assert!(requests[6].contains("/wait?"));
+    assert!(requests[8].contains("/logs?"));
+    assert!(requests[13].starts_with("DELETE /containers/"));
     assert!(
         journal
             .active_probe()
@@ -56,15 +67,23 @@ async fn completed_probe_cleans_the_exact_container_before_returning_metrics() -
             .is_none()
     );
     let budget = crate::worker::test_resource_budget().map_err(|error| error.to_string())?;
-    let observation = Observation::new(
-        record,
+    let postcheck_delay = Duration::from_millis(80);
+    tokio::time::sleep(postcheck_delay).await;
+    let observation = lifecycle::observation(
+        output,
         8,
         16 * 1024 * 1024 * 1024,
         ENGINE_ID.to_owned(),
         projection.root.digest().to_owned(),
-        std::time::Instant::now(),
     )
     .ok_or_else(|| "valid probe result was rejected".to_owned())?;
+    assert_eq!(observation.observed_at(), observed_at);
+    let final_check = Instant::now();
+    assert!(final_check.duration_since(observed_at) >= cleanup_delay + postcheck_delay);
+    let expired_at = observed_at
+        .checked_add(Duration::from_secs(31))
+        .ok_or_else(|| "could not construct expired output time".to_owned())?;
+    assert!(!observation.is_recent_at(expired_at));
     assert!(observation.into_start_permit(budget).is_some());
     crate::launch_harness::absent(&scratch.file())
 }
@@ -111,7 +130,13 @@ async fn lost_or_invalid_execution_results_cleanup_without_a_permit() -> Result<
                 "exited"
             }
         };
-        append_cleanup(&mut responses, &projection, cleanup_state, 9)?;
+        append_cleanup(
+            &mut responses,
+            &projection,
+            cleanup_state,
+            9,
+            Duration::ZERO,
+        )?;
         let docker = DockerStub::open(responses)?;
 
         assert!(
@@ -146,7 +171,11 @@ async fn lost_or_invalid_execution_results_cleanup_without_a_permit() -> Result<
 
 #[tokio::test]
 async fn prepared_restart_aborts_and_unverified_provider_stays_closed() -> Result<(), String> {
-    let (_scratch, journal, _projection) = prepared().await?;
+    let (scratch, journal, _projection) = prepared().await?;
+    drop(journal);
+    let journal = Journal::open(&scratch.file())
+        .await
+        .map_err(|error| error.to_string())?;
     let info =
         r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":8589934592}"#;
     let docker = DockerStub::open(vec![http(200, info)])?;
@@ -231,9 +260,17 @@ async fn prepared() -> Result<(Scratch, Journal, ProbeProjection), String> {
 
 fn start_responses(projection: &ProbeProjection) -> Result<Vec<DockerResponse>, String> {
     Ok(vec![
+        http(
+            200,
+            r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":17179869184}"#,
+        ),
         http(200, &format!(r#"{{"Id":"{CONTAINER_ID}","Warnings":[]}}"#)),
         http(200, &inspect(projection, "created", 0)?),
         http(200, &inspect(projection, "created", 0)?),
+        http(
+            200,
+            r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker"}"#,
+        ),
     ])
 }
 
@@ -242,11 +279,12 @@ fn append_cleanup(
     projection: &ProbeProjection,
     state: &str,
     exit_code: i64,
+    first_info_delay: Duration,
 ) -> Result<(), String> {
     let info = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker"}"#;
     let absent = "{}";
+    responses.push(delayed_http(200, info, first_info_delay));
     responses.extend([
-        http(200, info),
         http(200, &inspect(projection, state, exit_code)?),
         http(200, &inspect(projection, state, exit_code)?),
         http(200, info),

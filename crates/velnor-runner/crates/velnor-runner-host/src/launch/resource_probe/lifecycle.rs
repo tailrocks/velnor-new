@@ -36,9 +36,6 @@ pub(super) async fn collect<P: ImageProvider>(
     if let Some(row) = active.as_ref()
         && before.id.as_deref() != Some(row.engine_id.as_str())
     {
-        let _quarantined = deadline
-            .within(journal.quarantine_probe(&row.operation_id))
-            .await;
         return Err(HostError::Identity);
     }
     let (engine_id, root, cpu_count, memory_total) = bind_info(&before, journal, &deadline).await?;
@@ -56,19 +53,35 @@ pub(super) async fn collect<P: ImageProvider>(
     };
     let image = verified_image(candidate)?;
     let projection = projection(journal, &root, &engine_id, image, &deadline).await?;
-    let record = execute::run(docker, journal, &projection, memory_total, &deadline).await?;
+    let output = execute::run(docker, journal, &projection, memory_total, &deadline).await?;
     let after = info(docker, &deadline).await?;
     if !same_guest(&after, &engine_id, &root)? {
         return Err(HostError::Identity);
     }
-    Ok(Observation::new(
-        record,
+    Ok(observation(
+        output,
         cpu_count,
         memory_total,
         engine_id,
         root.digest().to_owned(),
-        Instant::now(),
     ))
+}
+
+pub(super) fn observation(
+    output: execute::ObservedProbeRecord,
+    cpu_count: u32,
+    memory_total: u64,
+    engine_id: String,
+    root_digest: String,
+) -> Option<Observation> {
+    Observation::new(
+        output.record,
+        cpu_count,
+        memory_total,
+        engine_id,
+        root_digest,
+        output.observed_at,
+    )
 }
 
 fn verified_image(candidate: VerifiedCandidate) -> Result<VerifiedProbeImage, HostError> {
@@ -154,27 +167,48 @@ fn same_guest(info: &SystemInfo, engine_id: &str, root: &DockerRoot) -> Result<b
 
 pub(super) struct Deadline {
     began: Instant,
+    timeout: Duration,
+    docker_timeout: Duration,
 }
 
 impl Deadline {
     pub(super) fn new() -> Self {
         Self {
             began: Instant::now(),
+            timeout: PROBE_TIMEOUT,
+            docker_timeout: DOCKER_OPERATION_TIMEOUT,
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn test_with_timeouts(timeout: Duration, docker_timeout: Duration) -> Self {
+        Self {
+            began: Instant::now(),
+            timeout,
+            docker_timeout,
         }
     }
 
     pub(super) fn remaining(&self) -> Duration {
-        PROBE_TIMEOUT.saturating_sub(self.began.elapsed())
+        self.timeout.saturating_sub(self.began.elapsed())
+    }
+
+    pub(super) fn ensure_remaining(&self) -> Result<(), HostError> {
+        (!self.remaining().is_zero())
+            .then_some(())
+            .ok_or(HostError::DockerTimeout)
     }
 
     pub(super) async fn within<F: Future>(&self, future: F) -> Result<F::Output, HostError> {
+        self.ensure_remaining()?;
         tokio::time::timeout(self.remaining(), future)
             .await
             .map_err(|_| HostError::DockerTimeout)
     }
 
     pub(super) async fn docker<F: Future>(&self, future: F) -> Result<F::Output, HostError> {
-        let timeout = self.remaining().min(DOCKER_OPERATION_TIMEOUT);
+        self.ensure_remaining()?;
+        let timeout = self.remaining().min(self.docker_timeout);
         tokio::time::timeout(timeout, future)
             .await
             .map_err(|_| HostError::DockerTimeout)
