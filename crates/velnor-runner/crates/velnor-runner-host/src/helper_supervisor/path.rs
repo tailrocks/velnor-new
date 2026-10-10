@@ -13,8 +13,15 @@ const MAX_HELPER_BYTES: u64 = 128 * 1024 * 1024;
 
 pub(super) fn open_verified(expected_sha256: &[u8; 32]) -> Result<PathBuf, HostError> {
     let executable = std::env::current_exe().map_err(|_| HostError::Identity)?;
-    let canonical = std::fs::canonicalize(&executable).map_err(|_| HostError::Identity)?;
-    if executable != canonical || !safe_components(&canonical) {
+    open_verified_from(&executable, expected_sha256)
+}
+
+fn open_verified_from(
+    executable: &Path,
+    expected_sha256: &[u8; 32],
+) -> Result<PathBuf, HostError> {
+    let canonical = std::fs::canonicalize(executable).map_err(|_| HostError::Identity)?;
+    if executable != canonical.as_path() || !safe_components(&canonical) {
         return Err(HostError::Identity);
     }
     let parent = canonical.parent().ok_or(HostError::Identity)?;
@@ -125,3 +132,7 @@ fn executable_owner(path: &Path) -> Result<u32, HostError> {
 fn executable_owner(_path: &Path) -> Result<u32, HostError> {
     Err(HostError::Identity)
 }
+
+#[cfg(all(test, unix))]
+#[path = "path_tests.rs"]
+mod tests;
