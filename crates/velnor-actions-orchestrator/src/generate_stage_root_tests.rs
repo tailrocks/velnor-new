@@ -1,3 +1,5 @@
+#![cfg(any(target_os = "linux", target_os = "macos"))]
+
 use super::*;
 use std::error::Error;
 use std::process::Command;
@@ -42,7 +44,7 @@ fn generate_stage_root_creates_private_self_ignored_state() -> Result<(), Box<dy
             .current_dir(repo.path())
             .output()?;
         assert!(ignored.status.success(), "{path}: {:?}", ignored.stderr);
-        assert!(String::from_utf8(ignored.stdout)?.contains("*"));
+        assert!(String::from_utf8(ignored.stdout)?.contains('*'));
     }
     let reopened = StageRoot::open(repo.path())?;
     assert_eq!(store.container_identity, reopened.container_identity);
@@ -62,7 +64,7 @@ fn generate_stage_root_cleans_children_without_replacing_spare_inode() -> Result
 
     let (after, metadata) = FsIdentity::capture(&store.spare)?;
     assert_eq!(after, root_identity);
-    assert_eq!(metadata.permissions().readonly(), false);
+    assert!(!metadata.permissions().readonly());
     assert!(fs::read_dir(&store.spare)?.next().is_none());
     assert!(store.spare.is_dir());
     Ok(())
@@ -123,8 +125,7 @@ fn generate_stage_root_rejects_foreign_owned_output_directories() -> Result<(), 
     fs::set_permissions(&nested, fs::Permissions::from_mode(0o777))?;
     let store = StageRoot::open(repo.path())?;
     let target_identity = store.validate_target(&target)?;
-    let current_owner = super::fs_ops::metadata_owner(&fs::metadata(repo.path())?)
-        .ok_or("Unix owner metadata unavailable")?;
+    let current_owner = super::fs_ops::metadata_owner(&fs::metadata(repo.path())?);
     let effective_owner = rustix::process::geteuid().as_raw();
     assert_eq!(current_owner, effective_owner);
     let foreign_owner = if current_owner == 0 { 65_534 } else { 0 };
@@ -135,8 +136,7 @@ fn generate_stage_root_rejects_foreign_owned_output_directories() -> Result<(), 
     );
 
     if changed.is_ok() {
-        let actual_owner = super::fs_ops::metadata_owner(&fs::symlink_metadata(&nested)?)
-            .ok_or("Unix owner metadata unavailable")?;
+        let actual_owner = super::fs_ops::metadata_owner(&fs::symlink_metadata(&nested)?);
         assert_eq!(actual_owner, foreign_owner);
         eprintln!(
             "foreign-owner fixture: effective_uid={effective_owner}, directory_uid={actual_owner}"
@@ -152,7 +152,7 @@ fn generate_stage_root_rejects_foreign_owned_output_directories() -> Result<(), 
         eprintln!(
             "foreign-owner fixture unavailable: effective_uid={effective_owner}; exercising owner predicate only"
         );
-        let error = super::fs_ops::validate_directory_owners(&nested, Some(foreign_owner))
+        let error = super::fs_ops::validate_directory_owners(&nested, foreign_owner)
             .expect_err("mismatched owner predicate must fail closed");
         assert!(
             error.to_string().contains("foreign_directory_owner"),

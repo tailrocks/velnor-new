@@ -160,6 +160,9 @@ or an unvalidated shell fragment.
 generate MUST render into a staging tree and validate every output before
 publishing. For in-place generation only, the orchestrator may retain the
 private, self-ignored `.github.velnor-stage/` runtime container at the Git root.
+In-place generation requires atomic directory exchange and is supported on
+Linux and macOS; other platforms fail before creating staging state. Preview
+generation does not use this restriction.
 It contains a root-bound owner record and one persistent same-filesystem spare
 directory; generation clears spare children but never removes or recreates
 either root. This container is runtime state, not generated output. `plan`

@@ -1,6 +1,6 @@
 //! In-place generation keeps one private spare root across publication cycles.
 
-#![cfg(unix)]
+#![cfg(any(target_os = "linux", target_os = "macos"))]
 
 use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -30,7 +30,7 @@ fn generate_stage_root_preserves_output_mode_and_retired_inode() -> TestResult {
     assert_eq!(fs::metadata(&target)?.permissions().mode() & 0o7777, 0o751);
     assert_eq!(fs::metadata(&local)?.permissions().mode() & 0o7777, 0o711);
     assert_eq!(
-        fs::read(&target.join("local/marker.txt"))?,
+        fs::read(target.join("local/marker.txt"))?,
         b"preserve across generation\n"
     );
     assert_eq!(fs::symlink_metadata(&spare)?.ino(), initial_root);
@@ -41,7 +41,7 @@ fn generate_stage_root_preserves_output_mode_and_retired_inode() -> TestResult {
     assert_eq!(fs::metadata(&target)?.permissions().mode() & 0o7777, 0o751);
     assert_eq!(fs::metadata(&local)?.permissions().mode() & 0o7777, 0o711);
     assert_eq!(
-        fs::read(&target.join("local/marker.txt"))?,
+        fs::read(target.join("local/marker.txt"))?,
         b"preserve across generation\n"
     );
     assert_eq!(fs::symlink_metadata(&spare)?.ino(), first_published_root);
