@@ -311,7 +311,7 @@ end_position=$((expected_fields - 1))
 argv=()
 for ((index = 0; index < argv_count; index++)); do
   value=${frame[$((10 + index))]}
-  [[ "$value" != *'${{'* ]] || fail_frame
+  [[ "$value" != *'$''{{'* ]] || fail_frame
   argv+=("$value")
 done
 
@@ -340,7 +340,7 @@ for ((index = 0; index < env_count; index++)); do
     TF_*)
       case "$key" in TF_IN_AUTOMATION|TF_INPUT) ;; *) fail_frame ;; esac ;;
   esac
-  [[ "$value" != *'${{'* ]] || fail_frame
+  [[ "$value" != *'$''{{'* ]] || fail_frame
   task_env+=("$key=$value")
 done
 [[ -n "$VELNOR_RUNTIME_RUNNER_TEMP" ]] || fail_frame
