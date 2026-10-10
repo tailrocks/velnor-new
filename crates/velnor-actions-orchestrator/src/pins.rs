@@ -21,7 +21,8 @@ use crate::discover::Discovery;
 
 #[path = "pins_acquire.rs"]
 mod pins_acquire;
-pub(super) use pins_acquire::{acquire_script_argv, acquire_step};
+pub use pins_acquire::acquire_script_argv;
+use pins_acquire::acquire_step;
 
 /// Override key selecting the Mise setup action pin.
 const MISE_ACTION_KEY: &str = "jdx/mise-action";

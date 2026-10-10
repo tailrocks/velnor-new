@@ -8,7 +8,7 @@ use crate::OrchestratorError;
 use crate::build_task_tools::selected_version_and_options;
 use crate::native_mise_tasks::safe_task_tool_version;
 use crate::native_tool_input::NativeMiseConfig;
-use crate::native_tool_lock::{NativeLockedTool, NativeMiseLock};
+use crate::native_tool_lock::NativeMiseLock;
 
 use super::failure;
 
