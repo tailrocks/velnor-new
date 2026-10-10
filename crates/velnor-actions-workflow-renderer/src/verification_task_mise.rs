@@ -212,6 +212,7 @@ fn run_script(policy: &VerificationTaskPolicy) -> String {
         "cd -P \"$workspace_root/{}\"",
         policy.task.source.working_directory
     ));
+    statements.push("task_working_directory=\"$PWD\"".to_owned());
     if policy.selected_tools.is_empty() {
         statements.extend([
             "/bin/mkdir -m 700 \"$task_root\"".to_owned(),
@@ -288,6 +289,7 @@ fn mbx_guard(mbx_version: &str) -> Vec<String> {
         "cd -P \"$workspace_root\"".to_owned(),
         "mbx_base=\"${mbx_path##*/}\"".to_owned(),
         "test \"$mbx_path\" = \"$mbx_parent/$mbx_base\"".to_owned(),
+        "cd -P \"$task_working_directory\"".to_owned(),
     ]
 }
 

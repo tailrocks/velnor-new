@@ -5,7 +5,7 @@ use std::fs;
 use velnor_actions_contract::{VerificationRunner, VerificationTask, VerificationTaskSource};
 
 use super::resolve_verification_tools;
-use crate::toolcheck::check_tool_inputs;
+use crate::toolcheck::{check_tool_inputs, check_tool_inputs_with_paths};
 
 fn verification_task(task_name: &str, runner: VerificationRunner) -> VerificationTask {
     VerificationTask {
@@ -112,6 +112,76 @@ fn only_transitive_task_tools_are_selected_and_platform_rows_are_bound() {
     );
     assert!(linux.mise_config_sha256.is_some());
     assert!(linux.mise_lock_sha256.is_some());
+}
+
+#[test]
+fn nested_mbx_task_uses_its_declared_config_when_root_has_same_task_name() {
+    let root = tempfile::tempdir().expect("temporary root");
+    let native = root.path().join("native");
+    fs::create_dir(&native).expect("native source directory");
+    for (directory, version, body) in [
+        (root.path(), "1.22.0", "echo root verification task"),
+        (native.as_path(), "1.23.0", "echo native verification task"),
+    ] {
+        fs::write(
+            directory.join("mise.toml"),
+            format!(
+                "[settings]\nlockfile = true\n\n[tasks.verify]\nrun = {body:?}\ntools = {{ mr-boxington = \"{version}\" }}\n"
+            ),
+        )
+        .expect("write verification source");
+        fs::write(directory.join("mise.lock"), mbx_lock(version))
+            .expect("write source-specific MBX lock");
+    }
+    let nested_paths = [
+        "native/mise.toml".to_owned(),
+        "native/mise.lock".to_owned(),
+        "native/rust-toolchain.toml".to_owned(),
+    ];
+    let checks = check_tool_inputs_with_paths(root.path(), &nested_paths);
+    let root_task = VerificationTask {
+        id: "verify-root".to_owned(),
+        mise_task: "verify".to_owned(),
+        source: VerificationTaskSource {
+            mise_config: "mise.toml".to_owned(),
+            working_directory: ".".to_owned(),
+        },
+        runner: VerificationRunner::LinuxX64,
+        timeout_minutes: 10,
+    };
+    let native_task = VerificationTask {
+        id: "verify-native".to_owned(),
+        mise_task: "verify".to_owned(),
+        source: VerificationTaskSource {
+            mise_config: "native/mise.toml".to_owned(),
+            working_directory: "native".to_owned(),
+        },
+        runner: VerificationRunner::LinuxX64,
+        timeout_minutes: 10,
+    };
+
+    let root_tools = resolve_verification_tools(&checks, &root_task).expect("root task closure");
+    let native_tools =
+        resolve_verification_tools(&checks, &native_task).expect("native task closure");
+    assert_eq!(root_tools.selected_tools[0].key, "mr-boxington");
+    assert_eq!(root_tools.selected_tools[0].version, "1.22.0");
+    assert_eq!(native_tools.selected_tools[0].key, "mr-boxington");
+    assert_eq!(native_tools.selected_tools[0].version, "1.23.0");
+    assert_eq!(
+        native_tools.selected_tools[0]
+            .artifact
+            .as_ref()
+            .expect("native MBX artifact")
+            .url,
+        "https://github.com/jdx/mr-boxington/releases/download/v1.23.0/mbx-x86_64-unknown-linux-gnu.tar.gz"
+    );
+}
+
+fn mbx_lock(version: &str) -> String {
+    format!(
+        "[tools]\n\"mr-boxington\" = [{{ version = \"{version}\", backend = \"packslip:github.com/jdx/mr-boxington\", \"platforms.linux-x64\" = {{ url = \"https://github.com/jdx/mr-boxington/releases/download/v{version}/mbx-x86_64-unknown-linux-gnu.tar.gz\", checksum = \"sha256:{}\" }} }}]\n",
+        "a".repeat(64)
+    )
 }
 
 #[test]
