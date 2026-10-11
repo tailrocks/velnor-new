@@ -253,7 +253,15 @@ fn assert_qualifier_mbx_preflight(
 fn step_index_named(steps: &[Yaml], name: &str) -> Result<usize, Box<dyn Error>> {
     steps
         .iter()
-        .position(|step| field(step, "name").is_ok_and(|value| value == &Yaml::str(name)))
+        .position(|step| {
+            let Ok(fields) = super::map_entries(step) else {
+                return false;
+            };
+            let Ok(value) = super::map_field(fields, "name") else {
+                return false;
+            };
+            value == &Yaml::str(name)
+        })
         .ok_or_else(|| format!("missing rendered step {name}").into())
 }
 
