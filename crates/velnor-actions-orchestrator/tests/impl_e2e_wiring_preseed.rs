@@ -35,7 +35,7 @@ fn assert_native_preseed_owner(jobs: &[JobText], yaml: &str) -> TestResult {
         .position(|arg| arg == "mbx")
         .ok_or("candidate build has no MBX command")?;
     // `JobText` retains YAML's escaping around the nested `sh -c` scalar.
-    expected[mbx] = "\\\"$mbx_bin\\\"".to_owned();
+    "\\\"$mbx_bin\\\"".clone_into(&mut expected[mbx]);
     let expected = expected.join(" ");
     assert!(
         builds[0].1.contains("command -v mbx")

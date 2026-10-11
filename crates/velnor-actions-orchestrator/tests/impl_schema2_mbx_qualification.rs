@@ -187,6 +187,10 @@ fn assert_reader(reader: &str) {
         ),
         "{reader}"
     );
+    assert_reader_toolchain_environment(reader, &catalog);
+}
+
+fn assert_reader_toolchain_environment(reader: &str, catalog: &ToolCatalog) {
     assert!(
         reader.contains(&format!("RUSTUP_TOOLCHAIN: {}", catalog.rustup_toolchain())),
         "{reader}"
