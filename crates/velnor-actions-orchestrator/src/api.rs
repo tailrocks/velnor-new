@@ -25,6 +25,8 @@ pub use super::generate::{
     GenerateOptions, GenerateReport, ToolSnapshot, generate, generate_dispatched,
     render_staged_tree, render_staged_tree_with,
 };
+#[doc(hidden)]
+pub use super::generate::{RetiredTreeOwners, generate_with_retired_tree_owners};
 pub use super::init::{InitReport, init_config};
 #[doc(hidden)]
 pub use super::internal::phase_timing::{PlanPhaseTimings, plan_internal_with_phase_timings};

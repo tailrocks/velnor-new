@@ -58,6 +58,21 @@ pub struct GenerateReport {
     pub warnings: Vec<String>,
 }
 
+/// Temporary owner used by the atomic-observer cleanup control.
+#[doc(hidden)]
+#[derive(Debug, Default)]
+pub struct RetiredTreeOwners {
+    directories: Vec<tempfile::TempDir>,
+}
+
+impl RetiredTreeOwners {
+    /// Number of exchanged trees still owned by this control.
+    #[doc(hidden)]
+    pub fn len(&self) -> usize {
+        self.directories.len()
+    }
+}
+
 /// Render in memory, then replace `.github` or write a preview.
 ///
 /// In-place replacement stages under the root and commits, leaving the
@@ -84,6 +99,25 @@ pub fn generate_dispatched(
     opts: &GenerateOptions,
     dispatch: Option<ExecutionMode>,
 ) -> Result<GenerateReport, OrchestratorError> {
+    generate_dispatched_with_retired_owners(prep, opts, dispatch, None)
+}
+
+/// Generate while retaining successfully exchanged trees for a bounded test.
+#[doc(hidden)]
+pub fn generate_with_retired_tree_owners(
+    prep: &GenerationPreparation,
+    opts: &GenerateOptions,
+    retired: &mut RetiredTreeOwners,
+) -> Result<GenerateReport, OrchestratorError> {
+    generate_dispatched_with_retired_owners(prep, opts, None, Some(retired))
+}
+
+fn generate_dispatched_with_retired_owners(
+    prep: &GenerationPreparation,
+    opts: &GenerateOptions,
+    dispatch: Option<ExecutionMode>,
+    mut retired: Option<&mut RetiredTreeOwners>,
+) -> Result<GenerateReport, OrchestratorError> {
     fail_on_blocking_findings(prep)?;
     let tools = ToolSnapshot::capture(&prep.root);
     let tofu_roots = crate::select_tofu::tofu_selected_roots(&prep.discovery.statuses);
@@ -95,7 +129,7 @@ pub fn generate_dispatched(
         .verify(&prep.root)
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     let warnings = match &opts.output_dir {
-        None => replace_in_place(prep, &tree)?,
+        None => replace_in_place(prep, &tree, retired.as_deref_mut())?,
         Some(dir) => preview::write_preview(prep, dir, &tree)?,
     };
     Ok(GenerateReport {
@@ -225,6 +259,7 @@ mod leaf_links;
 fn replace_in_place(
     prep: &GenerationPreparation,
     tree: &RenderedTree,
+    retired: Option<&mut RetiredTreeOwners>,
 ) -> Result<Vec<String>, OrchestratorError> {
     let root = &prep.root;
     let _ownership = GenerateOwnership::acquire(root)?;
@@ -248,7 +283,15 @@ fn replace_in_place(
             problem: "cross_filesystem_staging".to_owned(),
         });
     }
-    swap_directories(root, &target, &staged)
+    let target_existed = target.exists();
+    let result = swap_directories_with_cleanup_retention(root, &target, &staged, retired.is_some());
+    if result.is_ok() && target_existed {
+        if let Some(retired) = retired {
+            retired.directories.push(staging);
+            return result;
+        }
+    }
+    result
 }
 
 /// Commit fresh output with one rename and existing output with one exchange.
@@ -257,6 +300,15 @@ fn swap_directories(
     target: &Path,
     staged: &Path,
 ) -> Result<Vec<String>, OrchestratorError> {
+    swap_directories_with_cleanup_retention(_root, target, staged, false)
+}
+
+fn swap_directories_with_cleanup_retention(
+    _root: &Path,
+    target: &Path,
+    staged: &Path,
+    retain_cleanup: bool,
+) -> Result<Vec<String>, OrchestratorError> {
     let label = target.display().to_string();
     if !target.exists() {
         return match std::fs::rename(staged, target) {
@@ -264,17 +316,35 @@ fn swap_directories(
             Err(err) => Err(OrchestratorError::io(label, err.to_string())),
         };
     }
-    swap_existing_directory(target, staged, exchange_directories)
+    swap_existing_directory_with_cleanup_retention(
+        target,
+        staged,
+        exchange_directories,
+        retain_cleanup,
+    )
 }
 
 /// Exchange an existing target before cleaning up its old tree.
+#[cfg(test)]
 fn swap_existing_directory(
     target: &Path,
     staged: &Path,
     exchange: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
 ) -> Result<Vec<String>, OrchestratorError> {
+    swap_existing_directory_with_cleanup_retention(target, staged, exchange, false)
+}
+
+fn swap_existing_directory_with_cleanup_retention(
+    target: &Path,
+    staged: &Path,
+    exchange: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
+    retain_cleanup: bool,
+) -> Result<Vec<String>, OrchestratorError> {
     let label = target.display().to_string();
     exchange(staged, target).map_err(|err| OrchestratorError::io(label, err.to_string()))?;
+    if retain_cleanup {
+        return Ok(Vec::new());
+    }
     let old = staged.display().to_string();
     match std::fs::remove_dir_all(staged) {
         Ok(()) => Ok(Vec::new()),
