@@ -10,10 +10,8 @@
 #   repo-policy       `scripts/check-freshness.sh` (pins, policy mirror,
 #                     upstream evidence, deny policy; the live advisory scan
 #                     runs in CI, not here)
-#   generated-selector focused regression tests for Cargo artifact selection
-#   generated-tree    build the CLI, select the exact executable Cargo reports,
-#                     `generate --output-dir` to a temp dir, and `diff -r` the
-#                     committed `.github` tree against that generated tree.
+#   generated-tree    run the CLI through pinned MBX into a temp dir and
+#                     `diff -r` the committed `.github` tree against it.
 #   clippy-<crate>    per-crate pinned `cargo clippy --all-targets -- -D warnings`
 #   test-<crate>      per-crate pinned `cargo test` (unit plus integration plus doc)
 #   doctest-<crate>   per-crate pinned `cargo test --doc` for crates with library
@@ -27,14 +25,13 @@
 #   integration       whole-workspace pass: pinned nextest `ci` profile when
 #                     available, else pinned `cargo test`
 #
-# Every cargo/nextest invocation runs under `mise exec` with explicit
-# `tool@exact` specs from .velnor/version-policy.toml; mise.toml holds
-# local developer selections and may differ without changing the CI pins.
-# Bare ambient cargo never runs here, and
-# the repo mise wrapper routes cargo through the pinned MBX shim. Every
-# cargo invocation also passes `--locked`; the lockfile is policy. The
-# script honors `CARGO_TARGET_DIR` from the environment. Exit status is 0
-# only when every stage passes; the failing stage names print at the end.
+# Every Cargo-compatible lint/test/doc invocation runs under `mise exec` with
+# explicit `tool@exact` specs from .velnor/version-policy.toml; mise.toml holds
+# local developer selections and may differ without changing the CI pins. Its
+# Cargo wrapper dispatches those verbs through pinned MBX. CLI policy and
+# generated-tree execution use `mbx run` directly. Every build/test invocation
+# is locked. The script honors `CARGO_TARGET_DIR` for target placement. Exit
+# status is 0 only when every stage passes; failing stage names print at end.
 #
 # Usage: scripts/verify-local.sh
 set -uo pipefail
@@ -125,7 +122,7 @@ repo_policy() {
     VELNOR_INTERNAL_OP=repo-policy-v1 \
     VELNOR_REPO_POLICY_ACTION="$action" \
     VELNOR_REPO_POLICY_ROOT="$ROOT" \
-    "${MISE_EXEC[@]}" cargo run --quiet --locked -p velnor-actions-cli \
+    "${MISE_EXEC[@]}" mbx run --quiet --locked -p velnor-actions-cli \
       --bin velnor-actions
 }
 POLICY_SPECS="$(repo_policy toolchain-specs 2>"/tmp/verify-local-toolchain-policy.log")"
@@ -192,35 +189,20 @@ GEN_DIR="$(mktemp -d 2>/dev/null)"
 if [ -z "$GEN_DIR" ]; then
   fail "generated-tree (mktemp failed)"
 else
-  echo "--- verify-local: generated-selector"
-  if python3 -B scripts/test_cargo_artifact_executable.py \
-    >"/tmp/verify-local-generated-selector.log" 2>&1; then
-    pass "generated-selector"
-  else
-    fail "generated-selector (log: /tmp/verify-local-generated-selector.log)"
-  fi
   echo "--- verify-local: generated-tree"
-  if "${MISE_EXEC[@]}" cargo build --locked --message-format=json-render-diagnostics \
-    -p velnor-actions-cli --bin velnor-actions \
-    >"/tmp/verify-local-generated-artifacts.jsonl" \
-    2>"/tmp/verify-local-generated-build.log"; then
-    BIN="$(python3 scripts/cargo_artifact_executable.py \
-      --workspace-root "$ROOT" \
-      --manifest-path crates/velnor-actions-cli/Cargo.toml \
-      --target velnor-actions \
-      /tmp/verify-local-generated-artifacts.jsonl \
-      2>>"/tmp/verify-local-generated-build.log")"
-    # Schema 2 emits the full product workflow set; compare it directly.
-    if [ -n "$BIN" ] && "$BIN" generate --output-dir "$GEN_DIR/tree" \
-      >"/tmp/verify-local-generated-run.log" 2>&1 &&
-      diff -r --brief .github "$GEN_DIR/tree/.github" \
-        >"/tmp/verify-local-generated-diff.log" 2>&1; then
-      pass "generated-tree"
-    else
-      fail "generated-tree (see /tmp/verify-local-generated-*.log)"
-    fi
+  GENERATED_TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/target}"
+  # MBX resolves and runs the selected target itself; no artifact JSON parsing
+  # or raw binary invocation can select a stale repository executable.
+  if "${MISE_EXEC[@]}" mbx run --quiet --locked \
+    --target-dir "$GENERATED_TARGET_DIR" \
+    -p velnor-actions-cli --bin velnor-actions -- \
+    generate --output-dir "$GEN_DIR/tree" \
+    >"/tmp/verify-local-generated-run.log" 2>&1 &&
+    diff -r --brief .github "$GEN_DIR/tree/.github" \
+      >"/tmp/verify-local-generated-diff.log" 2>&1; then
+    pass "generated-tree"
   else
-    fail "generated-tree (build failed: /tmp/verify-local-generated-build.log)"
+    fail "generated-tree (see /tmp/verify-local-generated-*.log)"
   fi
   rm -rf "$GEN_DIR"
 fi

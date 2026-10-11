@@ -12,7 +12,7 @@ velnor-actions plan
 velnor-actions generate [--output-dir PATH]
 ```
 
-Run `cargo run -p velnor-actions-cli -- --help` for flags.
+Run `mbx run --locked -p velnor-actions-cli --bin velnor-actions -- --help` for flags.
 `generate --output-dir PATH` previews into `PATH/.github` without touching
 the repository.
 
@@ -60,8 +60,9 @@ origin is set); the preview directory must not be a symlink (`/tmp` on
 macOS is one — use `/private/tmp` or another real directory). The full
 gated local pass is `scripts/verify-local.sh` (fmt, policy, freshness,
 per-crate clippy/tests/doctests/docs, fixtures, Nextest `ci` profile). Its
-generated-tree check executes the binary Cargo just built, so an external or
-relative `CARGO_TARGET_DIR` cannot select a stale repository binary.
+generated-tree check runs the selected CLI target through pinned MBX in the
+configured target directory, so no raw binary path can select a stale
+repository executable.
 
 ## Consumer installation
 
