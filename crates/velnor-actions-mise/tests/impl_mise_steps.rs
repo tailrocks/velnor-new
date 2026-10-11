@@ -46,8 +46,8 @@ fn prepare_pinned_tools_argv_is_fixed_install() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "install",
-            "rust@1.98.1",
-            "mr-boxington@1.21.1",
+            "rust@1.99.0",
+            "mr-boxington@1.23.0",
         ])
     );
     Ok(())
@@ -63,7 +63,7 @@ fn prepare_pinned_tools_env_disables_knobs_and_carries_homes() -> Result<(), Str
         ("MISE_LOCKFILE", "0"),
         ("MISE_RUSTUP_HOME", "/velnor/rustup"),
         ("MISE_CARGO_HOME", "/velnor/cargo"),
-        ("RUSTUP_TOOLCHAIN", "1.98.1"),
+        ("RUSTUP_TOOLCHAIN", "1.99.0"),
     ] {
         assert!(env_has(&env, key, value), "missing {key}={value}: {env:?}");
     }
@@ -169,9 +169,10 @@ fn prepared_inputs_argv_is_locked_offline_qualification() -> Result<(), String> 
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
+            "rust@1.99.0",
             "--",
-            "cargo",
+            "mbx",
+            "+1.99.0",
             "metadata",
             "--format-version",
             "1",
@@ -202,7 +203,7 @@ fn prepared_inputs_env_matches_command() -> Result<(), String> {
         ("MISE_EXEC_AUTO_INSTALL", "false"),
         ("MISE_RUSTUP_HOME", "/velnor/rustup"),
         ("MISE_CARGO_HOME", "/velnor/cargo"),
-        ("RUSTUP_TOOLCHAIN", "1.98.1"),
+        ("RUSTUP_TOOLCHAIN", "1.99.0"),
     ] {
         assert!(env_has(&env, key, value), "missing {key}={value}: {env:?}");
     }
@@ -247,7 +248,7 @@ fn tool_homes_exec_env_is_verification_env() -> Result<(), String> {
         ("MISE_EXEC_AUTO_INSTALL", "false"),
         ("MISE_RUSTUP_HOME", "/velnor/rustup"),
         ("MISE_CARGO_HOME", "/velnor/cargo"),
-        ("RUSTUP_TOOLCHAIN", "1.98.1"),
+        ("RUSTUP_TOOLCHAIN", "1.99.0"),
     ] {
         assert!(env_has(&env, key, value), "missing {key}={value}: {env:?}");
     }
@@ -279,13 +280,13 @@ fn rust_components_argv_is_fixed_rustup_add() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
+            "rust@1.99.0",
             "--",
             "rustup",
             "component",
             "add",
             "--toolchain",
-            "1.98.1-x86_64-unknown-linux-gnu",
+            "1.99.0-x86_64-unknown-linux-gnu",
             "clippy",
             "rustfmt",
         ])
@@ -302,7 +303,7 @@ fn rust_components_command_matches_step() -> Result<(), String> {
     assert_eq!(command.argv(), request.argv(&catalog));
     assert_eq!(command.full_env(), env);
     assert!(command.disables_auto_install());
-    assert!(env_has(&env, "RUSTUP_TOOLCHAIN", "1.98.1"));
+    assert!(env_has(&env, "RUSTUP_TOOLCHAIN", "1.99.0"));
     assert_eq!(
         env_value(&env, "RUSTUP_HOME"),
         env_value(&env, "MISE_RUSTUP_HOME")
@@ -341,13 +342,13 @@ fn rust_target_argv_pins_host_toolchain_and_target() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
+            "rust@1.99.0",
             "--",
             "rustup",
             "target",
             "add",
             "--toolchain",
-            "1.98.1-aarch64-apple-darwin",
+            "1.99.0-aarch64-apple-darwin",
             "x86_64-apple-darwin",
         ])
     );
