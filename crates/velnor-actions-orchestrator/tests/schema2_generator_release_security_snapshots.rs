@@ -15,6 +15,32 @@ struct TargetJobs {
     attester_action: &'static str,
 }
 
+#[test]
+fn credential_assignment_without_matching_env_entry_is_rejected() {
+    let conditional_gh_token = credential_assignment_action("if true; then GH_TOKEN=attacker; fi");
+    assert_credential_action_rejected(&conditional_gh_token);
+    let missing_env_key = credential_assignment_action("if true; then GITHUB_TOKEN=attacker; fi");
+    assert_credential_action_rejected(&missing_env_key);
+}
+
+fn credential_assignment_action(command: &str) -> String {
+    format!(
+        "env:\n  GH_TOKEN: \"\"\nruns:\n  using: composite\n  steps:\n    - env:\n        GH_TOKEN: \"\"\n      run: \"{}\"\n    - run: \"{}\"\n    - run: {command}\n",
+        super::qualification_snapshots::CREDENTIAL_UNSET_PRELUDE,
+        super::qualification_snapshots::CREDENTIAL_UNSET_PRELUDE,
+    )
+}
+
+fn assert_credential_action_rejected(action_body: &str) {
+    assert!(
+        std::panic::catch_unwind(|| {
+            super::qualification_snapshots::assert_empty_credential_environment(action_body);
+        })
+        .is_err(),
+        "credential assignments in shell payloads must be rejected"
+    );
+}
+
 pub(super) fn assert_isolated_candidate_execution(
     workflow: &str,
     actions: &Actions,
