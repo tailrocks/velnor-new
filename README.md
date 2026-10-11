@@ -96,7 +96,7 @@ not a present claim.
 
 - Detect every stack with a registered adapter; V1 registers Rust and discovers its Cargo workspaces, crates, dependency edges, and relevant changes.
 - Configure stack exclusions in `.velnor/config.toml`; do not add stack selection or exclusion flags to the CLI.
-- Keep stack-specific behavior in named adapters; keep Mise integration in `velnor-actions-mise` and compose adapters through `velnor-actions-orchestrator`.
+- Keep stack-specific behavior in named adapters; keep Mise execution and catalog authority in `velnor-actions-mise`. The workflow renderer may read catalog pins to validate emitted Mise workflow data, while orchestration composes adapters.
 - Generate deterministic, repository-local GitHub Actions workflows with focused jobs and steps.
 - Use Mise as the authority for Rust, components, MBX, Nextest, and related tools.
 - Select Cargo vs MBX and Cargo test vs Nextest independently from repository evidence; never impose MBX or Nextest on consumers.
