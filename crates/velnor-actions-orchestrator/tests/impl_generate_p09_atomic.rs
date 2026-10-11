@@ -3,10 +3,13 @@
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use super::impl_common::{TestResult, config_with_branch, make_repo};
-use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
+use velnor_actions_orchestrator::{
+    GenerateOptions, RetiredTreeOwners, generate, generate_with_retired_tree_owners, prepare,
+};
 
 const WRITER_COMPLETE: usize = 17;
 
@@ -178,15 +181,25 @@ fn atomic_commit_never_exposes_missing_tree() -> TestResult {
     let done = AtomicUsize::new(0);
     let writer_phase = AtomicUsize::new(0);
     let started = Instant::now();
+    let (retired_sender, retired_receiver) = mpsc::sync_channel(1);
     std::thread::scope(|scope| {
-        scope.spawn(|| {
+        let writer_done = &done;
+        let writer_phase_ref = &writer_phase;
+        let prep_ref = &prep;
+        let opts_ref = &opts;
+        scope.spawn(move || {
+            let mut retired = RetiredTreeOwners::default();
             for rewrite in 1..=8 {
-                writer_phase.store(rewrite * 2 - 1, Ordering::Relaxed);
-                generate(&prep, &opts).expect("rewrite commits");
-                writer_phase.store(rewrite * 2, Ordering::Relaxed);
+                writer_phase_ref.store(rewrite * 2 - 1, Ordering::Relaxed);
+                generate_with_retired_tree_owners(prep_ref, opts_ref, &mut retired)
+                    .expect("rewrite commits");
+                writer_phase_ref.store(rewrite * 2, Ordering::Relaxed);
             }
-            writer_phase.store(WRITER_COMPLETE, Ordering::Relaxed);
-            done.store(1, Ordering::Relaxed);
+            writer_phase_ref.store(WRITER_COMPLETE, Ordering::Relaxed);
+            writer_done.store(1, Ordering::Relaxed);
+            retired_sender
+                .send(retired)
+                .expect("retired tree receiver remains alive");
         });
         for observer in 0..4 {
             let parent = root.to_path_buf();
@@ -208,6 +221,11 @@ fn atomic_commit_never_exposes_missing_tree() -> TestResult {
             });
         }
     });
+    let retired = retired_receiver
+        .recv()
+        .expect("writer returns the retired tree owners after observers join");
+    assert_eq!(retired.len(), 8, "each rewrite retains its retired TempDir");
+    drop(retired);
     assert!(live.is_dir(), "final tree live");
     let (not_found, other) = counts.snapshot();
     assert!(
