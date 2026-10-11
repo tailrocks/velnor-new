@@ -7,11 +7,18 @@ use tempfile::TempDir;
 use velnor_actions_actionlint::actions::{
     MR_BOXINGTON_ACTION_CANDIDATE_SHA, MR_BOXINGTON_ACTION_SHA,
 };
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 
 use crate::impl_common::{TestResult, make_repo};
 
-const CACHE_GENERATION: &str = "velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37";
+fn cache_generation() -> String {
+    format!(
+        "velnor-qualification-mbx-{}-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-{}",
+        ToolCatalog::pinned().version(PinnedTool::MrBoxington),
+        MR_BOXINGTON_ACTION_CANDIDATE_SHA,
+    )
+}
 
 fn assert_candidate_ref(writer: &str) {
     assert!(
@@ -29,15 +36,16 @@ fn assert_candidate_ref(writer: &str) {
 }
 
 fn assert_candidate_owner(job: &str) {
+    let catalog = ToolCatalog::pinned();
     for fragment in [
-        "version: 1.21.1",
-        "toolchain: 1.98.1",
-        "isolate-objects-cache: \"true\"",
-        "RUSTUP_TOOLCHAIN: 1.98.1",
-        "MBX_SHARE_OUT_DIR: \"0\"",
-        "CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo",
+        format!("version: {}", catalog.version(PinnedTool::MrBoxington)),
+        format!("toolchain: {}", catalog.version(PinnedTool::Rust)),
+        "isolate-objects-cache: \"true\"".to_owned(),
+        format!("RUSTUP_TOOLCHAIN: {}", catalog.rustup_toolchain()),
+        "MBX_SHARE_OUT_DIR: \"0\"".to_owned(),
+        "CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo".to_owned(),
     ] {
-        assert!(job.contains(fragment), "{job}");
+        assert!(job.contains(&fragment), "missing {fragment}:\n{job}");
     }
 }
 
@@ -74,11 +82,24 @@ fn assert_writer(writer: &str) {
         "{writer}"
     );
     assert!(
-        writer.contains(&format!("{CACHE_GENERATION}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}")),
+        writer.contains(&format!(
+            "{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
+            cache_generation()
+        )),
         "{writer}"
     );
-    assert!(writer.contains("version: 1.21.1"), "{writer}");
-    assert!(writer.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{writer}");
+    let catalog = ToolCatalog::pinned();
+    assert!(
+        writer.contains(&format!(
+            "version: {}",
+            catalog.version(PinnedTool::MrBoxington)
+        )),
+        "{writer}"
+    );
+    assert!(
+        writer.contains(&format!("RUSTUP_TOOLCHAIN: {}", catalog.rustup_toolchain())),
+        "{writer}"
+    );
     assert!(
         writer
             .contains("CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo"),
@@ -110,7 +131,10 @@ fn assert_reader(reader: &str) {
         "{reader}"
     );
     assert!(
-        reader.contains(&format!("{CACHE_GENERATION}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}")),
+        reader.contains(&format!(
+            "{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
+            cache_generation()
+        )),
         "{reader}"
     );
     assert!(
@@ -128,7 +152,14 @@ fn assert_reader(reader: &str) {
         reader.contains(".savings.cached_compilations > 0"),
         "{reader}"
     );
-    assert!(reader.contains("version: 1.21.1"), "{reader}");
+    let catalog = ToolCatalog::pinned();
+    assert!(
+        reader.contains(&format!(
+            "version: {}",
+            catalog.version(PinnedTool::MrBoxington)
+        )),
+        "{reader}"
+    );
     assert!(
         reader.contains("df -B1 -P \\\"$RUNNER_TEMP\\\""),
         "{reader}"
@@ -156,7 +187,10 @@ fn assert_reader(reader: &str) {
         ),
         "{reader}"
     );
-    assert!(reader.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{reader}");
+    assert!(
+        reader.contains(&format!("RUSTUP_TOOLCHAIN: {}", catalog.rustup_toolchain())),
+        "{reader}"
+    );
     assert!(
         reader
             .contains("CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo"),
