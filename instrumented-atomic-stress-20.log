@@ -1,0 +1,161 @@
+=== diagnostic iteration 1/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpRLOa5L/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.44s
+
+=== diagnostic iteration 2/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmptBY3Ok/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.16s
+
+=== diagnostic iteration 3/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpEzH0o0/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.05s
+
+=== diagnostic iteration 4/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpWAdydw/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.14s
+
+=== diagnostic iteration 5/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpRjHffo/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.15s
+
+=== diagnostic iteration 6/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpQFbflZ/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.21s
+
+=== diagnostic iteration 7/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpSTPIt7/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.13s
+
+=== diagnostic iteration 8/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpI8pjqO/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.19s
+
+=== diagnostic iteration 9/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpDIhLpc/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.15s
+
+=== diagnostic iteration 10/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmptxrFTt/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.10s
+
+=== diagnostic iteration 11/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpIz18f7/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.16s
+
+=== diagnostic iteration 12/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpH0ytYS/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.15s
+
+=== diagnostic iteration 13/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpUh6Vvp/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.35s
+
+=== diagnostic iteration 14/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpuz8E4l/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.39s
+
+=== diagnostic iteration 15/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpLphpFF/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.35s
+
+=== diagnostic iteration 16/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpDp3hU6/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.44s
+
+=== diagnostic iteration 17/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpCMVQws/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.33s
+
+=== diagnostic iteration 18/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpf4jiSF/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.41s
+
+=== diagnostic iteration 19/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpZog2RD/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.38s
+
+=== diagnostic iteration 20/20 ===
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmpSgGZXH/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.41s
+
+completed diagnostic iterations: 20/20
