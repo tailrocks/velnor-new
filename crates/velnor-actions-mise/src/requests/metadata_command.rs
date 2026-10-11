@@ -9,8 +9,6 @@ use crate::error::MiseError;
 
 use super::PinnedToolExec;
 
-const MBX_VERSION_ARGUMENT: &str = "--version";
-
 /// Metadata execution whose action-owned MBX authority is checked before
 /// every metadata process is spawned.
 ///
@@ -137,7 +135,7 @@ impl MetadataCommand {
         let metadata_template = self.command_template(&self.metadata)?;
         let mbx = metadata_template.resolve_action_owned_mbx()?;
         let output = self.command_with_path(&self.version_probe, &mbx)?.run()?;
-        self.verify_action_mbx(output)?;
+        self.verify_action_mbx(&output)?;
         self.command_with_path(&self.metadata, &mbx)?.run()
     }
 
@@ -161,7 +159,7 @@ impl MetadataCommand {
         command.with_env(&self.extra_env)
     }
 
-    fn verify_action_mbx(&self, output: ProcessOutput) -> Result<(), MiseError> {
+    fn verify_action_mbx(&self, output: &ProcessOutput) -> Result<(), MiseError> {
         if !output.success {
             return Err(MiseError::NonZeroExit {
                 program: "mbx --version".to_owned(),
