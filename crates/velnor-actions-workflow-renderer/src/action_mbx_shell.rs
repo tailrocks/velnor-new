@@ -1,4 +1,8 @@
-//! Narrow validation for the action-owned MBX executable binding.
+//! Whole-template validation for action-owned MBX lifecycle commands.
+
+use std::collections::BTreeMap;
+
+use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use crate::{RenderError, commands};
 
@@ -8,7 +12,14 @@ pub(crate) const RESOLVE_ACTION_MBX_BIN: &str = "if ! mbx_bin=$(command -v mbx);
 /// Shell-local absolute path assigned by [`RESOLVE_ACTION_MBX_BIN`].
 pub(crate) const ACTION_MBX_BIN: &str = "$mbx_bin";
 
-/// Validate the exact internal resolver while leaving generic validation strict.
+const RUST_EXEC_PREFIX: &str = "mise --no-config --no-env --no-hooks exec rust@";
+const VERSION_LINE_PREFIX: &str = "[ \"$version_line\" = 'mbx ";
+const VERSION_LINE_SUFFIX: &str = "' ] ||";
+const PRESEED_VERSION_PREFIX: &str = "grep -qxF \"mbx ";
+const PRESEED_VERSION_SUFFIX: &str = "\"";
+
+/// Validate a fixed internally-built shell vector before its role is attached.
+/// The serialized form is checked again against a role-specific producer.
 pub(crate) fn validate_argv(argv: &[String]) -> Result<(), RenderError> {
     let script_at =
         commands::inline_shell_script_at(argv).ok_or_else(|| bad_shape("not_inline_shell"))?;
@@ -22,23 +33,171 @@ pub(crate) fn validate_argv(argv: &[String]) -> Result<(), RenderError> {
     commands::validate_command_argv(&validated)
 }
 
-/// Validate and join a typed MBX resolver command for a workflow `run:` value.
-pub(crate) fn join_argv_for_run(argv: &[String]) -> Result<String, RenderError> {
+/// Validate a serialized MBX role by rebuilding its complete canonical argv.
+pub(crate) fn validate_argv_for_role(
+    argv: &[String],
+    role: Option<StepRole>,
+) -> Result<(), RenderError> {
     validate_argv(argv)?;
+    let script_at =
+        commands::inline_shell_script_at(argv).ok_or_else(|| bad_shape("not_inline_shell"))?;
+    let script = &argv[script_at];
+    let rust = rust_toolchain(script)?;
+    let expected = match role {
+        Some(StepRole::MbxVersionCheck) => {
+            let version = value_between(script, VERSION_LINE_PREFIX, VERSION_LINE_SUFFIX)?;
+            shell_run(crate::cache_steps::mbx_version_check_step(
+                version,
+                rust,
+                BTreeMap::new(),
+            )?)?
+        }
+        Some(StepRole::MbxWorkspaceCleanup) => {
+            let action = Step {
+                name: crate::cache_steps::MBX_RESTORE_NAME.to_owned(),
+                id: None,
+                role: Some(StepRole::MbxCache),
+                condition: None,
+                kind: StepKind::Action {
+                    uses: format!("{}@{}", crate::cache_steps::MBX_ACTION_NAME, "a".repeat(40)),
+                    with: BTreeMap::from([
+                        ("version".to_owned(), "1.0.0".to_owned()),
+                        ("toolchain".to_owned(), rust.to_owned()),
+                    ]),
+                    env: BTreeMap::new(),
+                },
+            };
+            shell_run(crate::cache_steps::mbx_workspace_clean_step_for_action(
+                &action,
+            )?)?
+        }
+        Some(StepRole::PreseedBuild) => {
+            let build = candidate_build_argv(rust);
+            shell_run(crate::preseed::preseed_build_step(
+                &build,
+                &BTreeMap::new(),
+            )?)?
+        }
+        Some(StepRole::PreseedVerifyBuild) => {
+            let version = value_between(script, PRESEED_VERSION_PREFIX, PRESEED_VERSION_SUFFIX)?;
+            let probe = mbx_probe_argv(rust);
+            shell_run(crate::preseed::preseed_verify_step(
+                &probe,
+                version,
+                &BTreeMap::new(),
+            )?)?
+        }
+        _ => return Err(bad_shape("role_not_authorized")),
+    };
+    if argv != expected {
+        return Err(bad_shape("canonical_template_mismatch"));
+    }
+    Ok(())
+}
+
+/// Join an MBX lifecycle argv only after complete role-template validation.
+pub(crate) fn join_argv_for_run(
+    argv: &[String],
+    role: Option<StepRole>,
+) -> Result<String, RenderError> {
+    validate_argv_for_role(argv, role)?;
     commands::join_validated_argv_for_run(argv)
 }
 
-/// Whether this step role is authorized to carry the fixed MBX resolver.
-pub(crate) fn role_uses_resolver(role: Option<velnor_actions_contract::StepRole>) -> bool {
+/// Whether this role selects one of the four complete MBX templates.
+pub(crate) fn role_uses_resolver(role: Option<StepRole>) -> bool {
     matches!(
         role,
         Some(
-            velnor_actions_contract::StepRole::MbxVersionCheck
-                | velnor_actions_contract::StepRole::MbxWorkspaceCleanup
-                | velnor_actions_contract::StepRole::PreseedBuild
-                | velnor_actions_contract::StepRole::PreseedVerifyBuild
+            StepRole::MbxVersionCheck
+                | StepRole::MbxWorkspaceCleanup
+                | StepRole::PreseedBuild
+                | StepRole::PreseedVerifyBuild
         )
     )
+}
+
+fn rust_toolchain(script: &str) -> Result<&str, RenderError> {
+    let (_, after) = script
+        .split_once(RUST_EXEC_PREFIX)
+        .ok_or_else(|| bad_shape("rust_toolchain_missing"))?;
+    let (rust, _) = after
+        .split_once(" -- ")
+        .ok_or_else(|| bad_shape("rust_toolchain_unclosed"))?;
+    if !is_exact_version(rust) {
+        return Err(bad_shape("rust_toolchain_invalid"));
+    }
+    Ok(rust)
+}
+
+fn value_between<'a>(script: &'a str, prefix: &str, suffix: &str) -> Result<&'a str, RenderError> {
+    if script.matches(prefix).count() != 1 {
+        return Err(bad_shape("dynamic_value_not_unique"));
+    }
+    let (_, after) = script
+        .split_once(prefix)
+        .ok_or_else(|| bad_shape("dynamic_value_missing"))?;
+    let (value, _) = after
+        .split_once(suffix)
+        .ok_or_else(|| bad_shape("dynamic_value_unclosed"))?;
+    if !is_exact_version(value) {
+        return Err(bad_shape("dynamic_value_invalid"));
+    }
+    Ok(value)
+}
+
+fn is_exact_version(version: &str) -> bool {
+    let parts: Vec<&str> = version.split('.').collect();
+    parts.len() == 3
+        && parts
+            .iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+}
+
+fn candidate_build_argv(rust: &str) -> Vec<String> {
+    let rust_spec = format!("rust@{rust}");
+    let rust_selector = format!("+{rust}");
+    let argv = [
+        "mise".to_owned(),
+        "--no-config".to_owned(),
+        "--no-env".to_owned(),
+        "--no-hooks".to_owned(),
+        "exec".to_owned(),
+        rust_spec,
+        "--".to_owned(),
+        "mbx".to_owned(),
+        rust_selector,
+        "build".to_owned(),
+        "--release".to_owned(),
+        "--locked".to_owned(),
+        "--package".to_owned(),
+        "velnor-actions-cli".to_owned(),
+        "--bin".to_owned(),
+        "velnor-actions".to_owned(),
+    ];
+    argv.to_vec()
+}
+
+fn mbx_probe_argv(rust: &str) -> Vec<String> {
+    let argv = [
+        "mise".to_owned(),
+        "--no-config".to_owned(),
+        "--no-env".to_owned(),
+        "--no-hooks".to_owned(),
+        "exec".to_owned(),
+        format!("rust@{rust}"),
+        "--".to_owned(),
+        "mbx".to_owned(),
+        "--version".to_owned(),
+    ];
+    argv.to_vec()
+}
+
+fn shell_run(step: Step) -> Result<Vec<String>, RenderError> {
+    match step.kind {
+        StepKind::Shell { run, .. } => Ok(run),
+        _ => Err(bad_shape("canonical_step_not_shell")),
+    }
 }
 
 fn bad_shape(reason: &str) -> RenderError {
@@ -49,56 +208,123 @@ fn bad_shape(reason: &str) -> RenderError {
 mod tests {
     use std::collections::BTreeMap;
 
-    use super::{RESOLVE_ACTION_MBX_BIN, join_argv_for_run, validate_argv};
-    use crate::{RenderError, commands};
+    use velnor_actions_contract::{Step, StepKind, StepRole};
 
-    fn resolver_argv(extra: &str) -> Vec<String> {
-        vec![
+    use super::{
+        ACTION_MBX_BIN, RESOLVE_ACTION_MBX_BIN, candidate_build_argv, join_argv_for_run,
+        mbx_probe_argv, role_uses_resolver, validate_argv, validate_argv_for_role,
+    };
+    use crate::{RenderError, cache_steps};
+
+    fn version_check() -> Step {
+        cache_steps::mbx_version_check_step("1.23.0", "1.99.0", BTreeMap::new())
+            .expect("version check")
+    }
+
+    fn cleanup() -> Step {
+        let action = Step {
+            name: cache_steps::MBX_RESTORE_NAME.to_owned(),
+            id: None,
+            role: Some(StepRole::MbxCache),
+            condition: None,
+            kind: StepKind::Action {
+                uses: format!("{}@{}", cache_steps::MBX_ACTION_NAME, "a".repeat(40)),
+                with: BTreeMap::from([
+                    ("version".to_owned(), "1.23.0".to_owned()),
+                    ("toolchain".to_owned(), "1.99.0".to_owned()),
+                ]),
+                env: BTreeMap::new(),
+            },
+        };
+        cache_steps::mbx_workspace_clean_step_for_action(&action).expect("cleanup")
+    }
+
+    fn build() -> Step {
+        crate::preseed::preseed_build_step(&candidate_build_argv("1.99.0"), &BTreeMap::new())
+            .expect("preseed build")
+    }
+
+    fn verify_build() -> Step {
+        crate::preseed::preseed_verify_step(&mbx_probe_argv("1.99.0"), "1.23.0", &BTreeMap::new())
+            .expect("preseed verification")
+    }
+
+    fn run(step: &Step) -> &[String] {
+        let StepKind::Shell { run, .. } = &step.kind else {
+            panic!("MBX template must be shell");
+        };
+        run
+    }
+
+    #[test]
+    fn whole_templates_accept_all_four_producer_roles() {
+        for step in [version_check(), cleanup(), build(), verify_build()] {
+            assert!(role_uses_resolver(step.role));
+            validate_argv_for_role(run(&step), step.role).expect("canonical MBX template");
+            join_argv_for_run(run(&step), step.role).expect("canonical template joins");
+        }
+    }
+
+    #[test]
+    fn forged_role_rejects_suffix_order_reassignment_and_comment_payloads() {
+        let step = version_check();
+        let mut suffix = run(&step).to_vec();
+        suffix[2].push_str("; echo injected");
+        assert!(validate_argv_for_role(&suffix, step.role).is_err());
+        assert!(join_argv_for_run(&suffix, step.role).is_err());
+
+        let mut before_resolver = run(&step).to_vec();
+        let resolver_at = before_resolver[2]
+            .find(RESOLVE_ACTION_MBX_BIN)
+            .expect("resolver in canonical script");
+        before_resolver[2].insert_str(resolver_at, "\"$mbx_bin\" --version; ");
+        assert!(validate_argv_for_role(&before_resolver, step.role).is_err());
+
+        let mut reassigned = run(&step).to_vec();
+        let resolver_end = reassigned[2]
+            .find(RESOLVE_ACTION_MBX_BIN)
+            .expect("resolver in canonical script")
+            + RESOLVE_ACTION_MBX_BIN.len();
+        reassigned[2].insert_str(resolver_end, "; mbx_bin=/tmp/evil");
+        assert!(validate_argv_for_role(&reassigned, step.role).is_err());
+
+        let mut comment_only = run(&step).to_vec();
+        assert!(comment_only[2].contains(" -- \"$mbx_bin\" --version"));
+        comment_only[2] = comment_only[2].replace(
+            " -- \"$mbx_bin\" --version",
+            "; : ' -- \"$mbx_bin\"'; echo injected",
+        );
+        assert!(comment_only[2].contains("; : ' -- \"$mbx_bin\"'"));
+        assert!(validate_argv_for_role(&comment_only, step.role).is_err());
+    }
+
+    #[test]
+    fn canonical_template_without_an_authorized_role_is_rejected() {
+        let step = version_check();
+        assert!(validate_argv_for_role(run(&step), None).is_err());
+        assert!(join_argv_for_run(run(&step), None).is_err());
+    }
+
+    #[test]
+    fn generic_steps_still_reject_command_substitution() {
+        let argv = vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            format!(
-                "set -eu; {RESOLVE_ACTION_MBX_BIN}; mise --no-config --no-env --no-hooks exec rust@1.99.0 -- \"$mbx_bin\" --version{extra}"
-            ),
-        ]
-    }
-
-    #[test]
-    fn typed_route_accepts_only_the_fixed_action_resolver() {
-        let argv = resolver_argv("");
-        assert!(validate_argv(&argv).is_ok());
-        let joined = join_argv_for_run(&argv).expect("typed MBX command joins");
-        assert!(joined.contains(RESOLVE_ACTION_MBX_BIN));
-        assert!(joined.contains("-- \"$mbx_bin\" --version"));
+            format!("echo $(evil); {ACTION_MBX_BIN} --version"),
+        ];
         assert!(matches!(
-            commands::validate_command_argv(&argv),
-            Err(RenderError::BadCommand(message)) if message.starts_with("command_substitution:")
-        ));
-        assert!(
-            crate::steps_shell::action_owned_mbx_shell_step(
-                "Verify native MBX",
-                argv.clone(),
-                BTreeMap::new(),
-            )
-            .is_ok()
-        );
-        assert!(matches!(
-            crate::steps_shell::shell_step("Generic command", argv, BTreeMap::new()),
+            crate::commands::validate_command_argv(&argv),
             Err(RenderError::BadCommand(message)) if message.starts_with("command_substitution:")
         ));
     }
 
     #[test]
-    fn typed_route_rejects_extra_substitution_and_unbound_resolver() {
+    fn existing_resolver_fragment_remains_generic_validation_only() {
+        let step = version_check();
         assert!(matches!(
-            validate_argv(&resolver_argv("; echo $(evil)")),
+            crate::commands::validate_command_argv(run(&step)),
             Err(RenderError::BadCommand(message)) if message.starts_with("command_substitution:")
         ));
-
-        let mut altered = resolver_argv("");
-        altered[2] = altered[2].replace("command -v mbx", "command -v git");
-        assert!(matches!(
-            validate_argv(&altered),
-            Err(RenderError::BadCommand(message)) if message == "action_owned_mbx_binding:resolver_or_binary_binding"
-        ));
+        validate_argv(run(&step)).expect("typed construction accepts its resolver");
     }
 }

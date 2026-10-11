@@ -160,7 +160,7 @@ fn rust_path_preflight_step(
     Ok(step)
 }
 
-pub(super) fn mbx_version_check_step(
+pub(crate) fn mbx_version_check_step(
     mbx_version: &str,
     rust_toolchain: &str,
     env: BTreeMap<String, String>,
