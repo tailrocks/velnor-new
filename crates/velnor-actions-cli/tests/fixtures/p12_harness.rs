@@ -148,7 +148,7 @@ fn script_builds_cli_in_shared_nested_target() -> Result<(), Box<dyn Error>> {
     assert_clean(&run);
     assert!(
         nested_target.join("debug/velnor-actions").is_file(),
-        "check-freshness Cargo output was not written under {}",
+        "check-freshness MBX output was not written under {}",
         nested_target.display()
     );
     cleanup(&fixture);

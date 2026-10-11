@@ -24,6 +24,11 @@ fn verify_local_toolchain_specs_come_from_policy_when_local_mise_pins_differ() {
     assert!(
         check_freshness.contains("mise exec \"rust@$RUST_POLICY\" \"mr-boxington@$MBX_POLICY\" --")
     );
+    assert!(
+        check_freshness
+            .contains("-- mbx run --quiet --locked -p velnor-actions-cli --bin velnor-actions")
+    );
+    assert!(!check_freshness.contains("-- cargo run"));
 
     let fixture_root = std::env::temp_dir().join(format!(
         "velnor-local-toolchain-policy-{}",
