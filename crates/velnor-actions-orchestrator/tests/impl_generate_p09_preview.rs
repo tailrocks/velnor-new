@@ -7,7 +7,6 @@
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_contract::StepKind;
 use velnor_actions_orchestrator::{
     GenerateOptions, GenerateReport, GenerationPreparation, OrchestratorError, ToolSnapshot,
     generate, prepare, render_staged_tree,
@@ -15,6 +14,9 @@ use velnor_actions_orchestrator::{
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{TestResult, config_with_branch, err_of, make_repo, snapshot};
+
+#[path = "impl_generate_p09_preview_contract.rs"]
+mod contract;
 
 /// Preview-generate helper: `Ok` report or the typed error.
 fn preview(
@@ -25,13 +27,6 @@ fn preview(
         output_dir: Some(dir.to_path_buf()),
     };
     generate(prep, &opts)
-}
-
-/// Rendered workflow text window between two job markers.
-fn window<'a>(yaml: &'a str, from: &str, to: &str) -> Result<&'a str, Box<dyn std::error::Error>> {
-    let start = yaml.find(from).ok_or("missing window start")?;
-    let end = yaml[start..].find(to).map_or(yaml.len(), |at| start + at);
-    Ok(&yaml[start..end])
 }
 
 #[test]
@@ -109,44 +104,11 @@ fn rendered_crate_steps_carry_validated_contract() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let prep = prepare(repo.path())?;
     let tree = render_staged_tree(&prep)?;
+    let manifest = contract::task_manifest(&tree)?;
     let yaml = tree
         .get(WORKFLOW_PATH)
         .ok_or_else(|| std::io::Error::other("missing workflow"))?;
-    let workflow_env = window(yaml, "env:\n", "concurrency:")?;
-    let task = window(yaml, "  rust-demo:", "  required:")?;
-    let run_at = task.find("- name: Clippy").ok_or("first obligation")?;
-    let run_block = &task[run_at..];
-    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:"] {
-        assert!(run_block.contains(key), "Clippy misses {key}");
-    }
-    assert!(
-        task.contains("RUSTUP_TOOLCHAIN: 1.98.1"),
-        "task misses toolchain"
-    );
-    for key in [
-        "MISE_NO_CONFIG:",
-        "MISE_NO_ENV:",
-        "MISE_NO_HOOKS:",
-        "MISE_LOCKFILE:",
-        "MISE_AUTO_INSTALL:",
-        "MISE_EXEC_AUTO_INSTALL:",
-    ] {
-        assert!(workflow_env.contains(key), "workflow misses {key}");
-    }
-    for key in [
-        "MISE_GITHUB_TOKEN",
-        "GITHUB_TOKEN",
-        "GH_TOKEN",
-        "ACTIONS_RUNTIME_TOKEN",
-        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
-        "ACTIONS_ID_TOKEN_REQUEST_URL",
-        "CARGO_REGISTRY_TOKEN",
-    ] {
-        assert!(
-            workflow_env.contains(&format!("{key}: \"\"")),
-            "workflow must scrub {key} empty"
-        );
-    }
+    contract::assert_crate_contract(&prep, &manifest, yaml)?;
     Ok(())
 }
 
