@@ -127,7 +127,7 @@ fn prepare_pinned_tools_specs_come_only_from_catalog() -> Result<(), String> {
     let argv = step.argv(&catalog);
     assert!(argv.iter().any(|arg| arg == "rust@1.97.0"));
     assert!(
-        !argv.iter().any(|arg| arg == "rust@1.98.1"),
+        !argv.iter().any(|arg| arg == "rust@1.99.0"),
         "no pinned fallback may leak in: {argv:?}"
     );
     assert!(env_has(&step.env(&catalog), "RUSTUP_TOOLCHAIN", "1.97.0"));
