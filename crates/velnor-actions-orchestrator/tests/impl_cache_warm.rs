@@ -269,14 +269,14 @@ fn expected_task_subcommand(
     task_id: &str,
     test_runner: &str,
 ) -> Result<&'static str, Box<dyn std::error::Error>> {
-    let kind = task_id.split('/').nth(3).ok_or("task ID misses its kind")?;
+    let kind = task_id
+        .rsplit('/')
+        .nth(1)
+        .ok_or("task ID misses its kind")?;
     match (kind, test_runner) {
         ("clippy", _) => Ok("clippy"),
-        ("build", "cargo_test") => Ok("test"),
-        ("build", "cargo_nextest") => Ok("nextest"),
-        ("test", _) => Ok("test"),
-        ("nextest", _) => Ok("nextest"),
-        ("doctest", _) => Ok("test"),
+        ("build", "cargo_test") | ("test", _) | ("doctest", _) => Ok("test"),
+        ("build", "cargo_nextest") | ("nextest", _) => Ok("nextest"),
         ("doc", _) => Ok("doc"),
         ("fmt", _) => Ok("fmt"),
         _ => Err(format!("unsupported task ID or test runner: {task_id} / {test_runner}").into()),
