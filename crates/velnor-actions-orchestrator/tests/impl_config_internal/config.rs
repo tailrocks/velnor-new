@@ -148,12 +148,12 @@ fn uncommented_init_sample_parses_with_overrides() -> TestResult {
         "sample must document overrides"
     );
     fs::write(root.join(".velnor/config.toml"), &live)?;
-    // The uncommented sample declares a verification task; resolution binds
-    // it to a checked-in Mise task body.
-    fs::write(
-        root.join("mise.toml"),
-        "[tasks.desktop-format-check]\nrun = \"echo desktop-format-check\"\n",
-    )?;
+    // The sample points at a nested checked-in task source and uses root
+    // toolchain files, so provide both real source locations before resolve.
+    crate::impl_schema2_build_tasks::write_native_source_fixture(root)?;
+    let mut native_mise = fs::read_to_string(root.join("native/mise.toml"))?;
+    native_mise.push_str("\n[tasks.desktop-format-check]\nrun = \"echo desktop-format-check\"\n");
+    fs::write(root.join("native/mise.toml"), native_mise)?;
     let prep = prepare(root)?;
     assert_eq!(
         prep.config.checks,
