@@ -212,7 +212,12 @@ pub(crate) fn step_to_yaml(
             step_context.runs_on,
         ),
         StepKind::Shell { run, env } => {
-            commands::validate_command_argv(run)?;
+            let action_owned_mbx = crate::action_mbx_shell::role_uses_resolver(step.role);
+            if action_owned_mbx {
+                crate::action_mbx_shell::validate_argv(run)?;
+            } else {
+                commands::validate_command_argv(run)?;
+            }
             if composite {
                 commands::validate_composite_env(env)?;
             } else {
@@ -237,7 +242,11 @@ pub(crate) fn step_to_yaml(
             push_composite_shell(&mut entries, composite);
             entries.push((
                 "run".to_owned(),
-                Yaml::str(commands::join_argv_for_run(run)?),
+                Yaml::str(if action_owned_mbx {
+                    crate::action_mbx_shell::join_argv_for_run(run)?
+                } else {
+                    commands::join_argv_for_run(run)?
+                }),
             ));
             Ok(Yaml::Map(entries))
         }

@@ -16,6 +16,7 @@ pub use crate::cache_steps::{
     TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step,
     check_cache_step_order, check_mbx_gating, is_never_archive_path, mbx_steps_for_driver,
 };
+pub(crate) use crate::steps_shell::action_owned_mbx_shell_step;
 pub(crate) use crate::steps_shell::composite_shell_step;
 pub use crate::steps_shell::{ambient_shell_step, shell_step};
 
