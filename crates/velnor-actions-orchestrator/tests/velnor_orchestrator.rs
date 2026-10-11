@@ -142,4 +142,5 @@ mod impl_validators;
 mod impl_validators_repo;
 mod impl_validators_repo_b;
 mod impl_wire_w1;
+mod impl_wire_w1_manifest;
 mod impl_wire_w2;

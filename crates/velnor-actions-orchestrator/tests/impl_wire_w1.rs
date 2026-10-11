@@ -9,6 +9,7 @@ use velnor_actions_actionlint::{
     render_actionlint_yaml, validate_action_inputs,
 };
 use velnor_actions_actionlint::{ActionlintConfigInput, RUNNER_LABEL_BRIDGE};
+use velnor_actions_contract::workflow::StepKind;
 use velnor_actions_mise::{CandidateBuild, PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{DEFAULT_RUNNER_LABEL, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::{ACTIONLINT_PATH, WORKFLOW_PATH};
@@ -300,16 +301,21 @@ fn w1_plan_format_runs_fmt_check() -> TestResult {
     );
     let job = window(yaml, "  rust-demo:", "  required:")?;
     assert!(job.contains("- name: Format"), "per-package scope:\n{job}");
-    let format_at = job.find("- name: Format").ok_or("format step")?;
-    let tail = &job[format_at..];
-    let block = &tail[..tail.len().min(900)];
-    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:"] {
-        assert!(block.contains(key), "format env misses {key}:\n{block}");
-    }
-    assert!(
-        job.contains("RUSTUP_TOOLCHAIN: 1.98.1"),
-        "job env misses RUSTUP_TOOLCHAIN:\n{job}"
-    );
+    let rust_job = prep
+        .workflow
+        .ir
+        .jobs
+        .get("rust-demo")
+        .ok_or("missing rust-demo IR job")?;
+    let format_task = rust_job
+        .steps
+        .iter()
+        .find(|step| step.name == "Format")
+        .ok_or("missing Format task")?;
+    let StepKind::TaskExecution { task_id, .. } = &format_task.kind else {
+        return Err("Format must be a declared task".into());
+    };
+    crate::impl_wire_w1_manifest::assert_format_task_record(task_id, job, &tree)?;
     for key in ["MISE_AUTO_INSTALL:", "MISE_EXEC_AUTO_INSTALL:"] {
         assert!(
             workflow_env.contains(key),
