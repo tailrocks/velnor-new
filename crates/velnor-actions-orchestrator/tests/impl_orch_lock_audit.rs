@@ -238,7 +238,7 @@ fn hostile_config_ignored_by_isolated_installs() -> TestResult {
 #[test]
 fn drifted_lock_advises_without_blocking() -> TestResult {
     let lock = full_lock();
-    let rust_pin = ToolCatalog::pinned().rust;
+    let rust_pin = ToolCatalog::pinned().rustup_toolchain();
     let rust_version = format!("version = \"{rust_pin}\"");
     let drifted = lock.replacen(&rust_version, "version = \"0.0.0\"", 1);
     assert_ne!(
