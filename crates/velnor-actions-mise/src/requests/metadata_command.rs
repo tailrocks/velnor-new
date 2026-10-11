@@ -28,9 +28,9 @@ pub struct MetadataCommand {
 impl MetadataCommand {
     pub(crate) fn new(
         catalog: &ToolCatalog,
-        metadata_argv: Vec<OsString>,
+        full_mbx_argv: Vec<OsString>,
     ) -> Result<Self, MiseError> {
-        let (program, metadata_args) = split_mbx_argv(metadata_argv)?;
+        let (program, payload_args) = split_mbx_argv(full_mbx_argv)?;
         let tools = vec![PinnedTool::Rust];
         let version_probe = PinnedToolExec::new_action_owned_mbx(
             tools.clone(),
@@ -38,7 +38,7 @@ impl MetadataCommand {
             vec![OsString::from(MBX_VERSION_ARGUMENT)],
         )?
         .command(catalog)?;
-        let metadata = PinnedToolExec::new_action_owned_mbx(tools, &program, metadata_args)?
+        let metadata = PinnedToolExec::new_action_owned_mbx(tools, &program, payload_args)?
             .command(catalog)?;
         Ok(Self {
             version_probe,
@@ -96,7 +96,7 @@ impl MetadataCommand {
         let expected_toolchain = self.catalog.rustup_toolchain();
         for (key, value) in extra {
             if key == crate::command::RUSTUP_TOOLCHAIN_ENV
-                && value != OsString::from(expected_toolchain.as_str())
+                && value.as_os_str() != OsStr::new(expected_toolchain.as_str())
             {
                 return Err(MiseError::InvalidStepInput {
                     field: crate::command::RUSTUP_TOOLCHAIN_ENV.to_owned(),
