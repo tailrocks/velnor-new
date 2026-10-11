@@ -18,8 +18,13 @@ fn strict_rejects_unstaged_internal() -> Result<(), RenderError> {
         vec![checkout_step(&checkout_pin())?, plan_step()],
     );
     assert!(
-        strict(&fixture_ir(vec![bare_plan]), &fixture_ctx())
-            .is_err_and(|err| format!("{err:?}").contains("internal_without_acquire")),
+        strict(&fixture_ir(vec![bare_plan]), &fixture_ctx()).is_err_and(|err| {
+            matches!(
+                err,
+                RenderError::InvalidWorkflow(problem)
+                    if problem == "consumer_without_acquire:plan"
+            )
+        }),
         "unstaged plan must fail closed"
     );
     let bare_final = job("required", "Required", Vec::new(), vec![merge_step()]);
@@ -30,7 +35,13 @@ fn strict_rejects_unstaged_internal() -> Result<(), RenderError> {
             &fixture_ir(vec![("required".to_owned(), final_job)]),
             &fixture_ctx()
         )
-        .is_err_and(|err| format!("{err:?}").contains("internal_without_acquire")),
+        .is_err_and(|err| {
+            matches!(
+                err,
+                RenderError::InvalidWorkflow(problem)
+                    if problem == "consumer_without_acquire:required"
+            )
+        }),
         "unstaged merge must fail closed"
     );
     let staged = job(
