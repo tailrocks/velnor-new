@@ -195,6 +195,7 @@ fn child_process(
                 fixture.0.join("bin/mbx")
             },
         )
+        .env("VELNOR_OVERLAY_PATH", fixture.0.join("overlay-bin"))
         .env("VELNOR_EXPECTED_MANIFEST", manifest)
         .env("VELNOR_EXPECT_HOMES", expected_homes)
         .env("VELNOR_EXPECTED_RUSTUP_HOME", fixture.0.join("owned-rustup"))
@@ -238,7 +239,7 @@ fn run_child(mode: &str) -> TestResult {
             if mode == "path-overlay" {
                 extra.push((
                     "PATH".into(),
-                    fixture.0.join("overlay-bin").into_os_string(),
+                    std::env::var_os("VELNOR_OVERLAY_PATH").ok_or("overlay path")?,
                 ));
             }
             let command = request.command(&catalog)?.with_env(&extra)?;
