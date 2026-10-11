@@ -166,7 +166,7 @@ fn verify_local_bootstrap_reads_quoted_mise_tool_key() -> Result<(), Box<dyn Err
         "quoted Aqua key rejected: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(String::from_utf8(output.stdout)?.trim(), "0.9.146");
+    assert_eq!(String::from_utf8(output.stdout)?.trim(), "0.9.148");
     Ok(())
 }
 
@@ -185,8 +185,64 @@ fn verify_local_entrypoint_parses() -> Result<(), Box<dyn Error>> {
 #[test]
 fn verify_local_repo_policy_stage_executes() -> Result<(), Box<dyn Error>> {
     let fixture = freshness::passing("verify-local-freshness")?;
+    refresh_fixture_rust_mbx_pins(&fixture.dir)?;
     let output = freshness::run_script(&fixture.dir, &[]);
     freshness::cleanup(&fixture);
     freshness::assert_clean(&output?);
+    Ok(())
+}
+
+/// Use the repository's current Rust+MBX pins for the script execution case.
+/// The shared P12 fixtures retain their historical versions for mutation tests.
+fn refresh_fixture_rust_mbx_pins(root: &std::path::Path) -> Result<(), Box<dyn Error>> {
+    let catalog = crate::impl_repo_policy::read("crates/velnor-actions-mise/src/catalog.rs")?;
+    let policy = crate::impl_repo_policy::read(".velnor/version-policy.toml")?;
+    let rust = crate::impl_repo_policy::quoted_value(&catalog, "RUST_VERSION")?;
+    let mbx = crate::impl_repo_policy::quoted_value(&catalog, "MR_BOXINGTON_VERSION")?;
+    assert_eq!(
+        rust,
+        crate::impl_repo_policy::quoted_value(&policy, "rust = ")?,
+        "catalog and version-policy Rust pins must agree"
+    );
+    assert_eq!(
+        mbx,
+        crate::impl_repo_policy::quoted_value(&policy, "mr-boxington = ")?,
+        "catalog and version-policy MBX pins must agree"
+    );
+
+    for (path, old, new) in [
+        (
+            "crates/velnor-actions-mise/src/catalog.rs",
+            "RUST_VERSION: &str = \"1.98.1\"",
+            format!("RUST_VERSION: &str = \"{rust}\""),
+        ),
+        (
+            "crates/velnor-actions-mise/src/catalog.rs",
+            "MR_BOXINGTON_VERSION: &str = \"1.19.0\"",
+            format!("MR_BOXINGTON_VERSION: &str = \"{mbx}\""),
+        ),
+        (
+            ".velnor/version-policy.toml",
+            "rust = \"1.98.1\"",
+            format!("rust = \"{rust}\""),
+        ),
+        (
+            ".velnor/version-policy.toml",
+            "mr-boxington = \"1.19.0\"",
+            format!("mr-boxington = \"{mbx}\""),
+        ),
+        (
+            ".velnor/freshness-inventory.json",
+            "\"name\":\"rust\",\"pinned\":\"1.98.1\",\"qualified\":\"1.98.1\"",
+            format!("\"name\":\"rust\",\"pinned\":\"{rust}\",\"qualified\":\"{rust}\""),
+        ),
+        (
+            ".velnor/freshness-inventory.json",
+            "\"name\":\"mr-boxington\",\"pinned\":\"1.19.0\",\"qualified\":\"1.19.0\"",
+            format!("\"name\":\"mr-boxington\",\"pinned\":\"{mbx}\",\"qualified\":\"{mbx}\""),
+        ),
+    ] {
+        freshness::mutate(root, path, old, &new)?;
+    }
     Ok(())
 }
