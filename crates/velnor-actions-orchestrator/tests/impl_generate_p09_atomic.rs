@@ -1,12 +1,17 @@
 //! Root-visibility diagnostics for atomic `.github` replacement.
 
 use std::io;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use super::impl_common::{TestResult, config_with_branch, make_repo};
-use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
+use velnor_actions_orchestrator::{
+    GenerateOptions, begin_atomic_diagnostic_capture, generate, prepare,
+    take_atomic_diagnostic_events,
+};
 
 const WRITER_COMPLETE: usize = 17;
 
@@ -48,6 +53,7 @@ struct FirstMetadataError {
     display: String,
     parent_probe: String,
     target_probe: String,
+    root_fd_probe: String,
 }
 
 impl FirstMetadataError {
@@ -72,6 +78,7 @@ impl FirstMetadataError {
         let display = error.to_string();
         let parent_probe = metadata_probe(parent);
         let target_probe = metadata_probe(target);
+        let root_fd_probe = root_fd_nofollow_probe(parent);
         Self {
             observer,
             iteration,
@@ -84,12 +91,13 @@ impl FirstMetadataError {
             display,
             parent_probe,
             target_probe,
+            root_fd_probe,
         }
     }
 
     fn emit(self) {
         eprintln!(
-            "FIRST_METADATA_ERROR wall_unix_ns={:?} elapsed_ns={} observer={} iteration={} writer_phase={} path={} kind={:?} raw_errno={:?} display={:?} POST_ERROR_PARENT_PROBE[{}] POST_ERROR_TARGET_PROBE[{}]",
+            "FIRST_METADATA_ERROR wall_unix_ns={:?} elapsed_ns={} observer={} iteration={} writer_phase={} path={} kind={:?} raw_errno={:?} display={:?} POST_ERROR_PARENT_PROBE[{}] POST_ERROR_TARGET_PROBE[{}] POST_ERROR_ROOT_FD_NOFOLLOW[{}]",
             self.wall_unix_ns,
             self.elapsed_ns,
             self.observer,
@@ -100,7 +108,8 @@ impl FirstMetadataError {
             self.raw_errno,
             self.display,
             self.parent_probe,
-            self.target_probe
+            self.target_probe,
+            self.root_fd_probe
         );
     }
 }
@@ -125,6 +134,30 @@ fn metadata_probe(path: &Path) -> String {
         Err(error) => format!(
             "path={},status=err,kind={:?},raw_errno={:?},display={:?}",
             path.display(),
+            error.kind(),
+            error.raw_os_error(),
+            error
+        ),
+    }
+}
+
+fn root_fd_nofollow_probe(root: &Path) -> String {
+    let root_fd = match std::fs::File::open(root) {
+        Ok(file) => file,
+        Err(error) => {
+            return format!(
+                "relative=.github,root_open=err,kind={:?},raw_errno={:?}",
+                error.kind(),
+                error.raw_os_error()
+            );
+        }
+    };
+    match rustix::fs::statat(&root_fd, ".github", rustix::fs::AtFlags::SYMLINK_NOFOLLOW)
+        .map_err(std::io::Error::from)
+    {
+        Ok(_) => "relative=.github,status=ok".to_owned(),
+        Err(error) => format!(
+            "relative=.github,status=err,kind={:?},raw_errno={:?},display={:?}",
             error.kind(),
             error.raw_os_error(),
             error
@@ -178,15 +211,24 @@ fn atomic_commit_never_exposes_missing_tree() -> TestResult {
     let done = AtomicUsize::new(0);
     let writer_phase = AtomicUsize::new(0);
     let started = Instant::now();
+    let defer_cleanup = std::env::var("VELNOR_ATOMIC_DEFER_CLEANUP").as_deref() == Ok("1");
+    let (trace_sender, trace_receiver) = mpsc::sync_channel(1);
     std::thread::scope(|scope| {
-        scope.spawn(|| {
+        let writer_done = &done;
+        let writer_phase_for_writer = &writer_phase;
+        scope.spawn(move || {
+            begin_atomic_diagnostic_capture(started, defer_cleanup);
             for rewrite in 1..=8 {
-                writer_phase.store(rewrite * 2 - 1, Ordering::Relaxed);
+                writer_phase_for_writer.store(rewrite * 2 - 1, Ordering::Relaxed);
                 generate(&prep, &opts).expect("rewrite commits");
-                writer_phase.store(rewrite * 2, Ordering::Relaxed);
+                writer_phase_for_writer.store(rewrite * 2, Ordering::Relaxed);
             }
-            writer_phase.store(WRITER_COMPLETE, Ordering::Relaxed);
-            done.store(1, Ordering::Relaxed);
+            writer_phase_for_writer.store(WRITER_COMPLETE, Ordering::Relaxed);
+            writer_done.store(1, Ordering::Relaxed);
+            let trace = take_atomic_diagnostic_events().expect("writer trace initialized");
+            trace_sender
+                .send(trace)
+                .expect("trace receiver remains alive");
         });
         for observer in 0..4 {
             let parent = root.to_path_buf();
@@ -208,6 +250,27 @@ fn atomic_commit_never_exposes_missing_tree() -> TestResult {
             });
         }
     });
+    let events = trace_receiver
+        .recv()
+        .expect("writer sends trace after final rewrite")
+        .finish_after_observers();
+    if let Some(path) = std::env::var_os("VELNOR_ATOMIC_TRACE_PATH") {
+        let mut file = std::fs::File::create(path)?;
+        writeln!(
+            file,
+            "pid={} cwd={:?} TMPDIR={:?} available_parallelism={:?} deferred_cleanup={} buffered_writer_events={}",
+            std::process::id(),
+            std::env::current_dir()?,
+            std::env::var_os("TMPDIR"),
+            std::thread::available_parallelism(),
+            defer_cleanup,
+            events.len()
+        )?;
+        for event in events {
+            writeln!(file, "{event}")?;
+        }
+        file.sync_all()?;
+    }
     assert!(live.is_dir(), "final tree live");
     let (not_found, other) = counts.snapshot();
     assert!(

@@ -22,8 +22,9 @@ pub use super::external_data::{
 };
 pub use super::finalized::finalized_jobs;
 pub use super::generate::{
-    GenerateOptions, GenerateReport, ToolSnapshot, generate, generate_dispatched,
-    render_staged_tree, render_staged_tree_with,
+    AtomicDiagnosticTrace, GenerateOptions, GenerateReport, ToolSnapshot,
+    begin_atomic_diagnostic_capture, generate, generate_dispatched, render_staged_tree,
+    render_staged_tree_with, take_atomic_diagnostic_events,
 };
 pub use super::init::{InitReport, init_config};
 #[doc(hidden)]

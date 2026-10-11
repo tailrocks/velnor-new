@@ -28,6 +28,11 @@ pub(super) fn stage_in_place(
     } else {
         staging_root.join(".github")
     };
+    super::atomic_diagnostic_event(if permissions.is_some() {
+        super::AtomicDiagnosticKind::StageAtTempDirRoot
+    } else {
+        super::AtomicDiagnosticKind::StageNestedGithub
+    });
     let directories = copy_repository_content(source, &staged)?;
     check_generated_collisions(&staged, tree)?;
     super::write_tree(&staged, tree)?;
