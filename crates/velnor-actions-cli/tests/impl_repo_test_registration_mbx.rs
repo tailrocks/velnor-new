@@ -1,5 +1,6 @@
 //! Resolve nested checks to Cargo's workspace target directory through pinned MBX.
 
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -35,16 +36,19 @@ fn metadata_target_directory(document: &Value, root: &Path) -> Outcome<PathBuf> 
     existing_or_absolute(root, &target_directory)
 }
 
-fn pinned_mbx() -> Outcome<(PathBuf, String)> {
+fn pinned_mbx(parent: &[(OsString, OsString)], current_dir: &Path) -> Outcome<(PathBuf, String)> {
     let catalog = crate::impl_repo_policy::read("crates/velnor-actions-mise/src/catalog.rs")?;
     let mbx_version = crate::impl_repo_policy::quoted_value(&catalog, "MR_BOXINGTON_VERSION")?;
     let rust_version = crate::impl_repo_policy::quoted_value(&catalog, "RUST_VERSION")?;
-    let path = std::env::var_os("PATH").ok_or("PATH is not set")?;
-    let executable = std::env::split_paths(&path)
-        .map(|directory| directory.join("mbx"))
-        .find(|candidate| candidate.is_file())
+    let executable = parent_env_value(parent, "PATH")
+        .and_then(|path| mbx_path_from_path(path, current_dir))
         .ok_or("pinned MBX executable is missing from PATH")?;
-    let version = Command::new(&executable).arg("--version").output()?;
+    let mut probe = Command::new(&executable);
+    probe
+        .arg("--version")
+        .env_clear()
+        .envs(mbx_child_environment(parent, &isolation_environment()));
+    let version = probe.output()?;
     let observed = String::from_utf8_lossy(&version.stdout);
     let expected = format!("mbx {mbx_version}");
     if !version.status.success() || observed.trim() != expected {
@@ -77,11 +81,19 @@ fn mbx_output_with_target(
     target_dir: Option<&Path>,
 ) -> Outcome<Output> {
     let current_dir = std::env::current_dir()?;
+    let parent = std::env::vars_os().collect::<Vec<_>>();
     let manifest_dir = manifest
         .parent()
         .ok_or("workspace manifest has no parent")?;
     let (command, options) = args.split_first().ok_or("empty MBX command")?;
-    let (mbx, rust_version) = pinned_mbx()?;
+    let (mbx, rust_version) = pinned_mbx(&parent, &current_dir)?;
+    let mut additions = isolation_environment();
+    if let Some(target_dir) = target_dir {
+        additions.push((
+            OsString::from("CARGO_TARGET_DIR"),
+            absolute_path(&current_dir, target_dir).into_os_string(),
+        ));
+    }
     let mut process = Command::new(mbx);
     process
         .arg(format!("+{rust_version}"))
@@ -89,13 +101,9 @@ fn mbx_output_with_target(
         .arg("--manifest-path")
         .arg(manifest)
         .args(options)
-        // Cargo exposes its own raw executable to tests, which cannot parse
-        // MBX's `+toolchain` selector. Let MBX resolve its selected Cargo.
-        .env_remove("CARGO")
+        .env_clear()
+        .envs(mbx_child_environment(&parent, &additions))
         .current_dir(manifest_dir);
-    if let Some(target_dir) = target_dir {
-        process.env("CARGO_TARGET_DIR", absolute_path(&current_dir, target_dir));
-    }
     let output = process.output()?;
     if !output.status.success() {
         return Err(format!(
@@ -108,6 +116,123 @@ fn mbx_output_with_target(
         .into());
     }
     Ok(output)
+}
+
+/// Mirrors the production MBX child boundary without linking this binary-only
+/// integration test to the library under test.
+fn mbx_child_environment(
+    parent: &[(OsString, OsString)],
+    additions: &[(OsString, OsString)],
+) -> Vec<(OsString, OsString)> {
+    let mut environment = parent
+        .iter()
+        .filter(|(key, _)| !mbx_parent_key_is_stripped(key))
+        .cloned()
+        .collect::<Vec<_>>();
+    environment.extend(additions.iter().cloned());
+    environment.retain(|(key, _)| !matches!(key.to_str(), Some("CARGO" | "RUSTC" | "RUSTDOC")));
+    sanitize_mise_cargo_path(&mut environment, parent);
+    environment
+}
+
+fn mbx_parent_key_is_stripped(key: &OsStr) -> bool {
+    let Some(name) = key.to_str() else {
+        return false;
+    };
+    name == "RUSTUP_TOOLCHAIN"
+        || name == "GH_HOST"
+        || name == "GH_CONFIG_DIR"
+        || name.starts_with("TF_")
+        || name.starts_with("TOFU_")
+        || name.starts_with("CHECKPOINT_")
+        || name.starts_with("CARGO_REGISTRIES_")
+        || name.ends_with("_TOKEN")
+        || [
+            "MISE_GITHUB_TOKEN",
+            "GITHUB_TOKEN",
+            "GH_TOKEN",
+            "ACTIONS_RUNTIME_TOKEN",
+            "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+            "ACTIONS_ID_TOKEN_REQUEST_URL",
+            "CARGO_REGISTRY_TOKEN",
+            "NPM_TOKEN",
+            "NODE_AUTH_TOKEN",
+        ]
+        .contains(&name)
+}
+
+fn sanitize_mise_cargo_path(
+    environment: &mut Vec<(OsString, OsString)>,
+    parent: &[(OsString, OsString)],
+) {
+    let data_dir = parent_env_value(parent, "MISE_DATA_DIR")
+        .map(PathBuf::from)
+        .or_else(|| {
+            parent_env_value(parent, "HOME")
+                .map(|home| PathBuf::from(home).join(".local/share/mise"))
+        });
+    let Some(data_dir) = data_dir.filter(|path| path.is_absolute()) else {
+        return;
+    };
+    let rejected = [
+        data_dir.join("command-wrappers").join("bin"),
+        data_dir.join("shims"),
+    ];
+    let Some((_, path)) = environment.iter().rev().find(|(key, _)| key == "PATH") else {
+        return;
+    };
+    let entries = std::env::split_paths(path)
+        .filter(|entry| !rejected.iter().any(|candidate| same_path(entry, candidate)))
+        .collect::<Vec<_>>();
+    let Ok(path) = std::env::join_paths(entries) else {
+        environment.retain(|(key, _)| key != "PATH");
+        return;
+    };
+    environment.retain(|(key, _)| key != "PATH");
+    environment.push((OsString::from("PATH"), path));
+}
+
+fn same_path(left: &Path, right: &Path) -> bool {
+    let left = left.components().collect::<Vec<_>>();
+    let right = right.components().collect::<Vec<_>>();
+    left.len() == right.len()
+        && left.iter().zip(right.iter()).all(|(left, right)| {
+            let left = left.as_os_str().to_string_lossy();
+            let right = right.as_os_str().to_string_lossy();
+            if cfg!(windows) || cfg!(target_os = "macos") {
+                left.eq_ignore_ascii_case(&right)
+            } else {
+                left == right
+            }
+        })
+}
+
+fn mbx_path_from_path(path: &OsStr, current_dir: &Path) -> Option<PathBuf> {
+    std::env::split_paths(path)
+        .map(|directory| absolute_path(current_dir, &directory.join("mbx")))
+        .find(|candidate| candidate.is_file())
+}
+
+fn parent_env_value<'a>(parent: &'a [(OsString, OsString)], name: &str) -> Option<&'a OsStr> {
+    parent
+        .iter()
+        .rev()
+        .find(|(key, _)| key == name)
+        .map(|(_, value)| value.as_os_str())
+}
+
+fn isolation_environment() -> Vec<(OsString, OsString)> {
+    [
+        ("MISE_NO_CONFIG", "1"),
+        ("MISE_NO_ENV", "1"),
+        ("MISE_NO_HOOKS", "1"),
+        ("MISE_LOCKFILE", "0"),
+        ("MISE_AUTO_INSTALL", "false"),
+        ("MISE_EXEC_AUTO_INSTALL", "false"),
+    ]
+    .into_iter()
+    .map(|(key, value)| (OsString::from(key), OsString::from(value)))
+    .collect()
 }
 
 pub(super) fn workspace_plan(manifest: &Path) -> Outcome<WorkspacePlan> {
@@ -226,6 +351,10 @@ pub(super) fn workspace_plans(root: &Path) -> Outcome<Vec<WorkspacePlan>> {
         .map(|workspace| workspace_plan(&root.join(workspace).join("Cargo.toml")))
         .collect()
 }
+
+#[cfg(test)]
+#[path = "impl_repo_test_registration_mbx_env_tests.rs"]
+mod env_tests;
 
 #[test]
 fn nested_workspace_uses_cargo_metadata_target_directory() -> Outcome<()> {
