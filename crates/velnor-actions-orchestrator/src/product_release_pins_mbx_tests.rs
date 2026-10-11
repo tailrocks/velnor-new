@@ -114,8 +114,12 @@ fn release_qualification_uses_catalog_action_and_exact_version_probe() {
         panic!("qualification last step must verify the native MBX version");
     };
     let command = run.join(" ");
-    assert!(
-        command.contains("mise --no-config --no-env --no-hooks exec rust@1.99.0 -- mbx --version")
-    );
+    assert!(command.contains("mbx_bin=$(command -v mbx)"));
+    assert!(command.contains("case \"$mbx_bin\" in /*)"));
+    assert!(command.contains("[ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]"));
+    assert!(command.contains(
+        "mise --no-config --no-env --no-hooks exec rust@1.99.0 -- \"$mbx_bin\" --version"
+    ));
+    assert!(!command.contains("-- mbx --version"));
     assert!(command.contains("mbx 1.23.0"));
 }
