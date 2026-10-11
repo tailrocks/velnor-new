@@ -16,6 +16,24 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{TestResult, config_with_branch, err_of, make_repo, snapshot};
 
+fn metadata_diagnostic(path: &std::path::Path) -> String {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => format!(
+            "path={:?},status=ok,is_dir={},is_symlink={}",
+            path,
+            metadata.is_dir(),
+            metadata.file_type().is_symlink()
+        ),
+        Err(error) => format!(
+            "path={:?},status=err,kind={:?},raw_errno={:?},error={:?}",
+            path,
+            error.kind(),
+            error.raw_os_error(),
+            error
+        ),
+    }
+}
+
 /// Preview-generate helper: `Ok` report or the typed error.
 fn preview(
     prep: &GenerationPreparation,
@@ -360,6 +378,7 @@ fn in_place_file_target_refused() -> TestResult {
 #[test]
 fn atomic_commit_never_exposes_missing_tree() -> TestResult {
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::{Instant, SystemTime, UNIX_EPOCH};
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     let prep = prepare(root)?;
@@ -368,18 +387,52 @@ fn atomic_commit_never_exposes_missing_tree() -> TestResult {
     let live = root.join(".github");
     let misses = AtomicUsize::new(0);
     let done = AtomicUsize::new(0);
+    let writer_phase = AtomicUsize::new(0);
+    let diagnostic_started = Instant::now();
     std::thread::scope(|scope| {
         scope.spawn(|| {
-            for _ in 0..8 {
+            for rewrite in 1..=8 {
+                writer_phase.store(rewrite * 2 - 1, Ordering::Relaxed);
                 generate(&prep, &opts).expect("rewrite commits");
+                writer_phase.store(rewrite * 2, Ordering::Relaxed);
             }
             done.store(1, Ordering::Relaxed);
         });
-        for _ in 0..4 {
-            scope.spawn(|| {
-                while done.load(Ordering::Relaxed) == 0 {
-                    if live.symlink_metadata().is_err() {
-                        misses.fetch_add(1, Ordering::Relaxed);
+        for observer in 0..4 {
+            let parent_path = root.to_path_buf();
+            let target_path = live.clone();
+            let started = &diagnostic_started;
+            let done_ref = &done;
+            let misses_ref = &misses;
+            let writer_phase_ref = &writer_phase;
+            scope.spawn(move || {
+                let mut iteration = 0_u64;
+                while done_ref.load(Ordering::Relaxed) == 0 {
+                    iteration += 1;
+                    if let Err(error) = target_path.symlink_metadata() {
+                        let wall_ns = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .map(|duration| duration.as_nanos())
+                            .unwrap_or_default();
+                        let phase = writer_phase_ref.load(Ordering::Relaxed);
+                        let writer_phase = match phase {
+                            0 => "writer_not_started".to_owned(),
+                            value if value % 2 == 1 => {
+                                format!("rewrite_{}_in_progress", (value + 1) / 2)
+                            }
+                            value => format!("rewrite_{}_completed", value / 2),
+                        };
+                        eprintln!(
+                            "ATOMIC_OBSERVER_ERROR wall_ns={wall_ns} elapsed_ns={} observer_phase=while_done_zero observer={observer} iteration={iteration} writer_phase={writer_phase} target={:?} lookup_kind={:?} lookup_raw_errno={:?} lookup_error={:?} parent_probe=[{}] target_probe=[{}]",
+                            started.elapsed().as_nanos(),
+                            target_path,
+                            error.kind(),
+                            error.raw_os_error(),
+                            error,
+                            metadata_diagnostic(&parent_path),
+                            metadata_diagnostic(&target_path)
+                        );
+                        misses_ref.fetch_add(1, Ordering::Relaxed);
                     }
                 }
             });
