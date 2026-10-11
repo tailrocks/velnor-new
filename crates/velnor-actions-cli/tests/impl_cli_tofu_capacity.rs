@@ -82,8 +82,8 @@ fn cli_schema2_paired_tofu_stays_within_capacity_and_fails_closed() -> Result<()
         workflow.len()
     );
 
-    let wide_repo = paired_tofu_repo(140)?;
-    let wide_preview = outer.join("preview-140");
+    let wide_repo = paired_tofu_repo(300)?;
+    let wide_preview = outer.join("preview-300");
     let rejected = spawn(
         &[
             "generate",
@@ -114,7 +114,7 @@ fn cli_schema2_paired_tofu_stays_within_capacity_and_fails_closed() -> Result<()
         "failed CLI generation left a preview tree"
     );
     eprintln!(
-        "perf: op=cli-generate schema=2 mode=both roots=140 failed_closed_bytes={actual} limit_bytes={MAX_WORKFLOW_BYTES}"
+        "perf: op=cli-generate schema=2 mode=both roots=300 failed_closed_bytes={actual} limit_bytes={MAX_WORKFLOW_BYTES}"
     );
     cleanup(&repo);
     cleanup(&wide_repo);
