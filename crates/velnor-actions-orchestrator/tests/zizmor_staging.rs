@@ -308,6 +308,7 @@ fn self_repository_ignores(root: &Path) -> Result<usize, Box<dyn std::error::Err
     for relative in [
         WORKFLOW_PATH,
         FRESHNESS_WORKFLOW_PATH,
+        ".github/actions/declared-task-0/action.yml",
         ".github/actions/u26/action.yml",
         ".github/actions/velnor-tool-seed/action.yml",
     ] {

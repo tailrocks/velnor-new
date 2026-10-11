@@ -199,13 +199,30 @@ fn w1_candidate_build_matches_mise_constructor() -> TestResult {
         let tree = render_staged_tree(&prep)?;
         let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
         let catalog = ToolCatalog::pinned();
-        let want = CandidateBuild::new()?
+        let mut candidate = CandidateBuild::new()?
             .argv(&catalog)
             .into_iter()
             .map(|arg| arg.into_string().map_err(|_| "non-utf8"))
-            .collect::<Result<Vec<_>, _>>()?
-            .join(" ");
-        assert!(yaml.contains(&want), "preseed build misses {want}:\n{yaml}");
+            .collect::<Result<Vec<_>, _>>()?;
+        let mbx = candidate
+            .iter()
+            .position(|arg| arg == "mbx")
+            .ok_or("candidate vector has no MBX command")?;
+        candidate[mbx] = "\\\"$mbx_bin\\\"".to_owned();
+        let want = candidate.join(" ");
+        let build = window(
+            yaml,
+            "name: Build helper (pre-seed trust-on-review)",
+            "name: Verify MBX compile (pre-seed trust-on-review)",
+        )?;
+        assert!(
+            build.contains("command -v mbx"),
+            "pre-seed resolves action-owned MBX before Mise: {build}"
+        );
+        assert!(
+            build.contains(&want),
+            "preseed build must bind the shared candidate vector to the resolved MBX binary; expected {want}:\n{build}"
+        );
         Ok(())
     })
 }
