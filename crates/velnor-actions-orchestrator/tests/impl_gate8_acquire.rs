@@ -2,7 +2,9 @@
 use std::fs;
 
 use tempfile::TempDir;
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare, render_staged_tree};
+use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use crate::impl_common::{TestResult, git, make_repo, without_ambient_identity};
 
@@ -48,7 +50,8 @@ fn consumer_plan_job_carries_acquire_step() -> TestResult {
 #[test]
 fn velnor_candidate_render_path_includes_release() -> TestResult {
     without_ambient_identity("velnor_candidate_render_path_includes_release", || {
-        // Render path only: full `generate` runs staged validation.
+        // Render the validated output tree without writing it. This includes
+        // the staged helper that declared task actions require.
         let repo = make_repo(
             "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ngenerator_validation = \"candidate\"\ndefault_branch = \"testmain\"\n",
         )?;
@@ -67,13 +70,10 @@ fn velnor_candidate_render_path_includes_release() -> TestResult {
             repo_policy()?,
         )?;
         let prep = prepare(repo.path())?;
-        let yaml = velnor_actions_workflow_renderer::render_workflow_ir(
-            &prep.workflow.ir,
-            prep.config.workflow.policy,
-            prep.workflow.support.as_ref(),
-            &prep.workflow.context,
-        )
-        .map_err(|err| format!("render: {err}"))?;
+        let tree = render_staged_tree(&prep)?;
+        let yaml = tree
+            .get(WORKFLOW_PATH)
+            .ok_or("missing generated workflow")?;
         for want in [
             "candidate:",
             "release:",
@@ -143,9 +143,17 @@ fn version_policy_drift_fails_velnor_generate() -> TestResult {
             ],
             repo.path(),
         )?;
+        let policy = repo_policy()?;
+        let rust_version = ToolCatalog::pinned().version(PinnedTool::Rust);
+        let drifted_policy =
+            policy.replace(&format!("rust = \"{rust_version}\""), "rust = \"9.9.9\"");
+        assert_ne!(
+            drifted_policy, policy,
+            "fixture tracks the catalog Rust pin"
+        );
         fs::write(
             repo.path().join(".velnor/version-policy.toml"),
-            repo_policy()?.replace("1.98.1", "9.9.9"),
+            drifted_policy,
         )?;
         let prep = prepare(repo.path())?;
         let parent = TempDir::new()?;
