@@ -2,9 +2,12 @@ use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 
 use crate::steps::{CompileDriver, mbx_steps_for_driver};
-use velnor_actions_contract::ReleaseTarget;
+use velnor_actions_contract::{ReleaseTarget, Step};
 use velnor_actions_mise::catalog::{PinnedTool, ToolCatalog};
-use velnor_actions_mise::{MiseInstall, PinnedToolExec, PrepareRustTarget};
+use velnor_actions_mise::{
+    ISOLATION_ENV, MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV, MiseInstall, NO_AUTO_INSTALL_ENV,
+    PinnedToolExec, PrepareRustTarget, RUSTUP_TOOLCHAIN_ENV, ToolHomes,
+};
 
 use crate::schema2::ProductReleasePins;
 use crate::setup::MiseSetup;
@@ -29,30 +32,6 @@ pub(super) fn test_pins() -> ProductReleasePins {
     let install_resource_probe_target_argv = resource_probe_target_argv(&catalog);
     let install_intel_target_argv = intel_target_argv(&catalog);
     let build = build_argv(&catalog);
-    let qualification_home = "${{ runner.temp }}/velnor/qualification";
-    let qualification_env = BTreeMap::from([
-        (
-            "MISE_RUSTUP_HOME".to_owned(),
-            format!("{qualification_home}/rustup"),
-        ),
-        (
-            "MISE_CARGO_HOME".to_owned(),
-            format!("{qualification_home}/cargo"),
-        ),
-        (
-            "RUSTUP_TOOLCHAIN".to_owned(),
-            catalog.version(PinnedTool::Rust).to_owned(),
-        ),
-    ]);
-    let qualify_mbx_action_steps = mbx_steps_for_driver(
-        &format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
-        CompileDriver::Mbx,
-        catalog.version(PinnedTool::MrBoxington),
-        catalog.version(PinnedTool::Rust),
-        qualification_env,
-    )
-    .expect("test MBX qualification steps are valid")
-    .expect("MBX qualification emits the native action steps");
     ProductReleasePins {
         linux_x86_64_setup: setup.clone(),
         macos_arm64_setup: setup.clone(),
@@ -76,7 +55,7 @@ pub(super) fn test_pins() -> ProductReleasePins {
             ],
             &catalog,
         ),
-        qualify_mbx_action_steps,
+        qualify_mbx_action_steps: qualification_mbx_action_steps(&catalog),
         install_runner_build_tools_argv,
         install_gh_argv: install_argv(&[PinnedTool::Gh], &catalog),
         build_argv: build.product,
@@ -106,6 +85,33 @@ pub(super) fn test_pins() -> ProductReleasePins {
         rust_version: catalog.version(PinnedTool::Rust).to_owned(),
         mr_boxington_version: catalog.version(PinnedTool::MrBoxington).to_owned(),
     }
+}
+
+fn qualification_mbx_action_steps(catalog: &ToolCatalog) -> [Step; 3] {
+    let homes = ToolHomes::runner_temp();
+    let mut env = ISOLATION_ENV
+        .iter()
+        .chain(NO_AUTO_INSTALL_ENV.iter())
+        .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
+        .collect::<BTreeMap<_, _>>();
+    env.insert(
+        MISE_RUSTUP_HOME_ENV.to_owned(),
+        homes.rustup_home().to_owned(),
+    );
+    env.insert(
+        MISE_CARGO_HOME_ENV.to_owned(),
+        homes.cargo_home().to_owned(),
+    );
+    env.insert(RUSTUP_TOOLCHAIN_ENV.to_owned(), catalog.rustup_toolchain());
+    mbx_steps_for_driver(
+        &format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
+        CompileDriver::Mbx,
+        catalog.version(PinnedTool::MrBoxington),
+        catalog.version(PinnedTool::Rust),
+        env,
+    )
+    .expect("test MBX qualification steps are valid")
+    .expect("MBX qualification emits the native action steps")
 }
 
 fn resource_probe_target_argv(catalog: &ToolCatalog) -> Vec<String> {
