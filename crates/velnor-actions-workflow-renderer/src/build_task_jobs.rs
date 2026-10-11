@@ -18,7 +18,7 @@ mod tests;
 /// Contract-fixed Xcode/SDK capability check step.
 pub(crate) const VERIFY_BUILD_TASK_MACOS_NAME: &str = "Verify macOS build toolchain";
 /// Contract-fixed MBX wrapper policy check step.
-pub(crate) const VERIFY_BUILD_TASK_MBX_NAME: &str = "Verify locked MBX Cargo wrapper";
+pub(crate) const VERIFY_BUILD_TASK_MBX_NAME: &str = "Verify locked MBX Rust route";
 /// Contract-fixed declared Mise task step.
 pub(crate) const RUN_BUILD_TASK_NAME: &str = "Run declared build task";
 /// Contract-fixed selected-tool bootstrap step.
@@ -85,6 +85,12 @@ pub struct BuildTaskPolicy {
     pub mise_lock_sha256: String,
     /// SHA-256 digest of the idiomatic Rust toolchain checked during planning.
     pub rust_toolchain_sha256: String,
+    /// SHA-256 of the task's declared Mise config, including its task bodies.
+    pub source_mise_config_sha256: String,
+    /// SHA-256 of a task-config-local Mise lock, when one exists.
+    pub source_mise_lock_sha256: Option<String>,
+    /// SHA-256 of a task-config-local Rust toolchain file, when one exists.
+    pub source_rust_toolchain_sha256: Option<String>,
     /// Sorted selected tools with the current runner's locked artifacts.
     pub selected_tools: Vec<BuildTaskTool>,
 }

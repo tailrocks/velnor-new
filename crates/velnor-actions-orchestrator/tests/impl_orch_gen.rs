@@ -62,7 +62,7 @@ fn lock_text() -> Result<String, Box<dyn std::error::Error>> {
         )?;
     }
     Ok(format!(
-        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.6\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.7\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
         "e".repeat(40),
         "b".repeat(64)
     ))
@@ -107,11 +107,13 @@ fn orch_gen_plan_matches_generated_tree() -> TestResult {
             ".github/AGENTS.md",
             ".github/CLAUDE.md",
             ".github/actionlint.yaml",
+            ".github/actions/declared-task-0/action.yml",
             ".github/actions/u26/action.yml",
             ".github/actions/velnor-tool-seed/action.yml",
             ".github/actions/velnor-tools-cache-restore/action.yml",
             ".github/actions/velnor-tools-prelude-u26/action.yml",
             ".github/scripts/velnor-tools-cache-identity.sh",
+            ".github/velnor/task-execution-manifest-v1.json",
             ".github/workflows/ci.yml"
         ]
     );

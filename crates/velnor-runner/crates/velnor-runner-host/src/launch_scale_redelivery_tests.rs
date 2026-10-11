@@ -40,7 +40,7 @@ async fn uncertain_jit_failure_redelivery_stays_queued() -> Result<(), String> {
     )
     .await;
     assert_eq!(second, Err(EnsureError::Uncertain));
-    assert!(replay.calls.is_empty());
+    assert_eq!(replay.calls, [] as [&str; 0]);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Uncertain);

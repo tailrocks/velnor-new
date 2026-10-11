@@ -3,8 +3,8 @@ use std::collections::BTreeSet;
 use velnor_actions_contract::{RoutingWorkflow, SCALE_SET_NAME, VELNOR_LABEL};
 
 use super::{
-    MbxQualificationPins, MisePinQualificationPins, Schema2WorkflowRequest, monitoring,
-    qualification, render_schema2_workflows,
+    MbxQualificationPins, MisePinQualificationPins, RustToolchainQualificationPins,
+    Schema2WorkflowRequest, monitoring, qualification, render_schema2_workflows,
 };
 use crate::setup::MiseSetup;
 use crate::yaml::Yaml;
@@ -40,6 +40,17 @@ fn request() -> Schema2WorkflowRequest {
                 version: "2026.10.5".to_owned(),
                 sha256: "c".repeat(64),
             },
+        }),
+        rust_toolchain_qualification: Some(RustToolchainQualificationPins {
+            mise_setup: MiseSetup {
+                uses: format!("jdx/mise-action@{}", "a".repeat(40)),
+                version: velnor_actions_mise::MISE_VERSION.to_owned(),
+                sha256: crate::setup::MISE_BINARY_SHA256_LINUX_X64.to_owned(),
+            },
+            mbx_version: velnor_actions_mise::MR_BOXINGTON_VERSION.to_owned(),
+            rust_version: "1.99.0".to_owned(),
+            manifest_url: "https://static.rust-lang.org/dist/channel-rust-1.99.0.toml".to_owned(),
+            manifest_sha256: super::super::RUST_TOOLCHAIN_QUALIFICATION_MANIFEST_SHA256.to_owned(),
         }),
         product_release: None,
     }
@@ -89,7 +100,9 @@ fn assert_lane_shells(document: &Yaml, minimum_per_lane: usize) {
                     "scale-set job {id} must declare its shell"
                 );
             }
-            Yaml::Str(label) if label == "ubuntu-26.04" || label == "macos-15-intel" => {
+            Yaml::Str(label)
+                if label == "ubuntu-26.04" || label == "macos-15-intel" || label == "macos-26" =>
+            {
                 hosted += 1;
                 if has_container {
                     assert_eq!(

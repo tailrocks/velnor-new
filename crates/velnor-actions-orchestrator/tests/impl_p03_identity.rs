@@ -33,7 +33,7 @@ fn anchor_id() -> String {
 fn generator_identity_has_no_zero_digest() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     assert_eq!(plan.generator.version, env!("CARGO_PKG_VERSION"));
-    assert!(!plan.generator.sha256.is_empty());
+    assert_ne!(plan.generator.sha256, "");
     assert!(
         !plan.generator.sha256.bytes().all(|b| b == b'0'),
         "zero digest: {}",
@@ -45,7 +45,7 @@ fn generator_identity_has_no_zero_digest() -> TestResult {
         "generator sha is real SHA-256 hex, never a b3- native hash: {}",
         plan.generator.sha256
     );
-    assert!(!plan.generator.target.is_empty());
+    assert_ne!(plan.generator.target, "");
     Ok(())
 }
 
@@ -98,7 +98,7 @@ fn lanes_follow_responsibility() -> TestResult {
         .iter()
         .map(|entry| entry.cache_ids.as_ref().map_or("", |ids| ids.lane_id()))
         .collect();
-    assert!(!lanes.is_empty());
+    assert_ne!(lanes, [] as [&str; 0]);
     assert!(lanes.iter().all(|lane| !lane.is_empty()));
     let clippy = plan
         .matrix

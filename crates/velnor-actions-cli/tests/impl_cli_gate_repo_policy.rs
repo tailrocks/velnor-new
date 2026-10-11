@@ -44,7 +44,7 @@ fn repo_policy_operation_requires_allowlisted_action_and_root() -> Result<(), Bo
         "{}",
         String::from_utf8_lossy(&valid.stderr)
     );
-    assert!(valid.stderr.is_empty());
+    assert_eq!(valid.stderr, [] as [u8; 0]);
     let specs = String::from_utf8(valid.stdout)?;
     assert!(specs.starts_with("rust@"), "{specs}");
     assert!(specs.contains(" mr-boxington@"), "{specs}");
@@ -95,7 +95,7 @@ fn repo_policy_boolean_flags_reject_malformed_values() -> Result<(), Box<dyn Err
         }
         let output = spawn_isolated(&[], &env, &tmp)?;
         assert_eq!(code(&output), 1);
-        assert!(output.stdout.is_empty());
+        assert_eq!(output.stdout, [] as [u8; 0]);
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(stderr.contains(name), "{stderr}");
         assert!(stderr.contains("must be absent, 0, or 1"), "{stderr}");

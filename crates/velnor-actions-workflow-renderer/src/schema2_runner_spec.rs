@@ -41,6 +41,7 @@ impl RunnerSpec {
             (label, target),
             ("ubuntu-26.04", ReleaseTarget::LinuxX86_64)
                 | ("macos-15-intel", ReleaseTarget::MacosX86_64)
+                | ("macos-26", ReleaseTarget::MacosArm64)
         );
         if !allowed_pair || ReleaseTarget::for_runner_label(label) != Some(target) {
             return Err(RenderError::InvalidWorkflow(format!(

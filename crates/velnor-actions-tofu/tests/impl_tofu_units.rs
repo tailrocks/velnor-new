@@ -181,7 +181,7 @@ fn json_and_malformed_fixtures_behave() -> Outcome {
 fn consumer_mirror_analyzes_clean() -> Outcome {
     let all = read_pairs(&fixture_dir("tofu-consumer-mirror"), "")?;
     let unit = analyze_files(&all).expect("consumer mirror analyzes");
-    assert!(!unit.effective.is_empty());
+    assert_ne!(unit.effective, [] as [String; 0]);
     assert_eq!(unit.effective.len(), unit.fmt.len());
     Ok(())
 }

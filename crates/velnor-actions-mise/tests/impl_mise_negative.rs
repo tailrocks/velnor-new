@@ -92,6 +92,34 @@ fn forbidden_payloads_are_rejected() {
 }
 
 #[test]
+fn mbx_requires_exact_catalog_authority_and_bare_program() {
+    for (tools, program) in [
+        (vec![PinnedTool::Rust], "mbx"),
+        (vec![PinnedTool::Rust, PinnedTool::MrBoxington], "/tmp/mbx"),
+        (vec![PinnedTool::Rust, PinnedTool::MrBoxington], "./mbx"),
+        (vec![PinnedTool::Rust, PinnedTool::MrBoxington], "mbx.exe"),
+    ] {
+        let error = PinnedToolExec::new(tools, OsStr::new(program), strings(&["--version"]))
+            .expect_err("an ambient or path-qualified MBX executable is not pinned");
+        assert!(
+            matches!(error, MiseError::ForbiddenPayload { .. }),
+            "unexpected error for {program}: {error}"
+        );
+    }
+}
+
+#[test]
+fn catalog_mbx_requires_a_pinned_rust_toolchain() {
+    let error = PinnedToolExec::new(
+        vec![PinnedTool::MrBoxington],
+        OsStr::new("mbx"),
+        strings(&["+1.99.0", "--version"]),
+    )
+    .expect_err("catalog MBX execution must have Rust selected through Mise");
+    assert!(matches!(error, MiseError::ForbiddenPayload { .. }));
+}
+
+#[test]
 fn forbidden_rejection_names_program_and_reason() {
     let err = PinnedToolExec::new(
         vec![PinnedTool::Rust],
@@ -153,16 +181,20 @@ fn every_request_routes_through_mise_or_git() -> Result<(), String> {
     .map_err(|err| err.to_string())?;
     let nextest = NextestArchive::new(NextestDriver::Cargo, "demo", &[], None)
         .map_err(|err| err.to_string())?;
+    let catalog = pinned();
     for command in [
-        discovery
-            .command(&pinned())
-            .map_err(|err| err.to_string())?,
-        qualification
-            .command(&pinned())
-            .map_err(|err| err.to_string())?,
         install.command(&pinned()).map_err(|err| err.to_string())?,
         exec.command(&pinned()).map_err(|err| err.to_string())?,
         nextest.command(&pinned()).map_err(|err| err.to_string())?,
+    ] {
+        assert_eq!(command.program(), "mise");
+        assert_eq!(command.argv()[0], OsString::from("mise"));
+    }
+    for command in [
+        discovery.command(&catalog).map_err(|err| err.to_string())?,
+        qualification
+            .command(&catalog)
+            .map_err(|err| err.to_string())?,
     ] {
         assert_eq!(command.program(), "mise");
         assert_eq!(command.argv()[0], OsString::from("mise"));
@@ -173,7 +205,7 @@ fn every_request_routes_through_mise_or_git() -> Result<(), String> {
 }
 
 #[test]
-fn candidate_build_vector_pins_implemented_trio_form() -> Result<(), String> {
+fn catalog_selected_mbx_build_vector_uses_current_pins() -> Result<(), String> {
     let exec = PinnedToolExec::new(
         vec![PinnedTool::Rust, PinnedTool::MrBoxington],
         OsStr::new("mbx"),
@@ -196,8 +228,8 @@ fn candidate_build_vector_pins_implemented_trio_form() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
-            "mr-boxington@1.21.1",
+            "rust@1.99.0",
+            "mr-boxington@1.23.0",
             "--",
             "mbx",
             "build",
@@ -275,7 +307,7 @@ fn toolchain_probe_mechanism_routes_through_pins() -> Result<(), String> {
         assert_eq!(argv[0], OsString::from("mise"));
         assert_eq!(argv[4], OsString::from("exec"));
         assert!(
-            argv.iter().any(|arg| arg == "rust@1.98.1"),
+            argv.iter().any(|arg| arg == "rust@1.99.0"),
             "probe must use the exact pin: {argv:?}"
         );
     }

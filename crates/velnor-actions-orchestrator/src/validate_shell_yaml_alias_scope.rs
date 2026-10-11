@@ -2,10 +2,23 @@ use crate::OrchestratorError;
 
 use super::shellcheck_fail;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum MappingProperty {
+    Anchor { name: String, inline_empty: bool },
+    Alias(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum StepProperty {
+    Anchor(String),
+    Alias(String),
+}
+
 pub(super) fn validate_mapping_value(
     key: &str,
     value: &str,
     is_step_run: bool,
+    is_supported_mapping: bool,
 ) -> Result<(), OrchestratorError> {
     if key == "<<" {
         return Err(shellcheck_fail("workflow_merge_key_unsupported"));
@@ -20,6 +33,21 @@ pub(super) fn validate_mapping_value(
         }
         return Ok(());
     }
+    if is_supported_mapping {
+        if parse_mapping_property(value)?.is_some() {
+            if has_node_property(key) {
+                return Err(shellcheck_fail("workflow_alias_outside_supported_mapping"));
+            }
+            return Ok(());
+        }
+        if starts_with_tag_property(value) || has_node_property(key) || has_node_property(value) {
+            return Err(shellcheck_fail("workflow_alias_outside_step_run"));
+        }
+        if flow_value_after_tags(value).is_some_and(flow_contains_merge_key) {
+            return Err(shellcheck_fail("workflow_merge_key_unsupported"));
+        }
+        return Ok(());
+    }
     if has_node_property(key) || has_node_property(value) {
         return Err(shellcheck_fail("workflow_alias_outside_step_run"));
     }
@@ -29,6 +57,65 @@ pub(super) fn validate_mapping_value(
         return Err(shellcheck_fail("workflow_merge_key_unsupported"));
     }
     Ok(())
+}
+
+pub(super) fn parse_mapping_property(
+    value: &str,
+) -> Result<Option<MappingProperty>, OrchestratorError> {
+    let value = value.trim();
+    let Some(property) = value.as_bytes().first().copied() else {
+        return Ok(None);
+    };
+    if !matches!(property, b'&' | b'*') {
+        return Ok(None);
+    }
+    let rest = &value[1..];
+    let name_len = rest
+        .bytes()
+        .take_while(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+        .count();
+    if name_len == 0 {
+        return Err(shellcheck_fail("workflow_mapping_property_malformed"));
+    }
+    let name = &rest[..name_len];
+    let trailing = rest[name_len..].trim();
+    match property {
+        b'&' if trailing.is_empty() || trailing == "{}" => Ok(Some(MappingProperty::Anchor {
+            name: name.to_owned(),
+            inline_empty: trailing == "{}",
+        })),
+        b'*' if trailing.is_empty() => Ok(Some(MappingProperty::Alias(name.to_owned()))),
+        _ => Err(shellcheck_fail("workflow_mapping_property_malformed")),
+    }
+}
+
+pub(super) fn parse_step_property(
+    content: &str,
+) -> Result<Option<StepProperty>, OrchestratorError> {
+    let Some(value) = content.strip_prefix("- ") else {
+        return Ok(None);
+    };
+    let value = value.trim();
+    let Some(property) = value.as_bytes().first().copied() else {
+        return Ok(None);
+    };
+    if !matches!(property, b'&' | b'*') {
+        return Ok(None);
+    }
+    let rest = &value[1..];
+    let name_len = rest
+        .bytes()
+        .take_while(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+        .count();
+    if name_len == 0 || !rest[name_len..].trim().is_empty() {
+        return Err(shellcheck_fail("workflow_step_property_malformed"));
+    }
+    let name = rest[..name_len].to_owned();
+    match property {
+        b'&' => Ok(Some(StepProperty::Anchor(name))),
+        b'*' => Ok(Some(StepProperty::Alias(name))),
+        _ => unreachable!(),
+    }
 }
 
 pub(super) fn reject_non_mapping_content(content: &str) -> Result<(), OrchestratorError> {

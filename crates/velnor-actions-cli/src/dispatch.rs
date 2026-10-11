@@ -7,26 +7,30 @@
 //! need runner temp plus the numeric run ID instead, and
 //! `write-preseed-manifest-v1` needs runner temp only, and
 //! `resolve-qualification-v1` requires a dispatch event, request file, and
-//! read-only GitHub token. Anything else falls through to Clap, so public
-//! behavior is byte-identical with or without the environment set.
+//! read-only GitHub token. `resolve-task-execution-v1` requires runner temp
+//! and the run ID; it emits only the plan-bound task data frame. Anything else
+//! falls through to Clap, so public behavior is byte-identical with or without
+//! the environment set.
 
 use std::env;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use clap::Parser;
 use velnor_actions_orchestrator::{
     DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, MERGE_OP, OrchestratorError,
     PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PlanOutputMode,
-    REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, execute_check, init_config, merge_internal,
-    merge_passed, plan_internal, plan_outputs, plan_text_checked, prepare, publish_final_report,
-    publish_plan_files, resolve_root, response_path_for, retrieve_reports, write_preseed_manifest,
-    write_request, write_task_report,
+    REPORT_OP, REQUEST_FILE_ENV, TASK_EXECUTION_RESOLVER_OP, WRITE_REQUEST_OP, execute_check,
+    merge_internal, merge_passed, plan_internal, plan_outputs, publish_final_report,
+    publish_plan_files, resolve_task_execution, response_path_for, retrieve_reports,
+    write_preseed_manifest, write_request, write_task_report,
 };
 
-use crate::args::{Cli, Command};
 use crate::dispatch_publish::run_publish_internal;
+
+mod public;
+pub(crate) use public::run_public;
 #[path = "dispatch_owned_tool_publication.rs"]
 mod owned_publication;
 
@@ -64,6 +68,8 @@ enum InternalOp {
     RepoPolicy,
     /// Read-only predecessor resolution for hosted qualification.
     ResolveQualification,
+    /// Data-only task execution record resolution for a generated wrapper.
+    ResolveTaskExecution,
 }
 
 /// Validated private request: operation plus exact request-file path.
@@ -73,35 +79,6 @@ struct InternalRequest {
     op: InternalOp,
     /// Exact request-file path from the environment.
     path: PathBuf,
-}
-
-/// Parse Clap arguments and dispatch one public command.
-///
-/// Clap owns `--help`, `--version`, and usage errors (exit 2).
-pub(crate) fn run_public() -> ExitCode {
-    let command = Cli::parse().command;
-    if command.is_owned_preview() {
-        return owned_publication::run_owned_command(command);
-    }
-    match command {
-        Command::Init => run_init(),
-        Command::Plan => run_plan(),
-        Command::Generate {
-            output_dir, mode, ..
-        } => crate::dispatch_generate::run_generate(output_dir, mode),
-        Command::Config { command } => crate::dispatch_config::run_config(&command),
-        Command::VerifyReleaseManifest {
-            manifest,
-            expected_source_commit,
-            linux_x64_binary,
-            macos_arm64_binary,
-        } => crate::dispatch_local_release::run_verify_release_manifest(
-            &manifest,
-            &expected_source_commit,
-            &linux_x64_binary,
-            &macos_arm64_binary,
-        ),
-    }
 }
 
 /// Run the private file entrypoint when the gate is satisfied.
@@ -133,8 +110,15 @@ fn gate_request() -> Option<InternalRequest> {
         Ok(tag) if crate::dispatch_qualification::is_resolver_op(tag) => {
             InternalOp::ResolveQualification
         }
+        Ok(tag) if tag == TASK_EXECUTION_RESOLVER_OP => InternalOp::ResolveTaskExecution,
         _ => return None,
     };
+    if op == InternalOp::ResolveTaskExecution {
+        if !env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
+            return None;
+        }
+        return runner_velnor_dir().map(|path| InternalRequest { op, path });
+    }
     if op == InternalOp::Fetch || op == InternalOp::Report || op == InternalOp::ExecuteCheck {
         if env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
             return runner_velnor_dir().map(|path| InternalRequest { op, path });
@@ -177,7 +161,8 @@ fn gate_request() -> Option<InternalRequest> {
         | InternalOp::Report
         | InternalOp::PreseedManifest
         | InternalOp::RepoPolicy
-        | InternalOp::ExecuteCheck => {}
+        | InternalOp::ExecuteCheck
+        | InternalOp::ResolveTaskExecution => {}
     }
     Some(InternalRequest { op, path })
 }
@@ -221,6 +206,13 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::Publish => run_publish_internal(&request.path),
         InternalOp::RepoPolicy => crate::dispatch_repo_policy::run(&request.path),
         InternalOp::ResolveQualification => crate::dispatch_qualification::run(&request.path),
+        InternalOp::ResolveTaskExecution => match resolve_task_execution() {
+            Ok(frame) => match std::io::stdout().lock().write_all(&frame) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => fail_internal(&format!("write task execution frame: {error}")),
+            },
+            Err(error) => fail_internal(&error.to_string()),
+        },
     }
 }
 
@@ -315,48 +307,6 @@ pub(crate) fn fail_internal(problem: &str) -> ExitCode {
     ExitCode::from(1)
 }
 
-/// Dispatch `init`: resolve the root, then create the config file.
-fn run_init() -> ExitCode {
-    let Some(cwd) = working_dir() else {
-        return ExitCode::from(1);
-    };
-    let report = resolve_root(&cwd).and_then(|root| init_config(&root));
-    match report {
-        Ok(report) => {
-            for path in &report.created {
-                println!("{path}");
-            }
-            ExitCode::SUCCESS
-        }
-        Err(error) => fail_public(&error),
-    }
-}
-
-/// Dispatch `plan`: report (recommendations included) to stdout only.
-///
-/// Contract §5 routes findings to stderr in one sentence, but §5's own
-/// example shows `Recommendations` inside the stdout report and §7 assigns
-/// the report to stdout; the example plus §7 govern, so stderr stays empty.
-fn run_plan() -> ExitCode {
-    let Some(cwd) = working_dir() else {
-        return ExitCode::from(1);
-    };
-    let preparation = resolve_root(&cwd).and_then(|root| prepare(&root));
-    let preparation = match preparation {
-        Ok(preparation) => preparation,
-        Err(error) => return fail_public(&error),
-    };
-    let text = match plan_text_checked(&preparation) {
-        Ok(text) => text,
-        Err(error) => return fail_public(&error),
-    };
-    print!("{text}");
-    if !text.ends_with('\n') {
-        println!();
-    }
-    ExitCode::SUCCESS
-}
-
 /// Read the working directory, reporting failures as exit 1.
 pub(crate) fn working_dir() -> Option<PathBuf> {
     match env::current_dir() {
@@ -374,9 +324,8 @@ pub(crate) fn fail_public(error: &OrchestratorError) -> ExitCode {
     ExitCode::from(1)
 }
 
-/// Collapse one error to a single log line (X8: values echoed into
-/// errors, such as `unsupported_label` or `bad_custom_task`, must not
-/// inject newlines into logs).
+/// Collapse error values to one log line so untrusted input cannot inject
+/// additional stderr records.
 fn single_line(text: &str) -> String {
     text.replace(['\n', '\r'], " ")
 }

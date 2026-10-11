@@ -2,10 +2,23 @@
 
 use std::fs;
 
-use velnor_actions_contract::VerificationRunner;
+use velnor_actions_contract::{MiseTaskSource, VerificationRunner, VerificationTask};
 
 use super::resolve_verification_tools;
-use crate::toolcheck::check_tool_inputs;
+use crate::toolcheck::{check_tool_inputs, check_tool_inputs_with_paths};
+
+fn verification_task(task_name: &str, runner: VerificationRunner) -> VerificationTask {
+    VerificationTask {
+        id: "verify".to_owned(),
+        mise_task: task_name.to_owned(),
+        source: MiseTaskSource {
+            mise_config: "mise.toml".to_owned(),
+            working_directory: ".".to_owned(),
+        },
+        runner,
+        timeout_minutes: 10,
+    }
+}
 
 fn tool_root() -> tempfile::TempDir {
     let root = tempfile::tempdir().expect("temporary tool input root");
@@ -35,15 +48,17 @@ tools = { "github:example/linter" = "1.2.3" }
     fs::write(
         root.path().join("mise.lock"),
         r#"
+lockfile_version = 3
+
 [tools]
 "aqua:vendor/tool" = [
-  { version = "2.3.4", backend = "aqua:vendor/tool", "platforms.linux-x64" = { url = "https://github.com/vendor/tool/releases/download/v2.3.4/tool-linux-x64.tar.gz", checksum = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }, "platforms.macos-arm64" = { url = "https://github.com/vendor/tool/releases/download/v2.3.4/tool-darwin-arm64.tar.gz", checksum = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" } }
+  { version = "2.3.4", backend = "aqua:vendor/tool", specifiers = ["2.3.4"], "platforms.linux-x64" = { url = "https://github.com/vendor/tool/releases/download/v2.3.4/tool-linux-x64.tar.gz", checksum = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }, "platforms.macos-arm64" = { url = "https://github.com/vendor/tool/releases/download/v2.3.4/tool-darwin-arm64.tar.gz", checksum = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" } }
 ]
 "github:example/linter" = [
-  { version = "1.2.3", backend = "github:example/linter", "platforms.linux-x64" = { url = "https://github.com/example/linter/releases/download/v1.2.3/linter-linux-x64.tar.gz", checksum = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" }, "platforms.macos-arm64" = { url = "https://github.com/example/linter/releases/download/v1.2.3/linter-darwin-arm64.tar.gz", checksum = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" } }
+  { version = "1.2.3", backend = "github:example/linter", specifiers = ["1.2.3"], "platforms.linux-x64" = { url = "https://github.com/example/linter/releases/download/v1.2.3/linter-linux-x64.tar.gz", checksum = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc" }, "platforms.macos-arm64" = { url = "https://github.com/example/linter/releases/download/v1.2.3/linter-darwin-arm64.tar.gz", checksum = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" } }
 ]
 "cargo:codebook-lsp" = [
-  { version = "0.1.0", backend = "cargo:codebook-lsp" }
+  { version = "0.1.0", backend = "cargo:codebook-lsp", specifiers = ["0.1.0"] }
 ]
 "#,
     )
@@ -52,13 +67,73 @@ tools = { "github:example/linter" = "1.2.3" }
 }
 
 #[test]
+fn verification_task_rejects_unsupported_mise_lockfile_versions() {
+    for version in [2, 4] {
+        let root = tool_root();
+        let lock_path = root.path().join("mise.lock");
+        let lock = fs::read_to_string(&lock_path)
+            .expect("read lock fixture")
+            .replace(
+                "lockfile_version = 3",
+                &format!("lockfile_version = {version}"),
+            );
+        fs::write(lock_path, lock).expect("write unsupported lock version");
+        let checks = check_tool_inputs(root.path());
+
+        let error = resolve_verification_tools(
+            &checks,
+            &verification_task("verify", VerificationRunner::LinuxX64),
+        )
+        .expect_err("unsupported Mise lock version must fail");
+        assert!(
+            error.to_string().contains("verification_mise_lock_root"),
+            "{error}"
+        );
+    }
+}
+
+#[test]
+fn verification_task_requires_the_configured_request_in_lock_specifiers() {
+    let root = tool_root();
+    let lock_path = root.path().join("mise.lock");
+    let lock = fs::read_to_string(&lock_path)
+        .expect("read lock fixture")
+        .replace("specifiers = [\"2.3.4\"]", "specifiers = [\"2.3\"]");
+    fs::write(lock_path, lock).expect("write mismatched specifier");
+    let checks = check_tool_inputs(root.path());
+
+    let error = resolve_verification_tools(
+        &checks,
+        &verification_task("verify", VerificationRunner::LinuxX64),
+    )
+    .expect_err("lock specifier must contain the selected config request");
+    assert!(
+        error
+            .to_string()
+            .contains("verification_tool_identity_or_lock"),
+        "{error}"
+    );
+}
+
+#[test]
 fn only_transitive_task_tools_are_selected_and_platform_rows_are_bound() {
     let root = tool_root();
     let checks = check_tool_inputs(root.path());
-    let linux = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
-        .expect("locked Linux task tool closure");
-    let macos = resolve_verification_tools(&checks, "verify", VerificationRunner::MacosArm64)
-        .expect("locked macOS task tool closure");
+    let linux = resolve_verification_tools(
+        &checks,
+        &verification_task("verify", VerificationRunner::LinuxX64),
+    )
+    .expect("locked Linux task tool closure");
+    let macos = resolve_verification_tools(
+        &checks,
+        &verification_task("verify", VerificationRunner::MacosArm64),
+    )
+    .expect("locked macOS task tool closure");
+    let macos_26 = resolve_verification_tools(
+        &checks,
+        &verification_task("verify", VerificationRunner::Macos26Arm64),
+    )
+    .expect("locked macOS 26 task tool closure");
 
     assert_eq!(linux.selected_tools.len(), 2);
     assert_eq!(
@@ -91,8 +166,86 @@ fn only_transitive_task_tools_are_selected_and_platform_rows_are_bound() {
             .url,
         "https://github.com/vendor/tool/releases/download/v2.3.4/tool-darwin-arm64.tar.gz"
     );
+    assert_eq!(
+        macos_26.selected_tools[0]
+            .artifact
+            .as_ref()
+            .expect("macOS 26 lock artifact")
+            .url,
+        "https://github.com/vendor/tool/releases/download/v2.3.4/tool-darwin-arm64.tar.gz"
+    );
     assert!(linux.mise_config_sha256.is_some());
     assert!(linux.mise_lock_sha256.is_some());
+}
+
+#[test]
+fn nested_mbx_task_uses_its_declared_config_when_root_has_same_task_name() {
+    let root = tempfile::tempdir().expect("temporary root");
+    let native = root.path().join("native");
+    fs::create_dir(&native).expect("native source directory");
+    for (directory, version, body) in [
+        (root.path(), "1.22.0", "echo root verification task"),
+        (native.as_path(), "1.23.0", "echo native verification task"),
+    ] {
+        fs::write(
+            directory.join("mise.toml"),
+            format!(
+                "[settings]\nlockfile = true\n\n[tasks.verify]\nrun = {body:?}\ntools = {{ mr-boxington = \"{version}\" }}\n"
+            ),
+        )
+        .expect("write verification source");
+        fs::write(directory.join("mise.lock"), mbx_lock(version))
+            .expect("write source-specific MBX lock");
+    }
+    let nested_paths = [
+        "native/mise.toml".to_owned(),
+        "native/mise.lock".to_owned(),
+        "native/rust-toolchain.toml".to_owned(),
+    ];
+    let checks = check_tool_inputs_with_paths(root.path(), &nested_paths);
+    let root_task = VerificationTask {
+        id: "verify-root".to_owned(),
+        mise_task: "verify".to_owned(),
+        source: MiseTaskSource {
+            mise_config: "mise.toml".to_owned(),
+            working_directory: ".".to_owned(),
+        },
+        runner: VerificationRunner::LinuxX64,
+        timeout_minutes: 10,
+    };
+    let native_task = VerificationTask {
+        id: "verify-native".to_owned(),
+        mise_task: "verify".to_owned(),
+        source: MiseTaskSource {
+            mise_config: "native/mise.toml".to_owned(),
+            working_directory: "native".to_owned(),
+        },
+        runner: VerificationRunner::LinuxX64,
+        timeout_minutes: 10,
+    };
+
+    let root_tools = resolve_verification_tools(&checks, &root_task).expect("root task closure");
+    let native_tools =
+        resolve_verification_tools(&checks, &native_task).expect("native task closure");
+    assert_eq!(root_tools.selected_tools[0].key, "mr-boxington");
+    assert_eq!(root_tools.selected_tools[0].version, "1.22.0");
+    assert_eq!(native_tools.selected_tools[0].key, "mr-boxington");
+    assert_eq!(native_tools.selected_tools[0].version, "1.23.0");
+    assert_eq!(
+        native_tools.selected_tools[0]
+            .artifact
+            .as_ref()
+            .expect("native MBX artifact")
+            .url,
+        "https://github.com/jdx/mr-boxington/releases/download/v1.23.0/mbx-x86_64-unknown-linux-gnu.tar.gz"
+    );
+}
+
+fn mbx_lock(version: &str) -> String {
+    format!(
+        "lockfile_version = 3\n\n[tools]\n\"mr-boxington\" = [{{ version = \"{version}\", backend = \"packslip:github.com/jdx/mr-boxington\", specifiers = [\"{version}\"], \"platforms.linux-x64\" = {{ url = \"https://github.com/jdx/mr-boxington/releases/download/v{version}/mbx-x86_64-unknown-linux-gnu.tar.gz\", checksum = \"sha256:{}\" }} }}]\n",
+        "a".repeat(64)
+    )
 }
 
 #[test]
@@ -112,13 +265,19 @@ tools = { "cargo:unsafe-tool" = "1.2.3" }
         r#"
 [tools]
 "cargo:unsafe-tool" = [
-  { version = "1.2.3", backend = "cargo:unsafe-tool" }
+  { version = "1.2.3", backend = "cargo:unsafe-tool", specifiers = ["1.2.3"] }
 ]
 "#,
     )
     .expect("write Cargo source lock fixture");
     let checks = check_tool_inputs(root.path());
-    assert!(resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64).is_err());
+    assert!(
+        resolve_verification_tools(
+            &checks,
+            &verification_task("verify", VerificationRunner::LinuxX64)
+        )
+        .is_err()
+    );
 
     fs::write(
         root.path().join("mise.toml"),
@@ -134,255 +293,14 @@ tools = { "github:example/linter" = "1.2.3" }
     .expect("write missing-lock-row config");
     fs::write(root.path().join("mise.lock"), "[tools]\n").expect("remove selected lock row");
     let checks = check_tool_inputs(root.path());
-    assert!(resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64).is_err());
-}
-
-#[test]
-fn conflicting_task_tool_pins_and_nested_mise_invocations_fail_closed() {
-    let root = tool_root();
-    fs::write(
-        root.path().join("mise.toml"),
-        r#"
-[settings]
-lockfile = true
-
-[tasks.verify]
-run = "echo verify"
-depends = ["shared"]
-tools = { "aqua:vendor/tool" = "2.3.4" }
-
-[tasks.shared]
-run = "echo shared"
-tools = { "aqua:vendor/tool" = "1.0.0" }
-"#,
-    )
-    .expect("write conflicting selected tool pins");
-    let checks = check_tool_inputs(root.path());
-    assert!(resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64).is_err());
-
-    fs::write(
-        root.path().join("mise.toml"),
-        r#"
-[settings]
-lockfile = true
-
-[tasks.verify]
-run = "echo verify && mise run shared"
-
-[tasks.shared]
-run = "echo shared"
-"#,
-    )
-    .expect("write unsupported nested invocation");
-    let checks = check_tool_inputs(root.path());
-    assert!(resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64).is_err());
-}
-
-#[test]
-fn cyclic_selected_task_dependencies_fail_closed() {
-    let root = tool_root();
-    fs::write(
-        root.path().join("mise.toml"),
-        r#"
-[settings]
-lockfile = true
-
-[tasks.verify]
-run = "echo verify"
-depends = ["shared"]
-
-[tasks.shared]
-run = "echo shared"
-depends = ["verify"]
-"#,
-    )
-    .expect("write task dependency cycle");
-    let checks = check_tool_inputs(root.path());
-    assert!(resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64).is_err());
-}
-
-#[test]
-fn empty_tool_closure_still_rejects_unsupported_settings_and_wrappers() {
-    let root = tool_root();
-    fs::write(
-        root.path().join("mise.toml"),
-        r#"
-[settings]
-lockfile = true
-auto_install = true
-
-[tasks.verify]
-run = "echo verify"
-"#,
-    )
-    .expect("write unsupported Mise setting");
-    let checks = check_tool_inputs(root.path());
-    let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
-        .expect_err("unsupported settings fail closed without selected tools");
-    assert!(error.to_string().contains("verification_mise_settings"));
-
-    fs::write(
-        root.path().join("mise.toml"),
-        r#"
-[settings]
-lockfile = true
-idiomatic_version_file_enable_tools = "rust"
-
-[tasks.verify]
-run = "echo verify"
-"#,
-    )
-    .expect("write malformed recognized setting");
-    let checks = check_tool_inputs(root.path());
-    let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
-        .expect_err("malformed recognized settings fail closed");
-    assert!(error.to_string().contains("verification_mise_settings"));
-
-    for wrapper in [
-        "command = \"cargo\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }",
-        "command = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"0\" }",
-    ] {
-        let config = format!(
-            "[settings]\nlockfile = true\n\n[tasks.verify]\nrun = \"echo verify\"\n\n[wrappers.cargo]\n{wrapper}\n"
-        );
-        fs::write(root.path().join("mise.toml"), config).expect("write unsupported wrapper");
-        let checks = check_tool_inputs(root.path());
-        let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
-            .expect_err("unsupported wrapper fails closed without selected tools");
-        assert!(error.to_string().contains("verification_mise_wrappers"));
-    }
-}
-
-#[test]
-fn missing_root_mise_config_does_not_admit_unmodeled_task_files() {
-    let root = tool_root();
-    fs::remove_file(root.path().join("mise.toml")).expect("remove root task config");
-    fs::create_dir(root.path().join(".mise")).expect("create task directory");
-    fs::create_dir(root.path().join(".mise/tasks")).expect("create task directory");
-    fs::write(
-        root.path().join(".mise/tasks/verify"),
-        "#!/bin/sh\nmise install cargo:unsafe-tool\n",
-    )
-    .expect("write unmodeled file task with install command");
-    let checks = check_tool_inputs(root.path());
-    let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
-        .expect_err("unmodeled task files are not admitted without root mise.toml");
     assert!(
-        error
-            .to_string()
-            .contains("verification_mise_config_missing")
-    );
-}
-
-#[test]
-fn commandless_task_metadata_cannot_overlay_any_default_task_file() {
-    // Mise v2026.10.6 discovers file tasks from each of these default roots.
-    // A metadata-only TOML task may overlay a same-named file task, retaining
-    // its executable body, so every admitted node must provide its own run.
-    for task_dir in [
-        "mise-tasks",
-        ".mise-tasks",
-        ".mise/tasks",
-        ".config/mise/tasks",
-        "mise/tasks",
-    ] {
-        let root = tool_root();
-        fs::write(
-            root.path().join("mise.toml"),
-            r#"
-[settings]
-lockfile = true
-
-[tasks.verify]
-depends = ["lint"]
-
-[tasks.lint]
-run = "echo lint"
-"#,
+        resolve_verification_tools(
+            &checks,
+            &verification_task("verify", VerificationRunner::LinuxX64)
         )
-        .expect("write commandless selected task metadata");
-        let task_file = root.path().join(task_dir).join("verify");
-        fs::create_dir_all(task_file.parent().expect("task directory"))
-            .expect("create task source directory");
-        fs::write(&task_file, "#!/bin/sh\nmise install cargo:unsafe-tool\n")
-            .expect("write unmodeled task body");
-
-        let checks = check_tool_inputs(root.path());
-        let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
-            .expect_err("metadata-only task must not inherit a file task body");
-        assert!(
-            error
-                .to_string()
-                .contains("verification_task_inline_run_required"),
-            "unexpected rejection for {task_dir}: {error}"
-        );
-    }
-}
-
-#[test]
-fn nested_commandless_task_metadata_cannot_overlay_a_file_task() {
-    let root = tool_root();
-    fs::write(
-        root.path().join("mise.toml"),
-        r#"
-[settings]
-lockfile = true
-
-[tasks.verify]
-run = "mise run aggregate"
-
-[tasks.aggregate]
-depends = ["lint"]
-
-[tasks.lint]
-run = "echo lint"
-"#,
-    )
-    .expect("write task graph with commandless nested task");
-    let task_file = root.path().join(".config/mise/tasks/aggregate");
-    fs::create_dir_all(task_file.parent().expect("task directory"))
-        .expect("create task source directory");
-    fs::write(&task_file, "#!/bin/sh\nmise install cargo:unsafe-tool\n")
-        .expect("write unmodeled nested task body");
-
-    let checks = check_tool_inputs(root.path());
-    let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
-        .expect_err("nested metadata-only task must not inherit a file task body");
-    assert!(
-        error
-            .to_string()
-            .contains("verification_task_inline_run_required")
+        .is_err()
     );
 }
 
-#[test]
-fn configured_task_directory_is_not_admitted() {
-    let root = tool_root();
-    fs::write(
-        root.path().join("mise.toml"),
-        r#"
-[settings]
-lockfile = true
-
-[task_config]
-dir = "custom-tasks"
-
-[tasks.verify]
-depends = ["lint"]
-
-[tasks.lint]
-run = "echo lint"
-"#,
-    )
-    .expect("write unsupported custom task directory");
-    let task_file = root.path().join("custom-tasks/verify");
-    fs::create_dir_all(task_file.parent().expect("task directory"))
-        .expect("create custom task source directory");
-    fs::write(&task_file, "#!/bin/sh\nmise install cargo:unsafe-tool\n")
-        .expect("write unmodeled custom task body");
-
-    let checks = check_tool_inputs(root.path());
-    let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
-        .expect_err("custom task directory config must fail closed");
-    assert!(error.to_string().contains("verification_mise_config_root"));
-}
+#[path = "impl_verification_task_bootstrap_b.rs"]
+mod task_source_shape_tests;

@@ -29,7 +29,7 @@ fn lock_text(sha: &str) -> String {
         .map(|target| binary_record(target, sha))
         .collect::<String>();
     format!(
-        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{GENERATOR_VERSION}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.6\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{GENERATOR_VERSION}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.7\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
         "a".repeat(40),
         "c".repeat(64)
     )
@@ -50,7 +50,9 @@ fn manifest_text(sha: &str) -> String {
 fn ctx() -> RenderContext {
     RenderContext {
         generator_version: GENERATOR_VERSION.to_owned(),
+        report_helper_version: GENERATOR_VERSION.to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        scale_set_selector: None,
         staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{GENERATOR_VERSION}"),
         request_dir: "${{ runner.temp }}/velnor/r".to_owned(),
         checkout_uses: format!("actions/checkout@{:040x}", 0),

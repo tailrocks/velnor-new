@@ -43,7 +43,9 @@ fn job(runs_on: &str) -> Job {
 fn context() -> RenderContext {
     RenderContext {
         generator_version: "0.1.0".to_owned(),
+        report_helper_version: "0.1.0".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        scale_set_selector: None,
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses: format!("actions/checkout@{:040x}", 0),

@@ -86,7 +86,7 @@ async fn busy_slot_does_not_ack_scale_assignment() -> Result<(), String> {
     }
     stub.finish().await?;
     assert!(!started_any);
-    assert!(script.calls.is_empty());
+    assert_eq!(script.calls, [] as [&str; 0]);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Pending);

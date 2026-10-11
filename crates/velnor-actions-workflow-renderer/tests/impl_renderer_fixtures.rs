@@ -15,9 +15,9 @@ use velnor_actions_workflow_renderer::{
 pub(crate) const VERSION: &str = "0.1.0";
 pub(crate) const LABEL: &str = "ubuntu-26.04";
 pub(crate) const MISE_USES: &str = "jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca";
-pub(crate) const MISE_VERSION: &str = "2026.10.6";
+pub(crate) const MISE_VERSION: &str = "2026.10.7";
 pub(crate) const MISE_SHA256: &str =
-    "3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366";
+    "6eb1b890e90818417ca34c90dbbd47881917d5cd199f31b63b062ea9c6b18d85";
 pub(crate) const STAGED: &str = "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0";
 
 pub(crate) const TEST_MBX_VERSION: &str = "1.21.1";
@@ -73,7 +73,9 @@ pub(crate) fn mise() -> MiseSetup {
 pub(crate) fn fixture_ctx() -> RenderContext {
     RenderContext {
         generator_version: VERSION.to_owned(),
+        report_helper_version: VERSION.to_owned(),
         runs_on: LABEL.to_owned(),
+        scale_set_selector: None,
         staged_binary: STAGED.to_owned(),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),

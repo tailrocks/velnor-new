@@ -1,6 +1,6 @@
 //! Preflight route-selection cases.
 use std::ffi::OsString;
-use velnor_actions_mise::{MiseError, RouteDriver, ToolCatalog, select_route};
+use velnor_actions_mise::{MiseError, PinnedTool, RouteDriver, ToolCatalog, select_route};
 
 fn pinned() -> ToolCatalog {
     ToolCatalog::pinned()
@@ -11,8 +11,9 @@ fn cargo_proof_pins_exact_toolchain_without_wrapper() -> Result<(), String> {
     let selection = select_route(&pinned(), RouteDriver::Cargo, "cargo-1", "gen-7")
         .map_err(|err| err.to_string())?;
     assert_eq!(selection.driver(), RouteDriver::Cargo);
-    assert_eq!(selection.identity_specs(), &["rust@1.98.1".to_owned()]);
-    assert_eq!(selection.probe_specs(), &["rust@1.98.1".to_owned()]);
+    let rust = pinned().tool_spec(PinnedTool::Rust);
+    assert_eq!(selection.identity_specs(), std::slice::from_ref(&rust));
+    assert_eq!(selection.probe_specs(), std::slice::from_ref(&rust));
     let invocation = selection.invocation(&pinned());
     assert_eq!(
         invocation,
@@ -22,7 +23,7 @@ fn cargo_proof_pins_exact_toolchain_without_wrapper() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
+            rust.as_str(),
             "--",
             "cargo",
             "--version",
@@ -48,19 +49,27 @@ fn mbx_route_separates_action_identity_from_mise_probe() -> Result<(), String> {
     let selection = select_route(&pinned(), RouteDriver::Mbx, "mbx-obj-3", "gen-9")
         .map_err(|err| err.to_string())?;
     assert_eq!(selection.driver(), RouteDriver::Mbx);
-    assert_eq!(
-        selection.identity_specs(),
-        &["rust@1.98.1".to_owned(), "mr-boxington@1.21.1".to_owned()]
-    );
-    assert_eq!(selection.probe_specs(), &["rust@1.98.1".to_owned()]);
+    let rust = pinned().tool_spec(PinnedTool::Rust);
+    let mbx = pinned().tool_spec(PinnedTool::MrBoxington);
+    assert_eq!(selection.identity_specs(), &[rust.clone(), mbx.clone()]);
+    assert_eq!(selection.probe_specs(), std::slice::from_ref(&rust));
     let invocation = selection.invocation(&pinned());
-    assert!(!invocation.iter().any(|arg| arg == "mr-boxington@1.21.1"));
+    assert!(
+        !invocation
+            .iter()
+            .any(|arg| arg.to_str() == Some(mbx.as_str()))
+    );
     assert_eq!(
         invocation.last(),
         Some(&OsString::from("--version")),
         "identity probe invocation: {invocation:?}"
     );
     assert_eq!(invocation[0], OsString::from("mise"));
+    let command = selection
+        .command(&pinned())
+        .map_err(|err| err.to_string())?;
+    assert_eq!(command.argv(), invocation);
+    assert_eq!(command.program(), "mise");
     assert!(velnor_actions_contract::is_valid_digest(
         selection.cache_format_id()
     ));

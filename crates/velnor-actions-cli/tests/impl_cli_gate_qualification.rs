@@ -44,7 +44,7 @@ fn qualification_resolver_requires_dispatch_token_and_exact_request_path()
         &tmp,
     )?;
     assert_eq!(code(&internal), 1);
-    assert!(internal.stdout.is_empty());
+    assert_eq!(internal.stdout, [] as [u8; 0]);
     let stderr = String::from_utf8_lossy(&internal.stderr);
     assert!(stderr.contains("internal request failed"), "{stderr}");
     assert!(!stderr.contains("test-token"), "secret appeared in stderr");

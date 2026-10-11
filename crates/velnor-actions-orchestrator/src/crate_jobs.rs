@@ -53,16 +53,31 @@ pub(crate) fn build_for_workflow(
     catalog: &ToolCatalog,
     fetch_roots: &[String],
     acquire: Option<&Step>,
+    helper_version: &str,
 ) -> Result<CrateBuild, OrchestratorError> {
-    build_crate_jobs(
+    build_crate_jobs(CrateJobInputs {
         label,
-        config.workflow.policy,
+        policy: config.workflow.policy,
         discovery,
         catalog,
         fetch_roots,
         acquire,
-        config.workflow.max_parallel_jobs,
-    )
+        max_parallel_jobs: config.workflow.max_parallel_jobs,
+        helper_version,
+    })
+}
+
+/// All authority and rendering inputs for one crate-job build.
+#[derive(Clone, Copy)]
+pub(crate) struct CrateJobInputs<'a> {
+    pub(crate) label: &'a str,
+    pub(crate) policy: WorkflowPolicy,
+    pub(crate) discovery: &'a Discovery,
+    pub(crate) catalog: &'a ToolCatalog,
+    pub(crate) fetch_roots: &'a [String],
+    pub(crate) acquire: Option<&'a Step>,
+    pub(crate) max_parallel_jobs: u32,
+    pub(crate) helper_version: &'a str,
 }
 
 /// Build one ordered IR job per runnable crate from discovery proposals.
@@ -78,15 +93,17 @@ pub(crate) fn build_for_workflow(
 /// # Errors
 ///
 /// Returns contract, render-context, or tool-request errors.
-pub(crate) fn build_crate_jobs(
-    label: &str,
-    policy: WorkflowPolicy,
-    discovery: &Discovery,
-    catalog: &ToolCatalog,
-    fetch_roots: &[String],
-    acquire: Option<&Step>,
-    max_parallel_jobs: u32,
-) -> Result<CrateBuild, OrchestratorError> {
+pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, OrchestratorError> {
+    let CrateJobInputs {
+        label,
+        policy,
+        discovery,
+        catalog,
+        fetch_roots,
+        acquire,
+        max_parallel_jobs,
+        helper_version,
+    } = input;
     let grouped = group_runnable(&discovery.proposals);
     let assigned = assign_group_ids(&grouped);
     let mut jobs = Vec::with_capacity(grouped.len());
@@ -136,6 +153,7 @@ pub(crate) fn build_crate_jobs(
             use_opentofu,
             acquire,
             max_parallel_jobs,
+            helper_version,
         )?;
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
@@ -191,7 +209,8 @@ fn obligation_for(
     catalog: &ToolCatalog,
 ) -> Result<CrateObligation, OrchestratorError> {
     let argv = crate::vectors::task_argv(task, catalog)?;
-    let toolchain = crate::internal_plan::toolchain_id(task, catalog)?;
+    let toolchain_inputs = crate::internal_plan::identities::toolchain_inputs_for(task, catalog)?;
+    let toolchain = velnor_actions_contract::cachekey::toolchain_id(&toolchain_inputs)?;
     let digest = crate::internal::plan_obligation::task_digest(&task.task_id, &argv, &toolchain)?;
     let matrix_id = matrix_id_for_task_group(&task.stack_id, &task.task_id)?;
     let matrix_key = matrix_key_for_id(&matrix_id)?;
@@ -202,6 +221,7 @@ fn obligation_for(
         gated_by: gates_for(task, executed),
         matrix_key,
         task_digest: digest,
+        toolchain_inputs,
         run: argv,
     })
 }
@@ -251,6 +271,7 @@ fn render_job(
     use_opentofu: bool,
     acquire: Option<&Step>,
     max_parallel_jobs: u32,
+    helper_version: &str,
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(acquire.cloned());
@@ -307,6 +328,7 @@ fn render_job(
             catalog,
             &downstream,
             cap,
+            helper_version,
         )?);
     }
     steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);

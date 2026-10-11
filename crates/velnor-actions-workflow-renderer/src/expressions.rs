@@ -132,8 +132,10 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
     };
     for inner in spans {
         let composite_input = composite
-            && inner.strip_prefix("inputs.")
-                == Some(crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT);
+            && inner.strip_prefix("inputs.").is_some_and(|name| {
+                name == crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT
+                    || is_task_execution_input(name)
+            });
         if !ENV_EXPRESSIONS.contains(&inner)
             && !is_matrix_field(inner)
             && !composite_input
@@ -143,6 +145,10 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
         }
     }
     Ok(())
+}
+
+fn is_task_execution_input(name: &str) -> bool {
+    name == "digest"
 }
 
 /// Declared provider token inputs use an uppercase Actions secret handle.
@@ -191,4 +197,36 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn execution_digest_is_allowed_only_as_the_digest_composite_input() {
+        let env = BTreeMap::from([(
+            "VELNOR_TASK_EXECUTION_DIGEST".to_owned(),
+            "${{ inputs.digest }}".to_owned(),
+        )]);
+
+        assert!(crate::commands::validate_composite_env(&env).is_ok());
+        assert!(crate::commands::validate_env(&env).is_err());
+
+        for input in [
+            "task_id",
+            "execution_digest",
+            "argv_0",
+            "env_MISE_CARGO_HOME",
+        ] {
+            let env = BTreeMap::from([(
+                "VELNOR_TASK_EXECUTION_DIGEST".to_owned(),
+                format!("${{{{ inputs.{input} }}}}"),
+            )]);
+            assert!(
+                crate::commands::validate_composite_env(&env).is_err(),
+                "obsolete task input {input} remains accepted"
+            );
+        }
+    }
 }

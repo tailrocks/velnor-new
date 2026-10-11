@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::native_mise_version::{NativeMiseMinimum, NativeMiseVersion};
 use crate::native_tool_lock::{NativeMiseLock, parse_native_mise_lock};
 
 const MAX_VALUES: usize = 64;
@@ -19,7 +20,7 @@ pub(crate) struct NativeToolInput {
 pub(crate) enum NativeToolSource {
     /// Rust version file; fields already validated by the Rust adapter.
     RustToolchain,
-    /// Project selectors, task names, settings, and cargo wrapper.
+    /// Project selectors, task names, and settings.
     MiseConfig(NativeMiseConfig),
     /// Exact version/backend/platform artifact records from `mise.lock`.
     MiseLock(NativeMiseLock),
@@ -28,16 +29,37 @@ pub(crate) enum NativeToolSource {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct NativeMiseConfig {
     pub(crate) root_keys: Vec<String>,
+    pub(crate) min_version: Option<NativeMiseMinimum>,
     pub(crate) tools: BTreeMap<String, NativeToolSelector>,
     pub(crate) tasks: BTreeMap<String, NativeMiseTask>,
     pub(crate) settings: NativeMiseSettings,
-    pub(crate) wrappers: NativeMiseWrappers,
+}
+
+impl NativeMiseConfig {
+    pub(crate) fn min_version_supported(&self) -> bool {
+        let configured = self.root_keys.iter().any(|key| key == "min_version");
+        if !configured {
+            return self.min_version.is_none();
+        }
+        let Some(required) = self.min_version else {
+            return false;
+        };
+        let Some(catalog) = NativeMiseVersion::parse(velnor_actions_mise::catalog::MISE_VERSION)
+        else {
+            return false;
+        };
+        required
+            .hard()
+            .is_none_or(|required| required.is_not_newer_than(catalog))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct NativeToolSelector {
     pub(crate) version: Option<String>,
     pub(crate) os: Option<Vec<String>>,
+    /// Whether the Rust selector delegates toolchain installation to MBX.
+    pub(crate) mr_boxington: Option<bool>,
     pub(crate) config_options: BTreeMap<String, String>,
     pub(crate) unsupported_options: Vec<String>,
     pub(crate) valid_shape: bool,
@@ -64,24 +86,18 @@ pub(crate) struct NativeMiseSettings {
     pub(crate) valid_shape: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub(crate) struct NativeMiseWrappers {
-    pub(crate) present: bool,
-    pub(crate) cargo_command: Option<String>,
-    pub(crate) mbx_cargo_shim_mode: Option<String>,
-    pub(crate) unsupported_fields: Vec<String>,
-    pub(crate) valid_shape: bool,
-}
-
 /// Build a typed source projection while retaining the exact raw-file identity.
 pub(crate) fn native_mise_source(
     path: &str,
     bytes: &[u8],
     value: &toml::Value,
 ) -> Option<NativeToolInput> {
-    let source = match path {
-        "mise.toml" => NativeToolSource::MiseConfig(parse_native_mise_config(value)?),
-        "mise.lock" => NativeToolSource::MiseLock(parse_native_mise_lock(value)?),
+    let source = match std::path::Path::new(path)
+        .file_name()
+        .and_then(|name| name.to_str())
+    {
+        Some("mise.toml") => NativeToolSource::MiseConfig(parse_native_mise_config(value)?),
+        Some("mise.lock") => NativeToolSource::MiseLock(parse_native_mise_lock(value)?),
         _ => return None,
     };
     Some(NativeToolInput {
@@ -94,6 +110,7 @@ fn parse_native_mise_config(value: &toml::Value) -> Option<NativeMiseConfig> {
     let root = value.as_table()?;
     let mut config = NativeMiseConfig {
         root_keys: root.keys().cloned().collect(),
+        min_version: root.get("min_version").and_then(NativeMiseMinimum::parse),
         ..NativeMiseConfig::default()
     };
     if let Some(tools) = root.get("tools") {
@@ -113,9 +130,6 @@ fn parse_native_mise_config(value: &toml::Value) -> Option<NativeMiseConfig> {
     if let Some(settings) = root.get("settings") {
         config.settings = parse_native_settings(settings);
     }
-    if let Some(wrappers) = root.get("wrappers") {
-        config.wrappers = parse_native_wrappers(wrappers);
-    }
     Some(config)
 }
 
@@ -134,6 +148,7 @@ fn parse_native_tool_selector(value: &toml::Value) -> NativeToolSelector {
         .get("version")
         .and_then(toml::Value::as_str)
         .map(ToOwned::to_owned);
+    let mr_boxington = table.get("mr_boxington").and_then(toml::Value::as_bool);
     let os = match table.get("os") {
         Some(value) => value.as_array().and_then(|items| {
             items
@@ -150,7 +165,12 @@ fn parse_native_tool_selector(value: &toml::Value) -> NativeToolSelector {
         .unwrap_or_default();
     let mut unsupported_options = table
         .keys()
-        .filter(|key| !matches!(key.as_str(), "version" | "os" | "matching_regex"))
+        .filter(|key| {
+            !matches!(
+                key.as_str(),
+                "version" | "os" | "matching_regex" | "mr_boxington"
+            )
+        })
         .cloned()
         .collect::<Vec<_>>();
     if table.contains_key("version") && version.is_none() {
@@ -162,12 +182,17 @@ fn parse_native_tool_selector(value: &toml::Value) -> NativeToolSelector {
     if table.contains_key("matching_regex") && !config_options.contains_key("matching_regex") {
         unsupported_options.push("matching_regex.shape".to_owned());
     }
+    if table.contains_key("mr_boxington") && mr_boxington.is_none() {
+        unsupported_options.push("mr_boxington.shape".to_owned());
+    }
     let valid_shape = version.is_some()
         && (!table.contains_key("os") || os.is_some())
-        && (!table.contains_key("matching_regex") || config_options.contains_key("matching_regex"));
+        && (!table.contains_key("matching_regex") || config_options.contains_key("matching_regex"))
+        && (!table.contains_key("mr_boxington") || mr_boxington.is_some());
     NativeToolSelector {
         version,
         os,
+        mr_boxington,
         config_options,
         unsupported_options,
         valid_shape,
@@ -235,66 +260,6 @@ fn parse_native_settings(value: &toml::Value) -> NativeMiseSettings {
             .and_then(|settings| settings.get("binstall_only"))
             .and_then(toml::Value::as_bool),
         unsupported_fields,
-        valid_shape: true,
-    }
-}
-
-fn parse_native_wrappers(value: &toml::Value) -> NativeMiseWrappers {
-    let Some(wrappers) = value.as_table() else {
-        return NativeMiseWrappers::default();
-    };
-    let Some(cargo) = wrappers.get("cargo").and_then(toml::Value::as_table) else {
-        return NativeMiseWrappers {
-            present: true,
-            unsupported_fields: wrappers.keys().cloned().collect(),
-            valid_shape: false,
-            ..NativeMiseWrappers::default()
-        };
-    };
-    let env = cargo.get("env").and_then(toml::Value::as_table);
-    let mut unsupported = wrappers
-        .keys()
-        .filter(|key| key.as_str() != "cargo")
-        .cloned()
-        .collect::<Vec<_>>();
-    unsupported.extend(
-        cargo
-            .keys()
-            .filter(|key| !matches!(key.as_str(), "command" | "env"))
-            .map(|key| format!("cargo.{key}")),
-    );
-    if let Some(env) = env {
-        unsupported.extend(
-            env.keys()
-                .filter(|key| key.as_str() != "MBX_CARGO_SHIM_MODE")
-                .map(|key| format!("cargo.env.{key}")),
-        );
-        if env.contains_key("MBX_CARGO_SHIM_MODE")
-            && env
-                .get("MBX_CARGO_SHIM_MODE")
-                .and_then(toml::Value::as_str)
-                .is_none()
-        {
-            unsupported.push("cargo.env.MBX_CARGO_SHIM_MODE.shape".to_owned());
-        }
-    } else if cargo.contains_key("env") {
-        unsupported.push("cargo.env.shape".to_owned());
-    }
-    if cargo.contains_key("command") && cargo.get("command").and_then(toml::Value::as_str).is_none()
-    {
-        unsupported.push("cargo.command.shape".to_owned());
-    }
-    NativeMiseWrappers {
-        present: true,
-        cargo_command: cargo
-            .get("command")
-            .and_then(toml::Value::as_str)
-            .map(ToOwned::to_owned),
-        mbx_cargo_shim_mode: env
-            .and_then(|table| table.get("MBX_CARGO_SHIM_MODE"))
-            .and_then(toml::Value::as_str)
-            .map(ToOwned::to_owned),
-        unsupported_fields: unsupported,
         valid_shape: true,
     }
 }

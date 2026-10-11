@@ -21,8 +21,8 @@ thiserror = { version = "=2.0.21" }
 
 [workspace.package]
 edition = "2024"
-rust-version = "1.98"
-version = "0.1.6"
+rust-version = "1.99"
+version = "0.1.7"
 license = "MIT OR Apache-2.0"
 
 [workspace.lints.rust]

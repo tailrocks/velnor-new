@@ -151,6 +151,7 @@ fn action_step_to_yaml(
         || uses == crate::cache_steps::TOOLS_RESTORE_USES
         || uses == crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
         || crate::action_ref::is_generated_provider_prelude(uses)
+        || crate::action_ref::is_generated_declared_task(uses)
     {
         Yaml::annotated(uses, "zizmor: ignore[self-repository]")
     } else {
@@ -158,7 +159,16 @@ fn action_step_to_yaml(
     };
     entries.push(("uses".to_owned(), uses_value));
     if !with.is_empty() {
-        entries.push(("with".to_owned(), string_map_yaml(with)));
+        let with_yaml = if crate::action_ref::is_generated_declared_task(uses) {
+            Yaml::FlowMap(
+                with.iter()
+                    .map(|(key, value)| (key.clone(), value.clone()))
+                    .collect(),
+            )
+        } else {
+            string_map_yaml(with)
+        };
+        entries.push(("with".to_owned(), with_yaml));
     }
     let filtered_env: BTreeMap<String, String> = env
         .iter()
@@ -234,6 +244,9 @@ pub(crate) fn step_to_yaml(
         StepKind::Internal { .. } => {
             internal_step_to_yaml(job_id, step, ctx, needs_envs, composite, step_context)
         }
+        StepKind::TaskExecution { .. } => Err(RenderError::InvalidWorkflow(
+            "unfactored_task_execution".to_owned(),
+        )),
     }
 }
 
@@ -294,4 +307,71 @@ fn internal_step_to_yaml(
         Yaml::str(commands::quote_run_arg(&ctx.staged_binary)?),
     ));
     Ok(Yaml::Map(entries))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use velnor_actions_contract::{Step, StepKind};
+
+    use super::action_step_to_yaml;
+    use crate::yaml;
+
+    #[test]
+    fn only_generated_task_calls_use_a_compact_flow_input_map() {
+        let digest = format!("b3-{}", "a".repeat(64));
+        let with = BTreeMap::from([("digest".to_owned(), digest.clone())]);
+        let env = BTreeMap::new();
+        let job_env = BTreeMap::new();
+        let task_uses = "./.github/actions/declared-task-0";
+        let task_step = Step {
+            name: "Run declared task".to_owned(),
+            id: None,
+            role: None,
+            condition: None,
+            kind: StepKind::Action {
+                uses: task_uses.to_owned(),
+                with: with.clone(),
+                env: env.clone(),
+            },
+        };
+        let task_yaml = action_step_to_yaml(
+            "rust-crate-0",
+            &task_step,
+            task_uses,
+            &with,
+            &env,
+            &job_env,
+            Some("ubuntu-24.04"),
+        )
+        .expect("generated task action is valid");
+        let task_yaml = yaml::render_yaml(&task_yaml);
+        assert!(task_yaml.contains(&format!("with: {{\"digest\": \"{digest}\"}}")));
+
+        let ordinary_uses = format!("actions/cache@{}", "a".repeat(40));
+        let ordinary_step = Step {
+            name: "Ordinary action".to_owned(),
+            id: None,
+            role: None,
+            condition: None,
+            kind: StepKind::Action {
+                uses: ordinary_uses.clone(),
+                with: with.clone(),
+                env: env.clone(),
+            },
+        };
+        let ordinary_yaml = action_step_to_yaml(
+            "rust-crate-0",
+            &ordinary_step,
+            &ordinary_uses,
+            &with,
+            &env,
+            &job_env,
+            Some("ubuntu-24.04"),
+        )
+        .expect("ordinary pinned action is valid");
+        let ordinary_yaml = yaml::render_yaml(&ordinary_yaml);
+        assert!(ordinary_yaml.contains(&format!("with:\n  digest: {digest}")));
+    }
 }

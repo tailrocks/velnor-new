@@ -37,7 +37,7 @@ fn msrv_step_pins_tool_to_rust_version_and_locked() -> Result<(), RenderError> {
         "wrong MSRV tool version must fail"
     );
     let unlocked: Vec<String> = argv().into_iter().filter(|arg| arg != "--locked").collect();
-    assert!(!unlocked.is_empty());
+    assert_ne!(unlocked, [] as [std::string::String; 0]);
     assert!(
         msrv_step(&spec(), unlocked, BTreeMap::new())
             .is_err_and(|err| format!("{err:?}").contains("msrv_without_locked")),
@@ -73,7 +73,7 @@ fn msrv_job_is_per_crate() -> Result<(), RenderError> {
     let job = msrv_job(LABEL, &checkout_pin(), &spec(), argv(), BTreeMap::new())?;
     assert_eq!(job.display_name, "MSRV velnor-actions-contract");
     assert_eq!(job.runs_on, LABEL);
-    assert!(job.needs.is_empty());
+    assert_eq!(job.needs, [] as [std::string::String; 0]);
     let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
     assert_eq!(names, ["Checkout", "msrv velnor-actions-contract"]);
     Ok(())

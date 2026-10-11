@@ -9,10 +9,10 @@ fn verify_local_toolchain_specs_come_from_policy_when_local_mise_pins_differ() {
     assert!(specs.is_ok(), "toolchain specs: {specs:?}");
     let specs = specs.unwrap_or_default();
     assert_eq!(specs.len(), 3);
-    assert!(specs.contains(&"rust@1.98.1".to_owned()));
-    assert!(specs.contains(&"mr-boxington@1.21.1".to_owned()));
+    assert!(specs.contains(&"rust@1.99.0".to_owned()));
+    assert!(specs.contains(&"mr-boxington@1.23.0".to_owned()));
     assert!(specs.contains(&"aqua:nextest-rs/nextest/cargo-nextest@0.9.148".to_owned()));
-    assert_eq!(policy_mise_version(&root), Ok("2026.10.6".to_owned()));
+    assert_eq!(policy_mise_version(&root), Ok("2026.10.7".to_owned()));
     let check_freshness = fs::read_to_string(root.join("scripts/check-freshness.sh"));
     assert!(
         check_freshness.is_ok(),
@@ -24,6 +24,11 @@ fn verify_local_toolchain_specs_come_from_policy_when_local_mise_pins_differ() {
     assert!(
         check_freshness.contains("mise exec \"rust@$RUST_POLICY\" \"mr-boxington@$MBX_POLICY\" --")
     );
+    assert!(
+        check_freshness
+            .contains("-- mbx run --quiet --locked -p velnor-actions-cli --bin velnor-actions")
+    );
+    assert!(!check_freshness.contains("-- cargo run"));
 
     let fixture_root = std::env::temp_dir().join(format!(
         "velnor-local-toolchain-policy-{}",

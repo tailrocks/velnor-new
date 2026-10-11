@@ -4,13 +4,13 @@ use super::{OrchestratorError, mise_action_uses};
 use velnor_actions_contract::{ReleaseTarget, VelnorConfig};
 use velnor_actions_workflow_renderer::{MisePinQualificationPins, MiseSetup};
 
-const VERSION: &str = "2026.10.6";
-const LINUX_X64_SHA256: &str = "3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366";
-const MACOS_X64_SHA256: &str = "70e1407e2fdc7a19f94db35745a8e5885b0e4bbdbfb34bfb7e3619d6230a8f70";
+const VERSION: &str = "2026.10.7";
+const LINUX_X64_SHA256: &str = "6eb1b890e90818417ca34c90dbbd47881917d5cd199f31b63b062ea9c6b18d85";
+const MACOS_X64_SHA256: &str = "c3355f0c56d1b9fe73a2ba30e034b4e483541b25b1ad812a87440abfaeec8baa";
 const LINUX_X64_RUNNER: &str = "ubuntu-26.04";
 const MACOS_X64_RUNNER: &str = "macos-15-intel";
 
-/// Resolve the unqualified 2026.10.6 release pins for both x64 hosts.
+/// Resolve the unqualified 2026.10.7 release pins for both x64 hosts.
 pub(crate) fn resolve(
     config: &VelnorConfig,
 ) -> Result<MisePinQualificationPins, OrchestratorError> {

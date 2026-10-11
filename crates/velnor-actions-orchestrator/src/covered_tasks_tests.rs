@@ -86,7 +86,7 @@ fn encode_empty_matches_nothing() {
         ObligationDecision::Execute,
     )]);
     let encoded = CoveredTasks::for_plan(&plan).encode();
-    assert!(encoded.is_empty());
+    assert_eq!(encoded, "");
     assert!(
         !encoded.contains(",stack/rust/a/clippy/default,"),
         "empty coverage must execute everything"

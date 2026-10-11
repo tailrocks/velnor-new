@@ -19,7 +19,8 @@ const PINS: [(&str, &str); 5] = [
 
 /// v3 lock entry; `platforms` selects checksummed platforms (`rust` takes none).
 fn entry(tool: &str, version: &str, platforms: &[&str], seed: u8) -> String {
-    let mut out = format!("[[tools.{tool}]]\nversion = \"{version}\"\n");
+    let mut out =
+        format!("[[tools.{tool}]]\nversion = \"{version}\"\nspecifiers = [\"{version}\"]\n");
     for platform in platforms {
         let hex = format!("{seed:02x}").repeat(32);
         let block = format!(
@@ -71,7 +72,7 @@ fn preview_generate(repo: &TempDir) -> Result<String, Box<dyn std::error::Error>
 fn missing_lock_advises_and_generates() -> TestResult {
     let repo = repo_with_lock(None)?;
     let prep = prepare(repo.path())?;
-    assert!(prep.lock_audit_blocking.is_empty());
+    assert_eq!(prep.lock_audit_blocking, [] as [String; 0]);
     let summary = prep
         .discovery
         .recommendations
@@ -97,7 +98,7 @@ fn missing_lock_advises_and_generates() -> TestResult {
 fn full_lock_leaves_only_rust_unverifiable() -> TestResult {
     let repo = repo_with_lock(Some(&full_lock()))?;
     let prep = prepare(repo.path())?;
-    assert!(prep.lock_audit_blocking.is_empty());
+    assert_eq!(prep.lock_audit_blocking, [] as [String; 0]);
     let summary = prep
         .discovery
         .recommendations
@@ -239,7 +240,7 @@ fn drifted_lock_advises_without_blocking() -> TestResult {
     let drifted = full_lock().replace("version = \"1.98.1\"", "version = \"1.97.0\"");
     let repo = repo_with_lock(Some(&drifted))?;
     let prep = prepare(repo.path())?;
-    assert!(prep.lock_audit_blocking.is_empty());
+    assert_eq!(prep.lock_audit_blocking, [] as [String; 0]);
     let summary = prep
         .discovery
         .recommendations

@@ -1,4 +1,5 @@
 //! Tool catalog pin cases.
+use std::{fs, path::Path};
 use velnor_actions_mise::catalog::{MbxProvisioning, NEXTEST_VERSION};
 use velnor_actions_mise::{
     ACTIONLINT_VERSION, GH_VERSION, MISE_VERSION, MR_BOXINGTON_VERSION, MiseError,
@@ -9,18 +10,18 @@ use velnor_actions_mise::{
 
 #[test]
 fn pinned_catalog_matches_qualified_versions() {
-    assert_eq!(MISE_VERSION, "2026.10.6");
+    assert_eq!(MISE_VERSION, "2026.10.7");
     let catalog = ToolCatalog::pinned();
-    assert_eq!(catalog.version(PinnedTool::Rust), "1.98.1");
-    assert_eq!(catalog.version(PinnedTool::MrBoxington), "1.21.1");
+    assert_eq!(catalog.version(PinnedTool::Rust), "1.99.0");
+    assert_eq!(catalog.version(PinnedTool::MrBoxington), "1.23.0");
     assert_eq!(catalog.version(PinnedTool::Gh), "2.102.0");
     assert_eq!(catalog.version(PinnedTool::Actionlint), "1.7.12");
     assert_eq!(catalog.version(PinnedTool::Shellcheck), "0.11.0");
     assert_eq!(catalog.version(PinnedTool::Zizmor), "1.30.1");
     assert_eq!(catalog.version(PinnedTool::Nextest), "0.9.148");
     assert_eq!(catalog.version(PinnedTool::Opentofu), "1.13.1");
-    assert_eq!(RUST_VERSION, "1.98.1");
-    assert_eq!(MR_BOXINGTON_VERSION, "1.21.1");
+    assert_eq!(RUST_VERSION, "1.99.0");
+    assert_eq!(MR_BOXINGTON_VERSION, "1.23.0");
     assert_eq!(GH_VERSION, "2.102.0");
     assert_eq!(ACTIONLINT_VERSION, "1.7.12");
     assert_eq!(SHELLCHECK_VERSION, "0.11.0");
@@ -30,12 +31,33 @@ fn pinned_catalog_matches_qualified_versions() {
 }
 
 #[test]
+fn repository_mise_toolchain_matches_catalog_pins() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let config = fs::read_to_string(root.join("mise.toml"));
+    assert!(config.is_ok(), "repository mise.toml: {config:?}");
+    let config = config.unwrap_or_default();
+    for expected in [
+        format!("rust = \"{RUST_VERSION}\""),
+        format!("mr-boxington = \"{MR_BOXINGTON_VERSION}\""),
+    ] {
+        assert_eq!(
+            config
+                .lines()
+                .filter(|line| line.trim() == expected)
+                .count(),
+            1,
+            "mise.toml must contain exactly one catalog selector: {expected}"
+        );
+    }
+}
+
+#[test]
 fn tool_specs_use_registry_names() {
     let catalog = ToolCatalog::pinned();
-    assert_eq!(catalog.tool_spec(PinnedTool::Rust), "rust@1.98.1");
+    assert_eq!(catalog.tool_spec(PinnedTool::Rust), "rust@1.99.0");
     assert_eq!(
         catalog.tool_spec(PinnedTool::MrBoxington),
-        "mr-boxington@1.21.1"
+        "mr-boxington@1.23.0"
     );
     assert_eq!(catalog.tool_spec(PinnedTool::Gh), "gh@2.102.0");
     assert_eq!(
@@ -54,7 +76,7 @@ fn tool_specs_use_registry_names() {
     assert_eq!(catalog.tool_spec(PinnedTool::Opentofu), "opentofu@1.13.1");
     assert_eq!(
         catalog.tool_specs(&[PinnedTool::Rust, PinnedTool::MrBoxington]),
-        vec!["rust@1.98.1".to_owned(), "mr-boxington@1.21.1".to_owned()]
+        vec!["rust@1.99.0".to_owned(), "mr-boxington@1.23.0".to_owned()]
     );
 }
 
@@ -174,7 +196,7 @@ fn rust_toolchain_name_pins_version_and_target() {
     ));
     assert_eq!(
         ToolCatalog::pinned().rust_toolchain_name(),
-        "1.98.1-x86_64-unknown-linux-gnu"
+        "1.99.0-x86_64-unknown-linux-gnu"
     );
 }
 

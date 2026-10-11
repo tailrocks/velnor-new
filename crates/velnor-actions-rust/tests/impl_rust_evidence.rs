@@ -46,7 +46,10 @@ fn tool_pin_without_setting_is_not_evidence() {
         panic!("tool pin must fall back to defaults");
     };
     assert_eq!(outcome.profile.compile_driver, CompileDriver::Cargo);
-    assert!(outcome.profile.evidence.is_empty());
+    assert_eq!(
+        outcome.profile.evidence,
+        [] as [velnor_actions_rust::Evidence; 0]
+    );
     assert_eq!(
         codes(&outcome),
         vec![NEXTEST_RECOMMENDATION, PERSIST_EVIDENCE]
@@ -93,7 +96,10 @@ fn executable_invoking_mbx_selects_mbx() {
     };
     assert_eq!(outcome.profile.compile_driver, CompileDriver::Mbx);
     assert_eq!(outcome.profile.test_runner, TestRunner::CargoTest);
-    assert!(outcome.recommendations.is_empty());
+    assert_eq!(
+        outcome.recommendations,
+        [] as [velnor_actions_rust::Recommendation; 0]
+    );
 }
 
 #[test]
@@ -129,7 +135,10 @@ fn generated_output_is_never_evidence() {
     };
     assert_eq!(outcome.profile.compile_driver, CompileDriver::Cargo);
     assert_eq!(outcome.profile.test_runner, TestRunner::CargoTest);
-    assert!(outcome.profile.evidence.is_empty());
+    assert_eq!(
+        outcome.profile.evidence,
+        [] as [velnor_actions_rust::Evidence; 0]
+    );
 }
 
 #[test]
@@ -175,7 +184,10 @@ fn comments_and_pins_are_not_evidence() {
     let Ok(outcome) = detect_profile(&inputs) else {
         panic!("comments and pins must fall back to defaults");
     };
-    assert!(outcome.profile.evidence.is_empty());
+    assert_eq!(
+        outcome.profile.evidence,
+        [] as [velnor_actions_rust::Evidence; 0]
+    );
     assert_eq!(outcome.profile.compile_driver, CompileDriver::Cargo);
 }
 
@@ -211,7 +223,10 @@ fn cargo_test_invocation_selects_cargo_test() {
         panic!("cargo test must select a profile");
     };
     assert_eq!(outcome.profile.test_runner, TestRunner::CargoTest);
-    assert!(outcome.recommendations.is_empty());
+    assert_eq!(
+        outcome.recommendations,
+        [] as [velnor_actions_rust::Recommendation; 0]
+    );
 }
 
 #[test]
@@ -254,5 +269,8 @@ fn nextest_pin_without_invocation_is_not_evidence() {
         panic!("nextest pin must fall back to defaults");
     };
     assert_eq!(outcome.profile.test_runner, TestRunner::CargoTest);
-    assert!(outcome.profile.evidence.is_empty());
+    assert_eq!(
+        outcome.profile.evidence,
+        [] as [velnor_actions_rust::Evidence; 0]
+    );
 }

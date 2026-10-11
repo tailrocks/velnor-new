@@ -168,6 +168,6 @@ fn generated_files_exist_only_for_real_v2_consumers() -> Result<(), RenderError>
         &BTreeMap::new(),
         "0.1.0",
     )?;
-    assert!(no_cache_files.is_empty());
+    assert_eq!(no_cache_files, [] as [crate::tree::RenderedFile; 0]);
     Ok(())
 }

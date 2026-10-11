@@ -124,6 +124,42 @@ pub(crate) fn crate_job_caps(
         if id == TASK_JOB_ID {
             continue;
         }
+        let task_steps: Vec<usize> = job
+            .steps
+            .iter()
+            .enumerate()
+            .filter_map(|(index, step)| {
+                matches!(&step.kind, StepKind::TaskExecution { .. }).then_some(index)
+            })
+            .collect();
+        let declared_caps: Vec<(usize, u32)> = job
+            .steps
+            .iter()
+            .enumerate()
+            .filter_map(|(index, step)| match &step.kind {
+                StepKind::TaskExecution {
+                    matrix_max_parallel: Some(cap),
+                    ..
+                } => Some((index, *cap)),
+                _ => None,
+            })
+            .collect();
+        if !declared_caps.is_empty() {
+            if marker_trio(job).is_some() {
+                return Err(matrix_invalid("matrix_multiple_cap_sources"));
+            }
+            let max = declared_caps[0].1;
+            if max == 0
+                || declared_caps.len() != 1
+                || task_steps.first().copied() != Some(declared_caps[0].0)
+                || !job.needs.iter().any(|need| need == PLAN_JOB_ID)
+                || !jobs.contains_key(PLAN_JOB_ID)
+            {
+                return Err(matrix_invalid("task_matrix_cap_contract"));
+            }
+            caps.insert(id.clone(), max);
+            continue;
+        }
         let trio = marker_trio(job);
         let Some([Some(producer), Some(output), Some(max)]) = trio else {
             if trio.is_some() {

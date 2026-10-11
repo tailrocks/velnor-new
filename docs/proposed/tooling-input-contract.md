@@ -84,11 +84,15 @@ execution boundary, trust admission, and Required evidence rules.
 ## 1.2. Isolated verification tasks
 
 Each verification entry in `workflow.tasks` declares `id`,
-`kind = "verification"`, an exact
-`mise_task`, `runner`, and bounded `timeout_minutes`. IDs must be sorted,
+`kind = "verification"`, an exact `mise_task`, a typed `source` with the
+repository-relative `mise_config` and `working_directory`, `runner`, and
+bounded `timeout_minutes`. The config file must be named `mise.toml`, and the
+working directory must be that config root or a descendant. `mise.lock` and
+`rust-toolchain.toml`, when present, are resolved beside the config. IDs must be sorted,
 unique, and safe as job keys; the generated base ID is `task-{id}`. The only
-V1 runners are `linux-x64` (`ubuntu-26.04`) and `macos-arm64` (`macos-15`),
-with separate pinned Mise binary digests. Task jobs are unconditional on pull
+V1 runners are `linux-x64` (`ubuntu-26.04`), `macos-arm64` (`macos-15`), and
+`macos-26-arm64` (`macos-26`), with separate pinned Mise binary digests per
+operating system and architecture. Task jobs are unconditional on pull
 requests, pushes, and merge groups, have no dependencies of their own, and
 join the `Required` fan-in. In schema 2, Linux tasks follow `hosted`,
 `scale-set`, or `both` mode; `both` emits a hosted and a Scale Set job, and
@@ -100,8 +104,8 @@ required check.
 Task jobs grant only `contents: read`; other workflow permission scopes are
 explicitly `none`. Checkout disables persisted credentials. The pinned Mise
 setup action does not install project tools, activate repository env, or use
-cache inputs. The job resolves only the selected task's `tools` maps from root
-`mise.toml`, including tasks reached through declared dependencies and simple
+cache inputs. The job resolves only the selected task's `tools` maps from its
+declared Mise config, including tasks reached through declared dependencies and simple
 nested `mise run` calls. Every task in that closure must have a nonempty inline
 `run` body. File-task-only dependencies and metadata-only TOML tasks fail
 closed: pinned Mise can merge command-less TOML metadata onto a same-named
@@ -117,13 +121,16 @@ BoltFFI asset regex and Rust components/targets copied from the idiomatic
 toolchain file. Present settings must set `lockfile = true`; the only accepted
 idiomatic-version selector is `rust`, and Cargo binstall settings cannot turn
 either modeled flag off. Declared Cargo wrappers bind exactly to `mbx` with
-`MBX_CARGO_SHIM_MODE=1`. Other root tools are excluded from the private
-install config, so an unrelated `cargo:` tool cannot be installed by a
+`MBX_CARGO_SHIM_MODE=1`. Other tools from the selected Mise config are excluded
+from the private install config, so an unrelated `cargo:` tool cannot be installed by a
 verification job. An empty
 closure does not emit an install step. When tools are installed, the task runs
 with `mise run --skip-tools`; all runs disable auto-install, env loading, and
-hooks. The checked-out task config, lock, and Rust toolchain inputs are
-hash-bound to planning and checked again before the task runs. It creates no
+hooks. Mise's config-search ceiling sits immediately above the declared config
+root, and the task starts from its declared working directory. The job rejects
+symlinked path components and hash-binds the exact config, sibling lock, and
+sibling Rust toolchain inputs to planning before checking the loaded config
+chain and running the task. It creates no
 task cache, artifact, or downstream output. The verification kind is for
 platform and other non-Rust checks only. Keeping task scripts free of Rust
 compilation is an authoring and review invariant; V1 does not inspect or
@@ -144,9 +151,19 @@ does not accept a repository or ref override.
 
 The job checks for Xcode 26.6 build 17F113 and macOS SDK 26.5 under
 `/Applications/Xcode_26.6.app/Contents/Developer`. Checkout disables
-persisted credentials. The pinned Mise action sets up only Mise itself. The
-job verifies the checked-out `mise.toml`, `mise.lock`, and
-`rust-toolchain.toml` against the source-bound digests, then creates a private
+persisted credentials. The pinned Mise action sets up only Mise itself. A
+build task declares a repository-relative `source.mise_config` and
+`source.working_directory`; the latter is that config directory or a
+descendant. The source config must contain tasks only. Its task names override
+same-named root tasks, while task dependencies and nested `mise run` calls may
+resolve from either config. Root `mise.toml` remains the authority for the
+selected tools, root `mise.lock`, Cargo wrapper, and Rust toolchain. The job
+hash-binds the root tool files and source task config. A source-local
+`mise.lock` or `rust-toolchain.toml`, when present, must match the corresponding
+root file and is also hash-bound. The job rejects symlinked path components
+and runs Mise from the declared working directory with a ceiling above the
+repository root, so Mise loads the root and nested task configs but nothing
+above the checkout. The job creates a private
 task-owned Mise home containing only the declared tool closure and its exact
 locked rows, including the locked ARM64 checksum artifacts where required.
 It installs that isolated closure once with
@@ -157,8 +174,8 @@ verified `mbx` wrapper, and the task's Rust compilation runs through that
 wrapper. All Mise inspection, install, exec, and task commands set
 `--no-env`; the task also inherits `MISE_NO_ENV=1`, so repository env files
 and `env._.source` directives cannot run or alter the selected tools. The
-checked config-file chain is compared before install and before task
-execution. The declared task runs from the checked-out root with
+checked config-file chain is compared before task
+execution. The declared task runs from its source working directory with
 `CARGO_BUILD_JOBS` and `NEXTEST_TEST_THREADS` from the validated limits,
 Mise task and exec auto-install disabled, and the same Xcode developer
 directory. Every shell step clears credential variables; the job grants only

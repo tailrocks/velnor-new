@@ -227,7 +227,7 @@
       MISE_NO_HOOKS: "1"
       MISE_RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
       RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
-      RUSTUP_TOOLCHAIN: 1.98.1
+      RUSTUP_TOOLCHAIN: 1.99.0
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -236,23 +236,23 @@
       - name: Set up Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
-          version: 2026.10.6
-          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.7
+          sha256: 6eb1b890e90818417ca34c90dbbd47881917d5cd199f31b63b062ea9c6b18d85
           install: "false"
           env: "false"
           cache: "false"
           cache_save: "false"
       - name: Install pinned Rust toolchain
-        run: "mise install rust@1.98.1 && printf '%s/bin\\n' \"$(mise exec rust@1.98.1 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
+        run: "mise install rust@1.99.0 && printf '%s/bin\\n' \"$(mise exec rust@1.99.0 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
       - name: Restore MBX objects
         uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         id: mbx_cache
         with:
           github-cache-mode: objects
-          version: 1.21.1
-          toolchain: 1.98.1
+          version: 1.23.0
+          toolchain: 1.99.0
           isolate-objects-cache: "true"
-          cache-generation: velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          cache-generation: velnor-qualification-mbx-1.23.0-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           save-on-workflow-dispatch: "true"
       - name: Verify MBX action identity and write policy
         id: mbx-ready
@@ -261,12 +261,12 @@
           CACHE_SAVE_ELIGIBLE: ${{ steps.mbx_cache.outputs.cache-save-eligible }}
           CACHE_SAVE_REASON: ${{ steps.mbx_cache.outputs.cache-save-reason }}
           CACHE_HIT: ${{ steps.mbx_cache.outputs.cache-hit }}
-        run: "test \"$MBX_VERSION\" = '1.21.1' && test \"$CACHE_SAVE_ELIGIBLE\" = 'true' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch'"
+        run: "test \"$MBX_VERSION\" = '1.23.0' && test \"$CACHE_SAVE_ELIGIBLE\" = 'true' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch'"
       - name: Compile MBX cache probe
         run: "set -eu\nroot=\"$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification\"\nmkdir -p \"$root/src\"\ncat > \"$root/Cargo.toml\" <<'EOF'\n[package]\nname = \"mbx-cache-qualification\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\".\"]\nresolver = \"3\"\n\n[lib]\npath = \"src/lib.rs\"\nEOF\ncat > \"$root/src/lib.rs\" <<'EOF'\npub fn cache_probe() -> u64 { 42 }\nEOF\nmbx build --manifest-path \"$root/Cargo.toml\"\n"
       - name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx clean
+        run: mise --no-config --no-env --no-hooks exec rust@1.99.0 -- mbx clean
       - name: Sample runner disk after cleanup
         run: "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\""
   mbx-cache-read-hosted:
@@ -293,7 +293,7 @@
       MISE_NO_HOOKS: "1"
       MISE_RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
       RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
-      RUSTUP_TOOLCHAIN: 1.98.1
+      RUSTUP_TOOLCHAIN: 1.99.0
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -302,23 +302,23 @@
       - name: Set up Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
-          version: 2026.10.6
-          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          version: 2026.10.7
+          sha256: 6eb1b890e90818417ca34c90dbbd47881917d5cd199f31b63b062ea9c6b18d85
           install: "false"
           env: "false"
           cache: "false"
           cache_save: "false"
       - name: Install pinned Rust toolchain
-        run: "mise install rust@1.98.1 && printf '%s/bin\\n' \"$(mise exec rust@1.98.1 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
+        run: "mise install rust@1.99.0 && printf '%s/bin\\n' \"$(mise exec rust@1.99.0 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
       - name: Restore MBX objects
         uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         id: mbx_cache
         with:
           github-cache-mode: objects
-          version: 1.21.1
-          toolchain: 1.98.1
+          version: 1.23.0
+          toolchain: 1.99.0
           isolate-objects-cache: "true"
-          cache-generation: velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          cache-generation: velnor-qualification-mbx-1.23.0-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           save-on-workflow-dispatch: "false"
       - name: Verify MBX action identity and write policy
         id: mbx-ready
@@ -327,7 +327,7 @@
           CACHE_SAVE_ELIGIBLE: ${{ steps.mbx_cache.outputs.cache-save-eligible }}
           CACHE_SAVE_REASON: ${{ steps.mbx_cache.outputs.cache-save-reason }}
           CACHE_HIT: ${{ steps.mbx_cache.outputs.cache-hit }}
-        run: "test \"$MBX_VERSION\" = '1.21.1' && test \"$CACHE_SAVE_ELIGIBLE\" = 'false' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch; save-on-workflow-dispatch is off' && test \"$CACHE_HIT\" = 'false'"
+        run: "test \"$MBX_VERSION\" = '1.23.0' && test \"$CACHE_SAVE_ELIGIBLE\" = 'false' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch; save-on-workflow-dispatch is off' && test \"$CACHE_HIT\" = 'false'"
       - name: Require imported MBX objects
         run: "set -e -o pipefail; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx cache stats --json | tee \"$RUNNER_TEMP/mbx-object-stats.json\"; jq -e '.objects > 0' \"$RUNNER_TEMP/mbx-object-stats.json\""
       - name: Compile MBX cache probe
@@ -336,7 +336,7 @@
         run: "set -e -o pipefail; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx stats --json | tee \"$RUNNER_TEMP/mbx-reuse-stats.json\"; jq -e '.savings.cached_compilations > 0' \"$RUNNER_TEMP/mbx-reuse-stats.json\""
       - name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx clean
+        run: mise --no-config --no-env --no-hooks exec rust@1.99.0 -- mbx clean
   mise-pin-linux-x64:
     name: Mise pin / hosted / Linux x64
     if: inputs.mode == 'mise-pin'
@@ -357,13 +357,13 @@
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
-          version: 2026.10.6
+          sha256: 6eb1b890e90818417ca34c90dbbd47881917d5cd199f31b63b062ea9c6b18d85
+          version: 2026.10.7
       - name: Verify selected ref, version, and binary digest
         shell: bash
         env:
-          MISE_VERSION: 2026.10.6
-          MISE_SHA256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
+          MISE_VERSION: 2026.10.7
+          MISE_SHA256: 6eb1b890e90818417ca34c90dbbd47881917d5cd199f31b63b062ea9c6b18d85
         run: "set -euo pipefail\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nversion=\"$(mise --version)\"\ncase \"$version\" in \"$MISE_VERSION linux-x64 (\"[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\")\") ;; *) echo \"unexpected Mise version: $version\" >&2; exit 1 ;; esac\nbinary=\"$(command -v mise)\"\nactual=\"$(sha256sum \"$binary\" | awk '{print $1}')\"\ntest \"$actual\" = \"$MISE_SHA256\""
   mise-pin-macos-x64:
     name: Mise pin / hosted / macOS x64
@@ -385,11 +385,99 @@
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 70e1407e2fdc7a19f94db35745a8e5885b0e4bbdbfb34bfb7e3619d6230a8f70
-          version: 2026.10.6
+          sha256: c3355f0c56d1b9fe73a2ba30e034b4e483541b25b1ad812a87440abfaeec8baa
+          version: 2026.10.7
       - name: Verify selected ref, version, and binary digest
         shell: bash
         env:
-          MISE_VERSION: 2026.10.6
-          MISE_SHA256: 70e1407e2fdc7a19f94db35745a8e5885b0e4bbdbfb34bfb7e3619d6230a8f70
+          MISE_VERSION: 2026.10.7
+          MISE_SHA256: c3355f0c56d1b9fe73a2ba30e034b4e483541b25b1ad812a87440abfaeec8baa
         run: "set -euo pipefail\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nversion=\"$(mise --version)\"\ncase \"$version\" in \"$MISE_VERSION macos-x64 (\"[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\")\") ;; *) echo \"unexpected Mise version: $version\" >&2; exit 1 ;; esac\nbinary=\"$(command -v mise)\"\nactual=\"$(shasum -a 256 \"$binary\" | awk '{print $1}')\"\ntest \"$actual\" = \"$MISE_SHA256\""
+  rust-toolchain-linux-x64:
+    name: Rust toolchain / hosted / Linux x64
+    if: inputs.mode == 'rust-toolchain'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out selected ref
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: "false"
+      - name: Setup Mise
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
+        with:
+          cache: "false"
+          cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: 6eb1b890e90818417ca34c90dbbd47881917d5cd199f31b63b062ea9c6b18d85
+          version: 2026.10.7
+      - name: Install pinned MBX through Mise
+        shell: bash
+        env:
+          MBX_VERSION: 1.23.0
+        run: "set -euo pipefail\nmise --no-config --no-env --no-hooks install \"mr-boxington@$MBX_VERSION\"\nmbx_path=\"$(mise --no-config --no-env --no-hooks which mbx --tool \"mr-boxington@$MBX_VERSION\")\"\ncase \"$mbx_path\" in /*) ;; *) echo 'Mise returned a non-absolute MBX path' >&2; exit 1 ;; esac\ntest -x \"$mbx_path\"\ntest \"$(\"$mbx_path\" --version)\" = \"mbx $MBX_VERSION\"\nprintf 'MBX_EXECUTABLE=%s\\n' \"$mbx_path\" >> \"$GITHUB_ENV\""
+      - name: Install official Rust components and measure the qualified tree
+        shell: bash
+        env:
+          RUST_VERSION: 1.99.0
+          MBX_VERSION: 1.23.0
+          RUST_MANIFEST_URL: https://static.rust-lang.org/dist/channel-rust-1.99.0.toml
+          RUST_MANIFEST_SHA256: ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2
+          QUALIFICATION_PLATFORM: linux_x64
+          QUALIFICATION_OUTPUT: ${{ runner.temp }}/rust-toolchain-qualification.json
+        run: "set -euo pipefail\npython3 --version\npython3 scripts/qualification/qualify_rust_toolchain.py \\\n  --mbx-executable \"$MBX_EXECUTABLE\" \\\n  --mbx-version \"$MBX_VERSION\" \\\n  --project-root \"$GITHUB_WORKSPACE\" \\\n  --version \"$RUST_VERSION\" \\\n  --manifest-url \"$RUST_MANIFEST_URL\" \\\n  --manifest-sha256 \"$RUST_MANIFEST_SHA256\" \\\n  --platform \"$QUALIFICATION_PLATFORM\" \\\n  --output \"$QUALIFICATION_OUTPUT\""
+      - name: Upload measured Rust qualification
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: rust-toolchain-linux-x64
+          path: ${{ runner.temp }}/rust-toolchain-qualification.json
+          if-no-files-found: error
+          retention-days: "14"
+  rust-toolchain-macos-arm64:
+    name: Rust toolchain / hosted / macOS ARM64
+    if: inputs.mode == 'rust-toolchain'
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out selected ref
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: "false"
+      - name: Setup Mise
+        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
+        with:
+          cache: "false"
+          cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: f5171e341518a57e8c4e9280e28443e35d66212c51164c83be76794e0a78b014
+          version: 2026.10.7
+      - name: Install pinned MBX through Mise
+        shell: bash
+        env:
+          MBX_VERSION: 1.23.0
+        run: "set -euo pipefail\nmise --no-config --no-env --no-hooks install \"mr-boxington@$MBX_VERSION\"\nmbx_path=\"$(mise --no-config --no-env --no-hooks which mbx --tool \"mr-boxington@$MBX_VERSION\")\"\ncase \"$mbx_path\" in /*) ;; *) echo 'Mise returned a non-absolute MBX path' >&2; exit 1 ;; esac\ntest -x \"$mbx_path\"\ntest \"$(\"$mbx_path\" --version)\" = \"mbx $MBX_VERSION\"\nprintf 'MBX_EXECUTABLE=%s\\n' \"$mbx_path\" >> \"$GITHUB_ENV\""
+      - name: Install official Rust components and measure the qualified tree
+        shell: bash
+        env:
+          RUST_VERSION: 1.99.0
+          MBX_VERSION: 1.23.0
+          RUST_MANIFEST_URL: https://static.rust-lang.org/dist/channel-rust-1.99.0.toml
+          RUST_MANIFEST_SHA256: ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2
+          QUALIFICATION_PLATFORM: macos_arm64
+          QUALIFICATION_OUTPUT: ${{ runner.temp }}/rust-toolchain-qualification.json
+        run: "set -euo pipefail\npython3 --version\npython3 scripts/qualification/qualify_rust_toolchain.py \\\n  --mbx-executable \"$MBX_EXECUTABLE\" \\\n  --mbx-version \"$MBX_VERSION\" \\\n  --project-root \"$GITHUB_WORKSPACE\" \\\n  --version \"$RUST_VERSION\" \\\n  --manifest-url \"$RUST_MANIFEST_URL\" \\\n  --manifest-sha256 \"$RUST_MANIFEST_SHA256\" \\\n  --platform \"$QUALIFICATION_PLATFORM\" \\\n  --output \"$QUALIFICATION_OUTPUT\""
+      - name: Upload measured Rust qualification
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: rust-toolchain-macos-arm64
+          path: ${{ runner.temp }}/rust-toolchain-qualification.json
+          if-no-files-found: error
+          retention-days: "14"

@@ -894,14 +894,14 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-actionlint"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-contract",
 ]
 
 [[package]]
 name = "velnor-actions-cli"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "clap",
  "proc-macro2",
@@ -915,7 +915,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-contract"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "blake3",
  "serde",
@@ -925,7 +925,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-freshness"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "flate2",
  "rustix",
@@ -939,7 +939,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-mise"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "rustix",
  "serde",
@@ -950,7 +950,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "flate2",
  "lzma-rust2",
@@ -975,7 +975,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-rust"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -985,7 +985,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-tofu"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "hcl-rs",
  "serde",
@@ -995,14 +995,15 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-workflow-renderer"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "velnor-actions-contract",
+ "velnor-actions-mise",
 ]
 
 [[package]]
 name = "velnor-archive-guard"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "flate2",
  "sha2",

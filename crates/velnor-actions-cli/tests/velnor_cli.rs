@@ -13,6 +13,8 @@ mod impl_cli_gate_preseed;
 mod impl_cli_gate_qualification;
 #[path = "impl_cli_gate_repo_policy.rs"]
 mod impl_cli_gate_repo_policy;
+#[path = "impl_cli_gate_task_execution.rs"]
+mod impl_cli_gate_task_execution;
 #[path = "impl_cli_init.rs"]
 mod impl_cli_init;
 #[path = "impl_cli_parity.rs"]

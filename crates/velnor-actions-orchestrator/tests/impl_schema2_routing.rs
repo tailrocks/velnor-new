@@ -320,10 +320,17 @@ fn assert_macos_producer(body: &str) -> TestResult {
     let build = job_body(body, "build-binary")?;
     assert!(build.contains("runs-on: macos-15"), "{build}");
     assert!(build.contains("jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca"));
-    assert!(build.contains("rust@1.98.1"), "{build}");
+    assert!(build.contains("rust@1.99.0"), "{build}");
+    assert!(build.contains("mr-boxington@1.23.0"), "{build}");
+    assert!(
+        body.contains(
+            "mise --no-config --no-env --no-hooks install rust@1.99.0 mr-boxington@1.23.0"
+        )
+    );
     assert!(body.contains(
-        "cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-runner-cli"
+        "mise --no-config --no-env --no-hooks exec rust@1.99.0 mr-boxington@1.23.0 -- mbx build --locked --manifest-path crates/velnor-runner/Cargo.toml --release --package velnor-runner-cli"
     ));
+    assert!(!body.contains("cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml"));
     assert!(body.contains("Mach-O"));
     assert!(body.contains("arm64"));
     assert!(body.contains("shasum -a 256"));

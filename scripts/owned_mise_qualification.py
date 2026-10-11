@@ -3,6 +3,7 @@
 import argparse, hashlib, http.server, json, os, platform, shutil, subprocess, tarfile, tempfile, threading
 from pathlib import Path
 from owned_tool_behavior import valid_mise_cases
+from owned_tool_source import OFFICIAL_MISE_VERSION
 
 ap=argparse.ArgumentParser()
 ap.add_argument("--mise", required=True)
@@ -128,7 +129,7 @@ if installed.exists():
     run("native-http-tampered-beforeexec",exclusive,installed_env,nested,want=1)
 else: results.append(dict(case="native-http-owned-dispatch",passed=False,error="missing expected native installation"))
 version=subprocess.run([str(binary),"--version"],env=dict(env,MISE_NO_CONFIG="1"),cwd=root,text=True,capture_output=True)
-report=dict(root=str(root),host=dict(system=platform.system(),machine=platform.machine()),source_commit=a.source_commit,source_diff_sha256=a.source_diff_sha256,upstream_commit=a.upstream_commit,binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),version=version.stdout.strip(),version_is_distinct=version.stdout.strip().split()[0]==a.expected_version and a.expected_version!="2026.10.6",results=results)
+report=dict(root=str(root),host=dict(system=platform.system(),machine=platform.machine()),source_commit=a.source_commit,source_diff_sha256=a.source_diff_sha256,upstream_commit=a.upstream_commit,binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),version=version.stdout.strip(),version_is_distinct=version.stdout.strip().split()[0]==a.expected_version and a.expected_version!=OFFICIAL_MISE_VERSION,results=results)
 Path(a.output).write_text(json.dumps(report,indent=2)+"\n")
 print(json.dumps({"output":a.output,"root":str(root),"passed":sum(r["passed"] for r in results),"total":len(results),"failed":[r["case"] for r in results if not r["passed"]]}))
 raise SystemExit(0 if valid_mise_cases(results) and report["version_is_distinct"] else 1)

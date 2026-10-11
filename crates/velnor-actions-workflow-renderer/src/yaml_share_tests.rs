@@ -1,5 +1,10 @@
-use super::share_step_run_scalars;
+use std::collections::BTreeMap;
+
+use super::share_repeated_workflow_nodes;
 use crate::yaml::{AnchorName, Yaml, render_yaml};
+
+#[path = "yaml_share_mapping_tests.rs"]
+mod mapping;
 
 fn repeated_runs(extra: Vec<(String, Yaml)>) -> Yaml {
     let command = "printf \"this repeated command is long enough to save bytes\"";
@@ -43,16 +48,22 @@ fn repeated_runs(extra: Vec<(String, Yaml)>) -> Yaml {
 }
 
 #[test]
-fn sharing_is_confined_to_step_runs_and_is_deterministic() {
+fn sharing_is_confined_to_step_runs_and_supported_input_maps() -> Result<(), String> {
     let node = repeated_runs(Vec::new());
-    let first = render_yaml(&share_step_run_scalars(node.clone()));
-    let second = render_yaml(&share_step_run_scalars(node));
+    let shared = share_repeated_workflow_nodes(node.clone());
+    let first = render_yaml(&shared);
+    let second = render_yaml(&share_repeated_workflow_nodes(node.clone()));
     assert_eq!(first, second);
     assert!(first.contains("run: &r1"));
     assert!(first.contains("run: *r1"));
     assert!(first.contains("defaults:\n  run: \"printf"));
-    assert!(first.contains("env:\n          run: \"printf"));
-    assert!(first.contains("with:\n          run: \"printf"));
+    assert!(first.contains("env: &m1\n          run: \"printf"));
+    assert!(first.contains("with: *m1"));
+    assert_eq!(
+        mapping::expand_aliases(&node)?,
+        mapping::expand_aliases(&shared)?
+    );
+    Ok(())
 }
 
 #[test]
@@ -65,7 +76,9 @@ fn generated_anchor_names_skip_existing_names() -> Result<(), String> {
             value: "unrelated".to_owned(),
         },
     );
-    let rendered = render_yaml(&share_step_run_scalars(repeated_runs(vec![existing])));
+    let rendered = render_yaml(&share_repeated_workflow_nodes(repeated_runs(vec![
+        existing,
+    ])));
     assert!(rendered.contains("run: &r2"));
     assert!(rendered.contains("run: *r2"));
     Ok(())
@@ -101,9 +114,98 @@ fn short_repeats_are_not_rewritten_when_anchors_cost_more() {
         )]),
     )]);
     assert_eq!(
-        render_yaml(&share_step_run_scalars(node.clone())),
+        render_yaml(&share_repeated_workflow_nodes(node.clone())),
         render_yaml(&node)
     );
+}
+
+#[test]
+fn parent_step_aliases_do_not_leave_unused_nested_anchors() -> Result<(), String> {
+    let command = "printf '%s' 'a repeated command long enough to share safely'";
+    let repeated_env = Yaml::Map(vec![(
+        "TOKEN".to_owned(),
+        Yaml::str("a repeated environment value"),
+    )]);
+    let repeated_with = Yaml::Map(vec![(
+        "INPUT".to_owned(),
+        Yaml::str("a repeated action input value"),
+    )]);
+    let step = Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str("same step")),
+        ("run".to_owned(), Yaml::str(command)),
+        ("env".to_owned(), repeated_env),
+        ("with".to_owned(), repeated_with),
+    ]);
+    let source = Yaml::Map(vec![(
+        "jobs".to_owned(),
+        Yaml::Map(vec![(
+            "job".to_owned(),
+            Yaml::Map(vec![(
+                "steps".to_owned(),
+                Yaml::Seq(vec![step.clone(), step]),
+            )]),
+        )]),
+    )]);
+
+    let shared = share_repeated_workflow_nodes(source.clone());
+    let rendered = render_yaml(&shared);
+    assert!(rendered.contains("- &s1"));
+    assert!(rendered.contains("*s1"));
+    assert!(
+        !rendered.contains("&m"),
+        "nested mapping anchor is redundant"
+    );
+    assert!(!rendered.contains("&r"), "nested run anchor is redundant");
+    assert_eq!(
+        mapping::expand_aliases(&source)?,
+        mapping::expand_aliases(&shared)?,
+        "pruning must preserve the expanded workflow"
+    );
+
+    let mut anchors = BTreeMap::new();
+    let mut aliases = BTreeMap::new();
+    collect_anchor_uses(&shared, &mut anchors, &mut aliases);
+    assert!(!anchors.is_empty());
+    assert!(anchors.iter().all(|(name, count)| {
+        *count == 1 && aliases.get(name).copied().unwrap_or_default() > 0
+    }));
+    Ok(())
+}
+
+fn collect_anchor_uses(
+    node: &Yaml,
+    anchors: &mut BTreeMap<AnchorName, usize>,
+    aliases: &mut BTreeMap<AnchorName, usize>,
+) {
+    match node {
+        Yaml::AnchoredScalar { name, .. } | Yaml::AnchoredMap { name, .. } => {
+            *anchors.entry(name.clone()).or_default() += 1;
+            if let Yaml::AnchoredMap { entries, .. } = node {
+                for (_, value) in entries {
+                    collect_anchor_uses(value, anchors, aliases);
+                }
+            }
+        }
+        Yaml::Alias(name) => *aliases.entry(name.clone()).or_default() += 1,
+        Yaml::Map(entries) => {
+            for (_, value) in entries {
+                collect_anchor_uses(value, anchors, aliases);
+            }
+        }
+        Yaml::Seq(items) => {
+            for item in items {
+                collect_anchor_uses(item, anchors, aliases);
+            }
+        }
+        Yaml::Null
+        | Yaml::Str(_)
+        | Yaml::Bool(_)
+        | Yaml::Int(_)
+        | Yaml::Flow(_)
+        | Yaml::FlowMap(_)
+        | Yaml::Quoted(_)
+        | Yaml::Annotated { .. } => {}
+    }
 }
 
 #[test]
@@ -138,7 +240,7 @@ fn repeated_run_scalars_preserve_yaml_escaping_and_expression_text() {
             Yaml::Map(vec![("steps".to_owned(), Yaml::Seq(steps))]),
         )]),
     )]);
-    let shared = share_step_run_scalars(source);
+    let shared = share_repeated_workflow_nodes(source);
     let Yaml::Map(root) = &shared else {
         panic!("root map")
     };
@@ -215,8 +317,10 @@ fn write_edge_corpus_for_external_psych_roundtrip() -> Result<(), Box<dyn std::e
             Yaml::Map(vec![("steps".to_owned(), Yaml::Seq(steps))]),
         )]),
     )]);
-    let marked =
-        crate::marker::with_marker("0.1.4", &render_yaml(&share_step_run_scalars(document)))?;
+    let marked = crate::marker::with_marker(
+        "0.1.4",
+        &render_yaml(&share_repeated_workflow_nodes(document)),
+    )?;
     fs::write(capture, marked)?;
     Ok(())
 }
@@ -244,9 +348,9 @@ fn profitability_edges_account_for_anchor_name_length() -> Result<(), String> {
             )]),
         )])
     };
-    let no_anchor = share_step_run_scalars(command("abcdefg"));
+    let no_anchor = share_repeated_workflow_nodes(command("abcdefg"));
     assert_eq!(render_yaml(&no_anchor), render_yaml(&command("abcdefg")));
-    let anchor = share_step_run_scalars(command("abcdefgh"));
+    let anchor = share_repeated_workflow_nodes(command("abcdefgh"));
     assert!(render_yaml(&anchor).contains("run: &r1"));
 
     let mut with_collisions = match command("abcdefghij") {
@@ -268,7 +372,7 @@ fn profitability_edges_account_for_anchor_name_length() -> Result<(), String> {
         }
         _ => return Err("test root must be map".to_owned()),
     };
-    with_collisions = share_step_run_scalars(with_collisions);
+    with_collisions = share_repeated_workflow_nodes(with_collisions);
     let rendered = render_yaml(&with_collisions);
     assert!(rendered.contains("run: &r10"));
     assert!(rendered.contains("run: *r10"));

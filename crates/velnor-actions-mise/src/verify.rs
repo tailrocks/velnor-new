@@ -7,7 +7,7 @@
 //! invocations (`--version`), never builds. Findings arrive validated
 //! from the owning adapters; this step only reports them.
 
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 
 use velnor_actions_contract::Finding;
 
@@ -244,10 +244,7 @@ fn runner_probe(
         RouteDriver::Cargo => NextestDriver::Cargo,
         RouteDriver::Mbx => NextestDriver::Mbx,
     };
-    PinnedToolExec::new(
-        prefix.tools(),
-        OsStr::new(prefix.program()),
-        vec![OsString::from("nextest"), OsString::from("--version")],
-    )
-    .map(Some)
+    prefix
+        .exec(vec![OsString::from("nextest"), OsString::from("--version")])
+        .map(Some)
 }

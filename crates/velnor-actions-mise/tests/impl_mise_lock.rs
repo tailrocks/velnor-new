@@ -18,7 +18,7 @@ fn lock_text(sha: &str) -> String {
         .map(|target| binary_record(target, sha))
         .collect::<String>();
     format!(
-        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{GENERATOR_VERSION}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.6\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n[[actions]]\nname = \"actions/checkout\"\nversion = \"v7.0.1\"\nsha = \"{}\"\nreviewed = \"2026-09-28\"\n",
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{GENERATOR_VERSION}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.7\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n[[actions]]\nname = \"actions/checkout\"\nversion = \"v7.0.1\"\nsha = \"{}\"\nreviewed = \"2026-09-28\"\n",
         "a".repeat(40),
         "c".repeat(64),
         "d".repeat(40)

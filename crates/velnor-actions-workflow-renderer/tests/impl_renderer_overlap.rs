@@ -45,8 +45,14 @@ fn prep_overlap_joins_independent_branches() -> Result<(), RenderError> {
         branch("velnor-prep-join", "Consume prepared inputs", "Use inputs")?,
     ]);
     wire_prep_join(&mut jobs, &spec())?;
-    assert!(jobs["velnor-prep-download"].needs.is_empty());
-    assert!(jobs["velnor-prep-image"].needs.is_empty());
+    assert_eq!(
+        jobs["velnor-prep-download"].needs,
+        [] as [std::string::String; 0]
+    );
+    assert_eq!(
+        jobs["velnor-prep-image"].needs,
+        [] as [std::string::String; 0]
+    );
     assert_eq!(
         jobs["velnor-prep-join"].needs,
         ["velnor-prep-download", "velnor-prep-image"]

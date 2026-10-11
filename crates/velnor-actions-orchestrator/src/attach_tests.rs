@@ -68,7 +68,7 @@ fn lock_acquire_inserts_digest_verified_stage() {
             }],
         },
         mise_bootstrap: MiseBootstrap {
-            version: "2026.10.6".to_owned(),
+            version: "2026.10.7".to_owned(),
             artifact: "https://example.invalid/m".to_owned(),
             sha256: "b".repeat(64),
         },
@@ -141,7 +141,7 @@ fn lock_acquire_records_source_commit() {
             }],
         },
         mise_bootstrap: MiseBootstrap {
-            version: "2026.10.6".to_owned(),
+            version: "2026.10.7".to_owned(),
             artifact: "https://example.invalid/m".to_owned(),
             sha256: "b".repeat(64),
         },
@@ -202,7 +202,9 @@ fn preseed_attach_builds_once_and_sets_mode() {
         support: None,
         context: RenderContext {
             generator_version: "0.1.0".to_owned(),
+            report_helper_version: "0.1.0".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
+            scale_set_selector: None,
             staged_binary: format!("{STAGED_BINARY_PREFIX}0.1.0"),
             request_dir: REQUEST_DIR.to_owned(),
             checkout_uses: CHECKOUT_USES.to_owned(),
@@ -304,7 +306,9 @@ fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
         support: None,
         context: RenderContext {
             generator_version: "0.1.0".to_owned(),
+            report_helper_version: "0.1.0".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
+            scale_set_selector: None,
             staged_binary: format!("{STAGED_BINARY_PREFIX}0.1.0"),
             request_dir: REQUEST_DIR.to_owned(),
             checkout_uses: CHECKOUT_USES.to_owned(),

@@ -48,7 +48,10 @@ fn committed_header_read_is_comparison_only() {
         ..ProfileInputs::default()
     };
     let outcome = detect_profile(&inputs).expect("profile");
-    assert!(outcome.profile.evidence.is_empty());
+    assert_eq!(
+        outcome.profile.evidence,
+        [] as [velnor_actions_rust::Evidence; 0]
+    );
     let committed = read_committed_profile_for_comparison(generated).expect("committed");
     assert_eq!(committed.compile_driver, CompileDriver::Mbx);
     assert_eq!(committed.test_runner, TestRunner::CargoNextest);
@@ -111,13 +114,13 @@ fn toolchain_inspection_never_fails_never_writes() {
             inspect_toolchain_file("rust-toolchain.toml", Some(content)).expect("never fails");
         for finding in &inspection.findings {
             assert_eq!(finding.file, "rust-toolchain.toml");
-            assert!(!finding.code.is_empty());
-            assert!(!finding.recommendation.is_empty());
+            assert_ne!(finding.code, "");
+            assert_ne!(finding.recommendation, "");
         }
     }
     let missing = inspect_toolchain_file("rust-toolchain.toml", None).expect("never fails");
     assert_eq!(missing.findings.len(), 1);
-    assert!(!missing.findings[0].recommendation.is_empty());
+    assert_ne!(missing.findings[0].recommendation, "");
 }
 
 #[test]

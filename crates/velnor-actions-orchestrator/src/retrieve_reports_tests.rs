@@ -163,7 +163,7 @@ fn staged_tokens_cover_every_failure_class() {
     ]}});
     let mut errors = Vec::new();
     let (reports, _) = read_staged_reports("local", &bad, tmp.path(), &mut errors);
-    assert!(reports.is_empty());
+    assert_eq!(reports, [] as [serde_json::Value; 0]);
     assert!(errors.contains(&"bad_artifact_id".to_owned()), "{errors:?}");
     assert!(
         errors.contains(&"bad_artifact_id:../escape".to_owned()),
@@ -219,7 +219,7 @@ fn staged_symlinks_reject_and_nested_layout_reads() {
         std::fs::write(target.join("matrix-report.json"), "{}").expect("report");
         std::os::unix::fs::symlink(&target, tmp.path().join(aid)).expect("link");
         let (reports, _, errors) = read(tmp.path());
-        assert!(reports.is_empty());
+        assert_eq!(reports, [] as [serde_json::Value; 0]);
         assert_eq!(errors, [format!("symlink_report:{aid}")]);
         // A symlinked nested parent rejects the same way.
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -227,7 +227,7 @@ fn staged_symlinks_reject_and_nested_layout_reads() {
         std::fs::create_dir_all(&home).expect("home");
         std::os::unix::fs::symlink(&target, home.join(aid)).expect("link");
         let (reports, _, errors) = read(tmp.path());
-        assert!(reports.is_empty());
+        assert_eq!(reports, [] as [serde_json::Value; 0]);
         assert_eq!(errors, [format!("symlink_report:{aid}")]);
         // A symlinked matrix file rejects without reading.
         let tmp = tempfile::tempdir().expect("tempdir");
@@ -240,7 +240,7 @@ fn staged_symlinks_reject_and_nested_layout_reads() {
         )
         .expect("link");
         let (reports, _, errors) = read(tmp.path());
-        assert!(reports.is_empty());
+        assert_eq!(reports, [] as [serde_json::Value; 0]);
         assert_eq!(errors, [format!("symlink_report:{aid}")]);
     }
 }
@@ -356,7 +356,7 @@ fn staged_task_file_rejects_duplicate_keys() {
     .expect("task");
     let mut errors = Vec::new();
     let (_, tasks) = read_staged_reports("local", &plan, tmp.path(), &mut errors);
-    assert!(tasks.is_empty());
+    assert_eq!(tasks, [] as [serde_json::Value; 0]);
     assert_eq!(errors, [format!("unparsable_task:{file_id}")]);
 }
 

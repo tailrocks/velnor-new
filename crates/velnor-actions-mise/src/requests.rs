@@ -1,13 +1,20 @@
 //! Typed mise requests: metadata discovery, qualification, and pinned exec.
 //!
-//! Discovery uses Cargo even for MBX workspaces (metadata discovery is not
-//! compilation). Discovery never resolves (`--no-deps`: no fetch, no write);
-//! only lockful qualification resolves, `--locked --offline`. Callers own
-//! parsing; discovery and qualification return the raw metadata JSON string,
-//! and pinned exec returns the typed output.
+//! Metadata discovery and locked qualification run through pinned MBX, including
+//! for workspaces that do not compile. Discovery never resolves (`--no-deps`:
+//! no fetch, no write); only lockful qualification resolves, `--locked
+//! --offline`. Callers own parsing; discovery and qualification return the raw
+//! metadata JSON string, and pinned exec returns the typed output.
 
 use std::ffi::{OsStr, OsString};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+
+#[path = "requests/metadata.rs"]
+mod metadata;
+pub use metadata::{MetadataDiscovery, MetadataQualification};
+#[path = "requests/metadata_command.rs"]
+mod metadata_command;
+pub use metadata_command::MetadataCommand;
 
 use crate::catalog::{PinnedTool, ToolCatalog};
 use crate::command::{
@@ -15,174 +22,53 @@ use crate::command::{
 };
 use crate::error::MiseError;
 
-/// Cargo payload program executed after the `--` separator.
+/// MBX payload program executed after the `--` separator.
+const MBX_PROGRAM: &str = "mbx";
+/// Cargo payload name retained only for rejecting source-install commands.
 const CARGO_PROGRAM: &str = "cargo";
 
-/// Cargo subcommand reporting workspace metadata as JSON.
-const CARGO_METADATA: &str = "metadata";
-
-/// Conservative discovery of one manifest through pinned Cargo.
-///
-/// Exact payload: `cargo metadata --format-version 1 --no-deps
-/// --manifest-path <manifest>`. No `--locked`/`--offline`: discovery must not
-/// wait for full resolution. `--no-deps` skips resolution entirely, so the
-/// probe performs no index access, network fetch, or repository write --
-/// not even for lockless-with-dependencies manifests (poison-fixture proven;
-/// the orchestrator also brackets every run with a tool snapshot that fails
-/// closed on drift). Full resolution is qualification's job, lockful-only.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MetadataDiscovery {
-    /// Manifest whose metadata is requested.
-    manifest: PathBuf,
+/// MBX's exact Rust toolchain selector.
+fn mbx_rust_selector(catalog: &ToolCatalog) -> String {
+    // Kept as a helper so metadata requests and MBX's own command-line
+    // selector cannot diverge from the Rust catalog identity.
+    format!("+{}", catalog.version(PinnedTool::Rust))
 }
 
-impl MetadataDiscovery {
-    /// Discover metadata for one manifest path.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidManifestPath`] for an empty path.
-    pub fn new(manifest: PathBuf) -> Result<Self, MiseError> {
-        if manifest.as_os_str().is_empty() {
-            return Err(MiseError::InvalidManifestPath {
-                path: String::new(),
-            });
-        }
-        Ok(Self { manifest })
-    }
+/// MBX subcommand reporting workspace metadata as JSON.
+const METADATA_SUBCOMMAND: &str = "metadata";
 
-    /// Manifest whose metadata is requested.
-    #[must_use]
-    pub fn manifest(&self) -> &Path {
-        &self.manifest
-    }
-
-    /// Cargo-side payload arguments, byte-exact per the contract.
-    #[must_use]
-    pub fn cargo_argv(&self) -> Vec<OsString> {
-        vec![
-            OsString::from(CARGO_PROGRAM),
-            OsString::from(CARGO_METADATA),
-            OsString::from("--format-version"),
-            OsString::from("1"),
-            OsString::from("--no-deps"),
-            OsString::from("--manifest-path"),
-            self.manifest.as_os_str().to_owned(),
-        ]
-    }
-
-    /// Full mise argument vector including the program.
-    #[must_use]
-    pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
-        full_mise_argv(catalog, &[PinnedTool::Rust], &self.cargo_argv())
-    }
-
-    /// Isolated command running this discovery.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
-    /// empty, which the constructor rules out.
-    pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
-        let specs = catalog.tool_specs(&[PinnedTool::Rust]);
-        IsolatedCommand::mise_exec(&specs, &self.cargo_argv())
-    }
-
-    /// Run discovery and return the raw metadata JSON string.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::SpawnFailed`] when Cargo cannot launch,
-    /// [`MiseError::NonZeroExit`] on nonzero status, and
-    /// [`MiseError::InvalidUtf8`] when stdout is not text.
-    pub fn run(&self, catalog: &ToolCatalog) -> Result<String, MiseError> {
-        let output = self.command(catalog)?.run()?;
-        output.require_success("mise")?;
-        output.stdout_text("mise")
-    }
-}
-
-/// Locked/offline qualification after dependency sources have been prepared.
-///
-/// Exact payload: `cargo metadata --format-version 1 --locked --offline
-/// --manifest-path <workspace-root>/Cargo.toml`. Missing offline
-/// dependencies surface as `preparation_incomplete` upstream, never a fetch.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MetadataQualification {
-    /// Workspace-root manifest whose resolution is qualified.
-    workspace_manifest: PathBuf,
-}
-
-impl MetadataQualification {
-    /// Qualify resolution for one workspace-root manifest.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidManifestPath`] for an empty path.
-    pub fn new(workspace_manifest: PathBuf) -> Result<Self, MiseError> {
-        if workspace_manifest.as_os_str().is_empty() {
-            return Err(MiseError::InvalidManifestPath {
-                path: String::new(),
-            });
-        }
-        Ok(Self { workspace_manifest })
-    }
-
-    /// Workspace-root manifest whose resolution is qualified.
-    #[must_use]
-    pub fn workspace_manifest(&self) -> &Path {
-        &self.workspace_manifest
-    }
-
-    /// Cargo-side payload arguments, byte-exact per the contract.
-    #[must_use]
-    pub fn cargo_argv(&self) -> Vec<OsString> {
-        vec![
-            OsString::from(CARGO_PROGRAM),
-            OsString::from(CARGO_METADATA),
-            OsString::from("--format-version"),
-            OsString::from("1"),
-            OsString::from("--locked"),
-            OsString::from("--offline"),
-            OsString::from("--manifest-path"),
-            self.workspace_manifest.as_os_str().to_owned(),
-        ]
-    }
-
-    /// Full mise argument vector including the program.
-    #[must_use]
-    pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
-        full_mise_argv(catalog, &[PinnedTool::Rust], &self.cargo_argv())
-    }
-
-    /// Isolated command running this qualification.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
-    /// empty, which the constructor rules out.
-    pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
-        let specs = catalog.tool_specs(&[PinnedTool::Rust]);
-        IsolatedCommand::mise_exec(&specs, &self.cargo_argv())
-    }
-
-    /// Run qualification and return the raw metadata JSON string.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::SpawnFailed`] when Cargo cannot launch,
-    /// [`MiseError::NonZeroExit`] on nonzero status, and
-    /// [`MiseError::InvalidUtf8`] when stdout is not text.
-    pub fn run(&self, catalog: &ToolCatalog) -> Result<String, MiseError> {
-        let output = self.command(catalog)?.run()?;
-        output.require_success("mise")?;
-        output.stdout_text("mise")
-    }
+fn metadata_mbx_argv(
+    catalog: &ToolCatalog,
+    manifest: &Path,
+    resolution_flags: &[&str],
+) -> Vec<OsString> {
+    let mut argv = vec![
+        OsString::from(MBX_PROGRAM),
+        OsString::from(mbx_rust_selector(catalog)),
+        OsString::from(METADATA_SUBCOMMAND),
+        OsString::from("--format-version"),
+        OsString::from("1"),
+    ];
+    argv.extend(resolution_flags.iter().map(OsString::from));
+    argv.extend([
+        OsString::from("--manifest-path"),
+        manifest.as_os_str().to_owned(),
+    ]);
+    argv
 }
 
 /// One payload program run under at least one pinned tool.
 ///
 /// `Debug` redacts `--token` values; payload shape stays visible.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MbxAuthority {
+    /// MBX is selected from the catalog by the enclosing Mise command.
+    Catalog,
+    /// A typed action-owned route supplies MBX through its pinned action.
+    ActionOwned,
+}
+
+/// Typed exact-pinned tool execution that rejects payloads bypassing Mise.
 #[derive(Clone, PartialEq, Eq)]
 pub struct PinnedToolExec {
     /// Tools selected as `<tool>@<exact>` before the `--` separator.
@@ -191,6 +77,9 @@ pub struct PinnedToolExec {
     program: OsString,
     /// Payload arguments passed byte-exact.
     args: Vec<OsString>,
+    /// Explicit authority for an MBX payload; arbitrary payloads cannot
+    /// silently resolve an ambient `mbx` executable.
+    mbx_authority: Option<MbxAuthority>,
 }
 
 impl std::fmt::Debug for PinnedToolExec {
@@ -199,6 +88,7 @@ impl std::fmt::Debug for PinnedToolExec {
             .field("tools", &self.tools)
             .field("program", &self.program)
             .field("args", &redact_argv_for_debug(&self.args))
+            .field("mbx_authority", &self.mbx_authority)
             .finish()
     }
 }
@@ -211,18 +101,57 @@ impl PinnedToolExec {
     /// Run `program` with `args` under the given pinned tools.
     ///
     /// Direct toolchain managers and installer actions are rejected:
-    /// validation runs through Mise-selected tools only.
+    /// validation runs through Mise-selected tools only. An `mbx` payload is
+    /// accepted only as the bare executable name with both the Rust and MBX
+    /// catalog tools selected; path-qualified MBX executables are never
+    /// treated as catalog-pinned.
     ///
     /// # Errors
     ///
     /// Returns [`MiseError::EmptyToolchain`] for zero tools,
     /// [`MiseError::EmptyCommand`] for an empty program, and
-    /// [`MiseError::ForbiddenPayload`] for `rustup` programs and
-    /// `cargo install` payloads.
+    /// [`MiseError::ForbiddenPayload`] for `rustup` programs, `cargo install`
+    /// payloads, and MBX payloads without exact Rust and MBX catalog selectors.
     pub fn new(
         tools: Vec<PinnedTool>,
         program: &OsStr,
         args: Vec<OsString>,
+    ) -> Result<Self, MiseError> {
+        let mbx_authority = if is_mbx_program(program) {
+            if program != OsStr::new("mbx")
+                || !tools.contains(&PinnedTool::Rust)
+                || !tools.contains(&PinnedTool::MrBoxington)
+            {
+                return Err(unpinned_mbx_error(program));
+            }
+            Some(MbxAuthority::Catalog)
+        } else {
+            None
+        };
+        Self::new_with_authority(tools, program, args, mbx_authority)
+    }
+
+    /// Build a fixed candidate through Rust selected by Mise and MBX supplied
+    /// by the workflow's separately pinned native action.
+    pub(crate) fn new_action_owned_mbx(
+        tools: Vec<PinnedTool>,
+        program: &OsStr,
+        args: Vec<OsString>,
+    ) -> Result<Self, MiseError> {
+        if program != OsStr::new("mbx")
+            || !tools.contains(&PinnedTool::Rust)
+            || tools.contains(&PinnedTool::MrBoxington)
+        {
+            return Err(unpinned_mbx_error(program));
+        }
+        Self::new_with_authority(tools, program, args, Some(MbxAuthority::ActionOwned))
+    }
+
+    fn new_with_authority(
+        tools: Vec<PinnedTool>,
+        program: &OsStr,
+        args: Vec<OsString>,
+        mbx_authority: Option<MbxAuthority>,
     ) -> Result<Self, MiseError> {
         if tools.is_empty() {
             return Err(MiseError::EmptyToolchain);
@@ -237,6 +166,7 @@ impl PinnedToolExec {
             tools,
             program: program.to_owned(),
             args,
+            mbx_authority,
         })
     }
 
@@ -285,6 +215,9 @@ impl PinnedToolExec {
         if self.tools.as_slice() == [PinnedTool::Gh] {
             return Ok(command.with_policy(crate::command::EnvPolicy::Baseline));
         }
+        if self.mbx_authority.is_some() {
+            return Ok(command.with_policy(crate::command::EnvPolicy::Mbx));
+        }
         Ok(command)
     }
 
@@ -296,6 +229,19 @@ impl PinnedToolExec {
     /// spawned or reaped. A nonzero exit is returned as data.
     pub fn run(&self, catalog: &ToolCatalog) -> Result<ProcessOutput, MiseError> {
         self.command(catalog)?.run()
+    }
+}
+
+fn is_mbx_program(program: &OsStr) -> bool {
+    Path::new(program)
+        .file_stem()
+        .is_some_and(|stem| stem == "mbx")
+}
+
+fn unpinned_mbx_error(program: &OsStr) -> MiseError {
+    MiseError::ForbiddenPayload {
+        program: program.to_string_lossy().into_owned(),
+        reason: "mbx_requires_catalog_or_action_authority".to_owned(),
     }
 }
 

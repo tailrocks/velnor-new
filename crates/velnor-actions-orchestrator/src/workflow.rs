@@ -3,8 +3,11 @@
 //! W1 emission wiring lives in the child module below.
 #[path = "wire_w1.rs"]
 pub(crate) mod wire_w1;
+#[path = "workflow_build.rs"]
+mod workflow_build;
 #[path = "workflow_context.rs"]
 mod workflow_context;
+pub(super) use workflow_build::{WorkflowBuildInput, build_workflow_for_consumer_release};
 #[path = "workflow_dispatch.rs"]
 mod workflow_dispatch;
 
@@ -13,26 +16,25 @@ pub(crate) mod check_jobs;
 
 use std::collections::BTreeMap;
 
-use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax};
+use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy};
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, Permissions, Stack, Step, StepKind, StepRole, Trigger,
-    ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    Concurrency, GeneratorValidation, Job, Permissions, Step, StepKind, Trigger, ValidatorKind,
+    VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
-use velnor_actions_mise::{
-    PREPARE_RUST_COMPONENTS_STEP, PrepareRustComponents, ToolCatalog, ToolHomes,
-};
-use velnor_actions_rust::TestRunner;
+use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::render::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PLAN_JOB_ID,
-    PUBLISH_JOB_ID, RenderContext, WORKFLOW_PATH,
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PUBLISH_JOB_ID,
+    RenderContext, WORKFLOW_PATH,
 };
 use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
-use crate::pins::consumer_acquire_step;
-use crate::utf8::{strings_of, strings_of_env};
-use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed, final_job, lint_job, plan_job};
+use crate::workflow_jobs::{PlanJobToolNeeds, final_job, lint_job, plan_job};
+
+#[path = "workflow_policy.rs"]
+pub(super) mod workflow_policy;
+pub(crate) use workflow_policy::prepare_rust_components_step;
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
 
@@ -87,7 +89,8 @@ fn build_plan_job(
 /// # Errors
 ///
 /// Returns contract, render-context, or tool-request errors.
-pub(crate) fn build_workflow(
+#[cfg(test)]
+pub(super) fn build_workflow(
     root: &std::path::Path,
     config: &VelnorConfig,
     branch: &str,
@@ -95,82 +98,14 @@ pub(crate) fn build_workflow(
     discovery: &Discovery,
     fetch_roots: &[String],
 ) -> Result<WorkflowPlan, OrchestratorError> {
-    wire_w1::vet_step_syntax(StepSyntax::JobMatrix)?;
-    let catalog = ToolCatalog::pinned();
-    let version = env!("CARGO_PKG_VERSION").to_owned();
-    let policy = config.workflow.policy;
-    let workflow_tasks = crate::workflow_task_jobs::policies(root, config, discovery)?;
-    let validation = config.workflow.generator_validation;
-    let verify = crate::verify::verify_kinds(&config.workflow.verify.jobs)?;
-    let support = support_workflow(policy, validation, discovery, &verify);
-    let mut jobs = BTreeMap::new();
-    let acquire = match policy {
-        WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(label, &version, discovery)?),
-        WorkflowPolicy::VelnorRepositoryV1 => None,
-    };
-    let format = wire_w1::workspace_format_step(discovery, &catalog)?;
-    let rust = match (plan_uses_rust(discovery, policy), format.is_some()) {
-        (false, false) => PlanRustNeed::None,
-        (_, true) => PlanRustNeed::CompilerAndComponents,
-        (true, false) => PlanRustNeed::Compiler,
-    };
-    let needs = PlanJobToolNeeds {
-        rust,
-        nextest: plan_uses_nextest(discovery),
-        opentofu: plan_uses_opentofu(discovery),
-        gh: policy == WorkflowPolicy::VelnorRepositoryV1,
-    };
-    let mut plan = build_plan_job(
-        label,
-        acquire.clone(),
-        &catalog,
-        needs,
-        fetch_roots,
-        discovery,
-    )?;
-    if let Some(format) = format {
-        insert_format_step(&mut plan, format);
-    }
-    if policy == WorkflowPolicy::VelnorRepositoryV1 {
-        plan.permissions = Some(crate::workflow_jobs::read_actions_permissions());
-    }
-    jobs.insert(PLAN_JOB_ID.to_owned(), plan);
-    let built = crate::crate_jobs::build_for_workflow(
+    build_workflow_for_consumer_release(&WorkflowBuildInput {
+        root,
         config,
+        branch,
         label,
         discovery,
-        &catalog,
         fetch_roots,
-        acquire.as_ref(),
-    )?;
-    let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
-    for (id, job) in built.jobs {
-        jobs.insert(id, job);
-    }
-    for (id, job) in check_jobs::build_check_jobs(policy, discovery, &catalog)? {
-        required_ids.push(id.clone());
-        jobs.insert(id, job);
-    }
-    crate::workflow_task_jobs::insert_jobs(&mut jobs, &workflow_tasks)?;
-    insert_gate_jobs(&mut jobs, label, branch, &required_ids, acquire, &catalog)?;
-    wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
-    let ir = workflow_ir(config, branch, jobs, policy);
-    let context = workflow_context::render_context(
-        config,
-        label,
-        &version,
-        &catalog,
-        discovery,
-        rust.has_compiler(),
-        workflow_tasks,
-        &verify,
-    )?;
-    let actionlint = actionlint_input(config, &version, label);
-    Ok(WorkflowPlan {
-        ir,
-        support,
-        context,
-        actionlint,
+        consumer_release_version: env!("CARGO_PKG_VERSION"),
     })
 }
 
@@ -294,75 +229,6 @@ fn insert_format_step(plan: &mut Job, format: Step) {
         })
         .unwrap_or(plan.steps.len());
     plan.steps.insert(at, format);
-}
-
-/// True when any selected workspace runs tests through Nextest; only those
-/// legs resolve the pinned runner.
-fn plan_uses_nextest(discovery: &Discovery) -> bool {
-    discovery
-        .workspaces
-        .iter()
-        .any(|workspace| workspace.profile.test_runner == TestRunner::CargoNextest)
-}
-
-/// True when any proposal runs through the pinned Opentofu driver.
-///
-/// Tofu has no workspace profiles, so the plan derives its tofu role
-/// from task proposals (the same per-task signal crate jobs group
-/// on), never from workspace scans.
-pub(crate) fn plan_uses_opentofu(discovery: &Discovery) -> bool {
-    discovery
-        .proposals
-        .iter()
-        .any(|task| Stack::from_id(&task.stack_id) == Some(Stack::Tofu))
-}
-
-/// True when the plan job needs the Rust toolchain.
-///
-/// Consumers require Rust for selected Rust evidence (selected or ignored
-/// Rust projects, or Rust task proposals without inventory records).
-/// Velnor also builds its candidate-source helper in Plan.
-pub(crate) fn plan_uses_rust(discovery: &Discovery, policy: WorkflowPolicy) -> bool {
-    policy == WorkflowPolicy::VelnorRepositoryV1
-        || !discovery.workspaces.is_empty()
-        || discovery.statuses.iter().any(|status| {
-            let project = match status {
-                velnor_actions_contract::DetectionStatus::Selected(project)
-                | velnor_actions_contract::DetectionStatus::Ignored { project, .. } => project,
-            };
-            Stack::from_id(&project.stack_id) == Some(Stack::Rust)
-        })
-        || discovery
-            .proposals
-            .iter()
-            .any(|task| Stack::from_id(&task.stack_id) == Some(Stack::Rust))
-}
-
-/// Typed `Prepare Rust components` step, shared by plan and task jobs.
-///
-/// Runs second, right after `Prepare pinned tools`: the pinned toolchain
-/// exists by then, so the fixed `rustup component add` guarantees
-/// clippy/rustfmt idempotently under the owned homes.
-///
-/// # Errors
-///
-/// Returns a contract error when the Mise adapter rejects the request.
-pub(crate) fn prepare_rust_components_step(
-    catalog: &ToolCatalog,
-) -> Result<Step, OrchestratorError> {
-    let request = PrepareRustComponents::new(ToolHomes::runner_temp());
-    let run = strings_of(request.argv(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let env = strings_of_env(&request.env(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let mut step = velnor_actions_workflow_renderer::ambient_shell_step(
-        PREPARE_RUST_COMPONENTS_STEP,
-        run,
-        env,
-    )
-    .map_err(OrchestratorError::from)?;
-    step.role = Some(StepRole::PrepareRustComponents);
-    Ok(step)
 }
 
 /// Actionlint input: generated workflow path plus policy-graded ignores.

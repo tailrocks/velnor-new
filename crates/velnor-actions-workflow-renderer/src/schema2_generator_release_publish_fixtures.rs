@@ -3,6 +3,7 @@
 use super::super::assets;
 use super::super::required_tool_path::with_required_tool_path;
 use super::{Failure, REPOSITORY, SOURCE_SHA, manifest};
+use crate::schema2::product_release_test_pins::test_pins;
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,6 +23,7 @@ pub(super) fn copy_release_helpers(root: &Path) -> Result<(), Box<dyn Error>> {
 }
 
 pub(super) fn write_candidate_records(root: &Path, case: Failure) -> Result<(), Box<dyn Error>> {
+    let pins = test_pins();
     let products = [assets::LINUX, assets::MACOS_ARM64, assets::MACOS_X86_64];
     for (index, product) in products.into_iter().enumerate() {
         let directory = root.join(product.directory);
@@ -50,9 +52,11 @@ pub(super) fn write_candidate_records(root: &Path, case: Failure) -> Result<(), 
         fs::write(
             directory.join(product.provenance),
             format!(
-                "{{\"schema\":1,\"version\":\"0.1.6\",\"repository\":\"{REPOSITORY}\",\"commit\":\"{SOURCE_SHA}\",\"target\":\"{}\",\"asset\":\"{}\",\"sha256\":\"{digest}\",\"toolchain\":{{\"rust\":\"1.98.1\",\"mr-boxington\":\"1.21.1\"}}}}\n",
+                "{{\"schema\":1,\"version\":\"0.1.7\",\"repository\":\"{REPOSITORY}\",\"commit\":\"{SOURCE_SHA}\",\"target\":\"{}\",\"asset\":\"{}\",\"sha256\":\"{digest}\",\"toolchain\":{{\"rust\":\"{}\",\"mr-boxington\":\"{}\"}}}}\n",
                 product.target.triple(),
-                product.binary
+                product.binary,
+                pins.rust_version,
+                pins.mr_boxington_version
             ),
         )?;
     }
@@ -89,12 +93,12 @@ pub(super) fn release_json(
     {
         "https://github.com/tailrocks/velnor-new/releases/tag/untagged-6899c9b4aa4e941dadba"
     } else {
-        "https://github.com/tailrocks/velnor-new/releases/tag/v0.1.6"
+        "https://github.com/tailrocks/velnor-new/releases/tag/v0.1.7"
     };
     let tag_name = if draft && case == Failure::WrongDraftTag {
         "v0.1.4"
     } else {
-        "v0.1.6"
+        "v0.1.7"
     };
     let source = if draft && case == Failure::WrongDraftSource {
         "1111111111111111111111111111111111111111"
@@ -104,7 +108,7 @@ pub(super) fn release_json(
     let api_url = if draft && case == Failure::WrongDraftRepository {
         format!("https://api.github.com/repos/untrusted/velnor-new/releases/{release_id}")
     } else if draft && case == Failure::WrongDraftApiPath {
-        format!("https://api.github.com/repos/{REPOSITORY}/releases/tags/v0.1.6")
+        format!("https://api.github.com/repos/{REPOSITORY}/releases/tags/v0.1.7")
     } else {
         format!("https://api.github.com/repos/{REPOSITORY}/releases/{release_id}")
     };
@@ -156,9 +160,9 @@ fn release_asset_rows(
                 "https://github.com/{REPOSITORY}/releases/download/untagged-6899c9b4aa4e941dadba/{expected_name}"
             )
         } else if case == Failure::WrongPublishedAssetUrl && index == 0 {
-            format!("https://github.com/untrusted/releases/download/v0.1.6/{name}")
+            format!("https://github.com/untrusted/releases/download/v0.1.7/{name}")
         } else {
-            format!("https://github.com/{REPOSITORY}/releases/download/v0.1.6/{name}")
+            format!("https://github.com/{REPOSITORY}/releases/download/v0.1.7/{name}")
         };
         let state = if draft && case == Failure::WrongDraftAssetState && index == 0 {
             "starter"
@@ -190,7 +194,7 @@ pub(super) fn assert_draft_metadata_is_only_url_mismatch(
         .ok_or("publisher metadata verifier is unterminated")?;
     let verifier = &script[start..end];
     let replay = format!(
-        "release_id='123'\ntag='v0.1.6'\n{verifier}\nverify_release_metadata draft-release.json true\n"
+        "release_id='123'\ntag='v0.1.7'\n{verifier}\nverify_release_metadata draft-release.json true\n"
     );
     let output = Command::new("bash")
         .args(["-euo", "pipefail", "-c", &replay])
@@ -223,7 +227,7 @@ pub(super) fn assert_draft_metadata_is_only_url_mismatch(
                 "123",
                 "--arg",
                 "tag",
-                "v0.1.6",
+                "v0.1.7",
                 "--arg",
                 "source",
                 SOURCE_SHA,
@@ -232,7 +236,7 @@ pub(super) fn assert_draft_metadata_is_only_url_mismatch(
                 "https://api.github.com/repos/tailrocks/velnor-new/releases/123",
                 "--arg",
                 "html_url",
-                "https://github.com/tailrocks/velnor-new/releases/tag/v0.1.6",
+                "https://github.com/tailrocks/velnor-new/releases/tag/v0.1.7",
                 predicate,
                 "draft-release.json",
             ])
@@ -283,7 +287,7 @@ pub(super) fn assert_draft_asset_validation_passes(root: &Path) -> Result<(), Bo
             .join("\n")
     };
     let replay = format!(
-        "tag='v0.1.6'\nrelease_asset_paths=(\n{}\n)\nrelease_asset_names=(\n{}\n)\nexpected_release_asset_names=\"$(printf '%s\\n' \"${{release_asset_names[@]}}\" | jq -R . | jq -s .)\"\n{verifier}\nverify_release_assets draft-release.json false\n",
+        "tag='v0.1.7'\nrelease_asset_paths=(\n{}\n)\nrelease_asset_names=(\n{}\n)\nexpected_release_asset_names=\"$(printf '%s\\n' \"${{release_asset_names[@]}}\" | jq -R . | jq -s .)\"\n{verifier}\nverify_release_assets draft-release.json false\n",
         array(&paths),
         array(&names)
     );

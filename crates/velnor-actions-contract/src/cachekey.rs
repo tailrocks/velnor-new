@@ -4,7 +4,7 @@
 //! (OS/arch/label/`ImageOS`/`ImageVersion`/target), format, and output
 //! contract. Run IDs, absolute paths, and cwd never enter an identity.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::canonical::{StackExtension, canonical_json_bytes, digest_b3, validate_digest};
 use crate::errors::ContractError;
@@ -109,9 +109,10 @@ pub struct LaneInputs {
 }
 
 /// Toolchain identity inputs: exact pins plus selected driver/runner.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolchainInputs {
-    /// Sorted exact `<tool>@<version>` selectors.
+    /// Sorted exact `<tool>@<version>` selectors (Nextest retains its pinned
+    /// `aqua:` registry namespace).
     pub tools: Vec<String>,
     /// Sorted installed component names.
     pub components: Vec<String>,

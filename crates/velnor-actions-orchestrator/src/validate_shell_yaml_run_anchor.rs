@@ -7,6 +7,7 @@ use super::shellcheck_fail;
 pub(super) fn resolve_run_scalar(
     value: &str,
     anchors: &mut BTreeMap<String, String>,
+    used_names: &mut std::collections::BTreeSet<String>,
 ) -> Result<String, OrchestratorError> {
     let value = value.trim();
     if let Some(definition) = value.strip_prefix('&') {
@@ -20,7 +21,7 @@ pub(super) fn resolve_run_scalar(
         {
             return Err(shellcheck_fail("run_scalar_anchor_malformed"));
         }
-        if anchors.contains_key(name) {
+        if !used_names.insert(name.to_owned()) || anchors.contains_key(name) {
             return Err(shellcheck_fail("run_scalar_anchor_duplicate"));
         }
         anchors.insert(name.to_owned(), scalar.to_owned());

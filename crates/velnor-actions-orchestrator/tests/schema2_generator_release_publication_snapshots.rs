@@ -25,9 +25,9 @@ pub(super) fn assert_asset_catalog(body: &str) {
     );
     assert!(body.contains("sha256sum --check"), "{body}");
     for binary in [
-        "velnor-actions-0.1.6-x86_64-unknown-linux-gnu",
-        "velnor-actions-0.1.6-aarch64-apple-darwin",
-        "velnor-actions-0.1.6-x86_64-apple-darwin",
+        "velnor-actions-0.1.7-x86_64-unknown-linux-gnu",
+        "velnor-actions-0.1.7-aarch64-apple-darwin",
+        "velnor-actions-0.1.7-x86_64-apple-darwin",
     ] {
         assert!(body.contains(binary), "missing {binary}");
     }
@@ -42,9 +42,9 @@ pub(super) fn assert_asset_catalog(body: &str) {
         );
     }
     for provenance in [
-        "velnor-actions-0.1.6-x86_64-unknown-linux-gnu.provenance.json",
-        "velnor-actions-0.1.6-aarch64-apple-darwin.provenance.json",
-        "velnor-actions-0.1.6-x86_64-apple-darwin.provenance.json",
+        "velnor-actions-0.1.7-x86_64-unknown-linux-gnu.provenance.json",
+        "velnor-actions-0.1.7-aarch64-apple-darwin.provenance.json",
+        "velnor-actions-0.1.7-x86_64-apple-darwin.provenance.json",
     ] {
         assert!(body.contains(provenance), "missing provenance {provenance}");
     }
@@ -112,21 +112,21 @@ fn assert_candidate_qualifications(
             "generator-release-qualify-linux",
             "build-linux",
             "linux-assets",
-            "velnor-actions-0.1.6-x86_64-unknown-linux-gnu",
+            "velnor-actions-0.1.7-x86_64-unknown-linux-gnu",
         ),
         (
             "qualify-macos",
             "generator-release-qualify-macos",
             "build-macos",
             "macos-assets",
-            "velnor-actions-0.1.6-aarch64-apple-darwin",
+            "velnor-actions-0.1.7-aarch64-apple-darwin",
         ),
         (
             "qualify-macos-intel",
             "generator-release-qualify-macos-intel",
             "build-macos-intel",
             "macos-intel-assets",
-            "velnor-actions-0.1.6-x86_64-apple-darwin",
+            "velnor-actions-0.1.7-x86_64-apple-darwin",
         ),
     ] {
         qualification_snapshots::assert_candidate_qualification(
@@ -156,7 +156,7 @@ fn assert_build_actions(body: &str, actions: &Actions) -> Result<(), Box<dyn std
         "{linux_action}"
     );
     assert!(
-        linux_action.contains("rust@1.98.1 mr-boxington@1.21.1"),
+        linux_action.contains("rust@1.99.0 mr-boxington@1.23.0"),
         "{linux_action}"
     );
     assert_macos_build(body, actions)
@@ -276,7 +276,7 @@ fn assert_manifest_attestation_job(
 fn assert_manifest_builder_contract(manifest: &str) {
     assert!(
         manifest.contains(
-            "create-release-manifest.sh '0.1.6' 'tailrocks/velnor-new' '1.98.1' '1.21.1'"
+            "create-release-manifest.sh '0.1.7' 'tailrocks/velnor-new' '1.99.0' '1.23.0'"
         ),
         "{manifest}"
     );
@@ -350,7 +350,7 @@ pub(super) fn assert_publish_job(
         "{publish_action}"
     );
     assert!(publish_action.contains(".intoto.jsonl"), "{publish_action}");
-    assert!(publish_action.contains("v0.1.6"), "{publish_action}");
+    assert!(publish_action.contains("v0.1.7"), "{publish_action}");
     assert!(
         publish_action.contains("inputs:\n  linux_artifact_id:"),
         "{publish_action}"

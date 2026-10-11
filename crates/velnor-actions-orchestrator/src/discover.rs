@@ -5,7 +5,8 @@ use std::path::Path;
 
 use velnor_actions_contract::{
     DETECTION_SCHEMA, DetectionStatus, FileIndex, ProposedTask, RustStackConfig, VelnorConfig,
-    apply_stack_ignores, check_candidate_outcomes, check_duplicates, selected_projects,
+    WorkflowTask, apply_stack_ignores, check_candidate_outcomes, check_duplicates,
+    selected_projects,
 };
 #[path = "discovery_registry.rs"]
 mod registry;
@@ -25,7 +26,7 @@ use crate::inventory::{qualify_workspaces, run_inventories, run_inventories_with
 use crate::recommendations::collect_recommendations;
 #[path = "consumer_manifest.rs"]
 mod consumer_manifest;
-use crate::toolcheck::{ToolInputCheck, check_tool_inputs};
+use crate::toolcheck::{ToolInputCheck, check_tool_inputs_with_paths};
 use crate::{discover_tofu::qualify_tofu_step, evidence::profile_for_workspace};
 
 /// One workspace with its inventory, profile, and recommendations.
@@ -115,7 +116,8 @@ fn discover_inner(
         previous = stack_id;
         candidates.extend(detect(&index));
     }
-    let tool_checks = check_tool_inputs(root);
+    let task_tool_paths = task_tool_paths(config);
+    let tool_checks = check_tool_inputs_with_paths(root, &task_tool_paths);
     let mut reads = velnor_actions_tofu::FileCache::new();
     let tofu_step = qualify_tofu_step(root, config, &index, &tool_checks, &mut reads)?;
     candidates.extend(tofu_step.candidates);
@@ -170,6 +172,28 @@ fn discover_inner(
         tofu_note: tofu_step.note,
         tofu_units,
     })
+}
+
+fn task_tool_paths(config: &VelnorConfig) -> Vec<String> {
+    config
+        .workflow
+        .tasks
+        .iter()
+        .filter_map(|task| match task {
+            WorkflowTask::Verification(task) => Some(&task.source),
+            WorkflowTask::Build(task) => Some(&task.source),
+            WorkflowTask::NativeImage(_) => None,
+        })
+        .flat_map(|source| {
+            [
+                source.mise_config.clone(),
+                source.mise_lock_path(),
+                source.rust_toolchain_path(),
+            ]
+        })
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
 }
 
 /// Sorted local dependency display names for one package.

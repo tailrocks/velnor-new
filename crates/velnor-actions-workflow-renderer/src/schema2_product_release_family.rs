@@ -93,6 +93,23 @@ impl Family {
         }
     }
 
+    /// Stable `workflow_dispatch.release_family` value.
+    pub(super) const fn selector_value(self) -> &'static str {
+        match self {
+            Self::Images => "images",
+            Self::Binary => "binary",
+            Self::Generator => "generator",
+        }
+    }
+
+    /// Condition that activates this configured family, preserving the default all-family run.
+    pub(super) fn selector_condition(self) -> String {
+        format!(
+            "inputs.release_family == 'all' || inputs.release_family == '{}'",
+            self.selector_value()
+        )
+    }
+
     /// Runner target that owns this family's pinned GitHub CLI setup.
     pub(super) const fn runner_target(self) -> ReleaseTarget {
         match self {

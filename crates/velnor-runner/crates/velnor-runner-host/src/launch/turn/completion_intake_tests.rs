@@ -86,12 +86,12 @@ async fn unmatched_completion_is_quarantined_without_claiming_cleanup_authority(
     record_completed(&journal, 8, &completed(Some(61), Some(901), Some("v61")))
         .await
         .map_err(|error| error.to_string())?;
-    assert!(
+    assert_eq!(
         journal
             .due_completed_launches(0, 10)
             .await
-            .map_err(|error| error.to_string())?
-            .is_empty()
+            .map_err(|error| error.to_string())?,
+        [] as [crate::journal::CompletedLaunch; 0]
     );
     assert!(
         journal
@@ -121,12 +121,12 @@ async fn invalid_completion_identity_is_quarantined_without_journal_authority() 
     record_completed(&journal, 7, &event)
         .await
         .map_err(|error| error.to_string())?;
-    assert!(
+    assert_eq!(
         journal
             .due_completed_launches(0, 10)
             .await
-            .map_err(|error| error.to_string())?
-            .is_empty()
+            .map_err(|error| error.to_string())?,
+        [] as [crate::journal::CompletedLaunch; 0]
     );
     let inbox = journal
         .pending_completion_inbox(0, 4)
@@ -165,12 +165,12 @@ async fn negative_completion_id_fails_before_authority_or_ack() -> Result<(), St
         .is_err()
     );
     assert!(!acknowledged);
-    assert!(
+    assert_eq!(
         journal
             .due_completed_launches(0, 10)
             .await
-            .map_err(|error| error.to_string())?
-            .is_empty()
+            .map_err(|error| error.to_string())?,
+        [] as [crate::journal::CompletedLaunch; 0]
     );
     assert!(
         journal
@@ -202,12 +202,12 @@ async fn oversized_completion_data_fails_before_inbox_write() -> Result<(), Stri
         }],
     });
     assert!(record_completed(&journal, 7, &oversized).await.is_err());
-    assert!(
+    assert_eq!(
         journal
             .pending_completion_inbox(0, 4)
             .await
-            .map_err(|error| error.to_string())?
-            .is_empty()
+            .map_err(|error| error.to_string())?,
+        [] as [crate::journal::CompletionInboxEntry; 0]
     );
 
     let Poll::Batch(mut too_many) = completed(Some(61), Some(901), Some("v61")) else {
@@ -220,12 +220,12 @@ async fn oversized_completion_data_fails_before_inbox_write() -> Result<(), Stri
             .await
             .is_err()
     );
-    assert!(
+    assert_eq!(
         journal
             .pending_completion_inbox(0, 4)
             .await
-            .map_err(|error| error.to_string())?
-            .is_empty()
+            .map_err(|error| error.to_string())?,
+        [] as [crate::journal::CompletionInboxEntry; 0]
     );
     Ok(())
 }
@@ -237,12 +237,12 @@ async fn quarantined_completion_retries_after_legacy_identity_appears() -> Resul
     record_completed(&journal, 7, &event)
         .await
         .map_err(|error| error.to_string())?;
-    assert!(
+    assert_eq!(
         journal
             .due_completed_launches(0, 10)
             .await
-            .map_err(|error| error.to_string())?
-            .is_empty()
+            .map_err(|error| error.to_string())?,
+        [] as [crate::journal::CompletedLaunch; 0]
     );
 
     let (id, fresh) = journal
@@ -262,12 +262,12 @@ async fn quarantined_completion_retries_after_legacy_identity_appears() -> Resul
     assert_eq!(due.len(), 1);
     assert_eq!(due[0].intent.id, id);
     assert_eq!(due[0].identity.runner_id, 901);
-    assert!(
+    assert_eq!(
         journal
             .pending_completion_inbox(i64::MAX, 4)
             .await
-            .map_err(|error| error.to_string())?
-            .is_empty()
+            .map_err(|error| error.to_string())?,
+        [] as [crate::journal::CompletionInboxEntry; 0]
     );
     Ok(())
 }

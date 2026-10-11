@@ -133,9 +133,9 @@ fn dind_gets_private_data_volume_without_runner_archive_projection() -> Result<(
     let volume = identity.private_volume();
     let dind = dind_create_for_identity(&identity)?;
 
-    assert!(dind.env.is_empty());
-    assert!(dind.cmd.is_empty());
-    assert!(dind.bind_mounts.is_empty());
+    assert_eq!(dind.env, [] as [std::string::String; 0]);
+    assert_eq!(dind.cmd, [] as [std::string::String; 0]);
+    assert_eq!(dind.bind_mounts, [] as [crate::worker::BindMount; 0]);
     assert!(
         dind.mounts
             .iter()
@@ -175,8 +175,8 @@ fn dind_gets_private_data_volume_without_runner_archive_projection() -> Result<(
 fn absent_or_relative_archive_path_does_not_create_a_bind() -> Result<(), HostError> {
     let identity = identity()?;
     let runner = runner_create_for_identity(&identity, None)?;
-    assert!(runner.env.is_empty());
-    assert!(runner.bind_mounts.is_empty());
+    assert_eq!(runner.env, [] as [std::string::String; 0]);
+    assert_eq!(runner.bind_mounts, [] as [crate::worker::BindMount; 0]);
 
     assert_eq!(
         runner_create_for_identity(&identity, Some(Path::new("relative-cache"))).err(),

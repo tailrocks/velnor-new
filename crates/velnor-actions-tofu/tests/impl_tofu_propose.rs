@@ -123,11 +123,11 @@ fn validate_depends_on_same_root_init() {
         validate.depends_on,
         vec!["stack/tofu/dir-737461636b732f61/init/default".to_owned()]
     );
-    assert!(validate.gated_by.is_empty());
+    assert_eq!(validate.gated_by, [] as [String; 0]);
     for kind in [TofuTaskKind::Fmt, TofuTaskKind::InitForValidate] {
         let task = propose_task(&group("stacks/a", kind)).expect("proposes");
         assert!(task.depends_on.is_empty(), "{} independent", kind.as_str());
-        assert!(task.gated_by.is_empty());
+        assert_eq!(task.gated_by, [] as [String; 0]);
     }
 }
 
@@ -318,7 +318,10 @@ fn dispatch_helpers_pin_spellings() {
     assert_eq!(payload_env_for_kind("fmt").len(), 2);
     assert_eq!(payload_env_for_kind("init").len(), 2);
     assert_eq!(payload_env_for_kind("validate").len(), 2);
-    assert!(payload_env_for_kind("bogus").is_empty());
+    assert_eq!(
+        payload_env_for_kind("bogus"),
+        [] as [(std::ffi::OsString, std::ffi::OsString); 0]
+    );
     assert_eq!(
         resource_class_for_kind(TofuTaskKind::InitForValidate),
         ResourceClass::Network

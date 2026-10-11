@@ -4,10 +4,11 @@
 //! module owns the compile-driver prefix, partition numbering, shared
 //! profile constants, and the pinned-execution constructors.
 
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 
 use crate::catalog::{PinnedTool, ToolCatalog};
 use crate::error::MiseError;
+use crate::preflight::RouteDriver;
 use crate::requests::PinnedToolExec;
 
 /// Compile-driver prefix selecting the payload program and tool set.
@@ -35,6 +36,19 @@ impl NextestDriver {
         match self {
             Self::Cargo | Self::Mbx => vec![PinnedTool::Rust, PinnedTool::Nextest],
         }
+    }
+
+    /// Construct an execution using this driver's pinned authority.
+    ///
+    /// MBX is supplied by the separately pinned workflow action, while Mise
+    /// selects Rust and Nextest. It must not be impersonated as a catalog
+    /// tool; Cargo remains a normal Mise-selected payload.
+    pub(crate) fn exec(self, args: Vec<OsString>) -> Result<PinnedToolExec, MiseError> {
+        let route = match self {
+            Self::Cargo => RouteDriver::Cargo,
+            Self::Mbx => RouteDriver::Mbx,
+        };
+        route.task_exec(args, true)
     }
 }
 
@@ -128,7 +142,7 @@ pub(crate) fn nextest_exec(
     driver: NextestDriver,
     args: &[OsString],
 ) -> Result<PinnedToolExec, MiseError> {
-    PinnedToolExec::new(driver.tools(), OsStr::new(driver.program()), args.to_vec())
+    driver.exec(args.to_vec())
 }
 
 /// Full mise argv for one driver plus a program-first payload.

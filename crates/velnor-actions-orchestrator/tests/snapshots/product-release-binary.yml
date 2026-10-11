@@ -64,16 +64,16 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
-          version: 2026.10.6
-          sha256: bbcea7b0f844d026424a4c8335357a15a2f5c9e9132c9408de990d9be6f26101
+          version: 2026.10.7
+          sha256: f5171e341518a57e8c4e9280e28443e35d66212c51164c83be76794e0a78b014
           install: "false"
           env: "false"
           cache: "false"
           cache_save: "false"
-      - name: Install pinned Rust
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1
+      - name: Install pinned Rust and MBX
+        run: mise --no-config --no-env --no-hooks install rust@1.99.0 mr-boxington@1.23.0
       - name: Build velnor-host
-        run: "set -eu\nmise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-runner-cli\ncp crates/velnor-runner/target/release/velnor-host velnor-host\ntest -s velnor-host"
+        run: "set -eu\nmise --no-config --no-env --no-hooks exec rust@1.99.0 mr-boxington@1.23.0 -- mbx build --locked --manifest-path crates/velnor-runner/Cargo.toml --release --package velnor-runner-cli\ncp crates/velnor-runner/target/release/velnor-host velnor-host\ntest -s velnor-host"
       - name: Verify Mach-O architecture
         run: "set -eu\ndesc=\"$(file -b velnor-host)\"\ncase \"$desc\" in\n  *Mach-O*arm64*) ;;\n  *) echo \"not an arm64 Mach-O: $desc\" >&2; exit 1 ;;\nesac"
       - name: Checksum built bytes
@@ -125,8 +125,8 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
         with:
-          version: 2026.10.6
-          sha256: bbcea7b0f844d026424a4c8335357a15a2f5c9e9132c9408de990d9be6f26101
+          version: 2026.10.7
+          sha256: f5171e341518a57e8c4e9280e28443e35d66212c51164c83be76794e0a78b014
           install: "false"
           env: "false"
           cache: "false"

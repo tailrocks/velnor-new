@@ -42,7 +42,7 @@ fn native_image_job_is_hosted_least_privilege_and_source_bound() {
     assert_eq!(policy.job_id(), "task-architect-arm64-image");
     assert_eq!(job.runs_on, "ubuntu-26.04-arm");
     assert_eq!(job.timeout_minutes.minutes(), 60);
-    assert!(job.needs.is_empty());
+    assert_eq!(job.needs, [] as [String; 0]);
     assert!(job.condition.is_none());
     assert!(job.environment.is_none());
     let permissions = job.permissions.as_ref().expect("explicit permissions");

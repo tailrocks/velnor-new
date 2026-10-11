@@ -25,9 +25,10 @@ fn discovery_argv_is_byte_exact() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
+            "rust@1.99.0",
             "--",
-            "cargo",
+            "mbx",
+            "+1.99.0",
             "metadata",
             "--format-version",
             "1",
@@ -37,6 +38,9 @@ fn discovery_argv_is_byte_exact() -> Result<(), String> {
         ])
     );
     let argv = request.argv(&pinned());
+    assert!(!argv.iter().any(|arg| arg == "mr-boxington@1.23.0"));
+    assert!(argv.iter().any(|arg| arg == "mbx"));
+    assert!(!argv.iter().any(|arg| arg == "cargo"));
     assert!(
         !argv
             .iter()
@@ -65,6 +69,7 @@ fn discovery_command_matches_argv() -> Result<(), String> {
     let command = request.command(&pinned()).map_err(|err| err.to_string())?;
     assert_eq!(command.argv(), request.argv(&pinned()));
     assert_eq!(command.program(), "mise");
+    assert!(format!("{command:?}").contains("Mbx"));
     Ok(())
 }
 
@@ -80,9 +85,10 @@ fn qualification_argv_carries_locked_offline() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
+            "rust@1.99.0",
             "--",
-            "cargo",
+            "mbx",
+            "+1.99.0",
             "metadata",
             "--format-version",
             "1",
@@ -93,6 +99,9 @@ fn qualification_argv_carries_locked_offline() -> Result<(), String> {
         ])
     );
     let argv = request.argv(&pinned());
+    assert!(!argv.iter().any(|arg| arg == "mr-boxington@1.23.0"));
+    assert!(argv.iter().any(|arg| arg == "mbx"));
+    assert!(!argv.iter().any(|arg| arg == "cargo"));
     assert!(
         !argv.iter().any(|arg| arg == "--no-deps"),
         "qualification resolves with full dependencies"
@@ -124,8 +133,8 @@ fn pinned_exec_selects_exact_tools() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
-            "mr-boxington@1.21.1",
+            "rust@1.99.0",
+            "mr-boxington@1.23.0",
             "--",
             "mbx",
             "clippy",
@@ -154,8 +163,8 @@ fn pinned_exec_accepts_all_catalog_tools() -> Result<(), String> {
     .map_err(|err| err.to_string())?;
     let argv = request.argv(&pinned());
     for spec in [
-        "rust@1.98.1",
-        "mr-boxington@1.21.1",
+        "rust@1.99.0",
+        "mr-boxington@1.23.0",
         "gh@2.102.0",
         "actionlint@1.7.12",
         "shellcheck@0.11.0",
@@ -171,9 +180,14 @@ fn pinned_exec_accepts_all_catalog_tools() -> Result<(), String> {
 #[test]
 fn pinned_exec_runs_nextest_without_preinstalled_tools() -> Result<(), String> {
     let request = PinnedToolExec::new(
-        vec![PinnedTool::Rust, PinnedTool::Nextest],
-        OsStr::new("cargo"),
+        vec![
+            PinnedTool::Rust,
+            PinnedTool::MrBoxington,
+            PinnedTool::Nextest,
+        ],
+        OsStr::new("mbx"),
         strings(&[
+            "+1.99.0",
             "nextest",
             "run",
             "--locked",
@@ -191,10 +205,12 @@ fn pinned_exec_runs_nextest_without_preinstalled_tools() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
+            "rust@1.99.0",
+            "mr-boxington@1.23.0",
             "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
             "--",
-            "cargo",
+            "mbx",
+            "+1.99.0",
             "nextest",
             "run",
             "--locked",

@@ -211,7 +211,7 @@ fn assert_dogfood_cargo_warmup(
 ) -> Result<(), Box<dyn std::error::Error>> {
     assert!(
         qualification_helpers.contains(
-            "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked"
+            "mise --no-config --no-env --no-hooks exec rust@1.99.0 mr-boxington@1.23.0 -- mbx fetch --locked"
         ),
         "{qualification_helpers}"
     );
@@ -230,7 +230,7 @@ fn assert_dogfood_cargo_warmup(
         .ok_or("dogfood capture must exist")?;
     let window = &qualification_helpers[dogfood..];
     let fetch = window
-        .find("cargo fetch --locked")
+        .find("mbx fetch --locked")
         .ok_or("dogfood must warm the cargo cache")?;
     let generate = window
         .find("release candidate dogfood generate failed")

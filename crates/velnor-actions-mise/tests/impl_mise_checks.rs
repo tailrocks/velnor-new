@@ -200,7 +200,10 @@ fn qualified_environment_clears_credential_and_config_poison() -> TestResult {
         )
     })
     .collect::<Vec<_>>();
-    assert!(EnvPolicy::QualifiedCheck.child_env(&parent, &[]).is_empty());
+    assert_eq!(
+        EnvPolicy::QualifiedCheck.child_env(&parent, &[]),
+        [] as [(std::ffi::OsString, std::ffi::OsString); 0]
+    );
     let ordinary = mise::IsolatedCommand::repo_task("true", vec![], &[])?;
     assert!(
         ordinary

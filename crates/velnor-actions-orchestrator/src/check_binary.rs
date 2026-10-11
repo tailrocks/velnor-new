@@ -1,4 +1,4 @@
-//! Snapshot the exact platform-qualified Mise bytes before any invocation.
+//! Snapshot the exact platform-pinned Mise bytes before any invocation.
 use crate::OrchestratorError;
 use crate::internal::internal;
 use std::path::Path;
@@ -8,7 +8,7 @@ use velnor_actions_workflow_renderer::setup::{
     MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
 };
 
-/// Raw executable byte counts measured for checksum-qualified Mise 2026.10.6.
+/// Raw executable byte counts measured for checksum-qualified Mise 2026.10.7.
 /// Each bound travels with the SHA selected for that same native platform.
 struct MiseBinaryPin {
     sha256: &'static str,
@@ -17,9 +17,9 @@ struct MiseBinaryPin {
 
 fn mise_binary_pin(platform: CheckPlatform) -> MiseBinaryPin {
     let (sha256, max_bytes) = match platform {
-        CheckPlatform::LinuxX64 => (MISE_BINARY_SHA256_LINUX_X64, 161_267_824),
-        CheckPlatform::MacosArm64 => (MISE_BINARY_SHA256_MACOS_ARM64, 126_670_800),
-        CheckPlatform::MacosX64 => (MISE_BINARY_SHA256_MACOS_X64, 154_455_968),
+        CheckPlatform::LinuxX64 => (MISE_BINARY_SHA256_LINUX_X64, 161_070_528),
+        CheckPlatform::MacosArm64 => (MISE_BINARY_SHA256_MACOS_ARM64, 127_277_984),
+        CheckPlatform::MacosX64 => (MISE_BINARY_SHA256_MACOS_X64, 155_846_176),
     };
     MiseBinaryPin { sha256, max_bytes }
 }
@@ -126,7 +126,7 @@ mod tests {
         let marker = temp.path().join("wrapper-ran");
         let source = temp.path().join("mise");
         let script = format!(
-            "#!/bin/sh\nprintf invoked > '{}'\nprintf '2026.10.6\\n'\n",
+            "#!/bin/sh\nprintf invoked > '{}'\nprintf '2026.10.7\\n'\n",
             marker.display()
         );
         std::fs::write(&source, script).expect("wrapper");

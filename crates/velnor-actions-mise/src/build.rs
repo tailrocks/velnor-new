@@ -50,7 +50,7 @@ impl CandidateBuild {
     pub fn new() -> Result<Self, MiseError> {
         let args = BUILD_ARGS.iter().map(OsString::from).collect();
         Ok(Self {
-            exec: PinnedToolExec::new(
+            exec: PinnedToolExec::new_action_owned_mbx(
                 vec![PinnedTool::Rust],
                 std::ffi::OsStr::new(MBX_PROGRAM),
                 args,

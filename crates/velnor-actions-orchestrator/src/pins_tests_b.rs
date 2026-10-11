@@ -46,21 +46,21 @@ fn mise_setup_defaults_to_compiled_pins() {
 }
 
 #[test]
-fn consumer_binary_mise_setup_uses_latest_verified_platforms_only() {
+fn consumer_binary_mise_setup_uses_official_platform_pins_only() {
     let config = config_with(BTreeMap::new());
     for (target, digest) in [
         (
             ReleaseTarget::LinuxX86_64,
-            "3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366",
+            "6eb1b890e90818417ca34c90dbbd47881917d5cd199f31b63b062ea9c6b18d85",
         ),
         (
             ReleaseTarget::MacosArm64,
-            "bbcea7b0f844d026424a4c8335357a15a2f5c9e9132c9408de990d9be6f26101",
+            "f5171e341518a57e8c4e9280e28443e35d66212c51164c83be76794e0a78b014",
         ),
     ] {
         let setup = resolve_mise_setup_for_consumer_binary_release(&config, target)
             .expect("supported consumer runner");
-        assert_eq!(setup.version, "2026.10.6");
+        assert_eq!(setup.version, "2026.10.7");
         assert_eq!(setup.sha256, digest);
     }
     assert!(
@@ -213,11 +213,15 @@ fn verification_mise_setup_pins_each_runner_architecture() {
         .expect("Linux Mise pin");
     let macos = resolve_verification_mise_setup(&config, VerificationRunner::MacosArm64)
         .expect("Apple ARM64 Mise pin");
+    let macos_26 = resolve_verification_mise_setup(&config, VerificationRunner::Macos26Arm64)
+        .expect("macOS 26 Apple ARM64 Mise pin");
 
     assert_eq!(linux.version, MISE_VERSION);
     assert_eq!(linux.sha256, MISE_BINARY_SHA256_LINUX_X64);
     assert_eq!(macos.version, MISE_VERSION);
     assert_eq!(macos.sha256, MISE_BINARY_SHA256_MACOS_ARM64);
+    assert_eq!(macos_26.version, MISE_VERSION);
+    assert_eq!(macos_26.sha256, MISE_BINARY_SHA256_MACOS_ARM64);
     assert_ne!(linux.sha256, macos.sha256);
 }
 

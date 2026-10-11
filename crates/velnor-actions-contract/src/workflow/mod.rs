@@ -24,6 +24,7 @@ pub mod step;
 pub mod step_identity;
 mod step_mbx_lifecycle;
 mod step_protocol;
+pub mod task_execution_manifest;
 pub mod timeout;
 pub mod trust;
 pub use artifacts::{
@@ -96,7 +97,15 @@ pub use report::{
     CacheLayer, CacheOutcome, CacheResult, MatrixReport, MatrixStatus, MatrixTaskEntry,
     NotSelectedReason, TaskReport, TaskStatus, TaskTiming,
 };
-pub use step::{Step, StepKind};
+pub use step::{
+    MAX_TASK_EXECUTION_ARGV, MAX_TASK_EXECUTION_ENV, Step, StepKind, TASK_COVERED_OUTPUT,
+    task_execution_condition,
+};
 pub use step_identity::{MBX_WORKSPACE_CLEAN_CONDITION, StepId, StepRole};
+pub use task_execution_manifest::{
+    MAX_TASK_EXECUTION_FRAME_BYTES, MAX_TASK_EXECUTION_RECORDS, TASK_EXECUTION_FRAME_MAGIC,
+    TASK_EXECUTION_MANIFEST_PATH, TASK_EXECUTION_MANIFEST_SCHEMA, TaskExecutionManifestEntryV1,
+    TaskExecutionManifestV1, task_execution_manifest_marker_line,
+};
 pub use timeout::JobTimeout;
 pub use trust::{Trust, trust_for_event};

@@ -16,14 +16,6 @@ use velnor_actions_contract::ReleaseTarget;
 
 const TOKEN_SENTINEL: &str = "nonsecret-token-fixture";
 const TOKEN_EXPRESSION: &str = "${{ github.token }}";
-const INSTALL_ARGS: &[&str] = &[
-    "--no-config",
-    "--no-env",
-    "--no-hooks",
-    "install",
-    "rust@1.98.1",
-    "mr-boxington@1.21.1",
-];
 
 #[test]
 fn every_release_asset_matches_the_workspace_version() {
@@ -78,20 +70,7 @@ fn every_target_install_receives_token_and_build_scrubs_it() -> Result<(), Box<d
 }
 
 fn release_test_pins() -> crate::schema2::ProductReleasePins {
-    let mut pins = crate::schema2::product_release_test_pins::test_pins();
-    pins.install_build_tools_argv = [
-        "mise",
-        "--no-config",
-        "--no-env",
-        "--no-hooks",
-        "install",
-        "rust@1.98.1",
-        "mr-boxington@1.21.1",
-    ]
-    .into_iter()
-    .map(str::to_owned)
-    .collect();
-    pins
+    crate::schema2::product_release_test_pins::test_pins()
 }
 
 fn step_named<'a>(steps: &'a [Yaml], name: &str) -> Result<&'a Yaml, Box<dyn Error>> {
@@ -155,7 +134,14 @@ fn assert_install_invocation(step: &Yaml) -> Result<(), Box<dyn Error>> {
 }
 
 fn expected_install_argv() -> String {
-    INSTALL_ARGS.join("\n") + "\n"
+    let pins = release_test_pins();
+    pins.install_build_tools_argv
+        .iter()
+        .skip(1)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n"
 }
 
 fn assert_build_invocation_scrubs_token(
@@ -255,9 +241,15 @@ fn wrong_checksum_filename_stops_before_candidate_execution() -> Result<(), Box<
         return Err("cannot read candidate source SHA".into());
     }
     let source_sha = String::from_utf8(sha.stdout)?.trim().to_owned();
+    let pins = release_test_pins();
     let command = format!(
         "{}\n{}",
-        verify_provenance_in_directory(LINUX, &directory_name, "1.98.1", "1.21.1"),
+        verify_provenance_in_directory(
+            LINUX,
+            &directory_name,
+            &pins.rust_version,
+            &pins.mr_boxington_version
+        ),
         qualification_script(LINUX.binary, &directory_name)
     );
     let status = Command::new("bash")

@@ -35,10 +35,11 @@ build uses `cargo build --release --locked`
 with the same manifest, package, binary, and target. The workflow compares the
 runtime version and tag again before publication. Its receipt records the
 repository, source SHA, package, Cargo version, binary, target, and tag.
-Each consumer workflow pins Mise 2026.10.6 for its Linux eligibility/publish
-jobs and Apple Silicon build job using the verified platform checksums. This
-consumer pin does not update Velnor's own generator, bootstrap, or release
-runtime pins.
+Consumer release workflows and the source-build bootstrap catalog now use the
+Mise 2026.10.7 official candidate with target-specific SHA-256 pins. The release
+renderer and catalog share the same 10.7 version and binary identities. Hosted
+qualification for 10.7 remains pending; historical 10.6 hosted evidence is not
+carried forward to the new release.
 
 ## Eligibility and job boundaries
 

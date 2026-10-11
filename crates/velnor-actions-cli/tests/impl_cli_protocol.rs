@@ -58,7 +58,7 @@ fn write_request_materializes_push_request() -> Result<(), Box<dyn Error>> {
         &tmp,
     )?;
     assert_eq!(code(&output), 0);
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout, [] as [u8; 0]);
     assert_no_leak(&output);
     let expected = format!(
         "{{\"base\":\"{base}\",\"event\":\"push\",\"head\":\"{head}\",\"op\":\"plan-v1\",\"root\":\".\",\"schema\":1}}"
@@ -86,7 +86,7 @@ fn write_request_rejects_malformed_payload() -> Result<(), Box<dyn Error>> {
         &tmp,
     )?;
     assert_eq!(code(&output), 1);
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout, [] as [u8; 0]);
     assert_no_leak(&output);
     assert!(!request.exists());
     cleanup(&tmp);
@@ -139,7 +139,7 @@ fn plan_writes_response_and_github_outputs() -> Result<(), Box<dyn Error>> {
         &repo,
     )?;
     assert_eq!(code(&output), 0, "stderr: {:?}", output.stderr);
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout, [] as [u8; 0]);
     assert_no_leak(&output);
     let response = std::fs::read_to_string(repo.join("plan-v1-response.json"))?;
     assert!(response.contains("\"run_key\":\"r7-a2\""), "{response}");
@@ -207,7 +207,7 @@ fn merge_no_work_plan_reports_no_work() -> Result<(), Box<dyn Error>> {
         &repo,
     )?;
     assert_eq!(code(&output), 0, "stderr: {:?}", output.stderr);
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout, [] as [u8; 0]);
     assert_no_leak(&output);
     let verdict = std::fs::read_to_string(repo.join("merge-v1-response.json"))?;
     assert!(verdict.contains("\"status\":\"no_work\""), "{verdict}");
@@ -286,7 +286,7 @@ fn plan_without_runner_temp_exits_one() -> Result<(), Box<dyn Error>> {
         &repo,
     )?;
     assert_eq!(code(&output), 1);
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout, [] as [u8; 0]);
     assert_no_leak(&output);
     assert!(repo.join("plan-v1-response.json").is_file());
     cleanup(&repo);
@@ -377,7 +377,7 @@ fn merge_garbage_request_exits_one() -> Result<(), Box<dyn Error>> {
         &tmp,
     )?;
     assert_eq!(code(&output), 1);
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout, [] as [u8; 0]);
     assert_no_leak(&output);
     assert!(!tmp.join("merge-v1-response.json").exists());
     cleanup(&tmp);

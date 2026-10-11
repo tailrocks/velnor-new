@@ -16,6 +16,7 @@ mod release;
 mod resources;
 mod runs_on;
 mod stacks;
+mod task_source;
 mod tofu;
 mod tofu_apply;
 mod verification;
@@ -65,6 +66,7 @@ pub use stacks::{
     DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
     is_valid_feature_name, is_valid_rust_target,
 };
+pub use task_source::MiseTaskSource;
 pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
 pub use tofu_apply::{GitHubTokenSecret, S3BackendConfig, TofuApplyConfig};
 pub use verification::{VerificationRunner, VerificationTask};

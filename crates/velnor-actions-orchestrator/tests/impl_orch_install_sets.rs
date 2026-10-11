@@ -81,7 +81,7 @@ fn lock_text() -> Result<String, Box<dyn std::error::Error>> {
         )?;
     }
     Ok(format!(
-        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.6\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.7\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
         "e".repeat(40),
         "b".repeat(64)
     ))
@@ -315,7 +315,7 @@ fn deny_install_is_audited() -> TestResult {
     without_ambient_identity("deny_install_is_audited", || {
         let repo = velnor_workspace()?;
         let prep = prepare(repo.path())?;
-        assert!(prep.lock_audit_blocking.is_empty());
+        assert_eq!(prep.lock_audit_blocking, [] as [String; 0]);
         let summary = prep
             .discovery
             .recommendations

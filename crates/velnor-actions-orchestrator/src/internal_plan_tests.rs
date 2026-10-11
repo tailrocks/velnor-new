@@ -88,7 +88,7 @@ fn envelope_normalizes_components_and_binds_env() {
     );
     let generator = default_generator();
     assert!(!generator.sha256.bytes().all(|b| b == b'0'));
-    assert!(!generator.sha256.is_empty());
+    assert_ne!(generator.sha256, "");
 }
 
 #[test]

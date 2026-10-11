@@ -134,18 +134,20 @@ fn machete_cold_install_uses_verified_asset_and_preserves_scan_invocation() {
 
 #[test]
 fn mbx_probe_vector_is_byte_exact() {
-    let probe = mbx_probe_argv(&ToolCatalog::pinned()).expect("probe argv");
-    let want = argv_of(&[
+    let catalog = ToolCatalog::pinned();
+    let probe = mbx_probe_argv(&catalog).expect("probe argv");
+    let mut want = argv_of(&[
         "mise",
         "--no-config",
         "--no-env",
         "--no-hooks",
         "exec",
-        "rust@1.98.1",
+        "rust@catalog-pin",
         "--",
         "mbx",
         "--version",
     ]);
+    want[5] = catalog.tool_spec(PinnedTool::Rust);
     assert_eq!(probe, want);
 }
 
@@ -211,15 +213,38 @@ fn task_payload_program_follows_route_driver() {
 fn task_runner_tools_follow_test_runner() {
     let catalog = ToolCatalog::pinned();
     let nextest = catalog.tool_spec(PinnedTool::Nextest);
-    for (runner, want) in [
-        (TestRunner::CargoTest, false),
-        (TestRunner::CargoNextest, true),
-    ] {
-        let mut task = group_with_driver(CompileDriver::Cargo);
-        task.identity.test_runner = runner.as_str().to_owned();
-        let argv = task_argv(&task, &catalog).expect("task argv");
-        assert_eq!(argv.contains(&nextest), want, "{} nextest", runner.as_str());
+    for (driver, program) in [(CompileDriver::Cargo, "cargo"), (CompileDriver::Mbx, "mbx")] {
+        for (runner, want) in [
+            (TestRunner::CargoTest, false),
+            (TestRunner::CargoNextest, true),
+        ] {
+            let mut task = group_with_driver(driver);
+            task.identity.test_runner = runner.as_str().to_owned();
+            let argv = task_argv(&task, &catalog).expect("task argv");
+            let at = argv.iter().position(|arg| arg == "--").expect("separator");
+            assert_eq!(argv[at + 1], program);
+            assert_eq!(argv.contains(&nextest), want, "{} nextest", runner.as_str());
+            if driver == CompileDriver::Mbx {
+                assert!(
+                    !argv.iter().any(|arg| arg.contains("mr-boxington")),
+                    "action-owned MBX must not become a Mise selector: {argv:?}"
+                );
+            }
+        }
     }
+}
+
+#[test]
+fn unknown_compile_driver_fails_instead_of_defaulting_to_cargo() {
+    let mut task = group_with_driver(CompileDriver::Cargo);
+    task.identity.compile_driver = "future-driver".to_owned();
+    let error = task_argv(&task, &ToolCatalog::pinned()).expect_err("unknown route must fail");
+    assert!(
+        error
+            .to_string()
+            .contains("unknown_compile_driver:future-driver"),
+        "route miss reason: {error}"
+    );
 }
 
 #[test]
@@ -236,14 +261,15 @@ fn zizmor_vector_is_pinned_and_offline() {
 
 #[test]
 fn section4_build_vector_is_byte_exact() {
-    let build = candidate_build_argv(&ToolCatalog::pinned()).expect("build argv");
-    let want = argv_of(&[
+    let catalog = ToolCatalog::pinned();
+    let build = candidate_build_argv(&catalog).expect("build argv");
+    let mut want = argv_of(&[
         "mise",
         "--no-config",
         "--no-env",
         "--no-hooks",
         "exec",
-        "rust@1.98.1",
+        "rust@catalog-pin",
         "--",
         "mbx",
         "build",
@@ -254,6 +280,7 @@ fn section4_build_vector_is_byte_exact() {
         "--bin",
         "velnor-actions",
     ]);
+    want[5] = catalog.tool_spec(PinnedTool::Rust);
     assert_eq!(build, want);
 }
 
