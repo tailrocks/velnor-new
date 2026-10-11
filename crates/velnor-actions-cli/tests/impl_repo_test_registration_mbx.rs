@@ -89,6 +89,9 @@ fn mbx_output_with_target(
         .arg("--manifest-path")
         .arg(manifest)
         .args(options)
+        // Cargo exposes its own raw executable to tests, which cannot parse
+        // MBX's `+toolchain` selector. Let MBX resolve its selected Cargo.
+        .env_remove("CARGO")
         .current_dir(manifest_dir);
     if let Some(target_dir) = target_dir {
         process.env("CARGO_TARGET_DIR", absolute_path(&current_dir, target_dir));
