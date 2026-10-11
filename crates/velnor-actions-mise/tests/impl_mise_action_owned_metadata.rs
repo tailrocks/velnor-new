@@ -1,7 +1,9 @@
 #![cfg(unix)]
 
 use std::path::{Path, PathBuf};
-use velnor_actions_mise::{MetadataDiscovery, MiseError, ToolCatalog, ToolHomes};
+use velnor_actions_mise::{
+    MetadataDiscovery, MiseError, NO_AUTO_INSTALL_ENV, ToolCatalog, ToolHomes,
+};
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
@@ -46,7 +48,9 @@ fn action_owned_metadata_checks_version_and_shares_tool_homes() -> TestResult {
 
 const FAKE_MISE: &str = r#"
 test "$1:$2:$3:$4:$5:$6" = '--no-config:--no-env:--no-hooks:exec:rust@1.99.0:--'
+test "$MISE_NO_CONFIG:$MISE_NO_ENV:$MISE_NO_HOOKS:$MISE_LOCKFILE" = '1:1:1:0'
 test "${MISE_AUTO_INSTALL-unset}" = false
+test "${MISE_EXEC_AUTO_INSTALL-unset}" = false
 test "$7" = "$VELNOR_EXPECTED_MBX"
 phase=version
 if [ "$8" != --version ]; then
@@ -240,6 +244,7 @@ fn run_child(mode: &str) -> TestResult {
             let command = request.command(&catalog)?.with_env(&extra)?;
             assert_eq!(command.argv(), request.argv(&catalog));
             assert!(command.disables_auto_install());
+            assert_fixed_auto_install_env(&command.full_env());
             command.run().and_then(|output| {
                 if matches!(mode, "valid-command" | "path-overlay") && output.success {
                     assert_eq!(output.stdout, b"{\"packages\":[]}\n");
@@ -263,4 +268,15 @@ fn run_child(mode: &str) -> TestResult {
         result?;
     }
     Ok(())
+}
+
+fn assert_fixed_auto_install_env(environment: &[(std::ffi::OsString, std::ffi::OsString)]) {
+    for (key, expected) in NO_AUTO_INSTALL_ENV {
+        let actual = environment
+            .iter()
+            .rev()
+            .find(|(name, _)| name == key)
+            .map(|(_, value)| value.as_os_str());
+        assert_eq!(actual, Some(std::ffi::OsStr::new(expected)));
+    }
 }
