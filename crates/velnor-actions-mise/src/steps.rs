@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use crate::catalog::{PinnedTool, ToolCatalog};
 use crate::command::{IsolatedCommand, NO_AUTO_INSTALL_ENV, mise_argv_tail, toolchain_env};
 use crate::error::MiseError;
-use crate::requests::{MetadataQualification, MiseInstall};
+use crate::requests::{MetadataCommand, MetadataQualification, MiseInstall};
 
 /// Contract-fixed display name shared by task-execution §2 step 1 and
 /// workflow §3 step 3. Emitters use this const, never a retyped string.
@@ -301,10 +301,8 @@ pub const VERIFY_PREPARED_INPUTS_STEP: &str = "Verify prepared inputs";
 
 /// Locked/offline preparation qualification as one named step.
 ///
-/// Fixed argv from [`MetadataQualification`]; the step env adds the
-/// install disable plus the owned homes to the isolation quartet, so a
-/// missing tool or dependency fails instead of fetching. Explicit
-/// installation stays out: this step verifies, never installs.
+/// Fixed argv from [`MetadataQualification`]; env adds install-disable and
+/// owned homes. Workflows preflight MBX; direct `.run()` checks it as well.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifyPreparedInputs {
     /// Fixed locked/offline qualification request.
@@ -359,13 +357,13 @@ impl VerifyPreparedInputs {
         self.homes.exec_env(catalog)
     }
 
-    /// Isolated command running this qualification under the owned homes.
+    /// Guarded command for this qualification under the owned homes.
     ///
     /// # Errors
     ///
     /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
     /// empty, which the constructor rules out.
-    pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
+    pub fn command(&self, catalog: &ToolCatalog) -> Result<MetadataCommand, MiseError> {
         self.qualification
             .command(catalog)?
             .with_env(&self.homes.env(catalog))

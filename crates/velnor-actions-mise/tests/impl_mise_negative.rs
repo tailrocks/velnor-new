@@ -181,16 +181,20 @@ fn every_request_routes_through_mise_or_git() -> Result<(), String> {
     .map_err(|err| err.to_string())?;
     let nextest = NextestArchive::new(NextestDriver::Cargo, "demo", &[], None)
         .map_err(|err| err.to_string())?;
+    let catalog = pinned();
     for command in [
-        discovery
-            .command(&pinned())
-            .map_err(|err| err.to_string())?,
-        qualification
-            .command(&pinned())
-            .map_err(|err| err.to_string())?,
         install.command(&pinned()).map_err(|err| err.to_string())?,
         exec.command(&pinned()).map_err(|err| err.to_string())?,
         nextest.command(&pinned()).map_err(|err| err.to_string())?,
+    ] {
+        assert_eq!(command.program(), "mise");
+        assert_eq!(command.argv()[0], OsString::from("mise"));
+    }
+    for command in [
+        discovery.command(&catalog).map_err(|err| err.to_string())?,
+        qualification
+            .command(&catalog)
+            .map_err(|err| err.to_string())?,
     ] {
         assert_eq!(command.program(), "mise");
         assert_eq!(command.argv()[0], OsString::from("mise"));

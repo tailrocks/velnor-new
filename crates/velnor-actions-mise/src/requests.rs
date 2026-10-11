@@ -12,6 +12,9 @@ use std::path::Path;
 #[path = "requests/metadata.rs"]
 mod metadata;
 pub use metadata::{MetadataDiscovery, MetadataQualification};
+#[path = "requests/metadata_command.rs"]
+mod metadata_command;
+pub use metadata_command::MetadataCommand;
 
 use crate::catalog::{PinnedTool, ToolCatalog};
 use crate::command::{

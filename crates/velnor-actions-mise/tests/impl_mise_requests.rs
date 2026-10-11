@@ -26,7 +26,6 @@ fn discovery_argv_is_byte_exact() -> Result<(), String> {
             "--no-hooks",
             "exec",
             "rust@1.99.0",
-            "mr-boxington@1.23.0",
             "--",
             "mbx",
             "+1.99.0",
@@ -39,7 +38,7 @@ fn discovery_argv_is_byte_exact() -> Result<(), String> {
         ])
     );
     let argv = request.argv(&pinned());
-    assert!(argv.iter().any(|arg| arg == "mr-boxington@1.23.0"));
+    assert!(!argv.iter().any(|arg| arg == "mr-boxington@1.23.0"));
     assert!(argv.iter().any(|arg| arg == "mbx"));
     assert!(!argv.iter().any(|arg| arg == "cargo"));
     assert!(
@@ -87,7 +86,6 @@ fn qualification_argv_carries_locked_offline() -> Result<(), String> {
             "--no-hooks",
             "exec",
             "rust@1.99.0",
-            "mr-boxington@1.23.0",
             "--",
             "mbx",
             "+1.99.0",
@@ -101,7 +99,7 @@ fn qualification_argv_carries_locked_offline() -> Result<(), String> {
         ])
     );
     let argv = request.argv(&pinned());
-    assert!(argv.iter().any(|arg| arg == "mr-boxington@1.23.0"));
+    assert!(!argv.iter().any(|arg| arg == "mr-boxington@1.23.0"));
     assert!(argv.iter().any(|arg| arg == "mbx"));
     assert!(!argv.iter().any(|arg| arg == "cargo"));
     assert!(
