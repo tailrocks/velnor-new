@@ -81,7 +81,7 @@ if [ "$1" = --version ]; then
 fi
 test "$1:$2:$3:$4:$5:$6" = '+1.99.0:metadata:--format-version:1:--no-deps:--manifest-path'
 test "$7" = "$VELNOR_EXPECTED_MANIFEST"
-touch "$VELNOR_METADATA_MARKER"
+: > "$VELNOR_METADATA_MARKER"
 printf '{"packages":[]}\n'
 "#;
 
@@ -248,7 +248,8 @@ fn run_child(mode: &str) -> TestResult {
             assert!(command.disables_auto_install());
             assert_fixed_auto_install_env(&command.full_env());
             command.run().and_then(|output| {
-                if matches!(mode, "valid-command" | "path-overlay") && output.success {
+                if matches!(mode, "valid-command" | "path-overlay") {
+                    output.require_success("mise")?;
                     assert_eq!(output.stdout, b"{\"packages\":[]}\n");
                     Ok(())
                 } else {
