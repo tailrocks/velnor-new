@@ -161,7 +161,7 @@ fn valid_file_entrypoint_skips_identity_lookup_without_opt_in() -> Result<(), Bo
         Ok(String::new())
     });
     assert!(result.is_ok(), "{result:?}");
-    assert!(calls.is_empty());
+    assert_eq!(calls, [] as [String; 0]);
     remove_fixture(&root)?;
     Ok(())
 }
