@@ -141,7 +141,8 @@ fn assert_preflight_step_shapes(
         return Err("native version check is not shell".into());
     };
     let version_script = run.get(2).ok_or("version-check script missing")?;
-    assert!(version_script.contains("mbx --version"));
+    assert!(version_script.contains("mbx_bin=$(command -v mbx)"));
+    assert!(version_script.contains("-- \"$mbx_bin\" --version"));
     assert!(version_script.contains("mbx 1.21.1"));
     Ok(())
 }

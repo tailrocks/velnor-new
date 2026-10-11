@@ -47,6 +47,10 @@ pub const MBX_CACHE_MODE_ENV: &str = "ACTIONS_CACHE_MODE";
 pub const MBX_RESTORE_NAME: &str = "Restore MBX objects";
 /// Display name for the exact MBX binary placed on PATH by its native action.
 pub const MBX_VERSION_CHECK_NAME: &str = "Verify native MBX version";
+/// Shell-local absolute path to the executable installed by the pinned action.
+pub(crate) const ACTION_MBX_BIN: &str = "$mbx_bin";
+/// Resolve the action-owned executable before Rust-only Mise rebuilds PATH.
+pub(crate) const RESOLVE_ACTION_MBX_BIN: &str = "if ! mbx_bin=$(command -v mbx); then printf '%s\\n' 'action-owned MBX is not on PATH' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '%s\\n' 'action-owned MBX path must be absolute' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '%s\\n' 'action-owned MBX path must be an executable file' >&2; exit 1; fi";
 /// Keep automatic collection from evicting uncommitted active-run results.
 pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
 /// Defer collection until the native action has committed and exported the job group.
@@ -185,13 +189,14 @@ pub(super) fn mbx_version_check_step(
         "cleanup() { rm -f \"$probe_dir/version\" \"$probe_dir/cache-dir\"; rmdir \"$probe_dir\"; }".to_owned(),
         "trap cleanup EXIT".to_owned(),
         "trap 'exit 1' HUP INT TERM".to_owned(),
-        format!("mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- mbx --version > \"$probe_dir/version\""),
+        RESOLVE_ACTION_MBX_BIN.to_owned(),
+        format!("mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" --version > \"$probe_dir/version\""),
         "exec 3< \"$probe_dir/version\"".to_owned(),
         "IFS= read -r version_line <&3 || { printf '%s\\n' 'MBX version output is empty or unterminated' >&2; exit 1; }".to_owned(),
         "extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '%s\\n' 'MBX version output has extra data' >&2; exit 1; fi".to_owned(),
         "exec 3<&-".to_owned(),
         format!("[ \"$version_line\" = 'mbx {mbx_version}' ] || {{ printf '%s\\n' 'MBX on PATH does not match the pinned action version' >&2; exit 1; }}"),
-        format!("mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- mbx cache dir > \"$probe_dir/cache-dir\""),
+        format!("mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" cache dir > \"$probe_dir/cache-dir\""),
         "exec 3< \"$probe_dir/cache-dir\"".to_owned(),
         "IFS= read -r cache_dir <&3 || { printf '%s\\n' 'MBX cache dir output is empty or unterminated' >&2; exit 1; }".to_owned(),
         "extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '%s\\n' 'MBX cache dir output has extra data' >&2; exit 1; fi".to_owned(),
@@ -245,7 +250,8 @@ pub(crate) fn mbx_workspace_clean_step_for_action(action: &Step) -> Result<Step,
         "[ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] && [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '%s\\n' 'MBX store path changed before cleanup' >&2; exit 1; }".to_owned(),
         mbx_disk_sample_function(),
         "mbx_disk_sample before-final-clean".to_owned(),
-        format!("clean_status=0; if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- mbx clean; then clean_status=0; else clean_status=$?; fi"),
+        RESOLVE_ACTION_MBX_BIN.to_owned(),
+        format!("clean_status=0; if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" +{rust_toolchain} clean; then clean_status=0; else clean_status=$?; fi"),
         "mbx_disk_sample after-final-clean".to_owned(),
         "exit \"$clean_status\"".to_owned(),
     ]

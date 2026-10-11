@@ -50,11 +50,14 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
     else {
         panic!("version check must be a shell step");
     };
-    assert!(run[2].contains("mbx --version"));
     assert!(run[2].contains("mbx 1.21.1"));
     assert!(run[2].contains("unterminated"));
+    assert!(run[2].contains("mbx_bin=$(command -v mbx)"));
+    assert!(run[2].contains("-- \"$mbx_bin\" --version"));
+    assert!(run[2].contains("-- \"$mbx_bin\" cache dir"));
+    assert!(!run[2].contains("-- mbx --version"));
     assert!(run[2].contains(&format!(
-        "mise --no-config --no-env --no-hooks exec rust@{TEST_RUST_TOOLCHAIN} -- mbx --version"
+        "mise --no-config --no-env --no-hooks exec rust@{TEST_RUST_TOOLCHAIN} -- \"$mbx_bin\" --version"
     )));
     let StepKind::Action { uses, with, env } = action.kind else {
         panic!("restore must be an action");
@@ -209,6 +212,8 @@ fn rendered_action_has_rust_homes_and_native_owner_policy() -> Result<(), Render
     assert!(text.contains("MBX_GC_AUTO: \"0\""));
     assert!(text.contains("name: Clean MBX workspace outputs"));
     assert!(text.contains("if: always() && steps.mbx-ready.outcome == 'success'"));
-    assert!(text.contains("mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx clean"));
+    assert!(text.contains(
+        "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" +1.98.1 clean"
+    ));
     Ok(())
 }
