@@ -219,13 +219,14 @@ fn candidate_mbx_roundtrip_defers_gc_and_cleans_after_each_last_consumer() {
         ),
     ] {
         for &command in required {
+            let serialized_command = command.replace('"', "\\\"");
             assert!(
-                job.contains(command),
+                job.contains(&serialized_command),
                 "missing action-owned MBX binding {command:?}:\n{job}"
             );
             if command != "mbx_bin=$(command -v mbx)" {
                 let command_at = job
-                    .find(command)
+                    .find(&serialized_command)
                     .unwrap_or_else(|| panic!("missing command {command:?}"));
                 let resolver_at = job[..command_at]
                     .rfind("mbx_bin=$(command -v mbx)")
