@@ -259,8 +259,8 @@ fn concurrent_generate_lock_refused() -> TestResult {
     let report = generate(&prep, &opts)?;
     assert_eq!(
         report.files_written.len(),
-        9,
-        "lock removal unblocks with V2 support assets: {:?}",
+        11,
+        "lock removal unblocks with generated task assets: {:?}",
         report.files_written
     );
     Ok(())
