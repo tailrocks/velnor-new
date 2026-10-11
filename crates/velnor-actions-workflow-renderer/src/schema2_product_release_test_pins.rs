@@ -29,12 +29,27 @@ pub(super) fn test_pins() -> ProductReleasePins {
     let install_resource_probe_target_argv = resource_probe_target_argv(&catalog);
     let install_intel_target_argv = intel_target_argv(&catalog);
     let build = build_argv(&catalog);
+    let qualification_home = "${{ github.workspace }}/.velnor-release-qualification";
+    let qualification_env = BTreeMap::from([
+        (
+            "MISE_RUSTUP_HOME".to_owned(),
+            format!("{qualification_home}/rustup"),
+        ),
+        (
+            "MISE_CARGO_HOME".to_owned(),
+            format!("{qualification_home}/cargo"),
+        ),
+        (
+            "RUSTUP_TOOLCHAIN".to_owned(),
+            catalog.version(PinnedTool::Rust).to_owned(),
+        ),
+    ]);
     let qualify_mbx_action_steps = mbx_steps_for_driver(
         &format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
         CompileDriver::Mbx,
         catalog.version(PinnedTool::MrBoxington),
         catalog.version(PinnedTool::Rust),
-        BTreeMap::new(),
+        qualification_env,
     )
     .expect("test MBX qualification steps are valid")
     .expect("MBX qualification emits the native action steps");
