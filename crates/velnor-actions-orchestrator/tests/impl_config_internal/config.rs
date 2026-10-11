@@ -154,6 +154,7 @@ fn uncommented_init_sample_parses_with_overrides() -> TestResult {
     let mut native_mise = fs::read_to_string(root.join("native/mise.toml"))?;
     native_mise.push_str("\n[tasks.desktop-format-check]\nrun = \"echo desktop-format-check\"\n");
     fs::write(root.join("native/mise.toml"), native_mise)?;
+    add_sample_binary_release_package(root)?;
     let prep = prepare(root)?;
     assert_sample_mbx_compile_route(&prep)?;
     assert_eq!(
@@ -183,6 +184,27 @@ fn uncommented_init_sample_parses_with_overrides() -> TestResult {
     assert_eq!(overrides["actions/checkout"].version, "v7.0.1");
     assert_eq!(prep.runner_label, "ubuntu-24.04");
     assert_eq!(prep.runner_selection, RunnerSelection::ConfigOverride);
+    Ok(())
+}
+
+fn add_sample_binary_release_package(root: &std::path::Path) -> TestResult {
+    let manifest_path = root.join("Cargo.toml");
+    let mut manifest = fs::read_to_string(&manifest_path)?;
+    manifest.push_str("\n[workspace]\nmembers = [\"crates/repo-scan\"]\nresolver = \"2\"\n");
+    fs::write(manifest_path, manifest)?;
+
+    let package = root.join("crates/repo-scan");
+    fs::create_dir_all(package.join("src"))?;
+    fs::write(
+        package.join("Cargo.toml"),
+        "[package]\nname = \"repo-scan\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )?;
+    fs::write(package.join("src/main.rs"), "fn main() {}\n")?;
+    fs::write(
+        root.join("Cargo.lock"),
+        "version = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"repo-scan\"\nversion = \"0.1.0\"\n",
+    )?;
+    git(&["add", "Cargo.lock"], root)?;
     Ok(())
 }
 
