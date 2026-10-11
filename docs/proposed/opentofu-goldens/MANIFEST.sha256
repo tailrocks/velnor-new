@@ -49,7 +49,7 @@ bd8d14441bdd7446c664237ab729479c4840af4c9cc49ef1c9d2e03b92ce6fc7  ./empty-suite/
 8a839b89328c6fee42c95c3988c0ef7e6148adb8aeea907efd12e68751676afd  ./empty-suite/preview/.github/actions/velnor-tools-prelude-u26/action.yml
 98fc1957fad1ca092161bae796400ae52afc728596443a44792773e04a51c4c2  ./empty-suite/preview/.github/scripts/velnor-tools-cache-identity.sh
 78545e426b5e34f3b1fbaba82f1b46eca8e77952c6be7a7040a17c4503f4cb8a  ./empty-suite/preview/.github/workflows/ci.yml
-174e7365b96afd0c23f3d2cb907c1046f97507aafdd10705bd2ce8dd718dcdd0  ./empty-suite/tree.sha256
+7e88b943afdce800724d2490b3404e6e73f4aec7d0f8c45f4b03a3298bada3fd  ./empty-suite/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./mbx-nextest/generate.exit
 2e87996831422fcfa411cc0026f79080051f97701475eac6b89219cc919fe214  ./mbx-nextest/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./mbx-nextest/generate.stdout.txt
@@ -65,7 +65,7 @@ bd8d14441bdd7446c664237ab729479c4840af4c9cc49ef1c9d2e03b92ce6fc7  ./mbx-nextest/
 8a839b89328c6fee42c95c3988c0ef7e6148adb8aeea907efd12e68751676afd  ./mbx-nextest/preview/.github/actions/velnor-tools-prelude-u26/action.yml
 98fc1957fad1ca092161bae796400ae52afc728596443a44792773e04a51c4c2  ./mbx-nextest/preview/.github/scripts/velnor-tools-cache-identity.sh
 b6bfc31406b1627e3767953da7ee4feee624c3e0d5edc3b751465891734b773c  ./mbx-nextest/preview/.github/workflows/ci.yml
-df1eb0dcd7da25dd986fae00c860150111e3ebe2877f63cdd0bdcd37a80df993  ./mbx-nextest/tree.sha256
+9268a407ec331956827f1b3fe68aff2be45e0c3f34f9069cdaccd9af63529ab9  ./mbx-nextest/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./minimal-cargo/generate.exit
 0fcb3388e152dcf6acbc80e4ecb3735830530464b81166b05aeecf6c3e5c25e0  ./minimal-cargo/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./minimal-cargo/generate.stdout.txt
@@ -81,7 +81,7 @@ bd8d14441bdd7446c664237ab729479c4840af4c9cc49ef1c9d2e03b92ce6fc7  ./minimal-carg
 8a839b89328c6fee42c95c3988c0ef7e6148adb8aeea907efd12e68751676afd  ./minimal-cargo/preview/.github/actions/velnor-tools-prelude-u26/action.yml
 98fc1957fad1ca092161bae796400ae52afc728596443a44792773e04a51c4c2  ./minimal-cargo/preview/.github/scripts/velnor-tools-cache-identity.sh
 ede30bab4a256f701ef603b28257d46c637d464ada5b1a70326248fb8991b35d  ./minimal-cargo/preview/.github/workflows/ci.yml
-897f3e4a2cf2694a9c2846b266100765a59db596a4b9d10f6f00d875982e8e22  ./minimal-cargo/tree.sha256
+aa21b67121887e94c687fe38c72c2b87307b011f8df716e4e68552621d70ce23  ./minimal-cargo/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./nested/generate.exit
 0fcb3388e152dcf6acbc80e4ecb3735830530464b81166b05aeecf6c3e5c25e0  ./nested/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./nested/generate.stdout.txt
@@ -97,4 +97,4 @@ bd8d14441bdd7446c664237ab729479c4840af4c9cc49ef1c9d2e03b92ce6fc7  ./nested/previ
 8a839b89328c6fee42c95c3988c0ef7e6148adb8aeea907efd12e68751676afd  ./nested/preview/.github/actions/velnor-tools-prelude-u26/action.yml
 98fc1957fad1ca092161bae796400ae52afc728596443a44792773e04a51c4c2  ./nested/preview/.github/scripts/velnor-tools-cache-identity.sh
 9e0d2d89e86b5098dd17349b69c164aa35d3afd19735635730b61fec02191252  ./nested/preview/.github/workflows/ci.yml
-edd36ad7383163655996323671ea2584793009430c084c818b26a75bd2837bde  ./nested/tree.sha256
+3ea85240750bddfea79edd695bff3f4ef4efaf4f9eba67eceb027c04e5396e24  ./nested/tree.sha256
