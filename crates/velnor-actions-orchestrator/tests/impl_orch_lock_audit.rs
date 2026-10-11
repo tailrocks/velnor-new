@@ -3,7 +3,7 @@ use std::fs;
 
 use tempfile::TempDir;
 use velnor_actions_contract::StepKind;
-use velnor_actions_mise::PREPARE_PINNED_TOOLS_STEP;
+use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, ToolCatalog};
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 
 use crate::impl_common::{TestResult, config_with_branch, make_repo, plan_for};
@@ -237,7 +237,14 @@ fn hostile_config_ignored_by_isolated_installs() -> TestResult {
 
 #[test]
 fn drifted_lock_advises_without_blocking() -> TestResult {
-    let drifted = full_lock().replace("version = \"1.98.1\"", "version = \"1.97.0\"");
+    let lock = full_lock();
+    let rust_pin = ToolCatalog::pinned().rust;
+    let rust_version = format!("version = \"{rust_pin}\"");
+    let drifted = lock.replacen(&rust_version, "version = \"0.0.0\"", 1);
+    assert_ne!(
+        drifted, lock,
+        "fixture mutation must change the Rust lock pin"
+    );
     let repo = repo_with_lock(Some(&drifted))?;
     let prep = prepare(repo.path())?;
     assert_eq!(prep.lock_audit_blocking, [] as [String; 0]);
