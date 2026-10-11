@@ -205,6 +205,7 @@ fn add_sample_binary_release_package(root: &std::path::Path) -> TestResult {
         "version = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"repo-scan\"\nversion = \"0.1.0\"\n",
     )?;
     git(&["add", "Cargo.lock"], root)?;
+    anchor_repo(root)?;
     Ok(())
 }
 
