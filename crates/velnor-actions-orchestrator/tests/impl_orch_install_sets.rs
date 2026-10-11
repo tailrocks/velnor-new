@@ -231,7 +231,7 @@ fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
 fn every_emitted_install_argv_carries_no_config() -> TestResult {
     without_ambient_identity("every_emitted_install_argv_carries_no_config", || {
         let catalog = ToolCatalog::pinned();
-        let specs = vec!["rust@1.98.1".to_owned()];
+        let specs = vec![catalog.tool_spec(PinnedTool::Rust)];
         let install = IsolatedCommand::mise_install(&specs).map_err(|err| err.to_string())?;
         let request = MiseInstall::new(vec![PinnedTool::Rust]).map_err(|err| err.to_string())?;
         let step = PreparePinnedTools::new(vec![PinnedTool::Rust], ToolHomes::runner_temp())
@@ -250,13 +250,10 @@ fn every_emitted_install_argv_carries_no_config() -> TestResult {
         }
         let repo = velnor_workspace()?;
         let prep = prepare(repo.path())?;
-        let yaml = velnor_actions_workflow_renderer::render_workflow_ir(
-            &prep.workflow.ir,
-            prep.config.workflow.policy,
-            prep.workflow.support.as_ref(),
-            &prep.workflow.context,
-        )
-        .map_err(|err| format!("render: {err}"))?;
+        let tree = render_staged_tree(&prep)?;
+        let yaml = tree
+            .get(WORKFLOW_PATH)
+            .ok_or("missing workflow in staged tree")?;
         let mut installs = 0;
         let mut saw_deny_install = false;
         for line in yaml.lines() {
