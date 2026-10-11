@@ -95,17 +95,24 @@ pub(crate) fn validate_argv_for_role(
     Ok(())
 }
 
-/// Join an MBX lifecycle argv only after complete role-template validation.
-pub(crate) fn join_argv_for_run(
+/// Validate a shell step using its role when the role owns an MBX template.
+///
+/// All other steps retain the generic fixed-argv validator. A role never
+/// grants a partial shell exception: MBX roles must match a complete
+/// producer-generated template in [`validate_argv_for_role`].
+pub(crate) fn validate_step_argv(
     argv: &[String],
     role: Option<StepRole>,
-) -> Result<String, RenderError> {
-    validate_argv_for_role(argv, role)?;
-    commands::join_validated_argv_for_run(argv)
+) -> Result<(), RenderError> {
+    if role_uses_resolver(role) {
+        validate_argv_for_role(argv, role)
+    } else {
+        commands::validate_command_argv(argv)
+    }
 }
 
 /// Whether this role selects one of the four complete MBX templates.
-pub(crate) fn role_uses_resolver(role: Option<StepRole>) -> bool {
+fn role_uses_resolver(role: Option<StepRole>) -> bool {
     matches!(
         role,
         Some(
@@ -211,8 +218,8 @@ mod tests {
     use velnor_actions_contract::{Step, StepKind, StepRole};
 
     use super::{
-        ACTION_MBX_BIN, RESOLVE_ACTION_MBX_BIN, candidate_build_argv, join_argv_for_run,
-        mbx_probe_argv, role_uses_resolver, validate_argv, validate_argv_for_role,
+        ACTION_MBX_BIN, RESOLVE_ACTION_MBX_BIN, candidate_build_argv, mbx_probe_argv,
+        role_uses_resolver, validate_argv, validate_argv_for_role, validate_step_argv,
     };
     use crate::{RenderError, cache_steps};
 
@@ -261,8 +268,35 @@ mod tests {
         for step in [version_check(), cleanup(), build(), verify_build()] {
             assert!(role_uses_resolver(step.role));
             validate_argv_for_role(run(&step), step.role).expect("canonical MBX template");
-            join_argv_for_run(run(&step), step.role).expect("canonical template joins");
+            crate::commands::join_validated_argv_for_run(run(&step))
+                .expect("canonical template joins");
         }
+    }
+
+    #[test]
+    fn plain_step_renderer_uses_role_validation_and_keeps_generic_rejection() {
+        let step = version_check();
+        crate::steps_plain::plain_step_to_yaml(&step)
+            .expect("plain renderer accepts the complete action-owned template");
+
+        let mut forged = step;
+        let StepKind::Shell { run, .. } = &mut forged.kind else {
+            panic!("MBX template must be shell");
+        };
+        run[2].push_str("; echo injected");
+        assert!(crate::steps_plain::plain_step_to_yaml(&forged).is_err());
+
+        let generic = Step {
+            name: "generic shell".to_owned(),
+            id: None,
+            role: None,
+            condition: None,
+            kind: StepKind::Shell {
+                run: vec!["sh".to_owned(), "-c".to_owned(), "echo $(evil)".to_owned()],
+                env: BTreeMap::new(),
+            },
+        };
+        assert!(crate::steps_plain::plain_step_to_yaml(&generic).is_err());
     }
 
     #[test]
@@ -271,7 +305,6 @@ mod tests {
         let mut suffix = run(&step).to_vec();
         suffix[2].push_str("; echo injected");
         assert!(validate_argv_for_role(&suffix, step.role).is_err());
-        assert!(join_argv_for_run(&suffix, step.role).is_err());
 
         let mut before_resolver = run(&step).to_vec();
         let resolver_at = before_resolver[2]
@@ -302,7 +335,6 @@ mod tests {
     fn canonical_template_without_an_authorized_role_is_rejected() {
         let step = version_check();
         assert!(validate_argv_for_role(run(&step), None).is_err());
-        assert!(join_argv_for_run(run(&step), None).is_err());
     }
 
     #[test]
@@ -313,7 +345,7 @@ mod tests {
             format!("echo $(evil); {ACTION_MBX_BIN} --version"),
         ];
         assert!(matches!(
-            crate::commands::validate_command_argv(&argv),
+            validate_step_argv(&argv, None),
             Err(RenderError::BadCommand(message)) if message.starts_with("command_substitution:")
         ));
     }

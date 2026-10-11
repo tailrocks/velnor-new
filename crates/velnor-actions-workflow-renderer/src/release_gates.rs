@@ -74,7 +74,7 @@ fn check_job_steps(id: &str, job: &ReleaseJobSpec) -> Result<(), RenderError> {
                 commands::validate_env(env)?;
             }
             StepKind::Shell { run, env } => {
-                commands::validate_command_argv(run)?;
+                crate::action_mbx_shell::validate_step_argv(run, step.role)?;
                 commands::validate_env(env)?;
             }
             StepKind::Internal { .. } => {
