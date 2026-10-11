@@ -1,5 +1,6 @@
 #![cfg(unix)]
 
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use velnor_actions_mise::{
     MetadataDiscovery, MiseError, NO_AUTO_INSTALL_ENV, ToolCatalog, ToolHomes,
@@ -19,7 +20,6 @@ impl Fixture {
     }
 
     fn write_program(&self, name: &str, body: &str) -> TestResult {
-        use std::os::unix::fs::PermissionsExt;
         let path = self.0.join("bin").join(name);
         std::fs::write(&path, format!("#!/bin/sh\nset -eu\n{body}\n"))?;
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700))?;
@@ -90,7 +90,6 @@ fn install_fake_tools(fixture: &Fixture) -> TestResult {
     fixture.write_program("mbx", FAKE_MBX)?;
     let overlay = fixture.0.join("overlay-bin/mbx");
     std::fs::copy(fixture.0.join("bin/mbx"), &overlay)?;
-    use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&overlay, std::fs::Permissions::from_mode(0o700))?;
     Ok(())
 }
