@@ -1,7 +1,8 @@
 //! Renderer context construction from discovered repository evidence.
 
 use velnor_actions_contract::{
-    GeneratorValidation, ScaleSetSelector, ValidatorKind, VelnorConfig, WorkflowPolicy,
+    ExecutionMode, GeneratorValidation, ScaleSetSelector, ValidatorKind, VelnorConfig,
+    WorkflowPolicy,
 };
 use velnor_actions_mise::{IsolatedCommand, PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::{CandidateSpec, RenderContext, ValidatorCommand};
@@ -43,7 +44,7 @@ pub(super) fn render_context(
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let validator_commands = validator_commands(&input)?;
     let candidate = candidate_spec_for(&input)?;
-    let scale_set_selector = scale_set_selector(input.config)?;
+    let scale_set_selector = scale_set_selector(input.config, None)?;
     Ok(RenderContext {
         generator_version: input.generator_version.to_owned(),
         report_helper_version: input.report_helper_version.to_owned(),
@@ -126,8 +127,9 @@ fn candidate_spec_for(
     }
 }
 
-fn scale_set_selector(
+pub(super) fn scale_set_selector(
     config: &VelnorConfig,
+    dispatch: Option<ExecutionMode>,
 ) -> Result<Option<ScaleSetSelector>, OrchestratorError> {
     let selector = config
         .execution
@@ -138,10 +140,14 @@ fn scale_set_selector(
                 .map_err(|error| OrchestratorError::Contract {
                     problem: error.to_string(),
                 })?;
-            if !execution.emits_scale_set_selector() {
+            let mut effective = execution.clone();
+            if let Some(mode) = dispatch {
+                effective.mode = Some(mode);
+            }
+            if !effective.emits_scale_set_selector() {
                 return Ok(None);
             }
-            execution
+            effective
                 .scale_selector()
                 .map(Some)
                 .map_err(|error| OrchestratorError::Contract {
