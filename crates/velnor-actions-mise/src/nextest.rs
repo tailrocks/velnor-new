@@ -151,6 +151,17 @@ pub(crate) fn argv_of(
     driver: NextestDriver,
     payload: &[OsString],
 ) -> Vec<OsString> {
+    let action_owned_payload = match driver {
+        NextestDriver::Cargo => None,
+        NextestDriver::Mbx => payload.split_first().map(|(program, args)| {
+            let mut bound = Vec::with_capacity(payload.len() + 1);
+            bound.push(program.clone());
+            bound.push(OsString::from(format!("+{}", catalog.rustup_toolchain())));
+            bound.extend(args.iter().cloned());
+            bound
+        }),
+    };
+    let payload = action_owned_payload.as_deref().unwrap_or(payload);
     let mut argv = vec![OsString::from("mise")];
     argv.extend(crate::command::mise_argv_tail(
         "exec",

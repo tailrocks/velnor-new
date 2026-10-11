@@ -69,7 +69,18 @@ fn discovery_command_matches_argv() -> Result<(), String> {
     let command = request.command(&pinned()).map_err(|err| err.to_string())?;
     assert_eq!(command.argv(), request.argv(&pinned()));
     assert_eq!(command.program(), "mise");
-    assert!(format!("{command:?}").contains("Mbx"));
+    assert!(command.disables_auto_install());
+    assert_eq!(
+        command.full_env(),
+        vec![
+            ("MISE_NO_CONFIG".into(), "1".into()),
+            ("MISE_NO_ENV".into(), "1".into()),
+            ("MISE_NO_HOOKS".into(), "1".into()),
+            ("MISE_LOCKFILE".into(), "0".into()),
+            ("MISE_AUTO_INSTALL".into(), "false".into()),
+            ("MISE_EXEC_AUTO_INSTALL".into(), "false".into()),
+        ]
+    );
     Ok(())
 }
 
