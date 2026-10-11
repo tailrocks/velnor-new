@@ -19,14 +19,15 @@ fn with_pinned_rust(mut argv: Vec<OsString>, catalog: &ToolCatalog) -> Vec<OsStr
     argv
 }
 
-fn assert_action_owned_command(actual: &[OsString], portable: &[OsString]) {
+fn assert_action_owned_command(actual: &[OsString], portable: &[OsString]) -> Result<(), String> {
     let separator = portable
         .iter()
         .position(|arg| arg == "--")
-        .expect("portable argv separator");
+        .ok_or_else(|| "portable argv is missing the tool-command separator".to_owned())?;
     assert_eq!(&actual[..=separator], &portable[..=separator]);
     assert!(Path::new(&actual[separator + 1]).is_absolute());
     assert_eq!(&actual[separator + 2..], &portable[separator + 2..]);
+    Ok(())
 }
 
 #[test]
@@ -287,7 +288,7 @@ fn mbx_nextest_commands_use_action_owned_pinned_mbx() -> Result<(), String> {
     let archive = NextestArchive::new(NextestDriver::Mbx, "demo", &[], None)
         .map_err(|err| err.to_string())?;
     let archive_command = archive.command(&catalog).map_err(|err| err.to_string())?;
-    assert_action_owned_command(&archive_command.argv(), &archive.argv(&catalog));
+    assert_action_owned_command(&archive_command.argv(), &archive.argv(&catalog))?;
     let rust_spec = catalog.tool_spec(PinnedTool::Rust);
     assert!(
         archive_command
@@ -311,10 +312,10 @@ fn mbx_nextest_commands_use_action_owned_pinned_mbx() -> Result<(), String> {
     let partition = NextestPartition::new(1, 1).map_err(|err| err.to_string())?;
     let list = NextestList::new(NextestDriver::Mbx, partition);
     let list_command = list.command(&catalog).map_err(|err| err.to_string())?;
-    assert_action_owned_command(&list_command.argv(), &list.argv(&catalog));
+    assert_action_owned_command(&list_command.argv(), &list.argv(&catalog))?;
     let run = NextestRun::new(NextestDriver::Mbx, partition, "m-abc", "p1")
         .map_err(|err| err.to_string())?;
     let run_command = run.command(&catalog).map_err(|err| err.to_string())?;
-    assert_action_owned_command(&run_command.argv(), &run.argv(&catalog));
+    assert_action_owned_command(&run_command.argv(), &run.argv(&catalog))?;
     Ok(())
 }
