@@ -288,12 +288,12 @@ const TOOL_PROBE_ROWS: &[(&str, &str, &str)] = &[
     (
         "https://static.rust-lang.org/dist/channel-rust-stable.toml",
         "rust.toml",
-        "[pkg.rust]\nversion = \"1.98.1 (48a229cea 2026-09-01)\"\n",
+        "[pkg.rust]\nversion = \"1.99.0 (abc 2026-10-01)\"\n",
     ),
     (
         "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
         "mbx.json",
-        "[{\"tag_name\": \"v1.20.0-beta\", \"prerelease\": true}, {\"tag_name\": \"v1.19.0\"}]",
+        "[{\"tag_name\": \"v1.20.0-beta\", \"prerelease\": true}, {\"tag_name\": \"v1.23.0\"}]",
     ),
     (
         "https://api.github.com/repos/cli/cli/releases/latest",
