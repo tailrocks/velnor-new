@@ -34,7 +34,7 @@ pub(super) fn job(
     action_steps.extend(
         pins.qualify_mbx_action_steps
             .iter()
-            .map(crate::steps_plain::plain_step_to_yaml)
+            .map(crate::steps_plain::composite_step_to_yaml)
             .collect::<Result<Vec<_>, _>>()?,
     );
     action_steps.extend(assets::download_build_steps(
