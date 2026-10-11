@@ -132,7 +132,8 @@ fn child_process(
     let binary = std::env::current_exe()?;
     let expected_homes = if mode == "wrong-request" { "no" } else { "yes" };
     let bin = fixture.0.join("bin");
-    Ok(std::process::Command::new(binary)
+    let mut command = std::process::Command::new(binary);
+    command
         .args([
             "--exact",
             "impl_mise_action_owned_metadata::action_owned_metadata_checks_version_and_shares_tool_homes",
@@ -149,7 +150,8 @@ fn child_process(
         .env("MISE_RUSTUP_HOME", fixture.0.join("ambient-rustup"))
         .env("MISE_CARGO_HOME", fixture.0.join("ambient-cargo"))
         .env("RUSTUP_TOOLCHAIN", "ambient-toolchain")
-        .env("PATH", format!("{}:/usr/bin:/bin", bin.display())))
+        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()));
+    Ok(command)
 }
 
 fn run_child(mode: &str) -> TestResult {
