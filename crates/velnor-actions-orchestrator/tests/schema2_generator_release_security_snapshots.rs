@@ -148,6 +148,7 @@ fn assert_qualifier_job_inputs(qualifier: &str, target: TargetJobs) -> Result<()
 
 fn assert_qualifier_action_boundary(qualifier_body: &str) -> Result<(), Box<dyn Error>> {
     assert_action_input(qualifier_body);
+    super::qualification_snapshots::assert_empty_credential_environment(qualifier_body);
     assert!(
         qualifier_body.contains("artifact-ids: ${{ inputs.artifact_id }}"),
         "{qualifier_body}"
@@ -185,7 +186,6 @@ fn assert_qualifier_action_boundary(qualifier_body: &str) -> Result<(), Box<dyn 
             .count(),
         1
     );
-    assert!(!qualifier_body.contains("GH_TOKEN:"), "{qualifier_body}");
     assert!(
         !qualifier_body.contains("Attest built artifacts"),
         "{qualifier_body}"
