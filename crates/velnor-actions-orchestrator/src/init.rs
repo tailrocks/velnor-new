@@ -110,13 +110,6 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # free of Rust compilation; V1 does not inspect them. Each declaration gets a
 # read-only contents token and joins Required on every CI trigger.
 # [[workflow.tasks]]
-# id = "native-format"
-# kind = "verification"
-# mise_task = "desktop-format-check"
-# source = { mise_config = "native/mise.toml", working_directory = "native" }
-# runner = "macos-arm64"               # Or "linux-x64".
-# timeout_minutes = 10                  # Bounded 1..=360.
-# [[workflow.tasks]]
 # id = "native-desktop"
 # kind = "build"                       # Hosted macOS 26 ARM64; joins Required.
 # mise_task = "desktop-ci"
@@ -126,6 +119,13 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # timeout_minutes = 120                 # Bounded 1..=180.
 # cargo_build_jobs = 2                  # Bounded 1..=2; compilation uses MBX.
 # nextest_test_threads = 2              # Bounded 1..=2.
+# [[workflow.tasks]]
+# id = "native-format"
+# kind = "verification"
+# mise_task = "desktop-format-check"
+# source = { mise_config = "native/mise.toml", working_directory = "native" }
+# runner = "macos-arm64"               # Or "linux-x64".
+# timeout_minutes = 10                  # Bounded 1..=360.
 
 # Optional resource limits for generated jobs.
 # [resources]
