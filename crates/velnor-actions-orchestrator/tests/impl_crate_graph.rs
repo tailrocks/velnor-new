@@ -7,10 +7,12 @@ use std::fs;
 
 use tempfile::TempDir;
 use velnor_actions_contract::StepKind;
-use velnor_actions_contract::workflow::{TASK_EXECUTION_MANIFEST_PATH, TaskExecutionManifestV1};
+use velnor_actions_contract::workflow::{
+    TASK_EXECUTION_MANIFEST_PATH, TaskExecutionManifestEntryV1, TaskExecutionManifestV1,
+};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
-use velnor_actions_orchestrator::{prepare, render_staged_tree};
-use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
+use velnor_actions_orchestrator::{GenerationPreparation, prepare, render_staged_tree};
+use velnor_actions_workflow_renderer::{render::WORKFLOW_PATH, tree::RenderedTree};
 
 use super::impl_common::{TestResult, config_with_branch, make_repo};
 
@@ -145,7 +147,13 @@ fn w1_crate_prepare_and_obligations_share_toolchain_union() -> TestResult {
     let prep = prepare(repo.path())?;
     let tree = render_staged_tree(&prep)?;
     let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
-    let task = window(&yaml, "  rust-demo:", "  required:")?;
+    let task = window(yaml, "  rust-demo:", "  required:")?;
+    assert_crate_job_prepares_required_tools(task)?;
+    assert_clippy_task_uses_toolchain_union(&prep, &tree, task)?;
+    Ok(())
+}
+
+fn assert_crate_job_prepares_required_tools(task: &str) -> TestResult {
     let prepare_at = task.find("- name: Prepare pinned tools").ok_or("prepare")?;
     let run_at = task.find("- name: Clippy").ok_or("first obligation")?;
     let catalog = ToolCatalog::pinned();
@@ -164,6 +172,14 @@ fn w1_crate_prepare_and_obligations_share_toolchain_union() -> TestResult {
             "crate jobs install {spec} for test-spawned generate:\n{task}"
         );
     }
+    Ok(())
+}
+
+fn assert_clippy_task_uses_toolchain_union(
+    prep: &GenerationPreparation,
+    tree: &RenderedTree,
+    task: &str,
+) -> TestResult {
     let manifest_text = tree
         .get(TASK_EXECUTION_MANIFEST_PATH)
         .ok_or("missing task execution manifest")?;
@@ -183,6 +199,26 @@ fn w1_crate_prepare_and_obligations_share_toolchain_union() -> TestResult {
         .iter()
         .find(|step| step.name == "Clippy")
         .ok_or("missing Clippy task")?;
+    let StepKind::TaskExecution { task_id, .. } = &clippy.kind else {
+        return Err("Clippy must be a declared task".into());
+    };
+    let record = manifest
+        .tasks
+        .get(task_id)
+        .ok_or("missing Clippy task manifest record")?;
+    assert_task_record_matches_step(&clippy.kind, record)?;
+    assert_clippy_uses_pinned_rust(record)?;
+    assert!(
+        task.contains(&record.execution_digest),
+        "Clippy binds its manifest record"
+    );
+    Ok(())
+}
+
+fn assert_task_record_matches_step(
+    step: &StepKind,
+    record: &TaskExecutionManifestEntryV1,
+) -> TestResult {
     let StepKind::TaskExecution {
         task_id,
         task_digest,
@@ -193,14 +229,10 @@ fn w1_crate_prepare_and_obligations_share_toolchain_union() -> TestResult {
         matrix_key,
         report_helper_version,
         matrix_max_parallel,
-    } = &clippy.kind
+    } = step
     else {
         return Err("Clippy must be a declared task".into());
     };
-    let record = manifest
-        .tasks
-        .get(task_id)
-        .ok_or("missing Clippy task manifest record")?;
     assert_eq!(record.task_id, *task_id);
     assert_eq!(record.task_digest, *task_digest);
     assert_eq!(record.argv, *argv);
@@ -210,11 +242,11 @@ fn w1_crate_prepare_and_obligations_share_toolchain_union() -> TestResult {
     assert_eq!(record.matrix_key, *matrix_key);
     assert_eq!(record.report_helper_version, *report_helper_version);
     assert_eq!(record.matrix_max_parallel, *matrix_max_parallel);
-    assert!(
-        task.contains(&record.execution_digest),
-        "Clippy wrapper binds the validated manifest record: {}\n{task}",
-        record.execution_digest
-    );
+    Ok(())
+}
+
+fn assert_clippy_uses_pinned_rust(record: &TaskExecutionManifestEntryV1) -> TestResult {
+    let catalog = ToolCatalog::pinned();
     let rust_spec = catalog.tool_spec(PinnedTool::Rust);
     let rust_version = catalog.rustup_toolchain();
     assert!(
