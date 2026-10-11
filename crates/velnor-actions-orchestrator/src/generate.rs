@@ -17,6 +17,7 @@ use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 use crate::provenance::{ProfileProvenance, profile_provenance};
 use crate::validate::validate_staged;
+use crate::workflow::scale_set_selector_for_dispatch;
 
 /// Filesystem guards: snapshots, destination validation, and ownership.
 #[path = "generate_guards.rs"]
@@ -172,15 +173,23 @@ fn render_all(
             problem: err.to_string(),
         }
     })?;
+    let mut render_context = prep.workflow.context.clone();
+    render_context.scale_set_selector = scale_set_selector_for_dispatch(&prep.config, dispatch)?;
+    let mut actionlint_input = prep.workflow.actionlint.clone();
+    actionlint_input.extra_runner_labels = render_context
+        .scale_set_selector
+        .as_ref()
+        .map(|selector| selector.labels().to_vec())
+        .unwrap_or_default();
     let rendered = velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared(
         &ir,
         prep.config.workflow.policy,
         prep.workflow.support.as_ref(),
-        &prep.workflow.context,
+        &render_context,
         &mise,
     )?;
     let workflow = rendered.yaml;
-    let actionlint = render_actionlint_yaml(&prep.workflow.actionlint)?;
+    let actionlint = render_actionlint_yaml(&actionlint_input)?;
     let actionlint = rehead_actionlint_marker(&actionlint.yaml, version)?;
     let mut extra = crate::release_emit::release_files(prep, &mise)?;
     extra.extend(crate::binary_release_emit::files(prep)?);

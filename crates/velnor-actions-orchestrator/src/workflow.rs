@@ -18,8 +18,9 @@ use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy};
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, Permissions, Step, StepKind, Trigger, ValidatorKind,
-    VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    Concurrency, ExecutionMode, GeneratorValidation, Job, Permissions, ScaleSetSelector, Step,
+    StepKind, Trigger, ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr,
+    WorkflowPolicy,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::render::{
@@ -37,6 +38,14 @@ pub(super) mod workflow_policy;
 pub(crate) use workflow_policy::prepare_rust_components_step;
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
+
+/// Resolve the scale-set selector for the mode that will actually be rendered.
+pub(crate) fn scale_set_selector_for_dispatch(
+    config: &VelnorConfig,
+    dispatch: Option<ExecutionMode>,
+) -> Result<Option<ScaleSetSelector>, OrchestratorError> {
+    workflow_context::scale_set_selector(config, dispatch)
+}
 
 /// Pinned `actions/checkout` ref (cli-contract section 4 sample pin).
 pub const CHECKOUT_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";

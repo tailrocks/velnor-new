@@ -111,9 +111,15 @@ fn dispatch_mode_overrides_configured_mode() -> TestResult {
     let forced = render_staged_tree_with(&prep, Some(ExecutionMode::Both))?;
     let hosted_ci = required_file(&hosted, ".github/workflows/ci.yml")?;
     let forced_ci = required_file(&forced, ".github/workflows/ci.yml")?;
+    let hosted_actionlint = required_file(&hosted, ".github/actionlint.yaml")?;
+    let forced_actionlint = required_file(&forced, ".github/actionlint.yaml")?;
     assert!(job_ids(hosted_ci).contains(&"rust-demo"), "{hosted_ci}");
     assert!(!hosted_ci.contains("rust-demo__hosted"), "{hosted_ci}");
+    assert!(!hosted_actionlint.contains("ubuntu-26.04-scale-set"));
+    assert!(!hosted_actionlint.contains("- velnor"));
     assert_both_ci(forced_ci)?;
+    assert!(forced_actionlint.contains("ubuntu-26.04-scale-set"));
+    assert!(forced_actionlint.contains("- velnor"));
     Ok(())
 }
 
