@@ -123,7 +123,7 @@ fn held_status_requires_an_exact_pin_version_match() {
         Some(&matching_pin),
         None,
     );
-    assert!(matching_context.failures.is_empty());
+    assert_eq!(matching_context.failures, [] as [String; 0]);
 
     let mut action_context = FreshnessContext::new(std::path::PathBuf::new(), false, false);
     action_context.holds = vec![json!({
@@ -150,5 +150,5 @@ fn held_status_requires_an_exact_pin_version_match() {
         Some(&version_pin),
         Some(&version_pin),
     );
-    assert!(action_context.failures.is_empty());
+    assert_eq!(action_context.failures, [] as [String; 0]);
 }
