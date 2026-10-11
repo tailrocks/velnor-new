@@ -35,7 +35,7 @@ fn metadata_target_directory(document: &Value, root: &Path) -> Outcome<PathBuf> 
     existing_or_absolute(root, &target_directory)
 }
 
-fn pinned_mbx() -> Outcome<(PathBuf, String, String)> {
+fn pinned_mbx() -> Outcome<(PathBuf, String)> {
     let catalog = crate::impl_repo_policy::read("crates/velnor-actions-mise/src/catalog.rs")?;
     let mbx_version = crate::impl_repo_policy::quoted_value(&catalog, "MR_BOXINGTON_VERSION")?;
     let rust_version = crate::impl_repo_policy::quoted_value(&catalog, "RUST_VERSION")?;
@@ -56,7 +56,7 @@ fn pinned_mbx() -> Outcome<(PathBuf, String, String)> {
         )
         .into());
     }
-    Ok((executable, mbx_version, rust_version))
+    Ok((executable, rust_version))
 }
 
 pub(super) fn mbx_output_at_target(
@@ -81,10 +81,9 @@ fn mbx_output_with_target(
         .parent()
         .ok_or("workspace manifest has no parent")?;
     let (command, options) = args.split_first().ok_or("empty MBX command")?;
-    let (mbx, mbx_version, rust_version) = pinned_mbx()?;
+    let (mbx, rust_version) = pinned_mbx()?;
     let mut process = Command::new(mbx);
     process
-        .arg(format!("+{mbx_version}"))
         .arg(format!("+{rust_version}"))
         .arg(command)
         .arg("--manifest-path")
