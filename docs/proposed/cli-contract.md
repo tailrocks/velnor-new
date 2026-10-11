@@ -2,10 +2,9 @@
 
 **Status:** Proposed. The `velnor-actions` binary is not implemented yet.
 
-This document defines the complete public command line for Velnor Actions V1.
-It has three commands. `plan` exposes a concise human summary from the same
-analysis used by `generate`; detailed task selection, cache decisions, report
-aggregation, and workflow rendering remain internal.
+This document defines the complete public command line for Velnor Actions V1. It has three commands.
+`plan` exposes a concise human summary from the same analysis used by `generate`; detailed task
+selection, cache decisions, report aggregation, and workflow rendering remain internal.
 
 ## 1. Executable and parser
 
@@ -27,55 +26,42 @@ an ignore flag, a base/head selector, `--check`, a task ID, a report path, or
 any other option not listed above. Unknown flags and extra positional arguments
 MUST fail with Clap's usage diagnostic.
 
-`crates/velnor-actions-cli/src/main.rs` parses arguments and dispatches typed
-requests to `velnor-actions-orchestrator`. The CLI MUST NOT invoke Git, Cargo,
-Mise, MBX, Nextest, or GitHub CLI directly. Command parsing tests MUST live in
-separate test files. The orchestrator owns internal plan/task/report types and
-coordinates typed process requests. The Mise adapter owns process creation,
-argument validation, environment construction, and result capture for those
-requests; the orchestrator MUST NOT launch processes or construct shell text.
+`crates/velnor-actions-cli/src/main.rs` parses arguments and dispatches typed requests to
+`velnor-actions-orchestrator`. The CLI MUST NOT invoke Git, Cargo, Mise, MBX, Nextest, or GitHub CLI
+directly. Command parsing tests MUST live in separate test files. The orchestrator owns internal
+plan/task/report types and coordinates typed process requests. The Mise adapter owns process
+creation, argument validation, environment construction, and result capture for those requests;
+the orchestrator MUST NOT launch processes or construct shell text.
 
-Internal workflow steps MUST NOT be exposed as subcommands. Product workflow
-operations use a bare invocation (no CLI arguments)
-with `VELNOR_INTERNAL_OP` naming a versioned typed operation
+Internal workflow steps MUST NOT be exposed as subcommands. Product workflow operations use a bare
+invocation (no CLI arguments) with `VELNOR_INTERNAL_OP` naming a versioned typed operation
 (`write-request-v1`, `plan-v1`, `merge-v1`, `fetch-reports-v1`, or
-`write-task-report-v1`, or `resolve-qualification-v1`) plus its gate inputs.
-`resolve-qualification-v1` is restricted to a Velnor `workflow_dispatch`
-plan with a runner-temp request file and a read-only GitHub token; it resolves
-and verifies predecessor receipt lineage before `plan-v1` emits typed cache
-directives. The complete protocol is in
-[`hosted-cache-qualification-contract.md`](hosted-cache-qualification-contract.md).
-`plan-v1` and `merge-v1`
-read schema-1 JSON from the existing request file at
-`VELNOR_REQUEST_FILE` and write the schema-1 JSON result to the sibling
-`<op>-response.json` derived from the `<op>-request.json` file name;
-`plan-v1` preserves a valid planner result there before checking whether
-its matrix and identity fit the selected workflow output policy. A rejected
-output policy fails before plan artifacts or `$GITHUB_OUTPUT` are written;
-an unknown output-mode marker is rejected before planning and produces no
-result file.
-`write-request-v1` requires that path to be absent plus the GitHub event
-environment and the runner-temp anchor (`RUNNER_TEMP`, which the request
-path must sit under), and materializes the request file; `fetch-reports-v1`
-takes no request file and instead requires the runner-temp velnor
-directory plus the numeric run ID; `write-task-report-v1` takes no
-request file and instead requires the runner-temp velnor directory,
-the run environment, and the obligation env (`VELNOR_TASK_ID`,
-`VELNOR_EXIT_CODE`, optional `VELNOR_DOWNSTREAM_TASK_IDS`), resolving
-the obligation against the downloaded plan and writing the validated
-task plus single-task matrix reports.
-Versioned tags replace the earlier unversioned op vocabulary, which had
-no names for request materialization or report retrieval. Any CLI
-argument — including `--help`, `--version`, and public commands —
-routes to the public Clap tree with the internal environment ignored,
-so every public surface stays byte-identical with or without the
-environment set; generated steps always invoke the helper bare, and
-stray arguments fail closed through Clap's usage diagnostic (exit 2).
-An unsatisfiable gate (unknown op, missing inputs) on a bare invocation
-likewise falls through to Clap and fails with the usage diagnostic
-(exit 2). A satisfied gate that fails operationally exits 1 with empty
-stdout and a one-line stderr diagnostic. Helper staging and version
-rules are in §6 and [workflow §3](workflow-contract.md).
+`write-task-report-v1`, or
+`resolve-qualification-v1`) plus its gate inputs. `resolve-qualification-v1` is restricted to a Velnor
+`workflow_dispatch` plan with a runner-temp request file and a read-only GitHub token; it resolves and
+verifies predecessor receipt lineage before `plan-v1` emits typed cache directives. The complete
+protocol is in [`hosted-cache-qualification-contract.md`](hosted-cache-qualification-contract.md).
+`plan-v1` and `merge-v1` read schema-1 JSON from the existing request file at `VELNOR_REQUEST_FILE`
+and write the schema-1 JSON result to the sibling `<op>-response.json` derived from the
+`<op>-request.json` file name; `plan-v1` preserves a valid planner result there before checking
+whether its matrix and identity fit the selected workflow output policy. A rejected output policy fails
+before plan artifacts or `$GITHUB_OUTPUT` are written; an unknown output-mode marker is rejected before
+planning and produces no result file.
+`write-request-v1` requires that path to be absent plus the GitHub event environment and the runner-temp
+anchor (`RUNNER_TEMP`, which the request path must sit under), and materializes the request file;
+`fetch-reports-v1` takes no request file and instead requires the runner-temp velnor directory plus the
+numeric run ID; `write-task-report-v1` takes no request file and instead requires the runner-temp velnor
+directory, the run environment, and the obligation env (`VELNOR_TASK_ID`, `VELNOR_EXIT_CODE`, optional
+`VELNOR_DOWNSTREAM_TASK_IDS`), resolving the obligation against the downloaded plan and writing the
+validated task plus single-task matrix reports.
+Versioned tags replace the earlier unversioned op vocabulary, which had no names for request
+materialization or report retrieval. Any CLI argument — including `--help`, `--version`, and public
+commands — routes to the public Clap tree with the internal environment ignored, so every public
+surface stays byte-identical with or without the environment set; generated steps always invoke the
+helper bare, and stray arguments fail closed through Clap's usage diagnostic (exit 2). An unsatisfiable
+gate (unknown op, missing inputs) on a bare invocation likewise falls through to Clap and fails with
+the usage diagnostic (exit 2). A satisfied gate that fails operationally exits 1 with empty stdout and
+a one-line stderr diagnostic. Helper staging and version rules are in §6 and [workflow §3](workflow-contract.md).
 
 Repository-maintenance checks use the separate private operation
 `VELNOR_INTERNAL_OP=repo-policy-v1` and the allowlisted
