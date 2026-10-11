@@ -21,6 +21,11 @@ use crate::impl_repo_policy::{
 fn expected_internal(dir: &str) -> Vec<&str> {
     match dir {
         "crates/velnor-actions-contract" | "crates/velnor-actions-freshness" => vec![],
+        // Workflow rendering reads the Mise catalog only to validate pinned
+        // tool data; command execution stays in the Mise adapter.
+        "crates/velnor-actions-workflow-renderer" => {
+            vec!["velnor-actions-contract", "velnor-actions-mise"]
+        }
         "crates/velnor-actions-orchestrator" => vec![
             "velnor-actions-actionlint",
             "velnor-actions-contract",
