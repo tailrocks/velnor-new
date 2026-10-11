@@ -1,5 +1,7 @@
+use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 
+use crate::steps::{CompileDriver, mbx_steps_for_driver};
 use velnor_actions_contract::ReleaseTarget;
 use velnor_actions_mise::catalog::{PinnedTool, ToolCatalog};
 use velnor_actions_mise::{MiseInstall, PinnedToolExec, PrepareRustTarget};
@@ -27,6 +29,15 @@ pub(super) fn test_pins() -> ProductReleasePins {
     let install_resource_probe_target_argv = resource_probe_target_argv(&catalog);
     let install_intel_target_argv = intel_target_argv(&catalog);
     let build = build_argv(&catalog);
+    let qualify_mbx_action_steps = mbx_steps_for_driver(
+        &format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
+        CompileDriver::Mbx,
+        catalog.version(PinnedTool::MrBoxington),
+        catalog.version(PinnedTool::Rust),
+        BTreeMap::new(),
+    )
+    .expect("test MBX qualification steps are valid")
+    .expect("MBX qualification emits the native action steps");
     ProductReleasePins {
         linux_x86_64_setup: setup.clone(),
         macos_arm64_setup: setup.clone(),
@@ -50,6 +61,7 @@ pub(super) fn test_pins() -> ProductReleasePins {
             ],
             &catalog,
         ),
+        qualify_mbx_action_steps,
         install_runner_build_tools_argv,
         install_gh_argv: install_argv(&[PinnedTool::Gh], &catalog),
         build_argv: build.product,

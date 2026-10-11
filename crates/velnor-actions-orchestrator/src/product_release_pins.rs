@@ -10,6 +10,7 @@ use velnor_actions_workflow_renderer::ProductReleasePins;
 use velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv;
 
 use crate::OrchestratorError;
+use crate::mbx_preflight::steps_for_catalog;
 use crate::pins::resolve_mise_setup_for_release_target;
 use crate::utf8::strings_of;
 
@@ -43,6 +44,7 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, Orche
             &catalog,
         )?,
         install_qualify_tools_argv: qualify_install_argv(&catalog)?,
+        qualify_mbx_action_steps: steps_for_catalog(&catalog)?,
         install_runner_build_tools_argv: install_argv(
             &[PinnedTool::Rust, PinnedTool::MrBoxington],
             &catalog,

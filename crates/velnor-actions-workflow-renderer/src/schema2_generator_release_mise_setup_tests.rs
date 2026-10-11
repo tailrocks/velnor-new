@@ -45,7 +45,14 @@ fn each_archive_consumer_has_target_pinned_mise_before_extraction() -> Result<()
             ReleaseTarget::MacosX86_64,
         ),
     ] {
-        assert_qualifier_setup(&release, jobs, job_id, action, pins.setup_for(target))?;
+        assert_qualifier_setup(
+            &release,
+            jobs,
+            job_id,
+            action,
+            pins.setup_for(target),
+            &pins,
+        )?;
     }
     Ok(())
 }
@@ -68,13 +75,14 @@ fn assert_qualifier_setup(
     job_id: &str,
     action: &str,
     setup: &MiseSetup,
+    pins: &crate::schema2::ProductReleasePins,
 ) -> Result<(), Box<dyn Error>> {
     let job = super::map_field(jobs, job_id)?;
     let steps = super::sequence(super::map_field(super::map_entries(job)?, "steps")?)?;
     assert_eq!(steps.len(), 2, "{job_id} must fetch source, then qualify");
     super::assert_source_step(&steps[0], job_id)?;
     super::assert_qualifier_step(&steps[1], steps, action, job_id)?;
-    assert_action_extracts_guard(&release.actions, action, setup, job_id)?;
+    assert_action_extracts_guard(&release.actions, action, setup, job_id, pins)?;
     assert_eq!(
         super::map_entries(super::map_field(super::map_entries(job)?, "permissions",)?)?.len(),
         0,
@@ -152,6 +160,7 @@ fn assert_action_extracts_guard(
     action: &str,
     setup: &MiseSetup,
     job_id: &str,
+    pins: &crate::schema2::ProductReleasePins,
 ) -> Result<(), Box<dyn Error>> {
     let path = format!("{}/action.yml", action.trim_start_matches("./"));
     let (_, document) = actions
@@ -165,6 +174,7 @@ fn assert_action_extracts_guard(
         setup,
         job_id,
     )?;
+    assert_qualifier_mbx_preflight(steps, pins, job_id)?;
     assert_guard_runs_after_step(steps, 0, job_id);
     assert!(
         steps.iter().any(|step| {
@@ -177,6 +187,74 @@ fn assert_action_extracts_guard(
         "{job_id} action must use the owned archive guard"
     );
     Ok(())
+}
+
+fn assert_qualifier_mbx_preflight(
+    steps: &[Yaml],
+    pins: &crate::schema2::ProductReleasePins,
+    job_id: &str,
+) -> Result<(), Box<dyn Error>> {
+    let install_index = step_index_named(steps, "Install pinned qualification tools")?;
+    let install_run = super::scalar(super::map_field(
+        super::map_entries(&steps[install_index])?,
+        "run",
+    )?)?;
+    assert!(
+        !install_run.contains("mr-boxington@"),
+        "{job_id} must use one action-owned MBX installation source"
+    );
+
+    let expected = pins
+        .qualify_mbx_action_steps
+        .iter()
+        .map(crate::steps_plain::plain_step_to_yaml)
+        .collect::<Result<Vec<_>, _>>()?;
+    let mbx_steps = steps
+        .get(install_index + 1..install_index + 1 + expected.len())
+        .ok_or_else(|| format!("{job_id} is missing the action-owned MBX steps"))?;
+    assert_eq!(
+        mbx_steps, expected,
+        "{job_id} MBX steps must match typed pins"
+    );
+
+    let native_fields = super::map_entries(&mbx_steps[1])?;
+    let native_ref = super::scalar(super::map_field(native_fields, "uses")?)?;
+    assert_eq!(
+        native_ref,
+        format!("jdx/mr-boxington-action@{}", "a".repeat(40))
+    );
+    let native_inputs = super::map_entries(super::map_field(native_fields, "with")?)?;
+    assert_eq!(
+        super::scalar(super::map_field(native_inputs, "version")?)?,
+        pins.mr_boxington_version
+    );
+    assert_eq!(
+        super::scalar(super::map_field(native_inputs, "toolchain")?)?,
+        pins.rust_version
+    );
+    assert_eq!(pins.mr_boxington_version, "1.23.0");
+    assert_eq!(pins.rust_version, "1.99.0");
+
+    let version_check =
+        super::scalar(super::map_field(super::map_entries(&mbx_steps[2])?, "run")?)?;
+    assert!(version_check.contains(&format!(
+        "mise --no-config --no-env --no-hooks exec rust@{} -- mbx --version",
+        pins.rust_version
+    )));
+    assert!(version_check.contains(&format!("mbx {}", pins.mr_boxington_version)));
+    let qualify_index = step_index_named(steps, "Qualify downloaded candidate")?;
+    assert!(
+        qualify_index > install_index + expected.len(),
+        "{job_id} must verify native MBX before candidate execution"
+    );
+    Ok(())
+}
+
+fn step_index_named(steps: &[Yaml], name: &str) -> Result<usize, Box<dyn Error>> {
+    steps
+        .iter()
+        .position(|step| field(step, "name").is_ok_and(|value| value == &Yaml::str(name)))
+        .ok_or_else(|| format!("missing rendered step {name}").into())
 }
 
 fn mise_setup(action: char, version: &str, digest: char) -> MiseSetup {
