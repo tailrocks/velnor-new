@@ -4,7 +4,7 @@ use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 
 use crate::catalog::{PinnedTool, ToolCatalog};
-use crate::command::{ActionOwnedMbxPath, IsolatedCommand, ProcessOutput};
+use crate::command::{ActionOwnedMbxPath, IsolatedCommand, NO_AUTO_INSTALL_ENV, ProcessOutput};
 use crate::error::MiseError;
 
 use super::PinnedToolExec;
@@ -72,6 +72,11 @@ impl MetadataCommand {
     #[must_use]
     pub fn full_env(&self) -> Vec<(OsString, OsString)> {
         let mut env = IsolatedCommand::env_overlay();
+        env.extend(
+            NO_AUTO_INSTALL_ENV
+                .iter()
+                .map(|(key, value)| (OsString::from(key), OsString::from(value))),
+        );
         env.extend(self.extra_env.iter().cloned());
         env
     }
