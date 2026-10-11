@@ -319,7 +319,7 @@ fn coordinator_command_selects_pinned_tools() {
         .iter()
         .position(|arg| arg == "--")
         .expect("payload separator");
-    for spec in ["rust@1.98.1", "release-plz@0.3.170"] {
+    for spec in ["rust@1.99.0", "release-plz@0.3.170"] {
         assert!(
             argv[..separator].iter().any(|arg| arg == spec),
             "missing tool spec before --: {spec}"
