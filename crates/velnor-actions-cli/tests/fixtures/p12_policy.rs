@@ -46,8 +46,8 @@ fn local_pin_mismatch_fails() -> Result<(), Box<dyn Error>> {
     harness::mutate(
         &fixture.dir,
         CATALOG,
-        "RUST_VERSION: &str = \"1.98.1\"",
         "RUST_VERSION: &str = \"1.99.0\"",
+        "RUST_VERSION: &str = \"1.98.1\"",
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_fail(&run, "local-pin");
@@ -61,8 +61,8 @@ fn policy_mirror_drift_fails() -> Result<(), Box<dyn Error>> {
     harness::mutate(
         &fixture.dir,
         POLICY,
-        "rust = \"1.98.1\"",
         "rust = \"1.99.0\"",
+        "rust = \"1.98.1\"",
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_fail(&run, "policy-mirror");

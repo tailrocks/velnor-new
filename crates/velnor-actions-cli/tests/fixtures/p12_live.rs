@@ -137,7 +137,7 @@ fn every_fail_row_is_nonzero() -> Result<(), Box<dyn Error>> {
         (
             "t-mirror",
             POLICY,
-            Some(("rust = \"1.98.1\"", "rust = \"1.99.0\"")),
+            Some(("rust = \"1.99.0\"", "rust = \"1.98.1\"")),
             "policy-mirror",
         ),
         (
@@ -226,8 +226,8 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
         "[validation-tools]",
         "cargo-mutants = \"27.1.0\"",
         "mise = \"2026.10.7\"",
-        "rust = \"1.98.1\"",
-        "mr-boxington = \"1.21.1\"",
+        "rust = \"1.99.0\"",
+        "mr-boxington = \"1.23.0\"",
         "gh = \"2.102.0\"",
         "actionlint = \"1.7.12\"",
         "shellcheck = \"0.11.0\"",
