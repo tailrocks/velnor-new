@@ -242,7 +242,7 @@ fn write_mbx_fixture(root: &Path) -> Result<std::path::PathBuf, Box<dyn Error>> 
     let script = bin.join("mbx");
     std::fs::write(
         &script,
-        r##"#!/bin/sh
+        r#"#!/bin/sh
 set -eu
 printf '%s\n' "$*" >> "$VELNOR_TEST_MBX_LOG"
 if [ "${1-}" = "--version" ]; then
@@ -273,7 +273,7 @@ case "$manifest" in
     */apple/Cargo.toml) printf '%s\n' '{ malformed metadata';;
     *) printf '{"version":1,"workspace_root":"%s"}\n' "$VELNOR_TEST_MBX_ROOT";;
 esac
-"##,
+"#,
     )?;
     let mut permissions = std::fs::metadata(&script)?.permissions();
     permissions.set_mode(0o755);
