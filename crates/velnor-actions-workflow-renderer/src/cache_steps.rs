@@ -18,7 +18,8 @@ pub use mbx_gate::check_mbx_gating;
 pub(crate) use mbx_gate::is_mbx_action;
 pub(crate) use mbx_preflight::{
     ACTION_MBX_BIN, MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV,
-    MBX_SHARE_OUT_DIR_VALUE, RESOLVE_ACTION_MBX_BIN, mbx_workspace_clean_step_for_action,
+    MBX_SHARE_OUT_DIR_VALUE, RESOLVE_ACTION_MBX_BIN, mbx_version_check_step,
+    mbx_workspace_clean_step_for_action,
 };
 pub use mbx_preflight::{
     MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, MBX_VERSION_CHECK_NAME,

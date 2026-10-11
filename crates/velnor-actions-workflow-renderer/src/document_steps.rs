@@ -214,7 +214,7 @@ pub(crate) fn step_to_yaml(
         StepKind::Shell { run, env } => {
             let action_owned_mbx = crate::action_mbx_shell::role_uses_resolver(step.role);
             if action_owned_mbx {
-                crate::action_mbx_shell::validate_argv(run)?;
+                crate::action_mbx_shell::validate_argv_for_role(run, step.role)?;
             } else {
                 commands::validate_command_argv(run)?;
             }
@@ -243,7 +243,7 @@ pub(crate) fn step_to_yaml(
             entries.push((
                 "run".to_owned(),
                 Yaml::str(if action_owned_mbx {
-                    crate::action_mbx_shell::join_argv_for_run(run)?
+                    crate::action_mbx_shell::join_argv_for_run(run, step.role)?
                 } else {
                     commands::join_argv_for_run(run)?
                 }),
