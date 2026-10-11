@@ -39,9 +39,11 @@ fn action_owned_metadata_checks_version_and_shares_tool_homes() -> TestResult {
     }
 
     let fixture = Fixture::new()?;
-    fixture.write_program(
-        "mise",
-        r#"
+    install_fake_tools(&fixture)?;
+    run_cases(&fixture)
+}
+
+const FAKE_MISE: &str = r#"
 test "$1:$2:$3:$4:$5:$6:$7" = '--no-config:--no-env:--no-hooks:exec:rust@1.99.0:--:mbx'
 test "${MISE_AUTO_INSTALL-unset}" = false
 phase=version
@@ -63,11 +65,9 @@ fi
 printf '%s\n' "$phase" >> "$VELNOR_METADATA_TRACE"
 shift 6
 exec "$@"
-"#,
-    )?;
-    fixture.write_program(
-        "mbx",
-        r#"
+"#;
+
+const FAKE_MBX: &str = r#"
 if [ "$1" = --version ]; then
     printf 'mbx %s\n' "$VELNOR_FIXTURE_MBX_VERSION"
     exit 0
@@ -76,54 +76,80 @@ test "$1:$2:$3:$4:$5:$6" = '+1.99.0:metadata:--format-version:1:--no-deps:--mani
 test "$7" = "$VELNOR_EXPECTED_MANIFEST"
 touch "$VELNOR_METADATA_MARKER"
 printf '{"packages":[]}\n'
-"#,
-    )?;
+"#;
 
+fn install_fake_tools(fixture: &Fixture) -> TestResult {
+    fixture.write_program("mise", FAKE_MISE)?;
+    fixture.write_program("mbx", FAKE_MBX)
+}
+
+fn run_cases(fixture: &Fixture) -> TestResult {
     for (mode, version, expected_trace, metadata_runs) in [
         ("wrong-command", "1.22.0", "version\n", false),
         ("wrong-request", "1.22.0", "version\n", false),
         ("invalid-rustup-selector", "1.23.0", "", false),
         ("valid-command", "1.23.0", "version\nmetadata\n", true),
     ] {
-        let trace = fixture.0.join(format!("{mode}.trace"));
-        let marker = fixture.0.join(format!("{mode}.metadata-ran"));
-        let manifest = fixture.0.join("manifest with space/Cargo.toml");
-        let output = std::process::Command::new(std::env::current_exe()?)
-            .args([
-                "--exact",
-                "impl_mise_action_owned_metadata::action_owned_metadata_checks_version_and_shares_tool_homes",
-                "--nocapture",
-            ])
-            .env("VELNOR_METADATA_GUARD_CHILD", mode)
-            .env("VELNOR_FIXTURE_MBX_VERSION", version)
-            .env("VELNOR_METADATA_TRACE", &trace)
-            .env("VELNOR_METADATA_MARKER", &marker)
-            .env("VELNOR_EXPECTED_MANIFEST", &manifest)
-            .env("VELNOR_EXPECT_HOMES", if mode == "wrong-request" { "no" } else { "yes" })
-            .env("VELNOR_EXPECTED_RUSTUP_HOME", fixture.0.join("owned-rustup"))
-            .env("VELNOR_EXPECTED_CARGO_HOME", fixture.0.join("owned-cargo"))
-            .env("MISE_RUSTUP_HOME", fixture.0.join("ambient-rustup"))
-            .env("MISE_CARGO_HOME", fixture.0.join("ambient-cargo"))
-            .env("RUSTUP_TOOLCHAIN", "ambient-toolchain")
-            .env(
-                "PATH",
-                format!("{}:/usr/bin:/bin", fixture.0.join("bin").display()),
-            )
-            .output()?;
-        assert!(
-            output.status.success(),
-            "{mode} child failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let actual_trace = if trace.exists() {
-            std::fs::read_to_string(trace)?
-        } else {
-            String::new()
-        };
-        assert_eq!(actual_trace, expected_trace, "{mode}");
-        assert_eq!(marker.exists(), metadata_runs, "{mode}");
+        run_case(fixture, mode, version, expected_trace, metadata_runs)?;
     }
     Ok(())
+}
+
+fn run_case(
+    fixture: &Fixture,
+    mode: &str,
+    version: &str,
+    expected_trace: &str,
+    metadata_runs: bool,
+) -> TestResult {
+    let trace = fixture.0.join(format!("{mode}.trace"));
+    let marker = fixture.0.join(format!("{mode}.metadata-ran"));
+    let manifest = fixture.0.join("manifest with space/Cargo.toml");
+    let output = child_process(fixture, mode, version, &manifest, &trace, &marker)?.output()?;
+    assert!(
+        output.status.success(),
+        "{mode} child failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let actual_trace = if trace.exists() {
+        std::fs::read_to_string(trace)?
+    } else {
+        String::new()
+    };
+    assert_eq!(actual_trace, expected_trace, "{mode}");
+    assert_eq!(marker.exists(), metadata_runs, "{mode}");
+    Ok(())
+}
+
+fn child_process(
+    fixture: &Fixture,
+    mode: &str,
+    version: &str,
+    manifest: &Path,
+    trace: &Path,
+    marker: &Path,
+) -> TestResult<std::process::Command> {
+    let binary = std::env::current_exe()?;
+    let expected_homes = if mode == "wrong-request" { "no" } else { "yes" };
+    let bin = fixture.0.join("bin");
+    Ok(std::process::Command::new(binary)
+        .args([
+            "--exact",
+            "impl_mise_action_owned_metadata::action_owned_metadata_checks_version_and_shares_tool_homes",
+            "--nocapture",
+        ])
+        .env("VELNOR_METADATA_GUARD_CHILD", mode)
+        .env("VELNOR_FIXTURE_MBX_VERSION", version)
+        .env("VELNOR_METADATA_TRACE", trace)
+        .env("VELNOR_METADATA_MARKER", marker)
+        .env("VELNOR_EXPECTED_MANIFEST", manifest)
+        .env("VELNOR_EXPECT_HOMES", expected_homes)
+        .env("VELNOR_EXPECTED_RUSTUP_HOME", fixture.0.join("owned-rustup"))
+        .env("VELNOR_EXPECTED_CARGO_HOME", fixture.0.join("owned-cargo"))
+        .env("MISE_RUSTUP_HOME", fixture.0.join("ambient-rustup"))
+        .env("MISE_CARGO_HOME", fixture.0.join("ambient-cargo"))
+        .env("RUSTUP_TOOLCHAIN", "ambient-toolchain")
+        .env("PATH", format!("{}:/usr/bin:/bin", bin.display())))
 }
 
 fn run_child(mode: &str) -> TestResult {
