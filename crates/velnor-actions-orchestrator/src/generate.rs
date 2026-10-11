@@ -3,6 +3,8 @@
 //! fail closed when an existing tree cannot be exchanged.
 
 use std::path::{Path, PathBuf};
+#[cfg(debug_assertions)]
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use velnor_actions_actionlint::render_actionlint_yaml;
 use velnor_actions_contract::{ExecutionMode, expand_workflow};
@@ -17,6 +19,11 @@ use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 use crate::provenance::{ProfileProvenance, profile_provenance};
 use crate::validate::validate_staged;
+
+/// Temporary debug-build phase counter for the atomic replacement repro.
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+pub static DEBUG_GENERATE_PHASE: AtomicUsize = AtomicUsize::new(0);
 
 /// Filesystem guards: snapshots, destination validation, and ownership.
 #[path = "generate_guards.rs"]
@@ -274,9 +281,19 @@ fn swap_existing_directory(
     exchange: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
 ) -> Result<Vec<String>, OrchestratorError> {
     let label = target.display().to_string();
-    exchange(staged, target).map_err(|err| OrchestratorError::io(label, err.to_string()))?;
+    #[cfg(debug_assertions)]
+    DEBUG_GENERATE_PHASE.fetch_add(1, Ordering::SeqCst);
+    let exchange_result = exchange(staged, target);
+    #[cfg(debug_assertions)]
+    DEBUG_GENERATE_PHASE.fetch_add(1, Ordering::SeqCst);
+    exchange_result.map_err(|err| OrchestratorError::io(label, err.to_string()))?;
     let old = staged.display().to_string();
-    match std::fs::remove_dir_all(staged) {
+    #[cfg(debug_assertions)]
+    DEBUG_GENERATE_PHASE.fetch_add(1, Ordering::SeqCst);
+    let cleanup = std::fs::remove_dir_all(staged);
+    #[cfg(debug_assertions)]
+    DEBUG_GENERATE_PHASE.fetch_add(1, Ordering::SeqCst);
+    match cleanup {
         Ok(()) => Ok(Vec::new()),
         Err(cleanup) => Ok(vec![format!("backup_cleanup_failed:{old}:{cleanup}")]),
     }
