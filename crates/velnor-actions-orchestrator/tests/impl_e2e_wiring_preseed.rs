@@ -6,7 +6,7 @@ use velnor_actions_workflow_renderer::{
     MBX_VERSION_CHECK_NAME, WORKFLOW_PATH, steps::MBX_RESTORE_NAME,
 };
 
-use super::{JobText, check_tree, check_verify_mbx, make_velnor_repo};
+use super::{JobText, check_tree, make_velnor_repo};
 use crate::impl_common::{TestResult, without_ambient_identity};
 
 fn assert_native_preseed_owner(jobs: &[JobText], yaml: &str) -> TestResult {

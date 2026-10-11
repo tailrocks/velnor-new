@@ -144,7 +144,8 @@ fn version_policy_drift_fails_velnor_generate() -> TestResult {
             repo.path(),
         )?;
         let policy = repo_policy()?;
-        let rust_version = ToolCatalog::pinned().version(PinnedTool::Rust);
+        let catalog = ToolCatalog::pinned();
+        let rust_version = catalog.version(PinnedTool::Rust);
         let drifted_policy =
             policy.replace(&format!("rust = \"{rust_version}\""), "rust = \"9.9.9\"");
         assert_ne!(
