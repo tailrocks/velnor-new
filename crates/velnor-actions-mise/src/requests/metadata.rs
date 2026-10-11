@@ -4,10 +4,9 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use crate::catalog::{PinnedTool, ToolCatalog};
-use crate::command::IsolatedCommand;
 use crate::error::MiseError;
 
-use super::{full_mise_argv, metadata_mbx_argv};
+use super::{MetadataCommand, full_mise_argv, metadata_mbx_argv};
 
 /// Conservative discovery of one manifest through pinned MBX.
 ///
@@ -54,32 +53,27 @@ impl MetadataDiscovery {
     /// Full mise argument vector including the program.
     #[must_use]
     pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
-        full_mise_argv(
-            catalog,
-            &[PinnedTool::Rust, PinnedTool::MrBoxington],
-            &self.mbx_argv(catalog),
-        )
+        full_mise_argv(catalog, &[PinnedTool::Rust], &self.mbx_argv(catalog))
     }
 
-    /// Isolated command running this discovery.
+    /// Guarded command running this discovery.
     ///
     /// # Errors
     ///
     /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
     /// empty, which the constructor rules out.
-    pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
-        let specs = catalog.tool_specs(&[PinnedTool::Rust, PinnedTool::MrBoxington]);
-        Ok(IsolatedCommand::mise_exec(&specs, &self.mbx_argv(catalog))?
-            .with_policy(crate::command::EnvPolicy::Mbx))
+    pub fn command(&self, catalog: &ToolCatalog) -> Result<MetadataCommand, MiseError> {
+        MetadataCommand::new(catalog, self.mbx_argv(catalog))
     }
 
-    /// Run discovery and return the raw metadata JSON string.
+    /// Verify action-owned MBX, run discovery, and return raw metadata JSON.
     ///
     /// # Errors
     ///
-    /// Returns [`MiseError::SpawnFailed`] when MBX cannot launch,
-    /// [`MiseError::NonZeroExit`] on nonzero status, and
-    /// [`MiseError::InvalidUtf8`] when stdout is not text.
+    /// Returns [`MiseError::InvalidToolVersion`] when action-owned MBX does
+    /// not match the catalog pin, [`MiseError::SpawnFailed`] when a process
+    /// cannot launch, [`MiseError::NonZeroExit`] on nonzero metadata status,
+    /// and [`MiseError::InvalidUtf8`] when stdout is not text.
     pub fn run(&self, catalog: &ToolCatalog) -> Result<String, MiseError> {
         let output = self.command(catalog)?.run()?;
         output.require_success("mise")?;
@@ -132,32 +126,27 @@ impl MetadataQualification {
     /// Full mise argument vector including the program.
     #[must_use]
     pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
-        full_mise_argv(
-            catalog,
-            &[PinnedTool::Rust, PinnedTool::MrBoxington],
-            &self.mbx_argv(catalog),
-        )
+        full_mise_argv(catalog, &[PinnedTool::Rust], &self.mbx_argv(catalog))
     }
 
-    /// Isolated command running this qualification.
+    /// Guarded command running this qualification.
     ///
     /// # Errors
     ///
     /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
     /// empty, which the constructor rules out.
-    pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
-        let specs = catalog.tool_specs(&[PinnedTool::Rust, PinnedTool::MrBoxington]);
-        Ok(IsolatedCommand::mise_exec(&specs, &self.mbx_argv(catalog))?
-            .with_policy(crate::command::EnvPolicy::Mbx))
+    pub fn command(&self, catalog: &ToolCatalog) -> Result<MetadataCommand, MiseError> {
+        MetadataCommand::new(catalog, self.mbx_argv(catalog))
     }
 
-    /// Run qualification and return the raw metadata JSON string.
+    /// Verify action-owned MBX, run qualification, and return raw metadata JSON.
     ///
     /// # Errors
     ///
-    /// Returns [`MiseError::SpawnFailed`] when MBX cannot launch,
-    /// [`MiseError::NonZeroExit`] on nonzero status, and
-    /// [`MiseError::InvalidUtf8`] when stdout is not text.
+    /// Returns [`MiseError::InvalidToolVersion`] when action-owned MBX does
+    /// not match the catalog pin, [`MiseError::SpawnFailed`] when a process
+    /// cannot launch, [`MiseError::NonZeroExit`] on nonzero metadata status,
+    /// and [`MiseError::InvalidUtf8`] when stdout is not text.
     pub fn run(&self, catalog: &ToolCatalog) -> Result<String, MiseError> {
         let output = self.command(catalog)?.run()?;
         output.require_success("mise")?;
