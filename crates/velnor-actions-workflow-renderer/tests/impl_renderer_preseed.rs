@@ -41,6 +41,46 @@ fn build_argv() -> Vec<String> {
     argv
 }
 
+fn assert_action_owned_build_step(build_step: &velnor_actions_contract::Step) {
+    let velnor_actions_contract::StepKind::Shell { run, env } = &build_step.kind else {
+        panic!("pre-seed build must be shell: {:?}", build_step.kind);
+    };
+    // S1: the helper build compiles PR source, so it unsets runner
+    // credentials before exec and scrubs the step env.
+    assert_eq!(
+        (
+            run.first().map(String::as_str),
+            run.get(1).map(String::as_str)
+        ),
+        (Some("sh"), Some("-c")),
+        "credential scrubbing stays inside the shell wrapper: {run:?}"
+    );
+    assert_eq!(run.len(), 3, "wrapped build command: {run:?}");
+    let script = run[2].as_str();
+    let credential_unset =
+        velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude();
+    assert!(
+        script.starts_with(&credential_unset),
+        "build must unset runtime credentials before its payload: {script}"
+    );
+    for key in velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST {
+        assert_eq!(
+            env.get(key).map(String::as_str),
+            Some(""),
+            "pre-seed build must scrub {key}"
+        );
+    }
+    let home = env.get("MISE_CARGO_HOME").map(String::as_str);
+    assert_eq!(home, Some("owned"), "build carries caller homes");
+    assert!(script.contains("mbx_bin=$(command -v mbx)"), "{script}");
+    assert!(
+        script.contains(&format!(
+            "exec rust@{RUST_TOOLCHAIN} -- \"$mbx_bin\" +{RUST_TOOLCHAIN} build"
+        )),
+        "build uses the action-owned absolute MBX through Rust-only Mise: {script}"
+    );
+}
+
 pub(crate) fn preseed_plan() -> Result<(String, Job), RenderError> {
     let build = build_argv();
     Ok(job(
@@ -83,43 +123,7 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
         &build,
         &BTreeMap::from([("MISE_CARGO_HOME".to_owned(), "owned".to_owned())]),
     )?;
-    // S1: the helper build compiles PR source, so it unsets runner
-    // credentials before exec and scrubs the step env.
-    let velnor_actions_contract::StepKind::Shell { run, env } = &build_step.kind else {
-        panic!("pre-seed build must be shell: {:?}", build_step.kind);
-    };
-    assert_eq!(
-        (
-            run.first().map(String::as_str),
-            run.get(1).map(String::as_str)
-        ),
-        (Some("sh"), Some("-c")),
-        "credential scrubbing stays inside the shell wrapper: {run:?}"
-    );
-    assert_eq!(run.len(), 3, "wrapped build command: {run:?}");
-    let script = run[2].as_str();
-    let credential_unset =
-        velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude();
-    assert!(
-        script.starts_with(&credential_unset),
-        "build must unset runtime credentials before its payload: {script}"
-    );
-    for key in velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST {
-        assert_eq!(
-            env.get(key).map(String::as_str),
-            Some(""),
-            "pre-seed build must scrub {key}"
-        );
-    }
-    let home = env.get("MISE_CARGO_HOME").map(String::as_str);
-    assert_eq!(home, Some("owned"), "build carries caller homes");
-    assert!(script.contains("mbx_bin=$(command -v mbx)"), "{script}");
-    assert!(
-        script.contains(&format!(
-            "exec rust@{RUST_TOOLCHAIN} -- \"$mbx_bin\" +{RUST_TOOLCHAIN} build"
-        )),
-        "build uses the action-owned absolute MBX through Rust-only Mise: {script}"
-    );
+    assert_action_owned_build_step(&build_step);
     for step in [
         build_step,
         preseed_verify_step(&mbx_probe(), MBX_VERSION, &BTreeMap::new())?,
