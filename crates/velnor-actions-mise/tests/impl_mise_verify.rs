@@ -175,6 +175,7 @@ fn verify_nextest_adds_runner_probe_per_driver() -> Result<(), String> {
             "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
             "--",
             "mbx",
+            "+1.98.1",
             "nextest",
             "--version",
         ])

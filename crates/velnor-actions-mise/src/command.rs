@@ -1,5 +1,7 @@
 //! Fixed subprocess wrapper: the sole `std::process::Command` constructor.
 //! Policy (`command_env.rs`) and output (`command_output.rs`) declare here.
+#[path = "command_action_mbx.rs"]
+mod action_owned_mbx;
 #[path = "command_cancellable.rs"]
 mod cancellable;
 #[path = "check_command.rs"]
@@ -14,6 +16,7 @@ mod output;
 mod qualified_acquisition;
 #[path = "command_tofu.rs"]
 mod tofu;
+pub(crate) use self::action_owned_mbx::ActionOwnedMbxPath;
 pub use check::resolve_program as resolve_check_program;
 
 pub use self::env::{

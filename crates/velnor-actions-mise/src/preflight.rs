@@ -83,7 +83,13 @@ impl RouteDriver {
     ///
     /// Returns [`MiseError`] if the fixed command is rejected.
     pub fn probe_exec(self, args: Vec<OsString>) -> Result<PinnedToolExec, MiseError> {
-        self.task_exec(args, false)
+        match self {
+            Self::Cargo => self.task_exec(args, false),
+            Self::Mbx if args.len() == 1 && args[0] == "--version" => {
+                PinnedToolExec::new_action_owned_mbx_version_probe(self.probe_tools())
+            }
+            Self::Mbx => self.task_exec(args, false),
+        }
     }
 
     /// Construct a compile-task invocation, optionally selecting Nextest.
@@ -104,10 +110,9 @@ impl RouteDriver {
         if nextest {
             tools.push(PinnedTool::Nextest);
         }
-        let program = OsStr::new(self.program());
         match self {
-            Self::Cargo => PinnedToolExec::new(tools, program, args),
-            Self::Mbx => PinnedToolExec::new_action_owned_mbx(tools, program, args),
+            Self::Cargo => PinnedToolExec::new(tools, OsStr::new("cargo"), args),
+            Self::Mbx => PinnedToolExec::new_action_owned_mbx(tools, args),
         }
     }
 }

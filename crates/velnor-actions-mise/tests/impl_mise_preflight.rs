@@ -68,7 +68,10 @@ fn mbx_route_separates_action_identity_from_mise_probe() -> Result<(), String> {
     let command = selection
         .command(&pinned())
         .map_err(|err| err.to_string())?;
-    assert_eq!(command.argv(), invocation);
+    let actual = command.argv();
+    assert_eq!(actual[0..7], invocation[0..7]);
+    assert!(std::path::Path::new(&actual[7]).is_absolute());
+    assert_eq!(actual[8..], invocation[8..]);
     assert_eq!(command.program(), "mise");
     assert!(velnor_actions_contract::is_valid_digest(
         selection.cache_format_id()

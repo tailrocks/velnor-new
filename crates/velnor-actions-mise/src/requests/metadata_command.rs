@@ -4,84 +4,88 @@ use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 
 use crate::catalog::{PinnedTool, ToolCatalog};
-use crate::command::{IsolatedCommand, ProcessOutput};
+use crate::command::{ActionOwnedMbxPath, IsolatedCommand, ProcessOutput};
 use crate::error::MiseError;
 
 use super::PinnedToolExec;
 
-const MBX_PROGRAM: &str = "mbx";
 const MBX_VERSION_ARGUMENT: &str = "--version";
 
 /// Metadata execution whose action-owned MBX authority is checked before
 /// every metadata process is spawned.
 ///
-/// The wrapped commands are intentionally private: callers may inspect the
-/// metadata argv and environment or add the same validated overlays to both
-/// invocations, but cannot execute metadata without the version preflight.
+/// The wrapped tool executions are intentionally private. `run` resolves the
+/// action-provided executable once from the final filtered environment, uses
+/// it for the version check, and then reuses it for metadata.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetadataCommand {
-    version_probe: IsolatedCommand,
-    metadata: IsolatedCommand,
+    version_probe: PinnedToolExec,
+    metadata: PinnedToolExec,
     catalog: ToolCatalog,
+    cwd: Option<PathBuf>,
+    extra_env: Vec<(OsString, OsString)>,
 }
 
 impl MetadataCommand {
     pub(crate) fn new(
         catalog: &ToolCatalog,
-        full_mbx_argv: Vec<OsString>,
+        metadata_args: Vec<OsString>,
     ) -> Result<Self, MiseError> {
-        let (program, payload_args) = split_mbx_argv(full_mbx_argv)?;
+        if metadata_args.first().map(OsString::as_os_str) != Some(OsStr::new("metadata")) {
+            return Err(MiseError::ForbiddenPayload {
+                program: "mbx".to_owned(),
+                reason: "metadata_requires_metadata_subcommand".to_owned(),
+            });
+        }
         let tools = vec![PinnedTool::Rust];
-        let version_probe = PinnedToolExec::new_action_owned_mbx(
-            tools.clone(),
-            &program,
-            vec![OsString::from(MBX_VERSION_ARGUMENT)],
-        )?
-        .command(catalog)?;
-        let metadata = PinnedToolExec::new_action_owned_mbx(tools, &program, payload_args)?
-            .command(catalog)?;
+        let version_probe = PinnedToolExec::new_action_owned_mbx_version_probe(tools.clone())?;
+        let metadata = PinnedToolExec::new_action_owned_mbx(tools, metadata_args)?;
         Ok(Self {
             version_probe,
             metadata,
             catalog: catalog.clone(),
+            cwd: None,
+            extra_env: Vec::new(),
         })
     }
 
-    /// Metadata command argv, for inspection only.
+    /// Portable metadata argv, for inspection only. Runtime replaces `mbx`
+    /// with the one absolute action-owned executable before invoking Mise.
     #[must_use]
     pub fn argv(&self) -> Vec<OsString> {
-        self.metadata.argv()
+        self.metadata.argv(&self.catalog)
     }
 
     /// Program used by the Mise invocation.
     #[must_use]
     pub fn program(&self) -> &OsStr {
-        self.metadata.program()
+        OsStr::new("mise")
     }
 
     /// Working-directory override shared by the probe and metadata command.
     #[must_use]
     pub fn cwd(&self) -> Option<&PathBuf> {
-        self.metadata.cwd()
+        self.cwd.as_ref()
     }
 
-    /// Read-only environment overlay applied to the metadata command.
+    /// Read-only environment overlay applied to both commands.
     #[must_use]
     pub fn full_env(&self) -> Vec<(OsString, OsString)> {
-        self.metadata.full_env()
+        let mut env = IsolatedCommand::env_overlay();
+        env.extend(self.extra_env.iter().cloned());
+        env
     }
 
     /// Whether the metadata command disables Mise's implicit installation.
     #[must_use]
-    pub fn disables_auto_install(&self) -> bool {
-        self.metadata.disables_auto_install()
+    pub const fn disables_auto_install(&self) -> bool {
+        true
     }
 
     /// Set one working directory for both preflight and metadata invocations.
     #[must_use]
     pub fn with_cwd(mut self, cwd: PathBuf) -> Self {
-        self.version_probe = self.version_probe.with_cwd(cwd.clone());
-        self.metadata = self.metadata.with_cwd(cwd);
+        self.cwd = Some(cwd);
         self
     }
 
@@ -94,6 +98,8 @@ impl MetadataCommand {
     /// No raw command can be extracted from this wrapper.
     pub fn with_env(mut self, extra: &[(OsString, OsString)]) -> Result<Self, MiseError> {
         let expected_toolchain = self.catalog.rustup_toolchain();
+        let probe = self.version_probe.command_template(&self.catalog)?;
+        let metadata = self.metadata.command_template(&self.catalog)?;
         for (key, value) in extra {
             if key == crate::command::RUSTUP_TOOLCHAIN_ENV
                 && value.as_os_str() != OsStr::new(expected_toolchain.as_str())
@@ -104,30 +110,53 @@ impl MetadataCommand {
                 });
             }
             let pair = [(key.clone(), value.clone())];
-            self.version_probe = self.version_probe.with_env(&pair)?;
-            self.metadata = self.metadata.with_env(&pair)?;
+            probe.clone().with_env(&pair)?;
+            metadata.clone().with_env(&pair)?;
         }
+        self.extra_env.extend(extra.iter().cloned());
         Ok(self)
     }
 
     /// Verify action-owned MBX, then run the metadata request.
     ///
     /// Both processes use the same Rust selector, Mise isolation policy,
-    /// working directory, and validated environment additions. The probe's
-    /// output is only interpreted as a strict version line; diagnostics never
-    /// copy arbitrary probe output into an error.
+    /// working directory, validated environment additions, and resolved MBX
+    /// path. Probe output is only interpreted as a strict version line; errors
+    /// do not copy arbitrary probe output into diagnostics.
     ///
     /// # Errors
     ///
     /// Returns a spawn/exit/UTF-8/version error when the exact action-owned
     /// MBX cannot be verified, and otherwise the metadata process result.
     pub fn run(&self) -> Result<ProcessOutput, MiseError> {
-        self.verify_action_mbx()?;
-        self.metadata.run()
+        let metadata_template = self.command_template(&self.metadata)?;
+        let mbx = metadata_template.resolve_action_owned_mbx()?;
+        let output = self.command_with_path(&self.version_probe, &mbx)?.run()?;
+        self.verify_action_mbx(output)?;
+        self.command_with_path(&self.metadata, &mbx)?.run()
     }
 
-    fn verify_action_mbx(&self) -> Result<(), MiseError> {
-        let output = self.version_probe.run()?;
+    fn command_template(&self, exec: &PinnedToolExec) -> Result<IsolatedCommand, MiseError> {
+        let mut command = exec.command_template(&self.catalog)?;
+        if let Some(cwd) = &self.cwd {
+            command = command.with_cwd(cwd.clone());
+        }
+        command.with_env(&self.extra_env)
+    }
+
+    fn command_with_path(
+        &self,
+        exec: &PinnedToolExec,
+        path: &ActionOwnedMbxPath,
+    ) -> Result<IsolatedCommand, MiseError> {
+        let mut command = exec.command_with_action_owned_path(&self.catalog, path)?;
+        if let Some(cwd) = &self.cwd {
+            command = command.with_cwd(cwd.clone());
+        }
+        command.with_env(&self.extra_env)
+    }
+
+    fn verify_action_mbx(&self, output: ProcessOutput) -> Result<(), MiseError> {
         if !output.success {
             return Err(MiseError::NonZeroExit {
                 program: "mbx --version".to_owned(),
@@ -139,22 +168,6 @@ impl MetadataCommand {
         let version = strict_mbx_version(&stdout).unwrap_or("<malformed-output>");
         self.catalog.reconcile_action_mbx(version)
     }
-}
-
-fn split_mbx_argv(argv: Vec<OsString>) -> Result<(OsString, Vec<OsString>), MiseError> {
-    let mut argv = argv.into_iter();
-    let Some(program) = argv.next() else {
-        return Err(MiseError::EmptyCommand {
-            program: "mbx".to_owned(),
-        });
-    };
-    if program != OsStr::new(MBX_PROGRAM) {
-        return Err(MiseError::ForbiddenPayload {
-            program: program.to_string_lossy().into_owned(),
-            reason: "metadata_requires_mbx_payload".to_owned(),
-        });
-    }
-    Ok((program, argv.collect()))
 }
 
 fn strict_mbx_version(stdout: &str) -> Option<&str> {
