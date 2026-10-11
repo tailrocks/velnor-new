@@ -207,7 +207,7 @@ fn assert_clippy_task_uses_toolchain_union(
         .get(task_id)
         .ok_or("missing Clippy task manifest record")?;
     assert_task_record_matches_step(&clippy.kind, record)?;
-    assert_clippy_uses_pinned_rust(record)?;
+    assert_clippy_uses_pinned_rust(record);
     assert!(
         task.contains(&record.execution_digest),
         "Clippy binds its manifest record"
@@ -245,7 +245,7 @@ fn assert_task_record_matches_step(
     Ok(())
 }
 
-fn assert_clippy_uses_pinned_rust(record: &TaskExecutionManifestEntryV1) -> TestResult {
+fn assert_clippy_uses_pinned_rust(record: &TaskExecutionManifestEntryV1) {
     let catalog = ToolCatalog::pinned();
     let rust_spec = catalog.tool_spec(PinnedTool::Rust);
     let rust_version = catalog.rustup_toolchain();
@@ -271,7 +271,6 @@ fn assert_clippy_uses_pinned_rust(record: &TaskExecutionManifestEntryV1) -> Test
             "{key}"
         );
     }
-    Ok(())
 }
 
 #[test]

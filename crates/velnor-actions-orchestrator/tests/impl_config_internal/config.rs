@@ -155,6 +155,7 @@ fn uncommented_init_sample_parses_with_overrides() -> TestResult {
     native_mise.push_str("\n[tasks.desktop-format-check]\nrun = \"echo desktop-format-check\"\n");
     fs::write(root.join("native/mise.toml"), native_mise)?;
     let prep = prepare(root)?;
+    assert_sample_mbx_compile_route(&prep)?;
     assert_eq!(
         prep.config.checks,
         [] as [velnor_actions_contract::MiseCheck; 0]
@@ -182,6 +183,64 @@ fn uncommented_init_sample_parses_with_overrides() -> TestResult {
     assert_eq!(overrides["actions/checkout"].version, "v7.0.1");
     assert_eq!(prep.runner_label, "ubuntu-24.04");
     assert_eq!(prep.runner_selection, RunnerSelection::ConfigOverride);
+    Ok(())
+}
+
+fn assert_sample_mbx_compile_route(
+    prep: &velnor_actions_orchestrator::GenerationPreparation,
+) -> TestResult {
+    let rust = prep
+        .config
+        .stacks
+        .rust
+        .as_ref()
+        .ok_or("sample Rust stack")?;
+    assert_eq!(
+        rust.compile_driver,
+        Some(velnor_actions_contract::DeclaredCompileDriver::Mbx)
+    );
+    let job = prep
+        .workflow
+        .ir
+        .jobs
+        .get("rust-demo")
+        .ok_or("sample Rust job")?;
+    let clippy = job
+        .steps
+        .iter()
+        .find(|step| step.name == "Clippy")
+        .ok_or("sample Clippy task")?;
+    let velnor_actions_contract::workflow::StepKind::TaskExecution {
+        task_id,
+        argv,
+        toolchain_inputs,
+        ..
+    } = &clippy.kind
+    else {
+        return Err("sample Clippy step must be a declared task".into());
+    };
+    assert_eq!(toolchain_inputs.compile_driver, "mbx");
+    let separator = argv
+        .iter()
+        .position(|arg| arg == "--")
+        .ok_or("sample Clippy command separator")?;
+    assert_eq!(argv.get(separator + 1).map(String::as_str), Some("mbx"));
+    assert_eq!(argv.get(separator + 2).map(String::as_str), Some("+1.99.0"));
+    assert_eq!(argv.get(separator + 3).map(String::as_str), Some("clippy"));
+
+    let tree = velnor_actions_orchestrator::render_staged_tree(prep)?;
+    let manifest = tree
+        .get(velnor_actions_contract::workflow::TASK_EXECUTION_MANIFEST_PATH)
+        .ok_or("sample task manifest")?;
+    let (_, json) = manifest
+        .split_once('\n')
+        .ok_or("sample task manifest marker")?;
+    let manifest: velnor_actions_contract::workflow::TaskExecutionManifestV1 =
+        serde_json::from_str(json)?;
+    manifest.validate()?;
+    let record = manifest.tasks.get(task_id).ok_or("sample Clippy record")?;
+    assert_eq!(record.argv, *argv);
+    assert_eq!(record.toolchain_inputs, *toolchain_inputs);
     Ok(())
 }
 

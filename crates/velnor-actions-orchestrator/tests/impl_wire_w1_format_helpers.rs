@@ -19,7 +19,7 @@ pub(super) fn assert_configured_format_is_per_crate() -> TestResult {
     let workflow_env = window(yaml, "env:\n", "concurrency:")?;
     let plan = window(yaml, "  plan:", "  required:")?;
     let job = window(yaml, "  rust-demo:", "  required:")?;
-    assert_no_overlapping_format(plan, yaml)?;
+    assert_no_overlapping_format(plan, yaml);
     assert!(job.contains("- name: Format"), "per-package scope:\n{job}");
     assert_format_task_is_manifest_bound(&prep, &tree, job)?;
     assert_format_environment(workflow_env);
@@ -27,7 +27,7 @@ pub(super) fn assert_configured_format_is_per_crate() -> TestResult {
     Ok(())
 }
 
-fn assert_no_overlapping_format(plan: &str, yaml: &str) -> TestResult {
+fn assert_no_overlapping_format(plan: &str, yaml: &str) {
     assert!(
         !plan.contains("- name: Format"),
         "root package owns its fmt scope:\n{plan}"
@@ -36,7 +36,6 @@ fn assert_no_overlapping_format(plan: &str, yaml: &str) -> TestResult {
         !yaml.contains("fmt --all --check"),
         "no workspace-wide fmt:\n{yaml}"
     );
-    Ok(())
 }
 
 fn assert_format_task_is_manifest_bound(
@@ -95,7 +94,8 @@ pub(super) fn assert_virtual_workspace_has_no_overlap() -> TestResult {
     let tree = render_staged_tree(&prep)?;
     let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
     let plan = window(yaml, "  plan:", "  required:")?;
-    assert_no_overlapping_format(plan, yaml)
+    assert_no_overlapping_format(plan, yaml);
+    Ok(())
 }
 
 pub(super) fn assert_ignored_rust_has_no_format() -> TestResult {
