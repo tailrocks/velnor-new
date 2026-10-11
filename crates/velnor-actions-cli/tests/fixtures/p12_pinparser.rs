@@ -52,14 +52,14 @@ fn matching_comment_cannot_hide_compiled_pin_drift() -> Result<(), Box<dyn Error
     let fixture = harness::passing("p12-pinparser-comment-shadow")?;
     let source = read_catalog(&fixture)?;
     let drifted = source.replace(
-        "RUST_VERSION: &str = \"1.98.1\"",
+        "RUST_VERSION: &str = \"1.99.0\"",
         "RUST_VERSION: &str = \"9.9.9\"",
     );
     assert_ne!(source, drifted, "fixture pin anchor must be unique");
-    let shadowed = format!("// pub const RUST_VERSION: &str = \"1.98.1\";\n{drifted}");
+    let shadowed = format!("// pub const RUST_VERSION: &str = \"1.99.0\";\n{drifted}");
     harness::write(&fixture.dir, CATALOG, &shadowed)?;
     let run = harness::run_script(&fixture.dir, &[])?;
-    harness::assert_fail(&run, "code='9.9.9' inventory='1.98.1'");
+    harness::assert_fail(&run, "code='9.9.9' inventory='1.99.0'");
     harness::cleanup(&fixture);
     Ok(())
 }
@@ -76,8 +76,8 @@ fn decoded_rust_string_escapes_match_compiled_values() -> Result<(), Box<dyn Err
     harness::mutate(
         &fixture.dir,
         CATALOG,
-        "RUST_VERSION: &str = \"1.98.1\"",
-        "RUST_VERSION: &str = \"\\u{31}.98.1\"",
+        "RUST_VERSION: &str = \"1.99.0\"",
+        "RUST_VERSION: &str = \"\\u{31}.99.0\"",
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_clean(&run);
