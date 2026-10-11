@@ -54,6 +54,9 @@ fn window<'a>(text: &'a str, start: &str, end: &str) -> Result<&'a str, &'static
     }
 }
 
+#[path = "impl_wire_w1_format_helpers.rs"]
+mod format_helpers;
+
 const VELNOR_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n";
 
 #[test]
@@ -266,97 +269,10 @@ fn w1_validators_carry_deny_machete_zizmor_in_order() -> TestResult {
 
 #[test]
 fn w1_plan_format_runs_fmt_check() -> TestResult {
-    let (_repo, yaml, _alint) = preview_both(config_with_branch())?;
-    let plan = window(&yaml, "  plan:", "  required:")?;
-    assert!(
-        !plan.contains("- name: Format"),
-        "no workspace scope without rustfmt config:\n{plan}"
-    );
-    let repo = make_repo(config_with_branch())?;
-    fs::write(repo.path().join("rustfmt.toml"), "[rustfmt]\n")?;
-    let prep = prepare(repo.path())?;
-    let tree = render_staged_tree(&prep)?;
-    let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
-    let workflow_env = window(yaml, "env:\n", "concurrency:")?;
-    // R28: per-package Fmt groups own every file, so the plan job carries no
-    // overlapping `fmt --all` scope; the crate job keeps its Format step.
-    let plan = window(yaml, "  plan:", "  required:")?;
-    assert!(
-        !plan.contains("- name: Format"),
-        "root package owns its fmt scope:\n{plan}"
-    );
-    let job = window(yaml, "  rust-demo:", "  required:")?;
-    assert!(job.contains("- name: Format"), "per-package scope:\n{job}");
-    {
-        // Virtual workspace with members: per-package groups still own every
-        // file, so no workspace `fmt --all` group exists and the plan job
-        // owns no Format scope either (R28/P05-5 no-overlap). The duplicate
-        // task id 6e2d4d4 fixed cannot recur: one group, one id.
-        let virtual_repo = make_virtual_repo(config_with_branch())?;
-        fs::write(virtual_repo.path().join("rustfmt.toml"), "[rustfmt]\n")?;
-        let prep = prepare(virtual_repo.path())?;
-        let tree = render_staged_tree(&prep)?;
-        let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
-        // Validators sort before plan, so the plan window ends at required.
-        let plan = window(yaml, "  plan:", "  required:")?;
-        assert!(
-            !plan.contains("- name: Format"),
-            "no overlapping plan scope in virtual workspaces:\n{plan}"
-        );
-        assert!(
-            !yaml.contains("fmt --all --check"),
-            "no workspace-wide format in virtual workspaces:\n{yaml}"
-        );
-    }
-    assert!(
-        !plan.contains("- name: Format"),
-        "no overlapping plan scope:\n{plan}"
-    );
-    assert!(
-        !yaml.contains("fmt --all --check"),
-        "no workspace-wide format:\n{yaml}"
-    );
-    let job = window(yaml, "  rust-demo:", "  required:")?;
-    assert!(job.contains("- name: Format"), "per-package scope:\n{job}");
-    let rust_job = prep
-        .workflow
-        .ir
-        .jobs
-        .get("rust-demo")
-        .ok_or("missing rust-demo IR job")?;
-    let format_task = rust_job
-        .steps
-        .iter()
-        .find(|step| step.name == "Format")
-        .ok_or("missing Format task")?;
-    let StepKind::TaskExecution { task_id, .. } = &format_task.kind else {
-        return Err("Format must be a declared task".into());
-    };
-    crate::impl_wire_w1_manifest::assert_format_task_record(task_id, job, &tree)?;
-    for key in ["MISE_AUTO_INSTALL:", "MISE_EXEC_AUTO_INSTALL:"] {
-        assert!(
-            workflow_env.contains(key),
-            "workflow env misses {key}:\n{workflow_env}"
-        );
-    }
-    // Regression: exactly one Format step per crate job, none in plan.
-    let formats = yaml.matches("- name: Format").count();
-    let crates = prep
-        .workflow
-        .ir
-        .jobs
-        .keys()
-        .filter(|id| id.starts_with("rust-"))
-        .count();
-    assert!(crates >= 1, "fixture needs a crate job");
-    assert_eq!(formats, crates, "one Format per crate, none elsewhere");
-    let ignored =
-        "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks]\nignore = [\"rust\"]\n";
-    let (_repo, yaml, _alint) = preview_both(ignored)?;
-    assert!(
-        !yaml.contains("- name: Format"),
-        "no fmt without rust:\n{yaml}"
-    );
+    format_helpers::assert_no_format_without_rustfmt_config()?;
+    format_helpers::assert_configured_format_is_per_crate()?;
+    format_helpers::assert_virtual_workspace_has_no_overlap()?;
+    format_helpers::assert_ignored_rust_has_no_format()?;
     Ok(())
 }
 
