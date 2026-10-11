@@ -145,14 +145,20 @@ fn assert_reader(reader: &str) {
         reader.contains("save-on-workflow-dispatch: \"false\""),
         "{reader}"
     );
-    assert!(reader.contains("mbx cache stats --json"), "{reader}");
+    let catalog = ToolCatalog::pinned();
+    assert!(
+        reader.contains(&format!(
+            "mise --no-config --no-env --no-hooks exec rust@{} -- \\\"$mbx_bin\\\" cache stats --json",
+            catalog.version(PinnedTool::Rust)
+        )),
+        "{reader}"
+    );
     assert!(reader.contains("set -e -o pipefail; df -B1 -P"), "{reader}");
     assert!(reader.contains(".objects > 0"), "{reader}");
     assert!(
         reader.contains(".savings.cached_compilations > 0"),
         "{reader}"
     );
-    let catalog = ToolCatalog::pinned();
     assert!(
         reader.contains(&format!(
             "version: {}",
