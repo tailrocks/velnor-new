@@ -29,7 +29,7 @@ pub(super) fn test_pins() -> ProductReleasePins {
     let install_resource_probe_target_argv = resource_probe_target_argv(&catalog);
     let install_intel_target_argv = intel_target_argv(&catalog);
     let build = build_argv(&catalog);
-    let qualification_home = "${{ github.workspace }}/.velnor-release-qualification";
+    let qualification_home = "${{ runner.temp }}/velnor/qualification";
     let qualification_env = BTreeMap::from([
         (
             "MISE_RUSTUP_HOME".to_owned(),
