@@ -93,7 +93,7 @@ pub(super) fn assert_crate_contract(
         assert!(workflow_env.contains(key), "workflow misses {key}");
     }
     assert!(
-        task.contains(&format!("RUSTUP_TOOLCHAIN: {}", rustup_toolchain)),
+        task.contains(&format!("RUSTUP_TOOLCHAIN: {rustup_toolchain}")),
         "crate job selects the catalog Rust toolchain"
     );
     assert_credentials_scrubbed(workflow_env);
