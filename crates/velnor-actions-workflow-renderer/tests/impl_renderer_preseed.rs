@@ -41,9 +41,14 @@ fn build_argv() -> Vec<String> {
     argv
 }
 
-fn assert_action_owned_build_step(build_step: &velnor_actions_contract::Step) {
+fn assert_action_owned_build_step(
+    build_step: &velnor_actions_contract::Step,
+) -> Result<(), RenderError> {
     let velnor_actions_contract::StepKind::Shell { run, env } = &build_step.kind else {
-        panic!("pre-seed build must be shell: {:?}", build_step.kind);
+        return Err(RenderError::InvalidWorkflow(format!(
+            "pre-seed build must be shell: {:?}",
+            build_step.kind
+        )));
     };
     // S1: the helper build compiles PR source, so it unsets runner
     // credentials before exec and scrubs the step env.
@@ -79,6 +84,7 @@ fn assert_action_owned_build_step(build_step: &velnor_actions_contract::Step) {
         )),
         "build uses the action-owned absolute MBX through Rust-only Mise: {script}"
     );
+    Ok(())
 }
 
 pub(crate) fn preseed_plan() -> Result<(String, Job), RenderError> {
@@ -123,7 +129,7 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
         &build,
         &BTreeMap::from([("MISE_CARGO_HOME".to_owned(), "owned".to_owned())]),
     )?;
-    assert_action_owned_build_step(&build_step);
+    assert_action_owned_build_step(&build_step)?;
     for step in [
         build_step,
         preseed_verify_step(&mbx_probe(), MBX_VERSION, &BTreeMap::new())?,
