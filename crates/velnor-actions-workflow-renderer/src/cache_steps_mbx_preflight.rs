@@ -249,7 +249,7 @@ pub(crate) fn mbx_workspace_clean_step_for_action(action: &Step) -> Result<Step,
         mbx_disk_sample_function(),
         "mbx_disk_sample before-final-clean".to_owned(),
         RESOLVE_ACTION_MBX_BIN.to_owned(),
-        format!("clean_status=0; if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" +{rust_toolchain} clean; then clean_status=0; else clean_status=$?; fi"),
+        format!("clean_status=0; if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" clean; then clean_status=0; else clean_status=$?; fi"),
         "mbx_disk_sample after-final-clean".to_owned(),
         "exit \"$clean_status\"".to_owned(),
     ]
