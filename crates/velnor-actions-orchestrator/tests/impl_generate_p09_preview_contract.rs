@@ -2,6 +2,7 @@
 
 use velnor_actions_contract::StepKind;
 use velnor_actions_contract::workflow::{TASK_EXECUTION_MANIFEST_PATH, TaskExecutionManifestV1};
+use velnor_actions_mise::ToolCatalog;
 use velnor_actions_orchestrator::GenerationPreparation;
 use velnor_actions_workflow_renderer::tree::RenderedTree;
 
@@ -59,6 +60,7 @@ pub(super) fn assert_crate_contract(
         .tasks
         .get(task_id)
         .ok_or("missing Clippy task manifest record")?;
+    let rustup_toolchain = ToolCatalog::pinned().rustup_toolchain();
     assert_eq!(clippy_record.env, *task_env, "manifest copies Clippy env");
     for key in ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME"] {
         assert!(
@@ -73,7 +75,7 @@ pub(super) fn assert_crate_contract(
         clippy_record
             .env
             .get("RUSTUP_TOOLCHAIN")
-            .is_some_and(|value| value == "1.99.0"),
+            .is_some_and(|value| value == &rustup_toolchain),
         "Clippy manifest carries the catalog Rust toolchain"
     );
     assert!(
@@ -91,7 +93,7 @@ pub(super) fn assert_crate_contract(
         assert!(workflow_env.contains(key), "workflow misses {key}");
     }
     assert!(
-        workflow_env.contains("RUSTUP_TOOLCHAIN: 1.99.0"),
+        task.contains(&format!("RUSTUP_TOOLCHAIN: {}", rustup_toolchain)),
         "crate job selects the catalog Rust toolchain"
     );
     assert_credentials_scrubbed(workflow_env);
