@@ -237,10 +237,14 @@ fn assert_qualifier_mbx_preflight(
 
     let version_check =
         super::scalar(super::map_field(super::map_entries(&mbx_steps[2])?, "run")?)?;
+    assert!(version_check.contains("mbx_bin=$(command -v mbx)"));
+    assert!(version_check.contains("case \"$mbx_bin\" in /*)"));
+    assert!(version_check.contains("[ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]"));
     assert!(version_check.contains(&format!(
-        "mise --no-config --no-env --no-hooks exec rust@{} -- mbx --version",
+        "mise --no-config --no-env --no-hooks exec rust@{} -- \"$mbx_bin\" --version",
         pins.rust_version
     )));
+    assert!(!version_check.contains("-- mbx --version"));
     assert!(version_check.contains(&format!("mbx {}", pins.mr_boxington_version)));
     let qualify_index = step_index_named(steps, "Qualify downloaded candidate")?;
     assert!(

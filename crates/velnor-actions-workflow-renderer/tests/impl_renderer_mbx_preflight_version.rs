@@ -6,6 +6,23 @@ use super::{
     run_version_check_with_cache_dir_mode, version_check_script, write_tool,
 };
 
+fn fake_mise_script() -> &'static str {
+    "#!/bin/sh\nset -eu\n[ \"$1\" = --no-config ] && [ \"$2\" = --no-env ] && [ \"$3\" = --no-hooks ] || exit 2\n[ \"$4\" = exec ] && [ \"$5\" = rust@1.98.1 ] && [ \"$6\" = -- ] || exit 3\nmbx_bin=$7\ncase \"$mbx_bin\" in /*) ;; *) exit 4 ;; esac\n[ -f \"$mbx_bin\" ] && [ -x \"$mbx_bin\" ] || exit 5\nshift 6\n[ \"$1\" = \"$mbx_bin\" ] || exit 6\nshift\nPATH=/usr/bin:/bin exec \"$mbx_bin\" \"$@\"\n"
+}
+
+fn fake_mbx_script(version_body: Option<&str>) -> String {
+    let mut script = String::from("#!/bin/sh\ncase \"$1\" in\n--version)\n");
+    if let Some(body) = version_body {
+        script.push_str(body.strip_prefix("#!/bin/sh\n").unwrap_or(body));
+    } else {
+        script.push_str("exit 127\n");
+    }
+    script.push_str(
+        ";;\ncache)\n[ \"$2\" = dir ] || exit 7\ncase \"$MBX_CACHE_DIR_MODE\" in\nexact) printf '%s\\n' \"$MBX_CACHE_DIR/actions\" ;;\nwrong) printf '%s\\n' \"$MBX_CACHE_DIR/other\" ;;\nextra) printf '%s\\n' \"$MBX_CACHE_DIR/actions\" extra ;;\nunterminated) printf '%s' \"$MBX_CACHE_DIR/actions\" ;;\nnonzero) printf '%s\\n' \"$MBX_CACHE_DIR/actions\"; exit 2 ;;\nesac\n;;\n*) exit 8 ;;\nesac\n",
+    );
+    script
+}
+
 #[test]
 fn native_action_version_guard_accepts_only_one_exact_complete_line()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -42,12 +59,9 @@ fn native_action_version_guard_accepts_only_one_exact_complete_line()
         let root = TempRoot::new()?;
         let fake_bin = root.0.join("fake-bin");
         fs::create_dir(&fake_bin)?;
-        write_tool(
-            &fake_bin.join("mise"),
-            "#!/bin/sh\nset -eu\n[ \"$1\" = --no-config ] && [ \"$2\" = --no-env ] && [ \"$3\" = --no-hooks ] || exit 2\n[ \"$4\" = exec ] && [ \"$5\" = rust@1.98.1 ] && [ \"$6\" = -- ] || exit 3\nif [ \"$7\" = mbx ] && [ \"$8\" = cache ] && [ \"$9\" = dir ]; then\ncase \"$MBX_CACHE_DIR_MODE\" in\nexact) printf '%s\\n' \"$MBX_CACHE_DIR/actions\" ;;\nwrong) printf '%s\\n' \"$MBX_CACHE_DIR/other\" ;;\nextra) printf '%s\\n' \"$MBX_CACHE_DIR/actions\" extra ;;\nunterminated) printf '%s' \"$MBX_CACHE_DIR/actions\" ;;\nnonzero) printf '%s\\n' \"$MBX_CACHE_DIR/actions\"; exit 2 ;;\nesac\nexit 0\nfi\nshift 6\n[ \"$#\" -eq 2 ] && [ \"$1\" = mbx ] && [ \"$2\" = --version ] || exit 4\nexec \"$@\"\n",
-        )?;
+        write_tool(&fake_bin.join("mise"), fake_mise_script())?;
         if let Some(output) = output {
-            write_tool(&fake_bin.join("mbx"), output)?;
+            write_tool(&fake_bin.join("mbx"), &fake_mbx_script(Some(output)))?;
         }
         let result = run_version_check(&root.0, &guard)?;
         assert_eq!(
@@ -69,13 +83,10 @@ fn native_action_cache_dir_guard_rejects_wrong_or_ambiguous_output()
         let root = TempRoot::new()?;
         let fake_bin = root.0.join("fake-bin");
         fs::create_dir(&fake_bin)?;
-        write_tool(
-            &fake_bin.join("mise"),
-            "#!/bin/sh\nset -eu\n[ \"$1\" = --no-config ] && [ \"$2\" = --no-env ] && [ \"$3\" = --no-hooks ] || exit 2\n[ \"$4\" = exec ] && [ \"$5\" = rust@1.98.1 ] && [ \"$6\" = -- ] || exit 3\nif [ \"$7\" = mbx ] && [ \"$8\" = cache ] && [ \"$9\" = dir ]; then\ncase \"$MBX_CACHE_DIR_MODE\" in\nwrong) printf '%s\\n' \"$MBX_CACHE_DIR/other\" ;;\nextra) printf '%s\\n' \"$MBX_CACHE_DIR/actions\" extra ;;\nunterminated) printf '%s' \"$MBX_CACHE_DIR/actions\" ;;\nnonzero) printf '%s\\n' \"$MBX_CACHE_DIR/actions\"; exit 2 ;;\nesac\nexit 0\nfi\nshift 6\n[ \"$#\" -eq 2 ] && [ \"$1\" = mbx ] && [ \"$2\" = --version ] || exit 4\nexec \"$@\"\n",
-        )?;
+        write_tool(&fake_bin.join("mise"), fake_mise_script())?;
         write_tool(
             &fake_bin.join("mbx"),
-            "#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1'\n",
+            &fake_mbx_script(Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1'\n")),
         )?;
         let result = run_version_check_with_cache_dir_mode(&root.0, &guard, mode)?;
         assert!(

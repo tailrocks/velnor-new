@@ -1,6 +1,6 @@
 //! Narrow recognition of actual MBX command positions in rendered steps.
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::{Step, StepKind, StepRole};
 
 const MISE_PREFIX: [&str; 5] = ["mise", "--no-config", "--no-env", "--no-hooks", "exec"];
 const REPORT_WRAPPER_PREFIX: &str = "s=$(date +%s%3N); ";
@@ -226,6 +226,12 @@ fn is_mbx_selector(word: &str) -> bool {
 }
 
 pub(super) fn uses_mbx_command(step: &Step) -> bool {
+    if matches!(
+        step.role,
+        Some(StepRole::PreseedBuild | StepRole::PreseedVerifyBuild)
+    ) {
+        return true;
+    }
     if let StepKind::TaskExecution { argv, .. } = &step.kind {
         return argv
             .iter()

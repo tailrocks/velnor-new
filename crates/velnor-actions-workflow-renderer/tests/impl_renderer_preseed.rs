@@ -25,6 +25,7 @@ fn build_argv() -> Vec<String> {
         "rust@1.98.1",
         "mbx",
         &[
+            "+1.98.1",
             "build",
             "--release",
             "--locked",
@@ -94,6 +95,12 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
     }
     let home = env.get("MISE_CARGO_HOME").map(String::as_str);
     assert_eq!(home, Some("owned"), "build carries caller homes");
+    let script = run.last().map(String::as_str).expect("build script");
+    assert!(script.contains("mbx_bin=$(command -v mbx)"), "{script}");
+    assert!(
+        script.contains("exec rust@1.98.1 -- \"$mbx_bin\" +1.98.1 build"),
+        "build uses the action-owned absolute MBX through Rust-only Mise: {script}"
+    );
     for step in [
         build_step,
         preseed_verify_step(&mbx_probe(), MBX_VERSION, &BTreeMap::new())?,
@@ -116,6 +123,20 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
     assert!(
         preseed_manifest_step(&["mbx".to_owned()], TARGET).is_err(),
         "toolchain-less build accepted"
+    );
+    let mut unbound_build = build.clone();
+    unbound_build.remove(8);
+    assert!(
+        preseed_build_step(&unbound_build, &BTreeMap::new()).is_err(),
+        "build without the catalog Rust selector accepted"
+    );
+    assert!(
+        preseed_build_step(
+            &mise_argv("mr-boxington@1.21.1", "mbx", &["build"]),
+            &BTreeMap::new()
+        )
+        .is_err(),
+        "Mise-owned MBX selector accepted in the action-owned pre-seed route"
     );
     assert!(
         preseed_stage_step(PreseedStageSource::LocalBuild, "target/release/x").is_err(),
@@ -191,16 +212,18 @@ fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
     assert_eq!((run[0].as_str(), run[1].as_str()), ("sh", "-c"));
     for need in [
         "test -x target/release/velnor-actions",
-        "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx --version",
+        "mbx_bin=$(command -v mbx)",
+        "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" --version",
         "mkdir -p \"$RUNNER_TEMP/velnor\"",
-        "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx --version > \"$RUNNER_TEMP/velnor/preseed-mbx-version\"",
+        "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" --version > \"$RUNNER_TEMP/velnor/preseed-mbx-version\"",
         "grep -qxF \"mbx 1.21.1\" \"$RUNNER_TEMP/velnor/preseed-mbx-version\"",
     ] {
         assert!(run[2].contains(need), "verify misses {need}: {}", run[2]);
     }
+    assert!(!run[2].contains('`'), "no command substitution: {}", run[2]);
     assert!(
-        !run[2].contains('\'') && !run[2].contains('`') && !run[2].contains('|'),
-        "verify has no unneeded quoting or status-masking pipeline: {}",
+        !run[2].contains(" | "),
+        "no status-masking pipeline: {}",
         run[2]
     );
     for bad_version in ["", "latest", "1.19", "v1.19.0", "1.19.0 "] {
