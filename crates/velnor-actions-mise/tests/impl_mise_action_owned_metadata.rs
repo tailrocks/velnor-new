@@ -70,7 +70,7 @@ else
 fi
 printf '%s\n' "$phase" >> "$VELNOR_METADATA_TRACE"
 printf '%s\n' "$7" >> "$VELNOR_METADATA_BIN_TRACE"
-shift 7
+shift 6
 exec "$@"
 "#;
 
