@@ -1,4 +1,5 @@
-//! Intake dependency-direction case: adapters stay leaf-only.
+//! Intake dependency direction: adapters stay contract-only; the renderer
+//! may read Mise catalog pins for emitted-workflow validation.
 //!
 //! Split from `impl_orch_intake` to hold the 400-line size gate; wired
 //! into `velnor_orchestrator` by the parent with one `mod` line. Uses
@@ -17,10 +18,13 @@ fn intake_adapter_dependency_direction() -> TestResult {
         let text = fs::read_to_string(path)?;
         let manifest: toml::Table = toml::from_str(&text)?;
         if let Some(deps) = manifest.get("dependencies").and_then(toml::Value::as_table) {
+            let renderer_catalog_edge = adapter == "workflow-renderer";
             for name in deps.keys() {
                 assert!(
-                    !name.starts_with("velnor-actions-") || name == "velnor-actions-contract",
-                    "{adapter} must not depend on {name}"
+                    !name.starts_with("velnor-actions-")
+                        || name == "velnor-actions-contract"
+                        || (renderer_catalog_edge && name == "velnor-actions-mise"),
+                    "{adapter} has an unapproved product dependency on {name}"
                 );
             }
         }
