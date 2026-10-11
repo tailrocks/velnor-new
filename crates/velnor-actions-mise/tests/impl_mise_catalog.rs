@@ -196,7 +196,7 @@ fn rust_toolchain_name_pins_version_and_target() {
     ));
     assert_eq!(
         ToolCatalog::pinned().rust_toolchain_name(),
-        "1.98.1-x86_64-unknown-linux-gnu"
+        "1.99.0-x86_64-unknown-linux-gnu"
     );
 }
 
