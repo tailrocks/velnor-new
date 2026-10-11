@@ -10,10 +10,13 @@
 
 use std::fs;
 
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract::{
+    StepKind,
+    workflow::{TASK_EXECUTION_MANIFEST_PATH, TaskExecutionManifestV1},
+};
 use velnor_actions_mise::cache_sources;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
-use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
+use velnor_actions_workflow_renderer::{render::WORKFLOW_PATH, tree::RenderedTree};
 
 use super::impl_common::{TestResult, config_with_branch, fixture_manifest_json, git};
 
@@ -72,13 +75,18 @@ fn lock_for(members: &[&str]) -> String {
 
 /// Rendered workflow bytes for one workspace.
 fn yaml_for(lock: &str, mbx: bool) -> Result<String, Box<dyn std::error::Error>> {
-    let repo = make_workspace(lock, mbx)?;
-    let prep = prepare(repo.path())?;
-    let tree = render_staged_tree(&prep)?;
+    let tree = tree_for(lock, mbx)?;
     Ok(tree
         .get(WORKFLOW_PATH)
         .ok_or_else(|| std::io::Error::other("missing workflow"))?
         .to_owned())
+}
+
+/// Rendered output tree for one workspace.
+fn tree_for(lock: &str, mbx: bool) -> Result<RenderedTree, Box<dyn std::error::Error>> {
+    let repo = make_workspace(lock, mbx)?;
+    let prep = prepare(repo.path())?;
+    Ok(render_staged_tree(&prep)?)
 }
 
 /// Every `key:`/`cache_key:`/`shared-key:` value in render order.
@@ -109,14 +117,19 @@ fn identical_inputs_render_identical_caches() -> TestResult {
     Ok(())
 }
 
-fn driver_task(line: &str, driver: &str, task: &str) -> bool {
-    let needle = format!("{driver} {task}");
-    line.match_indices(&needle).any(|(at, _)| {
-        line[at + needle.len()..]
-            .chars()
-            .next()
-            .is_none_or(|ch| !ch.is_ascii_alphanumeric())
-    })
+/// Parse and validate the exact manifest emitted beside a workflow.
+fn task_manifest(
+    tree: &RenderedTree,
+) -> Result<TaskExecutionManifestV1, Box<dyn std::error::Error>> {
+    let marked = tree
+        .get(TASK_EXECUTION_MANIFEST_PATH)
+        .ok_or("missing task execution manifest")?;
+    let (_, json) = marked
+        .split_once('\n')
+        .ok_or("missing task execution manifest marker")?;
+    let manifest: TaskExecutionManifestV1 = serde_json::from_str(json)?;
+    manifest.validate()?;
+    Ok(manifest)
 }
 
 #[test]
@@ -148,20 +161,78 @@ fn fetch_carries_offline_skip_branch() -> TestResult {
             }
         }
         assert!(seen_probe, "crate fetch probe present (mbx={mbx})");
-        let yaml = yaml_for(&lock_for(&["a", "b"]), mbx)?;
+        let tree = render_staged_tree(&prep)?;
+        let manifest = task_manifest(&tree)?;
+        let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
         let driver = if mbx { "mbx" } else { "cargo" };
         let mut obligations = 0;
-        for line in yaml.lines().filter(|line| line.contains("run:")) {
-            let is_obligation = ["clippy", "build", "test", "nextest", "doc", "fmt"]
-                .iter()
-                .any(|task| driver_task(line, driver, task));
-            if is_obligation {
+        for (job_id, job) in &prep.workflow.ir.jobs {
+            if !job_id.starts_with("rust-") {
+                continue;
+            }
+            for step in &job.steps {
+                if !["Clippy", "Build", "Test", "Nextest", "Doc", "Format"]
+                    .contains(&step.name.as_str())
+                {
+                    continue;
+                }
+                assert_task_is_offline_and_manifest_bound(
+                    &step.kind, &manifest, yaml, job_id, driver,
+                )?;
                 obligations += 1;
-                assert!(line.contains("--offline"), "offline obligation: {line}");
             }
         }
         assert!(obligations >= 2, "obligations present (mbx={mbx})");
     }
+    Ok(())
+}
+
+fn assert_task_is_offline_and_manifest_bound(
+    kind: &StepKind,
+    manifest: &TaskExecutionManifestV1,
+    yaml: &str,
+    job_id: &str,
+    driver: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let StepKind::TaskExecution {
+        argv,
+        task_id,
+        task_digest,
+        toolchain_inputs,
+        env,
+        matrix_id,
+        matrix_key,
+        report_helper_version,
+        matrix_max_parallel,
+    } = kind
+    else {
+        return Err("obligation must be a declared task".into());
+    };
+    assert!(
+        argv.iter().any(|arg| arg == driver),
+        "{job_id} driver: {argv:?}"
+    );
+    assert!(
+        argv.iter().any(|arg| arg == "--offline"),
+        "{job_id} is offline: {argv:?}"
+    );
+    let record = manifest
+        .tasks
+        .get(task_id)
+        .ok_or("task missing from manifest")?;
+    assert_eq!(record.task_id, *task_id);
+    assert_eq!(record.task_digest, *task_digest);
+    assert_eq!(record.argv, *argv);
+    assert_eq!(record.toolchain_inputs, *toolchain_inputs);
+    assert_eq!(record.env, *env);
+    assert_eq!(record.matrix_id, *matrix_id);
+    assert_eq!(record.matrix_key, *matrix_key);
+    assert_eq!(record.report_helper_version, *report_helper_version);
+    assert_eq!(record.matrix_max_parallel, *matrix_max_parallel);
+    assert!(
+        yaml.contains(&record.execution_digest),
+        "{job_id} binds its manifest record"
+    );
     Ok(())
 }
 
