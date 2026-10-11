@@ -1,6 +1,5 @@
-//! Resolve nested checks to Cargo's workspace target directory.
+//! Resolve nested checks to Cargo's workspace target directory through pinned MBX.
 
-use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -15,7 +14,7 @@ pub(super) fn cargo_target_dir_for_manifest(manifest: &Path) -> Outcome<PathBuf>
         let current_dir = std::env::current_dir()?;
         return Ok(absolute_path(&current_dir, Path::new(&configured)));
     }
-    let metadata = cargo_output(
+    let metadata = mbx_output(
         manifest,
         &["metadata", "--no-deps", "--format-version", "1", "--locked"],
     )?;
@@ -36,23 +35,43 @@ fn metadata_target_directory(document: &Value, root: &Path) -> Outcome<PathBuf> 
     existing_or_absolute(root, &target_directory)
 }
 
-fn cargo() -> OsString {
-    std::env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"))
+fn pinned_mbx() -> Outcome<(PathBuf, String, String)> {
+    let catalog = crate::impl_repo_policy::read("crates/velnor-actions-mise/src/catalog.rs")?;
+    let mbx_version = crate::impl_repo_policy::quoted_value(&catalog, "MR_BOXINGTON_VERSION")?;
+    let rust_version = crate::impl_repo_policy::quoted_value(&catalog, "RUST_VERSION")?;
+    let path = std::env::var_os("PATH").ok_or("PATH is not set")?;
+    let executable = std::env::split_paths(&path)
+        .map(|directory| directory.join("mbx"))
+        .find(|candidate| candidate.is_file())
+        .ok_or("pinned MBX executable is missing from PATH")?;
+    let version = Command::new(&executable).arg("--version").output()?;
+    let observed = String::from_utf8_lossy(&version.stdout);
+    let expected = format!("mbx {mbx_version}");
+    if !version.status.success() || observed.trim() != expected {
+        return Err(format!(
+            "expected MBX {expected} at {}, observed {:?} (exit {})",
+            executable.display(),
+            observed.trim(),
+            version.status
+        )
+        .into());
+    }
+    Ok((executable, mbx_version, rust_version))
 }
 
-pub(super) fn cargo_output_at_target(
+pub(super) fn mbx_output_at_target(
     manifest: &Path,
     args: &[&str],
     target_dir: &Path,
 ) -> Outcome<Output> {
-    cargo_output_with_target(manifest, args, Some(target_dir))
+    mbx_output_with_target(manifest, args, Some(target_dir))
 }
 
-fn cargo_output(manifest: &Path, args: &[&str]) -> Outcome<Output> {
-    cargo_output_with_target(manifest, args, None)
+fn mbx_output(manifest: &Path, args: &[&str]) -> Outcome<Output> {
+    mbx_output_with_target(manifest, args, None)
 }
 
-fn cargo_output_with_target(
+fn mbx_output_with_target(
     manifest: &Path,
     args: &[&str],
     target_dir: Option<&Path>,
@@ -61,9 +80,12 @@ fn cargo_output_with_target(
     let manifest_dir = manifest
         .parent()
         .ok_or("workspace manifest has no parent")?;
-    let (command, options) = args.split_first().ok_or("empty cargo command")?;
-    let mut process = Command::new(cargo());
+    let (command, options) = args.split_first().ok_or("empty MBX command")?;
+    let (mbx, mbx_version, rust_version) = pinned_mbx()?;
+    let mut process = Command::new(mbx);
     process
+        .arg(format!("+{mbx_version}"))
+        .arg(format!("+{rust_version}"))
         .arg(command)
         .arg("--manifest-path")
         .arg(manifest)
@@ -75,7 +97,7 @@ fn cargo_output_with_target(
     let output = process.output()?;
     if !output.status.success() {
         return Err(format!(
-            "cargo {} failed for {}: {}{}",
+            "mbx {} failed for {}: {}{}",
             args.first().copied().unwrap_or("command"),
             manifest.display(),
             String::from_utf8_lossy(&output.stderr),
@@ -95,7 +117,7 @@ pub(super) fn workspace_plan_at_target(
     manifest: &Path,
     target_dir: &Path,
 ) -> Outcome<WorkspacePlan> {
-    let metadata = cargo_output_at_target(
+    let metadata = mbx_output_at_target(
         manifest,
         &["metadata", "--no-deps", "--format-version", "1", "--locked"],
         target_dir,
