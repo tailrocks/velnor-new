@@ -88,9 +88,11 @@ printf '{"packages":[]}\n'
 fn install_fake_tools(fixture: &Fixture) -> TestResult {
     fixture.write_program("mise", FAKE_MISE)?;
     fixture.write_program("mbx", FAKE_MBX)?;
-    let overlay = fixture.0.join("overlay-bin/mbx");
-    std::fs::copy(fixture.0.join("bin/mbx"), &overlay)?;
-    std::fs::set_permissions(&overlay, std::fs::Permissions::from_mode(0o700))?;
+    for name in ["mbx", "mise"] {
+        let overlay = fixture.0.join("overlay-bin").join(name);
+        std::fs::copy(fixture.0.join("bin").join(name), &overlay)?;
+        std::fs::set_permissions(&overlay, std::fs::Permissions::from_mode(0o700))?;
+    }
     Ok(())
 }
 
