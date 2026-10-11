@@ -14,7 +14,7 @@ use velnor_actions_contract::{
     StepKind,
     workflow::{TASK_EXECUTION_MANIFEST_PATH, TaskExecutionManifestV1},
 };
-use velnor_actions_mise::cache_sources;
+use velnor_actions_mise::{PinnedTool, ToolCatalog, cache_sources};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::{render::WORKFLOW_PATH, tree::RenderedTree};
 
@@ -177,7 +177,12 @@ fn fetch_carries_offline_skip_branch() -> TestResult {
                     continue;
                 }
                 assert_task_is_offline_and_manifest_bound(
-                    &step.kind, &manifest, yaml, job_id, driver,
+                    &step.kind,
+                    &manifest,
+                    yaml,
+                    job_id,
+                    driver,
+                    &ToolCatalog::pinned(),
                 )?;
                 obligations += 1;
             }
@@ -193,6 +198,7 @@ fn assert_task_is_offline_and_manifest_bound(
     yaml: &str,
     job_id: &str,
     driver: &str,
+    catalog: &ToolCatalog,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let StepKind::TaskExecution {
         argv,
@@ -209,12 +215,35 @@ fn assert_task_is_offline_and_manifest_bound(
         return Err("obligation must be a declared task".into());
     };
     assert!(
-        argv.iter().any(|arg| arg == driver),
-        "{job_id} driver: {argv:?}"
-    );
-    assert!(
         argv.iter().any(|arg| arg == "--offline"),
         "{job_id} is offline: {argv:?}"
+    );
+    let separator = argv
+        .iter()
+        .position(|arg| arg == "--")
+        .ok_or("task command misses Mise payload separator")?;
+    let payload = &argv[separator + 1..];
+    let rust_selector = format!("+{}", catalog.version(PinnedTool::Rust));
+    let command = match driver {
+        "cargo" if payload.first().is_some_and(|arg| arg == "cargo") => &payload[1..],
+        "mbx"
+            if payload.first().is_some_and(|arg| arg == "mbx")
+                && payload.get(1).is_some_and(|arg| arg == &rust_selector) =>
+        {
+            &payload[2..]
+        }
+        _ => {
+            return Err(format!(
+                "{job_id} payload does not start with its selected driver: {payload:?}"
+            )
+            .into());
+        }
+    };
+    let expected_subcommand = expected_task_subcommand(task_id, &toolchain_inputs.test_runner)?;
+    assert_eq!(
+        command.first().map(String::as_str),
+        Some(expected_subcommand),
+        "{job_id}"
     );
     let record = manifest
         .tasks
@@ -234,6 +263,24 @@ fn assert_task_is_offline_and_manifest_bound(
         "{job_id} binds its manifest record"
     );
     Ok(())
+}
+
+fn expected_task_subcommand(
+    task_id: &str,
+    test_runner: &str,
+) -> Result<&'static str, Box<dyn std::error::Error>> {
+    let kind = task_id.split('/').nth(3).ok_or("task ID misses its kind")?;
+    match (kind, test_runner) {
+        ("clippy", _) => Ok("clippy"),
+        ("build", "cargo_test") => Ok("test"),
+        ("build", "cargo_nextest") => Ok("nextest"),
+        ("test", _) => Ok("test"),
+        ("nextest", _) => Ok("nextest"),
+        ("doctest", _) => Ok("test"),
+        ("doc", _) => Ok("doc"),
+        ("fmt", _) => Ok("fmt"),
+        _ => Err(format!("unsupported task ID or test runner: {task_id} / {test_runner}").into()),
+    }
 }
 
 #[test]
