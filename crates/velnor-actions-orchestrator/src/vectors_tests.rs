@@ -263,6 +263,7 @@ fn zizmor_vector_is_pinned_and_offline() {
 fn section4_build_vector_is_byte_exact() {
     let catalog = ToolCatalog::pinned();
     let build = candidate_build_argv(&catalog).expect("build argv");
+    let mbx_rust_selector = format!("+{}", catalog.version(PinnedTool::Rust));
     let mut want = argv_of(&[
         "mise",
         "--no-config",
@@ -272,6 +273,7 @@ fn section4_build_vector_is_byte_exact() {
         "rust@catalog-pin",
         "--",
         "mbx",
+        mbx_rust_selector.as_str(),
         "build",
         "--release",
         "--locked",
