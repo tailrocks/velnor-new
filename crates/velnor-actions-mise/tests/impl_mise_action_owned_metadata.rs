@@ -11,6 +11,7 @@ impl Fixture {
     fn new() -> TestResult<Self> {
         let root = crate::test_temp_dir::unique_temp_dir("action-owned-metadata")?;
         std::fs::create_dir(root.join("bin"))?;
+        std::fs::create_dir(root.join("overlay-bin"))?;
         std::fs::create_dir(root.join("manifest with space"))?;
         Ok(Self(root.canonicalize()?))
     }
@@ -44,8 +45,9 @@ fn action_owned_metadata_checks_version_and_shares_tool_homes() -> TestResult {
 }
 
 const FAKE_MISE: &str = r#"
-test "$1:$2:$3:$4:$5:$6:$7" = '--no-config:--no-env:--no-hooks:exec:rust@1.99.0:--:mbx'
+test "$1:$2:$3:$4:$5:$6" = '--no-config:--no-env:--no-hooks:exec:rust@1.99.0:--'
 test "${MISE_AUTO_INSTALL-unset}" = false
+test "$7" = "$VELNOR_EXPECTED_MBX"
 phase=version
 if [ "$8" != --version ]; then
     test "$#" -eq 14
@@ -63,7 +65,8 @@ else
     test "${RUSTUP_TOOLCHAIN-unset}" = unset
 fi
 printf '%s\n' "$phase" >> "$VELNOR_METADATA_TRACE"
-shift 6
+printf '%s\n' "$7" >> "$VELNOR_METADATA_BIN_TRACE"
+shift 7
 exec "$@"
 "#;
 
@@ -80,7 +83,12 @@ printf '{"packages":[]}\n'
 
 fn install_fake_tools(fixture: &Fixture) -> TestResult {
     fixture.write_program("mise", FAKE_MISE)?;
-    fixture.write_program("mbx", FAKE_MBX)
+    fixture.write_program("mbx", FAKE_MBX)?;
+    let overlay = fixture.0.join("overlay-bin/mbx");
+    std::fs::copy(fixture.0.join("bin/mbx"), &overlay)?;
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&overlay, std::fs::Permissions::from_mode(0o700))?;
+    Ok(())
 }
 
 fn run_cases(fixture: &Fixture) -> TestResult {
@@ -89,6 +97,7 @@ fn run_cases(fixture: &Fixture) -> TestResult {
         ("wrong-request", "1.22.0", "version\n", false),
         ("invalid-rustup-selector", "1.23.0", "", false),
         ("valid-command", "1.23.0", "version\nmetadata\n", true),
+        ("path-overlay", "1.23.0", "version\nmetadata\n", true),
     ] {
         run_case(fixture, mode, version, expected_trace, metadata_runs)?;
     }
@@ -103,9 +112,13 @@ fn run_case(
     metadata_runs: bool,
 ) -> TestResult {
     let trace = fixture.0.join(format!("{mode}.trace"));
+    let bin_trace = fixture.0.join(format!("{mode}.bin-trace"));
     let marker = fixture.0.join(format!("{mode}.metadata-ran"));
     let manifest = fixture.0.join("manifest with space/Cargo.toml");
-    let output = child_process(fixture, mode, version, &manifest, &trace, &marker)?.output()?;
+    let output = child_process(
+        fixture, mode, version, &manifest, &trace, &bin_trace, &marker,
+    )?
+    .output()?;
     assert!(
         output.status.success(),
         "{mode} child failed: {}",
@@ -117,6 +130,31 @@ fn run_case(
         String::new()
     };
     assert_eq!(actual_trace, expected_trace, "{mode}");
+    let actual_bins = if bin_trace.exists() {
+        std::fs::read_to_string(bin_trace)?
+    } else {
+        String::new()
+    };
+    let expected_mbx = if mode == "path-overlay" {
+        fixture.0.join("overlay-bin/mbx")
+    } else {
+        fixture.0.join("bin/mbx")
+    };
+    let expected_calls = match mode {
+        "invalid-rustup-selector" => 0,
+        "valid-command" | "path-overlay" => 2,
+        _ => 1,
+    };
+    let expected_bins = format!("{}", expected_mbx.display());
+    let expected_bins = std::iter::repeat_n(expected_bins, expected_calls)
+        .collect::<Vec<_>>()
+        .join("\n");
+    let expected_bins = if expected_calls == 0 {
+        String::new()
+    } else {
+        format!("{expected_bins}\n")
+    };
+    assert_eq!(actual_bins, expected_bins, "{mode} must reuse one MBX path");
     assert_eq!(marker.exists(), metadata_runs, "{mode}");
     Ok(())
 }
@@ -127,6 +165,7 @@ fn child_process(
     version: &str,
     manifest: &Path,
     trace: &Path,
+    bin_trace: &Path,
     marker: &Path,
 ) -> TestResult<std::process::Command> {
     let binary = std::env::current_exe()?;
@@ -142,7 +181,16 @@ fn child_process(
         .env("VELNOR_METADATA_GUARD_CHILD", mode)
         .env("VELNOR_FIXTURE_MBX_VERSION", version)
         .env("VELNOR_METADATA_TRACE", trace)
+        .env("VELNOR_METADATA_BIN_TRACE", bin_trace)
         .env("VELNOR_METADATA_MARKER", marker)
+        .env(
+            "VELNOR_EXPECTED_MBX",
+            if mode == "path-overlay" {
+                fixture.0.join("overlay-bin/mbx")
+            } else {
+                fixture.0.join("bin/mbx")
+            },
+        )
         .env("VELNOR_EXPECTED_MANIFEST", manifest)
         .env("VELNOR_EXPECT_HOMES", expected_homes)
         .env("VELNOR_EXPECTED_RUSTUP_HOME", fixture.0.join("owned-rustup"))
@@ -173,7 +221,7 @@ fn run_child(mode: &str) -> TestResult {
             ));
             Ok(())
         }
-        "wrong-command" | "valid-command" => {
+        "wrong-command" | "valid-command" | "path-overlay" => {
             let rustup =
                 Path::new(&std::env::var_os("VELNOR_EXPECTED_RUSTUP_HOME").ok_or("rustup")?)
                     .to_owned();
@@ -182,11 +230,18 @@ fn run_child(mode: &str) -> TestResult {
             let rustup = rustup.to_string_lossy();
             let cargo = cargo.to_string_lossy();
             let homes = ToolHomes::new(&rustup, &cargo)?;
-            let command = request.command(&catalog)?.with_env(&homes.env(&catalog))?;
+            let mut extra = homes.env(&catalog);
+            if mode == "path-overlay" {
+                extra.push((
+                    "PATH".into(),
+                    fixture.0.join("overlay-bin").into_os_string(),
+                ));
+            }
+            let command = request.command(&catalog)?.with_env(&extra)?;
             assert_eq!(command.argv(), request.argv(&catalog));
             assert!(command.disables_auto_install());
             command.run().and_then(|output| {
-                if mode == "valid-command" && output.success {
+                if matches!(mode, "valid-command" | "path-overlay") && output.success {
                     assert_eq!(output.stdout, b"{\"packages\":[]}\n");
                     Ok(())
                 } else {

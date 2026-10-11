@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use crate::catalog::{PinnedTool, ToolCatalog};
 use crate::error::MiseError;
 
-use super::{MetadataCommand, full_mise_argv, metadata_mbx_argv};
+use super::{MetadataCommand, full_mise_argv, metadata_args, metadata_mbx_argv};
 
 /// Conservative discovery of one manifest through pinned MBX.
 ///
@@ -63,7 +63,7 @@ impl MetadataDiscovery {
     /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
     /// empty, which the constructor rules out.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<MetadataCommand, MiseError> {
-        MetadataCommand::new(catalog, self.mbx_argv(catalog))
+        MetadataCommand::new(catalog, metadata_args(&self.manifest, &["--no-deps"]))
     }
 
     /// Verify action-owned MBX, run discovery, and return raw metadata JSON.
@@ -136,7 +136,10 @@ impl MetadataQualification {
     /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
     /// empty, which the constructor rules out.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<MetadataCommand, MiseError> {
-        MetadataCommand::new(catalog, self.mbx_argv(catalog))
+        MetadataCommand::new(
+            catalog,
+            metadata_args(&self.workspace_manifest, &["--locked", "--offline"]),
+        )
     }
 
     /// Verify action-owned MBX, run qualification, and return raw metadata JSON.

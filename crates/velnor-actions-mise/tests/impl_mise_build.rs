@@ -28,6 +28,7 @@ fn candidate_build_argv_is_byte_exact() -> Result<(), String> {
             "rust@1.99.0",
             "--",
             "mbx",
+            "+1.99.0",
             "build",
             "--release",
             "--locked",
@@ -46,7 +47,11 @@ fn candidate_build_command_matches_argv() -> Result<(), String> {
     let build = CandidateBuild::new().map_err(|err| err.to_string())?;
     let command = build.command(&catalog).map_err(|err| err.to_string())?;
     assert_eq!(command.program(), "mise");
-    assert_eq!(command.argv(), build.argv(&catalog));
+    let actual = command.argv();
+    let portable = build.argv(&catalog);
+    assert_eq!(actual[0..7], portable[0..7]);
+    assert!(std::path::Path::new(&actual[7]).is_absolute());
+    assert_eq!(actual[8..], portable[8..]);
     assert!(
         command.disables_auto_install(),
         "candidate build must not fetch tools: {command:?}"

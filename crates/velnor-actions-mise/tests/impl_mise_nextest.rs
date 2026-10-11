@@ -1,5 +1,6 @@
 //! Fixed Nextest archive/list/run vector cases.
 use std::ffi::OsString;
+use std::path::Path;
 use velnor_actions_mise::{
     ARCHIVE_FILE, MiseError, NEXTEST_EXTRACT_BASE, NextestArchive, NextestDriver, NextestList,
     NextestPartition, NextestRun, PinnedTool, ToolCatalog,
@@ -16,6 +17,16 @@ fn strings(items: &[&str]) -> Vec<OsString> {
 fn with_pinned_rust(mut argv: Vec<OsString>, catalog: &ToolCatalog) -> Vec<OsString> {
     argv[5] = OsString::from(catalog.tool_spec(PinnedTool::Rust));
     argv
+}
+
+fn assert_action_owned_command(actual: &[OsString], portable: &[OsString]) {
+    let separator = portable
+        .iter()
+        .position(|arg| arg == "--")
+        .expect("portable argv separator");
+    assert_eq!(&actual[..=separator], &portable[..=separator]);
+    assert!(Path::new(&actual[separator + 1]).is_absolute());
+    assert_eq!(&actual[separator + 2..], &portable[separator + 2..]);
 }
 
 #[test]
@@ -41,6 +52,7 @@ fn archive_argv_is_byte_exact_per_driver() -> Result<(), String> {
                 "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
                 "--",
                 "mbx",
+                "+1.99.0",
                 "nextest",
                 "archive",
                 "--package",
@@ -98,6 +110,7 @@ fn list_argv_is_byte_exact() -> Result<(), String> {
                 "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
                 "--",
                 "mbx",
+                "+1.99.0",
                 "nextest",
                 "list",
                 "--profile",
@@ -141,6 +154,7 @@ fn run_argv_is_byte_exact_with_no_tests_fail() -> Result<(), String> {
                 "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
                 "--",
                 "mbx",
+                "+1.99.0",
                 "nextest",
                 "run",
                 "--profile",
@@ -273,7 +287,7 @@ fn mbx_nextest_commands_use_action_owned_pinned_mbx() -> Result<(), String> {
     let archive = NextestArchive::new(NextestDriver::Mbx, "demo", &[], None)
         .map_err(|err| err.to_string())?;
     let archive_command = archive.command(&catalog).map_err(|err| err.to_string())?;
-    assert_eq!(archive_command.argv(), archive.argv(&catalog));
+    assert_action_owned_command(&archive_command.argv(), &archive.argv(&catalog));
     let rust_spec = catalog.tool_spec(PinnedTool::Rust);
     assert!(
         archive_command
@@ -296,17 +310,11 @@ fn mbx_nextest_commands_use_action_owned_pinned_mbx() -> Result<(), String> {
 
     let partition = NextestPartition::new(1, 1).map_err(|err| err.to_string())?;
     let list = NextestList::new(NextestDriver::Mbx, partition);
-    assert_eq!(
-        list.command(&catalog)
-            .map_err(|err| err.to_string())?
-            .argv(),
-        list.argv(&catalog)
-    );
+    let list_command = list.command(&catalog).map_err(|err| err.to_string())?;
+    assert_action_owned_command(&list_command.argv(), &list.argv(&catalog));
     let run = NextestRun::new(NextestDriver::Mbx, partition, "m-abc", "p1")
         .map_err(|err| err.to_string())?;
-    assert_eq!(
-        run.command(&catalog).map_err(|err| err.to_string())?.argv(),
-        run.argv(&catalog)
-    );
+    let run_command = run.command(&catalog).map_err(|err| err.to_string())?;
+    assert_action_owned_command(&run_command.argv(), &run.argv(&catalog));
     Ok(())
 }

@@ -15,11 +15,12 @@ pub use metadata::{MetadataDiscovery, MetadataQualification};
 #[path = "requests/metadata_command.rs"]
 mod metadata_command;
 pub use metadata_command::MetadataCommand;
+#[path = "requests/action_owned_mbx.rs"]
+mod action_owned_mbx;
 
 use crate::catalog::{PinnedTool, ToolCatalog};
-use crate::command::{
-    IsolatedCommand, ProcessOutput, mise_argv_tail, mise_install_argv_tail, redact_argv_for_debug,
-};
+use crate::command::redact_argv_for_debug;
+use crate::command::{IsolatedCommand, ProcessOutput, mise_argv_tail, mise_install_argv_tail};
 use crate::error::MiseError;
 
 /// MBX payload program executed after the `--` separator.
@@ -45,6 +46,13 @@ fn metadata_mbx_argv(
     let mut argv = vec![
         OsString::from(MBX_PROGRAM),
         OsString::from(mbx_rust_selector(catalog)),
+    ];
+    argv.extend(metadata_args(manifest, resolution_flags));
+    argv
+}
+
+fn metadata_args(manifest: &Path, resolution_flags: &[&str]) -> Vec<OsString> {
+    let mut argv = vec![
         OsString::from(METADATA_SUBCOMMAND),
         OsString::from("--format-version"),
         OsString::from("1"),
@@ -65,7 +73,15 @@ enum MbxAuthority {
     /// MBX is selected from the catalog by the enclosing Mise command.
     Catalog,
     /// A typed action-owned route supplies MBX through its pinned action.
-    ActionOwned,
+    ActionOwned(ActionOwnedMbxMode),
+}
+
+/// Action-owned MBX invocation shape. The version probe intentionally omits
+/// MBX's compiler selector; Rust-bound payloads carry it exactly once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ActionOwnedMbxMode {
+    RustBound,
+    VersionProbe,
 }
 
 /// Typed exact-pinned tool execution that rejects payloads bypassing Mise.
@@ -131,22 +147,6 @@ impl PinnedToolExec {
         Self::new_with_authority(tools, program, args, mbx_authority)
     }
 
-    /// Build a fixed candidate through Rust selected by Mise and MBX supplied
-    /// by the workflow's separately pinned native action.
-    pub(crate) fn new_action_owned_mbx(
-        tools: Vec<PinnedTool>,
-        program: &OsStr,
-        args: Vec<OsString>,
-    ) -> Result<Self, MiseError> {
-        if program != OsStr::new("mbx")
-            || !tools.contains(&PinnedTool::Rust)
-            || tools.contains(&PinnedTool::MrBoxington)
-        {
-            return Err(unpinned_mbx_error(program));
-        }
-        Self::new_with_authority(tools, program, args, Some(MbxAuthority::ActionOwned))
-    }
-
     fn new_with_authority(
         tools: Vec<PinnedTool>,
         program: &OsStr,
@@ -188,11 +188,14 @@ impl PinnedToolExec {
         &self.args
     }
 
-    /// Payload arguments: program first, then its arguments.
+    /// Portable payload arguments, including an action-owned Rust selector.
     #[must_use]
-    pub fn payload(&self) -> Vec<OsString> {
-        let mut payload = Vec::with_capacity(self.args.len() + 1);
+    pub fn payload(&self, catalog: &ToolCatalog) -> Vec<OsString> {
+        let mut payload = Vec::with_capacity(self.args.len() + 2);
         payload.push(self.program.clone());
+        if let Some(MbxAuthority::ActionOwned(ActionOwnedMbxMode::RustBound)) = self.mbx_authority {
+            payload.push(OsString::from(mbx_rust_selector(catalog)));
+        }
         payload.extend(self.args.iter().cloned());
         payload
     }
@@ -200,7 +203,7 @@ impl PinnedToolExec {
     /// Full mise argument vector including the program.
     #[must_use]
     pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
-        full_mise_argv(catalog, &self.tools, &self.payload())
+        full_mise_argv(catalog, &self.tools, &self.payload(catalog))
     }
 
     /// Isolated command running this pinned execution (`gh` selects Baseline).
@@ -210,15 +213,12 @@ impl PinnedToolExec {
     /// Returns [`MiseError::EmptyCommand`] only if the payload were empty,
     /// which the constructor rules out.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
-        let specs = catalog.tool_specs(&self.tools);
-        let command = IsolatedCommand::mise_exec(&specs, &self.payload())?;
-        if self.tools.as_slice() == [PinnedTool::Gh] {
-            return Ok(command.with_policy(crate::command::EnvPolicy::Baseline));
+        if matches!(self.mbx_authority, Some(MbxAuthority::ActionOwned(_))) {
+            let template = self.command_template(catalog)?;
+            let path = template.resolve_action_owned_mbx()?;
+            return self.command_with_action_owned_path(catalog, &path);
         }
-        if self.mbx_authority.is_some() {
-            return Ok(command.with_policy(crate::command::EnvPolicy::Mbx));
-        }
-        Ok(command)
+        self.command_template(catalog)
     }
 
     /// Run the payload and return its typed output, whatever the exit is.
