@@ -24,6 +24,11 @@ fn expected_internal(dir: &str) -> Vec<&str> {
             "velnor-actions-tofu",
             "velnor-actions-workflow-renderer",
         ],
+        // The renderer reads catalog pins to validate emitted Mise data;
+        // execution and tool installation remain owned by the Mise adapter.
+        "crates/velnor-actions-workflow-renderer" => {
+            vec!["velnor-actions-contract", "velnor-actions-mise"]
+        }
         "crates/velnor-actions-cli" => {
             vec!["velnor-actions-orchestrator", "velnor-actions-freshness"]
         }
