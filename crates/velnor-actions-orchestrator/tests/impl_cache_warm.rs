@@ -275,7 +275,7 @@ fn expected_task_subcommand(
         .ok_or("task ID misses its kind")?;
     match (kind, test_runner) {
         ("clippy", _) => Ok("clippy"),
-        ("build", "cargo_test") | ("test", _) | ("doctest", _) => Ok("test"),
+        ("build", "cargo_test") | ("test" | "doctest", _) => Ok("test"),
         ("build", "cargo_nextest") | ("nextest", _) => Ok("nextest"),
         ("doc", _) => Ok("doc"),
         ("fmt", _) => Ok("fmt"),
