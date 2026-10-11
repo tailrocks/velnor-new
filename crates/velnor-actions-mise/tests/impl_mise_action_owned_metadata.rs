@@ -259,11 +259,15 @@ fn run_child(mode: &str) -> TestResult {
         _ => return Err("unknown child mode".into()),
     };
     if mode.starts_with("wrong-") {
-        assert!(matches!(
-            result,
-            Err(MiseError::InvalidToolVersion { ref tool, ref version })
+        let rejected_wrong_version = matches!(
+            &result,
+            Err(MiseError::InvalidToolVersion { tool, version })
                 if tool == "mr-boxington" && version == "1.22.0"
-        ));
+        );
+        assert!(
+            rejected_wrong_version,
+            "wrong MBX version must fail as InvalidToolVersion, got {result:?}"
+        );
     } else {
         result?;
     }
