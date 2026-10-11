@@ -139,7 +139,7 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
             output_dir: Some(preview.clone()),
         },
     )?;
-    assert_eq!(report.files_written.len(), 10, "ten generated files");
+    assert_eq!(report.files_written.len(), 12, "generated files");
     assert!(
         report
             .files_written
@@ -183,10 +183,13 @@ fn stage(preview: &Path, yaml: &str) -> Result<TempDir, Box<dyn std::error::Erro
     for relative in [
         ".github/AGENTS.md",
         ".github/CLAUDE.md",
+        ".github/actions/declared-task-0/action.yml",
         ".github/actions/u26/action.yml",
         ".github/actions/velnor-tool-seed/action.yml",
         ".github/actions/velnor-tools-cache-restore/action.yml",
+        ".github/actions/velnor-tools-prelude-u26/action.yml",
         ".github/scripts/velnor-tools-cache-identity.sh",
+        ".github/velnor/task-execution-manifest-v1.json",
     ] {
         let destination = root.join(relative);
         if let Some(parent) = destination.parent() {
