@@ -136,8 +136,8 @@ fn fetch_matches_obligation_contract_by_construction() -> TestResult {
     let StepKind::Shell { env: fetch_env, .. } = &task.steps[fetch_at].kind else {
         return Err("fetch must be a shell step".into());
     };
-    let StepKind::Shell { env: run_env, .. } = &task.steps[run_at].kind else {
-        return Err("Clippy must be a shell step".into());
+    let StepKind::TaskExecution { env: run_env, .. } = &task.steps[run_at].kind else {
+        return Err("Clippy must be a declared task".into());
     };
     let mut keys: Vec<&str> = fetch_env.keys().map(String::as_str).collect();
     keys.sort_unstable();
