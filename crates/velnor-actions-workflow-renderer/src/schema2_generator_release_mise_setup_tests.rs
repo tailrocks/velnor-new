@@ -169,6 +169,16 @@ fn assert_action_extracts_guard(
         .ok_or_else(|| format!("missing generated action {path}"))?;
     let runs = super::map_entries(super::map_field(super::map_entries(document)?, "runs")?)?;
     let steps = super::sequence(super::map_field(runs, "steps")?)?;
+    for step in steps {
+        let fields = super::map_entries(step)?;
+        if fields.iter().any(|(key, _)| key == "run") {
+            assert_eq!(
+                super::scalar(super::map_field(fields, "shell")?)?,
+                "bash",
+                "{job_id} composite run steps must declare their shell"
+            );
+        }
+    }
     assert_setup_step(
         steps.first().ok_or("qualifier action has no steps")?,
         setup,
@@ -207,7 +217,7 @@ fn assert_qualifier_mbx_preflight(
     let expected = pins
         .qualify_mbx_action_steps
         .iter()
-        .map(crate::steps_plain::plain_step_to_yaml)
+        .map(crate::steps_plain::composite_step_to_yaml)
         .collect::<Result<Vec<_>, _>>()?;
     let mbx_steps = steps
         .get(install_index + 1..install_index + 1 + expected.len())

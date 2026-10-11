@@ -61,6 +61,27 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
     }
 }
 
+/// Render a step inside a composite action, where every `run` step must
+/// carry its shell explicitly rather than inherit workflow job defaults.
+pub(crate) fn composite_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
+    let mut rendered = plain_step_to_yaml(step)?;
+    if !matches!(&step.kind, StepKind::Shell { .. }) {
+        return Ok(rendered);
+    }
+    let Yaml::Map(entries) = &mut rendered else {
+        return Err(RenderError::InvalidWorkflow(
+            "composite_shell_step_not_map".to_owned(),
+        ));
+    };
+    let Some(run_index) = entries.iter().position(|(key, _)| key == "run") else {
+        return Err(RenderError::InvalidWorkflow(
+            "composite_shell_step_missing_run".to_owned(),
+        ));
+    };
+    entries.insert(run_index, ("shell".to_owned(), Yaml::str("bash")));
+    Ok(rendered)
+}
+
 /// Sorted string map as YAML (shared by `with:` and `env:` emission).
 fn string_map_yaml(map: &std::collections::BTreeMap<String, String>) -> Yaml {
     Yaml::Map(
