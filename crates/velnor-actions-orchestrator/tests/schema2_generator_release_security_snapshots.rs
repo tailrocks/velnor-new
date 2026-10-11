@@ -157,8 +157,15 @@ fn assert_qualifier_action_boundary(qualifier_body: &str) -> Result<(), Box<dyn 
     assert!(!qualifier_body.contains("github_token"), "{qualifier_body}");
     assert_eq!(
         qualifier_body.matches("uses:").count(),
-        3,
+        4,
         "{qualifier_body}"
+    );
+    assert_eq!(
+        qualifier_body
+            .matches("uses: actions/download-artifact@")
+            .count(),
+        2,
+        "candidate and manifest artifacts are downloaded separately: {qualifier_body}"
     );
     assert!(
         qualifier_body.contains("actions/download-artifact@"),
