@@ -6,7 +6,7 @@ pub(super) fn probe_argv_for_action(probe: &[String]) -> Result<Vec<String>, Ren
     super::check_probe_shape(probe)?;
     let offset = crate::toolchain_env::unset_prefix_len(probe);
     let mut runtime = probe.to_vec();
-    runtime[offset + 7] = ACTION_MBX_BIN.to_owned();
+    ACTION_MBX_BIN.clone_into(&mut runtime[offset + 7]);
     Ok(runtime)
 }
 
@@ -36,6 +36,6 @@ pub(super) fn build_argv_for_action(build: &[String]) -> Result<Vec<String>, Ren
         return Err(malformed());
     }
     let mut runtime = build.to_vec();
-    runtime[offset + 7] = ACTION_MBX_BIN.to_owned();
+    ACTION_MBX_BIN.clone_into(&mut runtime[offset + 7]);
     Ok(runtime)
 }
