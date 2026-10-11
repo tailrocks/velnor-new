@@ -103,7 +103,7 @@ fn unknown_label_skips_loudly_without_blocking() {
         "--no-env".to_owned(),
         "--no-hooks".to_owned(),
         "install".to_owned(),
-        "rust@1.98.1".to_owned(),
+        "rust@1.99.0".to_owned(),
     ]));
     let outcome = audit_prepare_installs(dir.path(), &ir, "self-hosted-1", &[]);
     assert_eq!(outcome.blocking, [] as [String; 0]);
@@ -217,14 +217,14 @@ fn deny_drift_blocks() {
     // A catalog spec inside a validator command resolves through
     // nothing: commands audit validator pins only, never catalog tools.
     let commands = vec![deny_command(
-        "{ mise --no-env --no-hooks install rust@1.98.1 && unset FOO } && payload",
+        "{ mise --no-env --no-hooks install rust@1.99.0 && unset FOO } && payload",
     )];
     let outcome = audit_prepare_installs(dir.path(), &ir, "ubuntu-26.04", &commands);
     assert!(
         outcome
             .blocking
             .iter()
-            .any(|line| line.contains("unauditable_install_spec:rust@1.98.1")),
+            .any(|line| line.contains("unauditable_install_spec:rust@1.99.0")),
         "misplaced catalog spec must block: {:?}",
         outcome.blocking
     );
@@ -326,7 +326,7 @@ fn oversized_tool_file_blocks() {
         "--no-env".to_owned(),
         "--no-hooks".to_owned(),
         "install".to_owned(),
-        "rust@1.98.1".to_owned(),
+        "rust@1.99.0".to_owned(),
     ]));
     let outcome = audit_prepare_installs(dir.path(), &ir, "ubuntu-26.04", &[]);
     assert!(
