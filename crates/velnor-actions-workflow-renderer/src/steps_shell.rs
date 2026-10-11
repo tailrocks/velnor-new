@@ -15,7 +15,13 @@ pub fn shell_step(
     argv: Vec<String>,
     env: BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
-    shell_step_with_env_validation(name, argv, env, commands::validate_env)
+    shell_step_with_env_validation(
+        name,
+        argv,
+        env,
+        commands::validate_env,
+        commands::validate_command_argv,
+    )
 }
 
 /// Validated scrubbed shell step inside a generated composite action.
@@ -25,7 +31,29 @@ pub(crate) fn composite_shell_step(
     argv: Vec<String>,
     env: BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
-    shell_step_with_env_validation(name, argv, env, commands::validate_composite_env)
+    shell_step_with_env_validation(
+        name,
+        argv,
+        env,
+        commands::validate_composite_env,
+        commands::validate_command_argv,
+    )
+}
+
+/// Construct an MBX lifecycle step carrying the one fixed action-owned path resolver.
+/// # Errors
+pub(crate) fn action_owned_mbx_shell_step(
+    name: &str,
+    argv: Vec<String>,
+    env: BTreeMap<String, String>,
+) -> Result<Step, RenderError> {
+    shell_step_with_env_validation(
+        name,
+        argv,
+        env,
+        commands::validate_env,
+        crate::action_mbx_shell::validate_argv,
+    )
 }
 
 fn shell_step_with_env_validation(
@@ -33,12 +61,13 @@ fn shell_step_with_env_validation(
     argv: Vec<String>,
     env: BTreeMap<String, String>,
     validate_env: fn(&BTreeMap<String, String>) -> Result<(), RenderError>,
+    validate_argv: fn(&[String]) -> Result<(), RenderError>,
 ) -> Result<Step, RenderError> {
     if name.trim().is_empty() {
         return Err(RenderError::BadCommand("empty_name".to_owned()));
     }
     crate::expressions::check_name_content(name)?;
-    commands::validate_command_argv(&argv)?;
+    validate_argv(&argv)?;
     validate_env(&env)?;
     crate::toolchain_env::reject_denied_step_keys(&env)?;
     steps::scan_for_private_subcommands(name)?;

@@ -112,7 +112,7 @@ pub fn preseed_build_step(
     let build = mbx::build_argv_for_action(build)?;
     let command = crate::commands::join_argv_for_run(&build)?;
     let script = format!("set -eu; {RESOLVE_ACTION_MBX_BIN}; {command}");
-    let mut step = steps::shell_step(
+    let mut step = steps::action_owned_mbx_shell_step(
         PRESEED_BUILD_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],
         env.clone(),
@@ -148,7 +148,7 @@ pub fn preseed_verify_step(
     let script = format!(
         "set -eu; {RESOLVE_ACTION_MBX_BIN}; test -x {PRESEED_BUILD_OUTPUT} && mkdir -p \"$RUNNER_TEMP/velnor\" && {command} > \"{PRESEED_MBX_VERSION_OUTPUT}\" && grep -qxF \"mbx {mbx_version}\" \"{PRESEED_MBX_VERSION_OUTPUT}\""
     );
-    let mut step = steps::shell_step(
+    let mut step = steps::action_owned_mbx_shell_step(
         PRESEED_VERIFY_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],
         env.clone(),

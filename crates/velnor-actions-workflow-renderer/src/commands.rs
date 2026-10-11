@@ -73,6 +73,11 @@ pub fn validate_command_argv(argv: &[String]) -> Result<(), RenderError> {
 /// Returns [`RenderError::BadCommand`] when argv validation fails.
 pub fn join_argv_for_run(argv: &[String]) -> Result<String, RenderError> {
     validate_command_argv(argv)?;
+    join_validated_argv_for_run(argv)
+}
+
+/// Join an argv vector after a narrow caller has performed its typed validation.
+pub(crate) fn join_validated_argv_for_run(argv: &[String]) -> Result<String, RenderError> {
     let script_at = inline_shell_script_at(argv);
     let mut words = Vec::with_capacity(argv.len());
     for (index, arg) in argv.iter().enumerate() {
@@ -90,7 +95,7 @@ pub(crate) fn is_inline_shell(argv: &[String]) -> bool {
     argv.len() > 2 && matches!(argv[0].as_str(), "sh" | "bash") && argv[1].as_str() == "-c"
 }
 
-fn inline_shell_script_at(argv: &[String]) -> Option<usize> {
+pub(crate) fn inline_shell_script_at(argv: &[String]) -> Option<usize> {
     if is_inline_shell(argv) {
         return Some(2);
     }

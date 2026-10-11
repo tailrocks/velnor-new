@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use super::{CompileDriver, MBX_ACTION_NAME};
 use crate::RenderError;
-use crate::steps::{action_step_with_env, shell_step, validate_uses};
+use crate::steps::{action_owned_mbx_shell_step, action_step_with_env, shell_step, validate_uses};
 use velnor_actions_contract::cachekey::mbx_cache_generation;
 use velnor_actions_contract::workflow::MBX_WORKSPACE_CLEAN_CONDITION;
 use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
@@ -48,9 +48,7 @@ pub const MBX_RESTORE_NAME: &str = "Restore MBX objects";
 /// Display name for the exact MBX binary placed on PATH by its native action.
 pub const MBX_VERSION_CHECK_NAME: &str = "Verify native MBX version";
 /// Shell-local absolute path to the executable installed by the pinned action.
-pub(crate) const ACTION_MBX_BIN: &str = "$mbx_bin";
-/// Resolve the action-owned executable before Rust-only Mise rebuilds PATH.
-pub(crate) const RESOLVE_ACTION_MBX_BIN: &str = "if ! mbx_bin=$(command -v mbx); then printf '%s\\n' 'action-owned MBX is not on PATH' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '%s\\n' 'action-owned MBX path must be absolute' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '%s\\n' 'action-owned MBX path must be an executable file' >&2; exit 1; fi";
+pub(crate) use crate::action_mbx_shell::{ACTION_MBX_BIN, RESOLVE_ACTION_MBX_BIN};
 /// Keep automatic collection from evicting uncommitted active-run results.
 pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
 /// Defer collection until the native action has committed and exported the job group.
@@ -205,7 +203,7 @@ pub(super) fn mbx_version_check_step(
     ];
     script.extend(mbx_disk_sample_commands("after-cache-restore"));
     let script = script.join("; ");
-    let mut step = shell_step(
+    let mut step = action_owned_mbx_shell_step(
         MBX_VERSION_CHECK_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],
         env,
@@ -256,7 +254,7 @@ pub(crate) fn mbx_workspace_clean_step_for_action(action: &Step) -> Result<Step,
         "exit \"$clean_status\"".to_owned(),
     ]
     .join("; ");
-    let mut step = shell_step(
+    let mut step = action_owned_mbx_shell_step(
         "Clean MBX workspace outputs",
         vec!["sh".to_owned(), "-c".to_owned(), script],
         clean_env,

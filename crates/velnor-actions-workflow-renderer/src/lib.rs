@@ -3,6 +3,7 @@
 //! Validated IR plus fixed argv in, marked YAML out: no subprocesses, no
 //! stack or tool branching, quoting-only shell shaping.
 
+mod action_mbx_shell;
 mod action_ref;
 pub mod agents_md;
 mod artifact_paths;
