@@ -96,7 +96,14 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
         (Some("sh"), Some("-c")),
         "credential scrubbing stays inside the shell wrapper: {run:?}"
     );
-    assert!(run.contains(&"GITHUB_TOKEN".to_owned()), "{run:?}");
+    assert_eq!(run.len(), 3, "wrapped build command: {run:?}");
+    let script = run[2].as_str();
+    let credential_unset =
+        velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude();
+    assert!(
+        script.starts_with(&credential_unset),
+        "build must unset runtime credentials before its payload: {script}"
+    );
     for key in velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST {
         assert_eq!(
             env.get(key).map(String::as_str),
@@ -106,8 +113,6 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
     }
     let home = env.get("MISE_CARGO_HOME").map(String::as_str);
     assert_eq!(home, Some("owned"), "build carries caller homes");
-    assert_eq!(run.len(), 3, "wrapped build command: {run:?}");
-    let script = run[2].as_str();
     assert!(script.contains("mbx_bin=$(command -v mbx)"), "{script}");
     assert!(
         script.contains(&format!(
