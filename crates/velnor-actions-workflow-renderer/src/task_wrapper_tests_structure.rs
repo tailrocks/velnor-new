@@ -158,7 +158,12 @@ fn assert_shell_wrapper_contract(action_file: &crate::tree::RenderedFile) {
     assert!(run.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
     assert!(!run.contains("eval"));
     assert!(!run.contains("replace_runner_temp"));
-    assert!(run.contains("[[ \"$value\" != *'${{'* ]] || fail_frame"));
+    let unresolved_expression_guard = "[[ \"$value\" != *'$''{{'* ]] || fail_frame";
+    assert_eq!(run.matches(unresolved_expression_guard).count(), 2);
+    assert!(
+        !run.contains("${{"),
+        "the Bash run scalar contains no GitHub expression syntax"
+    );
     assert!(run.contains("VELNOR_RUNTIME_RUNNER_TEMP"));
     for key in crate::toolchain_env::STEP_CREDENTIAL_DENYLIST
         .into_iter()
