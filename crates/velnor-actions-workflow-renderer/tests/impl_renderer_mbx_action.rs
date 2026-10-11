@@ -216,8 +216,10 @@ fn rendered_action_has_rust_homes_and_native_owner_policy() -> Result<(), Render
     assert!(text.contains("MBX_GC_AUTO: \"0\""));
     assert!(text.contains("name: Clean MBX workspace outputs"));
     assert!(text.contains("if: always() && steps.mbx-ready.outcome == 'success'"));
-    assert!(text.contains(
-        "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" +1.98.1 clean"
-    ));
+    assert!(
+        text.contains(
+            "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" clean"
+        )
+    );
     Ok(())
 }

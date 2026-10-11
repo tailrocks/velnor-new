@@ -202,7 +202,7 @@ fn candidate_mbx_roundtrip_defers_gc_and_cleans_after_each_last_consumer() {
                 "[ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]",
                 "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" --version",
                 "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" +1.98.1 build --manifest-path",
-                "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" +1.98.1 clean",
+                "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" clean",
             ][..],
         ),
         (
@@ -214,7 +214,7 @@ fn candidate_mbx_roundtrip_defers_gc_and_cleans_after_each_last_consumer() {
                 "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" cache stats --json",
                 "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" +1.98.1 build --manifest-path",
                 "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" stats --json",
-                "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" +1.98.1 clean",
+                "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" clean",
             ][..],
         ),
     ] {

@@ -274,8 +274,8 @@ fn clean_workspace_step(request: &MbxQualificationPins) -> Yaml {
         (
             "run".to_owned(),
             Yaml::str(format!(
-                "set -eu; {RESOLVE_ACTION_MBX_BIN}; mise --no-config --no-env --no-hooks exec rust@{} -- \"{ACTION_MBX_BIN}\" +{} clean",
-                request.rust_version, request.rust_version
+                "set -eu; {RESOLVE_ACTION_MBX_BIN}; mise --no-config --no-env --no-hooks exec rust@{} -- \"{ACTION_MBX_BIN}\" clean",
+                request.rust_version
             )),
         ),
     ])
