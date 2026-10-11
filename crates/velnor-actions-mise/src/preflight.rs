@@ -84,11 +84,10 @@ impl RouteDriver {
     /// Returns [`MiseError`] if the fixed command is rejected.
     pub fn probe_exec(self, args: Vec<OsString>) -> Result<PinnedToolExec, MiseError> {
         match self {
-            Self::Cargo => self.task_exec(args, false),
             Self::Mbx if args.len() == 1 && args[0] == "--version" => {
                 PinnedToolExec::new_action_owned_mbx_version_probe(self.probe_tools())
             }
-            Self::Mbx => self.task_exec(args, false),
+            Self::Cargo | Self::Mbx => self.task_exec(args, false),
         }
     }
 
