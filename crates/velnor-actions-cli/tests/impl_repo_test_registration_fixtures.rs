@@ -219,7 +219,7 @@ fn compiler_closure_handles_paths_includes_macros_fixtures_and_orphans() -> Outc
     write_test_sources(&scratch)?;
     let manifest = scratch.0.join("Cargo.toml");
     let target_dir = scratch.0.join("target");
-    let workspace = super::cargo_config::workspace_plan_at_target(&manifest, &target_dir)?;
+    let workspace = super::mbx_config::workspace_plan_at_target(&manifest, &target_dir)?;
     let data_only = scratch.0.join("tests/orphan_data.rs").canonicalize()?;
     // Cargo build-plan messages expose Rust-source dependencies, while
     // `include_str!` data inputs stay inside the compiler input graph.
@@ -294,7 +294,7 @@ fn compiler_dependencies_contain(
     workspace: &super::WorkspacePlan,
     source: &std::path::Path,
 ) -> Outcome<bool> {
-    let output = super::cargo_config::cargo_output_at_target(
+    let output = super::mbx_config::mbx_output_at_target(
         &workspace.manifest,
         &["test", "--no-run", "--locked", "--message-format=json"],
         &workspace.target_directory,
