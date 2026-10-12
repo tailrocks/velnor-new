@@ -358,6 +358,7 @@ fn freshness_inventory_mirrors_release_plz() {
         "\"pinned\": \"0.3.172\"",
         "\"qualified\": \"0.3.172\"",
         "\"source\": \"https://crates.io/api/v1/crates/release-plz\"",
+        "\"status\": \"current\"",
     ] {
         assert!(
             text.contains(needle),

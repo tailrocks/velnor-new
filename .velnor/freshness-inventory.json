@@ -6,10 +6,10 @@
       "latest": "v5.1.2",
       "pinned_sha": "08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8",
       "pinned_version": "v5.1.2",
-      "qualified_sha": "2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca",
-      "qualified_version": "v5.1.1",
+      "qualified_sha": "08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8",
+      "qualified_version": "v5.1.2",
       "source": "https://api.github.com/repos/jdx/mise-action/releases/latest",
-      "status": "pending"
+      "status": "current"
     },
     {
       "checked_at": "2026-10-12T22:59:12Z",
@@ -84,10 +84,10 @@
       "latest": "v0.18.1",
       "pinned_sha": "f558d76d076710312c54723d18e44d8cd95b3977",
       "pinned_version": "v0.18.1",
-      "qualified_sha": "d93c0283b19dd78afcd8a4b303f1556a7759ba81",
-      "qualified_version": "v0.17.0",
+      "qualified_sha": "f558d76d076710312c54723d18e44d8cd95b3977",
+      "qualified_version": "v0.18.1",
       "source": "https://api.github.com/repos/asamarts/alint/releases/latest",
-      "status": "pending"
+      "status": "current"
     },
     {
       "checked_at": "2026-10-12T22:59:12Z",
@@ -170,9 +170,9 @@
       "latest": "2026.10.8",
       "name": "mise",
       "pinned": "2026.10.8",
-      "qualified": "2026.10.6",
+      "qualified": "2026.10.8",
       "source": "https://api.github.com/repos/jdx/mise/releases/latest",
-      "status": "pending"
+      "status": "current"
     },
     {
       "checked_at": "2026-10-12T22:59:12Z",
@@ -252,9 +252,9 @@
       "latest": "0.3.172",
       "name": "release-plz",
       "pinned": "0.3.172",
-      "qualified": "0.3.170",
+      "qualified": "0.3.172",
       "source": "https://crates.io/api/v1/crates/release-plz",
-      "status": "pending"
+      "status": "current"
     }
   ]
 }

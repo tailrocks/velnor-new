@@ -49,17 +49,31 @@ runner labels remain unchanged.
 
 ## Qualification and local gates
 
-The candidate Mise pin still requires the `mise-pin` workflow on this exact
-source head to pass both Linux x64 and macOS x64 jobs. The inventory keeps
-Mise, `release-plz`, Alint, and `mise-action` in `pending` status until their
-required qualification completes. Do not interpret changed evidence
-timestamps as qualification.
+The exact candidate SHA `438bd90d2ef64515373f413b501b7ae01189a8e7` passed both
+hosted jobs in the `mise-pin` qualification dispatch: [Linux x64 job
+115050479288](https://github.com/tailrocks/velnor-new/actions/runs/38321521320/job/115050479288)
+and [macOS x64 job
+115050479238](https://github.com/tailrocks/velnor-new/actions/runs/38321521320/job/115050479238).
+Both verified the exact Mise version and binary digest. An earlier API read
+showed the enclosing dispatch `in_progress` with no conclusion despite all
+jobs being terminal. It subsequently finalized at `2026-10-12T23:30:12Z` as
+`completed/success`; the final API summary has 61 terminal jobs (2 success,
+59 skipped, 0 unfinished). This workflow has no `Required` job. The PR's
+`Required` result remains the final repository CI check.
 
-Workspace Clippy passed with Rust `1.98.1`, MBX `1.21.1`, and warnings denied.
-The full Nextest run is being repeated from the signed candidate commit because
-two repository harnesses intentionally build their committed input with
-`git archive HEAD`; running them before committing tested the old base tree.
-Formatting, Alint, Cargo Deny, workflow validation, and the offline freshness
-gate are also to be recorded against the final candidate head before this
-record is complete. No release workflow was published or merged as part of
+The final-state full workspace Nextest run passed all 3,699 tests (2 skipped;
+4 slow), run ID `d3d7207f-d1c7-40ba-bb72-4cd5f06adfb8`; its command and
+summary are recorded in the [Nextest receipt](evidence/freshness-2026-10-13/workspace-nextest-run.json)
+(SHA-256 `389a7cd6aa7cdea6d088bb6c9d8e9af29d177b96972f8411ed76bbabf99e4b87`).
+It ran with Rust `1.98.1`, Mise `2026.10.8`, and MBX `1.21.1`. Workspace
+doctests passed (0 doctests present). Both `scripts/check-freshness.sh` and
+`scripts/check-freshness.sh --with-advisories` passed after qualification.
+Other completed gates:
+`cargo fmt --all -- --check`, Clippy with warnings denied, both Cargo Deny
+workspaces, Actionlint, Alint `check --fail-on-warning` (three existing
+informational notices), Zizmor with no findings, shell syntax and diff checks,
+generated `.github` tree byte comparison against CLI output, and all five
+OpenTofu workflow goldens. The updated inventory records the four non-held
+pins as qualified/current against the successful bounded upstream
+observations above. No release workflow was published or merged as part of
 this update.

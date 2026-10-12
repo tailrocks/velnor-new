@@ -9,7 +9,7 @@
     "interpretation": "Both bounded captures returned all upstream source rows with no lookup_failed entries. This command exited 1 because the base inventory evidence was stale and newer versions were observed, including valid held rows; exit 1 is not recorded as a passing freshness gate."
   },
   "raw_log": {
-    "path": "work/freshness-evidence-2026-10-13/probe-04-root-retry.log",
+    "path": "docs/implemented/evidence/freshness-2026-10-13/probe-04-root-retry.log",
     "sha256": "8b8afd7e51c041f9501393b55b0c3208ea935fa62b5c1df0b09cbac22ecca15b",
     "bytes": 57243
   },
@@ -140,7 +140,7 @@
       "checked_at": "2026-10-12T22:52:46Z",
       "interpretation": "All source lookups timed out; excluded from inventory refresh.",
       "raw_log": {
-        "path": "work/freshness-evidence-2026-10-13/probe-02.log",
+        "path": "docs/implemented/evidence/freshness-2026-10-13/probe-02.log",
         "sha256": "6bdd7cf6e8e1ade19c2767a22f39e220ed3a6d344ac3f788635df10392225362",
         "bytes": 58283
       }
@@ -149,7 +149,7 @@
       "checked_at": "2026-10-12T22:52:46Z",
       "interpretation": "All source lookups timed out; excluded from inventory refresh.",
       "raw_log": {
-        "path": "work/freshness-evidence-2026-10-13/probe-03.log",
+        "path": "docs/implemented/evidence/freshness-2026-10-13/probe-03.log",
         "sha256": "55b96b9f2c2b9f4993965b52e23f310c54cfc0e31a9f3a6d0456ff01041ed815",
         "bytes": 58286
       }
@@ -166,7 +166,7 @@
         "ubuntu-22.04"
       ],
       "raw_html": {
-        "path": "work/freshness-evidence-2026-10-13/runner-doc.html",
+        "path": "docs/implemented/evidence/freshness-2026-10-13/runner-doc.html",
         "sha256": "2da9a6f63a630c023009ecf41e507150d1709cdcd74bdebf3461fc87b0ca9cfa",
         "bytes": 435396
       }
@@ -183,9 +183,9 @@
       "image_version": "20260927.149.1",
       "image_release": "https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20260927.149",
       "log": {
-        "path": "work/freshness-evidence-2026-10-13/main-run-38316930881-plan-job-115035687366.log",
-        "sha256": "83142e3a48acc6dafe5e2de218ea151197e62470c35edb4ddf64954af59e7db4",
-        "bytes": 348065
+        "path": "docs/implemented/evidence/freshness-2026-10-13/main-run-38316930881-plan-job-115035687366.log",
+        "sha256": "acc1236ed3ab0fd94030bedcf3e496e9790a8dcce0bcb8001b31b263f4295f91",
+        "bytes": 347778
       }
     }
   },
@@ -201,8 +201,8 @@
       "fetched_at": "2026-10-12T23:08:53Z",
       "sha256": "9237b178f5f3d1625045c18608e4bde6f66a023593822e8ae9029967c19474b0",
       "bytes": 3688,
-      "path": "work/freshness-evidence-2026-10-13/mise-SHASUMS256-v2026.10.8.txt",
-      "http_headers_path": "work/freshness-evidence-2026-10-13/mise-shasums-headers.txt",
+      "path": "docs/implemented/evidence/freshness-2026-10-13/mise-SHASUMS256-v2026.10.8.txt",
+      "http_headers_path": "docs/implemented/evidence/freshness-2026-10-13/mise-shasums-headers.txt",
       "http_headers_note": "Signed release-asset redirect URL was redacted from the saved headers."
     },
     "workflow_binary_assets": [
@@ -247,7 +247,7 @@
       "exit_code": 1,
       "interpretation": "All source lookups returned; exit 1 reflects stale base inventory and newer upstream versions, not an operational lookup failure.",
       "raw_log": {
-        "path": "work/freshness-evidence-2026-10-13/probe-01.log",
+        "path": "docs/implemented/evidence/freshness-2026-10-13/probe-01.log",
         "sha256": "9df853bf9defaf13cd39ec343ae83ae40a0859104e0aab9f83772cd232b0012d",
         "bytes": 57260
       }
@@ -259,7 +259,7 @@
       "exit_code": 1,
       "interpretation": "All source lookups returned; exit 1 reflects stale base inventory and newer upstream versions, not an operational lookup failure.",
       "raw_log": {
-        "path": "work/freshness-evidence-2026-10-13/probe-04-root-retry.log",
+        "path": "docs/implemented/evidence/freshness-2026-10-13/probe-04-root-retry.log",
         "sha256": "8b8afd7e51c041f9501393b55b0c3208ea935fa62b5c1df0b09cbac22ecca15b",
         "bytes": 57243
       }
