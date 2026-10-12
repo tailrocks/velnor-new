@@ -18,6 +18,14 @@ fn orch_gen_no_direct_process_spawn_in_source() -> TestResult {
         if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
             continue;
         }
+        // Unit-test-only modules under #[cfg(test)] may spawn test tools; the
+        // production-source policy is enforced separately on runtime files.
+        if path
+            .file_name()
+            .is_some_and(|name| name.to_string_lossy().ends_with("_tests.rs"))
+        {
+            continue;
+        }
         let text = fs::read_to_string(&path)?;
         for banned in ["process::Command", "Command::new", ".spawn("] {
             assert!(
