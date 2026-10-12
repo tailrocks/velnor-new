@@ -203,6 +203,23 @@ fn frontmatter_parser_rejects_duplicate_keys_and_bad_scalars() {
     }
 }
 
+fn assert_rejected_indented_scalar(name: &str, scalar: &str) {
+    let temp = tempfile::tempdir().expect("temporary repository");
+    write_skill(
+        temp.path(),
+        name,
+        &format!("name: {name}\ndescription:\n  {scalar}"),
+    );
+    let output = run_validator(temp.path());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains(&format!(
+            "non-string-frontmatter-scalar:skills/{name}/SKILL.md"
+        )),
+        "indented non-string scalar accepted: {scalar}; output: {stdout}"
+    );
+}
+
 #[test]
 fn frontmatter_parser_rejects_aliases_and_block_collections() {
     if !node_available() {
@@ -261,19 +278,7 @@ fn frontmatter_parser_rejects_aliases_and_block_collections() {
         ("binary-number", "0b10"),
         ("null", "null"),
     ] {
-        write_skill(
-            temp.path(),
-            name,
-            &format!("name: {name}\ndescription:\n  {scalar}"),
-        );
-        let invalid = run_validator(temp.path());
-        let stdout = String::from_utf8_lossy(&invalid.stdout);
-        assert!(
-            stdout.contains(&format!(
-                "non-string-frontmatter-scalar:skills/{name}/SKILL.md"
-            )),
-            "indented non-string scalar accepted: {scalar}; output: {stdout}"
-        );
+        assert_rejected_indented_scalar(name, scalar);
     }
     write_skill(
         temp.path(),
