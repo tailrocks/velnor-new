@@ -35,6 +35,21 @@ The markers never enter the real release manifest, generator lock, producer
 `fixtures/consumer-release-manifest.json` stays unchanged at 0.1.4 as a
 historical schema fixture for direct schema tests.
 
+## Product version prep v0.1.7 (2026-10-13; source-only)
+
+The workspace version, generator asset names/tag, release fixtures, generated
+`.github` tree, CLI parity goldens, and five OpenTofu case trees were updated
+from 0.1.6 to 0.1.7. Generated `.github` files came from the documented
+`velnor-actions generate --output-dir` preview; path/type and symlink inventories
+matched, and the copied files byte-match the preview. The capture script reported
+`dogfood tree identical`. The follow-up OpenTofu golden check passed all five
+cases, and CLI parity capture/check passed four tests.
+
+This is release-source preparation only. It does not establish exact-main CI,
+protected release eligibility, three-target hosted qualification, attestations,
+publication, or consumer adoption. No release was created. The historical v0.1.6
+section below records its own earlier capture.
+
 ## Product version prep v0.1.6 (2026-10-09)
 
 From `fix/release-0.1.6-qualified-generator`, the source was forward-merged
