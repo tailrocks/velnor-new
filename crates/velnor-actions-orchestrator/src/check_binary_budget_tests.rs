@@ -7,17 +7,17 @@ fn each_platform_bound_matches_qualified_installed_bytes() {
         (
             CheckPlatform::LinuxX64,
             MISE_BINARY_SHA256_LINUX_X64,
-            161_267_824,
+            161_373_664,
         ),
         (
             CheckPlatform::MacosArm64,
             MISE_BINARY_SHA256_MACOS_ARM64,
-            126_670_800,
+            127_303_648,
         ),
         (
             CheckPlatform::MacosX64,
             MISE_BINARY_SHA256_MACOS_X64,
-            154_455_968,
+            155_224_416,
         ),
     ] {
         let pin = mise_binary_pin(platform);

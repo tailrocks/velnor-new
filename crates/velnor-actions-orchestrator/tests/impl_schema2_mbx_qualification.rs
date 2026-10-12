@@ -11,7 +11,7 @@ use velnor_actions_orchestrator::{prepare, render_staged_tree};
 
 use crate::impl_common::{TestResult, make_repo};
 
-const CACHE_GENERATION: &str = "velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37";
+const CACHE_GENERATION: &str = "velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-47ce49b32025d93a7a2f4570815afaa2b7092240";
 
 fn assert_candidate_ref(writer: &str) {
     assert!(

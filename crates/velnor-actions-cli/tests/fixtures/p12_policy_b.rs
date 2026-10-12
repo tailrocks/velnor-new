@@ -49,8 +49,8 @@ fn dated(key: &str, granted: &str, expires: &str) -> String {
 #[test]
 fn missing_tool_row_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-missing-tool")?;
-    let row = "{\"name\":\"release-plz\",\"pinned\":\"0.3.170\",\
-        \"qualified\":\"0.3.170\",\
+    let row = "{\"name\":\"release-plz\",\"pinned\":\"0.3.172\",\
+        \"qualified\":\"0.3.172\",\
         \"source\":\"https://crates.io/api/v1/crates/release-plz\",\
         \"status\":\"current\"}";
     harness::mutate(&fixture.dir, INVENTORY, &format!(",{row}"), "")?;
@@ -203,7 +203,7 @@ fn blessed_standing_exception_passes() -> Result<(), Box<dyn Error>> {
         &fixture.dir,
         INVENTORY,
         "\"exceptions\":[]",
-        &format!("\"exceptions\":[{}]", blessed("v0.17.0")),
+        &format!("\"exceptions\":[{}]", blessed("v0.18.1")),
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_clean(&run);
@@ -231,7 +231,7 @@ fn blessed_standing_wrong_tag_fails() -> Result<(), Box<dyn Error>> {
 fn blessed_standing_missing_attribution_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-blessed-attr")?;
     let partial = "{\"key\":\"asamarts/alint\",\"kind\":\"mutable-tag\",\
-        \"tag\":\"v0.17.0\",\"expires\":null}";
+        \"tag\":\"v0.18.1\",\"expires\":null}";
     harness::mutate(
         &fixture.dir,
         INVENTORY,

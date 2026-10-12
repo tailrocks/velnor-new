@@ -167,8 +167,8 @@ Workflow to generate
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
     - actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-    - asamarts/alint@d93c0283b19dd78afcd8a4b303f1556a7759ba81
-    - jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
+    - asamarts/alint@f558d76d076710312c54723d18e44d8cd95b3977
+    - jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
     - jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
   Ineligible: stack/rust/crates/velnor-actions-cli/doctest/default has no test targets; no test command emitted
   Pull-request execution narrows crate obligations through its event-time affected-work plan.

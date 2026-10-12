@@ -323,7 +323,7 @@ const TOOL_PROBE_ROWS: &[(&str, &str, &str)] = &[
     (
         "https://crates.io/api/v1/crates/release-plz",
         "release-plz.json",
-        "{\"crate\": {\"max_version\": \"0.3.170\"}}",
+        "{\"crate\": {\"max_version\": \"0.3.172\"}}",
     ),
     (
         "https://api.github.com/repos/opentofu/opentofu/releases/latest",
@@ -336,7 +336,7 @@ const ACTION_PROBE_ROWS: &[(&str, &str, &str)] = &[
     (
         "https://api.github.com/repos/jdx/mise-action/releases/latest",
         "mise-action.json",
-        "{\"tag_name\": \"v5.1.1\"}",
+        "{\"tag_name\": \"v5.1.2\"}",
     ),
     (
         "https://api.github.com/repos/actions/checkout/releases/latest",
@@ -366,7 +366,7 @@ const ACTION_PROBE_ROWS: &[(&str, &str, &str)] = &[
     (
         "https://api.github.com/repos/asamarts/alint/releases/latest",
         "alint.json",
-        "{\"tag_name\": \"v0.17.0\"}",
+        "{\"tag_name\": \"v0.18.1\"}",
     ),
     (
         "https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest",
