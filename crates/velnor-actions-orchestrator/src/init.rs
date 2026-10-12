@@ -105,6 +105,8 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # repository-owned policy files (.alint.yml, .zizmor.yml).
 # [workflow.verify]
 # jobs = ["zizmor", "alint", "markdownlint", "strict-json", "frontmatter-id", "link-check", "native-validators"]
+# strict_json_files = [".github/marketplace.json"] # Optional explicit scope; omit to check every JSON file.
+# lychee_args = ["--offline", "--include-fragments"] # Optional Lychee args; preserved as separate argv values.
 
 # Optional isolated verification tasks. Authors and reviewers keep task bodies
 # free of Rust compilation; V1 does not inspect them. Each declaration gets a

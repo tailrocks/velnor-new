@@ -1,8 +1,8 @@
 # Velnor Actions: reusable-cache and affected-work performance specification
 
-**Research snapshot:** 3 October 2026.  
-**Generator inspected:** `tailrocks/velnor-new` at `c57c700459bbe1549fe7eedcb7d8689585c38986`.  
-**Scope:** the generator plus 46 consumers, listed in Appendix A and `scope.json`.  
+**Research snapshot:** 3 October 2026.
+**Generator inspected:** `tailrocks/velnor-new` at `c57c700459bbe1549fe7eedcb7d8689585c38986`.
+**Scope:** the generator plus 46 consumers, listed in Appendix A and `scope.json`.
 **Status:** evidence-backed implementation specification. No repository changes, new CI runs, cache deletion, releases, or deployments were performed by this research.
 
 ## 1. Executive finding and evidence boundary

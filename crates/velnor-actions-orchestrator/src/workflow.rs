@@ -164,6 +164,7 @@ pub(crate) fn build_workflow(
         rust.has_compiler(),
         workflow_tasks,
         &verify,
+        &config.workflow.verify,
     )?;
     let actionlint = actionlint_input(config, &version, label);
     Ok(WorkflowPlan {
