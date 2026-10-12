@@ -114,7 +114,11 @@ fn configured_content_verifiers_retain_argument_boundaries() {
     let links = verify_command(ValidatorKind::LinkCheck, &options, &catalog)
         .expect("link check vector builds")
         .expect("link check command exists");
-    let position = links.argv.iter().position(|arg| arg == "lychee").unwrap();
+    let position = links
+        .argv
+        .iter()
+        .position(|arg| arg == "lychee")
+        .expect("link-check argv contains Lychee");
     assert_eq!(
         &links.argv[position + 1..],
         [
@@ -129,168 +133,8 @@ fn configured_content_verifiers_retain_argument_boundaries() {
     );
 }
 
-#[test]
-fn frontmatter_parser_normalizes_multiline_yaml() {
-    let Ok(node) = std::process::Command::new("node").arg("--version").output() else {
-        return;
-    };
-    assert!(node.status.success());
-    let temp = tempfile::tempdir().expect("temporary repository");
-    let skills = temp.path().join("skills");
-    for (name, description) in [
-        (
-            "folded",
-            "> # comment\n  first line\n  second line\n\n  second paragraph\n",
-        ),
-        ("literal", "|-2\n  first line\n  second line\n"),
-        ("literal-paragraph", "|-\n  first line\n\n  second line\n"),
-        ("literal-leading", "|-\n\n  first line\n"),
-        (
-            "quoted",
-            "\"A \\\"quoted\\\" # value\" # trailing comment\n",
-        ),
-        ("plain", "first line\n  second line\n\n  second paragraph\n"),
-        ("modifier-order", ">-2\n  first line\n  second line\n"),
-        ("literal-keep", "|+2\n  first line\n\n"),
-    ] {
-        let dir = skills.join(name);
-        std::fs::create_dir_all(&dir).expect("skill directory");
-        std::fs::write(
-            dir.join("SKILL.md"),
-            format!("---\nname: {name}\ndescription: {description}metadata: {{author: team}}\nallowed-tools: [read, grep]\n---\nBody.\n"),
-        )
-        .expect("skill file");
-    }
-    let instrumented = FRONTMATTER_ID_SCRIPT.replace(
-        "const n = fm.get(\"name\");",
-        "console.log(\"description:\" + JSON.stringify(fm.get(\"description\"))); const n = fm.get(\"name\");",
-    );
-    let valid = std::process::Command::new("node")
-        .arg("-e")
-        .arg(instrumented)
-        .current_dir(temp.path())
-        .output()
-        .expect("run frontmatter validator");
-    assert!(
-        valid.status.success(),
-        "{}",
-        String::from_utf8_lossy(&valid.stdout)
-    );
-    let output = String::from_utf8_lossy(&valid.stdout);
-    for expected in [
-        r#"description:"first line second line\nsecond paragraph""#,
-        r#"description:"first line\nsecond line""#,
-        r#"description:"first line\n\nsecond line""#,
-        r#"description:"\nfirst line""#,
-        r#"description:"A \"quoted\" # value""#,
-        r#"description:"first line second line""#,
-        r#"description:"first line\n\n""#,
-    ] {
-        assert!(
-            output.contains(expected),
-            "missing {expected:?} in {output}"
-        );
-    }
-}
-
-#[test]
-fn frontmatter_parser_rejects_duplicate_and_invalid_scalars() {
-    if std::process::Command::new("node")
-        .arg("--version")
-        .output()
-        .is_err()
-    {
-        return;
-    }
-    let temp = tempfile::tempdir().expect("temporary repository");
-    let skills = temp.path().join("skills");
-    let folded = skills.join("folded");
-    std::fs::create_dir_all(&folded).expect("skill directory");
-    let duplicate = folded.join("SKILL.md");
-    std::fs::write(
-        &duplicate,
-        "---\nname: folded\ndescription: first\ndescription: second\n---\nBody.\n",
-    )
-    .expect("duplicate key fixture");
-    let invalid = std::process::Command::new("node")
-        .arg("-e")
-        .arg(FRONTMATTER_ID_SCRIPT)
-        .current_dir(temp.path())
-        .output()
-        .expect("run frontmatter validator");
-    assert!(!invalid.status.success());
-    assert!(String::from_utf8_lossy(&invalid.stdout).contains("duplicate-frontmatter-key"));
-
-    std::fs::write(
-        &duplicate,
-        "---\nname: folded\ndescription: valid\n---\nBody.\n",
-    )
-    .expect("reset duplicate fixture");
-    for (name, value) in [
-        ("unclosed", "\"not closed"),
-        ("missing-comment-separator", "\"valid\"#junk"),
-        ("collection", "[]"),
-        ("multiline-quoted", "\"first line\n  second line\""),
-        ("bad-indent", "|2\n x"),
-        ("tagged-sequence", "!!seq [item]"),
-    ] {
-        let dir = skills.join(name);
-        std::fs::create_dir_all(&dir).expect("invalid skill directory");
-        std::fs::write(
-            dir.join("SKILL.md"),
-            format!("---\nname: {name}\ndescription: {value}\n---\nBody.\n"),
-        )
-        .expect("invalid skill file");
-    }
-    let malformed = std::process::Command::new("node")
-        .arg("-e")
-        .arg(FRONTMATTER_ID_SCRIPT)
-        .current_dir(temp.path())
-        .output()
-        .expect("run frontmatter validator");
-    let malformed_output = String::from_utf8_lossy(&malformed.stdout);
-    assert!(!malformed.status.success());
-    assert!(malformed_output.contains("bad-frontmatter-scalar"));
-    assert!(malformed_output.contains("non-string-frontmatter-scalar"));
-    assert!(malformed_output.contains("bad-frontmatter-indent"));
-    assert!(malformed_output.contains("unsupported-frontmatter-alias-or-tag"));
-
-    let alias = skills.join("alias/SKILL.md");
-    std::fs::create_dir_all(alias.parent().expect("skill directory path"))
-        .expect("alias skill directory");
-    let long_value = "x".repeat(1025);
-    std::fs::write(
-        &alias,
-        format!("---\nname: alias\npayload: &long {long_value}\ndescription: *long\n---\nBody.\n"),
-    )
-    .expect("alias fixture");
-    let unsupported = std::process::Command::new("node")
-        .arg("-e")
-        .arg(FRONTMATTER_ID_SCRIPT)
-        .current_dir(temp.path())
-        .output()
-        .expect("run frontmatter validator");
-    assert!(!unsupported.status.success());
-    assert!(
-        String::from_utf8_lossy(&unsupported.stdout)
-            .contains("unsupported-frontmatter-alias-or-tag")
-    );
-
-    let block_collection = skills.join("collection/SKILL.md");
-    std::fs::write(
-        block_collection,
-        "---\nname: collection\ndescription:\n  - one\n---\nBody.\n",
-    )
-    .expect("block collection fixture");
-    let invalid = std::process::Command::new("node")
-        .arg("-e")
-        .arg(FRONTMATTER_ID_SCRIPT)
-        .current_dir(temp.path())
-        .output()
-        .expect("run frontmatter validator");
-    assert!(!invalid.status.success());
-    assert!(String::from_utf8_lossy(&invalid.stdout).contains("non-string-frontmatter-scalar"));
-}
+#[path = "verify_frontmatter_tests.rs"]
+mod frontmatter;
 
 #[test]
 fn strict_json_scope_rejects_missing_and_symlinked_files() {
