@@ -104,6 +104,39 @@ fn generic_workflow_runner_catalog_is_linux_only() {
 }
 
 #[test]
+fn verification_options_validate_scopes_and_lychee_arguments() {
+    let mut config = named("CI");
+    config.verify.jobs = vec!["link-check".to_owned(), "strict-json".to_owned()];
+    config.verify.strict_json_files = Some(vec![".github/marketplace.json".to_owned()]);
+    config.verify.lychee_args = vec![
+        "--offline".to_owned(),
+        "--include-fragments".to_owned(),
+        "--exclude".to_owned(),
+        "docs/**".to_owned(),
+    ];
+    assert!(config.validate("config.toml").is_ok());
+
+    config.verify.strict_json_files = Some(vec!["../outside.json".to_owned()]);
+    assert!(
+        config
+            .validate("config.toml")
+            .expect_err("path traversal fails")
+            .to_string()
+            .contains("invalid_or_duplicate_path")
+    );
+
+    config.verify.strict_json_files = None;
+    config.verify.lychee_args = vec!["--token=${{ secrets.X }}".to_owned()];
+    assert!(
+        config
+            .validate("config.toml")
+            .expect_err("workflow expression fails")
+            .to_string()
+            .contains("invalid_or_duplicate_lychee_arg")
+    );
+}
+
+#[test]
 fn workflow_tasks_require_sorted_unique_safe_ids() {
     let make = |id: &str| {
         WorkflowTask::Verification(VerificationTask {

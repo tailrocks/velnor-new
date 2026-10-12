@@ -67,6 +67,12 @@ pub struct VerifyConfig {
     /// Verification job IDs to emit, in canonical emission order.
     #[serde(default)]
     pub jobs: Vec<String>,
+    /// Optional explicit JSON file scope for `strict-json`; absent checks all JSON files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strict_json_files: Option<Vec<String>>,
+    /// Extra Lychee argv entries for the `link-check` validator.
+    #[serde(default)]
+    pub lychee_args: Vec<String>,
 }
 
 /// Cache-write policy for pull-request workflows.
@@ -254,8 +260,68 @@ impl VerifyConfig {
                 ));
             }
         }
+        if let Some(files) = &self.strict_json_files {
+            if !self.jobs.iter().any(|job| job == "strict-json") || files.is_empty() {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.verify.strict_json_files",
+                    "requires_strict_json_and_nonempty_files",
+                ));
+            }
+            let mut paths = std::collections::BTreeSet::new();
+            for path in files {
+                if !valid_json_path(path) || !paths.insert(path) {
+                    return Err(ContractError::config(
+                        file,
+                        "workflow.verify.strict_json_files",
+                        format!("invalid_or_duplicate_path:{path}"),
+                    ));
+                }
+            }
+        }
+        for arg in &self.lychee_args {
+            if !valid_lychee_arg(arg) {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.verify.lychee_args",
+                    format!("invalid_or_duplicate_lychee_arg:{arg}"),
+                ));
+            }
+        }
+        if !self.lychee_args.is_empty() && !self.jobs.iter().any(|job| job == "link-check") {
+            return Err(ContractError::config(
+                file,
+                "workflow.verify.lychee_args",
+                "requires_link_check",
+            ));
+        }
         Ok(())
     }
+}
+
+fn valid_json_path(value: &str) -> bool {
+    !value.is_empty()
+        && std::path::Path::new(value)
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+        && !value.starts_with('/')
+        && value.split('/').all(|part| {
+            !part.is_empty()
+                && part != "."
+                && part != ".."
+                && part
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        })
+}
+
+fn valid_lychee_arg(value: &str) -> bool {
+    !value.is_empty()
+        && value != "--"
+        && !value.contains("${{")
+        && !value.contains(['$', '`'])
+        && !value.chars().any(char::is_control)
+        && !value.split_whitespace().any(|word| word == "mise")
 }
 
 #[cfg(test)]

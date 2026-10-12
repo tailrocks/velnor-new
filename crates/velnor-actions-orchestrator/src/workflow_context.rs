@@ -1,6 +1,8 @@
 //! Renderer context construction from discovered repository evidence.
 
-use velnor_actions_contract::{GeneratorValidation, ValidatorKind, VelnorConfig, WorkflowPolicy};
+use velnor_actions_contract::{
+    GeneratorValidation, ValidatorKind, VelnorConfig, VerifyConfig, WorkflowPolicy,
+};
 use velnor_actions_mise::{IsolatedCommand, PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::{RenderContext, ValidatorCommand};
 use velnor_actions_workflow_renderer::steps::{
@@ -34,6 +36,7 @@ pub(super) fn render_context(
     plan_needs_rust: bool,
     workflow_tasks: Vec<WorkflowTaskPolicy>,
     verify: &[ValidatorKind],
+    verify_config: &VerifyConfig,
 ) -> Result<RenderContext, OrchestratorError> {
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let velnor = config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1;
@@ -77,7 +80,7 @@ pub(super) fn render_context(
             },
         ]);
     }
-    crate::verify::push_verify_commands(&mut validator_commands, verify, catalog)?;
+    crate::verify::push_verify_commands(&mut validator_commands, verify, verify_config, catalog)?;
     let candidate =
         if velnor && config.workflow.generator_validation == GeneratorValidation::Candidate {
             Some(candidate_spec(catalog)?)

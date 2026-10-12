@@ -295,6 +295,25 @@ pub(crate) fn validator_argv(
     program: &str,
     args: &[&str],
 ) -> Result<Vec<String>, OrchestratorError> {
+    validator_argv_parts(spec, version, program, args.iter().copied())
+}
+
+/// Owned argv counterpart for validated repository configuration.
+pub(crate) fn validator_argv_owned(
+    spec: &str,
+    version: &str,
+    program: &str,
+    args: &[String],
+) -> Result<Vec<String>, OrchestratorError> {
+    validator_argv_parts(spec, version, program, args.iter().map(String::as_str))
+}
+
+fn validator_argv_parts<'a>(
+    spec: &str,
+    version: &str,
+    program: &'a str,
+    args: impl IntoIterator<Item = &'a str>,
+) -> Result<Vec<String>, OrchestratorError> {
     if !VALIDATOR_TOOL_SPECS.contains(&spec) {
         return Err(OrchestratorError::Contract {
             problem: format!("validator_tool_rejected:{spec}"),
@@ -303,9 +322,8 @@ pub(crate) fn validator_argv(
     validate_exact_version(spec, version).map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
     })?;
-    let payload: Vec<OsString> = [program]
-        .into_iter()
-        .chain(args.iter().copied())
+    let payload: Vec<OsString> = std::iter::once(program)
+        .chain(args)
         .map(OsString::from)
         .collect();
     let exec =
