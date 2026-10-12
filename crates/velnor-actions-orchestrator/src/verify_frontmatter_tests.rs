@@ -180,6 +180,12 @@ fn frontmatter_parser_rejects_aliases_and_block_collections() {
     assert!(
         String::from_utf8_lossy(&alias.stdout).contains("unsupported-frontmatter-alias-or-tag")
     );
+    write_skill(
+        temp.path(),
+        "block-alias",
+        &format!("name: block-alias\npayload: &long {long_value}\ndescription:\n  *long"),
+    );
+    assert!(!run_validator(temp.path()).status.success());
 
     write_skill(
         temp.path(),
@@ -200,4 +206,16 @@ fn frontmatter_parser_rejects_aliases_and_block_collections() {
     assert!(
         String::from_utf8_lossy(&blank_collection.stdout).contains("non-string-frontmatter-scalar")
     );
+    write_skill(
+        temp.path(),
+        "quoted-map",
+        "name: quoted-map\ndescription:\n  \"text\": one",
+    );
+    assert!(!run_validator(temp.path()).status.success());
+    write_skill(
+        temp.path(),
+        "bare-sequence",
+        "name: bare-sequence\ndescription:\n  -",
+    );
+    assert!(!run_validator(temp.path()).status.success());
 }
