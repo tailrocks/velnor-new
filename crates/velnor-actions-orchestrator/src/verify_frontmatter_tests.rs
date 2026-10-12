@@ -177,6 +177,9 @@ fn frontmatter_parser_rejects_duplicate_keys_and_bad_scalars() {
         ("missing-single-quote-comment-separator", "'valid'#junk"),
         ("invalid-yaml-escape", "\"bad\\qescape\""),
         ("collection", "[]"),
+        ("hex-number", "0x12"),
+        ("octal-number", "0o12"),
+        ("binary-number", "0b10"),
         ("multiline-quoted", "\"first line\n  second line\""),
         ("bad-indent", "|2\n x"),
         ("tagged-sequence", "!!seq [item]"),
@@ -253,6 +256,9 @@ fn frontmatter_parser_rejects_aliases_and_block_collections() {
         ("eol-map", "text:"),
         ("boolean", "true"),
         ("number", "12"),
+        ("hex-number", "0x12"),
+        ("octal-number", "0o12"),
+        ("binary-number", "0b10"),
         ("null", "null"),
     ] {
         write_skill(
