@@ -120,6 +120,43 @@ fn frontmatter_plain_multiline_ignores_indented_comments() {
 }
 
 #[test]
+fn frontmatter_empty_value_accepts_plain_and_quoted_scalars() {
+    if !node_available() {
+        return;
+    }
+    let temp = tempfile::tempdir().expect("temporary repository");
+    write_skill(
+        temp.path(),
+        "plain-child",
+        "name: plain-child\ndescription:\n  first line\n  second line",
+    );
+    write_skill(
+        temp.path(),
+        "double-child",
+        "name: double-child\ndescription:\n  \"Use: tool\"",
+    );
+    write_skill(
+        temp.path(),
+        "single-child",
+        "name: single-child\ndescription:\n  'Use: tool'",
+    );
+    let instrumented = FRONTMATTER_ID_SCRIPT.replace(
+        "const n = fm.get(\"name\");",
+        "console.log(\"description:\" + JSON.stringify(fm.get(\"description\"))); const n = fm.get(\"name\");",
+    );
+    let output = Command::new("node")
+        .arg("-e")
+        .arg(instrumented)
+        .current_dir(temp.path())
+        .output()
+        .expect("run frontmatter validator");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{stdout}");
+    assert!(stdout.contains(r#"description:"first line second line""#));
+    assert_eq!(stdout.matches(r#"description:"Use: tool""#).count(), 2);
+}
+
+#[test]
 fn frontmatter_parser_rejects_duplicate_keys_and_bad_scalars() {
     if !node_available() {
         return;
@@ -216,6 +253,18 @@ fn frontmatter_parser_rejects_aliases_and_block_collections() {
         temp.path(),
         "bare-sequence",
         "name: bare-sequence\ndescription:\n  -",
+    );
+    assert!(!run_validator(temp.path()).status.success());
+    write_skill(
+        temp.path(),
+        "flow-sequence",
+        "name: flow-sequence\ndescription:\n  [one]",
+    );
+    assert!(!run_validator(temp.path()).status.success());
+    write_skill(
+        temp.path(),
+        "tagged-flow-sequence",
+        "name: tagged-flow-sequence\ndescription:\n  !!seq [one]",
     );
     assert!(!run_validator(temp.path()).status.success());
 }
