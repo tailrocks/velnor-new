@@ -288,3 +288,53 @@ fn frontmatter_parser_rejects_aliases_and_block_collections() {
     );
     assert!(!run_validator(temp.path()).status.success());
 }
+
+#[test]
+fn frontmatter_empty_plain_scalars_are_checked_after_comment_stripping_and_folding() {
+    if !node_available() {
+        return;
+    }
+    for (name, value, valid) in [
+        ("boolean-comment", "true # comment", false),
+        ("number-comment", "12 # comment", false),
+        ("null-comment", "null # comment", false),
+        ("boolean-continuation", "true\n  story about tools", true),
+        ("number-continuation", "12\n  tools for analysis", true),
+    ] {
+        let temp = tempfile::tempdir().expect("temporary repository");
+        write_skill(
+            temp.path(),
+            name,
+            &format!("name: {name}\ndescription:\n  {value}"),
+        );
+        let instrumented = FRONTMATTER_ID_SCRIPT.replace(
+            "const n = fm.get(\"name\");",
+            "console.log(\"description:\" + JSON.stringify(fm.get(\"description\"))); const n = fm.get(\"name\");",
+        );
+        let output = Command::new("node")
+            .arg("-e")
+            .arg(instrumented)
+            .current_dir(temp.path())
+            .output()
+            .expect("run frontmatter validator");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert_eq!(
+            output.status.success(),
+            valid,
+            "unexpected validation result for {value:?}: {stdout}"
+        );
+        if valid {
+            assert!(
+                stdout.contains("description:"),
+                "missing normalized value: {stdout}"
+            );
+        } else {
+            assert!(
+                stdout.contains(&format!(
+                    "non-string-frontmatter-scalar:skills/{name}/SKILL.md"
+                )),
+                "missing type error for {value:?}: {stdout}"
+            );
+        }
+    }
+}
