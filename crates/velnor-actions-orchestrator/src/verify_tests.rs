@@ -228,6 +228,7 @@ fn frontmatter_parser_rejects_duplicate_and_invalid_scalars() {
     .expect("reset duplicate fixture");
     for (name, value) in [
         ("unclosed", "\"not closed"),
+        ("missing-comment-separator", "\"valid\"#junk"),
         ("collection", "[]"),
         ("multiline-quoted", "\"first line\n  second line\""),
         ("bad-indent", "|2\n x"),
