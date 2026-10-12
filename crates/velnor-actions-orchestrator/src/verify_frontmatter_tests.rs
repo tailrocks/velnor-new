@@ -47,6 +47,7 @@ fn frontmatter_parser_normalizes_multiline_yaml() {
         ("literal-paragraph", "|-\n  first line\n\n  second line"),
         ("literal-leading", "|-\n\n  first line"),
         ("quoted", "\"A \\\"quoted\\\" # value\" # trailing comment"),
+        ("yaml-escaped", "\"Hello\\x20world\\u0021\\U0001F642\""),
         ("plain", "first line\n  second line\n\n  second paragraph"),
         ("modifier-order", ">-2\n  first line\n  second line"),
         ("literal-keep", "|+2\n  first line\n\n"),
@@ -78,6 +79,7 @@ fn frontmatter_parser_normalizes_multiline_yaml() {
         r#"description:"first line\n\nsecond line""#,
         r#"description:"\nfirst line""#,
         r#"description:"A \"quoted\" # value""#,
+        r#"description:"Hello world!🙂""#,
         r#"description:"first line second line""#,
         r#"description:"first line\n\n\n""#,
     ] {
@@ -98,7 +100,9 @@ fn frontmatter_plain_multiline_ignores_indented_comments() {
     write_skill(
         temp.path(),
         "plain-comment",
-        &format!("name: plain-comment\ndescription: first line\n  # {comment}\n  second line"),
+        &format!(
+            "name: plain-comment\ndescription: first line\n  # {comment}\n  second line # {comment}"
+        ),
     );
     let instrumented = FRONTMATTER_ID_SCRIPT.replace(
         "const n = fm.get(\"name\");",
@@ -134,6 +138,7 @@ fn frontmatter_parser_rejects_duplicate_keys_and_bad_scalars() {
         ("unclosed", "\"not closed"),
         ("missing-comment-separator", "\"valid\"#junk"),
         ("missing-single-quote-comment-separator", "'valid'#junk"),
+        ("invalid-yaml-escape", "\"bad\\qescape\""),
         ("collection", "[]"),
         ("multiline-quoted", "\"first line\n  second line\""),
         ("bad-indent", "|2\n x"),
@@ -184,4 +189,15 @@ fn frontmatter_parser_rejects_aliases_and_block_collections() {
     let collection = run_validator(temp.path());
     assert!(!collection.status.success());
     assert!(String::from_utf8_lossy(&collection.stdout).contains("non-string-frontmatter-scalar"));
+
+    write_skill(
+        temp.path(),
+        "blank-collection",
+        "name: blank-collection\ndescription:\n\n  - one",
+    );
+    let blank_collection = run_validator(temp.path());
+    assert!(!blank_collection.status.success());
+    assert!(
+        String::from_utf8_lossy(&blank_collection.stdout).contains("non-string-frontmatter-scalar")
+    );
 }
