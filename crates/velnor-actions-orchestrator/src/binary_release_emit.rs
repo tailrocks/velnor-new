@@ -1,4 +1,4 @@
-//! Emit the consumer's generated tag-triggered binary-release workflow.
+//! Emit the consumer's generated scheduled binary-release workflow.
 
 use std::ffi::{OsStr, OsString};
 

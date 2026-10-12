@@ -10,16 +10,14 @@ pub(super) fn job_base(
     runner: &str,
     timeout: i64,
     permissions: &[(&str, &str)],
+    condition: &str,
 ) -> Vec<(String, Yaml)> {
     vec![
         ("name".to_owned(), Yaml::str(name)),
         ("runs-on".to_owned(), Yaml::str(runner)),
         ("timeout-minutes".to_owned(), Yaml::Int(timeout)),
         ("permissions".to_owned(), permission_map(permissions)),
-        (
-            "if".to_owned(),
-            Yaml::str("github.event_name == 'push' && github.ref_type == 'tag'"),
-        ),
+        ("if".to_owned(), Yaml::str(condition)),
     ]
 }
 

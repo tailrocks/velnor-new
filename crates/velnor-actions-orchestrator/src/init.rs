@@ -137,7 +137,7 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # test_runner = "cargo_test"       # Sticky override: "cargo_test" (default) or "cargo_nextest". Without it, .config/nextest.toml selects Nextest ([profile.ci] when declared, else the documented default profile).
 # Do not put free-form Mise commands in credential-bearing Rust jobs.
 
-# Optional tag-triggered GitHub Release for one Cargo binary (consumer-v1 only).
+# Optional scheduled GitHub Release for one Cargo binary (consumer-v1 only).
 # [stacks.rust.binary_release]
 # enabled = true
 # manifest_path = "Cargo.toml"

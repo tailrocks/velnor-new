@@ -110,16 +110,25 @@ fn commands(rust: &str, gh: &str) -> RustBinaryReleaseCommands {
 }
 
 #[test]
-fn renderer_emits_source_checked_tag_release_and_repo_scan_build_env() {
+fn renderer_emits_trusted_scheduled_release_and_repo_scan_build_env() {
     let yaml = render_rust_binary_release_workflow(&request()).expect("binary workflow");
     for expected in [
-        "tags:\n      - demo-package-v*",
-        "github.event_name == 'push' && github.ref_type == 'tag'",
-        "refs/tags/$GITHUB_REF_NAME",
+        "cron: 17 * * * *",
+        "github.event_name == 'schedule'",
+        "needs.verify-source.outputs.should_release == 'true'",
+        "refs/tags/$tag",
         "--locked",
         "--release",
-        "expected_tag=\"demo-package-v$version\"",
-        "demo-package-v${RELEASE_VERSION-}",
+        "git merge-base --is-ancestor",
+        "semver.fullmatch(version)",
+        "functools.cmp_to_key(compare_tags)",
+        "cannot order release tags by SemVer precedence",
+        "env -u GH_TOKEN",
+        "should_release=true",
+        "source_sha=%s",
+        "resume_release_id=%s",
+        "RESUME_RELEASE_ID: ${{ needs.verify-source.outputs.resume_release_id }}",
+        "demo-package-v$version",
         "REPO_SCAN_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}",
         "RUSTUP_TOOLCHAIN: 1.98.1",
         "needs.build-linux.outputs.artifact_id",
@@ -133,9 +142,16 @@ fn renderer_emits_source_checked_tag_release_and_repo_scan_build_env() {
         "tar -tzf \"$linux_source\"",
         "tar -tzf \"$macos_source\"",
         "rwxr-xr-x",
+        "--repo \"$GITHUB_REPOSITORY\"",
+        "compare/$source_sha...$default_sha",
         "contents: write",
         "SHA256SUMS",
         "remote tag moved after verification",
+        "release_assets_are_expected_subset",
+        "release_assets_are_complete",
+        "existing draft cannot be resumed",
+        "release upload",
+        "draft=false",
     ] {
         // Run scripts are emitted as YAML double-quoted scalars, so shell
         // quotes and backslashes are escaped in the serialized document.
@@ -148,18 +164,26 @@ fn renderer_emits_source_checked_tag_release_and_repo_scan_build_env() {
     let publish = yaml
         .find("Verify checksums, recheck tag, and publish")
         .expect("token-bearing publish step");
-    let token = yaml.find("GH_TOKEN:").expect("publish token");
+    let token = yaml.rfind("GH_TOKEN:").expect("publish token");
     assert!(prep < publish && publish < token);
     assert!(yaml[prep..publish].contains("tar -tzf"));
     let token_script = &yaml[publish..token];
     assert!(token_script.contains("prepared checksums do not match"));
     assert!(token_script.contains("remote tag moved after verification"));
+    assert!(token_script.contains("source is no longer reachable"));
     assert!(token_script.contains("release create"));
+    assert!(token_script.contains("release upload"));
+    assert!(token_script.contains("draft=false"));
+    assert!(token_script.contains("selected draft assets do not match"));
     assert!(!token_script.contains("tar -t"));
     assert!(!token_script.contains("assets/incoming-"));
-    assert!(!yaml.contains("pull_request"), "workflow is tag push only");
+    assert!(!yaml.contains("push:"), "workflow has no push trigger");
+    assert!(!yaml.contains("sort -Vr"), "tags are not naturally sorted");
+    assert!(!yaml.contains("pull_request"), "workflow has no PR trigger");
+    let publisher = &yaml[yaml.find("publish-release:").expect("publisher job")..];
+    assert!(!publisher.contains("Check out exact source"));
     assert_eq!(yaml.matches("contents: write").count(), 1);
-    assert_eq!(yaml.matches("GH_TOKEN:").count(), 1);
+    assert_eq!(yaml.matches("GH_TOKEN:").count(), 2);
     assert!(!yaml.contains("actions: write"));
     assert!(
         !yaml.contains("@@"),

@@ -21,10 +21,14 @@ fn binary_release_is_generated_and_planned_only_when_enabled() -> TestResult {
         .expect("enabled binary release output");
     let yaml = &workflow.bytes;
     for expected in [
-        "tags:\n      - demo-v*",
+        "cron: 17 * * * *",
+        "github.event_name == 'schedule'",
+        "needs.verify-source.outputs.should_release == 'true'",
         "REPO_SCAN_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}",
         "artifact-ids: ${{ needs.build-linux.outputs.artifact_id }}",
         "artifact-ids: ${{ needs.build-macos.outputs.artifact_id }}",
+        "git merge-base --is-ancestor",
+        "env -u GH_TOKEN",
         "contents: write",
     ] {
         assert!(yaml.contains(expected), "missing `{expected}`:\n{yaml}");
@@ -50,11 +54,12 @@ fn binary_release_is_generated_and_planned_only_when_enabled() -> TestResult {
     );
     let scripts = run_scripts.join("\n");
     for expected in [
-        "refs/tags/$GITHUB_REF_NAME",
+        "refs/tags/$tag",
         "selected Cargo package or binary was not found",
         "x86_64-unknown-linux-gnu",
         "aarch64-apple-darwin",
         "sha256sum \"$linux_name\" \"$macos_name\" > SHA256SUMS",
+        "source is no longer reachable from captured default branch",
     ] {
         assert!(
             scripts.contains(expected),
@@ -65,6 +70,9 @@ fn binary_release_is_generated_and_planned_only_when_enabled() -> TestResult {
         !yaml.contains("pull_request"),
         "release has no PR trigger or job"
     );
+    assert!(!yaml.contains("push:"), "release has no tag push trigger");
+    let publisher = &yaml[yaml.find("publish-release:").expect("publisher job")..];
+    assert!(!publisher.contains("Check out exact source"));
     let plan = plan_for(&prep)?;
     assert!(plan.contains(".github/workflows/binary-release.yml"));
 

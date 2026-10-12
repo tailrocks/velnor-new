@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RustBinaryReleaseConfig {
-    /// Whether to emit the tag-triggered GitHub Release workflow.
+    /// Whether to emit the trusted scheduled GitHub Release workflow.
     #[serde(default)]
     pub enabled: bool,
     /// Repo-relative workspace manifest (default `Cargo.toml`).

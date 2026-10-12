@@ -41,12 +41,29 @@ runner, shell, or permission fields.
 enabled. The workflow is generator owned and `plan` lists it under the same
 condition. Successful generation retires the path when the option is disabled.
 
-The workflow accepts tag push events matching `<package>-v*`. A read-only
-source gate checks the event and ref shape, exact checked out commit, direct
-or one-level annotated tag target, and the selected package and binary from
-locked Cargo metadata. It then requires the tag to equal
-`<package>-v<Cargo package version>`. It intentionally allows historical
-version tags whose commits are no longer the default branch tip.
+The workflow uses an hourly schedule (`17 * * * *`). GitHub loads and runs the
+workflow from the repository's default branch for `schedule` events. The
+read-only source gate also checks the API-reported default branch and requires
+the scheduled commit to still equal its current head. A stale queued schedule
+is a no-op and is retried at the next poll.
+
+The source gate inventories `<package>-v*` tags and existing draft or
+published releases. It strictly parses SemVer 2.0.0 and considers tags in
+descending SemVer precedence. Stable versions outrank prereleases; build
+metadata does not affect precedence, and equal-precedence tags use ascending
+tag name as a deterministic tie-break. Malformed versions, including numeric
+identifiers with leading zeroes, are skipped. The resolver uses the runner's
+Python 3 standard library for this ordering. It also skips tags that already
+have a release, tags that do not point directly or through one annotated tag
+to a commit, and commits that are not ancestors of the captured
+default-branch SHA. For each remaining candidate, it reads locked Cargo
+metadata from a Git archive and requires the exact package and binary plus a
+matching `<package>-v<Cargo package version>` tag.
+The read token is removed from the environment before parsing tag-controlled
+manifests. The gate selects at most one candidate per poll; if none qualify,
+build and publish jobs do not run. A selected tag must already be merged into
+the default branch. Historical tags from commits no longer reachable from
+the default branch are intentionally ineligible.
 
 Two independent native jobs build the exact package and binary with pinned
 Mise managed Rust, `--locked`, and `--release` for:
@@ -54,33 +71,39 @@ Mise managed Rust, `--locked`, and `--release` for:
 - `x86_64-unknown-linux-gnu` on `ubuntu-24.04`;
 - `aarch64-apple-darwin` on `macos-15` (GitHub's standard arm64 label).
 
-Each job checks its Rust host and executable format, then uploads one asset.
-The publisher downloads the artifact IDs produced by those exact jobs in the
-same workflow run. It rejects missing, extra, empty, symlinked, or non-regular
-files, checks that each target archive contains exactly one regular binary
-with executable mode, computes and verifies `SHA256SUMS`, and rechecks the
-remote tag target against the verified source SHA before creating the GitHub
-Release. Asset names are `<binary>-<version>-<target>.tar.gz`. For example,
-to extract and run the macOS ARM64 artifact:
+Each job checks the exact source checkout, tag target, Cargo package version,
+Rust host, and executable format, then uploads one asset. The publisher runs
+in a fresh job with no checkout. It downloads the artifact IDs produced by
+those exact jobs in the same workflow run, rejects missing, extra, empty,
+symlinked, or non-regular files, checks that each target archive contains
+exactly one regular binary with executable mode, computes and verifies
+`SHA256SUMS`, and rechecks the remote tag target and source ancestry against
+the captured default-branch SHA before creating the GitHub Release. It does
+not execute the downloaded binary or archive contents. Asset names are
+`<binary>-<version>-<target>.tar.gz`. For example, to extract and run the
+macOS ARM64 artifact:
 
 ```sh
 tar -xzf repo-scan-1.2.3-aarch64-apple-darwin.tar.gz
 ./repo-scan --help
 ```
 
-No job runs for pull requests. Verification and build jobs have only
-`contents: read`; build artifact upload uses the Actions runtime artifact
-service. Only the publisher has `contents: write`, plus `actions: read` for
-exact artifact downloads. The publisher does not check out or execute
-downloaded binaries.
-Concurrent runs serialize by tag. Existing releases cause creation to fail
-rather than being overwritten.
+No job runs for pull requests or tag push events. Verification and build jobs
+have only `contents: read`; their checkout steps do not persist credentials,
+and the build jobs receive no write token or other release secret. Build
+artifact upload uses the Actions runtime artifact service. Only the publisher
+has `contents: write`, plus `actions: read` for exact artifact downloads.
+Concurrent polls serialize for the default branch. Existing draft or
+published releases are skipped during candidate selection; a release created
+after selection causes `gh release create` to fail rather than overwrite it.
 
 GitHub does not expose an atomic operation that both compares a tag's object
 SHA and creates a release against that same immutable comparison. The
 publisher therefore reads and validates the remote tag immediately before
 release creation and uses `--verify-tag`; a tag changed or deleted before
 that check fails closed. A concurrent ref change in the small interval
-between the check and release API call cannot be excluded by the available
-GitHub API. Repositories requiring that race to be impossible need a separate
-tag immutability rule at the GitHub repository level.
+between the check and the release API call cannot be excluded by the available
+GitHub API. Repositories using this workflow must enforce immutable release
+tags with a repository ruleset or equivalent policy. Without that policy, the
+remaining tag-move race is a release blocker, not a condition this workflow
+can make atomic.

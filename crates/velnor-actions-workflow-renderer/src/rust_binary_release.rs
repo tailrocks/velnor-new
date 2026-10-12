@@ -1,10 +1,21 @@
-//! Tag-triggered consumer Cargo binary releases.
+//! Trusted scheduled consumer Cargo binary releases.
 //!
 //! Builds run on native pinned-toolchain hosts. Only the final job has
-//! repository write permission, and it never executes downloaded bytes.
+//! repository write permission, and it never checks out source or executes
+//! downloaded bytes.
 
 mod commands;
+mod jobs;
+#[cfg(test)]
+#[path = "rust_binary_release_prepare_assets_test.rs"]
+mod prepare_assets_tests;
+#[cfg(test)]
+#[path = "rust_binary_release_resume_test.rs"]
+mod resume_tests;
 mod scripts;
+#[cfg(test)]
+#[path = "rust_binary_release_scripts_test.rs"]
+mod scripts_test;
 #[cfg(test)]
 #[path = "rust_binary_release_test.rs"]
 mod tests;
@@ -16,8 +27,7 @@ use crate::setup::MiseSetup;
 use crate::yaml::{Yaml, render_yaml};
 use crate::{RenderError, join_argv_for_run, marker, steps};
 use yaml_steps::{
-    checkout_step, download_step, job_base, mise_setup_step, permission_map, run_step,
-    run_step_with, upload_step,
+    checkout_step, job_base, mise_setup_step, permission_map, run_step, run_step_with, upload_step,
 };
 
 /// Fixed GitHub-hosted Linux `x86_64` runner.
@@ -69,9 +79,10 @@ pub struct RustBinaryReleaseRequest {
 
 /// Render a marked generic Cargo binary-release workflow.
 ///
-/// The trigger only accepts tags beginning with `<package>-v`; the
-/// verification job then requires the complete tag to equal the selected
-/// Cargo package version. All build jobs use the verified commit SHA.
+/// The trusted default-branch workflow polls release tags on a schedule. It
+/// selects one unreleased package tag whose commit is reachable from the
+/// captured default-branch SHA and whose manifest version matches the tag.
+/// All build jobs use that exact commit SHA.
 /// # Errors
 pub fn render_rust_binary_release_workflow(
     request: &RustBinaryReleaseRequest,
@@ -132,17 +143,16 @@ fn workflow_document(
     commands: &RenderedCommands,
     binary: &str,
 ) -> Yaml {
-    let tag_pattern = format!("{}-v*", request.config.package);
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Rust binary release")),
         (
             "on".to_owned(),
             Yaml::Map(vec![(
-                "push".to_owned(),
-                Yaml::Map(vec![(
-                    "tags".to_owned(),
-                    Yaml::Seq(vec![Yaml::str(tag_pattern)]),
-                )]),
+                "schedule".to_owned(),
+                Yaml::Seq(vec![Yaml::Map(vec![(
+                    "cron".to_owned(),
+                    Yaml::str("17 * * * *"),
+                )])]),
             )]),
         ),
         (
@@ -192,7 +202,7 @@ fn workflow_document(
                 ),
                 (
                     "publish-release".to_owned(),
-                    publish_job(request, commands, binary),
+                    jobs::publish_job(request, commands, binary),
                 ),
             ]),
         ),
@@ -206,17 +216,26 @@ fn verify_job(
 ) -> Yaml {
     let script = scripts::verify_source(&request.config, binary, commands);
     let mut fields = job_base(
-        "Verify tag and Cargo version",
+        "Select trusted release source",
         BINARY_RELEASE_LINUX_RUNNER,
         15,
         &[("contents", "read")],
+        "github.event_name == 'schedule'",
     );
     fields.push((
         "outputs".to_owned(),
         Yaml::Map(vec![
             (
+                "should_release".to_owned(),
+                Yaml::str("${{ steps.verify.outputs.should_release }}"),
+            ),
+            (
                 "source_sha".to_owned(),
                 Yaml::str("${{ steps.verify.outputs.source_sha }}"),
+            ),
+            (
+                "default_sha".to_owned(),
+                Yaml::str("${{ steps.verify.outputs.default_sha }}"),
             ),
             (
                 "version".to_owned(),
@@ -226,6 +245,10 @@ fn verify_job(
                 "tag".to_owned(),
                 Yaml::str("${{ steps.verify.outputs.tag }}"),
             ),
+            (
+                "resume_release_id".to_owned(),
+                Yaml::str("${{ steps.verify.outputs.resume_release_id }}"),
+            ),
         ]),
     ));
     fields.push((
@@ -234,11 +257,15 @@ fn verify_job(
             checkout_step(&request.checkout_uses, "${{ github.sha }}"),
             mise_setup_step(&request.linux_setup),
             run_step("Install pinned Rust", &commands.install_rust),
+            run_step("Install pinned GitHub CLI", &commands.install_gh),
             run_step_with(
-                "Verify source, tag, package, and binary",
+                "Select verified package tag",
                 "verify",
                 &script,
-                &[("RUSTUP_TOOLCHAIN", &commands.rust_version)],
+                &[
+                    ("GH_TOKEN", "${{ github.token }}"),
+                    ("RUSTUP_TOOLCHAIN", &commands.rust_version),
+                ],
             ),
         ]),
     ));
@@ -260,7 +287,13 @@ fn build_job(
         (&commands.build_macos, &request.macos_setup)
     };
     let script = scripts::build(binary, target, build, &commands.rustc_version);
-    let mut fields = job_base(name, runner, 60, &[("contents", "read")]);
+    let mut fields = job_base(
+        name,
+        runner,
+        60,
+        &[("contents", "read")],
+        "needs.verify-source.outputs.should_release == 'true'",
+    );
     fields.push((
         "needs".to_owned(),
         Yaml::Seq(vec![Yaml::str("verify-source")]),
@@ -283,6 +316,14 @@ fn build_job(
                 "SOURCE_SHA".to_owned(),
                 Yaml::str("${{ needs.verify-source.outputs.source_sha }}"),
             ),
+            (
+                "DEFAULT_SHA".to_owned(),
+                Yaml::str("${{ needs.verify-source.outputs.default_sha }}"),
+            ),
+            (
+                "RELEASE_TAG".to_owned(),
+                Yaml::str("${{ needs.verify-source.outputs.tag }}"),
+            ),
         ]),
     ));
     let path =
@@ -300,73 +341,18 @@ fn build_job(
             ),
             mise_setup_step(setup),
             run_step("Install pinned Rust", &commands.install_rust),
+            run_step_with(
+                "Verify selected source checkout",
+                "source",
+                &scripts::verify_build_source(&request.config, binary, commands),
+                &[
+                    ("SOURCE_SHA", "${{ env.SOURCE_SHA }}"),
+                    ("RELEASE_VERSION", "${{ env.RELEASE_VERSION }}"),
+                    ("RELEASE_TAG", "${{ env.RELEASE_TAG }}"),
+                ],
+            ),
             run_step_with("Build and verify binary", "build", &script, &build_env),
             upload_step(artifact, &path),
-        ]),
-    ));
-    Yaml::Map(fields)
-}
-
-fn publish_job(
-    request: &RustBinaryReleaseRequest,
-    commands: &RenderedCommands,
-    binary: &str,
-) -> Yaml {
-    let prepare_script = scripts::prepare_assets(&request.config.package, binary);
-    let publish_script = scripts::publish(binary, &commands.gh_prefix);
-    let mut fields = job_base(
-        "Publish GitHub Release",
-        BINARY_RELEASE_LINUX_RUNNER,
-        30,
-        &[("actions", "read"), ("contents", "write")],
-    );
-    fields.push((
-        "needs".to_owned(),
-        Yaml::Seq(vec![
-            Yaml::str("verify-source"),
-            Yaml::str("build-linux"),
-            Yaml::str("build-macos"),
-        ]),
-    ));
-    fields.push((
-        "env".to_owned(),
-        Yaml::Map(vec![
-            (
-                "RELEASE_VERSION".to_owned(),
-                Yaml::str("${{ needs.verify-source.outputs.version }}"),
-            ),
-            (
-                "SOURCE_SHA".to_owned(),
-                Yaml::str("${{ needs.verify-source.outputs.source_sha }}"),
-            ),
-            (
-                "RELEASE_TAG".to_owned(),
-                Yaml::str("${{ needs.verify-source.outputs.tag }}"),
-            ),
-        ]),
-    ));
-    fields.push((
-        "steps".to_owned(),
-        Yaml::Seq(vec![
-            mise_setup_step(&request.linux_setup),
-            run_step("Install pinned GitHub CLI", &commands.install_gh),
-            download_step(
-                "Download Linux x86_64 asset",
-                "${{ needs.build-linux.outputs.artifact_id }}",
-                "assets/incoming-linux",
-            ),
-            download_step(
-                "Download macOS ARM64 asset",
-                "${{ needs.build-macos.outputs.artifact_id }}",
-                "assets/incoming-macos",
-            ),
-            run_step("Validate archives and prepare checksums", &prepare_script),
-            run_step_with(
-                "Verify checksums, recheck tag, and publish",
-                "publish",
-                &publish_script,
-                &[("GH_TOKEN", "${{ github.token }}")],
-            ),
         ]),
     ));
     Yaml::Map(fields)
