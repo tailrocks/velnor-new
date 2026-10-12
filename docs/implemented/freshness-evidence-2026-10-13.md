@@ -24,9 +24,26 @@ inventory.
 | Pin | Observed latest | Update and compatibility evidence |
 | --- | --- | --- |
 | Mise | `2026.10.8` | Official release tag `v2026.10.8`, peeled commit `b671d356aaf33b87e48e7469a77abb40c3553c68`; raw binary digests are in [Mise platform pins](mise-platform-pins.md). The Linux ARM64 source-build archive hash was checked against the official manifest and downloaded bytes; a targeted assertion protects it. |
-| `release-plz` | `0.3.172` | The crates.io crate checksum is `ca9813f5aff1fbfb88d016a5b6685257caad6270d6a667a9ea23c99d749ab81e`; embedded VCS commit `8b523fa6c4eb4992f18365ac50a196b4dc6a1013`. Its release removes the old `release-plz/` branch fallback. Velnor does not set `pr_branch_prefix`, and no active release PR depends on that fallback. Existing explicit config and phase-separated argv remain covered by tests. |
+| `release-plz` | `0.3.172` | The crates.io crate checksum is `ca9813f5aff1fbfb88d016a5b6685257caad6270d6a667a9ea23c99d749ab81e`; embedded VCS commit `8b523fa6c4eb4992f18365ac50a196b4dc6a1013`. Its release removes the old `release-plz/` branch fallback. Velnor does not set `pr_branch_prefix`, and no active release PR depends on that fallback. Existing explicit config and phase-separated argv remain covered by tests. An isolated install confirmed the exact executable version/SHA and `release-plz release --help` shape; see the qualification receipt below. |
 | `asamarts/alint` action | `v0.18.1` | Upstream tag resolves to `f558d76d076710312c54723d18e44d8cd95b3977`. The generated repository-policy job keeps the explicit `.alint.yml` config and existing checks. |
 | `jdx/mise-action` | `v5.1.2` | Upstream tag resolves to `08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8`. Its new `mise_dir` export and Windows fallback do not change Velnor's explicit version/digest setup, cache-disabled mode, or unset `mise_dir`. |
+
+### release-plz install qualification
+
+An independent isolated install under the repository-pinned Rust `1.98.1`
+reported `release-plz 0.3.172`, with executable SHA-256
+`0d868442aaabbe52512558a6014ae450169656f90bab7137de3f76bda10a7707`. The
+`release-plz release --help` output reported `release-plz release [OPTIONS]`.
+The captured help (trailing whitespace trimmed, option text unchanged) includes
+Velnor-used `--config`, `--manifest-path`, `--registry`, `--token`, and
+`-o`/`--output`, as well as `--dry-run`, `--no-verify`, and `--allow-dirty`.
+The archive SHA-256 matched the cached registry index checksum
+(`ca9813f5aff1fbfb88d016a5b6685257caad6270d6a667a9ea23c99d749ab81e`).
+The [qualification receipt](evidence/freshness-2026-10-13/release-plz-0.3.172-install-evidence.json)
+and [credential-scrubbed transcript](evidence/freshness-2026-10-13/release-plz-0.3.172-install.log)
+are hash-bound in the upstream-probe JSON. The supplied probe did not include
+its execution timestamp or source HEAD; the receipt records when it was added
+to this evidence set and does not infer either missing value.
 
 Rust `1.99.0`, `mr-boxington` `v1.23.0`, `actions/download-artifact`
 `v8.0.2`, `actions/upload-artifact` `v7.0.2`, and

@@ -23,8 +23,13 @@ Linux ARM64 archive digest used by the source-build catalog.
 
 ## Hosted qualification
 
-Qualification for `2026.10.8` is pending. The exact-source `mise-pin` run must
-pass both Linux x64 and macOS x64 jobs before the inventory records this pin
-as qualified. This qualification checks the installed binary version and
-digest on those two hosted targets only. It does not qualify the generator
+Qualification for `2026.10.8` passed in the exact-source [`mise-pin` run
+38321521320](https://github.com/tailrocks/velnor-new/actions/runs/38321521320),
+dispatched against source SHA
+`438bd90d2ef64515373f413b501b7ae01189a8e7`. Both [Linux x64
+job 115050479288](https://github.com/tailrocks/velnor-new/actions/runs/38321521320/job/115050479288)
+and [macOS x64
+job 115050479238](https://github.com/tailrocks/velnor-new/actions/runs/38321521320/job/115050479238)
+passed the installed binary version and digest checks. This qualification
+covers those two hosted targets only. It does not qualify the generator
 release or establish qualification for Ubuntu `24.04`/`22.04` runner labels.

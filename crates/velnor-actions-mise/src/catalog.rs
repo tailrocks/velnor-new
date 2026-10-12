@@ -40,7 +40,9 @@ mod versions;
 pub use versions::{check_freshness_requirements, validate_exact_version};
 use versions::{invalid_version, tool_source};
 
-/// Adopted Mise runner release (tag `v2026.10.8`); hosted qualification is pending.
+/// Adopted Mise runner release (tag `v2026.10.8`); hosted version/digest qualification
+/// passed on Linux x64 and macOS x64 in run 38321521320 for source SHA
+/// `438bd90d2ef64515373f413b501b7ae01189a8e7`.
 /// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-10-12.
 pub const MISE_VERSION: &str = "2026.10.8";
 /// Qualified Rust stable toolchain; 1.99.0 is held pending policy review.
