@@ -249,6 +249,26 @@ fn frontmatter_parser_rejects_aliases_and_block_collections() {
         "name: quoted-map\ndescription:\n  \"text\": one",
     );
     assert!(!run_validator(temp.path()).status.success());
+    for (name, scalar) in [
+        ("eol-map", "text:"),
+        ("boolean", "true"),
+        ("number", "12"),
+        ("null", "null"),
+    ] {
+        write_skill(
+            temp.path(),
+            name,
+            &format!("name: {name}\ndescription:\n  {scalar}"),
+        );
+        let invalid = run_validator(temp.path());
+        let stdout = String::from_utf8_lossy(&invalid.stdout);
+        assert!(
+            stdout.contains(&format!(
+                "non-string-frontmatter-scalar:skills/{name}/SKILL.md"
+            )),
+            "indented non-string scalar accepted: {scalar}; output: {stdout}"
+        );
+    }
     write_skill(
         temp.path(),
         "bare-sequence",
