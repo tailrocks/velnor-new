@@ -280,11 +280,25 @@ fn strip_line_comment(line: &str) -> &str {
     line
 }
 
-#[test]
-fn orchestrator_src_passes_forbidden_table() -> TestResult {
-    let src = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
-    let mut checked = 0;
-    for path in rust_sources_recursive(&src)? {
+type SourceForbiddenHits = Vec<(PathBuf, Vec<&'static str>)>;
+
+/// Return forbidden tokens from production sources, excluding unit-test-only
+/// modules that are deliberately compiled only for tests and may spawn tools.
+fn production_source_hits(
+    root: &std::path::Path,
+) -> Result<SourceForbiddenHits, Box<dyn std::error::Error>> {
+    let mut hits_by_path = Vec::new();
+    for path in rust_sources_recursive(root)? {
+        let relative = path.strip_prefix(root)?;
+        let file_is_test_module = path
+            .file_name()
+            .is_some_and(|name| name.to_string_lossy().ends_with("_tests.rs"));
+        let is_in_test_directory = relative
+            .components()
+            .any(|component| matches!(component.as_os_str().to_str(), Some("test" | "tests")));
+        if file_is_test_module || is_in_test_directory {
+            continue;
+        }
         let text = std::fs::read_to_string(&path)?;
         let code: String = text
             .lines()
@@ -292,10 +306,55 @@ fn orchestrator_src_passes_forbidden_table() -> TestResult {
             .collect::<Vec<_>>()
             .join("\n");
         let hits = flagged(&code);
+        if !hits.is_empty() {
+            hits_by_path.push((path, hits));
+        }
+    }
+    Ok(hits_by_path)
+}
+
+#[test]
+fn production_source_scan_excludes_test_only_modules_and_rejects_process_spawns() -> TestResult {
+    let temp = tempfile::tempdir()?;
+    let src = temp.path().join("src");
+    std::fs::create_dir_all(src.join("nested/tests"))?;
+    std::fs::write(
+        src.join("runtime.rs"),
+        "let _ = std::process::Command::new(\"node\").output();",
+    )?;
+    std::fs::write(
+        src.join("validator_tests.rs"),
+        "let _ = std::process::Command::new(\"node\").output();",
+    )?;
+    std::fs::write(
+        src.join("nested/tests/fixture.rs"),
+        "let _ = std::process::Command::new(\"node\").output();",
+    )?;
+
+    let hits = production_source_hits(&src)?;
+    assert_eq!(hits.len(), 1, "test-only files are excluded");
+    assert_eq!(hits[0].0, src.join("runtime.rs"));
+    assert!(hits[0].1.contains(&"Command::new"));
+    assert!(hits[0].1.contains(&".output("));
+    Ok(())
+}
+
+#[test]
+fn orchestrator_src_passes_forbidden_table() -> TestResult {
+    let src = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+    let hits_by_path = production_source_hits(&src)?;
+    let checked = rust_sources_recursive(&src)?.len();
+    for (path, hits) in hits_by_path {
         let shell = hits.contains(&"sh -c");
         let spawn = hits.iter().any(|hit| *hit != "sh -c");
         assert!(!spawn, "spawn token in {}: {hits:?}", path.display());
         if shell {
+            let text = std::fs::read_to_string(&path)?;
+            let code: String = text
+                .lines()
+                .map(strip_line_comment)
+                .collect::<Vec<_>>()
+                .join("\n");
             let name = path
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned())
@@ -306,7 +365,6 @@ fn orchestrator_src_passes_forbidden_table() -> TestResult {
             );
             assert!(code.contains("TASK_RUN_ENV"), "env-only template");
         }
-        checked += 1;
     }
     assert!(checked > 0, "sources scanned");
     Ok(())
