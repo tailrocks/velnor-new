@@ -81,6 +81,8 @@ mod journal_identity_tests;
 #[cfg(test)]
 mod journal_launch_phase_tests;
 #[cfg(test)]
+mod journal_migration_tests;
+#[cfg(test)]
 mod journal_schema_tests;
 #[cfg(test)]
 mod journal_tests;

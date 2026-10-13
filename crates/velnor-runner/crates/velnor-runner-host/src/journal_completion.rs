@@ -101,7 +101,7 @@ impl Journal {
         let connection = self.connection().await?;
         let mut rows = connection
             .query(
-                "SELECT i.id, i.kind, i.subject, i.state, i.docker_id, i.github_runner_id, i.cleanup_proven, i.dind_id, i.worker_volume, i.scale_set_id, i.runner_request_id, i.runner_name, i.docker_engine_id, i.launch_phase, c.scale_set_id, c.runner_request_id, c.runner_id, c.runner_name, c.runner_absent FROM intents AS i JOIN completion_cleanup AS c ON c.intent_id = i.id WHERE i.kind = 'launch' AND i.cleanup_proven = 0 AND i.scale_set_id = c.scale_set_id AND i.runner_name = c.runner_name AND (i.runner_request_id IS NULL OR i.runner_request_id = c.runner_request_id) AND c.retry_after <= ?1 AND c.lease_until <= ?1 ORDER BY c.retry_after, i.id LIMIT ?2",
+                "SELECT i.id, i.kind, i.subject, i.state, i.docker_id, i.github_runner_id, i.cleanup_proven, i.dind_id, i.worker_volume, i.scale_set_id, i.runner_request_id, i.runner_name, i.docker_engine_id, i.launch_phase, i.launch_id, i.assignment_key, i.seed_generation_id, i.acquire_attempted, i.acquire_resolved, i.acquired, i.jit_requested, i.runner_completed, c.scale_set_id, c.runner_request_id, c.runner_id, c.runner_name, c.runner_absent FROM intents AS i JOIN completion_cleanup AS c ON c.intent_id = i.id WHERE i.kind = 'launch' AND i.cleanup_proven = 0 AND i.scale_set_id = c.scale_set_id AND i.runner_name = c.runner_name AND (i.runner_request_id IS NULL OR i.runner_request_id = c.runner_request_id) AND c.retry_after <= ?1 AND c.lease_until <= ?1 ORDER BY c.retry_after, i.id LIMIT ?2",
                 (now, i64::from(limit)),
             )
             .await
@@ -111,11 +111,11 @@ impl Journal {
             out.push(CompletedLaunch {
                 intent: intent_row(&row)?,
                 identity: CompletionIdentity {
-                    scale_set_id: row.get(14).map_err(|_| HostError::Journal)?,
-                    runner_request_id: row.get(15).map_err(|_| HostError::Journal)?,
-                    runner_id: row.get(16).map_err(|_| HostError::Journal)?,
-                    runner_name: row.get(17).map_err(|_| HostError::Journal)?,
-                    runner_absent: row.get(18).map_err(|_| HostError::Journal)?,
+                    scale_set_id: row.get(22).map_err(|_| HostError::Journal)?,
+                    runner_request_id: row.get(23).map_err(|_| HostError::Journal)?,
+                    runner_id: row.get(24).map_err(|_| HostError::Journal)?,
+                    runner_name: row.get(25).map_err(|_| HostError::Journal)?,
+                    runner_absent: row.get(26).map_err(|_| HostError::Journal)?,
                 },
             });
         }
