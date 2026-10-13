@@ -21,6 +21,7 @@ mod worker_volume;
 
 #[cfg(test)]
 mod schema_metadata_tests;
+pub(crate) use crate::journal_assignment::LaunchReservation;
 pub(crate) use completion::{
     CleanupClaim, CompletedLaunch, CompletionIdentity, CompletionInboxEntry,
     MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN,
