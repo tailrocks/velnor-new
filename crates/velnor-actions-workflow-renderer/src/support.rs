@@ -261,7 +261,7 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
     })
 }
 
-/// Fixed validator job: checkout plus its caller-supplied command.
+/// Fixed validator job: checkout, pinned tool preparation, then execution.
 ///
 /// Pinned analyzers install and run ambient because bootstrap needs
 /// authenticated quota (the scrub overlay broke `ubi:` installs with

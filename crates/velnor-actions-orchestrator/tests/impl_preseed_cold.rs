@@ -249,15 +249,6 @@ esac
         Ok(command.output()?)
     }
 
-    fn shell_run(step: &Step) -> Result<&[String], Box<dyn std::error::Error>> {
-        let StepKind::Shell { run, .. } = &step.kind else {
-            return Err(
-                std::io::Error::other(format!("{} must be a shell step", step.name)).into(),
-            );
-        };
-        Ok(run)
-    }
-
     fn write_executable(path: &Path, contents: &str) -> std::io::Result<()> {
         fs::write(path, contents)?;
         let mut permissions = fs::metadata(path)?.permissions();

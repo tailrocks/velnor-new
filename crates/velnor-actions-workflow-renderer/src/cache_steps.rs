@@ -58,6 +58,8 @@ pub(crate) fn validate_tools_restore_call(step: &Step) -> Result<&str, RenderErr
     tools::validate_restore_call(step)
 }
 
+pub(crate) use tools::restore_action_file as tools_restore_action_file;
+
 /// Build one V2 tools-cache action over the fixed path set.
 /// # Errors
 pub(crate) fn tools_cache_step(
@@ -66,6 +68,10 @@ pub(crate) fn tools_cache_step(
     condition: Option<String>,
 ) -> Result<Step, RenderError> {
     tools::cache_step(restore, key, condition)
+}
+
+pub(crate) fn validate_tools_restore_call(step: &Step) -> Result<&str, RenderError> {
+    tools::validate_restore_call(step)
 }
 
 /// Pinned mr-boxington action name (objects mode).

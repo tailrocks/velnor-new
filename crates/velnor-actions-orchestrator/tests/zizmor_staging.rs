@@ -329,7 +329,6 @@ fn velnor_policy_blessed_sha_validates_green() -> TestResult {
 fn staging_suppressions_stable_no_new() -> TestResult {
     let (_repo, _parent, preview, yaml, _) = policy_preview()?;
     let staged = stage(&preview, &yaml)?;
-    let ignores = self_repository_ignores(staged.path())?;
     let output = run_zizmor(staged.path())?;
     let text = streams(&output);
     let config = fs::read_to_string(staged.path().join(".zizmor.yml"))?;
@@ -344,8 +343,13 @@ fn staging_suppressions_stable_no_new() -> TestResult {
     );
     assert!(ignores > 0, "the tool-seed action needs one ignore");
     assert!(
-        text.contains(&format!("{ignores} ignored")),
-        "ignore count must match the local-action annotations: {text}"
+        config.contains("  unpinned-uses:\n    ignore: []\n"),
+        "unpinned-uses ignore list is empty: {config}"
+    );
+    assert!(output.success, "staged config greens zizmor: {text}");
+    assert!(
+        text.contains("No findings to report."),
+        "SHA-pinned refs produce no findings: {text}"
     );
     assert!(text.contains("2 suppressed"), "no new suppressions: {text}");
     Ok(())

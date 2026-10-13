@@ -16,6 +16,8 @@ use crate::tree::RenderedFile;
 #[path = "lane_share_runtime.rs"]
 mod runtime;
 
+#[path = "lane_share_check.rs"]
+mod check;
 #[path = "lane_share_runtime.rs"]
 mod runtime;
 

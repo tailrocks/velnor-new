@@ -160,7 +160,7 @@ fn sources_subset_accepted_under_owned_home_only() {
 #[test]
 fn retired_rust_cache_is_rejected_for_every_lane() {
     let sha = "c".repeat(40);
-    let [preflight, mbx, version_check] = mbx_tool_steps(
+    let [preflight, mbx, _] = mbx_tool_steps(
         &format!("jdx/mr-boxington-action@{sha}"),
         "1.19.0",
         "1.99.0",

@@ -30,7 +30,8 @@ pub(crate) fn workflow_to_yaml(
     ir: &WorkflowIr,
     shared: &LaneShare,
     ctx: &RenderContext,
-    mbx_jobs: &BTreeSet<String>,
+    mbx_gc_jobs: &BTreeSet<String>,
+    mbx_share_out_jobs: &BTreeSet<String>,
 ) -> Result<Yaml, RenderError> {
     let jobs = &shared.jobs;
     if shared.calls.keys().ne(shared.checkouts.keys())
@@ -266,6 +267,32 @@ fn job_to_yaml(
         .env_steps
         .get(id)
         .map_or(job.steps.as_slice(), Vec::as_slice);
+    let job_env = job_environment(id, source_steps, ctx, mbx_policy);
+    let mut entries = job_header_fields(job, runs_on);
+    append_job_options(&mut entries, job, scale_set, &job_env)?;
+    let rendered_steps = crate::document_lanes::render_job_steps(
+        id,
+        job,
+        ctx,
+        needs_envs,
+        shared,
+        lanes,
+        &crate::document_lanes::JobStepContext {
+            job_env: &job_env,
+            runs_on: Some(&job.runs_on),
+            actions_read: mbx_policy.actions_read,
+        },
+    )?;
+    entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
+    Ok(Yaml::Map(entries))
+}
+
+fn job_environment(
+    id: &str,
+    source_steps: &[Step],
+    ctx: &RenderContext,
+    mbx_policy: MbxJobPolicy,
+) -> BTreeMap<String, String> {
     let step_has_env = source_steps.iter().any(|step| match &step.kind {
         StepKind::Shell { env, .. }
         | StepKind::Action { env, .. }
@@ -313,6 +340,8 @@ fn job_to_yaml(
             crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
             crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned(),
         );
+    }
+    if mbx_policy.share_out_dir_disabled {
         job_env.insert(
             crate::cache_steps::MBX_SHARE_OUT_DIR_ENV.to_owned(),
             crate::cache_steps::MBX_SHARE_OUT_DIR_VALUE.to_owned(),

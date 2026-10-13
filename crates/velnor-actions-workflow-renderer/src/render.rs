@@ -4,7 +4,7 @@
 //! and candidate-planning invariants. Strict rendering also mandates Mise,
 //! staged helpers, and the plan anchor; legacy preserves the prior contract.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
     CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID, PullRequestCachePolicy,

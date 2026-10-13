@@ -218,7 +218,7 @@ fn provider_restore_entry(job: &Job) -> Option<(String, String)> {
         if step.role != Some(StepRole::TofuProvidersRestore) {
             return None;
         }
-        let StepKind::Action { uses, with, env } = &step.kind else {
+        let StepKind::Action { uses, with, .. } = &step.kind else {
             return None;
         };
         if uses != velnor_actions_contract::workflow::step_identity::TOFU_PROVIDER_ADMISSION_USES

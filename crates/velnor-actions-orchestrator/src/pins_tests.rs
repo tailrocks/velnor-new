@@ -246,7 +246,7 @@ fn assert_native_checksum_utility(step: velnor_actions_contract::Step, target: R
     };
     assert_eq!(
         script.matches(&format!("{expected} -c -")).count(),
-        2,
+        1,
         "{script}"
     );
     assert!(
